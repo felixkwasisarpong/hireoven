@@ -26,7 +26,7 @@ export default function DashboardPage() {
                 className="bg-white rounded-xl border border-gray-100 px-6 py-5"
               >
                 <a
-                  href={job.url}
+                  href={job.apply_url}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="font-semibold text-gray-900 hover:text-[#1D9E75] transition-colors"
