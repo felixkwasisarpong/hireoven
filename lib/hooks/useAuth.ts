@@ -52,7 +52,27 @@ export function useAuth() {
       .eq("id", user.id)
       .single()
 
-    setState({ user, profile: profile ?? null, isLoading: false })
+    if (profile) {
+      setState({ user, profile, isLoading: false })
+      return
+    }
+
+    const fallbackProfile = {
+      id: user.id,
+      email: user.email ?? null,
+      full_name: user.user_metadata?.full_name ?? null,
+      avatar_url: user.user_metadata?.avatar_url ?? null,
+    }
+
+    await ((supabase.from("profiles") as any).upsert(fallbackProfile))
+
+    const { data: freshProfile } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", user.id)
+      .single()
+
+    setState({ user, profile: freshProfile ?? null, isLoading: false })
   }
 
   async function signOut() {

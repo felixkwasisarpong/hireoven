@@ -12,7 +12,7 @@ interface OPTCountdownProps {
 type Urgency = 'safe' | 'watch' | 'hurry' | 'urgent'
 
 const URGENCY: Record<Urgency, { bg: string; border: string; text: string; bar: string; message: string }> = {
-  safe:   { bg: 'bg-green-50',  border: 'border-green-200',  text: 'text-green-700',  bar: 'bg-green-500',  message: 'You have time. Apply strategically.' },
+  safe:   { bg: 'bg-sky-50',    border: 'border-sky-200',    text: 'text-sky-700',    bar: 'bg-sky-500',    message: 'You have time. Apply strategically.' },
   watch:  { bg: 'bg-amber-50',  border: 'border-amber-200',  text: 'text-amber-700',  bar: 'bg-amber-500',  message: 'Start prioritizing fast-moving companies.' },
   hurry:  { bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-700', bar: 'bg-orange-500', message: 'Focus on companies with quick processes.' },
   urgent: { bg: 'bg-red-50',    border: 'border-red-200',    text: 'text-red-700',    bar: 'bg-red-500',    message: 'Urgent. Target companies with cap-gap support.' },
@@ -36,7 +36,7 @@ export default function OPTCountdown({ optEndDate, visaStatus, compact = false }
     return (
       <div className="rounded-xl border border-dashed border-gray-200 p-4 text-center">
         <p className="text-xs text-gray-400 mb-2">OPT end date not set</p>
-        <Link href="/dashboard/profile" className="text-xs text-[#1D9E75] font-medium hover:underline">
+        <Link href="/dashboard/profile" className="text-xs text-[#0369A1] font-medium hover:underline">
           Set your OPT date →
         </Link>
       </div>

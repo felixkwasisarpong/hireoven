@@ -69,7 +69,7 @@ export default function InternationalPage() {
   const maxPetitions = industryBars[0]?.petitions ?? 1
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(180deg,#F5FBF8_0%,#F8FAFC_58%,#F8FAFC_100%)] px-4 py-6 lg:px-8">
+    <main className="min-h-screen bg-[linear-gradient(180deg,#F7FBFF_0%,#F8FAFC_58%,#F8FAFC_100%)] px-4 py-6 lg:px-8">
       <div className="mx-auto max-w-6xl space-y-8">
 
         {/* ── Hero header ── */}
@@ -77,10 +77,10 @@ export default function InternationalPage() {
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <div className="flex items-center gap-2 mb-2">
-                <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-[#ECFBF5]">
-                  <Globe2 className="h-5 w-5 text-[#1D9E75]" />
+                <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-[#F0F9FF]">
+                  <Globe2 className="h-5 w-5 text-[#0369A1]" />
                 </div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#1D9E75]">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#0369A1]">
                   International Hub
                 </p>
               </div>
@@ -122,28 +122,28 @@ export default function InternationalPage() {
                   />
                 </div>
                 <div className="space-y-4">
-                  <div className="rounded-2xl bg-[#F8FBFA] p-4 border border-gray-100">
+                  <div className="rounded-2xl bg-[#F8FBFF] p-4 border border-gray-100">
                     <p className="text-xs font-semibold uppercase tracking-[0.22em] text-gray-400 mb-3">
                       Quick actions
                     </p>
                     <div className="space-y-2">
                       <Link
                         href="/dashboard/international#companies"
-                        className="flex items-center justify-between rounded-xl bg-white border border-gray-200 px-4 py-3 text-sm font-medium text-gray-700 transition hover:border-[#B6E9D8] hover:text-[#0F6E56]"
+                        className="flex items-center justify-between rounded-xl bg-white border border-gray-200 px-4 py-3 text-sm font-medium text-gray-700 transition hover:border-[#BAE6FD] hover:text-[#0C4A6E]"
                       >
                         Browse sponsor-friendly companies
                         <span className="text-gray-400">→</span>
                       </Link>
                       <Link
                         href="/dashboard/alerts"
-                        className="flex items-center justify-between rounded-xl bg-white border border-gray-200 px-4 py-3 text-sm font-medium text-gray-700 transition hover:border-[#B6E9D8] hover:text-[#0F6E56]"
+                        className="flex items-center justify-between rounded-xl bg-white border border-gray-200 px-4 py-3 text-sm font-medium text-gray-700 transition hover:border-[#BAE6FD] hover:text-[#0C4A6E]"
                       >
                         Set up sponsorship alerts
                         <span className="text-gray-400">→</span>
                       </Link>
                       <Link
                         href="/dashboard/onboarding"
-                        className="flex items-center justify-between rounded-xl bg-white border border-gray-200 px-4 py-3 text-sm font-medium text-gray-700 transition hover:border-[#B6E9D8] hover:text-[#0F6E56]"
+                        className="flex items-center justify-between rounded-xl bg-white border border-gray-200 px-4 py-3 text-sm font-medium text-gray-700 transition hover:border-[#BAE6FD] hover:text-[#0C4A6E]"
                       >
                         Update OPT end date
                         <span className="text-gray-400">→</span>
@@ -162,7 +162,7 @@ export default function InternationalPage() {
             <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-gray-400">
               Sponsorship Intel Feed
             </p>
-            <span className="rounded-full bg-[#ECFBF5] px-3 py-1 text-xs font-semibold text-[#0F6E56]">
+            <span className="rounded-full bg-[#F0F9FF] px-3 py-1 text-xs font-semibold text-[#0C4A6E]">
               H-1B friendly only
             </span>
           </div>
@@ -192,7 +192,7 @@ export default function InternationalPage() {
                   Ranked by petition volume — {companies.length} companies tracked
                 </p>
               </div>
-              <div className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-[#F8FBFA] px-4 py-3 sm:w-72">
+              <div className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-[#F8FBFF] px-4 py-3 sm:w-72">
                 <Search className="h-4 w-4 text-gray-400 flex-shrink-0" />
                 <input
                   value={companyQuery}
@@ -254,7 +254,7 @@ export default function InternationalPage() {
                       <div className="flex flex-1 items-center gap-3">
                         <div className="flex-1 h-8 rounded-xl bg-gray-100 overflow-hidden">
                           <div
-                            className="h-full rounded-xl bg-gradient-to-r from-[#0F6E56] to-[#1D9E75] transition-all duration-700"
+                            className="h-full rounded-xl bg-gradient-to-r from-[#0C4A6E] to-[#0369A1] transition-all duration-700"
                             style={{ width: `${pct}%` }}
                           />
                         </div>

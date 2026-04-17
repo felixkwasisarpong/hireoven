@@ -32,7 +32,7 @@ export default function Home() {
         <div className="max-w-3xl mx-auto">
           <h1 className="text-5xl font-extrabold text-gray-900 leading-tight mb-6 tracking-tight">
             Jobs served fresh.{" "}
-            <span className="text-[#1D9E75]">Apply before the crowd.</span>
+            <span className="text-[#0369A1]">Apply before the crowd.</span>
           </h1>
           <p className="text-xl text-gray-500 mb-10 leading-relaxed max-w-2xl mx-auto">
             We monitor thousands of company career pages in real time so you see
@@ -45,11 +45,11 @@ export default function Home() {
               name="email"
               placeholder="Enter your email"
               required
-              className="flex-1 px-4 py-3 rounded-lg border border-gray-200 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1D9E75] focus:border-transparent text-sm"
+              className="flex-1 px-4 py-3 rounded-lg border border-gray-200 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#0369A1] focus:border-transparent text-sm"
             />
             <button
               type="submit"
-              className="px-6 py-3 bg-[#1D9E75] hover:bg-[#188560] text-white text-sm font-semibold rounded-lg transition-colors whitespace-nowrap"
+              className="px-6 py-3 bg-[#0369A1] hover:bg-[#075985] text-white text-sm font-semibold rounded-lg transition-colors whitespace-nowrap"
             >
               Get early access
             </button>
@@ -68,8 +68,8 @@ export default function Home() {
                   key={feature.title}
                   className="bg-white rounded-xl p-8 border border-gray-100 shadow-sm"
                 >
-                  <div className="w-10 h-10 bg-[#E8F7F2] rounded-lg flex items-center justify-center mb-5">
-                    <Icon className="w-5 h-5 text-[#1D9E75]" />
+                  <div className="w-10 h-10 bg-[#E0F2FE] rounded-lg flex items-center justify-center mb-5">
+                    <Icon className="w-5 h-5 text-[#0369A1]" />
                   </div>
                   <h3 className="text-lg font-semibold text-gray-900 mb-2">
                     {feature.title}

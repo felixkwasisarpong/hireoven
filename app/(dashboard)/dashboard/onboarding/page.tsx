@@ -148,7 +148,7 @@ export default function OnboardingPage() {
               <div
                 key={i}
                 className="h-1.5 flex-1 rounded-full transition-colors duration-300"
-                style={{ backgroundColor: i < step ? "#1D9E75" : "#E5E7EB" }}
+                style={{ backgroundColor: i < step ? "#0369A1" : "#E5E7EB" }}
               />
             ))}
           </div>
@@ -250,7 +250,7 @@ function StepOne({
         <div>
           <label className="block text-sm font-semibold text-gray-700 mb-2">
             What roles are you looking for?
-            <span className="text-[#1D9E75] ml-1">*</span>
+            <span className="text-[#0369A1] ml-1">*</span>
           </label>
           <div className="flex flex-wrap gap-2 mb-2">
             {data.roles.map((r) => (
@@ -264,7 +264,7 @@ function StepOne({
             onKeyDown={(e) => handleKeyDown(e, "roles", roleInput, setRoleInput)}
             onBlur={() => addTag("roles", roleInput, setRoleInput)}
             placeholder='e.g. "Software Engineer" — press Enter to add'
-            className="w-full px-4 py-3 rounded-lg border border-gray-200 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1D9E75] focus:border-transparent"
+            className="w-full px-4 py-3 rounded-lg border border-gray-200 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#0369A1] focus:border-transparent"
           />
         </div>
 
@@ -286,7 +286,7 @@ function StepOne({
             onBlur={() => addTag("locations", locationInput, setLocationInput)}
             disabled={data.remoteOnly}
             placeholder={data.remoteOnly ? "Remote selected" : 'e.g. "New York" — press Enter to add'}
-            className="w-full px-4 py-3 rounded-lg border border-gray-200 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1D9E75] focus:border-transparent disabled:bg-gray-50 disabled:text-gray-400"
+            className="w-full px-4 py-3 rounded-lg border border-gray-200 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#0369A1] focus:border-transparent disabled:bg-gray-50 disabled:text-gray-400"
           />
           <label className="flex items-center gap-2 mt-2 cursor-pointer">
             <Checkbox
@@ -312,8 +312,8 @@ function StepOne({
                   onClick={() => toggleSeniority(opt.value)}
                   className={`px-4 py-2 rounded-full text-sm font-medium border transition-colors ${
                     selected
-                      ? "bg-[#1D9E75] border-[#1D9E75] text-white"
-                      : "bg-white border-gray-200 text-gray-600 hover:border-[#1D9E75] hover:text-[#1D9E75]"
+                      ? "bg-[#0369A1] border-[#0369A1] text-white"
+                      : "bg-white border-gray-200 text-gray-600 hover:border-[#0369A1] hover:text-[#0369A1]"
                   }`}
                 >
                   {opt.label}
@@ -328,7 +328,7 @@ function StepOne({
         type="button"
         onClick={onNext}
         disabled={!canContinue}
-        className="mt-10 w-full py-3.5 bg-[#1D9E75] hover:bg-[#188560] text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-40"
+        className="mt-10 w-full py-3.5 bg-[#0369A1] hover:bg-[#075985] text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-40"
       >
         Continue
       </button>
@@ -393,7 +393,7 @@ function StepTwo({
             }
             className={`flex flex-col items-start gap-1.5 p-5 rounded-xl border-2 text-left transition-all ${
               data.isInternational === opt.value
-                ? "border-[#1D9E75] bg-[#1D9E75]/5"
+                ? "border-[#0369A1] bg-[#0369A1]/5"
                 : "border-gray-200 bg-white hover:border-gray-300"
             }`}
           >
@@ -416,7 +416,7 @@ function StepTwo({
               onChange={(e) =>
                 onChange({ ...data, visaStatus: e.target.value as VisaStatus })
               }
-              className="w-full px-4 py-3 rounded-lg border border-gray-200 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#1D9E75] focus:border-transparent bg-white"
+              className="w-full px-4 py-3 rounded-lg border border-gray-200 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0369A1] focus:border-transparent bg-white"
             >
               <option value="">Select visa status…</option>
               {VISA_OPTIONS.map((opt) => (
@@ -436,7 +436,7 @@ function StepTwo({
                 type="date"
                 value={data.optEndDate}
                 onChange={(e) => onChange({ ...data, optEndDate: e.target.value })}
-                className="w-full px-4 py-3 rounded-lg border border-gray-200 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#1D9E75] focus:border-transparent"
+                className="w-full px-4 py-3 rounded-lg border border-gray-200 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0369A1] focus:border-transparent"
               />
               <p className="text-xs text-gray-400 mt-1.5">
                 We&apos;ll surface sponsorship-ready roles before your OPT expires.
@@ -472,7 +472,7 @@ function StepTwo({
         <button
           type="button"
           onClick={onNext}
-          className="flex-[2] py-3.5 bg-[#1D9E75] hover:bg-[#188560] text-white text-sm font-semibold rounded-lg transition-colors"
+          className="flex-[2] py-3.5 bg-[#0369A1] hover:bg-[#075985] text-white text-sm font-semibold rounded-lg transition-colors"
         >
           Continue
         </button>
@@ -545,7 +545,7 @@ function StepThree({
       <p className="text-xs text-gray-400 mb-6">
         Select up to {MAX_COMPANIES}
         {selectedCount > 0 && (
-          <span className="text-[#1D9E75] font-medium"> — {selectedCount} selected</span>
+          <span className="text-[#0369A1] font-medium"> — {selectedCount} selected</span>
         )}
       </p>
 
@@ -564,7 +564,7 @@ function StepThree({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search companies…"
-          className="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-200 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1D9E75] focus:border-transparent"
+          className="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-200 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#0369A1] focus:border-transparent"
         />
       </div>
 
@@ -588,7 +588,7 @@ function StepThree({
                 disabled={atLimit}
                 className={`flex items-center gap-3 p-4 rounded-xl border-2 text-left transition-all ${
                   selected
-                    ? "border-[#1D9E75] bg-[#1D9E75]/5"
+                    ? "border-[#0369A1] bg-[#0369A1]/5"
                     : atLimit
                     ? "border-gray-100 bg-gray-50 opacity-40 cursor-not-allowed"
                     : "border-gray-200 bg-white hover:border-gray-300"
@@ -615,7 +615,7 @@ function StepThree({
                       {company.name}
                     </p>
                     {company.sponsors_h1b && (
-                      <span className="shrink-0 text-[10px] font-semibold bg-[#1D9E75]/10 text-[#1D9E75] px-1.5 py-0.5 rounded-full">
+                      <span className="shrink-0 text-[10px] font-semibold bg-[#0369A1]/10 text-[#0369A1] px-1.5 py-0.5 rounded-full">
                         H-1B
                       </span>
                     )}
@@ -625,7 +625,7 @@ function StepThree({
                   </p>
                 </div>
                 {selected && (
-                  <svg className="h-4 w-4 text-[#1D9E75] shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                  <svg className="h-4 w-4 text-[#0369A1] shrink-0" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                   </svg>
                 )}
@@ -653,7 +653,7 @@ function StepThree({
           type="button"
           onClick={onFinish}
           disabled={saving}
-          className="flex-[2] flex items-center justify-center gap-2 py-3.5 bg-[#1D9E75] hover:bg-[#188560] text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-60"
+          className="flex-[2] flex items-center justify-center gap-2 py-3.5 bg-[#0369A1] hover:bg-[#075985] text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-60"
         >
           {saving ? (
             <><Spinner /> Saving…</>
@@ -674,12 +674,12 @@ function StepThree({
 
 function Tag({ label, onRemove }: { label: string; onRemove: () => void }) {
   return (
-    <span className="inline-flex items-center gap-1.5 bg-[#1D9E75]/10 text-[#1D9E75] text-xs font-medium px-3 py-1.5 rounded-full">
+    <span className="inline-flex items-center gap-1.5 bg-[#0369A1]/10 text-[#0369A1] text-xs font-medium px-3 py-1.5 rounded-full">
       {label}
       <button
         type="button"
         onClick={onRemove}
-        className="hover:text-[#188560] transition-colors"
+        className="hover:text-[#075985] transition-colors"
         aria-label={`Remove ${label}`}
       >
         <svg className="h-3 w-3" viewBox="0 0 12 12" fill="none" stroke="currentColor">
@@ -702,7 +702,7 @@ function Checkbox({
       type="button"
       onClick={() => onChange(!checked)}
       className={`flex-shrink-0 mt-0.5 w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors ${
-        checked ? "bg-[#1D9E75] border-[#1D9E75]" : "border-gray-300 bg-white"
+        checked ? "bg-[#0369A1] border-[#0369A1]" : "border-gray-300 bg-white"
       }`}
       role="checkbox"
       aria-checked={checked}

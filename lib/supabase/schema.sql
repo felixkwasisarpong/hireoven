@@ -119,10 +119,12 @@ CREATE TABLE alert_notifications (
   user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
   job_id UUID REFERENCES jobs(id) ON DELETE CASCADE,
   alert_id UUID REFERENCES job_alerts(id) ON DELETE CASCADE,
+  notification_type TEXT DEFAULT 'alert', -- alert, watchlist
   channel TEXT, -- email, push, both
   sent_at TIMESTAMPTZ DEFAULT NOW(),
   opened_at TIMESTAMPTZ,
-  clicked_at TIMESTAMPTZ
+  clicked_at TIMESTAMPTZ,
+  UNIQUE(user_id, job_id)
 );
 
 -- 7. Crawl logs table
@@ -155,6 +157,15 @@ CREATE TABLE h1b_records (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 9. Push subscriptions table
+-- Web push subscriptions for instant notifications
+CREATE TABLE push_subscriptions (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  subscription JSONB NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- =============================================================================
 -- Indexes
 -- =============================================================================
@@ -176,10 +187,14 @@ CREATE INDEX idx_watchlist_company ON watchlist(company_id);
 CREATE INDEX idx_alerts_user ON job_alerts(user_id);
 CREATE INDEX idx_alert_notifications_user ON alert_notifications(user_id);
 CREATE INDEX idx_alert_notifications_sent_at ON alert_notifications(sent_at DESC);
+CREATE INDEX idx_alert_notifications_opened_at ON alert_notifications(opened_at);
 CREATE INDEX idx_crawl_logs_company ON crawl_logs(company_id);
 CREATE INDEX idx_crawl_logs_crawled_at ON crawl_logs(crawled_at DESC);
 CREATE INDEX idx_h1b_records_company ON h1b_records(company_id);
 CREATE INDEX idx_h1b_records_year ON h1b_records(year DESC);
+CREATE INDEX idx_push_subscriptions_user ON push_subscriptions(user_id);
+CREATE UNIQUE INDEX idx_push_subscriptions_endpoint
+  ON push_subscriptions ((subscription->>'endpoint'));
 
 -- =============================================================================
 -- Row Level Security
@@ -193,6 +208,7 @@ ALTER TABLE jobs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE companies ENABLE ROW LEVEL SECURITY;
 ALTER TABLE crawl_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE h1b_records ENABLE ROW LEVEL SECURITY;
+ALTER TABLE push_subscriptions ENABLE ROW LEVEL SECURITY;
 
 -- Profiles
 CREATE POLICY "Users can view own profile"
@@ -213,6 +229,8 @@ CREATE POLICY "Users can manage own alerts"
 -- Alert notifications
 CREATE POLICY "Users can view own notifications"
   ON alert_notifications FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can update own notifications"
+  ON alert_notifications FOR UPDATE USING (auth.uid() = user_id);
 
 -- Public read for jobs and companies
 CREATE POLICY "Jobs are publicly readable"
@@ -225,6 +243,8 @@ CREATE POLICY "Service role can manage crawl logs"
   ON crawl_logs FOR ALL USING (auth.role() = 'service_role');
 CREATE POLICY "Service role can manage h1b records"
   ON h1b_records FOR ALL USING (auth.role() = 'service_role');
+CREATE POLICY "Users can manage own push subscriptions"
+  ON push_subscriptions FOR ALL USING (auth.uid() = user_id);
 
 -- =============================================================================
 -- Functions & Triggers

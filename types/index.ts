@@ -42,6 +42,8 @@ export type AlertFrequency = 'instant' | 'daily' | 'weekly';
 
 export type NotificationChannel = 'email' | 'push' | 'both';
 
+export type NotificationType = 'alert' | 'watchlist';
+
 export type CrawlStatus = 'success' | 'failed' | 'unchanged';
 
 export type JobWithinWindow = 'all' | '1h' | '6h' | '24h' | '3d';
@@ -224,7 +226,8 @@ export interface AlertNotification {
   id: string;
   user_id: string;
   job_id: string;
-  alert_id: string;
+  alert_id: string | null;
+  notification_type: NotificationType;
   channel: NotificationChannel;
   sent_at: string;
   opened_at: string | null;
@@ -239,8 +242,33 @@ export type AlertNotificationInsert = Omit<AlertNotification, 'id' | 'sent_at'> 
 /** Notification row with job and alert joined in */
 export interface AlertNotificationWithDetails extends AlertNotification {
   job: JobWithCompany;
-  alert: JobAlert;
+  alert: JobAlert | null;
 }
+
+// ---------------------------------------------------------------------------
+// Push subscriptions
+// ---------------------------------------------------------------------------
+
+export interface WebPushSubscription {
+  endpoint: string;
+  expirationTime: number | null;
+  keys: {
+    auth: string;
+    p256dh: string;
+  };
+}
+
+export interface PushSubscriptionRecord {
+  id: string;
+  user_id: string;
+  subscription: WebPushSubscription;
+  created_at: string;
+}
+
+export type PushSubscriptionInsert = Omit<PushSubscriptionRecord, 'id' | 'created_at'> & {
+  id?: string;
+  created_at?: string;
+};
 
 // ---------------------------------------------------------------------------
 // Crawl Logs
@@ -326,6 +354,11 @@ export interface Database {
       >;
       crawl_logs: TableDefinition<CrawlLog, CrawlLogInsert, Partial<CrawlLogInsert>>;
       h1b_records: TableDefinition<H1BRecord, H1BRecordInsert, Partial<H1BRecordInsert>>;
+      push_subscriptions: TableDefinition<
+        PushSubscriptionRecord,
+        PushSubscriptionInsert,
+        Partial<PushSubscriptionInsert>
+      >;
     };
     Views: {};
     Functions: {};
