@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import HireovenLogo from "@/components/ui/HireovenLogo"
 import { createClient } from "@/lib/supabase/client"
 
 export default function SignupPage() {
@@ -74,11 +75,8 @@ export default function SignupPage() {
     <main className="min-h-screen flex items-center justify-center bg-gray-50 px-6">
       <div className="w-full max-w-sm">
         {/* Logo */}
-        <Link href="/" className="flex items-center gap-2 mb-10">
-          <div className="w-8 h-8 bg-[#1D9E75] rounded-lg flex items-center justify-center">
-            <span className="text-white text-sm font-bold">H</span>
-          </div>
-          <span className="text-lg font-bold text-gray-900">Hireoven</span>
+        <Link href="/" className="mb-10 inline-flex items-center">
+          <HireovenLogo className="h-10 w-auto" priority />
         </Link>
 
         <h1 className="text-2xl font-bold text-gray-900 mb-1">Create your account</h1>

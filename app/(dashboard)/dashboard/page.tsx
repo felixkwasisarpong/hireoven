@@ -22,6 +22,7 @@ import JobSearch, {
   getSearchQuery,
   searchQueryToParams,
 } from "@/components/jobs/JobSearch"
+import HireovenLogo from "@/components/ui/HireovenLogo"
 import { useAuth } from "@/lib/hooks/useAuth"
 import { useWatchlist } from "@/lib/hooks/useWatchlist"
 import { createClient } from "@/lib/supabase/client"
@@ -142,14 +143,9 @@ export default function DashboardPage() {
         <div className="grid gap-6 lg:grid-cols-[240px_minmax(0,1fr)] xl:grid-cols-[240px_minmax(0,1fr)_320px]">
           <aside className="rounded-[28px] border border-white/80 bg-white/90 p-4 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur lg:sticky lg:top-4 lg:h-[calc(100vh-2rem)] lg:overflow-y-auto">
             <div className="flex h-full flex-col">
-              <div className="flex items-center gap-3 px-2 pb-6 pt-2">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#1D9E75] text-base font-bold text-white">
-                  H
-                </div>
-                <div>
-                  <p className="text-lg font-semibold text-gray-900">Hireoven</p>
-                  <p className="text-xs text-gray-500">Jobs served fresh</p>
-                </div>
+              <div className="px-2 pb-6 pt-2">
+                <HireovenLogo className="h-11 w-auto max-w-[168px]" priority />
+                <p className="mt-2 text-xs text-gray-500">Jobs served fresh</p>
               </div>
 
               <nav className="space-y-1">

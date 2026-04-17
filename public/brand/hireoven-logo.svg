@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="300" viewBox="0 0 1200 300">
+<rect width="1200" height="300" fill="none"/>
+<g transform="translate(35 45) scale(.42)">
+<rect x="90" y="155" width="332" height="190" rx="40" fill="#062246" stroke="#00142d" stroke-width="10"/>
+<rect x="130" y="205" width="180" height="97" rx="12" fill="#b4260c" stroke="#ff7716" stroke-width="10"/>
+<rect x="160" y="176" width="132" height="18" rx="8" fill="#ffd24a" stroke="#ffee7f" stroke-width="6"/>
+<circle cx="366" cy="221" r="16" fill="#ebf3ff"/><circle cx="366" cy="271" r="16" fill="#ebf3ff"/>
+<path d="M220 293 L185 262 L206 220 L218 252 L242 198 L271 242 L261 279 Z" fill="#ff9a2d"/>
+<path d="M228 291 L207 265 L224 237 L233 262 L249 228 L263 263 L253 289 Z" fill="#fff4cd"/>
+<line x1="190" y1="124" x2="224" y2="169" stroke="#ff9a2d" stroke-width="12" stroke-linecap="round"/>
+<line x1="256" y1="111" x2="256" y2="153" stroke="#ff9a2d" stroke-width="12" stroke-linecap="round"/>
+<line x1="321" y1="124" x2="287" y2="169" stroke="#ff9a2d" stroke-width="12" stroke-linecap="round"/>
+</g>
+<text x="255" y="170" font-family="Arial, Helvetica, sans-serif" font-size="96" font-weight="800" fill="#ff5c18">Hire</text>
+<text x="463" y="170" font-family="Arial, Helvetica, sans-serif" font-size="96" font-weight="800" fill="#062246">Oven</text>
+<text x="260" y="235" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="700" fill="#2d3746" opacity=".9">Fresh openings straight from the source</text>
+</svg>

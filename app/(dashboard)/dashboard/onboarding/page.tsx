@@ -2,6 +2,7 @@
 
 import { KeyboardEvent, useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
+import HireovenLogo from "@/components/ui/HireovenLogo"
 import { createClient } from "@/lib/supabase/client"
 import type { Company, SeniorityLevel, VisaStatus } from "@/types"
 
@@ -129,12 +130,7 @@ export default function OnboardingPage() {
       {/* Header */}
       <div className="bg-white border-b border-gray-100 px-6 py-4">
         <div className="max-w-xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 bg-[#1D9E75] rounded-md flex items-center justify-center">
-              <span className="text-white text-xs font-bold">H</span>
-            </div>
-            <span className="font-semibold text-gray-900">Hireoven</span>
-          </div>
+          <HireovenLogo className="h-8 w-auto" priority />
           <button
             onClick={() => router.push("/dashboard")}
             className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
