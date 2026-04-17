@@ -197,6 +197,33 @@ CREATE UNIQUE INDEX idx_push_subscriptions_endpoint
   ON push_subscriptions ((subscription->>'endpoint'));
 
 -- =============================================================================
+-- Full-text search vectors (run as a migration after initial schema)
+-- =============================================================================
+
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS search_vector tsvector
+  GENERATED ALWAYS AS (
+    to_tsvector('english',
+      coalesce(title, '') || ' ' ||
+      coalesce(normalized_title, '') || ' ' ||
+      coalesce(location, '') || ' ' ||
+      coalesce(array_to_string(skills, ' '), '')
+    )
+  ) STORED;
+
+CREATE INDEX IF NOT EXISTS idx_jobs_search ON jobs USING gin(search_vector);
+
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS search_vector tsvector
+  GENERATED ALWAYS AS (
+    to_tsvector('english',
+      coalesce(name, '') || ' ' ||
+      coalesce(industry, '') || ' ' ||
+      coalesce(domain, '')
+    )
+  ) STORED;
+
+CREATE INDEX IF NOT EXISTS idx_companies_search ON companies USING gin(search_vector);
+
+-- =============================================================================
 -- Row Level Security
 -- =============================================================================
 

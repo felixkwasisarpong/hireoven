@@ -1,0 +1,241 @@
+"use client"
+
+import { useEffect, useMemo, useRef, useState } from "react"
+import Link from "next/link"
+import { useRouter, useSearchParams } from "next/navigation"
+import { Search, X } from "lucide-react"
+import CompanyCard from "@/components/companies/CompanyCard"
+import JobCard from "@/components/jobs/JobCard"
+import { useAuth } from "@/lib/hooks/useAuth"
+import { useWatchlist } from "@/lib/hooks/useWatchlist"
+import { searchCompanies, searchJobs } from "@/lib/search"
+import type { Company, JobWithCompany } from "@/types"
+
+const TRENDING = ["Software Engineer", "Product Manager", "Data Scientist", "UX Designer", "Marketing Manager"]
+
+function highlight(text: string, query: string) {
+  if (!query.trim()) return text
+  const escaped = query.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  const parts = text.split(new RegExp(`(${escaped})`, "gi"))
+  return parts.map((part, i) =>
+    new RegExp(escaped, "i").test(part)
+      ? `<mark class="bg-yellow-100 text-yellow-900 rounded px-0.5">${part}</mark>`
+      : part
+  ).join("")
+}
+
+export default function SearchPage() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const rawQ = searchParams.get("q") ?? ""
+  const { user } = useAuth()
+  const { addCompany, removeCompany, isWatching } = useWatchlist(user?.id)
+
+  const [inputVal, setInputVal] = useState(rawQ)
+  const [jobs, setJobs] = useState<JobWithCompany[]>([])
+  const [companies, setCompanies] = useState<Company[]>([])
+  const [jobTotal, setJobTotal] = useState(0)
+  const [isLoading, setIsLoading] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => { setInputVal(rawQ) }, [rawQ])
+
+  useEffect(() => {
+    if (!rawQ.trim()) { setJobs([]); setCompanies([]); setJobTotal(0); return }
+    setIsLoading(true)
+    Promise.all([
+      searchJobs(rawQ, {}, 20, 0),
+      searchCompanies(rawQ, 10),
+    ]).then(([jobsResult, companiesResult]) => {
+      setJobs(jobsResult.jobs)
+      setJobTotal(jobsResult.total)
+      setCompanies(companiesResult)
+      setIsLoading(false)
+    })
+  }, [rawQ])
+
+  function submit(q: string) {
+    if (!q.trim()) return
+    router.push(`/dashboard/search?q=${encodeURIComponent(q.trim())}`)
+  }
+
+  const hasResults = jobs.length > 0 || companies.length > 0
+  const bothMatch = jobs.length > 0 && companies.length > 0
+
+  return (
+    <main className="min-h-screen bg-[linear-gradient(180deg,#F7FBFF_0%,#F8FAFC_58%,#F8FAFC_100%)] px-4 py-6 lg:px-8">
+      <div className="mx-auto max-w-7xl space-y-6">
+
+        {/* Search bar */}
+        <section className="rounded-[32px] border border-white/80 bg-white/90 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.06)]">
+          <form
+            onSubmit={(e) => { e.preventDefault(); submit(inputVal) }}
+            className="flex items-center gap-3 rounded-2xl border border-[#0369A1] bg-white px-5 py-3.5 ring-2 ring-[#0369A1]/15"
+          >
+            <Search className="h-5 w-5 flex-shrink-0 text-[#0369A1]" />
+            <input
+              ref={inputRef}
+              value={inputVal}
+              onChange={(e) => setInputVal(e.target.value)}
+              placeholder="Search jobs and companies…"
+              autoFocus
+              className="flex-1 bg-transparent text-base text-gray-900 outline-none placeholder:text-gray-400"
+            />
+            {inputVal && (
+              <button
+                type="button"
+                onClick={() => { setInputVal(""); inputRef.current?.focus() }}
+                className="flex-shrink-0 text-gray-400 hover:text-gray-600"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            )}
+            <button
+              type="submit"
+              className="rounded-xl bg-[#0369A1] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#075985]"
+            >
+              Search
+            </button>
+          </form>
+
+          {rawQ ? (
+            <p className="mt-4 text-sm text-gray-600">
+              {isLoading ? (
+                "Searching…"
+              ) : (
+                <>
+                  <span className="font-semibold text-gray-900">{jobTotal.toLocaleString()} jobs</span>{" "}
+                  and{" "}
+                  <span className="font-semibold text-gray-900">{companies.length.toLocaleString()} companies</span>{" "}
+                  match &ldquo;{rawQ}&rdquo;
+                </>
+              )}
+            </p>
+          ) : (
+            <div className="mt-5 space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-gray-400">Trending searches</p>
+              <div className="flex flex-wrap gap-2">
+                {TRENDING.map((term) => (
+                  <button
+                    key={term}
+                    type="button"
+                    onClick={() => submit(term)}
+                    className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:border-[#0369A1] hover:text-[#0369A1]"
+                  >
+                    {term}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
+
+        {/* Loading skeletons */}
+        {isLoading && (
+          <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
+            <div className="space-y-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="h-36 animate-pulse rounded-3xl bg-white/80" />
+              ))}
+            </div>
+            <div className="space-y-4">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="h-52 animate-pulse rounded-2xl bg-white/80" />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* No results */}
+        {!isLoading && rawQ && !hasResults && (
+          <div className="rounded-[28px] border border-dashed border-gray-300 bg-white/60 px-8 py-14 text-center">
+            <p className="text-lg font-semibold text-gray-900">No results for &ldquo;{rawQ}&rdquo;</p>
+            <p className="mt-2 text-sm text-gray-500">Try a different search term or browse companies directly.</p>
+            <Link
+              href="/dashboard/companies"
+              className="mt-6 inline-flex items-center gap-2 rounded-2xl bg-[#0369A1] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#075985]"
+            >
+              Browse all companies
+            </Link>
+          </div>
+        )}
+
+        {/* Results: dual column if both match */}
+        {!isLoading && hasResults && (
+          <div className={bothMatch ? "grid gap-6 lg:grid-cols-[1fr_360px]" : ""}>
+            {/* Jobs column */}
+            {jobs.length > 0 && (
+              <div>
+                <div className="mb-3 flex items-center justify-between">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-gray-400">
+                    Jobs · {jobTotal.toLocaleString()} results
+                  </p>
+                  {jobTotal > jobs.length && (
+                    <Link
+                      href={`/dashboard?q=${encodeURIComponent(rawQ)}`}
+                      className="text-xs font-medium text-[#0369A1] hover:text-[#075985] transition"
+                    >
+                      View all {jobTotal.toLocaleString()} →
+                    </Link>
+                  )}
+                </div>
+                <div className="space-y-4">
+                  {jobs.map((job) => (
+                    <JobCard key={job.id} job={job} />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Companies column */}
+            {companies.length > 0 && (
+              <div>
+                <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.28em] text-gray-400">
+                  Companies · {companies.length} results
+                </p>
+                <div className={bothMatch ? "space-y-3" : "grid gap-4 sm:grid-cols-2 lg:grid-cols-3"}>
+                  {bothMatch ? (
+                    companies.map((company) => (
+                      <Link
+                        key={company.id}
+                        href={`/dashboard/companies/${company.id}`}
+                        className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-white p-3 transition hover:border-[#BAE6FD] hover:bg-[#F7FBFF]"
+                      >
+                        {company.logo_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={company.logo_url} alt={company.name} className="h-10 w-10 flex-shrink-0 rounded-xl border border-gray-100 object-contain p-0.5" />
+                        ) : (
+                          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-[#E0F2FE] text-sm font-bold text-[#0C4A6E]">
+                            {company.name.charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-semibold text-gray-900"
+                             dangerouslySetInnerHTML={{ __html: highlight(company.name, rawQ) }}
+                          />
+                          <p className="truncate text-xs text-gray-400">
+                            {company.industry ?? "Company"} · {company.job_count} open roles
+                          </p>
+                        </div>
+                      </Link>
+                    ))
+                  ) : (
+                    companies.map((company) => (
+                      <CompanyCard
+                        key={company.id}
+                        company={company}
+                        isWatching={isWatching(company.id)}
+                        onWatch={(id) => void addCompany(id)}
+                        onUnwatch={(id) => void removeCompany(id)}
+                      />
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </main>
+  )
+}

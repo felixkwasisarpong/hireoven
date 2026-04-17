@@ -1,0 +1,381 @@
+"use client"
+
+import { useEffect, useMemo, useState } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
+import { Building2, ChevronDown, SlidersHorizontal } from "lucide-react"
+import CompanyCard from "@/components/companies/CompanyCard"
+import { useAuth } from "@/lib/hooks/useAuth"
+import { useWatchlist } from "@/lib/hooks/useWatchlist"
+import { createClient } from "@/lib/supabase/client"
+import { cn } from "@/lib/utils"
+import type { Company, CompanySize } from "@/types"
+
+const PAGE_SIZE = 24
+const ATS_OPTIONS = ["greenhouse", "lever", "workday", "icims", "bamboohr", "ashby", "custom"]
+const SIZE_OPTIONS: { value: CompanySize; label: string }[] = [
+  { value: "startup",    label: "Startup"    },
+  { value: "small",      label: "Small"      },
+  { value: "medium",     label: "Medium"     },
+  { value: "large",      label: "Large"      },
+  { value: "enterprise", label: "Enterprise" },
+]
+const SORT_OPTIONS = [
+  { value: "job_count",              label: "Most jobs"         },
+  { value: "sponsorship_confidence", label: "Highest sponsor score" },
+  { value: "created_at",             label: "Recently added"   },
+  { value: "name",                   label: "Alphabetical"     },
+]
+
+export default function CompaniesPage() {
+  const router      = useRouter()
+  const searchParams = useSearchParams()
+  const { user }    = useAuth()
+  const { addCompany, removeCompany, isWatching } = useWatchlist(user?.id)
+
+  const [all,        setAll]        = useState<Company[]>([])
+  const [industries, setIndustries] = useState<string[]>([])
+  const [newToday,   setNewToday]   = useState<Record<string, number>>({})
+  const [total,      setTotal]      = useState(0)
+  const [isLoading,  setIsLoading]  = useState(true)
+  const [offset,     setOffset]     = useState(0)
+  const [showFilters, setShowFilters] = useState(false)
+  const [industryOpen, setIndustryOpen] = useState(false)
+
+  // Filter state derived from URL
+  const selectedIndustries = useMemo(
+    () => searchParams.get("industry")?.split(",").filter(Boolean) ?? [],
+    [searchParams]
+  )
+  const selectedSizes = useMemo(
+    () => (searchParams.get("size")?.split(",").filter(Boolean) ?? []) as CompanySize[],
+    [searchParams]
+  )
+  const selectedAts    = searchParams.get("ats") ?? ""
+  const sponsorsH1b    = searchParams.get("sponsors_h1b") === "1"
+  const hasJobs        = searchParams.get("has_jobs") === "1"
+  const sort           = searchParams.get("sort") ?? "job_count"
+
+  function update(key: string, value: string | null) {
+    const next = new URLSearchParams(searchParams.toString())
+    if (value) next.set(key, value)
+    else next.delete(key)
+    setOffset(0)
+    router.replace(`?${next.toString()}`, { scroll: false })
+  }
+
+  function toggleList(key: string, current: string[], value: string) {
+    const next = current.includes(value) ? current.filter((v) => v !== value) : [...current, value]
+    update(key, next.join(",") || null)
+  }
+
+  useEffect(() => {
+    async function load() {
+      setIsLoading(true)
+      const supabase = createClient()
+
+      let q = supabase.from("companies").select("*", { count: "exact" }).eq("is_active", true)
+      if (selectedIndustries.length === 1) q = q.eq("industry", selectedIndustries[0])
+      else if (selectedIndustries.length > 1) q = (q as any).in("industry", selectedIndustries)
+      if (selectedSizes.length === 1) q = q.eq("size", selectedSizes[0])
+      else if (selectedSizes.length > 1) q = (q as any).in("size", selectedSizes)
+      if (selectedAts) q = q.eq("ats_type", selectedAts)
+      if (sponsorsH1b) q = q.eq("sponsors_h1b", true)
+      if (hasJobs) q = q.gt("job_count", 0)
+
+      const sortMap: Record<string, { col: string; asc: boolean }> = {
+        job_count:              { col: "job_count",              asc: false },
+        sponsorship_confidence: { col: "sponsorship_confidence", asc: false },
+        created_at:             { col: "created_at",             asc: false },
+        name:                   { col: "name",                   asc: true  },
+      }
+      const { col, asc } = sortMap[sort] ?? sortMap.job_count
+      const { data, count } = await q.order(col, { ascending: asc }).range(offset, offset + PAGE_SIZE - 1)
+
+      if (offset === 0) setAll((data as Company[]) ?? [])
+      else setAll((prev) => [...prev, ...((data as Company[]) ?? [])])
+      setTotal(count ?? 0)
+      setIsLoading(false)
+    }
+
+    void load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedIndustries.join(","), selectedSizes.join(","), selectedAts, sponsorsH1b, hasJobs, sort, offset])
+
+  // Fetch distinct industries for the filter dropdown
+  useEffect(() => {
+    async function loadIndustries() {
+      const supabase = createClient()
+      const { data } = await supabase.from("companies").select("industry").eq("is_active", true)
+      const unique = Array.from(new Set(
+        (data ?? []).map((r: any) => r.industry).filter(Boolean)
+      )).sort() as string[]
+      setIndustries(unique)
+    }
+    void loadIndustries()
+  }, [])
+
+  // Fetch new-today counts per company
+  useEffect(() => {
+    async function loadNewToday() {
+      const supabase = createClient()
+      const start = new Date(); start.setHours(0, 0, 0, 0)
+      const { data } = await (supabase
+        .from("jobs")
+        .select("company_id")
+        .eq("is_active", true)
+        .gte("first_detected_at", start.toISOString()) as any)
+
+      const map: Record<string, number> = {}
+      for (const row of (data ?? []) as { company_id: string }[]) {
+        map[row.company_id] = (map[row.company_id] ?? 0) + 1
+      }
+      setNewToday(map)
+    }
+    void loadNewToday()
+  }, [])
+
+  const activeFilterCount =
+    selectedIndustries.length + selectedSizes.length +
+    (selectedAts ? 1 : 0) + (sponsorsH1b ? 1 : 0) + (hasJobs ? 1 : 0)
+
+  return (
+    <main className="min-h-screen bg-[linear-gradient(180deg,#F7FBFF_0%,#F8FAFC_58%,#F8FAFC_100%)] px-4 py-6 lg:px-8">
+      <div className="mx-auto max-w-7xl space-y-5">
+
+        {/* Header */}
+        <section className="rounded-[32px] border border-white/80 bg-white/90 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.06)]">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-[#E0F2FE]">
+                  <Building2 className="h-5 w-5 text-[#0369A1]" />
+                </div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#0369A1]">
+                  Company Explorer
+                </p>
+              </div>
+              <h1 className="text-3xl font-semibold tracking-tight text-gray-900">
+                Companies we track
+              </h1>
+              <p className="mt-2 text-sm text-gray-500">
+                Tracking <span className="font-semibold text-gray-900">{total.toLocaleString()}</span> companies
+                {activeFilterCount > 0 && ` · ${activeFilterCount} filter${activeFilterCount !== 1 ? "s" : ""} active`}
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+              {/* Sort */}
+              <div className="relative">
+                <select
+                  value={sort}
+                  onChange={(e) => update("sort", e.target.value)}
+                  className="appearance-none rounded-2xl border border-gray-200 bg-white pl-4 pr-9 py-2.5 text-sm font-medium text-gray-700 outline-none transition focus:border-[#0369A1] focus:ring-2 focus:ring-[#0369A1]/15"
+                >
+                  {SORT_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              </div>
+
+              {/* Filters toggle */}
+              <button
+                type="button"
+                onClick={() => setShowFilters((v) => !v)}
+                className={cn(
+                  "inline-flex items-center gap-2 rounded-2xl border px-4 py-2.5 text-sm font-medium transition",
+                  showFilters || activeFilterCount > 0
+                    ? "border-[#0369A1] bg-[#E0F2FE] text-[#0369A1]"
+                    : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+                )}
+              >
+                <SlidersHorizontal className="h-4 w-4" />
+                Filters
+                {activeFilterCount > 0 && (
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#0369A1] text-[10px] font-bold text-white">
+                    {activeFilterCount}
+                  </span>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Filter panel */}
+          {showFilters && (
+            <div className="mt-5 rounded-2xl border border-gray-100 bg-[#F8FBFF] p-4 space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {/* Industry dropdown */}
+                <div>
+                  <p className="mb-2 text-xs font-semibold text-gray-500">Industry</p>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setIndustryOpen((v) => !v)}
+                      className="flex w-full items-center justify-between rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-700 transition hover:border-gray-300"
+                    >
+                      <span className="truncate">
+                        {selectedIndustries.length > 0
+                          ? `${selectedIndustries.length} selected`
+                          : "All industries"}
+                      </span>
+                      <ChevronDown className="h-4 w-4 flex-shrink-0 text-gray-400" />
+                    </button>
+                    {industryOpen && (
+                      <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-48 overflow-y-auto rounded-xl border border-gray-200 bg-white py-1 shadow-lg">
+                        {industries.map((ind) => (
+                          <button
+                            key={ind}
+                            type="button"
+                            onClick={() => toggleList("industry", selectedIndustries, ind)}
+                            className={cn(
+                              "flex w-full items-center gap-2 px-3 py-2 text-sm transition hover:bg-gray-50",
+                              selectedIndustries.includes(ind) ? "text-[#0369A1] font-medium" : "text-gray-700"
+                            )}
+                          >
+                            <span className={cn(
+                              "h-4 w-4 flex-shrink-0 rounded border transition",
+                              selectedIndustries.includes(ind)
+                                ? "border-[#0369A1] bg-[#0369A1]"
+                                : "border-gray-300"
+                            )} />
+                            {ind}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* ATS type */}
+                <div>
+                  <p className="mb-2 text-xs font-semibold text-gray-500">ATS type</p>
+                  <div className="relative">
+                    <select
+                      value={selectedAts}
+                      onChange={(e) => update("ats", e.target.value || null)}
+                      className="w-full appearance-none rounded-xl border border-gray-200 bg-white pl-3 pr-9 py-2.5 text-sm text-gray-700 outline-none transition focus:border-[#0369A1]"
+                    >
+                      <option value="">Any ATS</option>
+                      {ATS_OPTIONS.map((ats) => (
+                        <option key={ats} value={ats}>
+                          {ats.charAt(0).toUpperCase() + ats.slice(1)}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  </div>
+                </div>
+
+                {/* Toggles */}
+                <div className="flex flex-col gap-2 sm:col-span-2 lg:col-span-2">
+                  <p className="text-xs font-semibold text-gray-500">Quick filters</p>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => update("sponsors_h1b", sponsorsH1b ? null : "1")}
+                      className={cn(
+                        "rounded-xl border px-4 py-2 text-sm font-medium transition",
+                        sponsorsH1b
+                          ? "border-[#0369A1] bg-[#E0F2FE] text-[#0369A1]"
+                          : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+                      )}
+                    >
+                      Sponsors H-1B
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => update("has_jobs", hasJobs ? null : "1")}
+                      className={cn(
+                        "rounded-xl border px-4 py-2 text-sm font-medium transition",
+                        hasJobs
+                          ? "border-[#0369A1] bg-[#E0F2FE] text-[#0369A1]"
+                          : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+                      )}
+                    >
+                      Currently hiring
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Size filter pills */}
+              <div>
+                <p className="mb-2 text-xs font-semibold text-gray-500">Company size</p>
+                <div className="flex flex-wrap gap-2">
+                  {SIZE_OPTIONS.map((o) => (
+                    <button
+                      key={o.value}
+                      type="button"
+                      onClick={() => toggleList("size", selectedSizes, o.value)}
+                      className={cn(
+                        "rounded-xl border px-3 py-1.5 text-sm font-medium transition",
+                        selectedSizes.includes(o.value)
+                          ? "border-[#0369A1] bg-[#E0F2FE] text-[#0369A1]"
+                          : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+                      )}
+                    >
+                      {o.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {activeFilterCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    router.replace("/dashboard/companies", { scroll: false })
+                    setOffset(0)
+                  }}
+                  className="text-sm text-red-500 hover:text-red-700 transition"
+                >
+                  Clear all filters
+                </button>
+              )}
+            </div>
+          )}
+        </section>
+
+        {/* Grid */}
+        {isLoading && all.length === 0 ? (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 9 }).map((_, i) => (
+              <div key={i} className="h-52 animate-pulse rounded-2xl bg-white/80" />
+            ))}
+          </div>
+        ) : all.length === 0 ? (
+          <div className="rounded-[28px] border border-dashed border-gray-300 bg-white/60 px-8 py-14 text-center">
+            <p className="text-lg font-semibold text-gray-900">No companies match your filters</p>
+            <p className="mt-2 text-sm text-gray-500">Try removing some filters to see more results.</p>
+          </div>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {all.map((company) => (
+              <CompanyCard
+                key={company.id}
+                company={company}
+                newJobsToday={newToday[company.id]}
+                isWatching={isWatching(company.id)}
+                onWatch={(id) => void addCompany(id)}
+                onUnwatch={(id) => void removeCompany(id)}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Load more */}
+        {!isLoading && all.length < total && (
+          <div className="flex justify-center pt-2">
+            <button
+              type="button"
+              onClick={() => setOffset((o) => o + PAGE_SIZE)}
+              className="rounded-2xl border border-gray-200 bg-white px-6 py-3 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+            >
+              Load more companies
+            </button>
+          </div>
+        )}
+      </div>
+    </main>
+  )
+}

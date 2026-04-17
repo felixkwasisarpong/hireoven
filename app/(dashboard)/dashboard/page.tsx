@@ -6,11 +6,13 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import {
   BellRing,
   Bookmark,
+  Building2,
   Globe2,
   LogOut,
   UserCircle2,
   Waves,
 } from "lucide-react"
+import GlobalSearchBar from "@/components/search/GlobalSearchBar"
 import JobFeed from "@/components/jobs/JobFeed"
 import NotificationBell from "@/components/notifications/NotificationBell"
 import PushNotificationSetup from "@/components/notifications/PushNotificationSetup"
@@ -39,10 +41,11 @@ type TopHiringCompany = {
 }
 
 const NAV_ITEMS = [
-  { label: "Feed", href: "/dashboard", icon: Waves },
-  { label: "Watchlist", href: "/dashboard/watchlist", icon: Bookmark },
-  { label: "Alerts", href: "/dashboard/alerts", icon: BellRing },
-  { label: "Profile", href: "/dashboard/onboarding", icon: UserCircle2 },
+  { label: "Feed",      href: "/dashboard",           icon: Waves      },
+  { label: "Companies", href: "/dashboard/companies", icon: Building2  },
+  { label: "Watchlist", href: "/dashboard/watchlist", icon: Bookmark   },
+  { label: "Alerts",    href: "/dashboard/alerts",    icon: BellRing   },
+  { label: "Profile",   href: "/dashboard/onboarding",icon: UserCircle2},
 ]
 
 function getInitials(name?: string | null, email?: string | null) {
@@ -141,6 +144,16 @@ export default function DashboardPage() {
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(3,105,161,0.10),_transparent_35%),linear-gradient(180deg,#F7FBFF_0%,#F8FAFC_55%,#F8FAFC_100%)]">
+      {/* Sticky global search bar */}
+      <header className="sticky top-0 z-40 border-b border-gray-100 bg-white/90 backdrop-blur-sm">
+        <div className="mx-auto flex max-w-[1680px] items-center gap-4 px-4 py-3 lg:px-6">
+          <div className="hidden w-[240px] flex-shrink-0 lg:block" />
+          <div className="flex flex-1 justify-center">
+            <GlobalSearchBar />
+          </div>
+          <div className="hidden w-[240px] flex-shrink-0 xl:block" />
+        </div>
+      </header>
       <div className="mx-auto max-w-[1680px] px-4 py-4 lg:px-6">
         <div className="grid gap-6 lg:grid-cols-[240px_minmax(0,1fr)] xl:grid-cols-[240px_minmax(0,1fr)_320px]">
           <aside className="rounded-[28px] border border-white/80 bg-white/90 p-4 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur lg:sticky lg:top-4 lg:h-[calc(100vh-2rem)] lg:overflow-y-auto">
