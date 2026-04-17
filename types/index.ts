@@ -44,6 +44,10 @@ export type NotificationChannel = 'email' | 'push' | 'both';
 
 export type CrawlStatus = 'success' | 'failed' | 'unchanged';
 
+export type JobWithinWindow = 'all' | '1h' | '6h' | '24h' | '3d';
+
+export type JobSortOption = 'freshest' | 'match' | 'relevant';
+
 // ---------------------------------------------------------------------------
 // Companies
 // ---------------------------------------------------------------------------
@@ -281,6 +285,20 @@ export type H1BRecordInsert = Omit<H1BRecord, 'id' | 'created_at'> & {
   id?: string;
   created_at?: string;
 };
+
+// ---------------------------------------------------------------------------
+// UI filter state
+// ---------------------------------------------------------------------------
+
+export interface JobFilters {
+  remote?: boolean;
+  sponsorship?: boolean;
+  seniority?: SeniorityLevel[];
+  employment_type?: EmploymentType[];
+  within?: JobWithinWindow;
+  company_ids?: string[];
+  sort?: JobSortOption;
+}
 
 // ---------------------------------------------------------------------------
 // Supabase Database type map (for typed client usage)
