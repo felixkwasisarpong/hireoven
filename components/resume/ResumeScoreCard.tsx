@@ -59,8 +59,16 @@ export default function ResumeScoreCard({ resume }: { resume: Resume }) {
     return () => window.clearTimeout(timeout)
   }, [score])
 
+  const breakdownItems = [
+    ["Completeness", breakdown.completeness, 30],
+    ["Achievements", breakdown.achievements, 25],
+    ["Skills", breakdown.skillsClarity, 20],
+    ["Summary", breakdown.summaryQuality, 15],
+    ["Contact", breakdown.contactInfo, 10],
+  ] as const
+
   return (
-    <div className="rounded-[28px] border border-gray-200 bg-white p-5 shadow-[0_20px_60px_rgba(15,23,42,0.05)]">
+    <div className="rounded-[20px] border border-slate-200/80 bg-white p-5 shadow-[0_6px_18px_rgba(15,23,42,0.035)]">
       <div className="flex items-center gap-4">
         <div
           className="relative flex h-20 w-20 shrink-0 items-center justify-center rounded-full"
@@ -84,25 +92,21 @@ export default function ResumeScoreCard({ resume }: { resume: Resume }) {
         </div>
       </div>
 
-      <div className="mt-6 grid grid-cols-2 gap-2 sm:grid-cols-3">
-        {[
-          ["Completeness", breakdown.completeness, 30],
-          ["Achievements", breakdown.achievements, 25],
-          ["Skills", breakdown.skillsClarity, 20],
-          ["Summary", breakdown.summaryQuality, 15],
-          ["Contact", breakdown.contactInfo, 10],
-        ].map(([label, value, total]) => {
+      <div className="mt-6 space-y-4">
+        {breakdownItems.map(([label, value, total]) => {
           const pct = Math.round(((value as number) / (total as number)) * 100)
           return (
-            <div key={label as string} className="rounded-2xl border border-gray-200 bg-[#FAFCFF] px-3 py-3">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-400 truncate">
-                {label}
-              </p>
-              <p className="mt-1.5 text-base font-semibold text-gray-900">
-                {value as number}
-                <span className="text-xs font-medium text-gray-400">/{total as number}</span>
-              </p>
-              <div className="mt-2 h-1 overflow-hidden rounded-full bg-gray-200">
+            <div key={label as string}>
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-gray-400">
+                  {label}
+                </p>
+                <p className="text-sm font-semibold text-gray-900">
+                  {value as number}
+                  <span className="text-xs font-medium text-gray-400">/{total as number}</span>
+                </p>
+              </div>
+              <div className="mt-2 h-2 overflow-hidden rounded-full bg-gray-200">
                 <div
                   className="h-full rounded-full transition-all duration-700"
                   style={{
@@ -117,8 +121,8 @@ export default function ResumeScoreCard({ resume }: { resume: Resume }) {
       </div>
 
       {tips.length > 0 && (
-        <div className="mt-6 rounded-2xl border border-[#D6EEFF] bg-[#F5FBFF] px-4 py-4">
-          <p className="text-sm font-semibold text-[#0C4A6E]">Improvement tips</p>
+        <div className="mt-6 rounded-[18px] border border-[#FFD9C2] bg-[#FFF8F4] px-4 py-4">
+          <p className="text-sm font-semibold text-[#9A3412]">Improvement tips</p>
           <div className="mt-3 space-y-2 text-sm leading-6 text-gray-600">
             {tips.map((tip) => (
               <p key={tip}>{tip}</p>

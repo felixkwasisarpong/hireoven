@@ -57,7 +57,7 @@ export default function NotificationBell({ userId }: { userId?: string }) {
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className="relative inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-gray-200 bg-white text-gray-700 transition hover:border-[#BAE6FD] hover:text-[#0C4A6E]"
+        className="relative inline-flex h-11 w-11 items-center justify-center rounded-[16px] border border-slate-200/80 bg-white text-gray-700 transition hover:border-[#FFD2B8] hover:text-[#062246]"
         aria-label="Open notifications"
       >
         <Bell className="h-5 w-5" />
@@ -69,7 +69,7 @@ export default function NotificationBell({ userId }: { userId?: string }) {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-14 z-30 w-[360px] overflow-hidden rounded-[24px] border border-gray-200 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.14)]">
+        <div className="absolute right-0 top-14 z-30 w-[360px] overflow-hidden rounded-[18px] border border-slate-200/80 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.14)]">
           <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
             <div>
               <p className="text-sm font-semibold text-gray-900">Notifications</p>
@@ -82,7 +82,7 @@ export default function NotificationBell({ userId }: { userId?: string }) {
             <button
               type="button"
               onClick={() => void markAllRead()}
-              className="text-xs font-medium text-[#0C4A6E] transition hover:text-[#0369A1]"
+              className="text-xs font-medium text-[#062246] transition hover:text-[#FF5C18]"
             >
               Mark all read
             </button>
@@ -114,7 +114,7 @@ export default function NotificationBell({ userId }: { userId?: string }) {
                     {notification.opened_at ? (
                       <span className="block h-2.5 w-2.5 rounded-full bg-transparent" />
                     ) : (
-                      <span className="block h-2.5 w-2.5 rounded-full bg-[#0369A1]" />
+                      <span className="block h-2.5 w-2.5 rounded-full bg-[#FF5C18]" />
                     )}
                   </div>
 
@@ -141,7 +141,7 @@ export default function NotificationBell({ userId }: { userId?: string }) {
           <div className="flex items-center justify-between px-5 py-4">
             <Link
               href="/dashboard/notifications"
-              className="inline-flex items-center gap-1 text-sm font-medium text-[#0C4A6E] transition hover:text-[#0369A1]"
+              className="inline-flex items-center gap-1 text-sm font-medium text-[#062246] transition hover:text-[#FF5C18]"
               onClick={() => setOpen(false)}
             >
               View all

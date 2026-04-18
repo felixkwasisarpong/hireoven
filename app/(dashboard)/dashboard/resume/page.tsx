@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { FileText, Loader2, Sparkles, Trash2 } from "lucide-react"
+import DashboardPageHeader from "@/components/layout/DashboardPageHeader"
 import ParsedResumeView from "@/components/resume/ParsedResumeView"
 import { useResumeContext } from "@/components/resume/ResumeProvider"
 import ResumeScoreCard from "@/components/resume/ResumeScoreCard"
@@ -21,9 +22,9 @@ function scoreTone(score: number | null) {
 
 function ProcessingResumeCard({ resume }: { resume: Resume }) {
   return (
-    <div className="rounded-[32px] border border-white/80 bg-white/90 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.06)]">
+    <div className="surface-card p-6">
       <div className="flex items-center gap-4">
-        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#E0F2FE] text-[#0C4A6E]">
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#FFF1E8] text-[#062246]">
           <Loader2 className="h-6 w-6 animate-spin" />
         </div>
         <div>
@@ -53,7 +54,7 @@ function FailedResumeCard({
   onReplace: () => void
 }) {
   return (
-    <div className="rounded-[32px] border border-red-200 bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.05)]">
+    <div className="surface-card border-red-200 p-6">
       <p className="text-lg font-semibold text-gray-900">{resume.name ?? resume.file_name}</p>
       <p className="mt-2 text-sm leading-6 text-gray-600">
         Hireoven could not finish parsing this file. Try replacing it with a cleaner PDF or DOCX export.
@@ -61,7 +62,7 @@ function FailedResumeCard({
       <button
         type="button"
         onClick={onReplace}
-        className="mt-5 inline-flex items-center gap-2 rounded-2xl bg-[#0369A1] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#075985]"
+        className="mt-5 inline-flex items-center gap-2 rounded-2xl bg-[#FF5C18] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#E14F0E]"
       >
         Replace resume
       </button>
@@ -259,27 +260,20 @@ export default function ResumePage() {
   }
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(3,105,161,0.10),_transparent_35%),linear-gradient(180deg,#F7FBFF_0%,#F8FAFC_60%,#F8FAFC_100%)] px-4 py-6 lg:px-8">
-      <div className="mx-auto max-w-6xl space-y-6">
-        <section className="rounded-[32px] border border-white/80 bg-white/90 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.06)]">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#0369A1]">
-                Resume intelligence
-              </p>
-              <h1 className="mt-3 text-3xl font-semibold tracking-tight text-gray-900">
-                Turn your resume into structured data Hireoven can work with
-              </h1>
-              <p className="mt-3 max-w-3xl text-sm leading-7 text-gray-500">
-                Upload up to three resume variants, let AI parse them into a usable profile, and unlock faster job triage across the rest of the product.
-              </p>
-            </div>
-
-            <div className="rounded-3xl border border-[#D6EEFF] bg-[#F5FBFF] px-4 py-3 text-sm text-[#0C4A6E]">
+    <main className="app-page">
+      <div className="app-shell max-w-[1320px] space-y-6">
+        <DashboardPageHeader
+          kicker="Resume intelligence"
+          title="Turn your resume into structured data Hireoven can work with"
+          description="Upload up to three resume variants, let AI parse them into a usable profile, and unlock faster job triage across the rest of the product."
+          backHref="/dashboard"
+          backLabel="Back to dashboard"
+          meta={
+            <div className="rounded-full border border-slate-200 bg-slate-50/85 px-3 py-1.5 text-sm font-medium text-[#062246]">
               {resumes.length}/3 resumes uploaded
             </div>
-          </div>
-        </section>
+          }
+        />
 
         {(resumes.length < 3 || !hasResume) && (
           <section id="resume-upload">
@@ -294,8 +288,8 @@ export default function ResumePage() {
         )}
 
         {!isLoading && !hasResume && (
-          <section className="rounded-[32px] border border-white/80 bg-white/90 p-10 text-center shadow-[0_20px_60px_rgba(15,23,42,0.05)]">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[24px] bg-[#E0F2FE] text-[#0C4A6E]">
+          <section className="surface-card py-10 text-center">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[24px] bg-[#FFF1E8] text-[#062246]">
               <Sparkles className="h-7 w-7" />
             </div>
             <h2 className="mt-5 text-2xl font-semibold text-gray-900">
@@ -309,8 +303,8 @@ export default function ResumePage() {
 
         {isLoading && (
           <div className="space-y-4">
-            <div className="h-44 animate-pulse rounded-[32px] bg-white/70" />
-            <div className="h-96 animate-pulse rounded-[32px] bg-white/70" />
+            <div className="surface-card h-44 animate-pulse" />
+            <div className="surface-card h-96 animate-pulse" />
           </div>
         )}
 
@@ -341,13 +335,13 @@ export default function ResumePage() {
               return (
                 <section
                   key={resume.id}
-                  className="rounded-[32px] border border-white/80 bg-white/90 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.06)]"
+                  className="surface-card overflow-hidden"
                 >
-                  <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-                    <div className="space-y-5 xl:max-w-3xl">
+                  <div className="grid gap-0 xl:grid-cols-[minmax(0,1fr)_320px]">
+                    <div className="space-y-5 px-5 py-5 md:px-6 md:py-6">
                       <div className="flex flex-wrap items-center gap-3">
                         {resume.is_primary && (
-                          <span className="rounded-full bg-[#E0F2FE] px-3 py-1.5 text-sm font-medium text-[#0C4A6E]">
+                          <span className="rounded-full bg-[#FFF1E8] px-3 py-1.5 text-sm font-medium text-[#062246]">
                             Primary resume
                           </span>
                         )}
@@ -373,8 +367,8 @@ export default function ResumePage() {
                         </p>
                       </div>
 
-                      <div className="grid gap-3 sm:grid-cols-3">
-                        <div className="rounded-2xl border border-gray-200 bg-[#FAFCFF] px-4 py-3">
+                      <div className="section-divider-grid sm:grid sm:grid-cols-[minmax(0,2fr)_1fr_1fr] sm:divide-x sm:divide-slate-200/80">
+                        <div className="section-divider-item">
                           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">
                             Top skills
                           </p>
@@ -383,7 +377,7 @@ export default function ResumePage() {
                               topSkills.map((skill) => (
                                 <span
                                   key={skill}
-                                  className="rounded-full bg-white px-2.5 py-1 text-sm font-medium text-gray-700"
+                                  className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-sm font-medium text-gray-700"
                                 >
                                   {skill}
                                 </span>
@@ -394,7 +388,7 @@ export default function ResumePage() {
                           </div>
                         </div>
 
-                        <div className="rounded-2xl border border-gray-200 bg-[#FAFCFF] px-4 py-3">
+                        <div className="section-divider-item border-t border-slate-200/80 sm:border-t-0">
                           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">
                             Experience entries
                           </p>
@@ -403,7 +397,7 @@ export default function ResumePage() {
                           </p>
                         </div>
 
-                        <div className="rounded-2xl border border-gray-200 bg-[#FAFCFF] px-4 py-3">
+                        <div className="section-divider-item border-t border-slate-200/80 sm:border-t-0">
                           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">
                             Education entries
                           </p>
@@ -413,14 +407,14 @@ export default function ResumePage() {
                         </div>
                       </div>
 
-                      <div className="flex flex-wrap items-center gap-3">
+                      <div className="toolbar-strip">
                         <Link
                           href={
                             meta?.jobId
                               ? `/dashboard/resume/edit?jobId=${meta.jobId}`
                               : "/dashboard/resume/edit"
                           }
-                          className="inline-flex items-center gap-2 rounded-2xl bg-[#0369A1] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#075985]"
+                          className="inline-flex items-center gap-2 rounded-2xl bg-[#FF5C18] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#E14F0E]"
                         >
                           <Sparkles className="h-4 w-4" />
                           Edit resume
@@ -434,7 +428,7 @@ export default function ResumePage() {
                         {meta?.jobId && meta.jobTitle && (
                           <Link
                             href={`/dashboard/resume/edit?jobId=${meta.jobId}`}
-                            className="rounded-2xl border border-[#BAE6FD] bg-[#F0F9FF] px-4 py-2.5 text-sm font-medium text-[#0C4A6E] transition hover:bg-[#E0F2FE]"
+                            className="rounded-2xl border border-[#FFD2B8] bg-[#FFF7F2] px-4 py-2.5 text-sm font-medium text-[#062246] transition hover:bg-[#FFF1E8]"
                           >
                             Optimize for {meta.jobTitle}
                           </Link>
@@ -469,12 +463,14 @@ export default function ResumePage() {
                             type="button"
                             disabled={isBusy}
                             onClick={() => void handleSetPrimary(resume)}
-                            className="rounded-2xl border border-[#BAE6FD] bg-[#F0F9FF] px-4 py-2.5 text-sm font-medium text-[#0C4A6E] transition hover:bg-[#E0F2FE] disabled:opacity-60"
+                            className="rounded-2xl border border-[#FFD2B8] bg-[#FFF7F2] px-4 py-2.5 text-sm font-medium text-[#062246] transition hover:bg-[#FFF1E8] disabled:opacity-60"
                           >
                             Set as primary
                           </button>
                         )}
+                      </div>
 
+                      <div className="flex flex-wrap items-center gap-3">
                         <button
                           type="button"
                           onClick={() =>
@@ -505,16 +501,16 @@ export default function ResumePage() {
                       </div>
                     </div>
 
-                    <div className="xl:w-[320px]">
+                    <div className="border-t border-slate-200/80 bg-slate-50/55 px-5 py-5 md:px-6 md:py-6 xl:border-l xl:border-t-0">
                       <ResumeScoreCard resume={resume} />
                     </div>
                   </div>
 
-                  <div className="mt-6 rounded-[28px] border border-gray-200 bg-[#FAFCFF]">
+                  <div className="border-t border-slate-200/80 bg-slate-50/65">
                     <button
                       type="button"
                       onClick={() => setExpandedId((current) => (current === resume.id ? null : resume.id))}
-                      className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left"
+                      className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left md:px-6"
                     >
                       <div>
                         <p className="text-sm font-semibold text-gray-900">View full parse</p>
@@ -528,7 +524,7 @@ export default function ResumePage() {
                     </button>
 
                     {isExpanded && (
-                      <div className="border-t border-gray-200 px-5 py-5">
+                      <div className="border-t border-gray-200 px-5 py-5 md:px-6">
                         <ParsedResumeView resume={resume} />
                       </div>
                     )}
@@ -540,8 +536,8 @@ export default function ResumePage() {
         )}
 
         {primaryResume && (
-          <section className="rounded-[32px] border border-[#D6EEFF] bg-[#F5FBFF] p-6">
-            <p className="text-sm font-semibold text-[#0C4A6E]">
+          <section className="surface-inset p-6">
+            <p className="text-sm font-semibold text-[#062246]">
               Your primary resume is ready for Phase 2
             </p>
             <p className="mt-2 text-sm leading-7 text-gray-600">

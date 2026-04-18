@@ -189,11 +189,11 @@ export default function ResumeUploader({
         if (file) handleFile(file)
       }}
       className={cn(
-        "rounded-[28px] border border-dashed bg-white transition",
-        compact ? "p-4" : "p-6 sm:p-8",
+        "rounded-[22px] border border-dashed bg-white transition",
+        compact ? "p-4" : "p-5 sm:p-6",
         dragActive
-          ? "border-[#0369A1] bg-[#F0F9FF]"
-          : "border-gray-300 hover:border-[#7DD3FC] hover:bg-[#FAFCFF]"
+          ? "border-[#FF5C18] bg-[#FFF7F2]"
+          : "border-slate-300 hover:border-[#FFB088] hover:bg-[#FFF8F4]"
       )}
     >
       <input
@@ -208,7 +208,7 @@ export default function ResumeUploader({
       />
 
       <div className={cn("flex gap-4", compact ? "items-start" : "items-center")}>
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#E0F2FE] text-[#0C4A6E]">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#FFF1E8] text-[#062246]">
           {phase === "uploading" || phase === "processing" ? (
             <Loader2 className="h-5 w-5 animate-spin" />
           ) : showPrompt ? (
@@ -225,7 +225,7 @@ export default function ResumeUploader({
           <p className="mt-1 text-sm leading-6 text-gray-500">{helperCopy}</p>
 
           {!compact && showPrompt && (
-            <ul className="mt-4 space-y-2 text-sm text-gray-600">
+            <ul className="mt-4 grid gap-2 text-sm text-gray-600 sm:grid-cols-2">
               <li>AI gap analysis against any job</li>
               <li>Instant match scores on every listing</li>
               <li>One-click cover letter generation</li>
@@ -235,7 +235,7 @@ export default function ResumeUploader({
         </div>
       </div>
 
-      <div className="mt-5 flex flex-wrap items-center gap-3 text-xs font-medium uppercase tracking-[0.16em] text-gray-400">
+      <div className="mt-5 flex flex-wrap items-center gap-3 text-[11px] font-medium uppercase tracking-[0.16em] text-gray-400">
         <span>Accepts .pdf and .docx</span>
         <span>Max 5MB</span>
       </div>
@@ -268,11 +268,11 @@ export default function ResumeUploader({
             <div className="mt-4 space-y-2">
               <div className="h-2 overflow-hidden rounded-full bg-gray-100">
                 <div
-                  className="h-full rounded-full bg-[#0369A1] transition-all duration-300"
+                  className="h-full rounded-full bg-[#FF5C18] transition-all duration-300"
                   style={{ width: `${Math.max(progress, phase === "processing" ? 100 : 6)}%` }}
                 />
               </div>
-              <p className="text-sm text-[#0C4A6E]">
+              <p className="text-sm text-[#062246]">
                 {phase === "uploading" ? `Uploading... ${progress}%` : "AI is reading your resume..."}
               </p>
             </div>
@@ -289,7 +289,7 @@ export default function ResumeUploader({
           type="button"
           onClick={openPicker}
           className={cn(
-            "mt-5 flex w-full items-center justify-center gap-2 rounded-2xl border border-gray-200 bg-white text-sm font-medium text-gray-700 transition hover:border-[#7DD3FC] hover:text-[#0C4A6E]",
+            "mt-5 flex w-full items-center justify-center gap-2 rounded-2xl border border-gray-200 bg-white text-sm font-medium text-gray-700 transition hover:border-[#FFB088] hover:bg-[#FFF8F4] hover:text-[#062246]",
             compact ? "px-4 py-3" : "px-5 py-4"
           )}
         >
@@ -304,7 +304,7 @@ export default function ResumeUploader({
             type="button"
             onClick={startUpload}
             disabled={phase === "uploading" || phase === "processing"}
-            className="inline-flex items-center gap-2 rounded-2xl bg-[#0369A1] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#075985] disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex items-center gap-2 rounded-2xl bg-[#FF5C18] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#E14F0E] disabled:cursor-not-allowed disabled:opacity-60"
           >
             {phase === "uploading" || phase === "processing" ? (
               <Loader2 className="h-4 w-4 animate-spin" />

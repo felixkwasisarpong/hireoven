@@ -1,9 +1,11 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Building2, ChevronDown, SlidersHorizontal } from "lucide-react"
 import CompanyCard from "@/components/companies/CompanyCard"
+import DashboardPageHeader from "@/components/layout/DashboardPageHeader"
 import { useAuth } from "@/lib/hooks/useAuth"
 import { useWatchlist } from "@/lib/hooks/useWatchlist"
 import { createClient } from "@/lib/supabase/client"
@@ -139,27 +141,41 @@ export default function CompaniesPage() {
     (selectedAts ? 1 : 0) + (sponsorsH1b ? 1 : 0) + (hasJobs ? 1 : 0)
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(180deg,#F7FBFF_0%,#F8FAFC_58%,#F8FAFC_100%)] px-4 py-6 lg:px-8">
-      <div className="mx-auto max-w-7xl space-y-5">
+    <main className="app-page">
+      <div className="app-shell max-w-7xl space-y-5">
+        <DashboardPageHeader
+          kicker="Company explorer"
+          title="Companies we track"
+          description={`Tracking ${total.toLocaleString()} companies${activeFilterCount > 0 ? ` · ${activeFilterCount} active filter${activeFilterCount !== 1 ? "s" : ""}` : ""}`}
+          backHref="/dashboard"
+          backLabel="Back to dashboard"
+          meta={
+            <Link
+              href="/dashboard/search"
+              className="subpage-back"
+            >
+              Search jobs and companies
+            </Link>
+          }
+        />
 
         {/* Header */}
-        <section className="rounded-[32px] border border-white/80 bg-white/90 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.06)]">
+        <section className="surface-card p-5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <div className="flex items-center gap-2 mb-2">
-                <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-[#E0F2FE]">
-                  <Building2 className="h-5 w-5 text-[#0369A1]" />
+                <div className="flex h-9 w-9 items-center justify-center rounded-[16px] bg-[#FFF1E8]">
+                  <Building2 className="h-5 w-5 text-[#FF5C18]" />
                 </div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#0369A1]">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#FF5C18]">
                   Company Explorer
                 </p>
               </div>
-              <h1 className="text-3xl font-semibold tracking-tight text-gray-900">
-                Companies we track
-              </h1>
+              <h2 className="text-xl font-semibold tracking-tight text-gray-900">
+                Refine the list
+              </h2>
               <p className="mt-2 text-sm text-gray-500">
-                Tracking <span className="font-semibold text-gray-900">{total.toLocaleString()}</span> companies
-                {activeFilterCount > 0 && ` · ${activeFilterCount} filter${activeFilterCount !== 1 ? "s" : ""} active`}
+                Sort by hiring volume, sponsorship signal, or ATS footprint and narrow the list to the companies worth attention now.
               </p>
             </div>
 
@@ -169,7 +185,7 @@ export default function CompaniesPage() {
                 <select
                   value={sort}
                   onChange={(e) => update("sort", e.target.value)}
-                  className="appearance-none rounded-2xl border border-gray-200 bg-white pl-4 pr-9 py-2.5 text-sm font-medium text-gray-700 outline-none transition focus:border-[#0369A1] focus:ring-2 focus:ring-[#0369A1]/15"
+                  className="appearance-none rounded-2xl border border-gray-200 bg-white pl-4 pr-9 py-2.5 text-sm font-medium text-gray-700 outline-none transition focus:border-[#FF5C18] focus:ring-2 focus:ring-[#FF5C18]/15"
                 >
                   {SORT_OPTIONS.map((o) => (
                     <option key={o.value} value={o.value}>{o.label}</option>
@@ -185,14 +201,14 @@ export default function CompaniesPage() {
                 className={cn(
                   "inline-flex items-center gap-2 rounded-2xl border px-4 py-2.5 text-sm font-medium transition",
                   showFilters || activeFilterCount > 0
-                    ? "border-[#0369A1] bg-[#E0F2FE] text-[#0369A1]"
+                    ? "border-[#FF5C18] bg-[#FFF1E8] text-[#FF5C18]"
                     : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
                 )}
               >
                 <SlidersHorizontal className="h-4 w-4" />
                 Filters
                 {activeFilterCount > 0 && (
-                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#0369A1] text-[10px] font-bold text-white">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#FF5C18] text-[10px] font-bold text-white">
                     {activeFilterCount}
                   </span>
                 )}
@@ -202,7 +218,7 @@ export default function CompaniesPage() {
 
           {/* Filter panel */}
           {showFilters && (
-            <div className="mt-5 rounded-2xl border border-gray-100 bg-[#F8FBFF] p-4 space-y-4">
+            <div className="surface-inset mt-5 space-y-4 p-4">
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 {/* Industry dropdown */}
                 <div>
@@ -221,7 +237,7 @@ export default function CompaniesPage() {
                       <ChevronDown className="h-4 w-4 flex-shrink-0 text-gray-400" />
                     </button>
                     {industryOpen && (
-                      <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-48 overflow-y-auto rounded-xl border border-gray-200 bg-white py-1 shadow-lg">
+                      <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-48 overflow-y-auto rounded-2xl border border-gray-200 bg-white py-1 shadow-[0_18px_40px_rgba(15,23,42,0.12)]">
                         {industries.map((ind) => (
                           <button
                             key={ind}
@@ -229,13 +245,13 @@ export default function CompaniesPage() {
                             onClick={() => toggleList("industry", selectedIndustries, ind)}
                             className={cn(
                               "flex w-full items-center gap-2 px-3 py-2 text-sm transition hover:bg-gray-50",
-                              selectedIndustries.includes(ind) ? "text-[#0369A1] font-medium" : "text-gray-700"
+                              selectedIndustries.includes(ind) ? "text-[#FF5C18] font-medium" : "text-gray-700"
                             )}
                           >
                             <span className={cn(
                               "h-4 w-4 flex-shrink-0 rounded border transition",
                               selectedIndustries.includes(ind)
-                                ? "border-[#0369A1] bg-[#0369A1]"
+                                ? "border-[#FF5C18] bg-[#FF5C18]"
                                 : "border-gray-300"
                             )} />
                             {ind}
@@ -253,7 +269,7 @@ export default function CompaniesPage() {
                     <select
                       value={selectedAts}
                       onChange={(e) => update("ats", e.target.value || null)}
-                      className="w-full appearance-none rounded-xl border border-gray-200 bg-white pl-3 pr-9 py-2.5 text-sm text-gray-700 outline-none transition focus:border-[#0369A1]"
+                      className="w-full appearance-none rounded-xl border border-gray-200 bg-white pl-3 pr-9 py-2.5 text-sm text-gray-700 outline-none transition focus:border-[#FF5C18]"
                     >
                       <option value="">Any ATS</option>
                       {ATS_OPTIONS.map((ats) => (
@@ -276,7 +292,7 @@ export default function CompaniesPage() {
                       className={cn(
                         "rounded-xl border px-4 py-2 text-sm font-medium transition",
                         sponsorsH1b
-                          ? "border-[#0369A1] bg-[#E0F2FE] text-[#0369A1]"
+                          ? "border-[#FF5C18] bg-[#FFF1E8] text-[#FF5C18]"
                           : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
                       )}
                     >
@@ -288,7 +304,7 @@ export default function CompaniesPage() {
                       className={cn(
                         "rounded-xl border px-4 py-2 text-sm font-medium transition",
                         hasJobs
-                          ? "border-[#0369A1] bg-[#E0F2FE] text-[#0369A1]"
+                          ? "border-[#FF5C18] bg-[#FFF1E8] text-[#FF5C18]"
                           : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
                       )}
                     >
@@ -310,7 +326,7 @@ export default function CompaniesPage() {
                       className={cn(
                         "rounded-xl border px-3 py-1.5 text-sm font-medium transition",
                         selectedSizes.includes(o.value)
-                          ? "border-[#0369A1] bg-[#E0F2FE] text-[#0369A1]"
+                          ? "border-[#FF5C18] bg-[#FFF1E8] text-[#FF5C18]"
                           : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
                       )}
                     >
@@ -340,11 +356,11 @@ export default function CompaniesPage() {
         {isLoading && all.length === 0 ? (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {Array.from({ length: 9 }).map((_, i) => (
-              <div key={i} className="h-52 animate-pulse rounded-2xl bg-white/80" />
+              <div key={i} className="surface-card h-52 animate-pulse" />
             ))}
           </div>
         ) : all.length === 0 ? (
-          <div className="rounded-[28px] border border-dashed border-gray-300 bg-white/60 px-8 py-14 text-center">
+          <div className="empty-state py-12">
             <p className="text-lg font-semibold text-gray-900">No companies match your filters</p>
             <p className="mt-2 text-sm text-gray-500">Try removing some filters to see more results.</p>
           </div>
@@ -369,7 +385,7 @@ export default function CompaniesPage() {
             <button
               type="button"
               onClick={() => setOffset((o) => o + PAGE_SIZE)}
-              className="rounded-2xl border border-gray-200 bg-white px-6 py-3 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+              className="rounded-2xl border border-gray-200 bg-white px-6 py-3 text-sm font-medium text-gray-700 shadow-sm transition hover:border-gray-300 hover:bg-gray-50"
             >
               Load more companies
             </button>

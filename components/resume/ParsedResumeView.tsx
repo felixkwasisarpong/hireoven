@@ -21,7 +21,7 @@ function ResumeSection({
   const [open, setOpen] = useState(defaultOpen)
 
   return (
-    <section className="rounded-2xl border border-gray-200 bg-white">
+    <section className="overflow-hidden rounded-[20px] border border-slate-200/80 bg-white">
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
@@ -42,7 +42,7 @@ function ResumeSection({
         </div>
       </button>
 
-      {open && <div className="border-t border-gray-100 px-4 py-4">{children}</div>}
+      {open && <div className="border-t border-slate-200/75 px-4 py-4">{children}</div>}
     </section>
   )
 }
@@ -71,7 +71,7 @@ export default function ParsedResumeView({ resume }: { resume: Resume }) {
             ["LinkedIn", resume.linkedin_url],
             ["Portfolio", resume.portfolio_url],
           ].map(([label, value]) => (
-            <div key={label as string} className="rounded-2xl border border-gray-100 bg-[#FAFCFF] px-4 py-3">
+            <div key={label as string} className="rounded-2xl border border-slate-200/80 bg-slate-50/60 px-4 py-3">
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">
                 {label}
               </p>
@@ -91,7 +91,7 @@ export default function ParsedResumeView({ resume }: { resume: Resume }) {
         <div className="space-y-3">
           {(resume.work_experience?.length ?? 0) > 0 ? (
             resume.work_experience?.map((item, index) => (
-              <article key={`${item.company}-${item.title}-${index}`} className="rounded-2xl border border-gray-100 bg-[#FAFCFF] px-4 py-4">
+              <article key={`${item.company}-${item.title}-${index}`} className="rounded-2xl border border-slate-200/80 bg-slate-50/60 px-4 py-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <p className="text-base font-semibold text-gray-900">{item.title}</p>
@@ -123,7 +123,7 @@ export default function ParsedResumeView({ resume }: { resume: Resume }) {
         <div className="space-y-3">
           {(resume.education?.length ?? 0) > 0 ? (
             resume.education?.map((item, index) => (
-              <article key={`${item.institution}-${index}`} className="rounded-2xl border border-gray-100 bg-[#FAFCFF] px-4 py-4">
+              <article key={`${item.institution}-${index}`} className="rounded-2xl border border-slate-200/80 bg-slate-50/60 px-4 py-4">
                 <p className="text-base font-semibold text-gray-900">{item.institution}</p>
                 <p className="mt-1 text-sm text-gray-600">
                   {[item.degree, item.field].filter(Boolean).join(" · ") || "Degree details not detected"}
@@ -170,7 +170,7 @@ export default function ParsedResumeView({ resume }: { resume: Resume }) {
         <div className="space-y-3">
           {(resume.projects?.length ?? 0) > 0 ? (
             resume.projects?.map((project, index) => (
-              <article key={`${project.name}-${index}`} className="rounded-2xl border border-gray-100 bg-[#FAFCFF] px-4 py-4">
+              <article key={`${project.name}-${index}`} className="rounded-2xl border border-slate-200/80 bg-slate-50/60 px-4 py-4">
                 <p className="text-base font-semibold text-gray-900">{project.name}</p>
                 <p className="mt-2 text-sm leading-7 text-gray-600">{project.description}</p>
                 {project.technologies.length > 0 && (
@@ -178,7 +178,7 @@ export default function ParsedResumeView({ resume }: { resume: Resume }) {
                     {project.technologies.map((technology) => (
                       <span
                         key={technology}
-                        className="rounded-full bg-[#E0F2FE] px-3 py-1 text-sm font-medium text-[#0C4A6E]"
+                        className="rounded-full bg-[#FFF1E8] px-3 py-1 text-sm font-medium text-[#062246]"
                       >
                         {technology}
                       </span>
@@ -186,7 +186,7 @@ export default function ParsedResumeView({ resume }: { resume: Resume }) {
                   </div>
                 )}
                 {project.url && (
-                  <p className="mt-3 text-sm text-[#0369A1]">{project.url}</p>
+                  <p className="mt-3 text-sm text-[#FF5C18]">{project.url}</p>
                 )}
               </article>
             ))

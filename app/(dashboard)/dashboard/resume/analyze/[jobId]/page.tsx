@@ -93,7 +93,7 @@ function AnalysisLoader({ isAnalyzing }: { isAnalyzing: boolean }) {
             {i < step ? (
               <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-500" />
             ) : i === step ? (
-              <div className="h-5 w-5 shrink-0 animate-spin rounded-full border-2 border-[#0369A1] border-t-transparent" />
+              <div className="h-5 w-5 shrink-0 animate-spin rounded-full border-2 border-[#FF5C18] border-t-transparent" />
             ) : (
               <div className="h-5 w-5 shrink-0 rounded-full border-2 border-gray-200" />
             )}
@@ -101,7 +101,7 @@ function AnalysisLoader({ isAnalyzing }: { isAnalyzing: boolean }) {
               className={cn(
                 "text-sm",
                 i < step && "text-emerald-600",
-                i === step && "font-semibold text-[#0369A1]",
+                i === step && "font-semibold text-[#FF5C18]",
                 i > step && "text-gray-400"
               )}
             >
@@ -148,7 +148,7 @@ function FullAnalysisView({ analysis, job }: { analysis: ResumeAnalysis; job: Jo
   return (
     <div className="space-y-6">
       {/* Overall score + verdict */}
-      <div className="rounded-[32px] border border-white/80 bg-white/90 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.06)]">
+      <div className="surface-card p-6">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-center">
           <AnalysisScoreCircle score={analysis.overall_score ?? 0} size="lg" />
           <div className="flex-1">
@@ -183,7 +183,7 @@ function FullAnalysisView({ analysis, job }: { analysis: ResumeAnalysis; job: Jo
       </div>
 
       {/* Skills gap */}
-      <section className="rounded-[32px] border border-white/80 bg-white/90 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.06)]">
+      <section className="surface-card p-6">
         <h2 className="mb-4 text-sm font-semibold uppercase tracking-[0.22em] text-gray-400">
           Skills analysis
         </h2>
@@ -195,7 +195,7 @@ function FullAnalysisView({ analysis, job }: { analysis: ResumeAnalysis; job: Jo
       </section>
 
       {/* Keywords */}
-      <section className="rounded-[32px] border border-white/80 bg-white/90 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.06)]">
+      <section className="surface-card p-6">
         <h2 className="text-sm font-semibold uppercase tracking-[0.22em] text-gray-400">
           ATS keyword analysis
         </h2>
@@ -267,7 +267,7 @@ function FullAnalysisView({ analysis, job }: { analysis: ResumeAnalysis; job: Jo
 
       {/* Experience gap */}
       {expMatch && (
-        <section className="rounded-[32px] border border-white/80 bg-white/90 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.06)]">
+        <section className="surface-card p-6">
           <h2 className="mb-4 text-sm font-semibold uppercase tracking-[0.22em] text-gray-400">
             Experience match
           </h2>
@@ -320,7 +320,7 @@ function FullAnalysisView({ analysis, job }: { analysis: ResumeAnalysis; job: Jo
 
       {/* Recommendations */}
       {sortedRecs.length > 0 && (
-        <section className="rounded-[32px] border border-white/80 bg-white/90 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.06)]">
+        <section className="surface-card p-6">
           <h2 className="mb-4 text-sm font-semibold uppercase tracking-[0.22em] text-gray-400">
             Recommendations
           </h2>
@@ -350,7 +350,7 @@ function FullAnalysisView({ analysis, job }: { analysis: ResumeAnalysis; job: Jo
           href={job.apply_url}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-2 rounded-2xl bg-[#0369A1] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#075985]"
+          className="inline-flex items-center gap-2 rounded-2xl bg-[#FF5C18] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#E14F0E]"
         >
           Apply directly
           <ExternalLink className="h-4 w-4" />
@@ -410,8 +410,8 @@ export default function AnalyzePage() {
   const busy = isLoading || isAnalyzing || jobLoading
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(3,105,161,0.10),_transparent_35%),linear-gradient(180deg,#F7FBFF_0%,#F8FAFC_60%,#F8FAFC_100%)] px-4 py-6 lg:px-8">
-      <div className="mx-auto max-w-4xl space-y-5">
+    <main className="app-page">
+      <div className="app-shell max-w-6xl space-y-5">
         {/* Back */}
         <Link
           href="/dashboard"
@@ -423,7 +423,7 @@ export default function AnalyzePage() {
 
         {/* Job header */}
         {job && (
-          <div className="rounded-[32px] border border-white/80 bg-white/90 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.06)]">
+          <div className="surface-hero">
             <div className="flex items-start gap-4">
               {job.company.logo_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -433,7 +433,7 @@ export default function AnalyzePage() {
                   className="h-14 w-14 rounded-2xl border border-gray-200 object-cover"
                 />
               ) : (
-                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#E0F2FE] text-xl font-bold text-[#0C4A6E]">
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#FFF1E8] text-xl font-bold text-[#062246]">
                   {job.company.name.charAt(0).toUpperCase()}
                 </div>
               )}
@@ -444,12 +444,12 @@ export default function AnalyzePage() {
                 <h1 className="mt-1 text-2xl font-semibold text-gray-900">{job.title}</h1>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {job.is_remote && (
-                    <span className="rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-medium text-sky-700">
+                    <span className="rounded-full border border-[#FFD2B8] bg-[#FFF7F2] px-2.5 py-1 text-xs font-medium text-[#9A3412]">
                       Remote
                     </span>
                   )}
                   {job.sponsors_h1b && (
-                    <span className="rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-700">
+                    <span className="rounded-full border border-[#FFD2B8] bg-[#FFF7F2] px-2.5 py-1 text-xs font-semibold text-[#9A3412]">
                       Sponsors H1B
                     </span>
                   )}
@@ -464,7 +464,7 @@ export default function AnalyzePage() {
                 href={job.apply_url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="hidden sm:inline-flex items-center gap-2 rounded-2xl bg-[#0369A1] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#075985]"
+                className="hidden sm:inline-flex items-center gap-2 rounded-2xl bg-[#FF5C18] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#E14F0E]"
               >
                 Apply
                 <ExternalLink className="h-4 w-4" />
@@ -475,14 +475,14 @@ export default function AnalyzePage() {
 
         {/* No resume state */}
         {!resumeId && !isLoading && (
-          <div className="rounded-[32px] border border-white/80 bg-white/90 p-10 text-center shadow-[0_20px_60px_rgba(15,23,42,0.06)]">
+          <div className="surface-card p-10 text-center">
             <p className="text-lg font-semibold text-gray-900">Resume not ready</p>
             <p className="mt-2 text-sm text-gray-500">
               Your resume needs to finish parsing before analysis can run.
             </p>
             <Link
               href="/dashboard/resume"
-              className="mt-5 inline-flex rounded-2xl bg-[#0369A1] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#075985]"
+              className="mt-5 inline-flex rounded-2xl bg-[#FF5C18] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#E14F0E]"
             >
               Go to resume page
             </Link>
@@ -500,7 +500,7 @@ export default function AnalyzePage() {
             <button
               type="button"
               onClick={() => void triggerAnalysis()}
-              className="mt-4 rounded-2xl bg-[#0369A1] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#075985]"
+              className="mt-4 rounded-2xl bg-[#FF5C18] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#E14F0E]"
             >
               Retry
             </button>

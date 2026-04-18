@@ -18,7 +18,7 @@ type ApplicationItem = {
 
 function statusTone(status: string) {
   if (status === "offer") return "bg-emerald-100 text-emerald-700"
-  if (status === "interview" || status === "phone_screen") return "bg-sky-100 text-sky-700"
+  if (status === "interview" || status === "phone_screen") return "bg-[#FFF1E8] text-[#9A3412]"
   if (status === "rejected" || status === "withdrawn") return "bg-red-100 text-red-700"
   return "bg-gray-100 text-gray-700"
 }
@@ -63,21 +63,43 @@ export default function ApplicationsPage() {
   }, [applications])
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="mx-auto max-w-4xl px-4 py-8">
+    <div className="app-page">
+      <div className="app-shell max-w-5xl py-8">
         <Link
           href="/dashboard"
-          className="mb-4 inline-flex items-center gap-1.5 text-sm text-gray-500 transition hover:text-gray-700"
+          className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-gray-500 transition hover:text-gray-800"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to dashboard
         </Link>
 
-        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <section className="surface-hero">
+          <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="section-kicker">Application Tracker</p>
+              <h1 className="section-title mt-3">Every application, one clear pipeline</h1>
+              <p className="section-copy mt-3 max-w-2xl">
+                Keep the jobs you have already acted on visible, reopen company forms when needed,
+                and track where momentum is building.
+              </p>
+            </div>
+            <div className="surface-inset min-w-[220px] px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#0C4A6E]">
+                Active pipeline
+              </p>
+              <p className="mt-2 text-3xl font-semibold tracking-tight text-gray-950">
+                {stats.active}
+              </p>
+              <p className="text-sm text-gray-500">roles currently moving forward</p>
+            </div>
+          </div>
+        </section>
+
+        <div className="mb-8 mt-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Application tracker</h1>
+            <h2 className="text-lg font-semibold text-gray-900">Recent activity</h2>
             <p className="mt-1 text-sm text-gray-500">
-              Every job you have logged through autofill, in one place.
+              Every role logged through autofill, preserved with its current status.
             </p>
           </div>
           <Button asChild variant="outline">
@@ -91,28 +113,28 @@ export default function ApplicationsPage() {
             { label: "Active pipelines", value: stats.active },
             { label: "Interviewing", value: stats.interviews },
           ].map((stat) => (
-            <div key={stat.label} className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-              <p className="text-xs font-medium uppercase tracking-wide text-gray-500">{stat.label}</p>
-              <p className="mt-1 text-2xl font-semibold text-gray-900">{stat.value}</p>
+            <div key={stat.label} className="metric-tile">
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-gray-500">{stat.label}</p>
+              <p className="mt-2 text-3xl font-semibold tracking-tight text-gray-950">{stat.value}</p>
             </div>
           ))}
         </div>
 
-        <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+        <div className="surface-card overflow-hidden p-0">
           {loading ? (
             <div className="flex items-center justify-center py-16">
-              <Loader2 className="h-6 w-6 animate-spin text-sky-600" />
+              <Loader2 className="h-6 w-6 animate-spin text-[#FF5C18]" />
             </div>
           ) : applications.length === 0 ? (
-            <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
-              <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-sky-50 text-sky-600">
+            <div className="empty-state border-0 bg-transparent shadow-none">
+              <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#FFF1E8] text-[#FF5C18]">
                 <Briefcase className="h-7 w-7" />
               </div>
               <h2 className="text-lg font-semibold text-gray-900">No applications logged yet</h2>
               <p className="mt-1 max-w-md text-sm text-gray-500">
                 Once you run autofill and confirm you submitted an application, it will show up here.
               </p>
-              <Button asChild className="mt-4 bg-sky-600 text-white hover:bg-sky-700">
+              <Button asChild className="mt-4 bg-[#FF5C18] text-white hover:bg-[#E14F0E]">
                 <Link href="/dashboard">Find jobs</Link>
               </Button>
             </div>
@@ -123,15 +145,15 @@ export default function ApplicationsPage() {
                 return (
                   <div
                     key={application.id}
-                    className="flex flex-col gap-4 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
+                    className="data-list-row flex-col gap-4 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
                   >
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h2 className="truncate text-sm font-semibold text-gray-900">
+                        <h2 className="truncate text-base font-semibold text-gray-950">
                           {application.job_title}
                         </h2>
                         <span
-                          className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold capitalize ${statusTone(application.status)}`}
+                          className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold capitalize shadow-sm ${statusTone(application.status)}`}
                         >
                           {application.status.replace("_", " ")}
                         </span>
@@ -140,7 +162,7 @@ export default function ApplicationsPage() {
                     </div>
 
                     <div className="flex flex-wrap items-center gap-3 sm:justify-end">
-                      <div className="inline-flex items-center gap-1.5 text-xs text-gray-500">
+                      <div className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-500">
                         <CalendarDays className="h-3.5 w-3.5" />
                         {new Date(timestamp).toLocaleDateString("en-US", {
                           month: "short",
@@ -156,7 +178,7 @@ export default function ApplicationsPage() {
                       )}
 
                       {application.apply_url && (
-                        <Button asChild size="sm" className="bg-sky-600 text-white hover:bg-sky-700">
+                        <Button asChild size="sm" className="bg-[#FF5C18] text-white hover:bg-[#E14F0E]">
                           <a href={application.apply_url} target="_blank" rel="noopener noreferrer">
                             Reopen application
                             <ExternalLink className="ml-2 h-3.5 w-3.5" />

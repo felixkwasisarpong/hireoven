@@ -19,12 +19,12 @@ export default function VisaLanguageAlert({ sponsors_h1b, requires_authorization
 
   if (sponsors_h1b === true) {
     return (
-      <div className="flex gap-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2.5 text-xs">
-        <span className="mt-0.5 shrink-0 font-bold text-sky-500">✓</span>
+      <div className="flex gap-2 rounded-lg border border-[#FFD2B8] bg-[#FFF7F2] px-3 py-2.5 text-xs">
+        <span className="mt-0.5 shrink-0 font-bold text-[#FF5C18]">✓</span>
         <div>
-          <p className="mb-0.5 font-semibold text-sky-700">Sponsors H1B visas</p>
+          <p className="mb-0.5 font-semibold text-[#9A3412]">Sponsors H1B visas</p>
           {visa_language_detected && (
-            <p className="italic text-sky-600">&ldquo;{visa_language_detected}&rdquo;</p>
+            <p className="italic text-[#FF5C18]">&ldquo;{visa_language_detected}&rdquo;</p>
           )}
         </div>
       </div>

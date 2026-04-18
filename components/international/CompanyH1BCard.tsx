@@ -26,7 +26,7 @@ export default function CompanyH1BCard({ company, openRoles, isWatching, onWatch
             className="w-10 h-10 rounded-xl border border-gray-100 object-contain flex-shrink-0"
           />
         ) : (
-          <div className="w-10 h-10 rounded-xl bg-[#E0F2FE] flex items-center justify-center text-[#0C4A6E] font-semibold text-sm flex-shrink-0">
+          <div className="w-10 h-10 rounded-xl bg-[#FFF1E8] flex items-center justify-center text-[#062246] font-semibold text-sm flex-shrink-0">
             {company.name.charAt(0).toUpperCase()}
           </div>
         )}
@@ -69,7 +69,7 @@ export default function CompanyH1BCard({ company, openRoles, isWatching, onWatch
       <div className="flex gap-2 mt-auto pt-1">
         <Link
           href={`/dashboard/international/company/${company.id}`}
-          className="flex-1 py-2 text-center text-xs font-semibold text-[#0369A1] border border-[#0369A1] rounded-xl hover:bg-[#E0F2FE] transition-colors"
+          className="flex-1 py-2 text-center text-xs font-semibold text-[#FF5C18] border border-[#FF5C18] rounded-xl hover:bg-[#FFF1E8] transition-colors"
         >
           View jobs
         </Link>
@@ -77,8 +77,8 @@ export default function CompanyH1BCard({ company, openRoles, isWatching, onWatch
           onClick={() => (isWatching ? onUnwatch(company.id) : onWatch(company.id))}
           className={`flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl border transition-colors ${
             isWatching
-              ? 'bg-[#E0F2FE] text-[#0369A1] border-[#0369A1]/30'
-              : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-[#0369A1] hover:text-[#0369A1]'
+              ? 'bg-[#FFF1E8] text-[#FF5C18] border-[#FF5C18]/30'
+              : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-[#FF5C18] hover:text-[#FF5C18]'
           }`}
         >
           {isWatching ? <Check className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}

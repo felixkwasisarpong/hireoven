@@ -2,6 +2,8 @@
 
 import { KeyboardEvent, useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
+import { ArrowLeft } from "lucide-react"
 import HireovenLogo from "@/components/ui/HireovenLogo"
 import { createClient } from "@/lib/supabase/client"
 import type { Company, SeniorityLevel, VisaStatus } from "@/types"
@@ -126,14 +128,20 @@ export default function OnboardingPage() {
   }
 
   return (
-    <main className="min-h-screen bg-gray-50 flex flex-col">
+    <main className="app-page flex flex-col">
       {/* Header */}
-      <div className="bg-white border-b border-gray-100 px-6 py-4">
-        <div className="max-w-xl mx-auto flex items-center justify-between">
-          <HireovenLogo className="h-8 w-auto" priority />
+      <div className="glass-nav px-6 py-4">
+        <div className="mx-auto flex max-w-3xl items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <Link href="/dashboard" className="subpage-back">
+              <ArrowLeft className="h-4 w-4" />
+              Back to dashboard
+            </Link>
+            <HireovenLogo className="h-8 w-auto" priority />
+          </div>
           <button
             onClick={() => router.push("/dashboard")}
-            className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+            className="text-sm font-medium text-gray-500 transition-colors hover:text-gray-800"
           >
             Skip for now
           </button>
@@ -141,24 +149,24 @@ export default function OnboardingPage() {
       </div>
 
       {/* Progress bar */}
-      <div className="bg-white border-b border-gray-100">
-        <div className="max-w-xl mx-auto px-6 py-3">
+      <div className="border-b border-white/60 bg-white/70">
+        <div className="mx-auto max-w-3xl px-6 py-4">
           <div className="flex items-center gap-2">
             {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
               <div
                 key={i}
                 className="h-1.5 flex-1 rounded-full transition-colors duration-300"
-                style={{ backgroundColor: i < step ? "#0369A1" : "#E5E7EB" }}
+                style={{ backgroundColor: i < step ? "#FF5C18" : "#E5E7EB" }}
               />
             ))}
           </div>
-          <p className="text-xs text-gray-400 mt-2">Step {step} of {TOTAL_STEPS}</p>
+          <p className="mt-2 text-xs text-gray-400">Step {step} of {TOTAL_STEPS}</p>
         </div>
       </div>
 
       {/* Step content */}
       <div className="flex-1 flex flex-col items-center px-6 py-10">
-        <div className="w-full max-w-xl">
+        <div className="w-full max-w-3xl">
           {step === 1 && (
             <StepOne data={stepOne} onChange={setStepOne} onNext={next} />
           )}
@@ -250,7 +258,7 @@ function StepOne({
         <div>
           <label className="block text-sm font-semibold text-gray-700 mb-2">
             What roles are you looking for?
-            <span className="text-[#0369A1] ml-1">*</span>
+            <span className="ml-1 text-[#FF5C18]">*</span>
           </label>
           <div className="flex flex-wrap gap-2 mb-2">
             {data.roles.map((r) => (
@@ -264,7 +272,7 @@ function StepOne({
             onKeyDown={(e) => handleKeyDown(e, "roles", roleInput, setRoleInput)}
             onBlur={() => addTag("roles", roleInput, setRoleInput)}
             placeholder='e.g. "Software Engineer" — press Enter to add'
-            className="w-full px-4 py-3 rounded-lg border border-gray-200 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#0369A1] focus:border-transparent"
+            className="w-full rounded-lg border border-gray-200 px-4 py-3 text-sm text-gray-900 placeholder-gray-400 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#FF5C18]"
           />
         </div>
 
@@ -286,7 +294,7 @@ function StepOne({
             onBlur={() => addTag("locations", locationInput, setLocationInput)}
             disabled={data.remoteOnly}
             placeholder={data.remoteOnly ? "Remote selected" : 'e.g. "New York" — press Enter to add'}
-            className="w-full px-4 py-3 rounded-lg border border-gray-200 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#0369A1] focus:border-transparent disabled:bg-gray-50 disabled:text-gray-400"
+            className="w-full rounded-lg border border-gray-200 px-4 py-3 text-sm text-gray-900 placeholder-gray-400 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#FF5C18] disabled:bg-gray-50 disabled:text-gray-400"
           />
           <label className="flex items-center gap-2 mt-2 cursor-pointer">
             <Checkbox
@@ -312,8 +320,8 @@ function StepOne({
                   onClick={() => toggleSeniority(opt.value)}
                   className={`px-4 py-2 rounded-full text-sm font-medium border transition-colors ${
                     selected
-                      ? "bg-[#0369A1] border-[#0369A1] text-white"
-                      : "bg-white border-gray-200 text-gray-600 hover:border-[#0369A1] hover:text-[#0369A1]"
+                      ? "border-[#FF5C18] bg-[#FF5C18] text-white"
+                      : "border-gray-200 bg-white text-gray-600 hover:border-[#FF5C18] hover:text-[#FF5C18]"
                   }`}
                 >
                   {opt.label}
@@ -328,7 +336,7 @@ function StepOne({
         type="button"
         onClick={onNext}
         disabled={!canContinue}
-        className="mt-10 w-full py-3.5 bg-[#0369A1] hover:bg-[#075985] text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-40"
+        className="mt-10 w-full rounded-lg bg-[#FF5C18] py-3.5 text-sm font-semibold text-white transition-colors hover:bg-[#E14F0E] disabled:opacity-40"
       >
         Continue
       </button>
@@ -393,7 +401,7 @@ function StepTwo({
             }
             className={`flex flex-col items-start gap-1.5 p-5 rounded-xl border-2 text-left transition-all ${
               data.isInternational === opt.value
-                ? "border-[#0369A1] bg-[#0369A1]/5"
+                ? "border-[#FF5C18] bg-[#FFF7F2]"
                 : "border-gray-200 bg-white hover:border-gray-300"
             }`}
           >
@@ -416,7 +424,7 @@ function StepTwo({
               onChange={(e) =>
                 onChange({ ...data, visaStatus: e.target.value as VisaStatus })
               }
-              className="w-full px-4 py-3 rounded-lg border border-gray-200 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0369A1] focus:border-transparent bg-white"
+              className="w-full rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#FF5C18]"
             >
               <option value="">Select visa status…</option>
               {VISA_OPTIONS.map((opt) => (
@@ -436,7 +444,7 @@ function StepTwo({
                 type="date"
                 value={data.optEndDate}
                 onChange={(e) => onChange({ ...data, optEndDate: e.target.value })}
-                className="w-full px-4 py-3 rounded-lg border border-gray-200 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0369A1] focus:border-transparent"
+                className="w-full rounded-lg border border-gray-200 px-4 py-3 text-sm text-gray-900 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#FF5C18]"
               />
               <p className="text-xs text-gray-400 mt-1.5">
                 We&apos;ll surface sponsorship-ready roles before your OPT expires.
@@ -472,7 +480,7 @@ function StepTwo({
         <button
           type="button"
           onClick={onNext}
-          className="flex-[2] py-3.5 bg-[#0369A1] hover:bg-[#075985] text-white text-sm font-semibold rounded-lg transition-colors"
+          className="flex-[2] rounded-lg bg-[#FF5C18] py-3.5 text-sm font-semibold text-white transition-colors hover:bg-[#E14F0E]"
         >
           Continue
         </button>
@@ -545,7 +553,7 @@ function StepThree({
       <p className="text-xs text-gray-400 mb-6">
         Select up to {MAX_COMPANIES}
         {selectedCount > 0 && (
-          <span className="text-[#0369A1] font-medium"> — {selectedCount} selected</span>
+          <span className="font-medium text-[#FF5C18]"> — {selectedCount} selected</span>
         )}
       </p>
 
@@ -564,7 +572,7 @@ function StepThree({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search companies…"
-          className="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-200 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#0369A1] focus:border-transparent"
+          className="w-full rounded-lg border border-gray-200 py-3 pl-10 pr-4 text-sm text-gray-900 placeholder-gray-400 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#FF5C18]"
         />
       </div>
 
@@ -588,7 +596,7 @@ function StepThree({
                 disabled={atLimit}
                 className={`flex items-center gap-3 p-4 rounded-xl border-2 text-left transition-all ${
                   selected
-                    ? "border-[#0369A1] bg-[#0369A1]/5"
+                    ? "border-[#FF5C18] bg-[#FFF7F2]"
                     : atLimit
                     ? "border-gray-100 bg-gray-50 opacity-40 cursor-not-allowed"
                     : "border-gray-200 bg-white hover:border-gray-300"
@@ -615,7 +623,7 @@ function StepThree({
                       {company.name}
                     </p>
                     {company.sponsors_h1b && (
-                      <span className="shrink-0 text-[10px] font-semibold bg-[#0369A1]/10 text-[#0369A1] px-1.5 py-0.5 rounded-full">
+                      <span className="shrink-0 rounded-full bg-[#FFF1E8] px-1.5 py-0.5 text-[10px] font-semibold text-[#FF5C18]">
                         H-1B
                       </span>
                     )}
@@ -625,7 +633,7 @@ function StepThree({
                   </p>
                 </div>
                 {selected && (
-                  <svg className="h-4 w-4 text-[#0369A1] shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                  <svg className="h-4 w-4 shrink-0 text-[#FF5C18]" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                   </svg>
                 )}
@@ -653,7 +661,7 @@ function StepThree({
           type="button"
           onClick={onFinish}
           disabled={saving}
-          className="flex-[2] flex items-center justify-center gap-2 py-3.5 bg-[#0369A1] hover:bg-[#075985] text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-60"
+          className="flex-[2] flex items-center justify-center gap-2 rounded-lg bg-[#FF5C18] py-3.5 text-sm font-semibold text-white transition-colors hover:bg-[#E14F0E] disabled:opacity-60"
         >
           {saving ? (
             <><Spinner /> Saving…</>
@@ -674,7 +682,7 @@ function StepThree({
 
 function Tag({ label, onRemove }: { label: string; onRemove: () => void }) {
   return (
-    <span className="inline-flex items-center gap-1.5 bg-[#0369A1]/10 text-[#0369A1] text-xs font-medium px-3 py-1.5 rounded-full">
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-[#FFF1E8] px-3 py-1.5 text-xs font-medium text-[#FF5C18]">
       {label}
       <button
         type="button"
@@ -702,7 +710,7 @@ function Checkbox({
       type="button"
       onClick={() => onChange(!checked)}
       className={`flex-shrink-0 mt-0.5 w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors ${
-        checked ? "bg-[#0369A1] border-[#0369A1]" : "border-gray-300 bg-white"
+        checked ? "border-[#FF5C18] bg-[#FF5C18]" : "border-gray-300 bg-white"
       }`}
       role="checkbox"
       aria-checked={checked}

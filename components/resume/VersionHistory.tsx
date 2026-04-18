@@ -74,7 +74,7 @@ export default function VersionHistory({
     <section className="rounded-[28px] border border-gray-200 bg-white p-5 shadow-[0_20px_60px_rgba(15,23,42,0.05)]">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#0369A1]">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#FF5C18]">
             Version history
           </p>
           <h3 className="mt-2 text-xl font-semibold text-gray-900">
@@ -87,7 +87,7 @@ export default function VersionHistory({
         <button
           type="button"
           onClick={() => setShowComposer((current) => !current)}
-          className="inline-flex items-center gap-2 rounded-2xl bg-[#0369A1] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#075985]"
+          className="inline-flex items-center gap-2 rounded-2xl bg-[#FF5C18] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#E14F0E]"
         >
           <Save className="h-4 w-4" />
           Save current version
@@ -95,7 +95,7 @@ export default function VersionHistory({
       </div>
 
       {showComposer && (
-        <div className="mt-4 rounded-2xl border border-[#D6EEFF] bg-[#F5FBFF] p-4">
+        <div className="mt-4 rounded-2xl border border-[#FFD9C2] bg-[#FFF8F4] p-4">
           <label className="block">
             <span className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">
               Version name
@@ -111,7 +111,7 @@ export default function VersionHistory({
               type="button"
               disabled={saving}
               onClick={() => void saveCurrentVersion()}
-              className="rounded-2xl bg-[#0369A1] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#075985] disabled:opacity-60"
+              className="rounded-2xl bg-[#FF5C18] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#E14F0E] disabled:opacity-60"
             >
               {saving ? "Saving..." : "Save version"}
             </button>
@@ -138,7 +138,7 @@ export default function VersionHistory({
                 key={version.id}
                 className={`rounded-2xl border px-4 py-4 transition ${
                   selectedVersionId === version.id
-                    ? "border-[#7DD3FC] bg-[#F5FBFF]"
+                    ? "border-[#7DD3FC] bg-[#FFF8F4]"
                     : "border-gray-200 bg-[#FAFCFF]"
                 }`}
               >
@@ -207,7 +207,7 @@ export default function VersionHistory({
                   Top skills: {(resume.top_skills ?? []).slice(0, 5).join(", ") || "Not set"}
                 </p>
               </div>
-              <div className="rounded-2xl border border-[#BAE6FD] bg-white px-4 py-4">
+              <div className="rounded-2xl border border-[#FFD2B8] bg-white px-4 py-4">
                 <p className="text-sm font-semibold text-gray-900">
                   {selectedVersion.name ?? `Version ${selectedVersion.version_number}`}
                 </p>

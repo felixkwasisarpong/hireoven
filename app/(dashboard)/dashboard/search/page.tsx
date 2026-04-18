@@ -5,6 +5,7 @@ import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Search, X } from "lucide-react"
 import CompanyCard from "@/components/companies/CompanyCard"
+import DashboardPageHeader from "@/components/layout/DashboardPageHeader"
 import JobCard from "@/components/jobs/JobCard"
 import { useAuth } from "@/lib/hooks/useAuth"
 import { useWatchlist } from "@/lib/hooks/useWatchlist"
@@ -63,16 +64,23 @@ export default function SearchPage() {
   const bothMatch = jobs.length > 0 && companies.length > 0
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(180deg,#F7FBFF_0%,#F8FAFC_58%,#F8FAFC_100%)] px-4 py-6 lg:px-8">
-      <div className="mx-auto max-w-7xl space-y-6">
+    <main className="app-page">
+      <div className="app-shell max-w-7xl space-y-6">
+        <DashboardPageHeader
+          kicker="Search"
+          title="Find jobs and companies from one command bar"
+          description="Search across active roles, tracked companies, and sponsorship signals without leaving the dashboard."
+          backHref="/dashboard"
+          backLabel="Back to dashboard"
+        />
 
         {/* Search bar */}
-        <section className="rounded-[32px] border border-white/80 bg-white/90 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.06)]">
+        <section className="surface-card p-5">
           <form
             onSubmit={(e) => { e.preventDefault(); submit(inputVal) }}
-            className="flex items-center gap-3 rounded-2xl border border-[#0369A1] bg-white px-5 py-3.5 ring-2 ring-[#0369A1]/15"
+            className="flex items-center gap-3 rounded-[24px] border border-[#FFD2B8] bg-white px-5 py-4 shadow-[0_14px_30px_rgba(255,92,24,0.08)] ring-1 ring-[#FF5C18]/10"
           >
-            <Search className="h-5 w-5 flex-shrink-0 text-[#0369A1]" />
+            <Search className="h-5 w-5 flex-shrink-0 text-[#FF5C18]" />
             <input
               ref={inputRef}
               value={inputVal}
@@ -92,13 +100,13 @@ export default function SearchPage() {
             )}
             <button
               type="submit"
-              className="rounded-xl bg-[#0369A1] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#075985]"
+              className="rounded-xl bg-[#FF5C18] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#E14F0E]"
             >
               Search
             </button>
           </form>
 
-          {rawQ ? (
+            {rawQ ? (
             <p className="mt-4 text-sm text-gray-600">
               {isLoading ? (
                 "Searching…"
@@ -120,7 +128,7 @@ export default function SearchPage() {
                     key={term}
                     type="button"
                     onClick={() => submit(term)}
-                    className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:border-[#0369A1] hover:text-[#0369A1]"
+                    className="chip-control"
                   >
                     {term}
                   </button>
@@ -135,12 +143,12 @@ export default function SearchPage() {
           <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
             <div className="space-y-4">
               {Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="h-36 animate-pulse rounded-3xl bg-white/80" />
+                <div key={i} className="surface-card h-36 animate-pulse" />
               ))}
             </div>
             <div className="space-y-4">
               {Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="h-52 animate-pulse rounded-2xl bg-white/80" />
+                <div key={i} className="surface-card h-52 animate-pulse" />
               ))}
             </div>
           </div>
@@ -148,12 +156,12 @@ export default function SearchPage() {
 
         {/* No results */}
         {!isLoading && rawQ && !hasResults && (
-          <div className="rounded-[28px] border border-dashed border-gray-300 bg-white/60 px-8 py-14 text-center">
+          <div className="empty-state">
             <p className="text-lg font-semibold text-gray-900">No results for &ldquo;{rawQ}&rdquo;</p>
             <p className="mt-2 text-sm text-gray-500">Try a different search term or browse companies directly.</p>
             <Link
               href="/dashboard/companies"
-              className="mt-6 inline-flex items-center gap-2 rounded-2xl bg-[#0369A1] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#075985]"
+              className="mt-6 inline-flex items-center gap-2 rounded-2xl bg-[#FF5C18] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#E14F0E]"
             >
               Browse all companies
             </Link>
@@ -173,7 +181,7 @@ export default function SearchPage() {
                   {jobTotal > jobs.length && (
                     <Link
                       href={`/dashboard?q=${encodeURIComponent(rawQ)}`}
-                      className="text-xs font-medium text-[#0369A1] hover:text-[#075985] transition"
+                      className="text-xs font-medium text-[#FF5C18] hover:text-[#E14F0E] transition"
                     >
                       View all {jobTotal.toLocaleString()} →
                     </Link>
@@ -199,13 +207,13 @@ export default function SearchPage() {
                       <Link
                         key={company.id}
                         href={`/dashboard/companies/${company.id}`}
-                        className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-white p-3 transition hover:border-[#BAE6FD] hover:bg-[#F7FBFF]"
+                        className="surface-card-subtle flex items-center gap-3 p-3 transition hover:border-[#FFD2B8] hover:bg-[#FFF8F4]"
                       >
                         {company.logo_url ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={company.logo_url} alt={company.name} className="h-10 w-10 flex-shrink-0 rounded-xl border border-gray-100 object-contain p-0.5" />
+                          <img src={company.logo_url} alt={company.name} className="h-10 w-10 flex-shrink-0 rounded-xl border border-gray-100 object-contain bg-white p-0.5" />
                         ) : (
-                          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-[#E0F2FE] text-sm font-bold text-[#0C4A6E]">
+                          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-[#FFF1E8] text-sm font-bold text-[#062246]">
                             {company.name.charAt(0).toUpperCase()}
                           </div>
                         )}

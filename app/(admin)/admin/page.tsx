@@ -252,12 +252,12 @@ export default function AdminOverviewPage() {
         >
           <div
             ref={crawlFeedRef}
-            className="max-h-[560px] space-y-3 overflow-y-auto pr-1"
+            className="soft-scrollbar max-h-[560px] space-y-3 overflow-y-auto pr-1"
           >
             {realtime.recentCrawlLogs.map((log) => (
               <div
                 key={log.id}
-                className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3"
+                className="rounded-3xl border border-gray-200 bg-[linear-gradient(180deg,#FFFFFF_0%,#F8FAFC_100%)] px-4 py-3 shadow-sm"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -288,11 +288,11 @@ export default function AdminOverviewPage() {
           title="New jobs stream"
           description="Fresh jobs landing in the database right now."
         >
-          <div ref={jobsFeedRef} className="max-h-[560px] space-y-3 overflow-y-auto pr-1">
+          <div ref={jobsFeedRef} className="soft-scrollbar max-h-[560px] space-y-3 overflow-y-auto pr-1">
             {realtime.recentJobs.map((job) => (
               <div
                 key={job.id}
-                className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3"
+                className="rounded-3xl border border-gray-200 bg-[linear-gradient(180deg,#FFFFFF_0%,#F8FAFC_100%)] px-4 py-3 shadow-sm"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -360,7 +360,7 @@ export default function AdminOverviewPage() {
               />
             </div>
 
-            <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+            <div className="rounded-3xl border border-gray-200 bg-[linear-gradient(180deg,#FFFFFF_0%,#F8FAFC_100%)] p-4 shadow-sm">
               <p className="text-xs font-semibold uppercase tracking-[0.24em] text-gray-500">
                 API usage today
               </p>
@@ -406,9 +406,9 @@ function HealthRow({
   tone?: "neutral" | "success" | "danger" | "warning"
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-white px-3 py-3">
+    <div className="flex items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-white px-3 py-3 shadow-sm">
       <div className="flex items-center gap-3">
-        <div className="rounded-2xl bg-gray-100 p-2 text-gray-600">
+        <div className="rounded-2xl bg-gray-100 p-2 text-gray-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]">
           <Icon className="h-4 w-4" />
         </div>
         <p className="text-gray-600">{label}</p>

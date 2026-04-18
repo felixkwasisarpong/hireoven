@@ -132,7 +132,7 @@ export default function ResumeEditPage() {
 
   if (!editableResume) {
     return (
-      <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(3,105,161,0.10),_transparent_35%),linear-gradient(180deg,#F7FBFF_0%,#F8FAFC_60%,#F8FAFC_100%)] px-4 py-6 lg:px-8">
+      <main className="app-page">
         <div className="mx-auto max-w-3xl rounded-[32px] border border-white/80 bg-white/90 p-10 text-center shadow-[0_20px_60px_rgba(15,23,42,0.06)]">
           <p className="text-2xl font-semibold text-gray-900">Upload a parsed resume first</p>
           <p className="mt-3 text-sm leading-7 text-gray-500">
@@ -140,7 +140,7 @@ export default function ResumeEditPage() {
           </p>
           <Link
             href="/dashboard/resume"
-            className="mt-6 inline-flex items-center gap-2 rounded-2xl bg-[#0369A1] px-5 py-3 text-sm font-semibold text-white"
+            className="mt-6 inline-flex items-center gap-2 rounded-2xl bg-[#FF5C18] px-5 py-3 text-sm font-semibold text-white"
           >
             <ArrowLeft className="h-4 w-4" />
             Back to resume uploads
@@ -384,7 +384,7 @@ export default function ResumeEditPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(3,105,161,0.12),_transparent_34%),linear-gradient(180deg,#F7FBFF_0%,#F8FAFC_60%,#F8FAFC_100%)] px-4 py-6 lg:px-8">
+    <main className="app-page">
       <div className="mx-auto max-w-[1600px] space-y-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <Link
@@ -418,15 +418,15 @@ export default function ResumeEditPage() {
         </div>
 
         {job && (
-          <section className="rounded-[28px] border border-[#BAE6FD] bg-[#F5FBFF] px-5 py-4">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#0369A1]">
+          <section className="rounded-[28px] border border-[#FFD2B8] bg-[#FFF8F4] px-5 py-4">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#FF5C18]">
               Editing for target role
             </p>
             <div className="mt-2 flex flex-wrap items-center gap-3">
               <h1 className="text-2xl font-semibold text-gray-900">
                 {job.title} at {job.company?.name ?? "Company"}
               </h1>
-              <span className="rounded-full border border-[#BAE6FD] bg-white px-3 py-1.5 text-sm font-medium text-[#0C4A6E]">
+              <span className="rounded-full border border-[#FFD2B8] bg-white px-3 py-1.5 text-sm font-medium text-[#062246]">
                 {analysis?.overall_score ?? "—"}% current match
               </span>
             </div>
@@ -457,7 +457,7 @@ export default function ResumeEditPage() {
                     type="button"
                     disabled={summaryLoading}
                     onClick={() => void handleSummaryRewrite()}
-                    className="inline-flex items-center gap-2 rounded-2xl bg-[#0369A1] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#075985] disabled:opacity-60"
+                    className="inline-flex items-center gap-2 rounded-2xl bg-[#FF5C18] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#E14F0E] disabled:opacity-60"
                   >
                     {summaryLoading ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
@@ -553,7 +553,7 @@ export default function ResumeEditPage() {
                         <button
                           type="button"
                           onClick={() => void handleImproveAllBullets(experience, experienceIndex)}
-                          className="rounded-2xl border border-[#BAE6FD] bg-white px-3.5 py-2 text-sm font-medium text-[#0C4A6E]"
+                          className="rounded-2xl border border-[#FFD2B8] bg-white px-3.5 py-2 text-sm font-medium text-[#062246]"
                         >
                           Improve all bullets
                         </button>
@@ -846,7 +846,7 @@ export default function ResumeEditPage() {
                     className={cn(
                       "rounded-full px-3.5 py-2 text-sm font-medium transition",
                       activeTab === key
-                        ? "bg-[#0369A1] text-white"
+                        ? "bg-[#FF5C18] text-white"
                         : "border border-gray-200 text-gray-600 hover:bg-gray-50"
                     )}
                   >
@@ -858,7 +858,7 @@ export default function ResumeEditPage() {
               {activeTab === "keywords" && (
                 <div className="mt-5 space-y-3">
                   {jobId && missingKeywords.length === 0 && (isAnalyzing || isLoading) && (
-                    <div className="rounded-2xl border border-[#D6EEFF] bg-[#F5FBFF] px-4 py-4 text-sm text-[#0C4A6E]">
+                    <div className="rounded-2xl border border-[#FFD9C2] bg-[#FFF8F4] px-4 py-4 text-sm text-[#062246]">
                       <div className="flex items-center gap-2">
                         <Loader2 className="h-4 w-4 animate-spin" />
                         Loading role-specific keyword gaps…
@@ -878,7 +878,7 @@ export default function ResumeEditPage() {
                         <button
                           type="button"
                           onClick={() => setKeywordToInject(keyword)}
-                          className="rounded-2xl border border-[#BAE6FD] bg-white px-3 py-2 text-sm font-medium text-[#0C4A6E]"
+                          className="rounded-2xl border border-[#FFD2B8] bg-white px-3 py-2 text-sm font-medium text-[#062246]"
                         >
                           Add to resume
                         </button>
@@ -919,7 +919,7 @@ export default function ResumeEditPage() {
                           {suggestion.keywords_added?.map((keyword) => (
                             <span
                               key={keyword}
-                              className="rounded-full border border-[#BAE6FD] bg-white px-2.5 py-1 text-[11px] font-medium text-[#0C4A6E]"
+                              className="rounded-full border border-[#FFD2B8] bg-white px-2.5 py-1 text-[11px] font-medium text-[#062246]"
                             >
                               {keyword}
                             </span>
@@ -1015,8 +1015,8 @@ export default function ResumeEditPage() {
 
               {activeTab === "impact" && (
                 <div className="mt-5 space-y-4">
-                  <div className="rounded-2xl border border-[#D6EEFF] bg-[#F5FBFF] p-4">
-                    <p className="text-sm font-semibold text-[#0C4A6E]">
+                  <div className="rounded-2xl border border-[#FFD9C2] bg-[#FFF8F4] p-4">
+                    <p className="text-sm font-semibold text-[#062246]">
                       Accepting all suggestions would increase your match score from{" "}
                       <span className="font-bold">{analysis?.overall_score ?? 67}</span> to{" "}
                       <span className="font-bold">{projectedScore}</span>
@@ -1068,7 +1068,7 @@ export default function ResumeEditPage() {
         <div className="sticky bottom-4 z-20 rounded-[28px] border border-white/80 bg-white/95 px-5 py-4 shadow-[0_24px_70px_rgba(15,23,42,0.14)] backdrop-blur">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600">
-              <span className="rounded-full border border-[#D6EEFF] bg-[#F5FBFF] px-3 py-1.5 font-medium text-[#0C4A6E]">
+              <span className="rounded-full border border-[#FFD9C2] bg-[#FFF8F4] px-3 py-1.5 font-medium text-[#062246]">
                 {formatSavedState(saveState, lastSavedAt)}
               </span>
               {job && (
@@ -1109,7 +1109,7 @@ export default function ResumeEditPage() {
               <button
                 type="button"
                 onClick={() => void handleOpenOriginal()}
-                className="rounded-2xl bg-[#0369A1] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#075985]"
+                className="rounded-2xl bg-[#FF5C18] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#E14F0E]"
               >
                 Open uploaded file
               </button>

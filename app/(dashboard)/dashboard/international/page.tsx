@@ -69,25 +69,23 @@ export default function InternationalPage() {
   const maxPetitions = industryBars[0]?.petitions ?? 1
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(180deg,#F7FBFF_0%,#F8FAFC_58%,#F8FAFC_100%)] px-4 py-6 lg:px-8">
-      <div className="mx-auto max-w-6xl space-y-8">
+    <main className="app-page">
+      <div className="app-shell max-w-7xl space-y-8">
 
         {/* ── Hero header ── */}
-        <section className="rounded-[32px] border border-white/80 bg-white/90 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.06)]">
+        <section className="surface-hero">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <div className="flex items-center gap-2 mb-2">
-                <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-[#F0F9FF]">
-                  <Globe2 className="h-5 w-5 text-[#0369A1]" />
+                <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-[#FFF7F2]">
+                  <Globe2 className="h-5 w-5 text-[#FF5C18]" />
                 </div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#0369A1]">
-                  International Hub
-                </p>
+                <p className="section-kicker">International Hub</p>
               </div>
-              <h1 className="text-3xl font-semibold tracking-tight text-gray-900">
+              <h1 className="section-title">
                 Built for international candidates
               </h1>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-500">
+              <p className="section-copy mt-3 max-w-2xl">
                 Every company here has sponsored H-1B visas. Use USCIS petition data,
                 not guesswork, to decide where to spend your time.
               </p>
@@ -107,7 +105,7 @@ export default function InternationalPage() {
             <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.28em] text-gray-400">
               OPT Command Center
             </p>
-            <div className="rounded-[28px] border border-white/80 bg-white/90 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.06)]">
+            <div className="surface-card p-6">
               <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
                 <div>
                   <h2 className="text-xl font-semibold text-gray-900 mb-1">
@@ -122,28 +120,28 @@ export default function InternationalPage() {
                   />
                 </div>
                 <div className="space-y-4">
-                  <div className="rounded-2xl bg-[#F8FBFF] p-4 border border-gray-100">
+                  <div className="surface-card-subtle p-4">
                     <p className="text-xs font-semibold uppercase tracking-[0.22em] text-gray-400 mb-3">
                       Quick actions
                     </p>
                     <div className="space-y-2">
                       <Link
                         href="/dashboard/international#companies"
-                        className="flex items-center justify-between rounded-xl bg-white border border-gray-200 px-4 py-3 text-sm font-medium text-gray-700 transition hover:border-[#BAE6FD] hover:text-[#0C4A6E]"
+                        className="flex items-center justify-between rounded-xl bg-white border border-gray-200 px-4 py-3 text-sm font-medium text-gray-700 transition hover:border-[#FFD2B8] hover:text-[#062246]"
                       >
                         Browse sponsor-friendly companies
                         <span className="text-gray-400">→</span>
                       </Link>
                       <Link
                         href="/dashboard/alerts"
-                        className="flex items-center justify-between rounded-xl bg-white border border-gray-200 px-4 py-3 text-sm font-medium text-gray-700 transition hover:border-[#BAE6FD] hover:text-[#0C4A6E]"
+                        className="flex items-center justify-between rounded-xl bg-white border border-gray-200 px-4 py-3 text-sm font-medium text-gray-700 transition hover:border-[#FFD2B8] hover:text-[#062246]"
                       >
                         Set up sponsorship alerts
                         <span className="text-gray-400">→</span>
                       </Link>
                       <Link
                         href="/dashboard/onboarding"
-                        className="flex items-center justify-between rounded-xl bg-white border border-gray-200 px-4 py-3 text-sm font-medium text-gray-700 transition hover:border-[#BAE6FD] hover:text-[#0C4A6E]"
+                        className="flex items-center justify-between rounded-xl bg-white border border-gray-200 px-4 py-3 text-sm font-medium text-gray-700 transition hover:border-[#FFD2B8] hover:text-[#062246]"
                       >
                         Update OPT end date
                         <span className="text-gray-400">→</span>
@@ -162,11 +160,11 @@ export default function InternationalPage() {
             <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-gray-400">
               Sponsorship Intel Feed
             </p>
-            <span className="rounded-full bg-[#F0F9FF] px-3 py-1 text-xs font-semibold text-[#0C4A6E]">
+            <span className="rounded-full bg-[#FFF7F2] px-3 py-1 text-xs font-semibold text-[#062246]">
               H-1B friendly only
             </span>
           </div>
-          <div className="rounded-[28px] border border-white/80 bg-white/90 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.06)]">
+          <div className="surface-card p-6">
             <h2 className="text-xl font-semibold text-gray-900 mb-1">
               Fresh roles at sponsors
             </h2>
@@ -182,7 +180,7 @@ export default function InternationalPage() {
           <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.28em] text-gray-400">
             Company Explorer
           </p>
-          <div className="rounded-[28px] border border-white/80 bg-white/90 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.06)]">
+          <div className="surface-card p-6">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between mb-6">
               <div>
                 <h2 className="text-xl font-semibold text-gray-900 mb-1">
@@ -204,7 +202,7 @@ export default function InternationalPage() {
             </div>
 
             {filteredCompanies.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-gray-300 px-6 py-10 text-center text-sm text-gray-500">
+              <div className="empty-state px-6 py-10 text-sm text-gray-500 shadow-none">
                 No companies match &ldquo;{companyQuery}&rdquo;
               </div>
             ) : (
@@ -228,7 +226,7 @@ export default function InternationalPage() {
           <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.28em] text-gray-400">
             H-1B Insights
           </p>
-          <div className="rounded-[28px] border border-white/80 bg-white/90 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.06)]">
+          <div className="surface-card p-6">
             <h2 className="text-xl font-semibold text-gray-900 mb-1">
               Sponsorship by industry
             </h2>
@@ -254,7 +252,7 @@ export default function InternationalPage() {
                       <div className="flex flex-1 items-center gap-3">
                         <div className="flex-1 h-8 rounded-xl bg-gray-100 overflow-hidden">
                           <div
-                            className="h-full rounded-xl bg-gradient-to-r from-[#0C4A6E] to-[#0369A1] transition-all duration-700"
+                            className="h-full rounded-xl bg-gradient-to-r from-[#062246] to-[#FF5C18] transition-all duration-700"
                             style={{ width: `${pct}%` }}
                           />
                         </div>

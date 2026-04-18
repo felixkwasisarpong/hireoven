@@ -189,7 +189,7 @@ export default function CoverLetterPage() {
   const showSponsorshipSection = Boolean(profile?.needs_sponsorship)
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(3,105,161,0.08),_transparent_40%),linear-gradient(180deg,#F7FBFF_0%,#F8FAFC_60%,#F8FAFC_100%)] px-4 py-6 lg:px-8">
+    <main className="app-page">
       <div className="mx-auto max-w-4xl space-y-5">
         {/* Back */}
         <div className="flex items-center gap-3">

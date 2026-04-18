@@ -126,11 +126,11 @@ export default function CompanyProfilePage() {
 
   if (isLoading) {
     return (
-      <main className="min-h-screen bg-[linear-gradient(180deg,#F7FBFF_0%,#F8FAFC_58%)] px-4 py-6 lg:px-8">
-        <div className="mx-auto max-w-5xl space-y-5">
-          <div className="h-52 animate-pulse rounded-[32px] bg-white/80" />
-          <div className="h-12 animate-pulse rounded-2xl bg-white/80" />
-          <div className="h-96 animate-pulse rounded-[28px] bg-white/80" />
+      <main className="app-page">
+        <div className="app-shell max-w-5xl space-y-5">
+          <div className="surface-card h-52 animate-pulse" />
+          <div className="surface-card-subtle h-12 animate-pulse" />
+          <div className="surface-card h-96 animate-pulse" />
         </div>
       </main>
     )
@@ -138,10 +138,10 @@ export default function CompanyProfilePage() {
 
   if (!company) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#F7FBFF] px-4">
+      <main className="app-page flex min-h-screen items-center justify-center px-4">
         <div className="text-center">
           <p className="text-lg font-semibold text-gray-900">Company not found</p>
-          <Link href="/dashboard/companies" className="mt-4 inline-flex items-center gap-2 text-sm text-[#0369A1] hover:text-[#075985]">
+          <Link href="/dashboard/companies" className="mt-4 inline-flex items-center gap-2 text-sm text-[#FF5C18] hover:text-[#E14F0E]">
             <ArrowLeft className="h-4 w-4" /> Back to companies
           </Link>
         </div>
@@ -150,11 +150,11 @@ export default function CompanyProfilePage() {
   }
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(180deg,#F7FBFF_0%,#F8FAFC_58%,#F8FAFC_100%)] px-4 py-6 lg:px-8">
-      <div className="mx-auto max-w-5xl space-y-5">
+    <main className="app-page">
+      <div className="app-shell max-w-5xl space-y-5">
 
         {/* Header card */}
-        <section className="rounded-[32px] border border-white/80 bg-white/90 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.06)]">
+        <section className="surface-hero">
           <Link href="/dashboard/companies" className="mb-5 inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 transition">
             <ArrowLeft className="h-4 w-4" /> Company Explorer
           </Link>
@@ -162,7 +162,7 @@ export default function CompanyProfilePage() {
         </section>
 
         {/* Tab nav */}
-        <div className="flex gap-1 rounded-2xl border border-gray-200 bg-white p-1">
+        <div className="surface-card-subtle flex gap-1 p-1">
           {([
             { key: "roles" as Tab, label: `Open roles (${jobs.length})` },
             { key: "intel" as Tab, label: "Sponsorship intel" },
@@ -175,8 +175,8 @@ export default function CompanyProfilePage() {
               className={cn(
                 "flex-1 rounded-xl py-2.5 text-sm font-medium transition",
                 tab === key
-                  ? "bg-[#0369A1] text-white"
-                  : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                  ? "chip-control-active flex-1 justify-center rounded-xl"
+                  : "flex-1 text-gray-600 hover:bg-gray-50 hover:text-gray-900"
               )}
             >
               {label}
@@ -186,15 +186,15 @@ export default function CompanyProfilePage() {
 
         {/* ── Tab 1: Open roles ── */}
         {tab === "roles" && (
-          <section className="rounded-[28px] border border-white/80 bg-white/90 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.06)]">
+          <section className="surface-card">
             {/* Filters */}
             <div className="mb-5 flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 onClick={() => setRemoteOnly((v) => !v)}
                 className={cn(
-                  "rounded-xl border px-3 py-1.5 text-sm font-medium transition",
-                  remoteOnly ? "border-[#0369A1] bg-[#E0F2FE] text-[#0369A1]" : "border-gray-200 text-gray-600 hover:bg-gray-50"
+                  "chip-control",
+                  remoteOnly && "chip-control-active"
                 )}
               >
                 Remote only
@@ -207,8 +207,8 @@ export default function CompanyProfilePage() {
                     setSenFilter((prev) => prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s])
                   }
                   className={cn(
-                    "rounded-xl border px-3 py-1.5 text-sm font-medium transition capitalize",
-                    senFilter.includes(s) ? "border-[#0369A1] bg-[#E0F2FE] text-[#0369A1]" : "border-gray-200 text-gray-600 hover:bg-gray-50"
+                    "chip-control capitalize",
+                    senFilter.includes(s) && "chip-control-active"
                   )}
                 >
                   {s}
@@ -222,8 +222,8 @@ export default function CompanyProfilePage() {
                     setEmpFilter((prev) => prev.includes(o.value) ? prev.filter((x) => x !== o.value) : [...prev, o.value])
                   }
                   className={cn(
-                    "rounded-xl border px-3 py-1.5 text-sm font-medium transition",
-                    empFilter.includes(o.value) ? "border-[#0369A1] bg-[#E0F2FE] text-[#0369A1]" : "border-gray-200 text-gray-600 hover:bg-gray-50"
+                    "chip-control",
+                    empFilter.includes(o.value) && "chip-control-active"
                   )}
                 >
                   {o.label}
@@ -241,7 +241,7 @@ export default function CompanyProfilePage() {
             </div>
 
             {filteredJobs.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-gray-200 px-8 py-12 text-center">
+              <div className="empty-state border-dashed shadow-none">
                 {jobs.length === 0 ? (
                   <>
                     <Building2 className="mx-auto h-10 w-10 text-gray-300 mb-3" />
@@ -266,7 +266,7 @@ export default function CompanyProfilePage() {
         {tab === "intel" && (
           <div className="space-y-5">
             {/* Section A — Verdict */}
-            <section className="rounded-[28px] border border-white/80 bg-white/90 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.06)]">
+            <section className="surface-card">
               <h2 className="mb-4 text-lg font-semibold text-gray-900">Sponsorship verdict</h2>
               <div className="grid gap-5 lg:grid-cols-[1fr_280px]">
                 <div>
@@ -287,7 +287,7 @@ export default function CompanyProfilePage() {
                           <div className="flex flex-1 items-center gap-3">
                             <div className="flex-1 h-3 overflow-hidden rounded-full bg-gray-100">
                               <div
-                                className="h-full rounded-full bg-[#0369A1] transition-all duration-700"
+                                className="h-full rounded-full bg-[#FF5C18] transition-all duration-700"
                                 style={{ width: `${(score / max) * 100}%` }}
                               />
                             </div>
@@ -307,11 +307,11 @@ export default function CompanyProfilePage() {
             </section>
 
             {/* Section B — USCIS petition history */}
-            <section className="rounded-[28px] border border-white/80 bg-white/90 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.06)]">
+            <section className="surface-card">
               <h2 className="mb-1 text-lg font-semibold text-gray-900">USCIS petition history</h2>
               <p className="mb-5 text-sm text-gray-500">Approved vs. denied petitions by year from USCIS data.</p>
               {petitionBars.length === 0 ? (
-                <p className="rounded-2xl border border-dashed border-gray-200 px-5 py-8 text-center text-sm text-gray-400">
+                <p className="empty-state border-dashed px-5 py-8 text-sm text-gray-400 shadow-none">
                   No USCIS H-1B data found for this company. This may mean they rarely sponsor
                   or file under a different legal name.
                 </p>
@@ -326,7 +326,7 @@ export default function CompanyProfilePage() {
                           <p className="w-14 flex-shrink-0 text-sm font-medium text-gray-500">{year}</p>
                           <div className="flex flex-1 h-9 items-center gap-0.5">
                             <div
-                              className="h-full rounded-l-xl bg-[#0369A1]"
+                              className="h-full rounded-l-xl bg-[#FF5C18]"
                               style={{ width: `${Math.max(2, (approved / maxPetitions) * 100)}%` }}
                               title={`${approved.toLocaleString()} approved`}
                             />
@@ -347,7 +347,7 @@ export default function CompanyProfilePage() {
                     })}
                   </div>
                   <div className="mt-4 flex items-center gap-4 text-xs text-gray-400">
-                    <span className="flex items-center gap-1.5"><span className="inline-block h-3 w-3 rounded-sm bg-[#0369A1]" />Approved</span>
+                    <span className="flex items-center gap-1.5"><span className="inline-block h-3 w-3 rounded-sm bg-[#FF5C18]" />Approved</span>
                     <span className="flex items-center gap-1.5"><span className="inline-block h-3 w-3 rounded-sm bg-red-300" />Denied</span>
                   </div>
                 </>
@@ -356,7 +356,7 @@ export default function CompanyProfilePage() {
 
             {/* Section C — JD patterns */}
             {jdInsights && jobs.length > 0 && (
-              <section className="rounded-[28px] border border-white/80 bg-white/90 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.06)]">
+              <section className="surface-card">
                 <h2 className="mb-1 text-lg font-semibold text-gray-900">Job description patterns</h2>
                 <p className="mb-5 text-sm text-gray-500">
                   Based on {jobs.length} active job posting{jobs.length !== 1 ? "s" : ""} at {company.name}.
@@ -391,7 +391,7 @@ export default function CompanyProfilePage() {
             )}
 
             {/* Section D — Similar companies */}
-            <section className="rounded-[28px] border border-white/80 bg-white/90 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.06)]">
+            <section className="surface-card">
               <h2 className="mb-1 text-lg font-semibold text-gray-900">
                 Companies like {company.name} that actively sponsor
               </h2>
@@ -405,10 +405,10 @@ export default function CompanyProfilePage() {
 
         {/* ── Tab 3: About ── */}
         {tab === "about" && (
-          <section className="rounded-[28px] border border-white/80 bg-white/90 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.06)]">
+          <section className="surface-card">
             <h2 className="mb-5 text-lg font-semibold text-gray-900">About {company.name}</h2>
             <div className="space-y-5">
-              <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-5 py-8 text-center">
+              <div className="empty-state border-dashed bg-gray-50 shadow-none">
                 <p className="text-sm text-gray-400">
                   Company description coming soon. We&apos;re building out profile enrichment — check back.
                 </p>
@@ -433,7 +433,7 @@ export default function CompanyProfilePage() {
                     href={company.careers_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 rounded-2xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:border-[#0369A1] hover:text-[#0369A1]"
+                    className="inline-flex items-center gap-2 rounded-2xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:border-[#FF5C18] hover:text-[#FF5C18]"
                   >
                     View careers page →
                   </a>
