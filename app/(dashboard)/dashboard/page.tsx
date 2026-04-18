@@ -7,6 +7,7 @@ import {
   BellRing,
   Bookmark,
   Building2,
+  FileText,
   Globe2,
   LogOut,
   UserCircle2,
@@ -16,6 +17,8 @@ import GlobalSearchBar from "@/components/search/GlobalSearchBar"
 import JobFeed from "@/components/jobs/JobFeed"
 import NotificationBell from "@/components/notifications/NotificationBell"
 import PushNotificationSetup from "@/components/notifications/PushNotificationSetup"
+import ResumeUploader from "@/components/resume/ResumeUploader"
+import { useResumeContext } from "@/components/resume/ResumeProvider"
 import JobFilters, {
   SORT_OPTIONS,
   buildFilterPills,
@@ -43,6 +46,7 @@ type TopHiringCompany = {
 const NAV_ITEMS = [
   { label: "Feed",      href: "/dashboard",           icon: Waves      },
   { label: "Companies", href: "/dashboard/companies", icon: Building2  },
+  { label: "Resume",    href: "/dashboard/resume",    icon: FileText   },
   { label: "Watchlist", href: "/dashboard/watchlist", icon: Bookmark   },
   { label: "Alerts",    href: "/dashboard/alerts",    icon: BellRing   },
   { label: "Profile",   href: "/dashboard/onboarding",icon: UserCircle2},
@@ -78,6 +82,7 @@ export default function DashboardPage() {
 
   const { user, profile, isLoading: authLoading, signOut } = useAuth()
   const { watchlist } = useWatchlist(user?.id)
+  const { hasResume, primaryResume, upsertResume } = useResumeContext()
   const [feedMeta, setFeedMeta] = useState({ totalCount: 0, lastHourCount: 0 })
   const [topHiringCompanies, setTopHiringCompanies] = useState<TopHiringCompany[]>([])
 
@@ -340,11 +345,87 @@ export default function DashboardPage() {
               filters={filters}
               searchQuery={searchQuery}
               onMetaChange={setFeedMeta}
+              hasPrimaryResume={Boolean(primaryResume)}
             />
           </section>
 
           <aside className="hidden xl:block">
             <div className="sticky top-4 flex h-[calc(100vh-2rem)] flex-col gap-4 overflow-y-auto">
+              {!hasResume ? (
+                <div className="rounded-[28px] border border-white/80 bg-white/90 p-5 shadow-[0_20px_60px_rgba(15,23,42,0.06)]">
+                  <ResumeUploader
+                    compact
+                    showPrompt={false}
+                    onUploadComplete={upsertResume}
+                  />
+                </div>
+              ) : primaryResume?.parse_status === "processing" ? (
+                <div className="rounded-[28px] border border-white/80 bg-white/90 p-5 shadow-[0_20px_60px_rgba(15,23,42,0.06)]">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#E0F2FE] text-[#0C4A6E]">
+                      <FileText className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-gray-900">Resume analysis</p>
+                      <p className="text-xs text-gray-500">AI is reading your resume now</p>
+                    </div>
+                  </div>
+                  <div className="mt-4 h-2 overflow-hidden rounded-full bg-gray-100">
+                    <div className="h-full w-full animate-pulse rounded-full bg-[#0369A1]" />
+                  </div>
+                </div>
+              ) : primaryResume?.parse_status === "failed" ? (
+                <div className="rounded-[28px] border border-red-200 bg-white p-5 shadow-[0_20px_60px_rgba(15,23,42,0.06)]">
+                  <p className="text-sm font-semibold text-gray-900">Resume analysis stalled</p>
+                  <p className="mt-2 text-sm leading-6 text-gray-600">
+                    Replace your uploaded file on the resume page to unlock match scoring and autofill.
+                  </p>
+                  <Link
+                    href="/dashboard/resume"
+                    className="mt-4 inline-flex rounded-2xl bg-[#0369A1] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#075985]"
+                  >
+                    Open resume page
+                  </Link>
+                </div>
+              ) : (
+                <div className="rounded-[28px] border border-white/80 bg-white/90 p-5 shadow-[0_20px_60px_rgba(15,23,42,0.06)]">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-gray-900">Resume signal</p>
+                      <p className="text-xs text-gray-500">
+                        Your uploaded resume now powers the next layer of matching
+                      </p>
+                    </div>
+                    <Link
+                      href="/dashboard/resume"
+                      className="text-xs font-medium text-[#0369A1] transition hover:text-[#0C4A6E]"
+                    >
+                      Manage
+                    </Link>
+                  </div>
+
+                  <div className="mt-4 rounded-[24px] border border-[#D6EEFF] bg-[#F5FBFF] p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#0C4A6E]">
+                      Primary resume
+                    </p>
+                    <p className="mt-1.5 truncate text-sm font-semibold text-gray-900">
+                      {primaryResume?.name ?? primaryResume?.file_name ?? "Resume"}
+                    </p>
+                    <div className="mt-4 flex items-end gap-3">
+                      <div className="shrink-0">
+                        <p className="text-3xl font-semibold text-[#0369A1]">
+                          {primaryResume?.resume_score ?? 0}
+                        </p>
+                        <p className="text-xs text-gray-500">resume score</p>
+                      </div>
+                      <div className="min-w-0 flex-1 rounded-2xl border border-[#BAE6FD] bg-white px-3 py-2 text-xs font-medium text-[#0C4A6E]">
+                        Match scoring coming soon
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="rounded-[28px] border border-white/80 bg-white/90 p-5 shadow-[0_20px_60px_rgba(15,23,42,0.06)]">
                 <div className="flex items-center justify-between">
                   <div>

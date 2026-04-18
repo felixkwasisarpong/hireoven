@@ -52,6 +52,17 @@ export type JobWithinWindow = 'all' | '1h' | '6h' | '24h' | '3d';
 
 export type JobSortOption = 'freshest' | 'match' | 'relevant';
 
+export type ResumeParseStatus = 'pending' | 'processing' | 'complete' | 'failed';
+
+export type ApplicationStatus =
+  | 'saved'
+  | 'applied'
+  | 'phone_screen'
+  | 'interview'
+  | 'offer'
+  | 'rejected'
+  | 'withdrawn';
+
 // ---------------------------------------------------------------------------
 // Companies
 // ---------------------------------------------------------------------------
@@ -143,6 +154,8 @@ export type Profile = {
   desired_roles: string[] | null;
   desired_locations: string[] | null;
   desired_seniority: SeniorityLevel[] | null;
+  seniority_level: SeniorityLevel | null;
+  top_skills: string[] | null;
   remote_only: boolean;
   is_international: boolean;
   visa_status: VisaStatus | null;
@@ -163,6 +176,155 @@ export type ProfileInsert = Pick<Profile, 'id'> &
   };
 
 export type ProfileUpdate = Partial<Omit<Profile, 'id' | 'created_at' | 'updated_at'>>;
+
+// ---------------------------------------------------------------------------
+// Resumes
+// ---------------------------------------------------------------------------
+
+export type WorkExperience = {
+  company: string;
+  title: string;
+  start_date: string;
+  end_date: string | null;
+  is_current: boolean;
+  description: string;
+  achievements: string[];
+};
+
+export type Education = {
+  institution: string;
+  degree: string;
+  field: string;
+  start_date: string;
+  end_date: string | null;
+  gpa: string | null;
+};
+
+export type Skills = {
+  technical: string[];
+  soft: string[];
+  languages: string[];
+  certifications: string[];
+};
+
+export type Project = {
+  name: string;
+  description: string;
+  url: string | null;
+  technologies: string[];
+};
+
+export type ParsedResume = {
+  full_name: string | null;
+  email: string | null;
+  phone: string | null;
+  location: string | null;
+  linkedin_url: string | null;
+  portfolio_url: string | null;
+  summary: string | null;
+  work_experience: WorkExperience[];
+  education: Education[];
+  skills: Skills;
+  projects: Project[];
+  seniority_level: SeniorityLevel | null;
+  years_of_experience: number | null;
+  primary_role: string | null;
+  industries: string[];
+  top_skills: string[];
+  resume_score: number | null;
+  raw_text: string;
+};
+
+export type Resume = {
+  id: string;
+  user_id: string;
+  file_name: string;
+  name: string | null;
+  file_url: string;
+  storage_path: string;
+  file_size: number | null;
+  is_primary: boolean;
+  parse_status: ResumeParseStatus;
+  full_name: string | null;
+  email: string | null;
+  phone: string | null;
+  location: string | null;
+  linkedin_url: string | null;
+  portfolio_url: string | null;
+  summary: string | null;
+  work_experience: WorkExperience[] | null;
+  education: Education[] | null;
+  skills: Skills | null;
+  projects: Project[] | null;
+  seniority_level: SeniorityLevel | null;
+  years_of_experience: number | null;
+  primary_role: string | null;
+  industries: string[] | null;
+  top_skills: string[] | null;
+  resume_score: number | null;
+  raw_text: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ResumeInsert = Omit<Resume, 'id' | 'created_at' | 'updated_at'> & {
+  id?: string;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type ResumeUpdate = Partial<ResumeInsert>;
+
+export type ResumeVersion = {
+  id: string;
+  resume_id: string;
+  user_id: string;
+  version_number: number;
+  name: string | null;
+  file_url: string | null;
+  changes_summary: string | null;
+  created_at: string;
+};
+
+export type ResumeVersionInsert = Omit<ResumeVersion, 'id' | 'created_at'> & {
+  id?: string;
+  created_at?: string;
+};
+
+export type JobApplicationTimelineItem = {
+  status: ApplicationStatus;
+  date: string;
+  note: string | null;
+};
+
+export type JobApplication = {
+  id: string;
+  user_id: string;
+  job_id: string | null;
+  resume_id: string | null;
+  status: ApplicationStatus;
+  company_name: string;
+  job_title: string;
+  apply_url: string | null;
+  applied_at: string | null;
+  match_score: number | null;
+  cover_letter: string | null;
+  notes: string | null;
+  follow_up_date: string | null;
+  salary_expected: number | null;
+  salary_offered: number | null;
+  timeline: JobApplicationTimelineItem[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type JobApplicationInsert = Omit<JobApplication, 'id' | 'created_at' | 'updated_at'> & {
+  id?: string;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type JobApplicationUpdate = Partial<JobApplicationInsert>;
 
 // ---------------------------------------------------------------------------
 // API Usage
@@ -372,6 +534,17 @@ export type Database = {
         AlertNotification,
         AlertNotificationInsert,
         Partial<AlertNotificationInsert>
+      >;
+      resumes: TableDefinition<Resume, ResumeInsert, ResumeUpdate>;
+      resume_versions: TableDefinition<
+        ResumeVersion,
+        ResumeVersionInsert,
+        Partial<ResumeVersionInsert>
+      >;
+      job_applications: TableDefinition<
+        JobApplication,
+        JobApplicationInsert,
+        JobApplicationUpdate
       >;
       crawl_logs: TableDefinition<CrawlLog, CrawlLogInsert, Partial<CrawlLogInsert>>;
       h1b_records: TableDefinition<H1BRecord, H1BRecordInsert, Partial<H1BRecordInsert>>;

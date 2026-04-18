@@ -1,0 +1,184 @@
+"use client"
+
+import { useEffect, useMemo, useState } from "react"
+import { cn } from "@/lib/utils"
+import type { Resume } from "@/types"
+
+type ScoreBreakdown = {
+  completeness: number
+  achievements: number
+  skillsClarity: number
+  summaryQuality: number
+  contactInfo: number
+}
+
+function buildScoreBreakdown(resume: Resume): ScoreBreakdown {
+  const completenessSignals = [
+    resume.summary,
+    (resume.work_experience?.length ?? 0) > 0 ? "work" : null,
+    (resume.education?.length ?? 0) > 0 ? "education" : null,
+    resume.skills &&
+    (
+      resume.skills.technical.length +
+      resume.skills.soft.length +
+      resume.skills.languages.length +
+      resume.skills.certifications.length
+    ) > 0
+      ? "skills"
+      : null,
+  ].filter(Boolean).length
+
+  const quantifiedHits =
+    resume.work_experience?.reduce((count, item) => {
+      const text = `${item.description} ${item.achievements.join(" ")}`
+      return count + (text.match(/\b(\d+%|\$\d[\d,]*|\d+\+)\b/g)?.length ?? 0)
+    }, 0) ?? 0
+
+  const totalSkills =
+    (resume.skills?.technical.length ?? 0) +
+    (resume.skills?.soft.length ?? 0) +
+    (resume.skills?.languages.length ?? 0) +
+    (resume.skills?.certifications.length ?? 0)
+
+  const summaryWords = resume.summary?.split(/\s+/).filter(Boolean).length ?? 0
+  const contactFields = [
+    resume.email,
+    resume.phone,
+    resume.location,
+    resume.linkedin_url,
+    resume.portfolio_url,
+  ].filter(Boolean).length
+
+  return {
+    completeness: Math.min(30, Math.round((completenessSignals / 4) * 30)),
+    achievements: Math.min(25, quantifiedHits >= 5 ? 25 : quantifiedHits * 5),
+    skillsClarity: Math.min(20, totalSkills >= 10 ? 20 : totalSkills * 2),
+    summaryQuality: summaryWords >= 45 ? 15 : Math.min(15, Math.round(summaryWords / 3)),
+    contactInfo: Math.min(10, contactFields * 2),
+  }
+}
+
+function getScoreLabel(score: number) {
+  if (score >= 86) return "Excellent"
+  if (score >= 71) return "Strong"
+  if (score >= 51) return "Good"
+  return "Needs work"
+}
+
+function getScoreTone(score: number) {
+  if (score >= 71) {
+    return {
+      ring: "#10B981",
+      text: "text-emerald-600",
+      chip: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    }
+  }
+
+  if (score >= 41) {
+    return {
+      ring: "#F59E0B",
+      text: "text-amber-600",
+      chip: "bg-amber-50 text-amber-700 border-amber-200",
+    }
+  }
+
+  return {
+    ring: "#EF4444",
+    text: "text-red-600",
+    chip: "bg-red-50 text-red-700 border-red-200",
+  }
+}
+
+export default function ResumeScoreCard({ resume }: { resume: Resume }) {
+  const [animatedScore, setAnimatedScore] = useState(0)
+  const score = resume.resume_score ?? 0
+  const tone = getScoreTone(score)
+  const breakdown = useMemo(() => buildScoreBreakdown(resume), [resume])
+
+  const tips = useMemo(() => {
+    const nextTips: string[] = []
+
+    if (breakdown.completeness < 20) nextTips.push("Add a stronger summary and make sure experience, education, and skills are all present.")
+    if (breakdown.achievements < 15) nextTips.push("Add numbers to your impact, like revenue lifted, time saved, or projects shipped.")
+    if (breakdown.skillsClarity < 14) nextTips.push("Tighten the skills section so your strongest technical skills are obvious at a glance.")
+    if (breakdown.summaryQuality < 10) nextTips.push("Write a sharper 3-4 line summary that says what you do, your level, and your edge.")
+    if (breakdown.contactInfo < 8) nextTips.push("Round out the header with location, LinkedIn, or portfolio links.")
+
+    return nextTips.slice(0, 4)
+  }, [breakdown])
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setAnimatedScore(score), 80)
+    return () => window.clearTimeout(timeout)
+  }, [score])
+
+  return (
+    <div className="rounded-[28px] border border-gray-200 bg-white p-5 shadow-[0_20px_60px_rgba(15,23,42,0.05)]">
+      <div className="flex items-center gap-4">
+        <div
+          className="relative flex h-20 w-20 shrink-0 items-center justify-center rounded-full"
+          style={{
+            background: `conic-gradient(${tone.ring} ${animatedScore}%, #E5E7EB 0%)`,
+          }}
+        >
+          <div className="flex h-[66px] w-[66px] items-center justify-center rounded-full bg-white">
+            <span className={cn("text-2xl font-semibold", tone.text)}>{score}</span>
+          </div>
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-gray-400">
+            Resume quality
+          </p>
+          <p className="mt-1 text-xl font-semibold text-gray-900">{getScoreLabel(score)}</p>
+          <span className={cn("mt-2 inline-block rounded-full border px-2.5 py-1 text-xs font-medium", tone.chip)}>
+            {score >= 71 ? "Strong foundation" : score >= 41 ? "Room to improve" : "Needs work"}
+          </span>
+        </div>
+      </div>
+
+      <div className="mt-6 grid grid-cols-2 gap-2 sm:grid-cols-3">
+        {[
+          ["Completeness", breakdown.completeness, 30],
+          ["Achievements", breakdown.achievements, 25],
+          ["Skills", breakdown.skillsClarity, 20],
+          ["Summary", breakdown.summaryQuality, 15],
+          ["Contact", breakdown.contactInfo, 10],
+        ].map(([label, value, total]) => {
+          const pct = Math.round(((value as number) / (total as number)) * 100)
+          return (
+            <div key={label as string} className="rounded-2xl border border-gray-200 bg-[#FAFCFF] px-3 py-3">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-400 truncate">
+                {label}
+              </p>
+              <p className="mt-1.5 text-base font-semibold text-gray-900">
+                {value as number}
+                <span className="text-xs font-medium text-gray-400">/{total as number}</span>
+              </p>
+              <div className="mt-2 h-1 overflow-hidden rounded-full bg-gray-200">
+                <div
+                  className="h-full rounded-full transition-all duration-700"
+                  style={{
+                    width: `${pct}%`,
+                    backgroundColor: tone.ring,
+                  }}
+                />
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {tips.length > 0 && (
+        <div className="mt-6 rounded-2xl border border-[#D6EEFF] bg-[#F5FBFF] px-4 py-4">
+          <p className="text-sm font-semibold text-[#0C4A6E]">Improvement tips</p>
+          <div className="mt-3 space-y-2 text-sm leading-6 text-gray-600">
+            {tips.map((tip) => (
+              <p key={tip}>{tip}</p>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

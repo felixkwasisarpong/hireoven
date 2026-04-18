@@ -8,10 +8,12 @@ import {
   Share2,
   Sparkles,
 } from "lucide-react"
+import { useResumeContext } from "@/components/resume/ResumeProvider"
 import type { JobWithCompany } from "@/types"
 
 interface JobCardProps {
   job: JobWithCompany
+  hasPrimaryResume?: boolean
 }
 
 type FreshnessTone = "green" | "teal" | "gray" | "muted"
@@ -128,11 +130,14 @@ function SponsorshipBadge({ job }: { job: JobWithCompany }) {
   return null
 }
 
-export default function JobCard({ job }: JobCardProps) {
+export default function JobCard({ job, hasPrimaryResume }: JobCardProps) {
   const [expanded, setExpanded] = useState(false)
   const [saved, setSaved] = useState(false)
   const now = useLiveNow()
   const freshness = formatFreshness(job.first_detected_at, now)
+  const { primaryResume } = useResumeContext()
+  const showResumeSignal =
+    typeof hasPrimaryResume === "boolean" ? hasPrimaryResume : Boolean(primaryResume)
 
   const description = useMemo(
     () => (job.description ? stripHtml(job.description) : ""),
@@ -263,6 +268,13 @@ export default function JobCard({ job }: JobCardProps) {
             )}
             <span className={`text-sm ${freshness.text}`}>{freshness.label}</span>
           </div>
+
+          {showResumeSignal && (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-[#BAE6FD] bg-[#F0F9FF] px-2.5 py-1 text-[11px] font-semibold text-[#0C4A6E]">
+              <Sparkles className="h-3.5 w-3.5" />
+              Analyzing...
+            </span>
+          )}
 
           <SponsorshipBadge job={job} />
         </div>

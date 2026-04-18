@@ -10,6 +10,7 @@ interface JobFeedProps {
   filters: JobFilters
   searchQuery: string
   onMetaChange?: (meta: { totalCount: number; lastHourCount: number }) => void
+  hasPrimaryResume?: boolean
 }
 
 function JobCardSkeleton() {
@@ -36,6 +37,7 @@ export default function JobFeed({
   filters,
   searchQuery,
   onMetaChange,
+  hasPrimaryResume = false,
 }: JobFeedProps) {
   const {
     jobs,
@@ -104,7 +106,7 @@ export default function JobFeed({
       {jobs.length > 0 && (
         <div className="space-y-4">
           {jobs.map((job) => (
-            <JobCard key={job.id} job={job} />
+            <JobCard key={job.id} job={job} hasPrimaryResume={hasPrimaryResume} />
           ))}
         </div>
       )}
