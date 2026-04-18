@@ -8,7 +8,7 @@ import { createClient } from "@/lib/supabase/client"
 
 export default function LoginPage() {
   const searchParams = useSearchParams()
-  const next = searchParams.get("next") ?? "/dashboard"
+  const explicitNext = searchParams.get("next")
 
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -31,6 +31,19 @@ export default function LoginPage() {
     }))
   }
 
+  async function getPostLoginDestination(userId: string) {
+    if (explicitNext) return explicitNext
+
+    const supabase = createClient()
+    const { data: profile } = await ((supabase
+      .from("profiles")
+      .select("is_admin")
+      .eq("id", userId)
+      .single()) as any)
+
+    return profile?.is_admin ? "/admin" : "/dashboard"
+  }
+
   async function handleEmailLogin(e: FormEvent) {
     e.preventDefault()
     setLoading(true)
@@ -51,9 +64,11 @@ export default function LoginPage() {
 
     if (data.user) {
       await ensureProfileRow(data.user)
+      const destination = await getPostLoginDestination(data.user.id)
+      window.location.assign(destination)
+      return
     }
-
-    window.location.assign(next)
+    window.location.assign("/dashboard")
   }
 
   async function handleGoogleLogin() {
@@ -64,7 +79,7 @@ export default function LoginPage() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/auth/callback?next=${next}`,
+        redirectTo: `${window.location.origin}/auth/callback${explicitNext ? `?next=${encodeURIComponent(explicitNext)}` : ""}`,
       },
     })
 

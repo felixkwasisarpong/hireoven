@@ -54,6 +54,20 @@ export type JobSortOption = 'freshest' | 'match' | 'relevant';
 
 export type ResumeParseStatus = 'pending' | 'processing' | 'complete' | 'failed';
 
+export type ResumeEditType =
+  | 'rewrite'
+  | 'keyword_inject'
+  | 'quantify'
+  | 'expand'
+  | 'shorten';
+
+export type ResumeSection =
+  | 'summary'
+  | 'work_experience'
+  | 'skills'
+  | 'education'
+  | 'projects';
+
 export type ApplicationStatus =
   | 'saved'
   | 'applied'
@@ -323,6 +337,28 @@ export type ResumeInsert = Omit<Resume, 'id' | 'created_at' | 'updated_at'> & {
 
 export type ResumeUpdate = Partial<ResumeInsert>;
 
+export type ResumeSnapshot = Pick<
+  Resume,
+  | 'full_name'
+  | 'email'
+  | 'phone'
+  | 'location'
+  | 'linkedin_url'
+  | 'portfolio_url'
+  | 'summary'
+  | 'work_experience'
+  | 'education'
+  | 'skills'
+  | 'projects'
+  | 'seniority_level'
+  | 'years_of_experience'
+  | 'primary_role'
+  | 'industries'
+  | 'top_skills'
+  | 'resume_score'
+  | 'raw_text'
+>;
+
 export type ResumeVersion = {
   id: string;
   resume_id: string;
@@ -330,6 +366,7 @@ export type ResumeVersion = {
   version_number: number;
   name: string | null;
   file_url: string | null;
+  snapshot: ResumeSnapshot | null;
   changes_summary: string | null;
   created_at: string;
 };
@@ -373,6 +410,38 @@ export type JobApplicationInsert = Omit<JobApplication, 'id' | 'created_at' | 'u
 };
 
 export type JobApplicationUpdate = Partial<JobApplicationInsert>;
+
+export type ResumeEditContext = {
+  experienceIndex?: number;
+  bulletIndex?: number;
+  field?: 'summary' | 'description' | 'achievement' | 'technical' | 'soft' | 'languages' | 'certifications';
+  keyword?: string;
+};
+
+export type ResumeEdit = {
+  id: string;
+  user_id: string;
+  resume_id: string;
+  job_id: string | null;
+  section: ResumeSection;
+  original_content: string;
+  suggested_content: string;
+  edit_type: ResumeEditType | null;
+  keywords_added: string[] | null;
+  was_accepted: boolean | null;
+  feedback: string | null;
+  context: ResumeEditContext | null;
+  created_at: string;
+};
+
+export type ResumeEditInsert = Omit<ResumeEdit, 'id' | 'created_at'> & {
+  id?: string;
+  created_at?: string;
+};
+
+export type ResumeEditSuggestion = ResumeEdit & {
+  local_id?: string;
+};
 
 // ---------------------------------------------------------------------------
 // API Usage
@@ -588,6 +657,11 @@ export type Database = {
         ResumeVersion,
         ResumeVersionInsert,
         Partial<ResumeVersionInsert>
+      >;
+      resume_edits: TableDefinition<
+        ResumeEdit,
+        ResumeEditInsert,
+        Partial<ResumeEditInsert>
       >;
       job_applications: TableDefinition<
         JobApplication,

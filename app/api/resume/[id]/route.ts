@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server"
+import { deriveResumeFields } from "@/lib/resume/scoring"
+import { buildResumeRawText } from "@/lib/resume/state"
 import { deleteResume, getResumeUrl } from "@/lib/supabase/storage"
 import { createClient } from "@/lib/supabase/server"
-import type { Resume } from "@/types"
+import type { Education, Project, Resume, Skills, WorkExperience } from "@/types"
 
 export const runtime = "nodejs"
 
@@ -133,6 +135,40 @@ export async function PATCH(
       .eq("user_id", user.id)
 
     updates.is_primary = true
+  }
+
+  if (typeof body.summary === "string" || body.summary === null) {
+    updates.summary = typeof body.summary === "string" ? body.summary.trim() : null
+  }
+
+  if (Array.isArray(body.work_experience)) {
+    updates.work_experience = body.work_experience as WorkExperience[]
+  }
+
+  if (Array.isArray(body.education)) {
+    updates.education = body.education as Education[]
+  }
+
+  if (body.skills && typeof body.skills === "object") {
+    updates.skills = body.skills as Skills
+  }
+
+  if (Array.isArray(body.projects)) {
+    updates.projects = body.projects as Project[]
+  }
+
+  const contentChanged = ["summary", "work_experience", "education", "skills", "projects"].some(
+    (key) => key in updates
+  )
+
+  if (contentChanged) {
+    const nextResume: Resume = {
+      ...resume,
+      ...updates,
+    }
+
+    updates.raw_text = buildResumeRawText(nextResume)
+    Object.assign(updates, deriveResumeFields(nextResume))
   }
 
   if (Object.keys(updates).length === 0) {

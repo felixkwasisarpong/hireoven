@@ -209,11 +209,30 @@ CREATE TABLE IF NOT EXISTS resume_versions (
   version_number INTEGER NOT NULL,
   name TEXT,
   file_url TEXT,
+  snapshot JSONB,
   changes_summary TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 12. Job applications table
+-- 12. Resume edits table
+-- AI-generated suggestions plus accept/reject feedback
+CREATE TABLE IF NOT EXISTS resume_edits (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  resume_id UUID REFERENCES resumes(id) ON DELETE CASCADE,
+  job_id UUID REFERENCES jobs(id) ON DELETE SET NULL,
+  section TEXT NOT NULL,
+  original_content TEXT NOT NULL,
+  suggested_content TEXT NOT NULL,
+  edit_type TEXT,
+  keywords_added TEXT[],
+  was_accepted BOOLEAN,
+  feedback TEXT,
+  context JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 13. Job applications table
 -- Per-user tracking for jobs applied to
 CREATE TABLE IF NOT EXISTS job_applications (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -269,6 +288,10 @@ CREATE INDEX IF NOT EXISTS idx_resumes_user_id ON resumes(user_id);
 CREATE INDEX IF NOT EXISTS idx_resumes_primary ON resumes(user_id, is_primary);
 CREATE INDEX IF NOT EXISTS idx_resumes_parse_status ON resumes(parse_status);
 CREATE INDEX IF NOT EXISTS idx_resume_versions_resume_id ON resume_versions(resume_id);
+CREATE INDEX IF NOT EXISTS idx_resume_edits_resume_id ON resume_edits(resume_id);
+CREATE INDEX IF NOT EXISTS idx_resume_edits_job_id ON resume_edits(job_id);
+CREATE INDEX IF NOT EXISTS idx_resume_edits_user_id ON resume_edits(user_id);
+CREATE INDEX IF NOT EXISTS idx_resume_edits_created_at ON resume_edits(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_job_applications_user_id ON job_applications(user_id);
 CREATE INDEX IF NOT EXISTS idx_job_applications_status ON job_applications(status);
 
@@ -314,6 +337,7 @@ ALTER TABLE h1b_records ENABLE ROW LEVEL SECURITY;
 ALTER TABLE push_subscriptions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE resumes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE resume_versions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE resume_edits ENABLE ROW LEVEL SECURITY;
 ALTER TABLE job_applications ENABLE ROW LEVEL SECURITY;
 
 -- Profiles
@@ -383,6 +407,17 @@ BEGIN
   ) THEN
     CREATE POLICY "Users manage own applications"
       ON job_applications FOR ALL
+      USING (auth.uid() = user_id)
+      WITH CHECK (auth.uid() = user_id);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'resume_edits'
+      AND policyname = 'Users manage own edits'
+  ) THEN
+    CREATE POLICY "Users manage own edits"
+      ON resume_edits FOR ALL
       USING (auth.uid() = user_id)
       WITH CHECK (auth.uid() = user_id);
   END IF;

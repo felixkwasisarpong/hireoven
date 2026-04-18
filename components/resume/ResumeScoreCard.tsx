@@ -1,62 +1,9 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import { buildResumeScoreBreakdown } from "@/lib/resume/scoring"
 import { cn } from "@/lib/utils"
 import type { Resume } from "@/types"
-
-type ScoreBreakdown = {
-  completeness: number
-  achievements: number
-  skillsClarity: number
-  summaryQuality: number
-  contactInfo: number
-}
-
-function buildScoreBreakdown(resume: Resume): ScoreBreakdown {
-  const completenessSignals = [
-    resume.summary,
-    (resume.work_experience?.length ?? 0) > 0 ? "work" : null,
-    (resume.education?.length ?? 0) > 0 ? "education" : null,
-    resume.skills &&
-    (
-      resume.skills.technical.length +
-      resume.skills.soft.length +
-      resume.skills.languages.length +
-      resume.skills.certifications.length
-    ) > 0
-      ? "skills"
-      : null,
-  ].filter(Boolean).length
-
-  const quantifiedHits =
-    resume.work_experience?.reduce((count, item) => {
-      const text = `${item.description} ${item.achievements.join(" ")}`
-      return count + (text.match(/\b(\d+%|\$\d[\d,]*|\d+\+)\b/g)?.length ?? 0)
-    }, 0) ?? 0
-
-  const totalSkills =
-    (resume.skills?.technical.length ?? 0) +
-    (resume.skills?.soft.length ?? 0) +
-    (resume.skills?.languages.length ?? 0) +
-    (resume.skills?.certifications.length ?? 0)
-
-  const summaryWords = resume.summary?.split(/\s+/).filter(Boolean).length ?? 0
-  const contactFields = [
-    resume.email,
-    resume.phone,
-    resume.location,
-    resume.linkedin_url,
-    resume.portfolio_url,
-  ].filter(Boolean).length
-
-  return {
-    completeness: Math.min(30, Math.round((completenessSignals / 4) * 30)),
-    achievements: Math.min(25, quantifiedHits >= 5 ? 25 : quantifiedHits * 5),
-    skillsClarity: Math.min(20, totalSkills >= 10 ? 20 : totalSkills * 2),
-    summaryQuality: summaryWords >= 45 ? 15 : Math.min(15, Math.round(summaryWords / 3)),
-    contactInfo: Math.min(10, contactFields * 2),
-  }
-}
 
 function getScoreLabel(score: number) {
   if (score >= 86) return "Excellent"
@@ -93,7 +40,7 @@ export default function ResumeScoreCard({ resume }: { resume: Resume }) {
   const [animatedScore, setAnimatedScore] = useState(0)
   const score = resume.resume_score ?? 0
   const tone = getScoreTone(score)
-  const breakdown = useMemo(() => buildScoreBreakdown(resume), [resume])
+  const breakdown = useMemo(() => buildResumeScoreBreakdown(resume), [resume])
 
   const tips = useMemo(() => {
     const nextTips: string[] = []

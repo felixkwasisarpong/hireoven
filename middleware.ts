@@ -59,7 +59,14 @@ export async function middleware(request: NextRequest) {
 
   // Redirect logged-in users away from auth pages
   if (user && (pathname === "/login" || pathname === "/signup")) {
-    return NextResponse.redirect(new URL("/dashboard", request.url))
+    const { data: profile } = await ((supabase
+      .from("profiles")
+      .select("is_admin")
+      .eq("id", user.id)
+      .single()) as any)
+
+    const destination = profile?.is_admin ? "/admin" : "/dashboard"
+    return NextResponse.redirect(new URL(destination, request.url))
   }
 
   return response

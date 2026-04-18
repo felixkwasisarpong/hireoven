@@ -1,12 +1,14 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import Link from "next/link"
 import { FileText, Loader2, Sparkles, Trash2 } from "lucide-react"
 import ParsedResumeView from "@/components/resume/ParsedResumeView"
 import { useResumeContext } from "@/components/resume/ResumeProvider"
 import ResumeScoreCard from "@/components/resume/ResumeScoreCard"
 import ResumeUploader from "@/components/resume/ResumeUploader"
 import { useToast } from "@/components/ui/ToastProvider"
+import { createClient } from "@/lib/supabase/client"
 import { cn } from "@/lib/utils"
 import type { Resume } from "@/types"
 
@@ -82,6 +84,81 @@ export default function ResumePage() {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [nameDrafts, setNameDrafts] = useState<Record<string, string>>({})
   const [pendingActionId, setPendingActionId] = useState<string | null>(null)
+  const [analysisMeta, setAnalysisMeta] = useState<
+    Record<string, { improvements: number; jobId: string | null; jobTitle: string | null }>
+  >({})
+
+  useEffect(() => {
+    if (resumes.length === 0) {
+      setAnalysisMeta({})
+      return
+    }
+
+    const supabase = createClient()
+
+    async function loadAnalysisMeta() {
+      const resumeIds = resumes.map((resume) => resume.id)
+      const { data: analyses } = await (supabase
+        .from("resume_analyses")
+        .select("resume_id, job_id, recommendations, created_at")
+        .in("resume_id", resumeIds)
+        .order("created_at", { ascending: false }) as any)
+
+      const latestByResume = new Map<
+        string,
+        { jobId: string | null; improvements: number; createdAt: string }
+      >()
+
+      for (const analysis of (analyses ?? []) as Array<{
+        resume_id: string
+        job_id: string | null
+        recommendations: Array<unknown> | null
+        created_at: string
+      }>) {
+        if (latestByResume.has(analysis.resume_id)) continue
+        latestByResume.set(analysis.resume_id, {
+          jobId: analysis.job_id,
+          improvements: analysis.recommendations?.length ?? 0,
+          createdAt: analysis.created_at,
+        })
+      }
+
+      const jobIds = Array.from(
+        new Set(
+          Array.from(latestByResume.values())
+            .map((value) => value.jobId)
+            .filter((value): value is string => Boolean(value))
+        )
+      )
+
+      let jobTitleMap = new Map<string, string>()
+      if (jobIds.length > 0) {
+        const { data: jobs } = await (supabase
+          .from("jobs")
+          .select("id, title")
+          .in("id", jobIds) as any)
+        jobTitleMap = new Map(
+          ((jobs ?? []) as Array<{ id: string; title: string }>).map((job) => [job.id, job.title])
+        )
+      }
+
+      const next: Record<
+        string,
+        { improvements: number; jobId: string | null; jobTitle: string | null }
+      > = {}
+      latestByResume.forEach((value, resumeId) => {
+        next[resumeId] = {
+          improvements: value.improvements,
+          jobId: value.jobId,
+          jobTitle: value.jobId ? jobTitleMap.get(value.jobId) ?? null : null,
+        }
+      })
+
+      setAnalysisMeta(next)
+    }
+
+    void loadAnalysisMeta()
+  }, [resumes])
 
   useEffect(() => {
     if (!expandedId && resumes[0]) {
@@ -243,6 +320,7 @@ export default function ResumePage() {
               const isExpanded = expandedId === resume.id
               const isBusy = pendingActionId === resume.id
               const topSkills = resume.top_skills?.slice(0, 5) ?? []
+              const meta = analysisMeta[resume.id]
 
               if (resume.parse_status === "processing") {
                 return <ProcessingResumeCard key={resume.id} resume={resume} />
@@ -336,6 +414,32 @@ export default function ResumePage() {
                       </div>
 
                       <div className="flex flex-wrap items-center gap-3">
+                        <Link
+                          href={
+                            meta?.jobId
+                              ? `/dashboard/resume/edit?jobId=${meta.jobId}`
+                              : "/dashboard/resume/edit"
+                          }
+                          className="inline-flex items-center gap-2 rounded-2xl bg-[#0369A1] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#075985]"
+                        >
+                          <Sparkles className="h-4 w-4" />
+                          Edit resume
+                          {meta?.improvements ? (
+                            <span className="rounded-full bg-white/20 px-2 py-0.5 text-[11px] font-medium">
+                              {meta.improvements} suggested
+                            </span>
+                          ) : null}
+                        </Link>
+
+                        {meta?.jobId && meta.jobTitle && (
+                          <Link
+                            href={`/dashboard/resume/edit?jobId=${meta.jobId}`}
+                            className="rounded-2xl border border-[#BAE6FD] bg-[#F0F9FF] px-4 py-2.5 text-sm font-medium text-[#0C4A6E] transition hover:bg-[#E0F2FE]"
+                          >
+                            Optimize for {meta.jobTitle}
+                          </Link>
+                        )}
+
                         <label className="flex min-w-[220px] flex-1 items-center gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-3">
                           <FileText className="h-4 w-4 text-gray-400" />
                           <input
