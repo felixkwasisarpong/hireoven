@@ -95,6 +95,99 @@ export type ExperienceMatch = {
   gaps: string[];
 };
 
+// ---------------------------------------------------------------------------
+// Autofill
+// ---------------------------------------------------------------------------
+
+export type WorkAuthorization =
+  | 'us_citizen'
+  | 'green_card'
+  | 'h1b'
+  | 'opt'
+  | 'stem_opt'
+  | 'tn_visa'
+  | 'other'
+  | 'require_sponsorship';
+
+export type PreferredWorkType = 'remote' | 'hybrid' | 'onsite' | 'flexible';
+
+export type CustomAnswer = {
+  question_pattern: string;
+  answer: string;
+};
+
+export type AutofillProfile = {
+  id: string;
+  user_id: string;
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
+  phone: string | null;
+  address_line1: string | null;
+  address_line2: string | null;
+  city: string | null;
+  state: string | null;
+  zip_code: string | null;
+  country: string;
+  linkedin_url: string | null;
+  github_url: string | null;
+  portfolio_url: string | null;
+  website_url: string | null;
+  work_authorization: WorkAuthorization | null;
+  requires_sponsorship: boolean;
+  authorized_to_work: boolean;
+  sponsorship_statement: string | null;
+  years_of_experience: number | null;
+  salary_expectation_min: number | null;
+  salary_expectation_max: number | null;
+  earliest_start_date: string | null;
+  willing_to_relocate: boolean;
+  preferred_work_type: PreferredWorkType | null;
+  custom_answers: CustomAnswer[];
+  highest_degree: string | null;
+  field_of_study: string | null;
+  university: string | null;
+  graduation_year: number | null;
+  gpa: string | null;
+  gender: string | null;
+  ethnicity: string | null;
+  veteran_status: string | null;
+  disability_status: string | null;
+  auto_fill_diversity: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AutofillProfileInsert = Omit<AutofillProfile, 'id' | 'created_at' | 'updated_at'> & {
+  id?: string;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type AutofillProfileUpdate = Partial<AutofillProfileInsert>;
+
+export type AutofillHistory = {
+  id: string;
+  user_id: string;
+  job_id: string | null;
+  company_name: string | null;
+  job_title: string | null;
+  ats_type: string | null;
+  fields_filled: number;
+  fields_total: number;
+  fill_rate: number | null;
+  applied_at: string;
+};
+
+export type AutofillHistoryInsert = Omit<AutofillHistory, 'id' | 'applied_at'> & {
+  id?: string;
+  applied_at?: string;
+};
+
+// ---------------------------------------------------------------------------
+// Cover letter types
+// ---------------------------------------------------------------------------
+
 export type CoverLetterTone = 'professional' | 'conversational' | 'enthusiastic' | 'formal';
 export type CoverLetterLength = 'short' | 'medium' | 'long';
 export type CoverLetterStyle = 'story' | 'skills_focused' | 'achievement_focused';
@@ -739,6 +832,8 @@ export type Database = {
       >;
       resume_analyses: TableDefinition<ResumeAnalysis, ResumeAnalysisInsert, Partial<ResumeAnalysisInsert>>;
       cover_letters: TableDefinition<CoverLetter, CoverLetterInsert, CoverLetterUpdate>;
+      autofill_profiles: TableDefinition<AutofillProfile, AutofillProfileInsert, AutofillProfileUpdate>;
+      autofill_history: TableDefinition<AutofillHistory, AutofillHistoryInsert, Partial<AutofillHistoryInsert>>;
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;

@@ -423,7 +423,76 @@ BEGIN
   END IF;
 END $$;
 
--- 14. Cover letters table
+-- 14. Autofill profile table
+CREATE TABLE IF NOT EXISTS autofill_profiles (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES profiles(id) ON DELETE CASCADE UNIQUE,
+  first_name TEXT,
+  last_name TEXT,
+  email TEXT,
+  phone TEXT,
+  address_line1 TEXT,
+  address_line2 TEXT,
+  city TEXT,
+  state TEXT,
+  zip_code TEXT,
+  country TEXT DEFAULT 'United States',
+  linkedin_url TEXT,
+  github_url TEXT,
+  portfolio_url TEXT,
+  website_url TEXT,
+  work_authorization TEXT,
+  requires_sponsorship BOOLEAN DEFAULT false,
+  authorized_to_work BOOLEAN DEFAULT true,
+  sponsorship_statement TEXT,
+  years_of_experience INTEGER,
+  salary_expectation_min INTEGER,
+  salary_expectation_max INTEGER,
+  earliest_start_date TEXT,
+  willing_to_relocate BOOLEAN DEFAULT false,
+  preferred_work_type TEXT,
+  custom_answers JSONB DEFAULT '[]',
+  highest_degree TEXT,
+  field_of_study TEXT,
+  university TEXT,
+  graduation_year INTEGER,
+  gpa TEXT,
+  gender TEXT,
+  ethnicity TEXT,
+  veteran_status TEXT,
+  disability_status TEXT,
+  auto_fill_diversity BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 15. Autofill history table
+CREATE TABLE IF NOT EXISTS autofill_history (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  job_id UUID REFERENCES jobs(id) ON DELETE SET NULL,
+  company_name TEXT,
+  job_title TEXT,
+  ats_type TEXT,
+  fields_filled INTEGER DEFAULT 0,
+  fields_total INTEGER DEFAULT 0,
+  fill_rate DECIMAL,
+  applied_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE autofill_profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE autofill_history ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users manage own autofill profile"
+  ON autofill_profiles FOR ALL USING (auth.uid() = user_id);
+CREATE POLICY "Users view own autofill history"
+  ON autofill_history FOR ALL USING (auth.uid() = user_id);
+
+CREATE INDEX IF NOT EXISTS idx_autofill_profiles_user ON autofill_profiles(user_id);
+CREATE INDEX IF NOT EXISTS idx_autofill_history_user ON autofill_history(user_id);
+CREATE INDEX IF NOT EXISTS idx_autofill_history_applied ON autofill_history(applied_at DESC);
+
+-- 16. Cover letters table
 CREATE TABLE IF NOT EXISTS cover_letters (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,

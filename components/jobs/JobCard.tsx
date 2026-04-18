@@ -11,6 +11,7 @@ import {
 } from "lucide-react"
 import dynamic from "next/dynamic"
 import Link from "next/link"
+import { AutofillButton } from "@/components/autofill/AutofillButton"
 import { useResumeContext } from "@/components/resume/ResumeProvider"
 import { useResumeAnalysis } from "@/lib/hooks/useResumeAnalysis"
 import { cn } from "@/lib/utils"
@@ -373,6 +374,8 @@ export default function JobCard({ job, hasPrimaryResume, analysisIndex = 99 }: J
             >
               <Share2 className="h-4 w-4" />
             </button>
+
+            <AutofillButton jobId={job.id} />
 
             <a
               href={job.apply_url}
