@@ -63,6 +63,54 @@ export type ApplicationStatus =
   | 'rejected'
   | 'withdrawn';
 
+export type AnalysisVerdict = 'strong_match' | 'good_match' | 'partial_match' | 'weak_match';
+
+export type ApplyRecommendation = 'apply_now' | 'apply_with_tweaks' | 'stretch_role' | 'skip';
+
+export type AnalysisRecommendation = {
+  priority: 'high' | 'medium' | 'low';
+  category: 'skills' | 'experience' | 'keywords' | 'format';
+  issue: string;
+  fix: string;
+};
+
+export type ExperienceMatch = {
+  required_years: number | null;
+  candidate_years: number;
+  matching_roles: string[];
+  gaps: string[];
+};
+
+export type ResumeAnalysis = {
+  id: string;
+  user_id: string;
+  resume_id: string;
+  job_id: string;
+  overall_score: number | null;
+  skills_score: number | null;
+  experience_score: number | null;
+  education_score: number | null;
+  keywords_score: number | null;
+  matching_skills: string[] | null;
+  missing_skills: string[] | null;
+  bonus_skills: string[] | null;
+  matching_keywords: string[] | null;
+  missing_keywords: string[] | null;
+  keyword_density: Record<string, number> | null;
+  experience_match: ExperienceMatch | null;
+  recommendations: AnalysisRecommendation[] | null;
+  verdict: AnalysisVerdict | null;
+  verdict_summary: string | null;
+  apply_recommendation: ApplyRecommendation | null;
+  apply_reasoning: string | null;
+  created_at: string;
+};
+
+export type ResumeAnalysisInsert = Omit<ResumeAnalysis, 'id' | 'created_at'> & {
+  id?: string;
+  created_at?: string;
+};
+
 // ---------------------------------------------------------------------------
 // Companies
 // ---------------------------------------------------------------------------
@@ -559,6 +607,7 @@ export type Database = {
         SystemSettingInsert,
         Partial<SystemSettingInsert>
       >;
+      resume_analyses: TableDefinition<ResumeAnalysis, ResumeAnalysisInsert, Partial<ResumeAnalysisInsert>>;
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;

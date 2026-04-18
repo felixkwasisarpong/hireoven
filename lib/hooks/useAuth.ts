@@ -21,16 +21,7 @@ export function useAuth() {
   useEffect(() => {
     const supabase = createClient()
 
-    // Get initial session
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) {
-        fetchProfile(user)
-      } else {
-        setState({ user: null, profile: null, isLoading: false })
-      }
-    })
-
-    // Listen for auth changes
+    // Listen for auth changes (INITIAL_SESSION fires immediately without lock contention)
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {

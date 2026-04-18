@@ -105,8 +105,8 @@ export default function JobFeed({
 
       {jobs.length > 0 && (
         <div className="space-y-4">
-          {jobs.map((job) => (
-            <JobCard key={job.id} job={job} hasPrimaryResume={hasPrimaryResume} />
+          {jobs.map((job, i) => (
+            <JobCard key={job.id} job={job} hasPrimaryResume={hasPrimaryResume} analysisIndex={i} />
           ))}
         </div>
       )}

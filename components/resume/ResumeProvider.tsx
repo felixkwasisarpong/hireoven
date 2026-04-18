@@ -42,10 +42,6 @@ export function ResumeProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const supabase = createClient()
 
-    void supabase.auth.getUser().then(({ data: { user } }) => {
-      setUserId(user?.id ?? null)
-    })
-
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
