@@ -4,11 +4,13 @@ import { useEffect, useMemo, useState } from "react"
 import {
   Bookmark,
   ExternalLink,
+  FileText,
   MapPin,
   Share2,
   Sparkles,
 } from "lucide-react"
 import dynamic from "next/dynamic"
+import Link from "next/link"
 import { useResumeContext } from "@/components/resume/ResumeProvider"
 import { useResumeAnalysis } from "@/lib/hooks/useResumeAnalysis"
 import { cn } from "@/lib/utils"
@@ -310,6 +312,18 @@ export default function JobCard({ job, hasPrimaryResume, analysisIndex = 99 }: J
             {expanded && description && (
               <div className="mt-4 rounded-2xl border border-gray-100 bg-gray-50/80 p-4 text-sm leading-7 text-gray-600">
                 {description}
+              </div>
+            )}
+
+            {expanded && (
+              <div className="mt-3 flex flex-wrap gap-2" onClick={(e) => e.stopPropagation()}>
+                <Link
+                  href={`/dashboard/cover-letter/${job.id}`}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 transition hover:border-gray-300 hover:bg-gray-50"
+                >
+                  <FileText className="h-3.5 w-3.5" />
+                  Write cover letter
+                </Link>
               </div>
             )}
           </div>

@@ -423,6 +423,37 @@ BEGIN
   END IF;
 END $$;
 
+-- 14. Cover letters table
+CREATE TABLE IF NOT EXISTS cover_letters (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  resume_id UUID REFERENCES resumes(id) ON DELETE CASCADE,
+  job_id UUID REFERENCES jobs(id) ON DELETE SET NULL,
+  job_title TEXT NOT NULL,
+  company_name TEXT NOT NULL,
+  hiring_manager TEXT,
+  subject_line TEXT,
+  body TEXT NOT NULL,
+  word_count INTEGER,
+  tone TEXT DEFAULT 'professional',
+  length TEXT DEFAULT 'medium',
+  style TEXT DEFAULT 'story',
+  version_number INTEGER DEFAULT 1,
+  is_favorite BOOLEAN DEFAULT false,
+  was_used BOOLEAN DEFAULT false,
+  mentions_sponsorship BOOLEAN DEFAULT false,
+  sponsorship_approach TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE cover_letters ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users manage own cover letters"
+  ON cover_letters FOR ALL USING (auth.uid() = user_id);
+
+CREATE INDEX IF NOT EXISTS idx_cover_letters_user ON cover_letters(user_id);
+CREATE INDEX IF NOT EXISTS idx_cover_letters_job ON cover_letters(user_id, job_id);
+
 -- =============================================================================
 -- Functions & Triggers
 -- =============================================================================

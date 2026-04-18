@@ -361,6 +361,12 @@ function FullAnalysisView({ analysis, job }: { analysis: ResumeAnalysis; job: Jo
         >
           Edit resume
         </Link>
+        <Link
+          href={`/dashboard/cover-letter/${job.id}`}
+          className="inline-flex items-center gap-2 rounded-2xl border border-gray-200 px-5 py-3 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+        >
+          Generate cover letter
+        </Link>
       </div>
     </div>
   )

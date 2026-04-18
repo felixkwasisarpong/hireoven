@@ -95,6 +95,60 @@ export type ExperienceMatch = {
   gaps: string[];
 };
 
+export type CoverLetterTone = 'professional' | 'conversational' | 'enthusiastic' | 'formal';
+export type CoverLetterLength = 'short' | 'medium' | 'long';
+export type CoverLetterStyle = 'story' | 'skills_focused' | 'achievement_focused';
+export type SponsorshipApproach = 'proactive' | 'on_request' | 'omit';
+
+// CoverLetterOptions defined after ResumeAnalysis — see below
+export type CoverLetterOptionsBase = {
+  tone: CoverLetterTone;
+  length: CoverLetterLength;
+  style: CoverLetterStyle;
+  hiringManager?: string;
+  customInstructions?: string;
+  mentionSponsorship?: boolean;
+  sponsorshipApproach?: SponsorshipApproach;
+};
+
+export type GeneratedCoverLetter = {
+  subject_line: string;
+  body: string;
+  word_count: number;
+  opening_line: string;
+};
+
+export type CoverLetter = {
+  id: string;
+  user_id: string;
+  resume_id: string;
+  job_id: string | null;
+  job_title: string;
+  company_name: string;
+  hiring_manager: string | null;
+  subject_line: string | null;
+  body: string;
+  word_count: number | null;
+  tone: CoverLetterTone;
+  length: CoverLetterLength;
+  style: CoverLetterStyle;
+  version_number: number;
+  is_favorite: boolean;
+  was_used: boolean;
+  mentions_sponsorship: boolean;
+  sponsorship_approach: SponsorshipApproach | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CoverLetterInsert = Omit<CoverLetter, 'id' | 'created_at' | 'updated_at'> & {
+  id?: string;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type CoverLetterUpdate = Partial<CoverLetterInsert>;
+
 export type ResumeAnalysis = {
   id: string;
   user_id: string;
@@ -119,6 +173,8 @@ export type ResumeAnalysis = {
   apply_reasoning: string | null;
   created_at: string;
 };
+
+export type CoverLetterOptions = CoverLetterOptionsBase & { analysis?: ResumeAnalysis };
 
 export type ResumeAnalysisInsert = Omit<ResumeAnalysis, 'id' | 'created_at'> & {
   id?: string;
@@ -682,6 +738,7 @@ export type Database = {
         Partial<SystemSettingInsert>
       >;
       resume_analyses: TableDefinition<ResumeAnalysis, ResumeAnalysisInsert, Partial<ResumeAnalysisInsert>>;
+      cover_letters: TableDefinition<CoverLetter, CoverLetterInsert, CoverLetterUpdate>;
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
