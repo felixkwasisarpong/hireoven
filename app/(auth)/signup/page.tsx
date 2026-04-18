@@ -2,13 +2,10 @@
 
 import { FormEvent, useState } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
 import HireovenLogo from "@/components/ui/HireovenLogo"
 import { createClient } from "@/lib/supabase/client"
 
 export default function SignupPage() {
-  const router = useRouter()
-
   const [fullName, setFullName] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -49,8 +46,7 @@ export default function SignupPage() {
       })
     }
 
-    router.push("/dashboard/onboarding")
-    router.refresh()
+    window.location.assign("/dashboard/onboarding")
   }
 
   async function handleGoogleSignup() {
@@ -118,7 +114,7 @@ export default function SignupPage() {
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
               placeholder="Alex Johnson"
-              className="w-full px-4 py-3 rounded-lg border border-gray-200 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1D9E75] focus:border-transparent text-sm transition-shadow"
+              className="w-full px-4 py-3 rounded-lg border border-gray-200 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#0369A1] focus:border-transparent text-sm transition-shadow"
             />
           </div>
 
@@ -134,7 +130,7 @@ export default function SignupPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@example.com"
-              className="w-full px-4 py-3 rounded-lg border border-gray-200 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1D9E75] focus:border-transparent text-sm transition-shadow"
+              className="w-full px-4 py-3 rounded-lg border border-gray-200 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#0369A1] focus:border-transparent text-sm transition-shadow"
             />
           </div>
 
@@ -151,7 +147,7 @@ export default function SignupPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Min. 8 characters"
-              className="w-full px-4 py-3 rounded-lg border border-gray-200 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1D9E75] focus:border-transparent text-sm transition-shadow"
+              className="w-full px-4 py-3 rounded-lg border border-gray-200 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#0369A1] focus:border-transparent text-sm transition-shadow"
             />
           </div>
 
@@ -165,7 +161,7 @@ export default function SignupPage() {
           <button
             type="submit"
             disabled={loading || oauthLoading}
-            className="w-full flex items-center justify-center gap-2 py-3 bg-[#1D9E75] hover:bg-[#188560] text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-60"
+            className="w-full flex items-center justify-center gap-2 py-3 bg-[#0369A1] hover:bg-[#075985] text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-60"
           >
             {loading ? <><Spinner /> Creating account…</> : "Create account"}
           </button>
@@ -180,7 +176,7 @@ export default function SignupPage() {
 
         <p className="text-sm text-gray-500 mt-6 text-center">
           Already have an account?{" "}
-          <Link href="/login" className="text-[#1D9E75] font-medium hover:underline">
+          <Link href="/login" className="text-[#0369A1] font-medium hover:underline">
             Sign in
           </Link>
         </p>

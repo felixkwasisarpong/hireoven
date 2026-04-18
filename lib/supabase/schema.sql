@@ -119,10 +119,12 @@ CREATE TABLE alert_notifications (
   user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
   job_id UUID REFERENCES jobs(id) ON DELETE CASCADE,
   alert_id UUID REFERENCES job_alerts(id) ON DELETE CASCADE,
+  notification_type TEXT DEFAULT 'alert', -- alert, watchlist
   channel TEXT, -- email, push, both
   sent_at TIMESTAMPTZ DEFAULT NOW(),
   opened_at TIMESTAMPTZ,
-  clicked_at TIMESTAMPTZ
+  clicked_at TIMESTAMPTZ,
+  UNIQUE(user_id, job_id)
 );
 
 -- 7. Crawl logs table
@@ -155,6 +157,15 @@ CREATE TABLE h1b_records (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 9. Push subscriptions table
+-- Web push subscriptions for instant notifications
+CREATE TABLE push_subscriptions (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  subscription JSONB NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- =============================================================================
 -- Indexes
 -- =============================================================================
@@ -176,10 +187,41 @@ CREATE INDEX idx_watchlist_company ON watchlist(company_id);
 CREATE INDEX idx_alerts_user ON job_alerts(user_id);
 CREATE INDEX idx_alert_notifications_user ON alert_notifications(user_id);
 CREATE INDEX idx_alert_notifications_sent_at ON alert_notifications(sent_at DESC);
+CREATE INDEX idx_alert_notifications_opened_at ON alert_notifications(opened_at);
 CREATE INDEX idx_crawl_logs_company ON crawl_logs(company_id);
 CREATE INDEX idx_crawl_logs_crawled_at ON crawl_logs(crawled_at DESC);
 CREATE INDEX idx_h1b_records_company ON h1b_records(company_id);
 CREATE INDEX idx_h1b_records_year ON h1b_records(year DESC);
+CREATE INDEX idx_push_subscriptions_user ON push_subscriptions(user_id);
+CREATE UNIQUE INDEX idx_push_subscriptions_endpoint
+  ON push_subscriptions ((subscription->>'endpoint'));
+
+-- =============================================================================
+-- Full-text search vectors (run as a migration after initial schema)
+-- =============================================================================
+
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS search_vector tsvector
+  GENERATED ALWAYS AS (
+    to_tsvector('english',
+      coalesce(title, '') || ' ' ||
+      coalesce(normalized_title, '') || ' ' ||
+      coalesce(location, '') || ' ' ||
+      coalesce(array_to_string(skills, ' '), '')
+    )
+  ) STORED;
+
+CREATE INDEX IF NOT EXISTS idx_jobs_search ON jobs USING gin(search_vector);
+
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS search_vector tsvector
+  GENERATED ALWAYS AS (
+    to_tsvector('english',
+      coalesce(name, '') || ' ' ||
+      coalesce(industry, '') || ' ' ||
+      coalesce(domain, '')
+    )
+  ) STORED;
+
+CREATE INDEX IF NOT EXISTS idx_companies_search ON companies USING gin(search_vector);
 
 -- =============================================================================
 -- Row Level Security
@@ -193,6 +235,7 @@ ALTER TABLE jobs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE companies ENABLE ROW LEVEL SECURITY;
 ALTER TABLE crawl_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE h1b_records ENABLE ROW LEVEL SECURITY;
+ALTER TABLE push_subscriptions ENABLE ROW LEVEL SECURITY;
 
 -- Profiles
 CREATE POLICY "Users can view own profile"
@@ -213,6 +256,8 @@ CREATE POLICY "Users can manage own alerts"
 -- Alert notifications
 CREATE POLICY "Users can view own notifications"
   ON alert_notifications FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can update own notifications"
+  ON alert_notifications FOR UPDATE USING (auth.uid() = user_id);
 
 -- Public read for jobs and companies
 CREATE POLICY "Jobs are publicly readable"
@@ -225,6 +270,8 @@ CREATE POLICY "Service role can manage crawl logs"
   ON crawl_logs FOR ALL USING (auth.role() = 'service_role');
 CREATE POLICY "Service role can manage h1b records"
   ON h1b_records FOR ALL USING (auth.role() = 'service_role');
+CREATE POLICY "Users can manage own push subscriptions"
+  ON push_subscriptions FOR ALL USING (auth.uid() = user_id);
 
 -- =============================================================================
 -- Functions & Triggers
@@ -269,3 +316,195 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION handle_new_user();
+
+-- =============================================================================
+-- Admin additions (run as migration after initial schema)
+-- =============================================================================
+
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT false;
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS ats_identifier TEXT;
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS notes TEXT;
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS raw_ats_config JSONB DEFAULT '{}'::jsonb;
+
+-- 10. API usage table — track Claude, Resend, and push-notification calls
+CREATE TABLE IF NOT EXISTS api_usage (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  service TEXT NOT NULL, -- claude, resend, webpush
+  operation TEXT,        -- normalize, detect_visa, email, push
+  tokens_used INTEGER,
+  cost_usd DECIMAL(10,6),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_api_usage_service ON api_usage(service);
+CREATE INDEX IF NOT EXISTS idx_api_usage_created_at ON api_usage(created_at DESC);
+
+ALTER TABLE api_usage ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Service role can manage api_usage"
+  ON api_usage FOR ALL USING (auth.role() = 'service_role');
+
+-- 11. System settings table — lightweight config store for admin controls
+CREATE TABLE IF NOT EXISTS system_settings (
+  key TEXT PRIMARY KEY,
+  value JSONB NOT NULL DEFAULT '{}'::jsonb,
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_by UUID REFERENCES profiles(id)
+);
+
+ALTER TABLE system_settings ENABLE ROW LEVEL SECURITY;
+CREATE INDEX IF NOT EXISTS idx_system_settings_updated_at
+  ON system_settings(updated_at DESC);
+
+-- Security-definer helper so RLS policies can check admin status
+-- without recursive RLS on profiles
+CREATE OR REPLACE FUNCTION public.is_admin_user()
+RETURNS BOOLEAN AS $$
+  SELECT COALESCE(
+    (SELECT is_admin FROM public.profiles WHERE id = auth.uid()),
+    false
+  )
+$$ LANGUAGE sql SECURITY DEFINER STABLE;
+
+GRANT EXECUTE ON FUNCTION public.is_admin_user() TO anon, authenticated, service_role;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'h1b_records'
+      AND policyname = 'H1B records are publicly readable'
+  ) THEN
+    CREATE POLICY "H1B records are publicly readable"
+      ON h1b_records FOR SELECT USING (true);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'profiles'
+      AND policyname = 'Admins can read all profiles'
+  ) THEN
+    CREATE POLICY "Admins can read all profiles"
+      ON profiles FOR SELECT
+      USING (auth.uid() = id OR public.is_admin_user());
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'profiles'
+      AND policyname = 'Admins can update all profiles'
+  ) THEN
+    CREATE POLICY "Admins can update all profiles"
+      ON profiles FOR UPDATE
+      USING (auth.uid() = id OR public.is_admin_user())
+      WITH CHECK (auth.uid() = id OR public.is_admin_user());
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'watchlist'
+      AND policyname = 'Admins can manage watchlist'
+  ) THEN
+    CREATE POLICY "Admins can manage watchlist"
+      ON watchlist FOR ALL
+      USING (public.is_admin_user())
+      WITH CHECK (public.is_admin_user());
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'job_alerts'
+      AND policyname = 'Admins can manage job alerts'
+  ) THEN
+    CREATE POLICY "Admins can manage job alerts"
+      ON job_alerts FOR ALL
+      USING (public.is_admin_user())
+      WITH CHECK (public.is_admin_user());
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'alert_notifications'
+      AND policyname = 'Admins can manage alert notifications'
+  ) THEN
+    CREATE POLICY "Admins can manage alert notifications"
+      ON alert_notifications FOR ALL
+      USING (public.is_admin_user())
+      WITH CHECK (public.is_admin_user());
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'companies'
+      AND policyname = 'Admins can manage companies'
+  ) THEN
+    CREATE POLICY "Admins can manage companies"
+      ON companies FOR ALL
+      USING (public.is_admin_user())
+      WITH CHECK (public.is_admin_user());
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'jobs'
+      AND policyname = 'Admins can manage jobs'
+  ) THEN
+    CREATE POLICY "Admins can manage jobs"
+      ON jobs FOR ALL
+      USING (public.is_admin_user())
+      WITH CHECK (public.is_admin_user());
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'crawl_logs'
+      AND policyname = 'Admins can manage crawl logs'
+  ) THEN
+    CREATE POLICY "Admins can manage crawl logs"
+      ON crawl_logs FOR ALL
+      USING (public.is_admin_user())
+      WITH CHECK (public.is_admin_user());
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'h1b_records'
+      AND policyname = 'Admins can manage h1b records'
+  ) THEN
+    CREATE POLICY "Admins can manage h1b records"
+      ON h1b_records FOR ALL
+      USING (public.is_admin_user())
+      WITH CHECK (public.is_admin_user());
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'push_subscriptions'
+      AND policyname = 'Admins can manage push subscriptions'
+  ) THEN
+    CREATE POLICY "Admins can manage push subscriptions"
+      ON push_subscriptions FOR ALL
+      USING (public.is_admin_user())
+      WITH CHECK (public.is_admin_user());
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'api_usage'
+      AND policyname = 'Admins can read api_usage'
+  ) THEN
+    CREATE POLICY "Admins can read api_usage"
+      ON api_usage FOR SELECT
+      USING (public.is_admin_user());
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'system_settings'
+      AND policyname = 'Admins can manage system settings'
+  ) THEN
+    CREATE POLICY "Admins can manage system settings"
+      ON system_settings FOR ALL
+      USING (public.is_admin_user())
+      WITH CHECK (public.is_admin_user());
+  END IF;
+END $$;

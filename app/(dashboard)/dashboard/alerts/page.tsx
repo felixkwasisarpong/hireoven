@@ -200,12 +200,12 @@ export default function AlertsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(180deg,#F5FBF8_0%,#F8FAFC_58%,#F8FAFC_100%)] px-4 py-6 lg:px-8">
+    <main className="min-h-screen bg-[linear-gradient(180deg,#F7FBFF_0%,#F8FAFC_58%,#F8FAFC_100%)] px-4 py-6 lg:px-8">
       <div className="mx-auto max-w-6xl space-y-6">
         <section className="rounded-[32px] border border-white/80 bg-white/90 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.06)]">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#1D9E75]">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#0369A1]">
                 Alerts
               </p>
               <h1 className="mt-2 text-3xl font-semibold tracking-tight text-gray-900">
@@ -227,7 +227,7 @@ export default function AlertsPage() {
               <button
                 type="button"
                 onClick={() => setIsModalOpen(true)}
-                className="inline-flex items-center gap-2 rounded-2xl bg-[#1D9E75] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#188560]"
+                className="inline-flex items-center gap-2 rounded-2xl bg-[#0369A1] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#075985]"
               >
                 <Plus className="h-4 w-4" />
                 Create new alert
@@ -238,7 +238,7 @@ export default function AlertsPage() {
 
         {alerts.length === 0 && !isLoading ? (
           <section className="rounded-[32px] border border-dashed border-gray-300 bg-white px-6 py-14 text-center shadow-[0_20px_60px_rgba(15,23,42,0.04)]">
-            <BellRing className="mx-auto h-10 w-10 text-[#1D9E75]" />
+            <BellRing className="mx-auto h-10 w-10 text-[#0369A1]" />
             <h2 className="mt-4 text-2xl font-semibold text-gray-900">
               No saved alerts yet
             </h2>
@@ -249,7 +249,7 @@ export default function AlertsPage() {
             <button
               type="button"
               onClick={() => setIsModalOpen(true)}
-              className="mt-6 inline-flex items-center gap-2 rounded-2xl bg-[#1D9E75] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#188560]"
+              className="mt-6 inline-flex items-center gap-2 rounded-2xl bg-[#0369A1] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#075985]"
             >
               <Plus className="h-4 w-4" />
               Create new alert
@@ -271,7 +271,7 @@ export default function AlertsPage() {
                       <span
                         className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
                           alert.is_active
-                            ? "bg-[#ECFBF5] text-[#0F6E56]"
+                            ? "bg-[#F0F9FF] text-[#0C4A6E]"
                             : "bg-gray-100 text-gray-500"
                         }`}
                       >
@@ -296,7 +296,7 @@ export default function AlertsPage() {
                       className={`rounded-2xl px-4 py-2.5 text-sm font-medium transition ${
                         alert.is_active
                           ? "border border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50"
-                          : "bg-[#ECFBF5] text-[#0F6E56] hover:bg-[#DFF6EC]"
+                          : "bg-[#F0F9FF] text-[#0C4A6E] hover:bg-[#D6EEFF]"
                       }`}
                     >
                       {alert.is_active ? "Pause" : "Activate"}
@@ -322,7 +322,7 @@ export default function AlertsPage() {
           <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-[32px] bg-white p-6 shadow-[0_30px_90px_rgba(15,23,42,0.22)]">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#1D9E75]">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#0369A1]">
                   New alert
                 </p>
                 <h2 className="mt-2 text-2xl font-semibold text-gray-900">
@@ -348,7 +348,7 @@ export default function AlertsPage() {
                     setDraft((current) => ({ ...current, name: event.target.value }))
                   }
                   placeholder="Fresh backend roles"
-                  className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-[#1D9E75] focus:ring-2 focus:ring-[#1D9E75]/20"
+                  className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-[#0369A1] focus:ring-2 focus:ring-[#0369A1]/20"
                 />
               </label>
 
@@ -365,7 +365,7 @@ export default function AlertsPage() {
                     }))
                   }
                   placeholder="backend, platform, infra"
-                  className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-[#1D9E75] focus:ring-2 focus:ring-[#1D9E75]/20"
+                  className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-[#0369A1] focus:ring-2 focus:ring-[#0369A1]/20"
                 />
               </label>
 
@@ -380,7 +380,7 @@ export default function AlertsPage() {
                     }))
                   }
                   placeholder="Remote, Austin, New York"
-                  className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-[#1D9E75] focus:ring-2 focus:ring-[#1D9E75]/20"
+                  className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-[#0369A1] focus:ring-2 focus:ring-[#0369A1]/20"
                 />
               </label>
 
@@ -405,7 +405,7 @@ export default function AlertsPage() {
                       }
                       className={`rounded-2xl px-3 py-3 text-sm font-medium transition ${
                         draft.frequency === option.value
-                          ? "bg-[#ECFBF5] text-[#0F6E56]"
+                          ? "bg-[#F0F9FF] text-[#0C4A6E]"
                           : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                       }`}
                     >
@@ -416,7 +416,7 @@ export default function AlertsPage() {
               </div>
             </div>
 
-            <div className="mt-6 rounded-[28px] border border-gray-200 bg-[#F8FBFA] p-4">
+            <div className="mt-6 rounded-[28px] border border-gray-200 bg-[#F8FBFF] p-4">
               <p className="text-sm font-medium text-gray-700">Seniority</p>
               <div className="mt-3 flex flex-wrap gap-2">
                 {SENIORITY_OPTIONS.map((option) => (
@@ -426,7 +426,7 @@ export default function AlertsPage() {
                     onClick={() => toggleDraftSeniority(option.value)}
                     className={`rounded-full px-3 py-2 text-sm font-medium transition ${
                       draft.seniority.includes(option.value)
-                        ? "bg-[#1D9E75] text-white"
+                        ? "bg-[#0369A1] text-white"
                         : "bg-white text-gray-600 hover:bg-gray-100"
                     }`}
                   >
@@ -446,7 +446,7 @@ export default function AlertsPage() {
                   }
                   className={`rounded-2xl border px-4 py-3 text-left text-sm font-medium transition ${
                     draft.remoteOnly
-                      ? "border-[#B6E9D8] bg-[#ECFBF5] text-[#0F6E56]"
+                      ? "border-[#BAE6FD] bg-[#F0F9FF] text-[#0C4A6E]"
                       : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
                   }`}
                 >
@@ -462,7 +462,7 @@ export default function AlertsPage() {
                   }
                   className={`rounded-2xl border px-4 py-3 text-left text-sm font-medium transition ${
                     draft.sponsorshipRequired
-                      ? "border-[#B6E9D8] bg-[#ECFBF5] text-[#0F6E56]"
+                      ? "border-[#BAE6FD] bg-[#F0F9FF] text-[#0C4A6E]"
                       : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
                   }`}
                 >
@@ -471,7 +471,7 @@ export default function AlertsPage() {
               </div>
             </div>
 
-            <div className="mt-6 rounded-[28px] border border-gray-200 bg-[#F8FBFA] p-4">
+            <div className="mt-6 rounded-[28px] border border-gray-200 bg-[#F8FBFF] p-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-700">
@@ -485,7 +485,7 @@ export default function AlertsPage() {
                   value={companySearch}
                   onChange={(event) => setCompanySearch(event.target.value)}
                   placeholder="Search companies…"
-                  className="rounded-2xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 outline-none transition focus:border-[#1D9E75] focus:ring-2 focus:ring-[#1D9E75]/20"
+                  className="rounded-2xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 outline-none transition focus:border-[#0369A1] focus:ring-2 focus:ring-[#0369A1]/20"
                 />
               </div>
 
@@ -499,7 +499,7 @@ export default function AlertsPage() {
                       onClick={() => toggleDraftCompany(company.id)}
                       className={`flex items-center gap-3 rounded-2xl border px-4 py-3 text-left transition ${
                         selected
-                          ? "border-[#B6E9D8] bg-[#ECFBF5]"
+                          ? "border-[#BAE6FD] bg-[#F0F9FF]"
                           : "border-gray-200 bg-white hover:bg-gray-50"
                       }`}
                     >
@@ -511,7 +511,7 @@ export default function AlertsPage() {
                           className="h-10 w-10 rounded-2xl object-cover"
                         />
                       ) : (
-                        <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#E7F5F1] text-sm font-semibold text-[#0F6E56]">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#E0F2FE] text-sm font-semibold text-[#0C4A6E]">
                           {company.name.charAt(0).toUpperCase()}
                         </div>
                       )}
@@ -540,7 +540,7 @@ export default function AlertsPage() {
               <button
                 type="button"
                 onClick={() => void handleCreateAlert()}
-                className="rounded-2xl bg-[#1D9E75] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#188560]"
+                className="rounded-2xl bg-[#0369A1] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#075985]"
               >
                 Save alert
               </button>

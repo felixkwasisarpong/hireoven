@@ -73,12 +73,12 @@ export default function JobFeed({
         <button
           type="button"
           onClick={() => void refresh()}
-          className="flex w-full items-center justify-center gap-2 rounded-2xl border border-[#B7E8D8] bg-[#ECFBF5] px-4 py-3 text-sm font-medium text-[#0F6E56] transition hover:bg-[#E2F7EF]"
+          className="flex w-full items-center justify-center gap-2 rounded-2xl border border-[#BAE6FD] bg-[#F0F9FF] px-4 py-3 text-sm font-medium text-[#0C4A6E] transition hover:bg-[#E0F2FE]"
         >
           <Sparkles className="h-4 w-4" />
           {newJobsCount.toLocaleString()} new job
           {newJobsCount === 1 ? "" : "s"} just posted
-          <span className="text-[#1D9E75]">click to load</span>
+          <span className="text-[#0369A1]">click to load</span>
         </button>
       )}
 

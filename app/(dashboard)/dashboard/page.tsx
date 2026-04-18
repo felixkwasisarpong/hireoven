@@ -6,12 +6,16 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import {
   BellRing,
   Bookmark,
+  Building2,
   Globe2,
   LogOut,
   UserCircle2,
   Waves,
 } from "lucide-react"
+import GlobalSearchBar from "@/components/search/GlobalSearchBar"
 import JobFeed from "@/components/jobs/JobFeed"
+import NotificationBell from "@/components/notifications/NotificationBell"
+import PushNotificationSetup from "@/components/notifications/PushNotificationSetup"
 import JobFilters, {
   SORT_OPTIONS,
   buildFilterPills,
@@ -37,10 +41,11 @@ type TopHiringCompany = {
 }
 
 const NAV_ITEMS = [
-  { label: "Feed", href: "/dashboard", icon: Waves },
-  { label: "Watchlist", href: "/dashboard/watchlist", icon: Bookmark },
-  { label: "Alerts", href: "/dashboard/alerts", icon: BellRing },
-  { label: "Profile", href: "/dashboard/onboarding", icon: UserCircle2 },
+  { label: "Feed",      href: "/dashboard",           icon: Waves      },
+  { label: "Companies", href: "/dashboard/companies", icon: Building2  },
+  { label: "Watchlist", href: "/dashboard/watchlist", icon: Bookmark   },
+  { label: "Alerts",    href: "/dashboard/alerts",    icon: BellRing   },
+  { label: "Profile",   href: "/dashboard/onboarding",icon: UserCircle2},
 ]
 
 function getInitials(name?: string | null, email?: string | null) {
@@ -138,7 +143,17 @@ export default function DashboardPage() {
   const countdownTone = optDaysRemaining === null ? null : getCountdownTone(optDaysRemaining)
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(29,158,117,0.10),_transparent_35%),linear-gradient(180deg,#F5FBF8_0%,#F8FAFC_55%,#F8FAFC_100%)]">
+    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(3,105,161,0.10),_transparent_35%),linear-gradient(180deg,#F7FBFF_0%,#F8FAFC_55%,#F8FAFC_100%)]">
+      {/* Sticky global search bar */}
+      <header className="sticky top-0 z-40 border-b border-gray-100 bg-white/90 backdrop-blur-sm">
+        <div className="mx-auto flex max-w-[1680px] items-center gap-4 px-4 py-3 lg:px-6">
+          <div className="hidden w-[240px] flex-shrink-0 lg:block" />
+          <div className="flex flex-1 justify-center">
+            <GlobalSearchBar />
+          </div>
+          <div className="hidden w-[240px] flex-shrink-0 xl:block" />
+        </div>
+      </header>
       <div className="mx-auto max-w-[1680px] px-4 py-4 lg:px-6">
         <div className="grid gap-6 lg:grid-cols-[240px_minmax(0,1fr)] xl:grid-cols-[240px_minmax(0,1fr)_320px]">
           <aside className="rounded-[28px] border border-white/80 bg-white/90 p-4 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur lg:sticky lg:top-4 lg:h-[calc(100vh-2rem)] lg:overflow-y-auto">
@@ -159,7 +174,7 @@ export default function DashboardPage() {
                       className={cn(
                         "flex items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-medium transition",
                         active
-                          ? "bg-[#ECFBF5] text-[#0F6E56]"
+                          ? "bg-[#F0F9FF] text-[#0C4A6E]"
                           : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
                       )}
                     >
@@ -173,17 +188,17 @@ export default function DashboardPage() {
                   href="/dashboard/onboarding"
                   className="flex items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-medium text-gray-600 transition hover:bg-gray-50 hover:text-gray-900"
                 >
-                  <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#EAF7F3] text-[#0F6E56]">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#E0F2FE] text-[#0C4A6E]">
                     <Globe2 className="h-4 w-4" />
                   </span>
                   <span className="flex items-center gap-2">
                     For International
-                    <span className="h-2 w-2 rounded-full bg-[#1D9E75]" />
+                    <span className="h-2 w-2 rounded-full bg-[#0369A1]" />
                   </span>
                 </Link>
               </nav>
 
-              <div className="mt-8 rounded-[24px] border border-gray-200 bg-[#F8FBFA] p-4">
+              <div className="mt-8 rounded-[24px] border border-gray-200 bg-[#F8FBFF] p-4">
                 <JobFilters isInternational={profile?.is_international} />
               </div>
 
@@ -197,7 +212,7 @@ export default function DashboardPage() {
                       className="h-11 w-11 rounded-2xl object-cover"
                     />
                   ) : (
-                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#E7F5F1] text-sm font-semibold text-[#0F6E56]">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#E0F2FE] text-sm font-semibold text-[#0C4A6E]">
                       {getInitials(profile?.full_name, profile?.email)}
                     </div>
                   )}
@@ -228,7 +243,7 @@ export default function DashboardPage() {
             <div className="rounded-[32px] border border-white/70 bg-white/90 p-5 shadow-[0_20px_60px_rgba(15,23,42,0.06)] backdrop-blur">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div className="space-y-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#1D9E75]">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#0369A1]">
                     Main feed
                   </p>
                   <h1 className="text-3xl font-semibold tracking-tight text-gray-900">
@@ -240,17 +255,24 @@ export default function DashboardPage() {
                   </p>
                 </div>
 
-                <div className="min-w-[240px] rounded-3xl border border-[#D8F4EA] bg-[#F1FCF7] px-4 py-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#0F6E56]">
-                    Live signal
-                  </p>
-                  <p className="mt-2 text-2xl font-semibold text-gray-900">
-                    {feedMeta.lastHourCount.toLocaleString()}
-                  </p>
-                  <p className="text-sm text-gray-600">
-                    jobs posted in the last hour
-                  </p>
+                <div className="flex items-start gap-3">
+                  <NotificationBell userId={user?.id} />
+                  <div className="min-w-[240px] rounded-3xl border border-[#D6EEFF] bg-[#F5FBFF] px-4 py-3">
+                    <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#0C4A6E]">
+                      Live signal
+                    </p>
+                    <p className="mt-2 text-2xl font-semibold text-gray-900">
+                      {feedMeta.lastHourCount.toLocaleString()}
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      jobs posted in the last hour
+                    </p>
+                  </div>
                 </div>
+              </div>
+
+              <div className="mt-6">
+                <PushNotificationSetup />
               </div>
 
               <div className="mt-6 grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
@@ -269,7 +291,7 @@ export default function DashboardPage() {
                         className={cn(
                           "rounded-full px-4 py-2 text-sm font-medium transition",
                           active
-                            ? "bg-[#1D9E75] text-white"
+                            ? "bg-[#0369A1] text-white"
                             : "bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-900"
                         )}
                       >
@@ -287,7 +309,7 @@ export default function DashboardPage() {
                       key={pill.id}
                       type="button"
                       onClick={() => replaceFilters(pill.nextFilters)}
-                      className="inline-flex items-center gap-2 rounded-full bg-[#ECFBF5] px-3 py-1.5 text-sm font-medium text-[#0F6E56] transition hover:bg-[#DFF6EC]"
+                      className="inline-flex items-center gap-2 rounded-full bg-[#F0F9FF] px-3 py-1.5 text-sm font-medium text-[#0C4A6E] transition hover:bg-[#D6EEFF]"
                     >
                       {pill.label}
                       <span className="text-base leading-none">&times;</span>
@@ -335,7 +357,7 @@ export default function DashboardPage() {
                   </div>
                   <Link
                     href="/dashboard/watchlist"
-                    className="text-xs font-medium text-[#1D9E75] transition hover:text-[#0F6E56]"
+                    className="text-xs font-medium text-[#0369A1] transition hover:text-[#0C4A6E]"
                   >
                     View all
                   </Link>
@@ -356,7 +378,7 @@ export default function DashboardPage() {
                             className="h-8 w-8 rounded-xl object-cover"
                           />
                         ) : (
-                          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#E7F5F1] text-xs font-semibold text-[#0F6E56]">
+                          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#E0F2FE] text-xs font-semibold text-[#0C4A6E]">
                             {item.company.name.charAt(0).toUpperCase()}
                           </div>
                         )}
@@ -386,7 +408,7 @@ export default function DashboardPage() {
                         Keep the urgency visible
                       </p>
                     </div>
-                    <Globe2 className="h-5 w-5 text-[#1D9E75]" />
+                    <Globe2 className="h-5 w-5 text-[#0369A1]" />
                   </div>
 
                   {optDaysRemaining !== null ? (
@@ -398,7 +420,7 @@ export default function DashboardPage() {
                         <div
                           className={cn(
                             "h-full rounded-full",
-                            countdownTone === "green" && "bg-[#1D9E75]",
+                            countdownTone === "green" && "bg-[#0369A1]",
                             countdownTone === "amber" && "bg-amber-400",
                             countdownTone === "red" && "bg-red-500"
                           )}
@@ -451,7 +473,7 @@ export default function DashboardPage() {
                           className="h-10 w-10 rounded-2xl object-cover"
                         />
                       ) : (
-                        <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#E7F5F1] text-sm font-semibold text-[#0F6E56]">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#E0F2FE] text-sm font-semibold text-[#0C4A6E]">
                           {company.name.charAt(0).toUpperCase()}
                         </div>
                       )}
@@ -465,7 +487,7 @@ export default function DashboardPage() {
                         </p>
                       </div>
                       {company.sponsors_h1b && (
-                        <span className="rounded-full bg-[#ECFBF5] px-2 py-1 text-[11px] font-medium text-[#0F6E56]">
+                        <span className="rounded-full bg-[#F0F9FF] px-2 py-1 text-[11px] font-medium text-[#0C4A6E]">
                           H1B
                         </span>
                       )}

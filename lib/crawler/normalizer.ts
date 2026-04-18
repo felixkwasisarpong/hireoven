@@ -1,6 +1,14 @@
 import Anthropic from '@anthropic-ai/sdk'
+import { logApiUsage } from '@/lib/admin/usage'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+
+const MODEL_PRICING: Record<string, { inputPerMillion: number; outputPerMillion: number }> = {
+  'claude-haiku-4-5-20251001': {
+    inputPerMillion: 0.8,
+    outputPerMillion: 4,
+  },
+}
 
 export interface VisaAnalysis {
   sponsors_h1b: boolean | null
@@ -36,6 +44,20 @@ ${truncated}
 Return ONLY valid JSON.`,
       },
     ],
+  })
+
+  const pricing = MODEL_PRICING['claude-haiku-4-5-20251001']
+  const inputTokens = message.usage?.input_tokens ?? 0
+  const outputTokens = message.usage?.output_tokens ?? 0
+  const estimatedCost =
+    (inputTokens / 1_000_000) * pricing.inputPerMillion +
+    (outputTokens / 1_000_000) * pricing.outputPerMillion
+
+  await logApiUsage({
+    service: 'claude',
+    operation: 'detect_visa',
+    tokens_used: inputTokens + outputTokens,
+    cost_usd: Number(estimatedCost.toFixed(6)),
   })
 
   const text = message.content[0].type === 'text' ? message.content[0].text : '{}'

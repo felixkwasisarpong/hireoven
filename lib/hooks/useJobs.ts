@@ -140,7 +140,8 @@ function countLastHour(rows: JobWithCompany[]) {
 }
 
 export function useJobs(filters: JobFilters = {}, searchQuery = "") {
-  const [allJobs, setAllJobs] = useState<JobWithCompany[]>([])
+  const [allJobs, setAllJobsState] = useState<JobWithCompany[]>([])
+  const allJobsRef = useRef<JobWithCompany[]>([])
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
   const [isLoading, setIsLoading] = useState(true)
   const [hasMore, setHasMore] = useState(true)
@@ -152,6 +153,11 @@ export function useJobs(filters: JobFilters = {}, searchQuery = "") {
   const exhaustedRef = useRef(false)
   const loadingRef = useRef(false)
   const requestKeyRef = useRef("")
+
+  function setAllJobs(jobs: JobWithCompany[]) {
+    allJobsRef.current = jobs
+    setAllJobsState(jobs)
+  }
 
   const jobs = useMemo(
     () => allJobs.slice(0, visibleCount),
@@ -217,7 +223,7 @@ export function useJobs(filters: JobFilters = {}, searchQuery = "") {
       setIsLoading(true)
 
       try {
-        let nextRows = reset ? [] : allJobs
+        let nextRows = reset ? [] : allJobsRef.current
         let nextOffset = reset ? 0 : offsetRef.current
         let exhausted = reset ? false : exhaustedRef.current
         const chunkSize = searchQuery.trim() ? SEARCH_CHUNK_SIZE : PAGE_SIZE
@@ -259,7 +265,7 @@ export function useJobs(filters: JobFilters = {}, searchQuery = "") {
         loadingRef.current = false
       }
     },
-    [allJobs, fetchChunk, filters, searchQuery]
+    [fetchChunk, filters, searchQuery]
   )
 
   const refresh = useCallback(async () => {
@@ -277,14 +283,15 @@ export function useJobs(filters: JobFilters = {}, searchQuery = "") {
 
   const loadMore = useCallback(async () => {
     const target = visibleCount + PAGE_SIZE
-    if (allJobs.length >= target || exhaustedRef.current) {
-      setVisibleCount((current) => Math.min(current + PAGE_SIZE, allJobs.length))
-      setHasMore(!exhaustedRef.current || allJobs.length > target)
+    const currentLen = allJobsRef.current.length
+    if (currentLen >= target || exhaustedRef.current) {
+      setVisibleCount((current) => Math.min(current + PAGE_SIZE, currentLen))
+      setHasMore(!exhaustedRef.current || currentLen > target)
       return
     }
 
     await ensureVisibleJobs(target)
-  }, [allJobs.length, ensureVisibleJobs, visibleCount])
+  }, [ensureVisibleJobs, visibleCount])
 
   useEffect(() => {
     const supabase = createClient()

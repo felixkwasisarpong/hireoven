@@ -1,0 +1,21 @@
+{
+  "name": "Hireoven",
+  "short_name": "Hireoven",
+  "description": "Jobs served fresh. Apply before the crowd.",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0369A1",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

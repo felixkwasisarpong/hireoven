@@ -2,12 +2,11 @@
 
 import { FormEvent, useState } from "react"
 import Link from "next/link"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useSearchParams } from "next/navigation"
 import HireovenLogo from "@/components/ui/HireovenLogo"
 import { createClient } from "@/lib/supabase/client"
 
 export default function LoginPage() {
-  const router = useRouter()
   const searchParams = useSearchParams()
   const next = searchParams.get("next") ?? "/dashboard"
 
@@ -19,13 +18,26 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [oauthLoading, setOauthLoading] = useState(false)
 
+  async function ensureProfileRow(user: {
+    id: string
+    email?: string | null
+    user_metadata?: { full_name?: string | null }
+  }) {
+    const supabase = createClient()
+    await ((supabase.from("profiles") as any).upsert({
+      id: user.id,
+      email: user.email ?? null,
+      full_name: user.user_metadata?.full_name ?? null,
+    }))
+  }
+
   async function handleEmailLogin(e: FormEvent) {
     e.preventDefault()
     setLoading(true)
     setError(null)
 
     const supabase = createClient()
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
 
     if (error) {
       setError(
@@ -37,8 +49,11 @@ export default function LoginPage() {
       return
     }
 
-    router.push(next)
-    router.refresh()
+    if (data.user) {
+      await ensureProfileRow(data.user)
+    }
+
+    window.location.assign(next)
   }
 
   async function handleGoogleLogin() {
@@ -109,7 +124,7 @@ export default function LoginPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@example.com"
-              className="w-full px-4 py-3 rounded-lg border border-gray-200 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1D9E75] focus:border-transparent text-sm transition-shadow"
+              className="w-full px-4 py-3 rounded-lg border border-gray-200 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#0369A1] focus:border-transparent text-sm transition-shadow"
             />
           </div>
 
@@ -118,7 +133,7 @@ export default function LoginPage() {
               <label htmlFor="password" className="block text-sm font-medium text-gray-700">
                 Password
               </label>
-              <Link href="/forgot-password" className="text-xs text-[#1D9E75] hover:underline">
+              <Link href="/forgot-password" className="text-xs text-[#0369A1] hover:underline">
                 Forgot password?
               </Link>
             </div>
@@ -130,7 +145,7 @@ export default function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
-              className="w-full px-4 py-3 rounded-lg border border-gray-200 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1D9E75] focus:border-transparent text-sm transition-shadow"
+              className="w-full px-4 py-3 rounded-lg border border-gray-200 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#0369A1] focus:border-transparent text-sm transition-shadow"
             />
           </div>
 
@@ -144,7 +159,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading || oauthLoading}
-            className="w-full flex items-center justify-center gap-2 py-3 bg-[#1D9E75] hover:bg-[#188560] text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-60"
+            className="w-full flex items-center justify-center gap-2 py-3 bg-[#0369A1] hover:bg-[#075985] text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-60"
           >
             {loading ? <><Spinner /> Signing in…</> : "Sign in"}
           </button>
@@ -152,7 +167,7 @@ export default function LoginPage() {
 
         <p className="text-sm text-gray-500 mt-6 text-center">
           Don&apos;t have an account?{" "}
-          <Link href="/signup" className="text-[#1D9E75] font-medium hover:underline">
+          <Link href="/signup" className="text-[#0369A1] font-medium hover:underline">
             Sign up free
           </Link>
         </p>

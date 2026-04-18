@@ -63,7 +63,7 @@ export default function CompanyProfilePage() {
 
   if (isLoading) {
     return (
-      <main className="min-h-screen bg-[linear-gradient(180deg,#F5FBF8_0%,#F8FAFC_58%,#F8FAFC_100%)] px-4 py-6 lg:px-8">
+      <main className="min-h-screen bg-[linear-gradient(180deg,#F7FBFF_0%,#F8FAFC_58%,#F8FAFC_100%)] px-4 py-6 lg:px-8">
         <div className="mx-auto max-w-5xl space-y-6">
           <div className="h-48 animate-pulse rounded-[32px] bg-white/80" />
           <div className="h-64 animate-pulse rounded-[28px] bg-white/80" />
@@ -75,12 +75,12 @@ export default function CompanyProfilePage() {
 
   if (!company) {
     return (
-      <main className="min-h-screen bg-[linear-gradient(180deg,#F5FBF8_0%,#F8FAFC_58%,#F8FAFC_100%)] px-4 py-6 lg:px-8 flex items-center justify-center">
+      <main className="min-h-screen bg-[linear-gradient(180deg,#F7FBFF_0%,#F8FAFC_58%,#F8FAFC_100%)] px-4 py-6 lg:px-8 flex items-center justify-center">
         <div className="text-center">
           <p className="text-lg font-semibold text-gray-900">Company not found</p>
           <Link
             href="/dashboard/international"
-            className="mt-4 inline-flex items-center gap-2 text-sm text-[#1D9E75] hover:text-[#0F6E56]"
+            className="mt-4 inline-flex items-center gap-2 text-sm text-[#0369A1] hover:text-[#0C4A6E]"
           >
             <ArrowLeft className="h-4 w-4" />
             Back to International Hub
@@ -91,7 +91,7 @@ export default function CompanyProfilePage() {
   }
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(180deg,#F5FBF8_0%,#F8FAFC_58%,#F8FAFC_100%)] px-4 py-6 lg:px-8">
+    <main className="min-h-screen bg-[linear-gradient(180deg,#F7FBFF_0%,#F8FAFC_58%,#F8FAFC_100%)] px-4 py-6 lg:px-8">
       <div className="mx-auto max-w-5xl space-y-6">
 
         {/* ── Company header ── */}
@@ -114,7 +114,7 @@ export default function CompanyProfilePage() {
                   className="h-16 w-16 rounded-2xl border border-gray-100 object-contain flex-shrink-0"
                 />
               ) : (
-                <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#E7F5F1] text-xl font-bold text-[#0F6E56] flex-shrink-0">
+                <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#E0F2FE] text-xl font-bold text-[#0C4A6E] flex-shrink-0">
                   {company.name.charAt(0).toUpperCase()}
                 </div>
               )}
@@ -127,7 +127,7 @@ export default function CompanyProfilePage() {
                 </p>
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   {company.sponsors_h1b && (
-                    <span className="rounded-full bg-[#ECFBF5] px-3 py-1 text-xs font-semibold text-[#0F6E56] border border-[#B6E9D8]">
+                    <span className="rounded-full bg-[#F0F9FF] px-3 py-1 text-xs font-semibold text-[#0C4A6E] border border-[#BAE6FD]">
                       Sponsors H-1B
                     </span>
                   )}
@@ -136,7 +136,7 @@ export default function CompanyProfilePage() {
                       href={company.careers_url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 px-3 py-1 text-xs font-medium text-gray-600 transition hover:border-[#1D9E75] hover:text-[#1D9E75]"
+                      className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 px-3 py-1 text-xs font-medium text-gray-600 transition hover:border-[#0369A1] hover:text-[#0369A1]"
                     >
                       <Globe2 className="h-3.5 w-3.5" />
                       Careers page
@@ -152,8 +152,8 @@ export default function CompanyProfilePage() {
                 onClick={() => void (watching ? removeCompany(id) : addCompany(id))}
                 className={`rounded-2xl px-5 py-2.5 text-sm font-semibold transition ${
                   watching
-                    ? "bg-[#ECFBF5] text-[#0F6E56] border border-[#B6E9D8] hover:bg-[#DFF6EC]"
-                    : "bg-[#1D9E75] text-white hover:bg-[#188560]"
+                    ? "bg-[#F0F9FF] text-[#0C4A6E] border border-[#BAE6FD] hover:bg-[#D6EEFF]"
+                    : "bg-[#0369A1] text-white hover:bg-[#075985]"
                 }`}
               >
                 {watching ? "Watching" : "Watch company"}
@@ -166,25 +166,25 @@ export default function CompanyProfilePage() {
 
           {/* Summary stats */}
           <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <div className="rounded-2xl bg-[#F8FBFA] p-4 text-center border border-gray-100">
+            <div className="rounded-2xl bg-[#F8FBFF] p-4 text-center border border-gray-100">
               <p className="text-2xl font-bold tabular-nums text-gray-900">
                 {company.h1b_sponsor_count_1yr.toLocaleString()}
               </p>
               <p className="text-xs text-gray-400 mt-0.5">petitions (1yr)</p>
             </div>
-            <div className="rounded-2xl bg-[#F8FBFA] p-4 text-center border border-gray-100">
+            <div className="rounded-2xl bg-[#F8FBFF] p-4 text-center border border-gray-100">
               <p className="text-2xl font-bold tabular-nums text-gray-900">
                 {company.h1b_sponsor_count_3yr.toLocaleString()}
               </p>
               <p className="text-xs text-gray-400 mt-0.5">petitions (3yr)</p>
             </div>
-            <div className="rounded-2xl bg-[#F8FBFA] p-4 text-center border border-gray-100">
+            <div className="rounded-2xl bg-[#F8FBFF] p-4 text-center border border-gray-100">
               <p className="text-2xl font-bold tabular-nums text-gray-900">
                 {company.job_count.toLocaleString()}
               </p>
               <p className="text-xs text-gray-400 mt-0.5">open roles</p>
             </div>
-            <div className="rounded-2xl bg-[#F8FBFA] p-4 text-center border border-gray-100">
+            <div className="rounded-2xl bg-[#F8FBFF] p-4 text-center border border-gray-100">
               <p className="text-2xl font-bold tabular-nums text-gray-900">
                 {company.sponsorship_confidence}
               </p>
@@ -216,7 +216,7 @@ export default function CompanyProfilePage() {
                     </p>
                     <div className="flex flex-1 h-9 gap-1 items-center">
                       <div
-                        className="h-full rounded-l-xl bg-[#1D9E75]"
+                        className="h-full rounded-l-xl bg-[#0369A1]"
                         style={{ width: `${approvedPct}%` }}
                         title={`${approved.toLocaleString()} approved`}
                       />
@@ -241,7 +241,7 @@ export default function CompanyProfilePage() {
 
             <div className="mt-4 flex items-center gap-4 text-xs text-gray-400">
               <span className="flex items-center gap-1.5">
-                <span className="inline-block h-3 w-3 rounded-sm bg-[#1D9E75]" />
+                <span className="inline-block h-3 w-3 rounded-sm bg-[#0369A1]" />
                 Approved
               </span>
               <span className="flex items-center gap-1.5">

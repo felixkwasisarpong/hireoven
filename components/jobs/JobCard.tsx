@@ -40,9 +40,9 @@ function formatFreshness(timestamp: string, now: number) {
       label: `${minutes} min ago`,
       tone: "green" as FreshnessTone,
       showDot: true,
-      border: "border-l-[#1D9E75]",
-      text: "text-[#1D9E75] font-semibold",
-      dot: "bg-[#1D9E75]",
+      border: "border-l-[#0369A1]",
+      text: "text-[#0369A1] font-semibold",
+      dot: "bg-[#0369A1]",
     }
   }
 
@@ -53,9 +53,9 @@ function formatFreshness(timestamp: string, now: number) {
       label: `${hours} hour${hours === 1 ? "" : "s"} ago`,
       tone: "teal" as FreshnessTone,
       showDot: true,
-      border: "border-l-[#0F6E56]",
-      text: "text-[#0F6E56] font-medium",
-      dot: "bg-[#0F6E56]",
+      border: "border-l-[#0C4A6E]",
+      text: "text-[#0C4A6E] font-medium",
+      dot: "bg-[#0C4A6E]",
     }
   }
 
@@ -103,7 +103,7 @@ function getSeniorityLabel(value: JobWithCompany["seniority_level"]) {
 function SponsorshipBadge({ job }: { job: JobWithCompany }) {
   if (job.sponsors_h1b) {
     return (
-      <span className="rounded-full border border-teal-200 bg-teal-50 px-2.5 py-1 text-[11px] font-semibold text-teal-700">
+      <span className="rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[11px] font-semibold text-sky-700">
         Sponsors H1B
       </span>
     )
@@ -180,7 +180,7 @@ export default function JobCard({ job }: JobCardProps) {
             className="h-10 w-10 rounded-2xl border border-gray-200 object-cover"
           />
         ) : (
-          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#E7F5F1] text-sm font-semibold text-[#0F6E56]">
+          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#E0F2FE] text-sm font-semibold text-[#0C4A6E]">
             {job.company.name.charAt(0).toUpperCase()}
           </div>
         )}
@@ -237,7 +237,7 @@ export default function JobCard({ job }: JobCardProps) {
                 </span>
               ))}
               {hiddenSkillsCount > 0 && (
-                <span className="rounded-full bg-[#F0F7F5] px-2.5 py-1 text-xs font-medium text-[#0F6E56]">
+                <span className="rounded-full bg-[#EFF6FF] px-2.5 py-1 text-xs font-medium text-[#0C4A6E]">
                   +{hiddenSkillsCount} more
                 </span>
               )}
@@ -273,7 +273,7 @@ export default function JobCard({ job }: JobCardProps) {
             onClick={() => setSaved((current) => !current)}
             className={`inline-flex h-10 w-10 items-center justify-center rounded-2xl border transition ${
               saved
-                ? "border-[#1D9E75] bg-[#E8F7F2] text-[#1D9E75]"
+                ? "border-[#0369A1] bg-[#E0F2FE] text-[#0369A1]"
                 : "border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:text-gray-800"
             }`}
             aria-label={saved ? "Remove bookmark" : "Save job"}
@@ -294,7 +294,7 @@ export default function JobCard({ job }: JobCardProps) {
             href={job.apply_url}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 rounded-2xl bg-[#1D9E75] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#188560]"
+            className="inline-flex items-center gap-2 rounded-2xl bg-[#0369A1] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#075985]"
           >
             Apply directly
             <ExternalLink className="h-4 w-4" />

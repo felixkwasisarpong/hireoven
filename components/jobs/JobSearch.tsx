@@ -67,7 +67,7 @@ export default function JobSearch({ totalCount }: JobSearchProps) {
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
           placeholder="Search title, company, skills, location…"
-          className="w-full rounded-2xl border border-gray-200 bg-white py-3.5 pl-11 pr-11 text-sm text-gray-900 outline-none transition focus:border-[#1D9E75] focus:ring-2 focus:ring-[#1D9E75]/20"
+          className="w-full rounded-2xl border border-gray-200 bg-white py-3.5 pl-11 pr-11 text-sm text-gray-900 outline-none transition focus:border-[#0369A1] focus:ring-2 focus:ring-[#0369A1]/20"
         />
         {draft && (
           <button

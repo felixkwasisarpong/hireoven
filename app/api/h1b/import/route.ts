@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { assertAdminAccess } from '@/lib/admin/auth'
 import { importH1BDataFromBuffer } from '@/lib/h1b/uscis-parser'
 
 export async function POST(request: NextRequest) {
   const serviceKey = request.headers.get('x-service-role-key')
   if (serviceKey !== process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const access = await assertAdminAccess()
+    if (!access.ok) {
+      return NextResponse.json({ error: access.error }, { status: access.status })
+    }
   }
 
   const formData = await request.formData()

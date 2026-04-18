@@ -212,14 +212,14 @@ function FilterToggle({
     >
       <span
         className={`text-sm ${
-          accent ? "font-medium text-[#1D9E75]" : "text-gray-700"
+          accent ? "font-medium text-[#0369A1]" : "text-gray-700"
         }`}
       >
         {label}
       </span>
       <span
         className={`relative inline-flex h-6 w-10 items-center rounded-full transition ${
-          checked ? "bg-[#1D9E75]" : "bg-gray-200"
+          checked ? "bg-[#0369A1]" : "bg-gray-200"
         }`}
       >
         <span
@@ -247,7 +247,7 @@ function CheckboxOption<T extends string>({
         type="checkbox"
         checked={checked}
         onChange={(event) => onChange(event.target.checked)}
-        className="h-4 w-4 rounded border-gray-300 text-[#1D9E75] focus:ring-[#1D9E75]"
+        className="h-4 w-4 rounded border-gray-300 text-[#0369A1] focus:ring-[#0369A1]"
       />
       <span className="text-sm text-gray-700">{label}</span>
     </label>
@@ -372,7 +372,7 @@ export default function JobFilters({
               within: event.target.value as JobWithinWindow,
             })
           }
-          className="w-full rounded-2xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-700 outline-none transition focus:border-[#1D9E75] focus:ring-2 focus:ring-[#1D9E75]/20"
+          className="w-full rounded-2xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-700 outline-none transition focus:border-[#0369A1] focus:ring-2 focus:ring-[#0369A1]/20"
         >
           {WITHIN_OPTIONS.map((option) => (
             <option key={option.value} value={option.value}>
