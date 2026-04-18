@@ -1,5 +1,7 @@
 // =============================================================================
-// Hireoven — TypeScript interfaces matching the Supabase schema
+// Hireoven — TypeScript types matching the Supabase schema
+// NOTE: Must use `type` aliases (not `interface`) so they satisfy
+// `Record<string, unknown>` in Supabase SDK v2.100+ conditional types.
 // =============================================================================
 
 // ---------------------------------------------------------------------------
@@ -54,7 +56,7 @@ export type JobSortOption = 'freshest' | 'match' | 'relevant';
 // Companies
 // ---------------------------------------------------------------------------
 
-export interface Company {
+export type Company = {
   id: string;
   name: string;
   domain: string;
@@ -69,14 +71,13 @@ export interface Company {
   job_count: number;
   notes: string | null;
   raw_ats_config: Record<string, unknown> | null;
-  // H1B / sponsorship
   h1b_sponsor_count_1yr: number;
   h1b_sponsor_count_3yr: number;
   sponsors_h1b: boolean;
-  sponsorship_confidence: number; // 0-100
+  sponsorship_confidence: number;
   created_at: string;
   updated_at: string;
-}
+};
 
 export type CompanyInsert = Omit<Company, 'id' | 'created_at' | 'updated_at'> & {
   id?: string;
@@ -90,7 +91,7 @@ export type CompanyUpdate = Partial<CompanyInsert>;
 // Jobs
 // ---------------------------------------------------------------------------
 
-export interface Job {
+export type Job = {
   id: string;
   company_id: string;
   title: string;
@@ -106,22 +107,19 @@ export interface Job {
   description: string | null;
   apply_url: string;
   external_id: string | null;
-  // Freshness tracking
   first_detected_at: string;
   last_seen_at: string;
   is_active: boolean;
-  // H1B / sponsorship
   sponsors_h1b: boolean | null;
-  sponsorship_score: number; // 0-100
+  sponsorship_score: number;
   visa_language_detected: string | null;
   requires_authorization: boolean;
-  // AI normalized fields
   skills: string[] | null;
   normalized_title: string | null;
   raw_data: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
-}
+};
 
 export type JobInsert = Omit<Job, 'id' | 'created_at' | 'updated_at'> & {
   id?: string;
@@ -131,66 +129,31 @@ export type JobInsert = Omit<Job, 'id' | 'created_at' | 'updated_at'> & {
 
 export type JobUpdate = Partial<JobInsert>;
 
-/** Job row with the related company joined in */
-export interface JobWithCompany extends Job {
-  company: Company;
-}
+export type JobWithCompany = Job & { company: Company };
 
 // ---------------------------------------------------------------------------
 // Profiles (extends auth.users)
 // ---------------------------------------------------------------------------
 
-export interface Profile {
-  id: string; // matches auth.users.id
+export type Profile = {
+  id: string;
   email: string | null;
   full_name: string | null;
   avatar_url: string | null;
-  // Job preferences
   desired_roles: string[] | null;
   desired_locations: string[] | null;
   desired_seniority: SeniorityLevel[] | null;
   remote_only: boolean;
-  // International student fields
   is_international: boolean;
   visa_status: VisaStatus | null;
-  opt_end_date: string | null; // ISO date string
+  opt_end_date: string | null;
   needs_sponsorship: boolean;
-  // Notification preferences
   alert_frequency: AlertFrequency;
   email_alerts: boolean;
   push_alerts: boolean;
   is_admin: boolean;
   created_at: string;
   updated_at: string;
-}
-
-// ---------------------------------------------------------------------------
-// API Usage
-// ---------------------------------------------------------------------------
-
-export interface ApiUsage {
-  id: string;
-  service: string; // claude, resend, webpush
-  operation: string | null;
-  tokens_used: number | null;
-  cost_usd: number | null;
-  created_at: string;
-}
-
-export type ApiUsageInsert = Omit<ApiUsage, 'id' | 'created_at'> & {
-  id?: string;
-  created_at?: string;
-};
-
-export interface SystemSetting {
-  key: string;
-  value: Record<string, unknown>;
-  updated_at: string;
-  updated_by: string | null;
-}
-
-export type SystemSettingInsert = Omit<SystemSetting, 'updated_at'> & {
-  updated_at?: string;
 };
 
 export type ProfileInsert = Pick<Profile, 'id'> &
@@ -199,36 +162,60 @@ export type ProfileInsert = Pick<Profile, 'id'> &
     updated_at?: string;
   };
 
-export type ProfileUpdate = Partial<
-  Omit<Profile, 'id' | 'created_at' | 'updated_at'>
->;
+export type ProfileUpdate = Partial<Omit<Profile, 'id' | 'created_at' | 'updated_at'>>;
+
+// ---------------------------------------------------------------------------
+// API Usage
+// ---------------------------------------------------------------------------
+
+export type ApiUsage = {
+  id: string;
+  service: string;
+  operation: string | null;
+  tokens_used: number | null;
+  cost_usd: number | null;
+  created_at: string;
+};
+
+export type ApiUsageInsert = Omit<ApiUsage, 'id' | 'created_at'> & {
+  id?: string;
+  created_at?: string;
+};
+
+export type SystemSetting = {
+  key: string;
+  value: Record<string, unknown>;
+  updated_at: string;
+  updated_by: string | null;
+};
+
+export type SystemSettingInsert = Omit<SystemSetting, 'updated_at'> & {
+  updated_at?: string;
+};
 
 // ---------------------------------------------------------------------------
 // Watchlist
 // ---------------------------------------------------------------------------
 
-export interface Watchlist {
+export type Watchlist = {
   id: string;
   user_id: string;
   company_id: string;
   created_at: string;
-}
+};
 
 export type WatchlistInsert = Omit<Watchlist, 'id' | 'created_at'> & {
   id?: string;
   created_at?: string;
 };
 
-/** Watchlist row with company joined in */
-export interface WatchlistWithCompany extends Watchlist {
-  company: Company;
-}
+export type WatchlistWithCompany = Watchlist & { company: Company };
 
 // ---------------------------------------------------------------------------
 // Job Alerts
 // ---------------------------------------------------------------------------
 
-export interface JobAlert {
+export type JobAlert = {
   id: string;
   user_id: string;
   name: string | null;
@@ -242,7 +229,7 @@ export interface JobAlert {
   is_active: boolean;
   last_triggered_at: string | null;
   created_at: string;
-}
+};
 
 export type JobAlertInsert = Omit<JobAlert, 'id' | 'created_at'> & {
   id?: string;
@@ -255,7 +242,7 @@ export type JobAlertUpdate = Partial<JobAlertInsert>;
 // Alert Notifications
 // ---------------------------------------------------------------------------
 
-export interface AlertNotification {
+export type AlertNotification = {
   id: string;
   user_id: string;
   job_id: string;
@@ -265,38 +252,39 @@ export interface AlertNotification {
   sent_at: string;
   opened_at: string | null;
   clicked_at: string | null;
-}
-
-export type AlertNotificationInsert = Omit<AlertNotification, 'id' | 'sent_at'> & {
-  id?: string;
-  sent_at?: string;
 };
 
-/** Notification row with job and alert joined in */
-export interface AlertNotificationWithDetails extends AlertNotification {
+export type AlertNotificationInsert = Omit<AlertNotification, 'id' | 'sent_at' | 'opened_at' | 'clicked_at'> & {
+  id?: string;
+  sent_at?: string;
+  opened_at?: string | null;
+  clicked_at?: string | null;
+};
+
+export type AlertNotificationWithDetails = AlertNotification & {
   job: JobWithCompany;
   alert: JobAlert | null;
-}
+};
 
 // ---------------------------------------------------------------------------
 // Push subscriptions
 // ---------------------------------------------------------------------------
 
-export interface WebPushSubscription {
+export type WebPushSubscription = {
   endpoint: string;
   expirationTime: number | null;
   keys: {
     auth: string;
     p256dh: string;
   };
-}
+};
 
-export interface PushSubscriptionRecord {
+export type PushSubscriptionRecord = {
   id: string;
   user_id: string;
   subscription: WebPushSubscription;
   created_at: string;
-}
+};
 
 export type PushSubscriptionInsert = Omit<PushSubscriptionRecord, 'id' | 'created_at'> & {
   id?: string;
@@ -307,7 +295,7 @@ export type PushSubscriptionInsert = Omit<PushSubscriptionRecord, 'id' | 'create
 // Crawl Logs
 // ---------------------------------------------------------------------------
 
-export interface CrawlLog {
+export type CrawlLog = {
   id: string;
   company_id: string;
   status: CrawlStatus;
@@ -316,7 +304,7 @@ export interface CrawlLog {
   error_message: string | null;
   duration_ms: number | null;
   crawled_at: string;
-}
+};
 
 export type CrawlLogInsert = Omit<CrawlLog, 'id' | 'crawled_at'> & {
   id?: string;
@@ -327,7 +315,7 @@ export type CrawlLogInsert = Omit<CrawlLog, 'id' | 'crawled_at'> & {
 // H1B Records
 // ---------------------------------------------------------------------------
 
-export interface H1BRecord {
+export type H1BRecord = {
   id: string;
   company_id: string | null;
   employer_name: string;
@@ -340,7 +328,7 @@ export interface H1BRecord {
   naics_code: string | null;
   raw_data: Record<string, unknown> | null;
   created_at: string;
-}
+};
 
 export type H1BRecordInsert = Omit<H1BRecord, 'id' | 'created_at'> & {
   id?: string;
@@ -351,7 +339,7 @@ export type H1BRecordInsert = Omit<H1BRecord, 'id' | 'created_at'> & {
 // UI filter state
 // ---------------------------------------------------------------------------
 
-export interface JobFilters {
+export type JobFilters = {
   remote?: boolean;
   sponsorship?: boolean;
   seniority?: SeniorityLevel[];
@@ -359,20 +347,20 @@ export interface JobFilters {
   within?: JobWithinWindow;
   company_ids?: string[];
   sort?: JobSortOption;
-}
+};
 
 // ---------------------------------------------------------------------------
 // Supabase Database type map (for typed client usage)
 // ---------------------------------------------------------------------------
 
-type TableDefinition<Row, Insert, Update> = {
+type TableDefinition<Row extends Record<string, unknown>, Insert extends Record<string, unknown>, Update extends Record<string, unknown>> = {
   Row: Row;
   Insert: Insert;
   Update: Update;
-  Relationships: [];
+  Relationships: never[];
 };
 
-export interface Database {
+export type Database = {
   public: {
     Tables: {
       companies: TableDefinition<Company, CompanyInsert, CompanyUpdate>;
@@ -399,7 +387,9 @@ export interface Database {
         Partial<SystemSettingInsert>
       >;
     };
-    Views: {};
-    Functions: {};
+    Views: Record<string, never>;
+    Functions: Record<string, never>;
+    Enums: Record<string, never>;
+    CompositeTypes: Record<string, never>;
   };
-}
+};

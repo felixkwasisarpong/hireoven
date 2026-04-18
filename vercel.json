@@ -1,0 +1,16 @@
+{
+  "crons": [
+    {
+      "path": "/api/crawl",
+      "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/alerts/digest",
+      "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/alerts/weekly",
+      "schedule": "0 9 * * 1"
+    }
+  ]
+}

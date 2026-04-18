@@ -2,6 +2,7 @@ import webpush from "web-push"
 import { Resend } from "resend"
 import { logApiUsage } from "@/lib/admin/usage"
 import { removeSubscription, getUserSubscriptions } from "@/lib/alerts/push-subscriptions"
+import { env } from "@/lib/env"
 import { createAdminClient } from "@/lib/supabase/admin"
 import type { Company, Job, NotificationChannel, Profile } from "@/types"
 
@@ -20,7 +21,7 @@ function getBaseUrl() {
 function configureWebPush() {
   const publicKey = process.env.VAPID_PUBLIC_KEY
   const privateKey = process.env.VAPID_PRIVATE_KEY
-  const email = process.env.VAPID_EMAIL
+  const email = env.VAPID_EMAIL
 
   if (!publicKey || !privateKey || !email) {
     throw new Error("Missing VAPID environment variables")

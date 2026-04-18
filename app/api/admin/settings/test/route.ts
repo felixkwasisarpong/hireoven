@@ -3,6 +3,7 @@ import webpush from "web-push"
 import { Resend } from "resend"
 import { assertAdminAccess } from "@/lib/admin/auth"
 import { getUserSubscriptions } from "@/lib/alerts/push-subscriptions"
+import { env } from "@/lib/env"
 
 export async function POST(request: NextRequest) {
   const access = await assertAdminAccess()
@@ -33,7 +34,7 @@ export async function POST(request: NextRequest) {
 
     const publicKey = process.env.VAPID_PUBLIC_KEY
     const privateKey = process.env.VAPID_PRIVATE_KEY
-    const email = process.env.VAPID_EMAIL
+    const email = env.VAPID_EMAIL
     if (!publicKey || !privateKey || !email) {
       return NextResponse.json({ error: "Missing VAPID configuration" }, { status: 400 })
     }
