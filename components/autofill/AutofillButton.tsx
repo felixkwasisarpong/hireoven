@@ -126,7 +126,7 @@ export function AutofillButton({
       size={size}
       variant="outline"
       asChild
-      className={`gap-1.5 border-sky-300 text-sky-700 hover:bg-sky-50 hover:border-sky-400 ${className}`}
+      className={`gap-1.5 border-[#FFD2B8] text-[#9A3412] hover:border-[#FFB088] hover:bg-[#FFF7F2] ${className}`}
     >
       <Link href={`/dashboard/autofill/fill/${jobId}`}>
         <Zap className="w-3.5 h-3.5" />

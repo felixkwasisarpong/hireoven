@@ -53,9 +53,9 @@ function formatFreshness(timestamp: string, now: number) {
       label: `${minutes} min ago`,
       tone: "green" as FreshnessTone,
       showDot: true,
-      border: "border-l-[#0369A1]",
-      text: "text-[#0369A1] font-semibold",
-      dot: "bg-[#0369A1]",
+      border: "border-l-[#FF5C18]",
+      text: "text-[#FF5C18] font-semibold",
+      dot: "bg-[#FF5C18]",
     }
   }
 
@@ -66,9 +66,9 @@ function formatFreshness(timestamp: string, now: number) {
       label: `${hours} hour${hours === 1 ? "" : "s"} ago`,
       tone: "teal" as FreshnessTone,
       showDot: true,
-      border: "border-l-[#0C4A6E]",
-      text: "text-[#0C4A6E] font-medium",
-      dot: "bg-[#0C4A6E]",
+      border: "border-l-[#062246]",
+      text: "text-[#062246] font-medium",
+      dot: "bg-[#062246]",
     }
   }
 
@@ -109,7 +109,7 @@ function getSeniorityLabel(value: JobWithCompany["seniority_level"]) {
 function SponsorshipBadge({ job }: { job: JobWithCompany }) {
   if (job.sponsors_h1b) {
     return (
-      <span className="rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[11px] font-semibold text-sky-700">
+      <span className="rounded-full border border-[#FFD2B8] bg-[#FFF7F2] px-2.5 py-1 text-[11px] font-semibold text-[#9A3412]">
         Sponsors H1B
       </span>
     )
@@ -161,7 +161,7 @@ function ScorePill({
 
   if (isLoading || isAnalyzing) {
     return (
-      <span className="inline-flex items-center gap-1.5 rounded-full border border-[#BAE6FD] bg-[#F0F9FF] px-2.5 py-1 text-[11px] font-semibold text-[#0C4A6E]">
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-[#FFD2B8] bg-[#FFF7F2] px-2.5 py-1 text-[11px] font-semibold text-[#062246]">
         <Sparkles className="h-3.5 w-3.5 animate-pulse" />
         Analyzing…
       </span>
@@ -190,7 +190,7 @@ function ScorePill({
       <button
         type="button"
         onClick={onOpen}
-        className="inline-flex items-center gap-1.5 rounded-full border border-[#BAE6FD] bg-[#F0F9FF] px-2.5 py-1 text-[11px] font-semibold text-[#0C4A6E] transition hover:bg-[#E0F2FE]"
+        className="inline-flex items-center gap-1.5 rounded-full border border-[#FFD2B8] bg-[#FFF7F2] px-2.5 py-1 text-[11px] font-semibold text-[#062246] transition hover:bg-[#FFF1E8]"
       >
         <Sparkles className="h-3.5 w-3.5" />
         See match
@@ -241,7 +241,7 @@ export default function JobCard({ job, hasPrimaryResume, analysisIndex = 99 }: J
             setExpanded((c) => !c)
           }
         }}
-        className={`group rounded-3xl border border-gray-200 border-l-4 ${freshness.border} bg-white p-5 text-left shadow-[0_1px_0_rgba(15,23,42,0.02)] transition duration-200 hover:-translate-y-0.5 hover:bg-[#FBFEFD] hover:shadow-[0_18px_40px_rgba(14,37,32,0.08)]`}
+        className={`group rounded-[18px] border border-slate-200/80 border-l-4 ${freshness.border} bg-white p-5 text-left shadow-[0_10px_24px_rgba(15,23,42,0.045)] transition duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:bg-[#FFFCFA] hover:shadow-[0_16px_30px_rgba(15,23,42,0.07)]`}
       >
         <div className="flex items-start gap-4">
           {job.company.logo_url ? (
@@ -249,21 +249,21 @@ export default function JobCard({ job, hasPrimaryResume, analysisIndex = 99 }: J
             <img
               src={job.company.logo_url}
               alt={job.company.name}
-              className="h-10 w-10 rounded-2xl border border-gray-200 object-cover"
+              className="h-12 w-12 rounded-[16px] border border-slate-200/80 object-cover shadow-[0_6px_16px_rgba(15,23,42,0.03)]"
             />
           ) : (
-            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#E0F2FE] text-sm font-semibold text-[#0C4A6E]">
+            <div className="flex h-12 w-12 items-center justify-center rounded-[16px] bg-[#FFF1E8] text-base font-semibold text-[#062246] shadow-[0_6px_16px_rgba(15,23,42,0.03)]">
               {job.company.name.charAt(0).toUpperCase()}
             </div>
           )}
 
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-medium uppercase tracking-[0.18em] text-gray-400">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">
               {job.company.name}
             </p>
-            <h3 className="mt-1 text-lg font-semibold leading-tight text-gray-900">{job.title}</h3>
+            <h3 className="mt-2 text-[1.45rem] font-semibold leading-tight tracking-[-0.025em] text-slate-950">{job.title}</h3>
 
-            <div className="mt-3 flex flex-wrap items-center gap-2.5 text-sm text-gray-500">
+            <div className="mt-3.5 flex flex-wrap items-center gap-2.5 text-sm text-slate-500">
               {job.location && (
                 <span className="inline-flex items-center gap-1.5">
                   <MapPin className="h-3.5 w-3.5" />
@@ -271,22 +271,22 @@ export default function JobCard({ job, hasPrimaryResume, analysisIndex = 99 }: J
                 </span>
               )}
               {job.is_remote && (
-                <span className="rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-medium text-sky-700">
+                <span className="rounded-full border border-[#FFD2B8] bg-[#FFF7F2] px-2.5 py-1 text-[11px] font-semibold text-[#9A3412]">
                   Remote
                 </span>
               )}
               {!job.is_remote && job.is_hybrid && (
-                <span className="rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-xs font-medium text-violet-700">
+                <span className="rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[11px] font-semibold text-violet-700">
                   Hybrid
                 </span>
               )}
               {getSeniorityLabel(job.seniority_level) && (
-                <span className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs font-medium text-gray-700">
+                <span className="rounded-full border border-slate-200/80 bg-slate-100/80 px-2.5 py-1 text-[11px] font-semibold text-slate-700">
                   {getSeniorityLabel(job.seniority_level)}
                 </span>
               )}
               {getEmploymentLabel(job.employment_type) && (
-                <span className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs font-medium text-gray-700">
+                <span className="rounded-full border border-slate-200/80 bg-slate-100/80 px-2.5 py-1 text-[11px] font-semibold text-slate-700">
                   {getEmploymentLabel(job.employment_type)}
                 </span>
               )}
@@ -297,13 +297,13 @@ export default function JobCard({ job, hasPrimaryResume, analysisIndex = 99 }: J
                 {visibleSkills.map((skill) => (
                   <span
                     key={skill}
-                    className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600"
+                    className="rounded-full border border-slate-200/80 bg-slate-100/70 px-2.5 py-1 text-[11px] font-medium text-slate-600"
                   >
                     {skill}
                   </span>
                 ))}
                 {hiddenSkillsCount > 0 && (
-                  <span className="rounded-full bg-[#EFF6FF] px-2.5 py-1 text-xs font-medium text-[#0C4A6E]">
+                  <span className="rounded-full border border-[#FFD9C2] bg-[#FFF8F4] px-2.5 py-1 text-[11px] font-semibold text-[#062246]">
                     +{hiddenSkillsCount} more
                   </span>
                 )}
@@ -311,7 +311,7 @@ export default function JobCard({ job, hasPrimaryResume, analysisIndex = 99 }: J
             )}
 
             {expanded && description && (
-              <div className="mt-4 rounded-2xl border border-gray-100 bg-gray-50/80 p-4 text-sm leading-7 text-gray-600">
+              <div className="mt-4 rounded-[18px] border border-slate-200/70 bg-slate-50/75 p-4 text-sm leading-7 text-slate-600">
                 {description}
               </div>
             )}
@@ -320,7 +320,7 @@ export default function JobCard({ job, hasPrimaryResume, analysisIndex = 99 }: J
               <div className="mt-3 flex flex-wrap gap-2" onClick={(e) => e.stopPropagation()}>
                 <Link
                   href={`/dashboard/cover-letter/${job.id}`}
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 transition hover:border-gray-300 hover:bg-gray-50"
+                  className="inline-flex items-center gap-1.5 rounded-2xl border border-slate-200/80 px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:border-slate-300 hover:bg-slate-50"
                 >
                   <FileText className="h-3.5 w-3.5" />
                   Write cover letter
@@ -331,7 +331,7 @@ export default function JobCard({ job, hasPrimaryResume, analysisIndex = 99 }: J
         </div>
 
         <div
-          className="mt-5 flex flex-col gap-3 border-t border-gray-100 pt-4 sm:flex-row sm:items-center sm:justify-between"
+          className="mt-5 flex flex-col gap-3 border-t border-slate-200/75 pt-4 sm:flex-row sm:items-center sm:justify-between"
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex flex-wrap items-center gap-2.5">
@@ -356,10 +356,10 @@ export default function JobCard({ job, hasPrimaryResume, analysisIndex = 99 }: J
             <button
               type="button"
               onClick={() => setSaved((c) => !c)}
-              className={`inline-flex h-10 w-10 items-center justify-center rounded-2xl border transition ${
+              className={`inline-flex h-10 w-10 items-center justify-center rounded-[14px] border transition ${
                 saved
-                  ? "border-[#0369A1] bg-[#E0F2FE] text-[#0369A1]"
-                  : "border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:text-gray-800"
+                  ? "border-[#FF5C18] bg-[#FFF1E8] text-[#FF5C18]"
+                  : "border-slate-200/80 bg-white text-slate-500 hover:border-slate-300 hover:text-slate-800"
               }`}
               aria-label={saved ? "Remove bookmark" : "Save job"}
             >
@@ -369,19 +369,19 @@ export default function JobCard({ job, hasPrimaryResume, analysisIndex = 99 }: J
             <button
               type="button"
               onClick={() => void shareJob()}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-gray-200 bg-white text-gray-500 transition hover:border-gray-300 hover:text-gray-800"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-[14px] border border-slate-200/80 bg-white text-slate-500 transition hover:border-slate-300 hover:text-slate-800"
               aria-label="Share job"
             >
               <Share2 className="h-4 w-4" />
             </button>
 
-            <AutofillButton jobId={job.id} />
+            <AutofillButton jobId={job.id} className="rounded-[14px]" />
 
             <a
               href={job.apply_url}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 rounded-2xl bg-[#0369A1] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#075985]"
+              className="inline-flex items-center gap-2 rounded-[14px] bg-[#FF5C18] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#E14F0E]"
             >
               Apply directly
               <ExternalLink className="h-4 w-4" />

@@ -69,9 +69,9 @@ function StepIndicator({ current }: { current: StepId }) {
                 className={[
                   "w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold transition-colors",
                   done
-                    ? "bg-sky-600 text-white"
+                    ? "bg-[#FF5C18] text-white"
                     : active
-                    ? "bg-sky-100 text-sky-700 ring-2 ring-sky-600"
+                    ? "bg-[#FFF1E8] text-[#9A3412] ring-2 ring-[#FF5C18]"
                     : "bg-gray-100 text-gray-400",
                 ].join(" ")}
               >
@@ -80,7 +80,7 @@ function StepIndicator({ current }: { current: StepId }) {
               <span
                 className={[
                   "text-[10px] font-medium",
-                  active ? "text-sky-700" : done ? "text-sky-600" : "text-gray-400",
+                  active ? "text-[#9A3412]" : done ? "text-[#FF5C18]" : "text-gray-400",
                 ].join(" ")}
               >
                 {step.label}
@@ -90,7 +90,7 @@ function StepIndicator({ current }: { current: StepId }) {
               <div
                 className={[
                   "h-px w-10 mb-4 mx-1",
-                  step.id < current ? "bg-sky-600" : "bg-gray-200",
+                  step.id < current ? "bg-[#FF5C18]" : "bg-gray-200",
                 ].join(" ")}
               />
             )}
@@ -115,7 +115,7 @@ function PreflightStep({
   if (loading) {
     return (
       <div className="flex items-center justify-center py-16">
-        <Loader2 className="w-6 h-6 animate-spin text-sky-600" />
+        <Loader2 className="w-6 h-6 animate-spin text-[#FF5C18]" />
       </div>
     )
   }
@@ -203,7 +203,7 @@ function PreflightStep({
           </p>
           <Link
             href="/dashboard/autofill"
-            className="inline-block mt-2 text-sky-600 hover:underline font-medium"
+            className="inline-block mt-2 text-[#FF5C18] hover:underline font-medium"
           >
             Complete profile →
           </Link>
@@ -218,7 +218,7 @@ function PreflightStep({
           </p>
           <Link
             href="/dashboard/autofill"
-            className="inline-block mt-2 text-sky-600 hover:underline font-medium"
+            className="inline-block mt-2 text-[#FF5C18] hover:underline font-medium"
           >
             Set up profile →
           </Link>
@@ -229,7 +229,7 @@ function PreflightStep({
         <Button
           onClick={onNext}
           disabled={!check.ok}
-          className="bg-sky-600 hover:bg-sky-700 text-white gap-2"
+          className="bg-[#FF5C18] hover:bg-[#E14F0E] text-white gap-2"
         >
           Continue <ChevronRight className="w-4 h-4" />
         </Button>
@@ -298,7 +298,7 @@ function ResumeStep({
             <p className="text-sm text-gray-500">No resumes found.</p>
             <Link
               href="/dashboard/resume"
-              className="text-sky-600 text-sm hover:underline mt-1 inline-block"
+              className="text-[#FF5C18] text-sm hover:underline mt-1 inline-block"
             >
               Upload a resume →
             </Link>
@@ -311,7 +311,7 @@ function ResumeStep({
               className={[
                 "w-full flex items-center justify-between px-4 py-3 rounded-xl border text-left transition-colors",
                 selectedId === r.id
-                  ? "border-sky-500 bg-sky-50"
+                  ? "border-[#FF5C18] bg-[#FFF7F2]"
                   : "border-gray-200 hover:border-gray-300 bg-white",
               ].join(" ")}
             >
@@ -320,7 +320,7 @@ function ResumeStep({
                   className={[
                     "w-4 h-4 rounded-full border-2 flex-shrink-0",
                     selectedId === r.id
-                      ? "border-sky-600 bg-sky-600"
+                      ? "border-[#FF5C18] bg-[#FF5C18]"
                       : "border-gray-300",
                   ].join(" ")}
                 >
@@ -346,7 +346,7 @@ function ResumeStep({
         </Button>
         <Button
           onClick={onNext}
-          className="bg-sky-600 hover:bg-sky-700 text-white gap-2"
+          className="bg-[#FF5C18] hover:bg-[#E14F0E] text-white gap-2"
         >
           Continue <ChevronRight className="w-4 h-4" />
         </Button>
@@ -386,7 +386,7 @@ function ScriptStep({
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center py-16 gap-3">
-        <Loader2 className="w-6 h-6 animate-spin text-sky-600" />
+        <Loader2 className="w-6 h-6 animate-spin text-[#FF5C18]" />
         <p className="text-sm text-gray-500">Generating fill script…</p>
       </div>
     )
@@ -406,7 +406,7 @@ function ScriptStep({
         <>
           <div className="flex flex-wrap gap-3 text-sm">
             <div className="flex items-center gap-1.5 text-gray-600">
-              <Zap className="w-4 h-4 text-sky-500" />
+              <Zap className="w-4 h-4 text-[#FF5C18]" />
               <span>
                 <span className="font-semibold text-gray-800">~{fillResult.estimatedFields}</span> fields estimated
               </span>
@@ -423,7 +423,7 @@ function ScriptStep({
               <span className="text-xs font-mono text-gray-500">fill-script.js</span>
               <button
                 onClick={handleCopy}
-                className="flex items-center gap-1.5 text-xs text-sky-600 hover:text-sky-700 font-medium"
+                className="flex items-center gap-1.5 text-xs text-[#FF5C18] hover:text-[#9A3412] font-medium"
               >
                 <Copy className="w-3.5 h-3.5" />
                 {copied ? "Copied!" : "Copy"}
@@ -444,20 +444,20 @@ function ScriptStep({
               href={applyUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-2 text-sm text-sky-600 hover:underline font-medium"
+              className="flex items-center gap-2 text-sm text-[#FF5C18] hover:underline font-medium"
             >
               <ExternalLink className="w-4 h-4" />
               Open {companyName || "application"} page
             </a>
           )}
 
-          <div className="rounded-xl border border-sky-100 bg-sky-50 p-4 text-sm text-sky-800">
+          <div className="rounded-xl border border-[#FFD2B8] bg-[#FFF7F2] p-4 text-sm text-[#7C2D12]">
             <p className="font-semibold mb-1">Quick steps</p>
-            <ol className="list-decimal list-inside space-y-1 text-sky-700">
+            <ol className="list-decimal list-inside space-y-1 text-[#9A3412]">
               <li>Open the job application page (link above)</li>
-              <li>Open DevTools: <kbd className="bg-sky-100 px-1 rounded text-xs">F12</kbd> or <kbd className="bg-sky-100 px-1 rounded text-xs">⌘⌥I</kbd></li>
+              <li>Open DevTools: <kbd className="bg-[#FFF1E8] px-1 rounded text-xs">F12</kbd> or <kbd className="bg-[#FFF1E8] px-1 rounded text-xs">⌘⌥I</kbd></li>
               <li>Click the <strong>Console</strong> tab</li>
-              <li>Paste the script and press <kbd className="bg-sky-100 px-1 rounded text-xs">Enter</kbd></li>
+              <li>Paste the script and press <kbd className="bg-[#FFF1E8] px-1 rounded text-xs">Enter</kbd></li>
               <li>Review every filled field before submitting</li>
             </ol>
           </div>
@@ -470,7 +470,7 @@ function ScriptStep({
         </Button>
         <Button
           onClick={onNext}
-          className="bg-sky-600 hover:bg-sky-700 text-white gap-2"
+          className="bg-[#FF5C18] hover:bg-[#E14F0E] text-white gap-2"
         >
           I ran the script <ChevronRight className="w-4 h-4" />
         </Button>
@@ -529,7 +529,7 @@ function InstructionsStep({
       <ul className="space-y-2">
         {activeTips.map((tip, i) => (
           <li key={i} className="flex items-start gap-3 text-sm text-gray-700">
-            <div className="w-5 h-5 rounded-full bg-sky-100 text-sky-700 flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">
+            <div className="w-5 h-5 rounded-full bg-[#FFF1E8] text-[#9A3412] flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">
               {i + 1}
             </div>
             {tip}
@@ -551,7 +551,7 @@ function InstructionsStep({
         </Button>
         <Button
           onClick={onNext}
-          className="bg-sky-600 hover:bg-sky-700 text-white gap-2"
+          className="bg-[#FF5C18] hover:bg-[#E14F0E] text-white gap-2"
         >
           I submitted the application <ChevronRight className="w-4 h-4" />
         </Button>
@@ -600,7 +600,7 @@ function LogStep({
           <Button variant="outline" asChild>
             <Link href="/dashboard/applications">View tracker</Link>
           </Button>
-          <Button className="bg-sky-600 hover:bg-sky-700 text-white" asChild>
+          <Button className="bg-[#FF5C18] hover:bg-[#E14F0E] text-white" asChild>
             <Link href="/dashboard">Back to dashboard</Link>
           </Button>
         </div>
@@ -630,7 +630,7 @@ function LogStep({
             min={0}
             value={fieldsFilled}
             onChange={(e) => setFieldsFilled(Number(e.target.value))}
-            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#FF5C18]"
           />
         </div>
         <div className="space-y-1.5">
@@ -640,7 +640,7 @@ function LogStep({
             min={1}
             value={fieldsTotal}
             onChange={(e) => setFieldsTotal(Number(e.target.value))}
-            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#FF5C18]"
           />
         </div>
       </div>
@@ -655,7 +655,7 @@ function LogStep({
         <Button
           onClick={() => onLog(fieldsTotal, fieldsFilled)}
           disabled={logging}
-          className="bg-sky-600 hover:bg-sky-700 text-white gap-2"
+          className="bg-[#FF5C18] hover:bg-[#E14F0E] text-white gap-2"
         >
           {logging ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
           Log application

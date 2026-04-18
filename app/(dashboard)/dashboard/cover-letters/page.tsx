@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { Clipboard, Check, FileText, Search, Star, Trash2 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
+import DashboardPageHeader from "@/components/layout/DashboardPageHeader"
 import { cn } from "@/lib/utils"
 import type { CoverLetter } from "@/types"
 
@@ -47,13 +48,11 @@ function CoverLetterCard({ letter, onDelete }: { letter: CoverLetter; onDelete: 
   })
 
   return (
-    <div className="rounded-3xl border border-gray-200 bg-white p-5 transition hover:shadow-[0_4px_20px_rgba(15,23,42,0.06)]">
+    <div className="surface-card group p-5 transition-all duration-150 hover:-translate-y-px hover:shadow-[0_1px_0_rgba(15,23,42,0.04),0_12px_28px_rgba(15,23,42,0.07)]">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">
-            {letter.company_name}
-          </p>
-          <h3 className="mt-0.5 truncate text-base font-semibold text-gray-900">
+          <p className="section-kicker">{letter.company_name}</p>
+          <h3 className="mt-1 truncate text-[15px] font-semibold text-gray-900">
             {letter.job_title}
           </h3>
         </div>
@@ -61,8 +60,8 @@ function CoverLetterCard({ letter, onDelete }: { letter: CoverLetter; onDelete: 
           type="button"
           onClick={() => void toggleFav()}
           className={cn(
-            "shrink-0 rounded-xl border p-1.5 transition",
-            isFav ? "border-amber-200 bg-amber-50 text-amber-600" : "border-gray-200 text-gray-400 hover:text-gray-600"
+            "flex-shrink-0 rounded-lg border p-1.5 transition-colors",
+            isFav ? "border-amber-200 bg-amber-50 text-amber-500" : "border-slate-200/80 text-slate-300 hover:border-amber-200 hover:text-amber-400"
           )}
         >
           <Star className="h-3.5 w-3.5" fill={isFav ? "currentColor" : "none"} />
@@ -70,38 +69,34 @@ function CoverLetterCard({ letter, onDelete }: { letter: CoverLetter; onDelete: 
       </div>
 
       <div className="mt-2.5 flex flex-wrap gap-1.5">
-        <span className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[11px] font-medium capitalize text-gray-600">
-          {letter.tone}
-        </span>
-        <span className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[11px] font-medium capitalize text-gray-600">
-          {letter.length}
-        </span>
-        <span className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[11px] font-medium capitalize text-gray-600">
-          {letter.style.replace("_", " ")}
-        </span>
+        {[letter.tone, letter.length, letter.style.replace("_", " ")].map((tag) => (
+          <span key={tag} className="rounded-full border border-slate-200/70 bg-slate-50 px-2 py-0.5 text-[11px] font-medium capitalize text-slate-500">
+            {tag}
+          </span>
+        ))}
         {letter.word_count && (
-          <span className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[11px] font-medium text-gray-600">
+          <span className="rounded-full border border-slate-200/70 bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-500">
             {letter.word_count}w
           </span>
         )}
         {letter.was_used && (
-          <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
+          <span className="rounded-full border border-emerald-200/80 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-600">
             Used
           </span>
         )}
       </div>
 
-      <p className="mt-3 text-sm leading-6 text-gray-500 line-clamp-2">
-        {letter.body.slice(0, 120)}…
+      <p className="mt-3 text-[13px] leading-[1.65] text-slate-400 line-clamp-2">
+        {letter.body.slice(0, 130)}…
       </p>
 
-      <p className="mt-2 text-xs text-gray-400">{date}</p>
+      <p className="mt-2 text-[11px] text-slate-400">{date}</p>
 
-      <div className="mt-4 flex items-center gap-2 border-t border-gray-100 pt-4">
+      <div className="mt-4 flex items-center gap-1.5 border-t border-slate-200/60 pt-3.5">
         {letter.job_id && (
           <Link
             href={`/dashboard/cover-letter/${letter.job_id}`}
-            className="flex items-center gap-1.5 rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 transition hover:bg-gray-50"
+            className="flex items-center gap-1.5 rounded-lg border border-slate-200/80 px-2.5 py-1.5 text-[12px] font-medium text-slate-600 transition hover:border-slate-300 hover:bg-slate-50"
           >
             <FileText className="h-3.5 w-3.5" />
             View / Edit
@@ -112,10 +107,10 @@ function CoverLetterCard({ letter, onDelete }: { letter: CoverLetter; onDelete: 
           type="button"
           onClick={() => void copy()}
           className={cn(
-            "flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-medium transition",
+            "flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[12px] font-medium transition",
             isCopied
-              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-              : "border-gray-200 text-gray-600 hover:bg-gray-50"
+              ? "border-emerald-200 bg-emerald-50 text-emerald-600"
+              : "border-slate-200/80 text-slate-600 hover:bg-slate-50"
           )}
         >
           {isCopied ? <Check className="h-3.5 w-3.5" /> : <Clipboard className="h-3.5 w-3.5" />}
@@ -125,10 +120,9 @@ function CoverLetterCard({ letter, onDelete }: { letter: CoverLetter; onDelete: 
         <button
           type="button"
           onClick={() => void handleDelete()}
-          className="ml-auto flex items-center gap-1.5 rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-400 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+          className="ml-auto flex items-center gap-1.5 rounded-lg border border-slate-200/80 px-2.5 py-1.5 text-[12px] font-medium text-slate-400 transition hover:border-red-200 hover:bg-red-50 hover:text-red-500"
         >
           <Trash2 className="h-3.5 w-3.5" />
-          Delete
         </button>
       </div>
     </div>
@@ -180,31 +174,29 @@ export default function CoverLettersPage() {
   ]
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(3,105,161,0.08),_transparent_40%),linear-gradient(180deg,#F7FBFF_0%,#F8FAFC_60%,#F8FAFC_100%)] px-4 py-6 lg:px-8">
-      <div className="mx-auto max-w-5xl space-y-5">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold text-gray-900">Cover letters</h1>
-            <p className="mt-0.5 text-sm text-gray-500">
-              All your generated letters in one place
-            </p>
-          </div>
-        </div>
+    <main className="app-page">
+      <div className="app-shell max-w-6xl space-y-5">
+        <DashboardPageHeader
+          kicker="Cover letters"
+          title="Saved drafts, tailored for real roles"
+          description="Keep every generated letter in one place, revisit the strongest ones, and reopen drafts when a live application needs one more pass."
+          backHref="/dashboard"
+          backLabel="Back to dashboard"
+        />
 
         {/* Filters + search */}
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex rounded-2xl border border-gray-200 bg-white p-1">
+        <div className="surface-card flex flex-wrap items-center gap-3 px-4 py-3">
+          <div className="flex rounded-xl border border-slate-200/80 bg-slate-50 p-0.5">
             {TABS.map((tab) => (
               <button
                 key={tab.value}
                 type="button"
                 onClick={() => setFilter(tab.value)}
                 className={cn(
-                  "rounded-xl px-3.5 py-1.5 text-sm font-medium transition",
+                  "rounded-lg px-3 py-1.5 text-[13px] font-medium transition-all duration-100",
                   filter === tab.value
-                    ? "bg-[#0369A1] text-white"
-                    : "text-gray-500 hover:text-gray-900"
+                    ? "bg-white text-gray-900 shadow-[0_1px_4px_rgba(15,23,42,0.08)]"
+                    : "text-slate-500 hover:text-slate-700"
                 )}
               >
                 {tab.label}
@@ -213,13 +205,13 @@ export default function CoverLettersPage() {
           </div>
 
           <div className="relative ml-auto">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by job or company…"
-              className="w-56 rounded-2xl border border-gray-200 bg-white py-2 pl-9 pr-4 text-sm text-gray-900 outline-none focus:border-[#0369A1] focus:ring-1 focus:ring-[#0369A1] placeholder:text-gray-400"
+              placeholder="Search letters…"
+              className="w-52 rounded-xl border border-slate-200/80 bg-white py-2 pl-9 pr-3 text-sm text-gray-900 placeholder:text-slate-400 outline-none focus:border-[#FF5C18]"
             />
           </div>
         </div>
@@ -228,14 +220,14 @@ export default function CoverLettersPage() {
         {isLoading && (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="h-48 animate-pulse rounded-3xl bg-white" />
+              <div key={i} className="surface-card h-48 animate-pulse" />
             ))}
           </div>
         )}
 
         {/* Empty state */}
         {!isLoading && filtered.length === 0 && (
-          <div className="rounded-3xl border border-dashed border-gray-300 bg-white px-8 py-16 text-center">
+          <div className="empty-state">
             <FileText className="mx-auto h-10 w-10 text-gray-300" />
             <p className="mt-3 text-base font-semibold text-gray-900">
               {search || filter !== "all"
@@ -246,7 +238,7 @@ export default function CoverLettersPage() {
               {!search && filter === "all" && (
                 <>
                   Generate your first one from any job listing —{" "}
-                  <Link href="/dashboard" className="font-medium text-[#0369A1] underline">
+                  <Link href="/dashboard" className="font-medium text-[#FF5C18] underline">
                     browse jobs
                   </Link>
                 </>

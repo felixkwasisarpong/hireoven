@@ -45,13 +45,13 @@ function StatCard({
   color?: "sky" | "green" | "violet" | "amber"
 }) {
   const colors = {
-    sky: "bg-sky-50 text-sky-600",
+    sky: "bg-[#FFF1E8] text-[#FF5C18]",
     green: "bg-green-50 text-green-600",
     violet: "bg-violet-50 text-violet-600",
     amber: "bg-amber-50 text-amber-600",
   }
   return (
-    <div className="bg-white rounded-2xl border border-gray-200 p-5 flex items-start gap-4 shadow-sm">
+    <div className="metric-tile flex items-start gap-4">
       <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${colors[color]}`}>
         <Icon className="w-5 h-5" />
       </div>
@@ -119,7 +119,7 @@ function HistoryRow({ entry }: { entry: HistoryEntry }) {
   return (
     <div className="flex items-center gap-4 px-4 py-3.5 hover:bg-gray-50 transition-colors group">
       {/* Color strip */}
-      <div className="w-1 h-10 rounded-full bg-sky-400 flex-shrink-0" />
+      <div className="w-1 h-10 rounded-full bg-[#FF5C18] flex-shrink-0" />
 
       {/* Main info */}
       <div className="flex-1 min-w-0">
@@ -170,14 +170,14 @@ function HistoryRow({ entry }: { entry: HistoryEntry }) {
 function EmptyState() {
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center">
-      <div className="w-14 h-14 rounded-2xl bg-sky-50 flex items-center justify-center mb-4">
-        <Zap className="w-7 h-7 text-sky-500" />
+      <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#FFF1E8]">
+        <Zap className="w-7 h-7 text-[#FF5C18]" />
       </div>
       <h3 className="text-base font-semibold text-gray-800">No autofill history yet</h3>
       <p className="text-sm text-gray-500 mt-1 max-w-xs">
         When you use autofill on a job application, it will appear here with fill rate stats.
       </p>
-      <Button className="mt-4 bg-sky-600 hover:bg-sky-700 text-white" asChild>
+      <Button className="mt-4" asChild>
         <Link href="/dashboard">Find jobs to autofill</Link>
       </Button>
     </div>
@@ -240,10 +240,10 @@ export default function AutofillHistoryPage() {
     : `${stats.minutesSaved}m`
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-3xl mx-auto px-4 py-8">
+    <div className="app-page">
+      <div className="app-shell max-w-6xl px-4 py-8">
         {/* Header */}
-        <div className="mb-8">
+        <section className="surface-hero mb-8 p-6">
           <Link
             href="/dashboard/autofill"
             className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 mb-4"
@@ -253,8 +253,9 @@ export default function AutofillHistoryPage() {
           </Link>
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Autofill history</h1>
-              <p className="text-sm text-gray-500 mt-1">
+              <p className="section-kicker">Autofill History</p>
+              <h1 className="section-title mt-3">Every application you accelerated</h1>
+              <p className="section-copy mt-3 max-w-2xl">
                 Every application you've autofilled, with fill rate breakdown.
               </p>
             </div>
@@ -262,7 +263,7 @@ export default function AutofillHistoryPage() {
               <Link href="/dashboard/autofill">Edit profile</Link>
             </Button>
           </div>
-        </div>
+        </section>
 
         {/* Stats */}
         {!loading && stats.totalApplications > 0 && (
@@ -292,7 +293,7 @@ export default function AutofillHistoryPage() {
         )}
 
         {/* History list */}
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="surface-card overflow-hidden p-0">
           {/* Toolbar */}
           {!loading && history.length > 0 && (
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
@@ -307,7 +308,7 @@ export default function AutofillHistoryPage() {
                     className={[
                       "px-3 py-1 rounded-lg text-xs font-medium transition-colors",
                       filter === f
-                        ? "bg-sky-100 text-sky-700"
+                        ? "bg-[#FFF7F2] text-[#9A3412]"
                         : "text-gray-500 hover:bg-gray-100",
                     ].join(" ")}
                   >
@@ -321,7 +322,7 @@ export default function AutofillHistoryPage() {
           {/* Content */}
           {loading ? (
             <div className="flex items-center justify-center py-16">
-              <Loader2 className="w-5 h-5 animate-spin text-sky-600" />
+              <Loader2 className="w-5 h-5 animate-spin text-[#FF5C18]" />
             </div>
           ) : filteredHistory.length === 0 ? (
             <EmptyState />

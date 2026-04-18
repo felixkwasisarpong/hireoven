@@ -14,6 +14,7 @@ import {
   Sparkles,
   User,
 } from "lucide-react"
+import DashboardPageHeader from "@/components/layout/DashboardPageHeader"
 import { useResumeContext } from "@/components/resume/ResumeProvider"
 import { useAuth } from "@/lib/hooks/useAuth"
 import { cn } from "@/lib/utils"
@@ -27,16 +28,16 @@ import type {
 // ── Completion bar ────────────────────────────────────────────────────────────
 
 function CompletionBar({ pct }: { pct: number }) {
-  const color = pct >= 80 ? "bg-emerald-500" : pct >= 50 ? "bg-amber-400" : "bg-[#0369A1]"
+  const color = pct >= 80 ? "bg-emerald-500" : pct >= 50 ? "bg-amber-400" : "bg-[#FF5C18]"
   return (
-    <div className="rounded-[32px] border border-white/80 bg-white/90 p-5 shadow-[0_4px_24px_rgba(15,23,42,0.06)]">
-      <div className="flex items-center justify-between mb-2">
+    <div className="surface-card-subtle p-5">
+      <div className="mb-2 flex items-center justify-between">
         <p className="text-sm font-semibold text-gray-900">Profile completeness</p>
-        <span className={cn("text-sm font-bold", pct >= 80 ? "text-emerald-600" : pct >= 50 ? "text-amber-600" : "text-[#0369A1]")}>
+        <span className={cn("text-sm font-bold", pct >= 80 ? "text-emerald-600" : pct >= 50 ? "text-amber-600" : "text-[#FF5C18]")}>
           {pct}%
         </span>
       </div>
-      <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
+      <div className="h-2 overflow-hidden rounded-full bg-gray-100">
         <div
           className={cn("h-full rounded-full transition-all duration-500", color)}
           style={{ width: `${pct}%` }}
@@ -72,13 +73,13 @@ function Section({
 }) {
   const [open, setOpen] = useState(defaultOpen)
   return (
-    <div className="rounded-[32px] border border-white/80 bg-white/90 shadow-[0_4px_24px_rgba(15,23,42,0.06)] overflow-hidden">
+    <section className="overflow-hidden rounded-[22px] border border-slate-200/80 bg-white">
       <button
         type="button"
         className="flex w-full items-center gap-3 px-6 py-5 text-left"
         onClick={() => setOpen((o) => !o)}
       >
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-[#EFF6FF] text-[#0369A1]">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-[#FFF1E8] text-[#FF5C18]">
           {icon}
         </span>
         <div className="flex-1 min-w-0">
@@ -87,8 +88,8 @@ function Section({
         </div>
         {open ? <ChevronUp className="h-4 w-4 text-gray-400" /> : <ChevronDown className="h-4 w-4 text-gray-400" />}
       </button>
-      {open && <div className="px-6 pb-6 space-y-4">{children}</div>}
-    </div>
+      {open && <div className="space-y-4 border-t border-slate-200/75 px-6 pb-6 pt-5">{children}</div>}
+    </section>
   )
 }
 
@@ -123,7 +124,7 @@ function Input({
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
-      className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 outline-none focus:border-[#0369A1] focus:ring-1 focus:ring-[#0369A1] placeholder:text-gray-400"
+      className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 outline-none focus:border-[#FF5C18] focus:ring-1 focus:ring-[#FF5C18] placeholder:text-gray-400"
     />
   )
 }
@@ -147,7 +148,7 @@ function PillSelect<T extends string>({
           className={cn(
             "rounded-xl border px-3.5 py-2 text-sm font-medium transition",
             value === opt.value
-              ? "border-[#0369A1] bg-[#F0F9FF] text-[#0369A1]"
+              ? "border-[#FF5C18] bg-[#FFF7F2] text-[#FF5C18]"
               : "border-gray-200 text-gray-600 hover:border-gray-300"
           )}
         >
@@ -398,15 +399,15 @@ export default function AutofillPage() {
   )
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(3,105,161,0.08),_transparent_40%),linear-gradient(180deg,#F7FBFF_0%,#F8FAFC_60%,#F8FAFC_100%)] px-4 py-6 pb-28 lg:px-8">
-      <div className="mx-auto max-w-3xl space-y-4">
-        {/* Header */}
-        <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Your autofill profile</h1>
-          <p className="mt-1 text-sm text-gray-500">
-            Fill this out once. We&rsquo;ll use it to fill job applications across Greenhouse, Lever, Workday, Ashby, and more.
-          </p>
-        </div>
+    <main className="app-page pb-28">
+      <div className="app-shell max-w-[1240px] space-y-4">
+        <DashboardPageHeader
+          kicker="Autofill profile"
+          title="Fill it once, reuse it everywhere"
+          description="Fill this out once. We’ll use it to fill job applications across Greenhouse, Lever, Workday, Ashby, and more."
+          backHref="/dashboard"
+          backLabel="Back to dashboard"
+        />
 
         <CompletionBar pct={completion} />
 
@@ -432,7 +433,7 @@ export default function AutofillPage() {
           <button
             type="button"
             onClick={() => setShowAddress((s) => !s)}
-            className="text-sm font-medium text-[#0369A1] hover:text-[#075985]"
+            className="text-sm font-medium text-[#FF5C18] hover:text-[#E14F0E]"
           >
             {showAddress ? "Hide address" : "+ Add address (optional)"}
           </button>
@@ -505,7 +506,7 @@ export default function AutofillPage() {
             <select
               value={form.work_authorization ?? ""}
               onChange={(e) => set("work_authorization", (e.target.value as WorkAuthorization) || null)}
-              className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 outline-none focus:border-[#0369A1] focus:ring-1 focus:ring-[#0369A1] bg-white"
+              className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 outline-none focus:border-[#FF5C18] focus:ring-1 focus:ring-[#FF5C18] bg-white"
             >
               <option value="">Select status…</option>
               {WORK_AUTH_OPTIONS.map((opt) => (
@@ -515,10 +516,10 @@ export default function AutofillPage() {
           </Field>
 
           {needsSponsorship && (
-            <div className="rounded-2xl border border-[#BAE6FD] bg-[#F0F9FF] p-4 space-y-3">
+            <div className="rounded-2xl border border-[#FFD2B8] bg-[#FFF7F2] p-4 space-y-3">
               <div>
-                <p className="text-sm font-semibold text-[#0C4A6E] mb-1">Your sponsorship statement</p>
-                <p className="text-xs text-[#0369A1]">
+                <p className="text-sm font-semibold text-[#062246] mb-1">Your sponsorship statement</p>
+                <p className="text-xs text-[#FF5C18]">
                   This is what we&rsquo;ll use when applications ask about visa sponsorship.
                   Edit it to sound like you.
                 </p>
@@ -527,14 +528,14 @@ export default function AutofillPage() {
                 value={str(form.sponsorship_statement)}
                 onChange={(e) => set("sponsorship_statement", e.target.value || null)}
                 rows={4}
-                className="w-full resize-none rounded-xl border border-sky-200 bg-white px-4 py-3 text-sm text-gray-900 outline-none focus:border-[#0369A1] focus:ring-1 focus:ring-[#0369A1]"
+                className="w-full resize-none rounded-xl border border-[#FFD2B8] bg-white px-4 py-3 text-sm text-gray-900 outline-none focus:border-[#FF5C18] focus:ring-1 focus:ring-[#FF5C18]"
                 placeholder="I am currently authorized to work on OPT…"
               />
               <button
                 type="button"
                 onClick={() => void improveStatement()}
                 disabled={isImprovingStatement || !form.sponsorship_statement}
-                className="flex items-center gap-2 rounded-xl border border-sky-200 bg-white px-3.5 py-2 text-xs font-semibold text-[#0369A1] transition hover:bg-sky-50 disabled:opacity-50"
+                className="flex items-center gap-2 rounded-xl border border-[#FFD2B8] bg-white px-3.5 py-2 text-xs font-semibold text-[#FF5C18] transition hover:bg-[#FFF7F2] disabled:opacity-50"
               >
                 {isImprovingStatement ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -583,7 +584,7 @@ export default function AutofillPage() {
                 value={form.salary_expectation_min?.toString() ?? ""}
                 onChange={(e) => set("salary_expectation_min", e.target.value ? parseInt(e.target.value, 10) : null)}
                 placeholder="80,000"
-                className="flex-1 rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 outline-none focus:border-[#0369A1] focus:ring-1 focus:ring-[#0369A1] placeholder:text-gray-400"
+                className="flex-1 rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 outline-none focus:border-[#FF5C18] focus:ring-1 focus:ring-[#FF5C18] placeholder:text-gray-400"
               />
               <span className="text-gray-400 text-sm">to</span>
               <input
@@ -591,7 +592,7 @@ export default function AutofillPage() {
                 value={form.salary_expectation_max?.toString() ?? ""}
                 onChange={(e) => set("salary_expectation_max", e.target.value ? parseInt(e.target.value, 10) : null)}
                 placeholder="120,000"
-                className="flex-1 rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 outline-none focus:border-[#0369A1] focus:ring-1 focus:ring-[#0369A1] placeholder:text-gray-400"
+                className="flex-1 rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 outline-none focus:border-[#FF5C18] focus:ring-1 focus:ring-[#FF5C18] placeholder:text-gray-400"
               />
             </div>
           </Field>
@@ -623,7 +624,7 @@ export default function AutofillPage() {
               <select
                 value={str(form.highest_degree)}
                 onChange={(e) => set("highest_degree", e.target.value || null)}
-                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 outline-none focus:border-[#0369A1] bg-white"
+                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 outline-none focus:border-[#FF5C18] bg-white"
               >
                 <option value="">Select…</option>
                 {DEGREE_OPTIONS.map((d) => <option key={d} value={d}>{d}</option>)}
@@ -686,7 +687,7 @@ export default function AutofillPage() {
                 }}
                 rows={3}
                 placeholder="Your pre-written answer (leave blank to skip this question)"
-                className="w-full resize-none rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-[#0369A1] focus:ring-1 focus:ring-[#0369A1] placeholder:text-gray-400"
+                className="w-full resize-none rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-[#FF5C18] focus:ring-1 focus:ring-[#FF5C18] placeholder:text-gray-400"
               />
             </div>
           ))}
@@ -698,7 +699,7 @@ export default function AutofillPage() {
                 { question_pattern: "", answer: "" },
               ])
             }
-            className="text-sm font-medium text-[#0369A1] hover:text-[#075985]"
+            className="text-sm font-medium text-[#FF5C18] hover:text-[#E14F0E]"
           >
             + Add custom Q&amp;A
           </button>
@@ -726,7 +727,7 @@ export default function AutofillPage() {
               }}
               className={cn(
                 "relative inline-flex h-6 w-11 items-center rounded-full transition",
-                form.auto_fill_diversity ? "bg-[#0369A1]" : "bg-gray-200"
+                form.auto_fill_diversity ? "bg-[#FF5C18]" : "bg-gray-200"
               )}
             >
               <span
@@ -757,7 +758,7 @@ export default function AutofillPage() {
 
       {/* Fixed save bar */}
       <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-gray-100 bg-white/95 backdrop-blur-sm px-4 py-4">
-        <div className="mx-auto max-w-3xl flex items-center justify-between gap-4">
+        <div className="mx-auto flex max-w-[1240px] items-center justify-between gap-4">
           <div className="text-sm text-gray-500 hidden sm:block">
             Profile is <span className="font-semibold text-gray-900">{completion}%</span> complete
           </div>
@@ -772,7 +773,7 @@ export default function AutofillPage() {
               type="button"
               onClick={() => void handleSave()}
               disabled={isSaving}
-              className="flex items-center gap-2 rounded-2xl bg-[#0369A1] px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-[#075985] disabled:opacity-60"
+              className="flex items-center gap-2 rounded-2xl bg-[#FF5C18] px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-[#E14F0E] disabled:opacity-60"
             >
               {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               {isSaving ? "Saving…" : "Save autofill profile"}
