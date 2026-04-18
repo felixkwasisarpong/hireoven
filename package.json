@@ -28,6 +28,7 @@
     "lucide-react": "^0.309.0",
     "mammoth": "^1.12.0",
     "next": "14.0.4",
+    "p-limit": "^7.3.0",
     "pdf-parse": "^2.4.5",
     "react": "^18",
     "react-dom": "^18",

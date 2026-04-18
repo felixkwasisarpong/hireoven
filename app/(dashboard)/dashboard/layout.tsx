@@ -97,9 +97,13 @@ function DashboardSubpageChrome({ children }: { children: React.ReactNode }) {
     <div className="dashboard-subpage min-h-screen">
       <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/92 backdrop-blur-xl">
         <div className="mx-auto grid max-w-[1680px] items-center gap-4 px-4 py-3 lg:grid-cols-[252px_minmax(0,1fr)] lg:px-6 xl:grid-cols-[252px_minmax(0,1fr)_280px]">
-          <div className="hidden items-center text-xs font-medium uppercase tracking-[0.2em] text-slate-400 lg:flex">
-            Job seeker dashboard
-          </div>
+          <Link
+            href="/dashboard"
+            className="flex min-w-0 items-center rounded-[14px] bg-white px-3 py-2 shadow-[0_10px_26px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/80 transition hover:ring-[#FFD2B8]"
+            aria-label="Hireoven dashboard home"
+          >
+            <HireovenLogo className="h-12 w-auto max-w-[190px]" priority />
+          </Link>
           <div className="min-w-0">
             <GlobalSearchBar />
           </div>
@@ -113,10 +117,6 @@ function DashboardSubpageChrome({ children }: { children: React.ReactNode }) {
         <div className="grid gap-6 lg:grid-cols-[240px_minmax(0,1fr)]">
           <aside className="soft-scrollbar hidden rounded-[20px] border border-slate-200/70 bg-white p-3.5 shadow-[0_1px_0_rgba(15,23,42,0.04),0_8px_24px_rgba(15,23,42,0.05)] lg:sticky lg:top-4 lg:block lg:h-[calc(100vh-2rem)] lg:overflow-y-auto">
             <div className="flex h-full flex-col">
-              <div className="px-2 pb-5 pt-2">
-                <HireovenLogo className="h-10 w-auto max-w-[152px]" priority />
-              </div>
-
               <nav className="space-y-0.5">
                 {NAV_ITEMS.map((item) => {
                   const Icon = item.icon

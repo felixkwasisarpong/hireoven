@@ -53,6 +53,7 @@ export type JobWithinWindow = 'all' | '1h' | '6h' | '24h' | '3d';
 export type JobSortOption = 'freshest' | 'match' | 'relevant';
 
 export type ResumeParseStatus = 'pending' | 'processing' | 'complete' | 'failed';
+export type ScoreMethod = 'fast' | 'deep';
 
 export type ResumeEditType =
   | 'rewrite'
@@ -452,6 +453,7 @@ export type Profile = {
   desired_roles: string[] | null;
   desired_locations: string[] | null;
   desired_seniority: SeniorityLevel[] | null;
+  desired_employment_types: EmploymentType[] | null;
   seniority_level: SeniorityLevel | null;
   top_skills: string[] | null;
   remote_only: boolean;
@@ -644,6 +646,49 @@ export type ResumeEditInsert = Omit<ResumeEdit, 'id' | 'created_at'> & {
 
 export type ResumeEditSuggestion = ResumeEdit & {
   local_id?: string;
+};
+
+// ---------------------------------------------------------------------------
+// Match scoring
+// ---------------------------------------------------------------------------
+
+export type JobMatchScore = {
+  id: string;
+  user_id: string;
+  resume_id: string;
+  job_id: string;
+  overall_score: number;
+  skills_score: number | null;
+  seniority_score: number | null;
+  location_score: number | null;
+  employment_type_score: number | null;
+  sponsorship_score: number | null;
+  is_seniority_match: boolean | null;
+  is_location_match: boolean | null;
+  is_employment_type_match: boolean | null;
+  is_sponsorship_compatible: boolean | null;
+  matching_skills_count: number;
+  total_required_skills: number;
+  skills_match_rate: number | null;
+  score_method: ScoreMethod;
+  computed_at: string;
+  resume_version: number;
+};
+
+export type JobMatchScoreInsert = Omit<JobMatchScore, 'id'> & {
+  id?: string;
+};
+
+export type ScoreExplanation = {
+  headline: string;
+  strengths: string[];
+  concerns: string[];
+  sponsorship_note: string | null;
+};
+
+export type JobWithMatchScore = JobWithCompany & {
+  match_score?: JobMatchScore | null;
+  final_rank?: number | null;
 };
 
 // ---------------------------------------------------------------------------
@@ -883,6 +928,11 @@ export type Database = {
         SystemSetting,
         SystemSettingInsert,
         Partial<SystemSettingInsert>
+      >;
+      job_match_scores: TableDefinition<
+        JobMatchScore,
+        JobMatchScoreInsert,
+        Partial<JobMatchScoreInsert>
       >;
       resume_analyses: TableDefinition<ResumeAnalysis, ResumeAnalysisInsert, Partial<ResumeAnalysisInsert>>;
       cover_letters: TableDefinition<CoverLetter, CoverLetterInsert, CoverLetterUpdate>;

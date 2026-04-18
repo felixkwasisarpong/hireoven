@@ -7,6 +7,7 @@ import {
   sendWatchlistAlert,
 } from "@/lib/alerts/sender"
 import { requireWebhookAuth } from "@/lib/env"
+import { scoreNewJobForAllUsers } from "@/lib/matching/batch-scorer"
 import { createAdminClient } from "@/lib/supabase/admin"
 import type { Job, NotificationType } from "@/types"
 
@@ -39,6 +40,7 @@ export async function POST(request: NextRequest) {
 
   // Return 200 immediately — Supabase retries on non-2xx so we must not block
   void processNotifications(job)
+  void scoreNewJobForAllUsers(job)
 
   return NextResponse.json({ received: true, jobId: job.id })
 }

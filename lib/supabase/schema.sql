@@ -70,6 +70,7 @@ CREATE TABLE profiles (
   desired_roles TEXT[],
   desired_locations TEXT[],
   desired_seniority TEXT[],
+  desired_employment_types TEXT[],
   remote_only BOOLEAN DEFAULT false,
   -- International student fields
   is_international BOOLEAN DEFAULT false,
@@ -268,6 +269,32 @@ ALTER TABLE job_applications ADD COLUMN IF NOT EXISTS offer_details JSONB;
 ALTER TABLE job_applications ADD COLUMN IF NOT EXISTS is_archived BOOLEAN DEFAULT false;
 ALTER TABLE job_applications ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'hireoven';
 
+-- 14. Match scores table
+-- Per-user score cache for ranking and personalization
+CREATE TABLE IF NOT EXISTS job_match_scores (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  resume_id UUID REFERENCES resumes(id) ON DELETE CASCADE,
+  job_id UUID REFERENCES jobs(id) ON DELETE CASCADE,
+  overall_score INTEGER NOT NULL,
+  skills_score INTEGER,
+  seniority_score INTEGER,
+  location_score INTEGER,
+  employment_type_score INTEGER,
+  sponsorship_score INTEGER,
+  is_seniority_match BOOLEAN,
+  is_location_match BOOLEAN,
+  is_employment_type_match BOOLEAN,
+  is_sponsorship_compatible BOOLEAN,
+  matching_skills_count INTEGER DEFAULT 0,
+  total_required_skills INTEGER DEFAULT 0,
+  skills_match_rate DECIMAL,
+  score_method TEXT DEFAULT 'fast',
+  computed_at TIMESTAMPTZ DEFAULT NOW(),
+  resume_version INTEGER DEFAULT 1,
+  UNIQUE(user_id, resume_id, job_id)
+);
+
 -- =============================================================================
 -- Indexes
 -- =============================================================================
@@ -307,6 +334,9 @@ CREATE INDEX IF NOT EXISTS idx_resume_edits_user_id ON resume_edits(user_id);
 CREATE INDEX IF NOT EXISTS idx_resume_edits_created_at ON resume_edits(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_job_applications_user_id ON job_applications(user_id);
 CREATE INDEX IF NOT EXISTS idx_job_applications_status ON job_applications(status);
+CREATE INDEX IF NOT EXISTS idx_match_scores_user_job ON job_match_scores(user_id, job_id);
+CREATE INDEX IF NOT EXISTS idx_match_scores_score ON job_match_scores(user_id, overall_score DESC);
+CREATE INDEX IF NOT EXISTS idx_match_scores_computed ON job_match_scores(user_id, computed_at DESC);
 
 -- =============================================================================
 -- Full-text search vectors (run as a migration after initial schema)
@@ -352,6 +382,7 @@ ALTER TABLE resumes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE resume_versions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE resume_edits ENABLE ROW LEVEL SECURITY;
 ALTER TABLE job_applications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE job_match_scores ENABLE ROW LEVEL SECURITY;
 
 -- Profiles
 CREATE POLICY "Users can view own profile"
@@ -431,6 +462,17 @@ BEGIN
   ) THEN
     CREATE POLICY "Users manage own edits"
       ON resume_edits FOR ALL
+      USING (auth.uid() = user_id)
+      WITH CHECK (auth.uid() = user_id);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'job_match_scores'
+      AND policyname = 'Users view own scores'
+  ) THEN
+    CREATE POLICY "Users view own scores"
+      ON job_match_scores FOR ALL
       USING (auth.uid() = user_id)
       WITH CHECK (auth.uid() = user_id);
   END IF;
@@ -597,6 +639,7 @@ CREATE TRIGGER on_auth_user_created
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT false;
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS seniority_level TEXT;
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS top_skills TEXT[];
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS desired_employment_types TEXT[];
 ALTER TABLE companies ADD COLUMN IF NOT EXISTS ats_identifier TEXT;
 ALTER TABLE companies ADD COLUMN IF NOT EXISTS notes TEXT;
 ALTER TABLE companies ADD COLUMN IF NOT EXISTS raw_ats_config JSONB DEFAULT '{}'::jsonb;

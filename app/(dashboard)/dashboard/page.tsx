@@ -11,12 +11,14 @@ import {
   Globe2,
   LogOut,
   Scroll,
+  Sparkles,
   UserCircle2,
   Waves,
   Zap,
 } from "lucide-react"
 import GlobalSearchBar from "@/components/search/GlobalSearchBar"
 import JobFeed from "@/components/jobs/JobFeed"
+import { MatchScorePill } from "@/components/matching/MatchScorePill"
 import NotificationBell from "@/components/notifications/NotificationBell"
 import PushNotificationSetup from "@/components/notifications/PushNotificationSetup"
 import ResumeUploader from "@/components/resume/ResumeUploader"
@@ -36,6 +38,7 @@ import { useAuth } from "@/lib/hooks/useAuth"
 import { useWatchlist } from "@/lib/hooks/useWatchlist"
 import { createClient } from "@/lib/supabase/client"
 import { cn } from "@/lib/utils"
+import type { JobWithMatchScore } from "@/types"
 
 type TopHiringCompany = {
   id: string
@@ -47,6 +50,7 @@ type TopHiringCompany = {
 
 const NAV_ITEMS = [
   { label: "Feed",          href: "/dashboard",               icon: Waves       },
+  { label: "Matches",       href: "/dashboard/matches",       icon: Sparkles    },
   { label: "Companies",     href: "/dashboard/companies",     icon: Building2   },
   { label: "Resume",        href: "/dashboard/resume",        icon: FileText    },
   { label: "Cover letters", href: "/dashboard/cover-letters", icon: Scroll      },
@@ -89,6 +93,16 @@ export default function DashboardPage() {
   const { hasResume, primaryResume, upsertResume } = useResumeContext()
   const [feedMeta, setFeedMeta] = useState({ totalCount: 0, lastHourCount: 0 })
   const [topHiringCompanies, setTopHiringCompanies] = useState<TopHiringCompany[]>([])
+  const [topMatches, setTopMatches] = useState<JobWithMatchScore[]>([])
+
+  useEffect(() => {
+    if (!primaryResume || primaryResume.parse_status !== "complete") return
+    if (searchParams.has("sort")) return
+
+    const next = new URLSearchParams(searchParams.toString())
+    next.set("sort", "match")
+    router.replace(`${pathname}?${next.toString()}`, { scroll: false })
+  }, [pathname, primaryResume, router, searchParams])
 
   useEffect(() => {
     async function fetchTopHiringCompanies() {
@@ -135,6 +149,30 @@ export default function DashboardPage() {
     void fetchTopHiringCompanies()
   }, [])
 
+  useEffect(() => {
+    if (!primaryResume || primaryResume.parse_status !== "complete") {
+      setTopMatches([])
+      return
+    }
+
+    let cancelled = false
+
+    fetch("/api/match/feed?limit=3&within=24h", { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) return []
+        const payload = (await response.json()) as { jobs?: JobWithMatchScore[] }
+        return payload.jobs ?? []
+      })
+      .then((jobs) => {
+        if (cancelled) return
+        setTopMatches(jobs)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [primaryResume])
+
   function replaceFilters(nextFilters: typeof filters) {
     const next = filtersToSearchParams(searchParams, nextFilters)
     const withSearch = searchQueryToParams(next, searchQuery)
@@ -156,9 +194,13 @@ export default function DashboardPage() {
       {/* Sticky global search bar */}
       <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/92 backdrop-blur-xl">
         <div className="mx-auto grid max-w-[1680px] items-center gap-4 px-4 py-3 lg:grid-cols-[252px_minmax(0,1fr)] lg:px-6 xl:grid-cols-[252px_minmax(0,1fr)_320px]">
-          <div className="hidden lg:flex items-center text-xs font-medium uppercase tracking-[0.2em] text-slate-400">
-            Job seeker dashboard
-          </div>
+          <Link
+            href="/dashboard"
+            className="flex min-w-0 items-center rounded-[14px] bg-white px-3 py-2 shadow-[0_10px_26px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/80 transition hover:ring-[#FFD2B8]"
+            aria-label="Hireoven dashboard home"
+          >
+            <HireovenLogo className="h-12 w-auto max-w-[190px]" priority />
+          </Link>
           <div className="min-w-0">
             <GlobalSearchBar />
           </div>
@@ -171,10 +213,6 @@ export default function DashboardPage() {
         <div className="grid gap-6 lg:grid-cols-[240px_minmax(0,1fr)] xl:grid-cols-[240px_minmax(0,1fr)_312px]">
           <aside className="soft-scrollbar rounded-[20px] border border-slate-200/70 bg-white p-3.5 shadow-[0_1px_0_rgba(15,23,42,0.04),0_8px_24px_rgba(15,23,42,0.05)] lg:sticky lg:top-4 lg:h-[calc(100vh-2rem)] lg:overflow-y-auto">
             <div className="flex h-full flex-col">
-              <div className="px-2 pb-5 pt-2">
-                <HireovenLogo className="h-10 w-auto max-w-[152px]" priority />
-              </div>
-
               <nav className="space-y-0.5">
                 {NAV_ITEMS.map((item) => {
                   const Icon = item.icon
@@ -289,8 +327,8 @@ export default function DashboardPage() {
               </div>
 
               <div className="rounded-[20px] border border-slate-200/80 bg-white/95 p-4 shadow-[0_12px_30px_rgba(15,23,42,0.04)]">
-                <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
-                  <JobSearch totalCount={feedMeta.totalCount} />
+                  <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
+                    <JobSearch totalCount={feedMeta.totalCount} />
 
                   <div className="flex flex-wrap gap-2">
                     {SORT_OPTIONS.map((option) => {
@@ -420,6 +458,76 @@ export default function DashboardPage() {
                   </div>
                 </div>
               )}
+
+              <div className="border-b border-slate-200/60 p-5">
+                <div className="mb-3 flex items-center justify-between">
+                  <p className="text-[13px] font-semibold text-gray-900">Top matches today</p>
+                  <Link
+                    href="/dashboard/matches"
+                    className="text-xs font-medium text-[#FF5C18] hover:text-[#E14F0E]"
+                  >
+                    View all
+                  </Link>
+                </div>
+
+                {!primaryResume || primaryResume.parse_status !== "complete" ? (
+                  <div className="rounded-[14px] border border-dashed border-slate-200 bg-slate-50/60 px-4 py-5">
+                    <p className="text-xs text-slate-500">
+                      Upload your resume to see your strongest matches.
+                    </p>
+                    <Link
+                      href="/dashboard/resume"
+                      className="mt-2 inline-flex text-xs font-semibold text-[#FF5C18] hover:underline"
+                    >
+                      Upload resume →
+                    </Link>
+                  </div>
+                ) : topMatches.length === 0 ? (
+                  <div className="rounded-[14px] border border-dashed border-slate-200 bg-slate-50/60 px-4 py-5 text-xs text-slate-400">
+                    No strong matches landed in the last 24 hours yet.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {topMatches.map((job) => (
+                      <Link
+                        key={job.id}
+                        href={job.apply_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block rounded-[12px] border border-slate-200/60 bg-slate-50/60 px-3 py-3 transition hover:border-slate-300 hover:bg-white"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-[13px] font-semibold text-slate-900">
+                              {job.title}
+                            </p>
+                            <p className="mt-0.5 truncate text-[12px] text-slate-500">
+                              {job.company.name}
+                            </p>
+                            <p className="mt-1 text-[11px] text-slate-400">
+                              Posted{" "}
+                              {Math.max(
+                                1,
+                                Math.floor(
+                                  (Date.now() - new Date(job.first_detected_at).getTime()) /
+                                    3_600_000
+                                )
+                              )}{" "}
+                              h ago
+                            </p>
+                          </div>
+                          <MatchScorePill
+                            score={job.match_score?.overall_score ?? null}
+                            method={job.match_score?.score_method ?? null}
+                            isLoading={false}
+                            size="sm"
+                          />
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
 
               {/* Watchlist */}
               <div className="border-b border-slate-200/60 p-5">

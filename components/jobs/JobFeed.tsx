@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react"
 import { ArrowUp, Sparkles } from "lucide-react"
 import JobCard from "@/components/jobs/JobCard"
+import { useMatchScores } from "@/lib/hooks/useMatchScores"
 import { useJobs } from "@/lib/hooks/useJobs"
 import type { JobFilters } from "@/types"
 
@@ -39,6 +40,7 @@ export default function JobFeed({
   onMetaChange,
   hasPrimaryResume = false,
 }: JobFeedProps) {
+  const personalized = hasPrimaryResume && (filters.sort ?? "freshest") === "match"
   const {
     jobs,
     isLoading,
@@ -48,8 +50,11 @@ export default function JobFeed({
     lastHourCount,
     newJobsCount,
     refresh,
-  } = useJobs(filters, searchQuery)
+  } = useJobs(filters, searchQuery, { personalized })
   const sentinelRef = useRef<HTMLDivElement | null>(null)
+  const { getScore, isLoading: scoresLoading } = useMatchScores(
+    hasPrimaryResume ? jobs.map((job) => job.id) : []
+  )
 
   useEffect(() => {
     onMetaChange?.({ totalCount, lastHourCount })
@@ -71,6 +76,13 @@ export default function JobFeed({
 
   return (
     <div className="space-y-4">
+      {personalized && (
+        <div className="flex items-center gap-2 rounded-[16px] border border-[#FFD2B8] bg-[#FFF8F4] px-4 py-3 text-sm font-medium text-[#062246]">
+          <Sparkles className="h-4 w-4 text-[#FF5C18]" />
+          Personalized for you
+        </div>
+      )}
+
       {newJobsCount > 0 && (
         <button
           type="button"
@@ -107,7 +119,19 @@ export default function JobFeed({
       {jobs.length > 0 && (
         <div className="space-y-4">
           {jobs.map((job, i) => (
-            <JobCard key={job.id} job={job} hasPrimaryResume={hasPrimaryResume} analysisIndex={i} />
+            <JobCard
+              key={job.id}
+              job={job}
+              hasPrimaryResume={hasPrimaryResume}
+              analysisIndex={i}
+              matchScore={job.match_score ?? getScore(job.id)}
+              isMatchScoreLoading={
+                hasPrimaryResume &&
+                !job.match_score &&
+                scoresLoading &&
+                !getScore(job.id)
+              }
+            />
           ))}
         </div>
       )}

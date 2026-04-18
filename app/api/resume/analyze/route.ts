@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server"
+import { upsertMatchScores } from "@/lib/matching/batch-scorer"
+import { mapAnalysisToDeepScore } from "@/lib/matching/deep-scorer"
+import { computeFastScore } from "@/lib/matching/fast-scorer"
 import { analyzeResumeForJob, getCachedAnalysis } from "@/lib/resume/analyzer"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { createClient } from "@/lib/supabase/server"
-import type { Company, Job, Resume } from "@/types"
+import type { Company, Job, Profile, Resume } from "@/types"
 
 export const runtime = "nodejs"
 export const maxDuration = 60
@@ -78,6 +81,27 @@ export async function POST(request: Request) {
 
   try {
     const analysis = await analyzeResumeForJob(resume, job, user.id)
+    const { data: profileData } = await admin
+      .from("profiles")
+      .select("*")
+      .eq("id", user.id)
+      .single()
+
+    if (profileData) {
+      const fastScore = computeFastScore({
+        resume,
+        job,
+        profile: profileData as Profile,
+      })
+      const deepScore = mapAnalysisToDeepScore(
+        resume,
+        job,
+        fastScore,
+        analysis
+      )
+      await upsertMatchScores([deepScore])
+    }
+
     return NextResponse.json(analysis)
   } catch (err) {
     const message = err instanceof Error ? err.message : "Analysis failed"
