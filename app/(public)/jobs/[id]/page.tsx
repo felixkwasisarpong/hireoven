@@ -3,6 +3,7 @@ import Link from "next/link"
 import Image from "next/image"
 import { notFound } from "next/navigation"
 import { createAdminClient } from "@/lib/supabase/admin"
+import { AutofillButton } from "@/components/autofill/AutofillButton"
 import Navbar from "@/components/layout/Navbar"
 import type { Company, Job } from "@/types"
 
@@ -151,6 +152,7 @@ export default async function PublicJobPage({ params }: Props) {
 
         {/* Apply CTA */}
         <div className="flex flex-col sm:flex-row gap-3 mb-10">
+          <AutofillButton jobId={job.id} size="default" className="justify-center" />
           <a
             href={job.apply_url}
             target="_blank"

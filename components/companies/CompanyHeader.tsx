@@ -35,7 +35,7 @@ export default function CompanyHeader({ company, showWatchButton = true, newJobs
           />
         ) : null}
         <div
-          className={`${company.logo_url ? 'hidden' : 'flex'} h-20 w-20 flex-shrink-0 items-center justify-center rounded-2xl bg-[#E0F2FE] text-2xl font-bold text-[#0C4A6E]`}
+          className={`${company.logo_url ? 'hidden' : 'flex'} h-20 w-20 flex-shrink-0 items-center justify-center rounded-2xl bg-[#FFF1E8] text-2xl font-bold text-[#062246]`}
         >
           {company.name.charAt(0).toUpperCase()}
         </div>
@@ -47,7 +47,7 @@ export default function CompanyHeader({ company, showWatchButton = true, newJobs
           </p>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             {company.sponsors_h1b && (
-              <span className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700">
+              <span className="rounded-full border border-[#FFD2B8] bg-[#FFF7F2] px-3 py-1 text-xs font-semibold text-[#9A3412]">
                 Sponsors H-1B
               </span>
             )}
@@ -61,7 +61,7 @@ export default function CompanyHeader({ company, showWatchButton = true, newJobs
                 href={company.careers_url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 px-3 py-1 text-xs font-medium text-gray-600 transition hover:border-[#0369A1] hover:text-[#0369A1]"
+                className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 px-3 py-1 text-xs font-medium text-gray-600 transition hover:border-[#FF5C18] hover:text-[#FF5C18]"
               >
                 <Globe2 className="h-3.5 w-3.5" />
                 Careers page
@@ -78,8 +78,8 @@ export default function CompanyHeader({ company, showWatchButton = true, newJobs
             onClick={() => void (watching ? removeCompany(company.id) : addCompany(company.id))}
             className={`rounded-2xl px-5 py-2.5 text-sm font-semibold transition ${
               watching
-                ? 'border border-[#BAE6FD] bg-[#F0F9FF] text-[#0C4A6E] hover:bg-[#D6EEFF]'
-                : 'bg-[#0369A1] text-white hover:bg-[#075985]'
+                ? 'border border-[#FFD2B8] bg-[#FFF7F2] text-[#062246] hover:bg-[#FFD9C2]'
+                : 'bg-[#FF5C18] text-white hover:bg-[#E14F0E]'
             }`}
           >
             {watching ? 'Watching' : 'Watch company'}

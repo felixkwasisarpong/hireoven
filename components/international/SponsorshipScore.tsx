@@ -8,8 +8,8 @@ function getTier(score: number): ScoreTier {
 }
 
 const TIER: Record<ScoreTier, { label: string; dot: string; text: string; bg: string; bar: string; border: string }> = {
-  active:    { label: 'Actively sponsors',  dot: 'bg-sky-500',   text: 'text-sky-700',   bg: 'bg-sky-50',    bar: 'bg-sky-500',   border: 'border-sky-200'   },
-  often:     { label: 'Often sponsors',     dot: 'bg-blue-500',  text: 'text-blue-700',  bg: 'bg-blue-50',   bar: 'bg-[#0369A1]', border: 'border-blue-200'  },
+  active:    { label: 'Actively sponsors',  dot: 'bg-[#FF5C18]',   text: 'text-[#9A3412]',   bg: 'bg-[#FFF7F2]',    bar: 'bg-[#FF5C18]',   border: 'border-[#FFD2B8]'   },
+  often:     { label: 'Often sponsors',     dot: 'bg-[#062246]',  text: 'text-[#062246]',  bg: 'bg-[#FFF8F4]',   bar: 'bg-[#FF5C18]', border: 'border-[#FFD9C2]'  },
   sometimes: { label: 'Sometimes sponsors', dot: 'bg-amber-500', text: 'text-amber-700', bg: 'bg-amber-50',  bar: 'bg-amber-500',  border: 'border-amber-200' },
   rare:      { label: 'Rarely sponsors',    dot: 'bg-red-500',   text: 'text-red-700',   bg: 'bg-red-50',    bar: 'bg-red-500',    border: 'border-red-200'   },
 }

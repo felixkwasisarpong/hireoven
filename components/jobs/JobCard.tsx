@@ -4,14 +4,31 @@ import { useEffect, useMemo, useState } from "react"
 import {
   Bookmark,
   ExternalLink,
+  FileText,
   MapPin,
   Share2,
-  Sparkles,
 } from "lucide-react"
-import type { JobWithCompany } from "@/types"
+import dynamic from "next/dynamic"
+import Link from "next/link"
+import { useRouter } from "next/navigation"
+import { AutofillButton } from "@/components/autofill/AutofillButton"
+import { MatchScorePill } from "@/components/matching/MatchScorePill"
+import { useResumeContext } from "@/components/resume/ResumeProvider"
+import { getSeniorityGap } from "@/lib/matching/fast-scorer"
+import { cn } from "@/lib/utils"
+import type { JobMatchScore, JobWithCompany, JobWithMatchScore } from "@/types"
 
-interface JobCardProps {
-  job: JobWithCompany
+const QuickAnalysisDrawer = dynamic(
+  () => import("@/components/resume/QuickAnalysisDrawer"),
+  { ssr: false }
+)
+
+type JobCardProps = {
+  job: JobWithCompany | JobWithMatchScore
+  hasPrimaryResume?: boolean
+  analysisIndex?: number
+  matchScore?: JobMatchScore | null
+  isMatchScoreLoading?: boolean
 }
 
 type FreshnessTone = "green" | "teal" | "gray" | "muted"
@@ -40,9 +57,9 @@ function formatFreshness(timestamp: string, now: number) {
       label: `${minutes} min ago`,
       tone: "green" as FreshnessTone,
       showDot: true,
-      border: "border-l-[#0369A1]",
-      text: "text-[#0369A1] font-semibold",
-      dot: "bg-[#0369A1]",
+      border: "border-l-[#FF5C18]",
+      text: "text-[#FF5C18] font-semibold",
+      dot: "bg-[#FF5C18]",
     }
   }
 
@@ -53,9 +70,9 @@ function formatFreshness(timestamp: string, now: number) {
       label: `${hours} hour${hours === 1 ? "" : "s"} ago`,
       tone: "teal" as FreshnessTone,
       showDot: true,
-      border: "border-l-[#0C4A6E]",
-      text: "text-[#0C4A6E] font-medium",
-      dot: "bg-[#0C4A6E]",
+      border: "border-l-[#062246]",
+      text: "text-[#062246] font-medium",
+      dot: "bg-[#062246]",
     }
   }
 
@@ -83,14 +100,12 @@ function formatFreshness(timestamp: string, now: number) {
 
 function getEmploymentLabel(value: JobWithCompany["employment_type"]) {
   if (!value) return null
-
   const map = {
     fulltime: "Full-time",
     parttime: "Part-time",
     contract: "Contract",
     internship: "Internship",
   }
-
   return map[value]
 }
 
@@ -100,10 +115,10 @@ function getSeniorityLabel(value: JobWithCompany["seniority_level"]) {
   return value.charAt(0).toUpperCase() + value.slice(1)
 }
 
-function SponsorshipBadge({ job }: { job: JobWithCompany }) {
+function SponsorshipBadge({ job }: { job: JobWithCompany | JobWithMatchScore }) {
   if (job.sponsors_h1b) {
     return (
-      <span className="rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[11px] font-semibold text-sky-700">
+      <span className="rounded-full border border-[#FFD2B8] bg-[#FFF7F2] px-2.5 py-1 text-[11px] font-semibold text-[#9A3412]">
         Sponsors H1B
       </span>
     )
@@ -128,19 +143,111 @@ function SponsorshipBadge({ job }: { job: JobWithCompany }) {
   return null
 }
 
-export default function JobCard({ job }: JobCardProps) {
+export default function JobCard({
+  job,
+  hasPrimaryResume,
+  analysisIndex = 99,
+  matchScore: matchScoreProp,
+  isMatchScoreLoading = false,
+}: JobCardProps) {
   const [expanded, setExpanded] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [localMatchScore, setLocalMatchScore] = useState<JobMatchScore | null>(null)
+  const [localScoreLoading, setLocalScoreLoading] = useState(false)
   const now = useLiveNow()
   const freshness = formatFreshness(job.first_detected_at, now)
+  const router = useRouter()
+  const { primaryResume } = useResumeContext()
+  const showResumeSignal =
+    typeof hasPrimaryResume === "boolean" ? hasPrimaryResume : Boolean(primaryResume)
+
+  const resolvedMatchScore =
+    matchScoreProp ??
+    localMatchScore ??
+    ("match_score" in job ? (job.match_score ?? null) : null)
 
   const description = useMemo(
     () => (job.description ? stripHtml(job.description) : ""),
     [job.description]
   )
-
   const visibleSkills = job.skills?.slice(0, 4) ?? []
   const hiddenSkillsCount = Math.max(0, (job.skills?.length ?? 0) - visibleSkills.length)
+  const seniorityGap = getSeniorityGap(
+    primaryResume?.seniority_level,
+    job.seniority_level
+  )
+  const hasSeniorityMismatch = seniorityGap !== null && Math.abs(seniorityGap) > 2
+
+  useEffect(() => {
+    if (
+      !showResumeSignal ||
+      primaryResume?.parse_status !== "complete" ||
+      !primaryResume?.id ||
+      matchScoreProp ||
+      resolvedMatchScore
+    ) {
+      return
+    }
+
+    let cancelled = false
+    setLocalScoreLoading(true)
+
+    fetch(`/api/match/score?jobId=${job.id}`, { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) return null
+        const payload = (await response.json()) as { score?: JobMatchScore | null }
+        return payload.score ?? null
+      })
+      .then((score) => {
+        if (cancelled) return
+        setLocalMatchScore(score)
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLocalScoreLoading(false)
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [
+    job.id,
+    matchScoreProp,
+    primaryResume?.id,
+    primaryResume?.parse_status,
+    resolvedMatchScore,
+    showResumeSignal,
+  ])
+
+  async function handleBookmark() {
+    if (saving) return
+    setSaving(true)
+
+    try {
+      await fetch("/api/applications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jobId: job.id,
+          companyName: job.company.name,
+          companyLogoUrl: job.company.logo_url ?? undefined,
+          jobTitle: job.title,
+          applyUrl: job.apply_url,
+          status: "saved",
+          source: "hireoven",
+          matchScore: resolvedMatchScore?.overall_score ?? null,
+        }),
+      })
+      setSaved(true)
+    } catch {
+      // Ignore save failures for now to preserve current interaction style.
+    } finally {
+      setSaving(false)
+    }
+  }
 
   async function shareJob() {
     try {
@@ -158,149 +265,213 @@ export default function JobCard({ job }: JobCardProps) {
     await navigator.clipboard.writeText(job.apply_url)
   }
 
+  const scoreLoading = isMatchScoreLoading || localScoreLoading
+
   return (
-    <article
-      role="button"
-      tabIndex={0}
-      onClick={() => setExpanded((current) => !current)}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault()
-          setExpanded((current) => !current)
-        }
-      }}
-      className={`group rounded-3xl border border-gray-200 border-l-4 ${freshness.border} bg-white p-5 text-left shadow-[0_1px_0_rgba(15,23,42,0.02)] transition duration-200 hover:-translate-y-0.5 hover:bg-[#FBFEFD] hover:shadow-[0_18px_40px_rgba(14,37,32,0.08)]`}
-    >
-      <div className="flex items-start gap-4">
-        {job.company.logo_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={job.company.logo_url}
-            alt={job.company.name}
-            className="h-10 w-10 rounded-2xl border border-gray-200 object-cover"
-          />
-        ) : (
-          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#E0F2FE] text-sm font-semibold text-[#0C4A6E]">
-            {job.company.name.charAt(0).toUpperCase()}
-          </div>
+    <>
+      <article
+        role="button"
+        tabIndex={0}
+        onClick={() => setExpanded((current) => !current)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault()
+            setExpanded((current) => !current)
+          }
+        }}
+        className={cn(
+          "group rounded-[18px] border border-slate-200/80 border-l-4 bg-white p-5 text-left shadow-[0_10px_24px_rgba(15,23,42,0.045)] transition duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:bg-[#FFFCFA] hover:shadow-[0_16px_30px_rgba(15,23,42,0.07)]",
+          freshness.border
         )}
+      >
+        <div className="flex items-start gap-4">
+          {job.company.logo_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={job.company.logo_url}
+              alt={job.company.name}
+              className="h-12 w-12 rounded-[16px] border border-slate-200/80 object-cover shadow-[0_6px_16px_rgba(15,23,42,0.03)]"
+            />
+          ) : (
+            <div className="flex h-12 w-12 items-center justify-center rounded-[16px] bg-[#FFF1E8] text-base font-semibold text-[#062246] shadow-[0_6px_16px_rgba(15,23,42,0.03)]">
+              {job.company.name.charAt(0).toUpperCase()}
+            </div>
+          )}
 
-        <div className="min-w-0 flex-1">
-          <p className="text-xs font-medium uppercase tracking-[0.18em] text-gray-400">
-            {job.company.name}
-          </p>
-          <h3 className="mt-1 text-lg font-semibold leading-tight text-gray-900">
-            {job.title}
-          </h3>
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">
+              {job.company.name}
+            </p>
+            <h3 className="mt-2 text-[1.45rem] font-semibold leading-tight tracking-[-0.025em] text-slate-950">
+              {job.title}
+            </h3>
 
-          <div className="mt-3 flex flex-wrap items-center gap-2.5 text-sm text-gray-500">
-            {job.location && (
-              <span className="inline-flex items-center gap-1.5">
-                <MapPin className="h-3.5 w-3.5" />
-                {job.location}
-              </span>
-            )}
-
-            {job.is_remote && (
-              <span className="rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-medium text-sky-700">
-                Remote
-              </span>
-            )}
-
-            {!job.is_remote && job.is_hybrid && (
-              <span className="rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-xs font-medium text-violet-700">
-                Hybrid
-              </span>
-            )}
-
-            {getSeniorityLabel(job.seniority_level) && (
-              <span className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs font-medium text-gray-700">
-                {getSeniorityLabel(job.seniority_level)}
-              </span>
-            )}
-
-            {getEmploymentLabel(job.employment_type) && (
-              <span className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs font-medium text-gray-700">
-                {getEmploymentLabel(job.employment_type)}
-              </span>
-            )}
-          </div>
-
-          {visibleSkills.length > 0 && (
-            <div className="mt-4 flex flex-wrap gap-2">
-              {visibleSkills.map((skill) => (
-                <span
-                  key={skill}
-                  className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600"
-                >
-                  {skill}
+            <div className="mt-3.5 flex flex-wrap items-center gap-2.5 text-sm text-slate-500">
+              {job.location && (
+                <span className="inline-flex items-center gap-1.5">
+                  <MapPin className="h-3.5 w-3.5" />
+                  {job.location}
                 </span>
-              ))}
-              {hiddenSkillsCount > 0 && (
-                <span className="rounded-full bg-[#EFF6FF] px-2.5 py-1 text-xs font-medium text-[#0C4A6E]">
-                  +{hiddenSkillsCount} more
+              )}
+              {job.is_remote && (
+                <span className="rounded-full border border-[#FFD2B8] bg-[#FFF7F2] px-2.5 py-1 text-[11px] font-semibold text-[#9A3412]">
+                  Remote
+                </span>
+              )}
+              {!job.is_remote && job.is_hybrid && (
+                <span className="rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[11px] font-semibold text-violet-700">
+                  Hybrid
+                </span>
+              )}
+              {getSeniorityLabel(job.seniority_level) && (
+                <span className="rounded-full border border-slate-200/80 bg-slate-100/80 px-2.5 py-1 text-[11px] font-semibold text-slate-700">
+                  {getSeniorityLabel(job.seniority_level)}
+                </span>
+              )}
+              {getEmploymentLabel(job.employment_type) && (
+                <span className="rounded-full border border-slate-200/80 bg-slate-100/80 px-2.5 py-1 text-[11px] font-semibold text-slate-700">
+                  {getEmploymentLabel(job.employment_type)}
                 </span>
               )}
             </div>
-          )}
 
-          {expanded && description && (
-            <div className="mt-4 rounded-2xl border border-gray-100 bg-gray-50/80 p-4 text-sm leading-7 text-gray-600">
-              {description}
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div
-        className="mt-5 flex flex-col gap-3 border-t border-gray-100 pt-4 sm:flex-row sm:items-center sm:justify-between"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="flex flex-wrap items-center gap-2.5">
-          <div className="flex items-center gap-1.5">
-            {freshness.showDot && (
-              <span className={`h-2 w-2 rounded-full ${freshness.dot}`} />
+            {visibleSkills.length > 0 && (
+              <div className="mt-4 flex flex-wrap gap-2">
+                {visibleSkills.map((skill) => (
+                  <span
+                    key={skill}
+                    className="rounded-full border border-slate-200/80 bg-slate-100/70 px-2.5 py-1 text-[11px] font-medium text-slate-600"
+                  >
+                    {skill}
+                  </span>
+                ))}
+                {hiddenSkillsCount > 0 && (
+                  <span className="rounded-full border border-[#FFD9C2] bg-[#FFF8F4] px-2.5 py-1 text-[11px] font-semibold text-[#062246]">
+                    +{hiddenSkillsCount} more
+                  </span>
+                )}
+              </div>
             )}
-            <span className={`text-sm ${freshness.text}`}>{freshness.label}</span>
+
+            {expanded && description && (
+              <div className="mt-4 rounded-[18px] border border-slate-200/70 bg-slate-50/75 p-4 text-sm leading-7 text-slate-600">
+                {description}
+              </div>
+            )}
+
+            {expanded && (
+              <div
+                className="mt-3 flex flex-wrap gap-2"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <Link
+                  href={`/dashboard/cover-letter/${job.id}`}
+                  className="inline-flex items-center gap-1.5 rounded-2xl border border-slate-200/80 px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:border-slate-300 hover:bg-slate-50"
+                >
+                  <FileText className="h-3.5 w-3.5" />
+                  Write cover letter
+                </Link>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div
+          className="mt-5 flex flex-col gap-3 border-t border-slate-200/75 pt-4 sm:flex-row sm:items-center sm:justify-between"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="flex flex-wrap items-center gap-2.5">
+            <div className="flex items-center gap-1.5">
+              {freshness.showDot && (
+                <span className={`h-2 w-2 rounded-full ${freshness.dot}`} />
+              )}
+              <span className={`text-sm ${freshness.text}`}>{freshness.label}</span>
+            </div>
+
+            {showResumeSignal && primaryResume?.parse_status === "complete" ? (
+              <MatchScorePill
+                score={resolvedMatchScore?.overall_score ?? null}
+                method={resolvedMatchScore?.score_method ?? null}
+                isLoading={scoreLoading}
+                size="sm"
+                showDisqualifiers
+                isSponsorshipCompatible={resolvedMatchScore?.is_sponsorship_compatible}
+                hasSeniorityMismatch={hasSeniorityMismatch}
+                onClick={() => {
+                  if (resolvedMatchScore?.score_method === "deep") {
+                    router.push(`/dashboard/resume/analyze/${job.id}`)
+                    return
+                  }
+                  setDrawerOpen(true)
+                }}
+              />
+            ) : (
+              <MatchScorePill
+                score={null}
+                method={null}
+                isLoading={false}
+                size="sm"
+                onClick={() => router.push("/dashboard/resume")}
+              />
+            )}
+
+            <SponsorshipBadge job={job} />
           </div>
 
-          <SponsorshipBadge job={job} />
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void handleBookmark()}
+              disabled={saved || saving}
+              className={cn(
+                "inline-flex h-10 w-10 items-center justify-center rounded-[14px] border transition disabled:cursor-not-allowed",
+                saved
+                  ? "border-[#FF5C18] bg-[#FFF1E8] text-[#FF5C18]"
+                  : "border-slate-200/80 bg-white text-slate-500 hover:border-slate-300 hover:text-slate-800"
+              )}
+              aria-label={saved ? "Saved to pipeline" : "Save to pipeline"}
+              title={saved ? "Saved to pipeline" : "Save to pipeline"}
+            >
+              <Bookmark
+                className="h-4 w-4"
+                fill={saved ? "currentColor" : "none"}
+              />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => void shareJob()}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-[14px] border border-slate-200/80 bg-white text-slate-500 transition hover:border-slate-300 hover:text-slate-800"
+              aria-label="Share job"
+            >
+              <Share2 className="h-4 w-4" />
+            </button>
+
+            <AutofillButton jobId={job.id} className="rounded-[14px]" />
+
+            <a
+              href={job.apply_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 rounded-[14px] bg-[#FF5C18] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#E14F0E]"
+            >
+              Apply directly
+              <ExternalLink className="h-4 w-4" />
+            </a>
+          </div>
         </div>
+      </article>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setSaved((current) => !current)}
-            className={`inline-flex h-10 w-10 items-center justify-center rounded-2xl border transition ${
-              saved
-                ? "border-[#0369A1] bg-[#E0F2FE] text-[#0369A1]"
-                : "border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:text-gray-800"
-            }`}
-            aria-label={saved ? "Remove bookmark" : "Save job"}
-          >
-            <Bookmark className="h-4 w-4" fill={saved ? "currentColor" : "none"} />
-          </button>
-
-          <button
-            type="button"
-            onClick={() => void shareJob()}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-gray-200 bg-white text-gray-500 transition hover:border-gray-300 hover:text-gray-800"
-            aria-label="Share job"
-          >
-            <Share2 className="h-4 w-4" />
-          </button>
-
-          <a
-            href={job.apply_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 rounded-2xl bg-[#0369A1] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#075985]"
-          >
-            Apply directly
-            <ExternalLink className="h-4 w-4" />
-          </a>
-        </div>
-      </div>
-    </article>
+      {drawerOpen && primaryResume?.id && (
+        <QuickAnalysisDrawer
+          resumeId={primaryResume.id}
+          jobId={job.id}
+          jobTitle={`${job.title} at ${job.company.name}`}
+          applyUrl={job.apply_url}
+          onClose={() => setDrawerOpen(false)}
+          autoAnalyze={analysisIndex < 10}
+        />
+      )}
+    </>
   )
 }

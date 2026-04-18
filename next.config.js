@@ -12,6 +12,7 @@ const nextConfig = {
   },
   experimental: {
     serverActions: { allowedOrigins: ["hireoven.com", "localhost:3000"] },
+    serverComponentsExternalPackages: ["pdf-parse", "mammoth"],
   },
   async headers() {
     return [

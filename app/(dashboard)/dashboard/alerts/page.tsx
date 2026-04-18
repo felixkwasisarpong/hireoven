@@ -1,8 +1,8 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import Link from "next/link"
 import { BellRing, Plus, Trash2, X } from "lucide-react"
+import DashboardPageHeader from "@/components/layout/DashboardPageHeader"
 import { useAuth } from "@/lib/hooks/useAuth"
 import { createClient } from "@/lib/supabase/client"
 import type { AlertFrequency, Company, JobAlert, SeniorityLevel } from "@/types"
@@ -200,45 +200,29 @@ export default function AlertsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(180deg,#F7FBFF_0%,#F8FAFC_58%,#F8FAFC_100%)] px-4 py-6 lg:px-8">
-      <div className="mx-auto max-w-6xl space-y-6">
-        <section className="rounded-[32px] border border-white/80 bg-white/90 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.06)]">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#0369A1]">
-                Alerts
-              </p>
-              <h1 className="mt-2 text-3xl font-semibold tracking-tight text-gray-900">
-                Saved alerts that keep working for you
-              </h1>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-500">
-                Save the search patterns you care about, keep them active in the
-                background, and get nudged as new matching roles show up.
-              </p>
-            </div>
-
-            <div className="flex flex-wrap gap-3">
-              <Link
-                href="/dashboard"
-                className="inline-flex items-center gap-2 rounded-2xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:border-gray-300 hover:bg-gray-50"
-              >
-                Back to feed
-              </Link>
-              <button
-                type="button"
-                onClick={() => setIsModalOpen(true)}
-                className="inline-flex items-center gap-2 rounded-2xl bg-[#0369A1] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#075985]"
-              >
-                <Plus className="h-4 w-4" />
-                Create new alert
-              </button>
-            </div>
-          </div>
-        </section>
+    <main className="app-page">
+      <div className="app-shell max-w-7xl space-y-5">
+        <DashboardPageHeader
+          kicker="Alerts"
+          title="Saved alerts that keep working for you"
+          description="Save the search patterns you care about, keep them active in the background, and get nudged as new matching roles show up."
+          backHref="/dashboard"
+          backLabel="Back to feed"
+          actions={
+            <button
+              type="button"
+              onClick={() => setIsModalOpen(true)}
+              className="inline-flex items-center gap-2 rounded-2xl bg-[#FF5C18] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#E14F0E]"
+            >
+              <Plus className="h-4 w-4" />
+              Create new alert
+            </button>
+          }
+        />
 
         {alerts.length === 0 && !isLoading ? (
-          <section className="rounded-[32px] border border-dashed border-gray-300 bg-white px-6 py-14 text-center shadow-[0_20px_60px_rgba(15,23,42,0.04)]">
-            <BellRing className="mx-auto h-10 w-10 text-[#0369A1]" />
+          <section className="empty-state py-12">
+            <BellRing className="mx-auto h-10 w-10 text-[#FF5C18]" />
             <h2 className="mt-4 text-2xl font-semibold text-gray-900">
               No saved alerts yet
             </h2>
@@ -249,7 +233,7 @@ export default function AlertsPage() {
             <button
               type="button"
               onClick={() => setIsModalOpen(true)}
-              className="mt-6 inline-flex items-center gap-2 rounded-2xl bg-[#0369A1] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#075985]"
+              className="mt-6 inline-flex items-center gap-2 rounded-2xl bg-[#FF5C18] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#E14F0E]"
             >
               <Plus className="h-4 w-4" />
               Create new alert
@@ -260,9 +244,9 @@ export default function AlertsPage() {
             {alerts.map((alert) => (
               <article
                 key={alert.id}
-                className="rounded-[28px] border border-white/80 bg-white/90 p-5 shadow-[0_20px_60px_rgba(15,23,42,0.06)]"
+                className="surface-card p-0"
               >
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div className="flex flex-col gap-4 px-5 py-5 lg:flex-row lg:items-start lg:justify-between">
                   <div className="space-y-2">
                     <div className="flex flex-wrap items-center gap-3">
                       <p className="text-lg font-semibold text-gray-900">
@@ -271,16 +255,13 @@ export default function AlertsPage() {
                       <span
                         className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
                           alert.is_active
-                            ? "bg-[#F0F9FF] text-[#0C4A6E]"
+                            ? "bg-[#FFF7F2] text-[#062246]"
                             : "bg-gray-100 text-gray-500"
                         }`}
                       >
                         {alert.is_active ? "Active" : "Paused"}
                       </span>
                     </div>
-                    <p className="text-sm leading-6 text-gray-500">
-                      {buildSummary(alert)}
-                    </p>
                     <p className="text-sm text-gray-500">
                       Last triggered:{" "}
                       <span className="font-medium text-gray-700">
@@ -296,7 +277,7 @@ export default function AlertsPage() {
                       className={`rounded-2xl px-4 py-2.5 text-sm font-medium transition ${
                         alert.is_active
                           ? "border border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50"
-                          : "bg-[#F0F9FF] text-[#0C4A6E] hover:bg-[#D6EEFF]"
+                          : "bg-[#FFF7F2] text-[#062246] hover:bg-[#FFD9C2]"
                       }`}
                     >
                       {alert.is_active ? "Pause" : "Activate"}
@@ -311,6 +292,15 @@ export default function AlertsPage() {
                     </button>
                   </div>
                 </div>
+
+                <div className="border-t border-slate-200/80 px-5 py-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">
+                    Alert summary
+                  </p>
+                  <p className="mt-2 text-sm leading-6 text-gray-500">
+                    {buildSummary(alert)}
+                  </p>
+                </div>
               </article>
             ))}
           </section>
@@ -322,7 +312,7 @@ export default function AlertsPage() {
           <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-[32px] bg-white p-6 shadow-[0_30px_90px_rgba(15,23,42,0.22)]">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#0369A1]">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#FF5C18]">
                   New alert
                 </p>
                 <h2 className="mt-2 text-2xl font-semibold text-gray-900">
@@ -348,7 +338,7 @@ export default function AlertsPage() {
                     setDraft((current) => ({ ...current, name: event.target.value }))
                   }
                   placeholder="Fresh backend roles"
-                  className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-[#0369A1] focus:ring-2 focus:ring-[#0369A1]/20"
+                  className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-[#FF5C18] focus:ring-2 focus:ring-[#FF5C18]/20"
                 />
               </label>
 
@@ -365,7 +355,7 @@ export default function AlertsPage() {
                     }))
                   }
                   placeholder="backend, platform, infra"
-                  className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-[#0369A1] focus:ring-2 focus:ring-[#0369A1]/20"
+                  className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-[#FF5C18] focus:ring-2 focus:ring-[#FF5C18]/20"
                 />
               </label>
 
@@ -380,7 +370,7 @@ export default function AlertsPage() {
                     }))
                   }
                   placeholder="Remote, Austin, New York"
-                  className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-[#0369A1] focus:ring-2 focus:ring-[#0369A1]/20"
+                  className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-[#FF5C18] focus:ring-2 focus:ring-[#FF5C18]/20"
                 />
               </label>
 
@@ -405,7 +395,7 @@ export default function AlertsPage() {
                       }
                       className={`rounded-2xl px-3 py-3 text-sm font-medium transition ${
                         draft.frequency === option.value
-                          ? "bg-[#F0F9FF] text-[#0C4A6E]"
+                          ? "bg-[#FFF7F2] text-[#062246]"
                           : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                       }`}
                     >
@@ -426,7 +416,7 @@ export default function AlertsPage() {
                     onClick={() => toggleDraftSeniority(option.value)}
                     className={`rounded-full px-3 py-2 text-sm font-medium transition ${
                       draft.seniority.includes(option.value)
-                        ? "bg-[#0369A1] text-white"
+                        ? "bg-[#FF5C18] text-white"
                         : "bg-white text-gray-600 hover:bg-gray-100"
                     }`}
                   >
@@ -446,7 +436,7 @@ export default function AlertsPage() {
                   }
                   className={`rounded-2xl border px-4 py-3 text-left text-sm font-medium transition ${
                     draft.remoteOnly
-                      ? "border-[#BAE6FD] bg-[#F0F9FF] text-[#0C4A6E]"
+                      ? "border-[#FFD2B8] bg-[#FFF7F2] text-[#062246]"
                       : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
                   }`}
                 >
@@ -462,7 +452,7 @@ export default function AlertsPage() {
                   }
                   className={`rounded-2xl border px-4 py-3 text-left text-sm font-medium transition ${
                     draft.sponsorshipRequired
-                      ? "border-[#BAE6FD] bg-[#F0F9FF] text-[#0C4A6E]"
+                      ? "border-[#FFD2B8] bg-[#FFF7F2] text-[#062246]"
                       : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
                   }`}
                 >
@@ -485,7 +475,7 @@ export default function AlertsPage() {
                   value={companySearch}
                   onChange={(event) => setCompanySearch(event.target.value)}
                   placeholder="Search companies…"
-                  className="rounded-2xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 outline-none transition focus:border-[#0369A1] focus:ring-2 focus:ring-[#0369A1]/20"
+                  className="rounded-2xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 outline-none transition focus:border-[#FF5C18] focus:ring-2 focus:ring-[#FF5C18]/20"
                 />
               </div>
 
@@ -499,7 +489,7 @@ export default function AlertsPage() {
                       onClick={() => toggleDraftCompany(company.id)}
                       className={`flex items-center gap-3 rounded-2xl border px-4 py-3 text-left transition ${
                         selected
-                          ? "border-[#BAE6FD] bg-[#F0F9FF]"
+                          ? "border-[#FFD2B8] bg-[#FFF7F2]"
                           : "border-gray-200 bg-white hover:bg-gray-50"
                       }`}
                     >
@@ -511,7 +501,7 @@ export default function AlertsPage() {
                           className="h-10 w-10 rounded-2xl object-cover"
                         />
                       ) : (
-                        <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#E0F2FE] text-sm font-semibold text-[#0C4A6E]">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#FFF1E8] text-sm font-semibold text-[#062246]">
                           {company.name.charAt(0).toUpperCase()}
                         </div>
                       )}
@@ -540,7 +530,7 @@ export default function AlertsPage() {
               <button
                 type="button"
                 onClick={() => void handleCreateAlert()}
-                className="rounded-2xl bg-[#0369A1] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#075985]"
+                className="rounded-2xl bg-[#FF5C18] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#E14F0E]"
               >
                 Save alert
               </button>

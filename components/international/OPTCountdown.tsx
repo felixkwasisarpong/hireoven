@@ -12,7 +12,7 @@ interface OPTCountdownProps {
 type Urgency = 'safe' | 'watch' | 'hurry' | 'urgent'
 
 const URGENCY: Record<Urgency, { bg: string; border: string; text: string; bar: string; message: string }> = {
-  safe:   { bg: 'bg-sky-50',    border: 'border-sky-200',    text: 'text-sky-700',    bar: 'bg-sky-500',    message: 'You have time. Apply strategically.' },
+  safe:   { bg: 'bg-[#FFF7F2]',    border: 'border-[#FFD2B8]',    text: 'text-[#9A3412]',    bar: 'bg-[#FFB088]',    message: 'You have time. Apply strategically.' },
   watch:  { bg: 'bg-amber-50',  border: 'border-amber-200',  text: 'text-amber-700',  bar: 'bg-amber-500',  message: 'Start prioritizing fast-moving companies.' },
   hurry:  { bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-700', bar: 'bg-orange-500', message: 'Focus on companies with quick processes.' },
   urgent: { bg: 'bg-red-50',    border: 'border-red-200',    text: 'text-red-700',    bar: 'bg-red-500',    message: 'Urgent. Target companies with cap-gap support.' },
@@ -36,7 +36,7 @@ export default function OPTCountdown({ optEndDate, visaStatus, compact = false }
     return (
       <div className="rounded-xl border border-dashed border-gray-200 p-4 text-center">
         <p className="text-xs text-gray-400 mb-2">OPT end date not set</p>
-        <Link href="/dashboard/profile" className="text-xs text-[#0369A1] font-medium hover:underline">
+        <Link href="/dashboard/profile" className="text-xs text-[#FF5C18] font-medium hover:underline">
           Set your OPT date →
         </Link>
       </div>
@@ -73,7 +73,7 @@ export default function OPTCountdown({ optEndDate, visaStatus, compact = false }
           <p className="text-sm text-gray-500 mt-0.5">days remaining</p>
         </div>
         {isStem && (
-          <span className="px-2.5 py-1 bg-blue-100 text-blue-700 text-xs font-semibold rounded-full border border-blue-200">
+          <span className="px-2.5 py-1 bg-[#FFF1E8] text-[#062246] text-xs font-semibold rounded-full border border-[#FFD9C2]">
             STEM OPT
           </span>
         )}

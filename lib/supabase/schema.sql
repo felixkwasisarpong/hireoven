@@ -70,6 +70,7 @@ CREATE TABLE profiles (
   desired_roles TEXT[],
   desired_locations TEXT[],
   desired_seniority TEXT[],
+  desired_employment_types TEXT[],
   remote_only BOOLEAN DEFAULT false,
   -- International student fields
   is_international BOOLEAN DEFAULT false,
@@ -166,6 +167,134 @@ CREATE TABLE push_subscriptions (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 10. Resumes table
+-- Uploaded resumes plus parsed structured data
+CREATE TABLE IF NOT EXISTS resumes (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  file_name TEXT NOT NULL,
+  name TEXT,
+  file_url TEXT NOT NULL,
+  storage_path TEXT NOT NULL,
+  file_size INTEGER,
+  is_primary BOOLEAN DEFAULT false,
+  parse_status TEXT DEFAULT 'pending',
+  full_name TEXT,
+  email TEXT,
+  phone TEXT,
+  location TEXT,
+  linkedin_url TEXT,
+  portfolio_url TEXT,
+  summary TEXT,
+  work_experience JSONB,
+  education JSONB,
+  skills JSONB,
+  projects JSONB,
+  seniority_level TEXT,
+  years_of_experience INTEGER,
+  primary_role TEXT,
+  industries TEXT[],
+  top_skills TEXT[],
+  resume_score INTEGER,
+  raw_text TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 11. Resume versions table
+-- Saved tailored variants of a base resume
+CREATE TABLE IF NOT EXISTS resume_versions (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  resume_id UUID REFERENCES resumes(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  version_number INTEGER NOT NULL,
+  name TEXT,
+  file_url TEXT,
+  snapshot JSONB,
+  changes_summary TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 12. Resume edits table
+-- AI-generated suggestions plus accept/reject feedback
+CREATE TABLE IF NOT EXISTS resume_edits (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  resume_id UUID REFERENCES resumes(id) ON DELETE CASCADE,
+  job_id UUID REFERENCES jobs(id) ON DELETE SET NULL,
+  section TEXT NOT NULL,
+  original_content TEXT NOT NULL,
+  suggested_content TEXT NOT NULL,
+  edit_type TEXT,
+  keywords_added TEXT[],
+  was_accepted BOOLEAN,
+  feedback TEXT,
+  context JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 13. Job applications table
+-- Per-user tracking for jobs applied to
+CREATE TABLE IF NOT EXISTS job_applications (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  job_id UUID REFERENCES jobs(id) ON DELETE SET NULL,
+  resume_id UUID REFERENCES resumes(id) ON DELETE SET NULL,
+  cover_letter_id UUID REFERENCES cover_letters(id) ON DELETE SET NULL,
+  status TEXT DEFAULT 'saved',
+  company_name TEXT NOT NULL,
+  company_logo_url TEXT,
+  job_title TEXT NOT NULL,
+  apply_url TEXT,
+  applied_at TIMESTAMPTZ,
+  match_score INTEGER,
+  notes TEXT,
+  follow_up_date DATE,
+  salary_expected INTEGER,
+  salary_offered INTEGER,
+  timeline JSONB DEFAULT '[]'::jsonb,
+  interviews JSONB DEFAULT '[]'::jsonb,
+  offer_details JSONB,
+  is_archived BOOLEAN DEFAULT false,
+  source TEXT DEFAULT 'hireoven',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Migrations for existing installations
+ALTER TABLE job_applications ADD COLUMN IF NOT EXISTS cover_letter_id UUID REFERENCES cover_letters(id) ON DELETE SET NULL;
+ALTER TABLE job_applications ADD COLUMN IF NOT EXISTS company_logo_url TEXT;
+ALTER TABLE job_applications ADD COLUMN IF NOT EXISTS interviews JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE job_applications ADD COLUMN IF NOT EXISTS offer_details JSONB;
+ALTER TABLE job_applications ADD COLUMN IF NOT EXISTS is_archived BOOLEAN DEFAULT false;
+ALTER TABLE job_applications ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'hireoven';
+
+-- 14. Match scores table
+-- Per-user score cache for ranking and personalization
+CREATE TABLE IF NOT EXISTS job_match_scores (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  resume_id UUID REFERENCES resumes(id) ON DELETE CASCADE,
+  job_id UUID REFERENCES jobs(id) ON DELETE CASCADE,
+  overall_score INTEGER NOT NULL,
+  skills_score INTEGER,
+  seniority_score INTEGER,
+  location_score INTEGER,
+  employment_type_score INTEGER,
+  sponsorship_score INTEGER,
+  is_seniority_match BOOLEAN,
+  is_location_match BOOLEAN,
+  is_employment_type_match BOOLEAN,
+  is_sponsorship_compatible BOOLEAN,
+  matching_skills_count INTEGER DEFAULT 0,
+  total_required_skills INTEGER DEFAULT 0,
+  skills_match_rate DECIMAL,
+  score_method TEXT DEFAULT 'fast',
+  computed_at TIMESTAMPTZ DEFAULT NOW(),
+  resume_version INTEGER DEFAULT 1,
+  UNIQUE(user_id, resume_id, job_id)
+);
+
 -- =============================================================================
 -- Indexes
 -- =============================================================================
@@ -195,6 +324,19 @@ CREATE INDEX idx_h1b_records_year ON h1b_records(year DESC);
 CREATE INDEX idx_push_subscriptions_user ON push_subscriptions(user_id);
 CREATE UNIQUE INDEX idx_push_subscriptions_endpoint
   ON push_subscriptions ((subscription->>'endpoint'));
+CREATE INDEX IF NOT EXISTS idx_resumes_user_id ON resumes(user_id);
+CREATE INDEX IF NOT EXISTS idx_resumes_primary ON resumes(user_id, is_primary);
+CREATE INDEX IF NOT EXISTS idx_resumes_parse_status ON resumes(parse_status);
+CREATE INDEX IF NOT EXISTS idx_resume_versions_resume_id ON resume_versions(resume_id);
+CREATE INDEX IF NOT EXISTS idx_resume_edits_resume_id ON resume_edits(resume_id);
+CREATE INDEX IF NOT EXISTS idx_resume_edits_job_id ON resume_edits(job_id);
+CREATE INDEX IF NOT EXISTS idx_resume_edits_user_id ON resume_edits(user_id);
+CREATE INDEX IF NOT EXISTS idx_resume_edits_created_at ON resume_edits(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_job_applications_user_id ON job_applications(user_id);
+CREATE INDEX IF NOT EXISTS idx_job_applications_status ON job_applications(status);
+CREATE INDEX IF NOT EXISTS idx_match_scores_user_job ON job_match_scores(user_id, job_id);
+CREATE INDEX IF NOT EXISTS idx_match_scores_score ON job_match_scores(user_id, overall_score DESC);
+CREATE INDEX IF NOT EXISTS idx_match_scores_computed ON job_match_scores(user_id, computed_at DESC);
 
 -- =============================================================================
 -- Full-text search vectors (run as a migration after initial schema)
@@ -236,6 +378,11 @@ ALTER TABLE companies ENABLE ROW LEVEL SECURITY;
 ALTER TABLE crawl_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE h1b_records ENABLE ROW LEVEL SECURITY;
 ALTER TABLE push_subscriptions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE resumes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE resume_versions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE resume_edits ENABLE ROW LEVEL SECURITY;
+ALTER TABLE job_applications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE job_match_scores ENABLE ROW LEVEL SECURITY;
 
 -- Profiles
 CREATE POLICY "Users can view own profile"
@@ -273,6 +420,164 @@ CREATE POLICY "Service role can manage h1b records"
 CREATE POLICY "Users can manage own push subscriptions"
   ON push_subscriptions FOR ALL USING (auth.uid() = user_id);
 
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'resumes'
+      AND policyname = 'Users manage own resumes'
+  ) THEN
+    CREATE POLICY "Users manage own resumes"
+      ON resumes FOR ALL
+      USING (auth.uid() = user_id)
+      WITH CHECK (auth.uid() = user_id);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'resume_versions'
+      AND policyname = 'Users manage own versions'
+  ) THEN
+    CREATE POLICY "Users manage own versions"
+      ON resume_versions FOR ALL
+      USING (auth.uid() = user_id)
+      WITH CHECK (auth.uid() = user_id);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'job_applications'
+      AND policyname = 'Users manage own applications'
+  ) THEN
+    CREATE POLICY "Users manage own applications"
+      ON job_applications FOR ALL
+      USING (auth.uid() = user_id)
+      WITH CHECK (auth.uid() = user_id);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'resume_edits'
+      AND policyname = 'Users manage own edits'
+  ) THEN
+    CREATE POLICY "Users manage own edits"
+      ON resume_edits FOR ALL
+      USING (auth.uid() = user_id)
+      WITH CHECK (auth.uid() = user_id);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'job_match_scores'
+      AND policyname = 'Users view own scores'
+  ) THEN
+    CREATE POLICY "Users view own scores"
+      ON job_match_scores FOR ALL
+      USING (auth.uid() = user_id)
+      WITH CHECK (auth.uid() = user_id);
+  END IF;
+END $$;
+
+-- 14. Autofill profile table
+CREATE TABLE IF NOT EXISTS autofill_profiles (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES profiles(id) ON DELETE CASCADE UNIQUE,
+  first_name TEXT,
+  last_name TEXT,
+  email TEXT,
+  phone TEXT,
+  address_line1 TEXT,
+  address_line2 TEXT,
+  city TEXT,
+  state TEXT,
+  zip_code TEXT,
+  country TEXT DEFAULT 'United States',
+  linkedin_url TEXT,
+  github_url TEXT,
+  portfolio_url TEXT,
+  website_url TEXT,
+  work_authorization TEXT,
+  requires_sponsorship BOOLEAN DEFAULT false,
+  authorized_to_work BOOLEAN DEFAULT true,
+  sponsorship_statement TEXT,
+  years_of_experience INTEGER,
+  salary_expectation_min INTEGER,
+  salary_expectation_max INTEGER,
+  earliest_start_date TEXT,
+  willing_to_relocate BOOLEAN DEFAULT false,
+  preferred_work_type TEXT,
+  custom_answers JSONB DEFAULT '[]',
+  highest_degree TEXT,
+  field_of_study TEXT,
+  university TEXT,
+  graduation_year INTEGER,
+  gpa TEXT,
+  gender TEXT,
+  ethnicity TEXT,
+  veteran_status TEXT,
+  disability_status TEXT,
+  auto_fill_diversity BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 15. Autofill history table
+CREATE TABLE IF NOT EXISTS autofill_history (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  job_id UUID REFERENCES jobs(id) ON DELETE SET NULL,
+  company_name TEXT,
+  job_title TEXT,
+  ats_type TEXT,
+  fields_filled INTEGER DEFAULT 0,
+  fields_total INTEGER DEFAULT 0,
+  fill_rate DECIMAL,
+  applied_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE autofill_profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE autofill_history ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users manage own autofill profile"
+  ON autofill_profiles FOR ALL USING (auth.uid() = user_id);
+CREATE POLICY "Users view own autofill history"
+  ON autofill_history FOR ALL USING (auth.uid() = user_id);
+
+CREATE INDEX IF NOT EXISTS idx_autofill_profiles_user ON autofill_profiles(user_id);
+CREATE INDEX IF NOT EXISTS idx_autofill_history_user ON autofill_history(user_id);
+CREATE INDEX IF NOT EXISTS idx_autofill_history_applied ON autofill_history(applied_at DESC);
+
+-- 16. Cover letters table
+CREATE TABLE IF NOT EXISTS cover_letters (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  resume_id UUID REFERENCES resumes(id) ON DELETE CASCADE,
+  job_id UUID REFERENCES jobs(id) ON DELETE SET NULL,
+  job_title TEXT NOT NULL,
+  company_name TEXT NOT NULL,
+  hiring_manager TEXT,
+  subject_line TEXT,
+  body TEXT NOT NULL,
+  word_count INTEGER,
+  tone TEXT DEFAULT 'professional',
+  length TEXT DEFAULT 'medium',
+  style TEXT DEFAULT 'story',
+  version_number INTEGER DEFAULT 1,
+  is_favorite BOOLEAN DEFAULT false,
+  was_used BOOLEAN DEFAULT false,
+  mentions_sponsorship BOOLEAN DEFAULT false,
+  sponsorship_approach TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE cover_letters ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users manage own cover letters"
+  ON cover_letters FOR ALL USING (auth.uid() = user_id);
+
+CREATE INDEX IF NOT EXISTS idx_cover_letters_user ON cover_letters(user_id);
+CREATE INDEX IF NOT EXISTS idx_cover_letters_job ON cover_letters(user_id, job_id);
+
 -- =============================================================================
 -- Functions & Triggers
 -- =============================================================================
@@ -296,6 +601,16 @@ CREATE TRIGGER jobs_updated_at
 
 CREATE TRIGGER profiles_updated_at
   BEFORE UPDATE ON profiles
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+DROP TRIGGER IF EXISTS resumes_updated_at ON resumes;
+CREATE TRIGGER resumes_updated_at
+  BEFORE UPDATE ON resumes
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+DROP TRIGGER IF EXISTS job_applications_updated_at ON job_applications;
+CREATE TRIGGER job_applications_updated_at
+  BEFORE UPDATE ON job_applications
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
 -- Auto-create profile row when a new auth user signs up
@@ -322,6 +637,9 @@ CREATE TRIGGER on_auth_user_created
 -- =============================================================================
 
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT false;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS seniority_level TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS top_skills TEXT[];
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS desired_employment_types TEXT[];
 ALTER TABLE companies ADD COLUMN IF NOT EXISTS ats_identifier TEXT;
 ALTER TABLE companies ADD COLUMN IF NOT EXISTS notes TEXT;
 ALTER TABLE companies ADD COLUMN IF NOT EXISTS raw_ats_config JSONB DEFAULT '{}'::jsonb;

@@ -7,15 +7,22 @@ import {
   BellRing,
   Bookmark,
   Building2,
+  FileText,
   Globe2,
   LogOut,
+  Scroll,
+  Sparkles,
   UserCircle2,
   Waves,
+  Zap,
 } from "lucide-react"
 import GlobalSearchBar from "@/components/search/GlobalSearchBar"
 import JobFeed from "@/components/jobs/JobFeed"
+import { MatchScorePill } from "@/components/matching/MatchScorePill"
 import NotificationBell from "@/components/notifications/NotificationBell"
 import PushNotificationSetup from "@/components/notifications/PushNotificationSetup"
+import ResumeUploader from "@/components/resume/ResumeUploader"
+import { useResumeContext } from "@/components/resume/ResumeProvider"
 import JobFilters, {
   SORT_OPTIONS,
   buildFilterPills,
@@ -31,6 +38,7 @@ import { useAuth } from "@/lib/hooks/useAuth"
 import { useWatchlist } from "@/lib/hooks/useWatchlist"
 import { createClient } from "@/lib/supabase/client"
 import { cn } from "@/lib/utils"
+import type { JobWithMatchScore } from "@/types"
 
 type TopHiringCompany = {
   id: string
@@ -41,11 +49,15 @@ type TopHiringCompany = {
 }
 
 const NAV_ITEMS = [
-  { label: "Feed",      href: "/dashboard",           icon: Waves      },
-  { label: "Companies", href: "/dashboard/companies", icon: Building2  },
-  { label: "Watchlist", href: "/dashboard/watchlist", icon: Bookmark   },
-  { label: "Alerts",    href: "/dashboard/alerts",    icon: BellRing   },
-  { label: "Profile",   href: "/dashboard/onboarding",icon: UserCircle2},
+  { label: "Feed",          href: "/dashboard",               icon: Waves       },
+  { label: "Matches",       href: "/dashboard/matches",       icon: Sparkles    },
+  { label: "Companies",     href: "/dashboard/companies",     icon: Building2   },
+  { label: "Resume",        href: "/dashboard/resume",        icon: FileText    },
+  { label: "Cover letters", href: "/dashboard/cover-letters", icon: Scroll      },
+  { label: "Autofill",      href: "/dashboard/autofill",      icon: Zap         },
+  { label: "Watchlist",     href: "/dashboard/watchlist",     icon: Bookmark    },
+  { label: "Alerts",        href: "/dashboard/alerts",        icon: BellRing    },
+  { label: "Profile",       href: "/dashboard/onboarding",    icon: UserCircle2 },
 ]
 
 function getInitials(name?: string | null, email?: string | null) {
@@ -78,8 +90,19 @@ export default function DashboardPage() {
 
   const { user, profile, isLoading: authLoading, signOut } = useAuth()
   const { watchlist } = useWatchlist(user?.id)
+  const { hasResume, primaryResume, upsertResume } = useResumeContext()
   const [feedMeta, setFeedMeta] = useState({ totalCount: 0, lastHourCount: 0 })
   const [topHiringCompanies, setTopHiringCompanies] = useState<TopHiringCompany[]>([])
+  const [topMatches, setTopMatches] = useState<JobWithMatchScore[]>([])
+
+  useEffect(() => {
+    if (!primaryResume || primaryResume.parse_status !== "complete") return
+    if (searchParams.has("sort")) return
+
+    const next = new URLSearchParams(searchParams.toString())
+    next.set("sort", "match")
+    router.replace(`${pathname}?${next.toString()}`, { scroll: false })
+  }, [pathname, primaryResume, router, searchParams])
 
   useEffect(() => {
     async function fetchTopHiringCompanies() {
@@ -126,6 +149,30 @@ export default function DashboardPage() {
     void fetchTopHiringCompanies()
   }, [])
 
+  useEffect(() => {
+    if (!primaryResume || primaryResume.parse_status !== "complete") {
+      setTopMatches([])
+      return
+    }
+
+    let cancelled = false
+
+    fetch("/api/match/feed?limit=3&within=24h", { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) return []
+        const payload = (await response.json()) as { jobs?: JobWithMatchScore[] }
+        return payload.jobs ?? []
+      })
+      .then((jobs) => {
+        if (cancelled) return
+        setTopMatches(jobs)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [primaryResume])
+
   function replaceFilters(nextFilters: typeof filters) {
     const next = filtersToSearchParams(searchParams, nextFilters)
     const withSearch = searchQueryToParams(next, searchQuery)
@@ -143,27 +190,30 @@ export default function DashboardPage() {
   const countdownTone = optDaysRemaining === null ? null : getCountdownTone(optDaysRemaining)
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(3,105,161,0.10),_transparent_35%),linear-gradient(180deg,#F7FBFF_0%,#F8FAFC_55%,#F8FAFC_100%)]">
+    <main className="app-page">
       {/* Sticky global search bar */}
-      <header className="sticky top-0 z-40 border-b border-gray-100 bg-white/90 backdrop-blur-sm">
-        <div className="mx-auto flex max-w-[1680px] items-center gap-4 px-4 py-3 lg:px-6">
-          <div className="hidden w-[240px] flex-shrink-0 lg:block" />
-          <div className="flex flex-1 justify-center">
+      <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/92 backdrop-blur-xl">
+        <div className="mx-auto grid max-w-[1680px] items-center gap-4 px-4 py-3 lg:grid-cols-[252px_minmax(0,1fr)] lg:px-6 xl:grid-cols-[252px_minmax(0,1fr)_320px]">
+          <Link
+            href="/dashboard"
+            className="flex min-w-0 items-center rounded-[14px] bg-white px-3 py-2 shadow-[0_10px_26px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/80 transition hover:ring-[#FFD2B8]"
+            aria-label="Hireoven dashboard home"
+          >
+            <HireovenLogo className="h-12 w-auto max-w-[190px]" priority />
+          </Link>
+          <div className="min-w-0">
             <GlobalSearchBar />
           </div>
-          <div className="hidden w-[240px] flex-shrink-0 xl:block" />
+          <div className="hidden xl:flex justify-end">
+            <NotificationBell userId={user?.id} />
+          </div>
         </div>
       </header>
-      <div className="mx-auto max-w-[1680px] px-4 py-4 lg:px-6">
-        <div className="grid gap-6 lg:grid-cols-[240px_minmax(0,1fr)] xl:grid-cols-[240px_minmax(0,1fr)_320px]">
-          <aside className="rounded-[28px] border border-white/80 bg-white/90 p-4 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur lg:sticky lg:top-4 lg:h-[calc(100vh-2rem)] lg:overflow-y-auto">
+      <div className="app-shell mx-auto max-w-[1680px] px-4 py-4 lg:px-6">
+        <div className="grid gap-6 lg:grid-cols-[240px_minmax(0,1fr)] xl:grid-cols-[240px_minmax(0,1fr)_312px]">
+          <aside className="soft-scrollbar rounded-[20px] border border-slate-200/70 bg-white p-3.5 shadow-[0_1px_0_rgba(15,23,42,0.04),0_8px_24px_rgba(15,23,42,0.05)] lg:sticky lg:top-4 lg:h-[calc(100vh-2rem)] lg:overflow-y-auto">
             <div className="flex h-full flex-col">
-              <div className="px-2 pb-6 pt-2">
-                <HireovenLogo className="h-11 w-auto max-w-[168px]" priority />
-                <p className="mt-2 text-xs text-gray-500">Jobs served fresh</p>
-              </div>
-
-              <nav className="space-y-1">
+              <nav className="space-y-0.5">
                 {NAV_ITEMS.map((item) => {
                   const Icon = item.icon
                   const active = pathname === item.href
@@ -172,78 +222,80 @@ export default function DashboardPage() {
                       key={item.label}
                       href={item.href}
                       className={cn(
-                        "flex items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-medium transition",
+                        "flex items-center gap-2.5 rounded-[10px] px-3 py-2 text-[13.5px] font-medium transition-all duration-100",
                         active
-                          ? "bg-[#F0F9FF] text-[#0C4A6E]"
-                          : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                          ? "bg-[#062246] text-white shadow-[0_4px_12px_rgba(6,34,70,0.2)]"
+                          : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
                       )}
                     >
-                      <Icon className="h-4 w-4" />
+                      <Icon className={cn("h-[15px] w-[15px] flex-shrink-0", active ? "text-white/90" : "text-slate-400")} />
                       {item.label}
                     </Link>
                   )
                 })}
 
-                <Link
-                  href="/dashboard/onboarding"
-                  className="flex items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-medium text-gray-600 transition hover:bg-gray-50 hover:text-gray-900"
-                >
-                  <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#E0F2FE] text-[#0C4A6E]">
-                    <Globe2 className="h-4 w-4" />
-                  </span>
-                  <span className="flex items-center gap-2">
-                    For International
-                    <span className="h-2 w-2 rounded-full bg-[#0369A1]" />
-                  </span>
-                </Link>
+                <div className="pt-2">
+                  <Link
+                    href="/dashboard/international"
+                    className="flex items-center gap-2.5 rounded-[10px] px-3 py-2 text-[13.5px] font-medium text-slate-600 transition-all duration-100 hover:bg-[#FFF1E8] hover:text-[#9A3412]"
+                  >
+                    <Globe2 className="h-[15px] w-[15px] flex-shrink-0 text-[#FF5C18]" />
+                    <span className="flex items-center gap-1.5">
+                      International
+                      <span className="h-1.5 w-1.5 rounded-full bg-[#FF5C18]" />
+                    </span>
+                  </Link>
+                </div>
               </nav>
 
-              <div className="mt-8 rounded-[24px] border border-gray-200 bg-[#F8FBFF] p-4">
+              <div className="mt-6 border-t border-slate-200/60 pt-5">
                 <JobFilters isInternational={profile?.is_international} />
               </div>
 
-              <div className="mt-auto rounded-[24px] border border-gray-200 bg-white p-4">
-                <div className="flex items-center gap-3">
-                  {profile?.avatar_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={profile.avatar_url}
-                      alt={profile.full_name ?? "User avatar"}
-                      className="h-11 w-11 rounded-2xl object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#E0F2FE] text-sm font-semibold text-[#0C4A6E]">
-                      {getInitials(profile?.full_name, profile?.email)}
+              <div className="mt-auto pt-4">
+                <div className="rounded-[12px] border border-slate-200/70 bg-slate-50/80 p-3">
+                  <div className="flex items-center gap-2.5">
+                    {profile?.avatar_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={profile.avatar_url}
+                        alt={profile.full_name ?? "User avatar"}
+                        className="h-9 w-9 rounded-xl object-cover flex-shrink-0"
+                      />
+                    ) : (
+                      <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-[#FFF1E8] text-xs font-bold text-[#062246]">
+                        {getInitials(profile?.full_name, profile?.email)}
+                      </div>
+                    )}
+
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[13px] font-semibold text-gray-900 leading-tight">
+                        {profile?.full_name || (authLoading ? "…" : "Your profile")}
+                      </p>
+                      <p className="truncate text-[11px] text-slate-400 mt-0.5">
+                        {profile?.email || user?.email || "Signed in"}
+                      </p>
                     </div>
-                  )}
-
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-gray-900">
-                      {profile?.full_name || (authLoading ? "Loading…" : "Your profile")}
-                    </p>
-                    <p className="truncate text-xs text-gray-500">
-                      {profile?.email || user?.email || "Signed in"}
-                    </p>
                   </div>
-                </div>
 
-                <button
-                  type="button"
-                  onClick={() => void signOut()}
-                  className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:border-gray-300 hover:bg-gray-50"
-                >
-                  <LogOut className="h-4 w-4" />
-                  Sign out
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => void signOut()}
+                    className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[12.5px] font-medium text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900"
+                  >
+                    <LogOut className="h-3.5 w-3.5" />
+                    Sign out
+                  </button>
+                </div>
               </div>
             </div>
           </aside>
 
           <section className="min-w-0 space-y-5">
-            <div className="rounded-[32px] border border-white/70 bg-white/90 p-5 shadow-[0_20px_60px_rgba(15,23,42,0.06)] backdrop-blur">
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="space-y-5">
+              <div className="flex flex-col gap-4 border-b border-slate-200/80 pb-5 lg:flex-row lg:items-start lg:justify-between">
                 <div className="space-y-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#0369A1]">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#FF5C18]">
                     Main feed
                   </p>
                   <h1 className="text-3xl font-semibold tracking-tight text-gray-900">
@@ -256,9 +308,8 @@ export default function DashboardPage() {
                 </div>
 
                 <div className="flex items-start gap-3">
-                  <NotificationBell userId={user?.id} />
-                  <div className="min-w-[240px] rounded-3xl border border-[#D6EEFF] bg-[#F5FBFF] px-4 py-3">
-                    <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#0C4A6E]">
+                  <div className="min-w-[240px] rounded-[18px] border border-[#FFD9C2] bg-[#FFF8F4] px-4 py-3">
+                    <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#062246]">
                       Live signal
                     </p>
                     <p className="mt-2 text-2xl font-semibold text-gray-900">
@@ -271,68 +322,65 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              <div className="mt-6">
+              <div>
                 <PushNotificationSetup />
               </div>
 
-              <div className="mt-6 grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
-                <JobSearch totalCount={feedMeta.totalCount} />
+              <div className="rounded-[20px] border border-slate-200/80 bg-white/95 p-4 shadow-[0_12px_30px_rgba(15,23,42,0.04)]">
+                  <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
+                    <JobSearch totalCount={feedMeta.totalCount} />
 
-                <div className="flex flex-wrap gap-2">
-                  {SORT_OPTIONS.map((option) => {
-                    const active = (filters.sort ?? "freshest") === option.value
-                    return (
+                  <div className="flex flex-wrap gap-2">
+                    {SORT_OPTIONS.map((option) => {
+                      const active = (filters.sort ?? "freshest") === option.value
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() =>
+                            replaceFilters({ ...filters, sort: option.value })
+                          }
+                          className={cn("chip-control", active && "chip-control-active")}
+                        >
+                          {option.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {pills.length > 0 && (
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {pills.map((pill) => (
                       <button
-                        key={option.value}
+                        key={pill.id}
                         type="button"
-                        onClick={() =>
-                          replaceFilters({ ...filters, sort: option.value })
-                        }
-                        className={cn(
-                          "rounded-full px-4 py-2 text-sm font-medium transition",
-                          active
-                            ? "bg-[#0369A1] text-white"
-                            : "bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-900"
-                        )}
+                        onClick={() => replaceFilters(pill.nextFilters)}
+                        className="chip-control-active inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium"
                       >
-                        {option.label}
+                        {pill.label}
+                        <span className="text-base leading-none">&times;</span>
                       </button>
-                    )
-                  })}
-                </div>
-              </div>
+                    ))}
+                  </div>
+                )}
 
-              {pills.length > 0 && (
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {pills.map((pill) => (
-                    <button
-                      key={pill.id}
-                      type="button"
-                      onClick={() => replaceFilters(pill.nextFilters)}
-                      className="inline-flex items-center gap-2 rounded-full bg-[#F0F9FF] px-3 py-1.5 text-sm font-medium text-[#0C4A6E] transition hover:bg-[#D6EEFF]"
-                    >
-                      {pill.label}
-                      <span className="text-base leading-none">&times;</span>
-                    </button>
-                  ))}
+                <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-4">
+                  <p className="text-sm text-gray-600">
+                    <span className="font-semibold text-gray-900">
+                      {feedMeta.totalCount.toLocaleString()} jobs
+                    </span>{" "}
+                    — {feedMeta.lastHourCount.toLocaleString()} posted in the last hour
+                  </p>
+                  <p className="text-xs font-medium uppercase tracking-[0.22em] text-gray-400">
+                    Sorted by{" "}
+                    {
+                      SORT_OPTIONS.find(
+                        (option) => option.value === (filters.sort ?? "freshest")
+                      )?.label
+                    }
+                  </p>
                 </div>
-              )}
-
-              <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-4">
-                <p className="text-sm text-gray-600">
-                  <span className="font-semibold text-gray-900">
-                    {feedMeta.totalCount.toLocaleString()} jobs
-                  </span>{" "}
-                  — {feedMeta.lastHourCount.toLocaleString()} posted in the last hour
-                </p>
-                <p className="text-xs font-medium uppercase tracking-[0.22em] text-gray-400">
-                  Sorted by{" "}
-                  {
-                    SORT_OPTIONS.find(
-                      (option) => option.value === (filters.sort ?? "freshest")
-                    )?.label
-                  }
-                </p>
               </div>
             </div>
 
@@ -340,166 +388,273 @@ export default function DashboardPage() {
               filters={filters}
               searchQuery={searchQuery}
               onMetaChange={setFeedMeta}
+              hasPrimaryResume={Boolean(primaryResume)}
             />
           </section>
 
           <aside className="hidden xl:block">
-            <div className="sticky top-4 flex h-[calc(100vh-2rem)] flex-col gap-4 overflow-y-auto">
-              <div className="rounded-[28px] border border-white/80 bg-white/90 p-5 shadow-[0_20px_60px_rgba(15,23,42,0.06)]">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-semibold text-gray-900">
-                      Your watchlist
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      Companies you want to jump on first
-                    </p>
+            <div className="soft-scrollbar sticky top-4 max-h-[calc(100vh-2rem)] overflow-y-auto rounded-[20px] border border-slate-200/70 bg-white shadow-[0_1px_0_rgba(15,23,42,0.04),0_8px_24px_rgba(15,23,42,0.05)]">
+              {/* Resume signal */}
+              {!hasResume ? (
+                <div className="p-5">
+                  <ResumeUploader compact showPrompt={false} onUploadComplete={upsertResume} />
+                </div>
+              ) : primaryResume?.parse_status === "processing" ? (
+                <div className="border-b border-slate-200/60 p-5">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-[14px] bg-[#FFF1E8]">
+                      <FileText className="h-4.5 w-4.5 text-[#FF5C18]" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-gray-900">Parsing resume…</p>
+                      <p className="text-xs text-slate-400">AI is reading your resume now</p>
+                    </div>
                   </div>
+                  <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                    <div className="h-full w-3/4 animate-pulse rounded-full bg-[#FF5C18]" />
+                  </div>
+                </div>
+              ) : primaryResume?.parse_status === "failed" ? (
+                <div className="border-b border-slate-200/60 p-5">
+                  <p className="text-sm font-semibold text-gray-900">Parse failed</p>
+                  <p className="mt-1.5 text-xs leading-5 text-slate-500">
+                    Replace with a cleaner PDF or DOCX export to unlock match scoring.
+                  </p>
                   <Link
-                    href="/dashboard/watchlist"
-                    className="text-xs font-medium text-[#0369A1] transition hover:text-[#0C4A6E]"
+                    href="/dashboard/resume"
+                    className="mt-4 inline-flex rounded-[14px] bg-[#FF5C18] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[#E14F0E]"
+                  >
+                    Replace resume →
+                  </Link>
+                </div>
+              ) : (
+                <div className="border-b border-slate-200/60 p-5">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[13px] font-semibold text-gray-900">Resume</p>
+                    <Link href="/dashboard/resume" className="text-xs font-medium text-[#FF5C18] hover:text-[#E14F0E]">
+                      Manage
+                    </Link>
+                  </div>
+                  <div className="mt-3 rounded-[14px] border border-slate-200/60 bg-slate-50/80 p-3.5">
+                    <p className="truncate text-[13px] font-semibold text-gray-900">
+                      {primaryResume?.name ?? primaryResume?.file_name ?? "Resume"}
+                    </p>
+                    <div className="mt-3 flex items-center gap-3">
+                      <div className="flex-shrink-0">
+                        <p className="text-2xl font-bold text-[#FF5C18] leading-none">
+                          {primaryResume?.resume_score ?? 0}
+                        </p>
+                        <p className="text-[10px] text-slate-400 mt-0.5">score</p>
+                      </div>
+                      <Link
+                        href="/dashboard/resume"
+                        className="min-w-0 flex-1 rounded-xl border border-[#FFD2B8] bg-white px-2.5 py-2 text-[11.5px] font-medium text-[#062246] leading-tight transition hover:bg-[#FFF1E8]"
+                      >
+                        {primaryResume?.parse_status === "complete"
+                          ? "Match scores active ↗"
+                          : "View details →"}
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="border-b border-slate-200/60 p-5">
+                <div className="mb-3 flex items-center justify-between">
+                  <p className="text-[13px] font-semibold text-gray-900">Top matches today</p>
+                  <Link
+                    href="/dashboard/matches"
+                    className="text-xs font-medium text-[#FF5C18] hover:text-[#E14F0E]"
                   >
                     View all
                   </Link>
                 </div>
 
-                <div className="mt-4 grid grid-cols-2 gap-3">
-                  {watchlist.slice(0, 6).map((item) => (
-                    <div
-                      key={item.id}
-                      className="rounded-2xl border border-gray-200 bg-[#FAFCFB] p-3"
+                {!primaryResume || primaryResume.parse_status !== "complete" ? (
+                  <div className="rounded-[14px] border border-dashed border-slate-200 bg-slate-50/60 px-4 py-5">
+                    <p className="text-xs text-slate-500">
+                      Upload your resume to see your strongest matches.
+                    </p>
+                    <Link
+                      href="/dashboard/resume"
+                      className="mt-2 inline-flex text-xs font-semibold text-[#FF5C18] hover:underline"
                     >
-                      <div className="flex items-center gap-2">
+                      Upload resume →
+                    </Link>
+                  </div>
+                ) : topMatches.length === 0 ? (
+                  <div className="rounded-[14px] border border-dashed border-slate-200 bg-slate-50/60 px-4 py-5 text-xs text-slate-400">
+                    No strong matches landed in the last 24 hours yet.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {topMatches.map((job) => (
+                      <Link
+                        key={job.id}
+                        href={job.apply_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block rounded-[12px] border border-slate-200/60 bg-slate-50/60 px-3 py-3 transition hover:border-slate-300 hover:bg-white"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-[13px] font-semibold text-slate-900">
+                              {job.title}
+                            </p>
+                            <p className="mt-0.5 truncate text-[12px] text-slate-500">
+                              {job.company.name}
+                            </p>
+                            <p className="mt-1 text-[11px] text-slate-400">
+                              Posted{" "}
+                              {Math.max(
+                                1,
+                                Math.floor(
+                                  (Date.now() - new Date(job.first_detected_at).getTime()) /
+                                    3_600_000
+                                )
+                              )}{" "}
+                              h ago
+                            </p>
+                          </div>
+                          <MatchScorePill
+                            score={job.match_score?.overall_score ?? null}
+                            method={job.match_score?.score_method ?? null}
+                            isLoading={false}
+                            size="sm"
+                          />
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Watchlist */}
+              <div className="border-b border-slate-200/60 p-5">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-[13px] font-semibold text-gray-900">Watchlist</p>
+                  <Link href="/dashboard/watchlist" className="text-xs font-medium text-[#FF5C18] hover:text-[#E14F0E]">
+                    View all
+                  </Link>
+                </div>
+
+                {watchlist.length === 0 ? (
+                  <div className="rounded-[14px] border border-dashed border-slate-200 bg-slate-50/60 px-4 py-5 text-center">
+                    <p className="text-xs text-slate-400">No watched companies yet.</p>
+                    <Link href="/dashboard/watchlist" className="mt-1 block text-xs font-medium text-[#FF5C18] hover:underline">
+                      Add companies →
+                    </Link>
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    {watchlist.slice(0, 6).map((item) => (
+                      <div
+                        key={item.id}
+                        className="flex items-center gap-2.5 rounded-[12px] border border-slate-200/60 bg-slate-50/60 px-3 py-2.5 transition hover:border-slate-300 hover:bg-white"
+                      >
                         {item.company.logo_url ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={item.company.logo_url}
-                            alt={item.company.name}
-                            className="h-8 w-8 rounded-xl object-cover"
-                          />
+                          <img src={item.company.logo_url} alt={item.company.name} className="h-7 w-7 rounded-lg object-cover flex-shrink-0" />
                         ) : (
-                          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#E0F2FE] text-xs font-semibold text-[#0C4A6E]">
+                          <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-[#FFF1E8] text-[11px] font-bold text-[#062246]">
                             {item.company.name.charAt(0).toUpperCase()}
                           </div>
                         )}
-                        <p className="truncate text-sm font-medium text-gray-800">
+                        <p className="truncate text-[13px] font-medium text-gray-800">
                           {item.company.name}
                         </p>
                       </div>
-                    </div>
-                  ))}
-
-                  {watchlist.length === 0 && (
-                    <div className="col-span-2 rounded-2xl border border-dashed border-gray-300 px-4 py-6 text-center text-sm text-gray-500">
-                      No watched companies yet.
-                    </div>
-                  )}
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
+              {/* OPT countdown */}
               {profile?.needs_sponsorship && (
-                <div className="rounded-[28px] border border-white/80 bg-white/90 p-5 shadow-[0_20px_60px_rgba(15,23,42,0.06)]">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-semibold text-gray-900">
-                        OPT countdown
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        Keep the urgency visible
-                      </p>
-                    </div>
-                    <Globe2 className="h-5 w-5 text-[#0369A1]" />
+                <div className="border-b border-slate-200/60 p-5">
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-[13px] font-semibold text-gray-900">OPT countdown</p>
+                    <Globe2 className="h-4 w-4 text-[#FF5C18]" />
                   </div>
 
                   {optDaysRemaining !== null ? (
-                    <div className="mt-4 space-y-3">
-                      <p className="text-3xl font-semibold text-gray-900">
+                    <div className="space-y-2.5">
+                      <p className="text-2xl font-bold text-gray-900 leading-none">
                         {formatDays(optDaysRemaining)}
                       </p>
-                      <div className="h-3 overflow-hidden rounded-full bg-gray-100">
+                      <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
                         <div
                           className={cn(
-                            "h-full rounded-full",
-                            countdownTone === "green" && "bg-[#0369A1]",
+                            "h-full rounded-full transition-all",
+                            countdownTone === "green" && "bg-[#FF5C18]",
                             countdownTone === "amber" && "bg-amber-400",
                             countdownTone === "red" && "bg-red-500"
                           )}
-                          style={{
-                            width: `${Math.min(
-                              100,
-                              Math.max(8, (optDaysRemaining / 365) * 100)
-                            )}%`,
-                          }}
+                          style={{ width: `${Math.min(100, Math.max(6, (optDaysRemaining / 365) * 100))}%` }}
                         />
                       </div>
-                      <p className="text-sm leading-6 text-gray-600">
-                        {countdownTone === "green" &&
-                          "You still have room to be selective. Prioritize the freshest sponsor-friendly roles."}
-                        {countdownTone === "amber" &&
-                          "Time is tightening. Focus on companies with clear sponsorship history and direct applications."}
-                        {countdownTone === "red" &&
-                          "Urgency is high. Bias heavily toward sponsor-ready companies and same-day applications."}
+                      <p className="text-xs leading-5 text-slate-500">
+                        {countdownTone === "green" && "You still have room to be selective."}
+                        {countdownTone === "amber" && "Time is tightening — prioritize direct applications."}
+                        {countdownTone === "red" && "Urgency is high. Bias toward sponsor-ready companies."}
                       </p>
                     </div>
                   ) : (
-                    <div className="mt-4 rounded-2xl border border-dashed border-gray-300 px-4 py-5 text-sm text-gray-500">
-                      Add your OPT end date in onboarding to track the countdown here.
+                    <div className="rounded-[14px] border border-dashed border-slate-200 px-4 py-4 text-xs text-slate-400">
+                      Add your OPT end date in onboarding.
                     </div>
                   )}
                 </div>
               )}
 
-              <div className="rounded-[28px] border border-white/80 bg-white/90 p-5 shadow-[0_20px_60px_rgba(15,23,42,0.06)]">
-                <div>
-                  <p className="text-sm font-semibold text-gray-900">
-                    Top hiring companies
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    Most new roles added today
-                  </p>
+              {/* Top hiring */}
+              <div className="p-5">
+                <div className="mb-3 flex items-center justify-between">
+                  <p className="text-[13px] font-semibold text-gray-900">Hiring today</p>
+                  <span className="rounded-full bg-[#FFF1E8] px-2 py-0.5 text-[10.5px] font-semibold text-[#FF5C18]">
+                    live
+                  </span>
                 </div>
 
-                <div className="mt-4 space-y-3">
-                  {topHiringCompanies.map((company) => (
-                    <div
-                      key={company.id}
-                      className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-[#FAFCFB] px-3 py-3"
-                    >
-                      {company.logo_url ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={company.logo_url}
-                          alt={company.name}
-                          className="h-10 w-10 rounded-2xl object-cover"
-                        />
-                      ) : (
-                        <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#E0F2FE] text-sm font-semibold text-[#0C4A6E]">
-                          {company.name.charAt(0).toUpperCase()}
-                        </div>
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold text-gray-900">
-                          {company.name}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          {company.newJobsToday} new job
-                          {company.newJobsToday === 1 ? "" : "s"} today
-                        </p>
-                      </div>
-                      {company.sponsors_h1b && (
-                        <span className="rounded-full bg-[#F0F9FF] px-2 py-1 text-[11px] font-medium text-[#0C4A6E]">
-                          H1B
+                {topHiringCompanies.length === 0 ? (
+                  <div className="rounded-[14px] border border-dashed border-slate-200 px-4 py-4 text-xs text-slate-400">
+                    No hiring spikes yet today.
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    {topHiringCompanies.map((company, i) => (
+                      <div
+                        key={company.id}
+                        className="flex items-center gap-2.5 rounded-[12px] border border-slate-200/60 bg-slate-50/60 px-3 py-2.5 transition hover:border-slate-300 hover:bg-white"
+                      >
+                        <span className="text-[11px] font-bold text-slate-300 w-4 flex-shrink-0">
+                          {i + 1}
                         </span>
-                      )}
-                    </div>
-                  ))}
-
-                  {topHiringCompanies.length === 0 && (
-                    <div className="rounded-2xl border border-dashed border-gray-300 px-4 py-5 text-sm text-gray-500">
-                      No hiring spikes yet today.
-                    </div>
-                  )}
-                </div>
+                        {company.logo_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={company.logo_url} alt={company.name} className="h-7 w-7 rounded-lg object-cover flex-shrink-0" />
+                        ) : (
+                          <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-[#FFF1E8] text-[11px] font-bold text-[#062246]">
+                            {company.name.charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-[12.5px] font-semibold text-gray-900">
+                            {company.name}
+                          </p>
+                          <p className="text-[11px] text-slate-400">
+                            {company.newJobsToday} new today
+                          </p>
+                        </div>
+                        {company.sponsors_h1b && (
+                          <span className="flex-shrink-0 rounded-full bg-[#FFF1E8] px-1.5 py-0.5 text-[10px] font-semibold text-[#FF5C18]">
+                            H1B
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </aside>

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
-import type { Job, JobFilters, JobWithCompany } from "@/types"
+import type { Job, JobFilters, JobWithCompany, JobWithMatchScore } from "@/types"
 
 const PAGE_SIZE = 20
 const SEARCH_CHUNK_SIZE = 80
@@ -139,9 +139,18 @@ function countLastHour(rows: JobWithCompany[]) {
   ).length
 }
 
-export function useJobs(filters: JobFilters = {}, searchQuery = "") {
-  const [allJobs, setAllJobsState] = useState<JobWithCompany[]>([])
-  const allJobsRef = useRef<JobWithCompany[]>([])
+type UseJobsOptions = {
+  personalized?: boolean
+}
+
+export function useJobs(
+  filters: JobFilters = {},
+  searchQuery = "",
+  options: UseJobsOptions = {}
+) {
+  const personalized = Boolean(options.personalized)
+  const [allJobs, setAllJobsState] = useState<JobWithMatchScore[]>([])
+  const allJobsRef = useRef<JobWithMatchScore[]>([])
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
   const [isLoading, setIsLoading] = useState(true)
   const [hasMore, setHasMore] = useState(true)
@@ -154,7 +163,7 @@ export function useJobs(filters: JobFilters = {}, searchQuery = "") {
   const loadingRef = useRef(false)
   const requestKeyRef = useRef("")
 
-  function setAllJobs(jobs: JobWithCompany[]) {
+  function setAllJobs(jobs: JobWithMatchScore[]) {
     allJobsRef.current = jobs
     setAllJobsState(jobs)
   }
@@ -168,6 +177,42 @@ export function useJobs(filters: JobFilters = {}, searchQuery = "") {
     async (offset: number) => {
       const supabase = createClient()
       const chunkSize = searchQuery.trim() ? SEARCH_CHUNK_SIZE : PAGE_SIZE
+
+      if (personalized) {
+        const params = new URLSearchParams()
+        if (searchQuery.trim()) params.set("q", searchQuery.trim())
+        if (filters.remote) params.set("remote", "true")
+        if (filters.sponsorship) params.set("sponsorship", "true")
+        if (filters.seniority?.length) params.set("seniority", filters.seniority.join(","))
+        if (filters.employment_type?.length) {
+          params.set("employment", filters.employment_type.join(","))
+        }
+        if (filters.company_ids?.length) params.set("companies", filters.company_ids.join(","))
+        if (filters.within && filters.within !== "all") params.set("within", filters.within)
+        params.set("limit", String(chunkSize))
+        params.set("offset", String(offset))
+
+        const response = await fetch(`/api/match/feed?${params.toString()}`, {
+          cache: "no-store",
+        })
+
+        if (!response.ok) {
+          throw new Error("Failed to load personalized jobs")
+        }
+
+        const payload = (await response.json()) as {
+          jobs?: JobWithMatchScore[]
+          total?: number
+          newInLastHour?: number
+        }
+
+        return {
+          rows: payload.jobs ?? [],
+          rawCount: (payload.jobs ?? []).length,
+          totalCount: payload.total ?? null,
+          lastHourCount: payload.newInLastHour ?? 0,
+        }
+      }
 
       let query = (supabase
         .from("jobs")
@@ -208,9 +253,10 @@ export function useJobs(filters: JobFilters = {}, searchQuery = "") {
         ),
         rawCount: (data ?? []).length,
         totalCount: count ?? null,
+        lastHourCount: null,
       }
     },
-    [filters, searchQuery]
+    [filters, personalized, searchQuery]
   )
 
   const ensureVisibleJobs = useCallback(
@@ -229,7 +275,12 @@ export function useJobs(filters: JobFilters = {}, searchQuery = "") {
         const chunkSize = searchQuery.trim() ? SEARCH_CHUNK_SIZE : PAGE_SIZE
 
         while (nextRows.length < targetVisible && !exhausted) {
-          const { rows, rawCount, totalCount: exactCount } = await fetchChunk(nextOffset)
+          const {
+            rows,
+            rawCount,
+            totalCount: exactCount,
+            lastHourCount: exactLastHourCount,
+          } = await fetchChunk(nextOffset)
 
           if (requestKeyRef.current !== requestKey) return
 
@@ -241,13 +292,17 @@ export function useJobs(filters: JobFilters = {}, searchQuery = "") {
               collection.findIndex((item) => item.id === job.id) === index
           )
 
-          nextRows = sortJobs(merged, filters, searchQuery)
+          nextRows = personalized ? merged : sortJobs(merged, filters, searchQuery)
 
-          if (!searchQuery.trim() && exactCount !== null) {
+          if (exactCount !== null) {
             setTotalCount(exactCount)
           }
 
           if (rawCount === 0) exhausted = true
+
+          if (personalized && exactLastHourCount !== null) {
+            setLastHourCount(exactLastHourCount)
+          }
         }
 
         offsetRef.current = nextOffset
@@ -255,8 +310,10 @@ export function useJobs(filters: JobFilters = {}, searchQuery = "") {
         setAllJobs(nextRows)
         setVisibleCount(Math.min(targetVisible, nextRows.length))
         setHasMore(!exhausted || nextRows.length > targetVisible)
-        setLastHourCount(countLastHour(nextRows))
-        if (searchQuery.trim()) setTotalCount(nextRows.length)
+        if (!personalized) {
+          setLastHourCount(countLastHour(nextRows))
+          if (searchQuery.trim()) setTotalCount(nextRows.length)
+        }
         if (reset) setNewJobsCount(0)
       } finally {
         if (requestKeyRef.current === requestKey) {
@@ -265,7 +322,7 @@ export function useJobs(filters: JobFilters = {}, searchQuery = "") {
         loadingRef.current = false
       }
     },
-    [fetchChunk, filters, searchQuery]
+    [fetchChunk, filters, personalized, searchQuery]
   )
 
   const refresh = useCallback(async () => {

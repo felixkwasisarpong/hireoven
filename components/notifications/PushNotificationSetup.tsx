@@ -128,12 +128,12 @@ export default function PushNotificationSetup() {
   if (!shouldShow && !success) return null
 
   return (
-    <div className="rounded-[28px] border border-[#CDEBFF] bg-[#F5FBFF] p-4">
+    <div className="rounded-[28px] border border-[#CDEBFF] bg-[#FFF8F4] p-4">
       {success ? (
         <div className="flex items-center gap-3">
-          <CheckCircle2 className="h-5 w-5 text-[#0369A1]" />
+          <CheckCircle2 className="h-5 w-5 text-[#FF5C18]" />
           <div>
-            <p className="text-sm font-semibold text-[#0C4A6E]">
+            <p className="text-sm font-semibold text-[#062246]">
               You&apos;ll be notified instantly
             </p>
             <p className="text-xs text-[#365E7D]">
@@ -144,7 +144,7 @@ export default function PushNotificationSetup() {
       ) : (
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-[#0369A1]">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-[#FF5C18]">
               <BellRing className="h-5 w-5" />
             </div>
             <div>
@@ -163,7 +163,7 @@ export default function PushNotificationSetup() {
               type="button"
               onClick={() => void enableNotifications()}
               disabled={loading}
-              className="inline-flex items-center justify-center rounded-2xl bg-[#0369A1] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#075985] disabled:opacity-60"
+              className="inline-flex items-center justify-center rounded-2xl bg-[#FF5C18] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#E14F0E] disabled:opacity-60"
             >
               {loading ? "Enabling…" : "Enable"}
             </button>

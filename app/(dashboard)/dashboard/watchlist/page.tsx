@@ -1,8 +1,8 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import Link from "next/link"
 import { BookmarkMinus, Plus, Search, Sparkles } from "lucide-react"
+import DashboardPageHeader from "@/components/layout/DashboardPageHeader"
 import { useAuth } from "@/lib/hooks/useAuth"
 import { useWatchlist } from "@/lib/hooks/useWatchlist"
 import { createClient } from "@/lib/supabase/client"
@@ -115,32 +115,32 @@ export default function WatchlistPage() {
   )
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(180deg,#F7FBFF_0%,#F8FAFC_58%,#F8FAFC_100%)] px-4 py-6 lg:px-8">
-      <div className="mx-auto max-w-6xl space-y-6">
-        <section className="rounded-[32px] border border-white/80 bg-white/90 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.06)]">
+    <main className="app-page">
+      <div className="app-shell max-w-7xl space-y-5">
+        <DashboardPageHeader
+          kicker="Watchlist"
+          title="Companies worth stalking closely"
+          description="Track the employers you care about, see who is posting now, and remove friction when something fresh lands."
+          backHref="/dashboard"
+          backLabel="Back to feed"
+        />
+
+        <section className="surface-card p-5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#0369A1]">
-                Watchlist
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">
+                Add companies
               </p>
-              <h1 className="mt-2 text-3xl font-semibold tracking-tight text-gray-900">
-                Companies worth stalking closely
-              </h1>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-500">
-                Track the employers you care about, see who is posting now, and
-                remove friction when something fresh lands.
+              <h2 className="mt-2 text-xl font-semibold tracking-tight text-gray-900">
+                Build your shortlist
+              </h2>
+              <p className="mt-2 text-sm leading-6 text-gray-500">
+                Keep the employers you care about in one place and expand the list as new targets appear.
               </p>
             </div>
-
-            <Link
-              href="/dashboard"
-              className="inline-flex items-center gap-2 rounded-2xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:border-gray-300 hover:bg-gray-50"
-            >
-              Back to feed
-            </Link>
           </div>
 
-          <div className="mt-6 rounded-[28px] border border-gray-200 bg-[#F8FBFF] p-4">
+          <div className="mt-5 rounded-[18px] border border-slate-200/80 bg-slate-50/55 p-4">
             <div className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-3">
               <Search className="h-4 w-4 text-gray-400" />
               <input
@@ -157,7 +157,7 @@ export default function WatchlistPage() {
                   key={company.id}
                   type="button"
                   onClick={() => void addCompany(company.id)}
-                  className="flex items-center justify-between rounded-2xl border border-gray-200 bg-white px-4 py-3 text-left transition hover:border-[#BAE6FD] hover:bg-[#FCFEFE]"
+                  className="flex items-center justify-between rounded-2xl border border-gray-200 bg-white px-4 py-3 text-left transition hover:border-[#FFD2B8] hover:bg-[#FCFEFE]"
                 >
                   <div className="flex min-w-0 items-center gap-3">
                     {company.logo_url ? (
@@ -168,7 +168,7 @@ export default function WatchlistPage() {
                         className="h-10 w-10 rounded-2xl object-cover"
                       />
                     ) : (
-                      <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#E0F2FE] text-sm font-semibold text-[#0C4A6E]">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#FFF1E8] text-sm font-semibold text-[#062246]">
                         {company.name.charAt(0).toUpperCase()}
                       </div>
                     )}
@@ -181,7 +181,7 @@ export default function WatchlistPage() {
                       </p>
                     </div>
                   </div>
-                  <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-[#F0F9FF] text-[#0369A1]">
+                  <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-[#FFF7F2] text-[#FF5C18]">
                     <Plus className="h-4 w-4" />
                   </span>
                 </button>
@@ -191,8 +191,8 @@ export default function WatchlistPage() {
         </section>
 
         {watchlist.length === 0 && !isLoading ? (
-          <section className="rounded-[32px] border border-dashed border-gray-300 bg-white px-6 py-14 text-center shadow-[0_20px_60px_rgba(15,23,42,0.04)]">
-            <Sparkles className="mx-auto h-10 w-10 text-[#0369A1]" />
+          <section className="empty-state py-12">
+            <Sparkles className="mx-auto h-10 w-10 text-[#FF5C18]" />
             <h2 className="mt-4 text-2xl font-semibold text-gray-900">
               Your watchlist is empty
             </h2>
@@ -214,9 +214,9 @@ export default function WatchlistPage() {
               return (
                 <article
                   key={item.id}
-                  className="rounded-[28px] border border-white/80 bg-white/90 p-5 shadow-[0_20px_60px_rgba(15,23,42,0.06)]"
+                  className="surface-card overflow-hidden"
                 >
-                  <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-start justify-between gap-4 px-5 py-5">
                     <div className="flex min-w-0 items-center gap-3">
                       {company.logo_url ? (
                         // eslint-disable-next-line @next/next/no-img-element
@@ -226,7 +226,7 @@ export default function WatchlistPage() {
                           className="h-12 w-12 rounded-2xl object-cover"
                         />
                       ) : (
-                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#E0F2FE] text-sm font-semibold text-[#0C4A6E]">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#FFF1E8] text-sm font-semibold text-[#062246]">
                           {company.name.charAt(0).toUpperCase()}
                         </div>
                       )}
@@ -250,8 +250,8 @@ export default function WatchlistPage() {
                     </button>
                   </div>
 
-                  <div className="mt-5 grid gap-4 sm:grid-cols-2">
-                    <div className="rounded-2xl bg-[#F8FBFF] p-4">
+                  <div className="grid border-t border-slate-200/80 sm:grid-cols-2 sm:divide-x sm:divide-slate-200/80">
+                    <div className="px-5 py-4">
                       <p className="text-xs font-semibold uppercase tracking-[0.22em] text-gray-400">
                         This week
                       </p>
@@ -261,7 +261,7 @@ export default function WatchlistPage() {
                       <p className="text-sm text-gray-500">new jobs this week</p>
                     </div>
 
-                    <div className="rounded-2xl bg-[#F8FBFF] p-4">
+                    <div className="border-t border-slate-200/80 px-5 py-4 sm:border-t-0">
                       <p className="text-xs font-semibold uppercase tracking-[0.22em] text-gray-400">
                         Latest post
                       </p>
@@ -274,7 +274,7 @@ export default function WatchlistPage() {
                     </div>
                   </div>
 
-                  <div className="mt-5 rounded-2xl border border-gray-100 bg-white p-4">
+                  <div className="border-t border-slate-200/80 px-5 py-4">
                     <div className="flex items-center justify-between">
                       <p className="text-sm font-medium text-gray-700">
                         H1B sponsorship confidence
@@ -285,7 +285,7 @@ export default function WatchlistPage() {
                     </div>
                     <div className="mt-3 h-3 overflow-hidden rounded-full bg-gray-100">
                       <div
-                        className="h-full rounded-full bg-gradient-to-r from-[#0C4A6E] via-[#0369A1] to-[#7DD3FC]"
+                        className="h-full rounded-full bg-gradient-to-r from-[#062246] via-[#FF5C18] to-[#7DD3FC]"
                         style={{ width: `${confidence}%` }}
                       />
                     </div>

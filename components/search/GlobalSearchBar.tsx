@@ -155,8 +155,8 @@ export default function GlobalSearchBar() {
 
   return (
     <div ref={containerRef} className="relative w-full max-w-xl">
-      <div className={`flex items-center gap-2.5 rounded-2xl border bg-white px-4 py-2.5 transition ${
-        isFocused ? 'border-[#0369A1] ring-2 ring-[#0369A1]/15' : 'border-gray-200'
+      <div className={`flex items-center gap-2.5 rounded-[16px] border bg-white px-4 py-2.5 transition ${
+        isFocused ? 'border-[#FF5C18] ring-2 ring-[#FF5C18]/15' : 'border-slate-200/80'
       }`}>
         <Search className="h-4 w-4 flex-shrink-0 text-gray-400" />
         <input
@@ -179,14 +179,14 @@ export default function GlobalSearchBar() {
             <X className="h-4 w-4" />
           </button>
         ) : (
-          <kbd className="hidden flex-shrink-0 rounded-lg border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[10px] font-medium text-gray-400 sm:inline">
+          <kbd className="hidden flex-shrink-0 rounded-md border border-slate-200/80 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-gray-400 sm:inline">
             ⌘K
           </kbd>
         )}
       </div>
 
       {showDropdown && (
-        <div className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[0_20px_60px_rgba(14,30,70,0.15)]">
+        <div className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden rounded-[18px] border border-slate-200/80 bg-white shadow-[0_20px_60px_rgba(14,30,70,0.15)]">
           {query.trim().length >= 2 ? (
             <>
               {previewJobs.length > 0 && (
@@ -196,10 +196,10 @@ export default function GlobalSearchBar() {
                     <button
                       key={job.id}
                       type="button"
-                      className={`flex w-full items-center gap-3 px-4 py-3 text-left transition ${selectedIdx === i ? 'bg-[#F0F9FF]' : 'hover:bg-gray-50'}`}
+                      className={`flex w-full items-center gap-3 px-4 py-3 text-left transition ${selectedIdx === i ? 'bg-[#FFF7F2]' : 'hover:bg-gray-50'}`}
                       onClick={() => { pushRecent(job.title); router.push(`/dashboard/search?q=${encodeURIComponent(job.title)}`); setIsFocused(false); setQuery('') }}
                     >
-                      <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl bg-[#E0F2FE] text-xs font-bold text-[#0C4A6E]">
+                      <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl bg-[#FFF1E8] text-xs font-bold text-[#062246]">
                         {job.company.name.charAt(0).toUpperCase()}
                       </div>
                       <div className="min-w-0 flex-1">
@@ -220,7 +220,7 @@ export default function GlobalSearchBar() {
                       <button
                         key={company.id}
                         type="button"
-                        className={`flex w-full items-center gap-3 px-4 py-3 text-left transition ${selectedIdx === idx ? 'bg-[#F0F9FF]' : 'hover:bg-gray-50'}`}
+                        className={`flex w-full items-center gap-3 px-4 py-3 text-left transition ${selectedIdx === idx ? 'bg-[#FFF7F2]' : 'hover:bg-gray-50'}`}
                         onClick={() => { router.push(`/dashboard/companies/${company.id}`); setIsFocused(false); setQuery('') }}
                       >
                         <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl bg-gray-100 text-xs font-bold text-gray-600">
@@ -237,7 +237,7 @@ export default function GlobalSearchBar() {
               )}
               <button
                 type="button"
-                className="flex w-full items-center gap-2 border-t border-gray-100 px-4 py-3 text-sm font-medium text-[#0369A1] transition hover:bg-[#F0F9FF]"
+                className="flex w-full items-center gap-2 border-t border-gray-100 px-4 py-3 text-sm font-medium text-[#FF5C18] transition hover:bg-[#FFF7F2]"
                 onClick={() => navigate(query)}
               >
                 <Search className="h-4 w-4" />
@@ -253,7 +253,7 @@ export default function GlobalSearchBar() {
                     <button
                       key={label}
                       type="button"
-                      className={`flex w-full items-center gap-3 px-4 py-2.5 text-left transition ${selectedIdx === i ? 'bg-[#F0F9FF]' : 'hover:bg-gray-50'}`}
+                      className={`flex w-full items-center gap-3 px-4 py-2.5 text-left transition ${selectedIdx === i ? 'bg-[#FFF7F2]' : 'hover:bg-gray-50'}`}
                       onClick={() => navigate(label)}
                     >
                       <Search className="h-3.5 w-3.5 flex-shrink-0 text-gray-300" />
@@ -269,7 +269,7 @@ export default function GlobalSearchBar() {
                   <button
                     key={label}
                     type="button"
-                    className={`flex w-full items-center gap-3 px-4 py-2.5 text-left transition ${selectedIdx === idx ? 'bg-[#F0F9FF]' : 'hover:bg-gray-50'}`}
+                    className={`flex w-full items-center gap-3 px-4 py-2.5 text-left transition ${selectedIdx === idx ? 'bg-[#FFF7F2]' : 'hover:bg-gray-50'}`}
                     onClick={() => navigate(label)}
                   >
                     <span className="text-sm text-gray-500">{label}</span>

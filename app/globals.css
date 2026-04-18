@@ -10,7 +10,7 @@
     --card-foreground: 222 47% 11%;
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
-    --primary: 201 96% 32%;
+    --primary: 19 100% 55%;
     --primary-foreground: 0 0% 100%;
     --secondary: 210 40% 96%;
     --secondary-foreground: 222 47% 11%;
@@ -22,16 +22,242 @@
     --destructive-foreground: 0 0% 100%;
     --border: 214 32% 91%;
     --input: 214 32% 91%;
-    --ring: 201 96% 32%;
+    --ring: 19 100% 55%;
     --radius: 0.5rem;
+
+    /* Brand tokens */
+    --brand: #FF5C18;
+    --brand-dark: #E14F0E;
+    --brand-navy: #062246;
+    --brand-tint: #FFF1E8;
+    --brand-tint-mid: #FFD2B8;
   }
 }
 
 @layer base {
+  html {
+    @apply scroll-smooth antialiased;
+  }
+
   * {
     @apply border-border;
   }
+
   body {
     @apply bg-background text-foreground;
+    font-feature-settings: "ss01" on, "cv01" on, "cv11" on;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection {
+    background: rgba(255, 92, 24, 0.16);
+  }
+
+  *:focus-visible {
+    outline: 2px solid rgba(255, 92, 24, 0.5);
+    outline-offset: 2px;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+}
+
+@layer components {
+  /* ── Page shells ─────────────────────────────────────────────── */
+
+  .app-page {
+    @apply min-h-screen bg-[radial-gradient(ellipse_at_top_left,_rgba(255,92,24,0.06)_0%,_transparent_38%),linear-gradient(160deg,#FEFAF7_0%,#F7F9FC_50%,#F2F5FB_100%)] px-4 py-6 lg:px-8;
+  }
+
+  .app-shell {
+    @apply mx-auto w-full max-w-[1440px];
+  }
+
+  /* ── Surface layers ──────────────────────────────────────────── */
+
+  .surface-hero {
+    @apply rounded-[22px] border border-slate-200/70 bg-white shadow-[0_1px_0_rgba(15,23,42,0.04),0_8px_24px_rgba(15,23,42,0.055)] backdrop-blur-sm;
+  }
+
+  .surface-card {
+    @apply rounded-[20px] border border-slate-200/70 bg-white shadow-[0_1px_0_rgba(15,23,42,0.03),0_6px_20px_rgba(15,23,42,0.05)] backdrop-blur-sm;
+  }
+
+  .surface-card-subtle {
+    @apply rounded-[16px] border border-slate-200/60 bg-slate-50/80;
+  }
+
+  .surface-inset {
+    @apply rounded-[14px] border border-slate-200/60 bg-slate-50/80;
+  }
+
+  .metric-tile {
+    @apply rounded-[18px] border border-slate-200/70 bg-white p-5 shadow-[0_1px_0_rgba(15,23,42,0.03),0_4px_14px_rgba(15,23,42,0.04)];
+  }
+
+  /* ── Typography ──────────────────────────────────────────────── */
+
+  .section-kicker {
+    @apply text-[10.5px] font-bold uppercase tracking-[0.3em] text-[#FF5C18];
+  }
+
+  .section-title {
+    @apply text-[2rem] font-semibold leading-[1.2] tracking-[-0.02em] text-slate-950;
+  }
+
+  .section-copy {
+    @apply text-sm leading-[1.7] text-slate-500;
+  }
+
+  /* ── Controls ────────────────────────────────────────────────── */
+
+  .chip-control {
+    @apply inline-flex items-center gap-2 rounded-full border border-slate-200/80 bg-white/95 px-3.5 py-1.5 text-sm font-medium text-slate-600 shadow-[0_2px_8px_rgba(15,23,42,0.06)] transition-all duration-150 hover:-translate-y-px hover:border-slate-300 hover:shadow-[0_4px_12px_rgba(15,23,42,0.08)] hover:text-slate-900;
+  }
+
+  .chip-control-active {
+    @apply border-[#FFD2B8] bg-[#FFF4EC] text-[#9A3412] shadow-[0_4px_14px_rgba(255,92,24,0.14)];
+  }
+
+  /* ── List items ──────────────────────────────────────────────── */
+
+  .data-list-row {
+    @apply rounded-[18px] border border-slate-200/70 bg-white/95 px-4 py-3 shadow-[0_2px_10px_rgba(15,23,42,0.04)];
+  }
+
+  .empty-state {
+    @apply rounded-[20px] border border-dashed border-slate-300/80 bg-slate-50/70 px-6 py-12 text-center;
+  }
+
+  /* ── Navigation ──────────────────────────────────────────────── */
+
+  .glass-nav {
+    @apply border-b border-slate-200/60 bg-white/90 backdrop-blur-xl shadow-[0_1px_0_rgba(15,23,42,0.06)];
+  }
+
+  /* ── Admin ───────────────────────────────────────────────────── */
+
+  .admin-surface {
+    @apply rounded-[26px] border border-slate-200/80 bg-white shadow-[0_16px_44px_rgba(15,23,42,0.06)];
+  }
+
+  .admin-muted-surface {
+    @apply rounded-[22px] border border-white/10 bg-white/5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)];
+  }
+
+  /* ── Utility ─────────────────────────────────────────────────── */
+
+  .subpage-back {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-slate-200/90 bg-white/80 px-3 py-1.5 text-sm font-medium text-slate-500 transition-all duration-150 hover:border-slate-300 hover:bg-white hover:text-slate-900;
+  }
+
+  .section-divider-grid {
+    @apply overflow-hidden rounded-[18px] border border-slate-200/70 bg-slate-50/50;
+  }
+
+  .section-divider-item {
+    @apply px-4 py-4;
+  }
+
+  .toolbar-strip {
+    @apply flex flex-wrap items-center gap-2 border-t border-slate-200/70 pt-4;
+  }
+
+  /* ── Dashboard subpage content reset ────────────────────────── */
+
+  .dashboard-subpage-content > .app-page {
+    @apply min-h-0 bg-transparent px-0 py-0;
+  }
+
+  .dashboard-subpage-content > .app-page > .app-shell {
+    @apply max-w-none;
+  }
+
+  /* ── Scrollbar ───────────────────────────────────────────────── */
+
+  .soft-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(148, 163, 184, 0.4) transparent;
+  }
+
+  .soft-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .soft-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.38);
+    border: 2px solid transparent;
+    background-clip: padding-box;
+    border-radius: 9999px;
+  }
+
+  .soft-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+/* ── Input base styles ───────────────────────────────────────────── */
+@layer base {
+  input[type="text"],
+  input[type="email"],
+  input[type="number"],
+  input[type="tel"],
+  input[type="url"],
+  input[type="password"],
+  input[type="date"],
+  select,
+  textarea {
+    @apply rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 transition-colors duration-150;
+  }
+
+  input[type="text"]:focus,
+  input[type="email"]:focus,
+  input[type="number"]:focus,
+  input[type="tel"]:focus,
+  input[type="url"]:focus,
+  input[type="password"]:focus,
+  input[type="date"]:focus,
+  select:focus,
+  textarea:focus {
+    border-color: rgba(255, 92, 24, 0.55);
+    box-shadow: 0 0 0 3px rgba(255, 92, 24, 0.1);
+    outline: none;
+  }
+}
+
+/* ── Animations ──────────────────────────────────────────────────── */
+@layer utilities {
+  @keyframes fade-in {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes slide-up {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes scale-in {
+    from { opacity: 0; transform: scale(0.97); }
+    to   { opacity: 1; transform: scale(1); }
+  }
+
+  .animate-fade-in {
+    animation: fade-in 0.2s ease-out both;
+  }
+
+  .animate-slide-up {
+    animation: slide-up 0.25s ease-out both;
+  }
+
+  .animate-scale-in {
+    animation: scale-in 0.18s ease-out both;
   }
 }
