@@ -41,7 +41,15 @@ function calcConfidence(total1yr: number, approvalRate: number): number {
   return Math.min(100, score)
 }
 
-export async function importH1BDataFromBuffer(content: string): Promise<{ matched: number; skipped: number }> {
+export type H1BImportResult = {
+  processed: number
+  matched: number
+  skipped: number
+  scoresUpdated: number
+  unmatchedEmployers: string[]
+}
+
+export async function importH1BDataFromBuffer(content: string): Promise<H1BImportResult> {
   const rows = parse(content, { columns: true, skip_empty_lines: true, trim: true }) as Record<string, string>[]
 
   const supabase = await createClient()
@@ -63,17 +71,17 @@ export async function importH1BDataFromBuffer(content: string): Promise<{ matche
 
   let matched = 0
   let skipped = 0
+  let scoresUpdated = 0
+  const unmatchedEmployers: string[] = []
   const year = new Date().getFullYear()
 
   for (const [employerName, stats] of Array.from(aggregated.entries())) {
     const company = companies.find(c => fuzzyMatch(employerName, c.name))
-    if (!company) { skipped++; continue }
-
     const total = stats.approvals + stats.denials
     const approvalRate = total > 0 ? stats.approvals / total : 0
     const confidence = calcConfidence(stats.approvals, approvalRate)
     const h1bRecord: H1BRecordInsert = {
-      company_id: company.id,
+      company_id: company?.id ?? null,
       employer_name: employerName,
       year,
       total_petitions: total,
@@ -82,10 +90,30 @@ export async function importH1BDataFromBuffer(content: string): Promise<{ matche
       initial_approvals: stats.approvals,
       continuing_approvals: 0,
       naics_code: null,
-      raw_data: null,
+      raw_data: {
+        approvals: stats.approvals,
+        denials: stats.denials,
+      },
     }
 
-    await (supabase.from('h1b_records') as any).upsert(h1bRecord)
+    const { data: existingRecord } = await (supabase
+      .from('h1b_records')
+      .select('id')
+      .eq('employer_name', employerName)
+      .eq('year', year)
+      .maybeSingle() as any)
+
+    if (existingRecord?.id) {
+      await (supabase.from('h1b_records') as any).update(h1bRecord).eq('id', existingRecord.id)
+    } else {
+      await (supabase.from('h1b_records') as any).insert(h1bRecord)
+    }
+
+    if (!company) {
+      skipped++
+      unmatchedEmployers.push(employerName)
+      continue
+    }
 
     const update: CompanyUpdate = {
       h1b_sponsor_count_1yr: stats.approvals,
@@ -94,7 +122,14 @@ export async function importH1BDataFromBuffer(content: string): Promise<{ matche
     }
     await (supabase.from('companies') as any).update(update).eq('id', company.id)
     matched++
+    scoresUpdated++
   }
 
-  return { matched, skipped }
+  return {
+    processed: aggregated.size,
+    matched,
+    skipped,
+    scoresUpdated,
+    unmatchedEmployers,
+  }
 }

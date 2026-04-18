@@ -63,9 +63,12 @@ export interface Company {
   size: CompanySize | null;
   careers_url: string;
   ats_type: AtsType | null;
+  ats_identifier: string | null;
   is_active: boolean;
   last_crawled_at: string | null;
   job_count: number;
+  notes: string | null;
+  raw_ats_config: Record<string, unknown> | null;
   // H1B / sponsorship
   h1b_sponsor_count_1yr: number;
   h1b_sponsor_count_3yr: number;
@@ -156,9 +159,39 @@ export interface Profile {
   alert_frequency: AlertFrequency;
   email_alerts: boolean;
   push_alerts: boolean;
+  is_admin: boolean;
   created_at: string;
   updated_at: string;
 }
+
+// ---------------------------------------------------------------------------
+// API Usage
+// ---------------------------------------------------------------------------
+
+export interface ApiUsage {
+  id: string;
+  service: string; // claude, resend, webpush
+  operation: string | null;
+  tokens_used: number | null;
+  cost_usd: number | null;
+  created_at: string;
+}
+
+export type ApiUsageInsert = Omit<ApiUsage, 'id' | 'created_at'> & {
+  id?: string;
+  created_at?: string;
+};
+
+export interface SystemSetting {
+  key: string;
+  value: Record<string, unknown>;
+  updated_at: string;
+  updated_by: string | null;
+}
+
+export type SystemSettingInsert = Omit<SystemSetting, 'updated_at'> & {
+  updated_at?: string;
+};
 
 export type ProfileInsert = Pick<Profile, 'id'> &
   Partial<Omit<Profile, 'id' | 'created_at' | 'updated_at'>> & {
@@ -358,6 +391,12 @@ export interface Database {
         PushSubscriptionRecord,
         PushSubscriptionInsert,
         Partial<PushSubscriptionInsert>
+      >;
+      api_usage: TableDefinition<ApiUsage, ApiUsageInsert, Partial<ApiUsageInsert>>;
+      system_settings: TableDefinition<
+        SystemSetting,
+        SystemSettingInsert,
+        Partial<SystemSettingInsert>
       >;
     };
     Views: {};

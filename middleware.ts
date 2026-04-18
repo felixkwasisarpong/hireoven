@@ -1,7 +1,7 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
 
-const PROTECTED_PREFIXES = ["/dashboard"]
+const PROTECTED_PREFIXES = ["/dashboard", "/admin"]
 
 const PUBLIC_ROUTES = new Set(["/", "/login", "/signup", "/api/jobs", "/api/crawl"])
 

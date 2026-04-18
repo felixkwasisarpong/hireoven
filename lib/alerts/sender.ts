@@ -1,5 +1,6 @@
 import webpush from "web-push"
 import { Resend } from "resend"
+import { logApiUsage } from "@/lib/admin/usage"
 import { removeSubscription, getUserSubscriptions } from "@/lib/alerts/push-subscriptions"
 import { createAdminClient } from "@/lib/supabase/admin"
 import type { Company, Job, NotificationChannel, Profile } from "@/types"
@@ -283,6 +284,13 @@ export async function sendEmailAlert(
   })
 
   if (error) throw new Error(error.message)
+
+  await logApiUsage({
+    service: "resend",
+    operation: "email",
+    tokens_used: null,
+    cost_usd: 0,
+  })
 }
 
 export async function sendWatchlistAlert(
@@ -322,6 +330,13 @@ export async function sendWatchlistAlert(
   })
 
   if (error) throw new Error(error.message)
+
+  await logApiUsage({
+    service: "resend",
+    operation: "watchlist-email",
+    tokens_used: null,
+    cost_usd: 0,
+  })
 }
 
 export async function sendPushNotification(
@@ -374,6 +389,13 @@ export async function sendPushNotification(
   if (successCount === 0) {
     throw new Error(`Unable to deliver push notification to user ${userId}`)
   }
+
+  await logApiUsage({
+    service: "webpush",
+    operation: type,
+    tokens_used: null,
+    cost_usd: 0,
+  })
 }
 
 export function combineChannels({
