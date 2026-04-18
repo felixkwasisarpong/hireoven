@@ -1,3 +1,4 @@
+import { builtinModules, createRequire } from "node:module"
 import Anthropic from "@anthropic-ai/sdk"
 import { logApiUsage } from "@/lib/admin/usage"
 import type {
@@ -12,6 +13,7 @@ import type {
 const anthropic = process.env.ANTHROPIC_API_KEY
   ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
   : null
+const nodeRequire = createRequire(import.meta.url)
 
 const MODEL = "claude-haiku-4-5-20251001"
 const MODEL_PRICING = {
@@ -389,6 +391,30 @@ function normalizeParsedResume(raw: unknown, extractedText: string): ParsedResum
 }
 
 export async function extractTextFromPDF(buffer: Buffer): Promise<string> {
+  const processWithBuiltinModule = process as typeof process & {
+    getBuiltinModule?: (id: string) => unknown
+  }
+
+  if (typeof processWithBuiltinModule.getBuiltinModule !== "function") {
+    processWithBuiltinModule.getBuiltinModule = (id: string) => {
+      const normalized = id.startsWith("node:") ? id : `node:${id}`
+
+      if (
+        !builtinModules.includes(id) &&
+        !builtinModules.includes(normalized)
+      ) {
+        return undefined
+      }
+
+      try {
+        return nodeRequire(normalized)
+      } catch {
+        return undefined
+      }
+    }
+  }
+
+  await import("pdf-parse/worker")
   const { PDFParse } = await import("pdf-parse")
   const parser = new PDFParse({ data: new Uint8Array(buffer) })
   try {
