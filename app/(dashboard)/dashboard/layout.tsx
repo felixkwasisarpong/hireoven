@@ -1,10 +1,12 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
   BellRing,
   Bookmark,
+  Briefcase,
   Building2,
   FileText,
   Globe2,
@@ -21,8 +23,54 @@ import { ResumeProvider } from "@/components/resume/ResumeProvider"
 import { useAuth } from "@/lib/hooks/useAuth"
 import { cn } from "@/lib/utils"
 
+function PipelineWidget() {
+  const [counts, setCounts] = useState<{ active: number; offers: number } | null>(null)
+
+  useEffect(() => {
+    fetch("/api/applications/stats")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!data) return
+        setCounts({
+          active:
+            (data.by_status?.phone_screen ?? 0) +
+            (data.by_status?.interview ?? 0) +
+            (data.by_status?.final_round ?? 0),
+          offers: data.by_status?.offer ?? 0,
+        })
+      })
+      .catch(() => {})
+  }, [])
+
+  if (!counts || (counts.active === 0 && counts.offers === 0)) return null
+
+  return (
+    <Link
+      href="/dashboard/applications"
+      className="mx-0 mb-2 block rounded-[10px] border border-[#FFD2B8]/80 bg-[#FFF7F2] px-3 py-2.5 transition hover:bg-[#FFF1E8]"
+    >
+      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#9A3412]">Pipeline</p>
+      <div className="mt-1.5 flex items-center gap-3">
+        {counts.active > 0 && (
+          <div className="flex items-center gap-1">
+            <span className="text-base font-bold text-[#062246]">{counts.active}</span>
+            <span className="text-[11px] text-slate-500">active</span>
+          </div>
+        )}
+        {counts.offers > 0 && (
+          <div className="flex items-center gap-1">
+            <span className="text-base font-bold text-emerald-600">{counts.offers}</span>
+            <span className="text-[11px] text-slate-500">offer{counts.offers !== 1 ? "s" : ""}</span>
+          </div>
+        )}
+      </div>
+    </Link>
+  )
+}
+
 const NAV_ITEMS = [
   { label: "Feed", href: "/dashboard", icon: Waves },
+  { label: "Applications", href: "/dashboard/applications", icon: Briefcase },
   { label: "Companies", href: "/dashboard/companies", icon: Building2 },
   { label: "Resume", href: "/dashboard/resume", icon: FileText },
   { label: "Cover letters", href: "/dashboard/cover-letters", icon: Scroll },
@@ -109,6 +157,7 @@ function DashboardSubpageChrome({ children }: { children: React.ReactNode }) {
               </nav>
 
               <div className="mt-auto pt-4">
+                <PipelineWidget />
                 <div className="rounded-[12px] border border-slate-200/70 bg-slate-50/80 p-3">
                   <div className="flex items-center gap-2.5">
                     {profile?.avatar_url ? (

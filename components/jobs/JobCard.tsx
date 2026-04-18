@@ -204,7 +204,33 @@ function ScorePill({
 export default function JobCard({ job, hasPrimaryResume, analysisIndex = 99 }: JobCardProps) {
   const [expanded, setExpanded] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [saving, setSaving] = useState(false)
   const [drawerOpen, setDrawerOpen] = useState(false)
+
+  async function handleBookmark() {
+    if (saving) return
+    setSaving(true)
+    try {
+      await fetch("/api/applications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jobId: job.id,
+          companyName: job.company.name,
+          companyLogoUrl: job.company.logo_url ?? undefined,
+          jobTitle: job.title,
+          applyUrl: job.apply_url,
+          status: "saved",
+          source: "hireoven",
+        }),
+      })
+      setSaved(true)
+    } catch {
+      // silently ignore
+    } finally {
+      setSaving(false)
+    }
+  }
   const now = useLiveNow()
   const freshness = formatFreshness(job.first_detected_at, now)
   const { primaryResume } = useResumeContext()
@@ -355,13 +381,15 @@ export default function JobCard({ job, hasPrimaryResume, analysisIndex = 99 }: J
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={() => setSaved((c) => !c)}
+              onClick={() => void handleBookmark()}
+              disabled={saved || saving}
               className={`inline-flex h-10 w-10 items-center justify-center rounded-[14px] border transition ${
                 saved
                   ? "border-[#FF5C18] bg-[#FFF1E8] text-[#FF5C18]"
                   : "border-slate-200/80 bg-white text-slate-500 hover:border-slate-300 hover:text-slate-800"
-              }`}
-              aria-label={saved ? "Remove bookmark" : "Save job"}
+              } disabled:cursor-not-allowed`}
+              aria-label={saved ? "Saved to pipeline" : "Save to pipeline"}
+              title={saved ? "Saved to pipeline" : "Save to pipeline"}
             >
               <Bookmark className="h-4 w-4" fill={saved ? "currentColor" : "none"} />
             </button>

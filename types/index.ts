@@ -73,9 +73,96 @@ export type ApplicationStatus =
   | 'applied'
   | 'phone_screen'
   | 'interview'
+  | 'final_round'
   | 'offer'
   | 'rejected'
   | 'withdrawn';
+
+export type TimelineEntryType =
+  | 'status_change'
+  | 'note'
+  | 'interview_scheduled'
+  | 'offer_received'
+  | 'rejection_received';
+
+export type TimelineEntry = {
+  id: string;
+  type: TimelineEntryType;
+  status?: ApplicationStatus;
+  note?: string;
+  date: string;
+  auto: boolean;
+};
+
+export type InterviewFormat = 'phone' | 'video' | 'in_person' | 'take_home';
+export type InterviewOutcome = 'pending' | 'passed' | 'failed' | 'unknown';
+
+export type InterviewRound = {
+  id: string;
+  round_name: string;
+  date?: string;
+  format: InterviewFormat;
+  interviewer?: string;
+  notes?: string;
+  outcome: InterviewOutcome;
+};
+
+export type OfferDetails = {
+  base_salary?: number;
+  equity?: string;
+  signing_bonus?: number;
+  annual_bonus_target?: number;
+  benefits_notes?: string;
+  offer_deadline?: string;
+};
+
+export type JobApplication = {
+  id: string;
+  user_id: string;
+  job_id: string | null;
+  resume_id: string | null;
+  status: ApplicationStatus;
+  company_name: string;
+  company_logo_url: string | null;
+  job_title: string;
+  apply_url: string | null;
+  applied_at: string | null;
+  match_score: number | null;
+  cover_letter_id: string | null;
+  notes: string | null;
+  follow_up_date: string | null;
+  salary_expected: number | null;
+  salary_offered: number | null;
+  timeline: TimelineEntry[];
+  interviews: InterviewRound[];
+  offer_details: OfferDetails | null;
+  is_archived: boolean;
+  source: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type JobApplicationInsert = Omit<JobApplication, 'id' | 'created_at' | 'updated_at'> & {
+  id?: string;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type PipelineStats = {
+  total: number;
+  by_status: Record<ApplicationStatus, number>;
+  conversion_rates: {
+    applied_to_phone: number;
+    phone_to_interview: number;
+    interview_to_offer: number;
+    overall: number;
+  };
+  avg_days_to_response: number;
+  avg_days_in_interview: number;
+  applications_this_week: number;
+  applications_this_month: number;
+  response_rate: number;
+};
 
 export type AnalysisVerdict = 'strong_match' | 'good_match' | 'partial_match' | 'weak_match';
 
@@ -523,39 +610,6 @@ export type ResumeVersion = {
 export type ResumeVersionInsert = Omit<ResumeVersion, 'id' | 'created_at'> & {
   id?: string;
   created_at?: string;
-};
-
-export type JobApplicationTimelineItem = {
-  status: ApplicationStatus;
-  date: string;
-  note: string | null;
-};
-
-export type JobApplication = {
-  id: string;
-  user_id: string;
-  job_id: string | null;
-  resume_id: string | null;
-  status: ApplicationStatus;
-  company_name: string;
-  job_title: string;
-  apply_url: string | null;
-  applied_at: string | null;
-  match_score: number | null;
-  cover_letter: string | null;
-  notes: string | null;
-  follow_up_date: string | null;
-  salary_expected: number | null;
-  salary_offered: number | null;
-  timeline: JobApplicationTimelineItem[];
-  created_at: string;
-  updated_at: string;
-};
-
-export type JobApplicationInsert = Omit<JobApplication, 'id' | 'created_at' | 'updated_at'> & {
-  id?: string;
-  created_at?: string;
-  updated_at?: string;
 };
 
 export type JobApplicationUpdate = Partial<JobApplicationInsert>;

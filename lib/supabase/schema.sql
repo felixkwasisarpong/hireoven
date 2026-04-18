@@ -239,21 +239,34 @@ CREATE TABLE IF NOT EXISTS job_applications (
   user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
   job_id UUID REFERENCES jobs(id) ON DELETE SET NULL,
   resume_id UUID REFERENCES resumes(id) ON DELETE SET NULL,
+  cover_letter_id UUID REFERENCES cover_letters(id) ON DELETE SET NULL,
   status TEXT DEFAULT 'saved',
   company_name TEXT NOT NULL,
+  company_logo_url TEXT,
   job_title TEXT NOT NULL,
   apply_url TEXT,
   applied_at TIMESTAMPTZ,
   match_score INTEGER,
-  cover_letter TEXT,
   notes TEXT,
   follow_up_date DATE,
   salary_expected INTEGER,
   salary_offered INTEGER,
   timeline JSONB DEFAULT '[]'::jsonb,
+  interviews JSONB DEFAULT '[]'::jsonb,
+  offer_details JSONB,
+  is_archived BOOLEAN DEFAULT false,
+  source TEXT DEFAULT 'hireoven',
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Migrations for existing installations
+ALTER TABLE job_applications ADD COLUMN IF NOT EXISTS cover_letter_id UUID REFERENCES cover_letters(id) ON DELETE SET NULL;
+ALTER TABLE job_applications ADD COLUMN IF NOT EXISTS company_logo_url TEXT;
+ALTER TABLE job_applications ADD COLUMN IF NOT EXISTS interviews JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE job_applications ADD COLUMN IF NOT EXISTS offer_details JSONB;
+ALTER TABLE job_applications ADD COLUMN IF NOT EXISTS is_archived BOOLEAN DEFAULT false;
+ALTER TABLE job_applications ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'hireoven';
 
 -- =============================================================================
 -- Indexes

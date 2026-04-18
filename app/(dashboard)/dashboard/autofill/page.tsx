@@ -265,6 +265,7 @@ export default function AutofillPage() {
   const [profileId, setProfileId] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [saveStatus, setSaveStatus] = useState<"idle" | "saved" | "error">("idle")
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [isImprovingStatement, setIsImprovingStatement] = useState(false)
   const [showAddress, setShowAddress] = useState(false)
   const [showDiversity, setShowDiversity] = useState(false)
@@ -375,6 +376,7 @@ export default function AutofillPage() {
   const handleSave = useCallback(async () => {
     setIsSaving(true)
     setSaveStatus("idle")
+    setSaveError(null)
     try {
       const method = profileId ? "PATCH" : "POST"
       const res = await fetch("/api/autofill/profile", {
@@ -382,12 +384,13 @@ export default function AutofillPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
       })
-      const data = await res.json() as { profile?: AutofillProfile }
-      if (!res.ok) throw new Error("Save failed")
+      const data = await res.json() as { profile?: AutofillProfile; error?: string }
+      if (!res.ok) throw new Error(data.error ?? "Save failed")
       if (data.profile && !profileId) setProfileId(data.profile.id)
       setSaveStatus("saved")
       setTimeout(() => setSaveStatus("idle"), 3000)
-    } catch {
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "Save failed")
       setSaveStatus("error")
     } finally {
       setIsSaving(false)
@@ -399,7 +402,7 @@ export default function AutofillPage() {
   )
 
   return (
-    <main className="app-page pb-28">
+    <main className="app-page pb-10">
       <div className="app-shell max-w-[1240px] space-y-4">
         <DashboardPageHeader
           kicker="Autofill profile"
@@ -754,20 +757,20 @@ export default function AutofillPage() {
             </div>
           )}
         </Section>
-      </div>
 
-      {/* Fixed save bar */}
-      <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-gray-100 bg-white/95 backdrop-blur-sm px-4 py-4">
-        <div className="mx-auto flex max-w-[1240px] items-center justify-between gap-4">
-          <div className="text-sm text-gray-500 hidden sm:block">
-            Profile is <span className="font-semibold text-gray-900">{completion}%</span> complete
-          </div>
-          <div className="flex items-center gap-3 ml-auto">
+        <div className="sticky bottom-4 z-20 pt-3">
+          <div className="surface-card flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+            <div className="text-sm text-gray-500">
+              Profile is <span className="font-semibold text-gray-900">{completion}%</span> complete
+            </div>
+            <div className="flex flex-wrap items-center gap-3 sm:ml-auto">
             {saveStatus === "saved" && (
               <span className="text-sm font-medium text-emerald-600">✓ Profile saved — autofill is ready</span>
             )}
             {saveStatus === "error" && (
-              <span className="text-sm font-medium text-red-600">Save failed — try again</span>
+              <span className="text-sm font-medium text-red-600">
+                {saveError ? `Save failed — ${saveError}` : "Save failed — try again"}
+              </span>
             )}
             <button
               type="button"
@@ -778,6 +781,7 @@ export default function AutofillPage() {
               {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               {isSaving ? "Saving…" : "Save autofill profile"}
             </button>
+            </div>
           </div>
         </div>
       </div>

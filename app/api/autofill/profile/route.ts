@@ -4,6 +4,22 @@ import type { AutofillProfile, AutofillProfileInsert, AutofillProfileUpdate } fr
 
 export const runtime = "nodejs"
 
+async function getExistingProfile(supabase: any, userId: string) {
+  const { data, error } = await (supabase
+    .from("autofill_profiles" as any)
+    .select("*")
+    .eq("user_id", userId)
+    .order("updated_at", { ascending: false })
+    .limit(1) as any)
+
+  if (error) return { profile: null as AutofillProfile | null, error }
+
+  return {
+    profile: ((data as AutofillProfile[] | null) ?? [])[0] ?? null,
+    error: null,
+  }
+}
+
 function calcCompletion(p: Partial<AutofillProfile>): number {
   const required: Array<keyof AutofillProfile> = [
     "first_name", "last_name", "email", "phone",
@@ -36,13 +52,8 @@ export async function GET() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  const { data } = await (supabase
-    .from("autofill_profiles" as any)
-    .select("*")
-    .eq("user_id", user.id)
-    .single() as any)
-
-  const profile = data as AutofillProfile | null
+  const { profile, error } = await getExistingProfile(supabase, user.id)
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   const completion = profile ? calcCompletion(profile) : 0
   return NextResponse.json({
     profile: profile ?? null,
@@ -58,14 +69,24 @@ export async function POST(request: Request) {
 
   const body = await request.json().catch(() => ({})) as Omit<AutofillProfileInsert, "user_id">
 
-  const { data, error } = await (supabase
-    .from("autofill_profiles" as any)
-    .upsert(
-      { ...body, user_id: user.id, updated_at: new Date().toISOString() } as any,
-      { onConflict: "user_id" }
-    )
-    .select("*")
-    .single() as any)
+  const existing = await getExistingProfile(supabase, user.id)
+  if (existing.error) return NextResponse.json({ error: existing.error.message }, { status: 500 })
+
+  const payload = {
+    ...body,
+    user_id: user.id,
+    updated_at: new Date().toISOString(),
+  } as any
+
+  const table = (supabase as any).from("autofill_profiles")
+  const query = existing.profile
+    ? (table
+        .update(payload)
+        .eq("id", existing.profile.id))
+    : (table
+        .insert(payload))
+
+  const { data, error } = await (query.select("*").single() as any)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   const profile = data as AutofillProfile
@@ -79,13 +100,24 @@ export async function PATCH(request: Request) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const body = await request.json().catch(() => ({})) as AutofillProfileUpdate
-  const table = (supabase as any).from("autofill_profiles")
+  const existing = await getExistingProfile(supabase, user.id)
+  if (existing.error) return NextResponse.json({ error: existing.error.message }, { status: 500 })
 
-  const { data, error } = await table
-    .update({ ...body, updated_at: new Date().toISOString() })
-    .eq("user_id", user.id)
-    .select("*")
-    .single()
+  const payload = {
+    ...body,
+    user_id: user.id,
+    updated_at: new Date().toISOString(),
+  } as any
+
+  const table = (supabase as any).from("autofill_profiles")
+  const query = existing.profile
+    ? (table
+        .update(payload)
+        .eq("id", existing.profile.id))
+    : (table
+        .insert(payload))
+
+  const { data, error } = await (query.select("*").single() as any)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   const profile = data as AutofillProfile
