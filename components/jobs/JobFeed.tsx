@@ -64,7 +64,15 @@ export default function JobFeed({
     return () => window.clearInterval(id)
   }, [])
 
+  const lastMetaRef = useRef({ totalCount: -1, lastHourCount: -1 })
   useEffect(() => {
+    if (
+      lastMetaRef.current.totalCount === totalCount &&
+      lastMetaRef.current.lastHourCount === lastHourCount
+    ) {
+      return
+    }
+    lastMetaRef.current = { totalCount, lastHourCount }
     onMetaChange?.({ totalCount, lastHourCount })
   }, [lastHourCount, onMetaChange, totalCount])
 

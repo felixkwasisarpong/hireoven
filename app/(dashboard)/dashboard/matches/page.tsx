@@ -7,6 +7,7 @@ import { MatchScorePill } from "@/components/matching/MatchScorePill"
 import { useResumeContext } from "@/components/resume/ResumeProvider"
 import DashboardPageHeader from "@/components/layout/DashboardPageHeader"
 import { explainScore } from "@/lib/matching/score-explainer"
+import { devWarn } from "@/lib/client-dev-log"
 import { createClient } from "@/lib/supabase/client"
 import type { JobWithMatchScore } from "@/types"
 
@@ -55,7 +56,7 @@ export default function MatchesPage() {
         setUserId(data.user?.id ?? null)
       })
       .catch((error) => {
-        console.warn("Failed to load matches user", error)
+        devWarn("Failed to load matches user", error)
         if (!cancelled) setUserId(null)
       })
 

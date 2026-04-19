@@ -3,6 +3,7 @@
 import { useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { GripVertical, Sparkles } from "lucide-react"
+import CompanyLogo from "@/components/ui/CompanyLogo"
 import { cn } from "@/lib/utils"
 import type { JobApplication } from "@/types"
 
@@ -50,18 +51,12 @@ export function ApplicationCard({ application, onOpen }: Props) {
       </div>
 
       <div className="flex items-start gap-2.5">
-        {application.company_logo_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={application.company_logo_url}
-            alt={application.company_name}
-            className="h-9 w-9 flex-shrink-0 rounded-xl border border-slate-200/80 object-cover"
-          />
-        ) : (
-          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-[#FFF1E8] text-sm font-bold text-[#062246]">
-            {application.company_name.charAt(0).toUpperCase()}
-          </div>
-        )}
+        <CompanyLogo
+          companyName={application.company_name}
+          domain={application.company_domain ?? undefined}
+          logoUrl={application.company_logo_url}
+          className="h-9 w-9 rounded-xl"
+        />
 
         <div className="min-w-0 flex-1 pr-5">
           <p className="truncate text-[10.5px] font-semibold uppercase tracking-[0.18em] text-slate-400">

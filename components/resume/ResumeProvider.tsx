@@ -8,6 +8,7 @@ import {
   useMemo,
   useState,
 } from "react"
+import { devError } from "@/lib/client-dev-log"
 import { createClient } from "@/lib/supabase/client"
 import type { Resume } from "@/types"
 
@@ -67,7 +68,7 @@ export function ResumeProvider({ children }: { children: React.ReactNode }) {
       .order("created_at", { ascending: false })
 
     if (error) {
-      console.error("Failed to load resumes", error)
+      devError("Failed to load resumes", error)
       setResumes([])
       setIsLoading(false)
       return

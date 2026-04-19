@@ -1,32 +1,36 @@
 import Link from "next/link"
+import { BadgePercent, LogIn, UserPlus } from "lucide-react"
 import HireovenLogo from "@/components/ui/HireovenLogo"
 
 export default function Navbar() {
   return (
     <nav className="glass-nav sticky top-0 z-40 px-4 py-3 lg:px-8">
-      <div className="mx-auto flex max-w-6xl items-center justify-between">
-        <div className="flex items-center gap-8">
-          <Link href="/" className="flex items-center">
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-4">
+        <div className="flex min-w-0 items-center gap-6 sm:gap-8">
+          <Link href="/" className="flex shrink-0 items-center">
             <HireovenLogo className="h-10 w-auto" priority />
           </Link>
           <Link
             href="/pricing"
-            className="hidden text-sm font-medium text-muted-foreground transition-colors hover:text-strong sm:block"
+            className="hidden items-center gap-2 text-sm font-semibold text-muted-foreground transition-colors hover:text-strong sm:inline-flex"
           >
+            <BadgePercent className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
             Pricing
           </Link>
         </div>
-        <div className="flex items-center gap-1 rounded-lg border border-border bg-surface p-1 shadow-[0_1px_0_rgba(15,23,42,0.04)]">
+        <div className="flex shrink-0 items-center gap-1 rounded-xl border border-border bg-surface p-1 shadow-[0_1px_0_rgba(15,23,42,0.04)]">
           <Link
             href="/login"
-            className="rounded-md px-3.5 py-2 text-sm font-semibold text-muted-foreground transition-colors hover:bg-surface-alt hover:text-strong"
+            className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors hover:bg-surface-alt hover:text-strong"
           >
+            <LogIn className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
             Login
           </Link>
           <Link
             href="/signup"
-            className="rounded-md bg-primary px-3.5 py-2 text-sm font-semibold text-primary-foreground shadow-[0_1px_0_rgba(0,0,0,0.06)] transition-colors hover:bg-primary-hover"
+            className="inline-flex items-center gap-2 rounded-lg bg-primary px-3.5 py-2 text-sm font-semibold text-primary-foreground shadow-[0_1px_0_rgba(0,0,0,0.06)] transition-colors hover:bg-primary-hover"
           >
+            <UserPlus className="h-4 w-4 shrink-0" aria-hidden />
             Sign up
           </Link>
         </div>

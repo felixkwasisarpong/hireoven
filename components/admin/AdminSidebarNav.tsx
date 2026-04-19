@@ -26,11 +26,24 @@ const LINKS = [
   { href: "/admin/settings", label: "Settings", icon: Settings },
 ]
 
+/** Pinned below the scrollable nav on large screens — import from admin layout. */
+export function AdminSidebarRealtimeTip() {
+  return (
+    <div className="admin-muted-surface p-4 text-sm text-gray-400">
+      <div className="mb-2 flex items-center gap-2 text-white">
+        <Waves className="h-4 w-4" />
+        Realtime ops
+      </div>
+      Keep an eye on crawls, fresh jobs, and alert delivery in one place.
+    </div>
+  )
+}
+
 export default function AdminSidebarNav() {
   const pathname = usePathname()
 
   return (
-    <nav className="space-y-2">
+    <nav className="space-y-2" aria-label="Admin">
       {LINKS.map((link) => {
         const active =
           link.href === "/admin" ? pathname === link.href : pathname.startsWith(link.href)
@@ -46,27 +59,20 @@ export default function AdminSidebarNav() {
                 : "text-gray-400 hover:bg-white/5 hover:text-white"
             )}
           >
-            <span className={cn(
-              "flex h-9 w-9 items-center justify-center rounded-xl border transition",
-              active
-                ? "border-white/10 bg-white/10 text-white"
-                : "border-white/5 bg-white/[0.03] text-gray-400 group-hover:text-white"
-            )}>
+            <span
+              className={cn(
+                "flex h-9 w-9 items-center justify-center rounded-xl border transition",
+                active
+                  ? "border-white/10 bg-white/10 text-white"
+                  : "border-white/5 bg-white/[0.03] text-gray-400 group-hover:text-white"
+              )}
+            >
               <Icon className="h-4 w-4" />
             </span>
             {link.label}
           </Link>
         )
       })}
-      <div className="pt-4">
-        <div className="admin-muted-surface p-4 text-sm text-gray-400">
-          <div className="mb-2 flex items-center gap-2 text-white">
-            <Waves className="h-4 w-4" />
-            Realtime ops
-          </div>
-          Keep an eye on crawls, fresh jobs, and alert delivery in one place.
-        </div>
-      </div>
     </nav>
   )
 }
