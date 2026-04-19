@@ -4,6 +4,7 @@ import { mapAnalysisToDeepScore } from "@/lib/matching/deep-scorer"
 import { analyzeResumeForJob, getCachedAnalysis } from "@/lib/resume/analyzer"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { createClient } from "@/lib/supabase/server"
+import { requireFeature } from "@/lib/gates/server-gate"
 import type { Company, Job, JobMatchScore } from "@/types"
 
 export const runtime = "nodejs"
@@ -11,14 +12,11 @@ export const dynamic = "force-dynamic"
 export const maxDuration = 60
 
 export async function POST(request: Request) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const gate = await requireFeature("deep_analysis")
+  if (gate instanceof NextResponse) return gate
 
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  const supabase = await createClient()
+  const user = (await supabase.auth.getUser()).data.user!
 
   const body = (await request.json().catch(() => ({}))) as { jobId?: string }
   const jobId = body.jobId

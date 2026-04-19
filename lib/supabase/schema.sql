@@ -826,3 +826,33 @@ BEGIN
       WITH CHECK (public.is_admin_user());
   END IF;
 END $$;
+
+-- =============================================================================
+-- Subscriptions table
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS subscriptions (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  plan TEXT NOT NULL DEFAULT 'free' CHECK (plan IN ('free', 'pro', 'pro_international')),
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'trialing', 'canceled', 'past_due', 'unpaid')),
+  stripe_customer_id TEXT,
+  stripe_subscription_id TEXT UNIQUE,
+  current_period_start TIMESTAMPTZ,
+  current_period_end TIMESTAMPTZ,
+  cancel_at_period_end BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE subscriptions ENABLE ROW LEVEL SECURITY;
+
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'subscriptions' AND policyname = 'Users can view own subscription'
+  ) THEN
+    CREATE POLICY "Users can view own subscription"
+      ON subscriptions FOR SELECT
+      USING (auth.uid() = user_id);
+  END IF;
+END $$;

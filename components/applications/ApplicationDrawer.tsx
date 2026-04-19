@@ -17,6 +17,7 @@ import {
 import { cn } from "@/lib/utils"
 import type { ApplicationStatus, InterviewFormat, InterviewOutcome, InterviewRound, JobApplication, OfferDetails } from "@/types"
 import { InterviewPrep } from "./InterviewPrep"
+import FeatureGate from "@/components/gates/FeatureGate"
 
 const STATUS_META: Record<ApplicationStatus, { label: string; color: string }> = {
   saved: { label: "Saved", color: "bg-slate-100 text-slate-600 border-slate-200" },
@@ -374,7 +375,9 @@ function InterviewsTab({ app, onUpdate }: { app: JobApplication; onUpdate: Props
       {(app.interviews ?? []).length > 0 && (
         <div className="border-t border-slate-100 pt-4">
           <p className="mb-3 text-[11.5px] font-semibold uppercase tracking-[0.18em] text-slate-400">Interview prep</p>
-          <InterviewPrep applicationId={app.id} />
+          <FeatureGate feature="interview_prep" promptVariant="inline">
+            <InterviewPrep applicationId={app.id} />
+          </FeatureGate>
         </div>
       )}
     </div>

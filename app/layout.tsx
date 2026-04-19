@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from "next"
 import { Inter } from "next/font/google"
 import ServiceWorkerRegistration from "@/components/pwa/ServiceWorkerRegistration"
 import { RouteToastBridge, ToastProvider } from "@/components/ui/ToastProvider"
+import { UpgradeModalProvider } from "@/lib/context/UpgradeModalContext"
+import UpgradeModal from "@/components/gates/UpgradeModal"
 import "./globals.css"
 
 const inter = Inter({ subsets: ["latin"] })
@@ -42,11 +44,14 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        <ToastProvider>
-          <RouteToastBridge />
-          {children}
-          <ServiceWorkerRegistration />
-        </ToastProvider>
+        <UpgradeModalProvider>
+          <ToastProvider>
+            <RouteToastBridge />
+            {children}
+            <UpgradeModal />
+            <ServiceWorkerRegistration />
+          </ToastProvider>
+        </UpgradeModalProvider>
       </body>
     </html>
   )

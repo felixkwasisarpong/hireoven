@@ -21,7 +21,54 @@ import NotificationBell from "@/components/notifications/NotificationBell"
 import HireovenLogo from "@/components/ui/HireovenLogo"
 import { ResumeProvider } from "@/components/resume/ResumeProvider"
 import { useAuth } from "@/lib/hooks/useAuth"
+import { useSubscription } from "@/lib/hooks/useSubscription"
+import { useUpgradeModal } from "@/lib/context/UpgradeModalContext"
 import { cn } from "@/lib/utils"
+
+const NUDGE_DISMISS_KEY = "upgrade_nudge_dismissed_at"
+const NUDGE_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
+
+function UpgradeNudge() {
+  const { isPro } = useSubscription()
+  const { showUpgrade } = useUpgradeModal()
+  const [visible, setVisible] = useState(true)
+
+  useEffect(() => {
+    const dismissed = localStorage.getItem(NUDGE_DISMISS_KEY)
+    if (dismissed && Date.now() - Number(dismissed) < NUDGE_COOLDOWN_MS) {
+      setVisible(false)
+    }
+  }, [])
+
+  if (isPro || !visible) return null
+
+  function dismiss() {
+    localStorage.setItem(NUDGE_DISMISS_KEY, String(Date.now()))
+    setVisible(false)
+  }
+
+  return (
+    <div className="mb-2 rounded-[12px] border border-[#FFD2B8]/80 bg-[#FFF7F2] p-3">
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#9A3412]">Upgrade</p>
+        <button type="button" onClick={dismiss} className="text-[#9A3412]/50 hover:text-[#9A3412] transition">
+          <span className="text-xs">✕</span>
+        </button>
+      </div>
+      <p className="mt-1 text-[12px] leading-snug text-slate-600">
+        Unlock AI cover letters, autofill, resume analysis, and more.
+      </p>
+      <button
+        type="button"
+        onClick={() => showUpgrade("resume_upload")}
+        className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-lg bg-[#FF5C18] px-3 py-1.5 text-[12px] font-semibold text-white transition hover:bg-[#E14F0E]"
+      >
+        <Zap className="h-3 w-3" />
+        See Pro plans
+      </button>
+    </div>
+  )
+}
 
 function PipelineWidget() {
   const [counts, setCounts] = useState<{ active: number; offers: number } | null>(null)
@@ -157,6 +204,7 @@ function DashboardSubpageChrome({ children }: { children: React.ReactNode }) {
               </nav>
 
               <div className="mt-auto pt-4">
+                <UpgradeNudge />
                 <PipelineWidget />
                 <div className="rounded-[12px] border border-slate-200/70 bg-slate-50/80 p-3">
                   <div className="flex items-center gap-2.5">
