@@ -12,11 +12,13 @@ import {
   Settings,
   Users,
   Waves,
+  ClipboardList,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 const LINKS = [
   { href: "/admin", label: "Overview", icon: LayoutDashboard },
+  { href: "/admin/waitlist", label: "Waitlist", icon: ClipboardList },
   { href: "/admin/companies", label: "Companies", icon: Building2 },
   { href: "/admin/jobs", label: "Jobs", icon: Briefcase },
   { href: "/admin/crawl", label: "Crawl monitor", icon: Radar },

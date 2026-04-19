@@ -865,3 +865,27 @@ DO $$ BEGIN
       USING (auth.uid() = user_id);
   END IF;
 END $$;
+
+-- =============================================================================
+-- Waitlist (pre-launch marketing)
+-- =============================================================================
+-- Captured via /launch; accessed only from server (service role) in API routes.
+CREATE TABLE IF NOT EXISTS waitlist (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  email TEXT UNIQUE NOT NULL,
+  source TEXT DEFAULT 'launch_page',
+  referrer TEXT,
+  is_international BOOLEAN,
+  visa_status TEXT,
+  university TEXT,
+  metadata JSONB,
+  confirmed BOOLEAN DEFAULT false,
+  confirmation_token TEXT,
+  joined_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_waitlist_joined_at ON waitlist(joined_at);
+CREATE INDEX IF NOT EXISTS idx_waitlist_confirmation_token ON waitlist(confirmation_token) WHERE confirmation_token IS NOT NULL;
+
+ALTER TABLE waitlist ENABLE ROW LEVEL SECURITY;
+-- No policies: anon/authenticated clients cannot read/write; service role bypasses RLS.

@@ -349,4 +349,19 @@
   .pricing-save-badge {
     animation: pricing-save-slide 0.22s ease-out both;
   }
+
+  @keyframes launch-feed-card {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .animate-launch-feed-card {
+    animation: launch-feed-card 0.45s ease-out both;
+  }
 }

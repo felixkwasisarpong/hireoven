@@ -480,6 +480,40 @@ export type ProfileInsert = Pick<Profile, 'id'> &
 export type ProfileUpdate = Partial<Omit<Profile, 'id' | 'created_at' | 'updated_at'>>;
 
 // ---------------------------------------------------------------------------
+// Waitlist (pre-launch)
+// ---------------------------------------------------------------------------
+
+export type Waitlist = {
+  id: string;
+  email: string;
+  source: string | null;
+  referrer: string | null;
+  is_international: boolean | null;
+  visa_status: string | null;
+  university: string | null;
+  metadata: Record<string, unknown> | null;
+  confirmed: boolean;
+  confirmation_token: string | null;
+  joined_at: string;
+};
+
+export type WaitlistInsert = {
+  id?: string;
+  email: string;
+  source?: string | null;
+  referrer?: string | null;
+  is_international?: boolean | null;
+  visa_status?: string | null;
+  university?: string | null;
+  metadata?: Record<string, unknown> | null;
+  confirmed?: boolean;
+  confirmation_token?: string | null;
+  joined_at?: string;
+};
+
+export type WaitlistUpdate = Partial<Omit<WaitlistInsert, 'email'>>;
+
+// ---------------------------------------------------------------------------
 // Resumes
 // ---------------------------------------------------------------------------
 
@@ -940,6 +974,7 @@ export type Database = {
       cover_letters: TableDefinition<CoverLetter, CoverLetterInsert, CoverLetterUpdate>;
       autofill_profiles: TableDefinition<AutofillProfile, AutofillProfileInsert, AutofillProfileUpdate>;
       autofill_history: TableDefinition<AutofillHistory, AutofillHistoryInsert, Partial<AutofillHistoryInsert>>;
+      waitlist: TableDefinition<Waitlist, WaitlistInsert, WaitlistUpdate>;
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
