@@ -12,6 +12,7 @@ const PROTECTED_API_PREFIXES = [
   "/api/watchlist",
   "/api/applications",
   "/api/subscription",
+  "/api/billing",
 ]
 
 const PUBLIC_ROUTES = new Set(["/", "/login", "/signup", "/api/jobs", "/api/crawl"])

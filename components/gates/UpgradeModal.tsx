@@ -1,9 +1,10 @@
 "use client"
 
 import { useState } from "react"
-import { Check, X, Zap } from "lucide-react"
+import { Check, Loader2, X, Zap } from "lucide-react"
 import { useUpgradeModal } from "@/lib/context/UpgradeModalContext"
-import { FEATURE_DESCRIPTIONS, PLAN_PRICES, type FeatureKey } from "@/lib/gates"
+import { FEATURE_DESCRIPTIONS, type FeatureKey } from "@/lib/gates"
+import { PLAN_DATA, type BillingInterval, type PlanKey } from "@/lib/pricing"
 
 const PRO_FEATURES = [
   "Upload & AI-analyze your resume",
@@ -78,16 +79,34 @@ function PlanCard({
 export default function UpgradeModal() {
   const { state, hideUpgrade } = useUpgradeModal()
   const [annual, setAnnual] = useState(true)
+  const [loadingPlan, setLoadingPlan] = useState<PlanKey | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   if (!state.open) return null
 
   const feature = state.feature as FeatureKey | null
   const featureDesc = feature ? FEATURE_DESCRIPTIONS[feature] : null
-  const proPrice = annual ? PLAN_PRICES.pro.annual : PLAN_PRICES.pro.monthly
-  const intlPrice = annual ? PLAN_PRICES.pro_international.annual : PLAN_PRICES.pro_international.monthly
+  const interval: BillingInterval = annual ? "yearly" : "monthly"
+  const proPrice = annual ? PLAN_DATA.pro.yearly : PLAN_DATA.pro.monthly
+  const intlPrice = annual ? PLAN_DATA.pro_international.yearly : PLAN_DATA.pro_international.monthly
 
-  function handleSelectPlan(plan: string) {
-    window.location.href = `/api/checkout?plan=${plan}&billing=${annual ? "annual" : "monthly"}`
+  async function handleSelectPlan(plan: PlanKey) {
+    setLoadingPlan(plan)
+    setError(null)
+
+    const response = await fetch("/api/stripe/checkout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ plan, interval }),
+    })
+    const data = await response.json().catch(() => ({}))
+    if (data.url) {
+      window.location.href = data.url
+      return
+    }
+
+    setError(data.error ?? "Could not start checkout. Please try again.")
+    setLoadingPlan(null)
   }
 
   return (
@@ -137,17 +156,23 @@ export default function UpgradeModal() {
                   annual ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
                 }`}
               >
-                Annual <span className="ml-1 text-xs text-emerald-600 font-semibold">Save 26%</span>
+                Annual <span className="ml-1 text-xs text-emerald-600 font-semibold">Save 35%</span>
               </button>
             </div>
           </div>
+
+          {error && (
+            <div className="mb-4 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {error}
+            </div>
+          )}
 
           <div className="grid gap-4 sm:grid-cols-2">
             <PlanCard
               name="Pro"
               price={proPrice}
               features={PRO_FEATURES}
-              cta="Get Pro"
+              cta={loadingPlan === "pro" ? "Opening checkout…" : "Get Pro"}
               highlighted
               onSelect={() => handleSelectPlan("pro")}
             />
@@ -155,10 +180,17 @@ export default function UpgradeModal() {
               name="Pro + International"
               price={intlPrice}
               features={INTL_FEATURES}
-              cta="Get Pro + International"
+              cta={loadingPlan === "pro_international" ? "Opening checkout…" : "Get Pro + International"}
               onSelect={() => handleSelectPlan("pro_international")}
             />
           </div>
+
+          {loadingPlan && (
+            <div className="mt-4 flex items-center justify-center gap-2 text-xs font-medium text-slate-500">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Redirecting to secure Stripe checkout
+            </div>
+          )}
         </div>
       </div>
     </div>

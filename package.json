@@ -6,7 +6,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "db:backfill-careers-urls": "npx tsx scripts/backfill-company-careers-urls.ts",
+    "db:backfill-logo-urls": "npx tsx scripts/backfill-company-logo-urls.ts",
+    "db:seed-companies": "npx tsx scripts/seed-companies.ts",
+    "db:seed-companies:dry-run": "npx tsx scripts/seed-companies.ts --dry-run"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.52.0",
@@ -33,11 +37,13 @@
     "react": "^18",
     "react-dom": "^18",
     "resend": "^6.12.0",
+    "stripe": "^22.0.2",
     "tailwind-merge": "^2.2.0",
     "web-push": "^3.6.7",
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "tsx": "^4.19.2",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",

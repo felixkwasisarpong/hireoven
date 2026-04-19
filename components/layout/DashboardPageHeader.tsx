@@ -26,7 +26,7 @@ export default function DashboardPageHeader({
   className,
 }: DashboardPageHeaderProps) {
   return (
-    <section className={cn("surface-hero px-5 py-5 md:px-6 md:py-6", className)}>
+    <section className={cn("surface-panel rounded-lg px-5 py-5 md:px-6 md:py-6", className)}>
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div className="min-w-0">
           {backHref ? (

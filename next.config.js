@@ -6,6 +6,8 @@ const nextConfig = {
       { hostname: "**.lever.co" },
       { hostname: "**.ashbyhq.com" },
       { hostname: "logo.clearbit.com" },
+      { hostname: "unavatar.io" },
+      { hostname: "www.google.com" },
       { hostname: "**.supabase.co" },
       { hostname: "**.supabase.in" },
     ],

@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next"
 import { Inter } from "next/font/google"
 import ServiceWorkerRegistration from "@/components/pwa/ServiceWorkerRegistration"
 import { RouteToastBridge, ToastProvider } from "@/components/ui/ToastProvider"
+import { SubscriptionProvider } from "@/lib/context/SubscriptionContext"
 import { UpgradeModalProvider } from "@/lib/context/UpgradeModalContext"
 import UpgradeModal from "@/components/gates/UpgradeModal"
 import "./globals.css"
@@ -45,12 +46,14 @@ export default function RootLayout({
     <html lang="en">
       <body className={inter.className}>
         <UpgradeModalProvider>
-          <ToastProvider>
-            <RouteToastBridge />
-            {children}
-            <UpgradeModal />
-            <ServiceWorkerRegistration />
-          </ToastProvider>
+          <SubscriptionProvider>
+            <ToastProvider>
+              <RouteToastBridge />
+              {children}
+              <UpgradeModal />
+              <ServiceWorkerRegistration />
+            </ToastProvider>
+          </SubscriptionProvider>
         </UpgradeModalProvider>
       </body>
     </html>

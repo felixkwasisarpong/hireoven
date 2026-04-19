@@ -61,19 +61,19 @@ export default function JobSearch({ totalCount }: JobSearchProps) {
   return (
     <div className="space-y-2">
       <div className="relative">
-        <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <input
           type="search"
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
           placeholder="Search title, company, skills, location…"
-          className="w-full rounded-[16px] border border-slate-200/80 bg-white py-3.5 pl-11 pr-11 text-sm text-slate-900 outline-none transition focus:border-[#FF5C18] focus:ring-2 focus:ring-[#FF5C18]/20"
+          className="w-full rounded-lg border border-border bg-surface py-3 pl-10 pr-10 text-sm text-strong outline-none transition-colors focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
         />
         {draft && (
           <button
             type="button"
             onClick={clearQuery}
-            className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-gray-400 transition hover:bg-slate-100 hover:text-slate-700"
+            className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-alt hover:text-strong"
             aria-label="Clear search"
           >
             <X className="h-4 w-4" />
@@ -82,9 +82,9 @@ export default function JobSearch({ totalCount }: JobSearchProps) {
       </div>
 
       {query && totalCount !== undefined && (
-        <p className="pl-1 text-xs text-slate-500">
+        <p className="pl-0.5 text-xs text-muted-foreground">
           {totalCount.toLocaleString()} result{totalCount === 1 ? "" : "s"} for{" "}
-          <span className="font-medium text-slate-700">&ldquo;{query}&rdquo;</span>
+          <span className="font-medium text-strong">&ldquo;{query}&rdquo;</span>
         </p>
       )}
     </div>

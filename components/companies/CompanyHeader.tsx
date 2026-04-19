@@ -1,6 +1,7 @@
 'use client'
 
 import { Globe2 } from 'lucide-react'
+import CompanyLogo from '@/components/ui/CompanyLogo'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { useWatchlist } from '@/lib/hooks/useWatchlist'
 import type { Company } from '@/types'
@@ -20,25 +21,12 @@ export default function CompanyHeader({ company, showWatchButton = true, newJobs
   return (
     <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
       <div className="flex items-start gap-5">
-        {company.logo_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={company.logo_url}
-            alt={company.name}
-            onError={(e) => {
-              const el = e.currentTarget as HTMLImageElement
-              el.style.display = 'none'
-              const fb = el.nextSibling as HTMLElement
-              if (fb) fb.style.display = 'flex'
-            }}
-            className="h-20 w-20 flex-shrink-0 rounded-2xl border border-gray-100 object-contain p-1.5"
-          />
-        ) : null}
-        <div
-          className={`${company.logo_url ? 'hidden' : 'flex'} h-20 w-20 flex-shrink-0 items-center justify-center rounded-2xl bg-[#FFF1E8] text-2xl font-bold text-[#062246]`}
-        >
-          {company.name.charAt(0).toUpperCase()}
-        </div>
+        <CompanyLogo
+          companyName={company.name}
+          domain={company.domain}
+          logoUrl={company.logo_url}
+          className="h-20 w-20 rounded-2xl border border-gray-100 object-contain p-1.5"
+        />
 
         <div className="min-w-0">
           <h1 className="text-3xl font-semibold tracking-tight text-gray-900">{company.name}</h1>

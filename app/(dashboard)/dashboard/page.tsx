@@ -7,6 +7,7 @@ import {
   BellRing,
   Bookmark,
   Building2,
+  CreditCard,
   FileText,
   Globe2,
   LogOut,
@@ -33,8 +34,10 @@ import JobSearch, {
   getSearchQuery,
   searchQueryToParams,
 } from "@/components/jobs/JobSearch"
+import CompanyLogo from "@/components/ui/CompanyLogo"
 import HireovenLogo from "@/components/ui/HireovenLogo"
 import { useAuth } from "@/lib/hooks/useAuth"
+import { useSubscription } from "@/lib/hooks/useSubscription"
 import { useWatchlist } from "@/lib/hooks/useWatchlist"
 import { createClient } from "@/lib/supabase/client"
 import { cn } from "@/lib/utils"
@@ -43,6 +46,7 @@ import type { JobWithMatchScore } from "@/types"
 type TopHiringCompany = {
   id: string
   name: string
+  domain: string | null
   logo_url: string | null
   sponsors_h1b: boolean
   newJobsToday: number
@@ -89,11 +93,28 @@ export default function DashboardPage() {
   const pills = useMemo(() => buildFilterPills(filters), [filters])
 
   const { user, profile, isLoading: authLoading, signOut } = useAuth()
+  const { isPro } = useSubscription()
   const { watchlist } = useWatchlist(user?.id)
   const { hasResume, primaryResume, upsertResume } = useResumeContext()
   const [feedMeta, setFeedMeta] = useState({ totalCount: 0, lastHourCount: 0 })
   const [topHiringCompanies, setTopHiringCompanies] = useState<TopHiringCompany[]>([])
   const [topMatches, setTopMatches] = useState<JobWithMatchScore[]>([])
+  const [upgradeModal, setUpgradeModal] = useState<{ open: boolean; plan: string }>({ open: false, plan: "" })
+
+  useEffect(() => {
+    const upgradePlan = searchParams.get("upgrade")
+    const plan = searchParams.get("plan") ?? ""
+    if (upgradePlan === "success") {
+      setUpgradeModal({ open: true, plan })
+      const next = new URLSearchParams(searchParams.toString())
+      next.delete("upgrade")
+      next.delete("plan")
+      router.replace(`${pathname}${next.toString() ? `?${next}` : ""}`, { scroll: false })
+      import("canvas-confetti").then((m) => {
+        m.default({ particleCount: 140, spread: 90, origin: { y: 0.5 }, colors: ["#0369A1", "#34D399", "#FBBF24"] })
+      })
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!primaryResume || primaryResume.parse_status !== "complete") return
@@ -112,7 +133,7 @@ export default function DashboardPage() {
 
       const { data } = await (supabase
         .from("jobs")
-        .select("company_id, company:companies(id,name,logo_url,sponsors_h1b)")
+        .select("company_id, company:companies(id,name,domain,logo_url,sponsors_h1b)")
         .eq("is_active", true)
         .gte("first_detected_at", startOfDay.toISOString())
         .order("first_detected_at", { ascending: false })
@@ -133,6 +154,7 @@ export default function DashboardPage() {
         grouped.set(company.id, {
           id: company.id,
           name: company.name,
+          domain: company.domain ?? null,
           logo_url: company.logo_url,
           sponsors_h1b: company.sponsors_h1b,
           newJobsToday: 1,
@@ -191,12 +213,46 @@ export default function DashboardPage() {
 
   return (
     <main className="app-page">
+      {upgradeModal.open && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-strong/40 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-lg border border-border bg-surface p-6 shadow-[0_24px_80px_rgba(15,23,42,0.2)]">
+            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-brand-tint">
+              <Sparkles className="h-6 w-6 text-primary" />
+            </div>
+            <h2 className="mt-4 text-2xl font-semibold tracking-tight text-strong">
+              {upgradeModal.plan === "pro_international"
+                ? "Welcome to Hireoven Pro International!"
+                : "Welcome to Hireoven Pro!"}
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              {upgradeModal.plan === "pro_international"
+                ? "You now have everything built for your journey — from OPT tracking to sponsorship intel."
+                : "You now have AI match scores, resume tools, cover letters, autofill, and deeper job intelligence unlocked."}
+            </p>
+            <div className="mt-4 rounded-lg border border-brand-tint-strong bg-brand-tint p-4">
+              <p className="text-sm font-semibold text-brand-navy">Unlocked now</p>
+              <ul className="mt-2 space-y-1.5 text-sm text-strong">
+                <li>AI resume analysis and editor</li>
+                <li>Match scoring across the feed</li>
+                <li>Cover letters and application autofill</li>
+              </ul>
+            </div>
+            <button
+              type="button"
+              onClick={() => setUpgradeModal({ open: false, plan: "" })}
+              className="mt-5 w-full rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover"
+            >
+              Let&apos;s get started
+            </button>
+          </div>
+        </div>
+      )}
       {/* Sticky global search bar */}
-      <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/92 backdrop-blur-xl">
+      <header className="dash-header-bar">
         <div className="mx-auto grid max-w-[1680px] items-center gap-4 px-4 py-3 lg:grid-cols-[252px_minmax(0,1fr)] lg:px-6 xl:grid-cols-[252px_minmax(0,1fr)_320px]">
           <Link
             href="/dashboard"
-            className="flex min-w-0 items-center rounded-[14px] bg-white px-3 py-2 shadow-[0_10px_26px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/80 transition hover:ring-[#FFD2B8]"
+            className="flex min-w-0 items-center rounded-lg border border-border bg-surface px-3 py-2 transition-colors hover:border-border hover:bg-surface-alt"
             aria-label="Hireoven dashboard home"
           >
             <HireovenLogo className="h-12 w-auto max-w-[190px]" priority />
@@ -211,7 +267,7 @@ export default function DashboardPage() {
       </header>
       <div className="app-shell mx-auto max-w-[1680px] px-4 py-4 lg:px-6">
         <div className="grid gap-6 lg:grid-cols-[240px_minmax(0,1fr)] xl:grid-cols-[240px_minmax(0,1fr)_312px]">
-          <aside className="soft-scrollbar rounded-[20px] border border-slate-200/70 bg-white p-3.5 shadow-[0_1px_0_rgba(15,23,42,0.04),0_8px_24px_rgba(15,23,42,0.05)] lg:sticky lg:top-4 lg:h-[calc(100vh-2rem)] lg:overflow-y-auto">
+          <aside className="soft-scrollbar surface-panel rounded-lg p-3 lg:sticky lg:top-4 lg:h-[calc(100vh-2rem)] lg:overflow-y-auto">
             <div className="flex h-full flex-col">
               <nav className="space-y-0.5">
                 {NAV_ITEMS.map((item) => {
@@ -222,13 +278,13 @@ export default function DashboardPage() {
                       key={item.label}
                       href={item.href}
                       className={cn(
-                        "flex items-center gap-2.5 rounded-[10px] px-3 py-2 text-[13.5px] font-medium transition-all duration-100",
+                        "flex items-center gap-2.5 rounded-md px-3 py-2 text-[13px] font-medium transition-colors duration-100",
                         active
-                          ? "bg-[#062246] text-white shadow-[0_4px_12px_rgba(6,34,70,0.2)]"
-                          : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                          ? "bg-brand-navy text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
+                          : "text-muted-foreground hover:bg-surface-alt hover:text-strong"
                       )}
                     >
-                      <Icon className={cn("h-[15px] w-[15px] flex-shrink-0", active ? "text-white/90" : "text-slate-400")} />
+                      <Icon className={cn("h-[15px] w-[15px] flex-shrink-0", active ? "text-white/90" : "text-muted-foreground")} />
                       {item.label}
                     </Link>
                   )
@@ -237,42 +293,54 @@ export default function DashboardPage() {
                 <div className="pt-2">
                   <Link
                     href="/dashboard/international"
-                    className="flex items-center gap-2.5 rounded-[10px] px-3 py-2 text-[13.5px] font-medium text-slate-600 transition-all duration-100 hover:bg-[#FFF1E8] hover:text-[#9A3412]"
+                    className="flex items-center gap-2.5 rounded-md px-3 py-2 text-[13px] font-medium text-muted-foreground transition-colors duration-100 hover:bg-brand-tint hover:text-brand-navy"
                   >
-                    <Globe2 className="h-[15px] w-[15px] flex-shrink-0 text-[#FF5C18]" />
+                    <Globe2 className="h-[15px] w-[15px] flex-shrink-0 text-primary" />
                     <span className="flex items-center gap-1.5">
                       International
-                      <span className="h-1.5 w-1.5 rounded-full bg-[#FF5C18]" />
+                      <span className="h-1.5 w-1.5 rounded-full bg-primary" />
                     </span>
                   </Link>
                 </div>
               </nav>
 
-              <div className="mt-6 border-t border-slate-200/60 pt-5">
+              <div className="mt-6 border-t border-border pt-5">
                 <JobFilters isInternational={profile?.is_international} />
               </div>
 
               <div className="mt-auto pt-4">
-                <div className="rounded-[12px] border border-slate-200/70 bg-slate-50/80 p-3">
+                <Link
+                  href={isPro ? "/dashboard/billing" : "/dashboard/upgrade"}
+                  className={cn(
+                    "mb-2 flex items-center gap-2.5 rounded-md px-3 py-2 text-[13px] font-semibold transition-colors duration-100",
+                    isPro
+                      ? "text-muted-foreground hover:bg-surface-alt hover:text-strong"
+                      : "bg-brand-tint text-brand-navy hover:bg-brand-tint-strong/80"
+                  )}
+                >
+                  <CreditCard className={cn("h-[15px] w-[15px] flex-shrink-0", isPro ? "text-muted-foreground" : "text-primary")} />
+                  {isPro ? "Billing" : "Upgrade"}
+                </Link>
+                <div className="rounded-lg border border-border bg-surface-alt p-3">
                   <div className="flex items-center gap-2.5">
                     {profile?.avatar_url ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
                         src={profile.avatar_url}
                         alt={profile.full_name ?? "User avatar"}
-                        className="h-9 w-9 rounded-xl object-cover flex-shrink-0"
+                        className="h-9 w-9 rounded-md object-cover flex-shrink-0"
                       />
                     ) : (
-                      <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-[#FFF1E8] text-xs font-bold text-[#062246]">
+                      <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md bg-brand-tint text-xs font-bold text-brand-navy">
                         {getInitials(profile?.full_name, profile?.email)}
                       </div>
                     )}
 
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-[13px] font-semibold text-gray-900 leading-tight">
+                      <p className="truncate text-[13px] font-semibold text-strong leading-tight">
                         {profile?.full_name || (authLoading ? "…" : "Your profile")}
                       </p>
-                      <p className="truncate text-[11px] text-slate-400 mt-0.5">
+                      <p className="truncate text-[11px] text-muted-foreground mt-0.5">
                         {profile?.email || user?.email || "Signed in"}
                       </p>
                     </div>
@@ -281,7 +349,7 @@ export default function DashboardPage() {
                   <button
                     type="button"
                     onClick={() => void signOut()}
-                    className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[12.5px] font-medium text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900"
+                    className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-md border border-border bg-surface px-3 py-1.5 text-[12.5px] font-medium text-muted-foreground transition-colors hover:border-border hover:bg-surface-alt hover:text-strong"
                   >
                     <LogOut className="h-3.5 w-3.5" />
                     Sign out
@@ -293,31 +361,31 @@ export default function DashboardPage() {
 
           <section className="min-w-0 space-y-5">
             <div className="space-y-5">
-              <div className="flex flex-col gap-4 border-b border-slate-200/80 pb-5 lg:flex-row lg:items-start lg:justify-between">
-                <div className="space-y-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#FF5C18]">
-                    Main feed
-                  </p>
-                  <h1 className="text-3xl font-semibold tracking-tight text-gray-900">
-                    Fresh roles, ready to act on
-                  </h1>
-                  <p className="max-w-2xl text-sm leading-6 text-gray-500">
-                    Scan what just landed, narrow it fast, and jump directly to the
-                    company application before the crowd catches up.
-                  </p>
-                </div>
+              <div className="surface-panel rounded-lg p-5 sm:p-6">
+                <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+                  <div className="min-w-0 space-y-2">
+                    <p className="section-kicker">Main feed</p>
+                    <h1 className="text-2xl font-semibold tracking-tight text-strong sm:text-3xl">
+                      Fresh roles, ready to act on
+                    </h1>
+                    <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
+                      Scan what just landed, narrow it fast, and jump directly to the
+                      company application before the crowd catches up.
+                    </p>
+                  </div>
 
-                <div className="flex items-start gap-3">
-                  <div className="min-w-[240px] rounded-[18px] border border-[#FFD9C2] bg-[#FFF8F4] px-4 py-3">
-                    <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#062246]">
-                      Live signal
-                    </p>
-                    <p className="mt-2 text-2xl font-semibold text-gray-900">
-                      {feedMeta.lastHourCount.toLocaleString()}
-                    </p>
-                    <p className="text-sm text-gray-600">
-                      jobs posted in the last hour
-                    </p>
+                  <div className="flex shrink-0 items-start">
+                    <div className="min-w-[220px] border-l-0 border-t border-border pt-4 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-brand-navy">
+                        Live signal
+                      </p>
+                      <p className="mt-1.5 text-3xl font-semibold tabular-nums text-strong">
+                        {feedMeta.lastHourCount.toLocaleString()}
+                      </p>
+                      <p className="text-[13px] text-muted-foreground">
+                        jobs posted in the last hour
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -326,60 +394,67 @@ export default function DashboardPage() {
                 <PushNotificationSetup />
               </div>
 
-              <div className="rounded-[20px] border border-slate-200/80 bg-white/95 p-4 shadow-[0_12px_30px_rgba(15,23,42,0.04)]">
+              <div className="surface-panel rounded-lg">
+                <div className="surface-toolbar px-4 py-3 sm:px-5">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                    Search & sort
+                  </p>
+                </div>
+                <div className="space-y-4 p-4 sm:p-5">
                   <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
                     <JobSearch totalCount={feedMeta.totalCount} />
 
-                  <div className="flex flex-wrap gap-2">
-                    {SORT_OPTIONS.map((option) => {
-                      const active = (filters.sort ?? "freshest") === option.value
-                      return (
+                    <div className="flex flex-wrap gap-1.5">
+                      {SORT_OPTIONS.map((option) => {
+                        const active = (filters.sort ?? "freshest") === option.value
+                        return (
+                          <button
+                            key={option.value}
+                            type="button"
+                            onClick={() =>
+                              replaceFilters({ ...filters, sort: option.value })
+                            }
+                            className={cn("chip-control", active && "chip-control-active")}
+                          >
+                            {option.label}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  {pills.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {pills.map((pill) => (
                         <button
-                          key={option.value}
+                          key={pill.id}
                           type="button"
-                          onClick={() =>
-                            replaceFilters({ ...filters, sort: option.value })
-                          }
-                          className={cn("chip-control", active && "chip-control-active")}
+                          onClick={() => replaceFilters(pill.nextFilters)}
+                          className="chip-control-active inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[13px] font-medium"
                         >
-                          {option.label}
+                          {pill.label}
+                          <span className="text-base leading-none">&times;</span>
                         </button>
-                      )
-                    })}
-                  </div>
-                </div>
+                      ))}
+                    </div>
+                  )}
 
-                {pills.length > 0 && (
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {pills.map((pill) => (
-                      <button
-                        key={pill.id}
-                        type="button"
-                        onClick={() => replaceFilters(pill.nextFilters)}
-                        className="chip-control-active inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium"
-                      >
-                        {pill.label}
-                        <span className="text-base leading-none">&times;</span>
-                      </button>
-                    ))}
+                  <div className="toolbar-strip !pt-3">
+                    <p className="text-sm text-muted-foreground">
+                      <span className="font-semibold text-strong">
+                        {feedMeta.totalCount.toLocaleString()} jobs
+                      </span>{" "}
+                      — {feedMeta.lastHourCount.toLocaleString()} posted in the last hour
+                    </p>
+                    <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                      Sorted by{" "}
+                      {
+                        SORT_OPTIONS.find(
+                          (option) => option.value === (filters.sort ?? "freshest")
+                        )?.label
+                      }
+                    </p>
                   </div>
-                )}
-
-                <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-4">
-                  <p className="text-sm text-gray-600">
-                    <span className="font-semibold text-gray-900">
-                      {feedMeta.totalCount.toLocaleString()} jobs
-                    </span>{" "}
-                    — {feedMeta.lastHourCount.toLocaleString()} posted in the last hour
-                  </p>
-                  <p className="text-xs font-medium uppercase tracking-[0.22em] text-gray-400">
-                    Sorted by{" "}
-                    {
-                      SORT_OPTIONS.find(
-                        (option) => option.value === (filters.sort ?? "freshest")
-                      )?.label
-                    }
-                  </p>
                 </div>
               </div>
             </div>
@@ -393,62 +468,62 @@ export default function DashboardPage() {
           </section>
 
           <aside className="hidden xl:block">
-            <div className="soft-scrollbar sticky top-4 max-h-[calc(100vh-2rem)] overflow-y-auto rounded-[20px] border border-slate-200/70 bg-white shadow-[0_1px_0_rgba(15,23,42,0.04),0_8px_24px_rgba(15,23,42,0.05)]">
+            <div className="soft-scrollbar surface-panel sticky top-4 max-h-[calc(100vh-2rem)] overflow-y-auto rounded-lg">
               {/* Resume signal */}
               {!hasResume ? (
                 <div className="p-5">
                   <ResumeUploader compact showPrompt={false} onUploadComplete={upsertResume} />
                 </div>
               ) : primaryResume?.parse_status === "processing" ? (
-                <div className="border-b border-slate-200/60 p-5">
+                <div className="border-b border-border p-5">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-[14px] bg-[#FFF1E8]">
-                      <FileText className="h-4.5 w-4.5 text-[#FF5C18]" />
+                    <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-md bg-brand-tint">
+                      <FileText className="h-4.5 w-4.5 text-primary" />
                     </div>
                     <div>
-                      <p className="text-sm font-semibold text-gray-900">Parsing resume…</p>
-                      <p className="text-xs text-slate-400">AI is reading your resume now</p>
+                      <p className="text-sm font-semibold text-strong">Parsing resume…</p>
+                      <p className="text-xs text-muted-foreground">AI is reading your resume now</p>
                     </div>
                   </div>
-                  <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-slate-100">
-                    <div className="h-full w-3/4 animate-pulse rounded-full bg-[#FF5C18]" />
+                  <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-surface-muted">
+                    <div className="h-full w-3/4 animate-pulse rounded-full bg-primary" />
                   </div>
                 </div>
               ) : primaryResume?.parse_status === "failed" ? (
-                <div className="border-b border-slate-200/60 p-5">
-                  <p className="text-sm font-semibold text-gray-900">Parse failed</p>
-                  <p className="mt-1.5 text-xs leading-5 text-slate-500">
+                <div className="border-b border-border p-5">
+                  <p className="text-sm font-semibold text-strong">Parse failed</p>
+                  <p className="mt-1.5 text-xs leading-5 text-muted-foreground">
                     Replace with a cleaner PDF or DOCX export to unlock match scoring.
                   </p>
                   <Link
                     href="/dashboard/resume"
-                    className="mt-4 inline-flex rounded-[14px] bg-[#FF5C18] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[#E14F0E]"
+                    className="mt-4 inline-flex rounded-md bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary-hover"
                   >
                     Replace resume →
                   </Link>
                 </div>
               ) : (
-                <div className="border-b border-slate-200/60 p-5">
+                <div className="border-b border-border p-5">
                   <div className="flex items-center justify-between">
-                    <p className="text-[13px] font-semibold text-gray-900">Resume</p>
-                    <Link href="/dashboard/resume" className="text-xs font-medium text-[#FF5C18] hover:text-[#E14F0E]">
+                    <p className="text-[13px] font-semibold text-strong">Resume</p>
+                    <Link href="/dashboard/resume" className="text-xs font-medium text-primary transition-colors hover:text-primary-hover">
                       Manage
                     </Link>
                   </div>
-                  <div className="mt-3 rounded-[14px] border border-slate-200/60 bg-slate-50/80 p-3.5">
-                    <p className="truncate text-[13px] font-semibold text-gray-900">
+                  <div className="mt-3 rounded-md border border-border bg-surface-alt p-3.5">
+                    <p className="truncate text-[13px] font-semibold text-strong">
                       {primaryResume?.name ?? primaryResume?.file_name ?? "Resume"}
                     </p>
                     <div className="mt-3 flex items-center gap-3">
                       <div className="flex-shrink-0">
-                        <p className="text-2xl font-bold text-[#FF5C18] leading-none">
+                        <p className="text-2xl font-bold text-primary leading-none">
                           {primaryResume?.resume_score ?? 0}
                         </p>
-                        <p className="text-[10px] text-slate-400 mt-0.5">score</p>
+                        <p className="text-[10px] text-muted-foreground mt-0.5">score</p>
                       </div>
                       <Link
                         href="/dashboard/resume"
-                        className="min-w-0 flex-1 rounded-xl border border-[#FFD2B8] bg-white px-2.5 py-2 text-[11.5px] font-medium text-[#062246] leading-tight transition hover:bg-[#FFF1E8]"
+                        className="min-w-0 flex-1 rounded-md border border-brand-tint-strong bg-surface px-2.5 py-2 text-[11.5px] font-medium text-brand-navy leading-tight transition-colors hover:bg-brand-tint"
                       >
                         {primaryResume?.parse_status === "complete"
                           ? "Match scores active ↗"
@@ -459,52 +534,52 @@ export default function DashboardPage() {
                 </div>
               )}
 
-              <div className="border-b border-slate-200/60 p-5">
+              <div className="border-b border-border p-5">
                 <div className="mb-3 flex items-center justify-between">
-                  <p className="text-[13px] font-semibold text-gray-900">Top matches today</p>
+                  <p className="text-[13px] font-semibold text-strong">Top matches today</p>
                   <Link
                     href="/dashboard/matches"
-                    className="text-xs font-medium text-[#FF5C18] hover:text-[#E14F0E]"
+                    className="text-xs font-medium text-primary transition-colors hover:text-primary-hover"
                   >
                     View all
                   </Link>
                 </div>
 
                 {!primaryResume || primaryResume.parse_status !== "complete" ? (
-                  <div className="rounded-[14px] border border-dashed border-slate-200 bg-slate-50/60 px-4 py-5">
-                    <p className="text-xs text-slate-500">
+                  <div className="rounded-md border border-dashed border-border bg-surface-alt px-4 py-5">
+                    <p className="text-xs text-muted-foreground">
                       Upload your resume to see your strongest matches.
                     </p>
                     <Link
                       href="/dashboard/resume"
-                      className="mt-2 inline-flex text-xs font-semibold text-[#FF5C18] hover:underline"
+                      className="mt-2 inline-flex text-xs font-semibold text-primary hover:underline"
                     >
                       Upload resume →
                     </Link>
                   </div>
                 ) : topMatches.length === 0 ? (
-                  <div className="rounded-[14px] border border-dashed border-slate-200 bg-slate-50/60 px-4 py-5 text-xs text-slate-400">
+                  <div className="rounded-md border border-dashed border-border bg-surface-alt px-4 py-5 text-xs text-muted-foreground">
                     No strong matches landed in the last 24 hours yet.
                   </div>
                 ) : (
-                  <div className="space-y-2">
+                  <div className="divide-y divide-border rounded-md border border-border overflow-hidden">
                     {topMatches.map((job) => (
                       <Link
                         key={job.id}
                         href={job.apply_url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="block rounded-[12px] border border-slate-200/60 bg-slate-50/60 px-3 py-3 transition hover:border-slate-300 hover:bg-white"
+                        className="block bg-surface-alt/40 px-3 py-3 transition-colors hover:bg-surface"
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
-                            <p className="truncate text-[13px] font-semibold text-slate-900">
+                            <p className="truncate text-[13px] font-semibold text-strong">
                               {job.title}
                             </p>
-                            <p className="mt-0.5 truncate text-[12px] text-slate-500">
+                            <p className="mt-0.5 truncate text-[12px] text-muted-foreground">
                               {job.company.name}
                             </p>
-                            <p className="mt-1 text-[11px] text-slate-400">
+                            <p className="mt-1 text-[11px] text-muted-foreground">
                               Posted{" "}
                               {Math.max(
                                 1,
@@ -530,37 +605,35 @@ export default function DashboardPage() {
               </div>
 
               {/* Watchlist */}
-              <div className="border-b border-slate-200/60 p-5">
+              <div className="border-b border-border p-5">
                 <div className="flex items-center justify-between mb-3">
-                  <p className="text-[13px] font-semibold text-gray-900">Watchlist</p>
-                  <Link href="/dashboard/watchlist" className="text-xs font-medium text-[#FF5C18] hover:text-[#E14F0E]">
+                  <p className="text-[13px] font-semibold text-strong">Watchlist</p>
+                  <Link href="/dashboard/watchlist" className="text-xs font-medium text-primary transition-colors hover:text-primary-hover">
                     View all
                   </Link>
                 </div>
 
                 {watchlist.length === 0 ? (
-                  <div className="rounded-[14px] border border-dashed border-slate-200 bg-slate-50/60 px-4 py-5 text-center">
-                    <p className="text-xs text-slate-400">No watched companies yet.</p>
-                    <Link href="/dashboard/watchlist" className="mt-1 block text-xs font-medium text-[#FF5C18] hover:underline">
+                  <div className="rounded-md border border-dashed border-border bg-surface-alt px-4 py-5 text-center">
+                    <p className="text-xs text-muted-foreground">No watched companies yet.</p>
+                    <Link href="/dashboard/watchlist" className="mt-1 block text-xs font-medium text-primary hover:underline">
                       Add companies →
                     </Link>
                   </div>
                 ) : (
-                  <div className="space-y-1.5">
+                  <div className="divide-y divide-border rounded-md border border-border overflow-hidden">
                     {watchlist.slice(0, 6).map((item) => (
                       <div
                         key={item.id}
-                        className="flex items-center gap-2.5 rounded-[12px] border border-slate-200/60 bg-slate-50/60 px-3 py-2.5 transition hover:border-slate-300 hover:bg-white"
+                        className="flex items-center gap-2.5 bg-surface-alt/40 px-3 py-2.5 transition-colors hover:bg-surface"
                       >
-                        {item.company.logo_url ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={item.company.logo_url} alt={item.company.name} className="h-7 w-7 rounded-lg object-cover flex-shrink-0" />
-                        ) : (
-                          <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-[#FFF1E8] text-[11px] font-bold text-[#062246]">
-                            {item.company.name.charAt(0).toUpperCase()}
-                          </div>
-                        )}
-                        <p className="truncate text-[13px] font-medium text-gray-800">
+                        <CompanyLogo
+                          companyName={item.company.name}
+                          domain={item.company.domain}
+                          logoUrl={item.company.logo_url}
+                          className="h-7 w-7"
+                        />
+                        <p className="truncate text-[13px] font-medium text-strong">
                           {item.company.name}
                         </p>
                       </div>
@@ -571,36 +644,36 @@ export default function DashboardPage() {
 
               {/* OPT countdown */}
               {profile?.needs_sponsorship && (
-                <div className="border-b border-slate-200/60 p-5">
+                <div className="border-b border-border p-5">
                   <div className="flex items-center justify-between mb-3">
-                    <p className="text-[13px] font-semibold text-gray-900">OPT countdown</p>
-                    <Globe2 className="h-4 w-4 text-[#FF5C18]" />
+                    <p className="text-[13px] font-semibold text-strong">OPT countdown</p>
+                    <Globe2 className="h-4 w-4 text-primary" />
                   </div>
 
                   {optDaysRemaining !== null ? (
                     <div className="space-y-2.5">
-                      <p className="text-2xl font-bold text-gray-900 leading-none">
+                      <p className="text-2xl font-bold text-strong leading-none">
                         {formatDays(optDaysRemaining)}
                       </p>
-                      <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
+                      <div className="h-1.5 overflow-hidden rounded-full bg-surface-muted">
                         <div
                           className={cn(
                             "h-full rounded-full transition-all",
-                            countdownTone === "green" && "bg-[#FF5C18]",
-                            countdownTone === "amber" && "bg-amber-400",
-                            countdownTone === "red" && "bg-red-500"
+                            countdownTone === "green" && "bg-primary",
+                            countdownTone === "amber" && "bg-warning",
+                            countdownTone === "red" && "bg-danger"
                           )}
                           style={{ width: `${Math.min(100, Math.max(6, (optDaysRemaining / 365) * 100))}%` }}
                         />
                       </div>
-                      <p className="text-xs leading-5 text-slate-500">
+                      <p className="text-xs leading-5 text-muted-foreground">
                         {countdownTone === "green" && "You still have room to be selective."}
                         {countdownTone === "amber" && "Time is tightening — prioritize direct applications."}
                         {countdownTone === "red" && "Urgency is high. Bias toward sponsor-ready companies."}
                       </p>
                     </div>
                   ) : (
-                    <div className="rounded-[14px] border border-dashed border-slate-200 px-4 py-4 text-xs text-slate-400">
+                    <div className="rounded-md border border-dashed border-border px-4 py-4 text-xs text-muted-foreground">
                       Add your OPT end date in onboarding.
                     </div>
                   )}
@@ -610,44 +683,42 @@ export default function DashboardPage() {
               {/* Top hiring */}
               <div className="p-5">
                 <div className="mb-3 flex items-center justify-between">
-                  <p className="text-[13px] font-semibold text-gray-900">Hiring today</p>
-                  <span className="rounded-full bg-[#FFF1E8] px-2 py-0.5 text-[10.5px] font-semibold text-[#FF5C18]">
+                  <p className="text-[13px] font-semibold text-strong">Hiring today</p>
+                  <span className="rounded border border-brand-tint-strong bg-brand-tint px-2 py-0.5 text-[10.5px] font-semibold text-primary">
                     live
                   </span>
                 </div>
 
                 {topHiringCompanies.length === 0 ? (
-                  <div className="rounded-[14px] border border-dashed border-slate-200 px-4 py-4 text-xs text-slate-400">
+                  <div className="rounded-md border border-dashed border-border px-4 py-4 text-xs text-muted-foreground">
                     No hiring spikes yet today.
                   </div>
                 ) : (
-                  <div className="space-y-1.5">
+                  <div className="divide-y divide-border rounded-md border border-border overflow-hidden">
                     {topHiringCompanies.map((company, i) => (
                       <div
                         key={company.id}
-                        className="flex items-center gap-2.5 rounded-[12px] border border-slate-200/60 bg-slate-50/60 px-3 py-2.5 transition hover:border-slate-300 hover:bg-white"
+                        className="flex items-center gap-2.5 bg-surface-alt/40 px-3 py-2.5 transition-colors hover:bg-surface"
                       >
-                        <span className="text-[11px] font-bold text-slate-300 w-4 flex-shrink-0">
+                        <span className="w-4 flex-shrink-0 text-[11px] font-bold tabular-nums text-muted-foreground/50">
                           {i + 1}
                         </span>
-                        {company.logo_url ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={company.logo_url} alt={company.name} className="h-7 w-7 rounded-lg object-cover flex-shrink-0" />
-                        ) : (
-                          <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-[#FFF1E8] text-[11px] font-bold text-[#062246]">
-                            {company.name.charAt(0).toUpperCase()}
-                          </div>
-                        )}
+                        <CompanyLogo
+                          companyName={company.name}
+                          domain={company.domain}
+                          logoUrl={company.logo_url}
+                          className="h-7 w-7"
+                        />
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-[12.5px] font-semibold text-gray-900">
+                          <p className="truncate text-[12.5px] font-semibold text-strong">
                             {company.name}
                           </p>
-                          <p className="text-[11px] text-slate-400">
+                          <p className="text-[11px] text-muted-foreground">
                             {company.newJobsToday} new today
                           </p>
                         </div>
                         {company.sponsors_h1b && (
-                          <span className="flex-shrink-0 rounded-full bg-[#FFF1E8] px-1.5 py-0.5 text-[10px] font-semibold text-[#FF5C18]">
+                          <span className="flex-shrink-0 rounded border border-brand-tint-strong bg-brand-tint px-1.5 py-0.5 text-[10px] font-semibold text-primary">
                             H1B
                           </span>
                         )}

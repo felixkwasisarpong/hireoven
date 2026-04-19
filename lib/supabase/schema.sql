@@ -838,12 +838,21 @@ CREATE TABLE IF NOT EXISTS subscriptions (
   status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'trialing', 'canceled', 'past_due', 'unpaid')),
   stripe_customer_id TEXT,
   stripe_subscription_id TEXT UNIQUE,
+  billing_interval TEXT DEFAULT 'monthly' CHECK (billing_interval IN ('monthly', 'yearly')),
+  amount_cents INTEGER,
   current_period_start TIMESTAMPTZ,
   current_period_end TIMESTAMPTZ,
+  trial_end TIMESTAMPTZ,
   cancel_at_period_end BOOLEAN DEFAULT false,
+  cancellation_feedback JSONB,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS billing_interval TEXT DEFAULT 'monthly';
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS amount_cents INTEGER;
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS trial_end TIMESTAMPTZ;
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS cancellation_feedback JSONB;
 
 ALTER TABLE subscriptions ENABLE ROW LEVEL SECURITY;
 

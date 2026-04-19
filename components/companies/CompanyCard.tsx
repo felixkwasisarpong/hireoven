@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { Bookmark } from 'lucide-react'
+import CompanyLogo from '@/components/ui/CompanyLogo'
 import type { Company, CompanySize } from '@/types'
 
 interface CompanyCardProps {
@@ -18,20 +19,6 @@ const SIZE_DOTS: Record<CompanySize, number> = {
   medium:     3,
   large:      4,
   enterprise: 5,
-}
-
-const INITIAL_COLORS = [
-  'bg-blue-100 text-blue-700',
-  'bg-violet-100 text-violet-700',
-  'bg-emerald-100 text-emerald-700',
-  'bg-amber-100 text-amber-700',
-  'bg-rose-100 text-rose-700',
-  'bg-cyan-100 text-cyan-700',
-]
-
-function getInitialColor(name: string) {
-  const idx = name.charCodeAt(0) % INITIAL_COLORS.length
-  return INITIAL_COLORS[idx]
 }
 
 function SizeDots({ size }: { size: CompanySize | null }) {
@@ -74,20 +61,12 @@ export default function CompanyCard({ company, newJobsToday, isWatching, onWatch
 
       <div className="flex flex-1 flex-col p-5">
         <div className="flex items-start gap-3 pr-10">
-          {company.logo_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={company.logo_url}
-              alt={company.name}
-              onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; (e.currentTarget.nextSibling as HTMLElement).style.display = 'flex' }}
-              className="h-[54px] w-[54px] flex-shrink-0 rounded-[18px] border border-slate-200/80 bg-white object-contain p-1.5 shadow-[0_6px_18px_rgba(15,23,42,0.035)]"
-            />
-          ) : null}
-          <div
-            className={`${company.logo_url ? 'hidden' : 'flex'} h-[54px] w-[54px] flex-shrink-0 items-center justify-center rounded-[18px] text-lg font-bold shadow-[0_6px_18px_rgba(15,23,42,0.035)] ${getInitialColor(company.name)}`}
-          >
-            {company.name.charAt(0).toUpperCase()}
-          </div>
+          <CompanyLogo
+            companyName={company.name}
+            domain={company.domain}
+            logoUrl={company.logo_url}
+            className="h-[54px] w-[54px] rounded-[18px] border border-slate-200/80 bg-white object-contain p-1.5 shadow-[0_6px_18px_rgba(15,23,42,0.035)]"
+          />
           <div className="min-w-0">
             <p className="leading-tight font-semibold text-slate-950">{company.name}</p>
             <div className="mt-2 flex flex-wrap items-center gap-2">

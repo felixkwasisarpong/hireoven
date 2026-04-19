@@ -155,10 +155,10 @@ export default function GlobalSearchBar() {
 
   return (
     <div ref={containerRef} className="relative w-full max-w-xl">
-      <div className={`flex items-center gap-2.5 rounded-[16px] border bg-white px-4 py-2.5 transition ${
-        isFocused ? 'border-[#FF5C18] ring-2 ring-[#FF5C18]/15' : 'border-slate-200/80'
+      <div className={`flex items-center gap-2.5 rounded-lg border border-border bg-surface px-3 py-2 transition-colors ${
+        isFocused ? 'border-primary/45 ring-2 ring-primary/12' : ''
       }`}>
-        <Search className="h-4 w-4 flex-shrink-0 text-gray-400" />
+        <Search className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
         <input
           ref={inputRef}
           type="text"
@@ -167,68 +167,68 @@ export default function GlobalSearchBar() {
           onFocus={handleFocus}
           onKeyDown={handleKeyDown}
           placeholder="Search jobs and companies…"
-          className="flex-1 bg-transparent text-sm text-gray-900 outline-none placeholder:text-gray-400"
+          className="flex-1 bg-transparent text-sm text-strong outline-none placeholder:text-muted-foreground"
         />
         {query ? (
           <button
             type="button"
             onClick={() => { setQuery(''); setPreviewJobs([]); setPreviewCompanies([]) }}
-            className="flex-shrink-0 text-gray-400 hover:text-gray-600"
+            className="flex-shrink-0 rounded-md text-muted-foreground transition-colors hover:bg-surface-alt hover:text-strong"
             aria-label="Clear"
           >
             <X className="h-4 w-4" />
           </button>
         ) : (
-          <kbd className="hidden flex-shrink-0 rounded-md border border-slate-200/80 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-gray-400 sm:inline">
+          <kbd className="hidden flex-shrink-0 rounded border border-border bg-surface-alt px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground sm:inline">
             ⌘K
           </kbd>
         )}
       </div>
 
       {showDropdown && (
-        <div className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden rounded-[18px] border border-slate-200/80 bg-white shadow-[0_20px_60px_rgba(14,30,70,0.15)]">
+        <div className="absolute left-0 right-0 top-full z-50 mt-1.5 overflow-hidden rounded-lg border border-border bg-surface shadow-[0_12px_40px_rgba(15,23,42,0.12)]">
           {query.trim().length >= 2 ? (
             <>
               {previewJobs.length > 0 && (
                 <>
-                  <p className="px-4 pt-3 text-[10px] font-semibold uppercase tracking-[0.22em] text-gray-400">Jobs</p>
+                  <p className="px-4 pt-3 text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Jobs</p>
                   {previewJobs.map((job, i) => (
                     <button
                       key={job.id}
                       type="button"
-                      className={`flex w-full items-center gap-3 px-4 py-3 text-left transition ${selectedIdx === i ? 'bg-[#FFF7F2]' : 'hover:bg-gray-50'}`}
+                      className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors ${selectedIdx === i ? 'bg-brand-tint' : 'hover:bg-surface-alt'}`}
                       onClick={() => { pushRecent(job.title); router.push(`/dashboard/search?q=${encodeURIComponent(job.title)}`); setIsFocused(false); setQuery('') }}
                     >
-                      <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl bg-[#FFF1E8] text-xs font-bold text-[#062246]">
+                      <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md bg-brand-tint text-xs font-bold text-brand-navy">
                         {job.company.name.charAt(0).toUpperCase()}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-gray-900">{job.title}</p>
-                        <p className="truncate text-xs text-gray-400">{job.company.name}</p>
+                        <p className="truncate text-sm font-medium text-strong">{job.title}</p>
+                        <p className="truncate text-xs text-muted-foreground">{job.company.name}</p>
                       </div>
-                      <span className="flex-shrink-0 text-xs text-gray-400">{timeAgo(job.first_detected_at)}</span>
+                      <span className="flex-shrink-0 text-xs text-muted-foreground">{timeAgo(job.first_detected_at)}</span>
                     </button>
                   ))}
                 </>
               )}
               {previewCompanies.length > 0 && (
                 <>
-                  <p className="px-4 pt-2 text-[10px] font-semibold uppercase tracking-[0.22em] text-gray-400">Companies</p>
+                  <p className="px-4 pt-2 text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Companies</p>
                   {previewCompanies.map((company, i) => {
                     const idx = previewJobs.length + i
                     return (
                       <button
                         key={company.id}
                         type="button"
-                        className={`flex w-full items-center gap-3 px-4 py-3 text-left transition ${selectedIdx === idx ? 'bg-[#FFF7F2]' : 'hover:bg-gray-50'}`}
+                        className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors ${selectedIdx === idx ? 'bg-brand-tint' : 'hover:bg-surface-alt'}`}
                         onClick={() => { router.push(`/dashboard/companies/${company.id}`); setIsFocused(false); setQuery('') }}
                       >
-                        <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl bg-gray-100 text-xs font-bold text-gray-600">
+                        <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md bg-surface-muted text-xs font-bold text-muted-foreground">
                           {company.name.charAt(0).toUpperCase()}
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium text-gray-900">{company.name}</p>
-                          <p className="truncate text-xs text-gray-400">{company.industry ?? 'Company'} · {company.job_count} open roles</p>
+                          <p className="truncate text-sm font-medium text-strong">{company.name}</p>
+                          <p className="truncate text-xs text-muted-foreground">{company.industry ?? 'Company'} · {company.job_count} open roles</p>
                         </div>
                       </button>
                     )
@@ -237,7 +237,7 @@ export default function GlobalSearchBar() {
               )}
               <button
                 type="button"
-                className="flex w-full items-center gap-2 border-t border-gray-100 px-4 py-3 text-sm font-medium text-[#FF5C18] transition hover:bg-[#FFF7F2]"
+                className="flex w-full items-center gap-2 border-t border-border px-4 py-3 text-sm font-medium text-primary transition-colors hover:bg-brand-tint"
                 onClick={() => navigate(query)}
               >
                 <Search className="h-4 w-4" />
@@ -248,31 +248,31 @@ export default function GlobalSearchBar() {
             <>
               {recent.length > 0 && (
                 <>
-                  <p className="px-4 pt-3 text-[10px] font-semibold uppercase tracking-[0.22em] text-gray-400">Recent</p>
+                  <p className="px-4 pt-3 text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Recent</p>
                   {recent.map((label, i) => (
                     <button
                       key={label}
                       type="button"
-                      className={`flex w-full items-center gap-3 px-4 py-2.5 text-left transition ${selectedIdx === i ? 'bg-[#FFF7F2]' : 'hover:bg-gray-50'}`}
+                      className={`flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors ${selectedIdx === i ? 'bg-brand-tint' : 'hover:bg-surface-alt'}`}
                       onClick={() => navigate(label)}
                     >
-                      <Search className="h-3.5 w-3.5 flex-shrink-0 text-gray-300" />
-                      <span className="text-sm text-gray-700">{label}</span>
+                      <Search className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground/50" />
+                      <span className="text-sm text-muted-foreground">{label}</span>
                     </button>
                   ))}
                 </>
               )}
-              <p className="px-4 pt-2 text-[10px] font-semibold uppercase tracking-[0.22em] text-gray-400">Trending</p>
+              <p className="px-4 pt-2 text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Trending</p>
               {TRENDING.filter((t) => !recent.includes(t)).slice(0, 5 - recent.length).map((label, i) => {
                 const idx = recent.length + i
                 return (
                   <button
                     key={label}
                     type="button"
-                    className={`flex w-full items-center gap-3 px-4 py-2.5 text-left transition ${selectedIdx === idx ? 'bg-[#FFF7F2]' : 'hover:bg-gray-50'}`}
+                    className={`flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors ${selectedIdx === idx ? 'bg-brand-tint' : 'hover:bg-surface-alt'}`}
                     onClick={() => navigate(label)}
                   >
-                    <span className="text-sm text-gray-500">{label}</span>
+                    <span className="text-sm text-muted-foreground">{label}</span>
                   </button>
                 )
               })}
