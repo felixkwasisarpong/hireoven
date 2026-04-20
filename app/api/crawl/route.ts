@@ -55,9 +55,10 @@ export async function GET(request: NextRequest) {
 
   const succeeded = results.filter((r) => r.status === "fulfilled").length
   const failed = results.filter((r) => r.status === "rejected").length
-  const inserted = results
-    .filter((r): r is PromiseFulfilledResult<{ persisted: { inserted: number } }> => r.status === "fulfilled")
-    .reduce((sum, r) => sum + (r.value.persisted?.inserted ?? 0), 0)
+  const inserted = results.reduce((sum, r) => {
+    if (r.status !== "fulfilled") return sum
+    return sum + (r.value.persisted.inserted ?? 0)
+  }, 0)
 
   return NextResponse.json({
     success: true,
