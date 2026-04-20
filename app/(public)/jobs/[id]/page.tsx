@@ -72,40 +72,41 @@ export default async function PublicJobPage({ params }: Props) {
   }
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-background">
       <Navbar />
 
-      <main className="mx-auto max-w-3xl px-6 py-12">
+      <main className="mx-auto max-w-3xl px-4 py-10 sm:px-6 sm:py-12">
         {/* Breadcrumb */}
-        <nav className="mb-6 text-sm text-gray-400">
-          <Link href="/companies" className="hover:text-gray-600">Companies</Link>
+        <nav className="mb-8 text-sm text-muted-foreground">
+          <Link href="/companies" className="transition-colors hover:text-strong">Companies</Link>
           {" / "}
-          <Link href={`/companies/${company?.id}`} className="hover:text-gray-600">
+          <Link href={`/companies/${company?.id}`} className="transition-colors hover:text-strong">
             {company?.name}
           </Link>
           {" / "}
-          <span className="text-gray-600">{job.title}</span>
+          <span className="text-strong">{job.title}</span>
         </nav>
 
+        <div className="surface-panel rounded-lg p-6 sm:p-8">
         {/* Header */}
-        <div className="flex items-start gap-4 mb-6">
+        <div className="flex items-start gap-4 border-b border-border pb-6">
           {company?.logo_url ? (
             <Image
               src={company.logo_url}
               alt={company.name}
               width={56}
               height={56}
-              className="rounded-xl border border-gray-200 object-contain flex-shrink-0"
+              className="rounded-md border border-border object-contain flex-shrink-0"
             />
           ) : (
-            <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-xl bg-[#E0F2FE] text-lg font-bold text-[#0C4A6E]">
+            <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-md border border-border bg-brand-tint text-lg font-bold text-brand-navy">
               {company?.name?.charAt(0).toUpperCase() ?? "?"}
             </div>
           )}
           <div>
-            <p className="text-sm font-medium text-gray-500 uppercase tracking-wide">{company?.name}</p>
-            <h1 className="mt-0.5 text-2xl font-bold text-gray-900">{job.title}</h1>
-            <p className="mt-1 text-sm text-gray-500">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">{company?.name}</p>
+            <h1 className="mt-1 text-2xl font-semibold tracking-tight text-strong">{job.title}</h1>
+            <p className="mt-1.5 text-sm text-muted-foreground">
               {[
                 job.is_remote ? "Remote" : job.location,
                 job.seniority_level ? job.seniority_level.charAt(0).toUpperCase() + job.seniority_level.slice(1) : null,
@@ -116,27 +117,27 @@ export default async function PublicJobPage({ params }: Props) {
         </div>
 
         {/* Badges */}
-        <div className="flex flex-wrap gap-2 mb-6">
+        <div className="flex flex-wrap gap-2 py-6">
           {job.sponsors_h1b && (
-            <span className="rounded-full bg-sky-50 border border-sky-200 px-3 py-1 text-xs font-semibold text-sky-700">
+            <span className="rounded border border-border bg-surface-alt px-2.5 py-1 text-xs font-semibold text-brand-navy">
               Sponsors H1B
             </span>
           )}
           {job.salary_min && job.salary_max && (
-            <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700">
+            <span className="rounded border border-border bg-surface-muted px-2.5 py-1 text-xs font-medium tabular-nums text-strong">
               ${Math.round(job.salary_min / 1000)}k–${Math.round(job.salary_max / 1000)}k
             </span>
           )}
-          <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-500">
+          <span className="rounded border border-border bg-surface-alt px-2.5 py-1 text-xs font-medium text-muted-foreground">
             Detected {sincePosted(job.first_detected_at)}
           </span>
         </div>
 
         {/* Skills */}
         {skills.length > 0 && (
-          <div className="mb-6 flex flex-wrap gap-2">
+          <div className="mb-6 flex flex-wrap gap-1.5 border-b border-border pb-6">
             {skills.map((skill) => (
-              <span key={skill} className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600">
+              <span key={skill} className="rounded border border-border bg-surface-alt px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
                 {skill}
               </span>
             ))}
@@ -145,33 +146,34 @@ export default async function PublicJobPage({ params }: Props) {
 
         {/* Description */}
         {job.description && (
-          <div className="mb-8 rounded-2xl border border-gray-100 bg-gray-50 p-6 text-sm leading-7 text-gray-700 whitespace-pre-line">
+          <div className="mb-8 border border-border bg-surface-alt/50 p-5 text-sm leading-relaxed text-muted-foreground whitespace-pre-line">
             {job.description}
           </div>
         )}
 
         {/* Apply CTA */}
-        <div className="flex flex-col sm:flex-row gap-3 mb-10">
+        <div className="flex flex-col gap-2.5 border-t border-border pt-6 sm:flex-row sm:flex-wrap sm:gap-3">
           <AutofillButton jobId={job.id} size="default" className="justify-center" />
           <a
             href={job.apply_url}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#0369A1] px-6 py-3 text-sm font-semibold text-white hover:bg-[#075985] transition"
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover"
           >
             Apply directly at {company?.name} →
           </a>
           <Link
             href="/signup"
-            className="inline-flex items-center justify-center gap-2 rounded-2xl border border-[#BAE6FD] bg-[#F0F9FF] px-6 py-3 text-sm font-semibold text-[#0369A1] hover:bg-[#E0F2FE] transition"
+            className="inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-surface px-5 py-2.5 text-sm font-semibold text-brand-navy transition-colors hover:bg-brand-tint"
           >
             Create a free account for alerts like this
           </Link>
         </div>
 
-        <p className="text-xs text-gray-400 text-center">
+        <p className="mt-8 border-t border-border pt-6 text-center text-xs text-muted-foreground">
           This listing is sourced directly from {company?.name}&apos;s careers page and links there directly.
         </p>
+        </div>
       </main>
     </div>
   )

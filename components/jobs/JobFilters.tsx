@@ -208,18 +208,18 @@ function FilterToggle({
       role="switch"
       aria-checked={checked}
       onClick={() => onChange(!checked)}
-      className="flex w-full items-center justify-between rounded-xl border border-slate-200/80 bg-white px-3.5 py-3 text-left transition hover:border-slate-300 hover:bg-slate-50"
+      className="flex w-full items-center justify-between rounded-lg border border-border bg-surface px-3 py-2.5 text-left transition-colors hover:border-border hover:bg-surface-alt"
     >
       <span
         className={`text-sm ${
-          accent ? "font-medium text-[#FF5C18]" : "text-gray-700"
+          accent ? "font-medium text-primary" : "text-strong"
         }`}
       >
         {label}
       </span>
       <span
-        className={`relative inline-flex h-6 w-10 items-center rounded-full transition ${
-          checked ? "bg-[#FF5C18]" : "bg-gray-200"
+        className={`relative inline-flex h-6 w-10 items-center rounded-full transition-colors ${
+          checked ? "bg-primary" : "bg-surface-muted"
         }`}
       >
         <span
@@ -242,14 +242,14 @@ function CheckboxOption<T extends string>({
   onChange: (checked: boolean) => void
 }) {
   return (
-    <label className="flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 transition hover:bg-slate-50">
+    <label className="flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 transition-colors hover:bg-surface-alt">
       <input
         type="checkbox"
         checked={checked}
         onChange={(event) => onChange(event.target.checked)}
-        className="h-4 w-4 rounded border-gray-300 text-[#FF5C18] focus:ring-[#FF5C18]"
+        className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
       />
-      <span className="text-sm text-gray-700">{label}</span>
+      <span className="text-sm text-strong">{label}</span>
     </label>
   )
 }
@@ -289,7 +289,7 @@ export default function JobFilters({
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
           Filters
         </p>
         {pills.length > 0 && (
@@ -305,14 +305,14 @@ export default function JobFilters({
                 within: "all",
               })
             }
-            className="text-xs font-medium text-gray-500 transition hover:text-gray-800"
+            className="text-xs font-medium text-muted-foreground transition-colors hover:text-strong"
           >
             Clear
           </button>
         )}
       </div>
 
-      <div className="space-y-3 border-b border-slate-200/80 pb-4">
+      <div className="space-y-3 border-b border-border pb-4">
         <FilterToggle
           checked={Boolean(filters.remote)}
           label="Remote only"
@@ -330,8 +330,8 @@ export default function JobFilters({
         />
       </div>
 
-      <div className="border-b border-slate-200/80 pb-4">
-        <p className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-400">Seniority level</p>
+      <div className="border-b border-border pb-4">
+        <p className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Seniority level</p>
         <div className="space-y-1">
           {SENIORITY_OPTIONS.map((option) => (
             <CheckboxOption
@@ -346,8 +346,8 @@ export default function JobFilters({
         </div>
       </div>
 
-      <div className="border-b border-slate-200/80 pb-4">
-        <p className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-400">Employment type</p>
+      <div className="border-b border-border pb-4">
+        <p className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Employment type</p>
         <div className="space-y-1">
           {EMPLOYMENT_OPTIONS.map((option) => (
             <CheckboxOption
@@ -363,7 +363,7 @@ export default function JobFilters({
       </div>
 
       <div>
-        <p className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-slate-400">Posted within</p>
+        <p className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Posted within</p>
         <select
           value={filters.within ?? "all"}
           onChange={(event) =>
@@ -372,7 +372,7 @@ export default function JobFilters({
               within: event.target.value as JobWithinWindow,
             })
           }
-          className="w-full rounded-2xl border border-slate-200/80 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none shadow-[0_8px_20px_rgba(15,23,42,0.03)] transition focus:border-[#FF5C18] focus:ring-2 focus:ring-[#FF5C18]/20"
+          className="w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-strong outline-none transition-colors focus:border-primary/50 focus:ring-2 focus:ring-primary/12"
         >
           {WITHIN_OPTIONS.map((option) => (
             <option key={option.value} value={option.value}>

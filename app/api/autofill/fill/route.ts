@@ -2,14 +2,17 @@ import { NextResponse } from "next/server"
 import { generateFillScript } from "@/lib/autofill"
 import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
+import { requireFeature } from "@/lib/gates/server-gate"
 import type { AutofillProfile } from "@/types"
 
 export const runtime = "nodejs"
 
 export async function POST(request: Request) {
+  const gate = await requireFeature("autofill")
+  if (gate instanceof NextResponse) return gate
+
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const user = (await supabase.auth.getUser()).data.user!
 
   const body = await request.json().catch(() => ({})) as { jobId?: string }
   const { jobId } = body

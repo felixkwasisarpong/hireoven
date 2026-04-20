@@ -19,6 +19,7 @@ import {
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { devError } from "@/lib/client-dev-log"
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -757,7 +758,7 @@ export default function AutofillFillPage() {
       const data = await res.json()
       setFillResult(data)
     } catch (err) {
-      console.error(err)
+      devError(err)
     } finally {
       setScriptLoading(false)
     }
@@ -794,7 +795,7 @@ export default function AutofillFillPage() {
         })
         setLogged(true)
       } catch (err) {
-        console.error(err)
+        devError(err)
       } finally {
         setLogging(false)
       }

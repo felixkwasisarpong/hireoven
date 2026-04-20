@@ -39,10 +39,10 @@ export default function NotificationsPage() {
 
   return (
     <main className="app-page">
-      <div className="app-shell max-w-6xl space-y-6">
-        <section className="surface-hero">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div>
+      <div className="app-shell max-w-6xl space-y-6 px-4 pb-10 pt-1 sm:px-6 lg:px-8">
+        <section className="surface-hero rounded-xl p-5 sm:p-6 md:p-8">
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+            <div className="min-w-0">
               <p className="section-kicker">Notifications</p>
               <h1 className="section-title mt-3">
                 Everything Hireoven has flagged for you
@@ -53,7 +53,7 @@ export default function NotificationsPage() {
               </p>
             </div>
 
-            <div className="flex flex-wrap gap-3">
+            <div className="flex shrink-0 flex-wrap gap-3 lg:justify-end">
               <button
                 type="button"
                 onClick={() => void markAllRead()}
@@ -71,7 +71,7 @@ export default function NotificationsPage() {
           </div>
         </section>
 
-        <section className="surface-card">
+        <section className="surface-card rounded-xl p-5 sm:p-6 md:p-8">
           <div className="flex flex-wrap items-center gap-2">
             {FILTERS.map((item) => (
               <button
@@ -85,15 +85,15 @@ export default function NotificationsPage() {
             ))}
           </div>
 
-          <div className="mt-4 flex items-center justify-between">
-            <p className="text-sm text-gray-500">
+          <div className="mt-6 flex items-center justify-between border-b border-border pb-4">
+            <p className="text-sm font-medium text-gray-600">
               {title} notifications
               {unreadCount > 0 ? ` · ${unreadCount} unread` : ""}
             </p>
           </div>
 
           {notifications.length === 0 && !isLoading ? (
-            <div className="empty-state">
+            <div className="empty-state mt-8 rounded-xl">
               <BellRing className="mx-auto h-10 w-10 text-[#FF5C18]" />
               <h2 className="mt-4 text-2xl font-semibold text-gray-900">
                 No notifications yet
@@ -104,7 +104,7 @@ export default function NotificationsPage() {
               </p>
             </div>
           ) : (
-            <div className="mt-6 space-y-4">
+            <div className="mt-8 space-y-4">
               {notifications.map((notification) => (
                 <button
                   key={notification.id}

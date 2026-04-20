@@ -257,7 +257,6 @@ export function generateFillScript(
     setTimeout(function() { var el2 = document.getElementById('__hireoven_overlay'); if (el2) el2.remove(); }, 500);
   }, 12000);
 
-  console.log('[Hireoven] Autofill complete:', results);
   return results;
 })();`
 

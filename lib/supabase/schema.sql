@@ -826,3 +826,66 @@ BEGIN
       WITH CHECK (public.is_admin_user());
   END IF;
 END $$;
+
+-- =============================================================================
+-- Subscriptions table
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS subscriptions (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  plan TEXT NOT NULL DEFAULT 'free' CHECK (plan IN ('free', 'pro', 'pro_international')),
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'trialing', 'canceled', 'past_due', 'unpaid')),
+  stripe_customer_id TEXT,
+  stripe_subscription_id TEXT UNIQUE,
+  billing_interval TEXT DEFAULT 'monthly' CHECK (billing_interval IN ('monthly', 'yearly')),
+  amount_cents INTEGER,
+  current_period_start TIMESTAMPTZ,
+  current_period_end TIMESTAMPTZ,
+  trial_end TIMESTAMPTZ,
+  cancel_at_period_end BOOLEAN DEFAULT false,
+  cancellation_feedback JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS billing_interval TEXT DEFAULT 'monthly';
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS amount_cents INTEGER;
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS trial_end TIMESTAMPTZ;
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS cancellation_feedback JSONB;
+
+ALTER TABLE subscriptions ENABLE ROW LEVEL SECURITY;
+
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'subscriptions' AND policyname = 'Users can view own subscription'
+  ) THEN
+    CREATE POLICY "Users can view own subscription"
+      ON subscriptions FOR SELECT
+      USING (auth.uid() = user_id);
+  END IF;
+END $$;
+
+-- =============================================================================
+-- Waitlist (pre-launch marketing)
+-- =============================================================================
+-- Captured via /launch; accessed only from server (service role) in API routes.
+CREATE TABLE IF NOT EXISTS waitlist (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  email TEXT UNIQUE NOT NULL,
+  source TEXT DEFAULT 'launch_page',
+  referrer TEXT,
+  is_international BOOLEAN,
+  visa_status TEXT,
+  university TEXT,
+  metadata JSONB,
+  confirmed BOOLEAN DEFAULT false,
+  confirmation_token TEXT,
+  joined_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_waitlist_joined_at ON waitlist(joined_at);
+CREATE INDEX IF NOT EXISTS idx_waitlist_confirmation_token ON waitlist(confirmation_token) WHERE confirmation_token IS NOT NULL;
+
+ALTER TABLE waitlist ENABLE ROW LEVEL SECURITY;
+-- No policies: anon/authenticated clients cannot read/write; service role bypasses RLS.

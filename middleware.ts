@@ -3,10 +3,26 @@ import { NextResponse, type NextRequest } from "next/server"
 
 const PROTECTED_PREFIXES = ["/dashboard", "/admin"]
 
+const PROTECTED_API_PREFIXES = [
+  "/api/resume",
+  "/api/cover-letter",
+  "/api/autofill",
+  "/api/match",
+  "/api/alerts",
+  "/api/watchlist",
+  "/api/applications",
+  "/api/subscription",
+  "/api/billing",
+]
+
 const PUBLIC_ROUTES = new Set(["/", "/login", "/signup", "/api/jobs", "/api/crawl"])
 
 function isProtected(pathname: string): boolean {
   return PROTECTED_PREFIXES.some((prefix) => pathname.startsWith(prefix))
+}
+
+function isProtectedApi(pathname: string): boolean {
+  return PROTECTED_API_PREFIXES.some((prefix) => pathname.startsWith(prefix))
 }
 
 function isPublic(pathname: string): boolean {
@@ -51,10 +67,19 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl
 
+  // Protect dashboard/admin pages — redirect to login
   if (isProtected(pathname) && !user) {
     const loginUrl = new URL("/login", request.url)
     loginUrl.searchParams.set("next", pathname)
     return NextResponse.redirect(loginUrl)
+  }
+
+  // Protect API routes — return 401 JSON
+  if (isProtectedApi(pathname) && !user) {
+    return NextResponse.json(
+      { error: "Authentication required", code: "UNAUTHENTICATED" },
+      { status: 401 }
+    )
   }
 
   // Redirect logged-in users away from auth pages

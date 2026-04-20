@@ -2,11 +2,15 @@ import type { Metadata, Viewport } from "next"
 import { Inter } from "next/font/google"
 import ServiceWorkerRegistration from "@/components/pwa/ServiceWorkerRegistration"
 import { RouteToastBridge, ToastProvider } from "@/components/ui/ToastProvider"
+import { SubscriptionProvider } from "@/lib/context/SubscriptionContext"
+import { UpgradeModalProvider } from "@/lib/context/UpgradeModalContext"
+import UpgradeModal from "@/components/gates/UpgradeModal"
 import "./globals.css"
 
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
   title: "Hireoven – Jobs served fresh",
   description:
     "We monitor thousands of company career pages in real time so you see new roles within minutes of posting.",
@@ -42,11 +46,16 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        <ToastProvider>
-          <RouteToastBridge />
-          {children}
-          <ServiceWorkerRegistration />
-        </ToastProvider>
+        <UpgradeModalProvider>
+          <SubscriptionProvider>
+            <ToastProvider>
+              <RouteToastBridge />
+              {children}
+              <UpgradeModal />
+              <ServiceWorkerRegistration />
+            </ToastProvider>
+          </SubscriptionProvider>
+        </UpgradeModalProvider>
       </body>
     </html>
   )

@@ -14,9 +14,11 @@ import {
   Trash2,
   X,
 } from "lucide-react"
+import CompanyLogo from "@/components/ui/CompanyLogo"
 import { cn } from "@/lib/utils"
 import type { ApplicationStatus, InterviewFormat, InterviewOutcome, InterviewRound, JobApplication, OfferDetails } from "@/types"
 import { InterviewPrep } from "./InterviewPrep"
+import FeatureGate from "@/components/gates/FeatureGate"
 
 const STATUS_META: Record<ApplicationStatus, { label: string; color: string }> = {
   saved: { label: "Saved", color: "bg-slate-100 text-slate-600 border-slate-200" },
@@ -374,7 +376,9 @@ function InterviewsTab({ app, onUpdate }: { app: JobApplication; onUpdate: Props
       {(app.interviews ?? []).length > 0 && (
         <div className="border-t border-slate-100 pt-4">
           <p className="mb-3 text-[11.5px] font-semibold uppercase tracking-[0.18em] text-slate-400">Interview prep</p>
-          <InterviewPrep applicationId={app.id} />
+          <FeatureGate feature="interview_prep" promptVariant="inline">
+            <InterviewPrep applicationId={app.id} />
+          </FeatureGate>
         </div>
       )}
     </div>
@@ -500,18 +504,12 @@ export function ApplicationDrawer({ application, onClose, onUpdate, onDelete, on
       <div className="fixed inset-y-0 right-0 z-50 flex w-full max-w-[480px] flex-col bg-white shadow-2xl">
         {/* Header */}
         <div className="flex items-start gap-3 border-b border-slate-200/80 px-5 py-4">
-          {application.company_logo_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={application.company_logo_url}
-              alt={application.company_name}
-              className="h-11 w-11 shrink-0 rounded-xl border border-slate-200/80 object-cover"
-            />
-          ) : (
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#FFF1E8] text-base font-bold text-[#062246]">
-              {application.company_name.charAt(0).toUpperCase()}
-            </div>
-          )}
+          <CompanyLogo
+            companyName={application.company_name}
+            domain={application.company_domain ?? undefined}
+            logoUrl={application.company_logo_url}
+            className="h-11 w-11 shrink-0 rounded-xl"
+          />
 
           <div className="min-w-0 flex-1">
             <p className="text-[10.5px] font-semibold uppercase tracking-[0.18em] text-slate-400">

@@ -30,6 +30,7 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import confetti from "canvas-confetti"
+import CompanyLogo from "@/components/ui/CompanyLogo"
 import { cn } from "@/lib/utils"
 import { useApplications } from "@/lib/hooks/useApplications"
 import { ApplicationCard } from "@/components/applications/ApplicationCard"
@@ -73,14 +74,14 @@ function KanbanColumn({ col, apps, onOpen, isOver }: {
     <div
       ref={setNodeRef}
       className={cn(
-        "flex min-w-[188px] flex-col rounded-[16px] border border-t-[3px] border-slate-200/80 bg-slate-50/60 transition",
+        "flex min-w-[188px] flex-col overflow-hidden rounded-2xl border border-border border-t-[3px] bg-surface-alt/80 shadow-[0_1px_0_rgba(15,23,42,0.04)] transition",
         col.accentClass,
-        isOver && "bg-slate-100/80 ring-2 ring-[#FF5C18] ring-opacity-20"
+        isOver && "bg-brand-tint/40 ring-2 ring-primary/25"
       )}
       style={{ minHeight: 420 }}
     >
-      <div className="flex items-center justify-between px-3.5 py-3">
-        <span className="text-[12px] font-semibold text-slate-700">{col.label}</span>
+      <div className="flex items-center justify-between border-b border-border/60 px-3.5 py-3">
+        <span className="text-[12px] font-semibold text-strong">{col.label}</span>
         <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-semibold", col.countClass)}>
           {apps.length}
         </span>
@@ -94,7 +95,7 @@ function KanbanColumn({ col, apps, onOpen, isOver }: {
         </SortableContext>
         {apps.length === 0 && (
           <div className="flex flex-1 items-center justify-center">
-            <p className="text-[11.5px] text-slate-400">Drop here</p>
+            <p className="text-[11.5px] text-muted-foreground">Drop here</p>
           </div>
         )}
       </div>
@@ -122,43 +123,41 @@ const STATUS_COLOR: Record<ApplicationStatus, string> = {
 
 function TableView({ apps, onOpen }: { apps: JobApplication[]; onOpen: (a: JobApplication) => void }) {
   return (
-    <div className="overflow-hidden rounded-[16px] border border-slate-200/80 bg-white shadow-[0_1px_0_rgba(15,23,42,0.04),0_8px_24px_rgba(15,23,42,0.05)]">
+    <div className="surface-panel overflow-hidden rounded-xl shadow-[0_6px_18px_rgba(15,23,42,0.05)]">
       <table className="w-full min-w-[600px]">
         <thead>
-          <tr className="border-b border-slate-200/70 text-left text-[10.5px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-            <th className="px-4 py-3">Company</th>
-            <th className="px-4 py-3">Role</th>
-            <th className="px-4 py-3">Status</th>
-            <th className="px-4 py-3">Applied</th>
-            <th className="px-4 py-3">Score</th>
+          <tr className="border-b border-border bg-surface-alt/50 text-left text-[10.5px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            <th className="px-4 py-3.5">Company</th>
+            <th className="px-4 py-3.5">Role</th>
+            <th className="px-4 py-3.5">Status</th>
+            <th className="px-4 py-3.5">Applied</th>
+            <th className="px-4 py-3.5">Score</th>
           </tr>
         </thead>
         <tbody>
           {apps.map((app) => (
-            <tr key={app.id} onClick={() => onOpen(app)} className="group cursor-pointer border-b border-slate-100 last:border-0 transition hover:bg-slate-50/80">
+            <tr key={app.id} onClick={() => onOpen(app)} className="group cursor-pointer border-b border-border/80 last:border-0 transition hover:bg-surface-alt/80">
               <td className="px-4 py-3">
                 <div className="flex items-center gap-2.5">
-                  {app.company_logo_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={app.company_logo_url} alt={app.company_name} className="h-7 w-7 rounded-lg border border-slate-200/80 object-cover" />
-                  ) : (
-                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#FFF1E8] text-xs font-bold text-[#062246]">
-                      {app.company_name.charAt(0)}
-                    </div>
-                  )}
-                  <span className="text-[13px] font-medium text-slate-800">{app.company_name}</span>
+                  <CompanyLogo
+                    companyName={app.company_name}
+                    domain={app.company_domain ?? undefined}
+                    logoUrl={app.company_logo_url}
+                    className="h-8 w-8 rounded-lg"
+                  />
+                  <span className="text-[13px] font-medium text-strong">{app.company_name}</span>
                 </div>
               </td>
-              <td className="px-4 py-3 text-[13px] text-slate-700">{app.job_title}</td>
+              <td className="px-4 py-3 text-[13px] text-strong">{app.job_title}</td>
               <td className="px-4 py-3">
                 <span className={cn("rounded-full border px-2.5 py-0.5 text-[11px] font-semibold", STATUS_COLOR[app.status])}>
                   {STATUS_LABEL[app.status]}
                 </span>
               </td>
-              <td className="px-4 py-3 text-[12.5px] text-slate-500">
+              <td className="px-4 py-3 text-[12.5px] text-muted-foreground">
                 {app.applied_at ? new Date(app.applied_at).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "—"}
               </td>
-              <td className="px-4 py-3 text-[12.5px] text-slate-500">
+              <td className="px-4 py-3 text-[12.5px] text-muted-foreground">
                 {app.match_score != null ? `${app.match_score}%` : "—"}
               </td>
             </tr>
@@ -166,7 +165,7 @@ function TableView({ apps, onOpen }: { apps: JobApplication[]; onOpen: (a: JobAp
         </tbody>
       </table>
       {apps.length === 0 && (
-        <div className="py-12 text-center text-sm text-slate-400">No applications found</div>
+        <div className="py-12 text-center text-sm text-muted-foreground">No applications found</div>
       )}
     </div>
   )
@@ -247,72 +246,83 @@ export default function ApplicationsPage() {
   const currentApp = selectedApp ? (applications.find((a) => a.id === selectedApp.id) ?? selectedApp) : null
 
   return (
-    <div className="space-y-5">
-      {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-[10.5px] font-semibold uppercase tracking-[0.22em] text-slate-400">Pipeline</p>
-          <h1 className="mt-0.5 text-2xl font-bold tracking-tight text-slate-900">Applications</h1>
-        </div>
-        <div className="flex items-center gap-2">
-          <Link
-            href="/dashboard/applications/insights"
-            className="inline-flex items-center gap-1.5 rounded-[10px] border border-slate-200 px-3.5 py-2 text-[13px] font-medium text-slate-600 transition hover:bg-slate-50 shadow-[0_1px_0_rgba(15,23,42,0.04)]"
-          >
-            <BarChart2 className="h-4 w-4" />
-            Insights
-          </Link>
-          <button
-            type="button"
-            onClick={() => { setAddDefaultStatus("saved"); setShowAddModal(true) }}
-            className="inline-flex items-center gap-1.5 rounded-[10px] bg-[#FF5C18] px-4 py-2 text-[13px] font-semibold text-white transition hover:bg-[#E14F0E]"
-          >
-            <Plus className="h-4 w-4" />
-            Add
-          </button>
-        </div>
-      </div>
+    <main className="app-page">
+      <div className="app-shell max-w-[1680px] space-y-6 px-4 pb-10 pt-1 sm:px-6 lg:space-y-8 lg:px-8">
+        <section className="surface-hero rounded-xl border border-border p-5 sm:p-6 md:p-8">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+            <div className="min-w-0">
+              <p className="section-kicker">Pipeline</p>
+              <h1 className="section-title mt-2.5">Applications</h1>
+              <p className="section-copy mt-2.5 max-w-2xl">
+                Drag cards between stages, search everything, or switch to table view — one place for your search.
+              </p>
+            </div>
+            <div className="flex shrink-0 flex-wrap items-center gap-2.5">
+              <Link
+                href="/dashboard/applications/insights"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-surface px-3.5 py-2.5 text-[13px] font-semibold text-muted-foreground transition hover:border-border hover:bg-surface-alt hover:text-strong"
+              >
+                <BarChart2 className="h-4 w-4" />
+                Insights
+              </Link>
+              <button
+                type="button"
+                onClick={() => {
+                  setAddDefaultStatus("saved")
+                  setShowAddModal(true)
+                }}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2.5 text-[13px] font-semibold text-primary-foreground transition hover:bg-primary-hover"
+              >
+                <Plus className="h-4 w-4" />
+                Add
+              </button>
+            </div>
+          </div>
+        </section>
 
-      {/* Controls */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative min-w-48 flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Search companies or roles…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full rounded-[10px] border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm text-slate-800 placeholder:text-slate-400 shadow-[0_1px_0_rgba(15,23,42,0.04)] focus:outline-none"
-          />
-        </div>
+        <section className="surface-panel rounded-xl border border-border p-4 sm:p-5">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative min-w-48 flex-1">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder="Search companies or roles…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full rounded-xl border border-border bg-surface py-2.5 pl-10 pr-3 text-sm text-strong placeholder:text-muted-foreground shadow-[0_1px_0_rgba(15,23,42,0.04)] focus:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/15"
+              />
+            </div>
 
-        <div className="flex items-center rounded-[10px] border border-slate-200 bg-white p-0.5 shadow-[0_1px_0_rgba(15,23,42,0.04)]">
-          {(["kanban", "table"] as const).map((mode) => (
-            <button
-              key={mode}
-              type="button"
-              onClick={() => setView(mode)}
-              className={cn(
-                "flex h-8 w-8 items-center justify-center rounded-[8px] transition",
-                view === mode ? "bg-[#062246] text-white shadow-sm" : "text-slate-500 hover:text-slate-800"
-              )}
-            >
-              {mode === "kanban" ? <LayoutGrid className="h-4 w-4" /> : <List className="h-4 w-4" />}
-            </button>
-          ))}
-        </div>
+            <div className="flex items-center rounded-xl border border-border bg-surface-alt p-0.5">
+              {(["kanban", "table"] as const).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => setView(mode)}
+                  className={cn(
+                    "flex h-9 w-9 items-center justify-center rounded-[10px] transition",
+                    view === mode
+                      ? "bg-brand-navy text-white shadow-sm"
+                      : "text-muted-foreground hover:text-strong"
+                  )}
+                >
+                  {mode === "kanban" ? <LayoutGrid className="h-4 w-4" /> : <List className="h-4 w-4" />}
+                </button>
+              ))}
+            </div>
 
-        {stats && (
-          <button
-            type="button"
-            onClick={() => setStatsOpen((o) => !o)}
-            className="inline-flex items-center gap-1.5 rounded-[10px] border border-slate-200 bg-white px-3.5 py-2 text-[13px] font-medium text-slate-600 shadow-[0_1px_0_rgba(15,23,42,0.04)] transition hover:bg-slate-50"
-          >
-            Stats
-            {statsOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-          </button>
-        )}
-      </div>
+            {stats && (
+              <button
+                type="button"
+                onClick={() => setStatsOpen((o) => !o)}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-surface px-3.5 py-2.5 text-[13px] font-semibold text-muted-foreground transition hover:bg-surface-alt"
+              >
+                Stats
+                {statsOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+              </button>
+            )}
+          </div>
+        </section>
 
       {statsOpen && stats && (
         <div className="animate-fade-in">
@@ -322,7 +332,7 @@ export default function ApplicationsPage() {
 
       {isLoading && (
         <div className="flex items-center justify-center py-24">
-          <Loader2 className="h-6 w-6 animate-spin text-[#FF5C18]" />
+          <Loader2 className="h-6 w-6 animate-spin text-primary" />
         </div>
       )}
 
@@ -368,18 +378,18 @@ export default function ApplicationsPage() {
 
       {/* Empty state */}
       {!isLoading && applications.length === 0 && (
-        <div className="flex flex-col items-center gap-4 py-24 text-center">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#FFF1E8]">
-            <LayoutGrid className="h-8 w-8 text-[#FF5C18]" />
+        <div className="empty-state rounded-xl">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-tint">
+            <LayoutGrid className="h-8 w-8 text-primary" />
           </div>
-          <div>
-            <p className="font-semibold text-slate-800">No applications yet</p>
-            <p className="mt-1 text-sm text-slate-500">Track every application — from saved to offer</p>
-          </div>
+          <p className="mt-4 font-semibold text-strong">No applications yet</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Track every application — from saved to offer
+          </p>
           <button
             type="button"
             onClick={() => setShowAddModal(true)}
-            className="inline-flex items-center gap-2 rounded-[12px] bg-[#FF5C18] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#E14F0E]"
+            className="mt-6 inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition hover:bg-primary-hover"
           >
             <Plus className="h-4 w-4" />
             Add first application
@@ -402,9 +412,12 @@ export default function ApplicationsPage() {
         <AddApplicationModal
           onClose={() => setShowAddModal(false)}
           defaultStatus={addDefaultStatus}
-          onAdd={async (payload) => { await addApplication(payload) }}
+          onAdd={async (payload) => {
+            await addApplication(payload)
+          }}
         />
       )}
-    </div>
+      </div>
+    </main>
   )
 }

@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { devError } from "@/lib/client-dev-log"
 import { applyResumeEditContent } from "@/lib/resume/state"
 import type {
   Resume,
@@ -170,7 +171,7 @@ export function useResumeEditor(initialResume: Resume) {
         setLastSavedAt((data as Resume).updated_at)
         setSaveState("saved")
       } catch (error) {
-        console.error("Resume autosave failed", error)
+        devError("Resume autosave failed", error)
         setSaveState("error")
         window.setTimeout(() => setRetryTick((current) => current + 1), 3000)
       } finally {

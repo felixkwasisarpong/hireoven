@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { generateCoverLetter } from "@/lib/resume/cover-letter-generator"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { createClient } from "@/lib/supabase/server"
+import { requireFeature } from "@/lib/gates/server-gate"
 import type { CoverLetter, CoverLetterOptions, Company, Job, Resume } from "@/types"
 
 export const runtime = "nodejs"
@@ -31,11 +32,11 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const gate = await requireFeature("cover_letter")
+  if (gate instanceof NextResponse) return gate
+
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const user = (await supabase.auth.getUser()).data.user!
 
   const body = await request.json().catch(() => ({})) as {
     resumeId?: string

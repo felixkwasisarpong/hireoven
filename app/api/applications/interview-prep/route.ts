@@ -1,15 +1,18 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import Anthropic from "@anthropic-ai/sdk"
+import { requireFeature } from "@/lib/gates/server-gate"
 
 export const runtime = "nodejs"
 
 const anthropic = new Anthropic()
 
 export async function POST(request: NextRequest) {
+  const gate = await requireFeature("interview_prep", request)
+  if (gate instanceof NextResponse) return gate
+
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const user = (await supabase.auth.getUser()).data.user!
 
   const body = await request.json().catch(() => ({})) as {
     applicationId?: string

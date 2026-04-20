@@ -6,6 +6,8 @@ import type { Job, JobFilters, JobWithCompany, JobWithMatchScore } from "@/types
 
 const PAGE_SIZE = 20
 const SEARCH_CHUNK_SIZE = 80
+/** Avoid unbounded Supabase round-trips when client-side filters discard most rows. */
+const MAX_FETCH_CHUNKS = 14
 
 function hoursFromWithin(within: JobFilters["within"]) {
   if (within === "1h") return 1
@@ -274,7 +276,13 @@ export function useJobs(
         let exhausted = reset ? false : exhaustedRef.current
         const chunkSize = searchQuery.trim() ? SEARCH_CHUNK_SIZE : PAGE_SIZE
 
-        while (nextRows.length < targetVisible && !exhausted) {
+        let chunksFetched = 0
+        while (
+          nextRows.length < targetVisible &&
+          !exhausted &&
+          chunksFetched < MAX_FETCH_CHUNKS
+        ) {
+          chunksFetched += 1
           const {
             rows,
             rawCount,
@@ -303,6 +311,10 @@ export function useJobs(
           if (personalized && exactLastHourCount !== null) {
             setLastHourCount(exactLastHourCount)
           }
+        }
+
+        if (chunksFetched >= MAX_FETCH_CHUNKS && nextRows.length < targetVisible) {
+          exhausted = true
         }
 
         offsetRef.current = nextOffset
