@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { assertAdminAccess } from "@/lib/admin/auth"
 import { crawlCareersPage, type CrawlTarget } from "@/lib/crawler"
+import { persistCrawlJobs } from "@/lib/crawler/persist"
 import { createAdminClient } from "@/lib/supabase/admin"
 import type { Company } from "@/types"
 
@@ -92,26 +93,26 @@ export async function POST(request: NextRequest) {
         const result = await crawlCareersPage(target)
         const durationMs = Date.now() - startedAt
         const status = result.jobs.length > 0 ? "success" : "unchanged"
+        const persistResult = await persistCrawlJobs({
+          companyId: company.id,
+          crawledAt: result.crawledAt,
+          jobs: result.jobs,
+        })
 
-        await Promise.all([
-          (supabase.from("crawl_logs") as any).insert({
-            company_id: company.id,
-            status,
-            jobs_found: result.jobs.length,
-            new_jobs: result.jobs.length,
-            duration_ms: durationMs,
-            crawled_at: result.crawledAt.toISOString(),
-          }),
-          (supabase.from("companies") as any)
-            .update({ last_crawled_at: result.crawledAt.toISOString() } as any)
-            .eq("id", company.id),
-        ])
+        await (supabase.from("crawl_logs") as any).insert({
+          company_id: company.id,
+          status,
+          jobs_found: result.jobs.length,
+          new_jobs: persistResult.inserted,
+          duration_ms: durationMs,
+          crawled_at: result.crawledAt.toISOString(),
+        })
 
         results.push({
           companyId: company.id,
           companyName: company.name,
           status,
-          newJobs: result.jobs.length,
+          newJobs: persistResult.inserted,
           durationMs,
         })
       } catch (error) {

@@ -44,6 +44,10 @@ export default function CompanyCard({ company, newJobsToday, isWatching, onWatch
     confidence >= 40 ? 'bg-amber-400' :
     'bg-gray-300'
 
+  const atsLabel = company.ats_type
+    ? company.ats_type.charAt(0).toUpperCase() + company.ats_type.slice(1)
+    : null
+
   return (
     <div className="group relative flex h-full flex-col overflow-hidden rounded-[22px] border border-slate-200/80 bg-white/95 shadow-[0_10px_26px_rgba(15,23,42,0.04)] transition duration-200 hover:border-slate-300 hover:shadow-[0_16px_30px_rgba(15,23,42,0.06)]">
       <button
@@ -85,9 +89,11 @@ export default function CompanyCard({ company, newJobsToday, isWatching, onWatch
             <p className={company.job_count > 0 ? 'text-sm font-semibold text-[#FF5C18]' : 'text-sm font-medium text-slate-400'}>
               {company.job_count > 0 ? `${company.job_count.toLocaleString()} open roles` : 'No open roles'}
             </p>
-            <p className="mt-1 text-xs text-slate-400">
-              ATS: {company.ats_type ? company.ats_type.charAt(0).toUpperCase() + company.ats_type.slice(1) : 'Unknown'}
-            </p>
+            {atsLabel ? (
+              <p className="mt-1 text-xs text-slate-400">ATS: {atsLabel}</p>
+            ) : (
+              <p className="mt-1 text-xs text-slate-400">Career page monitored</p>
+            )}
           </div>
           {(newJobsToday ?? 0) > 0 && (
             <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">

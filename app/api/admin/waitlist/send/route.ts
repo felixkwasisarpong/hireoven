@@ -2,7 +2,9 @@ import { NextResponse } from "next/server"
 import { Resend } from "resend"
 import { z } from "zod"
 import { assertAdminAccess } from "@/lib/admin/auth"
+import { getSupportFromEmail } from "@/lib/email/identity"
 import { createAdminClient } from "@/lib/supabase/admin"
+import { isMissingWaitlistTableError } from "@/lib/waitlist/errors"
 import { getPublicSiteUrl } from "@/lib/waitlist/site-url"
 
 const bodySchema = z.object({
@@ -12,8 +14,7 @@ const bodySchema = z.object({
 })
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null
-const from =
-  process.env.RESEND_FROM_EMAIL ?? "Hireoven <onboarding@resend.dev>"
+const from = getSupportFromEmail()
 
 export async function POST(request: Request) {
   const access = await assertAdminAccess()
@@ -59,6 +60,16 @@ export async function POST(request: Request) {
     .eq("confirmed", true)
 
   if (error) {
+    if (isMissingWaitlistTableError(error.message)) {
+      return NextResponse.json(
+        {
+          error:
+            "Waitlist table is not available in this database yet. Run latest schema migration for public.waitlist.",
+        },
+        { status: 503 }
+      )
+    }
+
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 

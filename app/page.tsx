@@ -8,7 +8,7 @@ import { createClient } from "@/lib/supabase/server"
 export const metadata: Metadata = {
   title: "Hireoven — Jobs served fresh. Apply before the crowd.",
   description:
-    "We monitor thousands of company career pages every 30 minutes. See new jobs within minutes of posting. Built for speed, with H1B sponsorship intel for international candidates.",
+    "We monitor career pages every 30 minutes. See new jobs within minutes of posting. Built for speed, with H1B sponsorship intel for international candidates.",
 }
 
 export const revalidate = 3600
@@ -22,8 +22,8 @@ const HOW_IT_WORKS = [
   {
     step: "01",
     icon: Clock,
-    title: "We crawl thousands of career pages every 30 minutes",
-    body: "Our crawler monitors Greenhouse, Lever, Workday, Ashby, and custom career pages across every major company — day and night.",
+    title: "We crawl career pages every 30 minutes",
+    body: "Our crawler monitors Greenhouse, Lever, Workday, Ashby, and custom career pages across major employers — day and night.",
   },
   {
     step: "02",
@@ -60,13 +60,12 @@ const INTL_FEATURES = [
 async function getPlatformStats() {
   try {
     const supabase = createAdminClient()
-    const [jobs, companies] = await Promise.all([
+    const [jobs] = await Promise.all([
       supabase.from("jobs").select("*", { count: "exact", head: true }).eq("is_active", true),
-      supabase.from("companies").select("*", { count: "exact", head: true }).eq("is_active", true),
     ])
-    return { jobs: jobs.count ?? 0, companies: companies.count ?? 0 }
+    return { jobs: jobs.count ?? 0 }
   } catch {
-    return { jobs: 0, companies: 0 }
+    return { jobs: 0 }
   }
 }
 
@@ -97,14 +96,14 @@ export default async function HomePage() {
         <div className="mx-auto max-w-3xl">
           <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-[#BAE6FD] bg-[#F0F9FF] px-4 py-1.5 text-xs font-semibold text-[#0369A1]">
             <span className="h-2 w-2 rounded-full bg-[#0369A1] animate-pulse" />
-            Monitoring {stats.companies.toLocaleString()} companies right now
+            Live monitoring is active right now
           </div>
           <h1 className="text-5xl font-extrabold tracking-tight text-gray-900 leading-tight mb-5">
             Jobs served fresh.{" "}
             <span className="text-[#0369A1]">Apply before the crowd.</span>
           </h1>
           <p className="text-xl text-gray-500 leading-relaxed mb-8 max-w-2xl mx-auto">
-            We monitor thousands of company career pages in real time so you see new
+            We monitor company career pages in real time so you see new
             roles within minutes of posting — with H1B sponsorship intel built in.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
@@ -138,7 +137,7 @@ export default async function HomePage() {
           <div className="grid grid-cols-3 gap-8 text-center mb-10">
             {[
               { value: stats.jobs.toLocaleString(), label: "active jobs tracked" },
-              { value: stats.companies.toLocaleString(), label: "companies monitored" },
+              { value: "Realtime", label: "job feed updates" },
               { value: "<30m", label: "avg. time to detection" },
             ].map(({ value, label }) => (
               <div key={label}>

@@ -35,6 +35,8 @@ const envSchema = z.object({
       message: "RESEND_API_KEY must start with 're_'",
     })
     .optional(),
+  MAIL_FROM_DOMAIN: z.string().min(1).optional(),
+  RECENT_JOBS_FROM_EMAIL: z.string().min(1).optional(),
 
   // Web Push VAPID — generate with: npx web-push generate-vapid-keys
   VAPID_PUBLIC_KEY: z.string().min(1).optional(),
@@ -54,6 +56,8 @@ const envSchema = z.object({
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
 })
 
+type Env = z.infer<typeof envSchema>
+
 function parseEnv() {
   const result = envSchema.safeParse(process.env)
 
@@ -71,7 +75,20 @@ function parseEnv() {
   return result.data
 }
 
-export const env = parseEnv()
+let cachedEnv: Env | null = null
+
+export function getEnv(): Env {
+  if (!cachedEnv) {
+    cachedEnv = parseEnv()
+  }
+  return cachedEnv
+}
+
+export const env: Env = new Proxy({} as Env, {
+  get(_target, prop) {
+    return getEnv()[prop as keyof Env]
+  },
+})
 
 export function requireCronAuth(authHeader: string | null): boolean {
   const secret = process.env.CRON_SECRET

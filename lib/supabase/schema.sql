@@ -889,3 +889,100 @@ CREATE INDEX IF NOT EXISTS idx_waitlist_confirmation_token ON waitlist(confirmat
 
 ALTER TABLE waitlist ENABLE ROW LEVEL SECURITY;
 -- No policies: anon/authenticated clients cannot read/write; service role bypasses RLS.
+
+-- =============================================================================
+-- Marketing foundation
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS marketing_subscribers (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  email TEXT UNIQUE NOT NULL,
+  full_name TEXT,
+  source TEXT DEFAULT 'app',
+  subscribed_to_marketing BOOLEAN DEFAULT true,
+  unsubscribed_at TIMESTAMPTZ,
+  unsubscribe_token TEXT UNIQUE,
+  metadata JSONB DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS marketing_campaigns (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  created_by UUID REFERENCES profiles(id),
+  name TEXT NOT NULL,
+  subject TEXT NOT NULL,
+  body_text TEXT,
+  body_html TEXT,
+  segment TEXT DEFAULT 'all',
+  status TEXT DEFAULT 'draft' CHECK (status IN ('draft', 'sending', 'sent', 'failed')),
+  scheduled_at TIMESTAMPTZ,
+  sent_at TIMESTAMPTZ,
+  total_recipients INTEGER DEFAULT 0,
+  total_sent INTEGER DEFAULT 0,
+  total_failed INTEGER DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS marketing_campaign_sends (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  campaign_id UUID REFERENCES marketing_campaigns(id) ON DELETE CASCADE,
+  subscriber_id UUID REFERENCES marketing_subscribers(id) ON DELETE SET NULL,
+  email TEXT NOT NULL,
+  status TEXT DEFAULT 'sent' CHECK (status IN ('sent', 'failed')),
+  provider_message_id TEXT,
+  error_message TEXT,
+  sent_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_marketing_subscribers_email
+  ON marketing_subscribers(email);
+CREATE INDEX IF NOT EXISTS idx_marketing_subscribers_subscribed
+  ON marketing_subscribers(subscribed_to_marketing);
+CREATE INDEX IF NOT EXISTS idx_marketing_subscribers_token
+  ON marketing_subscribers(unsubscribe_token);
+CREATE INDEX IF NOT EXISTS idx_marketing_campaigns_created_at
+  ON marketing_campaigns(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_marketing_campaign_sends_campaign_id
+  ON marketing_campaign_sends(campaign_id);
+
+ALTER TABLE marketing_subscribers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE marketing_campaigns ENABLE ROW LEVEL SECURITY;
+ALTER TABLE marketing_campaign_sends ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'marketing_subscribers'
+      AND policyname = 'Admins can manage marketing subscribers'
+  ) THEN
+    CREATE POLICY "Admins can manage marketing subscribers"
+      ON marketing_subscribers FOR ALL
+      USING (public.is_admin_user())
+      WITH CHECK (public.is_admin_user());
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'marketing_campaigns'
+      AND policyname = 'Admins can manage marketing campaigns'
+  ) THEN
+    CREATE POLICY "Admins can manage marketing campaigns"
+      ON marketing_campaigns FOR ALL
+      USING (public.is_admin_user())
+      WITH CHECK (public.is_admin_user());
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'marketing_campaign_sends'
+      AND policyname = 'Admins can manage marketing campaign sends'
+  ) THEN
+    CREATE POLICY "Admins can manage marketing campaign sends"
+      ON marketing_campaign_sends FOR ALL
+      USING (public.is_admin_user())
+      WITH CHECK (public.is_admin_user());
+  END IF;
+END $$;

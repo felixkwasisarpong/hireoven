@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { crawlCareersPage, type CrawlTarget } from "@/lib/crawler"
+import { persistCrawlJobs } from "@/lib/crawler/persist"
 import { requireCronAuth } from "@/lib/env"
 import { createAdminClient } from "@/lib/supabase/admin"
 
@@ -28,18 +29,42 @@ export async function GET(request: NextRequest) {
         careersUrl: company.careers_url,
         lastCrawledAt: company.last_crawled_at ? new Date(company.last_crawled_at) : null,
       }
-      return crawlCareersPage(target)
+      const crawlResult = await crawlCareersPage(target)
+      const persistResult = await persistCrawlJobs({
+        companyId: company.id,
+        crawledAt: crawlResult.crawledAt,
+        jobs: crawlResult.jobs,
+      })
+
+      const status = crawlResult.jobs.length > 0 ? "success" : "unchanged"
+      await (supabase.from("crawl_logs") as any).insert({
+        company_id: company.id,
+        status,
+        jobs_found: crawlResult.jobs.length,
+        new_jobs: persistResult.inserted,
+        duration_ms: null,
+        crawled_at: crawlResult.crawledAt.toISOString(),
+      })
+
+      return {
+        ...crawlResult,
+        persisted: persistResult,
+      }
     })
   )
 
   const succeeded = results.filter((r) => r.status === "fulfilled").length
   const failed = results.filter((r) => r.status === "rejected").length
+  const inserted = results
+    .filter((r): r is PromiseFulfilledResult<{ persisted: { inserted: number } }> => r.status === "fulfilled")
+    .reduce((sum, r) => sum + (r.value.persisted?.inserted ?? 0), 0)
 
   return NextResponse.json({
     success: true,
     companiesCrawled: companies?.length ?? 0,
     succeeded,
     failed,
+    inserted,
     timestamp: new Date().toISOString(),
   })
 }
