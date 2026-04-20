@@ -129,6 +129,8 @@ Not bundled in-repo: call these URLs on a schedule (Coolify scheduled tasks, sys
 | `/api/crawl` | Every 30 min | Crawl all active companies for new jobs |
 | `/api/alerts/digest` | 8am UTC daily | Send daily digest emails |
 | `/api/alerts/weekly` | 9am UTC Monday | Send weekly digest emails |
+| `/api/alerts/recent-jobs?segment=with-resume` | Every 6 hours | Send 75%+ resume-match recent jobs (max 5) |
+| `/api/alerts/recent-jobs?segment=without-resume` | 8pm local / 20:00 UTC | End-of-day fresh jobs for users without resumes |
 
 All cron routes verify `Authorization: Bearer {CRON_SECRET}` (see [docs/coolify.md](docs/coolify.md)).
 

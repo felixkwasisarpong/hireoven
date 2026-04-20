@@ -35,6 +35,8 @@ const envSchema = z.object({
       message: "RESEND_API_KEY must start with 're_'",
     })
     .optional(),
+  MAIL_FROM_DOMAIN: z.string().min(1).optional(),
+  RECENT_JOBS_FROM_EMAIL: z.string().min(1).optional(),
 
   // Web Push VAPID — generate with: npx web-push generate-vapid-keys
   VAPID_PUBLIC_KEY: z.string().min(1).optional(),

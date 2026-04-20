@@ -8,9 +8,16 @@
     "start": "next start",
     "lint": "next lint",
     "db:backfill-careers-urls": "npx tsx scripts/backfill-company-careers-urls.ts",
+    "db:backfill-ats": "npx tsx scripts/backfill-company-ats.ts",
+    "db:backfill-ats:dry-run": "npx tsx scripts/backfill-company-ats.ts --dry-run",
+    "db:discover-ats-live": "npx tsx scripts/discover-company-ats-live.ts --limit=1200",
+    "db:discover-ats-live:dry-run": "npx tsx scripts/discover-company-ats-live.ts --limit=1200 --dry-run",
+    "db:discover-ats-live:overwrite": "npx tsx scripts/discover-company-ats-live.ts --limit=1200 --overwrite",
     "db:backfill-logo-urls": "npx tsx scripts/backfill-company-logo-urls.ts",
     "db:seed-companies": "npx tsx scripts/seed-companies.ts",
-    "db:seed-companies:dry-run": "npx tsx scripts/seed-companies.ts --dry-run"
+    "db:seed-companies:dry-run": "npx tsx scripts/seed-companies.ts --dry-run",
+    "db:topup-companies": "npx tsx scripts/topup-companies-to-target.ts --target=1000",
+    "db:topup-companies:dry-run": "npx tsx scripts/topup-companies-to-target.ts --target=1000 --dry-run"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.52.0",
