@@ -37,6 +37,22 @@ Repo includes [`../Dockerfile`](../Dockerfile) and Next [`output: "standalone"`]
 7. Attach **domain** in Coolify → enable **HTTPS**.
 8. **Deploy** / enable **auto deploy on push**.
 
+### Scheduled tasks (crawl + alerts)
+
+Vercel Cron is not used. In Coolify, add **scheduled tasks** (or any cron) that `GET` your public origin with `Authorization: Bearer <CRON_SECRET>` (same secret as in `.env.production.example`).
+
+| Path | Suggested schedule | Purpose |
+|------|--------------------|---------|
+| `/api/crawl` | `*/30 * * * *` | Crawl active companies |
+| `/api/alerts/digest` | `0 8 * * *` (UTC) | Daily digest emails |
+| `/api/alerts/weekly` | `0 9 * * 1` (UTC) | Weekly digest emails |
+
+Example (replace host and secret):
+
+```bash
+curl -fsS -H "Authorization: Bearer $CRON_SECRET" "https://hireoven.com/api/crawl"
+```
+
 ### Healthcheck (optional)
 
 - Path: `/` or `/api/health` if you add a small health route later.

@@ -54,8 +54,9 @@ export default function PrivacyPage() {
             <h2 className="text-xl font-semibold text-gray-900 mb-3">4. Data storage</h2>
             <p>
               Your data is stored in Supabase (hosted on AWS us-east-1). Emails are sent via Resend.
-              We use Vercel for hosting and Vercel Analytics for anonymous page-view statistics — no
-              personal identifiers are sent to Vercel Analytics.
+              The app runs on infrastructure we operate (e.g. self-hosted Docker). We use Vercel
+              Analytics for anonymous page-view statistics — no personal identifiers are sent to
+              Vercel Analytics.
             </p>
           </section>
 

@@ -3,7 +3,7 @@ import { crawlCareersPage, type CrawlTarget } from "@/lib/crawler"
 import { requireCronAuth } from "@/lib/env"
 import { createAdminClient } from "@/lib/supabase/admin"
 
-// Vercel cron fires GET requests
+// Scheduled jobs (Coolify, cron, etc.) call GET with CRON_SECRET
 export async function GET(request: NextRequest) {
   if (!requireCronAuth(request.headers.get("authorization"))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })

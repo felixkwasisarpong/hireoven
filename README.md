@@ -13,7 +13,7 @@ Real-time job monitoring platform. Crawls thousands of company career pages ever
 | Email | Resend |
 | Push notifications | Web Push |
 | Analytics | Vercel Analytics |
-| Hosting | Vercel |
+| Hosting | Docker (e.g. [Coolify](docs/coolify.md)) |
 
 ## Local setup
 
@@ -105,11 +105,7 @@ scripts/            # Seed scripts, migrations
 
 ## Deployment
 
-### Vercel (recommended)
-
-1. Push to GitHub and import the repo in [vercel.com/new](https://vercel.com/new)
-2. Add all environment variables from `.env.production.example`
-3. Deploy — cron jobs are configured in `vercel.json` automatically
+Production is intended to run as a **Docker** image (Next.js `standalone` output). See **[docs/coolify.md](docs/coolify.md)** for Coolify: repo root, Dockerfile build, port `3000`, env vars, and **scheduled HTTP jobs** for crawl and alert routes (replace Vercel Cron).
 
 ### Environment variables for production
 
@@ -126,15 +122,15 @@ See `.env.production.example` for the full list with comments. Key vars:
 
 ### Cron jobs
 
-Defined in `vercel.json`:
+Not bundled in-repo: call these URLs on a schedule (Coolify scheduled tasks, systemd timer, external cron, etc.):
 
-| Route | Schedule | Purpose |
+| Route | Suggested schedule | Purpose |
 |---|---|---|
 | `/api/crawl` | Every 30 min | Crawl all active companies for new jobs |
 | `/api/alerts/digest` | 8am UTC daily | Send daily digest emails |
 | `/api/alerts/weekly` | 9am UTC Monday | Send weekly digest emails |
 
-All cron routes verify `Authorization: Bearer {CRON_SECRET}`.
+All cron routes verify `Authorization: Bearer {CRON_SECRET}` (see [docs/coolify.md](docs/coolify.md)).
 
 ### Health check
 
