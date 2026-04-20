@@ -2,7 +2,7 @@ import type { Metadata } from "next"
 import Link from "next/link"
 import Image from "next/image"
 import { notFound } from "next/navigation"
-import { createAdminClient } from "@/lib/supabase/admin"
+import { createAdminClient, hasSupabaseAdminEnv } from "@/lib/supabase/admin"
 import { AutofillButton } from "@/components/autofill/AutofillButton"
 import Navbar from "@/components/layout/Navbar"
 import type { Company, Job } from "@/types"
@@ -12,6 +12,7 @@ export const revalidate = 3600
 type Props = { params: Promise<{ id: string }> }
 
 export async function generateStaticParams() {
+  if (!hasSupabaseAdminEnv()) return []
   const supabase = createAdminClient()
   const { data } = await supabase
     .from("jobs")
@@ -23,6 +24,7 @@ export async function generateStaticParams() {
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  if (!hasSupabaseAdminEnv()) return { title: "Job — Hireoven" }
   const { id } = await params
   const supabase = createAdminClient()
   const { data: rawData } = await supabase

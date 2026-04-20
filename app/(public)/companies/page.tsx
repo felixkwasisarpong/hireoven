@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 import Link from "next/link"
 import Image from "next/image"
-import { createAdminClient } from "@/lib/supabase/admin"
+import { createAdminClient, hasSupabaseAdminEnv } from "@/lib/supabase/admin"
 import Navbar from "@/components/layout/Navbar"
 import type { Company } from "@/types"
 
@@ -30,22 +30,27 @@ function SponsorsH1BBadge({ confidence }: { confidence: number }) {
 }
 
 export default async function PublicCompaniesPage() {
-  const supabase = createAdminClient()
-  const { data: companies } = await supabase
-    .from("companies")
-    .select("id, name, domain, logo_url, industry, size, job_count, sponsors_h1b, sponsorship_confidence")
-    .eq("is_active", true)
-    .gt("job_count", 0)
-    .order("job_count", { ascending: false })
+  const companies = hasSupabaseAdminEnv()
+    ? await (async () => {
+        const supabase = createAdminClient()
+        const { data } = await supabase
+          .from("companies")
+          .select("id, name, domain, logo_url, industry, size, job_count, sponsors_h1b, sponsorship_confidence")
+          .eq("is_active", true)
+          .gt("job_count", 0)
+          .order("job_count", { ascending: false })
+        return data ?? []
+      })()
+    : []
 
-  const grouped = (companies ?? []).reduce<Record<string, Company[]>>((acc, company) => {
+  const grouped = companies.reduce<Record<string, Company[]>>((acc, company) => {
     const industry = company.industry ?? "Other"
     if (!acc[industry]) acc[industry] = []
     acc[industry].push(company as Company)
     return acc
   }, {})
 
-  const totalJobs = (companies ?? []).reduce((sum, c) => sum + (c.job_count ?? 0), 0)
+  const totalJobs = companies.reduce((sum, c) => sum + (c.job_count ?? 0), 0)
 
   return (
     <div className="min-h-screen bg-white">
@@ -57,7 +62,7 @@ export default async function PublicCompaniesPage() {
             Companies hiring now
           </h1>
           <p className="mt-3 text-lg text-gray-500">
-            {(companies ?? []).length.toLocaleString()} companies ·{" "}
+            {companies.length.toLocaleString()} companies ·{" "}
             {totalJobs.toLocaleString()} open roles
           </p>
         </div>
