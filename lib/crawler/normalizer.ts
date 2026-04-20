@@ -17,6 +17,88 @@ export interface VisaAnalysis {
   sponsorship_score: number
 }
 
+const SENIORITY_PREFIXES = [
+  "senior",
+  "sr",
+  "staff",
+  "principal",
+  "lead",
+  "junior",
+  "jr",
+  "intern",
+  "director",
+  "vp",
+  "head",
+]
+
+const SKILL_KEYWORDS = [
+  "javascript",
+  "typescript",
+  "node",
+  "node.js",
+  "react",
+  "next.js",
+  "python",
+  "java",
+  "go",
+  "rust",
+  "sql",
+  "postgres",
+  "mysql",
+  "mongodb",
+  "redis",
+  "aws",
+  "gcp",
+  "azure",
+  "docker",
+  "kubernetes",
+  "terraform",
+  "graphql",
+  "rest",
+  "spark",
+  "airflow",
+  "pandas",
+  "machine learning",
+  "deep learning",
+]
+
+export function normalizeJobTitle(title: string): string {
+  const cleaned = title
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/\[[^\]]*\]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+
+  if (!cleaned) return title
+
+  const words = cleaned.split(" ")
+  const filtered = words.filter((word, idx) => {
+    if (idx === 0) return true
+    return !SENIORITY_PREFIXES.includes(word.toLowerCase().replace(/[.,]/g, ""))
+  })
+
+  const result = filtered.join(" ").trim()
+  return result || cleaned
+}
+
+export function extractSkillsFromText(...parts: Array<string | null | undefined>): string[] {
+  const blob = parts
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase()
+
+  if (!blob) return []
+
+  const found = new Set<string>()
+  for (const keyword of SKILL_KEYWORDS) {
+    if (blob.includes(keyword)) {
+      found.add(keyword === "node.js" ? "node" : keyword)
+    }
+  }
+
+  return [...found]
+}
+
 export async function detectVisaLanguage(description: string): Promise<VisaAnalysis> {
   const truncated = description.slice(0, 3000)
 

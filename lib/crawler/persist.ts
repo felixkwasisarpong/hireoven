@@ -1,6 +1,7 @@
 import crypto from "crypto"
 import { createAdminClient } from "@/lib/supabase/admin"
 import type { RawJob } from "@/lib/crawler"
+import { extractSkillsFromText, normalizeJobTitle } from "@/lib/crawler/normalizer"
 
 function externalIdForJob(job: RawJob) {
   if (job.externalId?.trim()) return job.externalId.trim()
@@ -44,9 +45,11 @@ export async function persistCrawlJobs({
     const payload: Record<string, unknown> = {
       company_id: companyId,
       title: job.title,
+      normalized_title: normalizeJobTitle(job.title),
       apply_url: job.url,
       location: job.location ?? null,
       external_id: job.externalId,
+      skills: extractSkillsFromText(job.title),
       is_active: true,
       last_seen_at: crawledAtIso,
       raw_data: {

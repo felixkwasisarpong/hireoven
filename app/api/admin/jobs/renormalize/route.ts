@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { assertAdminAccess } from "@/lib/admin/auth"
-import { detectVisaLanguage } from "@/lib/crawler/normalizer"
+import { detectVisaLanguage, extractSkillsFromText, normalizeJobTitle } from "@/lib/crawler/normalizer"
 import { createAdminClient } from "@/lib/supabase/admin"
 import type { Job } from "@/types"
 
@@ -28,18 +28,21 @@ export async function POST(request: NextRequest) {
   const updated: string[] = []
 
   for (const job of jobs) {
-    if (!job.description) continue
+    const nextPayload: Record<string, unknown> = {
+      normalized_title: normalizeJobTitle(job.title),
+      skills: extractSkillsFromText(job.title, job.description),
+    }
 
-    const normalized = await detectVisaLanguage(job.description)
+    if (job.description) {
+      const normalized = await detectVisaLanguage(job.description)
+      nextPayload.sponsors_h1b = normalized.sponsors_h1b
+      nextPayload.sponsorship_score = normalized.sponsorship_score
+      nextPayload.visa_language_detected = normalized.visa_language_detected
+      nextPayload.requires_authorization = normalized.requires_authorization
+    }
+
     const { error: updateError } = await ((supabase.from("jobs") as any)
-      .update(
-        {
-          sponsors_h1b: normalized.sponsors_h1b,
-          sponsorship_score: normalized.sponsorship_score,
-          visa_language_detected: normalized.visa_language_detected,
-          requires_authorization: normalized.requires_authorization,
-        } as any
-      )
+      .update(nextPayload as any)
       .eq("id", job.id))
 
     if (!updateError) {
