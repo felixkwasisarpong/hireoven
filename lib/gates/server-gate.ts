@@ -3,7 +3,7 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr"
 import { cookies } from "next/headers"
 import { type FeatureKey, type Plan, canAccess, requiredPlanFor } from "./index"
 
-async function getUserPlan(request?: NextRequest): Promise<{ userId: string | null; plan: Plan | null }> {
+export async function getUserPlan(request?: NextRequest): Promise<{ userId: string | null; plan: Plan | null }> {
   const cookieStore = request
     ? {
         get: (name: string) => request.cookies.get(name)?.value,

@@ -402,7 +402,7 @@ export default function AutofillPage() {
   )
 
   return (
-    <main className="app-page pb-36">
+    <main className="relative app-page">
       <div className="app-shell max-w-[1240px] space-y-4">
         <DashboardPageHeader
           kicker="Autofill profile"
@@ -758,7 +758,10 @@ export default function AutofillPage() {
           )}
         </Section>
 
-        <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-slate-200/80 bg-white/95 px-4 py-3 backdrop-blur-md">
+        {/* Reserve space so the fixed save bar never covers the last form sections (esp. when it wraps on small screens). */}
+        <div aria-hidden className="h-[clamp(8.5rem,26vh,14rem)] sm:h-[clamp(9.5rem,22vh,15rem)]" />
+
+        <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-slate-200/80 bg-white/95 px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur-md">
           <div className="mx-auto flex max-w-[1240px] flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="text-sm text-gray-500">
               Profile is <span className="font-semibold text-gray-900">{completion}%</span> complete

@@ -59,6 +59,7 @@ export default function DashboardPage() {
   const { user, profile } = useAuth()
   const { watchlist } = useWatchlist(user?.id)
   const { hasResume, primaryResume, upsertResume } = useResumeContext()
+  const primaryResumeReady = primaryResume?.parse_status === "complete"
   const [feedMeta, setFeedMeta] = useState({ totalCount: 0, lastHourCount: 0 })
   const [topHiringCompanies, setTopHiringCompanies] = useState<TopHiringCompany[]>([])
   const [topMatches, setTopMatches] = useState<JobWithMatchScore[]>([])
@@ -328,7 +329,7 @@ export default function DashboardPage() {
               filters={filters}
               searchQuery={searchQuery}
               onMetaChange={setFeedMeta}
-              hasPrimaryResume={Boolean(primaryResume)}
+              hasPrimaryResume={primaryResumeReady}
             />
           </section>
 

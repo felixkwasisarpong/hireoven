@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
 import HireovenLogo from "@/components/ui/HireovenLogo"
+import CompanyLogo from "@/components/ui/CompanyLogo"
 import { createClient } from "@/lib/supabase/client"
 import type { Company, SeniorityLevel, VisaStatus } from "@/types"
 
@@ -603,20 +604,12 @@ function StepThree({
                 }`}
               >
                 {/* Logo / fallback */}
-                {company.logo_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={company.logo_url}
-                    alt={company.name}
-                    className="w-9 h-9 rounded-lg object-contain flex-shrink-0 bg-gray-50"
-                  />
-                ) : (
-                  <div className="w-9 h-9 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
-                    <span className="text-sm font-bold text-gray-400">
-                      {company.name[0]}
-                    </span>
-                  </div>
-                )}
+                <CompanyLogo
+                  companyName={company.name}
+                  domain={company.domain}
+                  logoUrl={company.logo_url}
+                  className="h-9 w-9 bg-gray-50"
+                />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">
                     <p className="text-sm font-semibold text-gray-900 truncate">

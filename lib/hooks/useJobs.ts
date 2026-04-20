@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { devWarn } from "@/lib/client-dev-log"
 import { createClient } from "@/lib/supabase/client"
 import type { Job, JobFilters, JobWithCompany, JobWithMatchScore } from "@/types"
 
@@ -283,33 +284,39 @@ export function useJobs(
           chunksFetched < MAX_FETCH_CHUNKS
         ) {
           chunksFetched += 1
-          const {
-            rows,
-            rawCount,
-            totalCount: exactCount,
-            lastHourCount: exactLastHourCount,
-          } = await fetchChunk(nextOffset)
+          try {
+            const {
+              rows,
+              rawCount,
+              totalCount: exactCount,
+              lastHourCount: exactLastHourCount,
+            } = await fetchChunk(nextOffset)
 
-          if (requestKeyRef.current !== requestKey) return
+            if (requestKeyRef.current !== requestKey) return
 
-          nextOffset += rawCount
-          if (rawCount < chunkSize) exhausted = true
+            nextOffset += rawCount
+            if (rawCount < chunkSize) exhausted = true
 
-          const merged = [...nextRows, ...rows].filter(
-            (job, index, collection) =>
-              collection.findIndex((item) => item.id === job.id) === index
-          )
+            const merged = [...nextRows, ...rows].filter(
+              (job, index, collection) =>
+                collection.findIndex((item) => item.id === job.id) === index
+            )
 
-          nextRows = personalized ? merged : sortJobs(merged, filters, searchQuery)
+            nextRows = personalized ? merged : sortJobs(merged, filters, searchQuery)
 
-          if (exactCount !== null) {
-            setTotalCount(exactCount)
-          }
+            if (exactCount !== null) {
+              setTotalCount(exactCount)
+            }
 
-          if (rawCount === 0) exhausted = true
+            if (rawCount === 0) exhausted = true
 
-          if (personalized && exactLastHourCount !== null) {
-            setLastHourCount(exactLastHourCount)
+            if (personalized && exactLastHourCount !== null) {
+              setLastHourCount(exactLastHourCount)
+            }
+          } catch (error) {
+            devWarn("Job feed fetch failed", error)
+            exhausted = true
+            break
           }
         }
 

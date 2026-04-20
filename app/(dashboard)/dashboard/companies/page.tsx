@@ -141,8 +141,8 @@ export default function CompaniesPage() {
     (selectedAts ? 1 : 0) + (sponsorsH1b ? 1 : 0) + (hasJobs ? 1 : 0)
 
   return (
-    <main className="app-page">
-      <div className="app-shell max-w-7xl space-y-5">
+    <main className="app-page pb-[max(6rem,calc(env(safe-area-inset-bottom)+5.5rem))]">
+      <div className="app-shell max-w-7xl space-y-5 pb-[max(2rem,calc(env(safe-area-inset-bottom)+1rem))]">
         <DashboardPageHeader
           kicker="Company explorer"
           title="Companies we track"
@@ -160,7 +160,7 @@ export default function CompaniesPage() {
         />
 
         {/* Header */}
-        <section className="surface-card p-5">
+        <section className="surface-card rounded-lg px-5 py-5 md:px-6 md:py-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <div className="flex items-center gap-2 mb-2">

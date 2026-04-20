@@ -538,11 +538,38 @@ export default function ResumePage() {
         {primaryResume && (
           <section className="surface-inset p-6">
             <p className="text-sm font-semibold text-[#062246]">
-              Your primary resume is ready for Phase 2
+              Your primary resume is parsed — product features can use it
             </p>
             <p className="mt-2 text-sm leading-7 text-gray-600">
-              Hireoven can now build analyzer, editor, autofill, and match-scoring features on top of {primaryResume.name ?? primaryResume.file_name}.
+              Hireoven already ships resume analysis/editing, autofill, cover letters, and match scoring on top of{" "}
+              <span className="font-medium text-gray-900">{primaryResume.name ?? primaryResume.file_name}</span>.
             </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Link
+                href="/dashboard"
+                className="inline-flex items-center rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-800 transition hover:bg-gray-50"
+              >
+                Job feed
+              </Link>
+              <Link
+                href="/dashboard/resume/edit"
+                className="inline-flex items-center rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-800 transition hover:bg-gray-50"
+              >
+                Resume editor
+              </Link>
+              <Link
+                href="/dashboard/autofill"
+                className="inline-flex items-center rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-800 transition hover:bg-gray-50"
+              >
+                Autofill profile
+              </Link>
+              <Link
+                href="/dashboard/cover-letters"
+                className="inline-flex items-center rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-800 transition hover:bg-gray-50"
+              >
+                Cover letters
+              </Link>
+            </div>
           </section>
         )}
       </div>
