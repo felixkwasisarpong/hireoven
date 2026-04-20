@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { uploadResume, deleteResume, getResumeUrl } from "@/lib/supabase/storage"
 import { createClient } from "@/lib/supabase/server"
 import { MAX_RESUME_SIZE_BYTES, isResumeFilename, isResumeMimeType } from "@/lib/resume/constants"
+import { requireFeature } from "@/lib/gates/server-gate"
 import type { Profile, Resume, ResumeInsert } from "@/types"
 
 export const runtime = "nodejs"
@@ -85,14 +86,11 @@ async function processResumeInBackground({
 }
 
 export async function POST(request: Request) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const gate = await requireFeature("resume_upload")
+  if (gate instanceof NextResponse) return gate
 
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  const supabase = await createClient()
+  const user = (await supabase.auth.getUser()).data.user!
 
   const formData = await request.formData()
   const file = formData.get("file")

@@ -1,6 +1,7 @@
 import Image from "next/image"
 import { cn } from "@/lib/utils"
 
+/* Static files live in /public/brand — keep paths aligned with committed assets. */
 const LOGO_ASSETS = {
   mark: {
     src: "/brand/hireoven-icon.svg",
@@ -9,19 +10,19 @@ const LOGO_ASSETS = {
     alt: "Hireoven icon",
   },
   wordmark: {
-    src: "/brand/hireoven-wordmark-transparent.png",
-    width: 900,
-    height: 180,
-    alt: "Hireoven wordmark",
+    src: "/brand/hireoven-logo.svg",
+    width: 1200,
+    height: 300,
+    alt: "Hireoven",
   },
   header: {
-    src: "/brand/hireoven-logo-header-transparent.png",
-    width: 640,
-    height: 160,
+    src: "/brand/hireoven-logo.svg",
+    width: 1200,
+    height: 300,
     alt: "Hireoven",
   },
   full: {
-    src: "/brand/hireoven-logo-full-transparent.png",
+    src: "/brand/hireoven-logo.svg",
     width: 1200,
     height: 300,
     alt: "Hireoven",

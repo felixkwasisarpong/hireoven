@@ -4,7 +4,8 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
+    /* Core shadcn-compatible */
+    --background: 220 18% 97%;
     --foreground: 222 47% 11%;
     --card: 0 0% 100%;
     --card-foreground: 222 47% 11%;
@@ -12,25 +13,46 @@
     --popover-foreground: 222 47% 11%;
     --primary: 19 100% 55%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 210 40% 96%;
+    --secondary: 220 14% 96%;
     --secondary-foreground: 222 47% 11%;
-    --muted: 210 40% 96%;
-    --muted-foreground: 215 16% 47%;
-    --accent: 210 40% 96%;
-    --accent-foreground: 222 47% 11%;
-    --destructive: 0 84% 60%;
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 9% 42%;
+    --accent: 214 32% 94%;
+    --accent-foreground: 214 84% 18%;
+    --destructive: 0 72% 48%;
     --destructive-foreground: 0 0% 100%;
-    --border: 214 32% 91%;
-    --input: 214 32% 91%;
+    --border: 220 13% 88%;
+    --input: 220 13% 88%;
     --ring: 19 100% 55%;
-    --radius: 0.5rem;
+    --radius: 0.625rem;
 
-    /* Brand tokens */
-    --brand: #FF5C18;
-    --brand-dark: #E14F0E;
+    /* Semantic product tokens */
+    --primary-hover: 19 90% 47%;
+    --surface: 0 0% 100%;
+    --surface-alt: 220 16% 96%;
+    --surface-muted: 220 18% 94%;
+    --surface-inset: 220 20% 92%;
+    --elev-1: 220 40% 2%;
+    --elev-2: 220 30% 6%;
+    --text-strong: 222 47% 9%;
+    --text-muted: 220 9% 40%;
+    --text-subtle: 220 8% 48%;
+    --accent-brand: 214 84% 16%;
+    --accent-soft: 24 100% 96%;
+    --accent-soft-border: 24 90% 88%;
+    --success: 152 56% 36%;
+    --success-soft: 152 45% 94%;
+    --warning: 32 92% 44%;
+    --warning-soft: 38 92% 94%;
+    --danger: 0 72% 48%;
+    --danger-soft: 0 86% 96%;
+
+    /* Legacy brand hex references (gradients, one-off fixes) */
+    --brand: #ff5c18;
+    --brand-dark: #e14f0e;
     --brand-navy: #062246;
-    --brand-tint: #FFF1E8;
-    --brand-tint-mid: #FFD2B8;
+    --brand-tint: #fff1e8;
+    --brand-tint-mid: #ffd2b8;
   }
 }
 
@@ -55,11 +77,16 @@
   }
 
   *:focus-visible {
-    outline: 2px solid rgba(255, 92, 24, 0.5);
+    outline: 2px solid hsl(var(--primary) / 0.45);
     outline-offset: 2px;
   }
 
-  h1, h2, h3, h4, h5, h6 {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
     text-wrap: balance;
   }
 
@@ -72,79 +99,111 @@
   /* ── Page shells ─────────────────────────────────────────────── */
 
   .app-page {
-    @apply min-h-screen bg-[radial-gradient(ellipse_at_top_left,_rgba(255,92,24,0.06)_0%,_transparent_38%),linear-gradient(160deg,#FEFAF7_0%,#F7F9FC_50%,#F2F5FB_100%)] px-4 py-6 lg:px-8;
+    @apply min-h-screen;
+    background-color: hsl(var(--background));
+    background-image: linear-gradient(
+      180deg,
+      hsl(var(--background)) 0%,
+      hsl(220 16% 96%) 48%,
+      hsl(220 14% 95%) 100%
+    );
   }
 
   .app-shell {
-    @apply mx-auto w-full max-w-[1440px];
+    /* Width caps come from page-level max-w-* utilities (e.g. max-w-7xl). */
+    @apply mx-auto w-full;
   }
 
-  /* ── Surface layers ──────────────────────────────────────────── */
+  /* Layered surfaces (panels, not floating cards) */
+  .surface-panel {
+    @apply border border-border bg-[hsl(var(--surface))] shadow-[0_1px_0_rgba(15,23,42,0.04),0_1px_2px_rgba(15,23,42,0.04)];
+  }
+
+  .surface-panel-raised {
+    @apply border border-border bg-[hsl(var(--surface))] shadow-[0_1px_0_rgba(15,23,42,0.05),0_8px_24px_rgba(15,23,42,0.06)];
+  }
+
+  .surface-rail {
+    @apply border border-border bg-[hsl(var(--surface))];
+    box-shadow: inset 1px 0 0 hsl(var(--border) / 0.5);
+  }
+
+  .surface-toolbar {
+    @apply border-b border-border bg-surface-alt/95 backdrop-blur-sm;
+  }
 
   .surface-hero {
-    @apply rounded-[22px] border border-slate-200/70 bg-white shadow-[0_1px_0_rgba(15,23,42,0.04),0_8px_24px_rgba(15,23,42,0.055)] backdrop-blur-sm;
+    @apply border border-border bg-[hsl(var(--surface))] shadow-[0_1px_0_rgba(15,23,42,0.04)];
   }
 
   .surface-card {
-    @apply rounded-[20px] border border-slate-200/70 bg-white shadow-[0_1px_0_rgba(15,23,42,0.03),0_6px_20px_rgba(15,23,42,0.05)] backdrop-blur-sm;
+    @apply border border-border bg-[hsl(var(--surface))] shadow-[0_1px_0_rgba(15,23,42,0.04),0_6px_18px_rgba(15,23,42,0.05)];
   }
 
   .surface-card-subtle {
-    @apply rounded-[16px] border border-slate-200/60 bg-slate-50/80;
+    @apply border border-border bg-[hsl(var(--surface-alt))];
   }
 
   .surface-inset {
-    @apply rounded-[14px] border border-slate-200/60 bg-slate-50/80;
+    @apply border border-border bg-[hsl(var(--surface-inset))];
   }
 
   .metric-tile {
-    @apply rounded-[18px] border border-slate-200/70 bg-white p-5 shadow-[0_1px_0_rgba(15,23,42,0.03),0_4px_14px_rgba(15,23,42,0.04)];
+    @apply border border-border bg-[hsl(var(--surface))] p-4 shadow-[0_1px_0_rgba(15,23,42,0.03)];
   }
 
   /* ── Typography ──────────────────────────────────────────────── */
 
   .section-kicker {
-    @apply text-[10.5px] font-bold uppercase tracking-[0.3em] text-[#FF5C18];
+    @apply text-[10.5px] font-bold uppercase tracking-[0.26em] text-primary;
   }
 
   .section-title {
-    @apply text-[2rem] font-semibold leading-[1.2] tracking-[-0.02em] text-slate-950;
+    @apply text-[1.65rem] font-semibold leading-[1.2] tracking-[-0.02em] text-[hsl(var(--text-strong))] sm:text-[1.85rem];
   }
 
   .section-copy {
-    @apply text-sm leading-[1.7] text-slate-500;
+    @apply text-sm leading-relaxed text-[hsl(var(--text-muted))];
   }
 
   /* ── Controls ────────────────────────────────────────────────── */
 
   .chip-control {
-    @apply inline-flex items-center gap-2 rounded-full border border-slate-200/80 bg-white/95 px-3.5 py-1.5 text-sm font-medium text-slate-600 shadow-[0_2px_8px_rgba(15,23,42,0.06)] transition-all duration-150 hover:-translate-y-px hover:border-slate-300 hover:shadow-[0_4px_12px_rgba(15,23,42,0.08)] hover:text-slate-900;
+    @apply inline-flex items-center gap-2 rounded-md border border-border bg-[hsl(var(--surface))] px-3 py-1.5 text-[13px] font-medium text-[hsl(var(--text-muted))] transition-colors duration-150 hover:border-[hsl(var(--accent-soft-border))] hover:bg-[hsl(var(--accent-soft))] hover:text-[hsl(var(--text-strong))];
   }
 
   .chip-control-active {
-    @apply border-[#FFD2B8] bg-[#FFF4EC] text-[#9A3412] shadow-[0_4px_14px_rgba(255,92,24,0.14)];
+    @apply border-[hsl(var(--accent-soft-border))] bg-[hsl(var(--accent-soft))] text-[hsl(var(--accent-brand))] shadow-none;
   }
 
-  /* ── List items ──────────────────────────────────────────────── */
+  /* ── Job rows / lists ───────────────────────────────────────── */
+
+  .job-feed-panel {
+    @apply surface-panel overflow-hidden rounded-lg;
+  }
 
   .data-list-row {
-    @apply rounded-[18px] border border-slate-200/70 bg-white/95 px-4 py-3 shadow-[0_2px_10px_rgba(15,23,42,0.04)];
+    @apply border-b border-border bg-[hsl(var(--surface))] px-4 py-3 transition-colors last:border-b-0 hover:bg-[hsl(var(--surface-alt))];
   }
 
   .empty-state {
-    @apply rounded-[20px] border border-dashed border-slate-300/80 bg-slate-50/70 px-6 py-12 text-center;
+    @apply border border-dashed border-border bg-[hsl(var(--surface-alt))] px-6 py-14 text-center;
   }
 
   /* ── Navigation ──────────────────────────────────────────────── */
 
   .glass-nav {
-    @apply border-b border-slate-200/60 bg-white/90 backdrop-blur-xl shadow-[0_1px_0_rgba(15,23,42,0.06)];
+    @apply border-b border-border bg-surface/90 backdrop-blur-xl;
   }
 
-  /* ── Admin ───────────────────────────────────────────────────── */
+  .dash-header-bar {
+    @apply sticky top-0 z-40 border-b border-border bg-surface/95 backdrop-blur-xl;
+  }
+
+  /* ── Admin (unchanged structure, token alignment) ───────────── */
 
   .admin-surface {
-    @apply rounded-[26px] border border-slate-200/80 bg-white shadow-[0_16px_44px_rgba(15,23,42,0.06)];
+    @apply border border-border bg-[hsl(var(--surface))] shadow-[0_12px_36px_rgba(15,23,42,0.06)];
   }
 
   .admin-muted-surface {
@@ -154,11 +213,11 @@
   /* ── Utility ─────────────────────────────────────────────────── */
 
   .subpage-back {
-    @apply inline-flex items-center gap-1.5 rounded-full border border-slate-200/90 bg-white/80 px-3 py-1.5 text-sm font-medium text-slate-500 transition-all duration-150 hover:border-slate-300 hover:bg-white hover:text-slate-900;
+    @apply inline-flex items-center gap-1.5 rounded-md border border-border bg-[hsl(var(--surface))] px-2.5 py-1.5 text-[13px] font-medium text-[hsl(var(--text-subtle))] transition-colors hover:border-border hover:bg-[hsl(var(--surface-alt))] hover:text-[hsl(var(--text-strong))];
   }
 
   .section-divider-grid {
-    @apply overflow-hidden rounded-[18px] border border-slate-200/70 bg-slate-50/50;
+    @apply overflow-hidden border border-border bg-[hsl(var(--surface-alt))];
   }
 
   .section-divider-item {
@@ -166,20 +225,17 @@
   }
 
   .toolbar-strip {
-    @apply flex flex-wrap items-center gap-2 border-t border-slate-200/70 pt-4;
+    @apply flex flex-wrap items-center gap-2 border-t border-border pt-4;
   }
-
-  /* ── Dashboard subpage content reset ────────────────────────── */
 
   .dashboard-subpage-content > .app-page {
     @apply min-h-0 bg-transparent px-0 py-0;
   }
 
   .dashboard-subpage-content > .app-page > .app-shell {
-    @apply max-w-none;
+    /* Fill the content column; let max-w-* on this element constrain width */
+    @apply w-full;
   }
-
-  /* ── Scrollbar ───────────────────────────────────────────────── */
 
   .soft-scrollbar {
     scrollbar-width: thin;
@@ -214,7 +270,7 @@
   input[type="date"],
   select,
   textarea {
-    @apply rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 transition-colors duration-150;
+    @apply rounded-lg border border-border bg-[hsl(var(--surface))] px-3 py-2.5 text-sm text-[hsl(var(--text-strong))] placeholder:text-[hsl(var(--text-subtle))] transition-colors duration-150;
   }
 
   input[type="text"]:focus,
@@ -226,8 +282,8 @@
   input[type="date"]:focus,
   select:focus,
   textarea:focus {
-    border-color: rgba(255, 92, 24, 0.55);
-    box-shadow: 0 0 0 3px rgba(255, 92, 24, 0.1);
+    border-color: hsl(var(--primary) / 0.55);
+    box-shadow: 0 0 0 3px hsl(var(--primary) / 0.12);
     outline: none;
   }
 }
@@ -235,18 +291,47 @@
 /* ── Animations ──────────────────────────────────────────────────── */
 @layer utilities {
   @keyframes fade-in {
-    from { opacity: 0; transform: translateY(4px); }
-    to   { opacity: 1; transform: translateY(0); }
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 
   @keyframes slide-up {
-    from { opacity: 0; transform: translateY(10px); }
-    to   { opacity: 1; transform: translateY(0); }
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 
   @keyframes scale-in {
-    from { opacity: 0; transform: scale(0.97); }
-    to   { opacity: 1; transform: scale(1); }
+    from {
+      opacity: 0;
+      transform: scale(0.97);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  @keyframes pricing-save-slide {
+    from {
+      opacity: 0;
+      transform: translateX(-6px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
   }
 
   .animate-fade-in {
@@ -259,5 +344,24 @@
 
   .animate-scale-in {
     animation: scale-in 0.18s ease-out both;
+  }
+
+  .pricing-save-badge {
+    animation: pricing-save-slide 0.22s ease-out both;
+  }
+
+  @keyframes launch-feed-card {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .animate-launch-feed-card {
+    animation: launch-feed-card 0.45s ease-out both;
   }
 }

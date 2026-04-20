@@ -1,11 +1,14 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  output: "standalone",
   images: {
     remotePatterns: [
       { hostname: "**.greenhouse.io" },
       { hostname: "**.lever.co" },
       { hostname: "**.ashbyhq.com" },
       { hostname: "logo.clearbit.com" },
+      { hostname: "unavatar.io" },
+      { hostname: "www.google.com" },
       { hostname: "**.supabase.co" },
       { hostname: "**.supabase.in" },
     ],

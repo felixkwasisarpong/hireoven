@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 import { ArrowUp, Sparkles } from "lucide-react"
 import JobCard from "@/components/jobs/JobCard"
 import { useMatchScores } from "@/lib/hooks/useMatchScores"
@@ -14,22 +14,24 @@ interface JobFeedProps {
   hasPrimaryResume?: boolean
 }
 
-function JobCardSkeleton() {
+function JobRowSkeleton() {
   return (
-    <div className="rounded-[18px] border border-slate-200/80 bg-white p-5">
+    <div className="bg-surface px-4 py-4 sm:px-5">
       <div className="flex gap-4">
-        <div className="h-10 w-10 animate-pulse rounded-2xl bg-slate-100" />
-        <div className="flex-1 space-y-3">
-          <div className="h-3 w-24 animate-pulse rounded-full bg-slate-100" />
-          <div className="h-5 w-2/3 animate-pulse rounded-full bg-slate-100" />
-          <div className="h-4 w-1/2 animate-pulse rounded-full bg-slate-100" />
+        <div className="h-11 w-11 flex-shrink-0 animate-pulse rounded-md bg-surface-muted sm:h-12 sm:w-12" />
+        <div className="min-w-0 flex-1 space-y-3">
+          <div className="h-2.5 w-20 animate-pulse rounded bg-surface-muted" />
+          <div className="h-4 w-3/4 max-w-md animate-pulse rounded bg-surface-muted" />
+          <div className="h-3 w-1/2 animate-pulse rounded bg-surface-muted" />
           <div className="flex gap-2">
-            <div className="h-7 w-20 animate-pulse rounded-full bg-slate-100" />
-            <div className="h-7 w-24 animate-pulse rounded-full bg-slate-100" />
+            <div className="h-6 w-16 animate-pulse rounded border border-border bg-surface-muted" />
+            <div className="h-6 w-20 animate-pulse rounded border border-border bg-surface-muted" />
           </div>
         </div>
       </div>
-      <div className="mt-5 h-10 animate-pulse rounded-2xl bg-slate-100" />
+      <div className="mt-4 flex justify-end border-t border-border pt-3">
+        <div className="h-9 w-28 animate-pulse rounded-md bg-surface-muted" />
+      </div>
     </div>
   )
 }
@@ -56,7 +58,21 @@ export default function JobFeed({
     hasPrimaryResume ? jobs.map((job) => job.id) : []
   )
 
+  const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 60_000)
+    return () => window.clearInterval(id)
+  }, [])
+
+  const lastMetaRef = useRef({ totalCount: -1, lastHourCount: -1 })
+  useEffect(() => {
+    if (
+      lastMetaRef.current.totalCount === totalCount &&
+      lastMetaRef.current.lastHourCount === lastHourCount
+    ) {
+      return
+    }
+    lastMetaRef.current = { totalCount, lastHourCount }
     onMetaChange?.({ totalCount, lastHourCount })
   }, [lastHourCount, onMetaChange, totalCount])
 
@@ -77,8 +93,8 @@ export default function JobFeed({
   return (
     <div className="space-y-4">
       {personalized && (
-        <div className="flex items-center gap-2 rounded-[16px] border border-[#FFD2B8] bg-[#FFF8F4] px-4 py-3 text-sm font-medium text-[#062246]">
-          <Sparkles className="h-4 w-4 text-[#FF5C18]" />
+        <div className="flex items-center gap-2 border border-border bg-surface-alt px-4 py-2.5 text-sm font-medium text-brand-navy">
+          <Sparkles className="h-4 w-4 shrink-0 text-primary" />
           Personalized for you
         </div>
       )}
@@ -87,43 +103,39 @@ export default function JobFeed({
         <button
           type="button"
           onClick={() => void refresh()}
-          className="flex w-full items-center justify-center gap-2 rounded-[16px] border border-[#FFD2B8] bg-[#FFF8F4] px-4 py-3 text-sm font-medium text-[#062246] transition hover:bg-[#FFF1E8]"
+          className="flex w-full items-center justify-center gap-2 border border-border bg-surface-alt px-4 py-2.5 text-sm font-medium text-brand-navy transition-colors hover:bg-brand-tint"
         >
           <Sparkles className="h-4 w-4" />
           {newJobsCount.toLocaleString()} new job
           {newJobsCount === 1 ? "" : "s"} just posted
-          <span className="text-[#FF5C18]">click to load</span>
+          <span className="text-primary">click to load</span>
         </button>
       )}
 
       {isLoading && jobs.length === 0 && (
-        <div className="space-y-4">
-          <JobCardSkeleton />
-          <JobCardSkeleton />
-          <JobCardSkeleton />
+        <div className="job-feed-panel divide-y divide-border">
+          <JobRowSkeleton />
+          <JobRowSkeleton />
+          <JobRowSkeleton />
         </div>
       )}
 
       {!isLoading && jobs.length === 0 && (
-        <div className="rounded-[18px] border border-dashed border-gray-300 bg-white px-8 py-14 text-center">
-        
-          <p className="text-lg font-semibold text-gray-900">
-            No jobs match your filters
-          </p>
-          <p className="mt-2 text-sm text-gray-500">
-            Try widening your search
-          </p>
+        <div className="empty-state rounded-lg">
+          <p className="text-base font-semibold text-strong">No jobs match your filters</p>
+          <p className="mt-2 text-sm text-muted-foreground">Try widening your search</p>
         </div>
       )}
 
       {jobs.length > 0 && (
-        <div className="space-y-4">
+        <div className="job-feed-panel">
           {jobs.map((job, i) => (
             <JobCard
               key={job.id}
               job={job}
               hasPrimaryResume={hasPrimaryResume}
               analysisIndex={i}
+              now={now}
               matchScore={job.match_score ?? getScore(job.id)}
               isMatchScoreLoading={
                 hasPrimaryResume &&
@@ -139,14 +151,14 @@ export default function JobFeed({
       <div ref={sentinelRef} />
 
       {hasMore && jobs.length > 0 && (
-        <div className="flex justify-center py-4">
+        <div className="flex justify-center py-2">
           {isLoading ? (
-            <div className="text-sm text-gray-500">Loading more jobs…</div>
+            <div className="text-sm text-muted-foreground">Loading more jobs…</div>
           ) : (
             <button
               type="button"
               onClick={() => void loadMore()}
-              className="inline-flex items-center gap-2 rounded-2xl border border-slate-200/80 bg-white/95 px-4 py-2.5 text-sm font-medium text-slate-700 shadow-[0_8px_22px_rgba(15,23,42,0.04)] transition hover:border-slate-300 hover:bg-slate-50"
+              className="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-surface-alt hover:text-strong"
             >
               Load more
               <ArrowUp className="h-4 w-4 rotate-180" />

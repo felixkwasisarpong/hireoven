@@ -3,6 +3,7 @@ import Link from "next/link"
 import { Bell, Clock, Globe, Search, Zap } from "lucide-react"
 import Navbar from "@/components/layout/Navbar"
 import { createAdminClient } from "@/lib/supabase/admin"
+import { createClient } from "@/lib/supabase/server"
 
 export const metadata: Metadata = {
   title: "Hireoven — Jobs served fresh. Apply before the crowd.",
@@ -71,10 +72,25 @@ async function getPlatformStats() {
 
 export default async function HomePage() {
   const stats = await getPlatformStats()
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
 
   return (
     <div className="min-h-screen bg-white">
       <Navbar />
+
+      {!user ? (
+        <div className="border-b border-teal-200 bg-teal-50 px-4 py-3 text-center text-sm">
+          <Link
+            href="/launch"
+            className="font-semibold text-teal-800 transition hover:text-teal-950 hover:underline"
+          >
+            We&apos;re in early access — join the waitlist for founding member pricing
+          </Link>
+        </div>
+      ) : null}
 
       {/* Hero */}
       <section className="px-6 pt-20 pb-24 text-center bg-[radial-gradient(ellipse_at_top,_rgba(3,105,161,0.08),_transparent_60%)]">
@@ -98,6 +114,14 @@ export default async function HomePage() {
             >
               Get started free →
             </Link>
+            {!user ? (
+              <Link
+                href="/launch"
+                className="rounded-2xl border border-teal-200 bg-teal-50 px-8 py-3.5 text-base font-semibold text-teal-800 hover:border-teal-300 hover:bg-teal-100 transition"
+              >
+                Join waitlist
+              </Link>
+            ) : null}
             <Link
               href="/companies"
               className="rounded-2xl border border-gray-200 bg-white px-8 py-3.5 text-base font-semibold text-gray-700 hover:border-gray-300 hover:bg-gray-50 transition"

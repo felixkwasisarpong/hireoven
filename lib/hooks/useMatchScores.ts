@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { devWarn } from "@/lib/client-dev-log"
 import { createClient } from "@/lib/supabase/client"
 import type { JobMatchScore } from "@/types"
 
@@ -52,9 +53,11 @@ export function useMatchScores(jobIds: string[]) {
   const [isLoading, setIsLoading] = useState(false)
   const [, forceRender] = useState(0)
 
+  // Parent often passes `jobs.map((j) => j.id)` — new array reference every render. Key on content, not reference.
+  const jobIdsFingerprint = jobIds.join("\0")
   const uniqueJobIds = useMemo(
     () => Array.from(new Set(jobIds.filter(Boolean))),
-    [jobIds]
+    [jobIdsFingerprint]
   )
 
   useEffect(() => {
@@ -67,7 +70,7 @@ export function useMatchScores(jobIds: string[]) {
         setUserId(data.user?.id ?? null)
       })
       .catch((error) => {
-        console.warn("Failed to load match score user", error)
+        devWarn("Failed to load match score user", error)
         if (!cancelled) setUserId(null)
       })
 
@@ -110,7 +113,6 @@ export function useMatchScores(jobIds: string[]) {
       })
 
       if (missingJobIds.length === 0) {
-        forceRender((current) => current + 1)
         return
       }
 
@@ -124,11 +126,15 @@ export function useMatchScores(jobIds: string[]) {
         })
 
         if (!response.ok) {
+          // 401: session not ready yet; 503: scoring unavailable — expected, don't spam the console
+          if (response.status === 401 || response.status === 503) {
+            return
+          }
           const payload = (await response.json().catch(() => null)) as {
             error?: string
           } | null
 
-          console.warn(
+          devWarn(
             "Failed to fetch match scores",
             payload?.error ?? response.statusText
           )
@@ -147,7 +153,7 @@ export function useMatchScores(jobIds: string[]) {
         persist()
         forceRender((current) => current + 1)
       } catch (error) {
-        console.warn("Failed to fetch match scores", error)
+        devWarn("Failed to fetch match scores", error)
       } finally {
         setIsLoading(false)
       }

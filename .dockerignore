@@ -1,0 +1,27 @@
+# dependencies
+node_modules
+npm-debug.log*
+
+# build / local
+.next
+out
+dist
+build
+
+# env & secrets (set in Coolify / runtime)
+.env
+.env.*
+!.env.production.example
+
+# git & IDE
+.git
+.gitignore
+.cursor
+*.md
+!README.md
+
+# misc
+coverage
+.turbo
+.vercel
+*.tsbuildinfo

@@ -75,53 +75,53 @@ export default function SearchPage() {
         />
 
         {/* Search bar */}
-        <section className="surface-card p-5">
+        <section className="surface-panel rounded-lg p-4 sm:p-5">
           <form
             onSubmit={(e) => { e.preventDefault(); submit(inputVal) }}
-            className="flex items-center gap-3 rounded-[24px] border border-[#FFD2B8] bg-white px-5 py-4 shadow-[0_14px_30px_rgba(255,92,24,0.08)] ring-1 ring-[#FF5C18]/10"
+            className="flex flex-col gap-3 rounded-lg border border-border bg-surface px-4 py-3 shadow-[0_1px_0_rgba(15,23,42,0.04)] sm:flex-row sm:items-center sm:gap-3"
           >
-            <Search className="h-5 w-5 flex-shrink-0 text-[#FF5C18]" />
+            <Search className="h-5 w-5 flex-shrink-0 text-primary" />
             <input
               ref={inputRef}
               value={inputVal}
               onChange={(e) => setInputVal(e.target.value)}
               placeholder="Search jobs and companies…"
               autoFocus
-              className="flex-1 bg-transparent text-base text-gray-900 outline-none placeholder:text-gray-400"
+              className="min-w-0 flex-1 bg-transparent text-base text-strong outline-none placeholder:text-muted-foreground"
             />
             {inputVal && (
               <button
                 type="button"
                 onClick={() => { setInputVal(""); inputRef.current?.focus() }}
-                className="flex-shrink-0 text-gray-400 hover:text-gray-600"
+                className="flex-shrink-0 rounded-md text-muted-foreground transition-colors hover:bg-surface-alt hover:text-strong"
               >
                 <X className="h-5 w-5" />
               </button>
             )}
             <button
               type="submit"
-              className="rounded-xl bg-[#FF5C18] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#E14F0E]"
+              className="rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover sm:shrink-0"
             >
               Search
             </button>
           </form>
 
             {rawQ ? (
-            <p className="mt-4 text-sm text-gray-600">
+            <p className="mt-4 text-sm text-muted-foreground">
               {isLoading ? (
                 "Searching…"
               ) : (
                 <>
-                  <span className="font-semibold text-gray-900">{jobTotal.toLocaleString()} jobs</span>{" "}
+                  <span className="font-semibold text-strong">{jobTotal.toLocaleString()} jobs</span>{" "}
                   and{" "}
-                  <span className="font-semibold text-gray-900">{companies.length.toLocaleString()} companies</span>{" "}
+                  <span className="font-semibold text-strong">{companies.length.toLocaleString()} companies</span>{" "}
                   match &ldquo;{rawQ}&rdquo;
                 </>
               )}
             </p>
           ) : (
             <div className="mt-5 space-y-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-gray-400">Trending searches</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">Trending searches</p>
               <div className="flex flex-wrap gap-2">
                 {TRENDING.map((term) => (
                   <button
@@ -143,12 +143,12 @@ export default function SearchPage() {
           <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
             <div className="space-y-4">
               {Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="surface-card h-36 animate-pulse" />
+                <div key={i} className="surface-panel h-36 animate-pulse rounded-lg" />
               ))}
             </div>
             <div className="space-y-4">
               {Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="surface-card h-52 animate-pulse" />
+                <div key={i} className="surface-panel h-52 animate-pulse rounded-lg" />
               ))}
             </div>
           </div>
@@ -157,11 +157,11 @@ export default function SearchPage() {
         {/* No results */}
         {!isLoading && rawQ && !hasResults && (
           <div className="empty-state">
-            <p className="text-lg font-semibold text-gray-900">No results for &ldquo;{rawQ}&rdquo;</p>
-            <p className="mt-2 text-sm text-gray-500">Try a different search term or browse companies directly.</p>
+            <p className="text-lg font-semibold text-strong">No results for &ldquo;{rawQ}&rdquo;</p>
+            <p className="mt-2 text-sm text-muted-foreground">Try a different search term or browse companies directly.</p>
             <Link
               href="/dashboard/companies"
-              className="mt-6 inline-flex items-center gap-2 rounded-2xl bg-[#FF5C18] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#E14F0E]"
+              className="mt-6 inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover"
             >
               Browse all companies
             </Link>
@@ -175,13 +175,13 @@ export default function SearchPage() {
             {jobs.length > 0 && (
               <div>
                 <div className="mb-3 flex items-center justify-between">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-gray-400">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-muted-foreground">
                     Jobs · {jobTotal.toLocaleString()} results
                   </p>
                   {jobTotal > jobs.length && (
                     <Link
                       href={`/dashboard?q=${encodeURIComponent(rawQ)}`}
-                      className="text-xs font-medium text-[#FF5C18] hover:text-[#E14F0E] transition"
+                      className="text-xs font-medium text-primary transition-colors hover:text-primary-hover"
                     >
                       View all {jobTotal.toLocaleString()} →
                     </Link>
@@ -198,7 +198,7 @@ export default function SearchPage() {
             {/* Companies column */}
             {companies.length > 0 && (
               <div>
-                <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.28em] text-gray-400">
+                <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.28em] text-muted-foreground">
                   Companies · {companies.length} results
                 </p>
                 <div className={bothMatch ? "space-y-3" : "grid gap-4 sm:grid-cols-2 lg:grid-cols-3"}>
@@ -207,7 +207,7 @@ export default function SearchPage() {
                       <Link
                         key={company.id}
                         href={`/dashboard/companies/${company.id}`}
-                        className="surface-card-subtle flex items-center gap-3 p-3 transition hover:border-[#FFD2B8] hover:bg-[#FFF8F4]"
+                        className="surface-card-subtle flex items-center gap-3 rounded-md p-3 transition-colors hover:border-brand-tint-strong hover:bg-brand-tint"
                       >
                         {company.logo_url ? (
                           // eslint-disable-next-line @next/next/no-img-element

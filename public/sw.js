@@ -1,5 +1,5 @@
-const STATIC_CACHE = "hireoven-static-v2"
-const DATA_CACHE = "hireoven-data-v2"
+const STATIC_CACHE = "hireoven-static-v3"
+const DATA_CACHE = "hireoven-data-v3"
 const META_CACHE = "hireoven-meta-v2"
 const OFFLINE_URL = "/offline.html"
 const JOB_COUNT_META_URL = "/__offline__/jobs-count"
@@ -93,6 +93,19 @@ async function networkFirst(request, cacheName) {
     }
 
     return new Response("Offline", { status: 503, statusText: "Offline" })
+  }
+}
+
+/**
+ * Navigations are never cached. Cached HTML after a deploy can reference deleted
+ * `/_next/static/*` assets, causing an unstyled page. Offline navigations fall
+ * back to the offline shell only.
+ */
+async function navigateNetworkOnly(request) {
+  try {
+    return await fetch(request)
+  } catch {
+    return (await caches.match(OFFLINE_URL)) || Response.error()
   }
 }
 
@@ -230,7 +243,7 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (request.mode === "navigate") {
-    event.respondWith(networkFirst(request, DATA_CACHE))
+    event.respondWith(navigateNetworkOnly(request))
     return
   }
 
