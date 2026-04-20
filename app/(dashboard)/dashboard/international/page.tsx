@@ -160,7 +160,7 @@ export default function InternationalPage() {
           <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.28em] text-muted-foreground">
             Company Explorer
           </p>
-          <div className="surface-card p-6">
+          <div className="surface-card rounded-lg px-5 py-5 md:px-6 md:py-6">
             <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
               <div>
                 <h2 className="text-xl font-semibold text-strong mb-1">

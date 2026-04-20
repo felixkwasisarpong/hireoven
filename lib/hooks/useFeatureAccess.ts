@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback } from "react"
+import { useAuth } from "./useAuth"
 import { useSubscription } from "./useSubscription"
 import { useUpgradeModal } from "@/lib/context/UpgradeModalContext"
 import { canAccess, FEATURE_GATES, requiredPlanFor, type FeatureKey } from "@/lib/gates"
@@ -13,14 +14,17 @@ interface FeatureAccess {
 }
 
 export function useFeatureAccess(feature: FeatureKey): FeatureAccess {
-  const { plan, isLoading } = useSubscription()
+  const { user, isLoading: authLoading } = useAuth()
+  const { plan, isLoading: subLoading } = useSubscription()
   const { showUpgrade } = useUpgradeModal()
 
   const required = FEATURE_GATES[feature]
   const hasAccess =
-    required === "public" || required === "auth"
-      ? true // auth check handled by middleware/useAuth
-      : canAccess(plan, feature)
+    required === "public"
+      ? Boolean(user)
+      : required === "auth"
+        ? Boolean(user)
+        : canAccess(plan, feature)
 
   const showUpgradePrompt = useCallback(() => {
     showUpgrade(feature)
@@ -29,7 +33,7 @@ export function useFeatureAccess(feature: FeatureKey): FeatureAccess {
   return {
     hasAccess,
     requiredPlan: requiredPlanFor(feature),
-    isLoading,
+    isLoading: authLoading || subLoading,
     showUpgradePrompt,
   }
 }

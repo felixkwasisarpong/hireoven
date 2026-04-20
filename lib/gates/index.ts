@@ -14,16 +14,16 @@ export type FeatureKey =
   | "international"
 
 export const FEATURE_GATES: Record<FeatureKey, AccessLevel> = {
-  // Auth-gated
-  watchlist: "auth",
-  basic_alerts: "auth",
+  // Free forever (still requires login where the product surfaces them)
+  watchlist: "public",
+  basic_alerts: "public",
+  match_scores: "public",
+  resume_upload: "public",
   job_applications: "auth",
   // Pro-gated
-  resume_upload: "pro",
   deep_analysis: "pro",
   cover_letter: "pro",
   autofill: "pro",
-  match_scores: "pro",
   interview_prep: "pro",
   // Pro + International add-on
   international: "pro_international",
@@ -33,7 +33,7 @@ export const FEATURE_DESCRIPTIONS: Record<FeatureKey, string> = {
   watchlist: "Save companies to your watchlist",
   basic_alerts: "Create job alerts",
   job_applications: "Track job applications",
-  resume_upload: "Upload and manage your resume",
+  resume_upload: "Upload your resume (1 on Free, more on Pro)",
   deep_analysis: "AI-powered deep resume analysis",
   cover_letter: "AI cover letter generation",
   autofill: "One-click job application autofill",

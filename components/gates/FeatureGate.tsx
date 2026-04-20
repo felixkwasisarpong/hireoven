@@ -28,7 +28,7 @@ export default function FeatureGate({
 
   const requiredLevel = FEATURE_GATES[feature]
 
-  if ((requiredLevel === "auth" || requiredLevel === "pro" || requiredLevel === "pro_international") && !user) {
+  if ((requiredLevel === "public" || requiredLevel === "auth" || requiredLevel === "pro" || requiredLevel === "pro_international") && !user) {
     if (fallback) return <>{fallback}</>
     return <AuthWall variant={authWallVariant} />
   }

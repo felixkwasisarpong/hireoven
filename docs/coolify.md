@@ -41,6 +41,8 @@ Repo includes [`../Dockerfile`](../Dockerfile) and Next [`output: "standalone"`]
 
 Vercel Cron is not used. In Coolify, add **scheduled tasks** (or any cron) that `GET` your public origin with `Authorization: Bearer <CRON_SECRET>` (same secret as in `.env.production.example`).
 
+The production **Dockerfile** installs **`curl`** in the final image so scheduled task commands like the example below work. Redeploy after pulling this change; without `curl`, the job fails with `curl: not found`.
+
 | Path | Suggested schedule | Purpose |
 |------|--------------------|---------|
 | `/api/crawl` | `*/30 * * * *` | Crawl active companies |
@@ -54,6 +56,16 @@ Example (replace host and secret):
 ```bash
 curl -fsS -H "Authorization: Bearer $CRON_SECRET" "https://hireoven.com/api/crawl"
 ```
+
+If the task fails with **`curl: not found`**, the container image was built **without** `curl` (older deploy). The repo’s **Dockerfile** installs `curl` in the final stage — **rebuild and redeploy** the app in Coolify so the new image is used.
+
+**Workaround before redeploy** (Node is always in the image; set `APP_URL` to your public origin, no trailing slash):
+
+```bash
+node -e "const b=process.env.CRON_SECRET,u=(process.env.APP_URL||'').replace(/\/$/,'');if(!b||!u){console.error('Set CRON_SECRET and APP_URL');process.exit(1)}fetch(u+'/api/crawl',{headers:{Authorization:'Bearer '+b}}).then(r=>r.ok?r.text():Promise.reject(new Error('HTTP '+r.status))).then(console.log).catch(e=>{console.error(e);process.exit(1)})"
+```
+
+In Coolify, add **`APP_URL`** (e.g. `https://hireoven.com`) and **`CRON_SECRET`** to the application’s environment so the scheduled task inherits them (or inline the URL and use a Coolify secret for the bearer token).
 
 ### Healthcheck (optional)
 

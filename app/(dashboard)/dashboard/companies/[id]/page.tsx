@@ -126,8 +126,8 @@ export default function CompanyProfilePage() {
 
   if (isLoading) {
     return (
-      <main className="app-page">
-        <div className="app-shell max-w-5xl space-y-5">
+      <main className="app-page pb-[max(6rem,calc(env(safe-area-inset-bottom)+5.5rem))]">
+        <div className="app-shell space-y-5">
           <div className="surface-card h-52 animate-pulse" />
           <div className="surface-card-subtle h-12 animate-pulse" />
           <div className="surface-card h-96 animate-pulse" />
@@ -150,11 +150,11 @@ export default function CompanyProfilePage() {
   }
 
   return (
-    <main className="app-page">
-      <div className="app-shell max-w-5xl space-y-5">
+    <main className="app-page pb-[max(6rem,calc(env(safe-area-inset-bottom)+5.5rem))]">
+      <div className="app-shell space-y-5 pb-[max(2rem,calc(env(safe-area-inset-bottom)+1rem))]">
 
         {/* Header card */}
-        <section className="surface-hero">
+        <section className="surface-hero rounded-lg px-5 py-5 md:px-6 md:py-6">
           <Link href="/dashboard/companies" className="mb-5 inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 transition">
             <ArrowLeft className="h-4 w-4" /> Company Explorer
           </Link>
@@ -186,7 +186,7 @@ export default function CompanyProfilePage() {
 
         {/* ── Tab 1: Open roles ── */}
         {tab === "roles" && (
-          <section className="surface-card">
+          <section className="surface-card rounded-lg px-5 py-5 md:px-6 md:py-6">
             {/* Filters */}
             <div className="mb-5 flex flex-wrap items-center gap-2">
               <button
@@ -266,7 +266,7 @@ export default function CompanyProfilePage() {
         {tab === "intel" && (
           <div className="space-y-5">
             {/* Section A — Verdict */}
-            <section className="surface-card">
+            <section className="surface-card rounded-lg px-5 py-5 md:px-6 md:py-6">
               <h2 className="mb-4 text-lg font-semibold text-gray-900">Sponsorship verdict</h2>
               <div className="grid gap-5 lg:grid-cols-[1fr_280px]">
                 <div>
@@ -307,7 +307,7 @@ export default function CompanyProfilePage() {
             </section>
 
             {/* Section B — USCIS petition history */}
-            <section className="surface-card">
+            <section className="surface-card rounded-lg px-5 py-5 md:px-6 md:py-6">
               <h2 className="mb-1 text-lg font-semibold text-gray-900">USCIS petition history</h2>
               <p className="mb-5 text-sm text-gray-500">Approved vs. denied petitions by year from USCIS data.</p>
               {petitionBars.length === 0 ? (
@@ -356,7 +356,7 @@ export default function CompanyProfilePage() {
 
             {/* Section C — JD patterns */}
             {jdInsights && jobs.length > 0 && (
-              <section className="surface-card">
+              <section className="surface-card rounded-lg px-5 py-5 md:px-6 md:py-6">
                 <h2 className="mb-1 text-lg font-semibold text-gray-900">Job description patterns</h2>
                 <p className="mb-5 text-sm text-gray-500">
                   Based on {jobs.length} active job posting{jobs.length !== 1 ? "s" : ""} at {company.name}.
@@ -391,7 +391,7 @@ export default function CompanyProfilePage() {
             )}
 
             {/* Section D — Similar companies */}
-            <section className="surface-card">
+            <section className="surface-card rounded-lg px-5 py-5 md:px-6 md:py-6">
               <h2 className="mb-1 text-lg font-semibold text-gray-900">
                 Companies like {company.name} that actively sponsor
               </h2>
@@ -405,7 +405,7 @@ export default function CompanyProfilePage() {
 
         {/* ── Tab 3: About ── */}
         {tab === "about" && (
-          <section className="surface-card">
+          <section className="surface-card rounded-lg px-5 py-5 md:px-6 md:py-6">
             <h2 className="mb-5 text-lg font-semibold text-gray-900">About {company.name}</h2>
             <div className="space-y-5">
               <div className="empty-state border-dashed bg-gray-50 shadow-none">
@@ -450,6 +450,8 @@ export default function CompanyProfilePage() {
           </section>
         )}
 
+        {/* Extra scroll room so last job row clears viewport / home indicator (py-0 on .app-page in layout was cancelling pb before). */}
+        <div aria-hidden className="h-[clamp(3rem,10vh,6rem)] shrink-0" />
       </div>
     </main>
   )

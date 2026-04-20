@@ -19,7 +19,7 @@ export default function DashboardHeader() {
             className="flex min-w-0 shrink-0 items-center transition-opacity hover:opacity-90"
             aria-label="Hireoven dashboard home"
           >
-            <HireovenLogo className="h-10 w-auto max-w-[168px]" priority />
+            <HireovenLogo className="h-11 w-auto max-w-[184px]" priority />
           </Link>
         </div>
 

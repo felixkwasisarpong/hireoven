@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { uploadResume, deleteResume, getResumeUrl } from "@/lib/supabase/storage"
 import { createClient } from "@/lib/supabase/server"
 import { MAX_RESUME_SIZE_BYTES, isResumeFilename, isResumeMimeType } from "@/lib/resume/constants"
-import { requireFeature } from "@/lib/gates/server-gate"
+import { getUserPlan } from "@/lib/gates/server-gate"
 import type { Profile, Resume, ResumeInsert } from "@/types"
 
 export const runtime = "nodejs"
@@ -86,11 +86,11 @@ async function processResumeInBackground({
 }
 
 export async function POST(request: Request) {
-  const gate = await requireFeature("resume_upload")
-  if (gate instanceof NextResponse) return gate
-
   const supabase = await createClient()
-  const user = (await supabase.auth.getUser()).data.user!
+  const user = (await supabase.auth.getUser()).data.user
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
 
   const formData = await request.formData()
   const file = formData.get("file")
@@ -106,6 +106,13 @@ export async function POST(request: Request) {
     )
   }
 
+  const { userId, plan } = await getUserPlan()
+  if (!userId || userId !== user.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
+  const isPro = plan === "pro" || plan === "pro_international"
+
   const { data: existingResumes, error: existingError } = await ((supabase
     .from("resumes")
     .select("id, is_primary")
@@ -116,10 +123,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: existingError.message }, { status: 500 })
   }
 
-  if ((existingResumes?.length ?? 0) >= 3) {
+  const existingCount = existingResumes?.length ?? 0
+  const maxResumes = isPro ? 3 : 1
+
+  if (existingCount >= maxResumes) {
     return NextResponse.json(
-      { error: "You can upload up to 3 resumes" },
-      { status: 400 }
+      {
+        error: isPro
+          ? "You can upload up to 3 resumes"
+          : "Free accounts can keep one resume. Upgrade to Pro to upload more.",
+        requiredPlan: isPro ? null : "pro",
+      },
+      { status: 403 }
     )
   }
 

@@ -229,7 +229,8 @@
   }
 
   .dashboard-subpage-content > .app-page {
-    @apply min-h-0 bg-transparent px-0 py-0;
+    /* px-0 pt-0 only — do not zero pb so pages can add pb-* for safe-area / fixed chrome */
+    @apply min-h-0 bg-transparent px-0 pt-0;
   }
 
   .dashboard-subpage-content > .app-page > .app-shell {
