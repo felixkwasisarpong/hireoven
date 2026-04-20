@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { assertAdminAccess } from "@/lib/admin/auth"
+import { getSupportFromEmail } from "@/lib/email/identity"
 
 export async function GET() {
   const access = await assertAdminAccess()
@@ -10,7 +11,7 @@ export async function GET() {
   return NextResponse.json({
     vapidPublicKey: process.env.VAPID_PUBLIC_KEY ?? "",
     resendFromName: process.env.RESEND_FROM_NAME ?? "Hireoven",
-    resendFromEmail: process.env.RESEND_FROM_EMAIL ?? "",
+    resendFromEmail: getSupportFromEmail(),
     adminEmail: access.profile.email ?? "",
   })
 }

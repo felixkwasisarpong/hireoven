@@ -2,6 +2,7 @@ import { randomBytes } from "crypto"
 import { NextResponse } from "next/server"
 import { z } from "zod"
 import { createAdminClient } from "@/lib/supabase/admin"
+import { upsertMarketingSubscriber } from "@/lib/marketing/subscribers"
 import { getWaitlistPosition } from "@/lib/waitlist/position"
 import { sendWaitlistConfirmationEmail } from "@/lib/waitlist/send-confirmation"
 
@@ -98,6 +99,12 @@ export async function POST(request: Request) {
   }
 
   const position = await getWaitlistPosition(supabase, inserted.joined_at)
+
+  await upsertMarketingSubscriber({
+    email,
+    source: "waitlist",
+    metadata: { waitlist: true },
+  })
 
   await sendWaitlistConfirmationEmail({
     email,

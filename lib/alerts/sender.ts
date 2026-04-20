@@ -2,6 +2,7 @@ import webpush from "web-push"
 import { Resend } from "resend"
 import { logApiUsage } from "@/lib/admin/usage"
 import { removeSubscription, getUserSubscriptions } from "@/lib/alerts/push-subscriptions"
+import { getAlertsFromEmail } from "@/lib/email/identity"
 import { env } from "@/lib/env"
 import { createAdminClient } from "@/lib/supabase/admin"
 import type { Company, Job, NotificationChannel, Profile } from "@/types"
@@ -278,7 +279,7 @@ export async function sendEmailAlert(
   })
 
   const { error } = await resend.emails.send({
-    from: process.env.RESEND_FROM_EMAIL ?? "Hireoven <onboarding@resend.dev>",
+    from: getAlertsFromEmail(),
     to: [profile.email],
     subject: `${totalJobs} new job${totalJobs === 1 ? "" : "s"} match your alert: ${alertName}`,
     html,
@@ -324,7 +325,7 @@ export async function sendWatchlistAlert(
   })
 
   const { error } = await resend.emails.send({
-    from: process.env.RESEND_FROM_EMAIL ?? "Hireoven <onboarding@resend.dev>",
+    from: getAlertsFromEmail(),
     to: [profile.email],
     subject: `${companyName} just posted ${jobs.length} new job${jobs.length === 1 ? "" : "s"}`,
     html,

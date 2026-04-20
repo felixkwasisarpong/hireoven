@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { assertAdminAccess } from "@/lib/admin/auth"
 import { createAdminClient } from "@/lib/supabase/admin"
+import { isMissingWaitlistTableError } from "@/lib/waitlist/errors"
 
 export async function GET(request: Request) {
   const access = await assertAdminAccess()
@@ -29,6 +30,16 @@ export async function GET(request: Request) {
     .order("joined_at", { ascending: false })
 
   if (error) {
+    if (isMissingWaitlistTableError(error.message)) {
+      return NextResponse.json(
+        {
+          error:
+            "Waitlist table is not available in this database yet. Run latest schema migration for public.waitlist.",
+        },
+        { status: 503 }
+      )
+    }
+
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 

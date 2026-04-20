@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { upsertMarketingSubscriber } from "@/lib/marketing/subscribers"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getPublicSiteUrl } from "@/lib/waitlist/site-url"
 
@@ -20,7 +21,7 @@ export async function GET(request: Request) {
 
   const { data: row } = await supabase
     .from("waitlist")
-    .select("id, metadata")
+    .select("id, email, metadata")
     .eq("confirmation_token", token)
     .maybeSingle()
 
@@ -35,6 +36,19 @@ export async function GET(request: Request) {
   }
 
   await supabase.from("waitlist").update({ metadata: meta }).eq("id", row.id)
+  if (row.email) {
+    await upsertMarketingSubscriber({
+      email: row.email,
+      source: "waitlist_unsubscribe",
+      metadata: { unsubscribed_from_waitlist: true },
+    })
+    await ((supabase.from("marketing_subscribers") as any)
+      .update({
+        subscribed_to_marketing: false,
+        unsubscribed_at: new Date().toISOString(),
+      })
+      .eq("email", row.email.toLowerCase()))
+  }
 
   return NextResponse.redirect(new URL("/launch?unsubscribed=1", site))
 }

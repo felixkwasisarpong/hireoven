@@ -1,10 +1,10 @@
 import { Resend } from "resend"
+import { getWaitlistFromEmail } from "@/lib/email/identity"
 import { getPublicSiteUrl } from "@/lib/waitlist/site-url"
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null
 
-const from =
-  process.env.RESEND_FROM_EMAIL ?? "Hireoven <onboarding@resend.dev>"
+const from = getWaitlistFromEmail()
 
 export async function sendWaitlistConfirmationEmail(options: {
   email: string

@@ -3,6 +3,7 @@ import webpush from "web-push"
 import { Resend } from "resend"
 import { assertAdminAccess } from "@/lib/admin/auth"
 import { getUserSubscriptions } from "@/lib/alerts/push-subscriptions"
+import { getSupportFromEmail } from "@/lib/email/identity"
 import { env } from "@/lib/env"
 
 export async function POST(request: NextRequest) {
@@ -22,7 +23,7 @@ export async function POST(request: NextRequest) {
       }
 
       const { error } = await resend.emails.send({
-        from: process.env.RESEND_FROM_EMAIL ?? "Hireoven <onboarding@resend.dev>",
+        from: getSupportFromEmail(),
         to: [profile.email],
         subject: "Hireoven admin test email",
         html: "<p>This is a test email from Hireoven admin.</p>",

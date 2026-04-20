@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { Resend } from "resend"
+import { getAlertsFromEmail } from "@/lib/email/identity"
 import { requireCronAuth } from "@/lib/env"
 import { createAdminClient } from "@/lib/supabase/admin"
 import type { Job, JobAlert, Profile } from "@/types"
@@ -198,7 +199,7 @@ export async function GET(request: NextRequest) {
 
     try {
       await resend.emails.send({
-        from: `Hireoven <alerts@${process.env.RESEND_FROM_DOMAIN ?? "hireoven.com"}>`,
+        from: getAlertsFromEmail(),
         to: user.email!,
         subject: `Your daily job digest — ${totalCount} new match${totalCount === 1 ? "" : "es"}`,
         html: buildDigestEmail(user, sections, totalCount, "today"),
