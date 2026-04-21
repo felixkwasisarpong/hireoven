@@ -466,6 +466,7 @@ export default function JobCard({
           jobTitle={job.title}
           companyName={job.company.name}
           prediction={h1bPrediction}
+          isLoading={h1bIsLoading && !h1bPrediction}
           onClose={() => setH1BDrawerOpen(false)}
         />
       )}

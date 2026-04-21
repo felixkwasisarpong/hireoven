@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { runPrediction } from '@/app/api/h1b/predict/route'
+import {
+  H1B_PREDICTION_CACHE_TTL_MS,
+  runPrediction,
+} from '@/lib/h1b/prediction-service'
 import type { Company, H1BPrediction, Job } from '@/types'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-const CACHE_TTL_MS = 1000 * 60 * 60 * 24 * 7 // 7 days
+const CACHE_TTL_MS = H1B_PREDICTION_CACHE_TTL_MS
 const MAX_JOBS_PER_REQUEST = 20
 
 /**

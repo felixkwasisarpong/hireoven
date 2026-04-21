@@ -101,6 +101,10 @@ export async function importLCAData(
       ? loadLCARowsFromCSV(bytes)
       : loadLCARowsFromXLSX(bytes)
   if (rawRows.length === 0) {
+    // For XLSX we may have opened multiple sheets; for CSV there is only
+    // one logical "sheet" and `inspected` carries that single entry.
+    const sheetNames = inspected.map((s) => s.sheet)
+
     // Always dump the full diagnostic to the server console so the user
     // can copy it straight out of their `npm run dev` terminal — toasts
     // and HTTP error bodies truncate long multi-line strings.
@@ -108,7 +112,7 @@ export async function importLCAData(
       '[lca-import] header detection FAILED',
       JSON.stringify(
         {
-          sheetNamesInWorkbook: workbook.SheetNames,
+          sheetNamesInWorkbook: sheetNames,
           detectedFormat,
           inspected,
         },
@@ -142,7 +146,7 @@ export async function importLCAData(
       .join('\n')
 
     throw new Error(
-      `No header row matched. Checked ${workbook.SheetNames.length} sheet(s) [${workbook.SheetNames.join(', ')}]; ` +
+      `No header row matched. Checked ${sheetNames.length} sheet(s) [${sheetNames.join(', ')}]; ` +
         `scanned the first 20 rows of each for columns like EMPLOYER_NAME / ` +
         `CASE_NUMBER / CASE_STATUS / VISA_CLASS / JOB_TITLE.\n\n` +
         (diag

@@ -241,7 +241,10 @@ const AGG_CHUNK = 150
 // to absorb transient network issues instead of aborting the whole run.
 async function withRetry<T>(
   label: string,
-  fn: () => Promise<T>,
+  // Accept any thenable so Supabase's PostgrestFilterBuilder (which is a
+  // PromiseLike, not a true Promise) can be passed without a Promise<>
+  // mismatch at call sites.
+  fn: () => PromiseLike<T>,
   attempts = 3
 ): Promise<T> {
   let lastErr: unknown
