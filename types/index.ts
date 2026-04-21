@@ -429,6 +429,8 @@ export type Job = {
   skills: string[] | null;
   normalized_title: string | null;
   raw_data: Record<string, unknown> | null;
+  h1b_prediction: H1BPrediction | null;
+  h1b_prediction_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -899,6 +901,173 @@ export type H1BRecordInsert = Omit<H1BRecord, 'id' | 'created_at'> & {
 };
 
 // ---------------------------------------------------------------------------
+// DOL LCA records (H1B approval prediction input)
+// ---------------------------------------------------------------------------
+
+export type LCACaseStatus =
+  | 'Certified'
+  | 'Certified-Withdrawn'
+  | 'Denied'
+  | 'Withdrawn'
+  | string;
+
+export type LCARecord = {
+  id: string;
+  employer_name: string;
+  employer_name_normalized: string | null;
+  company_id: string | null;
+  job_title: string | null;
+  soc_code: string | null;
+  soc_title: string | null;
+  worksite_city: string | null;
+  worksite_state: string | null;
+  worksite_state_abbr: string | null;
+  wage_rate_from: number | null;
+  wage_rate_to: number | null;
+  wage_unit: string | null;
+  prevailing_wage: number | null;
+  prevailing_wage_unit: string | null;
+  wage_level: string | null;
+  case_status: LCACaseStatus | null;
+  decision_date: string | null;
+  visa_class: string | null;
+  employment_start_date: string | null;
+  employment_end_date: string | null;
+  full_time_position: boolean | null;
+  naics_code: string | null;
+  fiscal_year: number | null;
+  source_case_number: string | null;
+  created_at: string;
+};
+
+export type LCARecordInsert = Omit<LCARecord, 'id' | 'created_at'> & {
+  id?: string;
+  created_at?: string;
+};
+
+export type YearStat = {
+  total: number;
+  certified: number;
+  denied: number;
+  rate: number;
+};
+
+export type WageLevelStat = {
+  total: number;
+  certified: number;
+  rate: number;
+};
+
+export type TopJobTitle = {
+  title: string;
+  soc_code: string | null;
+  count: number;
+  cert_rate: number;
+};
+
+export type TopState = { state: string; count: number };
+
+export type EmployerLCAStats = {
+  id: string;
+  employer_name_normalized: string;
+  company_id: string | null;
+  display_name: string | null;
+  total_applications: number;
+  total_certified: number;
+  total_denied: number;
+  total_withdrawn: number;
+  certification_rate: number | null;
+  stats_by_year: Record<string, YearStat>;
+  stats_by_wage_level: Record<string, WageLevelStat>;
+  top_job_titles: TopJobTitle[];
+  top_states: TopState[];
+  is_staffing_firm: boolean;
+  is_consulting_firm: boolean;
+  has_high_denial_rate: boolean;
+  is_first_time_filer: boolean;
+  approval_trend: 'improving' | 'declining' | 'stable' | null;
+  last_updated: string;
+};
+
+export type EmployerLCAStatsInsert = Omit<EmployerLCAStats, 'id' | 'last_updated'> & {
+  id?: string;
+  last_updated?: string;
+};
+
+export type SOCBaseRate = {
+  soc_code: string;
+  soc_title: string | null;
+  total_applications: number;
+  total_certified: number;
+  total_denied: number;
+  approval_rate: number | null;
+  sample_size: number;
+  last_updated: string;
+};
+
+export type SOCBaseRateInsert = Omit<SOCBaseRate, 'last_updated'> & {
+  last_updated?: string;
+};
+
+// ---------------------------------------------------------------------------
+// H1B approval prediction
+// ---------------------------------------------------------------------------
+
+export type H1BConfidence = 'high' | 'medium' | 'low';
+export type H1BVerdict = 'strong' | 'good' | 'moderate' | 'risky' | 'unknown';
+
+export type PredictionSignal = {
+  factor: string;
+  impact: 'positive' | 'negative' | 'neutral';
+  weight: 'high' | 'medium' | 'low';
+  detail: string;
+};
+
+export type H1BEmployerSnapshot = {
+  totalApplications: number;
+  certificationRate: number;
+  trend: 'improving' | 'declining' | 'stable' | null;
+  isStaffingFirm: boolean;
+  dataYears: number[];
+};
+
+export type H1BPrediction = {
+  approvalLikelihood: number;
+  confidenceLevel: H1BConfidence;
+  verdict: H1BVerdict;
+  employerScore: number;
+  jobTitleScore: number;
+  locationScore: number;
+  wageScore: number | null;
+  signals: PredictionSignal[];
+  employerStats: H1BEmployerSnapshot | null;
+  missingSalary: boolean;
+  missingEmployerData: boolean;
+  summary: string;
+  topRisk: string | null;
+  computedAt: string;
+  isUSJob: boolean;
+};
+
+export type H1BPredictionInput = {
+  jobTitle: string;
+  normalizedTitle: string | null;
+  company: {
+    id: string;
+    name: string;
+  };
+  location: string | null;
+  state: string | null;
+  isRemote: boolean;
+  salaryMin: number | null;
+  salaryMax: number | null;
+  seniorityLevel: SeniorityLevel | null;
+  employmentType: EmploymentType | null;
+  socCode?: string | null;
+  description?: string | null;
+};
+
+// ---------------------------------------------------------------------------
 // UI filter state
 // ---------------------------------------------------------------------------
 
@@ -954,6 +1123,17 @@ export type Database = {
       >;
       crawl_logs: TableDefinition<CrawlLog, CrawlLogInsert, Partial<CrawlLogInsert>>;
       h1b_records: TableDefinition<H1BRecord, H1BRecordInsert, Partial<H1BRecordInsert>>;
+      lca_records: TableDefinition<LCARecord, LCARecordInsert, Partial<LCARecordInsert>>;
+      employer_lca_stats: TableDefinition<
+        EmployerLCAStats,
+        EmployerLCAStatsInsert,
+        Partial<EmployerLCAStatsInsert>
+      >;
+      soc_base_rates: TableDefinition<
+        SOCBaseRate,
+        SOCBaseRateInsert,
+        Partial<SOCBaseRateInsert>
+      >;
       push_subscriptions: TableDefinition<
         PushSubscriptionRecord,
         PushSubscriptionInsert,

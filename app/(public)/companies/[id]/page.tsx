@@ -47,7 +47,7 @@ export default async function PublicCompanyPage({ params }: Props) {
   const { id } = await params
   const supabase = createAdminClient()
 
-  const [companyResult, jobsResult] = await Promise.all([
+  const [companyResult, jobsResult, lcaStatsResult] = await Promise.all([
     supabase.from("companies").select("*").eq("id", id).single(),
     supabase
       .from("jobs")
@@ -56,12 +56,18 @@ export default async function PublicCompanyPage({ params }: Props) {
       .eq("is_active", true)
       .order("first_detected_at", { ascending: false })
       .limit(50),
+    supabase
+      .from("employer_lca_stats")
+      .select("total_applications, total_certified, total_denied, certification_rate, approval_trend, has_high_denial_rate")
+      .eq("company_id", id)
+      .maybeSingle(),
   ])
 
   if (companyResult.error || !companyResult.data) notFound()
 
   const company = companyResult.data
   const jobs = jobsResult.data ?? []
+  const lcaStats = lcaStatsResult.data
 
   function hoursAgo(ts: string) {
     const mins = Math.floor((Date.now() - new Date(ts).getTime()) / 60000)
@@ -123,6 +129,40 @@ export default async function PublicCompanyPage({ params }: Props) {
             Sign up free →
           </Link>
         </div>
+
+        {/* H-1B approval indicator */}
+        {lcaStats && lcaStats.total_applications > 0 ? (
+          <div className="mb-8 rounded-2xl border border-emerald-100 bg-emerald-50/60 px-6 py-5">
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-700">
+                  H-1B approval intelligence
+                </p>
+                <p className="mt-1 text-2xl font-bold tabular-nums text-gray-900">
+                  {lcaStats.certification_rate !== null
+                    ? `~${Math.round(lcaStats.certification_rate * 100)}% approval rate`
+                    : "Approval rate unavailable"}
+                </p>
+                <p className="mt-0.5 text-sm text-gray-600">
+                  Based on {lcaStats.total_applications.toLocaleString()} DOL LCA
+                  filing{lcaStats.total_applications === 1 ? "" : "s"}
+                  {lcaStats.approval_trend
+                    ? ` · ${lcaStats.approval_trend} trend`
+                    : ""}
+                </p>
+              </div>
+              {lcaStats.has_high_denial_rate ? (
+                <span className="inline-flex items-center rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-700">
+                  Elevated denial rate
+                </span>
+              ) : null}
+            </div>
+            <p className="mt-3 text-[11px] text-gray-500">
+              Statistical estimate only — not legal advice. Data from U.S. Department
+              of Labor LCA public disclosures.
+            </p>
+          </div>
+        ) : null}
 
         {/* Jobs */}
         <h2 className="mb-4 text-lg font-semibold text-gray-900">

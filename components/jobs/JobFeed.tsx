@@ -3,6 +3,9 @@
 import { useEffect, useRef, useState } from "react"
 import { ArrowUp, Sparkles } from "lucide-react"
 import JobCard from "@/components/jobs/JobCard"
+import { H1BPredictionProvider } from "@/lib/context/H1BPredictionContext"
+import { useAuth } from "@/lib/hooks/useAuth"
+import { useSubscription } from "@/lib/hooks/useSubscription"
 import { useMatchScores } from "@/lib/hooks/useMatchScores"
 import { useJobs } from "@/lib/hooks/useJobs"
 import type { JobFilters } from "@/types"
@@ -58,6 +61,12 @@ export default function JobFeed({
     hasPrimaryResume ? jobs.map((job) => job.id) : []
   )
 
+  const { profile } = useAuth()
+  const { isProInternational } = useSubscription()
+  const h1bEnabled = Boolean(
+    profile?.needs_sponsorship || profile?.is_international || isProInternational
+  )
+
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), 60_000)
@@ -91,6 +100,7 @@ export default function JobFeed({
   }, [hasMore, loadMore])
 
   return (
+    <H1BPredictionProvider enabled={h1bEnabled}>
     <div className="space-y-4">
       {personalized && (
         <div className="flex items-center gap-2 border border-border bg-surface-alt px-4 py-2.5 text-sm font-medium text-brand-navy">
@@ -167,5 +177,6 @@ export default function JobFeed({
         </div>
       )}
     </div>
+    </H1BPredictionProvider>
   )
 }
