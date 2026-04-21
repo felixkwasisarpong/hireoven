@@ -11,7 +11,7 @@ export const metadata: Metadata = {
     "Explore companies hiring now. Filter by H1B sponsorship, industry, and more. See jobs the moment they're posted.",
 }
 
-export const revalidate = 3600 // ISR: revalidate every hour
+export const dynamic = "force-dynamic"
 
 function SponsorsH1BBadge({ confidence }: { confidence: number }) {
   if (confidence >= 80)

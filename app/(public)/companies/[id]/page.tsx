@@ -5,33 +5,9 @@ import { notFound } from "next/navigation"
 import { createAdminClient, hasSupabaseAdminEnv } from "@/lib/supabase/admin"
 import Navbar from "@/components/layout/Navbar"
 
-export const revalidate = 3600
+export const dynamic = "force-dynamic"
 
 type Props = { params: Promise<{ id: string }> }
-
-function staticCompanyPrebuildLimit(): number {
-  const raw =
-    process.env.STATIC_PREBUILD_COMPANIES_LIMIT ??
-    process.env.STATIC_PREBUILD_LIMIT ??
-    "0"
-  const parsed = Number(raw)
-  if (!Number.isFinite(parsed) || parsed <= 0) return 0
-  return Math.min(Math.floor(parsed), 1000)
-}
-
-export async function generateStaticParams() {
-  const limit = staticCompanyPrebuildLimit()
-  if (!hasSupabaseAdminEnv() || limit === 0) return []
-  const supabase = createAdminClient()
-  const { data } = await supabase
-    .from("companies")
-    .select("id")
-    .eq("is_active", true)
-    .gt("job_count", 0)
-    .order("job_count", { ascending: false })
-    .limit(limit)
-  return (data ?? []).map((c) => ({ id: c.id }))
-}
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (!hasSupabaseAdminEnv()) return { title: "Company — Hireoven" }

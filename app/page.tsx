@@ -26,7 +26,7 @@ export const metadata: Metadata = {
     "Real-time job alerts, H-1B approval intelligence, one-click apply, and AI match scores. Built for fast, confident job hunting.",
 }
 
-export const revalidate = 3600
+export const dynamic = "force-dynamic"
 
 // ─── Feature copy ────────────────────────────────────────────────────────────
 // Benefit-first, never mechanism-first. The user cares about "I'll land

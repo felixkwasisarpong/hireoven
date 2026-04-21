@@ -7,32 +7,9 @@ import { AutofillButton } from "@/components/autofill/AutofillButton"
 import Navbar from "@/components/layout/Navbar"
 import type { Company, Job } from "@/types"
 
-export const revalidate = 3600
+export const dynamic = "force-dynamic"
 
 type Props = { params: Promise<{ id: string }> }
-
-function staticJobPrebuildLimit(): number {
-  const raw =
-    process.env.STATIC_PREBUILD_JOBS_LIMIT ??
-    process.env.STATIC_PREBUILD_LIMIT ??
-    "0"
-  const parsed = Number(raw)
-  if (!Number.isFinite(parsed) || parsed <= 0) return 0
-  return Math.min(Math.floor(parsed), 1000)
-}
-
-export async function generateStaticParams() {
-  const limit = staticJobPrebuildLimit()
-  if (!hasSupabaseAdminEnv() || limit === 0) return []
-  const supabase = createAdminClient()
-  const { data } = await supabase
-    .from("jobs")
-    .select("id")
-    .eq("is_active", true)
-    .order("first_detected_at", { ascending: false })
-    .limit(limit)
-  return (data ?? []).map((j) => ({ id: j.id }))
-}
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (!hasSupabaseAdminEnv()) return { title: "Job — Hireoven" }

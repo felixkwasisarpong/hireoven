@@ -38,6 +38,8 @@ export const metadata: Metadata = {
   },
 }
 
+export const dynamic = "force-dynamic"
+
 async function getWaitlistDisplayCount() {
   try {
     const supabase = createAdminClient()
