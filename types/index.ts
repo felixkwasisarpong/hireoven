@@ -1076,7 +1076,6 @@ export type JobFilters = {
   sponsorship?: boolean;
   seniority?: SeniorityLevel[];
   employment_type?: EmploymentType[];
-  location?: string;
   within?: JobWithinWindow;
   company_ids?: string[];
   sort?: JobSortOption;

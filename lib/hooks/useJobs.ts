@@ -71,15 +71,6 @@ function matchesClientFilters(job: JobWithCompany, filters: JobFilters, query: s
   if (filters.company_ids?.length && !filters.company_ids.includes(job.company_id))
     return false
 
-  if (
-    filters.location &&
-    !matchesLocationFilter(job.location, filters.location, {
-      isRemote: job.is_remote,
-    })
-  ) {
-    return false
-  }
-
   const hours = hoursFromWithin(filters.within)
   if (hours) {
     const ageMs = Date.now() - new Date(job.first_detected_at).getTime()
@@ -203,7 +194,6 @@ export function useJobs(
         if (filters.employment_type?.length) {
           params.set("employment", filters.employment_type.join(","))
         }
-        if (filters.location?.trim()) params.set("location", filters.location.trim())
         if (filters.company_ids?.length) params.set("companies", filters.company_ids.join(","))
         if (filters.within && filters.within !== "all") params.set("within", filters.within)
         params.set("limit", String(chunkSize))
@@ -404,10 +394,6 @@ export function useJobs(
                 filters.employment_type.includes(row.employment_type))) &&
             (!filters.company_ids?.length ||
               filters.company_ids.includes(row.company_id)) &&
-            (!filters.location ||
-              matchesLocationFilter(row.location, filters.location, {
-                isRemote: row.is_remote,
-              })) &&
             (!searchQuery.trim() ||
               matchesSearchQuery(
                 [
