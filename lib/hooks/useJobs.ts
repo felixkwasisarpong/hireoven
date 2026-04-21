@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { devWarn } from "@/lib/client-dev-log"
+import { matchesLocationFilter, matchesSearchQuery } from "@/lib/jobs/search-match"
 import { createClient } from "@/lib/supabase/client"
 import type { Job, JobFilters, JobWithCompany, JobWithMatchScore } from "@/types"
 
@@ -19,23 +20,26 @@ function hoursFromWithin(within: JobFilters["within"]) {
 }
 
 function matchesSearch(job: JobWithCompany, query: string) {
-  if (!query.trim()) return true
+  if (
+    matchesSearchQuery(
+      [
+        job.title,
+        job.normalized_title,
+        job.location,
+        job.company?.name,
+        job.company?.domain,
+        job.skills?.join(" "),
+        job.description,
+      ],
+      query
+    )
+  ) {
+    return true
+  }
 
-  const needle = query.trim().toLowerCase()
-  const haystack = [
-    job.title,
-    job.normalized_title,
-    job.location,
-    job.company?.name,
-    job.company?.domain,
-    job.skills?.join(" "),
-    job.description,
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase()
-
-  return haystack.includes(needle)
+  return matchesLocationFilter(job.location, query, {
+    isRemote: job.is_remote,
+  })
 }
 
 function matchesClientFilters(job: JobWithCompany, filters: JobFilters, query: string) {
@@ -66,6 +70,15 @@ function matchesClientFilters(job: JobWithCompany, filters: JobFilters, query: s
 
   if (filters.company_ids?.length && !filters.company_ids.includes(job.company_id))
     return false
+
+  if (
+    filters.location &&
+    !matchesLocationFilter(job.location, filters.location, {
+      isRemote: job.is_remote,
+    })
+  ) {
+    return false
+  }
 
   const hours = hoursFromWithin(filters.within)
   if (hours) {
@@ -190,6 +203,7 @@ export function useJobs(
         if (filters.employment_type?.length) {
           params.set("employment", filters.employment_type.join(","))
         }
+        if (filters.location?.trim()) params.set("location", filters.location.trim())
         if (filters.company_ids?.length) params.set("companies", filters.company_ids.join(","))
         if (filters.within && filters.within !== "all") params.set("within", filters.within)
         params.set("limit", String(chunkSize))
@@ -390,17 +404,23 @@ export function useJobs(
                 filters.employment_type.includes(row.employment_type))) &&
             (!filters.company_ids?.length ||
               filters.company_ids.includes(row.company_id)) &&
+            (!filters.location ||
+              matchesLocationFilter(row.location, filters.location, {
+                isRemote: row.is_remote,
+              })) &&
             (!searchQuery.trim() ||
-              [
-                row.title,
-                row.normalized_title,
-                row.location,
-                row.skills?.join(" "),
-              ]
-                .filter(Boolean)
-                .join(" ")
-                .toLowerCase()
-                .includes(searchQuery.trim().toLowerCase()))
+              matchesSearchQuery(
+                [
+                  row.title,
+                  row.normalized_title,
+                  row.location,
+                  row.skills?.join(" "),
+                ],
+                searchQuery
+              ) ||
+              matchesLocationFilter(row.location, searchQuery, {
+                isRemote: row.is_remote,
+              }))
 
           if (roughMatch) setNewJobsCount((current) => current + 1)
         }

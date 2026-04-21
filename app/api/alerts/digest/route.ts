@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { Resend } from "resend"
 import { getAlertsFromEmail } from "@/lib/email/identity"
 import { requireCronAuth } from "@/lib/env"
+import { matchesLocationFilter } from "@/lib/jobs/search-match"
 import { createAdminClient } from "@/lib/supabase/admin"
 import type { Job, JobAlert, Profile } from "@/types"
 
@@ -28,9 +29,8 @@ function matchesAlert(alert: JobAlert, job: Job): boolean {
   }
 
   if (alert.locations?.length) {
-    const loc = job.location?.toLowerCase() ?? ""
-    const hit = alert.locations.some((l) =>
-      l.toLowerCase() === "remote" ? job.is_remote : loc.includes(l.toLowerCase())
+    const hit = alert.locations.some((entry) =>
+      matchesLocationFilter(job.location, entry, { isRemote: job.is_remote })
     )
     if (!hit) return false
   }

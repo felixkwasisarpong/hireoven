@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo } from "react"
+import { useEffect, useMemo, useState } from "react"
 import {
   usePathname,
   useRouter,
@@ -83,12 +83,14 @@ export function parseJobFilters(
 ): JobFilters {
   const within = (params.get("within") as JobWithinWindow | null) ?? "all"
   const sort = (params.get("sort") as JobSortOption | null) ?? "freshest"
+  const location = params.get("location")?.trim() ?? ""
 
   return {
     remote: params.get("remote") === "true",
     sponsorship: params.get("sponsorship") === "true",
     seniority: parseList<SeniorityLevel>(params, "seniority"),
     employment_type: parseList<EmploymentType>(params, "employment"),
+    location: location || undefined,
     within,
     company_ids: parseList<string>(params, "companies"),
     sort,
@@ -114,6 +116,10 @@ export function filtersToSearchParams(
   const employment = normalizeArray(filters.employment_type)
   if (employment?.length) next.set("employment", employment.join(","))
   else next.delete("employment")
+
+  const location = filters.location?.trim()
+  if (location) next.set("location", location)
+  else next.delete("location")
 
   if (filters.within && filters.within !== "all") next.set("within", filters.within)
   else next.delete("within")
@@ -170,6 +176,14 @@ export function buildFilterPills(filters: JobFilters): FilterPill[] {
           (value) => value !== option.value
         ),
       },
+    })
+  }
+
+  if (filters.location?.trim()) {
+    pills.push({
+      id: "location",
+      label: `Location: ${filters.location.trim()}`,
+      nextFilters: { ...filters, location: undefined },
     })
   }
 
@@ -261,12 +275,32 @@ export default function JobFilters({
   const router = useRouter()
   const searchParams = useSearchParams()
   const filters = useMemo(() => parseJobFilters(searchParams), [searchParams])
+  const [locationDraft, setLocationDraft] = useState(filters.location ?? "")
 
   function replaceFilters(nextFilters: JobFilters) {
     const next = filtersToSearchParams(searchParams, nextFilters)
     const query = next.toString()
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false })
   }
+
+  useEffect(() => {
+    setLocationDraft(filters.location ?? "")
+  }, [filters.location])
+
+  useEffect(() => {
+    const nextValue = locationDraft.trim()
+    const currentValue = filters.location?.trim() ?? ""
+    if (nextValue === currentValue) return
+
+    const timeout = window.setTimeout(() => {
+      replaceFilters({
+        ...filters,
+        location: nextValue || undefined,
+      })
+    }, 250)
+
+    return () => window.clearTimeout(timeout)
+  }, [filters, locationDraft, replaceFilters])
 
   function toggleArray(
     key: "seniority" | "employment_type",
@@ -302,6 +336,7 @@ export default function JobFilters({
                 sponsorship: false,
                 seniority: undefined,
                 employment_type: undefined,
+                location: undefined,
                 within: "all",
               })
             }
@@ -360,6 +395,17 @@ export default function JobFilters({
             />
           ))}
         </div>
+      </div>
+
+      <div className="border-b border-border pb-4">
+        <p className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Location / country</p>
+        <input
+          type="text"
+          value={locationDraft}
+          onChange={(event) => setLocationDraft(event.target.value)}
+          placeholder="City, state, country (e.g. USA)"
+          className="w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-strong outline-none transition-colors focus:border-primary/50 focus:ring-2 focus:ring-primary/12"
+        />
       </div>
 
       <div>

@@ -27,6 +27,12 @@ const MAX_DISCOVERED_ATS_CANDIDATES = 12
 const MAX_GENERIC_JOBS = 250
 const WORKDAY_FALLBACK_MAX_ATTEMPTS = 48
 const WORKDAY_HOST_SHARDS = [1, 2, 3, 4, 5]
+const ORACLE_SEARCH_PAGE_SIZE = 24
+const ORACLE_MAX_JOBS = 240
+const PHENOM_DEFAULT_PAGE_SIZE = 10
+const PHENOM_MAX_JOBS = 240
+const GOOGLE_RESULTS_PAGE_SIZE = 20
+const GOOGLE_MAX_JOBS = 200
 
 const WORKDAY_PATH_STOPWORDS = new Set([
   "job",
@@ -128,6 +134,26 @@ function parseBambooPortal(url: URL) {
   return host === "bamboohr.com" || host.endsWith(".bamboohr.com")
 }
 
+function isOracleCandidateExperienceUrl(url: URL) {
+  const host = url.hostname.toLowerCase()
+  const path = url.pathname.toLowerCase()
+  return (
+    host.includes("oracle.com") &&
+    (path.includes("/sites/jobsearch") || path.includes("/hcmui/candexpstatic"))
+  )
+}
+
+function isCiscoPhenomPortal(url: URL) {
+  const host = url.hostname.toLowerCase()
+  return host === "jobs.cisco.com" || host === "careers.cisco.com"
+}
+
+function isGoogleCareersPortal(url: URL) {
+  const host = url.hostname.toLowerCase()
+  if (host === "careers.google.com") return true
+  return host.endsWith(".google.com") && url.pathname.toLowerCase().includes("/about/careers")
+}
+
 function isLocaleSegment(part: string) {
   return /^[a-z]{2}(?:-[a-z]{2})?$/i.test(part)
 }
@@ -224,14 +250,18 @@ async function fetchText(
   }
 }
 
-async function fetchJson<T>(url: string): Promise<T | null> {
+async function fetchJson<T>(
+  url: string,
+  init: RequestInit = {}
+): Promise<T | null> {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
   try {
     const response = await fetch(url, {
       method: "GET",
+      ...init,
       signal: controller.signal,
-      headers: buildRequestHeaders(),
+      headers: buildRequestHeaders(init.headers),
     })
     if (!response.ok) return null
     return (await response.json()) as T
@@ -704,6 +734,475 @@ function extractGenericJobsFromHtml(html: string, baseUrl: URL): RawJob[] {
   return out
 }
 
+function looksLikeOracleCandidateExperienceHtml(html: string): boolean {
+  return (
+    /var\s+CX_CONFIG\s*=/.test(html) &&
+    /apiBaseUrl:\s*'https?:\/\/[^']+'/.test(html) &&
+    /siteNumber:\s*'[^']+'/.test(html)
+  )
+}
+
+function looksLikePhenomHtml(html: string): boolean {
+  return (
+    /var\s+phApp\s*=\s*phApp\s*\|\|/.test(html) &&
+    /"widgetApiEndpoint":"https?:\/\/[^"]+"/.test(html)
+  )
+}
+
+function looksLikeGoogleJobsResultsHtml(html: string): boolean {
+  return html.includes("HiringCportalFrontendUi") && html.includes("jobs/results/")
+}
+
+function readConfigValue(html: string, key: string): string | null {
+  const quoted = html.match(new RegExp(`"${key}":"([^"]+)"`, "i"))?.[1]
+  const single = html.match(new RegExp(`${key}:\\s*'([^']+)'`, "i"))?.[1]
+  const raw = quoted ?? single
+  if (!raw) return null
+  return decodeHtmlEntities(raw).replace(/\\\//g, "/")
+}
+
+function extractBalancedObjectAfter(html: string, marker: string): string | null {
+  const markerIndex = html.indexOf(marker)
+  if (markerIndex < 0) return null
+
+  const firstBraceIndex = html.indexOf("{", markerIndex)
+  if (firstBraceIndex < 0) return null
+
+  let depth = 0
+  let inString: '"' | "'" | null = null
+  let escaped = false
+
+  for (let i = firstBraceIndex; i < html.length; i++) {
+    const ch = html[i]
+    if (!ch) break
+
+    if (inString) {
+      if (escaped) {
+        escaped = false
+        continue
+      }
+      if (ch === "\\") {
+        escaped = true
+        continue
+      }
+      if (ch === inString) {
+        inString = null
+      }
+      continue
+    }
+
+    if (ch === '"' || ch === "'") {
+      inString = ch
+      continue
+    }
+    if (ch === "{") {
+      depth += 1
+      continue
+    }
+    if (ch === "}") {
+      depth -= 1
+      if (depth === 0) {
+        return html.slice(firstBraceIndex, i + 1)
+      }
+    }
+  }
+
+  return null
+}
+
+type OraclePortalConfig = {
+  apiBaseUrl: string
+  siteNumber: string
+  siteLang: string | null
+  siteUrlName: string | null
+}
+
+type OracleRequisition = {
+  Id?: string
+  Title?: string
+  PrimaryLocation?: string
+  PostedDate?: string
+  secondaryLocations?: Array<Record<string, unknown> | string>
+}
+
+type OracleSearchBucket = {
+  TotalJobsCount?: number
+  requisitionList?: OracleRequisition[]
+}
+
+type OracleSearchResponse = {
+  items?: OracleSearchBucket[]
+}
+
+function parseOraclePortalConfig(html: string): OraclePortalConfig | null {
+  const apiBaseUrl = readConfigValue(html, "apiBaseUrl")
+  const siteNumber = readConfigValue(html, "siteNumber")
+  if (!apiBaseUrl || !siteNumber) return null
+
+  return {
+    apiBaseUrl: apiBaseUrl.replace(/\/+$/, ""),
+    siteNumber,
+    siteLang: readConfigValue(html, "siteLang"),
+    siteUrlName: readConfigValue(html, "siteURLName"),
+  }
+}
+
+function resolveOracleCareersPath(careersUrl: URL, siteUrlName: string | null): string {
+  const match = careersUrl.pathname.match(/^\/([a-z]{2}(?:-[a-z]{2})?)\/sites\/([^/?#]+)/i)
+  const locale = match?.[1] ?? "en"
+  const site = siteUrlName ?? match?.[2] ?? "jobsearch"
+  return `/${locale}/sites/${encodeURIComponent(site)}`
+}
+
+function pickOracleLocation(requisition: OracleRequisition): string | undefined {
+  const primary = String(requisition.PrimaryLocation ?? "").trim()
+  if (primary) return primary
+
+  const secondary = requisition.secondaryLocations
+  if (!Array.isArray(secondary)) return undefined
+
+  for (const item of secondary) {
+    if (typeof item === "string") {
+      const text = item.trim()
+      if (text) return text
+      continue
+    }
+    if (!item || typeof item !== "object") continue
+    const candidate = String(
+      (item as Record<string, unknown>).location ??
+        (item as Record<string, unknown>).Location ??
+        ""
+    ).trim()
+    if (candidate) return candidate
+  }
+
+  return undefined
+}
+
+async function crawlOracleCandidateExperience(
+  careersUrl: URL,
+  initialHtml?: string
+): Promise<RawJob[]> {
+  const html = initialHtml ?? (await fetchText(careersUrl.toString()))
+  if (!html || !looksLikeOracleCandidateExperienceHtml(html)) return []
+
+  const config = parseOraclePortalConfig(html)
+  if (!config) return []
+
+  const jobs: RawJob[] = []
+  const seen = new Set<string>()
+  let totalJobsCount = Number.POSITIVE_INFINITY
+
+  for (
+    let offset = 0;
+    offset < totalJobsCount && jobs.length < ORACLE_MAX_JOBS;
+    offset += ORACLE_SEARCH_PAGE_SIZE
+  ) {
+    const finder = `findReqs;siteNumber=${encodeURIComponent(
+      config.siteNumber
+    )},limit=${ORACLE_SEARCH_PAGE_SIZE},offset=${offset}`
+    const url = `${config.apiBaseUrl}/hcmRestApi/resources/latest/recruitingCEJobRequisitions?onlyData=true&expand=requisitionList.secondaryLocations&finder=${finder}`
+
+    const payload = await fetchJson<OracleSearchResponse>(url, {
+      headers: config.siteLang
+        ? {
+            "accept-language": config.siteLang,
+            "ora-irc-language": config.siteLang,
+          }
+        : undefined,
+    })
+    const bucket = payload?.items?.[0]
+    if (!bucket) break
+
+    if (typeof bucket.TotalJobsCount === "number" && Number.isFinite(bucket.TotalJobsCount)) {
+      totalJobsCount = bucket.TotalJobsCount
+    }
+
+    const requisitions = Array.isArray(bucket.requisitionList)
+      ? bucket.requisitionList
+      : []
+    if (requisitions.length === 0) break
+
+    let addedOnPage = 0
+    for (const requisition of requisitions) {
+      const id = String(requisition.Id ?? "").trim()
+      const title = String(requisition.Title ?? "").trim()
+      if (!id || !title) continue
+
+      const externalId = `oracle:${id}`
+      if (seen.has(externalId)) continue
+      seen.add(externalId)
+
+      const postedAt = String(requisition.PostedDate ?? "").trim()
+      jobs.push({
+        externalId,
+        title,
+        url: new URL(
+          `${resolveOracleCareersPath(careersUrl, config.siteUrlName)}/job/${encodeURIComponent(
+            id
+          )}`,
+          careersUrl.origin
+        ).toString(),
+        location: pickOracleLocation(requisition),
+        postedAt: postedAt || undefined,
+      })
+      addedOnPage += 1
+
+      if (jobs.length >= ORACLE_MAX_JOBS) break
+    }
+
+    if (addedOnPage === 0 || requisitions.length < ORACLE_SEARCH_PAGE_SIZE) break
+  }
+
+  return jobs
+}
+
+type PhenomPosting = {
+  jobSeqNo?: string
+  jobId?: string
+  reqId?: string
+  title?: string
+  location?: string
+  cityStateCountry?: string
+  cityState?: string
+  country?: string
+  postedDate?: string
+  dateCreated?: string
+  applyUrl?: string
+  multi_location?: string[]
+}
+
+function parsePhenomBaseUrl(html: string, careersUrl: URL): URL | null {
+  const configured = readConfigValue(html, "baseUrl") ?? readConfigValue(html, "rootDomain")
+  if (!configured) return null
+  return toUrl(configured, careersUrl)
+}
+
+function extractPhenomJobsFromHtml(html: string): PhenomPosting[] {
+  const ddoRaw = extractBalancedObjectAfter(html, "phApp.ddo =")
+  if (!ddoRaw) return []
+
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(ddoRaw)
+  } catch {
+    return []
+  }
+
+  if (!parsed || typeof parsed !== "object") return []
+  const ddo = parsed as Record<string, unknown>
+  const eagerLoadJobs = (
+    (ddo.eagerLoadRefineSearch as Record<string, unknown> | undefined)?.data as
+      | Record<string, unknown>
+      | undefined
+  )?.jobs
+  if (Array.isArray(eagerLoadJobs)) return eagerLoadJobs as PhenomPosting[]
+
+  for (const value of Object.values(ddo)) {
+    if (!value || typeof value !== "object") continue
+    const data = (value as Record<string, unknown>).data
+    if (!data || typeof data !== "object") continue
+    const jobs = (data as Record<string, unknown>).jobs
+    if (Array.isArray(jobs) && jobs.length > 0) return jobs as PhenomPosting[]
+  }
+
+  return []
+}
+
+function pickPhenomLocation(posting: PhenomPosting): string | undefined {
+  const candidates = [
+    posting.location,
+    posting.cityStateCountry,
+    posting.cityState,
+    Array.isArray(posting.multi_location) ? posting.multi_location[0] : undefined,
+    posting.country,
+  ]
+
+  for (const value of candidates) {
+    const text = String(value ?? "").trim()
+    if (text) return text
+  }
+
+  return undefined
+}
+
+async function crawlPhenomPortal(careersUrl: URL, initialHtml?: string): Promise<RawJob[]> {
+  const landingHtml = initialHtml ?? (await fetchText(careersUrl.toString()))
+  if (!landingHtml || !looksLikePhenomHtml(landingHtml)) return []
+
+  const baseUrl = parsePhenomBaseUrl(landingHtml, careersUrl)
+  if (!baseUrl) return []
+
+  let pageSize = PHENOM_DEFAULT_PAGE_SIZE
+  const firstPageJobs = extractPhenomJobsFromHtml(landingHtml)
+  if (firstPageJobs.length > 0) {
+    pageSize = firstPageJobs.length
+  }
+
+  const maxPages = Math.max(1, Math.ceil(PHENOM_MAX_JOBS / Math.max(pageSize, 1)))
+  const jobs: RawJob[] = []
+  const seen = new Set<string>()
+
+  for (let page = 0; page < maxPages; page++) {
+    const from = page * pageSize
+    const searchUrl = new URL("search-results", baseUrl)
+    searchUrl.searchParams.set("from", String(from))
+    searchUrl.searchParams.set("s", "1")
+
+    const pageHtml =
+      page === 0 && careersUrl.pathname.toLowerCase().includes("search-results")
+        ? landingHtml
+        : await fetchText(searchUrl.toString())
+    if (!pageHtml) break
+
+    const postings = extractPhenomJobsFromHtml(pageHtml)
+    if (postings.length === 0) break
+    if (page === 0 && postings.length > 0) {
+      pageSize = postings.length
+    }
+
+    let addedOnPage = 0
+    for (const posting of postings) {
+      const title = String(posting.title ?? "").trim()
+      if (!title) continue
+
+      const sourceId = String(
+        posting.jobSeqNo ?? posting.jobId ?? posting.reqId ?? ""
+      ).trim()
+
+      const applyCandidate = String(posting.applyUrl ?? "").trim()
+      const applyUrl = toUrl(applyCandidate, baseUrl)?.toString()
+      const fallbackUrl =
+        posting.jobId || posting.reqId
+          ? new URL(
+              `job/${encodeURIComponent(String(posting.jobId ?? posting.reqId))}/${normalizeWorkdaySlug(
+                title
+              )}`,
+              baseUrl
+            ).toString()
+          : null
+      const url = applyUrl ?? fallbackUrl
+      if (!url) continue
+
+      const key = sourceId || url
+      if (seen.has(key)) continue
+      seen.add(key)
+
+      jobs.push({
+        externalId: sourceId ? `phenom:${sourceId}` : undefined,
+        title,
+        url,
+        location: pickPhenomLocation(posting),
+        postedAt: String(posting.postedDate ?? posting.dateCreated ?? "").trim() || undefined,
+      })
+      addedOnPage += 1
+
+      if (jobs.length >= PHENOM_MAX_JOBS) break
+    }
+
+    if (addedOnPage === 0 || postings.length < pageSize || jobs.length >= PHENOM_MAX_JOBS) {
+      break
+    }
+  }
+
+  return jobs
+}
+
+function extractGoogleJobsFromHtml(html: string, baseUrl: URL): RawJob[] {
+  const jobs: RawJob[] = []
+  const seen = new Set<string>()
+  const cardRegex =
+    /ssk=['"]\d+:(\d+)['"][\s\S]{0,12000}?<h3[^>]*>([\s\S]*?)<\/h3>[\s\S]{0,4000}?<span class="r0wTof [^"]*">([\s\S]*?)<\/span>[\s\S]{0,20000}?href="(jobs\/results\/[^"]+)"/g
+
+  for (const match of html.matchAll(cardRegex)) {
+    const id = String(match[1] ?? "").trim()
+    const title = cleanText(match[2] ?? "")
+    const location = cleanText(match[3] ?? "")
+    const href = decodeHtmlEntities(match[4] ?? "")
+    const resolved = toUrl(href, baseUrl)
+    if (!id || !title || !resolved) continue
+    if (seen.has(id)) continue
+    seen.add(id)
+
+    jobs.push({
+      externalId: `google:${id}`,
+      title,
+      url: resolved.toString(),
+      location: location || undefined,
+    })
+
+    if (jobs.length >= GOOGLE_RESULTS_PAGE_SIZE) break
+  }
+
+  if (jobs.length > 0) return jobs
+
+  const fallback: RawJob[] = []
+  for (const job of extractGenericJobsFromHtml(html, baseUrl)) {
+    const resolved = toUrl(job.url)
+    if (!resolved) continue
+    if (!resolved.pathname.toLowerCase().includes("/jobs/results/")) continue
+
+    const id = resolved.pathname.match(/\/jobs\/results\/(\d+)/)?.[1]
+    fallback.push({
+      externalId: id ? `google:${id}` : undefined,
+      title: job.title,
+      url: resolved.toString(),
+      location: job.location,
+      postedAt: job.postedAt,
+    })
+
+    if (fallback.length >= GOOGLE_RESULTS_PAGE_SIZE) break
+  }
+
+  return dedupeJobs(fallback)
+}
+
+async function crawlGoogleCareers(careersUrl: URL, initialHtml?: string): Promise<RawJob[]> {
+  const resultsBase = new URL("https://www.google.com/about/careers/applications/jobs/results")
+  const jobs: RawJob[] = []
+  const seen = new Set<string>()
+  const maxPages = Math.max(1, Math.ceil(GOOGLE_MAX_JOBS / GOOGLE_RESULTS_PAGE_SIZE))
+
+  for (let page = 1; page <= maxPages; page++) {
+    const pageUrl = new URL(resultsBase.toString())
+    if (page > 1) pageUrl.searchParams.set("page", String(page))
+
+    const html =
+      page === 1 && initialHtml && looksLikeGoogleJobsResultsHtml(initialHtml)
+        ? initialHtml
+        : await fetchText(pageUrl.toString())
+    if (!html) break
+
+    const pageJobs = extractGoogleJobsFromHtml(html, pageUrl)
+    if (pageJobs.length === 0) break
+
+    let addedOnPage = 0
+    for (const job of pageJobs) {
+      const key = job.externalId ?? job.url
+      if (seen.has(key)) continue
+      seen.add(key)
+      jobs.push(job)
+      addedOnPage += 1
+
+      if (jobs.length >= GOOGLE_MAX_JOBS) break
+    }
+
+    if (
+      addedOnPage === 0 ||
+      pageJobs.length < GOOGLE_RESULTS_PAGE_SIZE ||
+      jobs.length >= GOOGLE_MAX_JOBS
+    ) {
+      break
+    }
+  }
+
+  if (jobs.length > 0) return jobs
+
+  const fallbackHtml = initialHtml ?? (await fetchText(careersUrl.toString()))
+  if (!fallbackHtml) return []
+  return dedupeJobs(extractGenericJobsFromHtml(fallbackHtml, careersUrl))
+}
+
 function walkJson(value: unknown, cb: (obj: Record<string, unknown>) => void): void {
   if (Array.isArray(value)) {
     for (const item of value) walkJson(item, cb)
@@ -846,6 +1345,18 @@ async function crawlByKnownAts(careersUrl: URL): Promise<RawJob[]> {
     return crawlBambooHr(careersUrl)
   }
 
+  if (isOracleCandidateExperienceUrl(careersUrl)) {
+    return crawlOracleCandidateExperience(careersUrl)
+  }
+
+  if (isCiscoPhenomPortal(careersUrl)) {
+    return crawlPhenomPortal(careersUrl)
+  }
+
+  if (isGoogleCareersPortal(careersUrl)) {
+    return crawlGoogleCareers(careersUrl)
+  }
+
   return []
 }
 
@@ -861,6 +1372,21 @@ async function discoverAndCrawlFromHtml(careersUrl: URL): Promise<RawJob[]> {
     if (!response.ok) return []
     const html = await response.text()
 
+    if (looksLikeOracleCandidateExperienceHtml(html)) {
+      const oracleJobs = await crawlOracleCandidateExperience(careersUrl, html)
+      if (oracleJobs.length > 0) return oracleJobs
+    }
+
+    if (looksLikePhenomHtml(html)) {
+      const phenomJobs = await crawlPhenomPortal(careersUrl, html)
+      if (phenomJobs.length > 0) return phenomJobs
+    }
+
+    if (isGoogleCareersPortal(careersUrl) || looksLikeGoogleJobsResultsHtml(html)) {
+      const googleJobs = await crawlGoogleCareers(careersUrl, html)
+      if (googleJobs.length > 0) return googleJobs
+    }
+
     const discoveredUrls = extractAbsoluteUrlsFromHtml(html, careersUrl)
     const knownAtsCandidates: URL[] = []
     const seen = new Set<string>()
@@ -872,7 +1398,10 @@ async function discoverAndCrawlFromHtml(careersUrl: URL): Promise<RawJob[]> {
         Boolean(parseAshbyCompany(candidate)) ||
         Boolean(parseWorkdayContext(candidate)) ||
         parseIcimsPortal(candidate) ||
-        parseBambooPortal(candidate)
+        parseBambooPortal(candidate) ||
+        isOracleCandidateExperienceUrl(candidate) ||
+        isCiscoPhenomPortal(candidate) ||
+        isGoogleCareersPortal(candidate)
 
       if (!known) continue
       const key = candidate.toString()

@@ -1,4 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
+import {
+  matchesLocationFilter,
+  matchesSearchQuery,
+} from "@/lib/jobs/search-match"
 import { getScoringContextForUser, scoreJobsForUser } from "@/lib/matching/batch-scorer"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { createClient } from "@/lib/supabase/server"
@@ -25,23 +29,26 @@ function parseList<T extends string>(value: string | null) {
 }
 
 function matchesSearch(job: JobWithMatchScore, query: string) {
-  if (!query.trim()) return true
+  if (
+    matchesSearchQuery(
+      [
+        job.title,
+        job.normalized_title,
+        job.location,
+        job.company?.name,
+        job.company?.domain,
+        job.skills?.join(" "),
+        job.description,
+      ],
+      query
+    )
+  ) {
+    return true
+  }
 
-  const needle = query.trim().toLowerCase()
-  const haystack = [
-    job.title,
-    job.normalized_title,
-    job.location,
-    job.company?.name,
-    job.company?.domain,
-    job.skills?.join(" "),
-    job.description,
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase()
-
-  return haystack.includes(needle)
+  return matchesLocationFilter(job.location, query, {
+    isRemote: job.is_remote,
+  })
 }
 
 function freshnessScore(timestamp: string) {
@@ -78,6 +85,7 @@ export async function GET(request: NextRequest) {
     parseList<EmploymentType>(sp.get("employment_type"))
   const remote = sp.get("remote") === "true"
   const sponsorship = sp.get("sponsorship") === "true"
+  const location = sp.get("location")?.trim() ?? ""
   const within = sp.get("within") ?? "all"
   const limit = Math.min(100, parseInt(sp.get("limit") ?? "24", 10))
   const offset = Math.max(0, parseInt(sp.get("offset") ?? "0", 10))
@@ -110,7 +118,17 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  const jobs = ((data ?? []) as JobWithMatchScore[]).filter((job) => matchesSearch(job, q))
+  const jobs = ((data ?? []) as JobWithMatchScore[]).filter((job) => {
+    if (!matchesSearch(job, q)) return false
+    if (
+      !matchesLocationFilter(job.location, location, {
+        isRemote: job.is_remote,
+      })
+    ) {
+      return false
+    }
+    return true
+  })
   let scoreMap = new Map<string, JobMatchScore>()
 
   try {
