@@ -4,3 +4,7 @@ out
 .env*.local
 .vercel
 .DS_Store
+
+# Build caches and local script artifacts
+tsconfig.tsbuildinfo
+scripts/output/

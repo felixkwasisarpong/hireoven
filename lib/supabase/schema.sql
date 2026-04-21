@@ -321,6 +321,13 @@ CREATE INDEX idx_crawl_logs_company ON crawl_logs(company_id);
 CREATE INDEX idx_crawl_logs_crawled_at ON crawl_logs(crawled_at DESC);
 CREATE INDEX idx_h1b_records_company ON h1b_records(company_id);
 CREATE INDEX idx_h1b_records_year ON h1b_records(year DESC);
+-- Enables fast upsert path in the USCIS importer (employer_name, fiscal year
+-- pair is the natural key for aggregated petition counts). Run this as a
+-- migration on existing databases:
+--   CREATE UNIQUE INDEX IF NOT EXISTS idx_h1b_records_employer_year
+--     ON h1b_records(employer_name, year);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_h1b_records_employer_year
+  ON h1b_records(employer_name, year);
 CREATE INDEX idx_push_subscriptions_user ON push_subscriptions(user_id);
 CREATE UNIQUE INDEX idx_push_subscriptions_endpoint
   ON push_subscriptions ((subscription->>'endpoint'));
@@ -984,5 +991,201 @@ BEGIN
       ON marketing_campaign_sends FOR ALL
       USING (public.is_admin_user())
       WITH CHECK (public.is_admin_user());
+  END IF;
+END $$;
+
+-- =============================================================================
+-- DOL LCA data (H1B approval prediction engine)
+-- =============================================================================
+-- `h1b_records` (above) holds aggregated USCIS employer-level petition data.
+-- `lca_records` holds Department of Labor LCA disclosures — one row per filing,
+-- including job title / SOC code / worksite / wage level / decision. This is
+-- the input data the prediction engine uses. `employer_lca_stats` is a
+-- pre-aggregated cache so we do not have to re-scan millions of rows at query
+-- time.
+
+CREATE TABLE IF NOT EXISTS lca_records (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  -- Employer info
+  employer_name TEXT NOT NULL,
+  employer_name_normalized TEXT,
+  company_id UUID REFERENCES companies(id) ON DELETE SET NULL,
+  -- Job details
+  job_title TEXT,
+  soc_code TEXT,
+  soc_title TEXT,
+  -- Location
+  worksite_city TEXT,
+  worksite_state TEXT,
+  worksite_state_abbr TEXT,
+  -- Wage info
+  wage_rate_from DECIMAL,
+  wage_rate_to DECIMAL,
+  wage_unit TEXT,
+  prevailing_wage DECIMAL,
+  prevailing_wage_unit TEXT,
+  wage_level TEXT,
+  -- Decision
+  case_status TEXT,
+  decision_date DATE,
+  -- Filing details
+  visa_class TEXT DEFAULT 'H-1B',
+  employment_start_date DATE,
+  employment_end_date DATE,
+  full_time_position BOOLEAN,
+  -- NAICS
+  naics_code TEXT,
+  -- Year for trend analysis
+  fiscal_year INTEGER,
+  -- Dedup key (composed from DOL case number when available so re-imports
+  -- skip duplicates instead of multiplying rows).
+  source_case_number TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_lca_employer
+  ON lca_records(employer_name_normalized);
+CREATE INDEX IF NOT EXISTS idx_lca_company
+  ON lca_records(company_id);
+CREATE INDEX IF NOT EXISTS idx_lca_state
+  ON lca_records(worksite_state_abbr);
+CREATE INDEX IF NOT EXISTS idx_lca_soc
+  ON lca_records(soc_code);
+CREATE INDEX IF NOT EXISTS idx_lca_year
+  ON lca_records(fiscal_year);
+CREATE INDEX IF NOT EXISTS idx_lca_status
+  ON lca_records(case_status);
+-- Full (not partial) unique index: rows where source_case_number IS NULL
+-- are treated as distinct by Postgres under default NULL semantics, so they
+-- won't collide. The importer still handles the NULL case by using a plain
+-- INSERT instead of an upsert. A partial unique index with WHERE cannot
+-- back an ON CONFLICT target via PostgREST's upsert, so keep this full.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_lca_case_year
+  ON lca_records(source_case_number, fiscal_year);
+
+CREATE TABLE IF NOT EXISTS employer_lca_stats (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  employer_name_normalized TEXT UNIQUE NOT NULL,
+  company_id UUID REFERENCES companies(id) ON DELETE SET NULL,
+  display_name TEXT,
+  -- Overall stats
+  total_applications INTEGER DEFAULT 0,
+  total_certified INTEGER DEFAULT 0,
+  total_denied INTEGER DEFAULT 0,
+  total_withdrawn INTEGER DEFAULT 0,
+  certification_rate DECIMAL,
+  -- By year (last 3 years) / wage level / titles / states
+  stats_by_year JSONB DEFAULT '{}'::jsonb,
+  stats_by_wage_level JSONB DEFAULT '{}'::jsonb,
+  top_job_titles JSONB DEFAULT '[]'::jsonb,
+  top_states JSONB DEFAULT '[]'::jsonb,
+  -- Risk flags
+  is_staffing_firm BOOLEAN DEFAULT false,
+  is_consulting_firm BOOLEAN DEFAULT false,
+  has_high_denial_rate BOOLEAN DEFAULT false,
+  is_first_time_filer BOOLEAN DEFAULT false,
+  -- Trend
+  approval_trend TEXT,
+  last_updated TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_employer_stats_company
+  ON employer_lca_stats(company_id);
+CREATE INDEX IF NOT EXISTS idx_employer_stats_rate
+  ON employer_lca_stats(certification_rate DESC);
+
+ALTER TABLE lca_records ENABLE ROW LEVEL SECURITY;
+ALTER TABLE employer_lca_stats ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'lca_records'
+      AND policyname = 'LCA records are publicly readable'
+  ) THEN
+    CREATE POLICY "LCA records are publicly readable"
+      ON lca_records FOR SELECT USING (true);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'lca_records'
+      AND policyname = 'Admins manage lca records'
+  ) THEN
+    CREATE POLICY "Admins manage lca records"
+      ON lca_records FOR ALL
+      USING (public.is_admin_user() OR auth.role() = 'service_role')
+      WITH CHECK (public.is_admin_user() OR auth.role() = 'service_role');
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'employer_lca_stats'
+      AND policyname = 'Employer stats are publicly readable'
+  ) THEN
+    CREATE POLICY "Employer stats are publicly readable"
+      ON employer_lca_stats FOR SELECT USING (true);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'employer_lca_stats'
+      AND policyname = 'Admins manage employer stats'
+  ) THEN
+    CREATE POLICY "Admins manage employer stats"
+      ON employer_lca_stats FOR ALL
+      USING (public.is_admin_user() OR auth.role() = 'service_role')
+      WITH CHECK (public.is_admin_user() OR auth.role() = 'service_role');
+  END IF;
+END $$;
+
+-- Cache prediction results per job (so batch/feed renders are cheap).
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS h1b_prediction JSONB;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS h1b_prediction_at TIMESTAMPTZ;
+
+-- Expose the employer display name on the aggregate so admin UIs can show it
+-- without re-joining to lca_records.
+ALTER TABLE employer_lca_stats ADD COLUMN IF NOT EXISTS display_name TEXT;
+
+-- SOC-code base rates — precomputed by the LCA importer so the H1B predictor
+-- can form its Bayesian prior without scanning `lca_records` on every call.
+-- One row per normalized 6-digit SOC code (e.g. "15-1252").
+CREATE TABLE IF NOT EXISTS soc_base_rates (
+  soc_code TEXT PRIMARY KEY,
+  soc_title TEXT,
+  total_applications INTEGER NOT NULL DEFAULT 0,
+  total_certified INTEGER NOT NULL DEFAULT 0,
+  total_denied INTEGER NOT NULL DEFAULT 0,
+  approval_rate DECIMAL,
+  sample_size INTEGER NOT NULL DEFAULT 0,
+  last_updated TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_soc_base_rates_sample_size
+  ON soc_base_rates(sample_size DESC);
+
+ALTER TABLE soc_base_rates ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'soc_base_rates'
+      AND policyname = 'SOC base rates are publicly readable'
+  ) THEN
+    CREATE POLICY "SOC base rates are publicly readable"
+      ON soc_base_rates FOR SELECT USING (true);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'soc_base_rates'
+      AND policyname = 'Admins manage soc base rates'
+  ) THEN
+    CREATE POLICY "Admins manage soc base rates"
+      ON soc_base_rates FOR ALL
+      USING (public.is_admin_user() OR auth.role() = 'service_role')
+      WITH CHECK (public.is_admin_user() OR auth.role() = 'service_role');
   END IF;
 END $$;
