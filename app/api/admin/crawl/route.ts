@@ -87,6 +87,7 @@ export async function POST(request: NextRequest) {
         companyName: company.name,
         careersUrl: company.careers_url,
         lastCrawledAt: company.last_crawled_at ? new Date(company.last_crawled_at) : null,
+        atsType: company.ats_type ?? null,
       }
 
       try {

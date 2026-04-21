@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
   const supabase = createAdminClient()
   const { data: companies, error } = await supabase
     .from("companies")
-    .select("id, name, careers_url, last_crawled_at")
+    .select("id, name, careers_url, last_crawled_at, ats_type")
     .eq("is_active", true)
     .order("last_crawled_at", { ascending: true, nullsFirst: true })
 
@@ -28,6 +28,7 @@ export async function GET(request: NextRequest) {
         companyName: company.name,
         careersUrl: company.careers_url,
         lastCrawledAt: company.last_crawled_at ? new Date(company.last_crawled_at) : null,
+        atsType: company.ats_type,
       }
       const crawlResult = await crawlCareersPage(target)
       const persistResult = await persistCrawlJobs({
@@ -81,6 +82,7 @@ export async function POST(request: NextRequest) {
     companyId: string
     careersUrl: string
     companyName: string
+    atsType?: string | null
     lastCrawledAt?: string | null
   }
 
@@ -89,6 +91,7 @@ export async function POST(request: NextRequest) {
     companyName: body.companyName,
     careersUrl: body.careersUrl,
     lastCrawledAt: body.lastCrawledAt ? new Date(body.lastCrawledAt) : null,
+    atsType: body.atsType ?? null,
   }
 
   const result = await crawlCareersPage(target)
