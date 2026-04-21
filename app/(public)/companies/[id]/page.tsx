@@ -9,14 +9,27 @@ export const revalidate = 3600
 
 type Props = { params: Promise<{ id: string }> }
 
+function staticCompanyPrebuildLimit(): number {
+  const raw =
+    process.env.STATIC_PREBUILD_COMPANIES_LIMIT ??
+    process.env.STATIC_PREBUILD_LIMIT ??
+    "0"
+  const parsed = Number(raw)
+  if (!Number.isFinite(parsed) || parsed <= 0) return 0
+  return Math.min(Math.floor(parsed), 1000)
+}
+
 export async function generateStaticParams() {
-  if (!hasSupabaseAdminEnv()) return []
+  const limit = staticCompanyPrebuildLimit()
+  if (!hasSupabaseAdminEnv() || limit === 0) return []
   const supabase = createAdminClient()
   const { data } = await supabase
     .from("companies")
     .select("id")
     .eq("is_active", true)
     .gt("job_count", 0)
+    .order("job_count", { ascending: false })
+    .limit(limit)
   return (data ?? []).map((c) => ({ id: c.id }))
 }
 
