@@ -8,6 +8,52 @@ function externalIdForJob(job: RawJob) {
   return `url:${crypto.createHash("sha1").update(job.url).digest("hex")}`
 }
 
+function normalizePostedAtToIso(
+  postedAt: string | undefined,
+  crawledAt: Date
+): string | null {
+  const raw = postedAt?.trim()
+  if (!raw) return null
+
+  const direct = Date.parse(raw)
+  if (!Number.isNaN(direct)) {
+    return new Date(direct).toISOString()
+  }
+
+  const normalized = raw.toLowerCase().replace(/^posted\s+/, "").trim()
+  if (!normalized) return null
+
+  if (normalized === "today" || normalized === "just posted" || normalized === "new") {
+    return crawledAt.toISOString()
+  }
+  if (normalized === "yesterday") {
+    return new Date(crawledAt.getTime() - 24 * 60 * 60 * 1000).toISOString()
+  }
+
+  const relativeMatch = normalized.match(
+    /^(\d+)\+?\s*(minute|hour|day|week|month|year)s?\s+ago$/
+  )
+  if (!relativeMatch) return null
+
+  const amount = Number.parseInt(relativeMatch[1], 10)
+  const unit = relativeMatch[2]
+  if (!Number.isFinite(amount) || amount < 0) return null
+
+  const unitMs: Record<string, number> = {
+    minute: 60 * 1000,
+    hour: 60 * 60 * 1000,
+    day: 24 * 60 * 60 * 1000,
+    week: 7 * 24 * 60 * 60 * 1000,
+    month: 30 * 24 * 60 * 60 * 1000,
+    year: 365 * 24 * 60 * 60 * 1000,
+  }
+
+  const step = unitMs[unit]
+  if (!step) return null
+
+  return new Date(crawledAt.getTime() - amount * step).toISOString()
+}
+
 export async function persistCrawlJobs({
   companyId,
   crawledAt,
@@ -42,6 +88,7 @@ export async function persistCrawlJobs({
   const toUpdate: Array<{ id: string; payload: Record<string, unknown> }> = []
 
   for (const job of normalized) {
+    const normalizedPostedAt = normalizePostedAtToIso(job.postedAt, crawledAt)
     const payload: Record<string, unknown> = {
       company_id: companyId,
       title: job.title,
@@ -55,6 +102,7 @@ export async function persistCrawlJobs({
       raw_data: {
         source: "crawler",
         posted_at: job.postedAt ?? null,
+        posted_at_normalized: normalizedPostedAt,
       },
       updated_at: crawledAtIso,
     }
@@ -65,7 +113,7 @@ export async function persistCrawlJobs({
     } else {
       toInsert.push({
         ...payload,
-        first_detected_at: job.postedAt ?? crawledAtIso,
+        first_detected_at: normalizedPostedAt ?? crawledAtIso,
         created_at: crawledAtIso,
       })
     }
