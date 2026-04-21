@@ -16,8 +16,27 @@
     "db:backfill-logo-urls": "npx tsx scripts/backfill-company-logo-urls.ts",
     "db:seed-companies": "npx tsx scripts/seed-companies.ts",
     "db:seed-companies:dry-run": "npx tsx scripts/seed-companies.ts --dry-run",
+    "db:add-known-crawl-companies": "npx tsx scripts/add-known-crawl-companies.ts",
+    "db:add-known-crawl-companies:execute": "npx tsx scripts/add-known-crawl-companies.ts --execute",
     "db:topup-companies": "npx tsx scripts/topup-companies-to-target.ts --target=1000",
-    "db:topup-companies:dry-run": "npx tsx scripts/topup-companies-to-target.ts --target=1000 --dry-run"
+    "db:topup-companies:dry-run": "npx tsx scripts/topup-companies-to-target.ts --target=1000 --dry-run",
+    "db:prune-low-signal": "npx tsx scripts/prune-low-signal-companies.ts",
+    "db:prune-low-signal:execute": "npx tsx scripts/prune-low-signal-companies.ts --execute",
+    "db:reconcile-from-imports": "npx tsx scripts/reconcile-companies-from-imports.ts",
+    "db:reconcile-from-imports:execute": "npx tsx scripts/reconcile-companies-from-imports.ts --execute",
+    "db:enrich-placeholders": "npx tsx scripts/enrich-placeholder-companies.ts",
+    "db:enrich-placeholders:execute": "npx tsx scripts/enrich-placeholder-companies.ts --execute",
+    "db:enrich-placeholders:retry": "npx tsx scripts/enrich-placeholder-companies.ts --retry-failed --execute",
+    "db:audit-placeholder-matches": "npx tsx scripts/audit-placeholder-matches.ts",
+    "db:audit-placeholder-matches:execute": "npx tsx scripts/audit-placeholder-matches.ts --execute",
+    "db:dedupe-companies": "npx tsx scripts/dedupe-companies.ts",
+    "db:dedupe-companies:execute": "npx tsx scripts/dedupe-companies.ts --execute",
+    "db:repair-company-logos": "npx tsx scripts/repair-company-logos.ts",
+    "db:repair-company-logos:execute": "npx tsx scripts/repair-company-logos.ts --execute",
+    "db:relink-h1b-employers": "npx tsx scripts/relink-h1b-unmatched-employers.ts",
+    "db:relink-h1b-employers:execute": "npx tsx scripts/relink-h1b-unmatched-employers.ts --execute",
+    "db:recompute-h1b-scores": "npx tsx scripts/recompute-company-h1b-scores.ts",
+    "db:recompute-h1b-scores:execute": "npx tsx scripts/recompute-company-h1b-scores.ts --execute"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.52.0",
@@ -48,6 +67,7 @@
     "stripe": "^22.0.2",
     "tailwind-merge": "^2.2.0",
     "web-push": "^3.6.7",
+    "xlsx": "^0.18.5",
     "zod": "^4.3.6"
   },
   "devDependencies": {
