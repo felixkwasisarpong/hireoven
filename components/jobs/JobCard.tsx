@@ -12,12 +12,19 @@ import dynamic from "next/dynamic"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { AutofillButton } from "@/components/autofill/AutofillButton"
+import H1BPredictionBadge from "@/components/h1b/H1BPredictionBadge"
 import { MatchScorePill } from "@/components/matching/MatchScorePill"
 import CompanyLogo from "@/components/ui/CompanyLogo"
 import { useResumeContext } from "@/components/resume/ResumeProvider"
+import { useH1BPrediction } from "@/lib/context/H1BPredictionContext"
 import { getSeniorityGap } from "@/lib/matching/fast-scorer"
 import { cn } from "@/lib/utils"
 import type { JobMatchScore, JobWithCompany, JobWithMatchScore } from "@/types"
+
+const H1BPredictionDrawer = dynamic(
+  () => import("@/components/h1b/H1BPredictionDrawer"),
+  { ssr: false }
+)
 
 const QuickAnalysisDrawer = dynamic(
   () => import("@/components/resume/QuickAnalysisDrawer"),
@@ -156,6 +163,13 @@ export default function JobCard({
   const [saved, setSaved] = useState(false)
   const [saving, setSaving] = useState(false)
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [h1bDrawerOpen, setH1BDrawerOpen] = useState(false)
+  const {
+    enabled: h1bEnabled,
+    attachRef: h1bAttachRef,
+    prediction: h1bPrediction,
+    isLoading: h1bIsLoading,
+  } = useH1BPrediction(job.id)
   const now = nowProp ?? Date.now()
   const freshness = formatFreshness(job.first_detected_at, now)
   const router = useRouter()
@@ -227,6 +241,7 @@ export default function JobCard({
   return (
     <>
       <article
+        ref={h1bAttachRef as (node: HTMLElement | null) => void}
         role="button"
         tabIndex={0}
         onClick={() => setExpanded((current) => !current)}
@@ -370,6 +385,15 @@ export default function JobCard({
                     />
                   )}
                   <SponsorshipBadge job={job} />
+                  {h1bEnabled && (
+                    <H1BPredictionBadge
+                      prediction={h1bPrediction}
+                      isLoading={h1bIsLoading && !h1bPrediction}
+                      size="sm"
+                      companyName={job.company.name}
+                      onClick={() => setH1BDrawerOpen(true)}
+                    />
+                  )}
                 </div>
               </div>
             </div>
@@ -433,6 +457,16 @@ export default function JobCard({
           applyUrl={job.apply_url}
           onClose={() => setDrawerOpen(false)}
           autoAnalyze={analysisIndex < 10}
+        />
+      )}
+
+      {h1bDrawerOpen && (
+        <H1BPredictionDrawer
+          jobId={job.id}
+          jobTitle={job.title}
+          companyName={job.company.name}
+          prediction={h1bPrediction}
+          onClose={() => setH1BDrawerOpen(false)}
         />
       )}
     </>
