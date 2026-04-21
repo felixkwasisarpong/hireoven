@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { BadgePercent, LogIn, UserPlus } from "lucide-react"
+import { BadgePercent, Building2, LogIn, Sparkles, UserPlus } from "lucide-react"
 import HireovenLogo from "@/components/ui/HireovenLogo"
 
 export default function Navbar() {
@@ -10,13 +10,29 @@ export default function Navbar() {
           <Link href="/" className="flex shrink-0 items-center">
             <HireovenLogo className="h-10 w-auto" priority />
           </Link>
-          <Link
-            href="/pricing"
-            className="hidden items-center gap-2 text-sm font-semibold text-muted-foreground transition-colors hover:text-strong sm:inline-flex"
-          >
-            <BadgePercent className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
-            Pricing
-          </Link>
+          <div className="hidden items-center gap-6 md:flex">
+            <Link
+              href="/#features"
+              className="inline-flex items-center gap-2 text-sm font-semibold text-muted-foreground transition-colors hover:text-strong"
+            >
+              <Sparkles className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
+              Features
+            </Link>
+            <Link
+              href="/companies"
+              className="inline-flex items-center gap-2 text-sm font-semibold text-muted-foreground transition-colors hover:text-strong"
+            >
+              <Building2 className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
+              Companies
+            </Link>
+            <Link
+              href="/pricing"
+              className="inline-flex items-center gap-2 text-sm font-semibold text-muted-foreground transition-colors hover:text-strong"
+            >
+              <BadgePercent className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
+              Pricing
+            </Link>
+          </div>
         </div>
         <div className="flex shrink-0 items-center gap-1 rounded-xl border border-border bg-surface p-1 shadow-[0_1px_0_rgba(15,23,42,0.04)]">
           <Link
@@ -24,7 +40,7 @@ export default function Navbar() {
             className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors hover:bg-surface-alt hover:text-strong"
           >
             <LogIn className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
-            Login
+            <span className="hidden sm:inline">Login</span>
           </Link>
           <Link
             href="/signup"
