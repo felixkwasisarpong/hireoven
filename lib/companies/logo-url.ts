@@ -3,7 +3,11 @@
  * Used to backfill companies.logo_url when you don't store your own assets.
  */
 
-export type LogoProvider = "clearbit" | "unavatar" | "google-favicon"
+export type LogoProvider =
+  | "clearbit"
+  | "unavatar"
+  | "duckduckgo"
+  | "google-favicon"
 
 export function normalizeCompanyDomain(domain: string) {
   return domain
@@ -32,6 +36,8 @@ export function companyLogoUrlFromDomain(
       return `https://logo.clearbit.com/${encodeURIComponent(d)}`
     case "unavatar":
       return `https://unavatar.io/${encodeURIComponent(d)}`
+    case "duckduckgo":
+      return `https://icons.duckduckgo.com/ip3/${encodeURIComponent(d)}.ico`
     case "google-favicon":
       return `https://www.google.com/s2/favicons?sz=128&domain=${encodeURIComponent(d)}`
     default:

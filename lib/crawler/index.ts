@@ -1,3 +1,5 @@
+import { cleanJobDescription } from "@/lib/jobs/description"
+
 export interface CrawlTarget {
   id: string
   companyName: string
@@ -10,6 +12,7 @@ export interface RawJob {
   externalId?: string
   title: string
   url: string
+  description?: string
   location?: string
   postedAt?: string
 }
@@ -350,6 +353,7 @@ function mapWorkdayPostings(
         `${site}${posting.externalPath}`.replace(/([^:]\/)\/+/g, "$1"),
         `https://${context.tenantHost}/`
       ).toString(),
+      description: cleanJobDescription(posting.bulletFields?.join("\n") ?? null) ?? undefined,
       location:
         posting.location ??
         posting.locationsText ??
@@ -492,6 +496,7 @@ async function crawlGreenhouse(careersUrl: URL): Promise<RawJob[]> {
       id: number
       title: string
       absolute_url: string
+      content?: string
       location?: { name?: string }
       updated_at?: string
     }>
@@ -504,6 +509,7 @@ async function crawlGreenhouse(careersUrl: URL): Promise<RawJob[]> {
       externalId: `greenhouse:${job.id}`,
       title: job.title,
       url: job.absolute_url,
+      description: cleanJobDescription(job.content ?? null) ?? undefined,
       location: job.location?.name,
       postedAt: job.updated_at,
     }))
@@ -518,6 +524,8 @@ async function crawlLever(careersUrl: URL): Promise<RawJob[]> {
       id: string
       text: string
       hostedUrl: string
+      description?: string
+      descriptionPlain?: string
       categories?: { location?: string }
       createdAt?: number
     }>
@@ -530,6 +538,11 @@ async function crawlLever(careersUrl: URL): Promise<RawJob[]> {
       externalId: `lever:${job.id}`,
       title: job.text,
       url: job.hostedUrl,
+      description:
+        cleanJobDescription(
+          job.descriptionPlain ??
+            (job.description ? cleanText(job.description) : null)
+        ) ?? undefined,
       location: job.categories?.location,
       postedAt: job.createdAt ? new Date(job.createdAt).toISOString() : undefined,
     }))
@@ -1291,6 +1304,7 @@ function extractJobsFromJsonLd(html: string, baseUrl: URL): RawJob[] {
           ).trim() || undefined,
         title,
         url,
+        description: cleanJobDescription(String(node.description ?? "").trim()) ?? undefined,
         location: extractJobLocation(node),
         postedAt: String(node.datePosted ?? "").trim() || undefined,
       })

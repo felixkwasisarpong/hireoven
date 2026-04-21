@@ -154,7 +154,7 @@ function HistoryRow({ entry }: { entry: HistoryEntry }) {
       {/* Job link */}
       {entry.job_id && (
         <Link
-          href={`/jobs/${entry.job_id}`}
+          href={`/dashboard/jobs/${entry.job_id}`}
           className="opacity-0 group-hover:opacity-100 transition-opacity"
           onClick={(e) => e.stopPropagation()}
         >
