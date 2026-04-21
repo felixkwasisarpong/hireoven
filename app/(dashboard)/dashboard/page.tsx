@@ -432,9 +432,7 @@ export default function DashboardPage() {
                     {topMatches.map((job) => (
                       <Link
                         key={job.id}
-                        href={job.apply_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                        href={`/dashboard/jobs/${job.id}`}
                         className="block bg-surface-alt/40 px-3 py-3 transition-colors hover:bg-surface"
                       >
                         <div className="flex items-start justify-between gap-3">

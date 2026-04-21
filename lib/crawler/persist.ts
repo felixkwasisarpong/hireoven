@@ -2,6 +2,16 @@ import crypto from "crypto"
 import { createAdminClient } from "@/lib/supabase/admin"
 import type { RawJob } from "@/lib/crawler"
 import { extractSkillsFromText, normalizeJobTitle } from "@/lib/crawler/normalizer"
+import { cleanJobDescription, fetchJobDescription } from "@/lib/jobs/description"
+
+const DESCRIPTION_FETCH_CONCURRENCY = Math.max(
+  1,
+  Number.parseInt(process.env.CRAWLER_DESCRIPTION_FETCH_CONCURRENCY ?? "4", 10)
+)
+const MAX_DESCRIPTION_FETCHES_PER_COMPANY = Math.max(
+  0,
+  Number.parseInt(process.env.CRAWLER_MAX_DESCRIPTION_FETCHES_PER_COMPANY ?? "20", 10)
+)
 
 function externalIdForJob(job: RawJob) {
   if (job.externalId?.trim()) return job.externalId.trim()
@@ -54,6 +64,27 @@ function normalizePostedAtToIso(
   return new Date(crawledAt.getTime() - amount * step).toISOString()
 }
 
+async function runWithConcurrency<T>(
+  tasks: Array<() => Promise<T>>,
+  maxConcurrency: number
+): Promise<T[]> {
+  const results: T[] = []
+  let idx = 0
+
+  async function worker() {
+    while (idx < tasks.length) {
+      const current = idx
+      idx += 1
+      results.push(await tasks[current]())
+    }
+  }
+
+  await Promise.all(
+    Array.from({ length: Math.min(maxConcurrency, tasks.length) }).map(() => worker())
+  )
+  return results
+}
+
 export async function persistCrawlJobs({
   companyId,
   crawledAt,
@@ -68,20 +99,40 @@ export async function persistCrawlJobs({
   const normalized = jobs.map((job) => ({
     ...job,
     externalId: externalIdForJob(job),
+    description: cleanJobDescription(job.description ?? null) ?? undefined,
   }))
+
+  const missingDescriptionIndexes = normalized
+    .map((job, index) => ({ index, hasDescription: Boolean(job.description), url: job.url }))
+    .filter((entry) => !entry.hasDescription && /^https?:\/\//i.test(entry.url))
+    .slice(0, MAX_DESCRIPTION_FETCHES_PER_COMPANY)
+
+  if (missingDescriptionIndexes.length > 0) {
+    await runWithConcurrency(
+      missingDescriptionIndexes.map((entry) => async () => {
+        const description = await fetchJobDescription(entry.url)
+        if (!description) return
+        normalized[entry.index] = {
+          ...normalized[entry.index],
+          description,
+        }
+      }),
+      DESCRIPTION_FETCH_CONCURRENCY
+    )
+  }
 
   const externalIds = normalized.map((job) => job.externalId)
   const { data: existingRows, error: existingError } = await (supabase
     .from("jobs")
-    .select("id, external_id")
+    .select("id, external_id, description")
     .eq("company_id", companyId)
     .in("external_id", externalIds) as any)
 
   if (existingError) throw existingError
 
-  const existingByExternalId = new Map<string, { id: string }>()
-  for (const row of (existingRows ?? []) as Array<{ id: string; external_id: string }>) {
-    existingByExternalId.set(row.external_id, { id: row.id })
+  const existingByExternalId = new Map<string, { id: string; description: string | null }>()
+  for (const row of (existingRows ?? []) as Array<{ id: string; external_id: string; description: string | null }>) {
+    existingByExternalId.set(row.external_id, { id: row.id, description: row.description ?? null })
   }
 
   const toInsert: Array<Record<string, unknown>> = []
@@ -89,25 +140,29 @@ export async function persistCrawlJobs({
 
   for (const job of normalized) {
     const normalizedPostedAt = normalizePostedAtToIso(job.postedAt, crawledAt)
+    const normalizedDescription = cleanJobDescription(job.description ?? null)
+    const existing = existingByExternalId.get(job.externalId)
+    const persistedDescription = normalizedDescription ?? existing?.description ?? null
     const payload: Record<string, unknown> = {
       company_id: companyId,
       title: job.title,
       normalized_title: normalizeJobTitle(job.title),
       apply_url: job.url,
       location: job.location ?? null,
+      description: persistedDescription,
       external_id: job.externalId,
-      skills: extractSkillsFromText(job.title),
+      skills: extractSkillsFromText(job.title, persistedDescription),
       is_active: true,
       last_seen_at: crawledAtIso,
       raw_data: {
         source: "crawler",
         posted_at: job.postedAt ?? null,
         posted_at_normalized: normalizedPostedAt,
+        description_captured: Boolean(persistedDescription),
       },
       updated_at: crawledAtIso,
     }
 
-    const existing = existingByExternalId.get(job.externalId)
     if (existing) {
       toUpdate.push({ id: existing.id, payload })
     } else {

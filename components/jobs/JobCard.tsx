@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useState } from "react"
 import {
   Bookmark,
   ExternalLink,
@@ -159,7 +159,6 @@ export default function JobCard({
   isMatchScoreLoading = false,
   now: nowProp,
 }: JobCardProps) {
-  const [expanded, setExpanded] = useState(false)
   const [saved, setSaved] = useState(false)
   const [saving, setSaving] = useState(false)
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -180,10 +179,6 @@ export default function JobCard({
   const resolvedMatchScore =
     matchScoreProp ?? ("match_score" in job ? (job.match_score ?? null) : null)
 
-  const description = useMemo(
-    () => (job.description ? stripHtml(job.description) : ""),
-    [job.description]
-  )
   const visibleSkills = job.skills?.slice(0, 4) ?? []
   const hiddenSkillsCount = Math.max(0, (job.skills?.length ?? 0) - visibleSkills.length)
   const seniorityGap = getSeniorityGap(
@@ -244,11 +239,11 @@ export default function JobCard({
         ref={h1bAttachRef as (node: HTMLElement | null) => void}
         role="button"
         tabIndex={0}
-        onClick={() => setExpanded((current) => !current)}
+        onClick={() => router.push(`/dashboard/jobs/${job.id}`)}
         onKeyDown={(event) => {
           if (event.key === "Enter" || event.key === " ") {
             event.preventDefault()
-            setExpanded((current) => !current)
+            router.push(`/dashboard/jobs/${job.id}`)
           }
         }}
         className={cn(
@@ -327,25 +322,10 @@ export default function JobCard({
                   </div>
                 )}
 
-                {expanded && description && (
-                  <div className="mt-3 border border-border bg-surface-alt/60 p-3 text-sm leading-relaxed text-muted-foreground">
-                    {description}
-                  </div>
-                )}
-
-                {expanded && (
-                  <div
-                    className="mt-2 flex flex-wrap gap-2"
-                    onClick={(event) => event.stopPropagation()}
-                  >
-                    <Link
-                      href={`/dashboard/cover-letter/${job.id}`}
-                      className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-border hover:bg-surface-alt hover:text-strong"
-                    >
-                      <FileText className="h-3.5 w-3.5" />
-                      Write cover letter
-                    </Link>
-                  </div>
+                {job.description && (
+                  <p className="line-clamp-2 text-sm leading-relaxed text-muted-foreground">
+                    {stripHtml(job.description)}
+                  </p>
                 )}
               </div>
 
@@ -405,10 +385,18 @@ export default function JobCard({
           onClick={(event) => event.stopPropagation()}
         >
           <p className="hidden text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground sm:block">
-            {expanded ? "Click row to collapse" : "Click row for description"}
+            Click row for full details
           </p>
 
           <div className="flex flex-wrap items-center justify-end gap-2 sm:ml-auto">
+            <Link
+              href={`/dashboard/jobs/${job.id}`}
+              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-border hover:bg-surface-alt hover:text-strong"
+            >
+              <FileText className="h-3.5 w-3.5" />
+              View details
+            </Link>
+
             <button
               type="button"
               onClick={() => void handleBookmark()}
