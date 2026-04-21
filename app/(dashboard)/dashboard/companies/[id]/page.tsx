@@ -10,7 +10,7 @@ import SponsorshipScore from "@/components/international/SponsorshipScore"
 import JobCard from "@/components/jobs/JobCard"
 import { createClient } from "@/lib/supabase/client"
 import { cn } from "@/lib/utils"
-import type { Company, EmploymentType, H1BRecord, JobWithCompany, SeniorityLevel } from "@/types"
+import type { Company, EmployerLCAStats, EmploymentType, H1BRecord, JobWithCompany, SeniorityLevel } from "@/types"
 
 type Tab = "roles" | "intel" | "about"
 
@@ -48,6 +48,7 @@ export default function CompanyProfilePage() {
 
   const [company,      setCompany]      = useState<Company | null>(null)
   const [records,      setRecords]      = useState<H1BRecord[]>([])
+  const [lcaStats,     setLcaStats]     = useState<EmployerLCAStats | null>(null)
   const [jobs,         setJobs]         = useState<JobWithCompany[]>([])
   const [newThisWeek,  setNewThisWeek]  = useState(0)
   const [jdInsights,   setJdInsights]   = useState<JdInsights | null>(null)
@@ -66,12 +67,14 @@ export default function CompanyProfilePage() {
       const [
         { data: companyData },
         { data: h1bData },
+        { data: lcaStatsData },
         { data: jobsData },
         { count: weekCount },
       ] = await Promise.all([
         supabase.from("companies").select("*").eq("id", id).single(),
         supabase.from("h1b_records").select("*").eq("company_id", id)
           .order("year", { ascending: false }).limit(6),
+        supabase.from("employer_lca_stats").select("*").eq("company_id", id).maybeSingle(),
         supabase.from("jobs")
           .select("*, company:companies(*)")
           .eq("company_id", id).eq("is_active", true)
@@ -84,6 +87,7 @@ export default function CompanyProfilePage() {
 
       setCompany(companyData as Company | null)
       setRecords((h1bData as H1BRecord[]) ?? [])
+      setLcaStats((lcaStatsData as EmployerLCAStats | null) ?? null)
 
       const typedJobs = (jobsData as JobWithCompany[]) ?? []
       setJobs(typedJobs)
@@ -351,6 +355,143 @@ export default function CompanyProfilePage() {
                     <span className="flex items-center gap-1.5"><span className="inline-block h-3 w-3 rounded-sm bg-red-300" />Denied</span>
                   </div>
                 </>
+              )}
+            </section>
+
+            {/* Section B.5 — H1B approval intelligence (DOL LCA) */}
+            <section className="surface-card rounded-lg px-5 py-5 md:px-6 md:py-6">
+              <div className="mb-1 flex items-center gap-2">
+                <h2 className="text-lg font-semibold text-gray-900">H-1B approval intelligence</h2>
+                <span className="inline-flex items-center rounded border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                  DOL LCA
+                </span>
+              </div>
+              <p className="mb-4 text-sm text-gray-500">
+                Based on DOL Labor Condition Application disclosures — the filings
+                that precede every H-1B petition.
+              </p>
+
+              {lcaStats ? (
+                <>
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
+                      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-gray-400">
+                        Applications
+                      </p>
+                      <p className="mt-2 text-2xl font-bold tabular-nums text-gray-900">
+                        {lcaStats.total_applications.toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
+                      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-600">
+                        Certified
+                      </p>
+                      <p className="mt-2 text-2xl font-bold tabular-nums text-emerald-700">
+                        {lcaStats.total_certified.toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl border border-red-100 bg-red-50 p-4">
+                      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-red-600">
+                        Denied
+                      </p>
+                      <p className="mt-2 text-2xl font-bold tabular-nums text-red-700">
+                        {lcaStats.total_denied.toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
+                      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-gray-400">
+                        Approval rate
+                      </p>
+                      <p className="mt-2 text-2xl font-bold tabular-nums text-gray-900">
+                        {lcaStats.certification_rate !== null
+                          ? `${Math.round(lcaStats.certification_rate * 100)}%`
+                          : "—"}
+                      </p>
+                      <p className="mt-1 text-[11px] capitalize text-gray-400">
+                        Trend: {lcaStats.approval_trend ?? "stable"}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {lcaStats.is_staffing_firm && (
+                      <span className="inline-flex rounded border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
+                        Staffing firm
+                      </span>
+                    )}
+                    {lcaStats.is_consulting_firm && (
+                      <span className="inline-flex rounded border border-sky-200 bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-700">
+                        Consulting firm
+                      </span>
+                    )}
+                    {lcaStats.has_high_denial_rate && (
+                      <span className="inline-flex rounded border border-red-200 bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700">
+                        High denial rate
+                      </span>
+                    )}
+                    {lcaStats.is_first_time_filer && (
+                      <span className="inline-flex rounded border border-violet-200 bg-violet-50 px-2 py-0.5 text-[11px] font-semibold text-violet-700">
+                        First-time filer
+                      </span>
+                    )}
+                  </div>
+
+                  {lcaStats.top_job_titles.length > 0 && (
+                    <div className="mt-5">
+                      <p className="mb-2 text-xs font-semibold uppercase tracking-[0.22em] text-gray-400">
+                        Top sponsored roles
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {lcaStats.top_job_titles.slice(0, 6).map((title, idx) => (
+                          <span
+                            key={`${title.title}-${idx}`}
+                            className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs text-gray-700"
+                          >
+                            <span className="font-medium text-gray-900">
+                              {title.title}
+                            </span>
+                            <span className="tabular-nums text-gray-500">
+                              {title.count.toLocaleString()}
+                            </span>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {lcaStats.top_states.length > 0 && (
+                    <div className="mt-4">
+                      <p className="mb-2 text-xs font-semibold uppercase tracking-[0.22em] text-gray-400">
+                        Top worksite states
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {lcaStats.top_states.slice(0, 8).map((s) => (
+                          <span
+                            key={s.state}
+                            className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs text-gray-700"
+                          >
+                            <span className="font-medium text-gray-900">
+                              {s.state}
+                            </span>
+                            <span className="tabular-nums text-gray-500">
+                              {s.count.toLocaleString()}
+                            </span>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <p className="mt-5 text-[11px] text-gray-400">
+                    H-1B approval estimates are statistical signals only — not legal
+                    advice. Talk to an immigration attorney for case-specific guidance.
+                  </p>
+                </>
+              ) : (
+                <p className="empty-state border-dashed px-5 py-8 text-sm text-gray-400 shadow-none">
+                  No DOL LCA filings found for {company.name}. They may file under a
+                  different legal entity — or not sponsor at all.
+                </p>
               )}
             </section>
 

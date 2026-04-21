@@ -125,6 +125,13 @@ export default function InternationalPage() {
                         <span className="text-muted-foreground">→</span>
                       </Link>
                       <Link
+                        href="/dashboard/international/h1b-explorer"
+                        className="flex items-center justify-between rounded-xl border border-border bg-surface px-4 py-3 text-sm font-medium text-strong transition hover:border-[hsl(var(--accent-soft-border))] hover:bg-brand-tint"
+                      >
+                        Search the DOL LCA database
+                        <span className="text-muted-foreground">→</span>
+                      </Link>
+                      <Link
                         href="/dashboard/onboarding"
                         className="flex items-center justify-between rounded-xl border border-border bg-surface px-4 py-3 text-sm font-medium text-strong transition hover:border-[hsl(var(--accent-soft-border))] hover:bg-brand-tint"
                       >
