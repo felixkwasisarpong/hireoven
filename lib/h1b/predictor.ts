@@ -2,21 +2,21 @@
  * H1B approval-likelihood prediction engine.
  *
  * Two stages:
- *   1. `predictH1BApproval` — fast, Bayesian + rule-based, pure Supabase
+ *   1. `predictH1BApproval` - fast, Bayesian + rule-based, pure Supabase
  *      reads. Safe to call in batch from the job feed.
- *   2. `deepH1BAnalysis` — optional Claude Sonnet narrative, gated behind a
+ *   2. `deepH1BAnalysis` - optional Claude Sonnet narrative, gated behind a
  *      Pro International plan and only triggered from the drawer.
  *
  * Model overview:
  *   The employer sub-score is a Beta-Binomial posterior over approval rate,
  *   shrunk toward a SOC-code base rate (or a global prior when SOC is
- *   unknown). This naturally handles small-sample employers — a first-time
+ *   unknown). This naturally handles small-sample employers - a first-time
  *   filer with 0 records gets the SOC base rate as its posterior mean, but
  *   with a wide credible interval that pulls the "reported" score down.
  *   Title, location, and wage-vs-prevailing remain deterministic modifiers.
  *
  * NOTE: H1B only applies to positions in the United States. Non-US jobs are
- * returned with `isUSJob: false` and a stub "unknown" verdict — the UI uses
+ * returned with `isUSJob: false` and a stub "unknown" verdict - the UI uses
  * this flag to skip rendering the badge entirely.
  */
 
@@ -49,7 +49,7 @@ const HIGH_VOLUME_STATES = new Set(['CA', 'WA', 'TX', 'NY', 'NJ', 'IL', 'MA', 'V
 
 export function isLikelyUSJob(location: string | null, state: string | null, isRemote: boolean): boolean {
   if (state && US_STATE_ABBRS.has(state.toUpperCase())) return true
-  if (!location) return isRemote // remote jobs w/ no location — assume US default
+  if (!location) return isRemote // remote jobs w/ no location - assume US default
   const loc = location.toLowerCase()
   if (/\b(usa|united states|u\.s\.|u\.s\.a\.|us)\b/.test(loc)) return true
   for (const abbr of US_STATE_ABBRS) {
@@ -163,7 +163,7 @@ function scoreTitle(title: string, normalizedTitle: string | null): TitleRisk {
   return {
     score: 62,
     category: 'Uncategorized',
-    detail: 'Role does not match our risk taxonomy — using a neutral baseline.',
+    detail: 'Role does not match our risk taxonomy - using a neutral baseline.',
   }
 }
 
@@ -383,9 +383,9 @@ function betaBinomialPosterior(
 //
 // We consult two data sources in parallel:
 //
-//   - `employer_lca_stats` — aggregated DOL LCA disclosures. Large sample
+//   - `employer_lca_stats` - aggregated DOL LCA disclosures. Large sample
 //      size but LCA-stage only (~97% certified industry-wide).
-//   - `h1b_records`        — USCIS H-1B Employer Data Hub, per-year approved
+//   - `h1b_records`        - USCIS H-1B Employer Data Hub, per-year approved
 //      and denied counts. Smaller sample but this is the *real* approval
 //      outcome at the I-129 stage.
 //
@@ -462,8 +462,8 @@ async function fetchEmployerStats(
 
 /**
  * Choose between USCIS (I-129) and LCA (DOL) counts as the observed data for
- * the Bayesian posterior. USCIS is the stronger signal — it's the actual
- * approval decision — so we prefer it whenever we have enough evidence.
+ * the Bayesian posterior. USCIS is the stronger signal - it's the actual
+ * approval decision - so we prefer it whenever we have enough evidence.
  */
 function pickEmployerSignal(
   lca: EmployerLCAStats | null,
@@ -577,7 +577,7 @@ export async function predictH1BApproval(
 
     const sourceLabel = signal.source === 'uscis' ? 'USCIS I-129' : 'DOL LCA'
 
-    // Headline signal — always shown when we have any data for this employer.
+    // Headline signal - always shown when we have any data for this employer.
     employerSignals.push({
       factor: `Employer posterior (${sourceLabel})`,
       impact:
@@ -614,7 +614,7 @@ export async function predictH1BApproval(
         factor: 'Consistent approval history',
         impact: 'positive',
         weight: 'high',
-        detail: `Raw approval rate is ${Math.round(empiricalRate * 100)}% across ${posterior.sampleSize.toLocaleString()} observations — the posterior is tightly concentrated.`,
+        detail: `Raw approval rate is ${Math.round(empiricalRate * 100)}% across ${posterior.sampleSize.toLocaleString()} observations - the posterior is tightly concentrated.`,
       })
     }
     if (stats?.has_high_denial_rate) {
@@ -638,7 +638,7 @@ export async function predictH1BApproval(
         factor: 'Small sample',
         impact: 'neutral',
         weight: 'medium',
-        detail: 'Fewer than 5 observations on record — the posterior leans heavily on the SOC-code prior and the credible interval is wide.',
+        detail: 'Fewer than 5 observations on record - the posterior leans heavily on the SOC-code prior and the credible interval is wide.',
       })
     }
     if (stats?.approval_trend === 'improving') {
@@ -661,7 +661,7 @@ export async function predictH1BApproval(
       factor: 'No employer records found',
       impact: 'neutral',
       weight: 'medium',
-      detail: `${input.company.name} is not present in our USCIS or LCA databases — score defaults to the ${Math.round(
+      detail: `${input.company.name} is not present in our USCIS or LCA databases - score defaults to the ${Math.round(
         socBaseRate * 100
       )}% ${priorSourceLabel} prior with a wide uncertainty band.`,
     })
@@ -671,7 +671,7 @@ export async function predictH1BApproval(
   const titleRisk = scoreTitle(input.jobTitle, input.normalizedTitle)
   const jobTitleScore = titleRisk.score
   const titleSignal: PredictionSignal = {
-    factor: `Role type — ${titleRisk.category}`,
+    factor: `Role type - ${titleRisk.category}`,
     impact: jobTitleScore >= 75 ? 'positive' : jobTitleScore >= 60 ? 'neutral' : 'negative',
     weight: jobTitleScore >= 85 || jobTitleScore < 50 ? 'high' : 'medium',
     detail: titleRisk.detail,
@@ -688,10 +688,10 @@ export async function predictH1BApproval(
     impact: locationScore >= 80 ? 'positive' : 'neutral',
     weight: 'low',
     detail: input.isRemote
-      ? 'Remote US positions typically reference the employer’s primary worksite — usually a high-volume state.'
+      ? 'Remote US positions typically reference the employer’s primary worksite - usually a high-volume state.'
       : stateGuess && HIGH_VOLUME_STATES.has(stateGuess)
         ? `${stateGuess} is a high-volume H1B state with established processing patterns.`
-        : 'Outside the top H1B states — fewer reference data points but not a disqualifier.',
+        : 'Outside the top H1B states - fewer reference data points but not a disqualifier.',
   }
 
   // --- 4. Wage ----------------------------------------------------------
@@ -715,7 +715,7 @@ export async function predictH1BApproval(
         weight: wageScore < 60 ? 'high' : 'medium',
         detail:
           wageScore < 60
-            ? 'Offered salary is close to or below the prevailing wage — USCIS scrutinises Level I wages heavily.'
+            ? 'Offered salary is close to or below the prevailing wage - USCIS scrutinises Level I wages heavily.'
             : `Offered salary is ${Math.round((ratio - 1) * 100)}% above the local prevailing wage (n=${prevailing.sampleSize}).`,
       }
     }
@@ -726,12 +726,12 @@ export async function predictH1BApproval(
       factor: 'Salary not disclosed',
       impact: 'neutral',
       weight: 'medium',
-      detail: 'Cannot assess wage-level risk without salary data — prediction uses employer and role patterns only.',
+      detail: 'Cannot assess wage-level risk without salary data - prediction uses employer and role patterns only.',
     }
   }
 
   // --- 5. Weighted score -----------------------------------------------
-  // The Bayesian employer posterior is the dominant signal — it already
+  // The Bayesian employer posterior is the dominant signal - it already
   // encodes employer history, SOC prior, and uncertainty. Title/wage/location
   // are smaller modifiers that capture orthogonal information (role-type risk
   // not yet reflected in the prior, wage-level red flags, geography).
@@ -763,7 +763,7 @@ export async function predictH1BApproval(
   }
 
   // --- 7. Verdict ------------------------------------------------------
-  // Reserve "unknown" for the case where we truly can't commit — no employer
+  // Reserve "unknown" for the case where we truly can't commit - no employer
   // history AND no wage data AND the prior is the generic global one (i.e.
   // we don't even have a role-specific SOC fallback).
   let verdict: H1BVerdict
@@ -855,14 +855,14 @@ function buildSummary(args: {
   const { verdict, company, stats, titleCategory, missingSalary, topRisk, approvalLikelihood } = args
 
   if (verdict === 'unknown') {
-    return `Limited data available for ${company}. Prediction is based on job title and location patterns only — research this employer's H1B history independently.`
+    return `Limited data available for ${company}. Prediction is based on job title and location patterns only - research this employer's H1B history independently.`
   }
   if (verdict === 'strong') {
     const rate = stats
       ? `${Math.round((stats.certification_rate ?? 0) * 100)}%`
       : 'a strong'
     return `${company} has ${rate} H1B approval track record. This ${titleCategory.toLowerCase()} role type is commonly approved. ${
-      missingSalary ? 'Salary isn’t disclosed — confirm it meets the prevailing wage if you receive an offer.' : 'Offered salary looks healthy vs prevailing wage.'
+      missingSalary ? 'Salary isn’t disclosed - confirm it meets the prevailing wage if you receive an offer.' : 'Offered salary looks healthy vs prevailing wage.'
     }`
   }
   if (verdict === 'good') {
@@ -881,7 +881,7 @@ function buildSummary(args: {
 }
 
 // ---------------------------------------------------------------------------
-// Deep (Claude) analysis — premium, on-demand
+// Deep (Claude) analysis - premium, on-demand
 // ---------------------------------------------------------------------------
 
 export async function deepH1BAnalysis(
@@ -891,7 +891,7 @@ export async function deepH1BAnalysis(
 ): Promise<string> {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) {
-    return 'Deep H1B analysis is unavailable — Anthropic credentials are not configured.'
+    return 'Deep H1B analysis is unavailable - Anthropic credentials are not configured.'
   }
 
   const client = new Anthropic({ apiKey })
@@ -915,7 +915,7 @@ Be honest about uncertainty. Cite numbers the user provided; do not invent new s
   const userPrompt = `Job: ${input.jobTitle}
 Company: ${input.company.name}
 Location: ${input.location ?? 'Unknown'}${input.isRemote ? ' (remote)' : ''}
-Salary band: ${input.salaryMin ?? 'n/a'} — ${input.salaryMax ?? 'n/a'}
+Salary band: ${input.salaryMin ?? 'n/a'} - ${input.salaryMax ?? 'n/a'}
 Seniority: ${input.seniorityLevel ?? 'unspecified'}
 SOC (if inferred): ${input.socCode ?? 'unknown'}
 

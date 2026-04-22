@@ -716,9 +716,111 @@ function inferTitleFromUrl(url: URL): string {
   return cleaned
 }
 
+function greenhouseEmbeddedJobId(url: URL): string | null {
+  const fromQuery = url.searchParams.get("gh_jid")?.trim()
+  if (fromQuery) return fromQuery
+  const fromPath = url.pathname.match(/\/jobs\/(\d+)/i)?.[1]
+  return fromPath?.trim() || null
+}
+
+function extractGreenhouseEmbeddedJobsFromHtml(html: string, baseUrl: URL): RawJob[] {
+  if (!/gh_jid=/i.test(html) || !/_greenhouseJob_/i.test(html)) return []
+
+  const fromProps: RawJob[] = []
+  const propsRaw =
+    html.match(/component-export="GreenhouseJobList"[\s\S]*?props="([\s\S]*?)"\s+ssr/i)?.[1] ??
+    null
+
+  if (propsRaw) {
+    const decodedProps = decodeHtmlEntities(decodeHtmlEntities(propsRaw))
+    const jobsRegex =
+      /"absolute_url":\[0,"([^"]*gh_jid=\d+[^"]*)"\][\s\S]{0,5000}?"location":\[0,\{"name":\[0,"([^"]*)"\]\}\][\s\S]{0,2000}?"id":\[0,"(\d+)"\][\s\S]{0,3000}?"title":\[0,"([^"]+)"\][\s\S]{0,10000}?"first_published":\[0,"([^"]+)"\][\s\S]{0,50000}?"content":\[0,"([\s\S]*?)"\],"departments":/g
+
+    const seenProps = new Set<string>()
+    for (const match of decodedProps.matchAll(jobsRegex)) {
+      const rawUrl = decodeHtmlEntities((match[1] ?? "").trim())
+      const location = decodeHtmlEntities((match[2] ?? "").trim()) || undefined
+      const id = (match[3] ?? "").trim()
+      const title = cleanText(match[4] ?? "")
+      const postedAt = (match[5] ?? "").trim() || undefined
+      const rawContent = (match[6] ?? "").trim()
+      const description =
+        cleanJobDescription(
+          decodeHtmlEntities(rawContent)
+            .replace(/\\n/g, "\n")
+            .replace(/\\"/g, '"')
+        ) ?? undefined
+
+      if (!rawUrl || !id || !title) continue
+
+      const resolved = toUrl(rawUrl, baseUrl)
+      if (!resolved) continue
+
+      // Canonicalize `/careers/jobs?gh_jid=<id>` to the concrete job path.
+      if (/\/careers\/jobs\/?$/i.test(resolved.pathname) && resolved.searchParams.has("gh_jid")) {
+        resolved.pathname = `${resolved.pathname.replace(/\/+$/, "")}/${id}`
+      }
+
+      const key = `greenhouse-embedded:${id}`
+      if (seenProps.has(key)) continue
+      seenProps.add(key)
+
+      fromProps.push({
+        externalId: key,
+        title,
+        url: normalizeJobApplyUrl(resolved.toString()),
+        description,
+        location,
+        postedAt,
+      })
+    }
+  }
+
+  if (fromProps.length > 0) return fromProps
+
+  const out: RawJob[] = []
+  const seen = new Set<string>()
+  const cardRegex =
+    /<div class="_greenhouseJob_[^"]*"[\s\S]*?<a[^>]*href="([^"]*\/careers\/jobs\/\d+\?gh_jid=\d+[^"]*)"[^>]*>\s*<\/a>[\s\S]*?<\/div>\s*<\/div>/gi
+
+  for (const match of html.matchAll(cardRegex)) {
+    const rawHref = decodeHtmlEntities((match[1] ?? "").trim())
+    if (!rawHref) continue
+
+    const resolved = toUrl(rawHref, baseUrl)
+    if (!resolved) continue
+
+    const block = match[0] ?? ""
+    const title = cleanText(block.match(/<h2[^>]*>([\s\S]*?)<\/h2>/i)?.[1] ?? "")
+    if (!title) continue
+
+    const id = greenhouseEmbeddedJobId(resolved)
+    const key = id ?? resolved.toString()
+    if (seen.has(key)) continue
+    seen.add(key)
+
+    const details = [...block.matchAll(/<span class="_jobDetail_[^"]*">([\s\S]*?)<\/span>/gi)]
+      .map((detailMatch) => cleanText(detailMatch[1] ?? ""))
+      .filter(Boolean)
+    const location = details[0] || undefined
+
+    out.push({
+      externalId: id ? `greenhouse-embedded:${id}` : undefined,
+      title,
+      url: normalizeJobApplyUrl(resolved.toString()),
+      location,
+    })
+
+    if (out.length >= MAX_GENERIC_JOBS) break
+  }
+
+  return out
+}
+
 function isLikelyJobLink(url: URL, text: string, baseUrl: URL): boolean {
   if (!/^https?:$/i.test(url.protocol)) return false
   if (url.hostname.toLowerCase() !== baseUrl.hostname.toLowerCase()) return false
+  if (url.searchParams.has("gh_jid")) return false
 
   const path = url.pathname.toLowerCase()
   if (!path || path === "/" || path === baseUrl.pathname.toLowerCase()) return false
@@ -1430,6 +1532,11 @@ async function discoverAndCrawlFromHtml(careersUrl: URL): Promise<RawJob[]> {
       if (googleJobs.length > 0) return googleJobs
     }
 
+    const greenhouseEmbeddedJobs = extractGreenhouseEmbeddedJobsFromHtml(html, careersUrl)
+    if (greenhouseEmbeddedJobs.length > 0) {
+      return greenhouseEmbeddedJobs
+    }
+
     const discoveredUrls = extractAbsoluteUrlsFromHtml(html, careersUrl)
     const knownAtsCandidates: URL[] = []
     const seen = new Set<string>()
@@ -1461,7 +1568,7 @@ async function discoverAndCrawlFromHtml(careersUrl: URL): Promise<RawJob[]> {
 
     const jsonLdJobs = extractJobsFromJsonLd(html, careersUrl)
     const genericJobs = extractGenericJobsFromHtml(html, careersUrl)
-    const combined = dedupeJobs([...jsonLdJobs, ...genericJobs])
+    const combined = dedupeJobs([...greenhouseEmbeddedJobs, ...jsonLdJobs, ...genericJobs])
     if (combined.length > 0) return combined
 
     // One-hop fallback: follow "all jobs"/"search jobs" links on the same host.
@@ -1480,6 +1587,7 @@ async function discoverAndCrawlFromHtml(careersUrl: URL): Promise<RawJob[]> {
       const nextHtml = await fetchText(candidate.href.toString())
       if (!nextHtml) continue
       oneHopJobs.push(
+        ...extractGreenhouseEmbeddedJobsFromHtml(nextHtml, candidate.href),
         ...extractJobsFromJsonLd(nextHtml, candidate.href),
         ...extractGenericJobsFromHtml(nextHtml, candidate.href)
       )

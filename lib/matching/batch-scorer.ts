@@ -92,8 +92,30 @@ export async function scoreJobsForUser(userId: string, jobIds: string[]) {
   const context = await getScoringContextForUser(userId)
   if (!context) return new Map<string, JobMatchScore>()
 
-  const jobs = await getJobsByIds(uniqueJobIds)
-  if (jobs.length === 0) return new Map<string, JobMatchScore>()
+  const supabase = createAdminClient()
+  const existingScoresResult = await supabase
+    .from("job_match_scores")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("resume_id", context.resume.id)
+    .in("job_id", uniqueJobIds)
+
+  if (existingScoresResult.error) {
+    throw existingScoresResult.error
+  }
+
+  const resumeUpdatedAtMs = new Date(context.resume.updated_at).getTime()
+  const existingFreshScores = (existingScoresResult.data ?? []).filter((row) => {
+    const computedAtMs = new Date(row.computed_at).getTime()
+    return Number.isFinite(computedAtMs) && computedAtMs >= resumeUpdatedAtMs
+  }) as JobMatchScore[]
+
+  const existingMap = new Map(existingFreshScores.map((row) => [row.job_id, row]))
+  const missingJobIds = uniqueJobIds.filter((jobId) => !existingMap.has(jobId))
+  if (missingJobIds.length === 0) return existingMap
+
+  const jobs = await getJobsByIds(missingJobIds)
+  if (jobs.length === 0) return existingMap
 
   const scores = jobs.map((job) =>
     computeFastScore({
@@ -104,7 +126,11 @@ export async function scoreJobsForUser(userId: string, jobIds: string[]) {
   )
 
   const rows = await upsertMatchScores(scores)
-  return new Map(rows.map((row) => [row.job_id, row]))
+  for (const row of rows) {
+    existingMap.set(row.job_id, row)
+  }
+
+  return existingMap
 }
 
 export async function scoreNewJobForAllUsers(job: Job) {

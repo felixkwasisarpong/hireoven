@@ -221,7 +221,7 @@ export async function importH1BDataFromBuffer(
   const companies = companiesData as Array<Pick<Company, 'id' | 'name'>>
 
   // ---------------------------------------------------------------------
-  // Step 1 — in-memory aggregation per (employer, fiscal year).
+  // Step 1 - in-memory aggregation per (employer, fiscal year).
   // ---------------------------------------------------------------------
   const aggregated = new Map<
     string,
@@ -245,7 +245,7 @@ export async function importH1BDataFromBuffer(
 
     const naicsRaw = pick(row, NAICS_COLUMNS).trim()
     // Tableau formats NAICS as "54 - Professional, Scientific, and Technical
-    // Services" — strip the description so we store just the numeric code.
+    // Services" - strip the description so we store just the numeric code.
     const naics = naicsRaw ? naicsRaw.split(/\s*-\s*/)[0].trim() || null : null
 
     const key = `${employer}__${year}`
@@ -270,7 +270,7 @@ export async function importH1BDataFromBuffer(
   console.log(`[uscis-import] aggregated into ${total.toLocaleString()} (employer, year) rows`)
 
   // ---------------------------------------------------------------------
-  // Step 2 — fuzzy-match each unique employer to a tracked company. We do
+  // Step 2 - fuzzy-match each unique employer to a tracked company. We do
   // this once per employer (not per year) so the O(N·M) cost does not scale
   // with fiscal years.
   // ---------------------------------------------------------------------
@@ -291,7 +291,7 @@ export async function importH1BDataFromBuffer(
   }
 
   // ---------------------------------------------------------------------
-  // Step 3 — batch upsert h1b_records. Requires the unique index on
+  // Step 3 - batch upsert h1b_records. Requires the unique index on
   // (employer_name, year) defined in schema.sql; without it we fall back
   // to a bulk select-then-split path for old databases.
   // ---------------------------------------------------------------------
@@ -348,7 +348,7 @@ export async function importH1BDataFromBuffer(
     }
   }
 
-  // Legacy fallback — bulk select, split, batch insert+update.
+  // Legacy fallback - bulk select, split, batch insert+update.
   if (upsertFailedWithConflict) {
     console.log(
       '[uscis-import] unique index missing on (employer_name, year); falling back to select+split path'
@@ -415,7 +415,7 @@ export async function importH1BDataFromBuffer(
   }
 
   // ---------------------------------------------------------------------
-  // Step 4 — per-company sponsorship snapshot using the most recent fiscal
+  // Step 4 - per-company sponsorship snapshot using the most recent fiscal
   // year we have per employer. One batched update per company.
   // ---------------------------------------------------------------------
   const perCompany = new Map<
@@ -466,7 +466,7 @@ export async function importH1BDataFromBuffer(
   const durationMs = Date.now() - started
   await onProgress?.({ phase: 'done', processed: total, total })
   console.log(
-    `[uscis-import] done in ${(durationMs / 1000).toFixed(1)}s — ` +
+    `[uscis-import] done in ${(durationMs / 1000).toFixed(1)}s - ` +
       `${total.toLocaleString()} records, ${perCompany.size.toLocaleString()} companies updated, ` +
       `${unmatchedEmployers.length.toLocaleString()} unmatched`
   )

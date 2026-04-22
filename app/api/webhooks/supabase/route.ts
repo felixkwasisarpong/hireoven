@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
 
   const job = payload.record
 
-  // Return 200 immediately — Supabase retries on non-2xx so we must not block
+  // Return 200 immediately - Supabase retries on non-2xx so we must not block
   void processNotifications(job)
   void scoreNewJobForAllUsers(job)
 
@@ -54,7 +54,7 @@ async function processNotifications(job: Job) {
       matchJobToWatchlists(job),
     ])
 
-    // Alert notifications — one alert may belong to many users, each alert has user_id
+    // Alert notifications - one alert may belong to many users, each alert has user_id
     for (const alert of matchedAlerts) {
       const { data: profile } = await supabase
         .from("profiles")
@@ -134,6 +134,6 @@ async function processNotifications(job: Job) {
       }
     }
   } catch {
-    // Silent failure — webhook already returned 200
+    // Silent failure - webhook already returned 200
   }
 }

@@ -7,8 +7,8 @@
  *
  * IMPORTANT: This module is a **pure data loader**. It does NOT create
  * rows in the `companies` table. Unmatched employers are stored with
- * `lca_records.company_id = null`; a dedicated reconciliation script —
- * `scripts/reconcile-companies-from-imports.ts` — is the single authoritative
+ * `lca_records.company_id = null`; a dedicated reconciliation script -
+ * `scripts/reconcile-companies-from-imports.ts` - is the single authoritative
  * path for turning unmatched employers into placeholder `companies` rows.
  * See `lib/companies/placeholder-from-employer.ts` for that logic.
  *
@@ -81,7 +81,7 @@ export async function importLCAData(
     await onProgress({ inserted: 0, ...p })
   }
 
-  // xlsx is finicky about input types in Node. Normalise to a Buffer —
+  // xlsx is finicky about input types in Node. Normalise to a Buffer -
   // we'll either hand it to XLSX.read with type: 'buffer' (xlsx/xls path)
   // or decode as text and parse as CSV/TSV.
   const bytes = Buffer.isBuffer(input)
@@ -106,7 +106,7 @@ export async function importLCAData(
     const sheetNames = inspected.map((s) => s.sheet)
 
     // Always dump the full diagnostic to the server console so the user
-    // can copy it straight out of their `npm run dev` terminal — toasts
+    // can copy it straight out of their `npm run dev` terminal - toasts
     // and HTTP error bodies truncate long multi-line strings.
     console.error(
       '[lca-import] header detection FAILED',
@@ -126,7 +126,7 @@ export async function importLCAData(
         `This looks like a USCIS H-1B Employer Data Hub crosstab (columns like ` +
           `"Employer (Petitioner) Name", "Initial/Continuing Approvals", "Tax ID", ` +
           `"NAICS"), not a DOL LCA disclosure file. Upload it via the "Import ` +
-          `USCIS CSV" panel instead — that parser understands this exact layout.`
+          `USCIS CSV" panel instead - that parser understands this exact layout.`
       )
     }
 
@@ -151,7 +151,7 @@ export async function importLCAData(
         `CASE_NUMBER / CASE_STATUS / VISA_CLASS / JOB_TITLE.\n\n` +
         (diag
           ? `What the parser saw:\n${diag}\n\n`
-          : `The parser could not open any sheet — check the dev server terminal for '[lca-import] header detection FAILED' details.\n\n`) +
+          : `The parser could not open any sheet - check the dev server terminal for '[lca-import] header detection FAILED' details.\n\n`) +
         `If the header row is visible above but not matching, share one of ` +
         `the column names we missed and we'll add it as an alias. If these ` +
         `rows look empty or truncated, re-save the file as .xlsx from Excel ` +
@@ -176,7 +176,7 @@ export async function importLCAData(
 
   // Pull existing companies once so we can attach `company_id` where a
   // normalised name already matches a tracked company. We NEVER insert into
-  // `companies` from this importer — unmatched employers stay with
+  // `companies` from this importer - unmatched employers stay with
   // `company_id = null` and are reconciled later by
   // `scripts/reconcile-companies-from-imports.ts`.
   const { data: companyRows, error: companyError } = await supabase
@@ -345,7 +345,7 @@ const HEADER_SIGNATURE_TOKENS = [
 ]
 
 /**
- * Tokens that strongly indicate a USCIS H-1B Employer Data Hub crosstab —
+ * Tokens that strongly indicate a USCIS H-1B Employer Data Hub crosstab -
  * **not** a DOL LCA disclosure. We use this to produce a more helpful error
  * when the user uploads the wrong file to the LCA panel.
  */
@@ -380,10 +380,10 @@ function canonicaliseHeaderCell(value: unknown): string {
 /**
  * Walk every sheet (skipping obvious metadata sheets) and look for the
  * first row that names at least one known LCA column. Once found, rebuild
- * records using that row as the header — everything above is discarded as
+ * records using that row as the header - everything above is discarded as
  * title / disclaimer / merged-cell banner, everything below is data.
  *
- * Falls back to "first non-metadata sheet, row 0" if nothing matches —
+ * Falls back to "first non-metadata sheet, row 0" if nothing matches -
  * which preserves the historical behaviour for perfectly-formatted files.
  */
 export type LoadLCARowsResult = {
@@ -391,7 +391,7 @@ export type LoadLCARowsResult = {
   sheetUsed: string
   headerRowIndex: number
   detectedFormat: 'lca' | 'uscis' | 'unknown'
-  /** Diagnostic trail — emitted when detection fails so the UI can surface
+  /** Diagnostic trail - emitted when detection fails so the UI can surface
    *  "we saw columns X, Y, Z on sheet 'Sheet1' row 1" and the user can tell
    *  whether the file is genuinely malformed or the parser is missing an
    *  alias. One entry per sheet that was inspected. */
@@ -564,7 +564,7 @@ function loadLCARowsFromXLSX(bytes: Buffer): LoadLCARowsResult {
     const sheet = workbook.Sheets[name]
     if (!sheet) {
       inspected.push({
-        sheet: `${name} [MISSING — workbook.Sheets['${name}'] is undefined; xlsx could not decode the sheet's data from the file zip]`,
+        sheet: `${name} [MISSING - workbook.Sheets['${name}'] is undefined; xlsx could not decode the sheet's data from the file zip]`,
         totalRows: -1,
         firstFewRows: [],
       })
@@ -612,7 +612,7 @@ function loadLCARowsFromCSV(bytes: Buffer): LoadLCARowsResult {
   const delimiter = detectDelimiter(text)
   // relax_column_count + skip_empty_lines keeps us tolerant of trailing
   // commas, ragged rows, and the odd blank line between header banners
-  // and data — all common in DOL's CSV exports.
+  // and data - all common in DOL's CSV exports.
   const rows = parseCSV(text, {
     columns: false,
     delimiter,
@@ -627,7 +627,7 @@ function loadLCARowsFromCSV(bytes: Buffer): LoadLCARowsResult {
   const label = `csv (delimiter="${delimiter === '\t' ? 'TAB' : delimiter}")`
   const match = locateHeaderRow(rows, label, inspected)
   if (match) return match
-  // Nothing matched — return what we saw so the caller can surface diagnostics.
+  // Nothing matched - return what we saw so the caller can surface diagnostics.
   const last = inspected[inspected.length - 1]
   return {
     rawRows: [],
@@ -1082,7 +1082,7 @@ export async function matchLCAToCompanies(): Promise<void> {
 
   const index = buildCompanyIndex(companyList)
 
-  // Pass 1 — bind every stats row to a company_id.
+  // Pass 1 - bind every stats row to a company_id.
   const statsUpdates: Array<{ id: string; company_id: string }> = []
   const companyUpdates = new Map<
     string,
@@ -1185,7 +1185,7 @@ function calcSponsorshipConfidence(
  * `lca_records`, then upsert into `soc_base_rates`. Runs at the end of every
  * LCA import so priors stay fresh with each quarterly DOL drop.
  *
- * Withdrawn cases are excluded — they don't reflect a DOL decision, only
+ * Withdrawn cases are excluded - they don't reflect a DOL decision, only
  * employer action.
  */
 export async function rebuildSOCBaseRates(): Promise<void> {

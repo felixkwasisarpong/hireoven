@@ -209,7 +209,7 @@ async function callClaude(
     model: MODEL,
     max_tokens: 4096,
     system:
-      "You are an expert career coach and resume analyst with deep knowledge of ATS systems, hiring practices, and what recruiters actually look for. You give honest, actionable analysis — not vague encouragement.",
+      "You are an expert career coach and resume analyst with deep knowledge of ATS systems, hiring practices, and what recruiters actually look for. You give honest, actionable analysis - not vague encouragement.",
     messages: [{ role: "user", content: buildPrompt(resume, job) }],
   })
 

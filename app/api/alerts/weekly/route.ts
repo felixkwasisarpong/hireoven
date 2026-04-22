@@ -232,7 +232,7 @@ export async function GET(request: NextRequest) {
       await resend.emails.send({
         from: getAlertsFromEmail(),
         to: user.email!,
-        subject: `Your weekly job digest — ${totalCount} new match${totalCount === 1 ? "" : "es"} this week`,
+        subject: `Your weekly job digest - ${totalCount} new match${totalCount === 1 ? "" : "es"} this week`,
         html: buildWeeklyEmail(user, sections, totalCount, platformStats),
       })
       sent++

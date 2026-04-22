@@ -1,4 +1,4 @@
-/** Logs only in development — avoids noisy production consoles for expected failures (auth races, gated APIs). */
+/** Logs only in development - avoids noisy production consoles for expected failures (auth races, gated APIs). */
 
 export function devWarn(...args: unknown[]) {
   if (process.env.NODE_ENV === "development") {

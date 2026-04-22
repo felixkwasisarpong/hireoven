@@ -11,6 +11,7 @@ import {
   fetchJobDescription,
   normalizeJobApplyUrl,
 } from "@/lib/jobs/description"
+import { inferJobMetadata } from "@/lib/jobs/metadata"
 
 const DESCRIPTION_FETCH_CONCURRENCY = Math.max(
   1,
@@ -18,8 +19,41 @@ const DESCRIPTION_FETCH_CONCURRENCY = Math.max(
 )
 const MAX_DESCRIPTION_FETCHES_PER_COMPANY = Math.max(
   0,
-  Number.parseInt(process.env.CRAWLER_MAX_DESCRIPTION_FETCHES_PER_COMPANY ?? "20", 10)
+  Number.parseInt(process.env.CRAWLER_MAX_DESCRIPTION_FETCHES_PER_COMPANY ?? "500", 10)
 )
+
+const BLOCKED_TITLE_PATTERNS = [
+  /^(login|log(?:\s+)?in|log back in!?)$/i,
+  /^go back to our career portal$/i,
+  /^by category$/i,
+  /^by job title$/i,
+  /^search jobs?$/i,
+]
+
+const BLOCKED_PATH_PATTERNS = [
+  /\/jobs\/login$/i,
+  /\/jobs\/intro$/i,
+  /\/intro$/i,
+]
+
+function isBlockedCrawlTitle(title: string) {
+  const normalized = title.replace(/\s+/g, " ").trim()
+  if (!normalized || normalized.length < 3) return true
+  return BLOCKED_TITLE_PATTERNS.some((pattern) => pattern.test(normalized))
+}
+
+function isBlockedApplyUrl(url: string) {
+  try {
+    const parsed = new URL(url)
+    const path = parsed.pathname.replace(/\/+$/, "")
+    if (BLOCKED_PATH_PATTERNS.some((pattern) => pattern.test(path))) return true
+    if (parsed.searchParams.has("loginOnly") && parsed.searchParams.get("loginOnly") === "1")
+      return true
+    return false
+  } catch {
+    return false
+  }
+}
 
 function externalIdForJob(job: RawJob) {
   if (job.externalId?.trim()) return job.externalId.trim()
@@ -107,17 +141,25 @@ export async function persistCrawlJobs({
 }) {
   const supabase = createAdminClient()
   const crawledAtIso = crawledAt.toISOString()
-  const normalized = jobs.map((job) => ({
-    ...job,
-    url: normalizeJobApplyUrl(job.url),
-    externalId: externalIdForJob(job),
-    description: cleanJobDescription(job.description ?? null) ?? undefined,
-  }))
+  const normalized = jobs
+    .map((job) => ({
+      ...job,
+      title: cleanJobTitle(job.title),
+      url: normalizeJobApplyUrl(job.url),
+      externalId: externalIdForJob(job),
+      description: cleanJobDescription(job.description ?? null) ?? undefined,
+    }))
+    .filter((job) => !isBlockedCrawlTitle(job.title))
+    .filter((job) => !isBlockedApplyUrl(job.url))
 
-  const missingDescriptionIndexes = normalized
+  const missingDescriptionCandidates = normalized
     .map((job, index) => ({ index, hasDescription: Boolean(job.description), url: job.url }))
     .filter((entry) => !entry.hasDescription && /^https?:\/\//i.test(entry.url))
-    .slice(0, MAX_DESCRIPTION_FETCHES_PER_COMPANY)
+
+  const missingDescriptionIndexes =
+    MAX_DESCRIPTION_FETCHES_PER_COMPANY > 0
+      ? missingDescriptionCandidates.slice(0, MAX_DESCRIPTION_FETCHES_PER_COMPANY)
+      : missingDescriptionCandidates
 
   if (missingDescriptionIndexes.length > 0) {
     await runWithConcurrency(
@@ -136,15 +178,54 @@ export async function persistCrawlJobs({
   const externalIds = normalized.map((job) => job.externalId)
   const { data: existingRows, error: existingError } = await (supabase
     .from("jobs")
-    .select("id, external_id, description")
+    .select(
+      "id, external_id, description, employment_type, seniority_level, is_remote, is_hybrid, requires_authorization, salary_min, salary_max, salary_currency"
+    )
     .eq("company_id", companyId)
     .in("external_id", externalIds) as any)
 
   if (existingError) throw existingError
 
-  const existingByExternalId = new Map<string, { id: string; description: string | null }>()
-  for (const row of (existingRows ?? []) as Array<{ id: string; external_id: string; description: string | null }>) {
-    existingByExternalId.set(row.external_id, { id: row.id, description: row.description ?? null })
+  const existingByExternalId = new Map<
+    string,
+    {
+      id: string
+      description: string | null
+      employment_type: string | null
+      seniority_level: string | null
+      is_remote: boolean | null
+      is_hybrid: boolean | null
+      requires_authorization: boolean | null
+      salary_min: number | null
+      salary_max: number | null
+      salary_currency: string | null
+    }
+  >()
+  for (const row of (existingRows ?? []) as Array<{
+    id: string
+    external_id: string
+    description: string | null
+    employment_type: string | null
+    seniority_level: string | null
+    is_remote: boolean | null
+    is_hybrid: boolean | null
+    requires_authorization: boolean | null
+    salary_min: number | null
+    salary_max: number | null
+    salary_currency: string | null
+  }>) {
+    existingByExternalId.set(row.external_id, {
+      id: row.id,
+      description: row.description ?? null,
+      employment_type: row.employment_type ?? null,
+      seniority_level: row.seniority_level ?? null,
+      is_remote: row.is_remote ?? null,
+      is_hybrid: row.is_hybrid ?? null,
+      requires_authorization: row.requires_authorization ?? null,
+      salary_min: row.salary_min ?? null,
+      salary_max: row.salary_max ?? null,
+      salary_currency: row.salary_currency ?? null,
+    })
   }
 
   const toInsert: Array<Record<string, unknown>> = []
@@ -156,12 +237,26 @@ export async function persistCrawlJobs({
     const cleanedTitle = cleanJobTitle(job.title)
     const existing = existingByExternalId.get(job.externalId)
     const persistedDescription = normalizedDescription ?? existing?.description ?? null
+    const inferred = inferJobMetadata({
+      title: cleanedTitle,
+      description: persistedDescription,
+      location: job.location,
+    })
     const payload: Record<string, unknown> = {
       company_id: companyId,
       title: cleanedTitle,
       normalized_title: normalizeJobTitle(cleanedTitle),
       apply_url: job.url,
       location: job.location ?? null,
+      employment_type: inferred.employmentType ?? existing?.employment_type ?? null,
+      seniority_level: inferred.seniorityLevel ?? existing?.seniority_level ?? null,
+      is_remote: inferred.isRemote ?? existing?.is_remote ?? false,
+      is_hybrid: inferred.isHybrid ?? existing?.is_hybrid ?? false,
+      requires_authorization:
+        inferred.requiresAuthorization ?? existing?.requires_authorization ?? false,
+      salary_min: inferred.salaryMin ?? existing?.salary_min ?? null,
+      salary_max: inferred.salaryMax ?? existing?.salary_max ?? null,
+      salary_currency: inferred.salaryCurrency ?? existing?.salary_currency ?? "USD",
       description: persistedDescription,
       external_id: job.externalId,
       skills: extractSkillsFromText(cleanedTitle, persistedDescription),

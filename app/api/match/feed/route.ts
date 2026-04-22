@@ -3,7 +3,7 @@ import {
   matchesLocationFilter,
   matchesSearchQuery,
 } from "@/lib/jobs/search-match"
-import { getScoringContextForUser, scoreJobsForUser } from "@/lib/matching/batch-scorer"
+import { scoreJobsForUser } from "@/lib/matching/batch-scorer"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { createClient } from "@/lib/supabase/server"
 import type {
@@ -71,11 +71,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  const context = await getScoringContextForUser(user.id)
-  if (!context) {
-    return NextResponse.json({ jobs: [], total: 0, newInLastHour: 0 })
-  }
-
   const sp = request.nextUrl.searchParams
   const q = sp.get("q") ?? ""
   const companyIds = parseList<string>(sp.get("companies"))
@@ -90,7 +85,9 @@ export async function GET(request: NextRequest) {
   const limit = Math.min(100, parseInt(sp.get("limit") ?? "24", 10))
   const offset = Math.max(0, parseInt(sp.get("offset") ?? "0", 10))
   const minScore = Number(sp.get("minScore") ?? "0")
-  const fetchLimit = Math.min(300, Math.max(limit + offset, 60) * 4)
+  const hasTextSearch = Boolean(q.trim() || location)
+  const fetchMultiplier = hasTextSearch ? 4 : 2
+  const fetchLimit = Math.min(220, Math.max(limit + offset, 60) * fetchMultiplier)
 
   const admin = createAdminClient()
   let query = admin

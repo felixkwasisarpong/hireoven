@@ -1,5 +1,5 @@
 -- =============================================================================
--- Hireoven — Seed Data: Jobs for 20 seeded companies
+-- Hireoven - Seed Data: Jobs for 20 seeded companies
 -- Run AFTER seed.sql (companies must exist first)
 -- =============================================================================
 

@@ -10,6 +10,7 @@
 
 import { loadEnvConfig } from "@next/env"
 import { createClient } from "@supabase/supabase-js"
+import { companyLogoUrlFromDomain } from "../lib/companies/logo-url"
 import {
   COMPANY_SEED_ROWS,
   type CompanySize,
@@ -58,7 +59,7 @@ function rowFromTuple(
     name,
     domain: domain.toLowerCase(),
     careers_url,
-    logo_url: `https://logo.clearbit.com/${domain.toLowerCase()}`,
+    logo_url: companyLogoUrlFromDomain(domain, "google-favicon"),
     industry,
     size,
     ats_type: e.ats_type ?? null,
