@@ -1,4 +1,7 @@
-import { cleanJobDescription } from "@/lib/jobs/description"
+import {
+  cleanJobDescription,
+  normalizeJobApplyUrl,
+} from "@/lib/jobs/description"
 
 export interface CrawlTarget {
   id: string
@@ -62,7 +65,13 @@ const GENERIC_JOB_PATH_HINTS = [
 
 const GENERIC_BLOCKED_PATH_HINTS = [
   "/about",
+  "/article",
+  "/articles",
   "/blog",
+  "/category",
+  "/categories",
+  "/developer",
+  "/developers",
   "/news",
   "/press",
   "/privacy",
@@ -73,6 +82,13 @@ const GENERIC_BLOCKED_PATH_HINTS = [
   "/faq",
   "/investor",
   "/events",
+  "/insight",
+  "/insights",
+  "/login",
+  "/portal",
+  "/resume",
+  "/service",
+  "/services",
 ]
 
 const ROLE_TEXT_HINT =
@@ -80,6 +96,9 @@ const ROLE_TEXT_HINT =
 
 const GENERIC_ANCHOR_TEXT =
   /^(learn more|read more|view all jobs?|all jobs?|careers?|search jobs?|apply now|apply|see all|details?)$/i
+
+const GENERIC_BLOCKED_ANCHOR_TEXT =
+  /^(login|log back in!?|get started|developer portal.*|analyst reports?|by job title)$/i
 
 const COMPANY_STOPWORDS = new Set([
   "inc",
@@ -349,10 +368,12 @@ function mapWorkdayPostings(
     .map((posting) => ({
       externalId: `workday:${site}:${posting.externalPath}`,
       title: posting.title!,
-      url: new URL(
-        `${site}${posting.externalPath}`.replace(/([^:]\/)\/+/g, "$1"),
-        `https://${context.tenantHost}/`
-      ).toString(),
+      url: normalizeJobApplyUrl(
+        new URL(
+          `${site}${posting.externalPath}`.replace(/([^:]\/)\/+/g, "$1"),
+          `https://${context.tenantHost}/`
+        ).toString()
+      ),
       description: cleanJobDescription(posting.bulletFields?.join("\n") ?? null) ?? undefined,
       location:
         posting.location ??
@@ -508,7 +529,7 @@ async function crawlGreenhouse(careersUrl: URL): Promise<RawJob[]> {
     .map((job) => ({
       externalId: `greenhouse:${job.id}`,
       title: job.title,
-      url: job.absolute_url,
+      url: normalizeJobApplyUrl(job.absolute_url),
       description: cleanJobDescription(job.content ?? null) ?? undefined,
       location: job.location?.name,
       postedAt: job.updated_at,
@@ -537,7 +558,7 @@ async function crawlLever(careersUrl: URL): Promise<RawJob[]> {
     .map((job) => ({
       externalId: `lever:${job.id}`,
       title: job.text,
-      url: job.hostedUrl,
+      url: normalizeJobApplyUrl(job.hostedUrl),
       description:
         cleanJobDescription(
           job.descriptionPlain ??
@@ -562,7 +583,7 @@ async function crawlAshby(careersUrl: URL): Promise<RawJob[]> {
   const seen = new Set<string>()
   for (const match of markup.matchAll(linkRegex)) {
     const path = match[1]
-    const fullUrl = `https://jobs.ashbyhq.com${path}`
+    const fullUrl = normalizeJobApplyUrl(`https://jobs.ashbyhq.com${path}`)
     if (seen.has(fullUrl)) continue
     seen.add(fullUrl)
 
@@ -714,9 +735,14 @@ function isLikelyJobLink(url: URL, text: string, baseUrl: URL): boolean {
     ROLE_TEXT_HINT.test(text) &&
     text.length <= 100 &&
     !/[{}$<>]/.test(text) &&
-    !GENERIC_ANCHOR_TEXT.test(text)
+    !GENERIC_ANCHOR_TEXT.test(text) &&
+    !GENERIC_BLOCKED_ANCHOR_TEXT.test(text)
   const segmentCount = path.split("/").filter(Boolean).length
-  const hasRoleOnlySignal = hasRoleText && segmentCount >= 2
+  const hasCareersContentPath =
+    /\/careers?\/[^/]+/i.test(path) ||
+    /\/jobs?\/results\//i.test(path) ||
+    /\/jobs?\/[^/]+/i.test(path)
+  const hasRoleOnlySignal = hasRoleText && (hasCareersContentPath || segmentCount >= 3)
 
   if (hasBlockedHint && !hasJobHint && !hasQueryJobHint) return false
   if (!(hasJobHint || hasQueryJobHint || hasRoleOnlySignal)) return false
@@ -728,7 +754,7 @@ function extractGenericJobsFromHtml(html: string, baseUrl: URL): RawJob[] {
   const seen = new Set<string>()
   for (const link of extractAnchorLinks(html, baseUrl)) {
     if (!isLikelyJobLink(link.href, link.text, baseUrl)) continue
-    const url = link.href.toString()
+    const url = normalizeJobApplyUrl(link.href.toString())
     if (seen.has(url)) continue
     seen.add(url)
 
@@ -1104,7 +1130,7 @@ async function crawlPhenomPortal(careersUrl: URL, initialHtml?: string): Promise
       jobs.push({
         externalId: sourceId ? `phenom:${sourceId}` : undefined,
         title,
-        url,
+        url: normalizeJobApplyUrl(url),
         location: pickPhenomLocation(posting),
         postedAt: String(posting.postedDate ?? posting.dateCreated ?? "").trim() || undefined,
       })
@@ -1132,7 +1158,10 @@ function extractGoogleJobsFromHtml(html: string, baseUrl: URL): RawJob[] {
     const title = cleanText(match[2] ?? "")
     const location = cleanText(match[3] ?? "")
     const href = decodeHtmlEntities(match[4] ?? "")
-    const resolved = toUrl(href, baseUrl)
+    const resolved = toUrl(
+      href,
+      new URL("https://www.google.com/about/careers/applications/")
+    )
     if (!id || !title || !resolved) continue
     if (seen.has(id)) continue
     seen.add(id)
@@ -1140,7 +1169,7 @@ function extractGoogleJobsFromHtml(html: string, baseUrl: URL): RawJob[] {
     jobs.push({
       externalId: `google:${id}`,
       title,
-      url: resolved.toString(),
+      url: normalizeJobApplyUrl(resolved.toString()),
       location: location || undefined,
     })
 
@@ -1159,7 +1188,7 @@ function extractGoogleJobsFromHtml(html: string, baseUrl: URL): RawJob[] {
     fallback.push({
       externalId: id ? `google:${id}` : undefined,
       title: job.title,
-      url: resolved.toString(),
+      url: normalizeJobApplyUrl(resolved.toString()),
       location: job.location,
       postedAt: job.postedAt,
     })

@@ -17,6 +17,8 @@ import { MatchScorePill } from "@/components/matching/MatchScorePill"
 import CompanyLogo from "@/components/ui/CompanyLogo"
 import { useResumeContext } from "@/components/resume/ResumeProvider"
 import { useH1BPrediction } from "@/lib/context/H1BPredictionContext"
+import { cleanJobTitle } from "@/lib/crawler/normalizer"
+import { cleanJobDescription } from "@/lib/jobs/description"
 import { getSeniorityGap } from "@/lib/matching/fast-scorer"
 import { cn } from "@/lib/utils"
 import type { JobMatchScore, JobWithCompany, JobWithMatchScore } from "@/types"
@@ -42,10 +44,6 @@ type JobCardProps = {
 }
 
 type FreshnessTone = "green" | "teal" | "gray" | "muted"
-
-function stripHtml(html: string) {
-  return html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim()
-}
 
 function formatSalaryRange(job: JobWithCompany | JobWithMatchScore) {
   if (job.salary_min == null || job.salary_max == null) return null
@@ -187,6 +185,8 @@ export default function JobCard({
   )
   const hasSeniorityMismatch = seniorityGap !== null && Math.abs(seniorityGap) > 2
   const salaryLabel = formatSalaryRange(job)
+  const displayTitle = cleanJobTitle(job.title)
+  const previewDescription = cleanJobDescription(job.description)
 
   async function handleBookmark() {
     if (saving) return
@@ -268,7 +268,7 @@ export default function JobCard({
                     {job.company.name}
                   </p>
                   <h3 className="mt-1 text-[1.125rem] font-semibold leading-snug tracking-[-0.02em] text-strong sm:text-[1.2rem]">
-                    {job.title}
+                    {displayTitle}
                   </h3>
                 </div>
 
@@ -322,9 +322,9 @@ export default function JobCard({
                   </div>
                 )}
 
-                {job.description && (
+                {previewDescription && (
                   <p className="line-clamp-2 text-sm leading-relaxed text-muted-foreground">
-                    {stripHtml(job.description)}
+                    {previewDescription}
                   </p>
                 )}
               </div>
