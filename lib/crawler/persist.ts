@@ -1,8 +1,16 @@
 import crypto from "crypto"
 import { createAdminClient } from "@/lib/supabase/admin"
 import type { RawJob } from "@/lib/crawler"
-import { extractSkillsFromText, normalizeJobTitle } from "@/lib/crawler/normalizer"
-import { cleanJobDescription, fetchJobDescription } from "@/lib/jobs/description"
+import {
+  cleanJobTitle,
+  extractSkillsFromText,
+  normalizeJobTitle,
+} from "@/lib/crawler/normalizer"
+import {
+  cleanJobDescription,
+  fetchJobDescription,
+  normalizeJobApplyUrl,
+} from "@/lib/jobs/description"
 
 const DESCRIPTION_FETCH_CONCURRENCY = Math.max(
   1,
@@ -15,7 +23,10 @@ const MAX_DESCRIPTION_FETCHES_PER_COMPANY = Math.max(
 
 function externalIdForJob(job: RawJob) {
   if (job.externalId?.trim()) return job.externalId.trim()
-  return `url:${crypto.createHash("sha1").update(job.url).digest("hex")}`
+  return `url:${crypto
+    .createHash("sha1")
+    .update(normalizeJobApplyUrl(job.url))
+    .digest("hex")}`
 }
 
 function normalizePostedAtToIso(
@@ -98,6 +109,7 @@ export async function persistCrawlJobs({
   const crawledAtIso = crawledAt.toISOString()
   const normalized = jobs.map((job) => ({
     ...job,
+    url: normalizeJobApplyUrl(job.url),
     externalId: externalIdForJob(job),
     description: cleanJobDescription(job.description ?? null) ?? undefined,
   }))
@@ -141,21 +153,23 @@ export async function persistCrawlJobs({
   for (const job of normalized) {
     const normalizedPostedAt = normalizePostedAtToIso(job.postedAt, crawledAt)
     const normalizedDescription = cleanJobDescription(job.description ?? null)
+    const cleanedTitle = cleanJobTitle(job.title)
     const existing = existingByExternalId.get(job.externalId)
     const persistedDescription = normalizedDescription ?? existing?.description ?? null
     const payload: Record<string, unknown> = {
       company_id: companyId,
-      title: job.title,
-      normalized_title: normalizeJobTitle(job.title),
+      title: cleanedTitle,
+      normalized_title: normalizeJobTitle(cleanedTitle),
       apply_url: job.url,
       location: job.location ?? null,
       description: persistedDescription,
       external_id: job.externalId,
-      skills: extractSkillsFromText(job.title, persistedDescription),
+      skills: extractSkillsFromText(cleanedTitle, persistedDescription),
       is_active: true,
       last_seen_at: crawledAtIso,
       raw_data: {
         source: "crawler",
+        source_title: job.title,
         posted_at: job.postedAt ?? null,
         posted_at_normalized: normalizedPostedAt,
         description_captured: Boolean(persistedDescription),

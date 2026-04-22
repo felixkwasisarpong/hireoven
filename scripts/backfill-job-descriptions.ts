@@ -9,8 +9,12 @@
 
 import { loadEnvConfig } from "@next/env"
 import { createClient } from "@supabase/supabase-js"
-import { extractSkillsFromText } from "../lib/crawler/normalizer"
-import { cleanJobDescription, fetchJobDescription } from "../lib/jobs/description"
+import { cleanJobTitle, extractSkillsFromText } from "../lib/crawler/normalizer"
+import {
+  cleanJobDescription,
+  fetchJobDescription,
+  normalizeJobApplyUrl,
+} from "../lib/jobs/description"
 
 loadEnvConfig(process.cwd())
 
@@ -123,7 +127,8 @@ async function main() {
   await runWithConcurrency(
     candidates.map((row) => async () => {
       scanned += 1
-      const extracted = await fetchJobDescription(row.apply_url, timeoutMs)
+      const normalizedApplyUrl = normalizeJobApplyUrl(row.apply_url)
+      const extracted = await fetchJobDescription(normalizedApplyUrl, timeoutMs)
       if (!extracted) {
         failed += 1
         if (scanned % 50 === 0) {
@@ -136,7 +141,10 @@ async function main() {
 
       fetched += 1
       const normalizedExisting = cleanJobDescription(row.description)
-      if (normalizedExisting && normalizedExisting === extracted) {
+      const cleanedTitle = cleanJobTitle(row.title)
+      const urlChanged = normalizedApplyUrl !== row.apply_url
+      const titleChanged = cleanedTitle !== row.title
+      if (normalizedExisting && normalizedExisting === extracted && !titleChanged && !urlChanged) {
         unchanged += 1
         return
       }
@@ -157,8 +165,10 @@ async function main() {
       const { error } = await supabase
         .from("jobs")
         .update({
+          title: cleanedTitle,
+          apply_url: normalizedApplyUrl,
           description: extracted,
-          skills: extractSkillsFromText(row.title, extracted),
+          skills: extractSkillsFromText(cleanedTitle, extracted),
           raw_data: nextRaw as Record<string, unknown>,
           updated_at: new Date().toISOString(),
         } as any)
