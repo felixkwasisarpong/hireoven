@@ -8,7 +8,7 @@ Hireoven is a **Next.js 14** app. Use a **Dockerfile** build on your Coolify ser
 - **Coolify** reachable at **HTTPS** so GitHub webhooks work (for private repo + auto deploy).
 - Domain for the app (e.g. `hireoven.com`) with DNS pointing at the Coolify server.
 
-## Option A — Dockerfile (recommended)
+## Option A - Dockerfile (recommended)
 
 Repo includes [`../Dockerfile`](../Dockerfile) and Next [`output: "standalone"`](../next.config.js).
 
@@ -57,7 +57,7 @@ Example (replace host and secret):
 curl -fsS -H "Authorization: Bearer $CRON_SECRET" "https://hireoven.com/api/crawl"
 ```
 
-If the task fails with **`curl: not found`**, the container image was built **without** `curl` (older deploy). The repo’s **Dockerfile** installs `curl` in the final stage — **rebuild and redeploy** the app in Coolify so the new image is used.
+If the task fails with **`curl: not found`**, the container image was built **without** `curl` (older deploy). The repo’s **Dockerfile** installs `curl` in the final stage - **rebuild and redeploy** the app in Coolify so the new image is used.
 
 **Workaround before redeploy** (Node is always in the image; set `APP_URL` to your public origin, no trailing slash):
 
@@ -71,7 +71,7 @@ In Coolify, add **`APP_URL`** (e.g. `https://hireoven.com`) and **`CRON_SECRET`*
 
 - Path: `/` or `/api/health` if you add a small health route later.
 
-## Option B — Nixpacks (no Dockerfile)
+## Option B - Nixpacks (no Dockerfile)
 
 - **Build command:** `npm ci && npm run build`
 - **Start command:** `npm run start`
