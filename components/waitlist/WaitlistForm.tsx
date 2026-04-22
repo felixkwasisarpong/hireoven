@@ -104,7 +104,7 @@ export default function WaitlistForm({
   }, [refId])
 
   const tweetText =
-    "Just joined the waitlist for @hireoven — a job board that shows you listings within minutes of being posted, not days. Also has H1B sponsorship scoring for international candidates. hireoven.com/launch"
+    "Just joined the waitlist for @hireoven - a job board that shows you listings within minutes of being posted, not days. Also has H1B sponsorship scoring for international candidates. hireoven.com/launch"
 
   const linkedInUrl = useMemo(() => {
     const u = new URL("https://www.linkedin.com/sharing/share-offsite/")
@@ -187,7 +187,7 @@ export default function WaitlistForm({
       >
         <p className="text-lg font-bold text-strong">You&apos;re on the waitlist!</p>
         <p className="mt-1 text-sm text-muted-foreground">
-          Check your email — we sent a confirmation.
+          Check your email - we sent a confirmation.
         </p>
         {message ? (
           <p className="mt-3 text-sm font-semibold text-teal-700">{message}</p>

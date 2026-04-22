@@ -110,7 +110,7 @@ export function AutofillButton({
         size={size}
         variant="outline"
         asChild
-        title={`Profile is ${completionPct}% complete — finish more fields for better coverage`}
+        title={`Profile is ${completionPct}% complete - finish more fields for better coverage`}
         className={`gap-1.5 border-amber-300 text-amber-700 hover:bg-amber-50 ${className}`}
       >
         <Link href={`/dashboard/autofill/fill/${jobId}`}>

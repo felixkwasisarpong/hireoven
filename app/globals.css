@@ -72,6 +72,67 @@
     -webkit-font-smoothing: antialiased;
   }
 
+  body.site-chroma {
+    position: relative;
+    background:
+      radial-gradient(1200px 650px at -8% -10%, hsl(195 100% 88% / 0.55), transparent 58%),
+      radial-gradient(1100px 620px at 108% 0%, hsl(274 100% 90% / 0.45), transparent 56%),
+      radial-gradient(900px 520px at 50% 112%, hsl(24 100% 86% / 0.35), transparent 64%),
+      linear-gradient(180deg, hsl(220 38% 97%), hsl(220 32% 95%));
+    background-attachment: fixed;
+  }
+
+  body.site-chroma::before,
+  body.site-chroma::after {
+    content: "";
+    position: fixed;
+    pointer-events: none;
+    z-index: 0;
+    filter: blur(56px);
+    opacity: 0.55;
+  }
+
+  body.site-chroma::before {
+    width: 34rem;
+    height: 34rem;
+    top: -8rem;
+    left: -8rem;
+    border-radius: 9999px;
+    background: hsl(188 100% 76% / 0.55);
+    animation: hue-float 14s ease-in-out infinite;
+  }
+
+  body.site-chroma::after {
+    width: 30rem;
+    height: 30rem;
+    top: 24vh;
+    right: -9rem;
+    border-radius: 9999px;
+    background: hsl(274 92% 80% / 0.52);
+    animation: hue-float 16s ease-in-out infinite reverse;
+  }
+
+  body.site-chroma > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Make hardcoded white/slate sections feel part of the colorful theme. */
+  body.site-chroma .bg-white {
+    background-color: hsl(0 0% 100% / 0.84) !important;
+  }
+
+  body.site-chroma .bg-slate-50,
+  body.site-chroma .bg-slate-50\/40,
+  body.site-chroma .bg-slate-50\/60 {
+    background-color: hsl(212 100% 97% / 0.7) !important;
+  }
+
+  body.site-chroma .bg-surface,
+  body.site-chroma .bg-\[hsl\(var\(--surface\)\)\] {
+    background-color: hsl(var(--surface) / 0.84) !important;
+  }
+
   ::selection {
     background: rgba(255, 92, 24, 0.16);
   }
@@ -101,12 +162,16 @@
   .app-page {
     @apply min-h-screen;
     background-color: hsl(var(--background));
-    background-image: linear-gradient(
-      180deg,
-      hsl(var(--background)) 0%,
-      hsl(220 16% 96%) 48%,
-      hsl(220 14% 95%) 100%
-    );
+    background-image:
+      radial-gradient(900px 420px at -5% -10%, hsl(194 100% 88% / 0.35), transparent 62%),
+      radial-gradient(760px 360px at 104% 6%, hsl(264 95% 88% / 0.25), transparent 58%),
+      radial-gradient(680px 300px at 52% 112%, hsl(24 100% 88% / 0.24), transparent 62%),
+      linear-gradient(
+        180deg,
+        hsl(var(--background)) 0%,
+        hsl(220 30% 96%) 46%,
+        hsl(220 28% 95%) 100%
+      );
   }
 
   .app-shell {
@@ -117,6 +182,11 @@
   /* Layered surfaces (panels, not floating cards) */
   .surface-panel {
     @apply border border-border bg-[hsl(var(--surface))] shadow-[0_1px_0_rgba(15,23,42,0.04),0_1px_2px_rgba(15,23,42,0.04)];
+    background-image: linear-gradient(
+      180deg,
+      hsl(0 0% 100%) 0%,
+      hsl(218 56% 98% / 0.8) 100%
+    );
   }
 
   .surface-panel-raised {
@@ -138,6 +208,9 @@
 
   .surface-card {
     @apply border border-border bg-[hsl(var(--surface))] shadow-[0_1px_0_rgba(15,23,42,0.04),0_6px_18px_rgba(15,23,42,0.05)];
+    background-image:
+      radial-gradient(120% 90% at 0% 0%, hsl(201 100% 96% / 0.65), transparent 65%),
+      linear-gradient(180deg, hsl(0 0% 100%), hsl(220 33% 98%));
   }
 
   .surface-card-subtle {
@@ -150,6 +223,7 @@
 
   .metric-tile {
     @apply border border-border bg-[hsl(var(--surface))] p-4 shadow-[0_1px_0_rgba(15,23,42,0.03)];
+    background-image: linear-gradient(150deg, hsl(201 100% 98%), hsl(0 0% 100%) 52%, hsl(264 100% 98%));
   }
 
   /* ── Typography ──────────────────────────────────────────────── */
@@ -193,11 +267,13 @@
   /* ── Navigation ──────────────────────────────────────────────── */
 
   .glass-nav {
-    @apply border-b border-border bg-surface/90 backdrop-blur-xl;
+    @apply border-b border-border bg-surface/85 backdrop-blur-xl;
+    background-image: linear-gradient(90deg, hsl(194 100% 96% / 0.45), hsl(24 100% 96% / 0.35), hsl(264 100% 96% / 0.35));
   }
 
   .dash-header-bar {
-    @apply sticky top-0 z-40 border-b border-border bg-surface/95 backdrop-blur-xl;
+    @apply sticky top-0 z-40 border-b border-border bg-surface/90 backdrop-blur-xl;
+    background-image: linear-gradient(90deg, hsl(194 100% 95% / 0.5), hsl(264 100% 96% / 0.4));
   }
 
   /* ── Admin (unchanged structure, token alignment) ───────────── */
@@ -229,7 +305,7 @@
   }
 
   .dashboard-subpage-content > .app-page {
-    /* px-0 pt-0 only — do not zero pb so pages can add pb-* for safe-area / fixed chrome */
+    /* px-0 pt-0 only - do not zero pb so pages can add pb-* for safe-area / fixed chrome */
     @apply min-h-0 bg-transparent px-0 pt-0;
   }
 
@@ -362,7 +438,26 @@
     }
   }
 
+  @keyframes hue-float {
+    0% {
+      transform: translate3d(0, 0, 0) scale(1);
+      opacity: 0.85;
+    }
+    50% {
+      transform: translate3d(0, -10px, 0) scale(1.04);
+      opacity: 1;
+    }
+    100% {
+      transform: translate3d(0, 0, 0) scale(1);
+      opacity: 0.85;
+    }
+  }
+
   .animate-launch-feed-card {
     animation: launch-feed-card 0.45s ease-out both;
+  }
+
+  .animate-hue-float {
+    animation: hue-float 8s ease-in-out infinite;
   }
 }

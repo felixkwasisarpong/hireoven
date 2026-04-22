@@ -26,7 +26,7 @@ const APPROACHES: Array<{
   {
     value: "proactive",
     label: "Proactive",
-    description: "Mention it confidently in the letter — one matter-of-fact sentence.",
+    description: "Mention it confidently in the letter - one matter-of-fact sentence.",
     example:
       "I will require H1B visa sponsorship. I understand you have a strong track record of sponsoring international candidates, and I'm happy to discuss the process at any stage.",
   },
@@ -41,14 +41,14 @@ const APPROACHES: Array<{
 
 function sponsorshipLabel(score: number, count1yr: number, companyName: string): string {
   if (count1yr > 50)
-    return `${companyName} sponsored ${count1yr} H1B petitions last year — very likely to support you.`
+    return `${companyName} sponsored ${count1yr} H1B petitions last year - very likely to support you.`
   if (count1yr > 10)
     return `${companyName} sponsored ${count1yr} H1B petitions last year.`
   if (score >= 60)
-    return `${companyName} has a ${score}% sponsorship confidence score — likely sponsors.`
+    return `${companyName} has a ${score}% sponsorship confidence score - likely sponsors.`
   if (score >= 30)
-    return `${companyName} has a ${score}% sponsorship confidence score — may sponsor in some cases.`
-  return `${companyName} has limited sponsorship history — consider the "omit" approach.`
+    return `${companyName} has a ${score}% sponsorship confidence score - may sponsor in some cases.`
+  return `${companyName} has limited sponsorship history - consider the "omit" approach.`
 }
 
 export default function SponsorshipHelper({

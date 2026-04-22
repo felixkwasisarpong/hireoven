@@ -29,7 +29,7 @@ const APPLY_CONFIG: Record<
   { label: string; className: string }
 > = {
   apply_now: {
-    label: "Apply now — you're a strong fit",
+    label: "Apply now - you're a strong fit",
     className: "border-emerald-200 bg-emerald-50 text-emerald-800",
   },
   apply_with_tweaks: {
@@ -37,11 +37,11 @@ const APPLY_CONFIG: Record<
     className: "border-amber-200 bg-amber-50 text-amber-800",
   },
   stretch_role: {
-    label: "Stretch role — apply if confident",
+    label: "Stretch role - apply if confident",
     className: "border-amber-200 bg-amber-50 text-amber-800",
   },
   skip: {
-    label: "Significant gaps — consider skipping",
+    label: "Significant gaps - consider skipping",
     className: "border-red-200 bg-red-50 text-red-800",
   },
 }

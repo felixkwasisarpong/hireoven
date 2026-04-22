@@ -8,7 +8,7 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { getWaitlistPosition } from "@/lib/waitlist/position"
 
 export const metadata: Metadata = {
-  title: "You're confirmed — Hireoven",
+  title: "You're confirmed - Hireoven",
   robots: { index: false, follow: false },
 }
 
@@ -60,7 +60,7 @@ export default async function LaunchConfirmedPage({
         </div>
         <h1 className="mt-8 text-3xl font-extrabold text-strong">You&apos;re confirmed!</h1>
         <p className="mt-4 text-lg text-muted-foreground leading-relaxed">
-          You&apos;re #{position} in line — we&apos;ll email you the moment we launch.
+          You&apos;re #{position} in line - we&apos;ll email you the moment we launch.
         </p>
 
         <ConfirmedShareBlock waitlistId={row.id} />

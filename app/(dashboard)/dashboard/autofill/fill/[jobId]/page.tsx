@@ -102,7 +102,7 @@ function StepIndicator({ current }: { current: StepId }) {
   )
 }
 
-// ── Step 1 — Pre-flight check ──────────────────────────────────────────────
+// ── Step 1 - Pre-flight check ──────────────────────────────────────────────
 
 function PreflightStep({
   check,
@@ -268,7 +268,7 @@ function CheckRow({
   )
 }
 
-// ── Step 2 — Resume selection ──────────────────────────────────────────────
+// ── Step 2 - Resume selection ──────────────────────────────────────────────
 
 function ResumeStep({
   resumes,
@@ -289,7 +289,7 @@ function ResumeStep({
         <h2 className="text-lg font-semibold text-gray-900">Choose a resume</h2>
         <p className="text-sm text-gray-500 mt-0.5">
           Select which resume to upload in the file input (if one exists on the form).
-          The autofill script uses your saved profile data — not the resume file.
+          The autofill script uses your saved profile data - not the resume file.
         </p>
       </div>
 
@@ -356,7 +356,7 @@ function ResumeStep({
   )
 }
 
-// ── Step 3 — Script ────────────────────────────────────────────────────────
+// ── Step 3 - Script ────────────────────────────────────────────────────────
 
 function ScriptStep({
   fillResult,
@@ -480,7 +480,7 @@ function ScriptStep({
   )
 }
 
-// ── Step 4 — Instructions ──────────────────────────────────────────────────
+// ── Step 4 - Instructions ──────────────────────────────────────────────────
 
 function InstructionsStep({
   atsType,
@@ -493,22 +493,22 @@ function InstructionsStep({
 }) {
   const tips: Record<string, string[]> = {
     greenhouse: [
-      "Greenhouse renders some dropdowns after page load — scroll down to trigger them before re-running if needed.",
+      "Greenhouse renders some dropdowns after page load - scroll down to trigger them before re-running if needed.",
       "File upload fields (resume, cover letter) must be filled manually.",
       "EEOC/diversity questions at the bottom are filled if you enabled that in your profile.",
     ],
     lever: [
-      "Lever's URL fields use custom names — check that LinkedIn/GitHub were filled correctly.",
-      "Some Lever forms use a multi-step layout — run the script on each step.",
+      "Lever's URL fields use custom names - check that LinkedIn/GitHub were filled correctly.",
+      "Some Lever forms use a multi-step layout - run the script on each step.",
       "The cover letter textarea is targeted automatically if it matches the label.",
     ],
     ashby: [
-      "Ashby uses React-rendered forms with dynamic IDs — the script targets by aria-label.",
+      "Ashby uses React-rendered forms with dynamic IDs - the script targets by aria-label.",
       "If fields appear empty after running, click on a field and try pasting manually.",
-      "Ashby's file upload is not autofilled — attach your resume manually.",
+      "Ashby's file upload is not autofilled - attach your resume manually.",
     ],
     generic: [
-      "Review every filled field carefully — the generic matcher works by field label text.",
+      "Review every filled field carefully - the generic matcher works by field label text.",
       "Fields that couldn't be matched will show in the overlay summary.",
       "File upload fields always need manual input.",
     ],
@@ -561,7 +561,7 @@ function InstructionsStep({
   )
 }
 
-// ── Step 5 — Log application ───────────────────────────────────────────────
+// ── Step 5 - Log application ───────────────────────────────────────────────
 
 function LogStep({
   jobTitle,
@@ -594,7 +594,7 @@ function LogStep({
         <div>
           <h2 className="text-lg font-semibold text-gray-900">Application logged!</h2>
           <p className="text-sm text-gray-500 mt-1">
-            {companyName} — {jobTitle} has been added to your autofill history.
+            {companyName} - {jobTitle} has been added to your autofill history.
           </p>
         </div>
         <div className="flex gap-3 mt-2">

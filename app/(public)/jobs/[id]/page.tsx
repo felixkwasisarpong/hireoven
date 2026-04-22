@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic"
 type Props = { params: Promise<{ id: string }> }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  if (!hasSupabaseAdminEnv()) return { title: "Job — Hireoven" }
+  if (!hasSupabaseAdminEnv()) return { title: "Job - Hireoven" }
   const { id } = await params
   const supabase = createAdminClient()
   const { data: rawData } = await supabase
@@ -21,12 +21,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     .eq("id", id)
     .single()
 
-  if (!rawData) return { title: "Job — Hireoven" }
+  if (!rawData) return { title: "Job - Hireoven" }
   const data = rawData as unknown as Pick<Job, "title" | "location" | "is_remote"> & { company: { name: string } | null }
   const companyName = data.company?.name ?? ""
 
   return {
-    title: `${data.title} at ${companyName} — Hireoven`,
+    title: `${data.title} at ${companyName} - Hireoven`,
     description: `Apply for ${data.title} at ${companyName}. ${data.is_remote ? "Remote." : data.location ?? ""} See this job fresh on Hireoven.`,
     openGraph: {
       title: `${data.title} at ${companyName}`,

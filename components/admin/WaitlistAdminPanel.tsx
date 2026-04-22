@@ -67,7 +67,7 @@ export default function WaitlistAdminPanel({ initialRows }: { initialRows: Row[]
   const [sendOpen, setSendOpen] = useState(false)
   const [subject, setSubject] = useState("Hireoven update")
   const [bodyText, setBodyText] = useState(
-    "Hi — quick update from the Hireoven team.\n\nWe're shipping fast and you'll be first in line when we open the doors.\n\n— The Hireoven team"
+    "Hi - quick update from the Hireoven team.\n\nWe're shipping fast and you'll be first in line when we open the doors.\n\n- The Hireoven team"
   )
   const [sendBusy, setSendBusy] = useState(false)
   const [sendResult, setSendResult] = useState<string | null>(null)
@@ -247,17 +247,17 @@ export default function WaitlistAdminPanel({ initialRows }: { initialRows: Row[]
                   {new Date(r.joined_at).toLocaleString()}
                 </td>
                 <td className="px-4 py-2.5">
-                  {r.is_international === true ? "Y" : r.is_international === false ? "N" : "—"}
+                  {r.is_international === true ? "Y" : r.is_international === false ? "N" : "-"}
                 </td>
                 <td className="max-w-[120px] truncate px-4 py-2.5 text-xs">
-                  {r.visa_status ?? "—"}
+                  {r.visa_status ?? "-"}
                 </td>
                 <td className="max-w-[140px] truncate px-4 py-2.5 text-xs">
-                  {r.university ?? "—"}
+                  {r.university ?? "-"}
                 </td>
-                <td className="px-4 py-2.5 text-xs">{r.source ?? "—"}</td>
+                <td className="px-4 py-2.5 text-xs">{r.source ?? "-"}</td>
                 <td className="max-w-[180px] truncate px-4 py-2.5 text-xs text-gray-500">
-                  {r.referrer ?? "—"}
+                  {r.referrer ?? "-"}
                 </td>
                 <td className="px-4 py-2.5">{r.confirmed ? "Y" : "N"}</td>
               </tr>

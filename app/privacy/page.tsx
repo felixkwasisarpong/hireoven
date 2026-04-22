@@ -3,7 +3,7 @@ import Link from "next/link"
 import Navbar from "@/components/layout/Navbar"
 
 export const metadata: Metadata = {
-  title: "Privacy Policy — Hireoven",
+  title: "Privacy Policy - Hireoven",
   description: "How Hireoven collects, uses, and protects your personal information.",
 }
 
@@ -55,7 +55,7 @@ export default function PrivacyPage() {
             <p>
               Your data is stored in Supabase (hosted on AWS us-east-1). Emails are sent via Resend.
               The app runs on infrastructure we operate (e.g. self-hosted Docker). We use Vercel
-              Analytics for anonymous page-view statistics — no personal identifiers are sent to
+              Analytics for anonymous page-view statistics - no personal identifiers are sent to
               Vercel Analytics.
             </p>
           </section>

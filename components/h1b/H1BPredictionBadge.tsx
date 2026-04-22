@@ -58,7 +58,7 @@ function H1BPredictionBadgeImpl({
   const tooltip =
     verdict === "unknown"
       ? `H1B approval data is limited for this employer. Estimate only, not legal advice.`
-      : `~${prediction.approvalLikelihood}% H1B approval likelihood (${prediction.confidenceLevel} confidence). Estimate only — not legal advice.`
+      : `~${prediction.approvalLikelihood}% H1B approval likelihood (${prediction.confidenceLevel} confidence). Estimate only - not legal advice.`
 
   if (size === "sm") {
     const label =
@@ -112,7 +112,7 @@ function H1BPredictionBadgeImpl({
         </span>
         {signal && (
           <span className="mt-1 text-xs opacity-80 line-clamp-2">
-            {companyName ? `${companyName} — ` : ""}
+            {companyName ? `${companyName} - ` : ""}
             {signal.detail}
           </span>
         )}

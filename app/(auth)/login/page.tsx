@@ -6,9 +6,22 @@ import { useSearchParams } from "next/navigation"
 import HireovenLogo from "@/components/ui/HireovenLogo"
 import { createClient } from "@/lib/supabase/client"
 
+function getPublicAppOrigin() {
+  const configured =
+    process.env.NEXT_PUBLIC_APP_URL?.trim() ||
+    process.env.NEXT_PUBLIC_SITE_URL?.trim()
+  return (configured || window.location.origin).replace(/\/$/, "")
+}
+
+function sanitizeNextPath(next: string | null) {
+  if (!next) return null
+  if (!next.startsWith("/") || next.startsWith("//")) return null
+  return next
+}
+
 export default function LoginPage() {
   const searchParams = useSearchParams()
-  const explicitNext = searchParams.get("next")
+  const explicitNext = sanitizeNextPath(searchParams.get("next"))
 
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -76,10 +89,11 @@ export default function LoginPage() {
     setError(null)
 
     const supabase = createClient()
+    const callbackBase = getPublicAppOrigin()
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/auth/callback${explicitNext ? `?next=${encodeURIComponent(explicitNext)}` : ""}`,
+        redirectTo: `${callbackBase}/auth/callback${explicitNext ? `?next=${encodeURIComponent(explicitNext)}` : ""}`,
       },
     })
 

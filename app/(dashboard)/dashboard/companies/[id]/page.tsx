@@ -54,7 +54,7 @@ export default function CompanyProfilePage() {
   const [jdInsights,   setJdInsights]   = useState<JdInsights | null>(null)
   const [isLoading,    setIsLoading]    = useState(true)
 
-  // Job filters (local, not URL — scoped to this page)
+  // Job filters (local, not URL - scoped to this page)
   const [senFilter, setSenFilter] = useState<SeniorityLevel[]>([])
   const [empFilter, setEmpFilter] = useState<EmploymentType[]>([])
   const [remoteOnly, setRemoteOnly] = useState(false)
@@ -255,7 +255,7 @@ export default function CompanyProfilePage() {
                     </p>
                   </>
                 ) : (
-                  <p className="text-sm text-gray-500">No roles match your filters — try widening them.</p>
+                  <p className="text-sm text-gray-500">No roles match your filters - try widening them.</p>
                 )}
               </div>
             ) : (
@@ -269,7 +269,7 @@ export default function CompanyProfilePage() {
         {/* ── Tab 2: Sponsorship intel ── */}
         {tab === "intel" && (
           <div className="space-y-5">
-            {/* Section A — Verdict */}
+            {/* Section A - Verdict */}
             <section className="surface-card rounded-lg px-5 py-5 md:px-6 md:py-6">
               <h2 className="mb-4 text-lg font-semibold text-gray-900">Sponsorship verdict</h2>
               <div className="grid gap-5 lg:grid-cols-[1fr_280px]">
@@ -310,7 +310,7 @@ export default function CompanyProfilePage() {
               </div>
             </section>
 
-            {/* Section B — USCIS petition history */}
+            {/* Section B - USCIS petition history */}
             <section className="surface-card rounded-lg px-5 py-5 md:px-6 md:py-6">
               <h2 className="mb-1 text-lg font-semibold text-gray-900">USCIS petition history</h2>
               <p className="mb-5 text-sm text-gray-500">Approved vs. denied petitions by year from USCIS data.</p>
@@ -358,7 +358,7 @@ export default function CompanyProfilePage() {
               )}
             </section>
 
-            {/* Section B.5 — H1B approval intelligence (DOL LCA) */}
+            {/* Section B.5 - H1B approval intelligence (DOL LCA) */}
             <section className="surface-card rounded-lg px-5 py-5 md:px-6 md:py-6">
               <div className="mb-1 flex items-center gap-2">
                 <h2 className="text-lg font-semibold text-gray-900">H-1B approval intelligence</h2>
@@ -367,7 +367,7 @@ export default function CompanyProfilePage() {
                 </span>
               </div>
               <p className="mb-4 text-sm text-gray-500">
-                Based on DOL Labor Condition Application disclosures — the filings
+                Based on DOL Labor Condition Application disclosures - the filings
                 that precede every H-1B petition.
               </p>
 
@@ -405,7 +405,7 @@ export default function CompanyProfilePage() {
                       <p className="mt-2 text-2xl font-bold tabular-nums text-gray-900">
                         {lcaStats.certification_rate !== null
                           ? `${Math.round(lcaStats.certification_rate * 100)}%`
-                          : "—"}
+                          : "-"}
                       </p>
                       <p className="mt-1 text-[11px] capitalize text-gray-400">
                         Trend: {lcaStats.approval_trend ?? "stable"}
@@ -483,19 +483,19 @@ export default function CompanyProfilePage() {
                   )}
 
                   <p className="mt-5 text-[11px] text-gray-400">
-                    H-1B approval estimates are statistical signals only — not legal
+                    H-1B approval estimates are statistical signals only - not legal
                     advice. Talk to an immigration attorney for case-specific guidance.
                   </p>
                 </>
               ) : (
                 <p className="empty-state border-dashed px-5 py-8 text-sm text-gray-400 shadow-none">
                   No DOL LCA filings found for {company.name}. They may file under a
-                  different legal entity — or not sponsor at all.
+                  different legal entity - or not sponsor at all.
                 </p>
               )}
             </section>
 
-            {/* Section C — JD patterns */}
+            {/* Section C - JD patterns */}
             {jdInsights && jobs.length > 0 && (
               <section className="surface-card rounded-lg px-5 py-5 md:px-6 md:py-6">
                 <h2 className="mb-1 text-lg font-semibold text-gray-900">Job description patterns</h2>
@@ -531,7 +531,7 @@ export default function CompanyProfilePage() {
               </section>
             )}
 
-            {/* Section D — Similar companies */}
+            {/* Section D - Similar companies */}
             <section className="surface-card rounded-lg px-5 py-5 md:px-6 md:py-6">
               <h2 className="mb-1 text-lg font-semibold text-gray-900">
                 Companies like {company.name} that actively sponsor
@@ -551,7 +551,7 @@ export default function CompanyProfilePage() {
             <div className="space-y-5">
               <div className="empty-state border-dashed bg-gray-50 shadow-none">
                 <p className="text-sm text-gray-400">
-                  Company description coming soon. We&apos;re building out profile enrichment — check back.
+                  Company description coming soon. We&apos;re building out profile enrichment - check back.
                 </p>
               </div>
               <dl className="grid gap-3 sm:grid-cols-2">

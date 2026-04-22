@@ -248,7 +248,7 @@ export default function CoverLetterPage() {
         {/* No resume warning */}
         {!hasResume && !jobLoading && (
           <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-800">
-            Upload and parse a resume first — the generator uses your actual experience to write a personalised letter.{" "}
+            Upload and parse a resume first - the generator uses your actual experience to write a personalised letter.{" "}
             <Link href="/dashboard/resume" className="font-semibold underline">
               Go to resume page
             </Link>
@@ -324,7 +324,7 @@ export default function CoverLetterPage() {
               type="text"
               value={options.hiringManager ?? ""}
               onChange={(e) => updateOptions({ hiringManager: e.target.value || undefined })}
-              placeholder="Leave blank if unknown — defaults to 'Dear Hiring Manager'"
+              placeholder="Leave blank if unknown - defaults to 'Dear Hiring Manager'"
               className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 outline-none focus:border-[#0369A1] focus:ring-1 focus:ring-[#0369A1] placeholder:text-gray-400"
             />
           </div>
@@ -365,7 +365,7 @@ export default function CoverLetterPage() {
             <textarea
               value={options.customInstructions ?? ""}
               onChange={(e) => updateOptions({ customInstructions: e.target.value || undefined })}
-              placeholder="e.g. 'Mention my work at Stripe specifically' or 'Keep it very concise — I prefer brevity'"
+              placeholder="e.g. 'Mention my work at Stripe specifically' or 'Keep it very concise - I prefer brevity'"
               rows={3}
               className="w-full resize-none rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 outline-none focus:border-[#0369A1] focus:ring-1 focus:ring-[#0369A1] placeholder:text-gray-400"
             />
@@ -539,7 +539,7 @@ export default function CoverLetterPage() {
         {variants.length > 0 && (
           <div className="rounded-[32px] border border-white/80 bg-white/90 p-6 shadow-[0_4px_24px_rgba(15,23,42,0.06)]">
             <h3 className="mb-4 text-base font-semibold text-gray-900">
-              3 variants — pick your favourite
+              3 variants - pick your favourite
             </h3>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               {variants.map((v) => (

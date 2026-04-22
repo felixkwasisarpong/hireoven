@@ -21,7 +21,7 @@ import { createAdminClient, hasSupabaseAdminEnv } from "@/lib/supabase/admin"
 import { createClient } from "@/lib/supabase/server"
 
 export const metadata: Metadata = {
-  title: "Hireoven — Jobs served fresh. Apply before the crowd.",
+  title: "Hireoven - Jobs served fresh. Apply before the crowd.",
   description:
     "Real-time job alerts, H-1B approval intelligence, one-click apply, and AI match scores. Built for fast, confident job hunting.",
 }
@@ -36,7 +36,7 @@ const CORE_FEATURES = [
   {
     icon: Zap,
     title: "Fresh jobs, before the crowd",
-    body: "New roles land in your feed within minutes of going live. The first handful of applicants get the most eyes — we make sure you're in it.",
+    body: "New roles land in your feed within minutes of going live. The first handful of applicants get the most eyes - we make sure you're in it.",
     accent: "text-[#0369A1]",
     ring: "border-[#BAE6FD] bg-[#F0F9FF]",
   },
@@ -50,7 +50,7 @@ const CORE_FEATURES = [
   {
     icon: Wand2,
     title: "One-click apply, done",
-    body: "Greenhouse, Lever, Ashby, Workday — our autofill handles the tedious fields so you ship applications in seconds, not minutes.",
+    body: "Greenhouse, Lever, Ashby, Workday - our autofill handles the tedious fields so you ship applications in seconds, not minutes.",
     accent: "text-emerald-700",
     ring: "border-emerald-200 bg-emerald-50",
   },
@@ -71,7 +71,7 @@ const CORE_FEATURES = [
   {
     icon: Bookmark,
     title: "Watchlist + instant alerts",
-    body: "Follow companies you love. The moment they post, you hear about it — email, push, or right inside your dashboard.",
+    body: "Follow companies you love. The moment they post, you hear about it - email, push, or right inside your dashboard.",
     accent: "text-rose-700",
     ring: "border-rose-200 bg-rose-50",
   },
@@ -81,7 +81,7 @@ const INTL_FEATURES = [
   {
     icon: Gauge,
     title: "H-1B approval likelihood",
-    body: "Every role shows the odds that a sponsorship request there actually gets approved — not just whether the company will sponsor.",
+    body: "Every role shows the odds that a sponsorship request there actually gets approved - not just whether the company will sponsor.",
   },
   {
     icon: Globe,
@@ -104,7 +104,7 @@ const HOW_IT_WORKS = [
   {
     step: "02",
     title: "Your feed goes live instantly",
-    body: "Matching roles start streaming in — ranked by fit, freshness, and (for international candidates) sponsorship odds.",
+    body: "Matching roles start streaming in - ranked by fit, freshness, and (for international candidates) sponsorship odds.",
   },
   {
     step: "03",
@@ -150,6 +150,8 @@ async function getFeaturedCompanies() {
       .eq("is_active", true)
       .gt("job_count", 0)
       .not("domain", "is", null)
+      .not("domain", "like", "%.uscis-employer")
+      .not("domain", "like", "%.lca-employer")
       .order("job_count", { ascending: false })
       .limit(24)
     return data ?? []
@@ -180,7 +182,7 @@ export default async function HomePage() {
             href="/launch"
             className="font-semibold text-teal-800 transition hover:text-teal-950 hover:underline"
           >
-            We&apos;re in early access — join the waitlist for founding member pricing
+            We&apos;re in early access - join the waitlist for founding member pricing
           </Link>
         </div>
       ) : null}
@@ -205,7 +207,7 @@ export default async function HomePage() {
             </h1>
             <p className="mt-5 max-w-xl text-lg text-gray-600 md:text-xl">
               Real-time job alerts, AI match scores, one-click apply, and H-1B
-              approval intelligence — all in one place. Built for people who
+              approval intelligence - all in one place. Built for people who
               want interviews, not just applications.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
@@ -239,7 +241,7 @@ export default async function HomePage() {
             </ul>
           </div>
 
-          {/* Product preview card — a mock, not a screenshot. Conveys value
+          {/* Product preview card - a mock, not a screenshot. Conveys value
               (match score + sponsorship + H-1B approval) without requiring
               asset maintenance. */}
           <div className="relative">
@@ -346,7 +348,7 @@ export default async function HomePage() {
               Everything in one place
             </p>
             <h2 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
-              From job posted to apply sent — in the time it takes to pour a coffee
+              From job posted to apply sent - in the time it takes to pour a coffee
             </h2>
             <p className="mt-4 text-lg text-gray-600">
               No more spreadsheets, browser tabs, or copy-pasting. Hireoven replaces
@@ -383,7 +385,7 @@ export default async function HomePage() {
             </h2>
             <p className="mt-4 text-lg text-gray-600">
               Sponsorship confidence, H-1B approval likelihood, and visa language
-              scanning — on every role. Stop burning time on companies that
+              scanning - on every role. Stop burning time on companies that
               won&apos;t back you, and focus on the ones that will.
             </p>
             <Link

@@ -48,7 +48,7 @@ function CompletionBar({ pct }: { pct: number }) {
           {pct < 50
             ? "Add your basics to enable autofill on most applications."
             : pct < 80
-            ? "Almost there — complete the remaining fields to maximize autofill coverage."
+            ? "Almost there - complete the remaining fields to maximize autofill coverage."
             : "Great profile! You're ready to autofill most applications."}
         </p>
       )}
@@ -378,7 +378,7 @@ export default function AutofillPage() {
     setSaveStatus("idle")
     setSaveError(null)
     try {
-      // Always POST (upsert by user_id) — avoids PATCH .single() errors
+      // Always POST (upsert by user_id) - avoids PATCH .single() errors
       const res = await fetch("/api/autofill/profile", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -414,7 +414,7 @@ export default function AutofillPage() {
 
         <CompletionBar pct={completion} />
 
-        {/* Section 1 — Personal info */}
+        {/* Section 1 - Personal info */}
         <Section icon={<User className="h-4 w-4" />} title="Personal information">
           <div className="grid grid-cols-2 gap-4">
             <Field label="First name">
@@ -467,7 +467,7 @@ export default function AutofillPage() {
           )}
         </Section>
 
-        {/* Section 2 — Professional links */}
+        {/* Section 2 - Professional links */}
         <Section
           icon={<Globe className="h-4 w-4" />}
           title="Professional links"
@@ -498,11 +498,11 @@ export default function AutofillPage() {
           ))}
         </Section>
 
-        {/* Section 3 — Work authorization */}
+        {/* Section 3 - Work authorization */}
         <Section
           icon={<Lock className="h-4 w-4" />}
           title="Work authorization"
-          subtitle="Critical — affects every application"
+          subtitle="Critical - affects every application"
           defaultOpen
         >
           <Field label="Work authorization status">
@@ -557,7 +557,7 @@ export default function AutofillPage() {
           )}
         </Section>
 
-        {/* Section 4 — Experience & preferences */}
+        {/* Section 4 - Experience & preferences */}
         <Section
           icon={<Briefcase className="h-4 w-4" />}
           title="Experience & preferences"
@@ -617,7 +617,7 @@ export default function AutofillPage() {
           </Field>
         </Section>
 
-        {/* Section 5 — Education */}
+        {/* Section 5 - Education */}
         <Section
           icon={<BookOpen className="h-4 w-4" />}
           title="Education"
@@ -650,12 +650,12 @@ export default function AutofillPage() {
               />
             </Field>
           </div>
-          <Field label="GPA (optional)" hint="Only include if 3.5 or above — otherwise leave blank.">
+          <Field label="GPA (optional)" hint="Only include if 3.5 or above - otherwise leave blank.">
             <Input value={str(form.gpa)} onChange={(v) => set("gpa", v || null)} placeholder="3.8" />
           </Field>
         </Section>
 
-        {/* Section 6 — Custom Q&A */}
+        {/* Section 6 - Custom Q&A */}
         <Section
           icon={<Sparkles className="h-4 w-4" />}
           title="Pre-written answers"
@@ -708,15 +708,15 @@ export default function AutofillPage() {
           </button>
         </Section>
 
-        {/* Section 7 — Diversity */}
+        {/* Section 7 - Diversity */}
         <Section
           icon={<User className="h-4 w-4" />}
           title="Diversity & inclusion"
-          subtitle="Optional — only filled if you turn it on"
+          subtitle="Optional - only filled if you turn it on"
           defaultOpen={false}
         >
           <p className="text-xs text-gray-500 -mt-2">
-            Many applications include optional diversity questions. These are always voluntary — you control whether we fill them.
+            Many applications include optional diversity questions. These are always voluntary - you control whether we fill them.
           </p>
           <div className="flex items-center justify-between rounded-xl border border-gray-200 px-4 py-3">
             <span className="text-sm font-medium text-gray-700">Auto-fill diversity questions</span>
@@ -768,11 +768,11 @@ export default function AutofillPage() {
             </div>
             <div className="flex flex-wrap items-center gap-3 sm:ml-auto">
             {saveStatus === "saved" && (
-              <span className="text-sm font-medium text-emerald-600">✓ Profile saved — autofill is ready</span>
+              <span className="text-sm font-medium text-emerald-600">✓ Profile saved - autofill is ready</span>
             )}
             {saveStatus === "error" && (
               <span className="text-sm font-medium text-red-600">
-                {saveError ? `Save failed — ${saveError}` : "Save failed — try again"}
+                {saveError ? `Save failed - ${saveError}` : "Save failed - try again"}
               </span>
             )}
             <button

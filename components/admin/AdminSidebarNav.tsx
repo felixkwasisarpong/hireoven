@@ -30,7 +30,7 @@ const LINKS = [
   { href: "/admin/settings", label: "Settings", icon: Settings },
 ]
 
-/** Pinned below the scrollable nav on large screens — import from admin layout. */
+/** Pinned below the scrollable nav on large screens - import from admin layout. */
 export function AdminSidebarRealtimeTip() {
   return (
     <div className="admin-muted-surface p-4 text-sm text-gray-400">

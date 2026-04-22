@@ -185,6 +185,17 @@ export function buildFilterPills(filters: JobFilters): FilterPill[] {
     }
   }
 
+  if (filters.company_ids?.length) {
+    pills.push({
+      id: "companies",
+      label:
+        filters.company_ids.length === 1
+          ? "1 company selected"
+          : `${filters.company_ids.length} companies selected`,
+      nextFilters: { ...filters, company_ids: undefined },
+    })
+  }
+
   return pills
 }
 
@@ -303,6 +314,7 @@ export default function JobFilters({
                 sponsorship: false,
                 seniority: undefined,
                 employment_type: undefined,
+                company_ids: undefined,
                 within: "all",
               })
             }

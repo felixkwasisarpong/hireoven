@@ -28,14 +28,14 @@ const TONES: Array<{
     label: "Conversational",
     description: "Warm and human. Like a smart colleague writing to another.",
     example: (company, _title) =>
-      `When I saw this role at ${company}, I immediately thought — this is exactly the problem I've been working on for the past three years.`,
+      `When I saw this role at ${company}, I immediately thought - this is exactly the problem I've been working on for the past three years.`,
   },
   {
     value: "enthusiastic",
     label: "Enthusiastic",
-    description: "Genuine energy. No clichés — real excitement.",
+    description: "Genuine energy. No clichés - real excitement.",
     example: (company, _title) =>
-      `Building products that help millions of people communicate better is what gets me up every morning — which is why ${company}'s mission stopped me mid-scroll.`,
+      `Building products that help millions of people communicate better is what gets me up every morning - which is why ${company}'s mission stopped me mid-scroll.`,
   },
   {
     value: "formal",

@@ -157,7 +157,7 @@ export default function H1BPredictionDrawer({
   const statsByYear = useMemo(() => {
     // NOTE: full yearly stats live on the employer stats table. For the
     // drawer we fall back to whatever is in the prediction cache. To expose
-    // the full chart we'd hydrate from /api/h1b/predict/stats — kept minimal
+    // the full chart we'd hydrate from /api/h1b/predict/stats - kept minimal
     // here to avoid round trips on drawer open.
     return {}
   }, [])
@@ -219,7 +219,7 @@ export default function H1BPredictionDrawer({
         <div className="space-y-6 px-5 py-5">
           {/* Disclaimer */}
           <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] leading-relaxed text-slate-500">
-            Based on DOL LCA data and historical patterns. Not legal advice —
+            Based on DOL LCA data and historical patterns. Not legal advice -
             consult an immigration attorney for case-specific guidance.
           </p>
 
@@ -243,7 +243,7 @@ export default function H1BPredictionDrawer({
                 <p className="text-sm leading-6 text-slate-600">{prediction.summary}</p>
                 <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">
                   Prediction confidence: {prediction.confidenceLevel}
-                  {prediction.confidenceLevel === "low" && " — limited data"}
+                  {prediction.confidenceLevel === "low" && " - limited data"}
                 </p>
               </div>
             </section>
@@ -321,7 +321,7 @@ export default function H1BPredictionDrawer({
                             prediction.employerStats.dataYears.length - 1
                           ]
                         }`
-                      : "—"}
+                      : "-"}
                   </p>
                 </div>
               </div>
@@ -382,7 +382,7 @@ export default function H1BPredictionDrawer({
               <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
                 <p>
                   Upgrade to Pro International for AI-powered detailed H1B
-                  assessment — employer context, SOC fit, wage-level risk, and
+                  assessment - employer context, SOC fit, wage-level risk, and
                   specific recommendations.
                 </p>
                 <Link

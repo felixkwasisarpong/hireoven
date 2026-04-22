@@ -3,29 +3,29 @@ import Link from "next/link"
 import HireovenLogo from "@/components/ui/HireovenLogo"
 
 export const metadata: Metadata = {
-  title: "Building in public — Hireoven",
+  title: "Building in public - Hireoven",
   description: "Weekly changelog: what we shipped for real-time jobs and international candidates.",
 }
 
 const ENTRIES = [
   {
     date: "2026-04-14",
-    title: "Cover letter generator shipped — 10,000 jobs in the database",
+    title: "Cover letter generator shipped - 10,000 jobs in the database",
     body: "You can draft role-specific cover letters from a job + resume context. Our job index crossed five figures as crawls widened.",
   },
   {
     date: "2026-04-07",
-    title: "Resume upload and AI parsing live — match scores on the feed",
+    title: "Resume upload and AI parsing live - match scores on the feed",
     body: "Upload a PDF or DOCX and get structured fields plus match scoring against fresh listings.",
   },
   {
     date: "2026-03-31",
-    title: "Added H1B sponsorship scores — integrated USCIS public data",
+    title: "Added H1B sponsorship scores - integrated USCIS public data",
     body: "Every company now carries a sponsorship confidence score grounded in real petition history.",
   },
   {
     date: "2026-03-24",
-    title: "Crawling 50 company career pages — detecting jobs within 30 minutes",
+    title: "Crawling 50 company career pages - detecting jobs within 30 minutes",
     body: "End-to-end pipeline from crawl to normalized job records with freshness timestamps.",
   },
 ]
@@ -53,7 +53,7 @@ export default function BuildingInPublicPage() {
         </p>
         <h1 className="mt-2 text-3xl font-extrabold text-strong">Building in public</h1>
         <p className="mt-3 text-muted-foreground leading-relaxed">
-          Honest updates on what shipped each week. Tweet the highlights — link candidates here
+          Honest updates on what shipped each week. Tweet the highlights - link candidates here
           for proof we&apos;re real.
         </p>
 

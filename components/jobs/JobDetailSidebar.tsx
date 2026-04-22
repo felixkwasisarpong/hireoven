@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { ExternalLink, Sparkles } from "lucide-react"
+import { Bookmark, ExternalLink, ShieldCheck, Sparkles } from "lucide-react"
 import { useResumeContext } from "@/components/resume/ResumeProvider"
 import { useResumeAnalysis } from "@/lib/hooks/useResumeAnalysis"
 import type { JobMatchScore } from "@/types"
@@ -15,6 +15,8 @@ type Props = {
   sponsorsH1b: boolean | null
   sponsorshipScore: number | null
   skills: string[]
+  highlights?: string[]
+  companySummary?: string | null
 }
 
 function ScoreRing({ value }: { value: number | null }) {
@@ -38,7 +40,7 @@ function ScoreRing({ value }: { value: number | null }) {
         }}
       >
         <div className="flex h-[92px] w-[92px] flex-col items-center justify-center rounded-full bg-white">
-          <span className="text-3xl font-semibold text-strong">{value ?? "—"}</span>
+          <span className="text-3xl font-semibold text-strong">{value ?? "-"}</span>
           <span className="text-[11px] font-medium text-muted-foreground">
             {value == null ? "No score" : "%"}
           </span>
@@ -55,7 +57,7 @@ function BreakdownRow({ label, value }: { label: string; value: number | null })
     <div>
       <div className="mb-1.5 flex items-center justify-between gap-3 text-sm">
         <span className="text-muted-foreground">{label}</span>
-        <span className="font-medium text-strong">{value == null ? "—" : `${safeValue}%`}</span>
+        <span className="font-medium text-strong">{value == null ? "-" : `${safeValue}%`}</span>
       </div>
       <div className="h-2 overflow-hidden rounded-full bg-slate-200">
         <div
@@ -65,6 +67,17 @@ function BreakdownRow({ label, value }: { label: string; value: number | null })
       </div>
     </div>
   )
+}
+
+function parseSalaryRange(label: string | null) {
+  if (!label) return null
+  const match = label.match(/([0-9]{2,3})k[^0-9]+([0-9]{2,3})k/i)
+  if (!match) return null
+  const min = Number.parseInt(match[1], 10)
+  const max = Number.parseInt(match[2], 10)
+  if (!Number.isFinite(min) || !Number.isFinite(max) || max <= min) return null
+  const median = Math.round((min + max) / 2)
+  return { min, max, median }
 }
 
 function SidebarCard({
@@ -90,6 +103,8 @@ export default function JobDetailSidebar({
   sponsorsH1b,
   sponsorshipScore,
   skills,
+  highlights = [],
+  companySummary,
 }: Props) {
   const { primaryResume } = useResumeContext()
   const resumeId = primaryResume?.parse_status === "complete" ? primaryResume.id : null
@@ -156,14 +171,15 @@ export default function JobDetailSidebar({
         : "text-slate-600"
   const sponsorshipLabel =
     sponsorsH1b || (sponsorshipScore ?? 0) >= 70
-      ? "Likely to sponsor"
+      ? "High success rate"
       : (sponsorshipScore ?? 0) >= 50
-        ? "Mixed sponsorship signal"
+        ? "Moderate sponsorship signal"
         : "Limited sponsorship signal"
+  const salaryRange = parseSalaryRange(salaryLabel)
 
   return (
     <aside className="space-y-4">
-      <SidebarCard title="Match Score">
+      <SidebarCard title="Your Match">
         {!resumeId ? (
           <div className="space-y-4">
             <ScoreRing value={null} />
@@ -180,6 +196,13 @@ export default function JobDetailSidebar({
         ) : (
           <div className="space-y-4">
             <ScoreRing value={isScoreLoading && !overallScore ? null : overallScore} />
+            <p className="text-center text-base font-semibold text-emerald-700">
+              {(overallScore ?? 0) >= 85
+                ? "Great Match"
+                : (overallScore ?? 0) >= 70
+                  ? "Good Match"
+                  : "Partial Match"}
+            </p>
             <div className="space-y-3">
               {breakdown.map((item) => (
                 <BreakdownRow key={item.label} label={item.label} value={item.value} />
@@ -198,22 +221,59 @@ export default function JobDetailSidebar({
 
       {salaryLabel ? (
         <SidebarCard title="Salary Range">
-          <p className="text-3xl font-semibold text-strong">{salaryLabel}</p>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Compensation estimate captured from the source posting when available.
-          </p>
+          <p className="text-3xl font-semibold text-strong">{salaryLabel} /yr</p>
+          <p className="mt-1 text-sm text-muted-foreground">Total compensation</p>
+          {salaryRange ? (
+            <div className="mt-4 space-y-2">
+              <div className="h-2 overflow-hidden rounded-full bg-slate-200">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-blue-300 via-blue-500 to-blue-300"
+                  style={{ width: "100%" }}
+                />
+              </div>
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>${salaryRange.min}K</span>
+                <span>${salaryRange.median}K median</span>
+                <span>${salaryRange.max}K</span>
+              </div>
+            </div>
+          ) : null}
         </SidebarCard>
       ) : null}
 
       <SidebarCard title="H1B Sponsorship">
-        <p className={`text-3xl font-semibold ${sponsorshipTone}`}>
-          {sponsorshipScore != null ? `${sponsorshipScore}%` : "—"}
-        </p>
-        <p className={`mt-1 text-sm font-medium ${sponsorshipTone}`}>{sponsorshipLabel}</p>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className={`text-4xl font-semibold ${sponsorshipTone}`}>
+              {sponsorshipScore != null ? `${sponsorshipScore}%` : "-"}
+            </p>
+            <p className={`mt-1 text-sm font-medium ${sponsorshipTone}`}>{sponsorshipLabel}</p>
+          </div>
+          <ShieldCheck className="h-10 w-10 text-emerald-600/80" />
+        </div>
         <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-          Historical sponsorship and visa-language signals for {companyName}.
+          Based on historical data and visa-language signals for {companyName}.
         </p>
       </SidebarCard>
+
+      {highlights.length > 0 ? (
+        <SidebarCard title="Job Highlights">
+          <ul className="space-y-2 text-sm text-muted-foreground">
+            {highlights.slice(0, 5).map((highlight) => (
+              <li key={highlight} className="flex items-start gap-2">
+                <span className="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-blue-500" />
+                <span>{highlight}</span>
+              </li>
+            ))}
+          </ul>
+        </SidebarCard>
+      ) : null}
+
+      {companySummary ? (
+        <SidebarCard title={`About ${companyName}`}>
+          <p className="text-sm leading-relaxed text-muted-foreground">{companySummary}</p>
+        </SidebarCard>
+      ) : null}
 
       {visibleSkills.length > 0 ? (
         <SidebarCard title="Top Matching Skills">
@@ -240,6 +300,13 @@ export default function JobDetailSidebar({
           Apply Now
           <ExternalLink className="h-4 w-4" />
         </a>
+        <Link
+          href="/dashboard/applications"
+          className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-md border border-border bg-surface px-4 py-3 text-sm font-semibold text-strong transition-colors hover:bg-surface-alt"
+        >
+          Save Job
+          <Bookmark className="h-4 w-4" />
+        </Link>
       </div>
     </aside>
   )
