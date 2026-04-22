@@ -40,6 +40,12 @@ function domainFromLogoUrl(logoUrl: string | null | undefined) {
       if (match?.[1]) return normalizeCompanyDomain(match[1])
     }
 
+    if (host === "icon.horse") {
+      const raw = url.pathname.replace(/^\/+/, "")
+      const match = raw.match(/^icon\/(.+)$/i)
+      if (match?.[1]) return normalizeCompanyDomain(match[1])
+    }
+
     return normalizeCompanyDomain(host)
   } catch {
     return ""
@@ -49,7 +55,24 @@ function domainFromLogoUrl(logoUrl: string | null | undefined) {
 function isGoogleFaviconUrl(logoUrl: string | null | undefined) {
   if (!logoUrl) return false
   try {
-    return new URL(logoUrl).hostname.toLowerCase().includes("google.com")
+    const host = new URL(logoUrl).hostname.toLowerCase()
+    return host.includes("google.com") || host.endsWith(".gstatic.com")
+  } catch {
+    return false
+  }
+}
+
+function isInvalidPlaceholderGoogleFaviconUrl(logoUrl: string | null | undefined) {
+  if (!logoUrl) return false
+  try {
+    const url = new URL(logoUrl)
+    const host = url.hostname.toLowerCase()
+    if (!host.includes("google.com") && !host.endsWith(".gstatic.com")) return false
+    const faviconDomain =
+      url.searchParams.get("domain") ??
+      url.searchParams.get("domain_url") ??
+      ""
+    return isPlaceholderDomain(faviconDomain)
   } catch {
     return false
   }
@@ -70,27 +93,30 @@ function buildLogoSources(logoUrl: string | null | undefined, domain: string | n
   )
 
   const googleFaviconOnly = isGoogleFaviconUrl(logoUrl)
-  if (logoUrl && !googleFaviconOnly) push(logoUrl)
+  const invalidPlaceholderFavicon = isInvalidPlaceholderGoogleFaviconUrl(logoUrl)
+  const isStaticAsset = !!logoUrl?.trim().startsWith("/")
+  if (logoUrl && !invalidPlaceholderFavicon && (isStaticAsset || googleFaviconOnly)) push(logoUrl)
 
   if (canonicalDomain) {
-    push(companyLogoUrlFromDomain(canonicalDomain, "clearbit"))
-    push(companyLogoUrlFromDomain(canonicalDomain, "unavatar"))
-    push(companyLogoUrlFromDomain(canonicalDomain, "duckduckgo"))
     push(companyLogoUrlFromDomain(canonicalDomain, "google-favicon"))
   }
 
-  if (logoUrl) push(logoUrl)
+  if (logoUrl && !invalidPlaceholderFavicon && !isStaticAsset && !googleFaviconOnly) {
+    // Keep legacy providers as a last resort only.
+    push(logoUrl)
+  }
 
   return out
 }
 
-/** Hostnames allowed by next.config images.remotePatterns — proxy via /_next/image so the browser does not hit Cloudflare directly (avoids noisy __cf_bm cookie warnings). */
+/** Hostnames allowed by next.config images.remotePatterns - proxy via /_next/image so the browser does not hit Cloudflare directly (avoids noisy __cf_bm cookie warnings). */
 function shouldOptimizeWithNextImage(src: string): boolean {
   try {
     const { hostname } = new URL(src)
+    if (hostname === "icon.horse") return true
     if (hostname === "logo.clearbit.com") return true
     if (hostname === "unavatar.io") return true
-    if (hostname === "www.google.com") return true
+    if (hostname === "www.google.com" || hostname.endsWith(".gstatic.com")) return true
     if (hostname.endsWith(".supabase.co") || hostname.endsWith(".supabase.in")) return true
     return false
   } catch {

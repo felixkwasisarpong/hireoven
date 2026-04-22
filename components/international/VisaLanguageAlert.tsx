@@ -35,7 +35,7 @@ export default function VisaLanguageAlert({ sponsors_h1b, requires_authorization
     return (
       <div className="flex gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 text-xs">
         <span className="text-amber-500 shrink-0 mt-0.5 font-bold">?</span>
-        <p className="text-amber-700">No explicit mention — check the full job description</p>
+        <p className="text-amber-700">No explicit mention - check the full job description</p>
       </div>
     )
   }

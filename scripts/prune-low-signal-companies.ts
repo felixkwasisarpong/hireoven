@@ -2,7 +2,7 @@
  * Prune low-signal company rows from the `companies` table.
  *
  * Hireoven's LCA importer historically synthesised a placeholder company for
- * every DOL employer it saw — tens of thousands of rows that never produced
+ * every DOL employer it saw - tens of thousands of rows that never produced
  * a job and whose H1B footprint is too small to meaningfully influence the
  * Bayesian posterior used by the predictor. This script reclaims that space.
  *
@@ -264,7 +264,7 @@ async function withRetry<T>(
     }
   }
   throw new Error(
-    `${label}: ${attempts} attempts failed — ${
+    `${label}: ${attempts} attempts failed - ${
       lastErr instanceof Error ? lastErr.message : String(lastErr)
     }`
   )
@@ -358,7 +358,7 @@ function detectSource(c: {
 }
 
 async function detachRelatedRows(ids: string[]): Promise<void> {
-  // Keep raw disclosure history — just unlink it from the company row.
+  // Keep raw disclosure history - just unlink it from the company row.
   await detachTable('lca_records', ids)
   await detachTable('employer_lca_stats', ids)
   await detachTable('h1b_records', ids)

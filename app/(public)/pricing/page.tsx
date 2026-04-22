@@ -17,7 +17,7 @@ import { useSubscription } from "@/lib/hooks/useSubscription"
 const FAQ_ITEMS = [
   {
     q: "Is the free plan actually free?",
-    a: "Yes — always. No credit card, no trial period, no expiration. We believe everyone deserves access to real-time job listings.",
+    a: "Yes - always. No credit card, no trial period, no expiration. We believe everyone deserves access to real-time job listings.",
   },
   {
     q: "What happens after the 7-day trial?",
@@ -28,12 +28,12 @@ const FAQ_ITEMS = [
     a: "Yes, anytime from your billing settings. If you switch to yearly mid-month we'll prorate the difference.",
   },
   {
-    q: "I'm on OPT — which plan do I need?",
+    q: "I'm on OPT - which plan do I need?",
     a: "Pro International is built for you. It includes the OPT countdown, sponsorship scoring, and urgency routing that prioritizes companies with fast H1B processes when your deadline is close.",
   },
   {
     q: "Does Hireoven help with the H1B application itself?",
-    a: "We help you find companies that sponsor and understand your odds before you apply. We don't provide immigration legal advice — for that, consult an immigration attorney.",
+    a: "We help you find companies that sponsor and understand your odds before you apply. We don't provide immigration legal advice - for that, consult an immigration attorney.",
   },
   {
     q: "What's your refund policy?",
@@ -117,8 +117,8 @@ function FaqItem({ q, a }: { q: string; a: string }) {
 // ─── Trust signals ────────────────────────────────────────────────────────────
 
 const TRUST_SIGNALS = [
-  { icon: ShieldCheck, text: "7-day free trial — no credit card required" },
-  { icon: Globe, text: "Cancel anytime — no questions asked" },
+  { icon: ShieldCheck, text: "7-day free trial - no credit card required" },
+  { icon: Globe, text: "Cancel anytime - no questions asked" },
   { icon: CreditCard, text: "Secure billing via Stripe" },
   { icon: Users, text: "Used by students at 200+ universities" },
 ]
@@ -135,7 +135,7 @@ const TESTIMONIALS = [
   {
     quote: "The sponsorship scores saved me hours of research. I stopped applying to companies that would never sponsor and focused on the ones that actually would. Got sponsored within 3 months.",
     name: "Ravi M.",
-    role: "Data Scientist — OPT",
+    role: "Data Scientist - OPT",
   },
   {
     quote: "The cover letter generator wrote better letters than I could in a fraction of the time. I used it for every application during my search.",
@@ -179,7 +179,7 @@ export default function PricingPage() {
           Land your next job faster
         </h1>
         <p className="mt-4 text-lg text-slate-500 mx-auto max-w-xl leading-relaxed">
-          Real-time jobs, AI resume tools, and H1B sponsorship intel — everything you need in one place
+          Real-time jobs, AI resume tools, and H1B sponsorship intel - everything you need in one place
         </p>
 
         <div className="mt-10">

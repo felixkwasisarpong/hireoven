@@ -155,7 +155,7 @@ export function useH1BPrediction(jobId: string | null) {
     if (isVisible) register(jobId)
   }, [enabled, isVisible, jobId, register])
 
-  // Poll for state changes. Cheap — provider forceRenders on each batch return.
+  // Poll for state changes. Cheap - provider forceRenders on each batch return.
   useEffect(() => {
     if (!enabled || !jobId) return
     setState(getState(jobId))

@@ -33,7 +33,7 @@ export default function LogoWall({ companies }: Props) {
             companyName={company.name}
             domain={company.domain}
             logoUrl={company.logo_url}
-            className="h-12 w-12 grayscale transition group-hover:grayscale-0"
+            className="h-12 w-12 transition"
           />
           <span className="line-clamp-1 text-center text-[11px] font-medium text-gray-400 group-hover:text-gray-600">
             {company.name}

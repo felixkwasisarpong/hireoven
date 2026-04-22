@@ -53,7 +53,7 @@ export function useMatchScores(jobIds: string[]) {
   const [isLoading, setIsLoading] = useState(false)
   const [, forceRender] = useState(0)
 
-  // Parent often passes `jobs.map((j) => j.id)` — new array reference every render. Key on content, not reference.
+  // Parent often passes `jobs.map((j) => j.id)` - new array reference every render. Key on content, not reference.
   const jobIdsFingerprint = jobIds.join("\0")
   const uniqueJobIds = useMemo(
     () => Array.from(new Set(jobIds.filter(Boolean))),
@@ -126,7 +126,7 @@ export function useMatchScores(jobIds: string[]) {
         })
 
         if (!response.ok) {
-          // 401: session not ready yet; 503: scoring unavailable — expected, don't spam the console
+          // 401: session not ready yet; 503: scoring unavailable - expected, don't spam the console
           if (response.status === 401 || response.status === 503) {
             return
           }

@@ -15,12 +15,12 @@ const vapidEmailSchema = z
   .transform((value) => (value.startsWith("mailto:") ? value : `mailto:${value}`))
 
 const envSchema = z.object({
-  // Supabase — get from: supabase.com → project settings → API
+  // Supabase - get from: supabase.com → project settings → API
   NEXT_PUBLIC_SUPABASE_URL: z.string().url("NEXT_PUBLIC_SUPABASE_URL must be a valid URL"),
   NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().min(1, "NEXT_PUBLIC_SUPABASE_ANON_KEY is required"),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1, "SUPABASE_SERVICE_ROLE_KEY is required"),
 
-  // Anthropic — get from: console.anthropic.com → API keys
+  // Anthropic - get from: console.anthropic.com → API keys
   ANTHROPIC_API_KEY: z
     .string()
     .refine((v) => v.startsWith("sk-ant-"), {
@@ -28,7 +28,7 @@ const envSchema = z.object({
     })
     .optional(),
 
-  // Resend — get from: resend.com → API keys
+  // Resend - get from: resend.com → API keys
   RESEND_API_KEY: z
     .string()
     .refine((v) => v.startsWith("re_"), {
@@ -38,12 +38,12 @@ const envSchema = z.object({
   MAIL_FROM_DOMAIN: z.string().min(1).optional(),
   RECENT_JOBS_FROM_EMAIL: z.string().min(1).optional(),
 
-  // Web Push VAPID — generate with: npx web-push generate-vapid-keys
+  // Web Push VAPID - generate with: npx web-push generate-vapid-keys
   VAPID_PUBLIC_KEY: z.string().min(1).optional(),
   VAPID_PRIVATE_KEY: z.string().min(1).optional(),
   VAPID_EMAIL: vapidEmailSchema.optional(),
 
-  // Security — generate with: openssl rand -base64 32
+  // Security - generate with: openssl rand -base64 32
   CRON_SECRET: z.string().min(32, "CRON_SECRET must be at least 32 characters").optional(),
   SUPABASE_WEBHOOK_SECRET: z.string().min(1).optional(),
 

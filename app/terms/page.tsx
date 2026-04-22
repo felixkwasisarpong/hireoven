@@ -3,7 +3,7 @@ import Link from "next/link"
 import Navbar from "@/components/layout/Navbar"
 
 export const metadata: Metadata = {
-  title: "Terms of Service — Hireoven",
+  title: "Terms of Service - Hireoven",
   description: "Terms and conditions for using Hireoven.",
 }
 
@@ -22,7 +22,7 @@ export default function TermsPage() {
             <p>
               Hireoven is a job monitoring service that crawls publicly available company career pages and
               surfaces new job listings to registered users via alerts and a dashboard feed. We are not a
-              recruiter, staffing agency, or employment platform. We do not facilitate applications — we
+              recruiter, staffing agency, or employment platform. We do not facilitate applications - we
               link directly to the original job posting on the company&apos;s own careers page.
             </p>
           </section>

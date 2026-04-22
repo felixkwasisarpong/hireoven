@@ -7,6 +7,19 @@ import HireovenLogo from "@/components/ui/HireovenLogo"
 import { createClient } from "@/lib/supabase/client"
 import { PLAN_DATA, type BillingInterval, type PlanKey } from "@/lib/pricing"
 
+function getPublicAppOrigin() {
+  const configured =
+    process.env.NEXT_PUBLIC_APP_URL?.trim() ||
+    process.env.NEXT_PUBLIC_SITE_URL?.trim()
+  return (configured || window.location.origin).replace(/\/$/, "")
+}
+
+function sanitizeNextPath(next: string | null) {
+  if (!next) return null
+  if (!next.startsWith("/") || next.startsWith("//")) return null
+  return next
+}
+
 // ─── Post-signup plan step ────────────────────────────────────────────────────
 
 function PostSignupPlanStep({ plan, interval }: { plan: PlanKey; interval: BillingInterval }) {
@@ -76,7 +89,7 @@ function PostSignupPlanStep({ plan, interval }: { plan: PlanKey; interval: Billi
           href="/dashboard/onboarding"
           className="mt-3 block w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-center text-sm font-medium text-slate-500 transition hover:bg-slate-50"
         >
-          Skip for now — stay on Free
+          Skip for now - stay on Free
         </Link>
       </div>
     </div>
@@ -91,7 +104,7 @@ function SignupForm() {
   const rawIntervalParam = searchParams.get("interval")
   const intervalParam: BillingInterval =
     rawIntervalParam === "yearly" ? "yearly" : "monthly"
-  const nextParam = searchParams.get("next") ?? "/dashboard/onboarding"
+  const nextParam = sanitizeNextPath(searchParams.get("next")) ?? "/dashboard/onboarding"
 
   const [fullName, setFullName] = useState("")
   const [email, setEmail] = useState("")
@@ -158,7 +171,7 @@ function SignupForm() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
+        redirectTo: `${getPublicAppOrigin()}/auth/callback?next=${encodeURIComponent(next)}`,
       },
     })
 

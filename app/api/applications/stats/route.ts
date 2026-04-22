@@ -47,7 +47,7 @@ export async function GET() {
     ? Math.round((by_status.offer / (by_status.interview + by_status.final_round + by_status.offer)) * 100) : 0
   const overall = applied > 0 ? Math.round((by_status.offer / applied) * 100) : 0
 
-  // Avg days to response — find first non-applied status change in timeline
+  // Avg days to response - find first non-applied status change in timeline
   const responseTimes: number[] = []
   for (const app of applications) {
     if (!app.applied_at) continue

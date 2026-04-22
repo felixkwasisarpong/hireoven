@@ -142,16 +142,16 @@ All cron routes verify `Authorization: Bearer {CRON_SECRET}` (see [docs/coolify.
 
 The key tables are:
 
-- `companies` — company metadata, ATS type, sponsorship confidence
-- `jobs` — job listings with enriched fields (seniority, skills, salary, sponsorship)
-- `alerts` — user-defined job alert filters
-- `watchlists` — users watching specific companies
-- `crawl_logs` — crawl history and error logs
-- `notification_logs` — sent notification history
+- `companies` - company metadata, ATS type, sponsorship confidence
+- `jobs` - job listings with enriched fields (seniority, skills, salary, sponsorship)
+- `alerts` - user-defined job alert filters
+- `watchlists` - users watching specific companies
+- `crawl_logs` - crawl history and error logs
+- `notification_logs` - sent notification history
 
 ## Development notes
 
 - `lib/env.ts` validates all required env vars at startup with Zod. Missing vars throw descriptive errors.
-- Public pages use `export const revalidate = 3600` (ISR) — they rebuild every hour without a full deploy.
+- Public pages use `export const revalidate = 3600` (ISR) - they rebuild every hour without a full deploy.
 - `generateStaticParams` pre-renders the top 1000 jobs and all active companies at build time for SEO.
 - The `useJobs` hook uses a ref pattern (`allJobsRef`) to avoid infinite re-render loops when polling for new jobs.

@@ -6,7 +6,7 @@ import Navbar from "@/components/layout/Navbar"
 import type { Company } from "@/types"
 
 export const metadata: Metadata = {
-  title: "Browse Companies — Hireoven",
+  title: "Browse Companies - Hireoven",
   description:
     "Explore companies hiring now. Filter by H1B sponsorship, industry, and more. See jobs the moment they're posted.",
 }

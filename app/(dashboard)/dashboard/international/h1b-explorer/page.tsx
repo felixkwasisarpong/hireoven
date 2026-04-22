@@ -35,7 +35,7 @@ const US_STATES = [
 type TabKey = "records" | "employers"
 
 function formatCurrency(value: number | null) {
-  if (value === null || Number.isNaN(value)) return "—"
+  if (value === null || Number.isNaN(value)) return "-"
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
@@ -283,7 +283,7 @@ export default function H1BExplorerPage() {
 
           <div className="mt-4 text-[11px] text-muted-foreground">
             Data source: U.S. Department of Labor LCA disclosure. Shown for research
-            only — not legal advice.
+            only - not legal advice.
           </div>
         </div>
 
@@ -338,7 +338,7 @@ export default function H1BExplorerPage() {
                           )}
                         </td>
                         <td className="px-4 py-3 text-strong">
-                          {record.job_title ?? "—"}
+                          {record.job_title ?? "-"}
                           {record.soc_title ? (
                             <div className="text-[11px] text-muted-foreground">
                               {record.soc_title}
@@ -346,7 +346,7 @@ export default function H1BExplorerPage() {
                           ) : null}
                         </td>
                         <td className="px-4 py-3 text-muted-foreground">
-                          {record.worksite_city ?? "—"}
+                          {record.worksite_city ?? "-"}
                           {record.worksite_state_abbr
                             ? `, ${record.worksite_state_abbr}`
                             : ""}
@@ -364,7 +364,7 @@ export default function H1BExplorerPage() {
                           ) : null}
                         </td>
                         <td className="px-4 py-3 text-muted-foreground">
-                          {record.wage_level ?? "—"}
+                          {record.wage_level ?? "-"}
                         </td>
                         <td className="px-4 py-3">
                           <span
@@ -376,7 +376,7 @@ export default function H1BExplorerPage() {
                           </span>
                         </td>
                         <td className="px-4 py-3 text-muted-foreground">
-                          {record.decision_date ?? "—"}
+                          {record.decision_date ?? "-"}
                           {record.fiscal_year ? (
                             <div className="text-[11px] text-muted-foreground">
                               FY {record.fiscal_year}
@@ -460,7 +460,7 @@ export default function H1BExplorerPage() {
                             {employer.total_denied.toLocaleString()}
                           </td>
                           <td className="px-4 py-3 font-semibold tabular-nums text-strong">
-                            {approval === null ? "—" : `${approval}%`}
+                            {approval === null ? "-" : `${approval}%`}
                           </td>
                           <td className="px-4 py-3 text-muted-foreground capitalize">
                             {employer.approval_trend ?? "stable"}

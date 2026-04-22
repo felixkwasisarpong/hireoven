@@ -15,6 +15,7 @@ import {
   fetchJobDescription,
   normalizeJobApplyUrl,
 } from "../lib/jobs/description"
+import { inferJobMetadata } from "../lib/jobs/metadata"
 
 loadEnvConfig(process.cwd())
 
@@ -36,8 +37,17 @@ const timeoutMs = Math.max(2000, Number(timeoutArg?.split("=")[1] ?? "12000"))
 type JobRow = {
   id: string
   title: string
+  location: string | null
   apply_url: string
   description: string | null
+  employment_type: string | null
+  seniority_level: string | null
+  is_remote: boolean | null
+  is_hybrid: boolean | null
+  requires_authorization: boolean | null
+  salary_min: number | null
+  salary_max: number | null
+  salary_currency: string | null
   is_active: boolean
   raw_data: Record<string, unknown> | null
 }
@@ -71,7 +81,9 @@ async function loadJobs(supabase: any) {
   while (true) {
     let query = supabase
       .from("jobs")
-      .select("id, title, apply_url, description, is_active, raw_data")
+      .select(
+        "id, title, location, apply_url, description, employment_type, seniority_level, is_remote, is_hybrid, requires_authorization, salary_min, salary_max, salary_currency, is_active, raw_data"
+      )
       .order("updated_at", { ascending: true })
       .range(page * pageSize, page * pageSize + pageSize - 1)
 
@@ -144,6 +156,11 @@ async function main() {
       const cleanedTitle = cleanJobTitle(row.title)
       const urlChanged = normalizedApplyUrl !== row.apply_url
       const titleChanged = cleanedTitle !== row.title
+      const inferred = inferJobMetadata({
+        title: cleanedTitle,
+        description: extracted,
+        location: row.location,
+      })
       if (normalizedExisting && normalizedExisting === extracted && !titleChanged && !urlChanged) {
         unchanged += 1
         return
@@ -169,6 +186,15 @@ async function main() {
           apply_url: normalizedApplyUrl,
           description: extracted,
           skills: extractSkillsFromText(cleanedTitle, extracted),
+          employment_type: inferred.employmentType ?? row.employment_type ?? null,
+          seniority_level: inferred.seniorityLevel ?? row.seniority_level ?? null,
+          is_remote: inferred.isRemote ?? row.is_remote ?? false,
+          is_hybrid: inferred.isHybrid ?? row.is_hybrid ?? false,
+          requires_authorization:
+            inferred.requiresAuthorization ?? row.requires_authorization ?? false,
+          salary_min: inferred.salaryMin ?? row.salary_min ?? null,
+          salary_max: inferred.salaryMax ?? row.salary_max ?? null,
+          salary_currency: inferred.salaryCurrency ?? row.salary_currency ?? "USD",
           raw_data: nextRaw as Record<string, unknown>,
           updated_at: new Date().toISOString(),
         } as any)
