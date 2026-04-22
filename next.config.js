@@ -3,12 +3,18 @@ const nextConfig = {
   output: "standalone",
   images: {
     remotePatterns: [
+      // Company logos come from many external career sites/domains.
+      // Keep explicit patterns, but allow HTTPS fallthrough so unknown hosts
+      // don't crash runtime with "next/image unconfigured host".
+      { protocol: "https", hostname: "**" },
       { hostname: "**.greenhouse.io" },
       { hostname: "**.lever.co" },
       { hostname: "**.ashbyhq.com" },
       { hostname: "logo.clearbit.com" },
       { hostname: "unavatar.io" },
+      { hostname: "icon.horse" },
       { hostname: "www.google.com" },
+      { hostname: "**.gstatic.com" },
       { hostname: "**.supabase.co" },
       { hostname: "**.supabase.in" },
     ],

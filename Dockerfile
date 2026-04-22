@@ -1,4 +1,4 @@
-# Hireoven — production image (Next.js standalone)
+# Hireoven - production image (Next.js standalone)
 # Coolify: build from repo root; expose port 3000; set env in UI.
 
 FROM node:20-bookworm-slim AS deps
