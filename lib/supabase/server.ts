@@ -17,14 +17,14 @@ export async function createClient() {
           try {
             cookieStore.set({ name, value, ...options })
           } catch {
-            // Called from a Server Component — middleware handles session refresh
+            // Called from a Server Component - middleware handles session refresh
           }
         },
         remove(name: string, options: CookieOptions) {
           try {
             cookieStore.set({ name, value: "", ...options })
           } catch {
-            // Called from a Server Component — middleware handles session refresh
+            // Called from a Server Component - middleware handles session refresh
           }
         },
       },
