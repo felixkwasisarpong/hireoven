@@ -13,7 +13,7 @@
  * for next 25 placeholders"). Each call is bounded by `limit` (default 25,
  * max 100) so the request finishes well within Next's serverless timeout.
  *
- * Keeps `is_active = false` when no ATS is discovered — promotion to active
+ * Keeps `is_active = false` when no ATS is discovered - promotion to active
  * is an explicit admin decision. When an ATS is found, the endpoint:
  *   - Sets `ats_type` and updates `careers_url` to the live origin.
  *   - Flips `is_active` to `true` only when confidence is "high" or "medium".
@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
   const supabase = createAdminClient()
 
   // Grab the next batch of pending placeholders. We match any of the known
-  // placeholder-source tags — the LCA importer historically wrote
+  // placeholder-source tags - the LCA importer historically wrote
   // `lca_import`, and the reconciliation script writes
   // `lca_reconciliation` / `uscis_reconciliation`. Old and new rows all
   // need the same enrichment pass.
@@ -248,7 +248,7 @@ async function enrichOne(
   }
 
   if (!detection) {
-    // No ATS found — mark as failed so we don't retry forever, but keep it
+    // No ATS found - mark as failed so we don't retry forever, but keep it
     // inactive. Humans can re-queue via a future admin action if they want.
     summary.failed++
     summary.sample.push({

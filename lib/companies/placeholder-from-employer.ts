@@ -2,7 +2,7 @@
  * Single source of truth for creating `companies` rows from raw employer
  * names found in USCIS or DOL LCA imports.
  *
- * Deliberately NOT called from the importers themselves — they are pure
+ * Deliberately NOT called from the importers themselves - they are pure
  * data loaders now and must not mutate the companies table. This module is
  * consumed exclusively by admin-triggered reconciliation flows:
  *

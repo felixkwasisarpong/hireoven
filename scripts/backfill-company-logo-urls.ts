@@ -26,7 +26,15 @@ const force = process.argv.includes("--force")
 function getProvider(): LogoProvider {
   const arg = process.argv.find((a) => a.startsWith("--provider="))
   const v = arg?.split("=")[1]?.toLowerCase()
-  if (v === "unavatar" || v === "google-favicon" || v === "clearbit") return v
+  if (
+    v === "icon-horse" ||
+    v === "unavatar" ||
+    v === "google-favicon" ||
+    v === "clearbit" ||
+    v === "duckduckgo"
+  ) {
+    return v
+  }
   return "google-favicon"
 }
 

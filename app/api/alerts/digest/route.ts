@@ -201,7 +201,7 @@ export async function GET(request: NextRequest) {
       await resend.emails.send({
         from: getAlertsFromEmail(),
         to: user.email!,
-        subject: `Your daily job digest — ${totalCount} new match${totalCount === 1 ? "" : "es"}`,
+        subject: `Your daily job digest - ${totalCount} new match${totalCount === 1 ? "" : "es"}`,
         html: buildDigestEmail(user, sections, totalCount, "today"),
       })
       sent++

@@ -100,7 +100,7 @@ type PlaceholderRow = {
 }
 
 // ---------------------------------------------------------------------------
-// Fetch pending placeholders (all of them, paged — PostgREST caps at 1,000
+// Fetch pending placeholders (all of them, paged - PostgREST caps at 1,000
 // per request by default, so we page in 1k chunks until exhausted).
 // ---------------------------------------------------------------------------
 
@@ -149,8 +149,8 @@ const LEGAL_SUFFIXES =
  * The single-guess approach in the original implementation failed badly:
  * legacy placeholders stored noisy guesses like `infosyslimited.com` which
  * don't resolve, and there was no fallback. Here we produce a ranked list
- * of candidates per row — stripped short form first, then progressively
- * less aggressive forms, then alternate TLDs — so even bad stored guesses
+ * of candidates per row - stripped short form first, then progressively
+ * less aggressive forms, then alternate TLDs - so even bad stored guesses
  * get superseded by better ones the enricher will actually try.
  *
  * Examples:
@@ -168,7 +168,7 @@ function guessCandidateDomains(name: string): string[] {
     .split(/[^a-z0-9]+/)
     .filter((w) => w.length > 0)
 
-  // Insertion-ordered list — order matters! Earlier candidates are
+  // Insertion-ordered list - order matters! Earlier candidates are
   // preferred because the first successful ATS detection wins. We put
   // high-specificity (full-name) candidates first and short acronyms last
   // to avoid domain-squatter hits like "cf.com" winning over "chime.com".
@@ -185,13 +185,13 @@ function guessCandidateDomains(name: string): string[] {
     }
   }
 
-  // 1) Full stripped name joined — most specific form. "infosys".
+  // 1) Full stripped name joined - most specific form. "infosys".
   add(words.join(''))
 
-  // 2) Hyphenated stripped name — "tata-consultancy-services.com".
+  // 2) Hyphenated stripped name - "tata-consultancy-services.com".
   if (words.length > 1) add(words.join('-'))
 
-  // 3) Raw slug including legal suffix — catches literal domains like
+  // 3) Raw slug including legal suffix - catches literal domains like
   //    "somecompanyllc.com" that some small firms actually own.
   const rawSlug = raw.replace(/[^a-z0-9]+/g, '')
   if (rawSlug && rawSlug !== words.join('')) add(rawSlug)
@@ -199,14 +199,14 @@ function guessCandidateDomains(name: string): string[] {
   // 4) First three words collapsed.
   if (words.length > 3) add(words.slice(0, 3).join(''))
 
-  // 5) First two words collapsed — "jp morgan chase" → "jpmorgan".
+  // 5) First two words collapsed - "jp morgan chase" → "jpmorgan".
   if (words.length > 2) add(words.slice(0, 2).join(''))
 
-  // 6) First word alone — only if it's ≥ 4 chars (avoids picking up
+  // 6) First word alone - only if it's ≥ 4 chars (avoids picking up
   //    `tata.com` or `adp.com` when those are owned by other orgs).
   if (words.length > 1 && words[0].length >= 4) add(words[0])
 
-  // 7) Acronym — ONLY when ≥ 4 letters. Short 2–3 letter acronyms
+  // 7) Acronym - ONLY when ≥ 4 letters. Short 2–3 letter acronyms
   //    (`cf.com`, `sri.com`, `rm.com`, `ml.com`, `dbs.com`) are almost
   //    always owned by a different company and cause catastrophic
   //    false positives. Requiring length ≥ 4 cuts the false-positive
@@ -216,7 +216,7 @@ function guessCandidateDomains(name: string): string[] {
     if (acronym.length >= 4 && acronym.length <= 6) add(acronym)
   }
 
-  // 8) Alt TLDs on the primary stripped form — tech/saas/ai shops.
+  // 8) Alt TLDs on the primary stripped form - tech/saas/ai shops.
   add(words.join(''), ['io', 'co', 'ai'])
 
   return out.slice(0, 10)
@@ -395,7 +395,7 @@ async function runWithConcurrency<T>(
  * SuccessFactors, Oracle HCM, bespoke ATS) that our signature set doesn't
  * cover, but the page itself is still clearly a hiring page.
  *
- * We look for keyword density rather than a single phrase — one false
+ * We look for keyword density rather than a single phrase - one false
  * positive phrase ("we're a career-focused firm") shouldn't flip an
  * unrelated page to "custom careers". */
 function looksLikeCareersPage(html: string): boolean {
@@ -524,7 +524,7 @@ async function enrichOne(row: PlaceholderRow): Promise<EnrichOutcome> {
     }
 
     // A candidate responded. Only trust it if the host is plausibly the
-    // right company — otherwise skip entirely (don't even consider it for
+    // right company - otherwise skip entirely (don't even consider it for
     // custom-careers fallback, to avoid activating a squatter domain).
     if (!isDomainPlausible(row.name, candidateDomain)) {
       deadDomains.add(candidateDomain)
@@ -794,7 +794,7 @@ async function main() {
   console.log(`[enrich]   fetch-failed    = ${counters.fetchFailed}`)
   console.log(`[enrich]   elapsed         = ${elapsedMin} min`)
   if (!execute) {
-    console.log('\n[enrich] dry-run — nothing written. Re-run with --execute to commit.')
+    console.log('\n[enrich] dry-run - nothing written. Re-run with --execute to commit.')
   }
 }
 

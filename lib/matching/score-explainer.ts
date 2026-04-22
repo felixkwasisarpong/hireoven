@@ -72,13 +72,13 @@ export function explainScore(
     concerns.push("Sponsorship compatibility is weak for your current work authorization needs.")
   }
 
-  let headline = "Potential fit — worth a closer look"
+  let headline = "Potential fit - worth a closer look"
   if (score.overall_score >= 85) {
-    headline = "Strong match — this role lines up well with your background"
+    headline = "Strong match - this role lines up well with your background"
   } else if (score.overall_score >= 70) {
-    headline = "Good match — the fundamentals line up, with a few gaps to close"
+    headline = "Good match - the fundamentals line up, with a few gaps to close"
   } else if (score.overall_score < 50) {
-    headline = "Lower match — there are some meaningful gaps to review first"
+    headline = "Lower match - there are some meaningful gaps to review first"
   }
 
   const sponsorshipNote = score.is_sponsorship_compatible

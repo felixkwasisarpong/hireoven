@@ -250,8 +250,8 @@ export default function AdminH1BPage() {
   }
 
   // Fetch the unmatched-employers slice from Postgres. We run three queries:
-  //   1. total unmatched (head-only count) — how big the backlog actually is
-  //   2. total unmatched at/above threshold (head-only count) — "showing X of Y"
+  //   1. total unmatched (head-only count) - how big the backlog actually is
+  //   2. total unmatched at/above threshold (head-only count) - "showing X of Y"
   //   3. the top `pageSize` rows at/above threshold, ordered by petitions DESC
   // This keeps the payload tiny (≤ pageSize rows) even when h1b_records has
   // hundreds of thousands of entries.
@@ -422,7 +422,7 @@ export default function AdminH1BPage() {
                 handlers.onError(evt.error)
               }
             } catch {
-              // Ignore malformed lines — the server should not emit them,
+              // Ignore malformed lines - the server should not emit them,
               // but we don't want a stray log line to kill the stream.
             }
           }
@@ -493,7 +493,7 @@ export default function AdminH1BPage() {
       pushToast({
         tone: "error",
         title: "Import request failed",
-        description: (err as Error).message ?? "Network error — check the server logs.",
+        description: (err as Error).message ?? "Network error - check the server logs.",
       })
     } finally {
       clearInterval(ticker)
@@ -556,7 +556,7 @@ export default function AdminH1BPage() {
       pushToast({
         tone: "error",
         title: "LCA import request failed",
-        description: (err as Error).message ?? "Network error — check the server logs.",
+        description: (err as Error).message ?? "Network error - check the server logs.",
       })
     } finally {
       setLCAUploading(false)
@@ -571,7 +571,7 @@ export default function AdminH1BPage() {
       const body = (await response.json()) as { remaining?: number }
       setEnrichPending(body.remaining ?? 0)
     } catch {
-      // silent — the button will just render without a count
+      // silent - the button will just render without a count
     }
   }, [])
 
@@ -778,7 +778,7 @@ export default function AdminH1BPage() {
               <p className="mt-3 text-2xl font-semibold text-gray-900">
                 {importResult.durationMs
                   ? `${(importResult.durationMs / 1000).toFixed(1)}s`
-                  : "—"}
+                  : "-"}
               </p>
             </div>
           </div>
@@ -787,7 +787,7 @@ export default function AdminH1BPage() {
 
       <AdminPanel
         title="Import DOL LCA disclosure"
-        description="Upload a DOL LCA quarterly disclosure — .xlsx, .xls, .csv, or .tsv. Rows are loaded into lca_records only; no companies are created here. Run the reconciliation script after import to promote unmatched employers into placeholder companies."
+        description="Upload a DOL LCA quarterly disclosure - .xlsx, .xls, .csv, or .tsv. Rows are loaded into lca_records only; no companies are created here. Run the reconciliation script after import to promote unmatched employers into placeholder companies."
       >
         <div className="grid gap-4 lg:grid-cols-[1fr_220px] lg:items-end">
           <label className="inline-flex cursor-pointer items-center gap-3 rounded-2xl border border-dashed border-emerald-300 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700 transition hover:border-emerald-400 hover:bg-emerald-100">
@@ -931,7 +931,7 @@ export default function AdminH1BPage() {
       {(lcaResult || importResult || (enrichPending !== null && enrichPending > 0)) ? (
         <AdminPanel
           title="Continue from here"
-          description="Imports load raw USCIS / LCA rows only — the companies table is untouched. The steps below are optional; skip them if you don't want new companies created right now."
+          description="Imports load raw USCIS / LCA rows only - the companies table is untouched. The steps below are optional; skip them if you don't want new companies created right now."
         >
           <div className="grid gap-4 lg:grid-cols-3">
             <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
@@ -941,12 +941,12 @@ export default function AdminH1BPage() {
               <p className="mt-3 text-sm text-amber-900/90">
                 Only run this when you&apos;re ready to promote heavy-filing
                 employers into <code className="rounded bg-white/70 px-1">companies</code> rows.
-                Defaults are strict so you don&apos;t flood the table — the
+                Defaults are strict so you don&apos;t flood the table - the
                 long tail stays in raw import tables with{" "}
                 <code className="rounded bg-white/70 px-1">company_id = null</code>.
               </p>
               <pre className="mt-3 overflow-x-auto rounded-lg bg-white/70 p-3 text-xs text-amber-900">
-{`# preview (dry-run prints N would-create and top 25)\nnpm run db:reconcile-from-imports\n\n# commit — back-links lca/h1b/employer_lca_stats rows\nnpm run db:reconcile-from-imports:execute\n\n# stricter / capped variants\nnpx tsx scripts/reconcile-companies-from-imports.ts \\\n  --lca-threshold=500 --uscis-threshold=200 --limit=250 --execute`}
+{`# preview (dry-run prints N would-create and top 25)\nnpm run db:reconcile-from-imports\n\n# commit - back-links lca/h1b/employer_lca_stats rows\nnpm run db:reconcile-from-imports:execute\n\n# stricter / capped variants\nnpx tsx scripts/reconcile-companies-from-imports.ts \\\n  --lca-threshold=500 --uscis-threshold=200 --limit=250 --execute`}
               </pre>
               <p className="mt-2 text-[11px] text-amber-700/80">
                 Defaults: lca ≥ 100 filings OR uscis ≥ 50 approvals. You can
@@ -961,7 +961,7 @@ export default function AdminH1BPage() {
                 Discover ATS
               </div>
               <p className="mt-3 text-3xl font-semibold text-indigo-900">
-                {enrichPending === null ? "—" : formatNumber(enrichPending)}
+                {enrichPending === null ? "-" : formatNumber(enrichPending)}
               </p>
               <p className="mt-1 text-xs text-indigo-700/80">
                 placeholder companies awaiting ATS discovery
@@ -1027,7 +1027,7 @@ export default function AdminH1BPage() {
                   </Link>
                 </li>
                 <li>
-                  Unmatched USCIS records are listed below — match them to a
+                  Unmatched USCIS records are listed below - match them to a
                   tracked company to fuse approval data with existing
                   sponsorship scores.
                 </li>
@@ -1062,7 +1062,7 @@ export default function AdminH1BPage() {
                               {row.atsType}
                             </AdminBadge>
                           ) : (
-                            <span className="text-gray-400">—</span>
+                            <span className="text-gray-400">-</span>
                           )}
                         </td>
                         <td className="px-4 py-2 text-gray-600">
@@ -1096,7 +1096,7 @@ export default function AdminH1BPage() {
       {unmatchedTotalAll > 0 ? (
         <AdminPanel
           title="High-signal unmatched employers"
-          description="Only employers at or above the threshold below are shown here. The long tail of one-off employers is intentionally hidden — trying to match them manually isn't worth it. Run the reconciliation script to bulk-create placeholder companies for big employers, or manually match the ones worth tracking below."
+          description="Only employers at or above the threshold below are shown here. The long tail of one-off employers is intentionally hidden - trying to match them manually isn't worth it. Run the reconciliation script to bulk-create placeholder companies for big employers, or manually match the ones worth tracking below."
           className="border-red-200"
         >
           <div className="mb-4 flex flex-wrap items-end gap-4">

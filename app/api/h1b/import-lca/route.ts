@@ -19,7 +19,7 @@ export const maxDuration = 300
  *   file: the .xlsx file (required)
  *   fiscalYear: number (optional, used if the file rows don't carry one)
  *
- * Company creation is NOT handled here — use
+ * Company creation is NOT handled here - use
  * `scripts/reconcile-companies-from-imports.ts` after import.
  *
  * The service-role key header is also accepted so this can be triggered

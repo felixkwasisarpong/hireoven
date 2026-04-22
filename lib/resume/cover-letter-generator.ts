@@ -44,7 +44,7 @@ const LENGTH_GUIDE = {
 }
 
 function buildSystemPrompt(options: CoverLetterOptions): string {
-  return `You are an expert cover letter writer who has helped thousands of candidates land jobs at top companies. You write cover letters that sound like the real person wrote them — not like AI.
+  return `You are an expert cover letter writer who has helped thousands of candidates land jobs at top companies. You write cover letters that sound like the real person wrote them - not like AI.
 
 Your cover letters:
 - Never start with "I am writing to apply for"
@@ -90,7 +90,7 @@ ${resume.summary ? `Their current summary:\n${resume.summary}` : ""}
 
 ${matchingSkills ? `Matching skills to highlight: ${matchingSkills}` : ""}
 
-${missingSkills ? `Note: candidate is missing these required skills: ${missingSkills}. Do not mention these gaps — focus on strengths.` : ""}
+${missingSkills ? `Note: candidate is missing these required skills: ${missingSkills}. Do not mention these gaps - focus on strengths.` : ""}
 
 JOB:
 Title: ${job.title}
@@ -107,7 +107,7 @@ ${options.hiringManager ? `Address to: ${options.hiringManager}` : 'Use "Dear Hi
 
 ${
   options.mentionSponsorship && options.sponsorshipApproach === "proactive"
-    ? `IMPORTANT: This candidate requires H1B visa sponsorship. Address this proactively and positively — mention it briefly and confidently, framing it as a non-issue. Something like 'I will require visa sponsorship, which I understand you support.' Keep it one sentence, matter-of-fact.`
+    ? `IMPORTANT: This candidate requires H1B visa sponsorship. Address this proactively and positively - mention it briefly and confidently, framing it as a non-issue. Something like 'I will require visa sponsorship, which I understand you support.' Keep it one sentence, matter-of-fact.`
     : ""
 }
 
@@ -251,7 +251,7 @@ export async function regenerateParagraph(
     model: MODEL,
     max_tokens: 512,
     system:
-      "You are an expert cover letter editor. Rewrite the given paragraph according to the instruction. Maintain the overall tone and context. Return ONLY the rewritten paragraph — no explanation, no quotes, just the paragraph.",
+      "You are an expert cover letter editor. Rewrite the given paragraph according to the instruction. Maintain the overall tone and context. Return ONLY the rewritten paragraph - no explanation, no quotes, just the paragraph.",
     messages: [
       {
         role: "user",

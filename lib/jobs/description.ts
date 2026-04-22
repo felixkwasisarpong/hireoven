@@ -20,6 +20,23 @@ const SECTION_HEADING_PATTERNS = [
   /^nice to have$/i,
   /^benefits$/i,
 ]
+const INLINE_SECTION_HEADINGS = [
+  "How You Will Make A Difference",
+  "Who You Are",
+  "Responsibilities",
+  "Requirements",
+  "Qualifications",
+  "Basic Qualifications",
+  "Preferred Qualifications",
+  "Minimum Qualifications",
+  "Nice to Have",
+  "What You'll Do",
+  "What You Will Do",
+  "About the Role",
+  "About You",
+  "About Us",
+  "Benefits",
+]
 
 function isGoogleCareersJobUrl(url: URL): boolean {
   return (
@@ -66,6 +83,9 @@ function decodeHtmlEntities(value: string): string {
     .replace(/&#39;|&apos;/gi, "'")
     .replace(/&lt;/gi, "<")
     .replace(/&gt;/gi, ">")
+    .replace(/&mdash;/gi, "-")
+    .replace(/&ndash;/gi, "–")
+    .replace(/&bull;/gi, "•")
 }
 
 function collapseWhitespace(value: string): string {
@@ -275,6 +295,60 @@ function isSectionHeading(line: string): boolean {
   return false
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+}
+
+function normalizeDescriptionForSections(input: string): string {
+  let output = input.replace(/\u2022/g, "•")
+
+  for (const heading of INLINE_SECTION_HEADINGS) {
+    const pattern = new RegExp(`\\s(${escapeRegExp(heading)}:)\\s*`, "gi")
+    output = output.replace(pattern, "\n\n$1\n")
+  }
+
+  output = output
+    .replace(/:\s*-\s+/g, ":\n- ")
+    .replace(/\s*•\s+/g, "\n• ")
+    .replace(
+      /\s([A-ZÀ-ÖØ-Ý][A-Za-zÀ-ÖØ-öø-ÿ0-9 /&(),'+-]{2,80}:)\s+/g,
+      "\n\n$1\n"
+    )
+
+  return output
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join("\n")
+}
+
+function splitLongParagraph(line: string): string[] {
+  if (line.length <= 360) return [line]
+
+  const sentences = line
+    .split(/(?<=[.!?])\s+(?=[A-ZÀ-ÖØ-Ý0-9])/g)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean)
+
+  if (sentences.length <= 2) return [line]
+
+  const chunks: string[] = []
+  let current = ""
+
+  for (const sentence of sentences) {
+    const candidate = current ? `${current} ${sentence}` : sentence
+    if (candidate.length > 320 && current) {
+      chunks.push(current)
+      current = sentence
+      continue
+    }
+    current = candidate
+  }
+
+  if (current) chunks.push(current)
+  return chunks.length > 0 ? chunks : [line]
+}
+
 export type JobDescriptionSection = {
   heading: string | null
   paragraphs: string[]
@@ -287,7 +361,9 @@ export function parseJobDescriptionSections(
   const cleaned = cleanJobDescription(description)
   if (!cleaned) return []
 
-  const lines = cleaned
+  const normalized = normalizeDescriptionForSections(cleaned)
+
+  const lines = normalized
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean)
@@ -309,7 +385,12 @@ export function parseJobDescriptionSections(
     }
 
     if (/^[-*•]\s+/.test(line)) {
-      current.bullets.push(line.replace(/^[-*•]\s+/, "").trim())
+      const rawBullet = line.replace(/^[-*•]\s+/, "").trim()
+      const splitBullets = rawBullet
+        .split(/\s+-\s+(?=[A-Z0-9])/g)
+        .map((item) => item.trim())
+        .filter(Boolean)
+      current.bullets.push(...splitBullets)
       continue
     }
 
@@ -318,11 +399,13 @@ export function parseJobDescriptionSections(
       continue
     }
 
-    current.paragraphs.push(line)
+    current.paragraphs.push(...splitLongParagraph(line))
   }
 
   pushCurrent()
-  return sections.length > 0 ? sections : [{ heading: null, paragraphs: [cleaned], bullets: [] }]
+  return sections.length > 0
+    ? sections
+    : [{ heading: null, paragraphs: [normalized], bullets: [] }]
 }
 
 function extractGoogleDescriptionFromHtml(html: string): string | null {
@@ -488,9 +571,6 @@ export function extractJobDescriptionFromHtml(html: string): string | null {
   const fromJsonLd = extractDescriptionFromJsonLd(html)
   if (fromJsonLd) return fromJsonLd
 
-  const fromMeta = extractDescriptionFromMetaTags(html)
-  if (fromMeta) return fromMeta
-
   let best: string | null = null
   let bestScore = -1
 
@@ -511,7 +591,12 @@ export function extractJobDescriptionFromHtml(html: string): string | null {
     }
   }
 
-  return best
+  if (best) return best
+
+  const fromMeta = extractDescriptionFromMetaTags(html)
+  if (fromMeta) return fromMeta
+
+  return null
 }
 
 export async function fetchJobDescription(

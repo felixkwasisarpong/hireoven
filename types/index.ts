@@ -1,5 +1,5 @@
 // =============================================================================
-// Hireoven — TypeScript types matching the Supabase schema
+// Hireoven - TypeScript types matching the Supabase schema
 // NOTE: Must use `type` aliases (not `interface`) so they satisfy
 // `Record<string, unknown>` in Supabase SDK v2.100+ conditional types.
 // =============================================================================
@@ -125,7 +125,7 @@ export type JobApplication = {
   status: ApplicationStatus;
   company_name: string;
   company_logo_url: string | null;
-  /** Enriched on read — company domain for logo fallbacks (favicon / Clearbit chain). */
+  /** Enriched on read - company domain for logo fallbacks (favicon / Clearbit chain). */
   company_domain?: string | null;
   job_title: string;
   apply_url: string | null;
@@ -283,7 +283,7 @@ export type CoverLetterLength = 'short' | 'medium' | 'long';
 export type CoverLetterStyle = 'story' | 'skills_focused' | 'achievement_focused';
 export type SponsorshipApproach = 'proactive' | 'on_request' | 'omit';
 
-// CoverLetterOptions defined after ResumeAnalysis — see below
+// CoverLetterOptions defined after ResumeAnalysis - see below
 export type CoverLetterOptionsBase = {
   tone: CoverLetterTone;
   length: CoverLetterLength;

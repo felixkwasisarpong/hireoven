@@ -14,7 +14,7 @@ const MAX_JOBS_PER_REQUEST = 20
 
 /**
  * Batch-predict H1B approval for up to 20 jobs at a time.
- * Returns { [jobId]: H1BPrediction } — missing jobs are simply omitted.
+ * Returns { [jobId]: H1BPrediction } - missing jobs are simply omitted.
  * Cached predictions <7 days old are served from the `jobs.h1b_prediction`
  * JSONB column; everything else is computed in parallel.
  */

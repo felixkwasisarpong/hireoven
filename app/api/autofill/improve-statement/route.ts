@@ -32,7 +32,7 @@ export async function POST(request: Request) {
     model: "claude-sonnet-4-6",
     max_tokens: 256,
     system:
-      "You rewrite visa sponsorship statements for job applications. Make them confident, honest, and professional — not apologetic. One or two sentences. Return only the rewritten statement, no explanation.",
+      "You rewrite visa sponsorship statements for job applications. Make them confident, honest, and professional - not apologetic. One or two sentences. Return only the rewritten statement, no explanation.",
     messages: [
       {
         role: "user",

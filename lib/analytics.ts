@@ -10,7 +10,7 @@ export function track(event: string, properties?: Record<string, string | number
   }
 }
 
-// Typed event helpers — call these throughout the app
+// Typed event helpers - call these throughout the app
 
 export function trackJobViewed(jobId: string, companyId: string, source: string) {
   track("job_viewed", { jobId, companyId, source })

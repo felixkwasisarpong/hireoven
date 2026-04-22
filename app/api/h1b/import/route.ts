@@ -10,7 +10,7 @@ export const maxDuration = 300
  * Streams NDJSON progress for a USCIS H-1B Employer Data Hub upload.
  * Same shape as the LCA import route.
  *
- * Company creation is NOT handled here — the importer only attaches
+ * Company creation is NOT handled here - the importer only attaches
  * `h1b_records.company_id` when a normalised employer name matches an
  * existing `companies` row. Unmatched employers are reconciled by
  * `scripts/reconcile-companies-from-imports.ts`.

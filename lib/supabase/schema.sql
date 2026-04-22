@@ -1,5 +1,5 @@
 -- =============================================================================
--- Hireoven — Supabase Database Schema
+-- Hireoven - Supabase Database Schema
 -- =============================================================================
 
 -- 1. Companies table
@@ -651,7 +651,7 @@ ALTER TABLE companies ADD COLUMN IF NOT EXISTS ats_identifier TEXT;
 ALTER TABLE companies ADD COLUMN IF NOT EXISTS notes TEXT;
 ALTER TABLE companies ADD COLUMN IF NOT EXISTS raw_ats_config JSONB DEFAULT '{}'::jsonb;
 
--- 10. API usage table — track Claude, Resend, and push-notification calls
+-- 10. API usage table - track Claude, Resend, and push-notification calls
 CREATE TABLE IF NOT EXISTS api_usage (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   service TEXT NOT NULL, -- claude, resend, webpush
@@ -668,7 +668,7 @@ ALTER TABLE api_usage ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Service role can manage api_usage"
   ON api_usage FOR ALL USING (auth.role() = 'service_role');
 
--- 11. System settings table — lightweight config store for admin controls
+-- 11. System settings table - lightweight config store for admin controls
 CREATE TABLE IF NOT EXISTS system_settings (
   key TEXT PRIMARY KEY,
   value JSONB NOT NULL DEFAULT '{}'::jsonb,
@@ -998,7 +998,7 @@ END $$;
 -- DOL LCA data (H1B approval prediction engine)
 -- =============================================================================
 -- `h1b_records` (above) holds aggregated USCIS employer-level petition data.
--- `lca_records` holds Department of Labor LCA disclosures — one row per filing,
+-- `lca_records` holds Department of Labor LCA disclosures - one row per filing,
 -- including job title / SOC code / worksite / wage level / decision. This is
 -- the input data the prediction engine uses. `employer_lca_stats` is a
 -- pre-aggregated cache so we do not have to re-scan millions of rows at query
@@ -1148,7 +1148,7 @@ ALTER TABLE jobs ADD COLUMN IF NOT EXISTS h1b_prediction_at TIMESTAMPTZ;
 -- without re-joining to lca_records.
 ALTER TABLE employer_lca_stats ADD COLUMN IF NOT EXISTS display_name TEXT;
 
--- SOC-code base rates — precomputed by the LCA importer so the H1B predictor
+-- SOC-code base rates - precomputed by the LCA importer so the H1B predictor
 -- can form its Bayesian prior without scanning `lca_records` on every call.
 -- One row per normalized 6-digit SOC code (e.g. "15-1252").
 CREATE TABLE IF NOT EXISTS soc_base_rates (

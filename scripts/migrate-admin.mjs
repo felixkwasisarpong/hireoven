@@ -42,7 +42,7 @@ const statements = [
 
 for (const sql of statements) {
   const { error } = await supabase.rpc("exec_sql", { sql }).catch(() => ({ error: null }))
-  // supabase JS doesn't have exec_sql by default — use the REST API directly
+  // supabase JS doesn't have exec_sql by default - use the REST API directly
   void error
 }
 
@@ -150,5 +150,5 @@ if (pErr) {
     console.log("✓ Already an admin")
   }
 } else {
-  console.log("\nProfile not found — log in first, then re-run this script")
+  console.log("\nProfile not found - log in first, then re-run this script")
 }

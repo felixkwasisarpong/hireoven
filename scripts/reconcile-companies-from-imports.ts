@@ -18,7 +18,7 @@
  *      `h1b_records`, and `employer_lca_stats` rows so the prediction engine
  *      and admin UI can join on it.
  *
- * Defaults to a DRY RUN — nothing is written. Pass `--execute` to commit.
+ * Defaults to a DRY RUN - nothing is written. Pass `--execute` to commit.
  *
  * Usage:
  *   npx tsx scripts/reconcile-companies-from-imports.ts              # dry run
@@ -53,7 +53,7 @@ const execute = process.argv.includes('--execute')
 const verbose = process.argv.includes('--verbose')
 const limit = Number(flag('limit')) || undefined
 // Deliberately strict defaults. Running this with `--execute` should never
-// flood the companies table — the typical USCIS/LCA dataset has a very long
+// flood the companies table - the typical USCIS/LCA dataset has a very long
 // tail of one-off employers that are useless for the predictor and only
 // bloat admin surfaces. Opt in to looser thresholds explicitly.
 const lcaThreshold = Number(flag('lca-threshold') ?? flag('threshold')) || 100
@@ -85,7 +85,7 @@ const admin = createClient(url, serviceKey, {
  *
  * IMPORTANT: PostgREST silently caps any single response at 1,000 rows by
  * default (the `db.max_rows` / `PGRST_DB_MAX_ROWS` setting). Asking for a
- * larger `pageSize` does NOT get you more rows — the server just truncates
+ * larger `pageSize` does NOT get you more rows - the server just truncates
  * the response to 1,000 and the old "break when page.length < pageSize"
  * loop terminated after the first page, silently missing every row past
  * row 1,000.
@@ -114,7 +114,7 @@ async function scanAll<T>(
 }
 
 // ---------------------------------------------------------------------------
-// Step 1 — aggregate LCA + USCIS footprint per normalised employer name
+// Step 1 - aggregate LCA + USCIS footprint per normalised employer name
 // ---------------------------------------------------------------------------
 
 type Candidate = {
@@ -225,7 +225,7 @@ function normalizeEmployerName(name: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Step 2 — create placeholder companies for candidates that clear the bar
+// Step 2 - create placeholder companies for candidates that clear the bar
 // ---------------------------------------------------------------------------
 
 async function reconcile() {

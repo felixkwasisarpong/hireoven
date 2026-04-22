@@ -6,7 +6,7 @@
  * The first generation of enrichment used greedy acronym guessing
  * (`guessCandidateDomains`) which happily accepted 2–3 letter domains
  * like `cf.com`, `rm.com`, `dbs.com`. Those domains often host real
- * ATS iframes — but they belong to *other* companies, so the activated
+ * ATS iframes - but they belong to *other* companies, so the activated
  * placeholder ended up with a wrong logo, wrong careers URL, and a
  * misleading `is_active = true` flag.
  *
@@ -157,7 +157,7 @@ async function main() {
   )
 
   if (!execute) {
-    console.log('\n[audit] dry-run — nothing written. Re-run with --execute to revert the implausible ones.')
+    console.log('\n[audit] dry-run - nothing written. Re-run with --execute to revert the implausible ones.')
     return
   }
 
@@ -180,7 +180,7 @@ async function main() {
 
     const cleanedConfig = {
       ...(row.raw_ats_config ?? {}),
-      // Intentionally drop the old bogus guessed_domain — the fresh
+      // Intentionally drop the old bogus guessed_domain - the fresh
       // candidate generator will re-derive it from the name.
       guessed_domain: null,
       domain_verified: false,

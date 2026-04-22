@@ -21,7 +21,7 @@ DELETE FROM h1b_records;
 -- 2. Operational company data
 DELETE FROM crawl_logs;
 
--- 3. Per-user watchlist entries (explicit wipe — no trace of any company)
+-- 3. Per-user watchlist entries (explicit wipe - no trace of any company)
 DELETE FROM watchlist;
 
 -- 4. Jobs.
@@ -33,7 +33,7 @@ DELETE FROM jobs;
 -- 5. Companies. Any residual watchlist rows CASCADE away here.
 DELETE FROM companies;
 
--- 6. Verification — every row count below should be 0.
+-- 6. Verification - every row count below should be 0.
 SELECT 'companies'          AS tbl, COUNT(*) AS rows FROM companies
 UNION ALL SELECT 'jobs',                COUNT(*) FROM jobs
 UNION ALL SELECT 'crawl_logs',          COUNT(*) FROM crawl_logs
