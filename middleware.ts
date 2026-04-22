@@ -67,14 +67,14 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl
 
-  // Protect dashboard/admin pages — redirect to login
+  // Protect dashboard/admin pages - redirect to login
   if (isProtected(pathname) && !user) {
     const loginUrl = new URL("/login", request.url)
     loginUrl.searchParams.set("next", pathname)
     return NextResponse.redirect(loginUrl)
   }
 
-  // Protect API routes — return 401 JSON
+  // Protect API routes - return 401 JSON
   if (isProtectedApi(pathname) && !user) {
     return NextResponse.json(
       { error: "Authentication required", code: "UNAUTHENTICATED" },
