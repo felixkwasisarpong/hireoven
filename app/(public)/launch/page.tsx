@@ -12,7 +12,7 @@ const site = getPublicSiteUrl()
 
 export const metadata: Metadata = {
   metadataBase: new URL(site),
-  title: "Hireoven — Jobs served fresh",
+  title: "Hireoven - Jobs served fresh",
   description:
     "See job listings within minutes of being posted. H1B sponsorship scores built in. Join the waitlist.",
   openGraph: {
@@ -25,7 +25,7 @@ export const metadata: Metadata = {
         url: "/api/og",
         width: 1200,
         height: 630,
-        alt: "Hireoven — jobs served fresh",
+        alt: "Hireoven - jobs served fresh",
       },
     ],
     type: "website",
@@ -130,7 +130,7 @@ export default async function LaunchPage({
           <div>
             <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800">
               <span className="h-2 w-2 rounded-full bg-emerald-500" />
-              Building in public — launching soon
+              Building in public - launching soon
             </div>
             <h1 className="text-4xl font-extrabold tracking-tight text-strong sm:text-5xl lg:text-[3.25rem] lg:leading-[1.08]">
               Jobs posted minutes ago.
@@ -196,7 +196,7 @@ export default async function LaunchPage({
               <ul className="mt-4 space-y-2 text-sm leading-relaxed text-muted-foreground">
                 <li>Job boards crawl company pages once a day</li>
                 <li>Then they index, deduplicate, and surface</li>
-                <li>By the time you see it — it&apos;s old news</li>
+                <li>By the time you see it - it&apos;s old news</li>
               </ul>
             </div>
             <div className="text-center">
@@ -222,7 +222,7 @@ export default async function LaunchPage({
               For OPT, STEM OPT, and H1B seekers
             </span>
             <h2 className="mt-4 text-3xl font-bold text-strong lg:text-4xl">
-              The most painful part of your job search — finally solved.
+              The most painful part of your job search - finally solved.
             </h2>
 
             <div className="mt-10 space-y-8">
@@ -231,7 +231,7 @@ export default async function LaunchPage({
                   You apply to 50 jobs not knowing which ones sponsor.
                 </p>
                 <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                  → We show H1B sponsorship confidence scores on every listing — based on real
+                  → We show H1B sponsorship confidence scores on every listing - based on real
                   USCIS petition data.
                 </p>
               </div>
@@ -260,7 +260,7 @@ export default async function LaunchPage({
               emailInputId="waitlist-email-hero"
               className="mt-10 inline-flex h-12 items-center justify-center rounded-xl bg-teal-600 px-6 text-sm font-semibold text-white shadow-sm transition hover:bg-teal-700"
             >
-              I need this — add me to the waitlist
+              I need this - add me to the waitlist
             </ScrollToWaitlist>
           </div>
 
@@ -299,7 +299,7 @@ export default async function LaunchPage({
               {
                 step: "1",
                 title: "We watch. You sleep.",
-                body: "Our crawler monitors 10,000+ company career pages every 30 minutes. The moment a job appears — we know about it.",
+                body: "Our crawler monitors 10,000+ company career pages every 30 minutes. The moment a job appears - we know about it.",
               },
               {
                 step: "2",
@@ -341,7 +341,7 @@ export default async function LaunchPage({
               {
                 badge: "Early access perk",
                 title: "First access to every new feature",
-                body: "Resume tools, autofill, interview prep — you get it before anyone else.",
+                body: "Resume tools, autofill, interview prep - you get it before anyone else.",
               },
             ].map((c) => (
               <div

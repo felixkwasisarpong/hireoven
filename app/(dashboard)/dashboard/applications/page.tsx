@@ -155,10 +155,10 @@ function TableView({ apps, onOpen }: { apps: JobApplication[]; onOpen: (a: JobAp
                 </span>
               </td>
               <td className="px-4 py-3 text-[12.5px] text-muted-foreground">
-                {app.applied_at ? new Date(app.applied_at).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "—"}
+                {app.applied_at ? new Date(app.applied_at).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "-"}
               </td>
               <td className="px-4 py-3 text-[12.5px] text-muted-foreground">
-                {app.match_score != null ? `${app.match_score}%` : "—"}
+                {app.match_score != null ? `${app.match_score}%` : "-"}
               </td>
             </tr>
           ))}
@@ -254,7 +254,7 @@ export default function ApplicationsPage() {
               <p className="section-kicker">Pipeline</p>
               <h1 className="section-title mt-2.5">Applications</h1>
               <p className="section-copy mt-2.5 max-w-2xl">
-                Drag cards between stages, search everything, or switch to table view — one place for your search.
+                Drag cards between stages, search everything, or switch to table view - one place for your search.
               </p>
             </div>
             <div className="flex shrink-0 flex-wrap items-center gap-2.5">
@@ -384,7 +384,7 @@ export default function ApplicationsPage() {
           </div>
           <p className="mt-4 font-semibold text-strong">No applications yet</p>
           <p className="mt-1 text-sm text-muted-foreground">
-            Track every application — from saved to offer
+            Track every application - from saved to offer
           </p>
           <button
             type="button"

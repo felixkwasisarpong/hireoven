@@ -190,7 +190,7 @@ export default function OnboardingPage() {
 }
 
 // ---------------------------------------------------------------------------
-// Step 1 — Job search preferences
+// Step 1 - Job search preferences
 // ---------------------------------------------------------------------------
 
 function StepOne({
@@ -272,7 +272,7 @@ function StepOne({
             onChange={(e) => setRoleInput(e.target.value)}
             onKeyDown={(e) => handleKeyDown(e, "roles", roleInput, setRoleInput)}
             onBlur={() => addTag("roles", roleInput, setRoleInput)}
-            placeholder='e.g. "Software Engineer" — press Enter to add'
+            placeholder='e.g. "Software Engineer" - press Enter to add'
             className="w-full rounded-lg border border-gray-200 px-4 py-3 text-sm text-gray-900 placeholder-gray-400 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#FF5C18]"
           />
         </div>
@@ -294,7 +294,7 @@ function StepOne({
             onKeyDown={(e) => handleKeyDown(e, "locations", locationInput, setLocationInput)}
             onBlur={() => addTag("locations", locationInput, setLocationInput)}
             disabled={data.remoteOnly}
-            placeholder={data.remoteOnly ? "Remote selected" : 'e.g. "New York" — press Enter to add'}
+            placeholder={data.remoteOnly ? "Remote selected" : 'e.g. "New York" - press Enter to add'}
             className="w-full rounded-lg border border-gray-200 px-4 py-3 text-sm text-gray-900 placeholder-gray-400 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#FF5C18] disabled:bg-gray-50 disabled:text-gray-400"
           />
           <label className="flex items-center gap-2 mt-2 cursor-pointer">
@@ -346,7 +346,7 @@ function StepOne({
 }
 
 // ---------------------------------------------------------------------------
-// Step 2 — International candidate status
+// Step 2 - International candidate status
 // ---------------------------------------------------------------------------
 
 function StepTwo({
@@ -373,7 +373,7 @@ function StepTwo({
         We&apos;ll filter jobs by sponsorship availability so you only see roles you can actually apply for.
       </p>
 
-      {/* Yes / No toggle — prominent */}
+      {/* Yes / No toggle - prominent */}
       <div className="grid grid-cols-2 gap-3 mb-8">
         {[
           {
@@ -491,7 +491,7 @@ function StepTwo({
 }
 
 // ---------------------------------------------------------------------------
-// Step 3 — Company watchlist
+// Step 3 - Company watchlist
 // ---------------------------------------------------------------------------
 
 function StepThree({
@@ -554,7 +554,7 @@ function StepThree({
       <p className="text-xs text-gray-400 mb-6">
         Select up to {MAX_COMPANIES}
         {selectedCount > 0 && (
-          <span className="font-medium text-[#FF5C18]"> — {selectedCount} selected</span>
+          <span className="font-medium text-[#FF5C18]"> - {selectedCount} selected</span>
         )}
       </p>
 

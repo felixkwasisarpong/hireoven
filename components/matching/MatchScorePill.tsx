@@ -90,7 +90,7 @@ function MatchScorePillComponent({
   const label =
     method === "deep"
       ? "AI-analyzed match"
-      : "Fast match — click for full analysis"
+      : "Fast match - click for full analysis"
 
   const pill = (
     <button

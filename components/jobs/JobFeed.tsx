@@ -57,8 +57,9 @@ export default function JobFeed({
     refresh,
   } = useJobs(filters, searchQuery, { personalized })
   const sentinelRef = useRef<HTMLDivElement | null>(null)
+  const shouldLoadBatchScores = hasPrimaryResume && !personalized
   const { getScore, isLoading: scoresLoading } = useMatchScores(
-    hasPrimaryResume ? jobs.map((job) => job.id) : []
+    shouldLoadBatchScores ? jobs.map((job) => job.id) : []
   )
 
   const { profile } = useAuth()
@@ -148,7 +149,7 @@ export default function JobFeed({
               now={now}
               matchScore={job.match_score ?? getScore(job.id)}
               isMatchScoreLoading={
-                hasPrimaryResume &&
+                shouldLoadBatchScores &&
                 !job.match_score &&
                 scoresLoading &&
                 !getScore(job.id)

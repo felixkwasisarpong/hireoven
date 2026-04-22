@@ -55,10 +55,10 @@ function TrialReminderBanner() {
     >
       <span>
         {isPaymentFailed
-          ? "Your trial has ended — add a payment method to keep your Pro features."
+          ? "Your trial has ended - add a payment method to keep your Pro features."
           : urgent
             ? `Your trial ends in ${trialDaysRemaining} day${trialDaysRemaining === 1 ? "" : "s"}.`
-            : `Pro trial active — ${trialDaysRemaining} days remaining.`}
+            : `Pro trial active - ${trialDaysRemaining} days remaining.`}
       </span>
       {urgent && (
         <button
@@ -83,16 +83,30 @@ function TrialReminderBanner() {
 
 function DashboardSubpageChrome({ children }: { children: React.ReactNode }) {
   return (
-    <div className="dashboard-subpage min-h-screen">
+    <div className="dashboard-subpage relative min-h-screen overflow-hidden xl:flex xl:h-[100dvh] xl:flex-col xl:overflow-hidden">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -left-20 top-20 h-72 w-72 rounded-full bg-cyan-200/35 blur-3xl animate-hue-float"
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -right-20 top-56 h-80 w-80 rounded-full bg-fuchsia-200/30 blur-3xl animate-hue-float"
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute bottom-0 left-1/3 h-72 w-72 rounded-full bg-amber-200/30 blur-3xl animate-hue-float"
+      />
       <DashboardHeader />
 
-      <div className="mx-auto max-w-[1680px] px-4 py-4 lg:px-6">
-        <div className="grid gap-6 lg:grid-cols-[240px_minmax(0,1fr)]">
-          <aside className="surface-panel rounded-xl p-3 lg:sticky lg:top-4 lg:self-start lg:flex lg:w-full lg:max-h-[calc(100dvh-5rem)] lg:flex-col lg:overflow-hidden">
+      <div className="relative z-10 mx-auto max-w-[1680px] px-4 py-4 lg:px-6 xl:mx-0 xl:flex-1 xl:max-w-none xl:min-h-0 xl:px-0 xl:py-0">
+        <div className="grid gap-6 lg:grid-cols-[240px_minmax(0,1fr)] xl:h-full xl:gap-0">
+          <aside className="surface-panel rounded-xl p-3 lg:sticky lg:top-4 lg:self-start lg:flex lg:w-full lg:max-h-[calc(100dvh-5rem)] lg:flex-col lg:overflow-hidden xl:static xl:h-full xl:max-h-none xl:self-auto xl:rounded-none xl:border-y-0 xl:border-l-0 xl:border-r xl:p-4 xl:shadow-none">
             <DashboardSidebarNav />
           </aside>
 
-          <div className="dashboard-subpage-content min-w-0">{children}</div>
+          <div className="dashboard-subpage-content min-w-0 xl:soft-scrollbar xl:h-full xl:overflow-y-auto xl:px-6 xl:py-5">
+            {children}
+          </div>
         </div>
       </div>
     </div>

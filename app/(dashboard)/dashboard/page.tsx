@@ -176,7 +176,7 @@ export default function DashboardPage() {
   const countdownTone = optDaysRemaining === null ? null : getCountdownTone(optDaysRemaining)
 
   return (
-    <main className="app-page">
+    <main className="app-page xl:flex xl:h-[100dvh] xl:flex-col xl:overflow-hidden">
       {upgradeModal.open && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-strong/40 px-4 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-lg border border-border bg-surface p-6 shadow-[0_24px_80px_rgba(15,23,42,0.2)]">
@@ -190,7 +190,7 @@ export default function DashboardPage() {
             </h2>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">
               {upgradeModal.plan === "pro_international"
-                ? "You now have everything built for your journey — from OPT tracking to sponsorship intel."
+                ? "You now have everything built for your journey - from OPT tracking to sponsorship intel."
                 : "You now have AI match scores, resume tools, cover letters, autofill, and deeper job intelligence unlocked."}
             </p>
             <div className="mt-4 rounded-lg border border-brand-tint-strong bg-brand-tint p-4">
@@ -212,9 +212,9 @@ export default function DashboardPage() {
         </div>
       )}
       <DashboardHeader />
-      <div className="app-shell mx-auto max-w-[1680px] px-4 py-4 lg:px-6">
-        <div className="grid gap-6 lg:grid-cols-[240px_minmax(0,1fr)] xl:grid-cols-[240px_minmax(0,1fr)_312px]">
-          <aside className="surface-panel rounded-xl p-3 lg:sticky lg:top-4 lg:self-start lg:flex lg:w-full lg:h-[calc(100dvh-5rem)] lg:max-h-[calc(100dvh-5rem)] lg:flex-col lg:overflow-hidden">
+      <div className="app-shell mx-auto max-w-[1680px] px-4 py-4 lg:px-6 xl:mx-0 xl:flex-1 xl:max-w-none xl:min-h-0 xl:px-0 xl:py-0">
+        <div className="grid gap-6 lg:grid-cols-[240px_minmax(0,1fr)] xl:h-full xl:gap-0 xl:grid-cols-[240px_minmax(0,1fr)_312px]">
+          <aside className="surface-panel rounded-xl p-3 lg:sticky lg:top-4 lg:self-start lg:flex lg:w-full lg:h-[calc(100dvh-5rem)] lg:max-h-[calc(100dvh-5rem)] lg:flex-col lg:overflow-hidden xl:static xl:h-full xl:max-h-none xl:self-auto xl:rounded-none xl:border-y-0 xl:border-l-0 xl:border-r xl:p-4 xl:shadow-none">
             <div className="flex min-h-0 flex-1 flex-col justify-between gap-4">
               <div className="soft-scrollbar min-h-0 min-w-0 flex-1 overflow-y-auto [-webkit-overflow-scrolling:touch]">
                 <DashboardSidebarNav />
@@ -225,7 +225,7 @@ export default function DashboardPage() {
             </div>
           </aside>
 
-          <section className="min-w-0 space-y-5">
+          <section className="min-w-0 space-y-5 xl:soft-scrollbar xl:h-full xl:overflow-y-auto xl:px-6 xl:py-5">
             <div className="space-y-5">
               <div className="surface-panel rounded-lg p-5 sm:p-6">
                 <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
@@ -310,7 +310,7 @@ export default function DashboardPage() {
                       <span className="font-semibold text-strong">
                         {feedMeta.totalCount.toLocaleString()} jobs
                       </span>{" "}
-                      — {feedMeta.lastHourCount.toLocaleString()} posted in the last hour
+                      - {feedMeta.lastHourCount.toLocaleString()} posted in the last hour
                     </p>
                     <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
                       Sorted by{" "}
@@ -333,8 +333,8 @@ export default function DashboardPage() {
             />
           </section>
 
-          <aside className="hidden xl:block">
-            <div className="soft-scrollbar surface-panel sticky top-4 max-h-[calc(100vh-2rem)] overflow-y-auto rounded-lg">
+          <aside className="hidden xl:flex xl:min-h-0 xl:flex-col xl:border-l xl:border-border xl:bg-surface">
+            <div className="soft-scrollbar min-h-0 flex-1 overflow-y-auto">
               {/* Resume signal */}
               {!hasResume ? (
                 <div className="p-5">
@@ -532,7 +532,7 @@ export default function DashboardPage() {
                       </div>
                       <p className="text-xs leading-5 text-muted-foreground">
                         {countdownTone === "green" && "You still have room to be selective."}
-                        {countdownTone === "amber" && "Time is tightening — prioritize direct applications."}
+                        {countdownTone === "amber" && "Time is tightening - prioritize direct applications."}
                         {countdownTone === "red" && "Urgency is high. Bias toward sponsor-ready companies."}
                       </p>
                     </div>

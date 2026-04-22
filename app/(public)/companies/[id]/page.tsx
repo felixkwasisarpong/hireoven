@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic"
 type Props = { params: Promise<{ id: string }> }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  if (!hasSupabaseAdminEnv()) return { title: "Company — Hireoven" }
+  if (!hasSupabaseAdminEnv()) return { title: "Company - Hireoven" }
   const { id } = await params
   const supabase = createAdminClient()
   const { data: company } = await supabase
@@ -19,13 +19,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     .eq("id", id)
     .single()
 
-  if (!company) return { title: "Company — Hireoven" }
+  if (!company) return { title: "Company - Hireoven" }
 
   return {
-    title: `${company.name} Jobs — Apply Fresh on Hireoven`,
+    title: `${company.name} Jobs - Apply Fresh on Hireoven`,
     description: `${company.job_count} open roles at ${company.name}. See jobs the moment they're posted. ${company.sponsorship_confidence}% H1B sponsorship confidence.`,
     openGraph: {
-      title: `${company.name} Jobs — Hireoven`,
+      title: `${company.name} Jobs - Hireoven`,
       description: `${company.job_count} open roles · ${company.sponsorship_confidence}% H1B confidence`,
       type: "website",
     },
@@ -147,7 +147,7 @@ export default async function PublicCompanyPage({ params }: Props) {
               ) : null}
             </div>
             <p className="mt-3 text-[11px] text-gray-500">
-              Statistical estimate only — not legal advice. Data from U.S. Department
+              Statistical estimate only - not legal advice. Data from U.S. Department
               of Labor LCA public disclosures.
             </p>
           </div>

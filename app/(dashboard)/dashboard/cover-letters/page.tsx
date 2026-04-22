@@ -237,7 +237,7 @@ export default function CoverLettersPage() {
             <p className="mt-1 text-sm text-gray-500">
               {!search && filter === "all" && (
                 <>
-                  Generate your first one from any job listing —{" "}
+                  Generate your first one from any job listing -{" "}
                   <Link href="/dashboard" className="font-medium text-[#FF5C18] underline">
                     browse jobs
                   </Link>

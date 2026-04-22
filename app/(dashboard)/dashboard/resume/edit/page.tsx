@@ -43,7 +43,7 @@ function formatSavedState(
   lastSavedAt: string | null
 ) {
   if (saveState === "saving") return "Saving..."
-  if (saveState === "error") return "Save failed — retrying..."
+  if (saveState === "error") return "Save failed - retrying..."
   if (!lastSavedAt) return "All changes saved"
 
   const secondsAgo = Math.max(
@@ -427,7 +427,7 @@ export default function ResumeEditPage() {
                 {job.title} at {job.company?.name ?? "Company"}
               </h1>
               <span className="rounded-full border border-[#FFD2B8] bg-white px-3 py-1.5 text-sm font-medium text-[#062246]">
-                {analysis?.overall_score ?? "—"}% current match
+                {analysis?.overall_score ?? "-"}% current match
               </span>
             </div>
             <p className="mt-2 text-sm leading-6 text-gray-600">

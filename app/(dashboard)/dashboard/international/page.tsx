@@ -174,7 +174,7 @@ export default function InternationalPage() {
                   H-1B sponsoring companies
                 </h2>
                 <p className="text-sm text-muted-foreground">
-                  Ranked by petition volume — {companies.length} companies tracked
+                  Ranked by petition volume - {companies.length} companies tracked
                 </p>
               </div>
               <div className="flex items-center gap-3 rounded-2xl border border-border bg-surface-alt px-4 py-3 sm:w-72">

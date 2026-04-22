@@ -189,7 +189,7 @@ export default function BillingPage() {
             )}
           </div>
 
-          {/* Usage meters — pro only */}
+          {/* Usage meters - pro only */}
           {isPro && usage && (
             <div className="mt-5 grid gap-3 sm:grid-cols-2 border-t border-slate-100 pt-5">
               <UsageMeter
@@ -226,7 +226,7 @@ export default function BillingPage() {
               }
               className="flex-shrink-0 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
             >
-              {resolvedInterval === "yearly" ? "Switch to monthly" : "Switch to yearly — save 35%"}
+              {resolvedInterval === "yearly" ? "Switch to monthly" : "Switch to yearly - save 35%"}
             </button>
           </div>
         )}
@@ -249,7 +249,7 @@ export default function BillingPage() {
 
             {!feedbackSubmitted ? (
               <div className="mt-5 border-t border-red-100 pt-5">
-                <p className="text-sm font-semibold text-slate-900">Help us improve — why are you canceling?</p>
+                <p className="text-sm font-semibold text-slate-900">Help us improve - why are you canceling?</p>
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
                   {["Too expensive", "Not finding jobs", "Missing a feature", "Found another tool", "Other"].map((reason) => (
                     <button

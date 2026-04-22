@@ -13,7 +13,7 @@ export default function ConfirmedShareBlock({ waitlistId }: { waitlistId: string
       <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
         Share Hireoven and move ahead of 10 people for each friend who joins.
       </p>
-      {/* TODO: Referral tracking — award position bumps when ref signups are verified. */}
+      {/* TODO: Referral tracking - award position bumps when ref signups are verified. */}
       <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
         Your personal share link
       </p>
@@ -33,7 +33,7 @@ export default function ConfirmedShareBlock({ waitlistId }: { waitlistId: string
       <div className="mt-4 flex flex-wrap gap-2">
         <a
           href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(
-            `Join me on the Hireoven waitlist — fresh jobs in minutes. ${share}`
+            `Join me on the Hireoven waitlist - fresh jobs in minutes. ${share}`
           )}`}
           target="_blank"
           rel="noopener noreferrer"

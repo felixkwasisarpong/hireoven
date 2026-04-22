@@ -538,7 +538,7 @@ export default function ResumePage() {
         {primaryResume && (
           <section className="surface-inset p-6">
             <p className="text-sm font-semibold text-[#062246]">
-              Your primary resume is parsed — product features can use it
+              Your primary resume is parsed - product features can use it
             </p>
             <p className="mt-2 text-sm leading-7 text-gray-600">
               Hireoven already ships resume analysis/editing, autofill, cover letters, and match scoring on top of{" "}

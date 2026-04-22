@@ -1,7 +1,7 @@
 import Image from "next/image"
 import { cn } from "@/lib/utils"
 
-/* Static files live in /public/brand — keep paths aligned with committed assets. */
+/* Static files live in /public/brand - keep paths aligned with committed assets. */
 const LOGO_ASSETS = {
   mark: {
     src: "/brand/hireoven-icon.svg",

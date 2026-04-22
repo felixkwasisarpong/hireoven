@@ -14,6 +14,8 @@ import {
 import AnalysisScoreCircle from "@/components/resume/AnalysisScoreCircle"
 import { useResumeContext } from "@/components/resume/ResumeProvider"
 import SkillsGapChart from "@/components/resume/SkillsGapChart"
+import { PLAN_NAMES } from "@/lib/gates"
+import { useFeatureAccess } from "@/lib/hooks/useFeatureAccess"
 import { useResumeAnalysis } from "@/lib/hooks/useResumeAnalysis"
 import { createClient } from "@/lib/supabase/client"
 import { cn } from "@/lib/utils"
@@ -41,7 +43,7 @@ const APPLY_CONFIG: Record<ApplyRecommendation, { label: string; sub: string; cl
   },
   stretch_role: {
     label: "Stretch role",
-    sub: "Apply if you're confident — expect tough questions on the gaps.",
+    sub: "Apply if you're confident - expect tough questions on the gaps.",
     className: "border-amber-200 bg-amber-50 text-amber-800",
   },
   skip: {
@@ -310,7 +312,7 @@ function FullAnalysisView({ analysis, job }: { analysis: ResumeAnalysis; job: Jo
               </p>
               <div className="space-y-1">
                 {expMatch.gaps.map((gap) => (
-                  <p key={gap} className="text-sm text-gray-600">— {gap}</p>
+                  <p key={gap} className="text-sm text-gray-600">- {gap}</p>
                 ))}
               </div>
             </div>
@@ -377,13 +379,20 @@ export default function AnalyzePage() {
   const jobId = params.jobId
   const { primaryResume } = useResumeContext()
   const resumeId = primaryResume?.parse_status === "complete" ? primaryResume.id : null
+  const {
+    hasAccess: hasAnalysisAccess,
+    requiredPlan: analysisRequiredPlan,
+    isLoading: accessLoading,
+    showUpgradePrompt,
+  } = useFeatureAccess("deep_analysis")
+  const canRunAnalysis = hasAnalysisAccess && !accessLoading
 
   const [job, setJob] = useState<JobWithCompany | null>(null)
   const [jobLoading, setJobLoading] = useState(true)
 
   const { analysis, isLoading, isAnalyzing, error, triggerAnalysis } = useResumeAnalysis(
-    resumeId,
-    jobId
+    canRunAnalysis ? resumeId : null,
+    canRunAnalysis ? jobId : null
   )
 
   // Fetch job details
@@ -403,15 +412,19 @@ export default function AnalyzePage() {
 
   // Trigger analysis if none exists
   useEffect(() => {
-    if (!resumeId || isLoading || isAnalyzing || analysis || error) return
+    if (!canRunAnalysis || !resumeId || isLoading || isAnalyzing || analysis || error) return
     void triggerAnalysis()
-  }, [resumeId, isLoading, isAnalyzing, analysis, error, triggerAnalysis])
+  }, [canRunAnalysis, resumeId, isLoading, isAnalyzing, analysis, error, triggerAnalysis])
 
-  const busy = isLoading || isAnalyzing || jobLoading
+  const analysisBusy = jobLoading || (canRunAnalysis && (isLoading || isAnalyzing))
+  const busy = accessLoading || analysisBusy
+  const isPlanBlocked = !accessLoading && !hasAnalysisAccess
+  const isPlanError = Boolean(error && /requires the .* plan/i.test(error))
+  const planName = analysisRequiredPlan ? PLAN_NAMES[analysisRequiredPlan] : "Pro"
 
   return (
     <main className="app-page">
-      <div className="app-shell max-w-6xl space-y-5">
+      <div className="app-shell max-w-6xl space-y-5 pb-8">
         {/* Back */}
         <Link
           href="/dashboard"
@@ -423,48 +436,52 @@ export default function AnalyzePage() {
 
         {/* Job header */}
         {job && (
-          <div className="surface-hero">
-            <div className="flex items-start gap-4">
-              {job.company.logo_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={job.company.logo_url}
-                  alt={job.company.name}
-                  className="h-14 w-14 rounded-2xl border border-gray-200 object-cover"
-                />
-              ) : (
-                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#FFF1E8] text-xl font-bold text-[#062246]">
-                  {job.company.name.charAt(0).toUpperCase()}
-                </div>
-              )}
-              <div className="min-w-0 flex-1">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">
-                  {job.company.name}
-                </p>
-                <h1 className="mt-1 text-2xl font-semibold text-gray-900">{job.title}</h1>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {job.is_remote && (
-                    <span className="rounded-full border border-[#FFD2B8] bg-[#FFF7F2] px-2.5 py-1 text-xs font-medium text-[#9A3412]">
-                      Remote
-                    </span>
-                  )}
-                  {job.sponsors_h1b && (
-                    <span className="rounded-full border border-[#FFD2B8] bg-[#FFF7F2] px-2.5 py-1 text-xs font-semibold text-[#9A3412]">
-                      Sponsors H1B
-                    </span>
-                  )}
-                  {job.seniority_level && (
-                    <span className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs font-medium text-gray-600 capitalize">
-                      {job.seniority_level}
-                    </span>
-                  )}
+          <div className="surface-hero px-6 py-4 sm:px-8 sm:py-6 lg:px-10">
+            <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:gap-6">
+              <div className="flex min-w-0 items-center gap-4">
+                {job.company.logo_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={job.company.logo_url}
+                    alt={job.company.name}
+                    className="h-14 w-14 rounded-2xl border border-gray-200 object-cover"
+                  />
+                ) : (
+                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#FFF1E8] text-xl font-bold text-[#062246]">
+                    {job.company.name.charAt(0).toUpperCase()}
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">
+                    {job.company.name}
+                  </p>
+                  <h1 className="mt-1 text-2xl font-semibold leading-tight text-gray-900">
+                    {job.title}
+                  </h1>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {job.is_remote && (
+                      <span className="rounded-full border border-[#FFD2B8] bg-[#FFF7F2] px-2.5 py-1 text-xs font-medium text-[#9A3412]">
+                        Remote
+                      </span>
+                    )}
+                    {job.sponsors_h1b && (
+                      <span className="rounded-full border border-[#FFD2B8] bg-[#FFF7F2] px-2.5 py-1 text-xs font-semibold text-[#9A3412]">
+                        Sponsors H1B
+                      </span>
+                    )}
+                    {job.seniority_level && (
+                      <span className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs font-medium text-gray-600 capitalize">
+                        {job.seniority_level}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
               <a
                 href={job.apply_url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="hidden sm:inline-flex items-center gap-2 rounded-2xl bg-[#FF5C18] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#E14F0E]"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#FF5C18] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#E14F0E] sm:w-auto sm:justify-self-end sm:self-center"
               >
                 Apply
                 <ExternalLink className="h-4 w-4" />
@@ -475,7 +492,7 @@ export default function AnalyzePage() {
 
         {/* No resume state */}
         {!resumeId && !isLoading && (
-          <div className="surface-card p-10 text-center">
+          <div className="surface-card px-6 py-8 text-center sm:px-8 sm:py-9">
             <p className="text-lg font-semibold text-gray-900">Resume not ready</p>
             <p className="mt-2 text-sm text-gray-500">
               Your resume needs to finish parsing before analysis can run.
@@ -490,11 +507,29 @@ export default function AnalyzePage() {
         )}
 
         {/* Loading state */}
-        {resumeId && busy && <AnalysisLoader isAnalyzing={isAnalyzing} />}
+        {resumeId && analysisBusy && <AnalysisLoader isAnalyzing={isAnalyzing} />}
+
+        {/* Plan gate */}
+        {!busy && (isPlanBlocked || isPlanError) && (
+          <div className="rounded-[28px] border border-[#FFD2B8] bg-[#FFF7F2] px-4 py-4 sm:px-5 sm:py-5">
+            <p className="text-xl font-semibold text-[#9A3412]">Deep analysis is locked</p>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-[#C2410C]">
+              This feature requires the {planName} plan. Upgrade to unlock full resume-to-job
+              analysis.
+            </p>
+            <button
+              type="button"
+              onClick={showUpgradePrompt}
+              className="mt-4 rounded-2xl bg-[#FF5C18] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#E14F0E]"
+            >
+              Upgrade to {planName}
+            </button>
+          </div>
+        )}
 
         {/* Error */}
-        {!busy && error && (
-          <div className="rounded-[32px] border border-red-200 bg-white p-6">
+        {!busy && !isPlanError && !isPlanBlocked && error && (
+          <div className="rounded-[28px] border border-red-200 bg-white px-4 py-4 sm:px-5 sm:py-5">
             <p className="font-semibold text-red-700">Analysis failed</p>
             <p className="mt-1 text-sm text-red-600">{error}</p>
             <button

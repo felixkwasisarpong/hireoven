@@ -82,7 +82,7 @@ function OverviewTab({ app, onUpdate }: { app: JobApplication; onUpdate: Props["
         <div className="rounded-[12px] border border-slate-200/70 bg-slate-50/60 p-3.5">
           <p className="text-[10.5px] font-semibold uppercase tracking-[0.18em] text-slate-400">Applied</p>
           <p className="mt-1.5 text-[13px] font-semibold text-slate-800">
-            {app.applied_at ? formatDate(app.applied_at) : "—"}
+            {app.applied_at ? formatDate(app.applied_at) : "-"}
           </p>
         </div>
         {app.match_score != null && (
