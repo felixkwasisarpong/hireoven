@@ -64,7 +64,7 @@ function H1BPredictionBadgeImpl({
     const label =
       verdict === "unknown"
         ? "H1B: unknown"
-        : `~${prediction.approvalLikelihood}% approval`
+        : `↗ +${prediction.approvalLikelihood}% approval`
     return (
       <button
         type="button"

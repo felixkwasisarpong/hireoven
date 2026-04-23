@@ -38,8 +38,8 @@ export default function DashboardUserMenu() {
         type="button"
         onClick={() => setOpen((o) => !o)}
         className={cn(
-          "flex h-10 max-w-[200px] items-center gap-1.5 rounded-xl border border-border bg-surface py-1 pl-1 pr-2 transition-colors",
-          "hover:border-border hover:bg-surface-alt"
+          "flex h-11 max-w-[200px] items-center gap-1.5 rounded-full border border-[#D7DCEA] bg-white py-1 pl-1 pr-2 transition-colors",
+          "hover:border-[#B9C3DE] hover:bg-[#F6F8FD]"
         )}
         aria-expanded={open}
         aria-haspopup="menu"
@@ -53,7 +53,7 @@ export default function DashboardUserMenu() {
             className="h-8 w-8 rounded-lg object-cover"
           />
         ) : (
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-tint text-xs font-bold text-brand-navy">
+          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#FBEEDF] text-xs font-bold text-brand-navy">
             {getInitials(profile?.full_name, profile?.email)}
           </div>
         )}
@@ -65,7 +65,7 @@ export default function DashboardUserMenu() {
 
       {open && (
         <div
-          className="absolute right-0 top-[calc(100%+8px)] z-[60] w-[min(100vw-2rem,18rem)] rounded-xl border border-border bg-surface py-2 shadow-[0_16px_48px_rgba(15,23,42,0.14)]"
+          className="absolute right-0 top-[calc(100%+8px)] z-[60] w-[min(100vw-2rem,18rem)] rounded-2xl border border-[#D7DCEA] bg-white py-2 shadow-[0_24px_58px_-34px_rgba(20,30,70,0.55)]"
           role="menu"
         >
           <div className="border-b border-border px-3 pb-3 pt-1">
@@ -79,7 +79,7 @@ export default function DashboardUserMenu() {
             <Link
               href="/dashboard/onboarding"
               role="menuitem"
-              className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-strong transition-colors hover:bg-surface-alt"
+              className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-strong transition-colors hover:bg-cyan-50/65"
               onClick={() => setOpen(false)}
             >
               <UserRound className="h-4 w-4 text-muted-foreground" strokeWidth={2} />
@@ -91,7 +91,7 @@ export default function DashboardUserMenu() {
               className={cn(
                 "mt-0.5 flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-semibold transition-colors",
                 isPro
-                  ? "text-strong hover:bg-surface-alt"
+                  ? "text-strong hover:bg-cyan-50/65"
                   : "bg-brand-tint text-brand-navy hover:bg-brand-tint-strong/80"
               )}
               onClick={() => setOpen(false)}
@@ -102,7 +102,7 @@ export default function DashboardUserMenu() {
             <button
               type="button"
               role="menuitem"
-              className="mt-0.5 flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-surface-alt hover:text-strong"
+              className="mt-0.5 flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-cyan-50/65 hover:text-strong"
               onClick={() => {
                 setOpen(false)
                 void signOut()

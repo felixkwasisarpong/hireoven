@@ -82,7 +82,7 @@ export function AutofillButton({
         className={`gap-1.5 opacity-50 ${className}`}
       >
         <Zap className="w-3.5 h-3.5" />
-        Autofill
+        Auto fill
       </Button>
     )
   }
@@ -98,7 +98,7 @@ export function AutofillButton({
       >
         <Link href="/dashboard/autofill">
           <AlertCircle className="w-3.5 h-3.5" />
-          Set up autofill
+          Set up auto fill
         </Link>
       </Button>
     )
@@ -115,7 +115,7 @@ export function AutofillButton({
       >
         <Link href={`/dashboard/autofill/fill/${jobId}`}>
           <Zap className="w-3.5 h-3.5" />
-          Autofill ({completionPct}%)
+          Auto fill ({completionPct}%)
         </Link>
       </Button>
     )
@@ -130,7 +130,7 @@ export function AutofillButton({
     >
       <Link href={`/dashboard/autofill/fill/${jobId}`}>
         <Zap className="w-3.5 h-3.5" />
-        Autofill
+        Auto fill
       </Link>
     </Button>
   )

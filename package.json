@@ -37,6 +37,8 @@
     "db:relink-h1b-employers:execute": "npx tsx scripts/relink-h1b-unmatched-employers.ts --execute",
     "db:recompute-h1b-scores": "npx tsx scripts/recompute-company-h1b-scores.ts",
     "db:recompute-h1b-scores:execute": "npx tsx scripts/recompute-company-h1b-scores.ts --execute",
+    "db:migrate-to-postgres": "bash scripts/db/migrate-supabase-to-postgres.sh",
+    "db:compare-postgres-counts": "bash scripts/db/compare-public-counts.sh",
     "jobs:generate-normalization-examples": "npx tsx scripts/normalization/generate-example-transformations.ts"
   },
   "dependencies": {

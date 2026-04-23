@@ -22,10 +22,20 @@ type Props = {
 function scoreTone(value: number | null) {
   if (value == null) return "#94A3B8"
   const safeValue = Math.max(0, Math.min(100, value))
-  if (safeValue >= 85) return "#10B981"
-  if (safeValue >= 70) return "#0EA5E9"
+  if (safeValue >= 85) return "#16A34A"
+  if (safeValue >= 70) return "#7C3AED"
   if (safeValue >= 50) return "#F59E0B"
   return "#EF4444"
+}
+
+function hexToRgba(hex: string, alpha: number) {
+  const normalized = hex.replace("#", "")
+  if (normalized.length !== 6) return hex
+  const bigint = Number.parseInt(normalized, 16)
+  const r = (bigint >> 16) & 255
+  const g = (bigint >> 8) & 255
+  const b = bigint & 255
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`
 }
 
 function scoreVerdict(overallScore: number | null, verdict: string | null | undefined) {
@@ -50,11 +60,12 @@ function ScoreRing({ value }: { value: number | null }) {
       <div
         className="relative flex h-28 w-28 items-center justify-center rounded-full"
         style={{
-          background: `conic-gradient(${tone} ${angle}deg, #E5E7EB ${angle}deg 360deg)`,
+          background: `conic-gradient(${tone} ${angle}deg, #E3E8F3 ${angle}deg 360deg)`,
+          boxShadow: `0 0 0 1px ${hexToRgba(tone, 0.12)}, 0 10px 24px ${hexToRgba(tone, 0.12)}`,
         }}
       >
-        <div className="flex h-[92px] w-[92px] flex-col items-center justify-center rounded-full bg-white">
-          <span className="text-3xl font-semibold text-strong">{value ?? "--"}</span>
+        <div className="flex h-[90px] w-[90px] flex-col items-center justify-center rounded-full bg-white">
+          <span className="text-[2rem] font-semibold text-strong">{value ?? "--"}</span>
           <span className="text-[11px] font-medium text-muted-foreground">
             {value == null ? "No data" : "%"}
           </span>
@@ -67,20 +78,25 @@ function ScoreRing({ value }: { value: number | null }) {
 function BreakdownRow({ label, value }: { label: string; value: number | null }) {
   const safeValue = Math.max(0, Math.min(100, value ?? 0))
   const tone = scoreTone(value)
+  const track = value == null ? "#CFD6E4" : hexToRgba(tone, 0.2)
+  const fill =
+    value == null
+      ? "#B4BFD4"
+      : `linear-gradient(90deg, ${hexToRgba(tone, 0.95)} 0%, ${hexToRgba(tone, 0.72)} 100%)`
 
   return (
     <div>
       <div className="mb-1.5 flex items-center justify-between gap-3 text-sm">
-        <span className="text-muted-foreground">{label}</span>
-        <span className="font-medium text-strong">{value == null ? "N/A" : `${safeValue}%`}</span>
+        <span className="font-medium text-[#4A5B82]">{label}</span>
+        <span className="font-semibold text-strong">{value == null ? "N/A" : `${safeValue}%`}</span>
       </div>
-      <div className="h-2 overflow-hidden rounded-full bg-slate-200">
+      <div className="h-2 overflow-hidden rounded-full" style={{ backgroundColor: track }}>
         {value == null ? (
-          <div className="h-full w-full rounded-full bg-slate-300/70" />
+          <div className="h-full w-full rounded-full" style={{ backgroundColor: fill }} />
         ) : (
           <div
             className="h-full rounded-full transition-all"
-            style={{ width: `${safeValue}%`, backgroundColor: tone }}
+            style={{ width: `${safeValue}%`, background: fill }}
           />
         )}
       </div>
@@ -220,18 +236,20 @@ export default function JobDetailSidebar({
         ) : (
           <div className="space-y-4">
             <ScoreRing value={isScoreLoading && !overallScore ? null : overallScore} />
-            <p className="text-center text-base font-semibold" style={{ color: verdictColor }}>
-              {verdictLabel}
-            </p>
-            <p className="text-center text-xs text-muted-foreground">{breakdownSourceLabel}</p>
-            <div className="space-y-3">
+            <div className="rounded-xl border border-[#E4E8F4] bg-[#F9FBFF] px-3 py-2 text-center">
+              <p className="text-base font-semibold" style={{ color: verdictColor }}>
+                {verdictLabel}
+              </p>
+              <p className="mt-1 text-[11px] text-muted-foreground">{breakdownSourceLabel}</p>
+            </div>
+            <div className="space-y-2.5">
               {breakdown.map((item) => (
                 <BreakdownRow key={item.label} label={item.label} value={item.value} />
               ))}
             </div>
             <Link
               href={`/dashboard/resume/analyze/${jobId}`}
-              className="inline-flex items-center gap-2 text-sm font-semibold text-primary hover:text-primary-hover"
+              className="inline-flex items-center gap-2 rounded-full border border-[#E7D9FF] bg-[#F4ECFF] px-3 py-1.5 text-sm font-semibold text-[#6D3FF8] transition-colors hover:bg-[#ECE0FF]"
             >
               <Sparkles className="h-4 w-4" />
               {analysis || isAnalysisLoading ? "Open full analysis" : "Improve match score"}

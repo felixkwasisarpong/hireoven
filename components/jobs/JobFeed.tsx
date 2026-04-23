@@ -19,9 +19,9 @@ interface JobFeedProps {
 
 function JobRowSkeleton() {
   return (
-    <div className="bg-surface px-4 py-4 sm:px-5">
+    <div className="bg-white/70 px-4 py-4 sm:px-5">
       <div className="flex gap-4">
-        <div className="h-11 w-11 flex-shrink-0 animate-pulse rounded-md bg-surface-muted sm:h-12 sm:w-12" />
+        <div className="h-11 w-11 flex-shrink-0 animate-pulse rounded-xl bg-surface-muted sm:h-12 sm:w-12" />
         <div className="min-w-0 flex-1 space-y-3">
           <div className="h-2.5 w-20 animate-pulse rounded bg-surface-muted" />
           <div className="h-4 w-3/4 max-w-md animate-pulse rounded bg-surface-muted" />
@@ -104,7 +104,7 @@ export default function JobFeed({
     <H1BPredictionProvider enabled={h1bEnabled}>
     <div className="space-y-4">
       {personalized && (
-        <div className="flex items-center gap-2 border border-border bg-surface-alt px-4 py-2.5 text-sm font-medium text-brand-navy">
+        <div className="neo-strip flex items-center gap-2 text-sm font-medium text-brand-navy">
           <Sparkles className="h-4 w-4 shrink-0 text-primary" />
           Personalized for you
         </div>
@@ -114,7 +114,7 @@ export default function JobFeed({
         <button
           type="button"
           onClick={() => void refresh()}
-          className="flex w-full items-center justify-center gap-2 border border-border bg-surface-alt px-4 py-2.5 text-sm font-medium text-brand-navy transition-colors hover:bg-brand-tint"
+          className="neo-strip flex w-full items-center justify-center gap-2 text-sm font-medium text-brand-navy transition-colors hover:brightness-[1.02]"
         >
           <Sparkles className="h-4 w-4" />
           {newJobsCount.toLocaleString()} new job
@@ -139,7 +139,7 @@ export default function JobFeed({
       )}
 
       {jobs.length > 0 && (
-        <div className="job-feed-panel">
+        <div className="space-y-3 animate-fade-in">
           {jobs.map((job, i) => (
             <JobCard
               key={job.id}
@@ -169,7 +169,7 @@ export default function JobFeed({
             <button
               type="button"
               onClick={() => void loadMore()}
-              className="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-surface-alt hover:text-strong"
+              className="inline-flex items-center gap-2 rounded-xl border border-border bg-white/70 px-4 py-2 text-sm font-medium text-muted-foreground shadow-[0_12px_30px_-24px_rgba(5,25,45,0.7)] transition-colors hover:bg-cyan-50/60 hover:text-strong"
             >
               Load more
               <ArrowUp className="h-4 w-4 rotate-180" />
