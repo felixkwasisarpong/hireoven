@@ -26,6 +26,18 @@ const DEACTIVATION_GRACE_HOURS = Math.max(
 )
 const ALLOW_DEACTIVATE_ON_EMPTY_RESULTS =
   process.env.CRAWLER_ALLOW_DEACTIVATE_ON_EMPTY_RESULTS === "true"
+const EXISTING_ROW_LOOKUP_BATCH_SIZE = Math.max(
+  25,
+  Number.parseInt(process.env.CRAWLER_EXISTING_ROW_LOOKUP_BATCH_SIZE ?? "100", 10)
+)
+const JOB_WRITE_BATCH_SIZE = Math.max(
+  10,
+  Number.parseInt(process.env.CRAWLER_JOB_WRITE_BATCH_SIZE ?? "25", 10)
+)
+const JOB_DEACTIVATE_BATCH_SIZE = Math.max(
+  25,
+  Number.parseInt(process.env.CRAWLER_JOB_DEACTIVATE_BATCH_SIZE ?? "250", 10)
+)
 
 const BLOCKED_TITLE_PATTERNS = [
   /^(login|log(?:\s+)?in|log back in!?)$/i,
@@ -135,6 +147,16 @@ async function runWithConcurrency<T>(
   return results
 }
 
+function chunkValues<T>(values: T[], chunkSize: number): T[][] {
+  if (values.length === 0) return []
+  const size = Math.max(1, chunkSize)
+  const chunks: T[][] = []
+  for (let i = 0; i < values.length; i += size) {
+    chunks.push(values.slice(i, i + size))
+  }
+  return chunks
+}
+
 export async function persistCrawlJobs({
   companyId,
   crawledAt,
@@ -180,16 +202,44 @@ export async function persistCrawlJobs({
     )
   }
 
-  const externalIds = normalized.map((job) => job.externalId)
-  const { data: existingRows, error: existingError } = await (supabase
-    .from("jobs")
-    .select(
-      "id, external_id, description, employment_type, seniority_level, is_remote, is_hybrid, requires_authorization, salary_min, salary_max, salary_currency, sponsors_h1b, sponsorship_score, visa_language_detected"
-    )
-    .eq("company_id", companyId)
-    .in("external_id", externalIds) as any)
+  // Some sources repeat identical external IDs. Keep the latest payload once to avoid
+  // duplicate writes and oversized PostgREST payloads.
+  const dedupedByExternalId = new Map<string, (typeof normalized)[number]>()
+  for (const job of normalized) {
+    dedupedByExternalId.set(job.externalId, job)
+  }
+  const dedupedJobs = [...dedupedByExternalId.values()]
 
-  if (existingError) throw existingError
+  const externalIds = dedupedJobs.map((job) => job.externalId)
+  const existingRows: Array<{
+    id: string
+    external_id: string
+    description: string | null
+    employment_type: EmploymentType | null
+    seniority_level: SeniorityLevel | null
+    is_remote: boolean | null
+    is_hybrid: boolean | null
+    requires_authorization: boolean | null
+    salary_min: number | null
+    salary_max: number | null
+    salary_currency: string | null
+    sponsors_h1b: boolean | null
+    sponsorship_score: number | null
+    visa_language_detected: string | null
+  }> = []
+
+  for (const externalIdChunk of chunkValues(externalIds, EXISTING_ROW_LOOKUP_BATCH_SIZE)) {
+    const { data, error } = await (supabase
+      .from("jobs")
+      .select(
+        "id, external_id, description, employment_type, seniority_level, is_remote, is_hybrid, requires_authorization, salary_min, salary_max, salary_currency, sponsors_h1b, sponsorship_score, visa_language_detected"
+      )
+      .eq("company_id", companyId)
+      .in("external_id", externalIdChunk) as any)
+
+    if (error) throw error
+    existingRows.push(...((data ?? []) as typeof existingRows))
+  }
 
   const existingByExternalId = new Map<
     string,
@@ -209,22 +259,7 @@ export async function persistCrawlJobs({
       visa_language_detected: string | null
     }
   >()
-  for (const row of (existingRows ?? []) as Array<{
-    id: string
-    external_id: string
-    description: string | null
-    employment_type: EmploymentType | null
-    seniority_level: SeniorityLevel | null
-    is_remote: boolean | null
-    is_hybrid: boolean | null
-    requires_authorization: boolean | null
-    salary_min: number | null
-    salary_max: number | null
-    salary_currency: string | null
-    sponsors_h1b: boolean | null
-    sponsorship_score: number | null
-    visa_language_detected: string | null
-  }>) {
+  for (const row of existingRows) {
     existingByExternalId.set(row.external_id, {
       id: row.id,
       description: row.description ?? null,
@@ -245,7 +280,7 @@ export async function persistCrawlJobs({
   const toInsert: Array<Record<string, unknown>> = []
   const toUpdate: Array<{ id: string; payload: Record<string, unknown> }> = []
 
-  for (const job of normalized) {
+  for (const job of dedupedJobs) {
     const normalizedPostedAt = normalizePostedAtToIso(job.postedAt, crawledAt)
     const existing = existingByExternalId.get(job.externalId)
     const normalization = normalizeCrawlerJobForPersistence({
@@ -341,8 +376,10 @@ export async function persistCrawlJobs({
   }
 
   if (toInsert.length > 0) {
-    const { error } = await ((supabase.from("jobs") as any).insert(toInsert))
-    if (error) throw error
+    for (const insertChunk of chunkValues(toInsert, JOB_WRITE_BATCH_SIZE)) {
+      const { error } = await ((supabase.from("jobs") as any).insert(insertChunk))
+      if (error) throw error
+    }
   }
 
   for (const row of toUpdate) {
@@ -378,10 +415,12 @@ export async function persistCrawlJobs({
     : []
 
   if (staleIds.length > 0) {
-    const { error } = await ((supabase.from("jobs") as any)
-      .update({ is_active: false, updated_at: crawledAtIso } as any)
-      .in("id", staleIds))
-    if (error) throw error
+    for (const staleChunk of chunkValues(staleIds, JOB_DEACTIVATE_BATCH_SIZE)) {
+      const { error } = await ((supabase.from("jobs") as any)
+        .update({ is_active: false, updated_at: crawledAtIso } as any)
+        .in("id", staleChunk))
+      if (error) throw error
+    }
   }
 
   const { count: activeCount, error: countError } = await supabase
