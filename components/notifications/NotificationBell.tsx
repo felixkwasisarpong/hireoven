@@ -57,23 +57,23 @@ export default function NotificationBell({ userId }: { userId?: string }) {
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className="relative inline-flex h-11 w-11 items-center justify-center rounded-[16px] border border-slate-200/80 bg-white text-gray-700 transition hover:border-[#FFD2B8] hover:text-[#062246]"
+        className="relative inline-flex h-11 w-11 items-center justify-center rounded-full border border-[#D7DCEA] bg-white text-slate-700 transition hover:border-[#B9C3DE] hover:bg-[#F6F8FD] hover:text-slate-900"
         aria-label="Open notifications"
       >
         <Bell className="h-5 w-5" />
         {unreadLabel && (
-          <span className="absolute -right-1 -top-1 rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
+          <span className="absolute -right-1 -top-1 rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold text-white shadow-[0_8px_14px_-8px_rgba(239,68,68,0.85)]">
             {unreadLabel}
           </span>
         )}
       </button>
 
       {open && (
-        <div className="absolute right-0 top-14 z-30 w-[360px] overflow-hidden rounded-[18px] border border-slate-200/80 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.14)]">
-          <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+        <div className="absolute right-0 top-14 z-30 w-[360px] overflow-hidden rounded-2xl border border-[#D7DCEA] bg-white shadow-[0_22px_56px_-32px_rgba(20,30,70,0.5)]">
+          <div className="flex items-center justify-between border-b border-border/80 bg-gradient-to-r from-cyan-50/70 via-sky-50/60 to-orange-50/65 px-5 py-4">
             <div>
-              <p className="text-sm font-semibold text-gray-900">Notifications</p>
-              <p className="text-xs text-gray-500">
+              <p className="text-sm font-semibold text-slate-900">Notifications</p>
+              <p className="text-xs text-slate-500">
                 {unreadCount > 0
                   ? `${unreadCount} unread`
                   : "You're all caught up"}
@@ -82,7 +82,7 @@ export default function NotificationBell({ userId }: { userId?: string }) {
             <button
               type="button"
               onClick={() => void markAllRead()}
-              className="text-xs font-medium text-[#062246] transition hover:text-[#FF5C18]"
+              className="text-xs font-medium text-sky-900 transition hover:text-[#FF5C18]"
             >
               Mark all read
             </button>
@@ -91,8 +91,8 @@ export default function NotificationBell({ userId }: { userId?: string }) {
           <div className="max-h-[420px] overflow-y-auto">
             {notifications.length === 0 ? (
               <div className="px-5 py-12 text-center">
-                <p className="text-sm font-medium text-gray-900">No notifications yet</p>
-                <p className="mt-1 text-xs text-gray-500">
+                <p className="text-sm font-medium text-slate-900">No notifications yet</p>
+                <p className="mt-1 text-xs text-slate-500">
                   New job matches and watchlist updates will show up here.
                 </p>
               </div>
@@ -108,7 +108,7 @@ export default function NotificationBell({ userId }: { userId?: string }) {
                     }
                     setOpen(false)
                   }}
-                  className="flex w-full items-start gap-3 border-b border-gray-100 px-5 py-4 text-left transition hover:bg-[#F8FBFF]"
+                  className="flex w-full items-start gap-3 border-b border-border/70 px-5 py-4 text-left transition hover:bg-cyan-50/55"
                 >
                   <div className="pt-1">
                     {notification.opened_at ? (
@@ -119,17 +119,17 @@ export default function NotificationBell({ userId }: { userId?: string }) {
                   </div>
 
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-gray-900">
+                    <p className="text-sm font-semibold text-slate-900">
                       {notification.job?.title ?? "New job notification"}
                     </p>
-                    <p className="mt-1 text-xs text-gray-500">
+                    <p className="mt-1 text-xs text-slate-500">
                       {notification.job?.company?.name ?? "Tracked company"}
                       {" · "}
                       {notification.notification_type === "watchlist"
                         ? "Watchlist"
                         : notification.alert?.name ?? "Saved alert"}
                     </p>
-                    <p className="mt-2 text-xs text-gray-400">
+                    <p className="mt-2 text-xs text-slate-400">
                       {formatRelative(notification.sent_at)}
                     </p>
                   </div>
@@ -138,10 +138,10 @@ export default function NotificationBell({ userId }: { userId?: string }) {
             )}
           </div>
 
-          <div className="flex items-center justify-between px-5 py-4">
+          <div className="flex items-center justify-between border-t border-border/70 bg-white/80 px-5 py-4">
             <Link
               href="/dashboard/notifications"
-              className="inline-flex items-center gap-1 text-sm font-medium text-[#062246] transition hover:text-[#FF5C18]"
+              className="inline-flex items-center gap-1 text-sm font-medium text-sky-900 transition hover:text-[#FF5C18]"
               onClick={() => setOpen(false)}
             >
               View all

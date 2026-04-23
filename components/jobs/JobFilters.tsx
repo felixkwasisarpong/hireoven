@@ -1,12 +1,20 @@
 "use client"
 
-import { useMemo } from "react"
+import { useMemo, type ComponentType } from "react"
 import {
   usePathname,
   useRouter,
   useSearchParams,
   type ReadonlyURLSearchParams,
 } from "next/navigation"
+import {
+  Briefcase,
+  ChevronRight,
+  ClipboardList,
+  Clock3,
+  Sparkles,
+} from "lucide-react"
+import { cn } from "@/lib/utils"
 import type {
   EmploymentType,
   JobFilters,
@@ -220,18 +228,18 @@ function FilterToggle({
       role="switch"
       aria-checked={checked}
       onClick={() => onChange(!checked)}
-      className="flex w-full items-center justify-between rounded-lg border border-border bg-surface px-3 py-2.5 text-left transition-colors hover:border-border hover:bg-surface-alt"
+      className="flex w-full items-center justify-between rounded-xl border border-transparent px-2 py-1 text-left transition-colors"
     >
       <span
         className={`text-sm ${
-          accent ? "font-medium text-primary" : "text-strong"
+          accent ? "font-medium text-[#5C4EE5]" : "text-[#223050]"
         }`}
       >
         {label}
       </span>
       <span
         className={`relative inline-flex h-6 w-10 items-center rounded-full transition-colors ${
-          checked ? "bg-primary" : "bg-surface-muted"
+          checked ? "bg-[#614DF0]" : "bg-[#D6DBE7]"
         }`}
       >
         <span
@@ -247,20 +255,29 @@ function FilterToggle({
 function CheckboxOption<T extends string>({
   checked,
   label,
+  icon: Icon,
+  iconClassName,
   onChange,
 }: {
   checked: boolean
   label: string
+  icon?: ComponentType<{ className?: string }>
+  iconClassName?: string
   onChange: (checked: boolean) => void
 }) {
   return (
-    <label className="flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 transition-colors hover:bg-surface-alt">
+    <label className="flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors hover:bg-[#F3F5FC]">
       <input
         type="checkbox"
         checked={checked}
         onChange={(event) => onChange(event.target.checked)}
-        className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
+        className="h-4 w-4 rounded border-[#C8CFDF] text-[#5E4EF1] focus:ring-[#5E4EF1]"
       />
+      {Icon && (
+        <span className={cn("inline-flex h-4 w-4 items-center justify-center rounded-md", iconClassName)}>
+          <Icon className="h-3 w-3" />
+        </span>
+      )}
       <span className="text-sm text-strong">{label}</span>
     </label>
   )
@@ -325,7 +342,7 @@ export default function JobFilters({
         )}
       </div>
 
-      <div className="space-y-3 border-b border-border pb-4">
+      <div className="space-y-3 border-b border-border/70 pb-4">
         <FilterToggle
           checked={Boolean(filters.remote)}
           label="Remote only"
@@ -343,7 +360,7 @@ export default function JobFilters({
         />
       </div>
 
-      <div className="border-b border-border pb-4">
+      <div className="border-b border-border/70 pb-4">
         <p className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Seniority level</p>
         <div className="space-y-1">
           {SENIORITY_OPTIONS.map((option) => (
@@ -359,7 +376,7 @@ export default function JobFilters({
         </div>
       </div>
 
-      <div className="border-b border-border pb-4">
+      <div className="border-b border-border/70 pb-4">
         <p className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Employment type</p>
         <div className="space-y-1">
           {EMPLOYMENT_OPTIONS.map((option) => (
@@ -367,6 +384,24 @@ export default function JobFilters({
               key={option.value}
               checked={filters.employment_type?.includes(option.value) ?? false}
               label={option.label}
+              icon={
+                option.value === "fulltime"
+                  ? Briefcase
+                  : option.value === "parttime"
+                    ? Clock3
+                    : option.value === "contract"
+                      ? ClipboardList
+                      : Sparkles
+              }
+              iconClassName={
+                option.value === "fulltime"
+                  ? "bg-emerald-100 text-emerald-700"
+                  : option.value === "parttime"
+                    ? "bg-violet-100 text-violet-700"
+                    : option.value === "contract"
+                      ? "bg-blue-100 text-blue-700"
+                      : "bg-orange-100 text-orange-700"
+              }
               onChange={(checked) =>
                 toggleArray("employment_type", option.value, checked)
               }
@@ -385,7 +420,7 @@ export default function JobFilters({
               within: event.target.value as JobWithinWindow,
             })
           }
-          className="w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-strong outline-none transition-colors focus:border-primary/50 focus:ring-2 focus:ring-primary/12"
+          className="w-full rounded-xl border border-[#D7DCEA] bg-white px-3 py-2.5 text-sm text-strong outline-none transition-colors focus:border-[#897EFB] focus:ring-2 focus:ring-[#DBD6FF]"
         >
           {WITHIN_OPTIONS.map((option) => (
             <option key={option.value} value={option.value}>
@@ -393,6 +428,28 @@ export default function JobFilters({
             </option>
           ))}
         </select>
+      </div>
+
+      <div className="rounded-xl border border-[#DCD5F8] bg-[#EEE9FF] p-3">
+        <div className="flex items-start gap-2">
+          <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-[#FCEFD4] text-[#F39B2F]">
+            <Sparkles className="h-4 w-4" />
+          </span>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-[#1E2A4E]">Unlock all filters</p>
+            <p className="mt-0.5 text-xs leading-4 text-[#7A84A3]">
+              Get better recommendations and priority support.
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => router.push("/dashboard/upgrade")}
+          className="mt-3 inline-flex w-full items-center justify-between rounded-lg border border-[#D7CCFF] bg-[#F7F4FF] px-3 py-2 text-sm font-semibold text-[#5E4EF1] transition-colors hover:bg-[#EFEAFF]"
+        >
+          Upgrade now
+          <ChevronRight className="h-4 w-4" />
+        </button>
       </div>
     </div>
   )

@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next"
 import { Suspense } from "react"
-import { Inter } from "next/font/google"
+import { Manrope, Space_Grotesk } from "next/font/google"
 import ServiceWorkerRegistration from "@/components/pwa/ServiceWorkerRegistration"
 import { RouteToastBridge, ToastProvider } from "@/components/ui/ToastProvider"
 import { SubscriptionProvider } from "@/lib/context/SubscriptionContext"
@@ -8,7 +8,17 @@ import { UpgradeModalProvider } from "@/lib/context/UpgradeModalContext"
 import UpgradeModal from "@/components/gates/UpgradeModal"
 import "./globals.css"
 
-const inter = Inter({ subsets: ["latin"] })
+const manrope = Manrope({
+  subsets: ["latin"],
+  variable: "--font-sans",
+  display: "swap",
+})
+
+const spaceGrotesk = Space_Grotesk({
+  subsets: ["latin"],
+  variable: "--font-display",
+  display: "swap",
+})
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
@@ -46,7 +56,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={`${inter.className} site-chroma`}>
+      <body className={`${manrope.variable} ${spaceGrotesk.variable} site-chroma`}>
         <UpgradeModalProvider>
           <SubscriptionProvider>
             <ToastProvider>

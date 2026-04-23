@@ -5,35 +5,46 @@ import { usePathname } from "next/navigation"
 import { DASHBOARD_NAV_ITEMS, isDashboardNavActive } from "@/lib/dashboard-nav"
 import { cn } from "@/lib/utils"
 
+const NAV_BADGES: Partial<Record<string, string>> = {
+  Applications: "12",
+  Companies: "128",
+}
+
 export default function DashboardSidebarNav() {
   const pathname = usePathname()
 
   return (
-    <nav className="space-y-1" aria-label="Dashboard">
+    <nav className="space-y-1.5" aria-label="Dashboard">
       {DASHBOARD_NAV_ITEMS.map((item) => {
         const Icon = item.icon
         const active = isDashboardNavActive(pathname, item.href)
+        const badge = NAV_BADGES[item.label]
 
         return (
           <Link
             key={item.label}
             href={item.href}
             className={cn(
-              "group flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-semibold tracking-tight transition-all duration-150",
+              "group neo-nav-link",
               active
-                ? "bg-gradient-to-br from-[#062246] via-[#0b3a68] to-[#0c4a7a] text-white shadow-[0_8px_22px_-6px_hsl(19_100%_50%/0.35),inset_0_1px_0_rgba(255,255,255,0.1)]"
-                : "text-muted-foreground hover:bg-surface-alt hover:text-strong"
+                ? "neo-nav-link-active"
+                : "neo-nav-link-idle"
             )}
           >
             <Icon
               className={cn(
-                "h-[18px] w-[18px] flex-shrink-0 transition-colors",
-                active ? "text-white" : "text-muted-foreground group-hover:text-strong"
+                "h-[18px] w-[18px] flex-shrink-0 transition-colors duration-200",
+                active ? "text-white" : "text-muted-foreground group-hover:text-[#4B53CB]"
               )}
               strokeWidth={active ? 2.35 : 2}
               aria-hidden
             />
-            <span>{item.label}</span>
+            <span className="flex-1 truncate">{item.label}</span>
+            {badge && !active && (
+              <span className="rounded-full border border-[#D9DEEA] bg-[#F2F5FB] px-2 py-0.5 text-[11px] font-semibold text-[#64729A]">
+                {badge}
+              </span>
+            )}
           </Link>
         )
       })}

@@ -5,7 +5,7 @@
 @layer base {
   :root {
     /* Core shadcn-compatible */
-    --background: 220 18% 97%;
+    --background: 228 26% 96%;
     --foreground: 222 47% 11%;
     --card: 0 0% 100%;
     --card-foreground: 222 47% 11%;
@@ -67,49 +67,26 @@
 
   body {
     @apply bg-background text-foreground;
+    font-family:
+      var(--font-sans),
+      "Manrope",
+      "Avenir Next",
+      "Segoe UI",
+      sans-serif;
     font-feature-settings: "ss01" on, "cv01" on, "cv11" on;
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
+    line-height: 1.45;
   }
 
   body.site-chroma {
     position: relative;
-    background:
-      radial-gradient(1200px 650px at -8% -10%, hsl(195 100% 88% / 0.55), transparent 58%),
-      radial-gradient(1100px 620px at 108% 0%, hsl(274 100% 90% / 0.45), transparent 56%),
-      radial-gradient(900px 520px at 50% 112%, hsl(24 100% 86% / 0.35), transparent 64%),
-      linear-gradient(180deg, hsl(220 38% 97%), hsl(220 32% 95%));
-    background-attachment: fixed;
+    background: hsl(228 26% 96%);
   }
 
   body.site-chroma::before,
   body.site-chroma::after {
-    content: "";
-    position: fixed;
-    pointer-events: none;
-    z-index: 0;
-    filter: blur(56px);
-    opacity: 0.55;
-  }
-
-  body.site-chroma::before {
-    width: 34rem;
-    height: 34rem;
-    top: -8rem;
-    left: -8rem;
-    border-radius: 9999px;
-    background: hsl(188 100% 76% / 0.55);
-    animation: hue-float 14s ease-in-out infinite;
-  }
-
-  body.site-chroma::after {
-    width: 30rem;
-    height: 30rem;
-    top: 24vh;
-    right: -9rem;
-    border-radius: 9999px;
-    background: hsl(274 92% 80% / 0.52);
-    animation: hue-float 16s ease-in-out infinite reverse;
+    content: none;
   }
 
   body.site-chroma > * {
@@ -149,6 +126,13 @@
   h5,
   h6 {
     text-wrap: balance;
+    font-family:
+      var(--font-display),
+      "Space Grotesk",
+      "Sora",
+      "Manrope",
+      sans-serif;
+    letter-spacing: -0.018em;
   }
 
   p {
@@ -162,16 +146,7 @@
   .app-page {
     @apply min-h-screen;
     background-color: hsl(var(--background));
-    background-image:
-      radial-gradient(900px 420px at -5% -10%, hsl(194 100% 88% / 0.35), transparent 62%),
-      radial-gradient(760px 360px at 104% 6%, hsl(264 95% 88% / 0.25), transparent 58%),
-      radial-gradient(680px 300px at 52% 112%, hsl(24 100% 88% / 0.24), transparent 62%),
-      linear-gradient(
-        180deg,
-        hsl(var(--background)) 0%,
-        hsl(220 30% 96%) 46%,
-        hsl(220 28% 95%) 100%
-      );
+    background-image: linear-gradient(180deg, hsl(228 26% 96%), hsl(228 28% 95%));
   }
 
   .app-shell {
@@ -181,16 +156,14 @@
 
   /* Layered surfaces (panels, not floating cards) */
   .surface-panel {
-    @apply border border-border bg-[hsl(var(--surface))] shadow-[0_1px_0_rgba(15,23,42,0.04),0_1px_2px_rgba(15,23,42,0.04)];
-    background-image: linear-gradient(
-      180deg,
-      hsl(0 0% 100%) 0%,
-      hsl(218 56% 98% / 0.8) 100%
-    );
+    @apply border border-border bg-[hsl(var(--surface))] shadow-[0_1px_0_rgba(15,23,42,0.04),0_10px_24px_-20px_rgba(15,23,42,0.25)];
+    background-image: linear-gradient(180deg, hsl(0 0% 100%), hsl(0 0% 100%));
+    backdrop-filter: blur(4px);
   }
 
   .surface-panel-raised {
-    @apply border border-border bg-[hsl(var(--surface))] shadow-[0_1px_0_rgba(15,23,42,0.05),0_8px_24px_rgba(15,23,42,0.06)];
+    @apply border border-border bg-[hsl(var(--surface))] shadow-[0_1px_0_rgba(15,23,42,0.05),0_14px_34px_-24px_rgba(3,19,41,0.24)];
+    backdrop-filter: blur(6px);
   }
 
   .surface-rail {
@@ -199,18 +172,16 @@
   }
 
   .surface-toolbar {
-    @apply border-b border-border bg-surface-alt/95 backdrop-blur-sm;
+    @apply border-b border-border bg-white/95 backdrop-blur-sm;
   }
 
   .surface-hero {
-    @apply border border-border bg-[hsl(var(--surface))] shadow-[0_1px_0_rgba(15,23,42,0.04)];
+    @apply border border-border bg-[hsl(var(--surface))] shadow-[0_1px_0_rgba(15,23,42,0.04),0_16px_34px_-20px_rgba(15,23,42,0.26)];
   }
 
   .surface-card {
-    @apply border border-border bg-[hsl(var(--surface))] shadow-[0_1px_0_rgba(15,23,42,0.04),0_6px_18px_rgba(15,23,42,0.05)];
-    background-image:
-      radial-gradient(120% 90% at 0% 0%, hsl(201 100% 96% / 0.65), transparent 65%),
-      linear-gradient(180deg, hsl(0 0% 100%), hsl(220 33% 98%));
+    @apply border border-border bg-[hsl(var(--surface))] shadow-[0_1px_0_rgba(15,23,42,0.04),0_14px_30px_-24px_rgba(8,24,48,0.22)];
+    background-image: linear-gradient(180deg, hsl(0 0% 100%), hsl(0 0% 100%));
   }
 
   .surface-card-subtle {
@@ -222,8 +193,8 @@
   }
 
   .metric-tile {
-    @apply border border-border bg-[hsl(var(--surface))] p-4 shadow-[0_1px_0_rgba(15,23,42,0.03)];
-    background-image: linear-gradient(150deg, hsl(201 100% 98%), hsl(0 0% 100%) 52%, hsl(264 100% 98%));
+    @apply border border-border bg-[hsl(var(--surface))] p-4 shadow-[0_1px_0_rgba(15,23,42,0.03),0_12px_24px_-20px_rgba(14,35,60,0.24)];
+    background-image: linear-gradient(180deg, hsl(0 0% 100%), hsl(0 0% 100%));
   }
 
   /* ── Typography ──────────────────────────────────────────────── */
@@ -253,7 +224,7 @@
   /* ── Job rows / lists ───────────────────────────────────────── */
 
   .job-feed-panel {
-    @apply surface-panel overflow-hidden rounded-lg;
+    @apply surface-panel overflow-hidden rounded-[14px];
   }
 
   .data-list-row {
@@ -267,13 +238,133 @@
   /* ── Navigation ──────────────────────────────────────────────── */
 
   .glass-nav {
-    @apply border-b border-border bg-surface/85 backdrop-blur-xl;
-    background-image: linear-gradient(90deg, hsl(194 100% 96% / 0.45), hsl(24 100% 96% / 0.35), hsl(264 100% 96% / 0.35));
+    @apply border-b border-border bg-white/95 backdrop-blur-xl;
+    background-image: linear-gradient(90deg, hsl(0 0% 100%), hsl(0 0% 100%));
   }
 
   .dash-header-bar {
-    @apply sticky top-0 z-40 border-b border-border bg-surface/90 backdrop-blur-xl;
-    background-image: linear-gradient(90deg, hsl(194 100% 95% / 0.5), hsl(264 100% 96% / 0.4));
+    @apply sticky top-0 z-40 border-b border-border bg-[#F5F6FB]/95 backdrop-blur-xl;
+    background-image: linear-gradient(180deg, hsl(228 26% 96% / 0.98), hsl(228 28% 95% / 0.94));
+  }
+
+  .dash-header-bar::after {
+    content: none;
+  }
+
+  .neo-shell {
+    position: relative;
+    isolation: isolate;
+  }
+
+  .neo-shell::before {
+    content: none;
+  }
+
+  .neo-hero {
+    @apply surface-panel relative overflow-hidden rounded-[14px] border px-5 py-5 sm:px-7 sm:py-7;
+    background-image:
+      linear-gradient(
+        90deg,
+        hsl(216 52% 87%) 0%,
+        hsl(218 56% 90%) 54%,
+        hsl(299 42% 88%) 100%
+      );
+    box-shadow: none;
+  }
+
+  .neo-hero::before {
+    content: none;
+  }
+
+  .neo-hero::after {
+    content: none;
+  }
+
+  .neo-strip {
+    @apply rounded-[14px] border border-[#F3DCCF] bg-[#FFF7F1] px-4 py-3;
+    box-shadow: none;
+  }
+
+  .neo-strip::before {
+    content: none;
+  }
+
+  .neo-strip::after {
+    content: none;
+  }
+
+  .neo-toolbar {
+    @apply rounded-[14px] border border-border bg-[hsl(var(--surface))] p-3 sm:p-4;
+    background-image: linear-gradient(180deg, hsl(0 0% 100%), hsl(0 0% 100%));
+    box-shadow: none;
+  }
+
+  .neo-toolbar::before {
+    content: none;
+  }
+
+  .neo-rail-card {
+    @apply overflow-hidden rounded-[14px] border border-border bg-[hsl(var(--surface))] p-4;
+    background-image: linear-gradient(180deg, hsl(0 0% 100%), hsl(0 0% 100%));
+    box-shadow: none;
+  }
+
+  .neo-rail-card::before {
+    content: none;
+  }
+
+  .neo-rail-card::after {
+    content: none;
+  }
+
+  .neo-stat {
+    @apply rounded-xl border border-[#C7CCE0] px-3 py-2;
+    background: hsl(0 0% 100% / 0.35);
+    box-shadow: none;
+  }
+
+  .neo-nav-link {
+    @apply relative flex items-center gap-3 rounded-[0.95rem] px-3 py-2.5 text-[13px] font-semibold tracking-tight transition-all duration-200;
+    border: 1px solid transparent;
+  }
+
+  .neo-nav-link-active {
+    @apply text-white;
+    border-color: hsl(249 88% 63% / 0.68);
+    background: linear-gradient(110deg, hsl(238 90% 58%) 0%, hsl(268 88% 64%) 100%);
+    box-shadow: 0 8px 18px -14px rgba(88, 60, 225, 0.8);
+  }
+
+  .neo-nav-link-idle {
+    @apply text-muted-foreground hover:text-strong;
+    border-color: transparent;
+    background: transparent;
+  }
+
+  .neo-nav-link-idle:hover {
+    border-color: hsl(215 30% 86%);
+    background: hsl(0 0% 100% / 0.8);
+  }
+
+  .neo-live-pill {
+    @apply inline-flex items-center gap-2 rounded-full border border-[#DDDDF3] bg-white px-3 py-1 text-[11px] font-semibold text-[#6256DB];
+  }
+
+  .neo-live-dot {
+    position: relative;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 9999px;
+    background: hsl(250 82% 62%);
+  }
+
+  .neo-live-dot::after {
+    content: "";
+    position: absolute;
+    inset: -0.35rem;
+    border-radius: 9999px;
+    border: 1px solid hsl(250 82% 62% / 0.4);
+    animation: pulse-ring 2s ease-out infinite;
   }
 
   /* ── Admin (unchanged structure, token alignment) ───────────── */
@@ -338,105 +429,66 @@
   /* ── Product app skin (dashboard, auth, public — not landing) ─────────────── */
 
   .product-skin {
-    --background: 220 42% 96%;
+    --background: 228 26% 96%;
     --surface: 0 0% 100%;
-    --surface-alt: 214 70% 97%;
-    --border: 220 20% 86%;
+    --surface-alt: 226 22% 95%;
+    --border: 223 24% 86%;
     --accent: 24 100% 95%;
-    --accent-foreground: 19 90% 22%;
+    --accent-foreground: 195 86% 22%;
   }
 
   .product-skin .app-page {
-    background-image:
-      radial-gradient(1000px 480px at -6% -8%, hsl(330 100% 92% / 0.55), transparent 58%),
-      radial-gradient(820px 420px at 108% 4%, hsl(195 100% 88% / 0.45), transparent 55%),
-      radial-gradient(720px 380px at 48% 108%, hsl(38 100% 86% / 0.38), transparent 60%),
-      linear-gradient(
-        185deg,
-        hsl(220 45% 97%) 0%,
-        hsl(270 28% 96%) 42%,
-        hsl(200 32% 95%) 100%
-      );
+    background-image: linear-gradient(180deg, hsl(228 26% 96%), hsl(228 28% 95%));
   }
 
   .product-skin .surface-panel {
-    border-color: hsl(220 22% 88% / 0.95);
-    background-image:
-      radial-gradient(140% 100% at 0% 0%, hsl(24 100% 97% / 0.85), transparent 55%),
-      radial-gradient(90% 80% at 100% 0%, hsl(210 100% 97% / 0.7), transparent 50%),
-      linear-gradient(180deg, hsl(0 0% 100% / 0.97) 0%, hsl(218 56% 98% / 0.92) 100%);
-    box-shadow:
-      0 1px 0 rgba(15, 23, 42, 0.05),
-      0 12px 32px -12px hsl(262 60% 55% / 0.12);
+    border-color: hsl(223 24% 86%);
+    background-image: linear-gradient(180deg, hsl(0 0% 100%), hsl(0 0% 100%));
+    box-shadow: 0 10px 24px -20px rgba(15, 23, 42, 0.24);
   }
 
   .product-skin .surface-card {
-    background-image:
-      radial-gradient(120% 90% at 0% 0%, hsl(330 100% 97% / 0.55), transparent 62%),
-      radial-gradient(90% 70% at 100% 10%, hsl(195 100% 96% / 0.5), transparent 58%),
-      linear-gradient(180deg, hsl(0 0% 100%), hsl(220 40% 99%));
+    background-image: linear-gradient(180deg, hsl(0 0% 100%), hsl(0 0% 100%));
   }
 
   .product-skin .surface-toolbar {
-    background-image: linear-gradient(
-      90deg,
-      hsl(24 100% 98% / 0.85) 0%,
-      hsl(210 100% 98% / 0.75) 50%,
-      hsl(270 100% 99% / 0.8) 100%
-    );
+    background-image: linear-gradient(90deg, hsl(0 0% 100%), hsl(0 0% 100%));
   }
 
   .product-skin .metric-tile {
-    background-image: linear-gradient(
-      135deg,
-      hsl(24 100% 98%) 0%,
-      hsl(0 0% 100%) 35%,
-      hsl(210 100% 98%) 70%,
-      hsl(280 100% 99%) 100%
-    );
+    background-image: linear-gradient(180deg, hsl(0 0% 100%), hsl(0 0% 100%));
   }
 
   .product-skin .dash-header-bar {
-    background-image: linear-gradient(
-      92deg,
-      hsl(194 100% 96% / 0.65) 0%,
-      hsl(24 100% 97% / 0.55) 35%,
-      hsl(270 100% 97% / 0.6) 70%,
-      hsl(195 100% 97% / 0.55) 100%
-    );
+    background-image: linear-gradient(180deg, hsl(228 26% 96% / 0.98), hsl(228 28% 95% / 0.95));
   }
 
   .product-skin .glass-nav {
-    background-image: linear-gradient(
-      92deg,
-      hsl(194 100% 95% / 0.55) 0%,
-      hsl(24 100% 96% / 0.45) 40%,
-      hsl(264 100% 96% / 0.5) 100%
-    );
+    background-image: linear-gradient(90deg, hsl(0 0% 100%), hsl(0 0% 100%));
   }
 
   .product-skin .chip-control:hover {
-    border-color: hsl(19 90% 82%);
-    background: linear-gradient(135deg, hsl(24 100% 98%), hsl(210 100% 98%));
+    border-color: hsl(245 88% 78%);
+    background: hsl(248 90% 98%);
   }
 
   .product-skin .chip-control-active {
-    border-color: hsl(19 85% 78%);
-    background: linear-gradient(135deg, hsl(24 100% 97%), hsl(33 100% 95%));
-    color: hsl(var(--accent-brand));
+    border-color: hsl(249 88% 70%);
+    background: hsl(250 100% 98%);
+    color: hsl(247 80% 56%);
   }
 
   .product-skin .section-kicker {
-    color: hsl(19 100% 45%);
-    text-shadow: 0 1px 0 hsl(0 0% 100% / 0.4);
+    color: hsl(247 80% 56%);
+    text-shadow: none;
   }
 
   .product-skin .soft-scrollbar {
-    scrollbar-color: hsl(19 80% 68% / 0.35) transparent;
+    scrollbar-color: hsl(245 60% 70% / 0.35) transparent;
   }
 
   .product-skin .soft-scrollbar::-webkit-scrollbar-thumb {
-    background: hsl(19 70% 62% / 0.35);
+    background: hsl(245 60% 70% / 0.35);
   }
 
   /* Auth & marketing sub-surfaces */
@@ -498,15 +550,15 @@
     background-image: linear-gradient(
       90deg,
       hsl(0 0% 100% / 0.02) 0%,
-      hsl(220 40% 99%) 100%
+      hsl(0 0% 100% / 0.98) 100%
     );
   }
 
   .product-skin .job-card-surface:hover {
     background-image: linear-gradient(
       100deg,
-      hsl(24 100% 99%) 0%,
-      hsl(210 100% 99%) 100%
+      hsl(247 100% 99% / 0.74) 0%,
+      hsl(24 100% 99% / 0.72) 100%
     );
     box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.8);
   }
@@ -543,6 +595,15 @@
 
 /* ── Animations ──────────────────────────────────────────────────── */
 @layer utilities {
+  @keyframes panel-sheen {
+    from {
+      background-position: 180% 50%;
+    }
+    to {
+      background-position: -180% 50%;
+    }
+  }
+
   @keyframes fade-in {
     from {
       opacity: 0;
@@ -584,6 +645,21 @@
     to {
       opacity: 1;
       transform: translateX(0);
+    }
+  }
+
+  @keyframes pulse-ring {
+    0% {
+      transform: scale(0.65);
+      opacity: 0.7;
+    }
+    70% {
+      transform: scale(1.25);
+      opacity: 0;
+    }
+    100% {
+      transform: scale(1.25);
+      opacity: 0;
     }
   }
 
@@ -635,5 +711,16 @@
 
   .animate-hue-float {
     animation: hue-float 8s ease-in-out infinite;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

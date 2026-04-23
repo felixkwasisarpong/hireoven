@@ -27,14 +27,14 @@ function scoreStyles(score: number, method: ScoreMethod | null) {
 
   if (score >= 70) {
     return method === "deep"
-      ? "border-cyan-200 bg-cyan-100 text-cyan-800"
-      : "border-cyan-200 bg-cyan-50 text-cyan-700"
+      ? "border-violet-200 bg-violet-100 text-violet-800"
+      : "border-violet-200 bg-violet-50 text-violet-700"
   }
 
   if (score >= 50) {
     return method === "deep"
-      ? "border-amber-200 bg-amber-100 text-amber-800"
-      : "border-amber-200 bg-amber-50 text-amber-700"
+      ? "border-orange-200 bg-orange-100 text-orange-800"
+      : "border-orange-200 bg-orange-50 text-orange-700"
   }
 
   return method === "deep"

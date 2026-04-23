@@ -61,19 +61,19 @@ export default function JobSearch({ totalCount }: JobSearchProps) {
   return (
     <div className="space-y-2">
       <div className="relative">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6A789D]" />
         <input
           type="search"
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
           placeholder="Search title, company, skills, location…"
-          className="w-full rounded-lg border border-border bg-surface py-3 pl-10 pr-10 text-sm text-strong outline-none transition-colors focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
+          className="w-full rounded-xl border border-[#D7DCEA] bg-white py-3 pl-10 pr-10 text-sm text-strong outline-none transition-colors focus:border-[#8A80FA] focus:ring-2 focus:ring-[#DBD6FF]"
         />
         {draft && (
           <button
             type="button"
             onClick={clearQuery}
-            className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-alt hover:text-strong"
+            className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-[#F3F5FB] hover:text-strong"
             aria-label="Clear search"
           >
             <X className="h-4 w-4" />

@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { BellRing, CheckCircle2, X } from "lucide-react"
+import { BellRing, ChevronRight, X } from "lucide-react"
 
 const DISMISS_KEY = "hireoven:push-dismissed-until"
 const DISMISS_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
@@ -128,31 +128,36 @@ export default function PushNotificationSetup() {
   if (!shouldShow && !success) return null
 
   return (
-    <div className="rounded-[28px] border border-[#CDEBFF] bg-[#FFF8F4] p-4">
+    <div className="rounded-[14px] border border-[#F3DCCF] bg-[#FFF7F1] p-3 sm:p-3.5">
       {success ? (
-        <div className="flex items-center gap-3">
-          <CheckCircle2 className="h-5 w-5 text-[#FF5C18]" />
-          <div>
-            <p className="text-sm font-semibold text-[#062246]">
-              You&apos;ll be notified instantly
-            </p>
-            <p className="text-xs text-[#365E7D]">
-              Hireoven will alert you when fresh jobs drop.
-            </p>
+        <div className="flex items-center justify-between gap-2.5">
+          <div className="flex items-center gap-3">
+            <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[#FFDCCB] bg-white text-[#FF5C18]">
+              <BellRing className="h-4.5 w-4.5" />
+            </span>
+            <div>
+              <p className="text-sm font-semibold text-[#062246]">
+                You&apos;ll be notified instantly
+              </p>
+              <p className="text-xs text-[#365E7D]">
+                Hireoven will alert you when fresh jobs drop.
+              </p>
+            </div>
           </div>
+          <ChevronRight className="h-5 w-5 text-[#FF5C18]" />
         </div>
       ) : (
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-[#FF5C18]">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-[#FFDCCB] bg-white text-[#FF5C18]">
               <BellRing className="h-5 w-5" />
             </div>
             <div>
               <p className="text-sm font-semibold text-gray-900">
-                Get instant alerts when jobs drop
+                You&apos;ll be notified instantly
               </p>
-              <p className="mt-1 text-sm text-gray-600">
-                Enable notifications so new matches reach you before the crowd.
+              <p className="mt-0.5 text-sm text-gray-600">
+                Hireoven will alert you when fresh jobs drop.
               </p>
               {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
             </div>
@@ -163,14 +168,14 @@ export default function PushNotificationSetup() {
               type="button"
               onClick={() => void enableNotifications()}
               disabled={loading}
-              className="inline-flex items-center justify-center rounded-2xl bg-[#FF5C18] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#E14F0E] disabled:opacity-60"
+              className="inline-flex items-center justify-center rounded-lg bg-[#FF5C18] px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-[#E14F0E] disabled:opacity-60"
             >
               {loading ? "Enabling…" : "Enable"}
             </button>
             <button
               type="button"
               onClick={dismiss}
-              className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-gray-200 bg-white text-gray-500 transition hover:border-gray-300 hover:text-gray-700"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 transition hover:border-gray-300 hover:text-gray-700"
               aria-label="Dismiss push notification prompt"
             >
               <X className="h-4 w-4" />
