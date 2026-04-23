@@ -2,6 +2,9 @@ import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
 
 function getPublicAppOrigin(requestOrigin: string) {
+  const runtime = requestOrigin.trim()
+  if (runtime) return runtime.replace(/\/$/, "")
+
   const configured =
     process.env.NEXT_PUBLIC_APP_URL?.trim() ||
     process.env.NEXT_PUBLIC_SITE_URL?.trim()
@@ -19,6 +22,14 @@ export async function GET(request: Request) {
   const origin = getPublicAppOrigin(requestOrigin)
   const code = searchParams.get("code")
   const next = sanitizeNextPath(searchParams.get("next"))
+  const providerError =
+    searchParams.get("error_description") || searchParams.get("error")
+
+  if (providerError) {
+    return NextResponse.redirect(
+      `${origin}/login?error=${encodeURIComponent(providerError)}`
+    )
+  }
 
   if (code) {
     const supabase = await createClient()
@@ -51,7 +62,25 @@ export async function GET(request: Request) {
 
       return NextResponse.redirect(`${origin}/dashboard`)
     }
+
+    console.error("[auth/callback] exchangeCodeForSession failed", {
+      message: error.message,
+      status: error.status,
+      code: error.code,
+      requestOrigin,
+      next,
+    })
+
+    return NextResponse.redirect(
+      `${origin}/login?error=${encodeURIComponent(
+        "Could not complete Google sign in. Please try again."
+      )}`
+    )
   }
 
-  return NextResponse.redirect(`${origin}/login?error=Could+not+sign+in+with+Google`)
+  return NextResponse.redirect(
+    `${origin}/login?error=${encodeURIComponent(
+      "Could not sign in with Google"
+    )}`
+  )
 }

@@ -16,19 +16,22 @@ import {
   MapPin,
   PiggyBank,
   Plane,
-  Sparkles,
   Share2,
+  Sparkles,
   Users,
   Wrench,
 } from "lucide-react"
 import { AutofillButton } from "@/components/autofill/AutofillButton"
 import JobDetailSidebar from "@/components/jobs/JobDetailSidebar"
 import CompanyLogo from "@/components/ui/CompanyLogo"
-import { parseJobDescriptionSections, type JobDescriptionSection } from "@/lib/jobs/description"
+import {
+  formatSalaryLabel,
+  resolveJobNormalization,
+  type PersistedJobForNormalization,
+} from "@/lib/jobs/normalization"
 import {
   extractEducationLabel,
   extractExperienceLabel,
-  inferJobMetadata,
 } from "@/lib/jobs/metadata"
 import { cleanJobTitle } from "@/lib/jobs/title"
 import { createClient } from "@/lib/supabase/server"
@@ -62,147 +65,20 @@ const EXPERIENCE_BY_SENIORITY: Record<string, string> = {
   exec: "12+ years",
 }
 
-function formatEmploymentLabel(value: Job["employment_type"]) {
-  if (!value) return null
-  if (value === "fulltime") return "Full-time"
-  if (value === "parttime") return "Part-time"
-  if (value === "internship") return "Internship"
-  if (value === "contract") return "Contract"
-  return value
-}
-
-function formatSeniorityLabel(value: Job["seniority_level"]) {
-  if (!value) return null
-  if (value === "staff") return "Staff+"
-  return value.charAt(0).toUpperCase() + value.slice(1)
-}
-
-function formatDetectedTime(value: string) {
-  const minutes = Math.max(1, Math.floor((Date.now() - new Date(value).getTime()) / 60_000))
-  if (minutes < 60) return `${minutes} min ago`
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`
-  const days = Math.floor(hours / 24)
-  return `${days} day${days === 1 ? "" : "s"} ago`
-}
-
-function formatSalaryRange(job: Pick<Job, "salary_min" | "salary_max" | "salary_currency">) {
-  if (job.salary_min == null || job.salary_max == null) return null
-  const sym =
-    job.salary_currency === "USD" || !job.salary_currency ? "$" : `${job.salary_currency} `
-  return `${sym}${Math.round(job.salary_min / 1000)}K - ${sym}${Math.round(job.salary_max / 1000)}K`
-}
-
-function headingKind(value: string | null) {
-  const heading = (value ?? "").toLowerCase().trim()
-  if (!heading) return "unknown"
-  if (/(about|overview|job details|role summary)/i.test(heading)) return "overview"
-  if (/(what you'll do|what you will do|responsibilit|day-to-day|impact)/i.test(heading))
-    return "responsibilities"
-  if (/(minimum|basic|required|must have|requirement)/i.test(heading)) return "minimum"
-  if (/(preferred|nice to have|ideal|plus)/i.test(heading)) return "preferred"
-  if (/(benefits|perks|compensation)/i.test(heading)) return "benefits"
-  if (/(about us|about company|company)/i.test(heading)) return "company"
-  return "unknown"
-}
-
-function toBulletSentences(paragraphs: string[]) {
-  return paragraphs
-    .flatMap((paragraph) =>
-      paragraph
-        .split(/(?<=[.!?])\s+(?=[A-Z0-9])/g)
-        .map((sentence) => sentence.trim())
-        .filter((sentence) => sentence.length > 24)
-    )
-    .map((sentence) => sentence.replace(/\.$/, "").trim())
-}
-
-function uniqTrimmed(values: string[], max: number) {
-  const out: string[] = []
-  for (const value of values.map((item) => item.trim()).filter(Boolean)) {
-    if (out.some((existing) => existing.toLowerCase() === value.toLowerCase())) continue
-    out.push(value)
-    if (out.length >= max) break
-  }
-  return out
-}
-
-function bucketDescriptionSections(sections: JobDescriptionSection[]) {
-  const overview: string[] = []
-  const responsibilities: string[] = []
-  const minimumRequirements: string[] = []
-  const preferredQualifications: string[] = []
-  const benefits: string[] = []
-  const company: string[] = []
-
-  for (const section of sections) {
-    const kind = headingKind(section.heading)
-    const bullets = section.bullets.length > 0 ? section.bullets : toBulletSentences(section.paragraphs)
-
-    if (kind === "overview") {
-      overview.push(...section.paragraphs)
-      continue
-    }
-
-    if (kind === "responsibilities") {
-      responsibilities.push(...bullets)
-      continue
-    }
-
-    if (kind === "minimum") {
-      minimumRequirements.push(...bullets)
-      continue
-    }
-
-    if (kind === "preferred") {
-      preferredQualifications.push(...bullets)
-      continue
-    }
-
-    if (kind === "benefits") {
-      benefits.push(...bullets)
-      continue
-    }
-
-    if (kind === "company") {
-      company.push(...section.paragraphs)
-      continue
-    }
-
-    if (overview.length < 3) overview.push(...section.paragraphs.slice(0, 2))
-    if (responsibilities.length < 6) responsibilities.push(...section.bullets)
-  }
-
-  const fallbackBullets = uniqTrimmed(
-    sections.flatMap((section) =>
-      section.bullets.length > 0 ? section.bullets : toBulletSentences(section.paragraphs)
-    ),
-    12
-  )
-
-  return {
-    overview: uniqTrimmed(overview, 3),
-    responsibilities:
-      responsibilities.length > 0 ? uniqTrimmed(responsibilities, 8) : fallbackBullets.slice(0, 6),
-    minimumRequirements:
-      minimumRequirements.length > 0
-        ? uniqTrimmed(minimumRequirements, 8)
-        : fallbackBullets.slice(0, 6),
-    preferredQualifications:
-      preferredQualifications.length > 0 ? uniqTrimmed(preferredQualifications, 8) : [],
-    benefits: uniqTrimmed(benefits, 6),
-    company: uniqTrimmed(company, 2),
-  }
-}
-
 function inferDepartment(title: string, description: string | null) {
   const blob = `${title}\n${description ?? ""}`
   const rules = [
     { label: "Product", pattern: /\bproduct\b/i },
-    { label: "Engineering", pattern: /\b(engineer|developer|software|platform|frontend|backend)\b/i },
+    {
+      label: "Engineering",
+      pattern: /\b(engineer|developer|software|platform|frontend|backend)\b/i,
+    },
     { label: "Data", pattern: /\b(data|analytics|machine learning|ai)\b/i },
     { label: "Design", pattern: /\b(design|ux|ui|research)\b/i },
-    { label: "Sales", pattern: /\b(sales|account executive|business development)\b/i },
+    {
+      label: "Sales",
+      pattern: /\b(sales|account executive|business development)\b/i,
+    },
     { label: "Marketing", pattern: /\b(marketing|growth|brand)\b/i },
     { label: "Operations", pattern: /\b(operations|supply chain|logistics)\b/i },
     { label: "Finance", pattern: /\b(finance|accounting|controller)\b/i },
@@ -212,26 +88,18 @@ function inferDepartment(title: string, description: string | null) {
   for (const rule of rules) {
     if (rule.pattern.test(blob)) return rule.label
   }
+
   return "General"
 }
 
-function inferBenefits(description: string | null) {
-  if (!description) return []
-  const rules = [
-    { label: "Health, dental, and vision insurance", pattern: /\b(health|dental|vision|medical)\b/i },
-    { label: "401(k) with company match", pattern: /\b401\s?\(k\)|retirement\b/i },
-    { label: "Flexible PTO", pattern: /\b(pto|paid time off|vacation)\b/i },
-    { label: "Parental leave", pattern: /\bparental leave|maternity|paternity\b/i },
-    { label: "Learning and development stipend", pattern: /\b(learning|development|training|tuition)\b/i },
-    { label: "Bonus or equity eligibility", pattern: /\b(bonus|equity|stock|rsu)\b/i },
-  ]
-  return rules.filter((rule) => rule.pattern.test(description)).map((rule) => rule.label)
-}
-
-function workAuthorizationLabel(job: Job, inferredRequired: boolean | null) {
-  if (job.requires_authorization || inferredRequired) return "United States (Required)"
-  if (job.sponsors_h1b) return "Sponsorship supported"
-  return "Not specified"
+function dedupe(values: string[], max = Number.POSITIVE_INFINITY): string[] {
+  const out: string[] = []
+  for (const value of values.map((entry) => entry.trim()).filter(Boolean)) {
+    if (out.some((existing) => existing.toLowerCase() === value.toLowerCase())) continue
+    out.push(value)
+    if (out.length >= max) break
+  }
+  return out
 }
 
 export default async function DashboardJobDetailPage({ params }: Props) {
@@ -250,67 +118,73 @@ export default async function DashboardJobDetailPage({ params }: Props) {
   const job = rawJob as unknown as Job & { company: Company | null }
   const company = job.company
 
-  const displayTitle = cleanJobTitle(job.title)
-  const descriptionSections = parseJobDescriptionSections(job.description)
-  const content = bucketDescriptionSections(descriptionSections)
-  const inferred = inferJobMetadata({
-    title: displayTitle,
-    description: job.description,
-    location: job.location,
-  })
+  const normalized = resolveJobNormalization(
+    job as unknown as PersistedJobForNormalization
+  )
 
-  const employmentLabel =
-    formatEmploymentLabel(job.employment_type) ??
-    formatEmploymentLabel(inferred.employmentType as Job["employment_type"])
-  const seniorityLabel =
-    formatSeniorityLabel(job.seniority_level) ??
-    formatSeniorityLabel(inferred.seniorityLevel as Job["seniority_level"])
-  const salaryLabel =
-    formatSalaryRange(job) ??
-    (inferred.salaryMin && inferred.salaryMax
-      ? formatSalaryRange({
-          salary_min: inferred.salaryMin,
-          salary_max: inferred.salaryMax,
-          salary_currency: inferred.salaryCurrency ?? "USD",
-        } as Pick<Job, "salary_min" | "salary_max" | "salary_currency">)
-      : null)
-
+  const page = normalized.pageView
+  const displayTitle = page.title
+  const postedLabel = page.posted_at_label ?? "Recently posted"
+  const employmentLabel = page.employment_label
+  const seniorityLabel = page.seniority_label
+  const salaryLabel = page.salary_label
   const experienceLabel =
     extractExperienceLabel(job.description) ??
-    (seniorityLabel ? EXPERIENCE_BY_SENIORITY[(job.seniority_level ?? inferred.seniorityLevel ?? "") as string] : null) ??
+    (seniorityLabel
+      ? EXPERIENCE_BY_SENIORITY[(job.seniority_level ?? "") as string]
+      : null) ??
     "Not specified"
   const educationLabel = extractEducationLabel(job.description) ?? "Not specified"
   const departmentLabel = job.department ?? inferDepartment(displayTitle, job.description)
-  const benefits =
-    content.benefits.length > 0 ? content.benefits : inferBenefits(job.description).slice(0, 6)
-  const tools = (job.skills ?? []).slice(0, 10)
-  const postedLabel = formatDetectedTime(job.first_detected_at)
-  const highlightList = uniqTrimmed(
-    [
-      job.is_hybrid || inferred.isHybrid ? "Hybrid work model" : null,
-      job.is_remote || inferred.isRemote ? "Remote-friendly role" : null,
-      employmentLabel ? `${employmentLabel} position` : null,
-      job.location ? `${job.location} location` : null,
-      salaryLabel ? `${salaryLabel} total compensation` : null,
-      job.sponsors_h1b ? "H1B sponsorship available" : null,
-      ...benefits.slice(0, 2),
-    ].filter(Boolean) as string[],
-    5
+
+  const aboutRole =
+    page.sections.about_role.items.length > 0
+      ? page.sections.about_role.items
+      : [
+          "We are still extracting this role summary from the source posting.",
+        ]
+
+  const responsibilities =
+    page.sections.responsibilities.items.length > 0
+      ? page.sections.responsibilities.items
+      : ["Role responsibilities are still being parsed from the source page."]
+
+  const requirements =
+    page.sections.requirements.items.length > 0
+      ? page.sections.requirements.items
+      : ["Requirements are still being parsed from the source page."]
+
+  const preferredQualifications = page.sections.preferred_qualifications.items
+
+  const benefitsAndCompensation = dedupe(
+    [...page.sections.benefits.items, ...page.sections.compensation.items],
+    9
   )
+
+  const companyInfo =
+    page.sections.company_info.items.length > 0
+      ? page.sections.company_info.items
+      : [
+          `${company?.name ?? "This company"} is actively hiring and regularly updates openings on its careers page.`,
+        ]
+
+  const applicationInfo = page.sections.application_info.items
+
+  const tools = page.skills.slice(0, 10)
 
   const selectSimilar =
     "id, title, location, salary_min, salary_max, salary_currency, company:companies(name, domain, logo_url)"
 
   const similarByTitleResult =
-    job.normalized_title && job.normalized_title.length > 0
+    page.normalized_title && page.normalized_title.length > 0
       ? await supabase
           .from("jobs")
           .select(selectSimilar)
           .eq("is_active", true)
-          .eq("normalized_title", job.normalized_title)
+          .eq("normalized_title", page.normalized_title)
           .neq("id", id)
           .limit(3)
-      : { data: [] as unknown[], error: null }
+      : { data: [] as unknown[] }
 
   const similarByCompanyResult = await supabase
     .from("jobs")
@@ -331,11 +205,11 @@ export default async function DashboardJobDetailPage({ params }: Props) {
   const similarJobs = [...similarMap.values()].slice(0, 3)
 
   const tabs = [
-    { id: "overview", label: "Overview", visible: true },
-    { id: "qualifications", label: "Qualifications", visible: true },
-    { id: "benefits", label: "Benefits", visible: true },
-    { id: "company", label: "Company", visible: true },
-  ].filter((tab) => tab.visible)
+    { id: "overview", label: "Overview" },
+    { id: "qualifications", label: "Qualifications" },
+    { id: "benefits", label: "Skills & Benefits" },
+    { id: "company", label: "Company" },
+  ]
 
   return (
     <main className="app-page">
@@ -367,10 +241,10 @@ export default async function DashboardJobDetailPage({ params }: Props) {
                       <BadgeCheck className="h-5 w-5 text-blue-600" />
                     </div>
                     <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
-                      {job.location ? (
+                      {page.location ? (
                         <span className="inline-flex items-center gap-1.5">
                           <MapPin className="h-4 w-4" />
-                          {job.location}
+                          {page.location}
                         </span>
                       ) : null}
                       {employmentLabel ? (
@@ -388,11 +262,9 @@ export default async function DashboardJobDetailPage({ params }: Props) {
                       <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
                         Actively Hiring
                       </span>
-                      {job.sponsors_h1b ? (
-                        <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
-                          H1B Sponsorship Available
-                        </span>
-                      ) : null}
+                      <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
+                        {page.sponsorship_label}
+                      </span>
                       {seniorityLabel ? (
                         <span className="rounded-full border border-border bg-surface-alt px-3 py-1 text-xs font-medium text-muted-foreground">
                           {seniorityLabel}
@@ -404,7 +276,7 @@ export default async function DashboardJobDetailPage({ params }: Props) {
 
                 <div className="flex items-center gap-2">
                   <a
-                    href={job.apply_url}
+                    href={page.apply_url}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-surface text-muted-foreground transition-colors hover:bg-surface-alt hover:text-strong"
@@ -444,12 +316,7 @@ export default async function DashboardJobDetailPage({ params }: Props) {
               <div>
                 <h2 className="text-[30px] font-semibold tracking-tight text-strong">About the role</h2>
                 <div className="mt-3 space-y-3">
-                  {(content.overview.length > 0
-                    ? content.overview
-                    : [
-                        "We are looking for someone who can drive outcomes quickly, collaborate cross-functionally, and ship high-impact work.",
-                      ]
-                  ).map((paragraph) => (
+                  {aboutRole.map((paragraph) => (
                     <p key={paragraph} className="text-[17px] leading-8 text-muted-foreground">
                       {paragraph}
                     </p>
@@ -500,40 +367,31 @@ export default async function DashboardJobDetailPage({ params }: Props) {
                       Work Authorization
                     </p>
                     <p className="mt-1 text-[15px] text-muted-foreground">
-                      {workAuthorizationLabel(job, inferred.requiresAuthorization)}
+                      {page.sponsorship_label}
                     </p>
                   </div>
                 </div>
               </div>
 
               <div className="border-t border-border pt-6">
-                <h3 className="text-3xl font-semibold tracking-tight text-strong">What you&apos;ll do</h3>
-                {content.responsibilities.length > 0 ? (
-                  <ul className="mt-4 space-y-2.5">
-                    {content.responsibilities.map((item) => (
-                      <li key={item} className="flex items-start gap-2.5 text-[16px] leading-7 text-muted-foreground">
-                        <CheckCircle2 className="mt-[2px] h-4 w-4 flex-shrink-0 text-emerald-600" />
-                        <span>{item}</span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="mt-3 text-[16px] leading-7 text-muted-foreground">
-                    We are still extracting role responsibilities from the source posting.
-                  </p>
-                )}
+                <h3 className="text-3xl font-semibold tracking-tight text-strong">Responsibilities</h3>
+                <ul className="mt-4 space-y-2.5">
+                  {responsibilities.map((item) => (
+                    <li key={item} className="flex items-start gap-2.5 text-[16px] leading-7 text-muted-foreground">
+                      <CheckCircle2 className="mt-[2px] h-4 w-4 flex-shrink-0 text-emerald-600" />
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
               </div>
             </section>
 
             <section id="qualifications" className="scroll-mt-24 border-t border-border py-6">
-              <div className="grid gap-6 md:grid-cols-2">
+              <div className="space-y-8">
                 <div>
                   <h3 className="text-2xl font-semibold tracking-tight text-strong">Minimum Requirements</h3>
                   <ul className="mt-4 space-y-2.5">
-                    {(content.minimumRequirements.length > 0
-                      ? content.minimumRequirements
-                      : ["Requirements are still being parsed from the source page."]
-                    ).map((item) => (
+                    {requirements.map((item) => (
                       <li key={item} className="flex items-start gap-2.5 text-[15px] leading-7 text-muted-foreground">
                         <span className="mt-[9px] h-1.5 w-1.5 flex-shrink-0 rounded-full bg-blue-500" />
                         <span>{item}</span>
@@ -542,25 +400,24 @@ export default async function DashboardJobDetailPage({ params }: Props) {
                   </ul>
                 </div>
 
-                <div>
-                  <h3 className="text-2xl font-semibold tracking-tight text-strong">Preferred Qualifications</h3>
-                  <ul className="mt-4 space-y-2.5">
-                    {(content.preferredQualifications.length > 0
-                      ? content.preferredQualifications
-                      : content.minimumRequirements.slice(0, 4)
-                    ).map((item) => (
-                      <li key={item} className="flex items-start gap-2.5 text-[15px] leading-7 text-muted-foreground">
-                        <span className="mt-[9px] h-1.5 w-1.5 flex-shrink-0 rounded-full bg-blue-500" />
-                        <span>{item}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+                {preferredQualifications.length > 0 ? (
+                  <div>
+                    <h3 className="text-2xl font-semibold tracking-tight text-strong">Preferred Qualifications</h3>
+                    <ul className="mt-4 space-y-2.5">
+                      {preferredQualifications.map((item) => (
+                        <li key={item} className="flex items-start gap-2.5 text-[15px] leading-7 text-muted-foreground">
+                          <span className="mt-[9px] h-1.5 w-1.5 flex-shrink-0 rounded-full bg-blue-500" />
+                          <span>{item}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
               </div>
             </section>
 
             <section id="benefits" className="scroll-mt-24 border-t border-border py-6">
-              <h3 className="text-2xl font-semibold tracking-tight text-strong">Tools &amp; Technologies</h3>
+              <h3 className="text-2xl font-semibold tracking-tight text-strong">Skills from this posting</h3>
               {tools.length > 0 ? (
                 <div className="mt-4 flex flex-wrap gap-2">
                   {tools.map((skill) => (
@@ -574,39 +431,45 @@ export default async function DashboardJobDetailPage({ params }: Props) {
                 </div>
               ) : (
                 <p className="mt-3 text-[15px] leading-7 text-muted-foreground">
-                  Tools are still being extracted from the source posting.
+                  No explicit skills list was found in the source posting.
                 </p>
               )}
 
-              <h3 className="mt-7 text-2xl font-semibold tracking-tight text-strong">Compensation &amp; Benefits</h3>
-              <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {benefits.slice(0, 6).map((item, index) => {
-                  const icon =
-                    index % 6 === 0 ? (
-                      <HeartPulse className="h-4 w-4 text-blue-700" />
-                    ) : index % 6 === 1 ? (
-                      <PiggyBank className="h-4 w-4 text-blue-700" />
-                    ) : index % 6 === 2 ? (
-                      <Plane className="h-4 w-4 text-blue-700" />
-                    ) : index % 6 === 3 ? (
-                      <Users className="h-4 w-4 text-blue-700" />
-                    ) : index % 6 === 4 ? (
-                      <BookOpen className="h-4 w-4 text-blue-700" />
-                    ) : (
-                      <Laptop className="h-4 w-4 text-blue-700" />
-                    )
+              <h3 className="mt-7 text-2xl font-semibold tracking-tight text-strong">Benefits &amp; Compensation</h3>
+              {benefitsAndCompensation.length > 0 ? (
+                <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {benefitsAndCompensation.map((item, index) => {
+                    const icon =
+                      index % 6 === 0 ? (
+                        <HeartPulse className="h-4 w-4 text-blue-700" />
+                      ) : index % 6 === 1 ? (
+                        <PiggyBank className="h-4 w-4 text-blue-700" />
+                      ) : index % 6 === 2 ? (
+                        <Plane className="h-4 w-4 text-blue-700" />
+                      ) : index % 6 === 3 ? (
+                        <Users className="h-4 w-4 text-blue-700" />
+                      ) : index % 6 === 4 ? (
+                        <BookOpen className="h-4 w-4 text-blue-700" />
+                      ) : (
+                        <Laptop className="h-4 w-4 text-blue-700" />
+                      )
 
-                  return (
-                    <div
-                      key={item}
-                      className="inline-flex items-center gap-2 rounded-lg border border-border bg-surface-alt px-3 py-2 text-sm text-muted-foreground"
-                    >
-                      {icon}
-                      <span>{item}</span>
-                    </div>
-                  )
-                })}
-              </div>
+                    return (
+                      <div
+                        key={item}
+                        className="inline-flex items-center gap-2 rounded-lg border border-border bg-surface-alt px-3 py-2 text-sm text-muted-foreground"
+                      >
+                        {icon}
+                        <span>{item}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : (
+                <p className="mt-3 text-[15px] leading-7 text-muted-foreground">
+                  No explicit benefits or compensation section was found in the source posting.
+                </p>
+              )}
 
               <div className="mt-5 rounded-lg border border-border bg-surface-alt px-4 py-3 text-sm leading-relaxed text-muted-foreground">
                 This role&apos;s details are sourced and normalized from the original careers page. Final offer terms depend on level and location.
@@ -614,19 +477,30 @@ export default async function DashboardJobDetailPage({ params }: Props) {
             </section>
 
             <section id="company" className="scroll-mt-24 border-t border-border py-6">
-              <h3 className="text-2xl font-semibold tracking-tight text-strong">About {company?.name ?? "the company"}</h3>
+              <h3 className="text-2xl font-semibold tracking-tight text-strong">
+                About {company?.name ?? "the company"}
+              </h3>
               <div className="mt-3 space-y-3">
-                {(content.company.length > 0
-                  ? content.company
-                  : [
-                      `${company?.name ?? "This company"} is actively hiring and regularly updates openings on its careers page.`,
-                    ]
-                ).map((paragraph) => (
+                {companyInfo.map((paragraph) => (
                   <p key={paragraph} className="text-[15px] leading-7 text-muted-foreground">
                     {paragraph}
                   </p>
                 ))}
               </div>
+
+              {applicationInfo.length > 0 ? (
+                <div className="mt-6 rounded-lg border border-border bg-surface-alt p-4">
+                  <h4 className="text-sm font-semibold text-strong">Application info</h4>
+                  <ul className="mt-3 space-y-2">
+                    {applicationInfo.map((item) => (
+                      <li key={item} className="flex items-start gap-2 text-sm text-muted-foreground">
+                        <span className="mt-[7px] h-1.5 w-1.5 flex-shrink-0 rounded-full bg-blue-500" />
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
             </section>
 
             {similarJobs.length > 0 ? (
@@ -640,11 +514,11 @@ export default async function DashboardJobDetailPage({ params }: Props) {
 
                 <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                   {similarJobs.map((similar) => {
-                    const cardSalary = formatSalaryRange({
-                      salary_min: similar.salary_min,
-                      salary_max: similar.salary_max,
-                      salary_currency: similar.salary_currency ?? "USD",
-                    } as Pick<Job, "salary_min" | "salary_max" | "salary_currency">)
+                    const cardSalary = formatSalaryLabel(
+                      similar.salary_min,
+                      similar.salary_max,
+                      similar.salary_currency ?? "USD"
+                    )
 
                     return (
                       <Link
@@ -664,7 +538,9 @@ export default async function DashboardJobDetailPage({ params }: Props) {
                             <p className="truncate text-xs text-muted-foreground">
                               {similar.company?.name ?? "Unknown company"}
                             </p>
-                            <p className="mt-1 truncate text-xs text-muted-foreground">{similar.location ?? "Location not specified"}</p>
+                            <p className="mt-1 truncate text-xs text-muted-foreground">
+                              {similar.location ?? "Location not specified"}
+                            </p>
                             {cardSalary ? (
                               <p className="mt-1 text-xs font-medium text-muted-foreground">{cardSalary}</p>
                             ) : null}
@@ -686,7 +562,7 @@ export default async function DashboardJobDetailPage({ params }: Props) {
                 Write cover letter
               </Link>
               <a
-                href={job.apply_url}
+                href={page.apply_url}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover"
@@ -700,13 +576,13 @@ export default async function DashboardJobDetailPage({ params }: Props) {
           <JobDetailSidebar
             jobId={job.id}
             companyName={company?.name ?? "Company"}
-            applyUrl={job.apply_url}
+            applyUrl={page.apply_url}
             salaryLabel={salaryLabel}
             sponsorsH1b={job.sponsors_h1b}
             sponsorshipScore={job.sponsorship_score}
-            skills={job.skills ?? []}
-            highlights={highlightList}
-            companySummary={content.company[0] ?? null}
+            skills={page.skills}
+            highlights={page.highlights}
+            companySummary={companyInfo[0] ?? null}
           />
         </div>
       </div>

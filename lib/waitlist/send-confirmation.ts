@@ -22,41 +22,66 @@ export async function sendWaitlistConfirmationEmail(options: {
 
   const intlLine =
     options.isInternational === true
-      ? `<p style="margin:16px 0;font-size:15px;line-height:1.6;color:#334155">We built the international candidate features specifically for people like you. We can't wait to show you what we've built.</p>`
+      ? `<p style="margin:16px 0;font-size:15px;line-height:1.7;color:#334155">We also built international job-seeker workflows for visa-aware applications, sponsorship insights, and faster prioritization.</p>`
       : ""
 
   const html = `
 <!DOCTYPE html>
 <html>
-<body style="font-family:system-ui,-apple-system,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#0f172a">
-  <p style="font-size:17px;font-weight:600;margin:0 0 12px">You're on the Hireoven waitlist</p>
-  <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#334155">Thanks for joining. Hireoven monitors thousands of company career pages in real time so you can apply before the crowd.</p>
+<body style="margin:0;background:#f8fafc;padding:24px;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#0f172a">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:16px;overflow:hidden">
+    <tr>
+      <td style="padding:24px 24px 8px 24px">
+        <p style="margin:0;font-size:13px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;color:#0369a1">Hireoven</p>
+        <h1 style="margin:8px 0 0 0;font-size:22px;line-height:1.3;color:#0f172a">Welcome - please confirm your email</h1>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding:12px 24px 0 24px">
+        <p style="margin:0;font-size:15px;line-height:1.7;color:#334155">Thank you for joining the Hireoven waitlist. We monitor company career pages in near real time so you can discover and apply to fresh opportunities earlier.</p>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding:0 24px">
   ${intlLine}
-  <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#334155">We're launching soon - you'll be among the first to know.</p>
-  <p style="margin:24px 0">
-    <a href="${confirmUrl}" style="display:inline-block;background:#1D9E75;color:#fff;text-decoration:none;padding:12px 20px;border-radius:12px;font-weight:600;font-size:15px">Confirm your email</a>
-  </p>
-  <p style="font-size:13px;line-height:1.5;color:#64748b">
-    <a href="${unsubscribeUrl}" style="color:#64748b">Unsubscribe</a> · You signed up at hireoven.com/launch
-  </p>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding:8px 24px 0 24px">
+        <p style="margin:0;font-size:15px;line-height:1.7;color:#334155">We are launching soon, and you will be among the first to receive access updates.</p>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding:24px">
+        <a href="${confirmUrl}" style="display:inline-block;background:#0f766e;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:10px;font-weight:600;font-size:15px">Confirm email address</a>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding:0 24px 24px 24px">
+        <p style="margin:0;font-size:13px;line-height:1.6;color:#64748b">If you did not request this, you can safely ignore this email.</p>
+        <p style="margin:10px 0 0 0;font-size:13px;line-height:1.6;color:#64748b"><a href="${unsubscribeUrl}" style="color:#64748b">Unsubscribe</a> · Submitted via hireoven.com/launch</p>
+      </td>
+    </tr>
+  </table>
 </body>
 </html>`
 
   const text = [
-    "You're on the Hireoven waitlist",
+    "Welcome to Hireoven - Please confirm your email",
     "",
-    "Thanks for joining. Hireoven monitors thousands of company career pages in real time so you can apply before the crowd.",
+    "Thank you for joining the Hireoven waitlist.",
+    "Hireoven monitors company career pages in near real time so you can discover and apply to fresh opportunities earlier.",
     options.isInternational === true
-      ? "We built the international candidate features specifically for people like you. We can't wait to show you what we've built."
+      ? "We also built international job-seeker workflows for visa-aware applications and sponsorship insights."
       : "",
     "",
-    "We're launching soon - you'll be among the first to know.",
+    "We're launching soon, and you'll be among the first to receive access updates.",
     "",
-    `Confirm your email: ${confirmUrl}`,
+    `Confirm your email address: ${confirmUrl}`,
     "",
     `Unsubscribe: ${unsubscribeUrl}`,
     "",
-    "You signed up at hireoven.com/launch",
+    "Submitted via hireoven.com/launch",
   ]
     .filter(Boolean)
     .join("\n")
@@ -64,7 +89,7 @@ export async function sendWaitlistConfirmationEmail(options: {
   const { error } = await resend.emails.send({
     from,
     to: options.email,
-    subject: "You're on the Hireoven waitlist",
+    subject: "Welcome to Hireoven - confirm your email",
     html,
     text,
   })

@@ -190,7 +190,6 @@ export async function getDashboardStats(): Promise<AdminStats> {
 export async function getCrawlHealth(): Promise<CrawlHealth> {
   const supabase = createAdminClient()
   const failedWindow = subHours(24)
-  const runningThreshold = subHours(1)
   const [latest, failed, durations, noJobs, settingsRows] = await Promise.all([
     supabase
       .from("crawl_logs")
@@ -221,6 +220,7 @@ export async function getCrawlHealth(): Promise<CrawlHealth> {
     ((settingsRows.data ?? []) as SystemSetting[]).map((row) => [row.key, row.value])
   )
   const crawlSettings = (settings.get("crawl") ?? {}) as Record<string, unknown>
+  const runtimeSettings = (settings.get("crawl_runtime") ?? {}) as Record<string, unknown>
   const intervalMinutes =
     typeof crawlSettings.intervalMinutes === "number" ? crawlSettings.intervalMinutes : 30
 
@@ -228,10 +228,36 @@ export async function getCrawlHealth(): Promise<CrawlHealth> {
     ? new Date(new Date(lastCrawl.crawled_at).getTime() + intervalMinutes * 60_000).toISOString()
     : null
 
+  const runtimeState = String(runtimeSettings.state ?? "")
+  const runtimeStartedAt = String(runtimeSettings.startedAt ?? "")
+  const runtimeFinishedAt = String(runtimeSettings.finishedAt ?? "")
+  const startedTs = Date.parse(runtimeStartedAt)
+  const finishedTs = Date.parse(runtimeFinishedAt)
+  const latestCrawlTs = lastCrawl?.crawled_at ? Date.parse(lastCrawl.crawled_at) : NaN
+  const now = Date.now()
+  const runningFreshnessMs = Math.max(
+    10 * 60_000,
+    Math.min(45 * 60_000, intervalMinutes * 60_000 * 2)
+  )
+  const startupGraceMs = 3 * 60_000
+  const progressFreshnessMs = 15 * 60_000
+  const startedRecently = Number.isFinite(startedTs) && now - startedTs <= startupGraceMs
+  const hasRecentProgress =
+    Number.isFinite(latestCrawlTs) &&
+    now - latestCrawlTs <= progressFreshnessMs &&
+    (!Number.isFinite(startedTs) || latestCrawlTs >= startedTs - 60_000)
+  const runtimeLooksActive =
+    runtimeState === "running" &&
+    Number.isFinite(startedTs) &&
+    now - startedTs <= runningFreshnessMs &&
+    (!Number.isFinite(finishedTs) || finishedTs < startedTs) &&
+    (startedRecently || hasRecentProgress)
+
   let crawlerStatus: CrawlerStatus = "idle"
-  if (failedCount > 0) crawlerStatus = "error"
-  if (lastCrawl && new Date(lastCrawl.crawled_at).getTime() >= new Date(runningThreshold).getTime()) {
+  if (runtimeLooksActive) {
     crawlerStatus = "running"
+  } else if (failedCount > 0) {
+    crawlerStatus = "error"
   }
 
   return {

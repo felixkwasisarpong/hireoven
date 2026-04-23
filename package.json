@@ -36,7 +36,8 @@
     "db:relink-h1b-employers": "npx tsx scripts/relink-h1b-unmatched-employers.ts",
     "db:relink-h1b-employers:execute": "npx tsx scripts/relink-h1b-unmatched-employers.ts --execute",
     "db:recompute-h1b-scores": "npx tsx scripts/recompute-company-h1b-scores.ts",
-    "db:recompute-h1b-scores:execute": "npx tsx scripts/recompute-company-h1b-scores.ts --execute"
+    "db:recompute-h1b-scores:execute": "npx tsx scripts/recompute-company-h1b-scores.ts --execute",
+    "jobs:generate-normalization-examples": "npx tsx scripts/normalization/generate-example-transformations.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.52.0",

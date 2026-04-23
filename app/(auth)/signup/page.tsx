@@ -3,15 +3,13 @@
 import { FormEvent, Suspense, useState } from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
+import { AuthPageShell } from "@/components/auth/AuthPageShell"
 import HireovenLogo from "@/components/ui/HireovenLogo"
 import { createClient } from "@/lib/supabase/client"
 import { PLAN_DATA, type BillingInterval, type PlanKey } from "@/lib/pricing"
 
 function getPublicAppOrigin() {
-  const configured =
-    process.env.NEXT_PUBLIC_APP_URL?.trim() ||
-    process.env.NEXT_PUBLIC_SITE_URL?.trim()
-  return (configured || window.location.origin).replace(/\/$/, "")
+  return window.location.origin.replace(/\/$/, "")
 }
 
 function sanitizeNextPath(next: string | null) {
@@ -38,61 +36,59 @@ function PostSignupPlanStep({ plan, interval }: { plan: PlanKey; interval: Billi
     if (json.url) {
       window.location.href = json.url
     } else {
-      setError(json.error ?? "Could not start checkout. Please try again.")
+      setError(json.error ?? "We couldn't start checkout right now. Please try again.")
       setLoading(false)
     }
   }
 
   return (
-    <div className="w-full max-w-sm">
-      <Link href="/" className="mb-10 inline-flex items-center">
+    <>
+      <Link href="/" className="mb-8 inline-flex items-center">
         <HireovenLogo className="h-10 w-auto" priority />
       </Link>
 
-      <div className="rounded-[20px] border border-slate-200/80 bg-white p-7 shadow-[0_8px_28px_rgba(15,23,42,0.08)]">
-        <div className="mb-1 flex h-10 w-10 items-center justify-center rounded-xl bg-[#0369A1]/10">
-          <span className="text-lg">🎉</span>
-        </div>
-        <h1 className="mt-3 text-xl font-bold text-slate-900">One more step</h1>
-        <p className="mt-1.5 text-sm text-slate-500">
-          Complete your account to start your{" "}
-          <span className="font-semibold text-slate-700">{data.name}</span> trial.
-        </p>
-
-        <div className="my-5 rounded-[14px] border border-[#0369A1]/20 bg-[#F0FDFA]/60 px-4 py-3.5">
-          <p className="text-sm font-semibold text-slate-800">7-day free trial</p>
-          <p className="mt-0.5 text-xs text-slate-500">
-            ${interval === "yearly" ? data.yearly : data.monthly}/mo after trial •{" "}
-            {interval === "yearly"
-              ? `Billed $${(data as any).yearlyBilled}/year`
-              : "Billed monthly"}{" "}
-            • Cancel anytime
-          </p>
-        </div>
-
-        {error && (
-          <div className="mb-4 rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
-            {error}
-          </div>
-        )}
-
-        <button
-          type="button"
-          onClick={handleContinue}
-          disabled={loading}
-          className="w-full rounded-xl bg-[#0369A1] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#075985] disabled:opacity-60"
-        >
-          {loading ? "Loading…" : "Continue to payment"}
-        </button>
-
-        <Link
-          href="/dashboard/onboarding"
-          className="mt-3 block w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-center text-sm font-medium text-slate-500 transition hover:bg-slate-50"
-        >
-          Skip for now - stay on Free
-        </Link>
+      <div className="mb-1 flex h-10 w-10 items-center justify-center rounded-xl bg-primary/12">
+        <span className="text-lg" aria-hidden>
+          ✓
+        </span>
       </div>
-    </div>
+      <h1 className="mt-3 text-xl font-bold text-strong">Account created successfully</h1>
+      <p className="mt-1.5 text-sm text-muted-foreground">
+        Continue to billing to activate your <span className="font-semibold text-foreground">{data.name}</span>{" "}
+        trial.
+      </p>
+
+      <div className="my-5 rounded-xl border border-cyan-200/80 bg-gradient-to-br from-cyan-50/90 to-sky-50/50 px-4 py-3.5">
+        <p className="text-sm font-semibold text-brand-navy">7-day trial included</p>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          ${interval === "yearly" ? data.yearly : data.monthly}/mo after trial •{" "}
+          {interval === "yearly" ? `Billed $${(data as any).yearlyBilled}/year` : "Billed monthly"} • Cancel
+          any time
+        </p>
+      </div>
+
+      {error && (
+        <div className="mb-4 rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
+          {error}
+        </div>
+      )}
+
+      <button
+        type="button"
+        onClick={handleContinue}
+        disabled={loading}
+        className="w-full rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground transition hover:bg-primary-hover disabled:opacity-60"
+      >
+        {loading ? "Processing..." : "Continue to billing"}
+      </button>
+
+      <Link
+        href="/dashboard/onboarding"
+        className="mt-3 block w-full rounded-xl border border-border bg-surface/80 px-4 py-3 text-center text-sm font-medium text-muted-foreground transition hover:bg-surface-alt"
+      >
+        Continue on Free plan
+      </Link>
+    </>
   )
 }
 
@@ -182,17 +178,21 @@ function SignupForm() {
   }
 
   if (signedUp && validPlan) {
-    return <PostSignupPlanStep plan={validPlan} interval={intervalParam} />
+    return (
+      <AuthPageShell>
+        <PostSignupPlanStep plan={validPlan} interval={intervalParam} />
+      </AuthPageShell>
+    )
   }
 
   return (
-    <div className="w-full max-w-sm">
-      <Link href="/" className="mb-10 inline-flex items-center">
+    <AuthPageShell>
+      <Link href="/" className="mb-8 inline-flex items-center">
         <HireovenLogo className="h-10 w-auto" priority />
       </Link>
 
-      <h1 className="text-2xl font-bold text-gray-900 mb-1">Create your account</h1>
-      <p className="text-sm text-gray-500 mb-8">
+      <h1 className="mb-1 text-2xl font-bold text-strong">Create your account</h1>
+      <p className="mb-8 text-sm text-muted-foreground">
         {validPlan
           ? `Start your 7-day ${PLAN_DATA[validPlan].name} trial`
           : "See new jobs within minutes of posting"}
@@ -202,7 +202,7 @@ function SignupForm() {
         type="button"
         onClick={handleGoogleSignup}
         disabled={oauthLoading || loading}
-        className="w-full flex items-center justify-center gap-3 px-4 py-3 border border-gray-200 rounded-lg bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-60 mb-6"
+        className="mb-6 flex w-full items-center justify-center gap-3 rounded-lg border border-border bg-surface/90 px-4 py-3 text-sm font-medium text-foreground shadow-sm transition hover:bg-surface-alt disabled:opacity-60"
       >
         {oauthLoading ? <Spinner /> : <GoogleIcon />}
         Continue with Google
@@ -210,81 +210,118 @@ function SignupForm() {
 
       <div className="relative mb-6">
         <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t border-gray-200" />
+          <div className="w-full border-t border-border" />
         </div>
-        <div className="relative flex justify-center">
-          <span className="px-3 bg-gray-50 text-xs text-gray-400">or sign up with email</span>
+        <div className="relative flex justify-center text-xs text-muted-foreground">
+          <span className="rounded-md bg-surface/95 px-3 py-0.5 backdrop-blur-sm">or sign up with email</span>
         </div>
       </div>
 
       <form onSubmit={handleSignup} className="space-y-4">
         <div>
-          <label htmlFor="full-name" className="block text-sm font-medium text-gray-700 mb-1.5">Full name</label>
+          <label htmlFor="full-name" className="mb-1.5 block text-sm font-medium text-foreground">
+            Full name
+          </label>
           <input
-            id="full-name" type="text" autoComplete="name" required
-            value={fullName} onChange={(e) => setFullName(e.target.value)}
+            id="full-name"
+            type="text"
+            autoComplete="name"
+            required
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
             placeholder="Alex Johnson"
-            className="w-full px-4 py-3 rounded-lg border border-gray-200 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#0369A1] focus:border-transparent text-sm"
+            className="w-full"
           />
         </div>
 
         <div>
-          <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1.5">Email</label>
+          <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-foreground">
+            Email
+          </label>
           <input
-            id="email" type="email" autoComplete="email" required
-            value={email} onChange={(e) => setEmail(e.target.value)}
+            id="email"
+            type="email"
+            autoComplete="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
             placeholder="you@example.com"
-            className="w-full px-4 py-3 rounded-lg border border-gray-200 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#0369A1] focus:border-transparent text-sm"
+            className="w-full"
           />
         </div>
 
         <div>
-          <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1.5">Password</label>
+          <label htmlFor="password" className="mb-1.5 block text-sm font-medium text-foreground">
+            Password
+          </label>
           <input
-            id="password" type="password" autoComplete="new-password" required minLength={8}
-            value={password} onChange={(e) => setPassword(e.target.value)}
+            id="password"
+            type="password"
+            autoComplete="new-password"
+            required
+            minLength={8}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
             placeholder="Min. 8 characters"
-            className="w-full px-4 py-3 rounded-lg border border-gray-200 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#0369A1] focus:border-transparent text-sm"
+            className="w-full"
           />
         </div>
 
         {error && (
-          <div className="flex items-start gap-2.5 bg-red-50 border border-red-100 text-red-600 text-sm px-4 py-3 rounded-lg">
+          <div className="flex items-start gap-2.5 rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
             <ErrorIcon />
             <span>{error}</span>
           </div>
         )}
 
         <button
-          type="submit" disabled={loading || oauthLoading}
-          className="w-full flex items-center justify-center gap-2 py-3 bg-[#0369A1] hover:bg-[#075985] text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-60"
+          type="submit"
+          disabled={loading || oauthLoading}
+          className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary py-3 text-sm font-semibold text-primary-foreground transition hover:bg-primary-hover disabled:opacity-60"
         >
-          {loading ? <><Spinner /> Creating account…</> : "Create account"}
+          {loading ? (
+            <>
+              <Spinner /> Creating account…
+            </>
+          ) : (
+            "Create account"
+          )}
         </button>
 
-        <p className="text-xs text-gray-400 text-center leading-relaxed">
+        <p className="text-center text-xs leading-relaxed text-muted-foreground">
           By creating an account you agree to our{" "}
-          <Link href="/terms" className="text-gray-500 hover:underline">Terms</Link>
-          {" "}and{" "}
-          <Link href="/privacy" className="text-gray-500 hover:underline">Privacy Policy</Link>.
+          <Link href="/terms" className="font-medium text-foreground hover:underline">
+            Terms
+          </Link>{" "}
+          and{" "}
+          <Link href="/privacy" className="font-medium text-foreground hover:underline">
+            Privacy Policy
+          </Link>
+          .
         </p>
       </form>
 
-      <p className="text-sm text-gray-500 mt-6 text-center">
+      <p className="mt-6 text-center text-sm text-muted-foreground">
         Already have an account?{" "}
-        <Link href="/login" className="text-[#0369A1] font-medium hover:underline">Sign in</Link>
+        <Link href="/login" className="font-semibold text-primary hover:underline">
+          Sign in
+        </Link>
       </p>
-    </div>
+    </AuthPageShell>
   )
 }
 
 export default function SignupPage() {
   return (
-    <main className="min-h-screen flex items-center justify-center bg-gray-50 px-6">
-      <Suspense>
-        <SignupForm />
-      </Suspense>
-    </main>
+    <Suspense
+      fallback={
+        <div className="flex min-h-[100dvh] items-center justify-center px-4">
+          <div className="h-40 w-full max-w-md animate-pulse rounded-2xl bg-surface/60" />
+        </div>
+      }
+    >
+      <SignupForm />
+    </Suspense>
   )
 }
 

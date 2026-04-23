@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
 import { assertAdminAccess } from "@/lib/admin/auth"
-import { detectVisaLanguage, extractSkillsFromText, normalizeJobTitle } from "@/lib/crawler/normalizer"
+import { fetchJobDescription } from "@/lib/jobs/description"
+import {
+  normalizePersistedJobRecord,
+  type PersistedJobForNormalization,
+} from "@/lib/jobs/normalization"
 import { createAdminClient } from "@/lib/supabase/admin"
 import type { Job } from "@/types"
 
@@ -26,19 +30,50 @@ export async function POST(request: NextRequest) {
 
   const jobs = (data ?? []) as Job[]
   const updated: string[] = []
+  const refreshedDescriptions: string[] = []
 
   for (const job of jobs) {
-    const nextPayload: Record<string, unknown> = {
-      normalized_title: normalizeJobTitle(job.title),
-      skills: extractSkillsFromText(job.title, job.description),
+    let jobForNormalization = job
+
+    if (!job.description?.trim() && job.apply_url) {
+      const fetchedDescription = await fetchJobDescription(job.apply_url)
+      if (fetchedDescription) {
+        jobForNormalization = {
+          ...job,
+          description: fetchedDescription,
+        }
+        refreshedDescriptions.push(job.id)
+      }
     }
 
-    if (job.description) {
-      const normalized = await detectVisaLanguage(job.description)
-      nextPayload.sponsors_h1b = normalized.sponsors_h1b
-      nextPayload.sponsorship_score = normalized.sponsorship_score
-      nextPayload.visa_language_detected = normalized.visa_language_detected
-      nextPayload.requires_authorization = normalized.requires_authorization
+    const normalization = normalizePersistedJobRecord(
+      jobForNormalization as PersistedJobForNormalization
+    )
+
+    const existingRawData =
+      jobForNormalization.raw_data && typeof jobForNormalization.raw_data === "object"
+        ? (jobForNormalization.raw_data as Record<string, unknown>)
+        : {}
+
+    const nextPayload: Record<string, unknown> = {
+      ...normalization.nextColumns,
+      raw_data: {
+        ...existingRawData,
+        normalization: {
+          version: normalization.canonical.schema_version,
+          normalized_at: normalization.canonical.normalized_at,
+          confidence_score: normalization.canonical.validation.confidence_score,
+          completeness_score: normalization.canonical.validation.completeness_score,
+          requires_review: normalization.canonical.validation.requires_review,
+          issues: normalization.canonical.validation.issues,
+        },
+        normalized: normalization.canonical,
+        view: {
+          page: normalization.pageView,
+          card: normalization.cardView,
+        },
+      },
+      updated_at: new Date().toISOString(),
     }
 
     const { error: updateError } = await ((supabase.from("jobs") as any)
@@ -50,5 +85,9 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  return NextResponse.json({ success: true, updated })
+  return NextResponse.json({
+    success: true,
+    updated,
+    refreshedDescriptions,
+  })
 }

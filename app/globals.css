@@ -334,6 +334,182 @@
   .soft-scrollbar::-webkit-scrollbar-track {
     background: transparent;
   }
+
+  /* ── Product app skin (dashboard, auth, public — not landing) ─────────────── */
+
+  .product-skin {
+    --background: 220 42% 96%;
+    --surface: 0 0% 100%;
+    --surface-alt: 214 70% 97%;
+    --border: 220 20% 86%;
+    --accent: 24 100% 95%;
+    --accent-foreground: 19 90% 22%;
+  }
+
+  .product-skin .app-page {
+    background-image:
+      radial-gradient(1000px 480px at -6% -8%, hsl(330 100% 92% / 0.55), transparent 58%),
+      radial-gradient(820px 420px at 108% 4%, hsl(195 100% 88% / 0.45), transparent 55%),
+      radial-gradient(720px 380px at 48% 108%, hsl(38 100% 86% / 0.38), transparent 60%),
+      linear-gradient(
+        185deg,
+        hsl(220 45% 97%) 0%,
+        hsl(270 28% 96%) 42%,
+        hsl(200 32% 95%) 100%
+      );
+  }
+
+  .product-skin .surface-panel {
+    border-color: hsl(220 22% 88% / 0.95);
+    background-image:
+      radial-gradient(140% 100% at 0% 0%, hsl(24 100% 97% / 0.85), transparent 55%),
+      radial-gradient(90% 80% at 100% 0%, hsl(210 100% 97% / 0.7), transparent 50%),
+      linear-gradient(180deg, hsl(0 0% 100% / 0.97) 0%, hsl(218 56% 98% / 0.92) 100%);
+    box-shadow:
+      0 1px 0 rgba(15, 23, 42, 0.05),
+      0 12px 32px -12px hsl(262 60% 55% / 0.12);
+  }
+
+  .product-skin .surface-card {
+    background-image:
+      radial-gradient(120% 90% at 0% 0%, hsl(330 100% 97% / 0.55), transparent 62%),
+      radial-gradient(90% 70% at 100% 10%, hsl(195 100% 96% / 0.5), transparent 58%),
+      linear-gradient(180deg, hsl(0 0% 100%), hsl(220 40% 99%));
+  }
+
+  .product-skin .surface-toolbar {
+    background-image: linear-gradient(
+      90deg,
+      hsl(24 100% 98% / 0.85) 0%,
+      hsl(210 100% 98% / 0.75) 50%,
+      hsl(270 100% 99% / 0.8) 100%
+    );
+  }
+
+  .product-skin .metric-tile {
+    background-image: linear-gradient(
+      135deg,
+      hsl(24 100% 98%) 0%,
+      hsl(0 0% 100%) 35%,
+      hsl(210 100% 98%) 70%,
+      hsl(280 100% 99%) 100%
+    );
+  }
+
+  .product-skin .dash-header-bar {
+    background-image: linear-gradient(
+      92deg,
+      hsl(194 100% 96% / 0.65) 0%,
+      hsl(24 100% 97% / 0.55) 35%,
+      hsl(270 100% 97% / 0.6) 70%,
+      hsl(195 100% 97% / 0.55) 100%
+    );
+  }
+
+  .product-skin .glass-nav {
+    background-image: linear-gradient(
+      92deg,
+      hsl(194 100% 95% / 0.55) 0%,
+      hsl(24 100% 96% / 0.45) 40%,
+      hsl(264 100% 96% / 0.5) 100%
+    );
+  }
+
+  .product-skin .chip-control:hover {
+    border-color: hsl(19 90% 82%);
+    background: linear-gradient(135deg, hsl(24 100% 98%), hsl(210 100% 98%));
+  }
+
+  .product-skin .chip-control-active {
+    border-color: hsl(19 85% 78%);
+    background: linear-gradient(135deg, hsl(24 100% 97%), hsl(33 100% 95%));
+    color: hsl(var(--accent-brand));
+  }
+
+  .product-skin .section-kicker {
+    color: hsl(19 100% 45%);
+    text-shadow: 0 1px 0 hsl(0 0% 100% / 0.4);
+  }
+
+  .product-skin .soft-scrollbar {
+    scrollbar-color: hsl(19 80% 68% / 0.35) transparent;
+  }
+
+  .product-skin .soft-scrollbar::-webkit-scrollbar-thumb {
+    background: hsl(19 70% 62% / 0.35);
+  }
+
+  /* Auth & marketing sub-surfaces */
+  .auth-chrome {
+    position: relative;
+    isolation: isolate;
+    min-height: 100dvh;
+    background:
+      radial-gradient(1100px 680px at -5% -10%, hsl(330 100% 90% / 0.65), transparent 58%),
+      radial-gradient(900px 560px at 105% -5%, hsl(195 100% 88% / 0.55), transparent 54%),
+      radial-gradient(780px 440px at 50% 108%, hsl(38 100% 86% / 0.5), transparent 58%),
+      linear-gradient(168deg, hsl(220 38% 97%) 0%, hsl(265 28% 96%) 38%, hsl(200 35% 96%) 100%);
+    background-attachment: fixed;
+  }
+
+  .auth-chrome .auth-form-card {
+    border-radius: 1.35rem;
+    border: 1px solid hsl(0 0% 100% / 0.7);
+    background: linear-gradient(
+      160deg,
+      hsl(0 0% 100% / 0.94) 0%,
+      hsl(220 50% 99% / 0.9) 45%,
+      hsl(24 100% 99% / 0.88) 100%
+    );
+    box-shadow:
+      0 0 0 1px hsl(19 100% 55% / 0.1),
+      0 28px 56px -16px hsl(280 60% 45% / 0.16),
+      0 8px 20px -6px hsl(200 80% 40% / 0.1);
+    backdrop-filter: blur(14px);
+  }
+
+  .public-chrome {
+    position: relative;
+    isolation: isolate;
+    min-height: 100dvh;
+    background:
+      radial-gradient(900px 500px at 10% 0%, hsl(200 100% 94% / 0.5), transparent 55%),
+      radial-gradient(800px 480px at 90% 10%, hsl(28 100% 93% / 0.45), transparent 55%),
+      linear-gradient(180deg, hsl(220 30% 98%) 0%, hsl(255 20% 97%) 100%);
+  }
+
+  .legal-chrome {
+    min-height: 100dvh;
+    background:
+      radial-gradient(800px 400px at 0% 0%, hsl(210 100% 96% / 0.7), transparent 60%),
+      radial-gradient(700px 380px at 100% 20%, hsl(24 100% 95% / 0.6), transparent 55%),
+      linear-gradient(180deg, hsl(0 0% 100%) 0%, hsl(220 25% 98%) 100%);
+  }
+
+  .legal-chrome .legal-prose-card {
+    border-radius: 1rem;
+    border: 1px solid hsl(var(--border));
+    background: hsl(0 0% 100% / 0.78);
+    box-shadow: 0 12px 40px -20px hsl(250 50% 40% / 0.12);
+  }
+
+  /* Job cards in product area */
+  .product-skin .job-card-surface {
+    background-image: linear-gradient(
+      90deg,
+      hsl(0 0% 100% / 0.02) 0%,
+      hsl(220 40% 99%) 100%
+    );
+  }
+
+  .product-skin .job-card-surface:hover {
+    background-image: linear-gradient(
+      100deg,
+      hsl(24 100% 99%) 0%,
+      hsl(210 100% 99%) 100%
+    );
+    box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.8);
+  }
 }
 
 /* ── Input base styles ───────────────────────────────────────────── */

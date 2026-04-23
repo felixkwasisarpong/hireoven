@@ -3,15 +3,14 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import type { RawJob } from "@/lib/crawler"
 import {
   cleanJobTitle,
-  extractSkillsFromText,
-  normalizeJobTitle,
-} from "@/lib/crawler/normalizer"
+} from "@/lib/jobs/text-normalizer"
 import {
   cleanJobDescription,
   fetchJobDescription,
   normalizeJobApplyUrl,
 } from "@/lib/jobs/description"
-import { inferJobMetadata } from "@/lib/jobs/metadata"
+import { normalizeCrawlerJobForPersistence } from "@/lib/jobs/normalization"
+import type { EmploymentType, SeniorityLevel } from "@/types"
 
 const DESCRIPTION_FETCH_CONCURRENCY = Math.max(
   1,
@@ -21,6 +20,12 @@ const MAX_DESCRIPTION_FETCHES_PER_COMPANY = Math.max(
   0,
   Number.parseInt(process.env.CRAWLER_MAX_DESCRIPTION_FETCHES_PER_COMPANY ?? "500", 10)
 )
+const DEACTIVATION_GRACE_HOURS = Math.max(
+  0,
+  Number.parseInt(process.env.CRAWLER_DEACTIVATION_GRACE_HOURS ?? "72", 10)
+)
+const ALLOW_DEACTIVATE_ON_EMPTY_RESULTS =
+  process.env.CRAWLER_ALLOW_DEACTIVATE_ON_EMPTY_RESULTS === "true"
 
 const BLOCKED_TITLE_PATTERNS = [
   /^(login|log(?:\s+)?in|log back in!?)$/i,
@@ -179,7 +184,7 @@ export async function persistCrawlJobs({
   const { data: existingRows, error: existingError } = await (supabase
     .from("jobs")
     .select(
-      "id, external_id, description, employment_type, seniority_level, is_remote, is_hybrid, requires_authorization, salary_min, salary_max, salary_currency"
+      "id, external_id, description, employment_type, seniority_level, is_remote, is_hybrid, requires_authorization, salary_min, salary_max, salary_currency, sponsors_h1b, sponsorship_score, visa_language_detected"
     )
     .eq("company_id", companyId)
     .in("external_id", externalIds) as any)
@@ -191,28 +196,34 @@ export async function persistCrawlJobs({
     {
       id: string
       description: string | null
-      employment_type: string | null
-      seniority_level: string | null
+      employment_type: EmploymentType | null
+      seniority_level: SeniorityLevel | null
       is_remote: boolean | null
       is_hybrid: boolean | null
       requires_authorization: boolean | null
       salary_min: number | null
       salary_max: number | null
       salary_currency: string | null
+      sponsors_h1b: boolean | null
+      sponsorship_score: number | null
+      visa_language_detected: string | null
     }
   >()
   for (const row of (existingRows ?? []) as Array<{
     id: string
     external_id: string
     description: string | null
-    employment_type: string | null
-    seniority_level: string | null
+    employment_type: EmploymentType | null
+    seniority_level: SeniorityLevel | null
     is_remote: boolean | null
     is_hybrid: boolean | null
     requires_authorization: boolean | null
     salary_min: number | null
     salary_max: number | null
     salary_currency: string | null
+    sponsors_h1b: boolean | null
+    sponsorship_score: number | null
+    visa_language_detected: string | null
   }>) {
     existingByExternalId.set(row.external_id, {
       id: row.id,
@@ -225,6 +236,9 @@ export async function persistCrawlJobs({
       salary_min: row.salary_min ?? null,
       salary_max: row.salary_max ?? null,
       salary_currency: row.salary_currency ?? null,
+      sponsors_h1b: row.sponsors_h1b ?? null,
+      sponsorship_score: row.sponsorship_score ?? null,
+      visa_language_detected: row.visa_language_detected ?? null,
     })
   }
 
@@ -233,41 +247,84 @@ export async function persistCrawlJobs({
 
   for (const job of normalized) {
     const normalizedPostedAt = normalizePostedAtToIso(job.postedAt, crawledAt)
-    const normalizedDescription = cleanJobDescription(job.description ?? null)
-    const cleanedTitle = cleanJobTitle(job.title)
     const existing = existingByExternalId.get(job.externalId)
-    const persistedDescription = normalizedDescription ?? existing?.description ?? null
-    const inferred = inferJobMetadata({
-      title: cleanedTitle,
-      description: persistedDescription,
-      location: job.location,
+    const normalization = normalizeCrawlerJobForPersistence({
+      rawJob: {
+        externalId: job.externalId,
+        title: job.title,
+        url: job.url,
+        description: job.description,
+        location: job.location,
+        postedAt: job.postedAt,
+      },
+      crawledAtIso,
+      existing: {
+        description: existing?.description ?? null,
+        employment_type: existing?.employment_type ?? null,
+        seniority_level: existing?.seniority_level ?? null,
+        is_remote: existing?.is_remote ?? null,
+        is_hybrid: existing?.is_hybrid ?? null,
+        requires_authorization: existing?.requires_authorization ?? null,
+        salary_min: existing?.salary_min ?? null,
+        salary_max: existing?.salary_max ?? null,
+        salary_currency: existing?.salary_currency ?? null,
+        sponsors_h1b: existing?.sponsors_h1b ?? null,
+        sponsorship_score: existing?.sponsorship_score ?? null,
+        visa_language_detected: existing?.visa_language_detected ?? null,
+      },
     })
+
+    const cleanedTitle = cleanJobTitle(job.title)
     const payload: Record<string, unknown> = {
       company_id: companyId,
       title: cleanedTitle,
-      normalized_title: normalizeJobTitle(cleanedTitle),
+      normalized_title: normalization.nextColumns.normalized_title,
       apply_url: job.url,
-      location: job.location ?? null,
-      employment_type: inferred.employmentType ?? existing?.employment_type ?? null,
-      seniority_level: inferred.seniorityLevel ?? existing?.seniority_level ?? null,
-      is_remote: inferred.isRemote ?? existing?.is_remote ?? false,
-      is_hybrid: inferred.isHybrid ?? existing?.is_hybrid ?? false,
-      requires_authorization:
-        inferred.requiresAuthorization ?? existing?.requires_authorization ?? false,
-      salary_min: inferred.salaryMin ?? existing?.salary_min ?? null,
-      salary_max: inferred.salaryMax ?? existing?.salary_max ?? null,
-      salary_currency: inferred.salaryCurrency ?? existing?.salary_currency ?? "USD",
-      description: persistedDescription,
+      location: normalization.nextColumns.location,
+      employment_type: normalization.nextColumns.employment_type,
+      seniority_level: normalization.nextColumns.seniority_level,
+      is_remote: normalization.nextColumns.is_remote,
+      is_hybrid: normalization.nextColumns.is_hybrid,
+      requires_authorization: normalization.nextColumns.requires_authorization,
+      salary_min: normalization.nextColumns.salary_min,
+      salary_max: normalization.nextColumns.salary_max,
+      salary_currency: normalization.nextColumns.salary_currency,
+      description: normalization.nextColumns.description,
       external_id: job.externalId,
-      skills: extractSkillsFromText(cleanedTitle, persistedDescription),
+      sponsors_h1b: normalization.nextColumns.sponsors_h1b,
+      sponsorship_score: normalization.nextColumns.sponsorship_score,
+      visa_language_detected: normalization.nextColumns.visa_language_detected,
+      skills: normalization.nextColumns.skills,
       is_active: true,
       last_seen_at: crawledAtIso,
       raw_data: {
         source: "crawler",
+        source_adapter: normalization.canonical.source.adapter,
         source_title: job.title,
         posted_at: job.postedAt ?? null,
         posted_at_normalized: normalizedPostedAt,
-        description_captured: Boolean(persistedDescription),
+        description_captured: Boolean(normalization.nextColumns.description),
+        raw: {
+          title: job.title,
+          url: job.url,
+          description: job.description ?? null,
+          location: job.location ?? null,
+          posted_at: job.postedAt ?? null,
+          external_id: job.externalId,
+        },
+        normalization: {
+          version: normalization.canonical.schema_version,
+          normalized_at: normalization.canonical.normalized_at,
+          confidence_score: normalization.canonical.validation.confidence_score,
+          completeness_score: normalization.canonical.validation.completeness_score,
+          requires_review: normalization.canonical.validation.requires_review,
+          issues: normalization.canonical.validation.issues,
+        },
+        normalized: normalization.canonical,
+        view: {
+          page: normalization.pageView,
+          card: normalization.cardView,
+        },
       },
       updated_at: crawledAtIso,
     }
@@ -295,15 +352,30 @@ export async function persistCrawlJobs({
 
   const { data: activeRows, error: activeRowsError } = await (supabase
     .from("jobs")
-    .select("id, external_id")
+    .select("id, external_id, last_seen_at")
     .eq("company_id", companyId)
     .eq("is_active", true) as any)
   if (activeRowsError) throw activeRowsError
 
   const currentExternalIdSet = new Set(externalIds)
-  const staleIds = ((activeRows ?? []) as Array<{ id: string; external_id: string | null }>)
-    .filter((row) => row.external_id && !currentExternalIdSet.has(row.external_id))
-    .map((row) => row.id)
+  const staleRows = ((activeRows ?? []) as Array<{
+    id: string
+    external_id: string | null
+    last_seen_at: string | null
+  }>).filter((row) => row.external_id && !currentExternalIdSet.has(row.external_id))
+  const cutoffTs = crawledAt.getTime() - DEACTIVATION_GRACE_HOURS * 60 * 60 * 1000
+  const canDeactivateOnThisRun =
+    currentExternalIdSet.size > 0 || ALLOW_DEACTIVATE_ON_EMPTY_RESULTS
+  const staleIds = canDeactivateOnThisRun
+    ? staleRows
+        .filter((row) => {
+          if (DEACTIVATION_GRACE_HOURS === 0) return true
+          const seenTs = row.last_seen_at ? Date.parse(row.last_seen_at) : NaN
+          if (!Number.isFinite(seenTs)) return true
+          return seenTs <= cutoffTs
+        })
+        .map((row) => row.id)
+    : []
 
   if (staleIds.length > 0) {
     const { error } = await ((supabase.from("jobs") as any)

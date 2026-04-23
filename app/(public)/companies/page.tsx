@@ -53,7 +53,7 @@ export default async function PublicCompaniesPage() {
   const totalJobs = companies.reduce((sum, c) => sum + (c.job_count ?? 0), 0)
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-dvh">
       <Navbar />
 
       <main className="mx-auto max-w-6xl px-6 py-12">
