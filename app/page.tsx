@@ -16,6 +16,7 @@ import {
   Zap,
 } from "lucide-react"
 import Navbar from "@/components/layout/Navbar"
+import ComingSoonSection from "@/components/marketing/ComingSoonSection"
 import LogoWall from "@/components/marketing/LogoWall"
 import { createAdminClient, hasSupabaseAdminEnv } from "@/lib/supabase/admin"
 import { createClient } from "@/lib/supabase/server"
@@ -446,6 +447,8 @@ export default async function HomePage() {
           </div>
         </div>
       </section>
+
+      <ComingSoonSection />
 
       {/* Final CTA ────────────────────────────────────────────────────────── */}
       <section className="px-6 pb-24">

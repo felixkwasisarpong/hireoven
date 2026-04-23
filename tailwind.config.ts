@@ -15,6 +15,41 @@ const config: Config = {
       screens: { "2xl": "1400px" },
     },
     extend: {
+      keyframes: {
+        "float-iphone": {
+          "0%, 100%": { transform: "translateY(0) rotate(0deg)" },
+          "50%": { transform: "translateY(-12px) rotate(0.5deg)" },
+        },
+        "aurora-orb": {
+          "0%, 100%": { opacity: "0.45", transform: "scale(1) translate(0, 0)" },
+          "33%": { opacity: "0.75", transform: "scale(1.08) translate(4px, -4px)" },
+          "66%": { opacity: "0.6", transform: "scale(1.04) translate(-3px, 2px)" },
+        },
+        "feed-ticker": {
+          "0%, 100%": { transform: "translateY(0)" },
+          "50%": { transform: "translateY(-3px)" },
+        },
+        "extension-breathe": {
+          "0%, 100%": { transform: "scale(1)" },
+          "50%": { transform: "scale(1.07)" },
+        },
+        "live-ping": {
+          "0%, 100%": { opacity: "1" },
+          "50%": { opacity: "0.55" },
+        },
+        "shimmer": {
+          "0%": { backgroundPosition: "200% 50%" },
+          "100%": { backgroundPosition: "-200% 50%" },
+        },
+      },
+      animation: {
+        "float-iphone": "float-iphone 5.5s ease-in-out infinite",
+        "aurora-orb": "aurora-orb 10s ease-in-out infinite",
+        "feed-ticker": "feed-ticker 2.8s ease-in-out infinite",
+        "live-ping": "live-ping 1.4s ease-in-out infinite",
+        shimmer: "shimmer 2.2s ease-in-out infinite",
+        "extension-breathe": "extension-breathe 2.4s ease-in-out infinite",
+      },
       colors: {
         teal: {
           DEFAULT: "#1D9E75",

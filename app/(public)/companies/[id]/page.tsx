@@ -67,7 +67,7 @@ export default async function PublicCompanyPage({ params }: Props) {
   }
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-dvh">
       <Navbar />
 
       <main className="mx-auto max-w-4xl px-6 py-12">

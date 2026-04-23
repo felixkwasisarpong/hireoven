@@ -19,17 +19,31 @@ type Props = {
   companySummary?: string | null
 }
 
+function scoreTone(value: number | null) {
+  if (value == null) return "#94A3B8"
+  const safeValue = Math.max(0, Math.min(100, value))
+  if (safeValue >= 85) return "#10B981"
+  if (safeValue >= 70) return "#0EA5E9"
+  if (safeValue >= 50) return "#F59E0B"
+  return "#EF4444"
+}
+
+function scoreVerdict(overallScore: number | null, verdict: string | null | undefined) {
+  if (verdict === "strong_match") return "Strong Match"
+  if (verdict === "good_match") return "Good Match"
+  if (verdict === "partial_match") return "Partial Match"
+  if (verdict === "weak_match") return "Low Match"
+  if (overallScore == null) return "Match data unavailable"
+  if (overallScore >= 85) return "Strong Match"
+  if (overallScore >= 70) return "Good Match"
+  if (overallScore >= 50) return "Partial Match"
+  return "Low Match"
+}
+
 function ScoreRing({ value }: { value: number | null }) {
   const safeValue = Math.max(0, Math.min(100, value ?? 0))
   const angle = safeValue * 3.6
-  const tone =
-    safeValue >= 85
-      ? "#10B981"
-      : safeValue >= 70
-        ? "#0EA5E9"
-        : safeValue >= 50
-          ? "#F59E0B"
-          : "#CBD5E1"
+  const tone = scoreTone(value)
 
   return (
     <div className="flex items-center justify-center">
@@ -40,9 +54,9 @@ function ScoreRing({ value }: { value: number | null }) {
         }}
       >
         <div className="flex h-[92px] w-[92px] flex-col items-center justify-center rounded-full bg-white">
-          <span className="text-3xl font-semibold text-strong">{value ?? "-"}</span>
+          <span className="text-3xl font-semibold text-strong">{value ?? "--"}</span>
           <span className="text-[11px] font-medium text-muted-foreground">
-            {value == null ? "No score" : "%"}
+            {value == null ? "No data" : "%"}
           </span>
         </div>
       </div>
@@ -52,18 +66,23 @@ function ScoreRing({ value }: { value: number | null }) {
 
 function BreakdownRow({ label, value }: { label: string; value: number | null }) {
   const safeValue = Math.max(0, Math.min(100, value ?? 0))
+  const tone = scoreTone(value)
 
   return (
     <div>
       <div className="mb-1.5 flex items-center justify-between gap-3 text-sm">
         <span className="text-muted-foreground">{label}</span>
-        <span className="font-medium text-strong">{value == null ? "-" : `${safeValue}%`}</span>
+        <span className="font-medium text-strong">{value == null ? "N/A" : `${safeValue}%`}</span>
       </div>
       <div className="h-2 overflow-hidden rounded-full bg-slate-200">
-        <div
-          className="h-full rounded-full bg-emerald-500 transition-all"
-          style={{ width: `${safeValue}%` }}
-        />
+        {value == null ? (
+          <div className="h-full w-full rounded-full bg-slate-300/70" />
+        ) : (
+          <div
+            className="h-full rounded-full transition-all"
+            style={{ width: `${safeValue}%`, backgroundColor: tone }}
+          />
+        )}
       </div>
     </div>
   )
@@ -143,6 +162,11 @@ export default function JobDetailSidebar({
   }, [jobId, resumeId])
 
   const overallScore = analysis?.overall_score ?? fastScore?.overall_score ?? null
+  const verdictLabel = scoreVerdict(overallScore, analysis?.verdict)
+  const verdictColor = scoreTone(overallScore)
+  const breakdownSourceLabel = analysis
+    ? "Detailed breakdown from resume analysis"
+    : "Instant breakdown from profile compatibility"
   const breakdown = useMemo(
     () =>
       analysis
@@ -196,13 +220,10 @@ export default function JobDetailSidebar({
         ) : (
           <div className="space-y-4">
             <ScoreRing value={isScoreLoading && !overallScore ? null : overallScore} />
-            <p className="text-center text-base font-semibold text-emerald-700">
-              {(overallScore ?? 0) >= 85
-                ? "Great Match"
-                : (overallScore ?? 0) >= 70
-                  ? "Good Match"
-                  : "Partial Match"}
+            <p className="text-center text-base font-semibold" style={{ color: verdictColor }}>
+              {verdictLabel}
             </p>
+            <p className="text-center text-xs text-muted-foreground">{breakdownSourceLabel}</p>
             <div className="space-y-3">
               {breakdown.map((item) => (
                 <BreakdownRow key={item.label} label={item.label} value={item.value} />

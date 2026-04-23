@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   Activity,
   BellRing,
@@ -40,7 +40,7 @@ export default function AdminOverviewPage() {
   const crawlFeedRef = useRef<HTMLDivElement | null>(null)
   const jobsFeedRef = useRef<HTMLDivElement | null>(null)
 
-  async function loadOverview() {
+  const loadOverview = useCallback(async () => {
     setError(null)
     setIsLoading(true)
     try {
@@ -55,11 +55,18 @@ export default function AdminOverviewPage() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [])
 
   useEffect(() => {
     void loadOverview()
-  }, [])
+  }, [loadOverview])
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      void loadOverview()
+    }, 15_000)
+    return () => window.clearInterval(interval)
+  }, [loadOverview])
 
   useEffect(() => {
     const interval = window.setInterval(() => setNow(Date.now()), 1000)
@@ -67,8 +74,6 @@ export default function AdminOverviewPage() {
   }, [])
 
   useEffect(() => {
-    if (!payload) return
-
     const crawlChannel = supabase
       .channel("admin-crawl-feed")
       .on(
@@ -96,6 +101,22 @@ export default function AdminOverviewPage() {
                 }
               : current
           )
+          void loadOverview()
+        }
+      )
+      .subscribe()
+
+    const runtimeChannel = supabase
+      .channel("admin-crawl-runtime")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "system_settings",
+          filter: "key=eq.crawl_runtime",
+        },
+        () => {
           void loadOverview()
         }
       )
@@ -136,8 +157,9 @@ export default function AdminOverviewPage() {
     return () => {
       void supabase.removeChannel(crawlChannel)
       void supabase.removeChannel(jobsChannel)
+      void supabase.removeChannel(runtimeChannel)
     }
-  }, [payload, supabase])
+  }, [supabase, loadOverview])
 
   useEffect(() => {
     if (crawlFeedRef.current) {

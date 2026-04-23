@@ -27,7 +27,7 @@ export interface CrawlResult {
 }
 
 const USER_AGENT =
-  "Mozilla/5.0 (compatible; HireovenCrawler/1.0; +https://hireoven.com)"
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 const FETCH_TIMEOUT_MS = 12_000
 const MAX_DISCOVERED_ATS_CANDIDATES = 12
 const MAX_GENERIC_JOBS = 250
@@ -39,6 +39,8 @@ const PHENOM_DEFAULT_PAGE_SIZE = 10
 const PHENOM_MAX_JOBS = 240
 const GOOGLE_RESULTS_PAGE_SIZE = 20
 const GOOGLE_MAX_JOBS = 200
+const ICIMS_JIBE_PAGE_SIZE = 100
+const ICIMS_JIBE_MAX_JOBS = 500
 
 const WORKDAY_PATH_STOPWORDS = new Set([
   "job",
@@ -95,10 +97,43 @@ const ROLE_TEXT_HINT =
   /\b(engineer|developer|scientist|analyst|manager|director|intern|architect|designer|consultant|specialist|lead|principal|product|data|software)\b/i
 
 const GENERIC_ANCHOR_TEXT =
-  /^(learn more|read more|view all jobs?|all jobs?|careers?|search jobs?|apply now|apply|see all|details?)$/i
+  /^(learn more|read more|view all jobs?|all jobs?|careers?|search jobs?|open roles?|see open roles?|apply now|apply|see all|details?)$/i
 
 const GENERIC_BLOCKED_ANCHOR_TEXT =
   /^(login|log back in!?|get started|developer portal.*|analyst reports?|by job title)$/i
+
+const GENERIC_NON_JOB_PATH_SLUGS = new Set([
+  "about",
+  "about-us",
+  "benefits",
+  "culture",
+  "departments",
+  "faq",
+  "how-we-operate",
+  "how-we-work",
+  "interview-process",
+  "jobs",
+  "locations",
+  "mission",
+  "our-story",
+  "our-values",
+  "perks",
+  "programs",
+  "results",
+  "search",
+  "students",
+  "teams",
+  "university",
+  "values",
+])
+
+const GENERIC_NON_JOB_PATH_PREFIXES = [
+  "life-at-",
+  "working-at-",
+]
+
+const GENERIC_NON_JOB_ANCHOR_TEXT =
+  /^(benefits|culture|university|life at [\w\s.'-]+|how we operate|how we work|our values|our mission|our story|teams?|locations?|departments?|see open roles?|open roles?|view openings?)$/i
 
 const COMPANY_STOPWORDS = new Set([
   "inc",
@@ -829,10 +864,19 @@ function isLikelyJobLink(url: URL, text: string, baseUrl: URL): boolean {
   const hasBlockedHint = GENERIC_BLOCKED_PATH_HINTS.some((hint) =>
     path.includes(hint)
   )
+  const pathSegments = path.split("/").filter(Boolean)
+  const terminalSlug = (pathSegments[pathSegments.length - 1] ?? "").toLowerCase()
+  const parentSlug = (pathSegments[pathSegments.length - 2] ?? "").toLowerCase()
+  const hasNonJobTerminalSlug =
+    GENERIC_NON_JOB_PATH_SLUGS.has(terminalSlug) ||
+    GENERIC_NON_JOB_PATH_PREFIXES.some((prefix) => terminalSlug.startsWith(prefix))
+  const hasNonJobAnchorText = GENERIC_NON_JOB_ANCHOR_TEXT.test(text.trim())
   const hasJobHint = GENERIC_JOB_PATH_HINTS.some((hint) => path.includes(hint))
   const hasQueryJobHint = [...url.searchParams.keys()].some((k) =>
     /job|position|opening|requisition/i.test(k)
   )
+  const slugRoleCandidate = terminalSlug.replace(/[-_]+/g, " ")
+  const hasRoleSlugHint = Boolean(slugRoleCandidate) && ROLE_TEXT_HINT.test(slugRoleCandidate)
   const hasRoleText =
     ROLE_TEXT_HINT.test(text) &&
     text.length <= 100 &&
@@ -845,9 +889,24 @@ function isLikelyJobLink(url: URL, text: string, baseUrl: URL): boolean {
     /\/jobs?\/results\//i.test(path) ||
     /\/jobs?\/[^/]+/i.test(path)
   const hasRoleOnlySignal = hasRoleText && (hasCareersContentPath || segmentCount >= 3)
+  const hasStrongJobPathSignal =
+    /\/jobs?\/listing\/[^/]+\/\d{3,}/i.test(path) ||
+    /\/(job|jobs|position|positions|opening|openings|requisition|requisitions)\/[^?#]*\d{3,}/i.test(
+      path
+    )
+  const hasPathRoleSignal = hasRoleSlugHint && hasCareersContentPath
+  const hasConcreteJobSignal =
+    hasQueryJobHint || hasRoleOnlySignal || hasPathRoleSignal || hasStrongJobPathSignal
+  const isListingPath =
+    (parentSlug === "jobs" || parentSlug === "careers") &&
+    (terminalSlug === "search" || terminalSlug === "results")
 
   if (hasBlockedHint && !hasJobHint && !hasQueryJobHint) return false
-  if (!(hasJobHint || hasQueryJobHint || hasRoleOnlySignal)) return false
+  if (hasNonJobAnchorText) return false
+  if (isListingPath && !hasRoleText && !hasQueryJobHint) return false
+  if (hasNonJobTerminalSlug && !hasRoleText && !hasQueryJobHint) return false
+  if (!hasJobHint && !hasQueryJobHint && !hasRoleOnlySignal && !hasPathRoleSignal) return false
+  if (!hasConcreteJobSignal) return false
   return true
 }
 
@@ -973,6 +1032,41 @@ type OracleSearchBucket = {
 
 type OracleSearchResponse = {
   items?: OracleSearchBucket[]
+}
+
+type IcimsJibeSearchConfig = {
+  path?: string
+  numRowsPerPage?: number
+  externalSearch?: boolean
+}
+
+type IcimsJibeApiJobData = {
+  slug?: string
+  req_id?: string
+  title?: string
+  description?: string
+  qualifications?: string
+  responsibilities?: string
+  apply_url?: string
+  full_location?: string
+  short_location?: string
+  location_name?: string
+  city?: string
+  state?: string
+  country?: string
+  posted_date?: string
+  update_date?: string
+  create_date?: string
+}
+
+type IcimsJibeApiJob = {
+  data?: IcimsJibeApiJobData
+}
+
+type IcimsJibeApiResponse = {
+  jobs?: IcimsJibeApiJob[]
+  totalCount?: number
+  count?: number
 }
 
 function parseOraclePortalConfig(html: string): OraclePortalConfig | null {
@@ -1445,12 +1539,221 @@ function extractJobsFromJsonLd(html: string, baseUrl: URL): RawJob[] {
   return out
 }
 
+function looksLikeIcimsJibeSearchHtml(html: string): boolean {
+  return html.includes("window.searchConfig =") && html.includes("/api/impression")
+}
+
+function parseIcimsJibeSearchConfig(html: string): IcimsJibeSearchConfig | null {
+  const raw = extractBalancedObjectAfter(html, "window.searchConfig =")
+  if (!raw) return null
+
+  try {
+    const parsed = JSON.parse(raw) as IcimsJibeSearchConfig
+    if (!parsed || typeof parsed !== "object") return null
+    return parsed
+  } catch {
+    return null
+  }
+}
+
+function extractMetaUrl(html: string, key: "og:url" | "canonical"): string | null {
+  if (key === "og:url") {
+    const single =
+      html.match(
+        /<meta[^>]*property=["']og:url["'][^>]*content=["']([^"']+)["'][^>]*>/i
+      )?.[1] ?? null
+    const reverse =
+      html.match(
+        /<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:url["'][^>]*>/i
+      )?.[1] ?? null
+    return decodeHtmlEntities(single ?? reverse ?? "")
+  }
+
+  const canonical =
+    html.match(
+      /<link[^>]*rel=["']canonical["'][^>]*href=["']([^"']+)["'][^>]*>/i
+    )?.[1] ?? null
+  return decodeHtmlEntities(canonical ?? "")
+}
+
+function scoreIcimsJibeOrigin(origin: string): number {
+  const url = toUrl(origin)
+  if (!url) return 0
+  const host = url.hostname.toLowerCase()
+
+  let score = 0
+  if (!host.endsWith(".icims.com")) score += 4
+  if (host.startsWith("careers.")) score += 2
+  if (host.startsWith("jobs.")) score += 1
+  return score
+}
+
+function extractIcimsJibeApiOrigins(html: string, careersUrl: URL): URL[] {
+  const candidates = new Set<string>()
+  candidates.add(careersUrl.origin)
+
+  for (const key of ["og:url", "canonical"] as const) {
+    const meta = extractMetaUrl(html, key)
+    if (!meta) continue
+    const resolved = toUrl(meta, careersUrl)
+    if (!resolved) continue
+    candidates.add(resolved.origin)
+  }
+
+  const jobsUrlRegex = /https?:\/\/[^\s"'<>]+\/jobs(?:[/?#][^\s"'<>]*)?/gi
+  for (const match of html.matchAll(jobsUrlRegex)) {
+    const raw = match[0]?.replace(/[),.;]+$/, "")
+    if (!raw) continue
+    const resolved = toUrl(raw)
+    if (!resolved) continue
+    candidates.add(resolved.origin)
+    if (candidates.size >= 8) break
+  }
+
+  return [...candidates]
+    .sort((a, b) => scoreIcimsJibeOrigin(b) - scoreIcimsJibeOrigin(a))
+    .map((origin) => toUrl(origin))
+    .filter((url): url is URL => Boolean(url))
+}
+
+function pickIcimsJibeLocation(data: IcimsJibeApiJobData): string | undefined {
+  const directCandidates = [data.full_location, data.short_location]
+  for (const value of directCandidates) {
+    const text = String(value ?? "").trim()
+    if (text) return text
+  }
+
+  const cityRegion = [data.city, data.state, data.country]
+    .map((value) => String(value ?? "").trim())
+    .filter(Boolean)
+  if (cityRegion.length > 0) return cityRegion.join(", ")
+
+  const fallback = String(data.location_name ?? "").trim()
+  return fallback || undefined
+}
+
+function resolveIcimsJibeJobUrl(data: IcimsJibeApiJobData, apiOrigin: URL): string | null {
+  const rawApplyUrl = String(data.apply_url ?? "").trim()
+  const applyUrl = toUrl(rawApplyUrl)?.toString()
+  const applyPath = applyUrl ? toUrl(applyUrl)?.pathname.toLowerCase() ?? "" : ""
+  const applyIsLoginPage = /\/login(?:\/|$)/i.test(applyPath)
+
+  if (applyUrl && !applyIsLoginPage) {
+    return normalizeJobApplyUrl(applyUrl)
+  }
+
+  const slug = String(data.slug ?? data.req_id ?? "").trim()
+  if (slug) {
+    return normalizeJobApplyUrl(
+      new URL(`/jobs/${encodeURIComponent(slug)}`, apiOrigin).toString()
+    )
+  }
+
+  if (applyUrl) return normalizeJobApplyUrl(applyUrl)
+  return null
+}
+
+async function crawlIcimsJibeFromOrigin(apiOrigin: URL, pageSize: number): Promise<RawJob[]> {
+  const jobs: RawJob[] = []
+  const seen = new Set<string>()
+  let totalCount = Number.POSITIVE_INFINITY
+
+  const effectiveLimit = Math.max(10, Math.min(pageSize, ICIMS_JIBE_PAGE_SIZE))
+  const maxPages = Math.max(1, Math.ceil(ICIMS_JIBE_MAX_JOBS / effectiveLimit) + 2)
+
+  for (let page = 1; page <= maxPages && jobs.length < ICIMS_JIBE_MAX_JOBS; page++) {
+    const jobsApi = new URL("/api/jobs", apiOrigin)
+    jobsApi.searchParams.set("internal", "false")
+    jobsApi.searchParams.set("page", String(page))
+    jobsApi.searchParams.set("limit", String(effectiveLimit))
+
+    const payload = await fetchJson<IcimsJibeApiResponse>(jobsApi.toString(), {
+      headers: {
+        accept: "application/json",
+      },
+    })
+    const entries = Array.isArray(payload?.jobs) ? payload.jobs : []
+    if (entries.length === 0) {
+      if (page === 1) return []
+      break
+    }
+
+    if (typeof payload?.totalCount === "number" && Number.isFinite(payload.totalCount)) {
+      totalCount = payload.totalCount
+    } else if (typeof payload?.count === "number" && Number.isFinite(payload.count)) {
+      totalCount = payload.count
+    }
+
+    let addedOnPage = 0
+    for (const item of entries) {
+      const data = item?.data
+      if (!data) continue
+
+      const title = String(data.title ?? "").trim()
+      const url = resolveIcimsJibeJobUrl(data, apiOrigin)
+      if (!title || !url) continue
+
+      const id = String(data.req_id ?? data.slug ?? "").trim()
+      const externalId = id ? `icims-jibe:${apiOrigin.hostname}:${id}` : undefined
+      const dedupeKey = externalId ?? url
+      if (seen.has(dedupeKey)) continue
+      seen.add(dedupeKey)
+
+      const descriptionText = String(data.description ?? "").trim()
+      const detailsText = [data.qualifications, data.responsibilities]
+        .map((value) => String(value ?? "").trim())
+        .filter(Boolean)
+        .join("\n\n")
+
+      jobs.push({
+        externalId,
+        title,
+        url,
+        description:
+          cleanJobDescription(descriptionText || detailsText || null) ?? undefined,
+        location: pickIcimsJibeLocation(data),
+        postedAt:
+          String(data.posted_date ?? data.update_date ?? data.create_date ?? "").trim() ||
+          undefined,
+      })
+      addedOnPage += 1
+
+      if (jobs.length >= ICIMS_JIBE_MAX_JOBS) break
+    }
+
+    if (addedOnPage === 0 || entries.length < effectiveLimit) break
+    if (Number.isFinite(totalCount) && page * effectiveLimit >= totalCount) break
+  }
+
+  return jobs
+}
+
+async function crawlIcimsJibeSearchPage(careersUrl: URL, html: string): Promise<RawJob[]> {
+  if (!looksLikeIcimsJibeSearchHtml(html)) return []
+  const searchConfig = parseIcimsJibeSearchConfig(html)
+  if (!searchConfig) return []
+
+  const preferredPageSize =
+    typeof searchConfig.numRowsPerPage === "number" && searchConfig.numRowsPerPage > 0
+      ? Math.min(ICIMS_JIBE_PAGE_SIZE, Math.max(searchConfig.numRowsPerPage, 20))
+      : ICIMS_JIBE_PAGE_SIZE
+
+  const origins = extractIcimsJibeApiOrigins(html, careersUrl)
+  for (const origin of origins) {
+    const jobs = await crawlIcimsJibeFromOrigin(origin, preferredPageSize)
+    if (jobs.length > 0) return jobs
+  }
+
+  return []
+}
+
 async function crawlIcims(careersUrl: URL): Promise<RawJob[]> {
   const html = await fetchText(careersUrl.toString())
   if (!html) return []
+  const jibeJobs = await crawlIcimsJibeSearchPage(careersUrl, html)
   const jsonLdJobs = extractJobsFromJsonLd(html, careersUrl)
   const genericJobs = extractGenericJobsFromHtml(html, careersUrl)
-  return dedupeJobs([...jsonLdJobs, ...genericJobs])
+  return dedupeJobs([...jibeJobs, ...jsonLdJobs, ...genericJobs])
 }
 
 async function crawlBambooHr(careersUrl: URL): Promise<RawJob[]> {
@@ -1577,10 +1880,40 @@ async function discoverAndCrawlFromHtml(careersUrl: URL): Promise<RawJob[]> {
       .filter((a) => a.href.toString() !== careersUrl.toString())
       .filter(
         (a) =>
-          /all jobs|search jobs|open positions|view openings/i.test(a.text) ||
+          /all jobs|search jobs|open positions|view openings|open roles|see open roles/i.test(
+            a.text
+          ) ||
           /\/(careers?|jobs?)\b/i.test(a.href.pathname)
       )
-      .slice(0, 3)
+      .sort((left, right) => {
+        const leftText = left.text.toLowerCase()
+        const rightText = right.text.toLowerCase()
+        const leftPath = left.href.pathname.toLowerCase()
+        const rightPath = right.href.pathname.toLowerCase()
+
+        const leftScore =
+          (/all jobs|search jobs|open positions|view openings|open roles|see open roles/.test(
+            leftText
+          )
+            ? 100
+            : 0) +
+          (/\/(jobs|careers)\/(search|results)/.test(leftPath) ? 70 : 0) +
+          (/\/(jobs|careers)\b/.test(leftPath) ? 30 : 0)
+        const rightScore =
+          (/all jobs|search jobs|open positions|view openings|open roles|see open roles/.test(
+            rightText
+          )
+            ? 100
+            : 0) +
+          (/\/(jobs|careers)\/(search|results)/.test(rightPath) ? 70 : 0) +
+          (/\/(jobs|careers)\b/.test(rightPath) ? 30 : 0)
+
+        return rightScore - leftScore
+      })
+      .filter((candidate, index, collection) => {
+        return collection.findIndex((entry) => entry.href.toString() === candidate.href.toString()) === index
+      })
+      .slice(0, 4)
 
     const oneHopJobs: RawJob[] = []
     for (const candidate of oneHopCandidates) {

@@ -3,14 +3,12 @@
 import { FormEvent, useState } from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
+import { AuthPageShell } from "@/components/auth/AuthPageShell"
 import HireovenLogo from "@/components/ui/HireovenLogo"
 import { createClient } from "@/lib/supabase/client"
 
 function getPublicAppOrigin() {
-  const configured =
-    process.env.NEXT_PUBLIC_APP_URL?.trim() ||
-    process.env.NEXT_PUBLIC_SITE_URL?.trim()
-  return (configured || window.location.origin).replace(/\/$/, "")
+  return window.location.origin.replace(/\/$/, "")
 }
 
 function sanitizeNextPath(next: string | null) {
@@ -104,104 +102,102 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-gray-50 px-6">
-      <div className="w-full max-w-sm">
-        {/* Logo */}
-        <Link href="/" className="mb-10 inline-flex items-center">
-          <HireovenLogo className="h-10 w-auto" priority />
-        </Link>
+    <AuthPageShell>
+      <Link href="/" className="mb-8 inline-flex items-center">
+        <HireovenLogo className="h-10 w-auto" priority />
+      </Link>
 
-        <h1 className="text-2xl font-bold text-gray-900 mb-1">Welcome back</h1>
-        <p className="text-sm text-gray-500 mb-8">Sign in to your account</p>
+      <h1 className="mb-1 text-2xl font-bold text-strong">Welcome back</h1>
+      <p className="mb-8 text-sm text-muted-foreground">Sign in to your account</p>
 
-        {/* Google OAuth */}
-        <button
-          type="button"
-          onClick={handleGoogleLogin}
-          disabled={oauthLoading || loading}
-          className="w-full flex items-center justify-center gap-3 px-4 py-3 border border-gray-200 rounded-lg bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-60 mb-6"
-        >
-          {oauthLoading ? (
-            <Spinner />
-          ) : (
-            <GoogleIcon />
-          )}
-          Continue with Google
-        </button>
+      <button
+        type="button"
+        onClick={handleGoogleLogin}
+        disabled={oauthLoading || loading}
+        className="mb-6 flex w-full items-center justify-center gap-3 rounded-lg border border-border bg-surface/90 px-4 py-3 text-sm font-medium text-foreground shadow-sm transition hover:bg-surface-alt disabled:opacity-60"
+      >
+        {oauthLoading ? <Spinner /> : <GoogleIcon />}
+        Continue with Google
+      </button>
 
-        {/* Divider */}
-        <div className="relative mb-6">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-gray-200" />
-          </div>
-          <div className="relative flex justify-center">
-            <span className="px-3 bg-gray-50 text-xs text-gray-400">or continue with email</span>
-          </div>
+      <div className="relative mb-6">
+        <div className="absolute inset-0 flex items-center">
+          <div className="w-full border-t border-border" />
+        </div>
+        <div className="relative flex justify-center text-xs text-muted-foreground">
+          <span className="rounded-md bg-surface/95 px-3 py-0.5 backdrop-blur-sm">
+            or continue with email
+          </span>
+        </div>
+      </div>
+
+      <form onSubmit={handleEmailLogin} className="space-y-4">
+        <div>
+          <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-foreground">
+            Email
+          </label>
+          <input
+            id="email"
+            type="email"
+            autoComplete="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="you@example.com"
+            className="w-full"
+          />
         </div>
 
-        {/* Email/password form */}
-        <form onSubmit={handleEmailLogin} className="space-y-4">
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1.5">
-              Email
+        <div>
+          <div className="mb-1.5 flex items-center justify-between">
+            <label htmlFor="password" className="text-sm font-medium text-foreground">
+              Password
             </label>
-            <input
-              id="email"
-              type="email"
-              autoComplete="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
-              className="w-full px-4 py-3 rounded-lg border border-gray-200 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#0369A1] focus:border-transparent text-sm transition-shadow"
-            />
+            <Link href="/forgot-password" className="text-xs font-medium text-primary hover:underline">
+              Forgot password?
+            </Link>
           </div>
+          <input
+            id="password"
+            type="password"
+            autoComplete="current-password"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="••••••••"
+            className="w-full"
+          />
+        </div>
 
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                Password
-              </label>
-              <Link href="/forgot-password" className="text-xs text-[#0369A1] hover:underline">
-                Forgot password?
-              </Link>
-            </div>
-            <input
-              id="password"
-              type="password"
-              autoComplete="current-password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              className="w-full px-4 py-3 rounded-lg border border-gray-200 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#0369A1] focus:border-transparent text-sm transition-shadow"
-            />
+        {error && (
+          <div className="flex items-start gap-2.5 rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
+            <ErrorIcon />
+            <span>{error}</span>
           </div>
+        )}
 
-          {error && (
-            <div className="flex items-start gap-2.5 bg-red-50 border border-red-100 text-red-600 text-sm px-4 py-3 rounded-lg">
-              <ErrorIcon />
-              <span>{error}</span>
-            </div>
+        <button
+          type="submit"
+          disabled={loading || oauthLoading}
+          className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground transition hover:bg-primary-hover disabled:opacity-60"
+        >
+          {loading ? (
+            <>
+              <Spinner /> Signing in…
+            </>
+          ) : (
+            "Sign in"
           )}
+        </button>
+      </form>
 
-          <button
-            type="submit"
-            disabled={loading || oauthLoading}
-            className="w-full flex items-center justify-center gap-2 py-3 bg-[#0369A1] hover:bg-[#075985] text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-60"
-          >
-            {loading ? <><Spinner /> Signing in…</> : "Sign in"}
-          </button>
-        </form>
-
-        <p className="text-sm text-gray-500 mt-6 text-center">
-          Don&apos;t have an account?{" "}
-          <Link href="/signup" className="text-[#0369A1] font-medium hover:underline">
-            Sign up free
-          </Link>
-        </p>
-      </div>
-    </main>
+      <p className="mt-6 text-center text-sm text-muted-foreground">
+        Don&apos;t have an account?{" "}
+        <Link href="/signup" className="font-semibold text-primary hover:underline">
+          Sign up free
+        </Link>
+      </p>
+    </AuthPageShell>
   )
 }
 

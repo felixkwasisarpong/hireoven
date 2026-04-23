@@ -21,7 +21,7 @@ export default function DashboardSidebarNav() {
             className={cn(
               "group flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-semibold tracking-tight transition-all duration-150",
               active
-                ? "bg-brand-navy text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
+                ? "bg-gradient-to-br from-[#062246] via-[#0b3a68] to-[#0c4a7a] text-white shadow-[0_8px_22px_-6px_hsl(19_100%_50%/0.35),inset_0_1px_0_rgba(255,255,255,0.1)]"
                 : "text-muted-foreground hover:bg-surface-alt hover:text-strong"
             )}
           >

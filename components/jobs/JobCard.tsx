@@ -17,9 +17,8 @@ import { MatchScorePill } from "@/components/matching/MatchScorePill"
 import CompanyLogo from "@/components/ui/CompanyLogo"
 import { useResumeContext } from "@/components/resume/ResumeProvider"
 import { useH1BPrediction } from "@/lib/context/H1BPredictionContext"
-import { cleanJobDescription } from "@/lib/jobs/description"
-import { cleanJobTitle } from "@/lib/jobs/title"
 import { getSeniorityGap } from "@/lib/matching/fast-scorer"
+import { resolveJobCardView } from "@/lib/jobs/normalization"
 import { cn } from "@/lib/utils"
 import type { JobMatchScore, JobWithCompany, JobWithMatchScore } from "@/types"
 
@@ -44,15 +43,6 @@ type JobCardProps = {
 }
 
 type FreshnessTone = "green" | "teal" | "gray" | "muted"
-
-function formatSalaryRange(job: JobWithCompany | JobWithMatchScore) {
-  if (job.salary_min == null || job.salary_max == null) return null
-  const sym =
-    job.salary_currency === "USD" || !job.salary_currency ? "$" : `${job.salary_currency} `
-  const a = Math.round(job.salary_min / 1000)
-  const b = Math.round(job.salary_max / 1000)
-  return `${sym}${a}k–${sym}${b}k`
-}
 
 function formatFreshness(timestamp: string, now: number) {
   const postedAt = new Date(timestamp).getTime()
@@ -104,25 +94,8 @@ function formatFreshness(timestamp: string, now: number) {
   }
 }
 
-function getEmploymentLabel(value: JobWithCompany["employment_type"]) {
-  if (!value) return null
-  const map = {
-    fulltime: "Full-time",
-    parttime: "Part-time",
-    contract: "Contract",
-    internship: "Internship",
-  }
-  return map[value]
-}
-
-function getSeniorityLabel(value: JobWithCompany["seniority_level"]) {
-  if (!value) return null
-  if (value === "staff") return "Staff+"
-  return value.charAt(0).toUpperCase() + value.slice(1)
-}
-
-function SponsorshipBadge({ job }: { job: JobWithCompany | JobWithMatchScore }) {
-  if (job.sponsors_h1b) {
+function SponsorshipBadge({ badgeKind }: { badgeKind: "sponsors" | "no_sponsorship" | "likely" | null }) {
+  if (badgeKind === "sponsors") {
     return (
       <span className="inline-flex items-center rounded border border-border bg-surface-alt px-2 py-0.5 text-[11px] font-semibold text-brand-navy">
         Sponsors H1B
@@ -130,7 +103,7 @@ function SponsorshipBadge({ job }: { job: JobWithCompany | JobWithMatchScore }) 
     )
   }
 
-  if (job.requires_authorization) {
+  if (badgeKind === "no_sponsorship") {
     return (
       <span className="inline-flex items-center rounded border border-danger/25 bg-danger-soft px-2 py-0.5 text-[11px] font-semibold text-danger">
         No sponsorship
@@ -138,7 +111,7 @@ function SponsorshipBadge({ job }: { job: JobWithCompany | JobWithMatchScore }) 
     )
   }
 
-  if ((job.sponsorship_score ?? 0) > 60) {
+  if (badgeKind === "likely") {
     return (
       <span className="inline-flex items-center rounded border border-warning/30 bg-warning-soft px-2 py-0.5 text-[11px] font-semibold text-warning">
         Likely sponsors
@@ -177,16 +150,21 @@ export default function JobCard({
   const resolvedMatchScore =
     matchScoreProp ?? ("match_score" in job ? (job.match_score ?? null) : null)
 
-  const visibleSkills = job.skills?.slice(0, 4) ?? []
-  const hiddenSkillsCount = Math.max(0, (job.skills?.length ?? 0) - visibleSkills.length)
+  const companyName = job.company?.name ?? "Unknown company"
+  const companyDomain = job.company?.domain ?? null
+  const companyLogoUrl = job.company?.logo_url ?? null
+
+  const cardView = resolveJobCardView(job)
+  const visibleSkills = cardView.skills.slice(0, 4)
+  const hiddenSkillsCount = Math.max(0, cardView.skills.length - visibleSkills.length)
   const seniorityGap = getSeniorityGap(
     primaryResume?.seniority_level,
     job.seniority_level
   )
   const hasSeniorityMismatch = seniorityGap !== null && Math.abs(seniorityGap) > 2
-  const salaryLabel = formatSalaryRange(job)
-  const displayTitle = cleanJobTitle(job.title)
-  const previewDescription = cleanJobDescription(job.description)
+  const salaryLabel = cardView.salary_label
+  const displayTitle = cardView.title
+  const previewDescription = cardView.preview_description
 
   async function handleBookmark() {
     if (saving) return
@@ -198,8 +176,8 @@ export default function JobCard({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           jobId: job.id,
-          companyName: job.company.name,
-          companyLogoUrl: job.company.logo_url ?? undefined,
+          companyName,
+          companyLogoUrl: companyLogoUrl ?? undefined,
           jobTitle: job.title,
           applyUrl: job.apply_url,
           status: "saved",
@@ -219,7 +197,7 @@ export default function JobCard({
     try {
       if (navigator.share) {
         await navigator.share({
-          title: `${job.title} at ${job.company.name}`,
+          title: `${job.title} at ${companyName}`,
           url: job.apply_url,
         })
         return
@@ -247,16 +225,17 @@ export default function JobCard({
           }
         }}
         className={cn(
-          "group relative border-b border-border bg-surface text-left transition-colors last:border-b-0",
+          "job-card-surface group relative border-b border-border bg-surface text-left transition-[background-color,box-shadow] duration-200 last:border-b-0",
           "hover:bg-surface-alt/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25 focus-visible:ring-inset",
-          freshness.tone === "green" && "border-l-[3px] border-l-primary"
+          freshness.tone === "green" && "border-l-[3px] border-l-primary",
+          freshness.tone === "teal" && "border-l-[3px] border-l-cyan-500/80"
         )}
       >
         <div className="flex gap-3 p-4 sm:gap-4 sm:p-5">
           <CompanyLogo
-            companyName={job.company.name}
-            domain={job.company.domain}
-            logoUrl={job.company.logo_url}
+            companyName={companyName}
+            domain={companyDomain}
+            logoUrl={companyLogoUrl}
             className="h-11 w-11 sm:h-12 sm:w-12"
           />
 
@@ -265,7 +244,7 @@ export default function JobCard({
               <div className="min-w-0 flex-1 space-y-2">
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                    {job.company.name}
+                    {companyName}
                   </p>
                   <h3 className="mt-1 text-[1.125rem] font-semibold leading-snug tracking-[-0.02em] text-strong sm:text-[1.2rem]">
                     {displayTitle}
@@ -273,10 +252,10 @@ export default function JobCard({
                 </div>
 
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[13px] text-muted-foreground">
-                  {job.location && (
+                  {cardView.location && (
                     <span className="inline-flex items-center gap-1">
                       <MapPin className="h-3.5 w-3.5 flex-shrink-0 opacity-70" />
-                      {job.location}
+                      {cardView.location}
                     </span>
                   )}
                   {job.is_remote && (
@@ -289,14 +268,14 @@ export default function JobCard({
                       Hybrid
                     </span>
                   )}
-                  {getSeniorityLabel(job.seniority_level) && (
+                  {cardView.seniority_label && (
                     <span className="rounded border border-border bg-surface-muted/80 px-2 py-0.5 text-[11px] font-medium text-strong">
-                      {getSeniorityLabel(job.seniority_level)}
+                      {cardView.seniority_label}
                     </span>
                   )}
-                  {getEmploymentLabel(job.employment_type) && (
+                  {cardView.employment_label && (
                     <span className="rounded border border-border bg-surface-muted/80 px-2 py-0.5 text-[11px] font-medium text-strong">
-                      {getEmploymentLabel(job.employment_type)}
+                      {cardView.employment_label}
                     </span>
                   )}
                   {salaryLabel && (
@@ -364,13 +343,13 @@ export default function JobCard({
                       onClick={() => router.push("/dashboard/resume")}
                     />
                   )}
-                  <SponsorshipBadge job={job} />
+                  <SponsorshipBadge badgeKind={cardView.sponsorship_badge} />
                   {h1bEnabled && (
                     <H1BPredictionBadge
                       prediction={h1bPrediction}
                       isLoading={h1bIsLoading && !h1bPrediction}
                       size="sm"
-                      companyName={job.company.name}
+                      companyName={companyName}
                       onClick={() => setH1BDrawerOpen(true)}
                     />
                   )}
@@ -441,7 +420,7 @@ export default function JobCard({
         <QuickAnalysisDrawer
           resumeId={primaryResume.id}
           jobId={job.id}
-          jobTitle={`${job.title} at ${job.company.name}`}
+          jobTitle={`${job.title} at ${companyName}`}
           applyUrl={job.apply_url}
           onClose={() => setDrawerOpen(false)}
           autoAnalyze={analysisIndex < 10}
@@ -452,7 +431,7 @@ export default function JobCard({
         <H1BPredictionDrawer
           jobId={job.id}
           jobTitle={job.title}
-          companyName={job.company.name}
+          companyName={companyName}
           prediction={h1bPrediction}
           isLoading={h1bIsLoading && !h1bPrediction}
           onClose={() => setH1BDrawerOpen(false)}

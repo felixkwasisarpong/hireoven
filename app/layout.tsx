@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next"
+import { Suspense } from "react"
 import { Inter } from "next/font/google"
 import ServiceWorkerRegistration from "@/components/pwa/ServiceWorkerRegistration"
 import { RouteToastBridge, ToastProvider } from "@/components/ui/ToastProvider"
@@ -49,7 +50,9 @@ export default function RootLayout({
         <UpgradeModalProvider>
           <SubscriptionProvider>
             <ToastProvider>
-              <RouteToastBridge />
+              <Suspense fallback={null}>
+                <RouteToastBridge />
+              </Suspense>
               {children}
               <UpgradeModal />
               <ServiceWorkerRegistration />
