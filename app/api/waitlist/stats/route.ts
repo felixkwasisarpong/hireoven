@@ -1,17 +1,13 @@
 import { NextResponse } from "next/server"
-import { createAdminClient } from "@/lib/supabase/admin"
+import { getPostgresPool } from "@/lib/postgres/server"
 
 export const dynamic = "force-dynamic"
 
 export async function GET() {
   try {
-    const supabase = createAdminClient()
-    const { count, error } = await supabase
-      .from("waitlist")
-      .select("*", { count: "exact", head: true })
-
-    if (error) throw error
-    return NextResponse.json({ count: count ?? 0 })
+    const pool = getPostgresPool()
+    const result = await pool.query<{ count: string }>("SELECT COUNT(*)::text AS count FROM waitlist")
+    return NextResponse.json({ count: Number(result.rows[0]?.count ?? 0) })
   } catch (e) {
     console.error("[waitlist/stats]", e)
     return NextResponse.json({ count: 1247 })

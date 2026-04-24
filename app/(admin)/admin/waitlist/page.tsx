@@ -1,22 +1,38 @@
 import { requireAdminProfile } from "@/lib/admin/auth"
-import { createAdminClient } from "@/lib/supabase/admin"
+import { getPostgresPool } from "@/lib/postgres/server"
 import WaitlistAdminPanel from "@/components/admin/WaitlistAdminPanel"
+import type { Waitlist } from "@/types"
+
+type WaitlistAdminRow = Pick<
+  Waitlist,
+  | "id"
+  | "email"
+  | "joined_at"
+  | "is_international"
+  | "visa_status"
+  | "university"
+  | "source"
+  | "referrer"
+  | "confirmed"
+>
 
 export default async function AdminWaitlistPage() {
   await requireAdminProfile()
 
-  const supabase = createAdminClient()
-  const { data: rows, error } = await supabase
-    .from("waitlist")
-    .select(
-      "id, email, joined_at, is_international, visa_status, university, source, referrer, confirmed"
+  let rows: WaitlistAdminRow[] = []
+  try {
+    const pool = getPostgresPool()
+    const result = await pool.query<WaitlistAdminRow>(
+      `SELECT id, email, joined_at, is_international, visa_status, university, source, referrer, confirmed
+       FROM waitlist
+       ORDER BY joined_at DESC`
     )
-    .order("joined_at", { ascending: false })
-
-  if (error) {
+    rows = result.rows
+  } catch (error) {
     return (
       <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-sm text-red-800">
-        Could not load waitlist: {error.message}
+        Could not load waitlist:{" "}
+        {error instanceof Error ? error.message : "Database query failed"}
       </div>
     )
   }

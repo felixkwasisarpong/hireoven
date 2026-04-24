@@ -14,7 +14,6 @@ import {
 } from "@/components/admin/AdminPrimitives"
 import { useToast } from "@/components/ui/ToastProvider"
 import { formatDateTime, formatRelativeTime } from "@/lib/admin/format"
-import { createClient } from "@/lib/supabase/client"
 import type { AtsType, Company, CompanySize, CrawlLog } from "@/types"
 
 const ATS_OPTIONS: AtsType[] = [
@@ -31,7 +30,6 @@ const SIZE_OPTIONS: CompanySize[] = ["startup", "small", "medium", "large", "ent
 
 export default function EditCompanyPage() {
   const { id } = useParams<{ id: string }>()
-  const supabase = useMemo(() => createClient(), [])
   const { pushToast } = useToast()
   const [company, setCompany] = useState<Company | null>(null)
   const [logs, setLogs] = useState<CrawlLog[]>([])
@@ -43,36 +41,33 @@ export default function EditCompanyPage() {
   useEffect(() => {
     async function loadCompany() {
       setLoading(true)
-      const [{ data: companyData, error: companyError }, { data: logsData, error: logsError }] =
-        await Promise.all([
-          supabase.from("companies").select("*").eq("id", id).single(),
-          supabase
-            .from("crawl_logs")
-            .select("*")
-            .eq("company_id", id)
-            .order("crawled_at", { ascending: false })
-            .limit(20),
-        ])
+      const [companyRes, logsRes] = await Promise.all([
+        fetch(`/api/companies/${encodeURIComponent(id)}`),
+        fetch(`/api/admin/crawl-logs`),
+      ])
 
-      if (companyError || logsError) {
-        pushToast({
-          tone: "error",
-          title: "Unable to load company",
-          description: companyError?.message ?? logsError?.message ?? "Unknown error",
-        })
+      if (!companyRes.ok) {
+        pushToast({ tone: "error", title: "Unable to load company" })
       } else {
-        const typed = companyData as Company
-        setCompany(typed)
-        setNotes(typed.notes ?? "")
-        setRawConfig(JSON.stringify(typed.raw_ats_config ?? {}, null, 2))
-        setLogs((logsData ?? []) as CrawlLog[])
+        const { company: typed } = (await companyRes.json()) as { company: Company | null }
+        if (typed) {
+          setCompany(typed)
+          setNotes((typed as Company & { notes?: string }).notes ?? "")
+          setRawConfig(JSON.stringify(typed.raw_ats_config ?? {}, null, 2))
+        }
+        const logsData: CrawlLog[] = logsRes.ok
+          ? ((await logsRes.json()) as { crawlLogs: CrawlLog[] }).crawlLogs.filter(
+              (l) => l.company_id === id
+            ).slice(0, 20)
+          : []
+        setLogs(logsData)
       }
 
       setLoading(false)
     }
 
     void loadCompany()
-  }, [id, pushToast, supabase])
+  }, [id, pushToast])
 
   async function saveCompany(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -82,21 +77,22 @@ export default function EditCompanyPage() {
 
     try {
       const parsedConfig = JSON.parse(rawConfig || "{}")
-      const { error } = await ((supabase.from("companies") as any)
-        .update({
+      const res = await fetch(`/api/admin/companies/${company.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
           name: company.name,
           domain: company.domain,
           careers_url: company.careers_url,
           ats_type: company.ats_type,
-          ats_identifier: company.ats_identifier,
           industry: company.industry,
           size: company.size,
           logo_url: company.logo_url,
-          notes,
           raw_ats_config: parsedConfig,
           is_active: company.is_active,
-        } as any)
-        .eq("id", company.id))
+        }),
+      })
+      const error = res.ok ? null : new Error("Request failed")
 
       if (error) throw error
 

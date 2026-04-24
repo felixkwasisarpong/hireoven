@@ -11,7 +11,6 @@ import {
 } from "@/components/admin/AdminPrimitives"
 import { useToast } from "@/components/ui/ToastProvider"
 import { formatDateTime, formatNumber, formatRelativeTime } from "@/lib/admin/format"
-import { createClient } from "@/lib/supabase/client"
 import type { AlertNotification, Company, Job, JobAlert, Profile } from "@/types"
 
 type AlertLogRow = AlertNotification & {
@@ -25,7 +24,6 @@ type AlertLogRow = AlertNotification & {
 }
 
 export default function AdminAlertsPage() {
-  const supabase = useMemo(() => createClient(), [])
   const { pushToast } = useToast()
   const [logs, setLogs] = useState<AlertLogRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -35,23 +33,14 @@ export default function AdminAlertsPage() {
 
   async function loadLogs() {
     setLoading(true)
-    const { data, error } = await ((supabase.from("alert_notifications") as any)
-      .select(
-        "*, alert:job_alerts(id, name), user:profiles(email, full_name), job:jobs(id, title, apply_url, company:companies(name))"
-      )
-      .order("sent_at", { ascending: false }))
-
-    if (error) {
-      pushToast({
-        tone: "error",
-        title: "Unable to load alert logs",
-        description: error.message,
-      })
+    const res = await fetch("/api/admin/alert-notifications")
+    if (!res.ok) {
+      pushToast({ tone: "error", title: "Unable to load alert logs" })
       setLoading(false)
       return
     }
-
-    setLogs((data ?? []) as AlertLogRow[])
+    const { notifications } = (await res.json()) as { notifications: AlertLogRow[] }
+    setLogs(notifications ?? [])
     setLoading(false)
   }
 
@@ -63,21 +52,6 @@ export default function AdminAlertsPage() {
     const interval = window.setInterval(() => setNow(Date.now()), 60_000)
     return () => window.clearInterval(interval)
   }, [])
-
-  useEffect(() => {
-    const channel = supabase
-      .channel("admin-alert-log")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "alert_notifications" },
-        () => void loadLogs()
-      )
-      .subscribe()
-
-    return () => {
-      void supabase.removeChannel(channel)
-    }
-  }, [supabase])
 
   const visibleLogs = useMemo(() => {
     const query = search.trim().toLowerCase()

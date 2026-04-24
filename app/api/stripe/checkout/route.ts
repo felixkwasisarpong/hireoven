@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { getPlanAmountCents, type BillingInterval, type PlanKey } from "@/lib/pricing"
+import { getPostgresPool } from "@/lib/postgres/server"
 import { createClient } from "@/lib/supabase/server"
 
 export const runtime = "nodejs"
@@ -19,6 +20,7 @@ export async function POST(request: Request) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const pool = getPostgresPool()
 
   const body = await request.json().catch(() => ({})) as { plan?: string; interval?: string }
   const { plan = "pro", interval = "monthly" } = body
@@ -42,24 +44,31 @@ export async function POST(request: Request) {
   const Stripe = (await import("stripe")).default
   const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: "2026-03-25.dahlia" })
 
-  const { data: profile } = await (supabase as any)
-    .from("profiles")
-    .select("email, full_name")
-    .eq("id", user.id)
-    .single()
-
-  const { data: existingSub } = await (supabase as any)
-    .from("subscriptions")
-    .select("stripe_customer_id")
-    .eq("user_id", user.id)
-    .limit(1)
-    .maybeSingle()
+  const [profileResult, existingSubResult] = await Promise.all([
+    pool.query<{ email: string | null; full_name: string | null }>(
+      `SELECT email, full_name
+       FROM profiles
+       WHERE id = $1
+       LIMIT 1`,
+      [user.id]
+    ),
+    pool.query<{ stripe_customer_id: string | null }>(
+      `SELECT stripe_customer_id
+       FROM subscriptions
+       WHERE user_id = $1
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [user.id]
+    ),
+  ])
+  const profile = profileResult.rows[0]
+  const existingSub = existingSubResult.rows[0]
 
   let customerId = existingSub?.stripe_customer_id as string | undefined
 
   if (!customerId) {
     const customer = await stripe.customers.create({
-      email: profile?.email ?? user.email,
+      email: profile?.email ?? user.email ?? undefined,
       name: profile?.full_name ?? undefined,
       metadata: { userId: user.id },
     })

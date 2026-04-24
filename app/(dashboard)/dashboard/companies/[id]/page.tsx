@@ -8,7 +8,6 @@ import CompanyHeader from "@/components/companies/CompanyHeader"
 import SimilarCompanies from "@/components/companies/SimilarCompanies"
 import SponsorshipScore from "@/components/international/SponsorshipScore"
 import JobCard from "@/components/jobs/JobCard"
-import { createClient } from "@/lib/supabase/client"
 import { cn } from "@/lib/utils"
 import type { Company, EmployerLCAStats, EmploymentType, H1BRecord, JobWithCompany, SeniorityLevel } from "@/types"
 
@@ -61,37 +60,33 @@ export default function CompanyProfilePage() {
 
   useEffect(() => {
     async function load() {
-      const supabase = createClient()
       const weekStart = new Date(); weekStart.setDate(weekStart.getDate() - 7)
 
-      const [
-        { data: companyData },
-        { data: h1bData },
-        { data: lcaStatsData },
-        { data: jobsData },
-        { count: weekCount },
-      ] = await Promise.all([
-        supabase.from("companies").select("*").eq("id", id).single(),
-        supabase.from("h1b_records").select("*").eq("company_id", id)
-          .order("year", { ascending: false }).limit(6),
-        supabase.from("employer_lca_stats").select("*").eq("company_id", id).maybeSingle(),
-        supabase.from("jobs")
-          .select("*, company:companies(*)")
-          .eq("company_id", id).eq("is_active", true)
-          .order("first_detected_at", { ascending: false })
-          .limit(50),
-        supabase.from("jobs").select("*", { head: true, count: "exact" })
-          .eq("company_id", id).eq("is_active", true)
-          .gte("first_detected_at", weekStart.toISOString()),
+      const [companyRes, h1bRes, jobsRes] = await Promise.all([
+        fetch(`/api/companies/${encodeURIComponent(id)}`),
+        fetch(`/api/h1b/records?companyId=${encodeURIComponent(id)}&limit=6`),
+        fetch(`/api/jobs?company_id=${encodeURIComponent(id)}&limit=50&sort=fresh`),
       ])
 
-      setCompany(companyData as Company | null)
-      setRecords((h1bData as H1BRecord[]) ?? [])
-      setLcaStats((lcaStatsData as EmployerLCAStats | null) ?? null)
+      const companyData = companyRes.ok
+        ? ((await companyRes.json()) as { company: Company | null; jobs: JobWithCompany[] })
+        : null
+      const h1bData = h1bRes.ok
+        ? ((await h1bRes.json()) as { records: H1BRecord[] }).records
+        : []
+      const jobsPayload = jobsRes.ok
+        ? ((await jobsRes.json()) as { jobs: JobWithCompany[] })
+        : { jobs: [] }
 
-      const typedJobs = (jobsData as JobWithCompany[]) ?? []
+      setCompany(companyData?.company ?? null)
+      setRecords(h1bData ?? [])
+      setLcaStats(null)
+
+      const typedJobs = companyData?.jobs ?? jobsPayload.jobs
       setJobs(typedJobs)
-      setNewThisWeek(weekCount ?? 0)
+      setNewThisWeek(typedJobs.filter((j) =>
+        new Date(j.first_detected_at).getTime() >= weekStart.getTime()
+      ).length)
 
       // JD insights
       const sponsors = typedJobs.filter((j) => j.sponsors_h1b === true).length

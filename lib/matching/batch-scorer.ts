@@ -1,6 +1,6 @@
 import pLimit from "p-limit"
-import { createAdminClient } from "@/lib/supabase/admin"
 import { computeFastScore } from "@/lib/matching/fast-scorer"
+import { getPostgresPool } from "@/lib/postgres/server"
 import type {
   Job,
   JobMatchScore,
@@ -22,30 +22,34 @@ function chunkArray<T>(items: T[], size: number) {
 }
 
 export async function getScoringContextForUser(userId: string) {
-  const supabase = createAdminClient()
+  const pool = getPostgresPool()
 
   const [profileResult, primaryResumeResult, fallbackResumeResult] = await Promise.all([
-    supabase.from("profiles").select("*").eq("id", userId).single(),
-    supabase
-      .from("resumes")
-      .select("*")
-      .eq("user_id", userId)
-      .eq("is_primary", true)
-      .eq("parse_status", "complete")
-      .order("updated_at", { ascending: false })
-      .limit(1),
-    supabase
-      .from("resumes")
-      .select("*")
-      .eq("user_id", userId)
-      .eq("parse_status", "complete")
-      .order("updated_at", { ascending: false })
-      .limit(1),
+    pool.query<Profile>("SELECT * FROM profiles WHERE id = $1 LIMIT 1", [userId]),
+    pool.query<Resume>(
+      `SELECT *
+       FROM resumes
+       WHERE user_id = $1
+         AND is_primary = true
+         AND parse_status = 'complete'
+       ORDER BY updated_at DESC
+       LIMIT 1`,
+      [userId]
+    ),
+    pool.query<Resume>(
+      `SELECT *
+       FROM resumes
+       WHERE user_id = $1
+         AND parse_status = 'complete'
+       ORDER BY updated_at DESC
+       LIMIT 1`,
+      [userId]
+    ),
   ])
 
-  const profile = (profileResult.data ?? null) as Profile | null
+  const profile = profileResult.rows[0] ?? null
   const resume =
-    ((primaryResumeResult.data?.[0] ?? fallbackResumeResult.data?.[0] ?? null) as Resume | null)
+    ((primaryResumeResult.rows[0] ?? fallbackResumeResult.rows[0] ?? null) as Resume | null)
 
   if (!profile || !resume) return null
 
@@ -55,31 +59,95 @@ export async function getScoringContextForUser(userId: string) {
 async function getJobsByIds(jobIds: string[]) {
   if (jobIds.length === 0) return []
 
-  const supabase = createAdminClient()
-  const { data } = await supabase.from("jobs").select("*").in("id", jobIds)
+  const pool = getPostgresPool()
+  const result = await pool.query<Job>("SELECT * FROM jobs WHERE id = ANY($1::uuid[])", [jobIds])
 
-  return (data ?? []) as Job[]
+  return result.rows
 }
 
 export async function upsertMatchScores(scores: JobMatchScoreInsert[]) {
   if (scores.length === 0) return []
 
-  const supabase = createAdminClient()
+  const pool = getPostgresPool()
   const upserted: JobMatchScore[] = []
 
   for (const chunk of chunkArray(scores, UPSERT_CHUNK_SIZE)) {
-    const { data, error } = await supabase
-      .from("job_match_scores")
-      .upsert(chunk, {
-        onConflict: "user_id,resume_id,job_id",
+    const params: Array<string | number | boolean | null> = []
+    const valuesSql = chunk
+      .map((score) => {
+        const rowValues = [
+          score.user_id,
+          score.resume_id,
+          score.job_id,
+          score.overall_score,
+          score.skills_score,
+          score.seniority_score,
+          score.location_score,
+          score.employment_type_score,
+          score.sponsorship_score,
+          score.is_seniority_match,
+          score.is_location_match,
+          score.is_employment_type_match,
+          score.is_sponsorship_compatible,
+          score.matching_skills_count,
+          score.total_required_skills,
+          score.skills_match_rate,
+          score.score_method,
+          score.computed_at,
+          score.resume_version,
+        ]
+        const placeholders = rowValues.map((value) => {
+          params.push(value)
+          return `$${params.length}`
+        })
+        return `(${placeholders.join(", ")})`
       })
-      .select("*")
+      .join(", ")
 
-    if (error) {
-      throw error
-    }
+    const query = `
+      INSERT INTO job_match_scores (
+        user_id,
+        resume_id,
+        job_id,
+        overall_score,
+        skills_score,
+        seniority_score,
+        location_score,
+        employment_type_score,
+        sponsorship_score,
+        is_seniority_match,
+        is_location_match,
+        is_employment_type_match,
+        is_sponsorship_compatible,
+        matching_skills_count,
+        total_required_skills,
+        skills_match_rate,
+        score_method,
+        computed_at,
+        resume_version
+      ) VALUES ${valuesSql}
+      ON CONFLICT (user_id, resume_id, job_id)
+      DO UPDATE SET
+        overall_score = EXCLUDED.overall_score,
+        skills_score = EXCLUDED.skills_score,
+        seniority_score = EXCLUDED.seniority_score,
+        location_score = EXCLUDED.location_score,
+        employment_type_score = EXCLUDED.employment_type_score,
+        sponsorship_score = EXCLUDED.sponsorship_score,
+        is_seniority_match = EXCLUDED.is_seniority_match,
+        is_location_match = EXCLUDED.is_location_match,
+        is_employment_type_match = EXCLUDED.is_employment_type_match,
+        is_sponsorship_compatible = EXCLUDED.is_sponsorship_compatible,
+        matching_skills_count = EXCLUDED.matching_skills_count,
+        total_required_skills = EXCLUDED.total_required_skills,
+        skills_match_rate = EXCLUDED.skills_match_rate,
+        score_method = EXCLUDED.score_method,
+        computed_at = EXCLUDED.computed_at,
+        resume_version = EXCLUDED.resume_version
+      RETURNING *`
 
-    upserted.push(...((data ?? []) as JobMatchScore[]))
+    const result = await pool.query<JobMatchScore>(query, params)
+    upserted.push(...result.rows)
   }
 
   return upserted
@@ -92,23 +160,21 @@ export async function scoreJobsForUser(userId: string, jobIds: string[]) {
   const context = await getScoringContextForUser(userId)
   if (!context) return new Map<string, JobMatchScore>()
 
-  const supabase = createAdminClient()
-  const existingScoresResult = await supabase
-    .from("job_match_scores")
-    .select("*")
-    .eq("user_id", userId)
-    .eq("resume_id", context.resume.id)
-    .in("job_id", uniqueJobIds)
-
-  if (existingScoresResult.error) {
-    throw existingScoresResult.error
-  }
+  const pool = getPostgresPool()
+  const existingScoresResult = await pool.query<JobMatchScore>(
+    `SELECT *
+     FROM job_match_scores
+     WHERE user_id = $1
+       AND resume_id = $2
+       AND job_id = ANY($3::uuid[])`,
+    [userId, context.resume.id, uniqueJobIds]
+  )
 
   const resumeUpdatedAtMs = new Date(context.resume.updated_at).getTime()
-  const existingFreshScores = (existingScoresResult.data ?? []).filter((row) => {
+  const existingFreshScores = existingScoresResult.rows.filter((row) => {
     const computedAtMs = new Date(row.computed_at).getTime()
     return Number.isFinite(computedAtMs) && computedAtMs >= resumeUpdatedAtMs
-  }) as JobMatchScore[]
+  })
 
   const existingMap = new Map(existingFreshScores.map((row) => [row.job_id, row]))
   const missingJobIds = uniqueJobIds.filter((jobId) => !existingMap.has(jobId))
@@ -134,17 +200,19 @@ export async function scoreJobsForUser(userId: string, jobIds: string[]) {
 }
 
 export async function scoreNewJobForAllUsers(job: Job) {
-  const supabase = createAdminClient()
+  const pool = getPostgresPool()
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1_000).toISOString()
 
   const [alertsResult, watchlistResult] = await Promise.all([
-    supabase.from("job_alerts").select("user_id").eq("is_active", true),
-    supabase.from("watchlist").select("user_id"),
+    pool.query<{ user_id: string | null }>(
+      "SELECT user_id FROM job_alerts WHERE is_active = true AND user_id IS NOT NULL"
+    ),
+    pool.query<{ user_id: string | null }>("SELECT user_id FROM watchlist WHERE user_id IS NOT NULL"),
   ])
 
   const candidateUserIds = Array.from(
     new Set(
-      [...(alertsResult.data ?? []), ...(watchlistResult.data ?? [])]
+      [...alertsResult.rows, ...watchlistResult.rows]
         .map((row) => row.user_id)
         .filter(Boolean)
     )
@@ -153,21 +221,25 @@ export async function scoreNewJobForAllUsers(job: Job) {
   if (candidateUserIds.length === 0) return
 
   const [profilesResult, resumesResult] = await Promise.all([
-    supabase
-      .from("profiles")
-      .select("*")
-      .in("id", candidateUserIds)
-      .gte("updated_at", thirtyDaysAgo),
-    supabase
-      .from("resumes")
-      .select("*")
-      .in("user_id", candidateUserIds)
-      .eq("is_primary", true)
-      .eq("parse_status", "complete"),
+    pool.query<Profile>(
+      `SELECT *
+       FROM profiles
+       WHERE id = ANY($1::uuid[])
+         AND updated_at >= $2`,
+      [candidateUserIds, thirtyDaysAgo]
+    ),
+    pool.query<Resume>(
+      `SELECT *
+       FROM resumes
+       WHERE user_id = ANY($1::uuid[])
+         AND is_primary = true
+         AND parse_status = 'complete'`,
+      [candidateUserIds]
+    ),
   ])
 
-  const profiles = (profilesResult.data ?? []) as Profile[]
-  const resumes = (resumesResult.data ?? []) as Resume[]
+  const profiles = profilesResult.rows
+  const resumes = resumesResult.rows
 
   if (profiles.length === 0 || resumes.length === 0) return
 

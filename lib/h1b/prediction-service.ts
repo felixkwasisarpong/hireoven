@@ -1,4 +1,4 @@
-import { createAdminClient } from '@/lib/supabase/admin'
+import { getPostgresPool } from '@/lib/postgres/server'
 import { predictH1BApproval } from '@/lib/h1b/predictor'
 import type {
   Company,
@@ -19,16 +19,18 @@ export async function predictForJob(
   jobId: string,
   options: { force?: boolean } = {}
 ): Promise<{ prediction: H1BPrediction | null; cached: boolean }> {
-  const supabase = createAdminClient()
+  const pool = getPostgresPool()
 
-  const { data, error } = await supabase
-    .from('jobs')
-    .select('*, company:companies(*)')
-    .eq('id', jobId)
-    .maybeSingle()
-
-  if (error || !data) return { prediction: null, cached: false }
-  const job = data as Job & { company: Company }
+  const result = await pool.query<Job & { company: Company }>(
+    `SELECT j.*, to_jsonb(c.*) AS company
+     FROM jobs j
+     LEFT JOIN companies c ON c.id = j.company_id
+     WHERE j.id = $1
+     LIMIT 1`,
+    [jobId]
+  )
+  const job = result.rows[0] ?? null
+  if (!job) return { prediction: null, cached: false }
 
   if (!options.force && job.h1b_prediction && job.h1b_prediction_at) {
     const age = Date.now() - new Date(job.h1b_prediction_at).getTime()
@@ -39,12 +41,13 @@ export async function predictForJob(
 
   const prediction = await runPrediction(job)
 
-  await (supabase.from('jobs') as any)
-    .update({
-      h1b_prediction: prediction,
-      h1b_prediction_at: new Date().toISOString(),
-    })
-    .eq('id', jobId)
+  await pool.query(
+    `UPDATE jobs
+     SET h1b_prediction = $1::jsonb,
+         h1b_prediction_at = $2
+     WHERE id = $3`,
+    [JSON.stringify(prediction), new Date().toISOString(), jobId]
+  )
 
   return { prediction, cached: false }
 }

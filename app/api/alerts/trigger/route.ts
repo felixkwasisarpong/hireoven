@@ -8,7 +8,7 @@ import {
   sendWatchlistAlert,
 } from "@/lib/alerts/sender"
 import { verifyWebhookSignature } from "@/lib/alerts/webhook"
-import { createAdminClient } from "@/lib/supabase/admin"
+import { getPostgresPool } from "@/lib/postgres/server"
 import type { Job, JobAlert, NotificationType, Profile } from "@/types"
 
 type JobWebhookPayload = {
@@ -60,44 +60,47 @@ function parseJobPayload(payload: unknown): Job | null {
 async function fetchProfiles(userIds: string[]) {
   if (!userIds.length) return new Map<string, NotificationProfile>()
 
-  const supabase = createAdminClient()
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("id, alert_frequency, email_alerts, push_alerts")
-    .in("id", userIds)
-
-  if (error) throw error
+  const pool = getPostgresPool()
+  const result = await pool.query<NotificationProfile>(
+    `SELECT id, alert_frequency, email_alerts, push_alerts
+     FROM profiles
+     WHERE id = ANY($1::uuid[])`,
+    [userIds]
+  )
+  const data = result.rows
 
   return new Map(
-    ((data ?? []) as NotificationProfile[]).map((profile) => [profile.id, profile])
+    data.map((profile) => [profile.id, profile])
   )
 }
 
 async function fetchCompanyName(companyId: string) {
-  const supabase = createAdminClient()
-  const { data } = await ((supabase
-    .from("companies")
-    .select("name")
-    .eq("id", companyId)
-    .single()) as any)
-
-  return data?.name ?? "A company you watch"
+  const pool = getPostgresPool()
+  const result = await pool.query<{ name: string }>(
+    `SELECT name
+     FROM companies
+     WHERE id = $1
+     LIMIT 1`,
+    [companyId]
+  )
+  return result.rows[0]?.name ?? "A company you watch"
 }
 
 async function fetchExistingNotifications(jobId: string, userIds: string[]) {
   if (!userIds.length) return new Set<string>()
 
-  const supabase = createAdminClient()
-  const { data, error } = await supabase
-    .from("alert_notifications")
-    .select("user_id")
-    .eq("job_id", jobId)
-    .in("user_id", userIds)
-
-  if (error) throw error
+  const pool = getPostgresPool()
+  const result = await pool.query<{ user_id: string | null }>(
+    `SELECT user_id
+     FROM alert_notifications
+     WHERE job_id = $1
+       AND user_id = ANY($2::uuid[])`,
+    [jobId, userIds]
+  )
+  const data = result.rows
 
   return new Set(
-    ((data ?? []) as Array<{ user_id: string | null }>)
+    data
       .map((row) => row.user_id)
       .filter((value): value is string => Boolean(value))
   )
@@ -106,12 +109,15 @@ async function fetchExistingNotifications(jobId: string, userIds: string[]) {
 async function touchAlerts(alerts: JobAlert[]) {
   if (!alerts.length) return
 
-  const supabase = createAdminClient()
+  const pool = getPostgresPool()
   const alertIds = alerts.map((alert) => alert.id)
 
-  await ((supabase.from("job_alerts") as any)
-    .update({ last_triggered_at: new Date().toISOString() } as any)
-    .in("id", alertIds))
+  await pool.query(
+    `UPDATE job_alerts
+     SET last_triggered_at = $1
+     WHERE id = ANY($2::uuid[])`,
+    [new Date().toISOString(), alertIds]
+  )
 }
 
 async function insertNotificationLog({
@@ -127,17 +133,18 @@ async function insertNotificationLog({
   channel: "email" | "push" | "both"
   notificationType: NotificationType
 }) {
-  const supabase = createAdminClient()
-  const { error } = await ((supabase.from("alert_notifications") as any).insert({
-    user_id: userId,
-    job_id: jobId,
-    alert_id: alertId,
-    channel,
-    notification_type: notificationType,
-  } as any))
-
-  if (error && error.code !== "23505") {
-    throw error
+  const pool = getPostgresPool()
+  try {
+    await pool.query(
+      `INSERT INTO alert_notifications (user_id, job_id, alert_id, channel, notification_type)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [userId, jobId, alertId, channel, notificationType]
+    )
+  } catch (error) {
+    const pgError = error as { code?: string }
+    if (pgError.code !== "23505") {
+      throw error
+    }
   }
 }
 

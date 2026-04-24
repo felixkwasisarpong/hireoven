@@ -18,7 +18,7 @@ import {
 import Navbar from "@/components/layout/Navbar"
 import ComingSoonSection from "@/components/marketing/ComingSoonSection"
 import LogoWall from "@/components/marketing/LogoWall"
-import { createAdminClient, hasSupabaseAdminEnv } from "@/lib/supabase/admin"
+import { getPostgresPool, hasPostgresEnv } from "@/lib/postgres/server"
 import { createClient } from "@/lib/supabase/server"
 
 export const metadata: Metadata = {
@@ -122,16 +122,20 @@ type PlatformStats = {
 }
 
 async function getPlatformStats(): Promise<PlatformStats> {
-  if (!hasSupabaseAdminEnv()) return { jobs: 0, companies: 0 }
+  if (!hasPostgresEnv()) return { jobs: 0, companies: 0 }
   try {
-    const supabase = createAdminClient()
+    const pool = getPostgresPool()
     const [jobs, companies] = await Promise.all([
-      supabase.from("jobs").select("*", { count: "exact", head: true }).eq("is_active", true),
-      supabase.from("companies").select("*", { count: "exact", head: true }).eq("is_active", true),
+      pool.query<{ c: string }>(
+        `SELECT COUNT(*)::text AS c FROM jobs WHERE is_active = true`
+      ),
+      pool.query<{ c: string }>(
+        `SELECT COUNT(*)::text AS c FROM companies WHERE is_active = true`
+      ),
     ])
     return {
-      jobs: jobs.count ?? 0,
-      companies: companies.count ?? 0,
+      jobs: Number(jobs.rows[0]?.c ?? 0),
+      companies: Number(companies.rows[0]?.c ?? 0),
     }
   } catch {
     return { jobs: 0, companies: 0 }
@@ -139,23 +143,29 @@ async function getPlatformStats(): Promise<PlatformStats> {
 }
 
 async function getFeaturedCompanies() {
-  if (!hasSupabaseAdminEnv()) return []
+  if (!hasPostgresEnv()) return []
   try {
-    const supabase = createAdminClient()
+    const pool = getPostgresPool()
     // We specifically want companies with a recognizable logo, so we require
     // a domain and order by job_count so the wall leans toward brands users
     // will actually know. 24 fills a 6-col grid with a comfortable 4 rows.
-    const { data } = await supabase
-      .from("companies")
-      .select("id, name, domain, logo_url")
-      .eq("is_active", true)
-      .gt("job_count", 0)
-      .not("domain", "is", null)
-      .not("domain", "like", "%.uscis-employer")
-      .not("domain", "like", "%.lca-employer")
-      .order("job_count", { ascending: false })
-      .limit(24)
-    return data ?? []
+    const { rows } = await pool.query<{
+      id: string
+      name: string
+      domain: string
+      logo_url: string | null
+    }>(
+      `SELECT id, name, domain, logo_url
+       FROM companies
+       WHERE is_active = true
+         AND job_count > 0
+         AND domain IS NOT NULL
+         AND domain NOT ILIKE '%.uscis-employer'
+         AND domain NOT ILIKE '%.lca-employer'
+       ORDER BY job_count DESC
+       LIMIT 24`
+    )
+    return rows
   } catch {
     return []
   }

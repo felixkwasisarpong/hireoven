@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { Resend } from "resend"
 import { getRecentJobsFromEmail } from "@/lib/email/identity"
 import { requireCronAuth } from "@/lib/env"
-import { createAdminClient } from "@/lib/supabase/admin"
+import { getPostgresPool } from "@/lib/postgres/server"
 
 export const dynamic = "force-dynamic"
 export const maxDuration = 300
@@ -195,32 +195,26 @@ export async function GET(request: NextRequest) {
   ).toISOString()
   const endOfDaySince = new Date(Date.now() - 24 * 3_600_000).toISOString()
 
-  const supabase = createAdminClient()
-  const { data: usersRaw, error: usersError } = await supabase
-    .from("profiles")
-    .select("id, email, full_name, email_alerts")
-    .eq("email_alerts", true)
-    .not("email", "is", null)
-
-  if (usersError) {
-    return NextResponse.json({ error: usersError.message }, { status: 500 })
-  }
-
-  const users = (usersRaw ?? []) as UserProfile[]
+  const pool = getPostgresPool()
+  const usersResult = await pool.query<UserProfile>(
+    `SELECT id, email, full_name, email_alerts
+     FROM profiles
+     WHERE email_alerts = true
+       AND email IS NOT NULL`
+  )
+  const users = usersResult.rows
   if (!users.length) return NextResponse.json({ sent: 0, skipped: "No eligible users" })
 
   const userIds = users.map((user) => user.id)
-  const { data: resumeRows, error: resumeError } = await supabase
-    .from("resumes")
-    .select("user_id")
-    .in("user_id", userIds)
-
-  if (resumeError) {
-    return NextResponse.json({ error: resumeError.message }, { status: 500 })
-  }
+  const resumeRowsResult = await pool.query<{ user_id: string | null }>(
+    `SELECT DISTINCT user_id
+     FROM resumes
+     WHERE user_id = ANY($1::uuid[])`,
+    [userIds]
+  )
 
   const usersWithResume = new Set(
-    ((resumeRows ?? []) as Array<{ user_id: string | null }>)
+    (resumeRowsResult.rows as Array<{ user_id: string | null }>)
       .map((row) => row.user_id)
       .filter((value): value is string => Boolean(value))
   )
@@ -239,28 +233,59 @@ export async function GET(request: NextRequest) {
   let errors = 0
 
   if (resumeRecipients.length) {
-    const { data: matchedRowsRaw, error: matchedError } = await supabase
-      .from("job_match_scores")
-      .select(
-        "user_id, overall_score, jobs!inner(id, title, apply_url, location, is_remote, first_detected_at, company:companies(name))"
-      )
-      .in("user_id", resumeRecipients.map((user) => user.id))
-      .gte("overall_score", 75)
-      .gte("jobs.first_detected_at", withResumeSince)
-      .eq("jobs.is_active", true)
-      .order("overall_score", { ascending: false })
-      .order("first_detected_at", { foreignTable: "jobs", ascending: false })
-      .limit(1000)
-
-    if (matchedError) {
-      return NextResponse.json({ error: matchedError.message }, { status: 500 })
-    }
+    const matchedRowsResult = await pool.query<
+      {
+        user_id: string
+        overall_score: number
+        id: string
+        title: string
+        apply_url: string
+        location: string | null
+        is_remote: boolean
+        first_detected_at: string
+        company_name: string | null
+      }
+    >(
+      `SELECT
+         jms.user_id,
+         jms.overall_score,
+         jobs.id,
+         jobs.title,
+         jobs.apply_url,
+         jobs.location,
+         jobs.is_remote,
+         jobs.first_detected_at,
+         companies.name AS company_name
+       FROM job_match_scores jms
+       INNER JOIN jobs ON jobs.id = jms.job_id
+       LEFT JOIN companies ON companies.id = jobs.company_id
+       WHERE jms.user_id = ANY($1::uuid[])
+         AND jms.overall_score >= 75
+         AND jobs.first_detected_at >= $2
+         AND jobs.is_active = true
+       ORDER BY jms.overall_score DESC, jobs.first_detected_at DESC
+       LIMIT 1000`,
+      [resumeRecipients.map((user) => user.id), withResumeSince]
+    )
 
     const byUser = new Map<string, Array<MatchedJobRow>>()
-    for (const row of (matchedRowsRaw ?? []) as unknown as MatchedJobRow[]) {
+    for (const row of matchedRowsResult.rows) {
+      const normalized: MatchedJobRow = {
+        user_id: row.user_id,
+        overall_score: row.overall_score,
+        jobs: {
+          id: row.id,
+          title: row.title,
+          apply_url: row.apply_url,
+          location: row.location,
+          is_remote: row.is_remote,
+          first_detected_at: row.first_detected_at,
+          company: row.company_name ? { name: row.company_name } : null,
+        },
+      }
       const current = byUser.get(row.user_id) ?? []
-      current.push(row)
-      byUser.set(row.user_id, current)
+      current.push(normalized)
+      byUser.set(normalized.user_id, current)
     }
 
     for (const user of resumeRecipients) {
@@ -298,19 +323,43 @@ export async function GET(request: NextRequest) {
   }
 
   if (noResumeRecipients.length) {
-    const { data: fallbackJobsRaw, error: fallbackError } = await supabase
-      .from("jobs")
-      .select("id, title, apply_url, location, is_remote, first_detected_at, company:companies(name)")
-      .eq("is_active", true)
-      .gte("first_detected_at", endOfDaySince)
-      .order("first_detected_at", { ascending: false })
-      .limit(5)
+    const fallbackJobsResult = await pool.query<
+      {
+        id: string
+        title: string
+        apply_url: string
+        location: string | null
+        is_remote: boolean
+        first_detected_at: string
+        company_name: string | null
+      }
+    >(
+      `SELECT
+         jobs.id,
+         jobs.title,
+         jobs.apply_url,
+         jobs.location,
+         jobs.is_remote,
+         jobs.first_detected_at,
+         companies.name AS company_name
+       FROM jobs
+       LEFT JOIN companies ON companies.id = jobs.company_id
+       WHERE jobs.is_active = true
+         AND jobs.first_detected_at >= $1
+       ORDER BY jobs.first_detected_at DESC
+       LIMIT 5`,
+      [endOfDaySince]
+    )
 
-    if (fallbackError) {
-      return NextResponse.json({ error: fallbackError.message }, { status: 500 })
-    }
-
-    const fallbackJobs = (fallbackJobsRaw ?? []) as unknown as FallbackJob[]
+    const fallbackJobs = fallbackJobsResult.rows.map<FallbackJob>((row) => ({
+      id: row.id,
+      title: row.title,
+      apply_url: row.apply_url,
+      location: row.location,
+      is_remote: row.is_remote,
+      first_detected_at: row.first_detected_at,
+      company: row.company_name ? { name: row.company_name } : null,
+    }))
     if (fallbackJobs.length) {
       for (const user of noResumeRecipients) {
         try {

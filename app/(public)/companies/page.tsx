@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 import Link from "next/link"
 import Image from "next/image"
-import { createAdminClient, hasSupabaseAdminEnv } from "@/lib/supabase/admin"
+import { getPostgresPool, hasPostgresEnv } from "@/lib/postgres/server"
 import Navbar from "@/components/layout/Navbar"
 import type { Company } from "@/types"
 
@@ -30,23 +30,26 @@ function SponsorsH1BBadge({ confidence }: { confidence: number }) {
 }
 
 export default async function PublicCompaniesPage() {
-  const companies = hasSupabaseAdminEnv()
-    ? await (async () => {
-        const supabase = createAdminClient()
-        const { data } = await supabase
-          .from("companies")
-          .select("id, name, domain, logo_url, industry, size, job_count, sponsors_h1b, sponsorship_confidence")
-          .eq("is_active", true)
-          .gt("job_count", 0)
-          .order("job_count", { ascending: false })
-        return data ?? []
-      })()
-    : []
+  let companies: Company[] = []
+  if (hasPostgresEnv()) {
+    try {
+      const pool = getPostgresPool()
+      const { rows } = await pool.query<Company>(
+        `SELECT id, name, domain, logo_url, industry, size, job_count, sponsors_h1b, sponsorship_confidence
+         FROM companies
+         WHERE is_active = true AND job_count > 0
+         ORDER BY job_count DESC`
+      )
+      companies = rows
+    } catch {
+      companies = []
+    }
+  }
 
   const grouped = companies.reduce<Record<string, Company[]>>((acc, company) => {
     const industry = company.industry ?? "Other"
     if (!acc[industry]) acc[industry] = []
-    acc[industry].push(company as Company)
+    acc[industry].push(company)
     return acc
   }, {})
 

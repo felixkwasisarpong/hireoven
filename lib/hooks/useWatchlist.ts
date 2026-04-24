@@ -1,8 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { createClient } from "@/lib/supabase/client"
-import type { Company, WatchlistWithCompany } from "@/types"
+import type { WatchlistWithCompany } from "@/types"
 
 export function useWatchlist(userId?: string) {
   const [watchlist, setWatchlist] = useState<WatchlistWithCompany[]>([])
@@ -15,15 +14,15 @@ export function useWatchlist(userId?: string) {
     }
 
     setIsLoading(true)
-    const supabase = createClient()
-    const { data } = await (supabase
-      .from("watchlist")
-      .select("*, company:companies(*)")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false }) as any)
-
-    setWatchlist((data as WatchlistWithCompany[]) ?? [])
-    setIsLoading(false)
+    try {
+      const res = await fetch("/api/watchlist")
+      if (res.ok) {
+        const { watchlist: rows } = (await res.json()) as { watchlist: WatchlistWithCompany[] }
+        setWatchlist(rows)
+      }
+    } finally {
+      setIsLoading(false)
+    }
   }, [userId])
 
   useEffect(() => {
@@ -39,48 +38,17 @@ export function useWatchlist(userId?: string) {
     async (companyId: string) => {
       if (!userId || isWatching(companyId)) return
 
-      const supabase = createClient()
-      const { data: company } = await supabase
-        .from("companies")
-        .select("*")
-        .eq("id", companyId)
-        .single()
+      const res = await fetch("/api/watchlist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ companyId }),
+      })
 
-      if (!company) return
-
-      const optimistic: WatchlistWithCompany = {
-        id: `optimistic-${companyId}`,
-        user_id: userId,
-        company_id: companyId,
-        created_at: new Date().toISOString(),
-        company: company as Company,
-      }
-
-      setWatchlist((current) => [optimistic, ...current])
-
-      const { data, error } = await ((supabase.from("watchlist") as any)
-        .insert({ user_id: userId, company_id: companyId })
-        .select("*, company:companies(*)")
-        .single())
-
-      if (error) {
-        setWatchlist((current) =>
-          current.filter((item) => item.company_id !== companyId)
-        )
-        return
-      }
-
-      if (data) {
-        setWatchlist((current) =>
-          current.map((item) =>
-            item.company_id === companyId
-              ? (data as WatchlistWithCompany)
-              : item
-          )
-        )
+      if (res.ok) {
+        await refresh()
       }
     },
-    [isWatching, userId]
+    [isWatching, refresh, userId]
   )
 
   const removeCompany = useCallback(
@@ -92,14 +60,11 @@ export function useWatchlist(userId?: string) {
         current.filter((item) => item.company_id !== companyId)
       )
 
-      const supabase = createClient()
-      const { error } = await supabase
-        .from("watchlist")
-        .delete()
-        .eq("user_id", userId)
-        .eq("company_id", companyId)
+      const res = await fetch(`/api/watchlist?companyId=${encodeURIComponent(companyId)}`, {
+        method: "DELETE",
+      })
 
-      if (error) setWatchlist(snapshot)
+      if (!res.ok) setWatchlist(snapshot)
     },
     [userId, watchlist]
   )

@@ -21,7 +21,6 @@ import {
 } from "@/components/admin/AdminPrimitives"
 import { useToast } from "@/components/ui/ToastProvider"
 import { formatDateTime, formatNumber, formatRelativeTime, downloadCsv } from "@/lib/admin/format"
-import { createClient } from "@/lib/supabase/client"
 import type { AtsType, Company, CrawlLog } from "@/types"
 
 type SortKey =
@@ -44,7 +43,6 @@ function getHealth(company: Company, crawl: CrawlLog | null) {
 }
 
 export default function AdminCompaniesPage() {
-  const supabase = useMemo(() => createClient(), [])
   const { pushToast } = useToast()
   const [companies, setCompanies] = useState<Company[]>([])
   const [latestCrawls, setLatestCrawls] = useState<Map<string, CrawlLog>>(new Map())
@@ -60,30 +58,28 @@ export default function AdminCompaniesPage() {
 
   async function loadData() {
     setLoading(true)
-    const [{ data: companiesData, error: companiesError }, { data: crawlData, error: crawlError }] =
-      await Promise.all([
-        supabase.from("companies").select("*").order("name"),
-        supabase.from("crawl_logs").select("*").order("crawled_at", { ascending: false }),
-      ])
+    const [companiesRes, crawlRes] = await Promise.all([
+      fetch("/api/admin/companies"),
+      fetch("/api/admin/crawl-logs"),
+    ])
 
-    if (companiesError || crawlError) {
-      pushToast({
-        tone: "error",
-        title: "Unable to load companies",
-        description: companiesError?.message ?? crawlError?.message ?? "Unknown error",
-      })
+    if (!companiesRes.ok) {
+      pushToast({ tone: "error", title: "Unable to load companies" })
       setLoading(false)
       return
     }
 
+    const { companies: companiesData } = (await companiesRes.json()) as { companies: Company[] }
+    const crawlData: CrawlLog[] = crawlRes.ok
+      ? ((await crawlRes.json()) as { crawlLogs: CrawlLog[] }).crawlLogs
+      : []
+
     const map = new Map<string, CrawlLog>()
-    for (const crawl of (crawlData ?? []) as CrawlLog[]) {
-      if (!map.has(crawl.company_id)) {
-        map.set(crawl.company_id, crawl)
-      }
+    for (const crawl of crawlData) {
+      if (!map.has(crawl.company_id)) map.set(crawl.company_id, crawl)
     }
 
-    setCompanies((companiesData ?? []) as Company[])
+    setCompanies(companiesData ?? [])
     setLatestCrawls(map)
     setLoading(false)
   }
@@ -127,16 +123,18 @@ export default function AdminCompaniesPage() {
 
   async function toggleCompany(company: Company, nextValue: boolean) {
     setBusyId(company.id)
-    const { error } = await ((supabase.from("companies") as any)
-      .update({ is_active: nextValue } as any)
-      .eq("id", company.id))
+    const res = await fetch(`/api/admin/companies/${company.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ is_active: nextValue }),
+    })
     setBusyId(null)
 
-    if (error) {
+    if (!res.ok) {
       pushToast({
         tone: "error",
         title: "Unable to update company",
-        description: error.message,
+        description: "Request failed",
       })
       return
     }
@@ -202,16 +200,17 @@ export default function AdminCompaniesPage() {
     if (!selected.length) return
     if (!window.confirm("Apply this bulk status change to the selected companies?")) return
 
-    const { error } = await ((supabase.from("companies") as any)
-      .update({ is_active: nextValue } as any)
-      .in("id", selected))
-
-    if (error) {
-      pushToast({
-        tone: "error",
-        title: "Bulk update failed",
-        description: error.message,
-      })
+    const results = await Promise.all(
+      selected.map((id) =>
+        fetch(`/api/admin/companies/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ is_active: nextValue }),
+        })
+      )
+    )
+    if (results.some((r) => !r.ok)) {
+      pushToast({ tone: "error", title: "Bulk update failed" })
       return
     }
 
@@ -230,13 +229,9 @@ export default function AdminCompaniesPage() {
   async function deleteCompany(company: Company) {
     if (!window.confirm(`Delete ${company.name} and all associated jobs?`)) return
 
-    const { error } = await supabase.from("companies").delete().eq("id", company.id)
-    if (error) {
-      pushToast({
-        tone: "error",
-        title: "Delete failed",
-        description: error.message,
-      })
+    const res = await fetch(`/api/admin/companies/${company.id}`, { method: "DELETE" })
+    if (!res.ok) {
+      pushToast({ tone: "error", title: "Delete failed" })
       return
     }
 

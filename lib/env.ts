@@ -15,10 +15,20 @@ const vapidEmailSchema = z
   .transform((value) => (value.startsWith("mailto:") ? value : `mailto:${value}`))
 
 const envSchema = z.object({
-  // Supabase - get from: supabase.com → project settings → API
-  NEXT_PUBLIC_SUPABASE_URL: z.string().url("NEXT_PUBLIC_SUPABASE_URL must be a valid URL"),
-  NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().min(1, "NEXT_PUBLIC_SUPABASE_ANON_KEY is required"),
-  SUPABASE_SERVICE_ROLE_KEY: z.string().min(1, "SUPABASE_SERVICE_ROLE_KEY is required"),
+  // Postgres - primary database
+  DATABASE_URL: z.string().url("DATABASE_URL must be a valid connection string").optional(),
+
+  // Session signing (required in production for cookie auth)
+  AUTH_SESSION_SECRET: z.string().min(32, "AUTH_SESSION_SECRET must be at least 32 characters").optional(),
+
+  // Optional: scripts / legacy admin routes that still call Supabase service role
+  SUPABASE_SERVICE_ROLE_KEY: z.string().min(1).optional(),
+  NEXT_PUBLIC_SUPABASE_URL: z.string().url().optional(),
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().min(1).optional(),
+
+  // Google OAuth (server-side only — no NEXT_PUBLIC_* required)
+  GOOGLE_CLIENT_ID: z.string().min(1).optional(),
+  GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
 
   // Anthropic - get from: console.anthropic.com → API keys
   ANTHROPIC_API_KEY: z

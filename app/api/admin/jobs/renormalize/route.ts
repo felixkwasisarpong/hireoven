@@ -5,8 +5,44 @@ import {
   normalizePersistedJobRecord,
   type PersistedJobForNormalization,
 } from "@/lib/jobs/normalization"
-import { createAdminClient } from "@/lib/supabase/admin"
+import { getPostgresPool } from "@/lib/postgres/server"
 import type { Job } from "@/types"
+
+const JOB_RENORMALIZE_COLUMNS = new Set([
+  "normalized_title",
+  "description",
+  "location",
+  "employment_type",
+  "seniority_level",
+  "is_remote",
+  "is_hybrid",
+  "salary_min",
+  "salary_max",
+  "salary_currency",
+  "sponsors_h1b",
+  "sponsorship_score",
+  "requires_authorization",
+  "visa_language_detected",
+  "skills",
+  "raw_data",
+  "updated_at",
+])
+
+async function updateJobRenormalized(
+  pool: ReturnType<typeof getPostgresPool>,
+  jobId: string,
+  payload: Record<string, unknown>
+): Promise<boolean> {
+  const entries = Object.entries(payload).filter(([k]) => JOB_RENORMALIZE_COLUMNS.has(k))
+  if (entries.length === 0) return false
+  const values = entries.map(([, v]) => v)
+  const setClause = entries.map(([k], i) => `${k} = $${i + 1}`).join(", ")
+  const result = await pool.query(
+    `UPDATE jobs SET ${setClause} WHERE id = $${values.length + 1}::uuid`,
+    [...values, jobId]
+  )
+  return (result.rowCount ?? 0) > 0
+}
 
 export async function POST(request: NextRequest) {
   const access = await assertAdminAccess()
@@ -21,14 +57,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Missing job ids" }, { status: 400 })
   }
 
-  const supabase = createAdminClient()
-  const { data, error } = await supabase.from("jobs").select("*").in("id", ids)
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+  const pool = getPostgresPool()
+  let jobs: Job[]
+  try {
+    const result = await pool.query<Job>(`SELECT * FROM jobs WHERE id = ANY($1::uuid[])`, [ids])
+    jobs = result.rows
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Database query failed" },
+      { status: 500 }
+    )
   }
-
-  const jobs = (data ?? []) as Job[]
   const updated: string[] = []
   const refreshedDescriptions: string[] = []
 
@@ -76,11 +115,8 @@ export async function POST(request: NextRequest) {
       updated_at: new Date().toISOString(),
     }
 
-    const { error: updateError } = await ((supabase.from("jobs") as any)
-      .update(nextPayload as any)
-      .eq("id", job.id))
-
-    if (!updateError) {
+    const ok = await updateJobRenormalized(pool, job.id, nextPayload)
+    if (ok) {
       updated.push(job.id)
     }
   }

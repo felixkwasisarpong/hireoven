@@ -5,7 +5,7 @@ import { LaunchFooter, LaunchNavbar } from "@/components/waitlist/LaunchChrome"
 import LaunchJobFeed from "@/components/waitlist/LaunchJobFeed"
 import ScrollToWaitlist from "@/components/waitlist/ScrollToWaitlist"
 import WaitlistForm from "@/components/waitlist/WaitlistForm"
-import { createAdminClient } from "@/lib/supabase/admin"
+import { getPostgresPool } from "@/lib/postgres/server"
 import { getPublicSiteUrl } from "@/lib/waitlist/site-url"
 
 const site = getPublicSiteUrl()
@@ -42,11 +42,9 @@ export const dynamic = "force-dynamic"
 
 async function getWaitlistDisplayCount() {
   try {
-    const supabase = createAdminClient()
-    const { count } = await supabase
-      .from("waitlist")
-      .select("*", { count: "exact", head: true })
-    const c = count ?? 0
+    const pool = getPostgresPool()
+    const { rows } = await pool.query<{ c: string }>(`SELECT COUNT(*)::text AS c FROM waitlist`)
+    const c = Number(rows[0]?.c ?? 0)
     return c > 0 ? c : 1247
   } catch {
     return 1247

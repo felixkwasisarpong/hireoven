@@ -17,7 +17,7 @@
  * uniqueness without colliding with real company domains.
  */
 
-import type { SupabaseClient } from '@supabase/supabase-js'
+import { getPostgresPool } from '@/lib/postgres/server'
 import { companyLogoUrlFromDomain } from '@/lib/companies/logo-url'
 
 export const PLACEHOLDER_DOMAIN_SUFFIX_LCA = 'lca-employer'
@@ -47,21 +47,9 @@ export function slugifyEmployer(name: string): string {
     .slice(0, 60)
 }
 
-/**
- * Best-effort guess at an employer's public domain. We store this in
- * `raw_ats_config.guessed_domain` so the enrichment pipeline has something
- * to try first; a favicon-based logo derives from it.
- *
- * We strip legal suffixes (inc, llc, corp, limited, ...) BEFORE slugifying
- * so "Infosys Limited" → "infosys.com" instead of "infosyslimited.com",
- * and "Google LLC" → "google.com" instead of "googlellc.com". This
- * dramatically improves the favicon-logo hit rate and gives the ATS
- * discovery pipeline a usable starting URL.
- */
 export function guessPublicDomain(displayName: string): string | null {
   const stripped = displayName
     .toLowerCase()
-    // drop common corporate suffixes, punctuation, and trailing "us" / "usa"
     .replace(/\b(incorporated|inc|l\.?l\.?c\.?|llp|corp|corporation|ltd|limited|co|company|plc|holdings|group|technologies|technology|solutions|services|systems|us|usa|america|americas|north\s+america)\b/g, ' ')
     .replace(/[^a-z0-9]+/g, ' ')
     .trim()
@@ -78,17 +66,9 @@ function placeholderDomain(slug: string, source: PlaceholderSource): string {
   return `${slug}.${suffix}`
 }
 
-/**
- * Idempotent placeholder creator. Given a normalized employer name, either
- * returns the existing company id or inserts a new inactive row and returns
- * the new id. Callers should supply `existingByNormalized` when batching to
- * avoid round-trips.
- */
 export async function ensurePlaceholderCompany(
-  supabase: SupabaseClient,
   { displayName, normalized, source, existingByNormalized }: EnsurePlaceholderInput
 ): Promise<EnsurePlaceholderResult | null> {
-  // Fast path: caller already knows this employer maps to an existing row.
   const known = existingByNormalized?.get(normalized)
   if (known) return { companyId: known, created: false, guessedDomain: null }
 
@@ -97,9 +77,7 @@ export async function ensurePlaceholderCompany(
 
   const sentinelDomain = placeholderDomain(slug, source)
   const guessedDomain = guessPublicDomain(displayName)
-  const careersUrl = `https://www.linkedin.com/jobs/search/?keywords=${encodeURIComponent(
-    displayName
-  )}`
+  const careersUrl = `https://www.linkedin.com/jobs/search/?keywords=${encodeURIComponent(displayName)}`
   const logoUrl = guessedDomain ? companyLogoUrlFromDomain(guessedDomain) : null
 
   const raw_ats_config = {
@@ -112,36 +90,32 @@ export async function ensurePlaceholderCompany(
     created_at: new Date().toISOString(),
   }
 
-  // Try insert; on unique-domain collision look up the existing row.
-  const { data, error } = await (supabase.from('companies') as any)
-    .insert({
-      name: displayName.slice(0, 140),
-      domain: sentinelDomain,
-      careers_url: careersUrl,
-      logo_url: logoUrl,
-      is_active: false,
-      ats_type: null,
-      raw_ats_config,
-    })
-    .select('id')
-    .single()
+  const pool = getPostgresPool()
 
-  if (data?.id) {
-    existingByNormalized?.set(normalized, data.id)
-    return { companyId: data.id, created: true, guessedDomain }
-  }
-
-  const err = error as { code?: string; message?: string } | null
-  if (err && (err.code === '23505' || /duplicate/i.test(err.message ?? ''))) {
-    const { data: found } = await supabase
-      .from('companies')
-      .select('id')
-      .eq('domain', sentinelDomain)
-      .maybeSingle()
-    const foundId = (found as { id?: string } | null)?.id ?? null
-    if (foundId) {
-      existingByNormalized?.set(normalized, foundId)
-      return { companyId: foundId, created: false, guessedDomain }
+  try {
+    const result = await pool.query<{ id: string }>(
+      `INSERT INTO companies (name, domain, careers_url, logo_url, is_active, ats_type, raw_ats_config)
+       VALUES ($1, $2, $3, $4, false, NULL, $5::jsonb)
+       RETURNING id`,
+      [displayName.slice(0, 140), sentinelDomain, careersUrl, logoUrl, JSON.stringify(raw_ats_config)]
+    )
+    const id = result.rows[0]?.id ?? null
+    if (id) {
+      existingByNormalized?.set(normalized, id)
+      return { companyId: id, created: true, guessedDomain }
+    }
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err)
+    if (/23505|duplicate|unique/i.test(msg)) {
+      const found = await pool.query<{ id: string }>(
+        `SELECT id FROM companies WHERE domain = $1 LIMIT 1`,
+        [sentinelDomain]
+      )
+      const foundId = found.rows[0]?.id ?? null
+      if (foundId) {
+        existingByNormalized?.set(normalized, foundId)
+        return { companyId: foundId, created: false, guessedDomain }
+      }
     }
   }
 

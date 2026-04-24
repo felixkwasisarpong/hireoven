@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { upsertMarketingSubscriber } from "@/lib/marketing/subscribers"
-import { createAdminClient } from "@/lib/supabase/admin"
+import { getPostgresPool } from "@/lib/postgres/server"
 import { getPublicSiteUrl } from "@/lib/waitlist/site-url"
 
 /** One-click unsubscribe from waitlist marketing (metadata flag). */
@@ -12,18 +12,19 @@ export async function GET(request: Request) {
     return NextResponse.redirect(new URL("/launch", site))
   }
 
-  let supabase
-  try {
-    supabase = createAdminClient()
-  } catch {
-    return NextResponse.redirect(new URL("/launch", site))
-  }
-
-  const { data: row } = await supabase
-    .from("waitlist")
-    .select("id, email, metadata")
-    .eq("confirmation_token", token)
-    .maybeSingle()
+  const pool = getPostgresPool()
+  const rowResult = await pool.query<{
+    id: string
+    email: string | null
+    metadata: Record<string, unknown> | null
+  }>(
+    `SELECT id, email, metadata
+     FROM waitlist
+     WHERE confirmation_token = $1
+     LIMIT 1`,
+    [token]
+  )
+  const row = rowResult.rows[0]
 
   if (!row) {
     return NextResponse.redirect(new URL("/launch", site))
@@ -35,19 +36,21 @@ export async function GET(request: Request) {
     marketing_unsubscribed_at: new Date().toISOString(),
   }
 
-  await supabase.from("waitlist").update({ metadata: meta }).eq("id", row.id)
+  await pool.query("UPDATE waitlist SET metadata = $1::jsonb WHERE id = $2", [JSON.stringify(meta), row.id])
   if (row.email) {
     await upsertMarketingSubscriber({
       email: row.email,
       source: "waitlist_unsubscribe",
       metadata: { unsubscribed_from_waitlist: true },
     })
-    await ((supabase.from("marketing_subscribers") as any)
-      .update({
-        subscribed_to_marketing: false,
-        unsubscribed_at: new Date().toISOString(),
-      })
-      .eq("email", row.email.toLowerCase()))
+    await pool.query(
+      `UPDATE marketing_subscribers
+       SET subscribed_to_marketing = false,
+           unsubscribed_at = $1,
+           updated_at = now()
+       WHERE email = $2`,
+      [new Date().toISOString(), row.email.toLowerCase()]
+    )
   }
 
   return NextResponse.redirect(new URL("/launch?unsubscribed=1", site))

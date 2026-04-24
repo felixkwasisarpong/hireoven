@@ -23,7 +23,6 @@ import { useToast } from "@/components/ui/ToastProvider"
 import { useResumeEditor } from "@/lib/hooks/useResumeEditor"
 import { useResumeAnalysis } from "@/lib/hooks/useResumeAnalysis"
 import { applyResumeEditContent } from "@/lib/resume/state"
-import { createClient } from "@/lib/supabase/client"
 import { cn } from "@/lib/utils"
 import type {
   Company,
@@ -173,17 +172,15 @@ export default function ResumeEditPage() {
 
   useEffect(() => {
     if (!jobId) return
-    const supabase = createClient()
-    const targetJobId = jobId
 
     async function loadJob() {
-      const { data } = await (supabase
-        .from("jobs")
-        .select("*, company:companies(*)")
-        .eq("id", targetJobId)
-        .single() as any)
-
-      setJob((data as JobWithCompany | null) ?? null)
+      const res = await fetch(`/api/jobs/${jobId}`, { cache: "no-store" })
+      if (!res.ok) {
+        setJob(null)
+        return
+      }
+      const body = (await res.json()) as { job: JobWithCompany | null }
+      setJob(body.job ?? null)
     }
 
     void loadJob()

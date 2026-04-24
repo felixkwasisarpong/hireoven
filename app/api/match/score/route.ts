@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createAdminClient } from "@/lib/supabase/admin"
+import { getPostgresPool } from "@/lib/postgres/server"
 import { scoreJobsForUser, getScoringContextForUser } from "@/lib/matching/batch-scorer"
 import { createClient } from "@/lib/supabase/server"
 import type { JobMatchScore } from "@/types"
@@ -29,14 +29,17 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ score: null })
     }
 
-    const admin = createAdminClient()
-    const { data: existing } = await admin
-      .from("job_match_scores")
-      .select("*")
-      .eq("user_id", user.id)
-      .eq("resume_id", context.resume.id)
-      .eq("job_id", jobId)
-      .maybeSingle()
+    const pool = getPostgresPool()
+    const existingResult = await pool.query<JobMatchScore>(
+      `SELECT *
+       FROM job_match_scores
+       WHERE user_id = $1
+         AND resume_id = $2
+         AND job_id = $3
+       LIMIT 1`,
+      [user.id, context.resume.id, jobId]
+    )
+    const existing = existingResult.rows[0]
 
     if (existing) {
       return NextResponse.json({ score: existing as JobMatchScore })

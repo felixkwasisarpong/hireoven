@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { Loader2, Search } from "lucide-react"
 import DashboardPageHeader from "@/components/layout/DashboardPageHeader"
-import { createClient } from "@/lib/supabase/client"
 import type { EmployerLCAStats, LCARecord } from "@/types"
 
 const PAGE_SIZE = 50
@@ -91,68 +90,48 @@ export default function H1BExplorerPage() {
 
   const loadRecords = useCallback(async () => {
     setLoading(true)
-    const supabase = createClient()
+    const params = new URLSearchParams({
+      tab: "records",
+      page: String(page),
+      pageSize: String(PAGE_SIZE),
+    })
+    if (debouncedQuery) params.set("q", debouncedQuery)
+    if (fiscalYear) params.set("fiscalYear", fiscalYear)
+    if (state) params.set("state", state)
+    if (caseStatus) params.set("caseStatus", caseStatus)
+    if (wageLevel) params.set("wageLevel", wageLevel)
 
-    const from = page * PAGE_SIZE
-    const to = from + PAGE_SIZE - 1
-
-    let query = supabase
-      .from("lca_records")
-      .select("*", { count: "exact" })
-      .order("decision_date", { ascending: false, nullsFirst: false })
-      .range(from, to)
-
-    if (debouncedQuery) {
-      const escaped = debouncedQuery.replace(/[%,]/g, "")
-      query = query.or(
-        `employer_name.ilike.%${escaped}%,job_title.ilike.%${escaped}%`
-      )
-    }
-    if (fiscalYear) query = query.eq("fiscal_year", Number(fiscalYear))
-    if (state) query = query.eq("worksite_state_abbr", state)
-    if (caseStatus) query = query.eq("case_status", caseStatus)
-    if (wageLevel) query = query.eq("wage_level", wageLevel)
-
-    const { data, count: total, error } = await query
+    const res = await fetch(`/api/h1b/explorer?${params}`, { cache: "no-store" })
     setLoading(false)
-    if (error) {
+    if (!res.ok) {
       setRecords([])
       setCount(0)
       return
     }
-    setRecords((data ?? []) as LCARecord[])
-    setCount(total ?? null)
+    const body = (await res.json()) as { records?: LCARecord[]; count?: number }
+    setRecords(body.records ?? [])
+    setCount(typeof body.count === "number" ? body.count : null)
   }, [debouncedQuery, fiscalYear, state, caseStatus, wageLevel, page])
 
   const loadEmployers = useCallback(async () => {
     setLoading(true)
-    const supabase = createClient()
+    const params = new URLSearchParams({
+      tab: "employers",
+      page: String(page),
+      pageSize: String(PAGE_SIZE),
+    })
+    if (debouncedQuery) params.set("q", debouncedQuery)
 
-    const from = page * PAGE_SIZE
-    const to = from + PAGE_SIZE - 1
-
-    let query = supabase
-      .from("employer_lca_stats")
-      .select("*", { count: "exact" })
-      .order("total_applications", { ascending: false })
-      .range(from, to)
-
-    if (debouncedQuery) {
-      const escaped = debouncedQuery.replace(/[%,]/g, "")
-      query = query.or(
-        `display_name.ilike.%${escaped}%,employer_name_normalized.ilike.%${escaped}%`
-      )
-    }
-
-    const { data, count: total, error } = await query
+    const res = await fetch(`/api/h1b/explorer?${params}`, { cache: "no-store" })
     setLoading(false)
-    if (error) {
+    if (!res.ok) {
       setEmployers([])
       setCount(0)
       return
     }
-    setEmployers((data ?? []) as EmployerLCAStats[])
-    setCount(total ?? null)
+    const body = (await res.json()) as { employers?: EmployerLCAStats[]; count?: number }
+    setEmployers(body.employers ?? [])
+    setCount(typeof body.count === "number" ? body.count : null)
   }, [debouncedQuery, page])
 
   useEffect(() => {

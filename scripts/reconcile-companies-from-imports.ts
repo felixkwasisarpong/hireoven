@@ -285,7 +285,7 @@ async function reconcile() {
   let failed = 0
   for (const c of work) {
     const source = c.lcaFilings >= c.uscisApprovals ? 'lca' : 'uscis'
-    const result = await ensurePlaceholderCompany(admin, {
+    const result = await ensurePlaceholderCompany({
       displayName: c.displayName,
       normalized: c.normalized,
       source,

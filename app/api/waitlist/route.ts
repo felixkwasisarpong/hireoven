@@ -1,9 +1,8 @@
 import { randomBytes } from "crypto"
 import { NextResponse } from "next/server"
 import { z } from "zod"
-import { createAdminClient } from "@/lib/supabase/admin"
+import { getPostgresPool } from "@/lib/postgres/server"
 import { upsertMarketingSubscriber } from "@/lib/marketing/subscribers"
-import { getWaitlistPosition } from "@/lib/waitlist/position"
 import { sendWaitlistConfirmationEmail } from "@/lib/waitlist/send-confirmation"
 
 const bodySchema = z.object({
@@ -41,25 +40,30 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid email" }, { status: 400 })
   }
 
-  let supabase
-  try {
-    supabase = createAdminClient()
-  } catch (e) {
-    console.error("[waitlist]", e)
-    return NextResponse.json(
-      { error: "Server configuration error" },
-      { status: 500 }
-    )
-  }
-
-  const { data: existing } = await supabase
-    .from("waitlist")
-    .select("id, email, joined_at, confirmation_token, is_international")
-    .eq("email", email)
-    .maybeSingle()
+  const pool = getPostgresPool()
+  const existingResult = await pool.query<{
+    id: string
+    email: string
+    joined_at: string
+    confirmation_token: string | null
+    is_international: boolean | null
+  }>(
+    `SELECT id, email, joined_at, confirmation_token, is_international
+     FROM waitlist
+     WHERE email = $1
+     LIMIT 1`,
+    [email]
+  )
+  const existing = existingResult.rows[0]
 
   if (existing) {
-    const position = await getWaitlistPosition(supabase, existing.joined_at)
+    const positionResult = await pool.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count
+       FROM waitlist
+       WHERE joined_at <= $1`,
+      [existing.joined_at]
+    )
+    const position = Number(positionResult.rows[0]?.count ?? 1)
     return NextResponse.json({
       success: true,
       position,
@@ -77,28 +81,46 @@ export async function POST(request: Request) {
       : {}),
   }
 
-  const { data: inserted, error: insertError } = await supabase
-    .from("waitlist")
-    .insert({
-      email,
-      source,
-      referrer,
-      is_international: parsed.data.isInternational ?? null,
-      visa_status: parsed.data.visaStatus?.trim() || null,
-      university: parsed.data.university?.trim() || null,
-      metadata: Object.keys(meta).length ? meta : null,
-      confirmation_token: confirmationToken,
-      confirmed: false,
-    })
-    .select("id, joined_at")
-    .single()
-
-  if (insertError || !inserted) {
+  let inserted: { id: string; joined_at: string } | null = null
+  try {
+    const insertResult = await pool.query<{ id: string; joined_at: string }>(
+      `INSERT INTO waitlist (
+        email,
+        source,
+        referrer,
+        is_international,
+        visa_status,
+        university,
+        metadata,
+        confirmation_token,
+        confirmed
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, false)
+      RETURNING id, joined_at`,
+      [
+        email,
+        source,
+        referrer,
+        parsed.data.isInternational ?? null,
+        parsed.data.visaStatus?.trim() || null,
+        parsed.data.university?.trim() || null,
+        JSON.stringify(Object.keys(meta).length ? meta : null),
+        confirmationToken,
+      ]
+    )
+    inserted = insertResult.rows[0] ?? null
+  } catch (insertError) {
     console.error("[waitlist] insert", insertError)
     return NextResponse.json({ error: "Could not join waitlist" }, { status: 500 })
   }
+  if (!inserted) return NextResponse.json({ error: "Could not join waitlist" }, { status: 500 })
 
-  const position = await getWaitlistPosition(supabase, inserted.joined_at)
+  const positionResult = await pool.query<{ count: string }>(
+    `SELECT COUNT(*)::text AS count
+     FROM waitlist
+     WHERE joined_at <= $1`,
+    [inserted.joined_at]
+  )
+  const position = Number(positionResult.rows[0]?.count ?? 1)
 
   await upsertMarketingSubscriber({
     email,

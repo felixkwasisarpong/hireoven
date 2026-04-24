@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { createAdminClient } from '@/lib/supabase/admin'
+import { getPostgresPool } from '@/lib/postgres/server'
 import { deepH1BAnalysis, predictH1BApproval } from '@/lib/h1b/predictor'
 import { canAccess, type Plan } from '@/lib/gates'
 import type {
@@ -24,15 +24,19 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const { data: sub } = await (supabase as any)
-    .from('subscriptions')
-    .select('plan, status')
-    .eq('user_id', user.id)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
+  const pool = getPostgresPool()
 
+  const subResult = await pool.query<{ plan: string | null; status: string | null }>(
+    `SELECT plan, status
+     FROM subscriptions
+     WHERE user_id = $1
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    [user.id]
+  )
+  const sub = subResult.rows[0] ?? null
   const plan: Plan = ((sub?.plan as Plan | null) ?? 'free') as Plan
+
   if (!canAccess(plan, 'international')) {
     return NextResponse.json(
       {
@@ -54,18 +58,19 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'jobId is required' }, { status: 400 })
   }
 
-  const admin = createAdminClient()
-  const { data: jobData } = await admin
-    .from('jobs')
-    .select('*, company:companies(*)')
-    .eq('id', body.jobId)
-    .maybeSingle()
+  const jobResult = await pool.query<Job & { company: Company }>(
+    `SELECT j.*, to_jsonb(c.*) AS company
+     FROM jobs j
+     LEFT JOIN companies c ON c.id = j.company_id
+     WHERE j.id = $1
+     LIMIT 1`,
+    [body.jobId]
+  )
+  const job = jobResult.rows[0] ?? null
 
-  if (!jobData) {
+  if (!job) {
     return NextResponse.json({ error: 'Job not found' }, { status: 404 })
   }
-
-  const job = jobData as Job & { company: Company }
 
   const input: H1BPredictionInput = {
     jobTitle: job.title,
@@ -94,18 +99,16 @@ export async function POST(request: NextRequest) {
     })
   }
 
-  const { data: records } = await admin
-    .from('lca_records')
-    .select('*')
-    .eq('company_id', job.company.id)
-    .order('decision_date', { ascending: false })
-    .limit(10)
-
-  const analysis = await deepH1BAnalysis(
-    input,
-    fast,
-    (records ?? []) as LCARecord[]
+  const lcaResult = await pool.query<LCARecord>(
+    `SELECT *
+     FROM lca_records
+     WHERE company_id = $1
+     ORDER BY decision_date DESC
+     LIMIT 10`,
+    [job.company.id]
   )
+
+  const analysis = await deepH1BAnalysis(input, fast, lcaResult.rows)
 
   return NextResponse.json({ analysis, prediction: fast })
 }

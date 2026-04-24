@@ -1,5 +1,5 @@
 import { parse } from 'csv-parse/sync'
-import { createClient } from '@/lib/supabase/server'
+import { getPostgresPool } from '@/lib/postgres/server'
 import type { Company, CompanyUpdate, H1BRecordInsert } from '@/types'
 
 /**
@@ -215,10 +215,10 @@ export async function importH1BDataFromBuffer(
     `[uscis-import] parsed ${rows.length.toLocaleString()} rows (${delimiter === '\t' ? 'TSV' : 'CSV'}, ${Math.round(buffer.length / 1024)}KB)`
   )
 
-  const supabase = await createClient()
-  const { data: companiesData } = await supabase.from('companies').select('id, name')
-  if (!companiesData) throw new Error('Could not load companies from database')
-  const companies = companiesData as Array<Pick<Company, 'id' | 'name'>>
+  const pool = getPostgresPool()
+  const companiesResult = await pool.query<Pick<Company, 'id' | 'name'>>(`SELECT id, name FROM companies`)
+  const companies = companiesResult.rows
+  if (!companies) throw new Error('Could not load companies from database')
 
   // ---------------------------------------------------------------------
   // Step 1 - in-memory aggregation per (employer, fiscal year).
@@ -318,99 +318,43 @@ export async function importH1BDataFromBuffer(
 
   const BATCH = 500
   let upserted = 0
-  let upsertFailedWithConflict = false
+  const UPSERT_COLS: Array<keyof H1BRecordInsert> = [
+    'company_id', 'employer_name', 'year', 'total_petitions', 'approved', 'denied',
+    'initial_approvals', 'continuing_approvals', 'naics_code', 'raw_data',
+  ]
+  const jsonCols = new Set(['raw_data'])
+
   for (let i = 0; i < records.length; i += BATCH) {
     const chunk = records.slice(i, i + BATCH)
-    const { error } = await (supabase.from('h1b_records') as any).upsert(chunk, {
-      onConflict: 'employer_name,year',
-      ignoreDuplicates: false,
-    })
-    if (error) {
-      // 42P10 = there is no unique constraint matching onConflict. Happens on
-      // databases that haven't run the new migration yet.
-      if (
-        (error as { code?: string }).code === '42P10' ||
-        /no unique|constraint matching/i.test(error.message ?? '')
-      ) {
-        upsertFailedWithConflict = true
-        break
-      }
-      throw new Error(`h1b_records upsert failed at batch ${i}: ${error.message}`)
+    const placeholders = chunk.map((_, ri) =>
+      `(${UPSERT_COLS.map((_, ci) => `$${ri * UPSERT_COLS.length + ci + 1}`).join(', ')})`
+    ).join(', ')
+    const values = chunk.flatMap((row) =>
+      UPSERT_COLS.map((c) => {
+        const v = row[c] ?? null
+        return jsonCols.has(c) && v !== null ? JSON.stringify(v) : v
+      })
+    )
+    const updateSet = UPSERT_COLS
+      .filter((c) => c !== 'employer_name' && c !== 'year')
+      .map((c) => jsonCols.has(c) ? `"${c}" = EXCLUDED."${c}"::jsonb` : `"${c}" = EXCLUDED."${c}"`)
+      .join(', ')
+
+    try {
+      await pool.query(
+        `INSERT INTO h1b_records (${UPSERT_COLS.map((c) => `"${c}"`).join(', ')})
+         VALUES ${placeholders}
+         ON CONFLICT (employer_name, year) DO UPDATE SET ${updateSet}`,
+        values
+      )
+    } catch (err) {
+      throw new Error(`h1b_records upsert failed at batch ${i}: ${err instanceof Error ? err.message : String(err)}`)
     }
+
     upserted += chunk.length
-    await onProgress?.({
-      phase: 'upsert-records',
-      processed: upserted,
-      total: records.length,
-    })
+    await onProgress?.({ phase: 'upsert-records', processed: upserted, total: records.length })
     if (upserted % 5000 === 0 || upserted === records.length) {
       console.log(`[uscis-import] upserted ${upserted.toLocaleString()}/${records.length.toLocaleString()} records`)
-    }
-  }
-
-  // Legacy fallback - bulk select, split, batch insert+update.
-  if (upsertFailedWithConflict) {
-    console.log(
-      '[uscis-import] unique index missing on (employer_name, year); falling back to select+split path'
-    )
-    const existingByKey = new Map<string, string>()
-    const employerChunks: string[][] = []
-    for (let i = 0; i < uniqueEmployers.length; i += 500) {
-      employerChunks.push(uniqueEmployers.slice(i, i + 500))
-    }
-    for (const chunk of employerChunks) {
-      const { data } = await supabase
-        .from('h1b_records')
-        .select('id, employer_name, year')
-        .in('employer_name', chunk)
-      for (const row of (data ?? []) as Array<{ id: string; employer_name: string; year: number }>) {
-        existingByKey.set(`${row.employer_name}__${row.year}`, row.id)
-      }
-    }
-
-    const toInsert: H1BRecordInsert[] = []
-    const toUpdate: Array<H1BRecordInsert & { id: string }> = []
-    for (const r of records) {
-      const existingId = existingByKey.get(`${r.employer_name}__${r.year}`)
-      if (existingId) {
-        toUpdate.push({ ...r, id: existingId })
-      } else {
-        toInsert.push(r)
-      }
-    }
-
-    for (let i = 0; i < toInsert.length; i += BATCH) {
-      const chunk = toInsert.slice(i, i + BATCH)
-      const { error } = await (supabase.from('h1b_records') as any).insert(chunk)
-      if (error) throw new Error(`h1b_records insert failed at batch ${i}: ${error.message}`)
-      upserted += chunk.length
-      await onProgress?.({
-        phase: 'upsert-records',
-        processed: upserted,
-        total: records.length,
-      })
-    }
-    // Updates have to stay per-row since each gets a different payload +
-    // primary key. They run in parallel in small waves to stay fast.
-    const CONCURRENCY = 10
-    for (let i = 0; i < toUpdate.length; i += CONCURRENCY) {
-      const wave = toUpdate.slice(i, i + CONCURRENCY)
-      await Promise.all(
-        wave.map(async ({ id, ...payload }) => {
-          const { error } = await (supabase.from('h1b_records') as any)
-            .update(payload)
-            .eq('id', id)
-          if (error) throw new Error(`h1b_records update ${id} failed: ${error.message}`)
-        })
-      )
-      upserted += wave.length
-      if (i % 500 === 0) {
-        await onProgress?.({
-          phase: 'upsert-records',
-          processed: upserted,
-          total: records.length,
-        })
-      }
     }
   }
 
@@ -450,10 +394,15 @@ export async function importH1BDataFromBuffer(
           sponsors_h1b: snap.approvals > 0,
           sponsorship_confidence: calcConfidence(snap.approvals, approvalRate),
         }
-        const { error } = await (supabase.from('companies') as any)
-          .update(update)
-          .eq('id', companyId)
-        if (!error) scoresUpdated++
+        await pool.query(
+          `UPDATE companies
+           SET h1b_sponsor_count_1yr = $1,
+               sponsors_h1b = $2,
+               sponsorship_confidence = $3
+           WHERE id = $4`,
+          [update.h1b_sponsor_count_1yr, update.sponsors_h1b, update.sponsorship_confidence, companyId]
+        )
+        scoresUpdated++
       })
     )
     await onProgress?.({

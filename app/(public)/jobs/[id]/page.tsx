@@ -2,7 +2,7 @@ import type { Metadata } from "next"
 import Link from "next/link"
 import Image from "next/image"
 import { notFound } from "next/navigation"
-import { createAdminClient, hasSupabaseAdminEnv } from "@/lib/supabase/admin"
+import { getPostgresPool, hasPostgresEnv } from "@/lib/postgres/server"
 import { AutofillButton } from "@/components/autofill/AutofillButton"
 import Navbar from "@/components/layout/Navbar"
 import {
@@ -16,22 +16,29 @@ export const dynamic = "force-dynamic"
 type Props = { params: Promise<{ id: string }> }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  if (!hasSupabaseAdminEnv()) return { title: "Job - Hireoven" }
+  if (!hasPostgresEnv()) return { title: "Job - Hireoven" }
   const { id } = await params
-  const supabase = createAdminClient()
-  const { data: rawData } = await supabase
-    .from("jobs")
-    .select("title, location, is_remote, company:companies(name)")
-    .eq("id", id)
-    .single()
-
-  if (!rawData) return { title: "Job - Hireoven" }
-  const data = rawData as unknown as Pick<Job, "title" | "location" | "is_remote"> & { company: { name: string } | null }
-  const companyName = data.company?.name ?? ""
+  const pool = getPostgresPool()
+  const { rows } = await pool.query<{
+    title: string
+    location: string | null
+    is_remote: boolean
+    company_name: string | null
+  }>(
+    `SELECT j.title, j.location, j.is_remote, c.name AS company_name
+     FROM jobs j
+     LEFT JOIN companies c ON c.id = j.company_id
+     WHERE j.id = $1::uuid
+     LIMIT 1`,
+    [id]
+  )
+  const data = rows[0]
+  if (!data) return { title: "Job - Hireoven" }
+  const companyName = data.company_name ?? ""
 
   return {
     title: `${data.title} at ${companyName} - Hireoven`,
-    description: `Apply for ${data.title} at ${companyName}. ${data.is_remote ? "Remote." : data.location ?? ""} See this job fresh on Hireoven.`,
+    description: `Apply for ${data.title} at ${companyName}. ${data.is_remote ? "Remote." : (data.location ?? "")} See this job fresh on Hireoven.`,
     openGraph: {
       title: `${data.title} at ${companyName}`,
       description: `${data.is_remote ? "Remote · " : ""}Apply fresh on Hireoven`,
@@ -41,19 +48,23 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function PublicJobPage({ params }: Props) {
+  if (!hasPostgresEnv()) notFound()
+
   const { id } = await params
-  const supabase = createAdminClient()
+  const pool = getPostgresPool()
 
-  const { data: rawJob, error } = await supabase
-    .from("jobs")
-    .select("*, company:companies(*)")
-    .eq("id", id)
-    .single()
+  const jobResult = await pool.query<Job>(`SELECT * FROM jobs WHERE id = $1::uuid LIMIT 1`, [id])
+  const jobRow = jobResult.rows[0]
+  if (!jobRow) notFound()
 
-  if (error || !rawJob) notFound()
+  const companyResult = jobRow.company_id
+    ? await pool.query<Company>(`SELECT * FROM companies WHERE id = $1::uuid LIMIT 1`, [
+        jobRow.company_id,
+      ])
+    : { rows: [] as Company[] }
 
-  const job = rawJob as unknown as Job & { company: Company | null }
-  const company = job.company
+  const company = companyResult.rows[0] ?? null
+  const job = { ...jobRow, company } as Job & { company: Company | null }
 
   const normalized = resolveJobNormalization(
     job as unknown as PersistedJobForNormalization

@@ -1,66 +1,115 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { NextRequest, NextResponse } from "next/server"
+import { getPostgresPool } from "@/lib/postgres/server"
 
 const WITHIN_MS: Record<string, number> = {
-  '1h':  3_600_000,
-  '6h':  21_600_000,
-  '24h': 86_400_000,
-  '3d':  259_200_000,
-  '7d':  604_800_000,
+  "1h": 3_600_000,
+  "6h": 21_600_000,
+  "24h": 86_400_000,
+  "3d": 259_200_000,
+  "7d": 604_800_000,
 }
 
 export async function GET(request: NextRequest) {
   const sp = new URL(request.url).searchParams
-  const q          = sp.get('q')
-  const companyId  = sp.get('company_id')
-  const seniority  = sp.get('seniority')?.split(',').filter(Boolean)
-  const empType    = sp.get('employment_type')?.split(',').filter(Boolean)
-  const remote     = sp.get('remote') === 'true'
-  const sponsorship = sp.get('sponsorship') === 'true'
-  const within     = sp.get('within') ?? 'all'
-  const sort       = sp.get('sort') ?? 'fresh'
-  const limit      = Math.min(100, parseInt(sp.get('limit') ?? '24', 10))
-  const offset     = parseInt(sp.get('offset') ?? '0', 10)
+  const q = sp.get("q")
+  const companyId = sp.get("company_id")
+  const seniority = sp.get("seniority")?.split(",").filter(Boolean)
+  const empType = sp.get("employment_type")?.split(",").filter(Boolean)
+  const remote = sp.get("remote") === "true"
+  const sponsorship = sp.get("sponsorship") === "true"
+  const within = sp.get("within") ?? "all"
+  const since = sp.get("since")?.trim()
+  const sort = sp.get("sort") ?? "fresh"
+  const limit = Math.min(250, parseInt(sp.get("limit") ?? "24", 10))
+  const offset = parseInt(sp.get("offset") ?? "0", 10)
 
-  const supabase = await createClient()
-  const oneHourAgo = new Date(Date.now() - 3_600_000).toISOString()
+  const where: string[] = ["jobs.is_active = true"]
+  const values: Array<string | number | boolean | string[]> = []
 
-  let query = supabase
-    .from('jobs')
-    .select('*, company:companies(*)', { count: 'exact' })
-    .eq('is_active', true)
-
-  if (q?.trim()) query = (query as any).ilike('title', `%${q.trim()}%`)
-  if (companyId) query = query.eq('company_id', companyId)
-  if (remote) query = query.eq('is_remote', true)
-  if (sponsorship) query = (query as any).or('sponsors_h1b.eq.true,sponsorship_score.gt.60')
-  if (seniority?.length) query = (query as any).in('seniority_level', seniority)
-  if (empType?.length) query = (query as any).in('employment_type', empType)
-  if (within !== 'all' && WITHIN_MS[within]) {
-    const cutoff = new Date(Date.now() - WITHIN_MS[within]).toISOString()
-    query = query.gte('first_detected_at', cutoff)
+  const addParam = (value: string | number | boolean | string[]) => {
+    values.push(value)
+    return `$${values.length}`
   }
 
-  query = sort === 'match'
-    ? query.order('sponsorship_score', { ascending: false })
-    : query.order('first_detected_at', { ascending: false })
+  if (q?.trim()) where.push(`jobs.title ILIKE ${addParam(`%${q.trim()}%`)}`)
+  if (companyId) where.push(`jobs.company_id = ${addParam(companyId)}`)
+  if (remote) where.push("jobs.is_remote = true")
+  if (sponsorship) where.push("(jobs.sponsors_h1b = true OR jobs.sponsorship_score > 60)")
+  if (seniority?.length) where.push(`jobs.seniority_level = ANY(${addParam(seniority)}::text[])`)
+  if (empType?.length) where.push(`jobs.employment_type = ANY(${addParam(empType)}::text[])`)
+  if (since) {
+    where.push(`jobs.first_detected_at >= ${addParam(since)}`)
+  } else if (within !== "all" && WITHIN_MS[within]) {
+    const cutoff = new Date(Date.now() - WITHIN_MS[within]).toISOString()
+    where.push(`jobs.first_detected_at >= ${addParam(cutoff)}`)
+  }
 
-  const { data, count, error } = await query.range(offset, offset + limit - 1)
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  const orderBy =
+    sort === "match" ? "jobs.sponsorship_score DESC NULLS LAST" : "jobs.first_detected_at DESC NULLS LAST"
+  const pool = getPostgresPool()
+  const oneHourAgo = new Date(Date.now() - 3_600_000).toISOString()
 
-  const { count: newInLastHour } = await supabase
-    .from('jobs')
-    .select('*', { count: 'exact', head: true })
-    .eq('is_active', true)
-    .gte('first_detected_at', oneHourAgo)
+  try {
+    const limitParam = addParam(limit)
+    const offsetParam = addParam(offset)
 
-  return NextResponse.json({ jobs: data ?? [], total: count ?? 0, newInLastHour: newInLastHour ?? 0 })
+    const [jobsResult, newInLastHourResult] = await Promise.all([
+      pool.query<Record<string, unknown> & { company: unknown; total_count: string }>(
+        `SELECT jobs.*, to_jsonb(companies.*) AS company, COUNT(*) OVER()::text AS total_count
+         FROM jobs
+         LEFT JOIN companies ON companies.id = jobs.company_id
+         WHERE ${where.join(" AND ")}
+         ORDER BY ${orderBy}
+         LIMIT ${limitParam}
+         OFFSET ${offsetParam}`,
+        values
+      ),
+      pool.query<{ count: string }>(
+        "SELECT COUNT(*)::text AS count FROM jobs WHERE is_active = true AND first_detected_at >= $1",
+        [oneHourAgo]
+      ),
+    ])
+
+    const jobs = jobsResult.rows.map(({ total_count: _ignore, ...row }) => row)
+    const total = Number(jobsResult.rows[0]?.total_count ?? 0)
+    const newInLastHour = Number(newInLastHourResult.rows[0]?.count ?? 0)
+
+    return NextResponse.json({ jobs, total, newInLastHour })
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Database query failed" },
+      { status: 500 }
+    )
+  }
 }
 
 export async function POST(request: NextRequest) {
   const body = await request.json()
-  const supabase = await createClient()
-  const { data, error } = await (supabase.from('jobs').insert(body).select('*').single() as any)
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ job: data }, { status: 201 })
+  const pool = getPostgresPool()
+
+  try {
+    const columns = Object.keys(body)
+    if (columns.length === 0) {
+      return NextResponse.json({ error: "Request body is required" }, { status: 400 })
+    }
+    if (!columns.every((col) => /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(col))) {
+      return NextResponse.json({ error: "Invalid column name in request body" }, { status: 400 })
+    }
+
+    const values = Object.values(body)
+    const placeholders = values.map((_, i) => `$${i + 1}`).join(", ")
+    const quotedColumns = columns.map((col) => `"${col}"`).join(", ")
+
+    const result = await pool.query<Record<string, unknown>>(
+      `INSERT INTO jobs (${quotedColumns}) VALUES (${placeholders}) RETURNING *`,
+      values
+    )
+
+    return NextResponse.json({ job: result.rows[0] }, { status: 201 })
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Failed to insert job" },
+      { status: 500 }
+    )
+  }
 }

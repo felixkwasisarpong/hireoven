@@ -9,7 +9,6 @@ import DashboardPageHeader from "@/components/layout/DashboardPageHeader"
 import JobFeed from "@/components/jobs/JobFeed"
 import { useAuth } from "@/lib/hooks/useAuth"
 import { useWatchlist } from "@/lib/hooks/useWatchlist"
-import { createClient } from "@/lib/supabase/client"
 import type { Company, JobFilters } from "@/types"
 
 const SPONSORSHIP_FEED_FILTERS: JobFilters = { sponsorship: true, sort: "freshest" }
@@ -29,16 +28,20 @@ export default function InternationalPage() {
 
   useEffect(() => {
     async function fetchCompanies() {
-      const supabase = createClient()
-      const { data } = await supabase
-        .from("companies")
-        .select("*")
-        .eq("is_active", true)
-        .eq("sponsors_h1b", true)
-        .order("h1b_sponsor_count_1yr", { ascending: false })
-        .limit(60)
-
-      setCompanies((data ?? []) as Company[])
+      const params = new URLSearchParams({
+        sponsors_h1b: "true",
+        limit: "60",
+        sort: "h1b_sponsor_count_1yr",
+      })
+      const res = await fetch(`/api/companies?${params}`, { cache: "no-store" })
+      if (!res.ok) {
+        setCompanies([])
+        setIndustryBars([])
+        return
+      }
+      const body = (await res.json()) as { companies?: Company[] }
+      const data = body.companies ?? []
+      setCompanies(data as Company[])
 
       // Aggregate petitions by industry
       const map = new Map<string, number>()

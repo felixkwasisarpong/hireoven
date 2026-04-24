@@ -4,7 +4,7 @@ import { redirect } from "next/navigation"
 import ConfirmedShareBlock from "@/components/waitlist/ConfirmedShareBlock"
 import { LaunchFooter, LaunchNavbar } from "@/components/waitlist/LaunchChrome"
 import { WaitlistSuccessCheck } from "@/components/waitlist/WaitlistForm"
-import { createAdminClient } from "@/lib/supabase/admin"
+import { getPostgresPool, hasPostgresEnv } from "@/lib/postgres/server"
 import { getWaitlistPosition } from "@/lib/waitlist/position"
 
 export const metadata: Metadata = {
@@ -30,24 +30,22 @@ export default async function LaunchConfirmedPage({
     redirect("/launch")
   }
 
-  let supabase
-  try {
-    supabase = createAdminClient()
-  } catch {
+  if (!hasPostgresEnv()) {
     redirect("/launch")
   }
 
-  const { data: row } = await supabase
-    .from("waitlist")
-    .select("id, joined_at")
-    .eq("confirmation_token", token.trim())
-    .maybeSingle()
+  const pool = getPostgresPool()
+  const { rows } = await pool.query<{ id: string; joined_at: string }>(
+    `SELECT id, joined_at FROM waitlist WHERE confirmation_token = $1 LIMIT 1`,
+    [token.trim()]
+  )
+  const row = rows[0]
 
   if (!row) {
     redirect("/launch?error=invalid-token")
   }
 
-  const position = await getWaitlistPosition(supabase, row.joined_at)
+  const position = await getWaitlistPosition(row.joined_at)
 
   return (
     <div className="min-h-screen bg-background">

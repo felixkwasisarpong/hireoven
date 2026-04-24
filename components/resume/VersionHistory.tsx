@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react"
 import { Download, RotateCcw, Save, SplitSquareVertical } from "lucide-react"
 import { buildResumeSnapshot } from "@/lib/resume/scoring"
-import { createClient } from "@/lib/supabase/client"
 import type { Resume, ResumeSnapshot, ResumeVersion } from "@/types"
 
 type VersionHistoryProps = {
@@ -24,14 +23,16 @@ export default function VersionHistory({
   const [saving, setSaving] = useState(false)
 
   async function loadVersions() {
-    const supabase = createClient()
-    const { data } = await supabase
-      .from("resume_versions")
-      .select("*")
-      .eq("resume_id", resume.id)
-      .order("created_at", { ascending: false })
-
-    setVersions((data ?? []) as ResumeVersion[])
+    const res = await fetch(`/api/resume/${resume.id}/versions`, {
+      credentials: "include",
+      cache: "no-store",
+    })
+    if (!res.ok) {
+      setVersions([])
+      return
+    }
+    const body = (await res.json()) as { versions?: ResumeVersion[] }
+    setVersions(body.versions ?? [])
   }
 
   useEffect(() => {
@@ -45,15 +46,14 @@ export default function VersionHistory({
 
   async function saveCurrentVersion() {
     setSaving(true)
-    const supabase = createClient()
     const nextVersionNumber =
       versions.reduce((max, version) => Math.max(max, version.version_number), 0) + 1
 
-    const { error } = await (supabase
-      .from("resume_versions")
-      .insert({
-        resume_id: resume.id,
-        user_id: resume.user_id,
+    const res = await fetch(`/api/resume/${resume.id}/versions`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
         version_number: nextVersionNumber,
         name: name.trim() || `Version ${nextVersionNumber}`,
         file_url: null,
@@ -61,10 +61,11 @@ export default function VersionHistory({
         changes_summary: jobLabel
           ? `Saved while optimizing for ${jobLabel}.`
           : "Saved from the AI resume editor.",
-      } as any))
+      }),
+    })
 
     setSaving(false)
-    if (!error) {
+    if (res.ok) {
       setShowComposer(false)
       await loadVersions()
     }

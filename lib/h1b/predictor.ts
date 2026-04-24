@@ -21,7 +21,7 @@
  */
 
 import Anthropic from '@anthropic-ai/sdk'
-import { createAdminClient } from '@/lib/supabase/admin'
+import { getPostgresPool } from '@/lib/postgres/server'
 import { normalizeEmployerName } from '@/lib/h1b/lca-importer'
 import type {
   EmployerLCAStats,
@@ -187,22 +187,17 @@ async function estimatePrevailingWage(
   stateAbbr: string | null
 ): Promise<{ median: number; sampleSize: number } | null> {
   if (!socCode && !stateAbbr) return null
-  const supabase = createAdminClient()
-  let query = supabase
-    .from('lca_records')
-    .select('prevailing_wage, prevailing_wage_unit')
-    .not('prevailing_wage', 'is', null)
-    .in('case_status', ['Certified', 'Certified-Withdrawn'])
-    .limit(500)
+  const pool = getPostgresPool()
+  const where: string[] = [`prevailing_wage IS NOT NULL`, `case_status IN ('Certified', 'Certified-Withdrawn')`]
+  const params: unknown[] = []
+  const p = (v: unknown) => { params.push(v); return `$${params.length}` }
+  if (socCode) where.push(`soc_code = ${p(socCode)}`)
+  if (stateAbbr) where.push(`worksite_state_abbr = ${p(stateAbbr)}`)
 
-  if (socCode) query = query.eq('soc_code', socCode)
-  if (stateAbbr) query = query.eq('worksite_state_abbr', stateAbbr)
-
-  const { data } = await query
-  const rows = (data ?? []) as Array<{
-    prevailing_wage: number | null
-    prevailing_wage_unit: string | null
-  }>
+  const { rows } = await pool.query<{ prevailing_wage: number | null; prevailing_wage_unit: string | null }>(
+    `SELECT prevailing_wage, prevailing_wage_unit FROM lca_records WHERE ${where.join(' AND ')} LIMIT 500`,
+    params
+  )
   const annualized = rows
     .map((r) => annualizeWage(r.prevailing_wage, r.prevailing_wage_unit))
     .filter((n): n is number => n !== null && n > 10_000 && n < 1_500_000)
@@ -271,21 +266,14 @@ async function ensureSOCCache(): Promise<Map<string, SOCCacheEntry>> {
     return SOC_CACHE ?? new Map()
   }
   SOC_CACHE_INFLIGHT = (async () => {
-    const supabase = createAdminClient()
-    const { data } = await supabase
-      .from('soc_base_rates')
-      .select('soc_code, approval_rate, sample_size')
+    const pool = getPostgresPool()
+    const { rows } = await pool.query<{ soc_code: string; approval_rate: number | null; sample_size: number }>(
+      `SELECT soc_code, approval_rate, sample_size FROM soc_base_rates`
+    )
     const next = new Map<string, SOCCacheEntry>()
-    for (const row of (data ?? []) as Array<{
-      soc_code: string
-      approval_rate: number | null
-      sample_size: number
-    }>) {
+    for (const row of rows) {
       if (row.approval_rate === null) continue
-      next.set(row.soc_code, {
-        rate: Number(row.approval_rate),
-        sampleSize: row.sample_size,
-      })
+      next.set(row.soc_code, { rate: Number(row.approval_rate), sampleSize: row.sample_size })
     }
     SOC_CACHE = next
     SOC_CACHE_LOADED_AT = Date.now()
@@ -407,38 +395,32 @@ async function fetchEmployerStats(
   lca: EmployerLCAStats | null
   uscis: EmployerSignal | null
 }> {
-  const supabase = createAdminClient()
+  const pool = getPostgresPool()
   const norm = normalizeEmployerName(companyName)
 
   const lcaPromise = (async (): Promise<EmployerLCAStats | null> => {
     if (companyId) {
-      const { data } = await supabase
-        .from('employer_lca_stats')
-        .select('*')
-        .eq('company_id', companyId)
-        .order('total_applications', { ascending: false })
-        .limit(1)
-        .maybeSingle()
-      if (data) return data as EmployerLCAStats
+      const result = await pool.query<EmployerLCAStats>(
+        `SELECT * FROM employer_lca_stats WHERE company_id = $1 ORDER BY total_applications DESC LIMIT 1`,
+        [companyId]
+      )
+      if (result.rows[0]) return result.rows[0]
     }
     if (!norm) return null
-    const { data } = await supabase
-      .from('employer_lca_stats')
-      .select('*')
-      .eq('employer_name_normalized', norm)
-      .maybeSingle()
-    return (data ?? null) as EmployerLCAStats | null
+    const result = await pool.query<EmployerLCAStats>(
+      `SELECT * FROM employer_lca_stats WHERE employer_name_normalized = $1 LIMIT 1`,
+      [norm]
+    )
+    return result.rows[0] ?? null
   })()
 
   const uscisPromise = (async (): Promise<EmployerSignal | null> => {
     if (!companyId) return null
-    const { data } = await supabase
-      .from('h1b_records')
-      .select('year, approved, denied')
-      .eq('company_id', companyId)
-      .order('year', { ascending: false })
-      .limit(6)
-    const rows = (data ?? []) as Array<Pick<H1BRecord, 'year' | 'approved' | 'denied'>>
+    const result = await pool.query<Pick<H1BRecord, 'year' | 'approved' | 'denied'>>(
+      `SELECT year, approved, denied FROM h1b_records WHERE company_id = $1 ORDER BY year DESC LIMIT 6`,
+      [companyId]
+    )
+    const rows = result.rows
     if (rows.length === 0) return null
     let approved = 0
     let denied = 0

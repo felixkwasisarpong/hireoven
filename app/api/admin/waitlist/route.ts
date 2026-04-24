@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { assertAdminAccess } from "@/lib/admin/auth"
-import { createAdminClient } from "@/lib/supabase/admin"
+import { getPostgresPool } from "@/lib/postgres/server"
 import { isMissingWaitlistTableError } from "@/lib/waitlist/errors"
 
 export async function GET(request: Request) {
@@ -12,25 +12,41 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const format = searchParams.get("format")
 
-  let supabase
+  const pool = getPostgresPool()
+  let list: Array<{
+    id: string
+    email: string
+    source: string | null
+    referrer: string | null
+    is_international: boolean | null
+    visa_status: string | null
+    university: string | null
+    metadata: Record<string, unknown> | null
+    confirmed: boolean
+    joined_at: string
+  }> = []
+
   try {
-    supabase = createAdminClient()
-  } catch (e) {
-    return NextResponse.json(
-      { error: (e as Error).message },
-      { status: 500 }
+    const result = await pool.query<{
+      id: string
+      email: string
+      source: string | null
+      referrer: string | null
+      is_international: boolean | null
+      visa_status: string | null
+      university: string | null
+      metadata: Record<string, unknown> | null
+      confirmed: boolean
+      joined_at: string
+    }>(
+      `SELECT id, email, source, referrer, is_international, visa_status, university, metadata, confirmed, joined_at
+       FROM waitlist
+       ORDER BY joined_at DESC`
     )
-  }
-
-  const { data: rows, error } = await supabase
-    .from("waitlist")
-    .select(
-      "id, email, source, referrer, is_international, visa_status, university, metadata, confirmed, joined_at"
-    )
-    .order("joined_at", { ascending: false })
-
-  if (error) {
-    if (isMissingWaitlistTableError(error.message)) {
+    list = result.rows
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Database query failed"
+    if (isMissingWaitlistTableError(message)) {
       return NextResponse.json(
         {
           error:
@@ -40,10 +56,8 @@ export async function GET(request: Request) {
       )
     }
 
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ error: message }, { status: 500 })
   }
-
-  const list = rows ?? []
 
   if (format === "csv") {
     const header = [

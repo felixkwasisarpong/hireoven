@@ -4,7 +4,7 @@ import {
   matchesSearchQuery,
 } from "@/lib/jobs/search-match"
 import { scoreJobsForUser } from "@/lib/matching/batch-scorer"
-import { createAdminClient } from "@/lib/supabase/admin"
+import { getPostgresPool } from "@/lib/postgres/server"
 import { createClient } from "@/lib/supabase/server"
 import type {
   EmploymentType,
@@ -89,33 +89,46 @@ export async function GET(request: NextRequest) {
   const fetchMultiplier = hasTextSearch ? 4 : 2
   const fetchLimit = Math.min(220, Math.max(limit + offset, 60) * fetchMultiplier)
 
-  const admin = createAdminClient()
-  let query = admin
-    .from("jobs")
-    .select("*, company:companies(*)")
-    .eq("is_active", true)
-    .order("first_detected_at", { ascending: false })
-    .limit(fetchLimit)
+  const pool = getPostgresPool()
+  const where: string[] = ["jobs.is_active = true"]
+  const params: Array<string | number | string[]> = []
+  const addParam = (value: string | number | string[]) => {
+    params.push(value)
+    return `$${params.length}`
+  }
 
-  if (companyIds?.length) query = query.in("company_id", companyIds)
-  if (remote) query = query.eq("is_remote", true)
-  if (seniority?.length) query = query.in("seniority_level", seniority)
-  if (employment?.length) query = query.in("employment_type", employment)
-  if (sponsorship) query = query.or("sponsors_h1b.eq.true,sponsorship_score.gte.60")
+  if (companyIds?.length) where.push(`jobs.company_id::text = ANY(${addParam(companyIds)}::text[])`)
+  if (remote) where.push("jobs.is_remote = true")
+  if (seniority?.length) where.push(`jobs.seniority_level = ANY(${addParam(seniority)}::text[])`)
+  if (employment?.length) where.push(`jobs.employment_type = ANY(${addParam(employment)}::text[])`)
+  if (sponsorship) where.push("(jobs.sponsors_h1b = true OR jobs.sponsorship_score >= 60)")
   if (within !== "all" && WITHIN_MS[within]) {
-    query = query.gte(
-      "first_detected_at",
+    where.push(`jobs.first_detected_at >= ${addParam(
       new Date(Date.now() - WITHIN_MS[within]).toISOString()
+    )}`)
+  }
+
+  const limitParam = addParam(fetchLimit)
+  let data: JobWithMatchScore[] = []
+  try {
+    const result = await pool.query<JobWithMatchScore>(
+      `SELECT jobs.*, to_jsonb(companies.*) AS company
+       FROM jobs
+       LEFT JOIN companies ON companies.id = jobs.company_id
+       WHERE ${where.join(" AND ")}
+       ORDER BY jobs.first_detected_at DESC NULLS LAST
+       LIMIT ${limitParam}`,
+      params
+    )
+    data = result.rows
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Database query failed" },
+      { status: 500 }
     )
   }
 
-  const { data, error } = await (query as any)
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
-  }
-
-  const jobs = ((data ?? []) as JobWithMatchScore[]).filter((job) => {
+  const jobs = data.filter((job) => {
     if (!matchesSearch(job, q)) return false
     if (
       !matchesLocationFilter(job.location, location, {

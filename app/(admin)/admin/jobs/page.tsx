@@ -13,7 +13,6 @@ import {
 } from "@/components/admin/AdminPrimitives"
 import { useToast } from "@/components/ui/ToastProvider"
 import { formatDateTime, formatNumber, formatRelativeTime } from "@/lib/admin/format"
-import { createClient } from "@/lib/supabase/client"
 import type { Company, EmploymentType, Job, SeniorityLevel } from "@/types"
 
 type JobRow = Job & {
@@ -72,7 +71,6 @@ function makeDraft(job: JobRow): JobDraft {
 }
 
 export default function AdminJobsPage() {
-  const supabase = useMemo(() => createClient(), [])
   const { pushToast } = useToast()
   const [jobs, setJobs] = useState<JobRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -90,21 +88,14 @@ export default function AdminJobsPage() {
 
   async function loadJobs() {
     setLoading(true)
-    const { data, error } = await ((supabase.from("jobs") as any)
-      .select("*, company:companies(id, name, logo_url, ats_type)")
-      .order("first_detected_at", { ascending: false }))
-
-    if (error) {
-      pushToast({
-        tone: "error",
-        title: "Unable to load jobs",
-        description: error.message,
-      })
+    const res = await fetch("/api/jobs?limit=500&sort=fresh")
+    if (!res.ok) {
+      pushToast({ tone: "error", title: "Unable to load jobs" })
       setLoading(false)
       return
     }
-
-    setJobs((data ?? []) as JobRow[])
+    const { jobs: data } = (await res.json()) as { jobs: JobRow[] }
+    setJobs(data ?? [])
     setLoading(false)
   }
 
@@ -116,21 +107,6 @@ export default function AdminJobsPage() {
     const interval = window.setInterval(() => setNow(Date.now()), 60_000)
     return () => window.clearInterval(interval)
   }, [])
-
-  useEffect(() => {
-    const channel = supabase
-      .channel("admin-jobs-table")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "jobs" },
-        () => void loadJobs()
-      )
-      .subscribe()
-
-    return () => {
-      void supabase.removeChannel(channel)
-    }
-  }, [supabase])
 
   const visibleJobs = useMemo(() => {
     const query = search.trim().toLowerCase()
@@ -194,17 +170,15 @@ export default function AdminJobsPage() {
 
   async function toggleActive(job: JobRow) {
     setBusyId(job.id)
-    const { error } = await ((supabase.from("jobs") as any)
-      .update({ is_active: !job.is_active } as any)
-      .eq("id", job.id))
+    const res = await fetch(`/api/admin/jobs/${job.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ is_active: !job.is_active }),
+    })
     setBusyId(null)
 
-    if (error) {
-      pushToast({
-        tone: "error",
-        title: "Unable to update job",
-        description: error.message,
-      })
+    if (!res.ok) {
+      pushToast({ tone: "error", title: "Unable to update job" })
       return
     }
 
@@ -219,15 +193,15 @@ export default function AdminJobsPage() {
     if (!draft) return
 
     setBusyId(jobId)
-    const { error } = await ((supabase.from("jobs") as any).update(draft as any).eq("id", jobId))
+    const res = await fetch(`/api/admin/jobs/${jobId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(draft),
+    })
     setBusyId(null)
 
-    if (error) {
-      pushToast({
-        tone: "error",
-        title: "Unable to save job",
-        description: error.message,
-      })
+    if (!res.ok) {
+      pushToast({ tone: "error", title: "Unable to save job" })
       return
     }
 

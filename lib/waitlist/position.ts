@@ -1,16 +1,13 @@
-import type { SupabaseClient } from "@supabase/supabase-js"
-import type { Database } from "@/types"
+import { getPostgresPool } from "@/lib/postgres/server"
 
 /** 1-based position: earlier joiners get lower numbers. */
-export async function getWaitlistPosition(
-  supabase: SupabaseClient<Database>,
-  joinedAt: string
-) {
-  const { count, error } = await supabase
-    .from("waitlist")
-    .select("*", { count: "exact", head: true })
-    .lte("joined_at", joinedAt)
-
-  if (error) throw error
-  return count ?? 1
+export async function getWaitlistPosition(joinedAt: string) {
+  const pool = getPostgresPool()
+  const result = await pool.query<{ count: string }>(
+    `SELECT COUNT(*)::text AS count
+     FROM waitlist
+     WHERE joined_at <= $1`,
+    [joinedAt]
+  )
+  return Number(result.rows[0]?.count ?? 1)
 }

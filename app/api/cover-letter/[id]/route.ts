@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { getPostgresPool } from "@/lib/postgres/server"
 import { createClient } from "@/lib/supabase/server"
 import type { CoverLetterUpdate } from "@/types"
 
@@ -13,19 +14,45 @@ export async function PATCH(
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const pool = getPostgresPool()
 
   const body = await request.json().catch(() => ({})) as CoverLetterUpdate
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const table = (supabase as any).from("cover_letters")
-  const { data, error } = await table
-    .update({ ...body, updated_at: new Date().toISOString() })
-    .eq("id", params.id)
-    .eq("user_id", user.id)
-    .select("*")
-    .single()
+  const allowed = new Set([
+    "hiring_manager",
+    "subject_line",
+    "body",
+    "word_count",
+    "tone",
+    "length",
+    "style",
+    "is_favorite",
+    "was_used",
+    "mentions_sponsorship",
+    "sponsorship_approach",
+  ])
+  const entries = Object.entries(body).filter(([key]) => allowed.has(key))
+  if (entries.length === 0) {
+    return NextResponse.json({ error: "No valid updates provided" }, { status: 400 })
+  }
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  const values: unknown[] = []
+  const setSql = entries.map(([key, value], idx) => {
+    values.push(value)
+    return `${key} = $${idx + 1}`
+  })
+  values.push(new Date().toISOString(), params.id, user.id)
+
+  const result = await pool.query(
+    `UPDATE cover_letters
+     SET ${setSql.join(", ")}, updated_at = $${values.length - 2}
+     WHERE id = $${values.length - 1}
+       AND user_id = $${values.length}
+     RETURNING *`,
+    values
+  )
+  const data = result.rows[0]
+  if (!data) return NextResponse.json({ error: "Cover letter not found" }, { status: 404 })
   return NextResponse.json(data)
 }
 
@@ -38,13 +65,13 @@ export async function DELETE(
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const pool = getPostgresPool()
 
-  const { error } = await (supabase
-    .from("cover_letters" as any)
-    .delete()
-    .eq("id", params.id)
-    .eq("user_id", user.id) as any)
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  await pool.query(
+    `DELETE FROM cover_letters
+     WHERE id = $1
+       AND user_id = $2`,
+    [params.id, user.id]
+  )
   return NextResponse.json({ success: true })
 }

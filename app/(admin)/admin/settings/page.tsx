@@ -10,7 +10,6 @@ import {
   AdminSelect,
 } from "@/components/admin/AdminPrimitives"
 import { useToast } from "@/components/ui/ToastProvider"
-import { createClient } from "@/lib/supabase/client"
 import type { SystemSetting } from "@/types"
 
 type SettingsMeta = {
@@ -33,7 +32,6 @@ function useSettingsMap(rows: SystemSetting[]) {
 }
 
 export default function AdminSettingsPage() {
-  const supabase = useMemo(() => createClient(), [])
   const { pushToast } = useToast()
   const [rows, setRows] = useState<SystemSetting[]>([])
   const [meta, setMeta] = useState<SettingsMeta | null>(null)
@@ -66,24 +64,25 @@ export default function AdminSettingsPage() {
 
   async function loadSettings() {
     setLoading(true)
-    const [{ data, error }, metaResponse] = await Promise.all([
-      supabase.from("system_settings").select("*").order("updated_at", { ascending: false }),
+    const [settingsRes, metaResponse] = await Promise.all([
+      fetch("/api/admin/system-settings"),
       fetch("/api/admin/settings/meta", { cache: "no-store" }),
     ])
 
     const metaBody = (await metaResponse.json()) as SettingsMeta & { error?: string }
 
-    if (error || !metaResponse.ok) {
+    if (!settingsRes.ok || !metaResponse.ok) {
       pushToast({
         tone: "error",
         title: "Unable to load settings",
-        description: error?.message ?? metaBody.error ?? "Unknown error",
+        description: metaBody.error ?? "Unknown error",
       })
       setLoading(false)
       return
     }
 
-    setRows((data ?? []) as SystemSetting[])
+    const { settings } = (await settingsRes.json()) as { settings: SystemSetting[] }
+    setRows(settings ?? [])
     setMeta(metaBody)
     setLoading(false)
   }
@@ -111,26 +110,20 @@ export default function AdminSettingsPage() {
 
   async function upsertSetting(key: string, value: Record<string, unknown>, successTitle: string) {
     setBusyAction(key)
-    const { error } = await ((supabase.from("system_settings") as any).upsert({
-      key,
-      value,
-    } as any))
+    const res = await fetch("/api/admin/system-settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key, value }),
+    })
     setBusyAction(null)
 
-    if (error) {
-      pushToast({
-        tone: "error",
-        title: "Unable to save settings",
-        description: error.message,
-      })
+    if (!res.ok) {
+      pushToast({ tone: "error", title: "Unable to save settings" })
       return false
     }
 
     await loadSettings()
-    pushToast({
-      tone: "success",
-      title: successTitle,
-    })
+    pushToast({ tone: "success", title: successTitle })
     return true
   }
 
@@ -199,22 +192,15 @@ export default function AdminSettingsPage() {
 
     setBusyAction("clear-logs")
     const cutoff = new Date(Date.now() - 30 * 86_400_000).toISOString()
-    const { error } = await supabase.from("crawl_logs").delete().lt("crawled_at", cutoff)
+    const res = await fetch(`/api/admin/crawl-logs?before=${encodeURIComponent(cutoff)}`, { method: "DELETE" })
     setBusyAction(null)
 
-    if (error) {
-      pushToast({
-        tone: "error",
-        title: "Unable to clear crawl logs",
-        description: error.message,
-      })
+    if (!res.ok) {
+      pushToast({ tone: "error", title: "Unable to clear crawl logs" })
       return
     }
 
-    pushToast({
-      tone: "success",
-      title: "Old crawl logs removed",
-    })
+    pushToast({ tone: "success", title: "Old crawl logs removed" })
   }
 
   async function recrawlAll() {
@@ -252,67 +238,22 @@ export default function AdminSettingsPage() {
 
   async function exportAllData() {
     setBusyAction("export")
-    const [companies, jobs, profiles, watchlist, jobAlerts, notifications, crawlLogs, h1bRecords, apiUsage, settings] =
-      await Promise.all([
-        supabase.from("companies").select("*"),
-        supabase.from("jobs").select("*"),
-        supabase.from("profiles").select("*"),
-        supabase.from("watchlist").select("*"),
-        supabase.from("job_alerts").select("*"),
-        supabase.from("alert_notifications").select("*"),
-        supabase.from("crawl_logs").select("*"),
-        supabase.from("h1b_records").select("*"),
-        supabase.from("api_usage").select("*"),
-        supabase.from("system_settings").select("*"),
-      ])
+    const [companies, jobs, notifications, crawlLogs, settings] = await Promise.all([
+      fetch("/api/admin/companies").then((r) => r.json()),
+      fetch("/api/jobs?limit=5000").then((r) => r.json()),
+      fetch("/api/admin/alert-notifications").then((r) => r.json()),
+      fetch("/api/admin/crawl-logs").then((r) => r.json()),
+      fetch("/api/admin/system-settings").then((r) => r.json()),
+    ])
     setBusyAction(null)
 
-    const errors = [
-      companies.error,
-      jobs.error,
-      profiles.error,
-      watchlist.error,
-      jobAlerts.error,
-      notifications.error,
-      crawlLogs.error,
-      h1bRecords.error,
-      apiUsage.error,
-      settings.error,
-    ].filter(Boolean)
-
-    if (errors.length) {
-      pushToast({
-        tone: "error",
-        title: "Export failed",
-        description: errors[0]?.message ?? "Unknown error",
-      })
-      return
-    }
-
-    const payload = {
-      exportedAt: new Date().toISOString(),
-      tables: {
-        companies: companies.data ?? [],
-        jobs: jobs.data ?? [],
-        profiles: profiles.data ?? [],
-        watchlist: watchlist.data ?? [],
-        job_alerts: jobAlerts.data ?? [],
-        alert_notifications: notifications.data ?? [],
-        crawl_logs: crawlLogs.data ?? [],
-        h1b_records: h1bRecords.data ?? [],
-        api_usage: apiUsage.data ?? [],
-        system_settings: settings.data ?? [],
-      },
-    }
-
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" })
+    const exportData = { companies, jobs, notifications, crawlLogs, settings }
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" })
     const url = URL.createObjectURL(blob)
-    const link = document.createElement("a")
-    link.href = url
-    link.download = "hireoven-admin-export.json"
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `hireoven-export-${new Date().toISOString().slice(0, 10)}.json`
+    a.click()
     URL.revokeObjectURL(url)
 
     pushToast({

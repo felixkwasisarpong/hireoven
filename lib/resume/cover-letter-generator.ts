@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk"
 import { logApiUsage } from "@/lib/admin/usage"
-import { createAdminClient } from "@/lib/supabase/admin"
+import { getPostgresPool } from "@/lib/postgres/server"
 import type {
   CoverLetter,
   CoverLetterInsert,
@@ -186,13 +186,15 @@ export async function generateCoverLetter(
   const userPrompt = buildUserPrompt(resume, job, options)
   const generated = await callClaudeForLetter(systemPrompt, userPrompt)
 
-  const supabase = createAdminClient()
-
-  const { count } = await (supabase
-    .from("cover_letters")
-    .select("*", { count: "exact", head: true })
-    .eq("user_id", userId)
-    .eq("job_id", job.id) as any)
+  const pool = getPostgresPool()
+  const countResult = await pool.query<{ count: string }>(
+    `SELECT COUNT(*)::text AS count
+     FROM cover_letters
+     WHERE user_id = $1
+       AND job_id = $2`,
+    [userId, job.id]
+  )
+  const existingCount = Number(countResult.rows[0]?.count ?? 0)
 
   const payload: CoverLetterInsert = {
     user_id: userId,
@@ -207,21 +209,59 @@ export async function generateCoverLetter(
     tone: options.tone,
     length: options.length,
     style: options.style,
-    version_number: ((count as number | null) ?? 0) + 1,
+    version_number: existingCount + 1,
     is_favorite: false,
     was_used: false,
     mentions_sponsorship: Boolean(options.mentionSponsorship),
     sponsorship_approach: options.sponsorshipApproach ?? null,
   }
 
-  const { data, error } = await (supabase
-    .from("cover_letters")
-    .insert(payload as any)
-    .select("*")
-    .single() as any)
-
-  if (error || !data) throw error ?? new Error("Failed to save cover letter")
-  return data as CoverLetter
+  const insertResult = await pool.query<CoverLetter>(
+    `INSERT INTO cover_letters (
+      user_id,
+      resume_id,
+      job_id,
+      job_title,
+      company_name,
+      hiring_manager,
+      subject_line,
+      body,
+      word_count,
+      tone,
+      length,
+      style,
+      version_number,
+      is_favorite,
+      was_used,
+      mentions_sponsorship,
+      sponsorship_approach
+    ) VALUES (
+      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17
+    )
+    RETURNING *`,
+    [
+      payload.user_id,
+      payload.resume_id,
+      payload.job_id,
+      payload.job_title,
+      payload.company_name,
+      payload.hiring_manager,
+      payload.subject_line,
+      payload.body,
+      payload.word_count,
+      payload.tone,
+      payload.length,
+      payload.style,
+      payload.version_number,
+      payload.is_favorite,
+      payload.was_used,
+      payload.mentions_sponsorship,
+      payload.sponsorship_approach,
+    ]
+  )
+  const data = insertResult.rows[0]
+  if (!data) throw new Error("Failed to save cover letter")
+  return data
 }
 
 export async function regenerateParagraph(
@@ -232,13 +272,21 @@ export async function regenerateParagraph(
 ): Promise<string> {
   if (!anthropic) throw new Error("ANTHROPIC_API_KEY not configured")
 
-  const supabase = createAdminClient()
-  const { data } = await (supabase
-    .from("cover_letters")
-    .select("body, job_title, company_name, tone")
-    .eq("id", coverLetterId)
-    .eq("user_id", userId)
-    .single() as any)
+  const pool = getPostgresPool()
+  const coverLetterResult = await pool.query<{
+    body: string
+    job_title: string
+    company_name: string
+    tone: string
+  }>(
+    `SELECT body, job_title, company_name, tone
+     FROM cover_letters
+     WHERE id = $1
+       AND user_id = $2
+     LIMIT 1`,
+    [coverLetterId, userId]
+  )
+  const data = coverLetterResult.rows[0]
 
   if (!data) throw new Error("Cover letter not found")
 
@@ -288,11 +336,13 @@ Instruction: ${instruction}`,
   const newBody = paragraphs.join("\n\n")
   const wordCount = newBody.split(/\s+/).filter(Boolean).length
 
-  await (supabase
-    .from("cover_letters")
-    .update({ body: newBody, word_count: wordCount, updated_at: new Date().toISOString() })
-    .eq("id", coverLetterId)
-    .eq("user_id", userId) as any)
+  await pool.query(
+    `UPDATE cover_letters
+     SET body = $1, word_count = $2, updated_at = $3
+     WHERE id = $4
+       AND user_id = $5`,
+    [newBody, wordCount, new Date().toISOString(), coverLetterId, userId]
+  )
 
   return newBody
 }

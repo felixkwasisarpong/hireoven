@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
+import { getPostgresPool } from "@/lib/postgres/server"
 import type { Profile } from "@/types"
 
 type AdminProfile = Pick<
@@ -15,13 +16,17 @@ export async function getAdminProfile(): Promise<AdminProfile | null> {
 
   if (!user) return null
 
-  const { data: profile } = await ((supabase
-    .from("profiles")
-    .select("id, email, full_name, avatar_url, is_admin")
-    .eq("id", user.id)
-    .single()) as any)
+  const pool = getPostgresPool()
+  const result = await pool.query<AdminProfile>(
+    `SELECT id, email, full_name, avatar_url, is_admin
+     FROM profiles
+     WHERE id = $1
+       AND suspended_at IS NULL
+     LIMIT 1`,
+    [user.id]
+  )
 
-  return (profile as AdminProfile | null) ?? null
+  return result.rows[0] ?? null
 }
 
 export async function requireAdminProfile(options?: { redirectTo?: string }) {

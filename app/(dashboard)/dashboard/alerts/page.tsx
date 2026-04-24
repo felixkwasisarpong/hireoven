@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react"
 import { BellRing, Plus, Trash2, X } from "lucide-react"
 import DashboardPageHeader from "@/components/layout/DashboardPageHeader"
 import { useAuth } from "@/lib/hooks/useAuth"
-import { createClient } from "@/lib/supabase/client"
 import type { AlertFrequency, Company, JobAlert, SeniorityLevel } from "@/types"
 
 type AlertDraft = {
@@ -83,25 +82,20 @@ export default function AlertsPage() {
 
   useEffect(() => {
     async function fetchInitialData() {
-      const supabase = createClient()
-      const [{ data: alertsData }, { data: companiesData }] = await Promise.all([
-        user?.id
-          ? supabase
-              .from("job_alerts")
-              .select("*")
-              .eq("user_id", user.id)
-              .order("created_at", { ascending: false })
-          : Promise.resolve({ data: [] }),
-        supabase
-          .from("companies")
-          .select("*")
-          .eq("is_active", true)
-          .order("job_count", { ascending: false })
-          .limit(50),
+      const [alertsRes, companiesRes] = await Promise.all([
+        user?.id ? fetch("/api/alerts") : Promise.resolve(null),
+        fetch("/api/companies?limit=50&sort=job_count"),
       ])
 
-      setAlerts((alertsData as JobAlert[]) ?? [])
-      setCompanies((companiesData as Company[]) ?? [])
+      const alertsData: JobAlert[] = alertsRes?.ok
+        ? ((await alertsRes.json()) as { alerts: JobAlert[] }).alerts
+        : []
+      const companiesData: Company[] = companiesRes.ok
+        ? ((await companiesRes.json()) as { companies: Company[] }).companies
+        : []
+
+      setAlerts(alertsData)
+      setCompanies(companiesData)
       setDraft(emptyDraft(profile?.alert_frequency ?? "instant"))
       setIsLoading(false)
     }
@@ -124,34 +118,32 @@ export default function AlertsPage() {
   async function handleCreateAlert() {
     if (!user?.id) return
 
-    const supabase = createClient()
-    const payload = {
-      user_id: user.id,
-      name: draft.name || null,
-      keywords: parseList(draft.keywords),
-      locations: parseList(draft.locations),
-      seniority_levels: draft.seniority,
-      employment_types: [],
-      remote_only: draft.remoteOnly,
-      sponsorship_required: draft.sponsorshipRequired,
-      company_ids: draft.companyIds,
-      is_active: true,
+    const res = await fetch("/api/alerts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: draft.name || "My Alert",
+        keywords: parseList(draft.keywords),
+        locations: parseList(draft.locations),
+        seniority_levels: draft.seniority,
+        employment_types: [],
+        remote_only: draft.remoteOnly,
+        sponsorship_required: draft.sponsorshipRequired,
+        company_ids: draft.companyIds,
+        is_active: true,
+      }),
+    })
+    const { alert } = res.ok ? ((await res.json()) as { alert: JobAlert }) : { alert: null }
+
+    if (draft.frequency !== profile?.alert_frequency) {
+      await fetch("/api/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ alert_frequency: draft.frequency }),
+      })
     }
 
-    const { data } = await (supabase
-      .from("job_alerts")
-      .insert(payload as any)
-      .select("*")
-      .single() as any)
-
-    if (draft.frequency !== profile?.alert_frequency && user.id) {
-      await (supabase
-        .from("profiles") as any)
-        .update({ alert_frequency: draft.frequency } as any)
-        .eq("id", user.id)
-    }
-
-    if (data) setAlerts((current) => [data as JobAlert, ...current])
+    if (alert) setAlerts((current) => [alert, ...current])
 
     setDraft(emptyDraft(draft.frequency))
     setCompanySearch("")
@@ -165,20 +157,19 @@ export default function AlertsPage() {
       )
     )
 
-    const supabase = createClient()
-    await (supabase
-      .from("job_alerts") as any)
-      .update({ is_active: isActive } as any)
-      .eq("id", alertId)
+    await fetch(`/api/alerts/${alertId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ is_active: isActive }),
+    })
   }
 
   async function deleteAlert(alertId: string) {
     const snapshot = alerts
     setAlerts((current) => current.filter((alert) => alert.id !== alertId))
 
-    const supabase = createClient()
-    const { error } = await supabase.from("job_alerts").delete().eq("id", alertId)
-    if (error) setAlerts(snapshot)
+    const res = await fetch(`/api/alerts/${alertId}`, { method: "DELETE" })
+    if (!res.ok) setAlerts(snapshot)
   }
 
   function toggleDraftSeniority(value: SeniorityLevel) {

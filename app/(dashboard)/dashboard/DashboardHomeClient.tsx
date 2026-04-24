@@ -32,7 +32,6 @@ import JobSearch, {
 import CompanyLogo from "@/components/ui/CompanyLogo"
 import { useAuth } from "@/lib/hooks/useAuth"
 import { useWatchlist } from "@/lib/hooks/useWatchlist"
-import { createClient } from "@/lib/supabase/client"
 import { cn } from "@/lib/utils"
 import type { JobWithMatchScore } from "@/types"
 
@@ -99,22 +98,39 @@ export default function DashboardHomeClient() {
 
   useEffect(() => {
     async function fetchTopHiringCompanies() {
-      const supabase = createClient()
       const startOfDay = new Date()
       startOfDay.setHours(0, 0, 0, 0)
-
-      const { data } = await (supabase
-        .from("jobs")
-        .select("company_id, company:companies(id,name,domain,logo_url,sponsors_h1b)")
-        .eq("is_active", true)
-        .gte("first_detected_at", startOfDay.toISOString())
-        .order("first_detected_at", { ascending: false })
-        .limit(250) as any)
+      const params = new URLSearchParams({
+        since: startOfDay.toISOString(),
+        limit: "250",
+        offset: "0",
+        sort: "fresh",
+      })
+      const res = await fetch(`/api/jobs?${params}`, { cache: "no-store" })
+      if (!res.ok) {
+        setTopHiringCompanies([])
+        return
+      }
+      const body = (await res.json()) as {
+        jobs?: Array<{
+          company_id?: string
+          company?: {
+            id?: string
+            name?: string
+            domain?: string | null
+            logo_url?: string | null
+            sponsors_h1b?: boolean
+          }
+        }>
+      }
+      const data = body.jobs ?? []
 
       const grouped = new Map<string, TopHiringCompany>()
 
-      for (const row of (data ?? []) as any[]) {
-        const company = row.company
+      for (const row of data) {
+        const company = row.company as
+          | { id?: string; name?: string; domain?: string | null; logo_url?: string | null; sponsors_h1b?: boolean }
+          | undefined
         if (!company?.id) continue
 
         const current = grouped.get(company.id)
@@ -125,10 +141,10 @@ export default function DashboardHomeClient() {
 
         grouped.set(company.id, {
           id: company.id,
-          name: company.name,
+          name: company.name ?? "",
           domain: company.domain ?? null,
-          logo_url: company.logo_url,
-          sponsors_h1b: company.sponsors_h1b,
+          logo_url: company.logo_url ?? null,
+          sponsors_h1b: Boolean(company.sponsors_h1b),
           newJobsToday: 1,
         })
       }

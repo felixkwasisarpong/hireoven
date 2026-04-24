@@ -6,7 +6,6 @@ import DashboardPageHeader from "@/components/layout/DashboardPageHeader"
 import CompanyLogo from "@/components/ui/CompanyLogo"
 import { useAuth } from "@/lib/hooks/useAuth"
 import { useWatchlist } from "@/lib/hooks/useWatchlist"
-import { createClient } from "@/lib/supabase/client"
 import type { Company } from "@/types"
 
 type CompanyInsights = {
@@ -40,20 +39,19 @@ export default function WatchlistPage() {
 
   useEffect(() => {
     async function fetchDiscoverCompanies() {
-      const supabase = createClient()
-      let request = supabase
-        .from("companies")
-        .select("*")
-        .eq("is_active", true)
-        .order("job_count", { ascending: false })
-        .limit(8)
-
-      if (query.trim()) {
-        request = request.ilike("name", `%${query.trim()}%`)
+      const params = new URLSearchParams({
+        sort: "job_count",
+        limit: "8",
+        has_jobs: "true",
+      })
+      if (query.trim()) params.set("q", query.trim())
+      const res = await fetch(`/api/companies?${params}`, { cache: "no-store" })
+      if (!res.ok) {
+        setDiscoverCompanies([])
+        return
       }
-
-      const { data } = await request
-      setDiscoverCompanies((data as Company[]) ?? [])
+      const body = (await res.json()) as { companies?: Company[] }
+      setDiscoverCompanies(body.companies ?? [])
     }
 
     const timeout = window.setTimeout(() => {
@@ -70,35 +68,36 @@ export default function WatchlistPage() {
         return
       }
 
-      const supabase = createClient()
       const weekStart = new Date()
       weekStart.setDate(weekStart.getDate() - 7)
 
       const pairs = await Promise.all(
         watchlist.map(async (item) => {
-          const [{ count }, { data: latestJob }] = await Promise.all([
-            supabase
-              .from("jobs")
-              .select("*", { head: true, count: "exact" })
-              .eq("company_id", item.company_id)
-              .eq("is_active", true)
-              .gte("first_detected_at", weekStart.toISOString()),
-            supabase
-              .from("jobs")
-              .select("title, first_detected_at")
-              .eq("company_id", item.company_id)
-              .eq("is_active", true)
-              .order("first_detected_at", { ascending: false })
-              .limit(1)
-              .maybeSingle(),
-          ])
+          const countParams = new URLSearchParams({
+            company_id: item.company_id,
+            within: "7d",
+            limit: "1",
+            offset: "0",
+          })
+          const countRes = await fetch(`/api/jobs?${countParams}`, { cache: "no-store" })
+          const countBody = countRes.ok ? ((await countRes.json()) as { total?: number }) : { total: 0 }
+
+          const latestParams = new URLSearchParams({
+            company_id: item.company_id,
+            within: "7d",
+            limit: "1",
+            offset: "0",
+          })
+          const latestRes = await fetch(`/api/jobs?${latestParams}`, { cache: "no-store" })
+          const latestBody = latestRes.ok ? ((await latestRes.json()) as { jobs?: Array<{ title?: string; first_detected_at?: string }> }) : { jobs: [] }
+          const latestJob = latestBody.jobs?.[0]
 
           return [
             item.company_id,
             {
-              newJobsThisWeek: count ?? 0,
-              latestJobTitle: (latestJob as any)?.title ?? null,
-              latestJobDetectedAt: (latestJob as any)?.first_detected_at ?? null,
+              newJobsThisWeek: countBody.total ?? 0,
+              latestJobTitle: latestJob?.title ?? null,
+              latestJobDetectedAt: latestJob?.first_detected_at ?? null,
             },
           ] as const
         })

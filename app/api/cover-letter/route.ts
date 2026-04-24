@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { generateCoverLetter } from "@/lib/resume/cover-letter-generator"
-import { createAdminClient } from "@/lib/supabase/admin"
+import { getPostgresPool } from "@/lib/postgres/server"
 import { createClient } from "@/lib/supabase/server"
 import { requireFeature } from "@/lib/gates/server-gate"
 import type { CoverLetter, CoverLetterOptions, Company, Job, Resume } from "@/types"
@@ -17,18 +17,31 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url)
   const jobId = searchParams.get("jobId")
-  if (!jobId) return NextResponse.json({ error: "jobId is required" }, { status: 400 })
+  const pool = getPostgresPool()
 
-  const { data } = await supabase
-    .from("cover_letters" as any)
-    .select("*")
-    .eq("user_id", user.id)
-    .eq("job_id", jobId)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .single()
+  if (!jobId) {
+    const result = await pool.query<CoverLetter>(
+      `SELECT *
+       FROM cover_letters
+       WHERE user_id = $1
+       ORDER BY created_at DESC`,
+      [user.id]
+    )
+    return NextResponse.json({ coverLetters: result.rows })
+  }
 
-  return NextResponse.json((data as CoverLetter | null) ?? null)
+  const result = await pool.query<CoverLetter>(
+    `SELECT *
+     FROM cover_letters
+     WHERE user_id = $1
+       AND job_id = $2
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    [user.id, jobId]
+  )
+  const data = result.rows[0] ?? null
+
+  return NextResponse.json(data)
 }
 
 export async function POST(request: Request) {
@@ -37,6 +50,7 @@ export async function POST(request: Request) {
 
   const supabase = await createClient()
   const user = (await supabase.auth.getUser()).data.user!
+  const pool = getPostgresPool()
 
   const body = await request.json().catch(() => ({})) as {
     resumeId?: string
@@ -51,23 +65,27 @@ export async function POST(request: Request) {
   // Resolve resume: use provided ID or fall back to primary
   let resume: Resume | null = null
   if (resumeId) {
-    const { data } = await supabase
-      .from("resumes")
-      .select("*")
-      .eq("id", resumeId)
-      .eq("user_id", user.id)
-      .single()
-    resume = (data as Resume | null)
+    const resumeResult = await pool.query<Resume>(
+      `SELECT *
+       FROM resumes
+       WHERE id = $1
+         AND user_id = $2
+       LIMIT 1`,
+      [resumeId, user.id]
+    )
+    resume = resumeResult.rows[0] ?? null
   } else {
-    const { data } = await supabase
-      .from("resumes")
-      .select("*")
-      .eq("user_id", user.id)
-      .eq("is_primary", true)
-      .eq("parse_status", "complete")
-      .limit(1)
-      .single()
-    resume = (data as Resume | null)
+    const resumeResult = await pool.query<Resume>(
+      `SELECT *
+       FROM resumes
+       WHERE user_id = $1
+         AND is_primary = true
+         AND parse_status = 'complete'
+       ORDER BY updated_at DESC
+       LIMIT 1`,
+      [user.id]
+    )
+    resume = resumeResult.rows[0] ?? null
   }
 
   if (!resume) {
@@ -77,12 +95,15 @@ export async function POST(request: Request) {
     )
   }
 
-  const admin = createAdminClient()
-  const { data: jobData } = await (admin
-    .from("jobs")
-    .select("*, company:companies(*)")
-    .eq("id", jobId)
-    .single() as any)
+  const jobResult = await pool.query<(Job & { company: Company })>(
+    `SELECT jobs.*, to_jsonb(companies.*) AS company
+     FROM jobs
+     LEFT JOIN companies ON companies.id = jobs.company_id
+     WHERE jobs.id = $1
+     LIMIT 1`,
+    [jobId]
+  )
+  const jobData = jobResult.rows[0]
 
   if (!jobData) return NextResponse.json({ error: "Job not found" }, { status: 404 })
 

@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { assertAdminAccess } from "@/lib/admin/auth"
 import { crawlCareersPage, type CrawlTarget } from "@/lib/crawler"
 import { persistCrawlJobs } from "@/lib/crawler/persist"
-import { createAdminClient } from "@/lib/supabase/admin"
+import { getPostgresPool } from "@/lib/postgres/server"
 import type { Company } from "@/types"
 
 const MAX_COMPANY_ATTEMPTS = Math.max(
@@ -97,53 +97,37 @@ type CrawlAction =
   | { type: "failed" }
   | { type: "company"; id: string }
 
-type CrawlLogSummary = {
-  company_id: string | null
-  status: string | null
-  crawled_at: string | null
-}
-
-async function getTargetCompanies(action: CrawlAction) {
-  const supabase = createAdminClient()
+async function getTargetCompanies(action: CrawlAction): Promise<Company[]> {
+  const pool = getPostgresPool()
 
   if (action.type === "company") {
-    const { data, error } = await supabase
-      .from("companies")
-      .select("*")
-      .eq("id", action.id)
-      .single()
-
-    if (error) throw error
-    return [data] as Company[]
+    const { rows } = await pool.query<Company>(`SELECT * FROM companies WHERE id = $1`, [
+      action.id,
+    ])
+    if (rows.length !== 1) throw new Error("Company not found")
+    return rows
   }
-
-  const { data: companies, error } = await supabase
-    .from("companies")
-    .select("*")
-    .eq("is_active", true)
-
-  if (error) throw error
 
   if (action.type === "all") {
-    return (companies ?? []) as Company[]
+    const { rows } = await pool.query<Company>(
+      `SELECT * FROM companies WHERE is_active = true`
+    )
+    return rows
   }
 
-  const { data: logs, error: logsError } = await supabase
-    .from("crawl_logs")
-    .select("company_id, status, crawled_at")
-    .order("crawled_at", { ascending: false })
-
-  if (logsError) throw logsError
-
-  const latestByCompany = new Map<string, string | null>()
-  for (const log of ((logs ?? []) as CrawlLogSummary[])) {
-    if (!log.company_id || latestByCompany.has(log.company_id)) continue
-    latestByCompany.set(log.company_id, log.status)
-  }
-
-  return ((companies ?? []) as Company[]).filter(
-    (company) => latestByCompany.get(company.id) === "failed"
+  const { rows } = await pool.query<Company>(
+    `WITH latest AS (
+       SELECT DISTINCT ON (company_id) company_id, status
+       FROM crawl_logs
+       WHERE company_id IS NOT NULL
+       ORDER BY company_id, crawled_at DESC NULLS LAST
+     )
+     SELECT c.*
+     FROM companies c
+     INNER JOIN latest l ON l.company_id = c.id
+     WHERE c.is_active = true AND l.status = 'failed'`
   )
+  return rows
 }
 
 export async function POST(request: NextRequest) {
@@ -156,7 +140,7 @@ export async function POST(request: NextRequest) {
   const startedAtIso = new Date().toISOString()
   const body = (await request.json()) as CrawlAction
   const action: CrawlAction = body?.type ? body : { type: "all" }
-  const supabase = createAdminClient()
+  const pool = getPostgresPool()
   const runStartedAt = Date.now()
   let completed = false
   let companiesCount = 0
@@ -165,16 +149,20 @@ export async function POST(request: NextRequest) {
   let inserted = 0
   let lastError: string | null = null
 
-  await ((supabase.from("system_settings") as any).upsert({
-    key: "crawl_runtime",
-    value: {
-      state: "running",
-      runId,
-      startedAt: startedAtIso,
-      route: "api/admin/crawl",
-      trigger: `admin:${action.type}`,
-    },
-  } as any))
+  await pool.query(
+    `INSERT INTO system_settings (key, value) VALUES ($1, $2::jsonb)
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+    [
+      "crawl_runtime",
+      JSON.stringify({
+        state: "running",
+        runId,
+        startedAt: startedAtIso,
+        route: "api/admin/crawl",
+        trigger: `admin:${action.type}`,
+      }),
+    ]
+  )
 
   try {
     const companies = await getTargetCompanies(action)
@@ -235,18 +223,24 @@ export async function POST(request: NextRequest) {
         const durationMs = Date.now() - startedAt
         const status = result.jobs.length > 0 ? "success" : "unchanged"
 
-        const { error: crawlLogInsertError } = await ((supabase.from("crawl_logs") as any).insert({
-          company_id: company.id,
-          status,
-          jobs_found: result.jobs.length,
-          new_jobs: persistResult.inserted,
-          duration_ms: durationMs,
-          crawled_at: result.crawledAt.toISOString(),
-          error_message: attempts > 1 ? `Recovered after ${attempts} attempts` : null,
-        }))
-        if (crawlLogInsertError) {
+        try {
+          await pool.query(
+            `INSERT INTO crawl_logs (company_id, status, jobs_found, new_jobs, duration_ms, crawled_at, error_message)
+             VALUES ($1::uuid, $2, $3, $4, $5, $6::timestamptz, $7)`,
+            [
+              company.id,
+              status,
+              result.jobs.length,
+              persistResult.inserted,
+              durationMs,
+              result.crawledAt.toISOString(),
+              attempts > 1 ? `Recovered after ${attempts} attempts` : null,
+            ]
+          )
+        } catch (logError) {
           console.error(
-            `[admin/crawl] Unable to insert crawl log for ${company.id}: ${crawlLogInsertError.message}`
+            `[admin/crawl] Unable to insert crawl log for ${company.id}:`,
+            logError instanceof Error ? logError.message : logError
           )
         }
 
@@ -260,18 +254,24 @@ export async function POST(request: NextRequest) {
       } catch (error) {
         const durationMs = Date.now() - startedAt
         const errorMessage = sanitizeErrorMessage(toErrorMessage(error))
-        const { error: crawlLogInsertError } = await ((supabase.from("crawl_logs") as any).insert({
-          company_id: company.id,
-          status: "failed",
-          jobs_found: 0,
-          new_jobs: 0,
-          duration_ms: durationMs,
-          error_message: errorMessage,
-          crawled_at: new Date().toISOString(),
-        }))
-        if (crawlLogInsertError) {
+        try {
+          await pool.query(
+            `INSERT INTO crawl_logs (company_id, status, jobs_found, new_jobs, duration_ms, crawled_at, error_message)
+             VALUES ($1::uuid, $2, $3, $4, $5, $6::timestamptz, $7)`,
+            [
+              company.id,
+              "failed",
+              0,
+              0,
+              durationMs,
+              new Date().toISOString(),
+              errorMessage,
+            ]
+          )
+        } catch (logError) {
           console.error(
-            `[admin/crawl] Unable to insert failed crawl log for ${company.id}: ${crawlLogInsertError.message}`
+            `[admin/crawl] Unable to insert failed crawl log for ${company.id}:`,
+            logError instanceof Error ? logError.message : logError
           )
         }
 
@@ -304,23 +304,27 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     )
   } finally {
-    await ((supabase.from("system_settings") as any).upsert({
-      key: "crawl_runtime",
-      value: {
-        state: "idle",
-        runId,
-        startedAt: startedAtIso,
-        finishedAt: new Date().toISOString(),
-        route: "api/admin/crawl",
-        trigger: `admin:${action.type}`,
-        companiesCrawled: companiesCount,
-        succeeded,
-        failed,
-        inserted,
-        totalDurationMs: Date.now() - runStartedAt,
-        lastError: lastError,
-        completed,
-      },
-    } as any))
+    await pool.query(
+      `INSERT INTO system_settings (key, value) VALUES ($1, $2::jsonb)
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+      [
+        "crawl_runtime",
+        JSON.stringify({
+          state: "idle",
+          runId,
+          startedAt: startedAtIso,
+          finishedAt: new Date().toISOString(),
+          route: "api/admin/crawl",
+          trigger: `admin:${action.type}`,
+          companiesCrawled: companiesCount,
+          succeeded,
+          failed,
+          inserted,
+          totalDurationMs: Date.now() - runStartedAt,
+          lastError: lastError,
+          completed,
+        }),
+      ]
+    )
   }
 }

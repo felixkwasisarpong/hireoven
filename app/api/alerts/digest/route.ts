@@ -3,7 +3,7 @@ import { Resend } from "resend"
 import { getAlertsFromEmail } from "@/lib/email/identity"
 import { requireCronAuth } from "@/lib/env"
 import { matchesLocationFilter } from "@/lib/jobs/search-match"
-import { createAdminClient } from "@/lib/supabase/admin"
+import { getPostgresPool } from "@/lib/postgres/server"
 import type { Job, JobAlert, Profile } from "@/types"
 
 export const dynamic = "force-dynamic"
@@ -145,43 +145,50 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ skipped: true, reason: "RESEND_API_KEY not configured" })
   }
 
-  const supabase = createAdminClient()
+  const pool = getPostgresPool()
   const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString()
 
   // Fetch all daily-frequency users with active alerts
-  const { data: users } = await supabase
-    .from("profiles")
-    .select("id, email, full_name, email_alerts")
-    .eq("alert_frequency", "daily")
-    .eq("email_alerts", true)
-    .not("email", "is", null)
+  const usersResult = await pool.query<Pick<Profile, "id" | "email" | "full_name" | "email_alerts">>(
+    `SELECT id, email, full_name, email_alerts
+     FROM profiles
+     WHERE alert_frequency = 'daily'
+       AND email_alerts = true
+       AND email IS NOT NULL`
+  )
+  const users = usersResult.rows
 
   if (!users?.length) return NextResponse.json({ sent: 0, reason: "no daily users" })
 
   // Fetch all jobs posted in last 24h
-  const { data: recentJobs } = await supabase
-    .from("jobs")
-    .select("*, company:companies(name)")
-    .eq("is_active", true)
-    .gte("first_detected_at", since)
-    .order("first_detected_at", { ascending: false })
+  const recentJobsResult = await pool.query<(Job & { company_name: string })>(
+    `SELECT jobs.*, companies.name AS company_name
+     FROM jobs
+     LEFT JOIN companies ON companies.id = jobs.company_id
+     WHERE jobs.is_active = true
+       AND jobs.first_detected_at >= $1
+     ORDER BY jobs.first_detected_at DESC`,
+    [since]
+  )
+  const recentJobs = recentJobsResult.rows
 
   if (!recentJobs?.length) return NextResponse.json({ sent: 0, reason: "no new jobs" })
 
-  type JobWithCompanyName = Job & { company: { name: string } | null; company_name: string }
-  const flatJobs = (recentJobs as unknown as Array<Job & { company: { name: string } | null }>).map(
-    (j): JobWithCompanyName => ({ ...j, company_name: j.company?.name ?? "" })
-  )
+  type JobWithCompanyName = Job & { company_name: string }
+  const flatJobs = recentJobs as JobWithCompanyName[]
 
   let sent = 0
   let errors = 0
 
   for (const user of users) {
-    const { data: alerts } = await supabase
-      .from("job_alerts")
-      .select("*")
-      .eq("user_id", user.id)
-      .eq("is_active", true)
+    const alertsResult = await pool.query<JobAlert>(
+      `SELECT *
+       FROM job_alerts
+       WHERE user_id = $1
+         AND is_active = true`,
+      [user.id]
+    )
+    const alerts = alertsResult.rows
 
     if (!alerts?.length) continue
 

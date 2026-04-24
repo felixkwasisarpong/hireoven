@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { assertAdminAccess } from "@/lib/admin/auth"
-import { createAdminClient } from "@/lib/supabase/admin"
+import { getPostgresPool } from "@/lib/postgres/server"
 import type { Profile } from "@/types"
 
 type UserRow = {
@@ -22,61 +22,44 @@ type UserIdRow = {
 }
 
 async function listUsers() {
-  const supabase = createAdminClient()
-  const [usersResponse, profilesResponse, watchlistResponse, alertsResponse, pushResponse] =
-    await Promise.all([
-      supabase.auth.admin.listUsers({ page: 1, perPage: 1000 }),
-      supabase.from("profiles").select("*"),
-      supabase.from("watchlist").select("user_id"),
-      supabase.from("job_alerts").select("user_id"),
-      supabase.from("push_subscriptions").select("user_id"),
-    ])
-
-  if (usersResponse.error) throw usersResponse.error
-  if (profilesResponse.error) throw profilesResponse.error
-  if (watchlistResponse.error) throw watchlistResponse.error
-  if (alertsResponse.error) throw alertsResponse.error
-  if (pushResponse.error) throw pushResponse.error
-
-  const profiles = new Map(
-    ((profilesResponse.data ?? []) as Profile[]).map((profile) => [profile.id, profile])
-  )
+  const pool = getPostgresPool()
+  const [profilesResult, watchlistResult, alertsResult, pushResult] = await Promise.all([
+    pool.query<Profile>(
+      `SELECT *
+       FROM profiles
+       ORDER BY created_at DESC NULLS LAST
+       LIMIT 1000`
+    ),
+    pool.query<UserIdRow>("SELECT user_id FROM watchlist"),
+    pool.query<UserIdRow>("SELECT user_id FROM job_alerts"),
+    pool.query<UserIdRow>("SELECT user_id FROM push_subscriptions"),
+  ])
 
   const watchlistCount = new Map<string, number>()
-  for (const row of ((watchlistResponse.data ?? []) as UserIdRow[])) {
+  for (const row of watchlistResult.rows) {
     watchlistCount.set(row.user_id, (watchlistCount.get(row.user_id) ?? 0) + 1)
   }
 
   const alertCount = new Map<string, number>()
-  for (const row of ((alertsResponse.data ?? []) as UserIdRow[])) {
+  for (const row of alertsResult.rows) {
     alertCount.set(row.user_id, (alertCount.get(row.user_id) ?? 0) + 1)
   }
 
-  const pushUsers = new Set(
-    ((pushResponse.data ?? []) as UserIdRow[]).map((row) => row.user_id)
-  )
+  const pushUsers = new Set(pushResult.rows.map((row) => row.user_id))
 
-  return (usersResponse.data?.users ?? []).map((user) => {
-    const profile = profiles.get(user.id)
-    return {
-      id: user.id,
-      email: user.email ?? profile?.email ?? null,
-      name:
-        (typeof user.user_metadata?.full_name === "string"
-          ? user.user_metadata.full_name
-          : null) ??
-        profile?.full_name ??
-        null,
-      joinedAt: user.created_at ?? profile?.created_at ?? null,
-      lastActiveAt: user.last_sign_in_at ?? null,
-      isAdmin: profile?.is_admin ?? false,
-      visaStatus: profile?.visa_status ?? null,
-      isInternational: profile?.is_international ?? false,
-      watchlistCount: watchlistCount.get(user.id) ?? 0,
-      alertCount: alertCount.get(user.id) ?? 0,
-      pushEnabled: pushUsers.has(user.id),
-    } satisfies UserRow
-  })
+  return profilesResult.rows.map((profile) => ({
+    id: profile.id,
+    email: profile.email ?? null,
+    name: profile.full_name ?? null,
+    joinedAt: profile.created_at ?? null,
+    lastActiveAt: profile.updated_at ?? null,
+    isAdmin: profile.is_admin ?? false,
+    visaStatus: profile.visa_status ?? null,
+    isInternational: profile.is_international ?? false,
+    watchlistCount: watchlistCount.get(profile.id) ?? 0,
+    alertCount: alertCount.get(profile.id) ?? 0,
+    pushEnabled: pushUsers.has(profile.id),
+  })) satisfies UserRow[]
 }
 
 export async function GET() {
@@ -106,24 +89,32 @@ export async function PATCH(request: NextRequest) {
     | { action: "toggle-admin"; userId: string; isAdmin: boolean }
     | { action: "suspend"; userId: string }
 
-  const supabase = createAdminClient()
+  const pool = getPostgresPool()
 
   try {
     if (body.action === "toggle-admin") {
-      const { error } = await ((supabase.from("profiles") as any)
-        .update({ is_admin: body.isAdmin } as any)
-        .eq("id", body.userId))
-
-      if (error) throw error
+      await pool.query(
+        `UPDATE profiles
+         SET is_admin = $1,
+             updated_at = now()
+         WHERE id = $2`,
+        [body.isAdmin, body.userId]
+      )
       return NextResponse.json({ success: true })
     }
 
-    const { error } = await supabase.auth.admin.updateUserById(body.userId, {
-      ban_duration: "876000h",
-    })
+    if (body.action === "suspend") {
+      await pool.query(
+        `UPDATE profiles
+         SET suspended_at = now(),
+             updated_at = now()
+         WHERE id = $1`,
+        [body.userId]
+      )
+      return NextResponse.json({ success: true })
+    }
 
-    if (error) throw error
-    return NextResponse.json({ success: true })
+    return NextResponse.json({ error: "Unknown action" }, { status: 400 })
   } catch (error) {
     return NextResponse.json(
       { error: (error as Error).message },

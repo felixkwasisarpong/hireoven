@@ -20,7 +20,6 @@ import {
 } from "@/components/admin/AdminPrimitives"
 import { useToast } from "@/components/ui/ToastProvider"
 import { formatNumber } from "@/lib/admin/format"
-import { createClient } from "@/lib/supabase/client"
 import type { Company, H1BRecord } from "@/types"
 
 type H1BRow = H1BRecord & {
@@ -185,7 +184,6 @@ function ImportProgressBar({
 }
 
 export default function AdminH1BPage() {
-  const supabase = useMemo(() => createClient(), [])
   const { pushToast } = useToast()
   const [records, setRecords] = useState<H1BRow[]>([])
   // Unmatched employers are fetched separately from the main records list.
@@ -225,27 +223,21 @@ export default function AdminH1BPage() {
 
   async function loadData() {
     setLoading(true)
-    const [{ data: recordsData, error: recordsError }, { data: companiesData, error: companiesError }] =
-      await Promise.all([
-        (supabase
-          .from("h1b_records")
-          .select("*, company:companies(id, name)")
-          .order("year", { ascending: false }) as any),
-        supabase.from("companies").select("*").order("name"),
-      ])
+    const [recordsRes, companiesRes] = await Promise.all([
+      fetch("/api/admin/h1b"),
+      fetch("/api/admin/companies"),
+    ])
 
-    if (recordsError || companiesError) {
-      pushToast({
-        tone: "error",
-        title: "Unable to load H1B data",
-        description: recordsError?.message ?? companiesError?.message ?? "Unknown error",
-      })
+    if (!recordsRes.ok || !companiesRes.ok) {
+      pushToast({ tone: "error", title: "Unable to load H1B data" })
       setLoading(false)
       return
     }
 
-    setRecords((recordsData ?? []) as H1BRow[])
-    setCompanies((companiesData ?? []) as Company[])
+    const { records: recordsData } = (await recordsRes.json()) as { records: H1BRow[] }
+    const { companies: companiesData } = (await companiesRes.json()) as { companies: Company[] }
+    setRecords(recordsData ?? [])
+    setCompanies(companiesData ?? [])
     setLoading(false)
   }
 
@@ -258,71 +250,30 @@ export default function AdminH1BPage() {
   const UNMATCHED_PAGE_SIZE = 25
   async function loadUnmatched(minPetitions: number, searchTerm: string) {
     setUnmatchedLoading(true)
-    const client = supabase as any
+    const params = new URLSearchParams({
+      mode: "unmatched",
+      minPetitions: String(minPetitions),
+      limit: String(UNMATCHED_PAGE_SIZE),
+    })
+    if (searchTerm.trim()) params.set("q", searchTerm.trim())
 
-    const grandTotalPromise = client
-      .from("h1b_records")
-      .select("id", { count: "exact", head: true })
-
-    const totalAllPromise = client
-      .from("h1b_records")
-      .select("id", { count: "exact", head: true })
-      .is("company_id", null)
-
-    let atThresholdCount = client
-      .from("h1b_records")
-      .select("id", { count: "exact", head: true })
-      .is("company_id", null)
-      .gte("total_petitions", minPetitions)
-
-    let atThresholdPage = client
-      .from("h1b_records")
-      .select("*, company:companies(id, name)")
-      .is("company_id", null)
-      .gte("total_petitions", minPetitions)
-      .order("total_petitions", { ascending: false })
-      .limit(UNMATCHED_PAGE_SIZE)
-
-    const trimmed = searchTerm.trim()
-    if (trimmed) {
-      // ilike is safe here because we wrap with % and the Supabase client
-      // escapes the value for us. Don't pass raw user input into filter().
-      atThresholdCount = atThresholdCount.ilike("employer_name", `%${trimmed}%`)
-      atThresholdPage = atThresholdPage.ilike("employer_name", `%${trimmed}%`)
-    }
-
-    const [grandTotalRes, totalAllRes, atThresholdCountRes, atThresholdPageRes] =
-      await Promise.all([
-        grandTotalPromise,
-        totalAllPromise,
-        atThresholdCount,
-        atThresholdPage,
-      ])
-
-    if (
-      grandTotalRes.error ||
-      totalAllRes.error ||
-      atThresholdCountRes.error ||
-      atThresholdPageRes.error
-    ) {
-      pushToast({
-        tone: "error",
-        title: "Unable to load unmatched employers",
-        description:
-          grandTotalRes.error?.message ??
-          totalAllRes.error?.message ??
-          atThresholdCountRes.error?.message ??
-          atThresholdPageRes.error?.message ??
-          "Unknown error",
-      })
+    const res = await fetch(`/api/admin/h1b?${params}`)
+    if (!res.ok) {
+      pushToast({ tone: "error", title: "Unable to load unmatched employers" })
       setUnmatchedLoading(false)
       return
     }
 
-    setRecordsTotalCount(grandTotalRes.count ?? 0)
-    setUnmatchedTotalAll(totalAllRes.count ?? 0)
-    setUnmatchedTotalAtThreshold(atThresholdCountRes.count ?? 0)
-    setUnmatchedList((atThresholdPageRes.data ?? []) as H1BRow[])
+    const data = (await res.json()) as {
+      grandTotal: number
+      unmatchedTotal: number
+      atThresholdCount: number
+      records: H1BRow[]
+    }
+    setRecordsTotalCount(data.grandTotal)
+    setUnmatchedTotalAll(data.unmatchedTotal)
+    setUnmatchedTotalAtThreshold(data.atThresholdCount)
+    setUnmatchedList(data.records)
     setUnmatchedLoading(false)
   }
 
@@ -330,9 +281,6 @@ export default function AdminH1BPage() {
     void loadData()
   }, [])
 
-  // Debounced refetch of the unmatched slice whenever the threshold or
-  // search changes. 250 ms is short enough to feel instant but long enough
-  // to avoid hammering Postgres while the user drags the slider.
   useEffect(() => {
     const handle = setTimeout(() => {
       void loadUnmatched(unmatchedMinPetitions, search)
@@ -340,25 +288,6 @@ export default function AdminH1BPage() {
     return () => clearTimeout(handle)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [unmatchedMinPetitions, search])
-
-  useEffect(() => {
-    const channel = supabase
-      .channel("admin-h1b-records")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "h1b_records" },
-        () => {
-          void loadData()
-          void loadUnmatched(unmatchedMinPetitions, search)
-        }
-      )
-      .subscribe()
-
-    return () => {
-      void supabase.removeChannel(channel)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [supabase])
 
   const visibleRecords = useMemo(() => {
     const query = search.trim().toLowerCase()
@@ -639,30 +568,24 @@ export default function AdminH1BPage() {
         ? (record.approved ?? 0) / record.total_petitions
         : 0
 
-    const [recordResponse, companyResponse] = await Promise.all([
-      (supabase.from("h1b_records") as any)
-        .update({ company_id: companyId } as any)
-        .eq("id", record.id),
-      (supabase.from("companies") as any)
-        .update(
-          {
-            h1b_sponsor_count_1yr: record.approved ?? 0,
-            sponsors_h1b: (record.approved ?? 0) > 0,
-            sponsorship_confidence: calcConfidence(record.approved ?? 0, approvalRate),
-          } as any
-        )
-        .eq("id", companyId),
-    ])
+    const matchRes = await fetch("/api/admin/h1b", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        recordId: record.id,
+        companyId,
+        sponsorCount: record.approved ?? 0,
+        sponsorsH1b: (record.approved ?? 0) > 0,
+        sponsorshipConfidence: calcConfidence(record.approved ?? 0, approvalRate),
+      }),
+    })
     setBusyMatchId(null)
 
-    if (recordResponse.error || companyResponse.error) {
+    if (!matchRes.ok) {
       pushToast({
         tone: "error",
         title: "Manual match failed",
-        description:
-          recordResponse.error?.message ??
-          companyResponse.error?.message ??
-          "Unknown error",
+        description: "Request failed",
       })
       return
     }

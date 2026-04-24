@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { getPostgresPool } from "@/lib/postgres/server"
 import { createClient } from "@/lib/supabase/server"
 import Anthropic from "@anthropic-ai/sdk"
 import { requireFeature } from "@/lib/gates/server-gate"
@@ -13,6 +14,7 @@ export async function POST(request: NextRequest) {
 
   const supabase = await createClient()
   const user = (await supabase.auth.getUser()).data.user!
+  const pool = getPostgresPool()
 
   const body = await request.json().catch(() => ({})) as {
     applicationId?: string
@@ -25,12 +27,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "applicationId is required" }, { status: 400 })
   }
 
-  const { data: app } = await (supabase as any)
-    .from("job_applications")
-    .select("company_name, job_title, notes, interviews")
-    .eq("id", body.applicationId)
-    .eq("user_id", user.id)
-    .single()
+  const appResult = await pool.query<{
+    company_name: string | null
+    job_title: string | null
+    notes: string | null
+    interviews: Array<{ round_name?: string }> | null
+  }>(
+    `SELECT company_name, job_title, notes, interviews
+     FROM job_applications
+     WHERE id = $1
+       AND user_id = $2
+     LIMIT 1`,
+    [body.applicationId, user.id]
+  )
+  const app = appResult.rows[0]
 
   if (!app) return NextResponse.json({ error: "Not found" }, { status: 404 })
 

@@ -1,4 +1,4 @@
-import { createAdminClient } from "@/lib/supabase/admin"
+import { getPostgresPool } from "@/lib/postgres/server"
 import type { WebPushSubscription } from "@/types"
 
 function normalizeSubscription(
@@ -33,56 +33,49 @@ export async function savePushSubscription(
   userId: string,
   subscription: PushSubscription | WebPushSubscription
 ): Promise<void> {
-  const supabase = createAdminClient()
+  const pool = getPostgresPool()
   const normalized = normalizeSubscription(subscription)
 
-  const { data: existing } = await ((supabase.from("push_subscriptions") as any)
-    .select("id")
-    .eq("user_id", userId)
-    .contains("subscription", { endpoint: normalized.endpoint })
-    .maybeSingle())
+  const existing = await pool.query<{ id: string }>(
+    `SELECT id FROM push_subscriptions
+     WHERE user_id = $1 AND subscription->>'endpoint' = $2
+     LIMIT 1`,
+    [userId, normalized.endpoint]
+  )
 
-  if (existing?.id) {
-    const { error } = await ((supabase.from("push_subscriptions") as any)
-      .update({ subscription: normalized } as any)
-      .eq("id", existing.id))
-
-    if (error) throw error
+  if (existing.rows[0]?.id) {
+    await pool.query(`UPDATE push_subscriptions SET subscription = $1::jsonb WHERE id = $2`, [
+      normalized,
+      existing.rows[0].id,
+    ])
     return
   }
 
-  const { error } = await ((supabase.from("push_subscriptions") as any)
-    .insert({
-      user_id: userId,
-      subscription: normalized,
-    } as any))
-
-  if (error) throw error
+  await pool.query(
+    `INSERT INTO push_subscriptions (user_id, subscription) VALUES ($1, $2::jsonb)`,
+    [userId, normalized]
+  )
 }
 
 export async function getUserSubscriptions(
   userId: string
 ): Promise<WebPushSubscription[]> {
-  const supabase = createAdminClient()
-  const { data, error } = await supabase
-    .from("push_subscriptions")
-    .select("subscription")
-    .eq("user_id", userId)
+  const pool = getPostgresPool()
+  const result = await pool.query<{ subscription: WebPushSubscription | null }>(
+    `SELECT subscription FROM push_subscriptions WHERE user_id = $1`,
+    [userId]
+  )
 
-  if (error) throw error
-
-  return ((data ?? []) as Array<{ subscription: WebPushSubscription | null }>)
-    .map((row) => row.subscription)
-    .filter((value): value is WebPushSubscription => Boolean(value))
+  return result.rows
+    .map((row: { subscription: WebPushSubscription | null }) => row.subscription)
+    .filter((value: WebPushSubscription | null): value is WebPushSubscription => Boolean(value))
 }
 
 export async function removeSubscription(
   subscriptionEndpoint: string
 ): Promise<void> {
-  const supabase = createAdminClient()
-  const { error } = await ((supabase.from("push_subscriptions") as any)
-    .delete()
-    .contains("subscription", { endpoint: subscriptionEndpoint }))
-
-  if (error) throw error
+  const pool = getPostgresPool()
+  await pool.query(`DELETE FROM push_subscriptions WHERE subscription->>'endpoint' = $1`, [
+    subscriptionEndpoint,
+  ])
 }

@@ -7,10 +7,6 @@ import { AuthPageShell } from "@/components/auth/AuthPageShell"
 import HireovenLogo from "@/components/ui/HireovenLogo"
 import { createClient } from "@/lib/supabase/client"
 
-function getPublicAppOrigin() {
-  return window.location.origin.replace(/\/$/, "")
-}
-
 function sanitizeNextPath(next: string | null) {
   if (!next) return null
   if (!next.startsWith("/") || next.startsWith("//")) return null
@@ -34,25 +30,26 @@ export default function LoginPage() {
     email?: string | null
     user_metadata?: { full_name?: string | null }
   }) {
-    const supabase = createClient()
-    await ((supabase.from("profiles") as any).upsert({
-      id: user.id,
-      email: user.email ?? null,
-      full_name: user.user_metadata?.full_name ?? null,
-    }))
+    await fetch("/api/profile", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: user.email ?? null,
+        full_name: user.user_metadata?.full_name ?? null,
+      }),
+    })
   }
 
-  async function getPostLoginDestination(userId: string) {
+  async function getPostLoginDestination() {
     if (explicitNext) return explicitNext
 
-    const supabase = createClient()
-    const { data: profile } = await ((supabase
-      .from("profiles")
-      .select("is_admin")
-      .eq("id", userId)
-      .single()) as any)
-
-    return profile?.is_admin ? "/admin" : "/dashboard"
+    const res = await fetch("/api/profile", { credentials: "include", cache: "no-store" })
+    if (res.ok) {
+      const { profile } = (await res.json()) as { profile: { is_admin?: boolean } | null }
+      return profile?.is_admin ? "/admin" : "/dashboard"
+    }
+    return "/dashboard"
   }
 
   async function handleEmailLogin(e: FormEvent) {
@@ -75,7 +72,7 @@ export default function LoginPage() {
 
     if (data.user) {
       await ensureProfileRow(data.user)
-      const destination = await getPostLoginDestination(data.user.id)
+      const destination = await getPostLoginDestination()
       window.location.assign(destination)
       return
     }
@@ -86,19 +83,28 @@ export default function LoginPage() {
     setOauthLoading(true)
     setError(null)
 
-    const supabase = createClient()
-    const callbackBase = getPublicAppOrigin()
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${callbackBase}/auth/callback${explicitNext ? `?next=${encodeURIComponent(explicitNext)}` : ""}`,
-      },
-    })
-
-    if (error) {
-      setError(error.message)
+    const providersRes = await fetch("/api/auth/providers", { cache: "no-store" })
+    const providers = providersRes.ok ? ((await providersRes.json()) as { google?: boolean }) : { google: false }
+    if (!providers.google) {
+      setError("Google sign-in is not configured on this server.")
       setOauthLoading(false)
+      return
     }
+
+    const next =
+      explicitNext ??
+      (await (async () => {
+        const res = await fetch("/api/profile", { credentials: "include", cache: "no-store" })
+        if (res.ok) {
+          const { profile } = (await res.json()) as { profile: { is_admin?: boolean } | null }
+          return profile?.is_admin ? "/admin" : "/dashboard"
+        }
+        return "/dashboard"
+      })())
+
+    window.location.assign(
+      `/api/auth/google?next=${encodeURIComponent(next)}`
+    )
   }
 
   return (

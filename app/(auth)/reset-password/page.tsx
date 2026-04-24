@@ -1,52 +1,30 @@
 "use client"
 
 import { FormEvent, useMemo, useState } from "react"
-import { useEffect } from "react"
 import Link from "next/link"
+import { useSearchParams } from "next/navigation"
 import { AuthPageShell } from "@/components/auth/AuthPageShell"
 import HireovenLogo from "@/components/ui/HireovenLogo"
-import { createClient } from "@/lib/supabase/client"
 
 export default function ResetPasswordPage() {
+  const searchParams = useSearchParams()
+  const token = searchParams.get("token")
+
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
   const [loading, setLoading] = useState(false)
-  const [checkingSession, setCheckingSession] = useState(true)
-  const [hasRecoverySession, setHasRecoverySession] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [updated, setUpdated] = useState(false)
 
   const isPasswordStrongEnough = useMemo(() => password.length >= 8, [password])
-
-  useEffect(() => {
-    let mounted = true
-
-    async function checkSession() {
-      const supabase = createClient()
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-
-      if (!mounted) return
-
-      const isRecovery = session?.user?.aud === "authenticated"
-      setHasRecoverySession(Boolean(isRecovery))
-      setCheckingSession(false)
-    }
-
-    void checkSession()
-
-    return () => {
-      mounted = false
-    }
-  }, [])
+  const hasToken = Boolean(token?.trim())
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
     setError(null)
 
-    if (!hasRecoverySession) {
-      setError("Recovery session missing. Please use the latest reset link from your email.")
+    if (!hasToken) {
+      setError("Missing reset token. Open the link from your email again.")
       return
     }
 
@@ -61,11 +39,15 @@ export default function ResetPasswordPage() {
     }
 
     setLoading(true)
-    const supabase = createClient()
-    const { error: updateError } = await supabase.auth.updateUser({ password })
+    const res = await fetch("/api/auth/reset-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: token!.trim(), password }),
+    })
+    const body = (await res.json().catch(() => ({}))) as { error?: string }
 
-    if (updateError) {
-      setError(updateError.message)
+    if (!res.ok) {
+      setError(body.error ?? "Could not reset password.")
       setLoading(false)
       return
     }
@@ -122,9 +104,9 @@ export default function ResetPasswordPage() {
           </p>
         )}
 
-        {!checkingSession && !hasRecoverySession && !updated && (
+        {!hasToken && !updated && (
           <p className="rounded-lg border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-700">
-            This page needs a valid recovery session. Open the newest reset email and click the link again.
+            This page needs a valid reset link. Request a new reset email from the sign-in page.
           </p>
         )}
 
@@ -136,10 +118,10 @@ export default function ResetPasswordPage() {
 
         <button
           type="submit"
-          disabled={loading || checkingSession || !hasRecoverySession}
+          disabled={loading || !hasToken}
           className="w-full rounded-lg bg-primary py-3 text-sm font-semibold text-primary-foreground transition hover:bg-primary-hover disabled:opacity-60"
         >
-          {checkingSession ? "Checking link..." : loading ? "Updating..." : "Update password"}
+          {loading ? "Updating..." : "Update password"}
         </button>
       </form>
 

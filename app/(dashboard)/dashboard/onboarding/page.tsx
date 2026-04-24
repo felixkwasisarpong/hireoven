@@ -6,7 +6,6 @@ import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
 import HireovenLogo from "@/components/ui/HireovenLogo"
 import CompanyLogo from "@/components/ui/CompanyLogo"
-import { createClient } from "@/lib/supabase/client"
 import type { Company, SeniorityLevel, VisaStatus } from "@/types"
 
 // ---------------------------------------------------------------------------
@@ -95,34 +94,34 @@ export default function OnboardingPage() {
   async function handleFinish() {
     setSaving(true)
 
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
+    const profileRes = await fetch("/api/profile", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        desired_roles: stepOne.roles,
+        desired_locations: stepOne.remoteOnly ? ["Remote"] : stepOne.locations,
+        desired_seniority: stepOne.seniority,
+        remote_only: stepOne.remoteOnly,
+        is_international: stepTwo.isInternational,
+        visa_status: stepTwo.visaStatus || null,
+        opt_end_date: stepTwo.optEndDate || null,
+        needs_sponsorship: stepTwo.needsSponsorship,
+      }),
+    })
+    if (!profileRes.ok) {
       router.push("/login")
       return
     }
 
-    // Update profile
-    await (supabase.from("profiles") as any).update({
-      desired_roles: stepOne.roles,
-      desired_locations: stepOne.remoteOnly ? ["Remote"] : stepOne.locations,
-      desired_seniority: stepOne.seniority,
-      remote_only: stepOne.remoteOnly,
-      is_international: stepTwo.isInternational,
-      visa_status: stepTwo.visaStatus || null,
-      opt_end_date: stepTwo.optEndDate || null,
-      needs_sponsorship: stepTwo.needsSponsorship,
-    }).eq("id", user.id)
-
-    // Insert watchlist entries
-    if (stepThree.selectedCompanyIds.length > 0) {
-      await (supabase.from("watchlist") as any).insert(
-        stepThree.selectedCompanyIds.map((company_id) => ({
-          user_id: user.id,
-          company_id,
-        }))
+    await Promise.all(
+      stepThree.selectedCompanyIds.map((companyId) =>
+        fetch("/api/watchlist", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ companyId }),
+        })
       )
-    }
+    )
 
     router.push("/dashboard")
     router.refresh()
@@ -513,13 +512,11 @@ function StepThree({
 
   useEffect(() => {
     async function fetchCompanies() {
-      const supabase = createClient()
-      const { data: rows } = await supabase
-        .from("companies")
-        .select("*")
-        .eq("is_active", true)
-        .order("name")
-      setCompanies(rows ?? [])
+      const res = await fetch("/api/companies?limit=500&sort=name")
+      if (res.ok) {
+        const { companies: rows } = (await res.json()) as { companies: Company[] }
+        setCompanies(rows ?? [])
+      }
       setLoadingCompanies(false)
     }
     void fetchCompanies()

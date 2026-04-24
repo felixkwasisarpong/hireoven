@@ -8,10 +8,6 @@ import HireovenLogo from "@/components/ui/HireovenLogo"
 import { createClient } from "@/lib/supabase/client"
 import { PLAN_DATA, type BillingInterval, type PlanKey } from "@/lib/pricing"
 
-function getPublicAppOrigin() {
-  return window.location.origin.replace(/\/$/, "")
-}
-
 function sanitizeNextPath(next: string | null) {
   if (!next) return null
   if (!next.startsWith("/") || next.startsWith("//")) return null
@@ -140,10 +136,11 @@ function SignupForm() {
     }
 
     if (data.user) {
-      await (supabase.from("profiles") as any).upsert({
-        id: data.user.id,
-        email,
-        full_name: fullName,
+      await fetch("/api/profile", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, full_name: fullName }),
       })
     }
 
@@ -159,22 +156,19 @@ function SignupForm() {
     setOauthLoading(true)
     setError(null)
 
-    const supabase = createClient()
+    const providersRes = await fetch("/api/auth/providers", { cache: "no-store" })
+    const providers = providersRes.ok ? ((await providersRes.json()) as { google?: boolean }) : { google: false }
+    if (!providers.google) {
+      setError("Google sign-in is not configured on this server.")
+      setOauthLoading(false)
+      return
+    }
+
     const next = validPlan
       ? `/dashboard/upgrade?plan=${validPlan}&interval=${intervalParam}&checkout=1`
       : nextParam
 
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${getPublicAppOrigin()}/auth/callback?next=${encodeURIComponent(next)}`,
-      },
-    })
-
-    if (error) {
-      setError(error.message)
-      setOauthLoading(false)
-    }
+    window.location.assign(`/api/auth/google?next=${encodeURIComponent(next)}`)
   }
 
   if (signedUp && validPlan) {
