@@ -9,7 +9,6 @@ import { useResumeContext } from "@/components/resume/ResumeProvider"
 import ResumeScoreCard from "@/components/resume/ResumeScoreCard"
 import ResumeUploader from "@/components/resume/ResumeUploader"
 import { useToast } from "@/components/ui/ToastProvider"
-import { createClient } from "@/lib/supabase/client"
 import { cn } from "@/lib/utils"
 import type { Resume } from "@/types"
 
@@ -95,52 +94,40 @@ export default function ResumePage() {
       return
     }
 
-    const supabase = createClient()
-
     async function loadAnalysisMeta() {
       const resumeIds = resumes.map((resume) => resume.id)
-      const { data: analyses } = await (supabase
-        .from("resume_analyses")
-        .select("resume_id, job_id, recommendations, created_at")
-        .in("resume_id", resumeIds)
-        .order("created_at", { ascending: false }) as any)
+      const qs = new URLSearchParams({ resume_ids: resumeIds.join(",") })
+      const res = await fetch(`/api/resume/analyses?${qs}`, {
+        credentials: "include",
+        cache: "no-store",
+      })
+      if (!res.ok) {
+        setAnalysisMeta({})
+        return
+      }
+      const body = (await res.json()) as {
+        analyses?: Array<{
+          resume_id: string
+          job_id: string | null
+          recommendations: Array<unknown> | null
+          created_at: string
+          job_title: string | null
+        }>
+      }
+      const analyses = body.analyses ?? []
 
       const latestByResume = new Map<
         string,
-        { jobId: string | null; improvements: number; createdAt: string }
+        { jobId: string | null; improvements: number; jobTitle: string | null }
       >()
 
-      for (const analysis of (analyses ?? []) as Array<{
-        resume_id: string
-        job_id: string | null
-        recommendations: Array<unknown> | null
-        created_at: string
-      }>) {
+      for (const analysis of analyses) {
         if (latestByResume.has(analysis.resume_id)) continue
         latestByResume.set(analysis.resume_id, {
           jobId: analysis.job_id,
           improvements: analysis.recommendations?.length ?? 0,
-          createdAt: analysis.created_at,
+          jobTitle: analysis.job_title,
         })
-      }
-
-      const jobIds = Array.from(
-        new Set(
-          Array.from(latestByResume.values())
-            .map((value) => value.jobId)
-            .filter((value): value is string => Boolean(value))
-        )
-      )
-
-      let jobTitleMap = new Map<string, string>()
-      if (jobIds.length > 0) {
-        const { data: jobs } = await (supabase
-          .from("jobs")
-          .select("id, title")
-          .in("id", jobIds) as any)
-        jobTitleMap = new Map(
-          ((jobs ?? []) as Array<{ id: string; title: string }>).map((job) => [job.id, job.title])
-        )
       }
 
       const next: Record<
@@ -151,7 +138,7 @@ export default function ResumePage() {
         next[resumeId] = {
           improvements: value.improvements,
           jobId: value.jobId,
-          jobTitle: value.jobId ? jobTitleMap.get(value.jobId) ?? null : null,
+          jobTitle: value.jobTitle ?? null,
         }
       })
 

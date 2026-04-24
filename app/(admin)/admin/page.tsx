@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import {
   Activity,
   BellRing,
@@ -17,7 +17,6 @@ import {
   AdminStatCard,
   AdminBadge,
 } from "@/components/admin/AdminPrimitives"
-import { createClient } from "@/lib/supabase/client"
 import { formatCurrency, formatDateTime, formatNumber, formatRelativeTime } from "@/lib/admin/format"
 import type { AdminOverviewPayload } from "@/lib/admin/stats"
 
@@ -32,7 +31,6 @@ function StatusTone({ status }: { status: string | null }) {
 }
 
 export default function AdminOverviewPage() {
-  const supabase = useMemo(() => createClient(), [])
   const [payload, setPayload] = useState<AdminOverviewPayload | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -72,94 +70,6 @@ export default function AdminOverviewPage() {
     const interval = window.setInterval(() => setNow(Date.now()), 1000)
     return () => window.clearInterval(interval)
   }, [])
-
-  useEffect(() => {
-    const crawlChannel = supabase
-      .channel("admin-crawl-feed")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "crawl_logs" },
-        async (event) => {
-          const inserted = event.new as CrawlFeedItem
-          const { data } = await supabase
-            .from("companies")
-            .select("id, name, ats_type")
-            .eq("id", inserted.company_id)
-            .single()
-
-          setPayload((current) =>
-            current
-              ? {
-                  ...current,
-                  realtime: {
-                    ...current.realtime,
-                    recentCrawlLogs: [
-                      ...current.realtime.recentCrawlLogs,
-                      { ...inserted, company: data ?? null },
-                    ].slice(-20),
-                  },
-                }
-              : current
-          )
-          void loadOverview()
-        }
-      )
-      .subscribe()
-
-    const runtimeChannel = supabase
-      .channel("admin-crawl-runtime")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "system_settings",
-          filter: "key=eq.crawl_runtime",
-        },
-        () => {
-          void loadOverview()
-        }
-      )
-      .subscribe()
-
-    const jobsChannel = supabase
-      .channel("admin-jobs-feed")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "jobs" },
-        async (event) => {
-          const inserted = event.new as JobFeedItem
-          const { data } = await supabase
-            .from("companies")
-            .select("id, name, ats_type, logo_url")
-            .eq("id", inserted.company_id)
-            .single()
-
-          setPayload((current) =>
-            current
-              ? {
-                  ...current,
-                  realtime: {
-                    ...current.realtime,
-                    recentJobs: [
-                      ...current.realtime.recentJobs,
-                      { ...inserted, company: data ?? null },
-                    ].slice(-20),
-                  },
-                }
-              : current
-          )
-          void loadOverview()
-        }
-      )
-      .subscribe()
-
-    return () => {
-      void supabase.removeChannel(crawlChannel)
-      void supabase.removeChannel(jobsChannel)
-      void supabase.removeChannel(runtimeChannel)
-    }
-  }, [supabase, loadOverview])
 
   useEffect(() => {
     if (crawlFeedRef.current) {

@@ -9,7 +9,7 @@ import {
   useState,
 } from "react"
 import { devError } from "@/lib/client-dev-log"
-import { createClient } from "@/lib/supabase/client"
+import { fetchSessionUser } from "@/lib/supabase/client"
 import type { Resume } from "@/types"
 
 type ResumeContextValue = {
@@ -41,15 +41,7 @@ export function ResumeProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    const supabase = createClient()
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUserId(session?.user?.id ?? null)
-    })
-
-    return () => subscription.unsubscribe()
+    void fetchSessionUser().then((u) => setUserId(u?.id ?? null))
   }, [])
 
   const refresh = useCallback(async () => {
@@ -60,21 +52,16 @@ export function ResumeProvider({ children }: { children: React.ReactNode }) {
     }
 
     setIsLoading(true)
-    const supabase = createClient()
-    const { data, error } = await supabase
-      .from("resumes")
-      .select("*")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false })
-
-    if (error) {
-      devError("Failed to load resumes", error)
+    const res = await fetch("/api/resume", { credentials: "include", cache: "no-store" })
+    if (!res.ok) {
+      devError("Failed to load resumes", new Error(String(res.status)))
       setResumes([])
       setIsLoading(false)
       return
     }
+    const data = (await res.json()) as Resume[]
 
-    setResumes(sortResumes((data ?? []) as Resume[]))
+    setResumes(sortResumes(data ?? []))
     setIsLoading(false)
   }, [userId])
 

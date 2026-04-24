@@ -17,7 +17,6 @@ import SkillsGapChart from "@/components/resume/SkillsGapChart"
 import { PLAN_NAMES } from "@/lib/gates"
 import { useFeatureAccess } from "@/lib/hooks/useFeatureAccess"
 import { useResumeAnalysis } from "@/lib/hooks/useResumeAnalysis"
-import { createClient } from "@/lib/supabase/client"
 import { cn } from "@/lib/utils"
 import type { ApplyRecommendation, Company, Job, ResumeAnalysis } from "@/types"
 
@@ -398,13 +397,14 @@ export default function AnalyzePage() {
   // Fetch job details
   useEffect(() => {
     async function load() {
-      const supabase = createClient()
-      const { data } = await (supabase
-        .from("jobs")
-        .select("*, company:companies(*)")
-        .eq("id", jobId)
-        .single() as any)
-      setJob((data as JobWithCompany | null) ?? null)
+      const res = await fetch(`/api/jobs/${jobId}`, { cache: "no-store" })
+      if (!res.ok) {
+        setJob(null)
+        setJobLoading(false)
+        return
+      }
+      const body = (await res.json()) as { job: JobWithCompany | null }
+      setJob(body.job ?? null)
       setJobLoading(false)
     }
     void load()

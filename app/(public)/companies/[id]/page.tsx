@@ -2,22 +2,44 @@ import type { Metadata } from "next"
 import Link from "next/link"
 import Image from "next/image"
 import { notFound } from "next/navigation"
-import { createAdminClient, hasSupabaseAdminEnv } from "@/lib/supabase/admin"
+import { getPostgresPool, hasPostgresEnv } from "@/lib/postgres/server"
 import Navbar from "@/components/layout/Navbar"
+import type { Company, Job } from "@/types"
 
 export const dynamic = "force-dynamic"
+
+type CompanyJobListRow = Pick<
+  Job,
+  | "id"
+  | "title"
+  | "location"
+  | "is_remote"
+  | "is_hybrid"
+  | "seniority_level"
+  | "employment_type"
+  | "sponsors_h1b"
+  | "sponsorship_score"
+  | "first_detected_at"
+  | "apply_url"
+  | "skills"
+>
 
 type Props = { params: Promise<{ id: string }> }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  if (!hasSupabaseAdminEnv()) return { title: "Company - Hireoven" }
+  if (!hasPostgresEnv()) return { title: "Company - Hireoven" }
   const { id } = await params
-  const supabase = createAdminClient()
-  const { data: company } = await supabase
-    .from("companies")
-    .select("name, job_count, sponsorship_confidence, industry")
-    .eq("id", id)
-    .single()
+  const pool = getPostgresPool()
+  const { rows } = await pool.query<{
+    name: string
+    job_count: number
+    sponsorship_confidence: number
+    industry: string | null
+  }>(
+    `SELECT name, job_count, sponsorship_confidence, industry FROM companies WHERE id = $1::uuid LIMIT 1`,
+    [id]
+  )
+  const company = rows[0]
 
   if (!company) return { title: "Company - Hireoven" }
 
@@ -33,30 +55,36 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function PublicCompanyPage({ params }: Props) {
+  if (!hasPostgresEnv()) notFound()
+
   const { id } = await params
-  const supabase = createAdminClient()
+  const pool = getPostgresPool()
 
   const [companyResult, jobsResult, lcaStatsResult] = await Promise.all([
-    supabase.from("companies").select("*").eq("id", id).single(),
-    supabase
-      .from("jobs")
-      .select("id, title, location, is_remote, is_hybrid, seniority_level, employment_type, sponsors_h1b, sponsorship_score, first_detected_at, apply_url, skills")
-      .eq("company_id", id)
-      .eq("is_active", true)
-      .order("first_detected_at", { ascending: false })
-      .limit(50),
-    supabase
-      .from("employer_lca_stats")
-      .select("total_applications, total_certified, total_denied, certification_rate, approval_trend, has_high_denial_rate")
-      .eq("company_id", id)
-      .maybeSingle(),
+    pool.query<Company>(`SELECT * FROM companies WHERE id = $1::uuid LIMIT 1`, [id]),
+    pool.query<CompanyJobListRow>(
+      `SELECT id, title, location, is_remote, is_hybrid, seniority_level, employment_type,
+              sponsors_h1b, sponsorship_score, first_detected_at, apply_url, skills
+       FROM jobs
+       WHERE company_id = $1::uuid AND is_active = true
+       ORDER BY first_detected_at DESC NULLS LAST
+       LIMIT 50`,
+      [id]
+    ),
+    pool.query(
+      `SELECT total_applications, total_certified, total_denied, certification_rate, approval_trend, has_high_denial_rate
+       FROM employer_lca_stats
+       WHERE company_id = $1::uuid
+       LIMIT 1`,
+      [id]
+    ),
   ])
 
-  if (companyResult.error || !companyResult.data) notFound()
+  const company = companyResult.rows[0]
+  if (!company) notFound()
 
-  const company = companyResult.data
-  const jobs = jobsResult.data ?? []
-  const lcaStats = lcaStatsResult.data
+  const jobs: CompanyJobListRow[] = jobsResult.rows
+  const lcaStats = lcaStatsResult.rows[0] ?? null
 
   function hoursAgo(ts: string) {
     const mins = Math.floor((Date.now() - new Date(ts).getTime()) / 60000)

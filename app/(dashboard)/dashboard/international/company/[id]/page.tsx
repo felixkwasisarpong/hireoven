@@ -8,7 +8,6 @@ import SponsorshipScore from "@/components/international/SponsorshipScore"
 import JobFeed from "@/components/jobs/JobFeed"
 import { useAuth } from "@/lib/hooks/useAuth"
 import { useWatchlist } from "@/lib/hooks/useWatchlist"
-import { createClient } from "@/lib/supabase/client"
 import type { Company, H1BRecord, JobFilters } from "@/types"
 
 type PetitionBar = { year: number; approved: number; denied: number }
@@ -26,19 +25,20 @@ export default function CompanyProfilePage() {
 
   useEffect(() => {
     async function fetchData() {
-      const supabase = createClient()
-      const [{ data: companyData }, { data: h1bData }] = await Promise.all([
-        supabase.from("companies").select("*").eq("id", id).single(),
-        supabase
-          .from("h1b_records")
-          .select("*")
-          .eq("company_id", id)
-          .order("year", { ascending: false })
-          .limit(5),
+      const [companyRes, h1bRes] = await Promise.all([
+        fetch(`/api/companies/${encodeURIComponent(id)}`),
+        fetch(`/api/h1b/records?companyId=${encodeURIComponent(id)}&limit=5`),
       ])
 
-      setCompany(companyData ?? null)
-      setRecords((h1bData ?? []) as H1BRecord[])
+      const companyData = companyRes.ok
+        ? ((await companyRes.json()) as { company: Company | null }).company
+        : null
+      const h1bData = h1bRes.ok
+        ? ((await h1bRes.json()) as { records: H1BRecord[] }).records
+        : []
+
+      setCompany(companyData)
+      setRecords(h1bData)
       setIsLoading(false)
     }
 

@@ -19,7 +19,6 @@ import SponsorshipHelper from "@/components/cover-letter/SponsorshipHelper"
 import ToneSelector from "@/components/cover-letter/ToneSelector"
 import { useResumeContext } from "@/components/resume/ResumeProvider"
 import { useCoverLetter } from "@/lib/hooks/useCoverLetter"
-import { createClient } from "@/lib/supabase/client"
 import { cn } from "@/lib/utils"
 import type { Company, CoverLetterLength, CoverLetterStyle, Job, Profile } from "@/types"
 
@@ -166,13 +165,20 @@ export default function CoverLetterPage() {
   // Load job and profile
   useEffect(() => {
     async function load() {
-      const supabase = createClient()
       const [jobRes, profileRes] = await Promise.all([
-        (supabase.from("jobs").select("*, company:companies(*)").eq("id", jobId).single() as any),
-        supabase.from("profiles").select("*").single(),
+        fetch(`/api/jobs/${encodeURIComponent(jobId)}`),
+        fetch("/api/profile"),
       ])
-      setJob((jobRes.data as JobWithCompany | null) ?? null)
-      setProfile((profileRes.data as Profile | null) ?? null)
+
+      const jobData = jobRes.ok
+        ? ((await jobRes.json()) as { job: JobWithCompany | null }).job
+        : null
+      const profileData = profileRes.ok
+        ? ((await profileRes.json()) as { profile: Profile | null }).profile
+        : null
+
+      setJob(jobData)
+      setProfile(profileData)
       setJobLoading(false)
     }
     void load()

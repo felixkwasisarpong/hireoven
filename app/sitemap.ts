@@ -1,5 +1,5 @@
 import type { MetadataRoute } from "next"
-import { createAdminClient } from "@/lib/supabase/admin"
+import { getPostgresPool } from "@/lib/postgres/server"
 
 export const dynamic = "force-dynamic"
 
@@ -16,35 +16,34 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   ]
 
   try {
-    const supabase = createAdminClient()
+    const pool = getPostgresPool()
 
     const [companiesResult, jobsResult] = await Promise.all([
-      supabase
-        .from("companies")
-        .select("id, updated_at")
-        .eq("is_active", true)
-        .order("job_count", { ascending: false }),
-      supabase
-        .from("jobs")
-        .select("id, updated_at")
-        .eq("is_active", true)
-        .order("first_detected_at", { ascending: false })
-        .limit(1000),
+      pool.query<{ id: string; updated_at: string }>(
+        `SELECT id, updated_at FROM companies WHERE is_active = true ORDER BY job_count DESC`
+      ),
+      pool.query<{ id: string; updated_at: string }>(
+        `SELECT id, updated_at FROM jobs WHERE is_active = true ORDER BY first_detected_at DESC NULLS LAST LIMIT 1000`
+      ),
     ])
 
-    const companyRoutes: MetadataRoute.Sitemap = (companiesResult.data ?? []).map((c) => ({
+    const companyRoutes: MetadataRoute.Sitemap = companiesResult.rows.map(
+      (c: { id: string; updated_at: string }) => ({
       url: `${base}/companies/${c.id}`,
       lastModified: new Date(c.updated_at),
       changeFrequency: "daily",
       priority: 0.7,
-    }))
+    })
+    )
 
-    const jobRoutes: MetadataRoute.Sitemap = (jobsResult.data ?? []).map((j) => ({
+    const jobRoutes: MetadataRoute.Sitemap = jobsResult.rows.map(
+      (j: { id: string; updated_at: string }) => ({
       url: `${base}/jobs/${j.id}`,
       lastModified: new Date(j.updated_at),
       changeFrequency: "weekly",
       priority: 0.6,
-    }))
+    })
+    )
 
     return [...staticRoutes, ...companyRoutes, ...jobRoutes]
   } catch {

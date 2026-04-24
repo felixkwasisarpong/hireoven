@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react"
 import { Loader2, Sparkles, X } from "lucide-react"
-import { createClient } from "@/lib/supabase/client"
 import { useToast } from "@/components/ui/ToastProvider"
 import {
   AdminBadge,
@@ -74,7 +73,6 @@ export default function AddCompanyModal({
   onClose,
   onCreated,
 }: AddCompanyModalProps) {
-  const supabase = useMemo(() => createClient(), [])
   const { pushToast } = useToast()
   const [loading, setLoading] = useState(false)
   const [form, setForm] = useState({
@@ -124,13 +122,13 @@ export default function AddCompanyModal({
         is_active: true,
       }
 
-      const { data, error } = await ((supabase
-        .from("companies")
-        .insert(payload as any)
-        .select("*")
-        .single()) as any)
-
-      if (error) throw error
+      const createRes = await fetch("/api/admin/companies", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+      if (!createRes.ok) throw new Error("Failed to create company")
+      const { company: data } = (await createRes.json()) as { company: { id: string } }
 
       const response = await fetch("/api/admin/crawl", {
         method: "POST",

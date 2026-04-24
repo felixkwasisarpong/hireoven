@@ -8,7 +8,6 @@ import CompanyCard from "@/components/companies/CompanyCard"
 import DashboardPageHeader from "@/components/layout/DashboardPageHeader"
 import { useAuth } from "@/lib/hooks/useAuth"
 import { useWatchlist } from "@/lib/hooks/useWatchlist"
-import { createClient } from "@/lib/supabase/client"
 import { cn } from "@/lib/utils"
 import type { Company, CompanySize } from "@/types"
 
@@ -73,29 +72,20 @@ export default function CompaniesPage() {
   useEffect(() => {
     async function load() {
       setIsLoading(true)
-      const supabase = createClient()
+      const params = new URLSearchParams({ sort, limit: String(PAGE_SIZE), offset: String(offset) })
+      if (selectedIndustries.length) params.set("industry", selectedIndustries.join(","))
+      if (selectedSizes.length) params.set("size", selectedSizes.join(","))
+      if (selectedAts) params.set("ats_type", selectedAts)
+      if (sponsorsH1b) params.set("sponsors_h1b", "true")
+      if (hasJobs) params.set("has_jobs", "true")
 
-      let q = supabase.from("companies").select("*", { count: "exact" }).eq("is_active", true)
-      if (selectedIndustries.length === 1) q = q.eq("industry", selectedIndustries[0])
-      else if (selectedIndustries.length > 1) q = (q as any).in("industry", selectedIndustries)
-      if (selectedSizes.length === 1) q = q.eq("size", selectedSizes[0])
-      else if (selectedSizes.length > 1) q = (q as any).in("size", selectedSizes)
-      if (selectedAts) q = q.eq("ats_type", selectedAts)
-      if (sponsorsH1b) q = q.eq("sponsors_h1b", true)
-      if (hasJobs) q = q.gt("job_count", 0)
-
-      const sortMap: Record<string, { col: string; asc: boolean }> = {
-        job_count:              { col: "job_count",              asc: false },
-        sponsorship_confidence: { col: "sponsorship_confidence", asc: false },
-        created_at:             { col: "created_at",             asc: false },
-        name:                   { col: "name",                   asc: true  },
+      const res = await fetch(`/api/companies?${params}`)
+      if (res.ok) {
+        const { companies: data, total: count } = (await res.json()) as { companies: Company[]; total: number }
+        if (offset === 0) setAll(data ?? [])
+        else setAll((prev) => [...prev, ...(data ?? [])])
+        setTotal(count ?? 0)
       }
-      const { col, asc } = sortMap[sort] ?? sortMap.job_count
-      const { data, count } = await q.order(col, { ascending: asc }).range(offset, offset + PAGE_SIZE - 1)
-
-      if (offset === 0) setAll((data as Company[]) ?? [])
-      else setAll((prev) => [...prev, ...((data as Company[]) ?? [])])
-      setTotal(count ?? 0)
       setIsLoading(false)
     }
 
@@ -106,11 +96,10 @@ export default function CompaniesPage() {
   // Fetch distinct industries for the filter dropdown
   useEffect(() => {
     async function loadIndustries() {
-      const supabase = createClient()
-      const { data } = await supabase.from("companies").select("industry").eq("is_active", true)
-      const unique = Array.from(new Set(
-        (data ?? []).map((r: any) => r.industry).filter(Boolean)
-      )).sort() as string[]
+      const res = await fetch("/api/companies?limit=500&sort=name")
+      if (!res.ok) return
+      const { companies } = (await res.json()) as { companies: Array<{ industry: string | null }> }
+      const unique = Array.from(new Set(companies.map((c) => c.industry).filter(Boolean))).sort() as string[]
       setIndustries(unique)
     }
     void loadIndustries()
@@ -119,16 +108,12 @@ export default function CompaniesPage() {
   // Fetch new-today counts per company
   useEffect(() => {
     async function loadNewToday() {
-      const supabase = createClient()
       const start = new Date(); start.setHours(0, 0, 0, 0)
-      const { data } = await (supabase
-        .from("jobs")
-        .select("company_id")
-        .eq("is_active", true)
-        .gte("first_detected_at", start.toISOString()) as any)
-
+      const res = await fetch(`/api/jobs?within=24h&limit=500&offset=0`)
+      if (!res.ok) return
+      const { jobs } = (await res.json()) as { jobs: Array<{ company_id: string }> }
       const map: Record<string, number> = {}
-      for (const row of (data ?? []) as { company_id: string }[]) {
+      for (const row of jobs) {
         map[row.company_id] = (map[row.company_id] ?? 0) + 1
       }
       setNewToday(map)

@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/client'
 import SponsorshipScore from '@/components/international/SponsorshipScore'
 import type { Company } from '@/types'
 
@@ -17,24 +16,21 @@ export default function SimilarCompanies({ companyId, industry, limit = 3 }: Sim
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    async function fetch() {
-      const supabase = createClient()
-      let query = supabase
-        .from('companies')
-        .select('*')
-        .eq('is_active', true)
-        .neq('id', companyId)
-        .order('sponsorship_confidence', { ascending: false })
-        .limit(limit)
+    async function load() {
+      const params = new URLSearchParams()
+      params.set('limit', String(limit + 1))
+      params.set('sort', 'sponsorship_confidence')
+      if (industry) params.set('industry', industry)
 
-      if (industry) query = query.eq('industry', industry)
+      const res = await fetch(`/api/companies?${params}`)
+      if (!res.ok) { setIsLoading(false); return }
 
-      const { data } = await query
-      setCompanies((data as Company[]) ?? [])
+      const { companies: rows } = (await res.json()) as { companies: Company[] }
+      setCompanies((rows ?? []).filter((c) => c.id !== companyId).slice(0, limit))
       setIsLoading(false)
     }
 
-    void fetch()
+    void load()
   }, [companyId, industry, limit])
 
   if (isLoading) {

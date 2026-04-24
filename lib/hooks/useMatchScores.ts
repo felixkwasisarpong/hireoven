@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { devWarn } from "@/lib/client-dev-log"
-import { createClient } from "@/lib/supabase/client"
+import { fetchSessionUser } from "@/lib/supabase/client"
 import type { JobMatchScore } from "@/types"
 
 type CacheEnvelope = {
@@ -63,11 +63,10 @@ export function useMatchScores(jobIds: string[]) {
   useEffect(() => {
     let cancelled = false
 
-    createClient()
-      .auth.getUser()
-      .then(({ data }) => {
+    fetchSessionUser()
+      .then((u) => {
         if (cancelled) return
-        setUserId(data.user?.id ?? null)
+        setUserId(u?.id ?? null)
       })
       .catch((error) => {
         devWarn("Failed to load match score user", error)

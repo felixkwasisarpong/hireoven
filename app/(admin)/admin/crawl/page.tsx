@@ -13,11 +13,9 @@ import {
 } from "@/components/admin/AdminPrimitives"
 import { useToast } from "@/components/ui/ToastProvider"
 import { formatDateTime, formatNumber, formatRelativeTime } from "@/lib/admin/format"
-import { createClient } from "@/lib/supabase/client"
 import type { Company, CrawlLog, SystemSetting } from "@/types"
 
 export default function AdminCrawlMonitorPage() {
-  const supabase = useMemo(() => createClient(), [])
   const { pushToast } = useToast()
   const [companies, setCompanies] = useState<Company[]>([])
   const [logs, setLogs] = useState<CrawlLog[]>([])
@@ -35,24 +33,32 @@ export default function AdminCrawlMonitorPage() {
 
   async function loadData() {
     setLoading(true)
-    const [{ data: companiesData }, { data: logsData }, { data: settingsData }] = await Promise.all([
-      supabase.from("companies").select("*").order("name"),
-      supabase.from("crawl_logs").select("*").order("crawled_at", { ascending: false }),
-      supabase.from("system_settings").select("*"),
+    const [companiesRes, logsRes, settingsRes] = await Promise.all([
+      fetch("/api/admin/companies"),
+      fetch("/api/admin/crawl-logs"),
+      fetch("/api/admin/system-settings"),
     ])
 
-    setCompanies((companiesData ?? []) as Company[])
-    setLogs((logsData ?? []) as CrawlLog[])
+    const companiesData: Company[] = companiesRes.ok
+      ? ((await companiesRes.json()) as { companies: Company[] }).companies
+      : []
+    const logsData: CrawlLog[] = logsRes.ok
+      ? ((await logsRes.json()) as { crawlLogs: CrawlLog[] }).crawlLogs
+      : []
+    const settingsData: SystemSetting[] = settingsRes.ok
+      ? ((await settingsRes.json()) as { settings: SystemSetting[] }).settings
+      : []
 
-    const crawlSettings = ((settingsData ?? []) as SystemSetting[]).find(
-      (entry) => entry.key === "crawl"
-    )
+    setCompanies(companiesData)
+    setLogs(logsData)
+
+    const crawlSettings = settingsData.find((s) => s.key === "crawl")
     setSettings(
-      ((crawlSettings?.value as Record<string, unknown>) ?? {
+      (crawlSettings?.value as Record<string, unknown>) ?? {
         intervalMinutes: 30,
         paused: false,
         maxConcurrentCrawls: 5,
-      })
+      }
     )
     setLoading(false)
   }
@@ -60,23 +66,6 @@ export default function AdminCrawlMonitorPage() {
   useEffect(() => {
     void loadData()
   }, [])
-
-  useEffect(() => {
-    const channel = supabase
-      .channel("admin-crawl-monitor")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "crawl_logs" },
-        (event) => {
-          setLogs((current) => [event.new as CrawlLog, ...current])
-        }
-      )
-      .subscribe()
-
-    return () => {
-      void supabase.removeChannel(channel)
-    }
-  }, [supabase])
 
   const filteredLogs = useMemo(() => {
     const windowMs =
@@ -174,16 +163,17 @@ export default function AdminCrawlMonitorPage() {
   }
 
   async function saveSettings(nextSettings: Record<string, unknown>) {
-    const { error } = await ((supabase.from("system_settings") as any).upsert({
-      key: "crawl",
-      value: nextSettings,
-    } as any))
+    const res = await fetch("/api/admin/system-settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key: "crawl", value: nextSettings }),
+    })
 
-    if (error) {
+    if (!res.ok) {
       pushToast({
         tone: "error",
         title: "Unable to save crawl settings",
-        description: error.message,
+        description: "Request failed",
       })
       return
     }

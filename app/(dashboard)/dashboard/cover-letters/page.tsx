@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { Clipboard, Check, FileText, Search, Star, Trash2 } from "lucide-react"
-import { createClient } from "@/lib/supabase/client"
 import DashboardPageHeader from "@/components/layout/DashboardPageHeader"
 import { cn } from "@/lib/utils"
 import type { CoverLetter } from "@/types"
@@ -137,12 +136,14 @@ export default function CoverLettersPage() {
 
   useEffect(() => {
     async function load() {
-      const supabase = createClient()
-      const { data } = await (supabase
-        .from("cover_letters" as any)
-        .select("*")
-        .order("created_at", { ascending: false }) as any)
-      setLetters((data as CoverLetter[]) ?? [])
+      const res = await fetch("/api/cover-letter", { credentials: "include", cache: "no-store" })
+      if (!res.ok) {
+        setLetters([])
+        setIsLoading(false)
+        return
+      }
+      const body = (await res.json()) as { coverLetters?: CoverLetter[] }
+      setLetters(body.coverLetters ?? [])
       setIsLoading(false)
     }
     void load()

@@ -34,7 +34,7 @@ import {
   extractExperienceLabel,
 } from "@/lib/jobs/metadata"
 import { cleanJobTitle } from "@/lib/jobs/title"
-import { createClient } from "@/lib/supabase/server"
+import { getPostgresPool } from "@/lib/postgres/server"
 import type { Company, Job } from "@/types"
 
 type Props = { params: Promise<{ id: string }> }
@@ -104,16 +104,18 @@ function dedupe(values: string[], max = Number.POSITIVE_INFINITY): string[] {
 
 export default async function DashboardJobDetailPage({ params }: Props) {
   const { id } = await params
-  const supabase = await createClient()
+  const pool = getPostgresPool()
 
-  const { data: rawJob, error } = await supabase
-    .from("jobs")
-    .select("*, company:companies(*)")
-    .eq("id", id)
-    .eq("is_active", true)
-    .single()
-
-  if (error || !rawJob) notFound()
+  const jobResult = await pool.query(
+    `SELECT j.*, to_jsonb(c.*) AS company
+     FROM jobs j
+     LEFT JOIN companies c ON c.id = j.company_id
+     WHERE j.id = $1::uuid AND j.is_active = true
+     LIMIT 1`,
+    [id]
+  )
+  const rawJob = jobResult.rows[0]
+  if (!rawJob) notFound()
 
   const job = rawJob as unknown as Job & { company: Company | null }
   const company = job.company
@@ -172,33 +174,32 @@ export default async function DashboardJobDetailPage({ params }: Props) {
 
   const tools = page.skills.slice(0, 10)
 
-  const selectSimilar =
-    "id, title, location, salary_min, salary_max, salary_currency, company:companies(name, domain, logo_url)"
+  const similarSql = `SELECT j.id, j.title, j.location, j.salary_min, j.salary_max, j.salary_currency,
+       jsonb_build_object('name', c.name, 'domain', c.domain, 'logo_url', c.logo_url) AS company
+     FROM jobs j
+     LEFT JOIN companies c ON c.id = j.company_id
+     WHERE j.is_active = true`
 
   const similarByTitleResult =
     page.normalized_title && page.normalized_title.length > 0
-      ? await supabase
-          .from("jobs")
-          .select(selectSimilar)
-          .eq("is_active", true)
-          .eq("normalized_title", page.normalized_title)
-          .neq("id", id)
-          .limit(3)
-      : { data: [] as unknown[] }
+      ? await pool.query<SimilarJob>(`${similarSql} AND j.normalized_title = $1 AND j.id <> $2::uuid LIMIT 3`, [
+          page.normalized_title,
+          id,
+        ])
+      : { rows: [] as SimilarJob[] }
 
-  const similarByCompanyResult = await supabase
-    .from("jobs")
-    .select(selectSimilar)
-    .eq("is_active", true)
-    .eq("company_id", job.company_id)
-    .neq("id", id)
-    .limit(6)
+  const similarByCompanyResult = job.company_id
+    ? await pool.query<SimilarJob>(`${similarSql} AND j.company_id = $1 AND j.id <> $2::uuid LIMIT 6`, [
+        job.company_id,
+        id,
+      ])
+    : { rows: [] as SimilarJob[] }
 
   const similarMap = new Map<string, SimilarJob>()
-  for (const entry of (similarByTitleResult.data ?? []) as SimilarJob[]) {
+  for (const entry of similarByTitleResult.rows ?? []) {
     similarMap.set(entry.id, entry)
   }
-  for (const entry of (similarByCompanyResult.data ?? []) as SimilarJob[]) {
+  for (const entry of similarByCompanyResult.rows ?? []) {
     if (similarMap.size >= 3) break
     similarMap.set(entry.id, entry)
   }

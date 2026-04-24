@@ -8,7 +8,7 @@ import { useResumeContext } from "@/components/resume/ResumeProvider"
 import DashboardPageHeader from "@/components/layout/DashboardPageHeader"
 import { explainScore } from "@/lib/matching/score-explainer"
 import { devWarn } from "@/lib/client-dev-log"
-import { createClient } from "@/lib/supabase/client"
+import { fetchSessionUser } from "@/lib/supabase/client"
 import type { JobWithMatchScore } from "@/types"
 
 const SYSTEM_ALERT_NAME = "System: strong matches"
@@ -49,11 +49,10 @@ export default function MatchesPage() {
 
   useEffect(() => {
     let cancelled = false
-    createClient()
-      .auth.getUser()
-      .then(({ data }) => {
+    fetchSessionUser()
+      .then((u) => {
         if (cancelled) return
-        setUserId(data.user?.id ?? null)
+        setUserId(u?.id ?? null)
       })
       .catch((error) => {
         devWarn("Failed to load matches user", error)
@@ -100,19 +99,15 @@ export default function MatchesPage() {
     if (!userId) return
 
     let cancelled = false
-    const supabase = createClient()
 
-    ;(supabase
-      .from("job_alerts")
-      .select("id, is_active")
-      .eq("user_id", userId)
-      .eq("name", SYSTEM_ALERT_NAME)
-      .limit(1)
-      .maybeSingle() as any)
-      .then(({ data }: { data: { is_active?: boolean } | null }) => {
+    fetch("/api/alerts")
+      .then((res) => (res.ok ? res.json() : { alerts: [] }))
+      .then(({ alerts }: { alerts: Array<{ name: string | null; is_active: boolean }> }) => {
         if (cancelled) return
-        setNotifyEnabled(Boolean(data?.is_active))
+        const sys = alerts.find((a) => a.name === SYSTEM_ALERT_NAME)
+        setNotifyEnabled(Boolean(sys?.is_active))
       })
+      .catch(() => {})
 
     return () => {
       cancelled = true
@@ -137,31 +132,35 @@ export default function MatchesPage() {
     if (!userId) return
 
     setIsSavingNotify(true)
-    const supabase = createClient()
-    const { data: existing } = await ((supabase
-      .from("job_alerts")
-      .select("id")
-      .eq("user_id", userId)
-      .eq("name", SYSTEM_ALERT_NAME)
-      .limit(1)
-      .maybeSingle()) as any)
 
-    if ((existing as { id?: string } | null)?.id) {
-      await (supabase.from("job_alerts") as any)
-        .update({ is_active: nextValue })
-        .eq("id", (existing as { id: string }).id)
+    const listRes = await fetch("/api/alerts")
+    const { alerts } = listRes.ok
+      ? ((await listRes.json()) as { alerts: Array<{ id: string; name: string | null }> })
+      : { alerts: [] }
+
+    const existing = alerts.find((a) => a.name === SYSTEM_ALERT_NAME)
+
+    if (existing?.id) {
+      await fetch(`/api/alerts/${existing.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_active: nextValue }),
+      })
     } else if (nextValue) {
-      await (supabase.from("job_alerts") as any).insert({
-        user_id: userId,
-        name: SYSTEM_ALERT_NAME,
-        keywords: null,
-        locations: null,
-        seniority_levels: null,
-        employment_types: null,
-        remote_only: false,
-        sponsorship_required: false,
-        company_ids: null,
-        is_active: true,
+      await fetch("/api/alerts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: SYSTEM_ALERT_NAME,
+          keywords: [],
+          locations: [],
+          seniority_levels: [],
+          employment_types: [],
+          remote_only: false,
+          sponsorship_required: false,
+          company_ids: [],
+          is_active: true,
+        }),
       })
     }
 

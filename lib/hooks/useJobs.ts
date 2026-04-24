@@ -3,8 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { devWarn } from "@/lib/client-dev-log"
 import { matchesLocationFilter, matchesSearchQuery } from "@/lib/jobs/search-match"
-import { createClient } from "@/lib/supabase/client"
-import type { Job, JobFilters, JobWithCompany, JobWithMatchScore } from "@/types"
+import type { JobFilters, JobWithCompany, JobWithMatchScore } from "@/types"
 
 const PAGE_SIZE = 20
 const SEARCH_CHUNK_SIZE = 80
@@ -182,7 +181,6 @@ export function useJobs(
 
   const fetchChunk = useCallback(
     async (offset: number) => {
-      const supabase = createClient()
       const chunkSize = searchQuery.trim() ? SEARCH_CHUNK_SIZE : PAGE_SIZE
 
       if (personalized) {
@@ -221,45 +219,31 @@ export function useJobs(
         }
       }
 
-      let query = (supabase
-        .from("jobs")
-        .select("*, company:companies(*)", {
-          count: searchQuery.trim() ? undefined : "exact",
-        })
-        .eq("is_active", true)
-        .order("first_detected_at", { ascending: false })
-        .range(offset, offset + chunkSize - 1) as any)
+      const params = new URLSearchParams()
+      if (searchQuery.trim()) params.set("q", searchQuery.trim())
+      if (filters.remote) params.set("remote", "true")
+      if (filters.sponsorship) params.set("sponsorship", "true")
+      if (filters.seniority?.length) params.set("seniority", filters.seniority.join(","))
+      if (filters.employment_type?.length) params.set("employment_type", filters.employment_type.join(","))
+      if (filters.company_ids?.length) params.set("company_id", filters.company_ids[0])
+      if (filters.within && filters.within !== "all") params.set("within", filters.within)
+      params.set("limit", String(chunkSize))
+      params.set("offset", String(offset))
 
-      if (filters.remote) query = query.eq("is_remote", true)
-      if (filters.seniority?.length)
-        query = query.in("seniority_level", filters.seniority)
-      if (filters.employment_type?.length)
-        query = query.in("employment_type", filters.employment_type)
-      if (filters.company_ids?.length)
-        query = query.in("company_id", filters.company_ids)
+      const response = await fetch(`/api/jobs?${params}`, { cache: "no-store" })
+      if (!response.ok) throw new Error("Failed to fetch jobs")
 
-      const hours = hoursFromWithin(filters.within)
-      if (hours) {
-        query = query.gte(
-          "first_detected_at",
-          new Date(Date.now() - hours * 3_600_000).toISOString()
-        )
+      const payload = (await response.json()) as {
+        jobs?: JobWithCompany[]
+        total?: number
+        newInLastHour?: number
       }
-
-      if (filters.sponsorship) {
-        query = query.or("sponsors_h1b.eq.true,sponsorship_score.gt.60")
-      }
-
-      const { data, error, count } = await query
-
-      if (error) throw error
+      const data = (payload.jobs ?? []) as JobWithCompany[]
 
       return {
-        rows: ((data ?? []) as JobWithCompany[]).filter((job) =>
-          matchesClientFilters(job, filters, searchQuery)
-        ),
-        rawCount: (data ?? []).length,
-        totalCount: count ?? null,
+        rows: data.filter((job) => matchesClientFilters(job, filters, searchQuery)),
+        rawCount: data.length,
+        totalCount: payload.total ?? null,
         lastHourCount: null,
       }
     },
@@ -373,50 +357,6 @@ export function useJobs(
     await ensureVisibleJobs(target)
   }, [ensureVisibleJobs, visibleCount])
 
-  useEffect(() => {
-    const supabase = createClient()
-    const channel = supabase
-      .channel(`jobs-feed-${JSON.stringify(filters)}-${searchQuery}`)
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "jobs" },
-        (payload) => {
-          const row = payload.new as Job
-          const roughMatch =
-            (!filters.remote || row.is_remote) &&
-            (!filters.sponsorship ||
-              (row.sponsors_h1b || (row.sponsorship_score ?? 0) > 60)) &&
-            (!filters.seniority?.length ||
-              (row.seniority_level &&
-                filters.seniority.includes(row.seniority_level))) &&
-            (!filters.employment_type?.length ||
-              (row.employment_type &&
-                filters.employment_type.includes(row.employment_type))) &&
-            (!filters.company_ids?.length ||
-              filters.company_ids.includes(row.company_id)) &&
-            (!searchQuery.trim() ||
-              matchesSearchQuery(
-                [
-                  row.title,
-                  row.normalized_title,
-                  row.location,
-                  row.skills?.join(" "),
-                ],
-                searchQuery
-              ) ||
-              matchesLocationFilter(row.location, searchQuery, {
-                isRemote: row.is_remote,
-              }))
-
-          if (roughMatch) setNewJobsCount((current) => current + 1)
-        }
-      )
-      .subscribe()
-
-    return () => {
-      void supabase.removeChannel(channel)
-    }
-  }, [filters, searchQuery])
 
   return {
     jobs,
