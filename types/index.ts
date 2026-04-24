@@ -446,7 +446,7 @@ export type JobUpdate = Partial<JobInsert>;
 export type JobWithCompany = Job & { company: Company };
 
 // ---------------------------------------------------------------------------
-// Profiles (extends auth.users)
+// Profiles (Postgres `public.profiles`)
 // ---------------------------------------------------------------------------
 
 export type Profile = {
@@ -469,6 +469,8 @@ export type Profile = {
   email_alerts: boolean;
   push_alerts: boolean;
   is_admin: boolean;
+  /** When set, account is suspended (Postgres-backed; enforced in middleware). */
+  suspended_at?: string | null;
   created_at: string;
   updated_at: string;
 };

@@ -1,33 +1,35 @@
-import { createServerClient, type CookieOptions } from "@supabase/ssr"
-import { cookies } from "next/headers"
-import type { Database } from "@/types"
+import { getSessionUser } from "@/lib/auth/session-user"
 
+type ShimUser = {
+  id: string
+  email?: string | null
+  app_metadata: Record<string, unknown>
+  user_metadata: Record<string, unknown>
+  aud?: string
+}
+
+/**
+ * Legacy shape used across API routes: `const supabase = await createClient(); await supabase.auth.getUser()`.
+ * Backed by Postgres session cookie (no Supabase).
+ */
 export async function createClient() {
-  const cookieStore = await cookies()
+  const session = await getSessionUser()
+  const user: ShimUser | null = session
+    ? {
+        id: session.sub,
+        email: session.email ?? undefined,
+        app_metadata: {},
+        user_metadata: {},
+        aud: "authenticated",
+      }
+    : null
 
-  return createServerClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value
-        },
-        set(name: string, value: string, options: CookieOptions) {
-          try {
-            cookieStore.set({ name, value, ...options })
-          } catch {
-            // Called from a Server Component - middleware handles session refresh
-          }
-        },
-        remove(name: string, options: CookieOptions) {
-          try {
-            cookieStore.set({ name, value: "", ...options })
-          } catch {
-            // Called from a Server Component - middleware handles session refresh
-          }
-        },
-      },
-    }
-  )
+  return {
+    auth: {
+      getUser: async () => ({ data: { user } }),
+      getSession: async () => ({
+        data: { session: user ? { user, access_token: "", expires_at: 0 } : null },
+      }),
+    },
+  }
 }

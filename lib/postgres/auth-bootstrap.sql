@@ -13,11 +13,16 @@ CREATE TABLE IF NOT EXISTS auth.users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   email TEXT UNIQUE,
   encrypted_password TEXT,
+  google_sub TEXT,
   email_confirmed_at TIMESTAMPTZ,
   last_sign_in_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS auth_users_google_sub_unique
+  ON auth.users (google_sub)
+  WHERE google_sub IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS auth.sessions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

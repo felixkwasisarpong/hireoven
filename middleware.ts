@@ -1,5 +1,6 @@
-import { createServerClient, type CookieOptions } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
+import { SESSION_COOKIE_NAME } from "@/lib/auth/constants"
+import { verifySessionJwt } from "@/lib/auth/jwt"
 
 const PROTECTED_PREFIXES = ["/dashboard", "/admin"]
 
@@ -15,8 +16,6 @@ const PROTECTED_API_PREFIXES = [
   "/api/billing",
 ]
 
-const PUBLIC_ROUTES = new Set(["/", "/login", "/signup", "/api/jobs", "/api/crawl"])
-
 function isProtected(pathname: string): boolean {
   return PROTECTED_PREFIXES.some((prefix) => pathname.startsWith(prefix))
 }
@@ -25,56 +24,40 @@ function isProtectedApi(pathname: string): boolean {
   return PROTECTED_API_PREFIXES.some((prefix) => pathname.startsWith(prefix))
 }
 
-function isPublic(pathname: string): boolean {
-  return PUBLIC_ROUTES.has(pathname)
+type SessionSummary = {
+  authenticated: boolean
+  isAdmin: boolean
+  suspended: boolean
 }
 
 export async function middleware(request: NextRequest) {
-  let response = NextResponse.next({
-    request: { headers: request.headers },
-  })
-
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name: string) {
-          return request.cookies.get(name)?.value
-        },
-        set(name: string, value: string, options: CookieOptions) {
-          request.cookies.set({ name, value, ...options })
-          response = NextResponse.next({
-            request: { headers: request.headers },
-          })
-          response.cookies.set({ name, value, ...options })
-        },
-        remove(name: string, options: CookieOptions) {
-          request.cookies.set({ name, value: "", ...options })
-          response = NextResponse.next({
-            request: { headers: request.headers },
-          })
-          response.cookies.set({ name, value: "", ...options })
-        },
-      },
-    }
-  )
-
-  // Always call getUser to refresh the session token if needed
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
   const { pathname } = request.nextUrl
 
-  // Protect dashboard/admin pages - redirect to login
+  if (pathname === "/api/auth/session-summary" || pathname.startsWith("/api/auth/session-summary/")) {
+    return NextResponse.next({ request: { headers: request.headers } })
+  }
+
+  const token = request.cookies.get(SESSION_COOKIE_NAME)?.value ?? null
+  const sessionUser = token ? await verifySessionJwt(token) : null
+  const user = sessionUser ? { id: sessionUser.sub } : null
+
+  async function fetchSessionSummary(): Promise<SessionSummary | null> {
+    if (!user) return null
+    const cookie = request.headers.get("cookie") ?? ""
+    const res = await fetch(new URL("/api/auth/session-summary", request.nextUrl.origin), {
+      headers: { cookie },
+      cache: "no-store",
+    })
+    if (!res.ok) return null
+    return (await res.json()) as SessionSummary
+  }
+
   if (isProtected(pathname) && !user) {
     const loginUrl = new URL("/login", request.url)
     loginUrl.searchParams.set("next", pathname)
     return NextResponse.redirect(loginUrl)
   }
 
-  // Protect API routes - return 401 JSON
   if (isProtectedApi(pathname) && !user) {
     return NextResponse.json(
       { error: "Authentication required", code: "UNAUTHENTICATED" },
@@ -82,19 +65,28 @@ export async function middleware(request: NextRequest) {
     )
   }
 
-  // Redirect logged-in users away from auth pages
-  if (user && (pathname === "/login" || pathname === "/signup")) {
-    const { data: profile } = await ((supabase
-      .from("profiles")
-      .select("is_admin")
-      .eq("id", user.id)
-      .single()) as any)
+  if (user && (isProtected(pathname) || isProtectedApi(pathname))) {
+    const summary = await fetchSessionSummary()
+    if (summary?.suspended) {
+      if (isProtectedApi(pathname)) {
+        return NextResponse.json(
+          { error: "Account suspended", code: "SUSPENDED" },
+          { status: 403 }
+        )
+      }
+      const loginUrl = new URL("/login", request.url)
+      loginUrl.searchParams.set("reason", "suspended")
+      return NextResponse.redirect(loginUrl)
+    }
+  }
 
-    const destination = profile?.is_admin ? "/admin" : "/dashboard"
+  if (user && (pathname === "/login" || pathname === "/signup")) {
+    const summary = await fetchSessionSummary()
+    const destination = summary?.isAdmin ? "/admin" : "/dashboard"
     return NextResponse.redirect(new URL(destination, request.url))
   }
 
-  return response
+  return NextResponse.next({ request: { headers: request.headers } })
 }
 
 export const config = {

@@ -8,3 +8,7 @@ out
 # Build caches and local script artifacts
 tsconfig.tsbuildinfo
 scripts/output/
+
+
+data.sql
+schema.sql
