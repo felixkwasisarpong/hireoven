@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { getPostgresPool } from "@/lib/postgres/server"
 import { createClient } from "@/lib/supabase/server"
 
 export async function GET(
@@ -14,14 +15,18 @@ export async function GET(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  const { data, error } = await supabase
-    .from("resumes")
-    .select("parse_status, resume_score")
-    .eq("id", params.id)
-    .eq("user_id", user.id)
-    .single()
+  const pool = getPostgresPool()
+  const result = await pool.query<{ parse_status: string; resume_score: number | null }>(
+    `SELECT parse_status, resume_score
+     FROM resumes
+     WHERE id = $1
+       AND user_id = $2
+     LIMIT 1`,
+    [params.id, user.id]
+  )
+  const data = result.rows[0]
 
-  if (error || !data) {
+  if (!data) {
     return NextResponse.json({ error: "Resume not found" }, { status: 404 })
   }
 

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { getPostgresPool } from "@/lib/postgres/server"
 import { createClient } from "@/lib/supabase/server"
 
 export const runtime = "nodejs"
@@ -8,13 +9,21 @@ export async function GET() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  const { data: apps } = await (supabase as any)
-    .from("job_applications")
-    .select("status, applied_at, created_at, updated_at, timeline")
-    .eq("user_id", user.id)
-    .eq("is_archived", false)
+  const pool = getPostgresPool()
+  const appsResult = await pool.query<{
+    status: string
+    applied_at: string | null
+    created_at: string
+    updated_at: string
+    timeline: Array<{ auto?: boolean; status?: string; date?: string }> | null
+  }>(
+    `SELECT status, applied_at, created_at, updated_at, timeline
+     FROM job_applications
+     WHERE user_id = $1 AND is_archived = false`,
+    [user.id]
+  )
 
-  const applications: any[] = apps ?? []
+  const applications = appsResult.rows
 
   const now = new Date()
   const weekAgo = new Date(now.getTime() - 7 * 86400000)
@@ -24,7 +33,7 @@ export async function GET() {
     saved: 0, applied: 0, phone_screen: 0, interview: 0,
     final_round: 0, offer: 0, rejected: 0, withdrawn: 0,
   }
-  for (const app of applications) {
+  for (const app of applications as Array<{ status: string }>) {
     if (by_status[app.status] !== undefined) by_status[app.status]++
     else by_status[app.status] = 1
   }
@@ -51,12 +60,14 @@ export async function GET() {
   const responseTimes: number[] = []
   for (const app of applications) {
     if (!app.applied_at) continue
-    const timeline: any[] = app.timeline ?? []
+    const timeline = app.timeline ?? []
     const firstResponse = timeline.find(
-      (e: any) => e.auto && e.status && !["saved", "applied"].includes(e.status)
+      (e) => e.auto && e.status && !["saved", "applied"].includes(e.status)
     )
     if (firstResponse) {
-      const days = (new Date(firstResponse.date).getTime() - new Date(app.applied_at).getTime()) / 86400000
+      const responseDate = firstResponse.date ? new Date(firstResponse.date) : null
+      if (!responseDate || Number.isNaN(responseDate.getTime())) continue
+      const days = (responseDate.getTime() - new Date(app.applied_at).getTime()) / 86400000
       if (days >= 0 && days < 365) responseTimes.push(days)
     }
   }

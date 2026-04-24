@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { upsertMarketingSubscriber } from "@/lib/marketing/subscribers"
-import { createAdminClient } from "@/lib/supabase/admin"
+import { getPostgresPool } from "@/lib/postgres/server"
 import { getPublicSiteUrl } from "@/lib/waitlist/site-url"
 
 export async function GET(request: Request) {
@@ -10,20 +10,15 @@ export async function GET(request: Request) {
     return NextResponse.redirect(new URL("/launch", getPublicSiteUrl()))
   }
 
-  let supabase
-  try {
-    supabase = createAdminClient()
-  } catch {
-    return NextResponse.redirect(
-      new URL("/launch?error=confirm", getPublicSiteUrl())
-    )
-  }
-
-  const { data: row } = await supabase
-    .from("waitlist")
-    .select("id, email")
-    .eq("confirmation_token", token)
-    .maybeSingle()
+  const pool = getPostgresPool()
+  const rowResult = await pool.query<{ id: string; email: string | null }>(
+    `SELECT id, email
+     FROM waitlist
+     WHERE confirmation_token = $1
+     LIMIT 1`,
+    [token]
+  )
+  const row = rowResult.rows[0]
 
   if (!row) {
     return NextResponse.redirect(
@@ -31,10 +26,7 @@ export async function GET(request: Request) {
     )
   }
 
-  await supabase
-    .from("waitlist")
-    .update({ confirmed: true })
-    .eq("id", row.id)
+  await pool.query("UPDATE waitlist SET confirmed = true WHERE id = $1", [row.id])
 
   if (row.email) {
     await upsertMarketingSubscriber({

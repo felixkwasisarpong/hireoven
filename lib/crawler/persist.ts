@@ -1,6 +1,6 @@
 import crypto from "crypto"
-import { createAdminClient } from "@/lib/supabase/admin"
 import type { RawJob } from "@/lib/crawler"
+import { getPostgresPool } from "@/lib/postgres/server"
 import {
   cleanJobTitle,
 } from "@/lib/jobs/text-normalizer"
@@ -38,6 +38,66 @@ const JOB_DEACTIVATE_BATCH_SIZE = Math.max(
   25,
   Number.parseInt(process.env.CRAWLER_JOB_DEACTIVATE_BATCH_SIZE ?? "250", 10)
 )
+
+const JOB_INSERT_COLUMNS = [
+  "company_id",
+  "title",
+  "normalized_title",
+  "apply_url",
+  "location",
+  "employment_type",
+  "seniority_level",
+  "is_remote",
+  "is_hybrid",
+  "requires_authorization",
+  "salary_min",
+  "salary_max",
+  "salary_currency",
+  "description",
+  "external_id",
+  "sponsors_h1b",
+  "sponsorship_score",
+  "visa_language_detected",
+  "skills",
+  "is_active",
+  "last_seen_at",
+  "raw_data",
+  "updated_at",
+  "first_detected_at",
+  "created_at",
+] as const
+
+const JOB_UPDATE_WHITELIST = new Set<string>(
+  JOB_INSERT_COLUMNS.filter((c) => c !== "first_detected_at" && c !== "created_at")
+)
+
+async function insertJobsChunk(pool: ReturnType<typeof getPostgresPool>, chunk: Record<string, unknown>[]) {
+  if (chunk.length === 0) return
+  const values: unknown[] = []
+  const tuples = chunk.map((row) => {
+    const placeholders = JOB_INSERT_COLUMNS.map((col) => {
+      values.push(row[col] ?? null)
+      return `$${values.length}`
+    })
+    return `(${placeholders.join(",")})`
+  })
+  await pool.query(
+    `INSERT INTO jobs (${JOB_INSERT_COLUMNS.join(",")}) VALUES ${tuples.join(",")}`,
+    values
+  )
+}
+
+async function updateJobRow(
+  pool: ReturnType<typeof getPostgresPool>,
+  id: string,
+  payload: Record<string, unknown>
+) {
+  const entries = Object.entries(payload).filter(([k]) => JOB_UPDATE_WHITELIST.has(k))
+  if (entries.length === 0) return
+  const values = entries.map(([, v]) => v)
+  const setClause = entries.map(([k], i) => `${k} = $${i + 1}`).join(", ")
+  await pool.query(`UPDATE jobs SET ${setClause} WHERE id = $${values.length + 1}`, [...values, id])
+}
 
 const BLOCKED_TITLE_PATTERNS = [
   /^(login|log(?:\s+)?in|log back in!?)$/i,
@@ -166,7 +226,7 @@ export async function persistCrawlJobs({
   crawledAt: Date
   jobs: RawJob[]
 }) {
-  const supabase = createAdminClient()
+  const pool = getPostgresPool()
   const crawledAtIso = crawledAt.toISOString()
   const normalized = jobs
     .map((job) => ({
@@ -229,16 +289,17 @@ export async function persistCrawlJobs({
   }> = []
 
   for (const externalIdChunk of chunkValues(externalIds, EXISTING_ROW_LOOKUP_BATCH_SIZE)) {
-    const { data, error } = await (supabase
-      .from("jobs")
-      .select(
-        "id, external_id, description, employment_type, seniority_level, is_remote, is_hybrid, requires_authorization, salary_min, salary_max, salary_currency, sponsors_h1b, sponsorship_score, visa_language_detected"
-      )
-      .eq("company_id", companyId)
-      .in("external_id", externalIdChunk) as any)
-
-    if (error) throw error
-    existingRows.push(...((data ?? []) as typeof existingRows))
+    const { rows } = await pool.query<
+      (typeof existingRows)[number]
+    >(
+      `SELECT id, external_id, description, employment_type, seniority_level, is_remote, is_hybrid,
+              requires_authorization, salary_min, salary_max, salary_currency, sponsors_h1b,
+              sponsorship_score, visa_language_detected
+       FROM jobs
+       WHERE company_id = $1 AND external_id = ANY($2::text[])`,
+      [companyId, externalIdChunk]
+    )
+    existingRows.push(...rows)
   }
 
   const existingByExternalId = new Map<
@@ -377,25 +438,25 @@ export async function persistCrawlJobs({
 
   if (toInsert.length > 0) {
     for (const insertChunk of chunkValues(toInsert, JOB_WRITE_BATCH_SIZE)) {
-      const { error } = await ((supabase.from("jobs") as any).insert(insertChunk))
-      if (error) throw error
+      await insertJobsChunk(pool, insertChunk)
     }
   }
 
   for (const row of toUpdate) {
-    const { error } = await ((supabase.from("jobs") as any).update(row.payload).eq("id", row.id))
-    if (error) throw error
+    await updateJobRow(pool, row.id, row.payload)
   }
 
-  const { data: activeRows, error: activeRowsError } = await (supabase
-    .from("jobs")
-    .select("id, external_id, last_seen_at")
-    .eq("company_id", companyId)
-    .eq("is_active", true) as any)
-  if (activeRowsError) throw activeRowsError
+  const activeResult = await pool.query<{
+    id: string
+    external_id: string | null
+    last_seen_at: string | null
+  }>(
+    `SELECT id, external_id, last_seen_at FROM jobs WHERE company_id = $1 AND is_active = true`,
+    [companyId]
+  )
 
   const currentExternalIdSet = new Set(externalIds)
-  const staleRows = ((activeRows ?? []) as Array<{
+  const staleRows = (activeResult.rows as Array<{
     id: string
     external_id: string | null
     last_seen_at: string | null
@@ -416,34 +477,30 @@ export async function persistCrawlJobs({
 
   if (staleIds.length > 0) {
     for (const staleChunk of chunkValues(staleIds, JOB_DEACTIVATE_BATCH_SIZE)) {
-      const { error } = await ((supabase.from("jobs") as any)
-        .update({ is_active: false, updated_at: crawledAtIso } as any)
-        .in("id", staleChunk))
-      if (error) throw error
+      await pool.query(
+        `UPDATE jobs SET is_active = false, updated_at = $1 WHERE id = ANY($2::uuid[])`,
+        [crawledAtIso, staleChunk]
+      )
     }
   }
 
-  const { count: activeCount, error: countError } = await supabase
-    .from("jobs")
-    .select("*", { count: "exact", head: true })
-    .eq("company_id", companyId)
-    .eq("is_active", true)
+  const countResult = await pool.query<{ count: string }>(
+    `SELECT COUNT(*)::text AS count FROM jobs WHERE company_id = $1 AND is_active = true`,
+    [companyId]
+  )
+  const activeCount = Number(countResult.rows[0]?.count ?? 0)
 
-  if (countError) throw countError
-
-  const { error: companyError } = await ((supabase.from("companies") as any)
-    .update({
-      last_crawled_at: crawledAtIso,
-      job_count: activeCount ?? 0,
-      updated_at: crawledAtIso,
-    } as any)
-    .eq("id", companyId))
-  if (companyError) throw companyError
+  await pool.query(
+    `UPDATE companies
+     SET last_crawled_at = $1, job_count = $2, updated_at = $3
+     WHERE id = $4`,
+    [crawledAtIso, activeCount, crawledAtIso, companyId]
+  )
 
   return {
     inserted: toInsert.length,
     updated: toUpdate.length,
     deactivated: staleIds.length,
-    activeCount: activeCount ?? 0,
+    activeCount,
   }
 }

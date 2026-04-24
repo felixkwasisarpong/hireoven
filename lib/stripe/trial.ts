@@ -1,4 +1,4 @@
-import { createAdminClient } from "@/lib/supabase/admin"
+import { getPostgresPool } from "@/lib/postgres/server"
 import { getPlanAmountCents } from "@/lib/pricing"
 
 export async function startTrial(
@@ -9,23 +9,48 @@ export async function startTrial(
   stripeSubscriptionId: string,
   stripeCustomerId: string
 ): Promise<void> {
-  const supabase = createAdminClient()
+  const pool = getPostgresPool()
 
-  await supabase.from("subscriptions" as any).upsert(
-    {
-      user_id: userId,
+  await pool.query(
+    `INSERT INTO subscriptions (
+      user_id,
       plan,
-      status: "trialing",
-      stripe_subscription_id: stripeSubscriptionId,
-      stripe_customer_id: stripeCustomerId,
-      billing_interval: interval,
-      amount_cents: getPlanAmountCents(plan, interval),
-      current_period_start: new Date().toISOString(),
-      current_period_end: trialEnd.toISOString(),
-      trial_end: trialEnd.toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "stripe_subscription_id" }
+      status,
+      stripe_subscription_id,
+      stripe_customer_id,
+      billing_interval,
+      amount_cents,
+      current_period_start,
+      current_period_end,
+      trial_end,
+      updated_at
+    ) VALUES (
+      $1, $2, 'trialing', $3, $4, $5, $6, $7, $8, $9, $10
+    )
+    ON CONFLICT (stripe_subscription_id)
+    DO UPDATE SET
+      user_id = EXCLUDED.user_id,
+      plan = EXCLUDED.plan,
+      status = EXCLUDED.status,
+      stripe_customer_id = EXCLUDED.stripe_customer_id,
+      billing_interval = EXCLUDED.billing_interval,
+      amount_cents = EXCLUDED.amount_cents,
+      current_period_start = EXCLUDED.current_period_start,
+      current_period_end = EXCLUDED.current_period_end,
+      trial_end = EXCLUDED.trial_end,
+      updated_at = EXCLUDED.updated_at`,
+    [
+      userId,
+      plan,
+      stripeSubscriptionId,
+      stripeCustomerId,
+      interval,
+      getPlanAmountCents(plan, interval),
+      new Date().toISOString(),
+      trialEnd.toISOString(),
+      trialEnd.toISOString(),
+      new Date().toISOString(),
+    ]
   )
 }
 
@@ -35,16 +60,17 @@ export async function isInTrial(userId: string): Promise<boolean> {
 }
 
 export async function getTrialDaysRemaining(userId: string): Promise<number | null> {
-  const supabase = createAdminClient()
-
-  const { data } = await (supabase as any)
-    .from("subscriptions" as any)
-    .select("status, current_period_end")
-    .eq("user_id", userId)
-    .eq("status", "trialing")
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle()
+  const pool = getPostgresPool()
+  const result = await pool.query<{ current_period_end: string | null }>(
+    `SELECT current_period_end
+     FROM subscriptions
+     WHERE user_id = $1
+       AND status = 'trialing'
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    [userId]
+  )
+  const data = result.rows[0]
 
   if (!data?.current_period_end) return null
 

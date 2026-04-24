@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { generateResumePDF } from "@/lib/resume/pdf-generator"
+import { getPostgresPool } from "@/lib/postgres/server"
 import { createClient } from "@/lib/supabase/server"
 import type { Resume } from "@/types"
 
@@ -15,6 +16,7 @@ export async function GET(request: Request) {
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
+  const pool = getPostgresPool()
 
   const { searchParams } = new URL(request.url)
   const resumeId = searchParams.get("resumeId")
@@ -23,14 +25,17 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "resumeId is required" }, { status: 400 })
   }
 
-  const { data, error } = await supabase
-    .from("resumes")
-    .select("*")
-    .eq("id", resumeId)
-    .eq("user_id", user.id)
-    .single()
+  const result = await pool.query<Resume>(
+    `SELECT *
+     FROM resumes
+     WHERE id = $1
+       AND user_id = $2
+     LIMIT 1`,
+    [resumeId, user.id]
+  )
+  const data = result.rows[0]
 
-  if (error || !data) {
+  if (!data) {
     return NextResponse.json({ error: "Resume not found" }, { status: 404 })
   }
 

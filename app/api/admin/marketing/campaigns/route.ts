@@ -7,7 +7,7 @@ import {
   buildMarketingUnsubscribeUrl,
   upsertMarketingSubscriber,
 } from "@/lib/marketing/subscribers"
-import { createAdminClient } from "@/lib/supabase/admin"
+import { getPostgresPool } from "@/lib/postgres/server"
 
 const resend = process.env.RESEND_API_KEY
   ? new Resend(process.env.RESEND_API_KEY)
@@ -38,25 +38,31 @@ function escapeHtml(input: string) {
 }
 
 async function getSegmentRecipients(segment: "all" | "waitlist_confirmed") {
-  const supabase = createAdminClient()
+  const pool = getPostgresPool()
 
   if (segment === "waitlist_confirmed") {
-    const { data } = await ((supabase.from("waitlist") as any)
-      .select("email")
-      .eq("confirmed", true)
-      .not("email", "is", null))
+    const result = await pool.query<{ email: string | null }>(
+      `SELECT email
+       FROM waitlist
+       WHERE confirmed = true
+         AND email IS NOT NULL`
+    )
+    const data = result.rows
     const emails = Array.from(
-      new Set(((data ?? []) as Array<{ email: string | null }>).map((x) => x.email).filter(Boolean))
+      new Set(data.map((x) => x.email).filter(Boolean))
     ) as string[]
     return emails
   }
 
-  const { data } = await ((supabase.from("marketing_subscribers") as any)
-    .select("email")
-    .eq("subscribed_to_marketing", true))
+  const result = await pool.query<{ email: string | null }>(
+    `SELECT email
+     FROM marketing_subscribers
+     WHERE subscribed_to_marketing = true`
+  )
+  const data = result.rows
 
   return Array.from(
-    new Set(((data ?? []) as Array<{ email: string | null }>).map((x) => x.email).filter(Boolean))
+    new Set(data.map((x) => x.email).filter(Boolean))
   ) as string[]
 }
 
@@ -66,14 +72,14 @@ export async function GET() {
     return NextResponse.json({ error: access.error }, { status: access.status })
   }
 
-  const supabase = createAdminClient()
-  const { data, error } = await ((supabase.from("marketing_campaigns") as any)
-    .select("*")
-    .order("created_at", { ascending: false })
-    .limit(50))
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ rows: data ?? [] })
+  const pool = getPostgresPool()
+  const result = await pool.query(
+    `SELECT *
+     FROM marketing_campaigns
+     ORDER BY created_at DESC
+     LIMIT 50`
+  )
+  return NextResponse.json({ rows: result.rows })
 }
 
 export async function POST(request: Request) {
@@ -99,27 +105,37 @@ export async function POST(request: Request) {
   }
 
   const { name, subject, bodyText, bodyHtml, segment, sendNow } = parsed.data
-  const supabase = createAdminClient()
+  const pool = getPostgresPool()
   const recipients = await getSegmentRecipients(segment)
 
-  const { data: campaign, error: campaignError } = await ((supabase
-    .from("marketing_campaigns") as any)
-    .insert({
-      created_by: access.profile.id,
+  const campaignResult = await pool.query<{ id: string } & Record<string, unknown>>(
+    `INSERT INTO marketing_campaigns (
+      created_by,
       name,
       subject,
-      body_text: bodyText,
-      body_html: bodyHtml ?? null,
+      body_text,
+      body_html,
       segment,
-      status: sendNow ? "sending" : "draft",
-      total_recipients: recipients.length,
-    })
-    .select("*")
-    .single())
+      status,
+      total_recipients
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    RETURNING *`,
+    [
+      access.profile.id,
+      name,
+      subject,
+      bodyText,
+      bodyHtml ?? null,
+      segment,
+      sendNow ? "sending" : "draft",
+      recipients.length,
+    ]
+  )
+  const campaign = campaignResult.rows[0]
 
-  if (campaignError || !campaign) {
+  if (!campaign) {
     return NextResponse.json(
-      { error: campaignError?.message ?? "Could not create campaign" },
+      { error: "Could not create campaign" },
       { status: 500 }
     )
   }
@@ -155,13 +171,22 @@ export async function POST(request: Request) {
         html,
       })
 
-      await ((supabase.from("marketing_campaign_sends") as any).insert({
-        campaign_id: campaign.id,
-        email,
-        status: sendResponse.error ? "failed" : "sent",
-        provider_message_id: (sendResponse as any)?.data?.id ?? null,
-        error_message: sendResponse.error?.message ?? null,
-      }))
+      await pool.query(
+        `INSERT INTO marketing_campaign_sends (
+          campaign_id,
+          email,
+          status,
+          provider_message_id,
+          error_message
+        ) VALUES ($1, $2, $3, $4, $5)`,
+        [
+          campaign.id,
+          email,
+          sendResponse.error ? "failed" : "sent",
+          (sendResponse as { data?: { id?: string } })?.data?.id ?? null,
+          sendResponse.error?.message ?? null,
+        ]
+      )
 
       if (sendResponse.error) {
         failed += 1
@@ -170,23 +195,28 @@ export async function POST(request: Request) {
       }
     } catch (error) {
       failed += 1
-      await ((supabase.from("marketing_campaign_sends") as any).insert({
-        campaign_id: campaign.id,
-        email,
-        status: "failed",
-        error_message: (error as Error).message,
-      }))
+      await pool.query(
+        `INSERT INTO marketing_campaign_sends (
+          campaign_id,
+          email,
+          status,
+          error_message
+        ) VALUES ($1, $2, 'failed', $3)`,
+        [campaign.id, email, (error as Error).message]
+      )
     }
   }
 
-  await ((supabase.from("marketing_campaigns") as any)
-    .update({
-      status: failed > 0 ? "failed" : "sent",
-      sent_at: new Date().toISOString(),
-      total_sent: sent,
-      total_failed: failed,
-    })
-    .eq("id", campaign.id))
+  await pool.query(
+    `UPDATE marketing_campaigns
+     SET status = $1,
+         sent_at = $2,
+         total_sent = $3,
+         total_failed = $4,
+         updated_at = now()
+     WHERE id = $5`,
+    [failed > 0 ? "failed" : "sent", new Date().toISOString(), sent, failed, campaign.id]
+  )
 
   return NextResponse.json({
     campaignId: campaign.id,

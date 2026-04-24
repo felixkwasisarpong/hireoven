@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { getPostgresPool } from "@/lib/postgres/server"
 import { createClient } from "@/lib/supabase/server"
 
 export const dynamic = "force-dynamic"
@@ -17,21 +18,27 @@ export async function GET() {
   monthStart.setUTCDate(1)
   monthStart.setUTCHours(0, 0, 0, 0)
 
+  const pool = getPostgresPool()
+
   const [coverLetters, analyses] = await Promise.all([
-    (supabase as any)
-      .from("cover_letters")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", user.id)
-      .gte("created_at", monthStart.toISOString()),
-    (supabase as any)
-      .from("resume_analyses")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", user.id)
-      .gte("created_at", monthStart.toISOString()),
+    pool.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count
+       FROM cover_letters
+       WHERE user_id = $1
+         AND created_at >= $2`,
+      [user.id, monthStart.toISOString()]
+    ),
+    pool.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count
+       FROM resume_analyses
+       WHERE user_id = $1
+         AND created_at >= $2`,
+      [user.id, monthStart.toISOString()]
+    ),
   ])
 
   return NextResponse.json({
-    cover_letters_used: coverLetters.count ?? 0,
-    analyses_used: analyses.count ?? 0,
+    cover_letters_used: Number(coverLetters.rows[0]?.count ?? 0),
+    analyses_used: Number(analyses.rows[0]?.count ?? 0),
   })
 }

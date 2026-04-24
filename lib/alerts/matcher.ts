@@ -1,4 +1,4 @@
-import { createAdminClient } from "@/lib/supabase/admin"
+import { getPostgresPool } from "@/lib/postgres/server"
 import type { Job, JobAlert } from "@/types"
 
 function normalizedList(values?: string[] | null) {
@@ -71,31 +71,24 @@ function matchesAlert(alert: JobAlert, job: Job) {
 }
 
 export async function matchJobToAlerts(job: Job): Promise<JobAlert[]> {
-  const supabase = createAdminClient()
-  const { data, error } = await supabase
-    .from("job_alerts")
-    .select("*")
-    .eq("is_active", true)
+  const pool = getPostgresPool()
+  const { rows } = await pool.query<JobAlert>(`SELECT * FROM job_alerts WHERE is_active = true`)
 
-  if (error) throw error
-
-  return ((data ?? []) as JobAlert[]).filter((alert) => matchesAlert(alert, job))
+  return rows.filter((alert: JobAlert) => matchesAlert(alert, job))
 }
 
 export async function matchJobToWatchlists(job: Job): Promise<string[]> {
-  const supabase = createAdminClient()
-  const { data, error } = await supabase
-    .from("watchlist")
-    .select("user_id")
-    .eq("company_id", job.company_id)
-
-  if (error) throw error
+  const pool = getPostgresPool()
+  const { rows } = await pool.query<{ user_id: string | null }>(
+    `SELECT user_id FROM watchlist WHERE company_id = $1`,
+    [job.company_id]
+  )
 
   return Array.from(
     new Set(
-      ((data ?? []) as Array<{ user_id: string | null }>)
-        .map((row) => row.user_id)
-        .filter((value): value is string => Boolean(value))
+      rows
+        .map((row: { user_id: string | null }) => row.user_id)
+        .filter((value: string | null): value is string => Boolean(value))
     )
   )
 }

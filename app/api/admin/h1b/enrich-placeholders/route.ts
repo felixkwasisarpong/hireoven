@@ -23,19 +23,21 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { assertAdminAccess } from '@/lib/admin/auth'
-import { createAdminClient } from '@/lib/supabase/admin'
+import { getPostgresPool } from '@/lib/postgres/server'
 import { detectAtsFromHtml } from '@/lib/companies/ats-signatures'
 import { detectAtsFromUrl } from '@/lib/companies/detect-ats'
 import { companyLogoUrlFromDomain } from '@/lib/companies/logo-url'
+import type { Pool } from 'pg'
 
 export const runtime = 'nodejs'
-// Discovery fans out HTTP calls; keep generous timeout on long-running runtimes.
 export const maxDuration = 300
 
 const DEFAULT_LIMIT = 25
 const MAX_LIMIT = 100
 const FETCH_TIMEOUT_MS = 6000
 const CONCURRENCY = 6
+
+const PLACEHOLDER_SOURCES = ['lca_import', 'lca_reconciliation', 'uscis_reconciliation']
 
 type PlaceholderRow = {
   id: string
@@ -86,32 +88,19 @@ export async function POST(request: NextRequest) {
   const limit = Math.min(MAX_LIMIT, Math.max(1, Number.isFinite(rawLimit) ? rawLimit : DEFAULT_LIMIT))
   const dryRun = Boolean(body.dryRun)
 
-  const supabase = createAdminClient()
+  const pool = getPostgresPool()
 
-  // Grab the next batch of pending placeholders. We match any of the known
-  // placeholder-source tags - the LCA importer historically wrote
-  // `lca_import`, and the reconciliation script writes
-  // `lca_reconciliation` / `uscis_reconciliation`. Old and new rows all
-  // need the same enrichment pass.
-  const PLACEHOLDER_SOURCES = [
-    'lca_import',
-    'lca_reconciliation',
-    'uscis_reconciliation',
-  ]
-  const { data, error } = await (supabase
-    .from('companies')
-    .select('id, name, domain, careers_url, ats_type, logo_url, raw_ats_config')
-    .in('raw_ats_config->>source', PLACEHOLDER_SOURCES)
-    .filter('raw_ats_config->>ats_discovery_status', 'eq', 'pending')
-    .is('ats_type', null)
-    .order('created_at', { ascending: true })
-    .limit(limit) as unknown as Promise<{ data: PlaceholderRow[] | null; error: { message: string } | null }>)
+  const { rows: pending } = await pool.query<PlaceholderRow>(
+    `SELECT id, name, domain, careers_url, ats_type, logo_url, raw_ats_config
+     FROM companies
+     WHERE raw_ats_config->>'source' = ANY($1::text[])
+       AND raw_ats_config->>'ats_discovery_status' = 'pending'
+       AND ats_type IS NULL
+     ORDER BY created_at ASC
+     LIMIT $2`,
+    [PLACEHOLDER_SOURCES, limit]
+  )
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
-  }
-
-  const pending = data ?? []
   const summary: EnrichSummary = {
     checked: 0,
     discovered: 0,
@@ -123,80 +112,85 @@ export async function POST(request: NextRequest) {
   }
 
   if (pending.length === 0) {
-    // Report remaining so the UI can stop polling.
-    const remaining = await countRemaining(supabase)
-    return NextResponse.json({ ok: true, dryRun, limit, ...summary, remaining })
+    summary.remaining = await countRemaining(pool)
+    return NextResponse.json({ ok: true, dryRun, limit, ...summary })
   }
 
-  // Run discovery with bounded concurrency.
-  const tasks = pending.map((row) => () => enrichOne(row, supabase, dryRun, summary))
+  const tasks = pending.map((row) => () => enrichOne(row, pool, dryRun, summary))
   await runWithConcurrency(tasks, CONCURRENCY)
 
-  summary.remaining = await countRemaining(supabase)
+  summary.remaining = await countRemaining(pool)
   return NextResponse.json({ ok: true, dryRun, limit, ...summary })
 }
 
-/** Returns the number of LCA placeholders still awaiting ATS discovery. */
 export async function GET() {
   const access = await assertAdminAccess()
   if (!access.ok) {
     return NextResponse.json({ error: access.error }, { status: access.status })
   }
-  const supabase = createAdminClient()
-  const remaining = await countRemaining(supabase)
+  const pool = getPostgresPool()
+  const remaining = await countRemaining(pool)
   return NextResponse.json({ remaining })
 }
 
 // ---------------------------------------------------------------------------
 
 async function updateCompanyWithDomainHandling(
-  supabase: ReturnType<typeof createAdminClient>,
+  pool: Pool,
   rowId: string,
-  update: Record<string, unknown>,
+  update: {
+    ats_type?: string
+    careers_url?: string | null
+    is_active?: boolean
+    logo_url?: string | null
+    raw_ats_config?: Record<string, unknown>
+    updated_at?: string
+  },
   verifiedDomain?: string
 ): Promise<void> {
   const payload = verifiedDomain ? { ...update, domain: verifiedDomain } : update
-  const { error } = await supabase
-    .from('companies')
-    .update(payload as never)
-    .eq('id', rowId)
-  if (!error) return
+  const cols = Object.keys(payload) as Array<keyof typeof payload>
+  const vals = cols.map((k) => {
+    const v = payload[k]
+    return k === 'raw_ats_config' ? JSON.stringify(v) : v
+  })
+  const setClauses = cols.map((k, i) =>
+    k === 'raw_ats_config' ? `raw_ats_config = $${i + 1}::jsonb` : `${k} = $${i + 1}`
+  )
+  vals.push(rowId)
 
-  const isDomainConflict =
-    Boolean(verifiedDomain) &&
-    (error.message.includes('23505') || /duplicate|unique/i.test(error.message))
+  try {
+    await pool.query(
+      `UPDATE companies SET ${setClauses.join(', ')} WHERE id = $${vals.length}`,
+      vals
+    )
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err)
+    const isDomainConflict =
+      Boolean(verifiedDomain) && /23505|duplicate|unique/i.test(msg)
 
-  if (!isDomainConflict) {
-    throw new Error(`enrich update failed: ${error.message}`)
-  }
+    if (!isDomainConflict) throw new Error(`enrich update failed: ${msg}`)
 
-  const { data: conflictRow } = await supabase
-    .from('companies')
-    .select('id')
-    .eq('domain', verifiedDomain!)
-    .maybeSingle()
-
-  const existingRaw = (update.raw_ats_config as Record<string, unknown> | undefined) ?? {}
-  const fallback = {
-    ...update,
-    raw_ats_config: {
+    const conflictResult = await pool.query<{ id: string }>(
+      `SELECT id FROM companies WHERE domain = $1 LIMIT 1`,
+      [verifiedDomain]
+    )
+    const existingRaw = (update.raw_ats_config as Record<string, unknown> | undefined) ?? {}
+    const fallbackConfig = {
       ...existingRaw,
       domain_conflict: {
         domain: verifiedDomain,
-        conflict_company_id:
-          (conflictRow as { id?: string } | null)?.id ?? null,
+        conflict_company_id: conflictResult.rows[0]?.id ?? null,
         noted_at: new Date().toISOString(),
       },
-    } as never,
-    updated_at: new Date().toISOString(),
-  }
-
-  const { error: fallbackError } = await supabase
-    .from('companies')
-    .update(fallback as never)
-    .eq('id', rowId)
-  if (fallbackError) {
-    throw new Error(`enrich update fallback failed: ${fallbackError.message}`)
+    }
+    await pool.query(
+      `UPDATE companies
+       SET raw_ats_config = $1::jsonb,
+           updated_at = $2
+       WHERE id = $3`,
+      [JSON.stringify(fallbackConfig), new Date().toISOString(), rowId]
+    )
   }
 }
 
@@ -204,7 +198,7 @@ async function updateCompanyWithDomainHandling(
 
 async function enrichOne(
   row: PlaceholderRow,
-  supabase: ReturnType<typeof createAdminClient>,
+  pool: Pool,
   dryRun: boolean,
   summary: EnrichSummary
 ): Promise<void> {
@@ -248,8 +242,6 @@ async function enrichOne(
   }
 
   if (!detection) {
-    // No ATS found - mark as failed so we don't retry forever, but keep it
-    // inactive. Humans can re-queue via a future admin action if they want.
     summary.failed++
     summary.sample.push({
       id: row.id,
@@ -260,23 +252,24 @@ async function enrichOne(
       status: candidateUrls.length === 0 ? 'no-match' : 'fetch-failed',
     })
     if (!dryRun) {
-      await supabase
-        .from('companies')
-        .update({
-          raw_ats_config: {
-            ...(row.raw_ats_config ?? {}),
+      await pool.query(
+        `UPDATE companies
+         SET raw_ats_config = raw_ats_config || $1::jsonb
+         WHERE id = $2`,
+        [
+          JSON.stringify({
             ats_discovery_status: 'failed',
             last_checked_at: new Date().toISOString(),
-          } as never,
-        } as never)
-        .eq('id', row.id)
+          }),
+          row.id,
+        ]
+      )
     }
     return
   }
 
   summary.discovered++
-  const shouldActivate =
-    detection.confidence === 'high' || detection.confidence === 'medium'
+  const shouldActivate = detection.confidence === 'high' || detection.confidence === 'medium'
   if (shouldActivate) summary.promoted++
   else summary.stillPending++
 
@@ -298,7 +291,7 @@ async function enrichOne(
   if (dryRun) return
 
   await updateCompanyWithDomainHandling(
-    supabase,
+    pool,
     row.id,
     {
       ats_type: detection.atsType,
@@ -316,32 +309,26 @@ async function enrichOne(
           matchedUrl: detection.matchedUrl,
         },
         last_checked_at: new Date().toISOString(),
-      } as never,
+      },
       updated_at: new Date().toISOString(),
     },
     verifiedDomain ?? undefined
   )
 }
 
-async function countRemaining(
-  supabase: ReturnType<typeof createAdminClient>
-): Promise<number> {
-  const { count } = await (supabase
-    .from('companies')
-    .select('id', { count: 'exact', head: true })
-    .in('raw_ats_config->>source', [
-      'lca_import',
-      'lca_reconciliation',
-      'uscis_reconciliation',
-    ])
-    .filter('raw_ats_config->>ats_discovery_status', 'eq', 'pending') as unknown as Promise<{
-    count: number | null
-  }>)
-  return count ?? 0
+async function countRemaining(pool: Pool): Promise<number> {
+  const result = await pool.query<{ c: string }>(
+    `SELECT COUNT(*)::text AS c
+     FROM companies
+     WHERE raw_ats_config->>'source' = ANY($1::text[])
+       AND raw_ats_config->>'ats_discovery_status' = 'pending'`,
+    [PLACEHOLDER_SOURCES]
+  )
+  return Number(result.rows[0]?.c ?? 0)
 }
 
 // ---------------------------------------------------------------------------
-// HTTP / discovery helpers (mirrors scripts/discover-company-ats-live.ts)
+// HTTP / discovery helpers
 // ---------------------------------------------------------------------------
 
 function buildCandidateUrls(
@@ -394,8 +381,6 @@ async function fetchHtml(url: string): Promise<string | null> {
     })
     if (!response.ok) return null
     const text = await response.text()
-    // Don't load the whole of massive corporate sites into memory; 500 KB is
-    // plenty to catch ATS signatures.
     return text.length > 500_000 ? text.slice(0, 500_000) : text
   } catch {
     return null
@@ -418,9 +403,7 @@ async function runWithConcurrency<T>(
     }
   }
   await Promise.all(
-    Array.from({ length: Math.min(maxConcurrency, tasks.length) }).map(() =>
-      worker()
-    )
+    Array.from({ length: Math.min(maxConcurrency, tasks.length) }).map(() => worker())
   )
   return results
 }

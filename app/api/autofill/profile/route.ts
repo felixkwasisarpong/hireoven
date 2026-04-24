@@ -1,23 +1,22 @@
 import { NextResponse } from "next/server"
+import { getPostgresPool } from "@/lib/postgres/server"
 import { createClient } from "@/lib/supabase/server"
 import type { AutofillProfile, AutofillProfileInsert, AutofillProfileUpdate } from "@/types"
 
 export const runtime = "nodejs"
 
-async function getExistingProfile(supabase: any, userId: string) {
-  const { data, error } = await (supabase
-    .from("autofill_profiles" as any)
-    .select("*")
-    .eq("user_id", userId)
-    .order("updated_at", { ascending: false })
-    .limit(1) as any)
+async function getExistingProfile(userId: string) {
+  const pool = getPostgresPool()
+  const result = await pool.query<AutofillProfile>(
+    `SELECT *
+     FROM autofill_profiles
+     WHERE user_id = $1
+     ORDER BY updated_at DESC
+     LIMIT 1`,
+    [userId]
+  )
 
-  if (error) return { profile: null as AutofillProfile | null, error }
-
-  return {
-    profile: ((data as AutofillProfile[] | null) ?? [])[0] ?? null,
-    error: null,
-  }
+  return result.rows[0] ?? null
 }
 
 function calcCompletion(p: Partial<AutofillProfile>): number {
@@ -52,8 +51,7 @@ export async function GET() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  const { profile, error } = await getExistingProfile(supabase, user.id)
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  const profile = await getExistingProfile(user.id)
   const completion = profile ? calcCompletion(profile) : 0
   return NextResponse.json({
     profile: profile ?? null,
@@ -69,8 +67,8 @@ export async function POST(request: Request) {
 
   const body = await request.json().catch(() => ({})) as Omit<AutofillProfileInsert, "user_id">
 
-  const existing = await getExistingProfile(supabase, user.id)
-  if (existing.error) return NextResponse.json({ error: existing.error.message }, { status: 500 })
+  const pool = getPostgresPool()
+  const existing = await getExistingProfile(user.id)
 
   const payload = {
     ...body,
@@ -78,18 +76,36 @@ export async function POST(request: Request) {
     updated_at: new Date().toISOString(),
   } as any
 
-  const table = (supabase as any).from("autofill_profiles")
-  const query = existing.profile
-    ? (table
-        .update(payload)
-        .eq("id", existing.profile.id))
-    : (table
-        .insert(payload))
-
-  const { data, error } = await (query.select("*").single() as any)
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  const profile = data as AutofillProfile
+  let profile: AutofillProfile | null = null
+  if (existing) {
+    const entries = Object.entries(payload)
+    const values: unknown[] = []
+    const setSql = entries.map(([key, value], idx) => {
+      values.push(value)
+      return `${key} = $${idx + 1}`
+    })
+    values.push(existing.id)
+    const result = await pool.query<AutofillProfile>(
+      `UPDATE autofill_profiles
+       SET ${setSql.join(", ")}
+       WHERE id = $${values.length}
+       RETURNING *`,
+      values
+    )
+    profile = result.rows[0] ?? null
+  } else {
+    const columns = Object.keys(payload)
+    const values = Object.values(payload)
+    const placeholders = values.map((_, i) => `$${i + 1}`).join(", ")
+    const result = await pool.query<AutofillProfile>(
+      `INSERT INTO autofill_profiles (${columns.join(", ")})
+       VALUES (${placeholders})
+       RETURNING *`,
+      values
+    )
+    profile = result.rows[0] ?? null
+  }
+  if (!profile) return NextResponse.json({ error: "Failed to save profile" }, { status: 500 })
   const completion = calcCompletion(profile)
   return NextResponse.json({ profile, completion, completionPct: completion })
 }
@@ -100,8 +116,8 @@ export async function PATCH(request: Request) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const body = await request.json().catch(() => ({})) as AutofillProfileUpdate
-  const existing = await getExistingProfile(supabase, user.id)
-  if (existing.error) return NextResponse.json({ error: existing.error.message }, { status: 500 })
+  const pool = getPostgresPool()
+  const existing = await getExistingProfile(user.id)
 
   const payload = {
     ...body,
@@ -109,18 +125,36 @@ export async function PATCH(request: Request) {
     updated_at: new Date().toISOString(),
   } as any
 
-  const table = (supabase as any).from("autofill_profiles")
-  const query = existing.profile
-    ? (table
-        .update(payload)
-        .eq("id", existing.profile.id))
-    : (table
-        .insert(payload))
-
-  const { data, error } = await (query.select("*").single() as any)
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  const profile = data as AutofillProfile
+  let profile: AutofillProfile | null = null
+  if (existing) {
+    const entries = Object.entries(payload)
+    const values: unknown[] = []
+    const setSql = entries.map(([key, value], idx) => {
+      values.push(value)
+      return `${key} = $${idx + 1}`
+    })
+    values.push(existing.id)
+    const result = await pool.query<AutofillProfile>(
+      `UPDATE autofill_profiles
+       SET ${setSql.join(", ")}
+       WHERE id = $${values.length}
+       RETURNING *`,
+      values
+    )
+    profile = result.rows[0] ?? null
+  } else {
+    const columns = Object.keys(payload)
+    const values = Object.values(payload)
+    const placeholders = values.map((_, i) => `$${i + 1}`).join(", ")
+    const result = await pool.query<AutofillProfile>(
+      `INSERT INTO autofill_profiles (${columns.join(", ")})
+       VALUES (${placeholders})
+       RETURNING *`,
+      values
+    )
+    profile = result.rows[0] ?? null
+  }
+  if (!profile) return NextResponse.json({ error: "Failed to save profile" }, { status: 500 })
   const completion = calcCompletion(profile)
   return NextResponse.json({ profile, completion, completionPct: completion })
 }

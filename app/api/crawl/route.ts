@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { crawlCareersPage, type CrawlTarget } from "@/lib/crawler"
 import { persistCrawlJobs } from "@/lib/crawler/persist"
 import { requireCronAuth } from "@/lib/env"
-import { createAdminClient } from "@/lib/supabase/admin"
+import { getPostgresPool } from "@/lib/postgres/server"
 
 const MAX_COMPANY_ATTEMPTS = Math.max(
   1,
@@ -91,6 +91,45 @@ function isTransientCrawlerError(message: string) {
   )
 }
 
+async function upsertCrawlRuntime(value: Record<string, unknown>) {
+  const pool = getPostgresPool()
+  await pool.query(
+    `INSERT INTO system_settings (key, value) VALUES ($1, $2::jsonb)
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+    ["crawl_runtime", JSON.stringify(value)]
+  )
+}
+
+async function insertCrawlLogSafe(prefix: string, params: {
+  companyId: string
+  status: string
+  jobsFound: number
+  newJobs: number
+  durationMs: number
+  crawledAtIso: string
+  errorMessage: string | null
+}) {
+  const pool = getPostgresPool()
+  try {
+    await pool.query(
+      `INSERT INTO crawl_logs (company_id, status, jobs_found, new_jobs, duration_ms, crawled_at, error_message)
+       VALUES ($1::uuid, $2, $3, $4, $5, $6::timestamptz, $7)`,
+      [
+        params.companyId,
+        params.status,
+        params.jobsFound,
+        params.newJobs,
+        params.durationMs,
+        params.crawledAtIso,
+        params.errorMessage,
+      ]
+    )
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error(`${prefix} Unable to insert crawl log for ${params.companyId}: ${message}`)
+  }
+}
+
 // Scheduled jobs (Coolify, cron, etc.) call GET with CRON_SECRET
 export async function GET(request: NextRequest) {
   if (!requireCronAuth(request.headers.get("authorization"))) {
@@ -100,7 +139,7 @@ export async function GET(request: NextRequest) {
   const runId = crypto.randomUUID()
   const startedAtIso = new Date().toISOString()
   const fullCrawlStartedAt = Date.now()
-  const supabase = createAdminClient()
+  const pool = getPostgresPool()
   let companiesCount = 0
   let succeeded = 0
   let failed = 0
@@ -109,33 +148,45 @@ export async function GET(request: NextRequest) {
   let completed = false
   let lastErrorMessage: string | null = null
 
-  await ((supabase.from("system_settings") as any).upsert({
-    key: "crawl_runtime",
-    value: {
-      state: "running",
-      runId,
-      startedAt: startedAtIso,
-      route: "api/crawl",
-      trigger: "cron",
-    },
-  } as any))
+  await upsertCrawlRuntime({
+    state: "running",
+    runId,
+    startedAt: startedAtIso,
+    route: "api/crawl",
+    trigger: "cron",
+  })
 
   try {
-    const { data: companies, error } = await supabase
-      .from("companies")
-      .select("id, name, careers_url, last_crawled_at, ats_type")
-      .eq("is_active", true)
-      .order("last_crawled_at", { ascending: true, nullsFirst: true })
-
-    if (error) {
-      lastErrorMessage = error.message
-      return NextResponse.json({ error: error.message }, { status: 500 })
+    let companies: Array<{
+      id: string
+      name: string
+      careers_url: string
+      last_crawled_at: string | null
+      ats_type: string | null
+    }>
+    try {
+      const companyResult = await pool.query<{
+        id: string
+        name: string
+        careers_url: string
+        last_crawled_at: string | null
+        ats_type: string | null
+      }>(
+        `SELECT id, name, careers_url, last_crawled_at, ats_type
+         FROM companies
+         WHERE is_active = true
+         ORDER BY last_crawled_at ASC NULLS FIRST`
+      )
+      companies = companyResult.rows
+    } catch (error) {
+      lastErrorMessage = error instanceof Error ? error.message : "Database query failed"
+      return NextResponse.json({ error: lastErrorMessage }, { status: 500 })
     }
 
-    companiesCount = companies?.length ?? 0
+    companiesCount = companies.length
 
     const results = await Promise.all(
-      (companies ?? []).map(async (company) => {
+      companies.map(async (company) => {
         const companyStartedAt = Date.now()
         const target: CrawlTarget = {
           id: company.id,
@@ -181,20 +232,15 @@ export async function GET(request: NextRequest) {
 
           const durationMs = Date.now() - companyStartedAt
           const status = crawlResult.jobs.length > 0 ? "success" : "unchanged"
-          const { error: crawlLogInsertError } = await ((supabase.from("crawl_logs") as any).insert({
-            company_id: company.id,
+          await insertCrawlLogSafe("[crawl]", {
+            companyId: company.id,
             status,
-            jobs_found: crawlResult.jobs.length,
-            new_jobs: persistResult.inserted,
-            duration_ms: durationMs,
-            crawled_at: crawlResult.crawledAt.toISOString(),
-            error_message: attempts > 1 ? `Recovered after ${attempts} attempts` : null,
-          }))
-          if (crawlLogInsertError) {
-            console.error(
-              `[crawl] Unable to insert crawl log for ${company.id}: ${crawlLogInsertError.message}`
-            )
-          }
+            jobsFound: crawlResult.jobs.length,
+            newJobs: persistResult.inserted,
+            durationMs,
+            crawledAtIso: crawlResult.crawledAt.toISOString(),
+            errorMessage: attempts > 1 ? `Recovered after ${attempts} attempts` : null,
+          })
 
           return {
             status: "fulfilled" as const,
@@ -206,20 +252,15 @@ export async function GET(request: NextRequest) {
         } catch (crawlError) {
           const durationMs = Date.now() - companyStartedAt
           const errorMessage = sanitizeErrorMessage(toErrorMessage(crawlError))
-          const { error: crawlLogInsertError } = await ((supabase.from("crawl_logs") as any).insert({
-            company_id: company.id,
+          await insertCrawlLogSafe("[crawl]", {
+            companyId: company.id,
             status: "failed",
-            jobs_found: 0,
-            new_jobs: 0,
-            duration_ms: durationMs,
-            error_message: errorMessage,
-            crawled_at: new Date().toISOString(),
-          }))
-          if (crawlLogInsertError) {
-            console.error(
-              `[crawl] Unable to insert failed crawl log for ${company.id}: ${crawlLogInsertError.message}`
-            )
-          }
+            jobsFound: 0,
+            newJobs: 0,
+            durationMs,
+            crawledAtIso: new Date().toISOString(),
+            errorMessage,
+          })
 
           return {
             status: "rejected" as const,
@@ -261,23 +302,20 @@ export async function GET(request: NextRequest) {
   } finally {
     const finishedAtIso = new Date().toISOString()
     const duration = Date.now() - fullCrawlStartedAt
-    await ((supabase.from("system_settings") as any).upsert({
-      key: "crawl_runtime",
-      value: {
-        state: "idle",
-        runId,
-        startedAt: startedAtIso,
-        finishedAt: finishedAtIso,
-        route: "api/crawl",
-        trigger: "cron",
-        companiesCrawled: companiesCount,
-        succeeded,
-        failed,
-        inserted,
-        totalDurationMs: completed ? totalDurationMs : duration,
-        lastError: lastErrorMessage,
-      },
-    } as any))
+    await upsertCrawlRuntime({
+      state: "idle",
+      runId,
+      startedAt: startedAtIso,
+      finishedAt: finishedAtIso,
+      route: "api/crawl",
+      trigger: "cron",
+      companiesCrawled: companiesCount,
+      succeeded,
+      failed,
+      inserted,
+      totalDurationMs: completed ? totalDurationMs : duration,
+      lastError: lastErrorMessage,
+    })
   }
 }
 

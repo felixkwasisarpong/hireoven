@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getPlanAmountCents, type BillingInterval, type PlanKey } from "@/lib/pricing"
+import { getPostgresPool } from "@/lib/postgres/server"
 import { startTrial } from "@/lib/stripe/trial"
-import { createAdminClient } from "@/lib/supabase/admin"
 
 export const runtime = "nodejs"
 
@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 })
   }
 
-  const supabase = createAdminClient()
+  const pool = getPostgresPool()
 
   switch (event.type) {
     case "checkout.session.completed": {
@@ -79,22 +79,50 @@ export async function POST(request: NextRequest) {
             : getPlanAmountCents(plan, interval)
       const period = getSubscriptionPeriod(sub)
 
-      await supabase.from("subscriptions" as any).upsert(
-        {
-          user_id: userId,
+      await pool.query(
+        `INSERT INTO subscriptions (
+          user_id,
           plan,
-          status: statusMap[sub.status] ?? "canceled",
-          stripe_subscription_id: sub.id,
-          stripe_customer_id: sub.customer as string,
-          billing_interval: interval,
-          amount_cents: amountCents,
-          current_period_start: new Date(period.start * 1000).toISOString(),
-          current_period_end: new Date(period.end * 1000).toISOString(),
-          trial_end: sub.trial_end ? new Date(sub.trial_end * 1000).toISOString() : null,
-          cancel_at_period_end: sub.cancel_at_period_end,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "stripe_subscription_id" }
+          status,
+          stripe_subscription_id,
+          stripe_customer_id,
+          billing_interval,
+          amount_cents,
+          current_period_start,
+          current_period_end,
+          trial_end,
+          cancel_at_period_end,
+          updated_at
+        ) VALUES (
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
+        )
+        ON CONFLICT (stripe_subscription_id)
+        DO UPDATE SET
+          user_id = EXCLUDED.user_id,
+          plan = EXCLUDED.plan,
+          status = EXCLUDED.status,
+          stripe_customer_id = EXCLUDED.stripe_customer_id,
+          billing_interval = EXCLUDED.billing_interval,
+          amount_cents = EXCLUDED.amount_cents,
+          current_period_start = EXCLUDED.current_period_start,
+          current_period_end = EXCLUDED.current_period_end,
+          trial_end = EXCLUDED.trial_end,
+          cancel_at_period_end = EXCLUDED.cancel_at_period_end,
+          updated_at = EXCLUDED.updated_at`,
+        [
+          userId,
+          plan,
+          statusMap[sub.status] ?? "canceled",
+          sub.id,
+          sub.customer as string,
+          interval,
+          amountCents,
+          new Date(period.start * 1000).toISOString(),
+          new Date(period.end * 1000).toISOString(),
+          sub.trial_end ? new Date(sub.trial_end * 1000).toISOString() : null,
+          sub.cancel_at_period_end,
+          new Date().toISOString(),
+        ]
       )
       break
     }

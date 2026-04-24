@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { getPostgresPool } from "@/lib/postgres/server"
 import { createClient } from "@/lib/supabase/server"
 import type { Plan } from "@/lib/gates"
 
@@ -7,13 +8,24 @@ export async function GET() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ plan: null }, { status: 401 })
 
-  const { data: sub } = await (supabase as any)
-    .from("subscriptions")
-    .select("plan, status, current_period_end, billing_interval, amount_cents, cancel_at_period_end, trial_end")
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle()
+  const pool = getPostgresPool()
+  const result = await pool.query<{
+    plan: string | null
+    status: string | null
+    current_period_end: string | null
+    billing_interval: string | null
+    amount_cents: number | null
+    cancel_at_period_end: boolean | null
+    trial_end: string | null
+  }>(
+    `SELECT plan, status, current_period_end, billing_interval, amount_cents, cancel_at_period_end, trial_end
+     FROM subscriptions
+     WHERE user_id = $1
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    [user.id]
+  )
+  const sub = result.rows[0]
 
   const plan: Plan = (sub?.plan as Plan) ?? "free"
   const trialEnd = sub?.trial_end ?? sub?.current_period_end ?? null

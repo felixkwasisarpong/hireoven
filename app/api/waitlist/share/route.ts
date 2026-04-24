@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { z } from "zod"
-import { createAdminClient } from "@/lib/supabase/admin"
+import { getPostgresPool } from "@/lib/postgres/server"
 
 const schema = z.object({
   email: z.string().email(),
@@ -25,19 +25,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid body" }, { status: 400 })
   }
 
-  let supabase
-  try {
-    supabase = createAdminClient()
-  } catch {
-    return NextResponse.json({ ok: true })
-  }
+  const pool = getPostgresPool()
 
   const email = normalizeEmail(parsed.data.email)
-  const { data: row } = await supabase
-    .from("waitlist")
-    .select("id, metadata")
-    .eq("email", email)
-    .maybeSingle()
+  const rowResult = await pool.query<{ id: string; metadata: Record<string, unknown> | null }>(
+    `SELECT id, metadata
+     FROM waitlist
+     WHERE email = $1
+     LIMIT 1`,
+    [email]
+  )
+  const row = rowResult.rows[0]
 
   if (!row) {
     return NextResponse.json({ ok: true })
@@ -53,12 +51,12 @@ export async function POST(request: Request) {
   const key = parsed.data.channel
   shares[key] = (shares[key] ?? 0) + 1
 
-  await supabase
-    .from("waitlist")
-    .update({
-      metadata: { ...prev, share_clicks: shares },
-    })
-    .eq("id", row.id)
+  await pool.query(
+    `UPDATE waitlist
+     SET metadata = $1::jsonb
+     WHERE id = $2`,
+    [JSON.stringify({ ...prev, share_clicks: shares }), row.id]
+  )
 
   return NextResponse.json({ ok: true })
 }

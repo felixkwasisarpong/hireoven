@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { deriveResumeFields } from "@/lib/resume/scoring"
 import { buildResumeRawText } from "@/lib/resume/state"
+import { getPostgresPool } from "@/lib/postgres/server"
 import { deleteResume, getResumeUrl } from "@/lib/supabase/storage"
 import { createClient } from "@/lib/supabase/server"
 import type { Education, Project, Resume, Skills, WorkExperience } from "@/types"
@@ -8,16 +9,17 @@ import type { Education, Project, Resume, Skills, WorkExperience } from "@/types
 export const runtime = "nodejs"
 
 async function getAuthedResume(id: string, userId: string) {
-  const supabase = await createClient()
-  const { data, error } = await supabase
-    .from("resumes")
-    .select("*")
-    .eq("id", id)
-    .eq("user_id", userId)
-    .single()
+  const pool = getPostgresPool()
+  const result = await pool.query<Resume>(
+    `SELECT *
+     FROM resumes
+     WHERE id = $1
+       AND user_id = $2
+     LIMIT 1`,
+    [id, userId]
+  )
 
-  if (error || !data) return null
-  return data as Resume
+  return result.rows[0] ?? null
 }
 
 export async function GET(
@@ -63,6 +65,8 @@ export async function DELETE(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
+  const pool = getPostgresPool()
+
   const resume = await getAuthedResume(params.id, user.id)
   if (!resume) {
     return NextResponse.json({ error: "Resume not found" }, { status: 404 })
@@ -74,30 +78,32 @@ export async function DELETE(
     console.error("Failed to delete resume from storage", error)
   }
 
-  const { error } = await supabase
-    .from("resumes")
-    .delete()
-    .eq("id", resume.id)
-    .eq("user_id", user.id)
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
-  }
+  await pool.query(
+    `DELETE FROM resumes
+     WHERE id = $1
+       AND user_id = $2`,
+    [resume.id, user.id]
+  )
 
   if (resume.is_primary) {
-    const { data: remaining } = await (supabase
-      .from("resumes")
-      .select("id")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(1) as any)
+    const remaining = await pool.query<{ id: string }>(
+      `SELECT id
+       FROM resumes
+       WHERE user_id = $1
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [user.id]
+    )
 
-    const nextPrimaryId = (remaining as Array<{ id: string }> | null)?.[0]?.id
+    const nextPrimaryId = remaining.rows[0]?.id
     if (nextPrimaryId) {
-      await (supabase.from("resumes") as any)
-        .update({ is_primary: true } satisfies Partial<Resume>)
-        .eq("id", nextPrimaryId)
-        .eq("user_id", user.id)
+      await pool.query(
+        `UPDATE resumes
+         SET is_primary = true
+         WHERE id = $1
+           AND user_id = $2`,
+        [nextPrimaryId, user.id]
+      )
     }
   }
 
@@ -106,7 +112,7 @@ export async function DELETE(
 
 export async function PATCH(
   request: Request,
-  { params }: { params: { id: string } }
+  { params: routeParams }: { params: { id: string } }
 ) {
   const supabase = await createClient()
   const {
@@ -116,8 +122,9 @@ export async function PATCH(
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
+  const pool = getPostgresPool()
 
-  const resume = await getAuthedResume(params.id, user.id)
+  const resume = await getAuthedResume(routeParams.id, user.id)
   if (!resume) {
     return NextResponse.json({ error: "Resume not found" }, { status: 404 })
   }
@@ -130,9 +137,12 @@ export async function PATCH(
   }
 
   if (body.is_primary === true) {
-    await (supabase.from("resumes") as any)
-      .update({ is_primary: false } satisfies Partial<Resume>)
-      .eq("user_id", user.id)
+    await pool.query(
+      `UPDATE resumes
+       SET is_primary = false
+       WHERE user_id = $1`,
+      [user.id]
+    )
 
     updates.is_primary = true
   }
@@ -175,15 +185,32 @@ export async function PATCH(
     return NextResponse.json({ error: "No valid updates provided" }, { status: 400 })
   }
 
-  const { data, error } = await ((supabase.from("resumes") as any)
-    .update(updates as any)
-    .eq("id", resume.id)
-    .eq("user_id", user.id)
-    .select("*")
-    .single() as any)
+  const entries = Object.entries(updates) as Array<[keyof Resume, unknown]>
+  const sqlParams: unknown[] = []
+  const setSql = entries.map(([key, value]) => {
+    sqlParams.push(value)
+    const idx = sqlParams.length
+    const jsonbFields = new Set(["work_experience", "education", "skills", "projects", "experience"])
+    const cast = jsonbFields.has(String(key)) ? "::jsonb" : ""
+    if (cast) {
+      sqlParams[idx - 1] = JSON.stringify(value)
+    }
+    return `${String(key)} = $${idx}${cast}`
+  })
+  sqlParams.push(resume.id, user.id)
 
-  if (error || !data) {
-    return NextResponse.json({ error: error?.message ?? "Failed to update resume" }, { status: 500 })
+  const result = await pool.query<Resume>(
+    `UPDATE resumes
+     SET ${setSql.join(", ")}, updated_at = now()
+     WHERE id = $${sqlParams.length - 1}
+       AND user_id = $${sqlParams.length}
+     RETURNING *`,
+    sqlParams
+  )
+  const data = result.rows[0]
+
+  if (!data) {
+    return NextResponse.json({ error: "Failed to update resume" }, { status: 500 })
   }
 
   try {

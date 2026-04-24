@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { improveSummary, rewriteBulletPoint } from "@/lib/resume/editor"
+import { getPostgresPool } from "@/lib/postgres/server"
 import { createClient } from "@/lib/supabase/server"
 import type { Job, Resume, ResumeEditContext, ResumeEditInsert, ResumeEditType, ResumeSection } from "@/types"
 
@@ -17,26 +18,30 @@ type EditRequestBody = {
 }
 
 async function getAuthedResume(resumeId: string, userId: string) {
-  const supabase = await createClient()
-  const { data } = await supabase
-    .from("resumes")
-    .select("*")
-    .eq("id", resumeId)
-    .eq("user_id", userId)
-    .single()
+  const pool = getPostgresPool()
+  const result = await pool.query<Resume>(
+    `SELECT *
+     FROM resumes
+     WHERE id = $1
+       AND user_id = $2
+     LIMIT 1`,
+    [resumeId, userId]
+  )
 
-  return (data as Resume | null) ?? null
+  return result.rows[0] ?? null
 }
 
 async function getJob(jobId: string) {
-  const supabase = await createClient()
-  const { data } = await supabase
-    .from("jobs")
-    .select("*")
-    .eq("id", jobId)
-    .single()
+  const pool = getPostgresPool()
+  const result = await pool.query<Job>(
+    `SELECT *
+     FROM jobs
+     WHERE id = $1
+     LIMIT 1`,
+    [jobId]
+  )
 
-  return (data as Job | null) ?? null
+  return result.rows[0] ?? null
 }
 
 export async function POST(request: Request) {
@@ -48,6 +53,7 @@ export async function POST(request: Request) {
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
+  const pool = getPostgresPool()
 
   const body = (await request.json().catch(() => ({}))) as EditRequestBody
 
@@ -122,16 +128,40 @@ export async function POST(request: Request) {
     context: body.context ?? null,
   }
 
-  const { data, error } = await (((supabase.from("resume_edits") as any)
-    .insert(payload as any)
-    .select("*")
-    .single()) as any)
-
-  if (error || !data) {
-    return NextResponse.json(
-      { error: error?.message ?? "Failed to save suggestion" },
-      { status: 500 }
+  const insertResult = await pool.query<Record<string, unknown>>(
+    `INSERT INTO resume_edits (
+      user_id,
+      resume_id,
+      job_id,
+      section,
+      original_content,
+      suggested_content,
+      edit_type,
+      keywords_added,
+      was_accepted,
+      feedback,
+      context
+    ) VALUES (
+      $1, $2, $3, $4, $5, $6, $7, $8::text[], $9, $10, $11::jsonb
     )
+    RETURNING *`,
+    [
+      payload.user_id,
+      payload.resume_id,
+      payload.job_id,
+      payload.section,
+      payload.original_content,
+      payload.suggested_content,
+      payload.edit_type,
+      payload.keywords_added ?? [],
+      payload.was_accepted,
+      payload.feedback,
+      JSON.stringify(payload.context ?? null),
+    ]
+  )
+  const data = insertResult.rows[0]
+  if (!data) {
+    return NextResponse.json({ error: "Failed to save suggestion" }, { status: 500 })
   }
 
   return NextResponse.json({

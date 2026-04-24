@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { parseResume } from "@/lib/resume/parser"
-import { createAdminClient } from "@/lib/supabase/admin"
+import { getPostgresPool } from "@/lib/postgres/server"
 import { uploadResume, deleteResume, getResumeUrl } from "@/lib/supabase/storage"
 import { createClient } from "@/lib/supabase/server"
 import { MAX_RESUME_SIZE_BYTES, isResumeFilename, isResumeMimeType } from "@/lib/resume/constants"
@@ -31,57 +31,97 @@ async function processResumeInBackground({
   fileUrl: string
   storagePath: string
 }) {
-  const supabase = createAdminClient()
+  const pool = getPostgresPool()
 
   try {
     const parsed = await parseResume(fileUrl, fileName)
     const refreshedUrl = await getResumeUrl(storagePath)
 
-    await (supabase.from("resumes") as any)
-      .update({
-        file_url: refreshedUrl,
-        parse_status: "complete",
-        full_name: parsed.full_name,
-        email: parsed.email,
-        phone: parsed.phone,
-        location: parsed.location,
-        linkedin_url: parsed.linkedin_url,
-        portfolio_url: parsed.portfolio_url,
-        summary: parsed.summary,
-        work_experience: parsed.work_experience,
-        education: parsed.education,
-        skills: parsed.skills,
-        projects: parsed.projects,
-        seniority_level: parsed.seniority_level,
-        years_of_experience: parsed.years_of_experience,
-        primary_role: parsed.primary_role,
-        industries: parsed.industries,
-        top_skills: parsed.top_skills,
-        resume_score: parsed.resume_score,
-        raw_text: parsed.raw_text,
-      } satisfies Partial<Resume>)
-      .eq("id", resumeId)
-      .eq("user_id", userId)
+    await pool.query(
+      `UPDATE resumes
+       SET
+         file_url = $1,
+         parse_status = $2,
+         full_name = $3,
+         email = $4,
+         phone = $5,
+         location = $6,
+         linkedin_url = $7,
+         portfolio_url = $8,
+         summary = $9,
+         work_experience = $10::jsonb,
+         education = $11::jsonb,
+         skills = $12::jsonb,
+         projects = $13::jsonb,
+         seniority_level = $14,
+         years_of_experience = $15,
+         primary_role = $16,
+         industries = $17::text[],
+         top_skills = $18::text[],
+         resume_score = $19,
+         raw_text = $20,
+         updated_at = now()
+       WHERE id = $21
+         AND user_id = $22`,
+      [
+        refreshedUrl,
+        "complete",
+        parsed.full_name,
+        parsed.email,
+        parsed.phone,
+        parsed.location,
+        parsed.linkedin_url,
+        parsed.portfolio_url,
+        parsed.summary,
+        JSON.stringify(parsed.work_experience ?? null),
+        JSON.stringify(parsed.education ?? null),
+        JSON.stringify(parsed.skills ?? null),
+        JSON.stringify(parsed.projects ?? null),
+        parsed.seniority_level,
+        parsed.years_of_experience,
+        parsed.primary_role,
+        parsed.industries ?? [],
+        parsed.top_skills ?? [],
+        parsed.resume_score,
+        parsed.raw_text,
+        resumeId,
+        userId,
+      ]
+    )
 
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("id, desired_roles, seniority_level, top_skills")
-      .eq("id", userId)
-      .single()
+    const profileResult = await pool.query<Pick<Profile, "desired_roles">>(
+      `SELECT desired_roles
+       FROM profiles
+       WHERE id = $1
+       LIMIT 1`,
+      [userId]
+    )
+    const profile = profileResult.rows[0] ?? null
 
-    await (supabase.from("profiles") as any)
-      .update({
-        desired_roles: mergeRoles((profile as Pick<Profile, "desired_roles"> | null)?.desired_roles ?? null, parsed.primary_role),
-        seniority_level: parsed.seniority_level,
-        top_skills: parsed.top_skills,
-      } satisfies Partial<Profile>)
-      .eq("id", userId)
+    await pool.query(
+      `UPDATE profiles
+       SET
+         desired_roles = $1::text[],
+         seniority_level = $2,
+         top_skills = $3::text[],
+         updated_at = now()
+       WHERE id = $4`,
+      [
+        mergeRoles((profile as Pick<Profile, "desired_roles"> | null)?.desired_roles ?? null, parsed.primary_role) ?? [],
+        parsed.seniority_level,
+        parsed.top_skills ?? [],
+        userId,
+      ]
+    )
   } catch (error) {
     console.error("Resume parsing failed", error)
-    await (supabase.from("resumes") as any)
-      .update({ parse_status: "failed" } satisfies Partial<Resume>)
-      .eq("id", resumeId)
-      .eq("user_id", userId)
+    await pool.query(
+      `UPDATE resumes
+       SET parse_status = $1, updated_at = now()
+       WHERE id = $2
+         AND user_id = $3`,
+      ["failed", resumeId, userId]
+    )
   }
 }
 
@@ -112,16 +152,16 @@ export async function POST(request: Request) {
   }
 
   const isPro = plan === "pro" || plan === "pro_international"
+  const pool = getPostgresPool()
 
-  const { data: existingResumes, error: existingError } = await ((supabase
-    .from("resumes")
-    .select("id, is_primary")
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: false })) as any)
-
-  if (existingError) {
-    return NextResponse.json({ error: existingError.message }, { status: 500 })
-  }
+  const existingResumesResult = await pool.query<Array<{ id: string; is_primary: boolean }>[number]>(
+    `SELECT id, is_primary
+     FROM resumes
+     WHERE user_id = $1
+     ORDER BY created_at DESC`,
+    [user.id]
+  )
+  const existingResumes = existingResumesResult.rows
 
   const existingCount = existingResumes?.length ?? 0
   const maxResumes = isPro ? 3 : 1
@@ -148,9 +188,12 @@ export async function POST(request: Request) {
     ).some((resume) => resume.is_primary)
 
     if (shouldBePrimary) {
-      await (supabase.from("resumes") as any)
-        .update({ is_primary: false } satisfies Partial<Resume>)
-        .eq("user_id", user.id)
+      await pool.query(
+        `UPDATE resumes
+         SET is_primary = false
+         WHERE user_id = $1`,
+        [user.id]
+      )
     }
 
     const payload: ResumeInsert = {
@@ -182,14 +225,73 @@ export async function POST(request: Request) {
       raw_text: null,
     }
 
-    const { data: resume, error: insertError } = await (supabase
-      .from("resumes")
-      .insert(payload as any)
-      .select("*")
-      .single() as any)
-
-    if (insertError || !resume) {
-      throw insertError ?? new Error("Failed to create resume record")
+    const insertResult = await pool.query<Resume>(
+      `INSERT INTO resumes (
+        user_id,
+        file_name,
+        name,
+        file_url,
+        storage_path,
+        file_size,
+        is_primary,
+        parse_status,
+        full_name,
+        email,
+        phone,
+        location,
+        linkedin_url,
+        portfolio_url,
+        summary,
+        work_experience,
+        education,
+        skills,
+        projects,
+        seniority_level,
+        years_of_experience,
+        primary_role,
+        industries,
+        top_skills,
+        resume_score,
+        raw_text
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8,
+        $9, $10, $11, $12, $13, $14, $15,
+        $16::jsonb, $17::jsonb, $18::jsonb, $19::jsonb,
+        $20, $21, $22, $23::text[], $24::text[], $25, $26
+      )
+      RETURNING *`,
+      [
+        payload.user_id,
+        payload.file_name,
+        payload.name,
+        payload.file_url,
+        payload.storage_path,
+        payload.file_size,
+        payload.is_primary,
+        payload.parse_status,
+        payload.full_name,
+        payload.email,
+        payload.phone,
+        payload.location,
+        payload.linkedin_url,
+        payload.portfolio_url,
+        payload.summary,
+        JSON.stringify(payload.work_experience ?? null),
+        JSON.stringify(payload.education ?? null),
+        JSON.stringify(payload.skills ?? null),
+        JSON.stringify(payload.projects ?? null),
+        payload.seniority_level,
+        payload.years_of_experience,
+        payload.primary_role,
+        payload.industries ?? [],
+        payload.top_skills ?? [],
+        payload.resume_score,
+        payload.raw_text,
+      ]
+    )
+    const resume = insertResult.rows[0]
+    if (!resume) {
+      throw new Error("Failed to create resume record")
     }
 
     queueMicrotask(() => {

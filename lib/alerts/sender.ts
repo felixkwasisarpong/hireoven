@@ -4,7 +4,7 @@ import { logApiUsage } from "@/lib/admin/usage"
 import { removeSubscription, getUserSubscriptions } from "@/lib/alerts/push-subscriptions"
 import { getAlertsFromEmail } from "@/lib/email/identity"
 import { env } from "@/lib/env"
-import { createAdminClient } from "@/lib/supabase/admin"
+import { getPostgresPool } from "@/lib/postgres/server"
 import type { Company, Job, NotificationChannel, Profile } from "@/types"
 
 type JobWithCompanyContext = Job & {
@@ -32,27 +32,29 @@ function configureWebPush() {
 }
 
 async function getProfileForNotifications(userId: string) {
-  const supabase = createAdminClient()
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("id, email, full_name")
-    .eq("id", userId)
-    .single()
-
-  if (error) throw error
-  return data as Pick<Profile, "id" | "email" | "full_name">
+  const pool = getPostgresPool()
+  const result = await pool.query<Pick<Profile, "id" | "email" | "full_name">>(
+    `SELECT id, email, full_name
+     FROM profiles
+     WHERE id = $1
+     LIMIT 1`,
+    [userId]
+  )
+  const data = result.rows[0]
+  if (!data) throw new Error(`Profile not found for user ${userId}`)
+  return data
 }
 
 async function hydrateJobs(jobs: Job[]): Promise<JobWithCompanyContext[]> {
-  const supabase = createAdminClient()
   const companyIds = Array.from(new Set(jobs.map((job) => job.company_id)))
-
-  const { data, error } = await supabase
-    .from("companies")
-    .select("id, name, logo_url, sponsors_h1b")
-    .in("id", companyIds)
-
-  if (error) throw error
+  const pool = getPostgresPool()
+  const result = await pool.query<Pick<Company, "id" | "name" | "logo_url" | "sponsors_h1b">>(
+    `SELECT id, name, logo_url, sponsors_h1b
+     FROM companies
+     WHERE id = ANY($1::uuid[])`,
+    [companyIds]
+  )
+  const data = result.rows
 
   const companyMap = new Map(
     ((data ?? []) as Array<Pick<Company, "id" | "name" | "logo_url" | "sponsors_h1b">>).map(
@@ -223,17 +225,18 @@ function buildManageAlertsUrl() {
 }
 
 export async function hasReachedEmailRateLimit(userId: string): Promise<boolean> {
-  const supabase = createAdminClient()
+  const pool = getPostgresPool()
   const oneHourAgo = new Date(Date.now() - 3_600_000).toISOString()
 
-  const { data, error } = await ((supabase.from("alert_notifications") as any)
-    .select("id, channel")
-    .eq("user_id", userId)
-    .gte("sent_at", oneHourAgo)
-    .or("channel.eq.email,channel.eq.both"))
-
-  if (error) throw error
-  return (data?.length ?? 0) >= 10
+  const result = await pool.query<{ count: string }>(
+    `SELECT COUNT(*)::text AS count
+     FROM alert_notifications
+     WHERE user_id = $1
+       AND sent_at >= $2
+       AND channel IN ('email', 'both')`,
+    [userId, oneHourAgo]
+  )
+  return Number(result.rows[0]?.count ?? 0) >= 10
 }
 
 export async function sendEmailAlert(

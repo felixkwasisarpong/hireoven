@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase/admin'
+import { getPostgresPool } from '@/lib/postgres/server'
 import {
   H1B_PREDICTION_CACHE_TTL_MS,
   runPrediction,
@@ -12,12 +12,6 @@ export const dynamic = 'force-dynamic'
 const CACHE_TTL_MS = H1B_PREDICTION_CACHE_TTL_MS
 const MAX_JOBS_PER_REQUEST = 20
 
-/**
- * Batch-predict H1B approval for up to 20 jobs at a time.
- * Returns { [jobId]: H1BPrediction } - missing jobs are simply omitted.
- * Cached predictions <7 days old are served from the `jobs.h1b_prediction`
- * JSONB column; everything else is computed in parallel.
- */
 export async function POST(request: NextRequest) {
   let body: { jobIds?: unknown }
   try {
@@ -34,18 +28,24 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ predictions: {} })
   }
 
-  const supabase = createAdminClient()
+  const pool = getPostgresPool()
 
-  const { data, error } = await supabase
-    .from('jobs')
-    .select('*, company:companies(*)')
-    .in('id', jobIds)
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+  let jobs: Array<Job & { company: Company }>
+  try {
+    const result = await pool.query<Job & { company: Company }>(
+      `SELECT j.*, to_jsonb(c.*) AS company
+       FROM jobs j
+       LEFT JOIN companies c ON c.id = j.company_id
+       WHERE j.id = ANY($1::uuid[])`,
+      [jobIds]
+    )
+    jobs = result.rows
+  } catch (err) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : 'Database query failed' },
+      { status: 500 }
+    )
   }
-
-  const jobs = (data ?? []) as Array<Job & { company: Company }>
 
   const now = Date.now()
   const predictions: Record<string, H1BPrediction> = {}
@@ -75,27 +75,21 @@ export async function POST(request: NextRequest) {
       })
     )
 
-    const updates = computed
-      .filter((r): r is readonly [string, H1BPrediction] => r[1] !== null)
-      .map(([id, prediction]) => ({
-        id,
-        prediction,
-      }))
-
     for (const [id, prediction] of computed) {
       if (prediction) predictions[id] = prediction
     }
 
-    // Fire-and-forget cache write. We await to keep the TTL honest but don't
-    // block the response on individual failures.
+    const updates = computed.filter((r): r is readonly [string, H1BPrediction] => r[1] !== null)
+
     await Promise.allSettled(
-      updates.map(({ id, prediction }) =>
-        (supabase.from('jobs') as any)
-          .update({
-            h1b_prediction: prediction,
-            h1b_prediction_at: new Date().toISOString(),
-          })
-          .eq('id', id)
+      updates.map(([id, prediction]) =>
+        pool.query(
+          `UPDATE jobs
+           SET h1b_prediction = $1::jsonb,
+               h1b_prediction_at = $2
+           WHERE id = $3`,
+          [JSON.stringify(prediction), new Date().toISOString(), id]
+        )
       )
     )
   }

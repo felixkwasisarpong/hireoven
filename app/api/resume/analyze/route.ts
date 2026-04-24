@@ -2,8 +2,8 @@ import { NextResponse } from "next/server"
 import { upsertMatchScores } from "@/lib/matching/batch-scorer"
 import { mapAnalysisToDeepScore } from "@/lib/matching/deep-scorer"
 import { computeFastScore } from "@/lib/matching/fast-scorer"
+import { getPostgresPool } from "@/lib/postgres/server"
 import { analyzeResumeForJob, getCachedAnalysis } from "@/lib/resume/analyzer"
-import { createAdminClient } from "@/lib/supabase/admin"
 import { createClient } from "@/lib/supabase/server"
 import { requireFeature } from "@/lib/gates/server-gate"
 import type { Company, Job, Profile, Resume } from "@/types"
@@ -35,6 +35,7 @@ export async function POST(request: Request) {
 
   const supabase = await createClient()
   const user = (await supabase.auth.getUser()).data.user!
+  const pool = getPostgresPool()
 
   const body = await request.json().catch(() => ({})) as { resumeId?: string; jobId?: string }
   const { resumeId, jobId } = body
@@ -44,12 +45,15 @@ export async function POST(request: Request) {
   }
 
   // Verify resume ownership
-  const { data: resumeData } = await supabase
-    .from("resumes")
-    .select("*")
-    .eq("id", resumeId)
-    .eq("user_id", user.id)
-    .single()
+  const resumeResult = await pool.query<Resume>(
+    `SELECT *
+     FROM resumes
+     WHERE id = $1
+       AND user_id = $2
+     LIMIT 1`,
+    [resumeId, user.id]
+  )
+  const resumeData = resumeResult.rows[0]
 
   if (!resumeData) {
     return NextResponse.json({ error: "Resume not found" }, { status: 404 })
@@ -69,12 +73,15 @@ export async function POST(request: Request) {
   if (cached) return NextResponse.json(cached)
 
   // Fetch job + company
-  const admin = createAdminClient()
-  const { data: jobData } = await (admin
-    .from("jobs")
-    .select("*, company:companies(*)")
-    .eq("id", jobId)
-    .single() as any)
+  const jobResult = await pool.query<(Job & { company: Company })>(
+    `SELECT jobs.*, to_jsonb(companies.*) AS company
+     FROM jobs
+     LEFT JOIN companies ON companies.id = jobs.company_id
+     WHERE jobs.id = $1
+     LIMIT 1`,
+    [jobId]
+  )
+  const jobData = jobResult.rows[0]
 
   if (!jobData) {
     return NextResponse.json({ error: "Job not found" }, { status: 404 })
@@ -84,11 +91,14 @@ export async function POST(request: Request) {
 
   try {
     const analysis = await analyzeResumeForJob(resume, job, user.id)
-    const { data: profileData } = await admin
-      .from("profiles")
-      .select("*")
-      .eq("id", user.id)
-      .single()
+    const profileResult = await pool.query<Profile>(
+      `SELECT *
+       FROM profiles
+       WHERE id = $1
+       LIMIT 1`,
+      [user.id]
+    )
+    const profileData = profileResult.rows[0]
 
     if (profileData) {
       const fastScore = computeFastScore({

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { getPostgresPool } from "@/lib/postgres/server"
 import { createClient } from "@/lib/supabase/server"
 
 export const runtime = "nodejs"
@@ -8,16 +9,16 @@ export async function GET() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  const { data, error } = await (supabase as any)
-    .from("autofill_history")
-    .select("*")
-    .eq("user_id", user.id)
-    .order("applied_at", { ascending: false })
-    .limit(100)
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-
-  const history = data ?? []
+  const pool = getPostgresPool()
+  const result = await pool.query<Record<string, unknown>>(
+    `SELECT *
+     FROM autofill_history
+     WHERE user_id = $1
+     ORDER BY applied_at DESC
+     LIMIT 100`,
+    [user.id]
+  )
+  const history = result.rows
   const totalApplications = history.length
   const avgFillRate =
     totalApplications > 0
@@ -53,72 +54,78 @@ export async function POST(request: Request) {
   const fill_rate = fields_total > 0 ? Math.round((fields_filled / fields_total) * 100) : 0
 
   const now = new Date().toISOString()
+  const pool = getPostgresPool()
 
   if (body.job_id) {
     const timeline = [{ status: "applied", date: now, note: "Logged via Hireoven autofill" }]
 
-    const { data: existingApplication } = await (supabase as any)
-      .from("job_applications")
-      .select("id")
-      .eq("user_id", user.id)
-      .eq("job_id", body.job_id)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle()
+    const existingResult = await pool.query<{ id: string }>(
+      `SELECT id
+       FROM job_applications
+       WHERE user_id = $1
+         AND job_id = $2
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [user.id, body.job_id]
+    )
+    const existingApplication = existingResult.rows[0]
 
     if (existingApplication?.id) {
-      const { error: applicationError } = await (supabase as any)
-        .from("job_applications")
-        .update({
-          resume_id: body.resume_id ?? null,
-          status: "applied",
-          company_name: body.company_name ?? "Unknown company",
-          job_title: body.job_title ?? "Untitled role",
-          apply_url: body.apply_url ?? null,
-          applied_at: now,
-          timeline,
-        })
-        .eq("id", existingApplication.id)
-
-      if (applicationError) {
-        return NextResponse.json({ error: applicationError.message }, { status: 500 })
-      }
+      await pool.query(
+        `UPDATE job_applications
+         SET resume_id = $1,
+             status = 'applied',
+             company_name = $2,
+             job_title = $3,
+             apply_url = $4,
+             applied_at = $5,
+             timeline = $6::jsonb,
+             updated_at = now()
+         WHERE id = $7`,
+        [
+          body.resume_id ?? null,
+          body.company_name ?? "Unknown company",
+          body.job_title ?? "Untitled role",
+          body.apply_url ?? null,
+          now,
+          JSON.stringify(timeline),
+          existingApplication.id,
+        ]
+      )
     } else {
-      const { error: applicationError } = await (supabase as any)
-        .from("job_applications")
-        .insert({
-          user_id: user.id,
-          job_id: body.job_id,
-          resume_id: body.resume_id ?? null,
-          status: "applied",
-          company_name: body.company_name ?? "Unknown company",
-          job_title: body.job_title ?? "Untitled role",
-          apply_url: body.apply_url ?? null,
-          applied_at: now,
-          timeline,
-        })
-
-      if (applicationError) {
-        return NextResponse.json({ error: applicationError.message }, { status: 500 })
-      }
+      await pool.query(
+        `INSERT INTO job_applications (
+          user_id, job_id, resume_id, status, company_name, job_title, apply_url, applied_at, timeline
+        ) VALUES ($1, $2, $3, 'applied', $4, $5, $6, $7, $8::jsonb)`,
+        [
+          user.id,
+          body.job_id,
+          body.resume_id ?? null,
+          body.company_name ?? "Unknown company",
+          body.job_title ?? "Untitled role",
+          body.apply_url ?? null,
+          now,
+          JSON.stringify(timeline),
+        ]
+      )
     }
   }
 
-  const { data, error } = await (supabase as any)
-    .from("autofill_history")
-    .insert({
-      user_id: user.id,
-      job_id: body.job_id ?? null,
-      company_name: body.company_name ?? null,
-      job_title: body.job_title ?? null,
-      ats_type: body.ats_type ?? null,
+  const insertResult = await pool.query<Record<string, unknown>>(
+    `INSERT INTO autofill_history (
+      user_id, job_id, company_name, job_title, ats_type, fields_filled, fields_total, fill_rate
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    RETURNING *`,
+    [
+      user.id,
+      body.job_id ?? null,
+      body.company_name ?? null,
+      body.job_title ?? null,
+      body.ats_type ?? null,
       fields_filled,
       fields_total,
       fill_rate,
-    })
-    .select()
-    .single()
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ entry: data }, { status: 201 })
+    ]
+  )
+  return NextResponse.json({ entry: insertResult.rows[0] ?? null }, { status: 201 })
 }

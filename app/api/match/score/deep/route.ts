@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server"
 import { scoreJobsForUser, getScoringContextForUser, upsertMatchScores } from "@/lib/matching/batch-scorer"
 import { mapAnalysisToDeepScore } from "@/lib/matching/deep-scorer"
+import { getPostgresPool } from "@/lib/postgres/server"
 import { analyzeResumeForJob, getCachedAnalysis } from "@/lib/resume/analyzer"
-import { createAdminClient } from "@/lib/supabase/admin"
 import { createClient } from "@/lib/supabase/server"
 import { requireFeature } from "@/lib/gates/server-gate"
 import type { Company, Job, JobMatchScore } from "@/types"
@@ -33,12 +33,16 @@ export async function POST(request: Request) {
     )
   }
 
-  const admin = createAdminClient()
-  const { data: jobData } = await (admin
-    .from("jobs")
-    .select("*, company:companies(*)")
-    .eq("id", jobId)
-    .single() as any)
+  const pool = getPostgresPool()
+  const jobResult = await pool.query<(Job & { company: Company })>(
+    `SELECT jobs.*, to_jsonb(companies.*) AS company
+     FROM jobs
+     LEFT JOIN companies ON companies.id = jobs.company_id
+     WHERE jobs.id = $1
+     LIMIT 1`,
+    [jobId]
+  )
+  const jobData = jobResult.rows[0]
 
   if (!jobData) {
     return NextResponse.json({ error: "Job not found" }, { status: 404 })

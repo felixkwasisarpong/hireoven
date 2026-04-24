@@ -3,7 +3,7 @@ import { Resend } from "resend"
 import { z } from "zod"
 import { assertAdminAccess } from "@/lib/admin/auth"
 import { getSupportFromEmail } from "@/lib/email/identity"
-import { createAdminClient } from "@/lib/supabase/admin"
+import { getPostgresPool } from "@/lib/postgres/server"
 import { isMissingWaitlistTableError } from "@/lib/waitlist/errors"
 import { getPublicSiteUrl } from "@/lib/waitlist/site-url"
 
@@ -44,23 +44,18 @@ export async function POST(request: Request) {
     )
   }
 
-  let supabase
+  const pool = getPostgresPool()
+  let rows: Array<{ email: string; metadata: Record<string, unknown> | null; confirmed: boolean }> = []
   try {
-    supabase = createAdminClient()
-  } catch (e) {
-    return NextResponse.json(
-      { error: (e as Error).message },
-      { status: 500 }
+    const result = await pool.query<{ email: string; metadata: Record<string, unknown> | null; confirmed: boolean }>(
+      `SELECT email, metadata, confirmed
+       FROM waitlist
+       WHERE confirmed = true`
     )
-  }
-
-  const { data: rows, error } = await supabase
-    .from("waitlist")
-    .select("email, metadata, confirmed")
-    .eq("confirmed", true)
-
-  if (error) {
-    if (isMissingWaitlistTableError(error.message)) {
+    rows = result.rows
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Database query failed"
+    if (isMissingWaitlistTableError(message)) {
       return NextResponse.json(
         {
           error:
@@ -70,14 +65,14 @@ export async function POST(request: Request) {
       )
     }
 
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 
   const recipients =
-    rows?.filter((r) => {
+    rows.filter((r) => {
       const m = r.metadata as Record<string, unknown> | null
       return !m?.marketing_unsubscribed
-    }) ?? []
+    })
 
   if (parsed.data.previewOnly) {
     return NextResponse.json({

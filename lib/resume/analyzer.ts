@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk"
 import { logApiUsage } from "@/lib/admin/usage"
-import { createAdminClient } from "@/lib/supabase/admin"
+import { getPostgresPool } from "@/lib/postgres/server"
 import type {
   AnalysisRecommendation,
   AnalysisVerdict,
@@ -240,19 +240,22 @@ export async function analyzeResumeForJob(
   job: Job & { company: Company },
   userId: string
 ): Promise<ResumeAnalysis> {
-  const supabase = createAdminClient()
+  const pool = getPostgresPool()
 
   // Check cache
-  const { data: cached } = await (supabase
-    .from("resume_analyses")
-    .select("*")
-    .eq("user_id", userId)
-    .eq("resume_id", resume.id)
-    .eq("job_id", job.id)
-    .gte("created_at", new Date(Date.now() - CACHE_TTL_MS).toISOString())
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .single() as any)
+  const cacheCutoff = new Date(Date.now() - CACHE_TTL_MS).toISOString()
+  const cachedResult = await pool.query<ResumeAnalysis>(
+    `SELECT *
+     FROM resume_analyses
+     WHERE user_id = $1
+       AND resume_id = $2
+       AND job_id = $3
+       AND created_at >= $4
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    [userId, resume.id, job.id, cacheCutoff]
+  )
+  const cached = cachedResult.rows[0]
 
   if (cached) return cached as ResumeAnalysis
 
@@ -275,14 +278,67 @@ export async function analyzeResumeForJob(
     ...fields,
   }
 
-  const { data: inserted, error } = await (supabase
-    .from("resume_analyses")
-    .insert(payload as any)
-    .select("*")
-    .single() as any)
-
-  if (error || !inserted) throw error ?? new Error("Failed to save analysis")
-  return inserted as ResumeAnalysis
+  const insertedResult = await pool.query<ResumeAnalysis>(
+    `INSERT INTO resume_analyses (
+      user_id,
+      resume_id,
+      job_id,
+      overall_score,
+      skills_score,
+      experience_score,
+      education_score,
+      keywords_score,
+      matching_skills,
+      missing_skills,
+      bonus_skills,
+      matching_keywords,
+      missing_keywords,
+      keyword_density,
+      experience_match,
+      recommendations,
+      verdict,
+      verdict_summary,
+      apply_recommendation,
+      apply_reasoning
+    ) VALUES (
+      $1, $2, $3, $4, $5, $6, $7, $8,
+      $9::text[],
+      $10::text[],
+      $11::text[],
+      $12::text[],
+      $13::text[],
+      $14::jsonb,
+      $15::jsonb,
+      $16::jsonb,
+      $17, $18, $19, $20
+    )
+    RETURNING *`,
+    [
+      payload.user_id,
+      payload.resume_id,
+      payload.job_id,
+      payload.overall_score,
+      payload.skills_score,
+      payload.experience_score,
+      payload.education_score,
+      payload.keywords_score,
+      payload.matching_skills ?? [],
+      payload.missing_skills ?? [],
+      payload.bonus_skills ?? [],
+      payload.matching_keywords ?? [],
+      payload.missing_keywords ?? [],
+      JSON.stringify(payload.keyword_density ?? null),
+      JSON.stringify(payload.experience_match ?? null),
+      JSON.stringify(payload.recommendations ?? []),
+      payload.verdict,
+      payload.verdict_summary,
+      payload.apply_recommendation,
+      payload.apply_reasoning,
+    ]
+  )
+  const inserted = insertedResult.rows[0]
+  if (!inserted) throw new Error("Failed to save analysis")
+  return inserted
 }
 
 export async function getCachedAnalysis(
@@ -290,17 +346,18 @@ export async function getCachedAnalysis(
   resumeId: string,
   jobId: string
 ): Promise<ResumeAnalysis | null> {
-  const supabase = createAdminClient()
-  const { data } = await (supabase
-    .from("resume_analyses")
-    .select("*")
-    .eq("user_id", userId)
-    .eq("resume_id", resumeId)
-    .eq("job_id", jobId)
-    .gte("created_at", new Date(Date.now() - CACHE_TTL_MS).toISOString())
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .single() as any)
+  const pool = getPostgresPool()
+  const result = await pool.query<ResumeAnalysis>(
+    `SELECT *
+     FROM resume_analyses
+     WHERE user_id = $1
+       AND resume_id = $2
+       AND job_id = $3
+       AND created_at >= $4
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    [userId, resumeId, jobId, new Date(Date.now() - CACHE_TTL_MS).toISOString()]
+  )
 
-  return (data as ResumeAnalysis | null) ?? null
+  return result.rows[0] ?? null
 }

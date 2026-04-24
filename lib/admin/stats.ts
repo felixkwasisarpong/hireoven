@@ -1,5 +1,5 @@
 import { startOfDay, startOfWeek, subHours } from "@/lib/admin/time"
-import { createAdminClient } from "@/lib/supabase/admin"
+import { getPostgresPool } from "@/lib/postgres/server"
 import type {
   AlertNotification,
   ApiUsage,
@@ -80,42 +80,31 @@ function average(values: Array<number | null | undefined>) {
 }
 
 async function listAdminUsers() {
-  const supabase = createAdminClient()
-  const users: AdminUserSummary[] = []
-  let page = 1
+  const pool = getPostgresPool()
+  const result = await pool.query<{
+    id: string
+    email: string | null
+    full_name: string | null
+    created_at: string | null
+    updated_at: string | null
+  }>(
+    `SELECT id, email, full_name, created_at, updated_at
+     FROM profiles
+     ORDER BY created_at DESC
+     LIMIT 5000`
+  )
 
-  while (true) {
-    const { data, error } = await supabase.auth.admin.listUsers({
-      page,
-      perPage: 200,
-    })
-
-    if (error) throw error
-
-    const pageUsers = data?.users ?? []
-    users.push(
-      ...pageUsers.map((user) => ({
-        id: user.id,
-        email: user.email ?? null,
-        name:
-          (typeof user.user_metadata?.full_name === "string"
-            ? user.user_metadata.full_name
-            : null) ??
-          (typeof user.user_metadata?.name === "string" ? user.user_metadata.name : null),
-        joinedAt: user.created_at ?? null,
-        lastActiveAt: user.last_sign_in_at ?? null,
-      }))
-    )
-
-    if (pageUsers.length < 200) break
-    page += 1
-  }
-
-  return users
+  return result.rows.map((row) => ({
+    id: row.id,
+    email: row.email ?? null,
+    name: row.full_name ?? null,
+    joinedAt: row.created_at ?? null,
+    lastActiveAt: row.updated_at ?? null,
+  })) as AdminUserSummary[]
 }
 
 export async function getDashboardStats(): Promise<AdminStats> {
-  const supabase = createAdminClient()
+  const pool = getPostgresPool()
   const dayStart = startOfDay()
   const weekStart = startOfWeek()
 
@@ -126,98 +115,92 @@ export async function getDashboardStats(): Promise<AdminStats> {
     jobsToday,
     jobsWeek,
     alertsToday,
-    crawlsToday,
+    crawlAgg,
     crawlDurationsToday,
-    users,
   ] = await Promise.all([
-    supabase.from("companies").select("id", { count: "exact", head: true }),
-    supabase
-      .from("companies")
-      .select("id", { count: "exact", head: true })
-      .eq("is_active", true),
-    supabase
-      .from("jobs")
-      .select("id", { count: "exact", head: true })
-      .eq("is_active", true),
-    supabase
-      .from("jobs")
-      .select("id", { count: "exact", head: true })
-      .gte("first_detected_at", dayStart),
-    supabase
-      .from("jobs")
-      .select("id", { count: "exact", head: true })
-      .gte("first_detected_at", weekStart),
-    supabase
-      .from("alert_notifications")
-      .select("id", { count: "exact", head: true })
-      .gte("sent_at", dayStart),
-    supabase
-      .from("crawl_logs")
-      .select("id, status")
-      .gte("crawled_at", dayStart),
-    supabase
-      .from("crawl_logs")
-      .select("duration_ms")
-      .gte("crawled_at", dayStart),
-    listAdminUsers(),
+    pool.query<{ c: string }>(`SELECT COUNT(*)::text AS c FROM companies`),
+    pool.query<{ c: string }>(
+      `SELECT COUNT(*)::text AS c FROM companies WHERE is_active = true`
+    ),
+    pool.query<{ c: string }>(`SELECT COUNT(*)::text AS c FROM jobs WHERE is_active = true`),
+    pool.query<{ c: string }>(
+      `SELECT COUNT(*)::text AS c FROM jobs WHERE first_detected_at >= $1::timestamptz`,
+      [dayStart]
+    ),
+    pool.query<{ c: string }>(
+      `SELECT COUNT(*)::text AS c FROM jobs WHERE first_detected_at >= $1::timestamptz`,
+      [weekStart]
+    ),
+    pool.query<{ c: string }>(
+      `SELECT COUNT(*)::text AS c FROM alert_notifications WHERE sent_at >= $1::timestamptz`,
+      [dayStart]
+    ),
+    pool.query<{ total: string; failed: string }>(
+      `SELECT COUNT(*)::text AS total,
+              COUNT(*) FILTER (WHERE status = 'failed')::text AS failed
+       FROM crawl_logs
+       WHERE crawled_at >= $1::timestamptz`,
+      [dayStart]
+    ),
+    pool.query<{ duration_ms: number | null }>(
+      `SELECT duration_ms FROM crawl_logs WHERE crawled_at >= $1::timestamptz`,
+      [dayStart]
+    ),
   ])
 
-  const failedCrawlsToday = ((crawlsToday.data ?? []) as Array<{ status: string | null }>).filter(
-    (crawl) => crawl.status === "failed"
-  ).length
+  const adminUsers = await listAdminUsers()
+  const failedCrawlsToday = Number(crawlAgg.rows[0]?.failed ?? 0)
 
   return {
-    totalCompanies: companiesTotal.count ?? 0,
-    activeCompanies: companiesActive.count ?? 0,
-    totalActiveJobs: jobsTotal.count ?? 0,
-    jobsToday: jobsToday.count ?? 0,
-    jobsThisWeek: jobsWeek.count ?? 0,
-    totalUsers: users.length,
-    usersToday: users.filter(
-      (user) => user.joinedAt && new Date(user.joinedAt).getTime() >= new Date(dayStart).getTime()
+    totalCompanies: Number(companiesTotal.rows[0]?.c ?? 0),
+    activeCompanies: Number(companiesActive.rows[0]?.c ?? 0),
+    totalActiveJobs: Number(jobsTotal.rows[0]?.c ?? 0),
+    jobsToday: Number(jobsToday.rows[0]?.c ?? 0),
+    jobsThisWeek: Number(jobsWeek.rows[0]?.c ?? 0),
+    totalUsers: adminUsers.length,
+    usersToday: adminUsers.filter(
+      (user: AdminUserSummary) =>
+        user.joinedAt && new Date(user.joinedAt).getTime() >= new Date(dayStart).getTime()
     ).length,
-    alertsSentToday: alertsToday.count ?? 0,
-    crawlsToday: crawlsToday.data?.length ?? 0,
+    alertsSentToday: Number(alertsToday.rows[0]?.c ?? 0),
+    crawlsToday: Number(crawlAgg.rows[0]?.total ?? 0),
     failedCrawlsToday,
     averageCrawlDuration: average(
-      ((crawlDurationsToday.data ?? []) as Array<{ duration_ms: number | null }>).map(
-        (crawl) => crawl.duration_ms
-      )
+      crawlDurationsToday.rows.map((crawl: { duration_ms: number | null }) => crawl.duration_ms)
     ),
   }
 }
 
 export async function getCrawlHealth(): Promise<CrawlHealth> {
-  const supabase = createAdminClient()
+  const pool = getPostgresPool()
   const failedWindow = subHours(24)
-  const [latest, failed, durations, noJobs, settingsRows] = await Promise.all([
-    supabase
-      .from("crawl_logs")
-      .select("id, status, crawled_at, duration_ms")
-      .order("crawled_at", { ascending: false })
-      .limit(1),
-    supabase
-      .from("crawl_logs")
-      .select("id, status")
-      .gte("crawled_at", failedWindow),
-    supabase
-      .from("crawl_logs")
-      .select("duration_ms")
-      .gte("crawled_at", failedWindow),
-    supabase
-      .from("companies")
-      .select("id", { count: "exact", head: true })
-      .eq("is_active", true)
-      .eq("job_count", 0),
-    supabase.from("system_settings").select("key, value"),
+  const [latest, failedAgg, durations, noJobs, settingsRows] = await Promise.all([
+    pool.query<CrawlLog>(
+      `SELECT id, company_id, status, jobs_found, new_jobs, error_message, duration_ms, crawled_at
+       FROM crawl_logs
+       ORDER BY crawled_at DESC NULLS LAST
+       LIMIT 1`
+    ),
+    pool.query<{ failed: string }>(
+      `SELECT COUNT(*) FILTER (WHERE status = 'failed')::text AS failed
+       FROM crawl_logs
+       WHERE crawled_at >= $1::timestamptz`,
+      [failedWindow]
+    ),
+    pool.query<{ duration_ms: number | null }>(
+      `SELECT duration_ms FROM crawl_logs WHERE crawled_at >= $1::timestamptz`,
+      [failedWindow]
+    ),
+    pool.query<{ c: string }>(
+      `SELECT COUNT(*)::text AS c FROM companies WHERE is_active = true AND job_count = 0`
+    ),
+    pool.query<SystemSetting>(`SELECT key, value, updated_at, updated_by FROM system_settings`),
   ])
 
-  const lastCrawl = (latest.data?.[0] as CrawlLog | undefined) ?? null
-  const failedCount = ((failed.data ?? []) as CrawlLog[]).filter(
-    (crawl) => crawl.status === "failed"
-  ).length
+  const lastCrawl = latest.rows[0] ?? null
+  const failedCount = Number(failedAgg.rows[0]?.failed ?? 0)
   const settings = new Map(
-    ((settingsRows.data ?? []) as SystemSetting[]).map((row) => [row.key, row.value])
+    settingsRows.rows.map((row: SystemSetting) => [row.key, row.value])
   )
   const crawlSettings = (settings.get("crawl") ?? {}) as Record<string, unknown>
   const runtimeSettings = (settings.get("crawl_runtime") ?? {}) as Record<string, unknown>
@@ -266,56 +249,76 @@ export async function getCrawlHealth(): Promise<CrawlHealth> {
     crawlerStatus,
     failedCrawlsLast24Hours: failedCount,
     averageCrawlDuration: average(
-      ((durations.data ?? []) as Array<{ duration_ms: number | null }>).map(
-        (crawl) => crawl.duration_ms
-      )
+      durations.rows.map((crawl: { duration_ms: number | null }) => crawl.duration_ms)
     ),
-    companiesWithZeroJobs: noJobs.count ?? 0,
+    companiesWithZeroJobs: Number(noJobs.rows[0]?.c ?? 0),
   }
 }
 
 export async function getAPIUsage(): Promise<APIUsage> {
-  const supabase = createAdminClient()
+  const pool = getPostgresPool()
   const dayStart = startOfDay()
 
-  const { data, error } = await supabase
-    .from("api_usage")
-    .select("service, operation, cost_usd")
-    .gte("created_at", dayStart)
-
-  if (error) throw error
-
-  const rows = (data ?? []) as ApiUsage[]
+  const { rows } = await pool.query<ApiUsage>(
+    `SELECT id, service, operation, tokens_used, cost_usd, created_at
+     FROM api_usage
+     WHERE created_at >= $1::timestamptz`,
+    [dayStart]
+  )
 
   return {
-    claudeCallsToday: rows.filter((row) => row.service === "claude").length,
-    estimatedCostUsd: rows.reduce((sum, row) => sum + asNumber(row.cost_usd), 0),
-    pushNotificationsSent: rows.filter((row) => row.service === "webpush").length,
-    emailsSent: rows.filter((row) => row.service === "resend").length,
+    claudeCallsToday: rows.filter((row: ApiUsage) => row.service === "claude").length,
+    estimatedCostUsd: rows.reduce(
+      (sum: number, row: ApiUsage) => sum + asNumber(row.cost_usd),
+      0
+    ),
+    pushNotificationsSent: rows.filter((row: ApiUsage) => row.service === "webpush").length,
+    emailsSent: rows.filter((row: ApiUsage) => row.service === "resend").length,
   }
 }
 
 export async function getAdminOverviewPayload(): Promise<AdminOverviewPayload> {
-  const supabase = createAdminClient()
+  const pool = getPostgresPool()
   const [stats, crawlHealth, apiUsage, crawlLogs, recentJobs, settingsRows] = await Promise.all([
     getDashboardStats(),
     getCrawlHealth(),
     getAPIUsage(),
-    (supabase
-      .from("crawl_logs")
-      .select("*, company:companies(id, name, ats_type)")
-      .order("crawled_at", { ascending: false })
-      .limit(20) as any),
-    (supabase
-      .from("jobs")
-      .select("*, company:companies(id, name, ats_type, logo_url)")
-      .order("first_detected_at", { ascending: false })
-      .limit(20) as any),
-    supabase.from("system_settings").select("key, value"),
+    pool.query<
+      CrawlLog & {
+        company: Pick<Company, "id" | "name" | "ats_type"> | null
+      }
+    >(
+      `SELECT cl.id, cl.company_id, cl.status, cl.jobs_found, cl.new_jobs, cl.error_message,
+              cl.duration_ms, cl.crawled_at,
+              CASE WHEN c.id IS NULL THEN NULL
+                   ELSE jsonb_build_object('id', c.id, 'name', c.name, 'ats_type', c.ats_type)
+              END AS company
+       FROM crawl_logs cl
+       LEFT JOIN companies c ON c.id = cl.company_id
+       ORDER BY cl.crawled_at DESC NULLS LAST
+       LIMIT 20`
+    ),
+    pool.query<
+      Job & {
+        company: Pick<Company, "id" | "name" | "ats_type" | "logo_url"> | null
+      }
+    >(
+      `SELECT j.*,
+              CASE WHEN c.id IS NULL THEN NULL
+                   ELSE jsonb_build_object(
+                     'id', c.id, 'name', c.name, 'ats_type', c.ats_type, 'logo_url', c.logo_url
+                   )
+              END AS company
+       FROM jobs j
+       LEFT JOIN companies c ON c.id = j.company_id
+       ORDER BY j.first_detected_at DESC NULLS LAST
+       LIMIT 20`
+    ),
+    pool.query<SystemSetting>(`SELECT key, value, updated_at, updated_by FROM system_settings`),
   ])
 
   const settings = Object.fromEntries(
-    ((settingsRows.data ?? []) as SystemSetting[]).map((row) => [row.key, row.value])
+    settingsRows.rows.map((row: SystemSetting) => [row.key, row.value])
   )
 
   return {
@@ -323,8 +326,8 @@ export async function getAdminOverviewPayload(): Promise<AdminOverviewPayload> {
     crawlHealth,
     apiUsage,
     realtime: {
-      recentCrawlLogs: (crawlLogs.data ?? []) as AdminRealtimePayload["recentCrawlLogs"],
-      recentJobs: (recentJobs.data ?? []) as AdminRealtimePayload["recentJobs"],
+      recentCrawlLogs: crawlLogs.rows as AdminRealtimePayload["recentCrawlLogs"],
+      recentJobs: recentJobs.rows as AdminRealtimePayload["recentJobs"],
       settings,
     },
   }

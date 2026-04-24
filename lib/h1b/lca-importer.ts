@@ -18,7 +18,7 @@
 
 import * as XLSX from 'xlsx'
 import { parse as parseCSV } from 'csv-parse/sync'
-import { createAdminClient } from '@/lib/supabase/admin'
+import { getPostgresPool } from '@/lib/postgres/server'
 import type {
   Company,
   EmployerLCAStats,
@@ -172,24 +172,18 @@ export async function importLCAData(
   let rowsInserted = 0
   let rowsSkipped = 0
 
-  const supabase = createAdminClient()
+  const pool = getPostgresPool()
 
   // Pull existing companies once so we can attach `company_id` where a
   // normalised name already matches a tracked company. We NEVER insert into
   // `companies` from this importer - unmatched employers stay with
   // `company_id = null` and are reconciled later by
   // `scripts/reconcile-companies-from-imports.ts`.
-  const { data: companyRows, error: companyError } = await supabase
-    .from('companies')
-    .select('id, name, domain')
-
-  if (companyError) {
-    throw new Error(`Failed to load companies: ${companyError.message}`)
-  }
-
-  const companiesIndex = buildCompanyIndex(
-    (companyRows ?? []) as Pick<Company, 'id' | 'name' | 'domain'>[]
+  const companyResult = await pool.query<Pick<Company, 'id' | 'name' | 'domain'>>(
+    `SELECT id, name, domain FROM companies`
   )
+
+  const companiesIndex = buildCompanyIndex(companyResult.rows)
   const matchedEmployerIds = new Set<string>()
   const unmatchedEmployerKeys = new Set<string>()
 
@@ -204,27 +198,38 @@ export async function importLCAData(
     const withoutCase = batch.filter((r) => !r.source_case_number)
 
     if (withCase.length > 0) {
-      const { error } = await supabase
-        .from('lca_records')
-        .upsert(withCase as never, {
-          onConflict: 'source_case_number,fiscal_year',
-          ignoreDuplicates: true,
-        })
-      if (error) {
-        errors.push(`batch upsert: ${error.message}`)
-      } else {
+      try {
+        const cols = Object.keys(withCase[0]) as Array<keyof LCARecordInsert>
+        const placeholders = withCase.map((_, ri) =>
+          `(${cols.map((_, ci) => `$${ri * cols.length + ci + 1}`).join(', ')})`
+        ).join(', ')
+        const values = withCase.flatMap((row) => cols.map((c) => (row as Record<string, unknown>)[c] ?? null))
+        await pool.query(
+          `INSERT INTO lca_records (${cols.map((c) => `"${c}"`).join(', ')})
+           VALUES ${placeholders}
+           ON CONFLICT (source_case_number, fiscal_year) DO NOTHING`,
+          values
+        )
         rowsInserted += withCase.length
+      } catch (err) {
+        errors.push(`batch upsert: ${err instanceof Error ? err.message : String(err)}`)
       }
     }
 
     if (withoutCase.length > 0) {
-      const { error } = await supabase
-        .from('lca_records')
-        .insert(withoutCase as never)
-      if (error) {
-        errors.push(`batch insert: ${error.message}`)
-      } else {
+      try {
+        const cols = Object.keys(withoutCase[0]) as Array<keyof LCARecordInsert>
+        const placeholders = withoutCase.map((_, ri) =>
+          `(${cols.map((_, ci) => `$${ri * cols.length + ci + 1}`).join(', ')})`
+        ).join(', ')
+        const values = withoutCase.flatMap((row) => cols.map((c) => (row as Record<string, unknown>)[c] ?? null))
+        await pool.query(
+          `INSERT INTO lca_records (${cols.map((c) => `"${c}"`).join(', ')}) VALUES ${placeholders}`,
+          values
+        )
         rowsInserted += withoutCase.length
+      } catch (err) {
+        errors.push(`batch insert: ${err instanceof Error ? err.message : String(err)}`)
       }
     }
 
@@ -845,10 +850,9 @@ const STAFFING_PATTERNS =
 const CONSULTING_PATTERNS = /\b(consulting|consultants|advisory)\b/i
 
 export async function rebuildEmployerStats(): Promise<void> {
-  const supabase = createAdminClient()
+  const pool = getPostgresPool()
 
-  // Pull everything we need in one streaming-ish pass. For large datasets we
-  // page in 10k chunks so we never exceed Supabase row limits.
+  // Pull everything we need in one streaming-ish pass.
   const byEmployer = new Map<
     string,
     {
@@ -868,13 +872,24 @@ export async function rebuildEmployerStats(): Promise<void> {
   let offset = 0
   const pageSize = 10_000
   while (true) {
-    const { data, error } = await supabase
-      .from('lca_records')
-      .select(
-        'employer_name, employer_name_normalized, company_id, case_status, fiscal_year, wage_level, job_title, soc_code, worksite_state_abbr'
-      )
-      .range(offset, offset + pageSize - 1)
-    if (error) throw new Error(`load lca_records: ${error.message}`)
+    const { rows: data } = await pool.query<{
+      employer_name: string
+      employer_name_normalized: string | null
+      company_id: string | null
+      case_status: string | null
+      fiscal_year: number | null
+      wage_level: string | null
+      job_title: string | null
+      soc_code: string | null
+      worksite_state_abbr: string | null
+    }>(
+      `SELECT employer_name, employer_name_normalized, company_id, case_status,
+              fiscal_year, wage_level, job_title, soc_code, worksite_state_abbr
+       FROM lca_records
+       ORDER BY id
+       LIMIT $1 OFFSET $2`,
+      [pageSize, offset]
+    )
     if (!data || data.length === 0) break
 
     for (const row of data as Array<{
@@ -1044,12 +1059,21 @@ export async function rebuildEmployerStats(): Promise<void> {
   const CHUNK = 500
   for (let i = 0; i < inserts.length; i += CHUNK) {
     const slice = inserts.slice(i, i + CHUNK)
-    const { error } = await supabase
-      .from('employer_lca_stats')
-      .upsert(slice as never, {
-        onConflict: 'employer_name_normalized',
-      })
-    if (error) throw new Error(`upsert employer stats: ${error.message}`)
+    const cols = Object.keys(slice[0]) as string[]
+    const placeholders = slice.map((_, ri) =>
+      `(${cols.map((_, ci) => `$${ri * cols.length + ci + 1}`).join(', ')})`
+    ).join(', ')
+    const values = slice.flatMap((row) => cols.map((c) => (row as Record<string, unknown>)[c] ?? null))
+    const updateSet = cols
+      .filter((c) => c !== 'employer_name_normalized')
+      .map((c) => `"${c}" = EXCLUDED."${c}"`)
+      .join(', ')
+    await pool.query(
+      `INSERT INTO employer_lca_stats (${cols.map((c) => `"${c}"`).join(', ')})
+       VALUES ${placeholders}
+       ON CONFLICT (employer_name_normalized) DO UPDATE SET ${updateSet}`,
+      values
+    )
   }
 }
 
@@ -1062,23 +1086,29 @@ function round(value: number): number {
 // ---------------------------------------------------------------------------
 
 export async function matchLCAToCompanies(): Promise<void> {
-  const supabase = createAdminClient()
+  const pool = getPostgresPool()
 
-  const { data: stats, error: statsErr } = await supabase
-    .from('employer_lca_stats')
-    .select(
-      'id, employer_name_normalized, company_id, display_name, total_certified, total_applications, total_denied, stats_by_year'
-    )
-  if (statsErr) throw new Error(statsErr.message)
+  const statsResult = await pool.query<{
+    id: string
+    employer_name_normalized: string
+    company_id: string | null
+    display_name: string | null
+    total_certified: number
+    total_applications: number
+    total_denied: number
+    stats_by_year: Record<string, YearStat> | null
+  }>(
+    `SELECT id, employer_name_normalized, company_id, display_name,
+            total_certified, total_applications, total_denied, stats_by_year
+     FROM employer_lca_stats`
+  )
+  const stats = statsResult.rows
   if (!stats || stats.length === 0) return
 
-  const { data: companies, error: compErr } = await supabase
-    .from('companies')
-    .select('id, name, domain')
-  if (compErr) throw new Error(compErr.message)
-  const companyList = (companies ?? []) as Array<
-    Pick<Company, 'id' | 'name' | 'domain'>
-  >
+  const companyResult = await pool.query<Pick<Company, 'id' | 'name' | 'domain'>>(
+    `SELECT id, name, domain FROM companies`
+  )
+  const companyList = companyResult.rows
 
   const index = buildCompanyIndex(companyList)
 
@@ -1140,31 +1170,37 @@ export async function matchLCAToCompanies(): Promise<void> {
   }
 
   for (const update of statsUpdates) {
-    await (supabase.from('employer_lca_stats') as any)
-      .update({ company_id: update.company_id })
-      .eq('id', update.id)
+    await pool.query(
+      `UPDATE employer_lca_stats SET company_id = $1 WHERE id = $2`,
+      [update.company_id, update.id]
+    )
   }
 
   for (const [companyId, patch] of companyUpdates) {
-    await (supabase.from('companies') as any).update(patch).eq('id', companyId)
+    await pool.query(
+      `UPDATE companies
+       SET h1b_sponsor_count_1yr = $1,
+           h1b_sponsor_count_3yr = $2,
+           sponsors_h1b = $3,
+           sponsorship_confidence = $4
+       WHERE id = $5`,
+      [patch.h1b_sponsor_count_1yr, patch.h1b_sponsor_count_3yr, patch.sponsors_h1b, patch.sponsorship_confidence, companyId]
+    )
   }
 
   // Also backfill company_id on lca_records rows that are still unlinked but
   // whose normalised employer now maps to a company (e.g. a company was
   // created after the initial insert).
   const unlinkedMap = new Map<string, string>()
-  for (const s of stats as Array<{
-    employer_name_normalized: string
-    company_id: string | null
-  }>) {
+  for (const s of stats) {
     if (s.company_id) unlinkedMap.set(s.employer_name_normalized, s.company_id)
   }
 
   for (const [norm, companyId] of unlinkedMap) {
-    await (supabase.from('lca_records') as any)
-      .update({ company_id: companyId })
-      .eq('employer_name_normalized', norm)
-      .is('company_id', null)
+    await pool.query(
+      `UPDATE lca_records SET company_id = $1 WHERE employer_name_normalized = $2 AND company_id IS NULL`,
+      [companyId, norm]
+    )
   }
 }
 
@@ -1189,7 +1225,7 @@ function calcSponsorshipConfidence(
  * employer action.
  */
 export async function rebuildSOCBaseRates(): Promise<void> {
-  const supabase = createAdminClient()
+  const pool = getPostgresPool()
 
   type SocBucket = {
     title: string | null
@@ -1201,12 +1237,18 @@ export async function rebuildSOCBaseRates(): Promise<void> {
   let offset = 0
   const pageSize = 10_000
   while (true) {
-    const { data, error } = await supabase
-      .from('lca_records')
-      .select('soc_code, soc_title, case_status')
-      .not('soc_code', 'is', null)
-      .range(offset, offset + pageSize - 1)
-    if (error) throw new Error(`load lca_records for SOC: ${error.message}`)
+    const { rows: data } = await pool.query<{
+      soc_code: string | null
+      soc_title: string | null
+      case_status: string | null
+    }>(
+      `SELECT soc_code, soc_title, case_status
+       FROM lca_records
+       WHERE soc_code IS NOT NULL
+       ORDER BY id
+       LIMIT $1 OFFSET $2`,
+      [pageSize, offset]
+    )
     if (!data || data.length === 0) break
 
     for (const row of data as Array<{
@@ -1271,13 +1313,20 @@ export async function rebuildSOCBaseRates(): Promise<void> {
   // Supabase `upsert` with onConflict so re-running an import just refreshes
   // the numbers in place rather than creating duplicates.
   const BATCH = 500
+  const cols = ['soc_code', 'soc_title', 'total_applications', 'total_certified', 'total_denied', 'approval_rate', 'sample_size', 'last_updated'] as const
   for (let i = 0; i < rows.length; i += BATCH) {
     const chunk = rows.slice(i, i + BATCH)
-    const { error } = await (supabase.from('soc_base_rates') as any).upsert(
-      chunk,
-      { onConflict: 'soc_code' }
+    const placeholders = chunk.map((_, ri) =>
+      `(${cols.map((_, ci) => `$${ri * cols.length + ci + 1}`).join(', ')})`
+    ).join(', ')
+    const values = chunk.flatMap((row) => cols.map((c) => (row as Record<string, unknown>)[c] ?? null))
+    const updateSet = cols.filter((c) => c !== 'soc_code').map((c) => `"${c}" = EXCLUDED."${c}"`).join(', ')
+    await pool.query(
+      `INSERT INTO soc_base_rates (${cols.map((c) => `"${c}"`).join(', ')})
+       VALUES ${placeholders}
+       ON CONFLICT (soc_code) DO UPDATE SET ${updateSet}`,
+      values
     )
-    if (error) throw new Error(`upsert soc_base_rates: ${error.message}`)
   }
 }
 
