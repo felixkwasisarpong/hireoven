@@ -26,19 +26,16 @@ export default function VisaIntelTrigger({ job, displayTitle, children, classNam
   return (
     <>
       {children ? (
-        <div
-          role="button"
-          tabIndex={0}
-          onClick={openDrawer}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" || event.key === " ") {
-              event.preventDefault()
-              openDrawer()
-            }
-          }}
-          className={cn("block w-full text-left focus-visible:outline-none", className)}
-        >
+        <div className={cn("relative block w-full text-left", className)}>
           {children}
+          <button
+            type="button"
+            aria-label="Open Visa Intelligence details"
+            onClick={openDrawer}
+            className="absolute inset-0 z-20 rounded-xl bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]/35"
+          >
+            <span className="sr-only">Open Visa Intelligence details</span>
+          </button>
         </div>
       ) : (
         <button
