@@ -160,12 +160,86 @@ export default function DashboardFeedToolbar({
     return null
   }
 
-  const filterBtn = (active: boolean) =>
+  type FilterTone =
+    | "blue"
+    | "sky"
+    | "violet"
+    | "indigo"
+    | "emerald"
+    | "amber"
+    | "slate"
+    | "cyan"
+    | "teal"
+    | "rose"
+
+  const TONE_STYLES: Record<
+    FilterTone,
+    { idleIcon: string; activeWrap: string; activeIcon: string }
+  > = {
+    blue: {
+      idleIcon: "text-blue-500",
+      activeWrap: "border-blue-200 bg-blue-50 text-blue-800 ring-1 ring-blue-200/70",
+      activeIcon: "text-blue-600",
+    },
+    sky: {
+      idleIcon: "text-sky-500",
+      activeWrap: "border-sky-200 bg-sky-50 text-sky-800 ring-1 ring-sky-200/70",
+      activeIcon: "text-sky-600",
+    },
+    violet: {
+      idleIcon: "text-violet-500",
+      activeWrap: "border-violet-200 bg-violet-50 text-violet-800 ring-1 ring-violet-200/70",
+      activeIcon: "text-violet-600",
+    },
+    indigo: {
+      idleIcon: "text-indigo-500",
+      activeWrap: "border-indigo-200 bg-indigo-50 text-indigo-800 ring-1 ring-indigo-200/70",
+      activeIcon: "text-indigo-600",
+    },
+    emerald: {
+      idleIcon: "text-emerald-600",
+      activeWrap: "border-emerald-200 bg-emerald-50 text-emerald-900 ring-1 ring-emerald-200/70",
+      activeIcon: "text-emerald-700",
+    },
+    amber: {
+      idleIcon: "text-amber-500",
+      activeWrap: "border-amber-200 bg-amber-50 text-amber-900 ring-1 ring-amber-200/70",
+      activeIcon: "text-amber-600",
+    },
+    slate: {
+      idleIcon: "text-slate-500",
+      activeWrap: "border-slate-300 bg-slate-100 text-slate-800 ring-1 ring-slate-200/70",
+      activeIcon: "text-slate-700",
+    },
+    cyan: {
+      idleIcon: "text-cyan-600",
+      activeWrap: "border-cyan-200 bg-cyan-50 text-cyan-800 ring-1 ring-cyan-200/70",
+      activeIcon: "text-cyan-700",
+    },
+    teal: {
+      idleIcon: "text-teal-600",
+      activeWrap: "border-teal-200 bg-teal-50 text-teal-800 ring-1 ring-teal-200/70",
+      activeIcon: "text-teal-700",
+    },
+    rose: {
+      idleIcon: "text-rose-500",
+      activeWrap: "border-rose-200 bg-rose-50 text-rose-800 ring-1 ring-rose-200/70",
+      activeIcon: "text-rose-600",
+    },
+  }
+
+  const filterBtn = (active: boolean, tone: FilterTone = "blue") =>
     cn(
-      "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-[#E5E7EB] bg-white px-3 text-[13px] font-medium shadow-sm transition",
+      "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border bg-white px-3 text-[13px] font-medium shadow-sm transition",
       active
-        ? "border-[#0052CC]/35 bg-sky-50/80 text-[#0052CC] ring-1 ring-[#0052CC]/15"
-        : "text-slate-600 hover:border-slate-300 hover:bg-slate-50/80"
+        ? TONE_STYLES[tone].activeWrap
+        : "border-[#E5E7EB] text-slate-700 hover:border-slate-300 hover:bg-slate-50/80"
+    )
+
+  const iconCls = (active: boolean, tone: FilterTone) =>
+    cn(
+      "h-3.5 w-3.5",
+      active ? TONE_STYLES[tone].activeIcon : TONE_STYLES[tone].idleIcon
     )
 
   return (
@@ -207,9 +281,9 @@ export default function DashboardFeedToolbar({
           <button
             type="button"
             onClick={() => (filterDropdown === "keywords" ? setFilterDropdown(null) : openDropdown("keywords"))}
-            className={filterBtn(Boolean(searchQuery.trim()))}
+            className={filterBtn(Boolean(searchQuery.trim()), "blue")}
           >
-            <Search className="h-3.5 w-3.5 text-slate-500" />
+            <Search className={iconCls(Boolean(searchQuery.trim()), "blue")} />
             Keywords
             <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
           </button>
@@ -262,10 +336,16 @@ export default function DashboardFeedToolbar({
             type="button"
             onClick={() => openDropdown("location")}
             className={filterBtn(
-              Boolean(filters.locationQuery?.trim()) || Boolean(filters.remote)
+              Boolean(filters.locationQuery?.trim()) || Boolean(filters.remote),
+              "sky"
             )}
           >
-            <MapPin className="h-3.5 w-3.5 text-slate-500" />
+            <MapPin
+              className={iconCls(
+                Boolean(filters.locationQuery?.trim()) || Boolean(filters.remote),
+                "sky"
+              )}
+            />
             <span className="max-w-[120px] truncate">{locationLabel}</span>
             <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-400" />
           </button>
@@ -321,9 +401,9 @@ export default function DashboardFeedToolbar({
           <button
             type="button"
             onClick={() => openDropdown("jobtype")}
-            className={filterBtn(Boolean(filters.employment_type?.length))}
+            className={filterBtn(Boolean(filters.employment_type?.length), "violet")}
           >
-            <Briefcase className="h-3.5 w-3.5 text-slate-500" />
+            <Briefcase className={iconCls(Boolean(filters.employment_type?.length), "violet")} />
             {jobtypeLabel}
             <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-400" />
           </button>
@@ -359,9 +439,9 @@ export default function DashboardFeedToolbar({
           <button
             type="button"
             onClick={() => openDropdown("experience")}
-            className={filterBtn(Boolean(filters.seniority?.length))}
+            className={filterBtn(Boolean(filters.seniority?.length), "indigo")}
           >
-            <Tag className="h-3.5 w-3.5 text-slate-500" />
+            <Tag className={iconCls(Boolean(filters.seniority?.length), "indigo")} />
             {experienceLabel}
             <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-400" />
           </button>
@@ -397,9 +477,9 @@ export default function DashboardFeedToolbar({
           <button
             type="button"
             onClick={() => openDropdown("salary")}
-            className={filterBtn(Boolean(filters.min_salary))}
+            className={filterBtn(Boolean(filters.min_salary), "emerald")}
           >
-            <DollarSign className="h-3.5 w-3.5 text-slate-500" />
+            <DollarSign className={iconCls(Boolean(filters.min_salary), "emerald")} />
             {salaryLabel}
             <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-400" />
           </button>
@@ -436,9 +516,9 @@ export default function DashboardFeedToolbar({
         <button
           type="button"
           onClick={() => replaceFilters({ ...filters, sponsorship: !filters.sponsorship })}
-          className={filterBtn(Boolean(filters.sponsorship))}
+          className={filterBtn(Boolean(filters.sponsorship), "emerald")}
         >
-          <Plane className="h-3.5 w-3.5 text-slate-500" />
+          <Plane className={iconCls(Boolean(filters.sponsorship), "emerald")} />
           Sponsorship
         </button>
 
@@ -446,9 +526,17 @@ export default function DashboardFeedToolbar({
           <button
             type="button"
             onClick={() => openDropdown("posted")}
-            className={filterBtn(Boolean(filters.within && filters.within !== "all"))}
+            className={filterBtn(
+              Boolean(filters.within && filters.within !== "all"),
+              "rose"
+            )}
           >
-            <Clock className="h-3.5 w-3.5 text-slate-500" />
+            <Clock
+              className={iconCls(
+                Boolean(filters.within && filters.within !== "all"),
+                "rose"
+              )}
+            />
             {postedLabel}
             <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-400" />
           </button>
@@ -476,15 +564,13 @@ export default function DashboardFeedToolbar({
             </div>
           )}
         </div>
-      </div>
 
-      <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
           onClick={() => replaceFilters({ ...filters, remote: !filters.remote ? true : false })}
-          className={filterBtn(Boolean(filters.remote))}
+          className={filterBtn(Boolean(filters.remote), "cyan")}
         >
-          <Globe2 className="h-3.5 w-3.5 text-slate-500" />
+          <Globe2 className={iconCls(Boolean(filters.remote), "cyan")} />
           Remote
         </button>
 
@@ -492,9 +578,9 @@ export default function DashboardFeedToolbar({
           <button
             type="button"
             onClick={() => openDropdown("skills")}
-            className={filterBtn(Boolean(filters.skills?.length))}
+            className={filterBtn(Boolean(filters.skills?.length), "amber")}
           >
-            <Sparkles className="h-3.5 w-3.5 text-slate-500" />
+            <Sparkles className={iconCls(Boolean(filters.skills?.length), "amber")} />
             Skills
             <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-400" />
           </button>
@@ -533,9 +619,9 @@ export default function DashboardFeedToolbar({
           <button
             type="button"
             onClick={() => openDropdown("industry")}
-            className={filterBtn(Boolean(filters.industryQuery?.trim()))}
+            className={filterBtn(Boolean(filters.industryQuery?.trim()), "teal")}
           >
-            <Building2 className="h-3.5 w-3.5 text-slate-500" />
+            <Building2 className={iconCls(Boolean(filters.industryQuery?.trim()), "teal")} />
             Industry
             <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-400" />
           </button>
@@ -574,11 +660,13 @@ export default function DashboardFeedToolbar({
             type="button"
             onClick={() => openDropdown("more")}
             className={cn(
-              "inline-flex items-center gap-1.5 rounded-md px-1.5 py-1.5 text-sm font-semibold text-[#0052CC] transition hover:bg-sky-50 hover:underline",
-              moreFilterCount > 0 && "bg-sky-50/80"
+              "inline-flex h-8 items-center gap-1.5 rounded-lg border bg-white px-3 text-[13px] font-semibold transition shadow-sm",
+              moreFilterCount > 0
+                ? "border-[#0052CC]/30 bg-sky-50 text-[#0052CC] ring-1 ring-[#0052CC]/15"
+                : "border-[#E5E7EB] text-[#0052CC] hover:bg-sky-50/60"
             )}
           >
-            <SlidersHorizontal className="h-4 w-4" strokeWidth={2} />
+            <SlidersHorizontal className="h-3.5 w-3.5" strokeWidth={2} />
             More filters
             {moreFilterCount > 0 && (
               <span className="ml-0.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-[#0052CC] px-1 text-[10px] font-bold leading-none text-white">
