@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { useState } from "react"
 import { ChevronRight } from "lucide-react"
 import VisaIntelDrawer from "@/components/jobs/VisaIntelDrawer"
 import { cn } from "@/lib/utils"
@@ -14,51 +14,37 @@ type Props = {
 }
 
 /**
- * Self-contained trigger that owns the open/close state for VisaIntelDrawer.
- * With children, the whole child area opens the drawer. Without children, it
- * renders a compact "Details ›" trigger.
+ * Self-contained trigger that owns the open/close state for VisaIntelDrawer
+ * (which is built on Radix Dialog).
+ *
+ * - With `children`, the entire wrapped area becomes a real <button>.
+ * - Without children, renders a compact "Details ›" button.
  */
 export default function VisaIntelTrigger({ job, displayTitle, children, className }: Props) {
   const [open, setOpen] = useState(false)
-  const openDrawer = useCallback(() => {
-    setOpen(true)
-  }, [])
-  const closeDrawer = useCallback(() => setOpen(false), [])
 
   return (
     <>
       {children ? (
-        <div className={cn("relative block w-full text-left", className)}>
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          aria-label="Open Visa Intelligence details"
+          className={cn(
+            "block w-full cursor-pointer rounded-xl border-0 bg-transparent p-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]/35",
+            className
+          )}
+        >
           {children}
-          <button
-            type="button"
-            aria-label="Open Visa Intelligence details"
-            onPointerDown={(event) => {
-              event.preventDefault()
-              event.stopPropagation()
-              openDrawer()
-            }}
-            onClick={(event) => {
-              event.preventDefault()
-              event.stopPropagation()
-            }}
-            className="absolute inset-0 z-20 rounded-xl bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]/35"
-          >
-            <span className="sr-only">Open Visa Intelligence details</span>
-          </button>
-        </div>
+        </button>
       ) : (
         <button
           type="button"
-          onPointerDown={(event) => {
-            event.preventDefault()
-            event.stopPropagation()
-            openDrawer()
-          }}
-          onClick={(event) => {
-            event.preventDefault()
-            event.stopPropagation()
-          }}
+          onClick={() => setOpen(true)}
+          aria-haspopup="dialog"
+          aria-expanded={open}
           className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[11px] font-semibold text-[#2563EB] transition hover:bg-blue-50 focus-visible:outline-none"
         >
           Details
@@ -66,13 +52,12 @@ export default function VisaIntelTrigger({ job, displayTitle, children, classNam
         </button>
       )}
 
-      {open && (
-        <VisaIntelDrawer
-          job={job}
-          displayTitle={displayTitle}
-          onClose={closeDrawer}
-        />
-      )}
+      <VisaIntelDrawer
+        open={open}
+        onOpenChange={setOpen}
+        job={job}
+        displayTitle={displayTitle}
+      />
     </>
   )
 }

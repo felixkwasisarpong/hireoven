@@ -105,6 +105,21 @@
     background-color: hsl(var(--surface) / 0.84) !important;
   }
 
+  /* Escape hatch: drawers/modals must stay fully opaque even on chroma pages. */
+  body.site-chroma .app-drawer,
+  body.site-chroma .app-drawer .bg-white {
+    background-color: #ffffff !important;
+  }
+  body.site-chroma .app-drawer .bg-slate-50,
+  body.site-chroma .app-drawer .bg-slate-50\/40,
+  body.site-chroma .app-drawer .bg-slate-50\/60 {
+    background-color: #f8fafc !important;
+  }
+  body.site-chroma .app-drawer .bg-surface,
+  body.site-chroma .app-drawer .bg-\[hsl\(var\(--surface\)\)\] {
+    background-color: hsl(var(--surface)) !important;
+  }
+
   ::selection {
     background: rgba(30, 58, 138, 0.12);
   }
