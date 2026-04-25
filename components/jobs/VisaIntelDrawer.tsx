@@ -216,7 +216,7 @@ export default function VisaIntelDrawer({ open, onClose, job, displayTitle }: Pr
       aria-modal="false"
       aria-label="Visa Intelligence breakdown"
       className="animate-slide-in-right fixed inset-y-0 right-0 flex h-full w-full max-w-[480px] flex-col border-l border-slate-200 shadow-2xl outline-none"
-      style={{ ...WHITE, zIndex: Z_TOP }}
+      style={{ ...WHITE, zIndex: Z_TOP, position: "fixed" }}
     >
         {/* ── Header ── */}
         <header
