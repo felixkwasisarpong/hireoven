@@ -9,6 +9,7 @@ import {
   resolveJobNormalization,
   type PersistedJobForNormalization,
 } from "@/lib/jobs/normalization"
+import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
 import type { Company, Job } from "@/types"
 
 export const dynamic = "force-dynamic"
@@ -28,7 +29,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     `SELECT j.title, j.location, j.is_remote, c.name AS company_name
      FROM jobs j
      LEFT JOIN companies c ON c.id = j.company_id
-     WHERE j.id = $1::uuid
+     WHERE j.id = $1::uuid AND ${sqlJobLocatedInUsa("j")}
      LIMIT 1`,
     [id]
   )
@@ -53,7 +54,10 @@ export default async function PublicJobPage({ params }: Props) {
   const { id } = await params
   const pool = getPostgresPool()
 
-  const jobResult = await pool.query<Job>(`SELECT * FROM jobs WHERE id = $1::uuid LIMIT 1`, [id])
+  const jobResult = await pool.query<Job>(
+    `SELECT * FROM jobs WHERE id = $1::uuid AND ${sqlJobLocatedInUsa("jobs")} LIMIT 1`,
+    [id]
+  )
   const jobRow = jobResult.rows[0]
   if (!jobRow) notFound()
 

@@ -2,6 +2,7 @@ import type { Metadata } from "next"
 import Link from "next/link"
 import Image from "next/image"
 import { notFound } from "next/navigation"
+import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
 import { getPostgresPool, hasPostgresEnv } from "@/lib/postgres/server"
 import Navbar from "@/components/layout/Navbar"
 import type { Company, Job } from "@/types"
@@ -66,7 +67,7 @@ export default async function PublicCompanyPage({ params }: Props) {
       `SELECT id, title, location, is_remote, is_hybrid, seniority_level, employment_type,
               sponsors_h1b, sponsorship_score, first_detected_at, apply_url, skills
        FROM jobs
-       WHERE company_id = $1::uuid AND is_active = true
+       WHERE company_id = $1::uuid AND is_active = true AND ${sqlJobLocatedInUsa("jobs")}
        ORDER BY first_detected_at DESC NULLS LAST
        LIMIT 50`,
       [id]

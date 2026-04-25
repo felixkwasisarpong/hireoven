@@ -32,7 +32,7 @@ const INDUSTRIES = [
 ] as const
 
 const SIZES = ["startup", "small", "medium", "large", "enterprise"] as const
-const ATS_TYPES = ["greenhouse", "lever", "workday", "ashby", "custom"] as const
+const ATS_TYPES = ["greenhouse", "lever", "workday", "ashby", "jobvite", "custom"] as const
 
 type InsertRow = {
   name: string

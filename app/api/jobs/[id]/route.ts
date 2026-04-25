@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
 import { getPostgresPool } from "@/lib/postgres/server"
 import type { JobWithCompany } from "@/types"
 
@@ -13,7 +14,7 @@ export async function GET(
     `SELECT j.*, to_jsonb(c.*) AS company
      FROM jobs j
      LEFT JOIN companies c ON c.id = j.company_id
-     WHERE j.id = $1
+     WHERE j.id = $1 AND ${sqlJobLocatedInUsa("j")}
      LIMIT 1`,
     [id]
   )

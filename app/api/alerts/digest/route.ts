@@ -3,6 +3,7 @@ import { Resend } from "resend"
 import { getAlertsFromEmail } from "@/lib/email/identity"
 import { requireCronAuth } from "@/lib/env"
 import { matchesLocationFilter } from "@/lib/jobs/search-match"
+import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
 import { getPostgresPool } from "@/lib/postgres/server"
 import type { Job, JobAlert, Profile } from "@/types"
 
@@ -166,6 +167,7 @@ export async function GET(request: NextRequest) {
      FROM jobs
      LEFT JOIN companies ON companies.id = jobs.company_id
      WHERE jobs.is_active = true
+       AND ${sqlJobLocatedInUsa("jobs")}
        AND jobs.first_detected_at >= $1
      ORDER BY jobs.first_detected_at DESC`,
     [since]

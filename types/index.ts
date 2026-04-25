@@ -17,6 +17,7 @@ export type AtsType =
   | 'icims'
   | 'bamboohr'
   | 'ashby'
+  | 'jobvite'
   | 'custom';
 
 export type EmploymentType = 'fulltime' | 'parttime' | 'contract' | 'internship';
@@ -54,6 +55,19 @@ export type JobSortOption = 'freshest' | 'match' | 'relevant';
 
 export type ResumeParseStatus = 'pending' | 'processing' | 'complete' | 'failed';
 export type ScoreMethod = 'fast' | 'deep';
+export type IntelligenceConfidence = 'high' | 'medium' | 'low' | 'unknown';
+export type IntelligenceRiskLevel = 'low' | 'medium' | 'high' | 'unknown';
+export type IntelligenceSignalImpact = 'positive' | 'negative' | 'neutral';
+export type IntelligenceSource =
+  | 'job_description'
+  | 'company_profile'
+  | 'resume'
+  | 'application'
+  | 'ats'
+  | 'lca'
+  | 'uscis'
+  | 'system'
+  | 'mock';
 
 export type ResumeEditType =
   | 'rewrite'
@@ -139,6 +153,7 @@ export type JobApplication = {
   timeline: TimelineEntry[];
   interviews: InterviewRound[];
   offer_details: OfferDetails | null;
+  application_verdict?: ApplicationVerdict | null;
   is_archived: boolean;
   source: string;
   created_at: string;
@@ -387,6 +402,8 @@ export type Company = {
   h1b_sponsor_count_3yr: number;
   sponsors_h1b: boolean;
   sponsorship_confidence: number;
+  immigration_profile_summary?: CompanyImmigrationProfileSummary | null;
+  hiring_health?: CompanyHiringHealth | null;
   created_at: string;
   updated_at: string;
 };
@@ -431,6 +448,7 @@ export type Job = {
   raw_data: Record<string, unknown> | null;
   h1b_prediction: H1BPrediction | null;
   h1b_prediction_at: string | null;
+  job_intelligence?: JobIntelligence | null;
   created_at: string;
   updated_at: string;
 };
@@ -444,6 +462,179 @@ export type JobInsert = Omit<Job, 'id' | 'created_at' | 'updated_at'> & {
 export type JobUpdate = Partial<JobInsert>;
 
 export type JobWithCompany = Job & { company: Company };
+
+// ---------------------------------------------------------------------------
+// Job intelligence layer
+// ---------------------------------------------------------------------------
+
+export type IntelligenceSignal = {
+  label: string;
+  detail: string | null;
+  impact: IntelligenceSignalImpact;
+  source: IntelligenceSource;
+  confidence: IntelligenceConfidence;
+};
+
+export type SponsorshipBlockerKind =
+  | 'no_sponsorship_statement'
+  | 'requires_unrestricted_work_authorization'
+  | 'citizenship_or_clearance_required'
+  | 'contract_or_vendor_restriction'
+  | 'location_or_role_restriction'
+  | 'unknown';
+
+export type SponsorshipBlocker = {
+  detected: boolean;
+  kind: SponsorshipBlockerKind | null;
+  severity: IntelligenceRiskLevel;
+  evidence: string[];
+  source: IntelligenceSource;
+  confidence: IntelligenceConfidence;
+};
+
+export type VisaFitVerdict = 'strong_fit' | 'possible_fit' | 'needs_review' | 'blocked' | 'unknown';
+export type VisaFitScoreLabel = 'Blocked' | 'Weak' | 'Medium' | 'Strong' | 'Very Strong';
+
+export type VisaIntelligence = {
+  visaFitScore: number | null;
+  label: VisaFitScoreLabel | null;
+  verdict: VisaFitVerdict;
+  confidence: IntelligenceConfidence;
+  requiresSponsorship: boolean | null;
+  employerLikelySponsors: boolean | null;
+  sponsorshipScore: number | null;
+  h1bPrediction: H1BPrediction | null;
+  blockers: SponsorshipBlocker[];
+  positiveSignals: IntelligenceSignal[];
+  riskSignals: IntelligenceSignal[];
+  summary: string | null;
+};
+
+export type LcaSalaryPosition = 'below_range' | 'within_range' | 'above_range' | 'unknown';
+
+export type LcaSalaryIntelligence = {
+  salaryFitScore: number | null;
+  position: LcaSalaryPosition;
+  offeredSalaryMin: number | null;
+  offeredSalaryMax: number | null;
+  prevailingWage: number | null;
+  lcaWagePercentile: number | null;
+  comparableLcaCount: number | null;
+  wageLevel: string | null;
+  socCode: string | null;
+  socTitle: string | null;
+  worksiteState: string | null;
+  confidence: IntelligenceConfidence;
+  summary: string | null;
+};
+
+export type StemOptReadiness = {
+  eligible: boolean | null;
+  score: number | null;
+  eVerifyLikely: boolean | null;
+  stemRelatedRole: boolean | null;
+  employerTrainingPlanRisk: IntelligenceRiskLevel;
+  missingSignals: string[];
+  summary: string | null;
+};
+
+export type CapExemptSignal = {
+  isLikelyCapExempt: boolean | null;
+  category: 'higher_education' | 'nonprofit_research' | 'government_research' | 'affiliated_nonprofit' | 'unknown';
+  confidence: IntelligenceConfidence;
+  evidence: string[];
+  summary: string | null;
+};
+
+export type GhostJobRisk = {
+  score: number | null;
+  riskLevel: IntelligenceRiskLevel;
+  freshnessDays: number | null;
+  repostCount: number | null;
+  lastSeenAt: string | null;
+  signals: IntelligenceSignal[];
+  summary: string | null;
+};
+
+export type CompanyHiringHealth = {
+  score: number | null;
+  status: 'growing' | 'steady' | 'slowing' | 'unknown';
+  activeJobCount: number | null;
+  recentJobCount: number | null;
+  hiringVelocity: number | null;
+  sponsorshipTrend: 'improving' | 'stable' | 'declining' | 'unknown';
+  lcaCertificationRate: number | null;
+  lastUpdatedAt: string | null;
+  signals: IntelligenceSignal[];
+  summary: string | null;
+};
+
+export type CompanyImmigrationProfileSummary = {
+  sponsorsH1b: boolean | null;
+  sponsorshipConfidence: number | null;
+  recentH1BPetitions: number | null;
+  totalLcaApplications: number | null;
+  lcaCertificationRate: number | null;
+  commonSocCodes: string[];
+  commonJobTitles: string[];
+  commonWorksiteStates: string[];
+  riskFlags: string[];
+  lastUpdatedAt: string | null;
+  summary: string | null;
+};
+
+export type ApplicationVerdict = {
+  recommendation: ApplyRecommendation | 'watch' | 'avoid' | 'unknown';
+  confidence: IntelligenceConfidence;
+  score: number | null;
+  reasons: string[];
+  blockers: string[];
+  nextBestAction: string | null;
+  computedAt: string | null;
+};
+
+export type MatchScoreBreakdown = {
+  overallScore: number | null;
+  skillsScore: number | null;
+  experienceScore: number | null;
+  seniorityScore: number | null;
+  locationScore: number | null;
+  employmentTypeScore: number | null;
+  sponsorshipScore: number | null;
+  visaFitScore: number | null;
+  freshnessScore: number | null;
+  matchedSkills: string[];
+  missingSkills: string[];
+  totalRequiredSkills: number | null;
+  scoreMethod: ScoreMethod;
+  confidence: IntelligenceConfidence;
+  concerns: string[];
+  computedAt: string | null;
+};
+
+export type JobIntelligence = {
+  schemaVersion: '2026-04-24';
+  computedAt: string | null;
+  sources: IntelligenceSource[];
+  visa: VisaIntelligence | null;
+  sponsorshipBlockers: SponsorshipBlocker[];
+  lcaSalary: LcaSalaryIntelligence | null;
+  stemOpt: StemOptReadiness | null;
+  capExempt: CapExemptSignal | null;
+  ghostJobRisk: GhostJobRisk | null;
+  companyHiringHealth: CompanyHiringHealth | null;
+  applicationVerdict: ApplicationVerdict | null;
+  matchScore: MatchScoreBreakdown | null;
+  postedFreshness: {
+    firstDetectedAt: string | null;
+    lastSeenAt: string | null;
+    freshnessDays: number | null;
+    label: string | null;
+    score: number | null;
+  } | null;
+  companyImmigrationProfile: CompanyImmigrationProfileSummary | null;
+  summary: string | null;
+};
 
 // ---------------------------------------------------------------------------
 // Profiles (Postgres `public.profiles`)
@@ -711,6 +902,7 @@ export type JobMatchScore = {
   total_required_skills: number;
   skills_match_rate: number | null;
   score_method: ScoreMethod;
+  score_breakdown?: MatchScoreBreakdown | null;
   computed_at: string;
   resume_version: number;
 };
@@ -1075,12 +1267,22 @@ export type H1BPredictionInput = {
 
 export type JobFilters = {
   remote?: boolean;
+  hybrid?: boolean;
+  onsite?: boolean;
   sponsorship?: boolean;
   seniority?: SeniorityLevel[];
   employment_type?: EmploymentType[];
   within?: JobWithinWindow;
   company_ids?: string[];
   sort?: JobSortOption;
+  /** City / region; synced to `location` query param (match feed) */
+  locationQuery?: string;
+  /** Minimum annual compensation (USD); jobs with a known cap below this are hidden */
+  min_salary?: number;
+  /** Required skill tokens (AND); URL `skills=a,b` */
+  skills?: string[];
+  /** Substring match on `company.industry` (client-side) */
+  industryQuery?: string;
 };
 
 // ---------------------------------------------------------------------------

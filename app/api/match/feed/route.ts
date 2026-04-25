@@ -3,6 +3,7 @@ import {
   matchesLocationFilter,
   matchesSearchQuery,
 } from "@/lib/jobs/search-match"
+import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
 import { scoreJobsForUser } from "@/lib/matching/batch-scorer"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { createClient } from "@/lib/supabase/server"
@@ -90,7 +91,7 @@ export async function GET(request: NextRequest) {
   const fetchLimit = Math.min(220, Math.max(limit + offset, 60) * fetchMultiplier)
 
   const pool = getPostgresPool()
-  const where: string[] = ["jobs.is_active = true"]
+  const where: string[] = ["jobs.is_active = true", sqlJobLocatedInUsa("jobs")]
   const params: Array<string | number | string[]> = []
   const addParam = (value: string | number | string[]) => {
     params.push(value)
@@ -153,7 +154,7 @@ export async function GET(request: NextRequest) {
   const ranked = jobs
     .map((job) => {
       const matchScore = scoreMap.get(job.id) ?? null
-      const overall = matchScore?.overall_score ?? 50
+      const overall = matchScore?.overall_score ?? 0
       const finalRank = Number(
         ((overall * 0.65) + (freshnessScore(job.first_detected_at) * 0.35)).toFixed(2)
       )
@@ -164,7 +165,7 @@ export async function GET(request: NextRequest) {
         final_rank: finalRank,
       }
     })
-    .filter((job) => (job.match_score?.overall_score ?? 50) >= minScore)
+    .filter((job) => job.match_score ? job.match_score.overall_score >= minScore : minScore <= 0)
     .sort((left, right) => {
       if ((right.final_rank ?? 0) !== (left.final_rank ?? 0)) {
         return (right.final_rank ?? 0) - (left.final_rank ?? 0)

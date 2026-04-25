@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { usePathname } from "next/navigation"
 import { X } from "lucide-react"
 import DashboardHeader from "@/components/dashboard/DashboardHeader"
-import DashboardSidebarNav from "@/components/dashboard/DashboardSidebarNav"
+import DashboardSubpageSidebar from "@/components/dashboard/DashboardSubpageSidebar"
 import { ResumeProvider } from "@/components/resume/ResumeProvider"
 import { useSubscription } from "@/lib/hooks/useSubscription"
 import { cn } from "@/lib/utils"
@@ -83,30 +83,13 @@ function TrialReminderBanner() {
 
 function DashboardSubpageChrome({ children }: { children: React.ReactNode }) {
   return (
-    <div className="dashboard-subpage neo-shell relative min-h-screen overflow-hidden xl:flex xl:h-[100dvh] xl:flex-col xl:overflow-hidden">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute -left-20 top-20 h-72 w-72 rounded-full bg-cyan-200/18 blur-3xl animate-hue-float"
-      />
-      <div
-        aria-hidden
-        className="pointer-events-none absolute -right-20 top-56 h-80 w-80 rounded-full bg-orange-200/16 blur-3xl animate-hue-float"
-      />
-      <div
-        aria-hidden
-        className="pointer-events-none absolute bottom-0 left-1/3 h-72 w-72 rounded-full bg-amber-200/14 blur-3xl animate-hue-float"
-      />
-      <DashboardHeader />
+    <div className="dashboard-subpage relative min-h-[100dvh] bg-white xl:flex xl:h-[100dvh] xl:overflow-hidden">
+      <DashboardSubpageSidebar />
 
-      <div className="relative z-10 mx-auto max-w-[1720px] px-4 py-4 lg:px-6 xl:mx-0 xl:flex-1 xl:max-w-none xl:min-h-0 xl:px-0 xl:py-0">
-        <div className="grid gap-6 lg:grid-cols-[252px_minmax(0,1fr)] xl:h-full xl:gap-0">
-          <aside className="neo-toolbar rounded-[1.1rem] p-3 lg:sticky lg:top-4 lg:self-start lg:flex lg:w-full lg:max-h-[calc(100dvh-5rem)] lg:flex-col lg:overflow-hidden xl:static xl:h-full xl:max-h-none xl:self-auto xl:rounded-none xl:border-y-0 xl:border-l-0 xl:border-r xl:p-4 xl:shadow-none">
-            <DashboardSidebarNav />
-          </aside>
-
-          <div className="dashboard-subpage-content min-w-0 xl:soft-scrollbar xl:h-full xl:overflow-y-auto xl:px-6 xl:py-5">
-            {children}
-          </div>
+      <div className="flex min-w-0 flex-1 flex-col xl:h-full xl:overflow-hidden">
+        <DashboardHeader />
+        <div className="dashboard-subpage-content min-w-0 flex-1 xl:soft-scrollbar xl:overflow-y-auto">
+          {children}
         </div>
       </div>
     </div>

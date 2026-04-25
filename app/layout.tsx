@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next"
 import { Suspense } from "react"
-import { Manrope, Space_Grotesk } from "next/font/google"
+import { Plus_Jakarta_Sans } from "next/font/google"
 import ServiceWorkerRegistration from "@/components/pwa/ServiceWorkerRegistration"
 import { RouteToastBridge, ToastProvider } from "@/components/ui/ToastProvider"
 import { SubscriptionProvider } from "@/lib/context/SubscriptionContext"
@@ -8,16 +8,12 @@ import { UpgradeModalProvider } from "@/lib/context/UpgradeModalContext"
 import UpgradeModal from "@/components/gates/UpgradeModal"
 import "./globals.css"
 
-const manrope = Manrope({
+/** Plus Jakarta Sans — geometric SaaS feel (Cruip / Mosaic-adjacent). */
+const jakarta = Plus_Jakarta_Sans({
   subsets: ["latin"],
   variable: "--font-sans",
   display: "swap",
-})
-
-const spaceGrotesk = Space_Grotesk({
-  subsets: ["latin"],
-  variable: "--font-display",
-  display: "swap",
+  weight: ["400", "500", "600", "700", "800"],
 })
 
 export const metadata: Metadata = {
@@ -56,7 +52,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={`${manrope.variable} ${spaceGrotesk.variable} site-chroma`}>
+      <body className={`${jakarta.variable} site-chroma`}>
         <UpgradeModalProvider>
           <SubscriptionProvider>
             <ToastProvider>

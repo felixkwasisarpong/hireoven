@@ -19,21 +19,25 @@ interface JobFeedProps {
 
 function JobRowSkeleton() {
   return (
-    <div className="bg-white/70 px-4 py-4 sm:px-5">
-      <div className="flex gap-4">
-        <div className="h-11 w-11 flex-shrink-0 animate-pulse rounded-xl bg-surface-muted sm:h-12 sm:w-12" />
-        <div className="min-w-0 flex-1 space-y-3">
-          <div className="h-2.5 w-20 animate-pulse rounded bg-surface-muted" />
-          <div className="h-4 w-3/4 max-w-md animate-pulse rounded bg-surface-muted" />
-          <div className="h-3 w-1/2 animate-pulse rounded bg-surface-muted" />
-          <div className="flex gap-2">
-            <div className="h-6 w-16 animate-pulse rounded border border-border bg-surface-muted" />
-            <div className="h-6 w-20 animate-pulse rounded border border-border bg-surface-muted" />
+    <div className="rounded-2xl border border-slate-100 bg-white p-5">
+      <div className="flex gap-3.5">
+        <div className="h-10 w-10 flex-shrink-0 animate-pulse rounded-xl bg-slate-100" />
+        <div className="min-w-0 flex-1 space-y-2.5">
+          <div className="h-2.5 w-24 animate-pulse rounded-full bg-slate-100" />
+          <div className="h-4 w-2/3 max-w-sm animate-pulse rounded-full bg-slate-100" />
+          <div className="flex gap-1.5 pt-0.5">
+            <div className="h-5 w-16 animate-pulse rounded-full bg-slate-100" />
+            <div className="h-5 w-20 animate-pulse rounded-full bg-slate-100" />
+            <div className="h-5 w-14 animate-pulse rounded-full bg-slate-100" />
           </div>
         </div>
       </div>
-      <div className="mt-4 flex justify-end border-t border-border pt-3">
-        <div className="h-9 w-28 animate-pulse rounded-md bg-surface-muted" />
+      <div className="mt-4 flex items-center justify-between border-t border-slate-50 pt-3.5">
+        <div className="flex gap-4">
+          <div className="h-3.5 w-14 animate-pulse rounded-full bg-slate-100" />
+          <div className="h-3.5 w-20 animate-pulse rounded-full bg-slate-100" />
+        </div>
+        <div className="h-8 w-20 animate-pulse rounded-xl bg-slate-100" />
       </div>
     </div>
   )
@@ -55,12 +59,13 @@ export default function JobFeed({
     lastHourCount,
     newJobsCount,
     refresh,
-  } = useJobs(filters, searchQuery, { personalized })
+  } = useJobs(filters, searchQuery, { personalized, withScores: hasPrimaryResume && !personalized })
   const sentinelRef = useRef<HTMLDivElement | null>(null)
-  const shouldLoadBatchScores = hasPrimaryResume && !personalized
-  const { getScore, isLoading: scoresLoading } = useMatchScores(
-    shouldLoadBatchScores ? jobs.map((job) => job.id) : []
-  )
+  /** Embedded `match_score` from /api/jobs covers most jobs; only fetch any that arrive without one. */
+  const missingScoreIds = hasPrimaryResume && !personalized
+    ? jobs.filter((job) => !job.match_score).map((job) => job.id)
+    : []
+  const { getScore, isLoading: scoresLoading } = useMatchScores(missingScoreIds)
 
   const { profile } = useAuth()
   const { isProInternational } = useSubscription()
@@ -100,31 +105,37 @@ export default function JobFeed({
     return () => observer.disconnect()
   }, [hasMore, loadMore])
 
+  /** “Best match” must follow the same % as the card, not feed position #1 (rank blends freshness). */
+  let bestMatchJobId: string | null = null
+  if (filters.sort === "match") {
+    let top = -1
+    for (const job of jobs) {
+      const ms = job.match_score ?? getScore(job.id)
+      const overall = ms?.overall_score
+      if (overall == null) continue
+      if (overall > top) {
+        top = overall
+        bestMatchJobId = job.id
+      }
+    }
+  }
+
   return (
     <H1BPredictionProvider enabled={h1bEnabled}>
     <div className="space-y-4">
-      {personalized && (
-        <div className="neo-strip flex items-center gap-2 text-sm font-medium text-brand-navy">
-          <Sparkles className="h-4 w-4 shrink-0 text-primary" />
-          Personalized for you
-        </div>
-      )}
-
       {newJobsCount > 0 && (
         <button
           type="button"
           onClick={() => void refresh()}
-          className="neo-strip flex w-full items-center justify-center gap-2 text-sm font-medium text-brand-navy transition-colors hover:brightness-[1.02]"
+          className="neo-strip flex w-full items-center justify-center gap-2 text-[13px] font-semibold text-brand-navy transition-colors hover:brightness-[1.02]"
         >
-          <Sparkles className="h-4 w-4" />
-          {newJobsCount.toLocaleString()} new job
-          {newJobsCount === 1 ? "" : "s"} just posted
-          <span className="text-primary">click to load</span>
+          <Sparkles className="h-3.5 w-3.5 text-primary" />
+          {newJobsCount.toLocaleString()} new job{newJobsCount === 1 ? "" : "s"} — click to load
         </button>
       )}
 
       {isLoading && jobs.length === 0 && (
-        <div className="job-feed-panel divide-y divide-border">
+        <div className="space-y-3">
           <JobRowSkeleton />
           <JobRowSkeleton />
           <JobRowSkeleton />
@@ -132,9 +143,9 @@ export default function JobFeed({
       )}
 
       {!isLoading && jobs.length === 0 && (
-        <div className="empty-state rounded-lg">
-          <p className="text-base font-semibold text-strong">No jobs match your filters</p>
-          <p className="mt-2 text-sm text-muted-foreground">Try widening your search</p>
+        <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-6 py-14 text-center">
+          <p className="text-[15px] font-semibold text-slate-700">No jobs match your filters</p>
+          <p className="mt-1.5 text-sm text-slate-500">Try widening your search or removing some filters</p>
         </div>
       )}
 
@@ -146,10 +157,13 @@ export default function JobFeed({
               job={job}
               hasPrimaryResume={hasPrimaryResume}
               analysisIndex={i}
+              isBestMatch={Boolean(bestMatchJobId && job.id === bestMatchJobId)}
               now={now}
+              priorityLogo={i < 6}
               matchScore={job.match_score ?? getScore(job.id)}
               isMatchScoreLoading={
-                shouldLoadBatchScores &&
+                hasPrimaryResume &&
+                !personalized &&
                 !job.match_score &&
                 scoresLoading &&
                 !getScore(job.id)
@@ -164,15 +178,15 @@ export default function JobFeed({
       {hasMore && jobs.length > 0 && (
         <div className="flex justify-center py-2">
           {isLoading ? (
-            <div className="text-sm text-muted-foreground">Loading more jobs…</div>
+            <div className="text-[13px] text-slate-400">Loading…</div>
           ) : (
             <button
               type="button"
               onClick={() => void loadMore()}
-              className="inline-flex items-center gap-2 rounded-xl border border-border bg-white/70 px-4 py-2 text-sm font-medium text-muted-foreground shadow-[0_12px_30px_-24px_rgba(5,25,45,0.7)] transition-colors hover:bg-cyan-50/60 hover:text-strong"
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-[13px] font-medium text-slate-500 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-700"
             >
               Load more
-              <ArrowUp className="h-4 w-4 rotate-180" />
+              <ArrowUp className="h-3.5 w-3.5 rotate-180" />
             </button>
           )}
         </div>

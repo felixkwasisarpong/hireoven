@@ -546,6 +546,22 @@ function rebalanceQualificationBuckets(
 ) {
   const movedFromResponsibilities = [...buckets.responsibilities.items]
   for (const item of movedFromResponsibilities) {
+    if (BENEFITS_LIKE_RE.test(item)) {
+      moveItem(
+        buckets.responsibilities,
+        buckets.benefits,
+        item,
+        0.66,
+        {
+          adapter,
+          method: "heuristic",
+          source_path: "responsibilities.rebalanced",
+          source_excerpt: item.slice(0, 220),
+        }
+      )
+      continue
+    }
+
     if (PREFERRED_LIKE_RE.test(item)) {
       moveItem(
         buckets.responsibilities,
@@ -564,7 +580,6 @@ function rebalanceQualificationBuckets(
 
     if (
       REQUIREMENT_LIKE_RE.test(item) &&
-      !RESPONSIBILITY_LIKE_RE.test(item) &&
       !BENEFITS_LIKE_RE.test(item)
     ) {
       moveItem(

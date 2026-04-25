@@ -129,33 +129,50 @@ type CompanyLogoProps = {
   domain?: string | null
   logoUrl?: string | null
   className?: string
+  /** Use eager loading + fetchPriority high; recommended for above-the-fold cards. */
+  priority?: boolean
 }
 
 /**
  * Renders a company mark with automatic fallback when the stored URL fails (e.g. Clearbit 404).
- * Known CDNs use next/image so loads are same-origin to the app and third-party cookies are not set in the browser.
+ *
+ * UX: a colored initial-letter chip is rendered immediately as the visible backdrop; the remote
+ * image fades in on top once it loads. This keeps cards "filled" instead of flashing empty squares
+ * while favicons/Clearbit hits travel the network.
  */
 export default function CompanyLogo({
   companyName,
   domain,
   logoUrl,
   className,
+  priority = false,
 }: CompanyLogoProps) {
   const sources = useMemo(() => buildLogoSources(logoUrl, domain), [logoUrl, domain])
   const [index, setIndex] = useState(0)
+  const [loaded, setLoaded] = useState(false)
 
   const initial = companyName.charAt(0).toUpperCase() || "?"
 
-  if (sources.length === 0 || index >= sources.length) {
+  const placeholder = (
+    <div
+      aria-hidden
+      className="absolute inset-0 flex items-center justify-center bg-surface-alt text-sm font-semibold text-brand-navy"
+    >
+      {initial}
+    </div>
+  )
+
+  const noSource = sources.length === 0 || index >= sources.length
+
+  if (noSource) {
     return (
       <div
         className={cn(
-          "flex flex-shrink-0 items-center justify-center rounded-md border border-border bg-surface-alt text-sm font-semibold text-brand-navy",
+          "relative flex-shrink-0 overflow-hidden rounded-md border border-border",
           className
         )}
-        aria-hidden
       >
-        {initial}
+        {placeholder}
       </div>
     )
   }
@@ -163,61 +180,74 @@ export default function CompanyLogo({
   const src = sources[index]
   const viaNext = shouldOptimizeWithNextImage(src)
 
-  if (viaNext) {
-    return (
-      <div
-        className={cn("relative flex-shrink-0 overflow-hidden rounded-md border border-border", className)}
-      >
+  function handleSmallImage(naturalWidth: number, naturalHeight: number) {
+    if (
+      naturalWidth > 0 &&
+      naturalHeight > 0 &&
+      (naturalWidth < MIN_CRISP_ICON_SIZE || naturalHeight < MIN_CRISP_ICON_SIZE)
+    ) {
+      setLoaded(false)
+      setIndex((i) => i + 1)
+    }
+  }
+
+  return (
+    <div
+      className={cn(
+        "relative flex-shrink-0 overflow-hidden rounded-md border border-border",
+        className
+      )}
+    >
+      {placeholder}
+      {viaNext ? (
         <Image
           key={src}
           src={src}
           alt={companyName}
           fill
           sizes="(max-width: 768px) 48px, 64px"
-          className="object-contain bg-white p-1"
+          priority={priority}
+          loading={priority ? "eager" : "lazy"}
+          className={cn(
+            "object-contain bg-white p-1 transition-opacity duration-200",
+            loaded ? "opacity-100" : "opacity-0"
+          )}
           referrerPolicy="no-referrer"
           onLoad={(event) => {
             const image = event.currentTarget as HTMLImageElement
-            if (
-              image.naturalWidth > 0 &&
-              image.naturalHeight > 0 &&
-              (image.naturalWidth < MIN_CRISP_ICON_SIZE ||
-                image.naturalHeight < MIN_CRISP_ICON_SIZE)
-            ) {
-              setIndex((i) => i + 1)
-            }
+            handleSmallImage(image.naturalWidth, image.naturalHeight)
+            setLoaded(true)
           }}
-          onError={() => setIndex((i) => i + 1)}
+          onError={() => {
+            setLoaded(false)
+            setIndex((i) => i + 1)
+          }}
         />
-      </div>
-    )
-  }
-
-  return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      key={src}
-      src={src}
-      alt={companyName}
-      loading="lazy"
-      decoding="async"
-      referrerPolicy="no-referrer"
-      className={cn(
-        "flex-shrink-0 rounded-md border border-border bg-white object-contain p-1",
-        className
+      ) : (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          key={src}
+          src={src}
+          alt={companyName}
+          loading={priority ? "eager" : "lazy"}
+          fetchPriority={priority ? "high" : "auto"}
+          decoding="async"
+          referrerPolicy="no-referrer"
+          className={cn(
+            "absolute inset-0 h-full w-full bg-white object-contain p-1 transition-opacity duration-200",
+            loaded ? "opacity-100" : "opacity-0"
+          )}
+          onLoad={(event) => {
+            const image = event.currentTarget
+            handleSmallImage(image.naturalWidth, image.naturalHeight)
+            setLoaded(true)
+          }}
+          onError={() => {
+            setLoaded(false)
+            setIndex((i) => i + 1)
+          }}
+        />
       )}
-      onLoad={(event) => {
-        const image = event.currentTarget
-        if (
-          image.naturalWidth > 0 &&
-          image.naturalHeight > 0 &&
-          (image.naturalWidth < MIN_CRISP_ICON_SIZE ||
-            image.naturalHeight < MIN_CRISP_ICON_SIZE)
-        ) {
-          setIndex((i) => i + 1)
-        }
-      }}
-      onError={() => setIndex((i) => i + 1)}
-    />
+    </div>
   )
 }

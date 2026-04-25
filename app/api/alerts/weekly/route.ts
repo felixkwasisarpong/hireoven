@@ -3,6 +3,7 @@ import { Resend } from "resend"
 import { getAlertsFromEmail } from "@/lib/email/identity"
 import { requireCronAuth } from "@/lib/env"
 import { matchesLocationFilter } from "@/lib/jobs/search-match"
+import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
 import { getPostgresPool } from "@/lib/postgres/server"
 import type { Job, JobAlert, Profile } from "@/types"
 
@@ -154,7 +155,9 @@ export async function GET(request: NextRequest) {
 
   const [jobsCountResult, newCompaniesResult, topCompaniesResult] = await Promise.all([
     pool.query<{ count: string }>(
-      "SELECT COUNT(*)::text AS count FROM jobs WHERE first_detected_at >= $1",
+      `SELECT COUNT(*)::text AS count FROM jobs WHERE is_active = true AND ${sqlJobLocatedInUsa(
+        "jobs"
+      )} AND first_detected_at >= $1`,
       [weekStart]
     ),
     pool.query<{ count: string }>(
@@ -165,7 +168,7 @@ export async function GET(request: NextRequest) {
       `SELECT companies.name
        FROM jobs
        JOIN companies ON companies.id = jobs.company_id
-       WHERE jobs.first_detected_at >= $1 AND jobs.is_active = true
+       WHERE jobs.first_detected_at >= $1 AND jobs.is_active = true AND ${sqlJobLocatedInUsa("jobs")}
        GROUP BY companies.name
        ORDER BY COUNT(*) DESC
        LIMIT 5`,
@@ -197,6 +200,7 @@ export async function GET(request: NextRequest) {
      FROM jobs
      LEFT JOIN companies ON companies.id = jobs.company_id
      WHERE jobs.is_active = true
+       AND ${sqlJobLocatedInUsa("jobs")}
        AND jobs.first_detected_at >= $1
      ORDER BY jobs.first_detected_at DESC`,
     [since]

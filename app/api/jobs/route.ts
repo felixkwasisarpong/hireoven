@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
+import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
 import { getPostgresPool } from "@/lib/postgres/server"
+import { createClient } from "@/lib/supabase/server"
+import type { JobMatchScore } from "@/types"
+
+const FAST_SCORE_ALGORITHM_UPDATED_AT = "2026-04-24T23:45:00.000Z"
 
 const WITHIN_MS: Record<string, number> = {
   "1h": 3_600_000,
@@ -22,8 +27,9 @@ export async function GET(request: NextRequest) {
   const sort = sp.get("sort") ?? "fresh"
   const limit = Math.min(250, parseInt(sp.get("limit") ?? "24", 10))
   const offset = parseInt(sp.get("offset") ?? "0", 10)
+  const withScores = sp.get("withScores") === "1" || sp.get("with_scores") === "1"
 
-  const where: string[] = ["jobs.is_active = true"]
+  const where: string[] = ["jobs.is_active = true", sqlJobLocatedInUsa("jobs")]
   const values: Array<string | number | boolean | string[]> = []
 
   const addParam = (value: string | number | boolean | string[]) => {
@@ -65,7 +71,9 @@ export async function GET(request: NextRequest) {
         values
       ),
       pool.query<{ count: string }>(
-        "SELECT COUNT(*)::text AS count FROM jobs WHERE is_active = true AND first_detected_at >= $1",
+        `SELECT COUNT(*)::text AS count FROM jobs WHERE is_active = true AND ${sqlJobLocatedInUsa(
+          "jobs"
+        )} AND first_detected_at >= $1`,
         [oneHourAgo]
       ),
     ])
@@ -73,6 +81,44 @@ export async function GET(request: NextRequest) {
     const jobs = jobsResult.rows.map(({ total_count: _ignore, ...row }) => row)
     const total = Number(jobsResult.rows[0]?.total_count ?? 0)
     const newInLastHour = Number(newInLastHourResult.rows[0]?.count ?? 0)
+
+    if (withScores && jobs.length > 0) {
+      try {
+        const supabase = await createClient()
+        const {
+          data: { user },
+        } = await supabase.auth.getUser()
+        if (user) {
+          const jobIds = jobs.map((j) => j.id as string)
+          const scoresResult = await pool.query<JobMatchScore & { user_id: string }>(
+            `SELECT s.*
+               FROM job_match_scores s
+               INNER JOIN resumes r
+                 ON r.id = s.resume_id
+                AND r.user_id = s.user_id
+                AND r.is_primary = true
+                AND r.parse_status = 'complete'
+              WHERE s.user_id = $1
+                AND s.job_id = ANY($2::uuid[])
+                AND s.computed_at >= r.updated_at
+                AND s.computed_at >= $3::timestamptz`,
+            [user.id, jobIds, FAST_SCORE_ALGORITHM_UPDATED_AT]
+          )
+          const byJobId = new Map<string, JobMatchScore>()
+          for (const row of scoresResult.rows) {
+            byJobId.set(row.job_id, row)
+          }
+          for (const job of jobs) {
+            const existing = byJobId.get(job.id as string)
+            if (existing) {
+              ;(job as Record<string, unknown>).match_score = existing
+            }
+          }
+        }
+      } catch (scoreErr) {
+        console.warn("Failed to embed match scores in /api/jobs", scoreErr)
+      }
+    }
 
     return NextResponse.json({ jobs, total, newInLastHour })
   } catch (error) {

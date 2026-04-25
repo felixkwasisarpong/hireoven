@@ -1,26 +1,15 @@
 import { getSeniorityGap } from "@/lib/matching/fast-scorer"
+import {
+  getAllResumeSkillLabels,
+  normalizeSkillList,
+  skillMatches,
+} from "@/lib/skills/taxonomy"
 import type {
   Job,
   JobMatchScore,
   Resume,
   ScoreExplanation,
 } from "@/types"
-
-function normalizeSkill(value: string) {
-  return value.trim().toLowerCase()
-}
-
-function getResumeSkills(resume: Resume) {
-  return new Set(
-    [
-      ...(resume.top_skills ?? []),
-      ...(resume.skills?.technical ?? []),
-      ...(resume.skills?.certifications ?? []),
-    ]
-      .map(normalizeSkill)
-      .filter(Boolean)
-  )
-}
 
 export function explainScore(
   score: JobMatchScore,
@@ -29,18 +18,14 @@ export function explainScore(
 ): ScoreExplanation {
   const strengths: string[] = []
   const concerns: string[] = []
-  const resumeSkills = getResumeSkills(resume)
-  const missingSkills = (job.skills ?? []).filter(
-    (skill) =>
-      !Array.from(resumeSkills).some(
-        (resumeSkill) =>
-          resumeSkill === normalizeSkill(skill) ||
-          resumeSkill.includes(normalizeSkill(skill)) ||
-          normalizeSkill(skill).includes(resumeSkill)
-      )
+  const resumeSkills = getAllResumeSkillLabels(resume)
+  const missingSkills = normalizeSkillList(job.skills ?? []).filter(
+    (skill) => !resumeSkills.some((resumeSkill) => skillMatches(skill, resumeSkill))
   )
 
-  if ((score.skills_score ?? 0) >= 75) {
+  if (score.total_required_skills === 0 || score.skills_score == null) {
+    concerns.push("This posting has limited structured skill data, so the match score is lower confidence.")
+  } else if ((score.skills_score ?? 0) >= 75) {
     strengths.push(
       `${score.matching_skills_count} of ${Math.max(
         score.total_required_skills,

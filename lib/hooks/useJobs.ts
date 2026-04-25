@@ -2,7 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { devWarn } from "@/lib/client-dev-log"
-import { matchesLocationFilter, matchesSearchQuery } from "@/lib/jobs/search-match"
+import {
+  matchesLocationFilter,
+  matchesSearchQuery,
+} from "@/lib/jobs/search-match"
 import type { JobFilters, JobWithCompany, JobWithMatchScore } from "@/types"
 
 const PAGE_SIZE = 20
@@ -42,7 +45,14 @@ function matchesSearch(job: JobWithCompany, query: string) {
 }
 
 function matchesClientFilters(job: JobWithCompany, filters: JobFilters, query: string) {
-  if (filters.remote && !job.is_remote) return false
+  const workAny = filters.remote || filters.hybrid || filters.onsite
+  if (workAny) {
+    const ok =
+      (Boolean(filters.remote) && job.is_remote) ||
+      (Boolean(filters.hybrid) && job.is_hybrid) ||
+      (Boolean(filters.onsite) && !job.is_remote && !job.is_hybrid)
+    if (!ok) return false
+  }
 
   if (
     filters.sponsorship &&
@@ -70,10 +80,49 @@ function matchesClientFilters(job: JobWithCompany, filters: JobFilters, query: s
   if (filters.company_ids?.length && !filters.company_ids.includes(job.company_id))
     return false
 
+  if (filters.locationQuery?.trim()) {
+    if (
+      !matchesLocationFilter(
+        job.location,
+        filters.locationQuery,
+        { isRemote: job.is_remote }
+      )
+    ) {
+      return false
+    }
+  }
+
+  if (filters.min_salary != null && filters.min_salary > 0) {
+    const min = filters.min_salary
+    if (job.salary_max != null && job.salary_max < min) return false
+  }
+
   const hours = hoursFromWithin(filters.within)
   if (hours) {
     const ageMs = Date.now() - new Date(job.first_detected_at).getTime()
     if (ageMs > hours * 3_600_000) return false
+  }
+
+  if (filters.skills?.length) {
+    const haystack = [
+      ...(job.skills ?? []),
+      job.title,
+      job.normalized_title ?? "",
+      job.description ?? "",
+    ]
+      .join(" ")
+      .toLowerCase()
+    for (const token of filters.skills) {
+      const t = token.trim().toLowerCase()
+      if (!t) continue
+      if (!haystack.includes(t)) return false
+    }
+  }
+
+  if (filters.industryQuery?.trim()) {
+    const needle = filters.industryQuery.trim().toLowerCase()
+    const industry = job.company?.industry?.toLowerCase() ?? ""
+    if (!industry.includes(needle)) return false
   }
 
   return matchesSearch(job, query)
@@ -145,8 +194,14 @@ function countLastHour(rows: JobWithCompany[]) {
   ).length
 }
 
+/** Only narrow the API with `remote=true` when remote is the sole work-mode filter */
+function passRemoteToJobsApi(filters: JobFilters) {
+  return Boolean(filters.remote) && !filters.hybrid && !filters.onsite
+}
+
 type UseJobsOptions = {
   personalized?: boolean
+  withScores?: boolean
 }
 
 export function useJobs(
@@ -155,6 +210,7 @@ export function useJobs(
   options: UseJobsOptions = {}
 ) {
   const personalized = Boolean(options.personalized)
+  const withScores = Boolean(options.withScores)
   const [allJobs, setAllJobsState] = useState<JobWithMatchScore[]>([])
   const allJobsRef = useRef<JobWithMatchScore[]>([])
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
@@ -186,7 +242,7 @@ export function useJobs(
       if (personalized) {
         const params = new URLSearchParams()
         if (searchQuery.trim()) params.set("q", searchQuery.trim())
-        if (filters.remote) params.set("remote", "true")
+        if (passRemoteToJobsApi(filters)) params.set("remote", "true")
         if (filters.sponsorship) params.set("sponsorship", "true")
         if (filters.seniority?.length) params.set("seniority", filters.seniority.join(","))
         if (filters.employment_type?.length) {
@@ -194,6 +250,9 @@ export function useJobs(
         }
         if (filters.company_ids?.length) params.set("companies", filters.company_ids.join(","))
         if (filters.within && filters.within !== "all") params.set("within", filters.within)
+        if (filters.locationQuery?.trim()) {
+          params.set("location", filters.locationQuery.trim())
+        }
         params.set("limit", String(chunkSize))
         params.set("offset", String(offset))
 
@@ -211,9 +270,14 @@ export function useJobs(
           newInLastHour?: number
         }
 
+        const all = payload.jobs ?? []
+        const list = all.filter((job) =>
+          matchesClientFilters(job, filters, searchQuery)
+        )
         return {
-          rows: payload.jobs ?? [],
-          rawCount: (payload.jobs ?? []).length,
+          rows: list,
+          /** Keep offset in sync with server batch size, not after client-side filtering */
+          rawCount: all.length,
           totalCount: payload.total ?? null,
           lastHourCount: payload.newInLastHour ?? 0,
         }
@@ -221,12 +285,13 @@ export function useJobs(
 
       const params = new URLSearchParams()
       if (searchQuery.trim()) params.set("q", searchQuery.trim())
-      if (filters.remote) params.set("remote", "true")
+      if (passRemoteToJobsApi(filters)) params.set("remote", "true")
       if (filters.sponsorship) params.set("sponsorship", "true")
       if (filters.seniority?.length) params.set("seniority", filters.seniority.join(","))
       if (filters.employment_type?.length) params.set("employment_type", filters.employment_type.join(","))
       if (filters.company_ids?.length) params.set("company_id", filters.company_ids[0])
       if (filters.within && filters.within !== "all") params.set("within", filters.within)
+      if (withScores) params.set("withScores", "1")
       params.set("limit", String(chunkSize))
       params.set("offset", String(offset))
 
@@ -247,7 +312,7 @@ export function useJobs(
         lastHourCount: null,
       }
     },
-    [filters, personalized, searchQuery]
+    [filters, personalized, searchQuery, withScores]
   )
 
   const ensureVisibleJobs = useCallback(

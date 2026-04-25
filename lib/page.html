@@ -1,0 +1,1967 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HireOven Companies</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <style>
+    :root {
+      --orange: #ff5a00;
+      --orange-2: #ff7a1a;
+      --orange-soft: #fff0e4;
+      --orange-soft-2: #fff7ef;
+      --bg: #fffaf7;
+      --text: #101828;
+      --muted: #667085;
+      --line: #f2e6dc;
+      --border: #ffe0c7;
+      --card: #ffffff;
+      --green: #22c55e;
+      --green-soft: #eafff2;
+      --blue: #2563eb;
+      --shadow: 0 12px 34px rgba(255, 90, 0, 0.07);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: "Inter", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      overflow: hidden;
+    }
+
+    button,
+    input,
+    select {
+      font-family: inherit;
+    }
+
+    .app {
+      height: 100vh;
+      display: grid;
+      grid-template-columns: 282px minmax(0, 1fr);
+      overflow: hidden;
+    }
+
+    /* Sidebar */
+
+    .sidebar {
+      background: #fffdf9;
+      border-right: 1px solid var(--border);
+      padding: 30px 20px 24px;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 54px;
+      padding-left: 4px;
+    }
+
+    .logo-mark {
+      width: 42px;
+      height: 32px;
+      background: #111827;
+      border-radius: 8px;
+      position: relative;
+      display: grid;
+      place-items: center;
+    }
+
+    .logo-mark::before {
+      content: "";
+      width: 20px;
+      height: 14px;
+      border-radius: 4px;
+      background: var(--orange);
+      position: absolute;
+    }
+
+    .logo-mark::after {
+      content: "";
+      width: 5px;
+      height: 5px;
+      border-radius: 99px;
+      background: #fff;
+      position: absolute;
+      top: 9px;
+      right: 9px;
+    }
+
+    .logo-ant {
+      position: absolute;
+      top: -5px;
+      width: 16px;
+      height: 2px;
+      background: #111827;
+      border-radius: 99px;
+    }
+
+    .brand-title {
+      font-size: 25px;
+      font-weight: 900;
+      letter-spacing: -0.05em;
+      line-height: 1;
+    }
+
+    .brand-title span {
+      color: var(--orange);
+    }
+
+    .brand-subtitle {
+      font-size: 12px;
+      color: #475467;
+      margin-top: 4px;
+    }
+
+    .nav {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .nav-item {
+      height: 48px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      color: #475467;
+      font-weight: 700;
+      font-size: 15px;
+      border-radius: 14px;
+      padding: 0 14px;
+      position: relative;
+    }
+
+    .nav-item.active {
+      color: #fff;
+      background: var(--orange);
+      box-shadow: 0 12px 24px rgba(255, 90, 0, 0.22);
+    }
+
+    .nav-icon {
+      width: 26px;
+      height: 26px;
+      display: grid;
+      place-items: center;
+      color: currentColor;
+    }
+
+    .nav-badge {
+      margin-left: auto;
+      min-width: 36px;
+      height: 26px;
+      border-radius: 99px;
+      display: grid;
+      place-items: center;
+      color: var(--orange);
+      background: #fff0e5;
+      font-size: 13px;
+      font-weight: 900;
+    }
+
+    .nav-item.active .nav-badge {
+      background: rgba(255, 255, 255, 0.22);
+      color: #fff;
+    }
+
+    .upgrade-card {
+      margin: 0 4px;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      background: #fffaf5;
+      padding: 20px;
+      box-shadow: 0 8px 22px rgba(255, 90, 0, 0.05);
+    }
+
+    .upgrade-head {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 16px;
+    }
+
+    .upgrade-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 14px;
+      background: #fff1e6;
+      color: var(--orange);
+      display: grid;
+      place-items: center;
+    }
+
+    .upgrade-title {
+      font-size: 15px;
+      line-height: 1.35;
+      font-weight: 900;
+    }
+
+    .upgrade-text {
+      font-size: 15px;
+      color: #667085;
+      line-height: 1.55;
+      margin-bottom: 18px;
+    }
+
+    .upgrade-btn {
+      width: 100%;
+      height: 46px;
+      border: 0;
+      border-radius: 9px;
+      color: #fff;
+      background: var(--orange);
+      font-size: 15px;
+      font-weight: 900;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 18px;
+      cursor: pointer;
+    }
+
+    /* Main */
+
+    .main {
+      height: 100vh;
+      overflow: hidden;
+      display: grid;
+      grid-template-rows: 72px minmax(0, 1fr);
+      padding: 18px 28px 26px;
+      gap: 18px;
+    }
+
+    .topbar {
+      height: 58px;
+      display: grid;
+      grid-template-columns: minmax(480px, 910px) auto;
+      gap: 24px;
+      align-items: center;
+    }
+
+    .global-search {
+      height: 54px;
+      max-width: 910px;
+      background: #fff;
+      border: 1px solid #eadfd6;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      overflow: hidden;
+      box-shadow: 0 6px 18px rgba(16, 24, 40, 0.03);
+    }
+
+    .global-search .search-icon {
+      width: 58px;
+      color: #475467;
+      display: grid;
+      place-items: center;
+    }
+
+    .global-search input {
+      flex: 1;
+      border: 0;
+      outline: 0;
+      font-size: 15px;
+      color: #344054;
+      background: transparent;
+    }
+
+    .search-btn {
+      width: 54px;
+      height: 54px;
+      border: 0;
+      border-radius: 10px;
+      background: var(--orange);
+      color: #fff;
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+    }
+
+    .top-actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 16px;
+    }
+
+    .top-icon {
+      width: 42px;
+      height: 42px;
+      border: 0;
+      background: transparent;
+      color: #344054;
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+      position: relative;
+    }
+
+    .dot {
+      position: absolute;
+      top: 4px;
+      right: 7px;
+      width: 8px;
+      height: 8px;
+      border-radius: 99px;
+      background: var(--orange);
+    }
+
+    .avatar {
+      width: 44px;
+      height: 44px;
+      border-radius: 999px;
+      background: #fff0e6;
+      color: var(--orange);
+      display: grid;
+      place-items: center;
+      font-size: 14px;
+      font-weight: 900;
+    }
+
+    .profile {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: #344054;
+    }
+
+    .page-scroll {
+      min-height: 0;
+      overflow-y: auto;
+      padding-right: 8px;
+      padding-bottom: 40px;
+      scrollbar-width: thin;
+      scrollbar-color: #ffd1ad transparent;
+    }
+
+    .page-scroll::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    .page-scroll::-webkit-scrollbar-thumb {
+      background: #ffd1ad;
+      border-radius: 99px;
+    }
+
+    .page-scroll::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    /* Hero */
+
+    .hero {
+      min-height: 266px;
+      border-radius: 18px;
+      border: 1px solid var(--border);
+      background:
+        linear-gradient(90deg, rgba(255, 246, 238, 0.98), rgba(255, 196, 135, 0.72)),
+        radial-gradient(circle at 83% 70%, rgba(255, 90, 0, 0.2), transparent 34%);
+      position: relative;
+      overflow: hidden;
+      padding: 34px 40px 28px;
+      box-shadow: var(--shadow);
+      margin-bottom: 22px;
+    }
+
+    .city {
+      position: absolute;
+      inset: 0 0 0 auto;
+      width: 58%;
+      opacity: 0.75;
+      pointer-events: none;
+    }
+
+    .city::before {
+      content: "";
+      position: absolute;
+      right: 40px;
+      bottom: 0;
+      width: 760px;
+      height: 230px;
+      background:
+        linear-gradient(#fff5ec, #fff5ec) 80px 50px / 50px 135px no-repeat,
+        linear-gradient(#ff7a1a, #ff7a1a) 175px 88px / 92px 98px no-repeat,
+        linear-gradient(#fff0e2, #fff0e2) 300px 78px / 78px 108px no-repeat,
+        linear-gradient(#ff9a44, #ff9a44) 405px 118px / 48px 68px no-repeat,
+        linear-gradient(#fff1e4, #fff1e4) 490px 60px / 58px 126px no-repeat,
+        linear-gradient(#ffe0bf, #ffe0bf) 570px 96px / 52px 90px no-repeat;
+      clip-path: inset(0 round 10px);
+    }
+
+    .city::after {
+      content: "";
+      position: absolute;
+      right: 0;
+      bottom: -20px;
+      width: 780px;
+      height: 90px;
+      background:
+        radial-gradient(circle at 7% 60%, #ff7a1a 0 18px, transparent 19px),
+        radial-gradient(circle at 18% 42%, #ff7a1a 0 26px, transparent 27px),
+        radial-gradient(circle at 29% 72%, #ff7a1a 0 14px, transparent 15px),
+        linear-gradient(135deg, transparent 0 20%, rgba(255, 90, 0, 0.22) 20% 55%, transparent 55%);
+      opacity: .9;
+    }
+
+    .hero-line {
+      position: absolute;
+      right: 140px;
+      top: 42px;
+      width: 560px;
+      height: 150px;
+      border-top: 1px dashed rgba(255, 255, 255, 0.85);
+      border-radius: 50%;
+      transform: rotate(-6deg);
+      opacity: .8;
+    }
+
+    .hero-content {
+      position: relative;
+      z-index: 2;
+      max-width: 760px;
+    }
+
+    .eyebrow {
+      color: var(--orange);
+      font-size: 12px;
+      letter-spacing: 0.22em;
+      font-weight: 900;
+      text-transform: uppercase;
+      margin-bottom: 16px;
+    }
+
+    .hero h1 {
+      font-size: 32px;
+      line-height: 1.1;
+      letter-spacing: -0.055em;
+      margin-bottom: 10px;
+    }
+
+    .hero-sub {
+      color: #344054;
+      font-size: 17px;
+      font-weight: 500;
+      margin-bottom: 24px;
+    }
+
+    .stats-strip {
+      width: 740px;
+      min-height: 98px;
+      background: rgba(255, 255, 255, 0.88);
+      border: 1px solid #ffe0c7;
+      border-radius: 16px;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      align-items: center;
+      overflow: hidden;
+      backdrop-filter: blur(10px);
+    }
+
+    .stat {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      padding: 0 22px;
+      min-width: 0;
+      border-right: 1px solid var(--line);
+    }
+
+    .stat:last-child {
+      border-right: 0;
+    }
+
+    .stat-icon {
+      width: 46px;
+      height: 46px;
+      border-radius: 999px;
+      background: #fff1e7;
+      color: var(--orange);
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+    }
+
+    .stat-number {
+      font-size: 19px;
+      font-weight: 900;
+      letter-spacing: -0.04em;
+      margin-bottom: 3px;
+    }
+
+    .stat-label {
+      color: #475467;
+      font-size: 12px;
+      line-height: 1.3;
+      font-weight: 600;
+    }
+
+    .hero-company-search {
+      position: absolute;
+      z-index: 3;
+      right: 280px;
+      bottom: 52px;
+      width: 448px;
+      height: 56px;
+      border: 1px solid #eadfd6;
+      border-radius: 14px;
+      background: #fff;
+      display: flex;
+      align-items: center;
+      box-shadow: 0 16px 32px rgba(16, 24, 40, 0.06);
+    }
+
+    .hero-company-search .search-icon {
+      width: 54px;
+      display: grid;
+      place-items: center;
+      color: #475467;
+    }
+
+    .hero-company-search input {
+      border: 0;
+      outline: 0;
+      flex: 1;
+      font-size: 15px;
+      color: #344054;
+      background: transparent;
+    }
+
+    /* Insight cards */
+
+    .insights {
+      display: grid;
+      grid-template-columns: 1.05fr 1fr 1.1fr 1.1fr;
+      gap: 20px;
+      margin-bottom: 22px;
+    }
+
+    .insight-card {
+      background: #fff;
+      border: 1px solid #f1dfd2;
+      border-radius: 16px;
+      padding: 22px;
+      min-height: 188px;
+      box-shadow: 0 8px 22px rgba(16, 24, 40, 0.025);
+    }
+
+    .insight-head {
+      display: grid;
+      grid-template-columns: 46px 1fr auto;
+      gap: 14px;
+      align-items: start;
+      margin-bottom: 22px;
+    }
+
+    .insight-icon {
+      width: 46px;
+      height: 46px;
+      border-radius: 999px;
+      background: #fff1e7;
+      color: var(--orange);
+      display: grid;
+      place-items: center;
+    }
+
+    .insight-title {
+      font-size: 15px;
+      font-weight: 900;
+      margin-bottom: 4px;
+    }
+
+    .insight-sub {
+      color: #667085;
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    .tiny-crown {
+      width: 28px;
+      height: 28px;
+      border-radius: 999px;
+      background: #fff5e8;
+      color: #ffb000;
+      display: grid;
+      place-items: center;
+    }
+
+    .rank-list {
+      display: flex;
+      flex-direction: column;
+      gap: 13px;
+      margin-bottom: 20px;
+    }
+
+    .rank-row {
+      display: grid;
+      grid-template-columns: 22px 1fr auto;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+    }
+
+    .rank-num {
+      color: #667085;
+      font-weight: 800;
+    }
+
+    .rank-name {
+      color: #344054;
+      font-weight: 800;
+    }
+
+    .score-pill {
+      color: #16a34a;
+      background: var(--green-soft);
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .role-count {
+      color: #667085;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .ats-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin: 26px 0 18px;
+      gap: 14px;
+    }
+
+    .ats-item {
+      text-align: center;
+    }
+
+    .ats-logo {
+      width: 52px;
+      height: 52px;
+      border-radius: 999px;
+      background: #fafafa;
+      border: 1px solid #ebe6e1;
+      display: grid;
+      place-items: center;
+      font-size: 26px;
+      font-weight: 900;
+      margin-bottom: 8px;
+    }
+
+    .ats-logo.workday {
+      color: #0875be;
+    }
+
+    .ats-logo.lever {
+      color: #111827;
+      transform: skew(-8deg);
+    }
+
+    .ats-logo.greenhouse {
+      color: #00a66a;
+    }
+
+    .ats-logo.ashby {
+      color: #182033;
+      font-family: Georgia, serif;
+    }
+
+    .ats-count {
+      color: #475467;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .watchlist-logos {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-top: 28px;
+      margin-bottom: 25px;
+    }
+
+    .watch-logo {
+      width: 46px;
+      height: 46px;
+      border-radius: 999px;
+      background: #fafafa;
+      border: 1px solid #eee6df;
+      display: grid;
+      place-items: center;
+      font-size: 19px;
+      font-weight: 900;
+    }
+
+    .watch-more {
+      color: var(--orange);
+      background: #fff1e6;
+      font-size: 12px;
+    }
+
+    .view-link {
+      border: 0;
+      background: transparent;
+      color: var(--orange);
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 900;
+      cursor: pointer;
+    }
+
+    /* Filters */
+
+    .filters {
+      background: #fff;
+      border: 1px solid #f1dfd2;
+      border-radius: 16px;
+      padding: 16px;
+      margin-bottom: 14px;
+      box-shadow: 0 8px 22px rgba(16, 24, 40, 0.025);
+    }
+
+    .filter-row {
+      display: grid;
+      grid-template-columns: minmax(260px, 1.4fr) repeat(4, minmax(140px, .75fr)) auto auto;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+
+    .filter-input,
+    .filter-select,
+    .more-filters {
+      height: 40px;
+      border: 1px solid #e6ded6;
+      border-radius: 9px;
+      background: #fff;
+      color: #344054;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 14px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .filter-input input {
+      border: 0;
+      outline: 0;
+      flex: 1;
+      background: transparent;
+      color: #344054;
+      min-width: 0;
+    }
+
+    .filter-select {
+      justify-content: space-between;
+    }
+
+    .toggle-wrap {
+      height: 40px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      white-space: nowrap;
+      font-size: 13px;
+      color: #344054;
+      font-weight: 700;
+    }
+
+    .toggle {
+      width: 38px;
+      height: 22px;
+      border-radius: 99px;
+      background: var(--orange);
+      position: relative;
+      flex-shrink: 0;
+    }
+
+    .toggle::after {
+      content: "";
+      width: 18px;
+      height: 18px;
+      border-radius: 99px;
+      background: #fff;
+      position: absolute;
+      right: 2px;
+      top: 2px;
+    }
+
+    .more-filters {
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .filter-bottom {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .chip {
+      height: 36px;
+      border-radius: 10px;
+      background: #fff1e7;
+      color: var(--orange);
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 14px;
+      font-size: 13px;
+      font-weight: 900;
+    }
+
+    .clear {
+      color: var(--orange);
+      border: 0;
+      background: transparent;
+      font-size: 13px;
+      font-weight: 900;
+      cursor: pointer;
+    }
+
+    .sort {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      color: #667085;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .sort-select {
+      height: 40px;
+      min-width: 164px;
+      border: 1px solid #e6ded6;
+      border-radius: 9px;
+      background: #fff;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 12px;
+      color: #344054;
+      font-weight: 700;
+    }
+
+    /* Company cards */
+
+    .company-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 18px;
+    }
+
+    .company-card-item {
+      background: #fff;
+      border: 1px solid #f1dfd2;
+      border-radius: 18px;
+      padding: 20px;
+      min-height: 292px;
+      box-shadow: 0 8px 22px rgba(16, 24, 40, 0.025);
+      position: relative;
+    }
+
+    .company-card-item.featured {
+      border-color: #ffb16f;
+      box-shadow: 0 10px 32px rgba(255, 90, 0, 0.10);
+    }
+
+    .company-card-head {
+      display: grid;
+      grid-template-columns: 58px 1fr auto;
+      gap: 16px;
+      align-items: start;
+      margin-bottom: 20px;
+    }
+
+    .company-logo {
+      width: 58px;
+      height: 58px;
+      border-radius: 11px;
+      display: grid;
+      place-items: center;
+      color: #fff;
+      background: #0f172a;
+      font-size: 12px;
+      font-weight: 900;
+      text-align: center;
+      overflow: hidden;
+    }
+
+    .logo-docusign {
+      background: linear-gradient(135deg, #641bff 0 48%, #ff3b62 48% 100%);
+      border-radius: 14px;
+      font-size: 0;
+    }
+
+    .logo-palantir {
+      background: #08162d;
+    }
+
+    .logo-klaviyo {
+      background: #222;
+      font-size: 0;
+      position: relative;
+    }
+
+    .logo-klaviyo::after {
+      content: "";
+      width: 28px;
+      height: 20px;
+      background: #fff;
+      clip-path: polygon(0 0, 100% 0, 54% 50%, 100% 100%, 0 100%);
+    }
+
+    .logo-letter {
+      color: #344054;
+      background: #f7f7f7;
+      font-size: 16px;
+    }
+
+    .logo-visa {
+      background: linear-gradient(#245ee8 0 33%, #fff 33% 66%, #ffb000 66%);
+      color: transparent;
+    }
+
+    .company-title {
+      font-size: 18px;
+      font-weight: 900;
+      line-height: 1.28;
+      letter-spacing: -0.03em;
+      padding-top: 3px;
+    }
+
+    .company-badges {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .hot,
+    .sponsor-badge,
+    .save-small {
+      height: 34px;
+      border-radius: 9px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 0 11px;
+      font-size: 12px;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .hot {
+      color: var(--orange);
+      background: #fff1e7;
+    }
+
+    .sponsor-badge {
+      color: #16a34a;
+      background: var(--green-soft);
+    }
+
+    .save-small {
+      width: 34px;
+      padding: 0;
+      color: #667085;
+      border: 1px solid #e6ded6;
+      background: #fff;
+    }
+
+    .open-roles {
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+
+    .roles-num {
+      font-size: 33px;
+      color: var(--orange);
+      font-weight: 900;
+      letter-spacing: -0.07em;
+    }
+
+    .roles-label {
+      font-size: 12px;
+      color: #475467;
+      font-weight: 700;
+    }
+
+    .company-meta {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 18px;
+      margin-bottom: 14px;
+    }
+
+    .meta-block {
+      border-right: 1px solid var(--line);
+      padding-left: 4px;
+    }
+
+    .meta-block:last-child {
+      border-right: 0;
+      padding-left: 18px;
+    }
+
+    .meta-label {
+      font-size: 11px;
+      color: #98a2b3;
+      font-weight: 800;
+      margin-bottom: 5px;
+    }
+
+    .meta-value {
+      font-size: 13px;
+      color: #111827;
+      font-weight: 900;
+    }
+
+    .last-posted {
+      font-size: 12px;
+      color: #667085;
+      margin-bottom: 18px;
+      font-weight: 600;
+    }
+
+    .confidence {
+      margin-bottom: 16px;
+    }
+
+    .confidence-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+
+    .confidence-label {
+      font-size: 11px;
+      color: #667085;
+      letter-spacing: .13em;
+      text-transform: uppercase;
+      font-weight: 900;
+    }
+
+    .confidence-value {
+      font-size: 13px;
+      font-weight: 900;
+    }
+
+    .confidence-bar {
+      height: 7px;
+      background: #edf0f3;
+      border-radius: 99px;
+      overflow: hidden;
+    }
+
+    .confidence-bar span {
+      display: block;
+      height: 100%;
+      background: #20c77a;
+      border-radius: inherit;
+    }
+
+    .company-card-foot {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .foot-signal {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .foot-icon {
+      width: 26px;
+      height: 26px;
+      border-radius: 999px;
+      background: #fff1e7;
+      color: var(--orange);
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+    }
+
+    .foot-label {
+      font-size: 10px;
+      color: #667085;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .foot-value {
+      font-size: 11px;
+      color: #111827;
+      font-weight: 900;
+      margin-top: 2px;
+      white-space: nowrap;
+    }
+
+    .view-jobs {
+      height: 40px;
+      border: 1px solid #ffba85;
+      background: #fffaf5;
+      color: var(--orange);
+      border-radius: 9px;
+      padding: 0 14px;
+      font-size: 12px;
+      font-weight: 900;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    @media (max-width: 1350px) {
+      .insights,
+      .company-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .filter-row {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .hero-company-search {
+        right: 40px;
+        width: 420px;
+      }
+
+      .stats-strip {
+        width: 680px;
+      }
+    }
+
+    @media (max-width: 980px) {
+      body {
+        overflow: auto;
+      }
+
+      .app {
+        display: block;
+        height: auto;
+      }
+
+      .sidebar {
+        display: none;
+      }
+
+      .main {
+        height: auto;
+        overflow: visible;
+      }
+
+      .page-scroll {
+        overflow: visible;
+      }
+
+      .topbar {
+        grid-template-columns: 1fr;
+        height: auto;
+      }
+
+      .top-actions {
+        display: none;
+      }
+
+      .hero {
+        min-height: 420px;
+      }
+
+      .stats-strip {
+        width: 100%;
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .hero-company-search {
+        position: relative;
+        right: auto;
+        bottom: auto;
+        width: 100%;
+        margin-top: 18px;
+      }
+
+      .insights,
+      .company-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .filter-bottom {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div>
+        <div class="brand">
+          <div class="logo-mark">
+            <div class="logo-ant"></div>
+          </div>
+          <div>
+            <div class="brand-title">Hire<span>Oven</span></div>
+            <div class="brand-subtitle">Land your next opportunity</div>
+          </div>
+        </div>
+
+        <nav class="nav">
+          <div class="nav-item">
+            <span class="nav-icon"><i data-lucide="layout-grid"></i></span>
+            Feed
+          </div>
+
+          <div class="nav-item">
+            <span class="nav-icon"><i data-lucide="clipboard-list"></i></span>
+            Applications
+            <span class="nav-badge">12</span>
+          </div>
+
+          <div class="nav-item active">
+            <span class="nav-icon"><i data-lucide="building-2"></i></span>
+            Companies
+            <span class="nav-badge">128</span>
+          </div>
+
+          <div class="nav-item">
+            <span class="nav-icon"><i data-lucide="file-text"></i></span>
+            Resume
+          </div>
+
+          <div class="nav-item">
+            <span class="nav-icon"><i data-lucide="mail"></i></span>
+            Cover letters
+          </div>
+
+          <div class="nav-item">
+            <span class="nav-icon"><i data-lucide="wand-sparkles"></i></span>
+            Autofill
+          </div>
+
+          <div class="nav-item">
+            <span class="nav-icon"><i data-lucide="bookmark"></i></span>
+            Watchlist
+          </div>
+
+          <div class="nav-item">
+            <span class="nav-icon"><i data-lucide="bell"></i></span>
+            Alerts
+          </div>
+        </nav>
+      </div>
+
+      <div class="upgrade-card">
+        <div class="upgrade-head">
+          <div class="upgrade-icon"><i data-lucide="crown"></i></div>
+          <div class="upgrade-title">Unlock more<br>opportunities</div>
+        </div>
+
+        <p class="upgrade-text">
+          Get better matches and priority support.
+        </p>
+
+        <button class="upgrade-btn">
+          Upgrade now
+          <i data-lucide="arrow-right"></i>
+        </button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="global-search">
+          <div class="search-icon"><i data-lucide="search"></i></div>
+          <input placeholder="Search jobs, companies..." />
+          <button class="search-btn"><i data-lucide="search"></i></button>
+        </div>
+
+        <div class="top-actions">
+          <button class="top-icon">
+            <span class="dot"></span>
+            <i data-lucide="bell"></i>
+          </button>
+
+          <button class="top-icon">
+            <i data-lucide="sun"></i>
+          </button>
+
+          <div class="profile">
+            <div class="avatar">FS</div>
+            <i data-lucide="chevron-down"></i>
+          </div>
+        </div>
+      </header>
+
+      <section class="page-scroll">
+        <div class="hero">
+          <div class="city"></div>
+          <div class="hero-line"></div>
+
+          <div class="hero-content">
+            <div class="eyebrow">Company Explorer</div>
+            <h1>Companies we track</h1>
+            <p class="hero-sub">Track sponsor-friendly companies before jobs get crowded</p>
+
+            <div class="stats-strip">
+              <div class="stat">
+                <div class="stat-icon"><i data-lucide="building-2"></i></div>
+                <div>
+                  <div class="stat-number">848</div>
+                  <div class="stat-label">Companies<br>tracked</div>
+                </div>
+              </div>
+
+              <div class="stat">
+                <div class="stat-icon"><i data-lucide="briefcase-business"></i></div>
+                <div>
+                  <div class="stat-number">12,400</div>
+                  <div class="stat-label">Open roles</div>
+                </div>
+              </div>
+
+              <div class="stat">
+                <div class="stat-icon"><i data-lucide="shield-check"></i></div>
+                <div>
+                  <div class="stat-number">312</div>
+                  <div class="stat-label">Likely<br>sponsors</div>
+                </div>
+              </div>
+
+              <div class="stat">
+                <div class="stat-icon"><i data-lucide="trending-up"></i></div>
+                <div>
+                  <div class="stat-number">128</div>
+                  <div class="stat-label">High-volume<br>hiring</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="hero-company-search">
+            <div class="search-icon"><i data-lucide="search"></i></div>
+            <input placeholder="Search company name, industry, ATS..." />
+          </div>
+        </div>
+
+        <div class="insights">
+          <div class="insight-card">
+            <div class="insight-head">
+              <div class="insight-icon"><i data-lucide="shield-check"></i></div>
+              <div>
+                <div class="insight-title">Top sponsor signal</div>
+                <div class="insight-sub">Companies with strongest sponsorship history</div>
+              </div>
+              <div class="tiny-crown"><i data-lucide="crown" size="16"></i></div>
+            </div>
+
+            <div class="rank-list">
+              <div class="rank-row">
+                <div class="rank-num">1</div>
+                <div class="rank-name">Amazon</div>
+                <div class="score-pill">95%</div>
+              </div>
+
+              <div class="rank-row">
+                <div class="rank-num">2</div>
+                <div class="rank-name">Microsoft</div>
+                <div class="score-pill">93%</div>
+              </div>
+
+              <div class="rank-row">
+                <div class="rank-num">3</div>
+                <div class="rank-name">JPMorgan Chase</div>
+                <div class="score-pill">92%</div>
+              </div>
+            </div>
+
+            <button class="view-link">View all <i data-lucide="arrow-right" size="16"></i></button>
+          </div>
+
+          <div class="insight-card">
+            <div class="insight-head">
+              <div class="insight-icon"><i data-lucide="zap"></i></div>
+              <div>
+                <div class="insight-title">Hiring fastest now</div>
+                <div class="insight-sub">Companies hiring the most in the last 7 days</div>
+              </div>
+            </div>
+
+            <div class="rank-list">
+              <div class="rank-row">
+                <div class="rank-num">1</div>
+                <div class="rank-name">Databricks</div>
+                <div class="role-count">812 roles</div>
+              </div>
+
+              <div class="rank-row">
+                <div class="rank-num">2</div>
+                <div class="rank-name">Capital One</div>
+                <div class="role-count">623 roles</div>
+              </div>
+
+              <div class="rank-row">
+                <div class="rank-num">3</div>
+                <div class="rank-name">ServiceNow</div>
+                <div class="role-count">512 roles</div>
+              </div>
+            </div>
+
+            <button class="view-link">View all <i data-lucide="arrow-right" size="16"></i></button>
+          </div>
+
+          <div class="insight-card">
+            <div class="insight-head">
+              <div class="insight-icon"><i data-lucide="layers-3"></i></div>
+              <div>
+                <div class="insight-title">Best ATS coverage</div>
+                <div class="insight-sub">Companies using modern ATS you can track</div>
+              </div>
+            </div>
+
+            <div class="ats-row">
+              <div class="ats-item">
+                <div class="ats-logo workday">W</div>
+                <div class="ats-count">342</div>
+              </div>
+              <div class="ats-item">
+                <div class="ats-logo lever">L</div>
+                <div class="ats-count">198</div>
+              </div>
+              <div class="ats-item">
+                <div class="ats-logo greenhouse">g</div>
+                <div class="ats-count">146</div>
+              </div>
+              <div class="ats-item">
+                <div class="ats-logo ashby">A</div>
+                <div class="ats-count">89</div>
+              </div>
+            </div>
+
+            <button class="view-link">View all <i data-lucide="arrow-right" size="16"></i></button>
+          </div>
+
+          <div class="insight-card">
+            <div class="insight-head">
+              <div class="insight-icon"><i data-lucide="bookmark"></i></div>
+              <div>
+                <div class="insight-title">Your watchlist</div>
+                <div class="insight-sub">Companies you're tracking closely</div>
+              </div>
+            </div>
+
+            <div class="watchlist-logos">
+              <div class="watch-logo">a</div>
+              <div class="watch-logo" style="color:#00a4ef;">■</div>
+              <div class="watch-logo" style="color:#a32985;">D</div>
+              <div class="watch-logo" style="color:#c2410c;">P</div>
+              <div class="watch-logo watch-more">+8</div>
+            </div>
+
+            <button class="view-link">View watchlist <i data-lucide="arrow-right" size="16"></i></button>
+          </div>
+        </div>
+
+        <div class="filters">
+          <div class="filter-row">
+            <div class="filter-input">
+              <i data-lucide="search" size="16"></i>
+              <input placeholder="Search company..." />
+            </div>
+
+            <div class="filter-select">
+              <span>Industry</span>
+              <i data-lucide="chevron-down" size="16"></i>
+            </div>
+
+            <div class="filter-select">
+              <span>ATS</span>
+              <i data-lucide="chevron-down" size="16"></i>
+            </div>
+
+            <div class="filter-select">
+              <span>Sponsorship signal</span>
+              <i data-lucide="chevron-down" size="16"></i>
+            </div>
+
+            <div class="filter-select">
+              <span>Hiring volume</span>
+              <i data-lucide="chevron-down" size="16"></i>
+            </div>
+
+            <div class="toggle-wrap">
+              <div class="toggle"></div>
+              Remote-friendly
+            </div>
+
+            <button class="more-filters">
+              <i data-lucide="sliders-horizontal" size="16"></i>
+              More filters
+            </button>
+          </div>
+
+          <div class="filter-bottom">
+            <div class="chips">
+              <span class="chip">Strong sponsor signal <i data-lucide="x" size="14"></i></span>
+              <span class="chip">Workday <i data-lucide="x" size="14"></i></span>
+              <span class="chip">100+ jobs <i data-lucide="x" size="14"></i></span>
+              <span class="chip">Technology <i data-lucide="x" size="14"></i></span>
+              <button class="clear">Clear all</button>
+            </div>
+
+            <div class="sort">
+              Sort by:
+              <div class="sort-select">
+                Most jobs
+                <i data-lucide="chevron-down" size="16"></i>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="company-grid">
+          <article class="company-card-item featured">
+            <div class="company-card-head">
+              <div class="company-logo" style="background:#075bb6;">State Street</div>
+              <div class="company-title">State Street Bank and<br>Trust Company</div>
+              <div class="company-badges">
+                <span class="hot"><i data-lucide="flame" size="15"></i> Hot hiring</span>
+              </div>
+            </div>
+
+            <div class="open-roles">
+              <div class="roles-num">358</div>
+              <div class="roles-label">open roles</div>
+            </div>
+
+            <div class="company-meta">
+              <div class="meta-block">
+                <div class="meta-label">ATS</div>
+                <div class="meta-value">Workday</div>
+              </div>
+              <div class="meta-block">
+                <div class="meta-label">Location</div>
+                <div class="meta-value">US · Hybrid</div>
+              </div>
+            </div>
+
+            <div class="last-posted">Last role posted&nbsp;&nbsp; 12 min ago</div>
+
+            <div class="confidence">
+              <div class="confidence-top">
+                <div class="confidence-label">Sponsorship confidence</div>
+                <div class="confidence-value">100%</div>
+              </div>
+              <div class="confidence-bar"><span style="width:100%"></span></div>
+            </div>
+
+            <div class="company-card-foot">
+              <div class="foot-signal">
+                <div class="foot-icon"><i data-lucide="shield-check" size="14"></i></div>
+                <div>
+                  <div class="foot-label">H1B History</div>
+                  <div class="foot-value">Strong</div>
+                </div>
+              </div>
+
+              <div class="foot-signal">
+                <div class="foot-icon"><i data-lucide="stamp" size="14"></i></div>
+                <div>
+                  <div class="foot-label">Visa Language</div>
+                  <div class="foot-value">Yes</div>
+                </div>
+              </div>
+
+              <div class="foot-signal">
+                <div class="foot-icon"><i data-lucide="trending-up" size="14"></i></div>
+                <div>
+                  <div class="foot-label">Hiring Velocity</div>
+                  <div class="foot-value">Very High</div>
+                </div>
+              </div>
+
+              <button class="view-jobs">View 358 jobs <i data-lucide="arrow-right" size="15"></i></button>
+            </div>
+          </article>
+
+          <article class="company-card-item">
+            <div class="company-card-head">
+              <div class="company-logo logo-docusign"></div>
+              <div class="company-title">DocuSign</div>
+              <div class="company-badges">
+                <span class="hot"><i data-lucide="flame" size="15"></i> Hot hiring</span>
+              </div>
+            </div>
+
+            <div class="open-roles">
+              <div class="roles-num">296</div>
+              <div class="roles-label">open roles</div>
+            </div>
+
+            <div class="company-meta">
+              <div class="meta-block">
+                <div class="meta-label">ATS</div>
+                <div class="meta-value">Custom</div>
+              </div>
+              <div class="meta-block">
+                <div class="meta-label">Location</div>
+                <div class="meta-value">US · Remote</div>
+              </div>
+            </div>
+
+            <div class="last-posted">Last role posted&nbsp;&nbsp; 28 min ago</div>
+
+            <div class="confidence">
+              <div class="confidence-top">
+                <div class="confidence-label">Sponsorship confidence</div>
+                <div class="confidence-value">90%</div>
+              </div>
+              <div class="confidence-bar"><span style="width:90%"></span></div>
+            </div>
+
+            <div class="company-card-foot">
+              <div class="foot-signal">
+                <div class="foot-icon"><i data-lucide="shield-check" size="14"></i></div>
+                <div>
+                  <div class="foot-label">H1B History</div>
+                  <div class="foot-value">Good</div>
+                </div>
+              </div>
+
+              <div class="foot-signal">
+                <div class="foot-icon"><i data-lucide="stamp" size="14"></i></div>
+                <div>
+                  <div class="foot-label">Visa Language</div>
+                  <div class="foot-value">Yes</div>
+                </div>
+              </div>
+
+              <div class="foot-signal">
+                <div class="foot-icon"><i data-lucide="trending-up" size="14"></i></div>
+                <div>
+                  <div class="foot-label">Hiring Velocity</div>
+                  <div class="foot-value">High</div>
+                </div>
+              </div>
+
+              <button class="view-jobs">View 296 jobs <i data-lucide="arrow-right" size="15"></i></button>
+            </div>
+          </article>
+
+          <article class="company-card-item">
+            <div class="company-card-head">
+              <div class="company-logo logo-palantir">Palantir</div>
+              <div class="company-title">Palantir</div>
+              <div class="company-badges">
+                <span class="sponsor-badge"><i data-lucide="shield-check" size="15"></i> Strong sponsor</span>
+                <button class="save-small"><i data-lucide="bookmark" size="16"></i></button>
+              </div>
+            </div>
+
+            <div class="open-roles">
+              <div class="roles-num">284</div>
+              <div class="roles-label">open roles</div>
+            </div>
+
+            <div class="company-meta">
+              <div class="meta-block">
+                <div class="meta-label">ATS</div>
+                <div class="meta-value">Lever</div>
+              </div>
+              <div class="meta-block">
+                <div class="meta-label">Location</div>
+                <div class="meta-value">US · Hybrid</div>
+              </div>
+            </div>
+
+            <div class="last-posted">Last role posted&nbsp;&nbsp; 35 min ago</div>
+
+            <div class="confidence">
+              <div class="confidence-top">
+                <div class="confidence-label">Sponsorship confidence</div>
+                <div class="confidence-value">90%</div>
+              </div>
+              <div class="confidence-bar"><span style="width:90%"></span></div>
+            </div>
+
+            <div class="company-card-foot">
+              <div class="foot-signal">
+                <div class="foot-icon"><i data-lucide="shield-check" size="14"></i></div>
+                <div>
+                  <div class="foot-label">H1B History</div>
+                  <div class="foot-value">Strong</div>
+                </div>
+              </div>
+
+              <div class="foot-signal">
+                <div class="foot-icon"><i data-lucide="stamp" size="14"></i></div>
+                <div>
+                  <div class="foot-label">Visa Language</div>
+                  <div class="foot-value">Yes</div>
+                </div>
+              </div>
+
+              <div class="foot-signal">
+                <div class="foot-icon"><i data-lucide="trending-up" size="14"></i></div>
+                <div>
+                  <div class="foot-label">Hiring Velocity</div>
+                  <div class="foot-value">High</div>
+                </div>
+              </div>
+
+              <button class="view-jobs">View 284 jobs <i data-lucide="arrow-right" size="15"></i></button>
+            </div>
+          </article>
+
+          <article class="company-card-item">
+            <div class="company-card-head">
+              <div class="company-logo logo-letter">E</div>
+              <div class="company-title">EVERNORTH ENTERPRISE<br>SERVICES INC</div>
+              <div class="company-badges">
+                <span class="sponsor-badge"><i data-lucide="shield-check" size="15"></i> Strong sponsor</span>
+                <button class="save-small"><i data-lucide="bookmark" size="16"></i></button>
+              </div>
+            </div>
+
+            <div class="open-roles">
+              <div class="roles-num">212</div>
+              <div class="roles-label">open roles</div>
+            </div>
+
+            <div class="company-meta">
+              <div class="meta-block">
+                <div class="meta-label">ATS</div>
+                <div class="meta-value">Workday</div>
+              </div>
+              <div class="meta-block">
+                <div class="meta-label">Location</div>
+                <div class="meta-value">US · Hybrid</div>
+              </div>
+            </div>
+
+            <div class="last-posted">Last role posted&nbsp;&nbsp; 42 min ago</div>
+
+            <div class="confidence">
+              <div class="confidence-top">
+                <div class="confidence-label">Sponsorship confidence</div>
+                <div class="confidence-value">88%</div>
+              </div>
+              <div class="confidence-bar"><span style="width:88%"></span></div>
+            </div>
+
+            <div class="company-card-foot">
+              <div class="foot-signal">
+                <div class="foot-icon"><i data-lucide="shield-check" size="14"></i></div>
+                <div>
+                  <div class="foot-label">H1B History</div>
+                  <div class="foot-value">Strong</div>
+                </div>
+              </div>
+
+              <div class="foot-signal">
+                <div class="foot-icon"><i data-lucide="stamp" size="14"></i></div>
+                <div>
+                  <div class="foot-label">Visa Language</div>
+                  <div class="foot-value">Yes</div>
+                </div>
+              </div>
+
+              <div class="foot-signal">
+                <div class="foot-icon"><i data-lucide="trending-up" size="14"></i></div>
+                <div>
+                  <div class="foot-label">Hiring Velocity</div>
+                  <div class="foot-value">Medium</div>
+                </div>
+              </div>
+
+              <button class="view-jobs">View 212 jobs <i data-lucide="arrow-right" size="15"></i></button>
+            </div>
+          </article>
+
+          <article class="company-card-item">
+            <div class="company-card-head">
+              <div class="company-logo logo-klaviyo"></div>
+              <div class="company-title">Klaviyo</div>
+              <div class="company-badges">
+                <span class="hot"><i data-lucide="flame" size="15"></i> Hot hiring</span>
+                <button class="save-small"><i data-lucide="bookmark" size="16"></i></button>
+              </div>
+            </div>
+
+            <div class="open-roles">
+              <div class="roles-num">198</div>
+              <div class="roles-label">open roles</div>
+            </div>
+
+            <div class="company-meta">
+              <div class="meta-block">
+                <div class="meta-label">ATS</div>
+                <div class="meta-value">Greenhouse</div>
+              </div>
+              <div class="meta-block">
+                <div class="meta-label">Location</div>
+                <div class="meta-value">US · Remote</div>
+              </div>
+            </div>
+
+            <div class="last-posted">Last role posted&nbsp;&nbsp; 1 hr ago</div>
+
+            <div class="confidence">
+              <div class="confidence-top">
+                <div class="confidence-label">Sponsorship confidence</div>
+                <div class="confidence-value">86%</div>
+              </div>
+              <div class="confidence-bar"><span style="width:86%"></span></div>
+            </div>
+
+            <div class="company-card-foot">
+              <div class="foot-signal">
+                <div class="foot-icon"><i data-lucide="shield-check" size="14"></i></div>
+                <div>
+                  <div class="foot-label">H1B History</div>
+                  <div class="foot-value">Good</div>
+                </div>
+              </div>
+
+              <div class="foot-signal">
+                <div class="foot-icon"><i data-lucide="stamp" size="14"></i></div>
+                <div>
+                  <div class="foot-label">Visa Language</div>
+                  <div class="foot-value">Partial</div>
+                </div>
+              </div>
+
+              <div class="foot-signal">
+                <div class="foot-icon"><i data-lucide="trending-up" size="14"></i></div>
+                <div>
+                  <div class="foot-label">Hiring Velocity</div>
+                  <div class="foot-value">High</div>
+                </div>
+              </div>
+
+              <button class="view-jobs">View 198 jobs <i data-lucide="arrow-right" size="15"></i></button>
+            </div>
+          </article>
+
+          <article class="company-card-item">
+            <div class="company-card-head">
+              <div class="company-logo logo-visa">V</div>
+              <div class="company-title">VISA TECHNOLOGY AND<br>OPERATIONS LLC</div>
+              <div class="company-badges">
+                <span class="sponsor-badge"><i data-lucide="shield-check" size="15"></i> Strong sponsor</span>
+                <button class="save-small"><i data-lucide="bookmark" size="16"></i></button>
+              </div>
+            </div>
+
+            <div class="open-roles">
+              <div class="roles-num">176</div>
+              <div class="roles-label">open roles</div>
+            </div>
+
+            <div class="company-meta">
+              <div class="meta-block">
+                <div class="meta-label">ATS</div>
+                <div class="meta-value">Workday</div>
+              </div>
+              <div class="meta-block">
+                <div class="meta-label">Location</div>
+                <div class="meta-value">US · Hybrid</div>
+              </div>
+            </div>
+
+            <div class="last-posted">Last role posted&nbsp;&nbsp; 1 hr ago</div>
+
+            <div class="confidence">
+              <div class="confidence-top">
+                <div class="confidence-label">Sponsorship confidence</div>
+                <div class="confidence-value">84%</div>
+              </div>
+              <div class="confidence-bar"><span style="width:84%"></span></div>
+            </div>
+
+            <div class="company-card-foot">
+              <div class="foot-signal">
+                <div class="foot-icon"><i data-lucide="shield-check" size="14"></i></div>
+                <div>
+                  <div class="foot-label">H1B History</div>
+                  <div class="foot-value">Strong</div>
+                </div>
+              </div>
+
+              <div class="foot-signal">
+                <div class="foot-icon"><i data-lucide="stamp" size="14"></i></div>
+                <div>
+                  <div class="foot-label">Visa Language</div>
+                  <div class="foot-value">Yes</div>
+                </div>
+              </div>
+
+              <div class="foot-signal">
+                <div class="foot-icon"><i data-lucide="trending-up" size="14"></i></div>
+                <div>
+                  <div class="foot-label">Hiring Velocity</div>
+                  <div class="foot-value">Medium</div>
+                </div>
+              </div>
+
+              <button class="view-jobs">View 176 jobs <i data-lucide="arrow-right" size="15"></i></button>
+            </div>
+          </article>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    lucide.createIcons({
+      attrs: {
+        strokeWidth: 2,
+        width: 22,
+        height: 22
+      }
+    });
+  </script>
+</body>
+</html>

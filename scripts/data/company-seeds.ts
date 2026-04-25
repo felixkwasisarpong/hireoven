@@ -7,7 +7,7 @@
 export type CompanySize = "startup" | "small" | "medium" | "large" | "enterprise"
 
 export type SeedExtra = {
-  ats_type?: "greenhouse" | "lever" | "ashby" | "workday" | "icims" | "bamboohr" | "custom" | null
+  ats_type?: "greenhouse" | "lever" | "ashby" | "workday" | "icims" | "bamboohr" | "jobvite" | "custom" | null
   ats_identifier?: string | null
   sponsors_h1b?: boolean
   sponsorship_confidence?: number

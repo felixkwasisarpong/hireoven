@@ -1,352 +1,217 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useId, useMemo, useState } from "react"
 import Link from "next/link"
-import { Bookmark, ExternalLink, ShieldCheck, Sparkles } from "lucide-react"
+import { ArrowRight, CheckCircle2, Info } from "lucide-react"
 import { useResumeContext } from "@/components/resume/ResumeProvider"
 import { useResumeAnalysis } from "@/lib/hooks/useResumeAnalysis"
 import type { JobMatchScore } from "@/types"
 
 type Props = {
   jobId: string
-  companyName: string
-  applyUrl: string
-  salaryLabel: string | null
-  sponsorsH1b: boolean | null
-  sponsorshipScore: number | null
-  skills: string[]
-  highlights?: string[]
-  companySummary?: string | null
+  /**
+   * Pre-resolved on the job page (same as GET /api/match/score) so the gauge can render
+   * on first paint without waiting for resume context + a second client round-trip.
+   */
+  initialMatchScore?: JobMatchScore | null
 }
 
-function scoreTone(value: number | null) {
-  if (value == null) return "#94A3B8"
-  const safeValue = Math.max(0, Math.min(100, value))
-  if (safeValue >= 85) return "#16A34A"
-  if (safeValue >= 70) return "#7C3AED"
-  if (safeValue >= 50) return "#F59E0B"
-  return "#EF4444"
+function clamp(value: number | null | undefined): number {
+  if (value == null || !Number.isFinite(value)) return 0
+  return Math.max(0, Math.min(100, Math.round(value)))
 }
 
-function hexToRgba(hex: string, alpha: number) {
-  const normalized = hex.replace("#", "")
-  if (normalized.length !== 6) return hex
-  const bigint = Number.parseInt(normalized, 16)
-  const r = (bigint >> 16) & 255
-  const g = (bigint >> 8) & 255
-  const b = bigint & 255
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`
-}
+function MatchGauge({ value }: { value: number | null }) {
+  const gradId = useId().replace(/:/g, "")
+  const size = 168
+  const stroke = 14
+  const r = (size - stroke) / 2
+  const cx = size / 2
+  const cy = size / 2
 
-function scoreVerdict(overallScore: number | null, verdict: string | null | undefined) {
-  if (verdict === "strong_match") return "Strong Match"
-  if (verdict === "good_match") return "Good Match"
-  if (verdict === "partial_match") return "Partial Match"
-  if (verdict === "weak_match") return "Low Match"
-  if (overallScore == null) return "Match data unavailable"
-  if (overallScore >= 85) return "Strong Match"
-  if (overallScore >= 70) return "Good Match"
-  if (overallScore >= 50) return "Partial Match"
-  return "Low Match"
-}
-
-function ScoreRing({ value }: { value: number | null }) {
-  const safeValue = Math.max(0, Math.min(100, value ?? 0))
-  const angle = safeValue * 3.6
-  const tone = scoreTone(value)
+  // Half-donut: arc spans 180° (semicircle), starting at 9 o'clock.
+  const arcLength = Math.PI * r
+  const pct = value == null ? 0 : clamp(value)
+  const dash = (pct / 100) * arcLength
 
   return (
-    <div className="flex items-center justify-center">
-      <div
-        className="relative flex h-28 w-28 items-center justify-center rounded-full"
-        style={{
-          background: `conic-gradient(${tone} ${angle}deg, #E3E8F3 ${angle}deg 360deg)`,
-          boxShadow: `0 0 0 1px ${hexToRgba(tone, 0.12)}, 0 10px 24px ${hexToRgba(tone, 0.12)}`,
-        }}
+    <div className="relative mx-auto" style={{ width: size, height: size / 2 + 8 }}>
+      <svg
+        width={size}
+        height={size}
+        viewBox={`0 0 ${size} ${size}`}
+        aria-hidden
+        className="absolute inset-x-0 top-0"
       >
-        <div className="flex h-[90px] w-[90px] flex-col items-center justify-center rounded-full bg-white">
-          <span className="text-[2rem] font-semibold text-strong">{value ?? "--"}</span>
-          <span className="text-[11px] font-medium text-muted-foreground">
-            {value == null ? "No data" : "%"}
+        <defs>
+          <linearGradient id={`match-grad-${gradId}`} x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="#10B981" />
+            <stop offset="100%" stopColor="#34D399" />
+          </linearGradient>
+        </defs>
+        {/* Track */}
+        <path
+          d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`}
+          fill="none"
+          stroke="#E2E8F0"
+          strokeWidth={stroke}
+          strokeLinecap="round"
+        />
+        {/* Progress */}
+        <path
+          d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`}
+          fill="none"
+          stroke={`url(#match-grad-${gradId})`}
+          strokeWidth={stroke}
+          strokeLinecap="round"
+          strokeDasharray={`${dash} ${arcLength}`}
+          className="transition-[stroke-dasharray] duration-700 ease-out"
+        />
+      </svg>
+      <div className="pointer-events-none absolute inset-x-0 top-[42%] flex flex-col items-center text-center">
+        <span className="text-[34px] font-bold leading-none tracking-tight text-emerald-600 tabular-nums">
+          {value == null ? "—" : `${pct}%`}
+        </span>
+      </div>
+    </div>
+  )
+}
+
+function verdictLabel(score: number | null): string {
+  if (score == null) return "Upload your resume"
+  if (score >= 85) return "Great match!"
+  if (score >= 70) return "Good match"
+  if (score >= 50) return "Partial match"
+  return "Low match"
+}
+
+function FactorRow({ label, description, value }: { label: string; description: string; value: number | null }) {
+  const pct = value == null ? null : clamp(value)
+  return (
+    <li className="flex items-start gap-3">
+      <CheckCircle2
+        className={`mt-0.5 h-[18px] w-[18px] shrink-0 ${pct == null ? "text-slate-300" : "text-emerald-500"}`}
+        strokeWidth={2}
+        aria-hidden
+      />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="text-[13px] font-semibold text-slate-900">{label}</span>
+          <span className="shrink-0 text-[13px] font-semibold text-slate-700 tabular-nums">
+            {pct == null ? "—" : `${pct}%`}
           </span>
         </div>
+        <p className="mt-0.5 text-[12px] leading-snug text-slate-500">{description}</p>
       </div>
-    </div>
+    </li>
   )
 }
 
-function BreakdownRow({ label, value }: { label: string; value: number | null }) {
-  const safeValue = Math.max(0, Math.min(100, value ?? 0))
-  const tone = scoreTone(value)
-  const track = value == null ? "#CFD6E4" : hexToRgba(tone, 0.2)
-  const fill =
-    value == null
-      ? "#B4BFD4"
-      : `linear-gradient(90deg, ${hexToRgba(tone, 0.95)} 0%, ${hexToRgba(tone, 0.72)} 100%)`
-
-  return (
-    <div>
-      <div className="mb-1.5 flex items-center justify-between gap-3 text-sm">
-        <span className="font-medium text-[#4A5B82]">{label}</span>
-        <span className="font-semibold text-strong">{value == null ? "N/A" : `${safeValue}%`}</span>
-      </div>
-      <div className="h-2 overflow-hidden rounded-full" style={{ backgroundColor: track }}>
-        {value == null ? (
-          <div className="h-full w-full rounded-full" style={{ backgroundColor: fill }} />
-        ) : (
-          <div
-            className="h-full rounded-full transition-all"
-            style={{ width: `${safeValue}%`, background: fill }}
-          />
-        )}
-      </div>
-    </div>
-  )
-}
-
-function parseSalaryRange(label: string | null) {
-  if (!label) return null
-  const match = label.match(/([0-9]{2,3})k[^0-9]+([0-9]{2,3})k/i)
-  if (!match) return null
-  const min = Number.parseInt(match[1], 10)
-  const max = Number.parseInt(match[2], 10)
-  if (!Number.isFinite(min) || !Number.isFinite(max) || max <= min) return null
-  const median = Math.round((min + max) / 2)
-  return { min, max, median }
-}
-
-function SidebarCard({
-  title,
-  children,
-}: {
-  title: string
-  children: React.ReactNode
-}) {
-  return (
-    <section className="surface-panel rounded-lg p-5">
-      <h2 className="text-base font-semibold text-strong">{title}</h2>
-      <div className="mt-4">{children}</div>
-    </section>
-  )
-}
-
-export default function JobDetailSidebar({
-  jobId,
-  companyName,
-  applyUrl,
-  salaryLabel,
-  sponsorsH1b,
-  sponsorshipScore,
-  skills,
-  highlights = [],
-  companySummary,
-}: Props) {
+export default function JobDetailSidebar({ jobId, initialMatchScore }: Props) {
   const { primaryResume } = useResumeContext()
   const resumeId = primaryResume?.parse_status === "complete" ? primaryResume.id : null
-  const [fastScore, setFastScore] = useState<JobMatchScore | null>(null)
-  const [isScoreLoading, setIsScoreLoading] = useState(false)
-  const { analysis, isLoading: isAnalysisLoading } = useResumeAnalysis(resumeId, jobId)
+  const hasServerMatchScore = initialMatchScore !== undefined
+  const [fastScore, setFastScore] = useState<JobMatchScore | null>(initialMatchScore ?? null)
+  const { analysis } = useResumeAnalysis(resumeId, jobId)
 
   useEffect(() => {
+    if (!hasServerMatchScore) return
+    setFastScore(initialMatchScore ?? null)
+  }, [hasServerMatchScore, jobId, initialMatchScore])
+
+  useEffect(() => {
+    if (hasServerMatchScore) return
     if (!resumeId) {
       setFastScore(null)
       return
     }
-
     let cancelled = false
-    setIsScoreLoading(true)
-
     fetch(`/api/match/score?jobId=${jobId}`, { cache: "no-store" })
-      .then(async (response) => {
-        if (!response.ok) return null
-        const payload = (await response.json()) as { score?: JobMatchScore | null }
-        return payload.score ?? null
-      })
-      .then((score) => {
-        if (!cancelled) setFastScore(score)
+      .then(async (r) => (r.ok ? ((await r.json()) as { score?: JobMatchScore | null }).score ?? null : null))
+      .then((s) => {
+        if (!cancelled) setFastScore(s)
       })
       .catch(() => {
         if (!cancelled) setFastScore(null)
       })
-      .finally(() => {
-        if (!cancelled) setIsScoreLoading(false)
-      })
-
     return () => {
       cancelled = true
     }
-  }, [jobId, resumeId])
+  }, [hasServerMatchScore, jobId, resumeId])
 
-  const overallScore = analysis?.overall_score ?? fastScore?.overall_score ?? null
-  const verdictLabel = scoreVerdict(overallScore, analysis?.verdict)
-  const verdictColor = scoreTone(overallScore)
-  const breakdownSourceLabel = analysis
-    ? "Detailed breakdown from resume analysis"
-    : "Instant breakdown from profile compatibility"
-  const breakdown = useMemo(
-    () =>
-      analysis
-        ? [
-            { label: "Skills", value: analysis.skills_score },
-            { label: "Experience", value: analysis.experience_score },
-            { label: "Education", value: analysis.education_score },
-            { label: "Keywords", value: analysis.keywords_score },
-          ]
-        : [
-            { label: "Skills", value: fastScore?.skills_score ?? null },
-            { label: "Seniority", value: fastScore?.seniority_score ?? null },
-            { label: "Location", value: fastScore?.location_score ?? null },
-            { label: "Sponsorship", value: fastScore?.sponsorship_score ?? null },
-          ],
-    [analysis, fastScore]
-  )
+  const overall = analysis?.overall_score ?? fastScore?.overall_score ?? null
+  const hasDeepRoleFit = analysis?.keywords_score != null
 
-  const matchingSkills = (analysis?.matching_skills ?? []).slice(0, 6)
-  const visibleSkills = (matchingSkills.length > 0 ? matchingSkills : skills).slice(0, 6)
-  const sponsorshipTone =
-    sponsorsH1b || (sponsorshipScore ?? 0) >= 70
-      ? "text-emerald-700"
-      : (sponsorshipScore ?? 0) >= 50
-        ? "text-amber-700"
-        : "text-slate-600"
-  const sponsorshipLabel =
-    sponsorsH1b || (sponsorshipScore ?? 0) >= 70
-      ? "High success rate"
-      : (sponsorshipScore ?? 0) >= 50
-        ? "Moderate sponsorship signal"
-        : "Limited sponsorship signal"
-  const salaryRange = parseSalaryRange(salaryLabel)
+  const factors = useMemo(() => {
+    return [
+      {
+        label: "Skills match",
+        description: "Your top skills align strongly with this job.",
+        value: analysis?.skills_score ?? fastScore?.skills_score ?? null,
+      },
+      {
+        label: "Experience",
+        description: "Your experience level matches what they're looking for.",
+        value: analysis?.experience_score ?? fastScore?.seniority_score ?? null,
+      },
+      {
+        label: "Education",
+        description: "Your education matches the job requirements.",
+        value: analysis?.education_score ?? null,
+      },
+      {
+        label: "Location",
+        description: "You meet the location preference.",
+        value: fastScore?.location_score ?? null,
+      },
+      {
+        label: hasDeepRoleFit ? "Job role fit" : "Authorization fit",
+        description: hasDeepRoleFit
+          ? "Your profile keywords align with this role."
+          : "This reflects sponsorship and work authorization compatibility.",
+        value: hasDeepRoleFit ? (analysis?.keywords_score ?? null) : (fastScore?.sponsorship_score ?? null),
+      },
+    ]
+  }, [analysis, fastScore, hasDeepRoleFit])
 
   return (
-    <aside className="space-y-4">
-      <SidebarCard title="Your Match">
-        {!resumeId ? (
-          <div className="space-y-4">
-            <ScoreRing value={null} />
-            <p className="text-sm leading-relaxed text-muted-foreground">
-              Upload your resume to see how well you match this role and where to improve.
-            </p>
-            <Link
-              href="/dashboard/resume"
-              className="inline-flex items-center gap-2 text-sm font-semibold text-primary hover:text-primary-hover"
-            >
-              Upload resume to score match
-            </Link>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            <ScoreRing value={isScoreLoading && !overallScore ? null : overallScore} />
-            <div className="rounded-xl border border-[#E4E8F4] bg-[#F9FBFF] px-3 py-2 text-center">
-              <p className="text-base font-semibold" style={{ color: verdictColor }}>
-                {verdictLabel}
-              </p>
-              <p className="mt-1 text-[11px] text-muted-foreground">{breakdownSourceLabel}</p>
-            </div>
-            <div className="space-y-2.5">
-              {breakdown.map((item) => (
-                <BreakdownRow key={item.label} label={item.label} value={item.value} />
-              ))}
-            </div>
-            <Link
-              href={`/dashboard/resume/analyze/${jobId}`}
-              className="inline-flex items-center gap-2 rounded-full border border-[#E7D9FF] bg-[#F4ECFF] px-3 py-1.5 text-sm font-semibold text-[#6D3FF8] transition-colors hover:bg-[#ECE0FF]"
-            >
-              <Sparkles className="h-4 w-4" />
-              {analysis || isAnalysisLoading ? "Open full analysis" : "Improve match score"}
-            </Link>
-          </div>
-        )}
-      </SidebarCard>
-
-      {salaryLabel ? (
-        <SidebarCard title="Salary Range">
-          <p className="text-3xl font-semibold text-strong">{salaryLabel} /yr</p>
-          <p className="mt-1 text-sm text-muted-foreground">Total compensation</p>
-          {salaryRange ? (
-            <div className="mt-4 space-y-2">
-              <div className="h-2 overflow-hidden rounded-full bg-slate-200">
-                <div
-                  className="h-full rounded-full bg-gradient-to-r from-blue-300 via-blue-500 to-blue-300"
-                  style={{ width: "100%" }}
-                />
-              </div>
-              <div className="flex items-center justify-between text-xs text-muted-foreground">
-                <span>${salaryRange.min}K</span>
-                <span>${salaryRange.median}K median</span>
-                <span>${salaryRange.max}K</span>
-              </div>
-            </div>
-          ) : null}
-        </SidebarCard>
-      ) : null}
-
-      <SidebarCard title="H1B Sponsorship">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <p className={`text-4xl font-semibold ${sponsorshipTone}`}>
-              {sponsorshipScore != null ? `${sponsorshipScore}%` : "-"}
-            </p>
-            <p className={`mt-1 text-sm font-medium ${sponsorshipTone}`}>{sponsorshipLabel}</p>
-          </div>
-          <ShieldCheck className="h-10 w-10 text-emerald-600/80" />
-        </div>
-        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-          Based on historical data and visa-language signals for {companyName}.
-        </p>
-      </SidebarCard>
-
-      {highlights.length > 0 ? (
-        <SidebarCard title="Job Highlights">
-          <ul className="space-y-2 text-sm text-muted-foreground">
-            {highlights.slice(0, 5).map((highlight) => (
-              <li key={highlight} className="flex items-start gap-2">
-                <span className="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-blue-500" />
-                <span>{highlight}</span>
-              </li>
-            ))}
-          </ul>
-        </SidebarCard>
-      ) : null}
-
-      {companySummary ? (
-        <SidebarCard title={`About ${companyName}`}>
-          <p className="text-sm leading-relaxed text-muted-foreground">{companySummary}</p>
-        </SidebarCard>
-      ) : null}
-
-      {visibleSkills.length > 0 ? (
-        <SidebarCard title="Top Matching Skills">
-          <div className="flex flex-wrap gap-2">
-            {visibleSkills.map((skill) => (
-              <span
-                key={skill}
-                className="rounded-full border border-border bg-surface-alt px-3 py-1 text-xs font-medium text-strong"
-              >
-                {skill}
-              </span>
-            ))}
-          </div>
-        </SidebarCard>
-      ) : null}
-
-      <div className="surface-panel rounded-lg p-4">
-        <a
-          href={applyUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover"
-        >
-          Apply Now
-          <ExternalLink className="h-4 w-4" />
-        </a>
-        <Link
-          href="/dashboard/applications"
-          className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-md border border-border bg-surface px-4 py-3 text-sm font-semibold text-strong transition-colors hover:bg-surface-alt"
-        >
-          Save Job
-          <Bookmark className="h-4 w-4" />
-        </Link>
+    <aside className="rounded-2xl bg-white p-5 shadow-[0_1px_3px_rgba(15,23,42,0.06)] sm:p-6">
+      <div className="flex items-center gap-1.5">
+        <h2 className="text-[15px] font-semibold text-slate-900">Match Score</h2>
+        <Info className="h-3.5 w-3.5 text-slate-400" aria-hidden />
       </div>
+
+      <div className="mt-4">
+        <MatchGauge value={overall} />
+        <p className="mt-1 text-center text-sm font-medium text-slate-700">{verdictLabel(overall)}</p>
+      </div>
+
+      <div className="mt-5">
+        <h3 className="text-[13px] font-semibold text-slate-900">Why this is a great match</h3>
+        <ul className="mt-3 space-y-3">
+          {factors.map((factor) => (
+            <FactorRow key={factor.label} {...factor} />
+          ))}
+        </ul>
+      </div>
+
+      {resumeId ? (
+        <Link
+          href={`/dashboard/resume/analyze/${jobId}`}
+          className="mt-5 inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#2563EB] hover:underline"
+        >
+          View full match details
+          <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+        </Link>
+      ) : (
+        <Link
+          href="/dashboard/resume"
+          className="mt-5 inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#2563EB] hover:underline"
+        >
+          Upload resume to score
+          <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+        </Link>
+      )}
     </aside>
   )
 }

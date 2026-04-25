@@ -39,6 +39,7 @@ const ATS_FIRST_ADAPTERS = new Set<SourceAdapterKind>([
   "workday",
   "icims",
   "bamboohr",
+  "jobvite",
   "oracle",
   "phenom",
   "google",
@@ -121,6 +122,16 @@ const ADAPTER_HEADING_RULES: Partial<Record<SourceAdapterKind, HeadingRule[]>> =
       pattern: /\b(basic qualifications)\b/i,
     },
   ],
+  jobvite: [
+    {
+      key: "about_role",
+      pattern: /\b(description|job description|overview|the opportunity)\b/i,
+    },
+    {
+      key: "requirements",
+      pattern: /\b(qualifications|requirements|what you bring|what we're looking for)\b/i,
+    },
+  ],
 }
 
 const INLINE_HEADING_MARKERS: Partial<Record<SourceAdapterKind, string[]>> = {
@@ -170,6 +181,23 @@ const INLINE_HEADING_MARKERS: Partial<Record<SourceAdapterKind, string[]>> = {
     "Benefits",
     "Compensation",
     "Work Authorization",
+  ],
+  jobvite: [
+    "Description",
+    "Job Description",
+    "Overview",
+    "The Opportunity",
+    "Responsibilities",
+    "What you'll do",
+    "What you will do",
+    "Qualifications",
+    "Requirements",
+    "Minimum Qualifications",
+    "Preferred Qualifications",
+    "Nice to Have",
+    "Benefits",
+    "Compensation",
+    "EEO",
   ],
 }
 
@@ -246,6 +274,12 @@ const INLINE_ALIASES_BY_ADAPTER: Partial<Record<SourceAdapterKind, HeadingAlias[
     { key: "application_info", alias: "Interview process" },
   ],
   workday: [...COMMON_INLINE_ALIASES],
+  jobvite: [
+    ...COMMON_INLINE_ALIASES,
+    { key: "about_role", alias: "Description" },
+    { key: "about_role", alias: "The opportunity" },
+    { key: "application_info", alias: "EEO" },
+  ],
   icims: [...COMMON_INLINE_ALIASES],
   bamboohr: [...COMMON_INLINE_ALIASES],
   oracle: [...COMMON_INLINE_ALIASES],

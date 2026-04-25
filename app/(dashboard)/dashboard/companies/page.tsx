@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils"
 import type { Company, CompanySize } from "@/types"
 
 const PAGE_SIZE = 24
-const ATS_OPTIONS = ["greenhouse", "lever", "workday", "icims", "bamboohr", "ashby", "custom"]
+const ATS_OPTIONS = ["greenhouse", "lever", "workday", "icims", "bamboohr", "ashby", "jobvite", "custom"]
 const SIZE_OPTIONS: { value: CompanySize; label: string }[] = [
   { value: "startup",    label: "Startup"    },
   { value: "small",      label: "Small"      },

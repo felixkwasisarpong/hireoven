@@ -18,6 +18,7 @@ import {
 import Navbar from "@/components/layout/Navbar"
 import ComingSoonSection from "@/components/marketing/ComingSoonSection"
 import LogoWall from "@/components/marketing/LogoWall"
+import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
 import { getPostgresPool, hasPostgresEnv } from "@/lib/postgres/server"
 import { createClient } from "@/lib/supabase/server"
 
@@ -127,7 +128,7 @@ async function getPlatformStats(): Promise<PlatformStats> {
     const pool = getPostgresPool()
     const [jobs, companies] = await Promise.all([
       pool.query<{ c: string }>(
-        `SELECT COUNT(*)::text AS c FROM jobs WHERE is_active = true`
+        `SELECT COUNT(*)::text AS c FROM jobs WHERE is_active = true AND ${sqlJobLocatedInUsa("jobs")}`
       ),
       pool.query<{ c: string }>(
         `SELECT COUNT(*)::text AS c FROM companies WHERE is_active = true`

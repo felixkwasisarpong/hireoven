@@ -1,4 +1,5 @@
 import { startOfDay, startOfWeek, subHours } from "@/lib/admin/time"
+import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
 import { getPostgresPool } from "@/lib/postgres/server"
 import type {
   AlertNotification,
@@ -122,13 +123,19 @@ export async function getDashboardStats(): Promise<AdminStats> {
     pool.query<{ c: string }>(
       `SELECT COUNT(*)::text AS c FROM companies WHERE is_active = true`
     ),
-    pool.query<{ c: string }>(`SELECT COUNT(*)::text AS c FROM jobs WHERE is_active = true`),
     pool.query<{ c: string }>(
-      `SELECT COUNT(*)::text AS c FROM jobs WHERE first_detected_at >= $1::timestamptz`,
+      `SELECT COUNT(*)::text AS c FROM jobs WHERE is_active = true AND ${sqlJobLocatedInUsa("jobs")}`
+    ),
+    pool.query<{ c: string }>(
+      `SELECT COUNT(*)::text AS c FROM jobs WHERE is_active = true AND ${sqlJobLocatedInUsa(
+        "jobs"
+      )} AND first_detected_at >= $1::timestamptz`,
       [dayStart]
     ),
     pool.query<{ c: string }>(
-      `SELECT COUNT(*)::text AS c FROM jobs WHERE first_detected_at >= $1::timestamptz`,
+      `SELECT COUNT(*)::text AS c FROM jobs WHERE is_active = true AND ${sqlJobLocatedInUsa(
+        "jobs"
+      )} AND first_detected_at >= $1::timestamptz`,
       [weekStart]
     ),
     pool.query<{ c: string }>(
@@ -311,6 +318,7 @@ export async function getAdminOverviewPayload(): Promise<AdminOverviewPayload> {
               END AS company
        FROM jobs j
        LEFT JOIN companies c ON c.id = j.company_id
+       WHERE j.is_active = true AND ${sqlJobLocatedInUsa("j")}
        ORDER BY j.first_detected_at DESC NULLS LAST
        LIMIT 20`
     ),

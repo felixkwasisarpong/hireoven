@@ -1,6 +1,11 @@
 import { builtinModules, createRequire } from "node:module"
 import Anthropic from "@anthropic-ai/sdk"
 import { logApiUsage } from "@/lib/admin/usage"
+import {
+  extractSkillsFromText,
+  normalizeSkillList,
+  normalizeSkillsBuckets,
+} from "@/lib/skills/taxonomy"
 import type {
   Education,
   ParsedResume,
@@ -20,35 +25,6 @@ const MODEL_PRICING = {
   inputPerMillion: 0.8,
   outputPerMillion: 4,
 }
-
-const SKILL_KEYWORDS = [
-  "typescript",
-  "javascript",
-  "react",
-  "next.js",
-  "node.js",
-  "python",
-  "java",
-  "go",
-  "aws",
-  "gcp",
-  "azure",
-  "docker",
-  "kubernetes",
-  "postgresql",
-  "mysql",
-  "mongodb",
-  "graphql",
-  "rest",
-  "figma",
-  "product strategy",
-  "sql",
-  "machine learning",
-  "data analysis",
-  "leadership",
-  "communication",
-  "project management",
-]
 
 function clampScore(value: number | null | undefined) {
   if (typeof value !== "number" || Number.isNaN(value)) return null
@@ -81,12 +57,12 @@ function normalizeSkills(value: unknown): Skills {
   }
 
   const skills = value as Record<string, unknown>
-  return {
+  return normalizeSkillsBuckets({
     technical: toStringArray(skills.technical),
     soft: toStringArray(skills.soft),
     languages: toStringArray(skills.languages),
     certifications: toStringArray(skills.certifications),
-  }
+  })
 }
 
 function normalizeWorkExperience(value: unknown): WorkExperience[] {
@@ -248,8 +224,7 @@ function inferRole(text: string) {
 }
 
 function inferTopSkills(text: string) {
-  const lower = text.toLowerCase()
-  return SKILL_KEYWORDS.filter((skill) => lower.includes(skill.toLowerCase())).slice(0, 10)
+  return extractSkillsFromText(text).slice(0, 10)
 }
 
 function inferYearsOfExperience(text: string) {
@@ -349,7 +324,7 @@ function normalizeParsedResume(raw: unknown, extractedText: string): ParsedResum
   const portfolioUrl = cleanString(parsed.portfolio_url)
   const summary = cleanString(parsed.summary)
   const industries = toStringArray(parsed.industries)
-  const topSkills = toStringArray(parsed.top_skills, 10)
+  const topSkills = normalizeSkillList(toStringArray(parsed.top_skills, 10), 10)
   const yearsOfExperience =
     typeof parsed.years_of_experience === "number"
       ? Math.max(0, Math.round(parsed.years_of_experience))

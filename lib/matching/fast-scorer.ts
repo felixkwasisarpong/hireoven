@@ -5,8 +5,13 @@ import type {
   Profile,
   Resume,
   SeniorityLevel,
-  Skills,
 } from "@/types"
+import {
+  getAllResumeSkillLabels,
+  normalizeSkillKey,
+  normalizeSkillList,
+  skillMatches,
+} from "@/lib/skills/taxonomy"
 
 export interface FastScoreInput {
   resume: Resume
@@ -30,44 +35,29 @@ function normalizeTerm(value: string) {
   return value.trim().toLowerCase().replace(/[^a-z0-9+#./ -]/g, "")
 }
 
-function uniqueTerms(values: Array<string | null | undefined>) {
-  return Array.from(
-    new Set(
-      values
-        .flatMap((value) => (value ?? "").split(","))
-        .map((value) => normalizeTerm(value))
-        .filter(Boolean)
-    )
-  )
-}
-
-function getResumeTechnicalSkills(skills: Skills | null) {
-  if (!skills) return []
-  return [...skills.technical, ...skills.certifications, ...skills.languages]
+function uniqueSkillTerms(values: Array<string | null | undefined>) {
+  return normalizeSkillList(values.flatMap((value) => (value ?? "").split(",")))
 }
 
 function calculateSkillScore(jobSkills: string[] | null, resume: Resume) {
   if (!jobSkills?.length) {
     return {
-      skillsScore: 60,
+      skillsScore: null,
       matchingSkillsCount: 0,
       totalRequiredSkills: 0,
-      skillsMatchRate: 0.6,
+      skillsMatchRate: null,
     }
   }
 
-  const requiredSkills = uniqueTerms(jobSkills)
-  const candidateSkills = uniqueTerms([
-    ...(resume.top_skills ?? []),
-    ...getResumeTechnicalSkills(resume.skills ?? null),
-  ])
+  const requiredSkills = uniqueSkillTerms(jobSkills)
+  const candidateSkills = getAllResumeSkillLabels(resume)
 
   if (requiredSkills.length === 0) {
     return {
-      skillsScore: 60,
+      skillsScore: null,
       matchingSkillsCount: 0,
       totalRequiredSkills: 0,
-      skillsMatchRate: 0.6,
+      skillsMatchRate: null,
     }
   }
 
@@ -78,15 +68,12 @@ function calculateSkillScore(jobSkills: string[] | null, resume: Resume) {
     let bestMatch = 0
 
     for (const candidate of candidateSkills) {
-      if (candidate === required) {
+      if (normalizeSkillKey(candidate) === normalizeSkillKey(required)) {
         bestMatch = 1
         break
       }
 
-      if (
-        candidate.includes(required) ||
-        required.includes(candidate)
-      ) {
+      if (skillMatches(required, candidate)) {
         bestMatch = Math.max(bestMatch, 0.8)
       }
     }
@@ -244,13 +231,22 @@ export function computeFastScore({
   const { sponsorshipScore, isSponsorshipCompatible } =
     calculateSponsorshipScore(profile, job)
 
+  const hasVisibleSkillData = skillsScore !== null && totalRequiredSkills > 0
+  const effectiveSkillsScore = skillsScore ?? 35
+
   let overallScore = Math.round(
-    skillsScore * 0.4 +
+    effectiveSkillsScore * 0.4 +
       seniorityScore * 0.25 +
       locationScore * 0.15 +
       employmentTypeScore * 0.1 +
       sponsorshipScore * 0.1
   )
+
+  // Do not present a strong match when the posting did not expose usable skills.
+  // Location/seniority/sponsorship can suggest relevance, but not a confident role match.
+  if (!hasVisibleSkillData) {
+    overallScore = Math.min(overallScore, 62)
+  }
 
   const hasHardDisqualifier =
     (!job.is_remote && profile.remote_only) ||

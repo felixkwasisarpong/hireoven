@@ -12,6 +12,7 @@ import type {
 const BACKGROUND_USER_LIMIT = 10_000
 const UPSERT_CHUNK_SIZE = 250
 const BACKGROUND_CONCURRENCY = 50
+const FAST_SCORE_ALGORITHM_UPDATED_AT = new Date("2026-04-24T23:45:00.000Z").getTime()
 
 function chunkArray<T>(items: T[], size: number) {
   const chunks: T[][] = []
@@ -173,7 +174,11 @@ export async function scoreJobsForUser(userId: string, jobIds: string[]) {
   const resumeUpdatedAtMs = new Date(context.resume.updated_at).getTime()
   const existingFreshScores = existingScoresResult.rows.filter((row) => {
     const computedAtMs = new Date(row.computed_at).getTime()
-    return Number.isFinite(computedAtMs) && computedAtMs >= resumeUpdatedAtMs
+    return (
+      Number.isFinite(computedAtMs) &&
+      computedAtMs >= resumeUpdatedAtMs &&
+      computedAtMs >= FAST_SCORE_ALGORITHM_UPDATED_AT
+    )
   })
 
   const existingMap = new Map(existingFreshScores.map((row) => [row.job_id, row]))

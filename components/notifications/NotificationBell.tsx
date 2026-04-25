@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { Bell, ChevronRight } from "lucide-react"
 import { useNotifications } from "@/lib/hooks/useNotifications"
+import { cn } from "@/lib/utils"
 
 function formatRelative(timestamp: string) {
   const diffMinutes = Math.max(
@@ -24,7 +25,16 @@ function formatRelative(timestamp: string) {
   return `${diffDays} day${diffDays === 1 ? "" : "s"} ago`
 }
 
-export default function NotificationBell({ userId }: { userId?: string }) {
+export default function NotificationBell({
+  userId,
+  badgeVariant = "red",
+  buttonClassName,
+}: {
+  userId?: string
+  /** `product` = blue badge (dashboard job feed mockup). */
+  badgeVariant?: "red" | "product"
+  buttonClassName?: string
+}) {
   const [open, setOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement | null>(null)
   const { notifications, unreadCount, markAllRead, markAsRead } = useNotifications(
@@ -57,19 +67,29 @@ export default function NotificationBell({ userId }: { userId?: string }) {
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className="relative inline-flex h-11 w-11 items-center justify-center rounded-full border border-[#D7DCEA] bg-white text-slate-700 transition hover:border-[#B9C3DE] hover:bg-[#F6F8FD] hover:text-slate-900"
+        className={cn(
+          "relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#D7DCEA] bg-white text-slate-700 transition hover:border-[#B9C3DE] hover:bg-[#F6F8FD] hover:text-slate-900",
+          buttonClassName
+        )}
         aria-label="Open notifications"
       >
-        <Bell className="h-5 w-5" />
+        <Bell className="h-4 w-4" />
         {unreadLabel && (
-          <span className="absolute -right-1 -top-1 rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold text-white shadow-[0_8px_14px_-8px_rgba(239,68,68,0.85)]">
+          <span
+            className={cn(
+              "absolute -right-0.5 -top-0.5 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full px-1 text-[10px] font-bold leading-none text-white",
+              badgeVariant === "product"
+                ? "bg-[#2563EB]"
+                : "bg-red-500 shadow-[0_8px_14px_-8px_rgba(239,68,68,0.85)]"
+            )}
+          >
             {unreadLabel}
           </span>
         )}
       </button>
 
       {open && (
-        <div className="absolute right-0 top-14 z-30 w-[360px] overflow-hidden rounded-2xl border border-[#D7DCEA] bg-white shadow-[0_22px_56px_-32px_rgba(20,30,70,0.5)]">
+        <div className="absolute right-0 top-11 z-30 w-[360px] overflow-hidden rounded-2xl border border-[#D7DCEA] bg-white shadow-[0_22px_56px_-32px_rgba(20,30,70,0.5)]">
           <div className="flex items-center justify-between border-b border-border/80 bg-gradient-to-r from-cyan-50/70 via-sky-50/60 to-orange-50/65 px-5 py-4">
             <div>
               <p className="text-sm font-semibold text-slate-900">Notifications</p>
