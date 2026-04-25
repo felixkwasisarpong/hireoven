@@ -1,8 +1,8 @@
 "use client"
 
-import { useEffect, useId, useMemo, useState, useCallback } from "react"
+import { useEffect, useId, useMemo, useState } from "react"
 import Link from "next/link"
-import VisaIntelDrawer from "@/components/jobs/VisaIntelDrawer"
+import VisaIntelTrigger from "@/components/jobs/VisaIntelTrigger"
 import {
   AlertTriangle,
   ArrowRight,
@@ -12,7 +12,6 @@ import {
   Briefcase,
   Building2,
   CheckCircle2,
-  ChevronRight,
   ExternalLink,
   Ghost,
   Info,
@@ -77,7 +76,7 @@ function SectionRow({
 }: {
   icon: React.ElementType
   label: string
-  onViewBreakdown?: () => void
+  onViewBreakdown?: React.ReactNode
   children: React.ReactNode
 }) {
   return (
@@ -87,16 +86,7 @@ function SectionRow({
           <Icon className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden />
           <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-500">{label}</span>
         </div>
-        {onViewBreakdown && (
-          <button
-            type="button"
-            onClick={onViewBreakdown}
-            className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[11px] font-semibold text-[#2563EB] transition hover:bg-blue-50 focus-visible:outline-none"
-          >
-            Details
-            <ChevronRight className="h-3 w-3" aria-hidden />
-          </button>
-        )}
+        {onViewBreakdown}
       </div>
       {children}
     </div>
@@ -240,9 +230,6 @@ export default function JobDetailPanel({
 
   const [saved, setSaved] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [visaDrawerOpen, setVisaDrawerOpen] = useState(false)
-  const openVisaDrawer = useCallback(() => setVisaDrawerOpen(true), [])
-  const closeVisaDrawer = useCallback(() => setVisaDrawerOpen(false), [])
 
   const intel = useMemo(() => getJobIntelligence(job), [job])
 
@@ -437,7 +424,7 @@ export default function JobDetailPanel({
       {/* ── 3. Visa / Sponsorship Intelligence ── */}
       {(showVisaSignals || hasBlocker) && (
         <PanelCard>
-          <SectionRow icon={Plane} label="Visa Intelligence" onViewBreakdown={openVisaDrawer}>
+          <SectionRow icon={Plane} label="Visa Intelligence" onViewBreakdown={<VisaIntelTrigger job={job} displayTitle={displayTitle} />}>
             {hasBlocker ? (
               <div className="flex items-start gap-2 rounded-lg bg-red-50 px-3 py-2.5 ring-1 ring-red-200">
                 <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-red-700" aria-hidden />
@@ -596,14 +583,6 @@ export default function JobDetailPanel({
         </PanelCard>
       )}
 
-      {/* ── Visa Intelligence drawer ── */}
-      {visaDrawerOpen && (
-        <VisaIntelDrawer
-          job={job}
-          displayTitle={displayTitle}
-          onClose={closeVisaDrawer}
-        />
-      )}
     </div>
   )
 }
