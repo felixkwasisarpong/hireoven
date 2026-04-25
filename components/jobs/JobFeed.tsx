@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import { ArrowUp, Sparkles } from "lucide-react"
-import JobCard from "@/components/jobs/JobCard"
+import JobCardV2 from "@/components/jobs/JobCardV2"
 import { H1BPredictionProvider } from "@/lib/context/H1BPredictionContext"
 import { useAuth } from "@/lib/hooks/useAuth"
 import { useSubscription } from "@/lib/hooks/useSubscription"
@@ -19,25 +19,38 @@ interface JobFeedProps {
 
 function JobRowSkeleton() {
   return (
-    <div className="rounded-2xl border border-slate-100 bg-white p-5">
-      <div className="flex gap-3.5">
-        <div className="h-10 w-10 flex-shrink-0 animate-pulse rounded-xl bg-slate-100" />
+    <div className="overflow-hidden rounded-xl border border-[#E5E7EB] bg-white">
+      {/* Header section */}
+      <div className="flex items-start gap-4 p-5">
+        <div className="h-12 w-12 flex-shrink-0 animate-pulse rounded-lg bg-slate-100" />
         <div className="min-w-0 flex-1 space-y-2.5">
-          <div className="h-2.5 w-24 animate-pulse rounded-full bg-slate-100" />
-          <div className="h-4 w-2/3 max-w-sm animate-pulse rounded-full bg-slate-100" />
-          <div className="flex gap-1.5 pt-0.5">
-            <div className="h-5 w-16 animate-pulse rounded-full bg-slate-100" />
-            <div className="h-5 w-20 animate-pulse rounded-full bg-slate-100" />
+          <div className="h-4 w-2/3 max-w-xs animate-pulse rounded-full bg-slate-100" />
+          <div className="flex items-center gap-2">
+            <div className="h-3 w-24 animate-pulse rounded-full bg-slate-100" />
+            <div className="h-3 w-16 animate-pulse rounded-full bg-slate-100" />
+          </div>
+          <div className="flex gap-3 pt-0.5">
+            <div className="h-3 w-20 animate-pulse rounded-full bg-slate-100" />
+            <div className="h-3 w-16 animate-pulse rounded-full bg-slate-100" />
+            <div className="h-3 w-14 animate-pulse rounded-full bg-slate-100" />
+          </div>
+          <div className="flex gap-1.5 pt-1">
             <div className="h-5 w-14 animate-pulse rounded-full bg-slate-100" />
+            <div className="h-5 w-16 animate-pulse rounded-full bg-slate-100" />
+            <div className="h-5 w-12 animate-pulse rounded-full bg-slate-100" />
           </div>
         </div>
       </div>
-      <div className="mt-4 flex items-center justify-between border-t border-slate-50 pt-3.5">
-        <div className="flex gap-4">
-          <div className="h-3.5 w-14 animate-pulse rounded-full bg-slate-100" />
-          <div className="h-3.5 w-20 animate-pulse rounded-full bg-slate-100" />
+      {/* Intelligence strip */}
+      <div className="flex items-center justify-between border-t border-[#F1F5F9] bg-[#FAFAFA] px-5 py-2.5">
+        <div className="flex gap-2">
+          <div className="h-5 w-20 animate-pulse rounded-full bg-slate-200/70" />
+          <div className="h-5 w-24 animate-pulse rounded-full bg-slate-200/70" />
         </div>
-        <div className="h-8 w-20 animate-pulse rounded-xl bg-slate-100" />
+        <div className="flex items-center gap-3">
+          <div className="h-4 w-8 animate-pulse rounded-full bg-slate-200/70" />
+          <div className="h-7 w-16 animate-pulse rounded-md bg-slate-200/70" />
+        </div>
       </div>
     </div>
   )
@@ -152,7 +165,7 @@ export default function JobFeed({
       {jobs.length > 0 && (
         <div className="space-y-3 animate-fade-in">
           {jobs.map((job, i) => (
-            <JobCard
+            <JobCardV2
               key={job.id}
               job={job}
               hasPrimaryResume={hasPrimaryResume}
@@ -168,6 +181,7 @@ export default function JobFeed({
                 scoresLoading &&
                 !getScore(job.id)
               }
+              showVisaSignals={h1bEnabled}
             />
           ))}
         </div>

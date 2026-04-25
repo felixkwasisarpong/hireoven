@@ -9,7 +9,6 @@ import {
   CalendarClock,
   CheckCircle2,
   ClipboardList,
-  ExternalLink,
   FileText,
   Home as HomeIcon,
   ListChecks,
@@ -18,12 +17,8 @@ import {
   Star,
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
-import JobDetailSidebar from "@/components/jobs/JobDetailSidebar"
-import JobSaveButton from "@/components/jobs/JobSaveButton"
+import JobDetailPanel from "@/components/jobs/JobDetailPanel"
 import JobShareRow from "@/components/jobs/JobShareRow"
-import SponsorshipProbabilityCard, {
-  type ProbabilityTier,
-} from "@/components/jobs/SponsorshipProbabilityCard"
 import CompanyLogo from "@/components/ui/CompanyLogo"
 import {
   formatSalaryLabel,
@@ -36,7 +31,6 @@ import {
 } from "@/lib/jobs/metadata"
 import { cleanJobTitle } from "@/lib/jobs/title"
 import {
-  effectiveEmployerSponsorshipScore,
   employerLikelySponsorsH1b,
   employerSponsorshipPill,
 } from "@/lib/jobs/sponsorship-employer-signal"
@@ -196,18 +190,6 @@ export default async function DashboardJobDetailPage({ params }: Props) {
 
   const sponsorshipPill = employerSponsorshipPill({ ...job, company })
   const sponsorsConfirmed = employerLikelySponsorsH1b({ ...job, company })
-  const sponsorshipScore = effectiveEmployerSponsorshipScore({ ...job, company })
-
-  const sponsorshipProbability: { tier: ProbabilityTier; scorePercent: number | null } =
-    (() => {
-      const score = sponsorshipScore > 0 ? sponsorshipScore : null
-      if (sponsorsConfirmed) return { tier: "High", scorePercent: score ?? 90 }
-      if (job.requires_authorization) return { tier: "Low", scorePercent: score }
-      if (score == null) return { tier: "Unknown", scorePercent: null }
-      if (score >= 70) return { tier: "High", scorePercent: score }
-      if (score >= 50) return { tier: "Medium", scorePercent: score }
-      return { tier: "Low", scorePercent: score }
-    })()
 
   const workModel = job.is_remote ? "Remote" : job.is_hybrid ? "Hybrid" : "On-site"
   const workModelLong = job.is_remote
@@ -292,239 +274,185 @@ export default async function DashboardJobDetailPage({ params }: Props) {
   const panel = "rounded-2xl bg-white shadow-[0_1px_3px_rgba(15,23,42,0.06)] ring-1 ring-slate-200/70"
 
   return (
-    <main className="min-h-full bg-white pb-12">
-      <div className="mx-auto w-full max-w-[1320px] px-4 py-6 sm:px-6 lg:px-8">
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px] xl:gap-8">
-          {/* ---------------- Main column ---------------- */}
-          <div className="min-w-0 space-y-6">
-            {/* Back link */}
-            <Link
-              href="/dashboard"
-              className="inline-flex items-center gap-1.5 text-[13px] font-medium text-[#2563EB] hover:underline"
-            >
-              <ArrowLeft className="h-3.5 w-3.5" strokeWidth={2.25} />
-              Back to jobs
-            </Link>
+    <main className="min-h-full bg-[#F1F5F9] pb-16">
+      <div className="mx-auto w-full max-w-[1340px] px-4 py-6 sm:px-6 lg:px-8">
+        {/* Back link */}
+        <Link
+          href="/dashboard"
+          className="mb-5 inline-flex items-center gap-1.5 text-[13px] font-medium text-[#2563EB] hover:underline"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" strokeWidth={2.25} />
+          Back to jobs
+        </Link>
 
-            <section
-              id="job-details"
-              className="grid min-w-0 gap-8 lg:grid-cols-[minmax(0,1fr)_min(100%,280px)]"
-            >
-              <div className="min-w-0">
-                <header className="pb-6">
-                  <div className="flex min-w-0 items-start gap-5">
-                    <CompanyLogo
-                      companyName={company?.name ?? "Company"}
-                      domain={company?.domain ?? null}
-                      logoUrl={company?.logo_url ?? null}
-                      className="h-[120px] w-[120px] shrink-0 rounded-xl border-0 bg-transparent"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <h1 className="text-[24px] font-bold leading-tight tracking-tight text-slate-900 sm:text-[26px]">
-                        {displayTitle}
-                      </h1>
-                      <div className="mt-1 flex items-center gap-1.5">
-                        <span className="text-[15px] font-semibold text-slate-700">
-                          {company?.name ?? "Unknown company"}
-                        </span>
-                        <BadgeCheck className="h-4 w-4 text-[#2563EB]" strokeWidth={2.5} aria-hidden />
-                      </div>
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px] xl:gap-8">
+          {/* ──────────────────── Main column ──────────────────── */}
+          <div className="min-w-0 space-y-5">
 
-                      <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-[13px] text-slate-600">
-                        {page.location ? (
-                          <span className="inline-flex items-center gap-1.5">
-                            <MapPin className="h-3.5 w-3.5 text-slate-500" strokeWidth={2} aria-hidden />
-                            {page.location}
-                          </span>
-                        ) : null}
-                        <span className="inline-flex items-center gap-1.5">
-                          <Briefcase className="h-3.5 w-3.5 text-slate-500" strokeWidth={2} aria-hidden />
-                          {employmentLabel}
-                        </span>
-                        <span className="inline-flex items-center gap-1.5">
-                          <HomeIcon className="h-3.5 w-3.5 text-slate-500" strokeWidth={2} aria-hidden />
-                          {workModel}
-                        </span>
-                      </div>
-
-                      {skills.length > 0 ? (
-                        <div className="mt-4 flex flex-wrap gap-2">
-                          {skills.map((skill) => (
-                            <span
-                              key={skill}
-                              className="rounded-full bg-sky-50 px-3 py-1 text-[12px] font-medium text-sky-800"
-                            >
-                              {skill}
-                            </span>
-                          ))}
-                        </div>
-                      ) : null}
-                    </div>
+            {/* Job header */}
+            <section id="job-details" className={cn(panel, "p-6")}>
+              <div className="flex min-w-0 items-start gap-5">
+                <CompanyLogo
+                  companyName={company?.name ?? "Company"}
+                  domain={company?.domain ?? null}
+                  logoUrl={company?.logo_url ?? null}
+                  className="h-[88px] w-[88px] shrink-0 rounded-xl border-0 bg-transparent"
+                />
+                <div className="min-w-0 flex-1">
+                  <h1 className="text-[22px] font-bold leading-tight tracking-tight text-slate-900 sm:text-[24px]">
+                    {displayTitle}
+                  </h1>
+                  <div className="mt-1 flex items-center gap-1.5">
+                    <span className="text-[14px] font-semibold text-slate-700">
+                      {company?.name ?? "Unknown company"}
+                    </span>
+                    <BadgeCheck className="h-4 w-4 text-[#2563EB]" strokeWidth={2.5} aria-hidden />
                   </div>
-                </header>
-
-                <nav className="pt-1">
-                  <div className="flex flex-wrap gap-x-1 gap-y-0">
-                    {TABS.map((tab, index) => {
-                      const Icon = tab.icon
-                      return (
-                        <a
-                          key={tab.id}
-                          href={`#${tab.id}`}
-                          className={`relative inline-flex h-12 items-center gap-1.5 px-4 text-[14px] font-semibold transition-colors ${
-                            index === 0
-                              ? "text-[#2563EB]"
-                              : "text-slate-500 hover:text-slate-900"
-                          }`}
+                  <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[13px] text-slate-600">
+                    {page.location ? (
+                      <span className="inline-flex items-center gap-1.5">
+                        <MapPin className="h-3.5 w-3.5 text-slate-400" strokeWidth={2} aria-hidden />
+                        {page.location}
+                      </span>
+                    ) : null}
+                    <span className="inline-flex items-center gap-1.5">
+                      <Briefcase className="h-3.5 w-3.5 text-slate-400" strokeWidth={2} aria-hidden />
+                      {employmentLabel}
+                    </span>
+                    <span className="inline-flex items-center gap-1.5">
+                      <HomeIcon className="h-3.5 w-3.5 text-slate-400" strokeWidth={2} aria-hidden />
+                      {workModel}
+                    </span>
+                    {salaryLabel ? (
+                      <span className="inline-flex items-center gap-1.5">
+                        <Banknote className="h-3.5 w-3.5 text-slate-400" strokeWidth={2} aria-hidden />
+                        {salaryLabel}
+                      </span>
+                    ) : null}
+                  </div>
+                  {skills.length > 0 ? (
+                    <div className="mt-3.5 flex flex-wrap gap-1.5">
+                      {skills.map((skill) => (
+                        <span
+                          key={skill}
+                          className="rounded-full bg-sky-50 px-2.5 py-0.5 text-[11.5px] font-medium text-sky-800"
                         >
-                          <Icon className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden />
-                          {tab.label}
-                          {index === 0 ? (
-                            <span className="absolute inset-x-3 bottom-0 h-[2px] rounded-full bg-[#2563EB]" />
-                          ) : null}
-                        </a>
-                      )
-                    })}
-                  </div>
-                </nav>
+                          {skill}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
 
-                <div className="pt-6">
+              {/* Tab nav */}
+              <nav className="mt-5 border-t border-slate-100 pt-1">
+                <div className="flex flex-wrap gap-x-1">
+                  {TABS.map((tab, index) => {
+                    const Icon = tab.icon
+                    return (
+                      <a
+                        key={tab.id}
+                        href={`#${tab.id}`}
+                        className={`relative inline-flex h-11 items-center gap-1.5 px-3.5 text-[13.5px] font-semibold transition-colors ${
+                          index === 0
+                            ? "text-[#2563EB]"
+                            : "text-slate-500 hover:text-slate-900"
+                        }`}
+                      >
+                        <Icon className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden />
+                        {tab.label}
+                        {index === 0 ? (
+                          <span className="absolute inset-x-2.5 bottom-0 h-[2px] rounded-full bg-[#2563EB]" />
+                        ) : null}
+                      </a>
+                    )
+                  })}
+                </div>
+              </nav>
+
+              {/* Job description sections */}
+              <div className="mt-5 space-y-7">
+                <div>
                   <SectionH icon={FileText}>About the role</SectionH>
                   <div className="mt-3 space-y-3 text-[14px] leading-relaxed text-slate-700">
                     {aboutRole.map((paragraph) => (
                       <p key={paragraph}>{paragraph}</p>
                     ))}
                   </div>
-
-                  {responsibilities.length > 0 ? (
-                    <div className="mt-7">
-                      <SectionH icon={ListChecks}>What you&apos;ll do</SectionH>
-                      <div className="mt-3">
-                        <BulletList items={responsibilities} />
-                      </div>
-                    </div>
-                  ) : null}
-
-                  {qualificationItems.length > 0 ? (
-                    <div className="mt-7">
-                      <SectionH icon={ClipboardList}>Requirements</SectionH>
-                      {requirementSkillPills.length > 0 ? (
-                        <div className="mt-3">
-                          <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-slate-400">
-                            Required skills
-                          </p>
-                          <div className="mt-2 flex flex-wrap gap-2">
-                            {requirementSkillPills.map(({ skill, matched }) => (
-                              <span
-                                key={skill}
-                                className={cn(
-                                  "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-semibold ring-1",
-                                  matched
-                                    ? "bg-emerald-50 text-emerald-800 ring-emerald-200"
-                                    : "bg-slate-50 text-slate-600 ring-slate-200"
-                                )}
-                              >
-                                {matched ? (
-                                  <CheckCircle2 className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden />
-                                ) : null}
-                                {skill}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      ) : null}
-                      <div className="mt-3">
-                        <BulletList items={qualificationItems} />
-                      </div>
-                    </div>
-                  ) : null}
-
-                  {niceToHaveItems.length > 0 ? (
-                    <div className="mt-7">
-                      <SectionH icon={Star}>Nice to have</SectionH>
-                      <div className="mt-3">
-                        <BulletList items={niceToHaveItems} />
-                      </div>
-                    </div>
-                  ) : null}
-
-                  {educationLabel && educationLabel !== "Not specified" ? (
-                    <p className="mt-6 text-[12px] text-slate-500">
-                      Education preference: {educationLabel}
-                    </p>
-                  ) : null}
-                </div>
                 </div>
 
-                <div className="flex min-w-0 flex-col gap-4 pt-1">
-                  <div className="space-y-3">
-                    <div className="grid min-w-0 grid-cols-2 gap-2.5">
-                      <JobSaveButton
-                        variant="row"
-                        jobId={job.id}
-                        jobTitle={displayTitle}
-                        companyName={company?.name ?? "Company"}
-                        applyUrl={page.apply_url}
-                        companyLogoUrl={company?.logo_url ?? null}
-                        className="h-10 w-full min-w-0 rounded-lg border-0 bg-white px-3 text-[13px] font-semibold text-slate-800 ring-1 ring-slate-300/80 transition hover:bg-slate-50"
-                      />
-                      <a
-                        href={page.apply_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex h-10 w-full min-w-0 items-center justify-center gap-1.5 rounded-lg bg-[#2563EB] px-3 text-[13px] font-semibold text-white shadow-[0_8px_16px_rgba(37,99,235,0.18)] transition hover:bg-[#1D4ED8]"
-                      >
-                        Apply Now
-                        <ExternalLink className="h-3.5 w-3.5" strokeWidth={2.25} />
-                      </a>
-                    </div>
-
-                    {sponsorsConfirmed ? (
-                      <span className="inline-flex w-fit items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-2 text-[12px] font-semibold text-emerald-800">
-                        <Plane className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                        Sponsorship Available
-                      </span>
-                    ) : (
-                      <span
-                        className={`inline-flex w-fit items-center gap-1.5 rounded-lg px-3 py-2 text-[12px] font-medium ${sponsorshipPill.className}`}
-                      >
-                        <Plane className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                        {sponsorshipPill.label}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className={cn(panel, "p-5 lg:mt-10")}>
-                    <ul className="space-y-4">
-                      {facts.map((f) => (
-                        <FactRow key={f.label} icon={f.icon} label={f.label} value={f.value} />
-                      ))}
-                    </ul>
-                    <SponsorshipProbabilityCard
-                      jobId={job.id}
-                      jobTitle={displayTitle}
-                      companyName={company?.name ?? "Company"}
-                      tier={sponsorshipProbability.tier}
-                      scorePercent={sponsorshipProbability.scorePercent}
-                      initialPrediction={job.h1b_prediction ?? null}
-                      variant="nested"
-                    />
-                  </div>
-
-                  <div className={cn(panel, "p-5")}>
-                    <h3 className="text-[14px] font-semibold text-slate-900">Share this job</h3>
+                {responsibilities.length > 0 && (
+                  <div>
+                    <SectionH icon={ListChecks}>What you&apos;ll do</SectionH>
                     <div className="mt-3">
-                      <JobShareRow jobTitle={displayTitle} />
+                      <BulletList items={responsibilities} />
                     </div>
                   </div>
-                </div>
+                )}
+
+                {qualificationItems.length > 0 && (
+                  <div>
+                    <SectionH icon={ClipboardList}>Requirements</SectionH>
+                    {requirementSkillPills.length > 0 && (
+                      <div className="mt-3">
+                        <p className="text-[11.5px] font-semibold uppercase tracking-[0.12em] text-slate-400">
+                          Required skills
+                        </p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {requirementSkillPills.map(({ skill, matched }) => (
+                            <span
+                              key={skill}
+                              className={cn(
+                                "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-semibold ring-1",
+                                matched
+                                  ? "bg-emerald-50 text-emerald-800 ring-emerald-200"
+                                  : "bg-slate-50 text-slate-600 ring-slate-200"
+                              )}
+                            >
+                              {matched && (
+                                <CheckCircle2 className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden />
+                              )}
+                              {skill}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    <div className="mt-3">
+                      <BulletList items={qualificationItems} />
+                    </div>
+                  </div>
+                )}
+
+                {niceToHaveItems.length > 0 && (
+                  <div>
+                    <SectionH icon={Star}>Nice to have</SectionH>
+                    <div className="mt-3">
+                      <BulletList items={niceToHaveItems} />
+                    </div>
+                  </div>
+                )}
+
+                {educationLabel && educationLabel !== "Not specified" && (
+                  <p className="text-[12px] text-slate-500">
+                    Education preference: {educationLabel}
+                  </p>
+                )}
+              </div>
             </section>
 
-            {/* About company anchor */}
-            <section
-              id="about-company"
-              className={cn(panel, "p-5 sm:p-6")}
-            >
+            {/* Job facts (key info) */}
+            <section className={cn(panel, "p-5")}>
+              <ul className="grid gap-4 sm:grid-cols-2">
+                {facts.map((f) => (
+                  <FactRow key={f.label} icon={f.icon} label={f.label} value={f.value} />
+                ))}
+              </ul>
+            </section>
+
+            {/* About company */}
+            <section id="about-company" className={cn(panel, "p-5 sm:p-6")}>
               <SectionH icon={Building2}>About {company?.name ?? "the company"}</SectionH>
               <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-start">
                 <CompanyLogo
@@ -561,22 +489,15 @@ export default async function DashboardJobDetailPage({ params }: Props) {
             </section>
 
             {/* Similar jobs */}
-            {similarJobs.length > 0 ? (
-              <section
-                id="similar-jobs"
-                className={cn(panel, "p-5 sm:p-6")}
-              >
+            {similarJobs.length > 0 && (
+              <section id="similar-jobs" className={cn(panel, "p-5 sm:p-6")}>
                 <div className="mb-4 flex items-center justify-between gap-2">
                   <SectionH icon={Briefcase}>Similar jobs</SectionH>
-                  <Link
-                    href="/dashboard"
-                    className="text-[13px] font-semibold text-[#2563EB] hover:underline"
-                  >
+                  <Link href="/dashboard" className="text-[13px] font-semibold text-[#2563EB] hover:underline">
                     View all
                   </Link>
                 </div>
-
-                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {similarJobs.map((similar) => {
                     const cardSalary = formatSalaryLabel(
                       similar.salary_min,
@@ -587,7 +508,7 @@ export default async function DashboardJobDetailPage({ params }: Props) {
                       <Link
                         key={similar.id}
                         href={`/dashboard/jobs/${similar.id}`}
-                        className="rounded-2xl bg-white/90 p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:shadow-[0_2px_6px_rgba(15,23,42,0.08)] hover:bg-white"
+                        className="rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200/60 transition hover:bg-white hover:shadow-sm"
                       >
                         <div className="flex items-start gap-3">
                           <CompanyLogo
@@ -604,18 +525,18 @@ export default async function DashboardJobDetailPage({ params }: Props) {
                               {similar.company?.name ?? "Unknown company"}
                             </p>
                             <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-slate-500">
-                              {similar.location ? (
+                              {similar.location && (
                                 <span className="inline-flex items-center gap-1">
                                   <MapPin className="h-3 w-3" aria-hidden />
                                   {similar.location}
                                 </span>
-                              ) : null}
-                              {cardSalary ? (
+                              )}
+                              {cardSalary && (
                                 <span className="inline-flex items-center gap-1">
                                   <Banknote className="h-3 w-3" aria-hidden />
                                   {cardSalary}
                                 </span>
-                              ) : null}
+                              )}
                             </div>
                           </div>
                         </div>
@@ -624,12 +545,28 @@ export default async function DashboardJobDetailPage({ params }: Props) {
                   })}
                 </div>
               </section>
-            ) : null}
+            )}
+
+            {/* Share row */}
+            <section className={cn(panel, "p-5")}>
+              <h3 className="text-[13px] font-semibold text-slate-900">Share this job</h3>
+              <div className="mt-3">
+                <JobShareRow jobTitle={displayTitle} />
+              </div>
+            </section>
           </div>
 
-          {/* ---------------- Right rail: Match Score ---------------- */}
-          <aside className="space-y-4 xl:sticky xl:top-4 xl:self-start">
-            <JobDetailSidebar jobId={job.id} initialMatchScore={initialMatchScore} />
+          {/* ──────────────────── Right panel ──────────────────── */}
+          <aside className="xl:sticky xl:top-6 xl:self-start xl:max-h-[calc(100vh-5rem)] xl:overflow-y-auto xl:pb-4 [&::-webkit-scrollbar]:w-0">
+            <JobDetailPanel
+              job={job as Parameters<typeof JobDetailPanel>[0]["job"]}
+              initialMatchScore={initialMatchScore}
+              displayTitle={displayTitle}
+              applyUrl={page.apply_url}
+              sponsorsConfirmed={sponsorsConfirmed}
+              sponsorshipPill={sponsorshipPill}
+              showVisaSignals={true}
+            />
           </aside>
         </div>
       </div>
