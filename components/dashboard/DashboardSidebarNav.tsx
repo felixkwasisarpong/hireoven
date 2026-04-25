@@ -46,7 +46,7 @@ export default function DashboardSidebarNav({
 
         const linkClass = feedSkin
           ? cn(
-              "group relative flex min-h-[44px] items-center gap-3 rounded-lg px-3 py-2 text-[14px] transition-colors",
+              "group relative flex min-h-[34px] items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[12.5px] transition-colors",
               active
                 ? "bg-sky-50 font-semibold text-[#2563EB]"
                 : "font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900"
@@ -55,7 +55,7 @@ export default function DashboardSidebarNav({
 
         const iconClass = feedSkin
           ? cn(
-              "h-[18px] w-[18px] flex-shrink-0 transition-colors duration-200",
+              "h-4 w-4 flex-shrink-0 transition-colors duration-200",
               active ? "text-[#2563EB]" : "text-slate-500 group-hover:text-[#2563EB]"
             )
           : cn(

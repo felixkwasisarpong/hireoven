@@ -288,7 +288,7 @@ export const calculateVisaFitScore = (input: CalculateVisaFitScoreInput): VisaFi
     label: labelForScore(finalScore),
     confidence: confidenceForCoverage(coverage),
     reasons,
-    warnings: ["This is decision support, not legal advice.", ...warnings],
+    warnings,
     dataGaps,
     stemOptReadiness,
     capExempt,

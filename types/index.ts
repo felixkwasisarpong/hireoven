@@ -41,6 +41,82 @@ export type VisaStatus =
   | 'green_card'
   | 'other';
 
+export type OptTimelineImmigrationStatus =
+  | 'F1_OPT'
+  | 'F1_STEM_OPT'
+  | 'H1B'
+  | 'GC'
+  | 'Citizen'
+  | 'Other';
+
+export type OfferRiskWorkAuthorizationStatus =
+  | 'F1_OPT'
+  | 'F1_STEM_OPT'
+  | 'H1B'
+  | 'needs_future_sponsorship'
+  | 'citizen_or_gc'
+  | 'other'
+  | 'unknown';
+
+export type OfferRiskWorkMode = 'remote' | 'hybrid' | 'on_site' | 'unknown';
+
+export type OfferRiskLabel = 'Low' | 'Medium' | 'High' | 'Unknown';
+
+export type OptTimelineEmploymentStatus =
+  | 'employed'
+  | 'unemployed'
+  | 'offer_accepted'
+  | 'not_started'
+  | 'unknown';
+
+export type OptTimelineUrgencyLevel = 'Low' | 'Medium' | 'High' | 'Emergency';
+
+export type OptTimelineFallbackCategory =
+  | 'sponsor_friendly_employers'
+  | 'e_verified_employers'
+  | 'contract_or_temp_roles'
+  | 'university_or_cap_exempt_roles'
+  | 'staffing_or_consulting_firms'
+  | 'bridge_education_options'
+  | 'non_visa_sensitive_roles'
+  | 'dso_or_immigration_review';
+
+export type OptTimelineSettings = {
+  immigrationStatus: OptTimelineImmigrationStatus;
+  optStartDate: string | null;
+  optEndDate: string | null;
+  stemOptStartDate: string | null;
+  stemOptEndDate: string | null;
+  unemploymentDaysUsed: number | null;
+  currentEmploymentStatus: OptTimelineEmploymentStatus;
+  targetWeeklyApplicationGoal: number | null;
+  manualOverrides?: {
+    daysRemaining?: number | null;
+    unemploymentDaysUsed?: number | null;
+    unemploymentDaysRemaining?: number | null;
+    urgencyLevel?: OptTimelineUrgencyLevel | null;
+  } | null;
+  updatedAt?: string | null;
+};
+
+export type OptTimelineDashboard = {
+  immigrationStatus: OptTimelineImmigrationStatus;
+  currentAuthorizationPeriod: 'OPT' | 'STEM_OPT' | 'not_tracked' | 'unknown';
+  daysRemaining: number | null;
+  unemploymentDaysUsed: number | null;
+  estimatedUnemploymentDaysRemaining: number | null;
+  unemploymentDaysLimit: number | null;
+  urgencyLevel: OptTimelineUrgencyLevel;
+  recommendedWeeklyApplicationTarget: number;
+  recommendedJobSearchStrategy: string;
+  recommendedFallbackCategories: OptTimelineFallbackCategory[];
+  warnings: string[];
+  dataGaps: string[];
+  assumptions: string[];
+  disclaimer: string;
+  calculatedAt: string;
+};
+
 export type AlertFrequency = 'instant' | 'daily' | 'weekly';
 
 export type NotificationChannel = 'email' | 'push' | 'both';
@@ -49,7 +125,7 @@ export type NotificationType = 'alert' | 'watchlist';
 
 export type CrawlStatus = 'success' | 'failed' | 'unchanged';
 
-export type JobWithinWindow = 'all' | '1h' | '6h' | '24h' | '3d';
+export type JobWithinWindow = 'all' | '1h' | '6h' | '24h' | '3d' | '7d';
 
 export type JobSortOption = 'freshest' | 'match' | 'relevant';
 
@@ -507,16 +583,92 @@ export type VisaIntelligence = {
   blockers: SponsorshipBlocker[];
   positiveSignals: IntelligenceSignal[];
   riskSignals: IntelligenceSignal[];
+  capExempt: CapExemptSignal | null;
   summary: string | null;
 };
 
 export type LcaSalaryPosition = 'below_range' | 'within_range' | 'above_range' | 'unknown';
+export type LcaSalaryComparisonLabel = 'Below Market' | 'Aligned' | 'Above Market' | 'Unknown';
+
+export type LcaWageRecord = {
+  employerName?: string | null;
+  jobTitle?: string | null;
+  roleFamily?: string | null;
+  location?: string | null;
+  worksiteState?: string | null;
+  wageRateFrom: number | null;
+  wageRateTo?: number | null;
+  wageUnit?: 'Year' | 'Hour' | 'Month' | 'Week' | 'Bi-Weekly' | string | null;
+  prevailingWage?: number | null;
+  wageLevel?: string | null;
+  fiscalYear?: number | null;
+  decisionDate?: string | null;
+};
+
+export type OfferRiskCompanySnapshot = {
+  companyName: string | null;
+  sponsorsH1b: boolean | null;
+  sponsorshipConfidence: number | null;
+  recentH1BCount: number | null;
+  totalLcaCount: number | null;
+  certificationRate: number | null;
+  topJobTitles: string[];
+  topWorksiteStates: string[];
+  eVerifyLikely?: boolean | null;
+};
+
+export type OfferRiskInput = {
+  company: string;
+  jobTitle: string;
+  location?: string | null;
+  salary?: number | null;
+  salaryMin?: number | null;
+  salaryMax?: number | null;
+  workAuthorizationStatus: OfferRiskWorkAuthorizationStatus;
+  needsOptStemSupport?: boolean;
+  needsH1B?: boolean;
+  needsFutureSponsorship?: boolean;
+  offerStartDate?: string | null;
+  workMode?: OfferRiskWorkMode;
+  sponsorshipStatement?: string | null;
+  companySnapshot?: OfferRiskCompanySnapshot | null;
+  lcaRecords?: LcaWageRecord[] | null;
+  asOf?: string | null;
+};
+
+export type OfferRiskAnalysis = {
+  riskLabel: OfferRiskLabel;
+  riskScore: number | null;
+  confidence: IntelligenceConfidence;
+  summary: string;
+  keyConcerns: string[];
+  positiveSignals: string[];
+  questionsToAskRecruiter: string[];
+  documentationChecklist: string[];
+  missingData: string[];
+  salaryIntelligence: LcaSalaryIntelligence;
+  visaFit: {
+    score: number;
+    label: VisaFitScoreLabel;
+    reasons: string[];
+    warnings: string[];
+    dataGaps: string[];
+  };
+  h1bTimingRisk: IntelligenceRiskLevel;
+  sponsorshipConflictDetected: boolean;
+  disclaimer: string;
+};
 
 export type LcaSalaryIntelligence = {
   salaryFitScore: number | null;
   position: LcaSalaryPosition;
   offeredSalaryMin: number | null;
   offeredSalaryMax: number | null;
+  historicalRangeMin: number | null;
+  historicalRangeMax: number | null;
+  medianWage: number | null;
+  commonWageLevel: string | null;
+  comparisonLabel: LcaSalaryComparisonLabel;
   prevailingWage: number | null;
   lcaWagePercentile: number | null;
   comparableLcaCount: number | null;
@@ -525,6 +677,7 @@ export type LcaSalaryIntelligence = {
   socTitle: string | null;
   worksiteState: string | null;
   confidence: IntelligenceConfidence;
+  explanation: string;
   summary: string | null;
 };
 
@@ -540,7 +693,14 @@ export type StemOptReadiness = {
 
 export type CapExemptSignal = {
   isLikelyCapExempt: boolean | null;
-  category: 'higher_education' | 'nonprofit_research' | 'government_research' | 'affiliated_nonprofit' | 'unknown';
+  category:
+    | 'higher_education'
+    | 'nonprofit_research'
+    | 'government_research'
+    | 'affiliated_nonprofit'
+    | 'academic_medical_center'
+    | 'national_laboratory'
+    | 'unknown';
   confidence: IntelligenceConfidence;
   evidence: string[];
   summary: string | null;
@@ -552,6 +712,8 @@ export type GhostJobRisk = {
   freshnessDays: number | null;
   repostCount: number | null;
   lastSeenAt: string | null;
+  reasons: string[];
+  recommendedAction: string | null;
   signals: IntelligenceSignal[];
   summary: string | null;
 };
@@ -583,14 +745,83 @@ export type CompanyImmigrationProfileSummary = {
   summary: string | null;
 };
 
+export type CompanyLcaRoleFamily = {
+  label: string;
+  count: number | null;
+  share: number | null;
+  recentFiscalYear: number | null;
+  confidence: IntelligenceConfidence;
+};
+
+export type CompanyLcaWorksite = {
+  label: string;
+  state: string | null;
+  count: number | null;
+  share: number | null;
+  confidence: IntelligenceConfidence;
+};
+
+export type CompanySalaryIntelligenceSummary = {
+  medianWage: number | null;
+  rangeMin: number | null;
+  rangeMax: number | null;
+  commonWageLevel: string | null;
+  sampleSize: number | null;
+  confidence: IntelligenceConfidence;
+  summary: string | null;
+};
+
+export type CompanyStemOptReadinessSummary = {
+  likelyEVerify: boolean | null;
+  hasStemRoleHistory: boolean | null;
+  readiness: 'likely' | 'possible' | 'unknown' | 'limited';
+  confidence: IntelligenceConfidence;
+  summary: string | null;
+};
+
+export type CompanyImmigrationProfile = {
+  companyId: string;
+  companyName: string;
+  overviewSummary: string;
+  sponsorshipHistory: CompanyImmigrationProfileSummary;
+  roleFamilies: CompanyLcaRoleFamily[];
+  worksites: CompanyLcaWorksite[];
+  salaryIntelligence: CompanySalaryIntelligenceSummary;
+  stemOptReadiness: CompanyStemOptReadinessSummary;
+  capExempt: CapExemptSignal;
+  hiringHealth: CompanyHiringHealth;
+  similarCompanyIds: string[];
+  faq: {
+    h1b: string;
+    opt: string;
+    stemOpt: string;
+    sponsoredRoles: string;
+  };
+};
+
 export type ApplicationVerdict = {
+  verdict: 'Apply Today' | 'Apply, But Customize Resume' | 'Maybe' | 'Skip' | 'High Risk' | 'Unknown';
   recommendation: ApplyRecommendation | 'watch' | 'avoid' | 'unknown';
   confidence: IntelligenceConfidence;
   score: number | null;
+  priorityScore: number | null;
   reasons: string[];
+  warnings: string[];
   blockers: string[];
+  recommendedNextAction: string | null;
   nextBestAction: string | null;
   computedAt: string | null;
+};
+
+export type ResumeLcaRoleAlignment = {
+  alignmentScore: number | null;
+  missingKeywords: string[];
+  strongMatches: string[];
+  roleFamily: string | null;
+  resumeRewriteSuggestions: string[];
+  explanation: string;
+  confidence: IntelligenceConfidence;
+  source: 'lca_history' | 'job_description' | 'mixed' | 'insufficient_data';
 };
 
 export type MatchScoreBreakdown = {
@@ -624,6 +855,7 @@ export type JobIntelligence = {
   ghostJobRisk: GhostJobRisk | null;
   companyHiringHealth: CompanyHiringHealth | null;
   applicationVerdict: ApplicationVerdict | null;
+  resumeLcaRoleAlignment?: ResumeLcaRoleAlignment | null;
   matchScore: MatchScoreBreakdown | null;
   postedFreshness: {
     firstDetectedAt: string | null;
@@ -655,6 +887,7 @@ export type Profile = {
   is_international: boolean;
   visa_status: VisaStatus | null;
   opt_end_date: string | null;
+  opt_timeline_settings?: OptTimelineSettings | null;
   needs_sponsorship: boolean;
   alert_frequency: AlertFrequency;
   email_alerts: boolean;
@@ -1265,6 +1498,9 @@ export type H1BPredictionInput = {
 // UI filter state
 // ---------------------------------------------------------------------------
 
+export type VisaFitLabel = 'Very Strong' | 'Strong' | 'Medium' | 'Weak' | 'Blocked';
+export type GhostRiskMax = 'low' | 'medium';
+
 export type JobFilters = {
   remote?: boolean;
   hybrid?: boolean;
@@ -1283,6 +1519,28 @@ export type JobFilters = {
   skills?: string[];
   /** Substring match on `company.industry` (client-side) */
   industryQuery?: string;
+
+  // --- Advanced intelligence filters (client-side) ---
+  /** Hide jobs where requires_authorization is true (sponsorship blocker detected) */
+  hide_blockers?: boolean;
+  /** Only show jobs whose computed visa fit label is in this set */
+  visa_fit?: VisaFitLabel[];
+  /** Only show jobs where STEM OPT eligibility is signalled */
+  stem_opt_ready?: boolean;
+  /** Only show jobs where E-Verify is likely */
+  e_verify_signal?: boolean;
+  /** Only show employers that may be cap-exempt */
+  cap_exempt_possible?: boolean;
+  /** Only show jobs where LCA salary is aligned with market */
+  lca_salary_aligned?: boolean;
+  /** Maximum ghost-job risk level to allow through */
+  ghost_risk_max?: GhostRiskMax;
+
+  // --- Job quality filters (client-side) ---
+  /** Only show jobs that have a salary range listed */
+  has_salary?: boolean;
+  /** Only show jobs with a known ATS link (not generic/custom) */
+  direct_ats_only?: boolean;
 };
 
 // ---------------------------------------------------------------------------

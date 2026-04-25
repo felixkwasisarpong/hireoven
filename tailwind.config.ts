@@ -41,8 +41,13 @@ const config: Config = {
           "0%": { backgroundPosition: "200% 50%" },
           "100%": { backgroundPosition: "-200% 50%" },
         },
+        "slide-in-right": {
+          "0%": { transform: "translateX(100%)" },
+          "100%": { transform: "translateX(0)" },
+        },
       },
       animation: {
+        "slide-in-right": "slide-in-right 0.22s cubic-bezier(0.16, 1, 0.3, 1)",
         "float-iphone": "float-iphone 5.5s ease-in-out infinite",
         "aurora-orb": "aurora-orb 10s ease-in-out infinite",
         "feed-ticker": "feed-ticker 2.8s ease-in-out infinite",

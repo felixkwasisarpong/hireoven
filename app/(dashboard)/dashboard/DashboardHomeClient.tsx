@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
-import { Plane, Sparkles } from "lucide-react"
+import { Sparkles } from "lucide-react"
 import DashboardHeader from "@/components/dashboard/DashboardHeader"
 import DashboardFeedToolbar, {
   type FeedToolbarDropdown,
@@ -76,6 +76,8 @@ export default function DashboardHomeClient({
   useEffect(() => {
     function onPointerDown(e: PointerEvent) {
       if (!filterDropdown) return
+      // Ignore clicks inside portalled drawers (data-portal attribute) or the filters bar itself
+      if (e.target instanceof Element && e.target.closest("[data-portal-drawer]")) return
       if (e.target instanceof Node && filtersBarRef.current && !filtersBarRef.current.contains(e.target)) {
         setFilterDropdown(null)
       }
@@ -134,26 +136,6 @@ export default function DashboardHomeClient({
 
         <div className="soft-scrollbar min-h-0 flex-1 overflow-y-auto [-webkit-overflow-scrolling:touch]">
           <DashboardSidebarNav variant="light" navSkin="feed" />
-        </div>
-
-        <div className="rounded-xl border border-emerald-200/80 bg-gradient-to-br from-emerald-50/95 to-teal-50/80 p-3 shadow-sm">
-          <div className="flex items-start gap-2.5">
-            <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-white text-emerald-600 ring-1 ring-emerald-200/80">
-              <Plane className="h-4 w-4" aria-hidden />
-            </span>
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-emerald-950">Sponsorship made easy.</p>
-              <p className="mt-0.5 text-[11px] leading-snug text-emerald-900/85">
-                See which employers actually sponsor, before you invest time in applying.
-              </p>
-            </div>
-          </div>
-          <Link
-            href="/dashboard/international"
-            className="mt-3 inline-flex w-full items-center justify-center rounded-lg border-2 border-emerald-500 bg-white px-3 py-2 text-[11px] font-semibold text-emerald-800 transition hover:bg-emerald-50/90"
-          >
-            Learn more
-          </Link>
         </div>
       </aside>
 

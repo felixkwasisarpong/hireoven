@@ -4,6 +4,7 @@ import { getPostgresPool } from "@/lib/postgres/server"
 import {
   cleanJobTitle,
 } from "@/lib/jobs/text-normalizer"
+import { detectAts } from "@/lib/companies/detect-ats"
 import {
   cleanJobDescription,
   fetchJobDescription,
@@ -105,6 +106,13 @@ const BLOCKED_TITLE_PATTERNS = [
   /^by category$/i,
   /^by job title$/i,
   /^search jobs?$/i,
+  /^work in [\w\s,().-]+$/i,
+  /^explore (?:jobs|careers|roles)/i,
+  /^contractor roles?$/i,
+  /^remote opportunities?$/i,
+  /^hybrid opportunities?$/i,
+  /^\s*\.css-/i,                        // styled-components CSS class strings
+  /\{-webkit-|-webkit-text-decoration/, // CSS property bleed
 ]
 
 const BLOCKED_PATH_PATTERNS = [
@@ -496,6 +504,25 @@ export async function persistCrawlJobs({
      WHERE id = $4`,
     [crawledAtIso, activeCount, crawledAtIso, companyId]
   )
+
+  // Auto-detect and backfill ATS type from the apply URLs we just crawled.
+  // Only updates when the company is still marked null or 'custom' — never
+  // overwrites a previously confirmed ATS type.
+  if (dedupedJobs.length > 0) {
+    const applyUrls = dedupedJobs.map((j) => j.url)
+    const detected = detectAts({ careersUrl: null, applyUrls })
+    if (detected && detected.confidence === "high") {
+      await pool.query(
+        `UPDATE companies
+         SET ats_type = $1,
+             ats_identifier = COALESCE(ats_identifier, $2),
+             updated_at = $3
+         WHERE id = $4
+           AND (ats_type IS NULL OR ats_type = 'custom')`,
+        [detected.atsType, detected.atsIdentifier, crawledAtIso, companyId]
+      )
+    }
+  }
 
   return {
     inserted: toInsert.length,

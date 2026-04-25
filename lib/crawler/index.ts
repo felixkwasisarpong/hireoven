@@ -33,6 +33,8 @@ const MAX_DISCOVERED_ATS_CANDIDATES = 12
 const MAX_GENERIC_JOBS = 250
 const WORKDAY_FALLBACK_MAX_ATTEMPTS = 48
 const WORKDAY_HOST_SHARDS = [1, 2, 3, 4, 5]
+const WORKDAY_DESC_CONCURRENCY = 8  // parallel detail fetches
+const WORKDAY_DESC_MAX_JOBS = 60    // cap so crawls don't balloon in time
 const ORACLE_SEARCH_PAGE_SIZE = 24
 const ORACLE_MAX_JOBS = 240
 const PHENOM_DEFAULT_PAGE_SIZE = 10
@@ -133,7 +135,7 @@ const GENERIC_NON_JOB_PATH_PREFIXES = [
 ]
 
 const GENERIC_NON_JOB_ANCHOR_TEXT =
-  /^(benefits|culture|university|life at [\w\s.'-]+|how we operate|how we work|our values|our mission|our story|teams?|locations?|departments?|see open roles?|open roles?|view openings?)$/i
+  /^(benefits|culture|university|life at [\w\s.'-]+|how we operate|how we work|our values|our mission|our story|teams?|locations?|departments?|see open roles?|open roles?|view openings?|work in [\w\s,().-]+|explore (?:jobs|careers|roles)|remote opportunities?|hybrid opportunities?|contractor roles?)$/i
 
 const COMPANY_STOPWORDS = new Set([
   "inc",
@@ -276,6 +278,8 @@ type WorkdayPosting = {
   locationsText?: string
   postedOn?: string
   bulletFields?: string[]
+  // populated by fetchWorkdayDescriptions — not present in list API response
+  jobDescription?: string
 }
 
 function buildRequestHeaders(extra?: HeadersInit): Headers {
@@ -387,6 +391,38 @@ async function fetchWorkdayPostings(
   return collected
 }
 
+async function fetchWorkdayDescriptions(
+  context: WorkdayContext,
+  site: string,
+  postings: WorkdayPosting[]
+): Promise<void> {
+  // The list API only returns bulletFields (brief bullets). Full jobDescription
+  // lives at GET /wday/cxs/{tenant}/{site}{externalPath}.
+  const targets = postings
+    .filter((p) => p.externalPath && !p.jobDescription)
+    .slice(0, WORKDAY_DESC_MAX_JOBS)
+
+  const queue = [...targets]
+  const workers = Array.from({ length: WORKDAY_DESC_CONCURRENCY }, async () => {
+    while (queue.length > 0) {
+      const posting = queue.shift()
+      if (!posting?.externalPath) continue
+      const url = `https://${context.tenantHost}/wday/cxs/${encodeURIComponent(
+        context.tenant
+      )}/${encodeURIComponent(site)}${posting.externalPath}`
+      const payload = await fetchJson<{
+        jobPostingInfo?: { jobDescription?: string; briefDescription?: string }
+      }>(url)
+      const raw =
+        payload?.jobPostingInfo?.jobDescription ??
+        payload?.jobPostingInfo?.briefDescription ??
+        null
+      if (raw) posting.jobDescription = raw
+    }
+  })
+  await Promise.all(workers)
+}
+
 function mapWorkdayPostings(
   context: WorkdayContext,
   site: string,
@@ -409,7 +445,9 @@ function mapWorkdayPostings(
           `https://${context.tenantHost}/`
         ).toString()
       ),
-      description: cleanJobDescription(posting.bulletFields?.join("\n") ?? null) ?? undefined,
+      description:
+        cleanJobDescription(posting.jobDescription ?? posting.bulletFields?.join("\n") ?? null) ??
+        undefined,
       location:
         posting.location ??
         posting.locationsText ??
@@ -532,6 +570,7 @@ async function crawlWorkdayByHeuristic(
             const postings = await fetchWorkdayPostings(context, site)
             if (postings.length === 0) continue
 
+            await fetchWorkdayDescriptions(context, site, postings)
             const jobs = mapWorkdayPostings(context, site, postings)
             if (jobs.length > 0) return jobs
           }
@@ -642,6 +681,7 @@ async function crawlWorkday(careersUrl: URL): Promise<RawJob[]> {
     const postings = await fetchWorkdayPostings(context, site)
     if (postings.length === 0) continue
 
+    await fetchWorkdayDescriptions(context, site, postings)
     const jobs = mapWorkdayPostings(context, site, postings)
     if (jobs.length > 0) return jobs
   }
@@ -856,6 +896,13 @@ function isLikelyJobLink(url: URL, text: string, baseUrl: URL): boolean {
   if (!/^https?:$/i.test(url.protocol)) return false
   if (url.hostname.toLowerCase() !== baseUrl.hostname.toLowerCase()) return false
   if (url.searchParams.has("gh_jid")) return false
+
+  // Block Algolia InstantSearch refinement URLs — these are search-state filter
+  // links (e.g. Greenhouse-embedded location filters), not individual job pages.
+  const rawSearch = url.search.toLowerCase()
+  if (rawSearch.includes("refinementlist") || rawSearch.includes("greenhouse-jobs-index")) {
+    return false
+  }
 
   const path = url.pathname.toLowerCase()
   if (!path || path === "/" || path === baseUrl.pathname.toLowerCase()) return false
@@ -1632,16 +1679,29 @@ function pickIcimsJibeLocation(data: IcimsJibeApiJobData): string | undefined {
   return fallback || undefined
 }
 
+function isIcimsMarketingUrl(url: string): boolean {
+  try {
+    const host = new URL(url).hostname.toLowerCase()
+    // icims.com and www.icims.com are the iCIMS product/marketing site.
+    // Any apply_url pointing there is bad data from the Jibe API — the job
+    // belongs to a branded portal (e.g. careers.mheducation.com), not iCIMS HQ.
+    return host === "icims.com" || host === "www.icims.com"
+  } catch {
+    return false
+  }
+}
+
 function resolveIcimsJibeJobUrl(data: IcimsJibeApiJobData, apiOrigin: URL): string | null {
   const rawApplyUrl = String(data.apply_url ?? "").trim()
   const applyUrl = toUrl(rawApplyUrl)?.toString()
   const applyPath = applyUrl ? toUrl(applyUrl)?.pathname.toLowerCase() ?? "" : ""
   const applyIsLoginPage = /\/login(?:\/|$)/i.test(applyPath)
 
-  if (applyUrl && !applyIsLoginPage) {
+  if (applyUrl && !applyIsLoginPage && !isIcimsMarketingUrl(applyUrl)) {
     return normalizeJobApplyUrl(applyUrl)
   }
 
+  // Fallback: construct the job URL from slug/req_id on the branded portal origin.
   const slug = String(data.slug ?? data.req_id ?? "").trim()
   if (slug) {
     return normalizeJobApplyUrl(
@@ -1649,6 +1709,7 @@ function resolveIcimsJibeJobUrl(data: IcimsJibeApiJobData, apiOrigin: URL): stri
     )
   }
 
+  // Last resort: use apply_url even if it looked suspicious (better than null).
   if (applyUrl) return normalizeJobApplyUrl(applyUrl)
   return null
 }
@@ -1819,6 +1880,11 @@ async function discoverAndCrawlFromHtml(careersUrl: URL): Promise<RawJob[]> {
     })
     if (!response.ok) return []
     const html = await response.text()
+
+    if (looksLikeIcimsJibeSearchHtml(html)) {
+      const icimsJobs = await crawlIcimsJibeSearchPage(careersUrl, html)
+      if (icimsJobs.length > 0) return icimsJobs
+    }
 
     if (looksLikeOracleCandidateExperienceHtml(html)) {
       const oracleJobs = await crawlOracleCandidateExperience(careersUrl, html)

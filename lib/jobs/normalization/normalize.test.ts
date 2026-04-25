@@ -172,7 +172,7 @@ test("extractSkillsFromText only tags go when language context exists", () => {
     "Backend Engineer",
     "Experience with Go and Rust. Build high-throughput Golang services."
   )
-  assert.equal(language.includes("go"), true)
+  assert.equal(language.includes("Go"), true)
 })
 
 test("detectSourceAdapter recognizes ats-prefixed external ids", () => {

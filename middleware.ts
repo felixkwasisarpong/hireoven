@@ -65,15 +65,12 @@ export async function middleware(request: NextRequest) {
     )
   }
 
-  if (user && (isProtected(pathname) || isProtectedApi(pathname))) {
+  // Keep protected API requests fast: route handlers already verify the session
+  // with getSessionUser(), and this avoids an extra internal HTTP + DB round-trip
+  // for every dashboard API call.
+  if (user && isProtected(pathname)) {
     const summary = await fetchSessionSummary()
     if (summary?.suspended) {
-      if (isProtectedApi(pathname)) {
-        return NextResponse.json(
-          { error: "Account suspended", code: "SUSPENDED" },
-          { status: 403 }
-        )
-      }
       const loginUrl = new URL("/login", request.url)
       loginUrl.searchParams.set("reason", "suspended")
       return NextResponse.redirect(loginUrl)

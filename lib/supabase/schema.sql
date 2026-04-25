@@ -79,6 +79,7 @@ CREATE TABLE profiles (
   is_international BOOLEAN DEFAULT false,
   visa_status TEXT, -- opt, stem_opt, h1b, citizen, green_card, other
   opt_end_date DATE,
+  opt_timeline_settings JSONB,
   needs_sponsorship BOOLEAN DEFAULT false,
   -- Notification preferences
   alert_frequency TEXT DEFAULT 'instant', -- instant, daily, weekly
