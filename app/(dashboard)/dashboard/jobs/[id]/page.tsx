@@ -440,15 +440,15 @@ export default async function DashboardJobDetailPage({ params }: Props) {
                   </p>
                 )}
               </div>
-            </section>
 
-            {/* Job facts (key info) */}
-            <section className={cn(panel, "p-5")}>
-              <ul className="grid gap-4 sm:grid-cols-2">
-                {facts.map((f) => (
-                  <FactRow key={f.label} icon={f.icon} label={f.label} value={f.value} />
-                ))}
-              </ul>
+              {/* Job facts — inside the same card */}
+              <div className="mt-7 border-t border-slate-100 pt-6">
+                <ul className="grid gap-4 sm:grid-cols-2">
+                  {facts.map((f) => (
+                    <FactRow key={f.label} icon={f.icon} label={f.label} value={f.value} />
+                  ))}
+                </ul>
+              </div>
             </section>
 
             {/* About company */}
