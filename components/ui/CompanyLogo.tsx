@@ -62,6 +62,15 @@ function isGoogleFaviconUrl(logoUrl: string | null | undefined) {
   }
 }
 
+function isClearbitUrl(logoUrl: string | null | undefined) {
+  if (!logoUrl) return false
+  try {
+    return new URL(logoUrl).hostname === "logo.clearbit.com"
+  } catch {
+    return false
+  }
+}
+
 function isInvalidPlaceholderGoogleFaviconUrl(logoUrl: string | null | undefined) {
   if (!logoUrl) return false
   try {
@@ -95,14 +104,23 @@ function buildLogoSources(logoUrl: string | null | undefined, domain: string | n
   const googleFaviconOnly = isGoogleFaviconUrl(logoUrl)
   const invalidPlaceholderFavicon = isInvalidPlaceholderGoogleFaviconUrl(logoUrl)
   const isStaticAsset = !!logoUrl?.trim().startsWith("/")
-  if (logoUrl && !invalidPlaceholderFavicon && (isStaticAsset || googleFaviconOnly)) push(logoUrl)
+  const isClearbit = isClearbitUrl(logoUrl)
+
+  // Static assets and curated marks come first.
+  if (logoUrl && !invalidPlaceholderFavicon && isStaticAsset) push(logoUrl)
+
+  // Clearbit brand marks are high quality — try before the generic favicon fallback.
+  if (logoUrl && !invalidPlaceholderFavicon && isClearbit) push(logoUrl)
+
+  // Google favicon stored directly: push it before synthesising another.
+  if (logoUrl && !invalidPlaceholderFavicon && googleFaviconOnly) push(logoUrl)
 
   if (canonicalDomain) {
     push(companyLogoUrlFromDomain(canonicalDomain, "google-favicon"))
   }
 
-  if (logoUrl && !invalidPlaceholderFavicon && !isStaticAsset && !googleFaviconOnly) {
-    // Keep legacy providers as a last resort only.
+  if (logoUrl && !invalidPlaceholderFavicon && !isStaticAsset && !googleFaviconOnly && !isClearbit) {
+    // Other legacy providers (unavatar, icon-horse, duckduckgo) as last resort.
     push(logoUrl)
   }
 
