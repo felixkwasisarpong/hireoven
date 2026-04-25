@@ -430,7 +430,7 @@ export default function AdvancedFiltersDrawer({
               <p className="text-[11px] leading-snug text-slate-500">
                 Intelligence signals are estimates based on available data. Visa
                 fit, STEM OPT, and cap-exempt signals are for search guidance
-                only. Confirm with your DSO or attorney before applying.
+                only. Confirm important immigration decisions with your DSO or attorney.
               </p>
             </div>
           </div>

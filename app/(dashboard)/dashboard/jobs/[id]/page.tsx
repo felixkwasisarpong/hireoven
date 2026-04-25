@@ -200,7 +200,7 @@ export default async function DashboardJobDetailPage({ params }: Props) {
       : "On-site"
 
   const visaSponsorshipValue = sponsorsConfirmed
-    ? "Available"
+    ? "Historical signal"
     : job.requires_authorization
       ? "Not provided"
       : "See posting"

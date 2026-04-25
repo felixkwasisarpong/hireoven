@@ -21,6 +21,7 @@ function hoursFromWithin(within: JobFilters["within"]) {
   if (within === "6h") return 6
   if (within === "24h") return 24
   if (within === "3d") return 72
+  if (within === "7d") return 168
   return null
 }
 

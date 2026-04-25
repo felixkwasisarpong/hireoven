@@ -192,10 +192,10 @@ const VISA_LABEL_CONFIG: Record<
   VisaFitScoreLabel,
   { classes: string; icon: React.ElementType; verdict: string }
 > = {
-  "Very Strong": { classes: "bg-emerald-50 text-emerald-800 ring-emerald-200", icon: ShieldCheck, verdict: "Very strong visa fit" },
-  Strong:        { classes: "bg-emerald-50 text-emerald-800 ring-emerald-200", icon: ShieldCheck, verdict: "Strong visa fit" },
-  Medium:        { classes: "bg-sky-50 text-sky-800 ring-sky-200",             icon: Plane,       verdict: "Possible visa fit" },
-  Weak:          { classes: "bg-amber-50 text-amber-800 ring-amber-200",        icon: AlertTriangle, verdict: "Weak visa fit" },
+  "Very Strong": { classes: "bg-emerald-50 text-emerald-800 ring-emerald-200", icon: ShieldCheck, verdict: "Very strong visa signal" },
+  Strong:        { classes: "bg-emerald-50 text-emerald-800 ring-emerald-200", icon: ShieldCheck, verdict: "Strong visa signal" },
+  Medium:        { classes: "bg-sky-50 text-sky-800 ring-sky-200",             icon: Plane,       verdict: "Possible visa signal" },
+  Weak:          { classes: "bg-amber-50 text-amber-800 ring-amber-200",        icon: AlertTriangle, verdict: "Weak visa signal" },
   Blocked:       { classes: "bg-red-50 text-red-800 ring-red-200",              icon: ShieldAlert, verdict: "Sponsorship blocked" },
 }
 
@@ -412,7 +412,7 @@ export default function JobDetailPanel({
           {sponsorsConfirmed ? (
             <div className="flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-2 ring-1 ring-emerald-200/60">
               <Plane className="h-3.5 w-3.5 shrink-0 text-emerald-700" aria-hidden />
-              <span className="text-[12px] font-semibold text-emerald-800">Sponsorship Available</span>
+              <span className="text-[12px] font-semibold text-emerald-800">Historical sponsorship signal</span>
             </div>
           ) : (
             <div className={cn("flex items-center gap-1.5 rounded-lg px-3 py-2 ring-1 ring-inset ring-slate-200/60", sponsorshipPill.className)}>
@@ -549,7 +549,7 @@ export default function JobDetailPanel({
                   <div>
                     <p className="text-[12px] font-semibold text-red-800">Sponsorship blocker detected</p>
                     <p className="mt-0.5 text-[11px] leading-relaxed text-red-700/80">
-                      The posting contains language suggesting sponsorship may not be available. Verify before applying.
+                      The posting contains language suggesting sponsorship may not be available. Verify before relying on this role.
                     </p>
                   </div>
                 </div>

@@ -303,9 +303,13 @@ export function extractSkillsFromText(...parts: Array<string | null | undefined>
 
   const found: string[] = []
   for (const skill of SKILL_DEFINITIONS) {
+    const aliasesToCheck =
+      skill.label === "Go"
+        ? skill.aliases.filter((alias) => normalizeSkillKey(alias) !== "go")
+        : skill.aliases
     const matched =
       Boolean(skill.patterns?.some((pattern) => pattern.test(blob))) ||
-      skill.aliases.some((alias) => aliasPattern(alias).test(blob))
+      aliasesToCheck.some((alias) => aliasPattern(alias).test(blob))
 
     if (matched) found.push(skill.label)
   }

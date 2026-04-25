@@ -957,6 +957,38 @@ function sanitizeBenefitsBucket(
         continue
       }
 
+      if (REQUIREMENT_LIKE_RE.test(normalizedCandidate) && !BENEFITS_LIKE_RE.test(normalizedCandidate)) {
+        addItems(
+          buckets.requirements,
+          [normalizedCandidate],
+          0.56,
+          {
+            adapter,
+            method: "heuristic",
+            source_path: "benefits.sanitized",
+            source_excerpt: normalizedCandidate.slice(0, 200),
+          },
+          14
+        )
+        continue
+      }
+
+      if (RESPONSIBILITY_LIKE_RE.test(normalizedCandidate) && !BENEFITS_LIKE_RE.test(normalizedCandidate)) {
+        addItems(
+          buckets.responsibilities,
+          [normalizedCandidate],
+          0.56,
+          {
+            adapter,
+            method: "heuristic",
+            source_path: "benefits.sanitized",
+            source_excerpt: normalizedCandidate.slice(0, 200),
+          },
+          14
+        )
+        continue
+      }
+
       if (BENEFITS_LIKE_RE.test(normalizedCandidate)) {
         kept.push(normalizedCandidate)
         continue
