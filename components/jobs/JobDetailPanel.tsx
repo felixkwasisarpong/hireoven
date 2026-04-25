@@ -12,6 +12,7 @@ import {
   Briefcase,
   Building2,
   CheckCircle2,
+  ChevronRight,
   ExternalLink,
   Ghost,
   Info,
@@ -423,36 +424,51 @@ export default function JobDetailPanel({
 
       {/* ── 3. Visa / Sponsorship Intelligence ── */}
       {(showVisaSignals || hasBlocker) && (
-        <PanelCard>
-          <SectionRow icon={Plane} label="Visa Intelligence" onViewBreakdown={<VisaIntelTrigger job={job} displayTitle={displayTitle} />}>
-            {hasBlocker ? (
-              <div className="flex items-start gap-2 rounded-lg bg-red-50 px-3 py-2.5 ring-1 ring-red-200">
-                <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-red-700" aria-hidden />
-                <div>
-                  <p className="text-[12px] font-semibold text-red-800">Sponsorship blocker detected</p>
-                  <p className="mt-0.5 text-[11px] leading-relaxed text-red-700/80">
-                    The posting contains language suggesting sponsorship may not be available. Verify before applying.
-                  </p>
-                </div>
-              </div>
-            ) : visaLabelConfig && VisaIcon ? (
-              <div>
-                <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-semibold ring-1", visaLabelConfig.classes)}>
-                  <VisaIcon className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                  {visaLabelConfig.verdict}
+        <VisaIntelTrigger
+          job={job}
+          displayTitle={displayTitle}
+          className="rounded-xl transition hover:shadow-[0_2px_8px_rgba(15,23,42,0.08)] focus-visible:ring-2 focus-visible:ring-[#2563EB]/35"
+        >
+          <PanelCard>
+            <SectionRow
+              icon={Plane}
+              label="Visa Intelligence"
+              onViewBreakdown={
+                <span className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[11px] font-semibold text-[#2563EB]">
+                  Details
+                  <ChevronRight className="h-3 w-3" aria-hidden />
                 </span>
-                {intel.visa?.visaFitScore != null && (
-                  <p className="mt-1.5 text-[11px] text-slate-500">Score: {intel.visa.visaFitScore}/100 · {intel.visa.confidence} confidence</p>
-                )}
-                {intel.visa?.summary && (
-                  <p className="mt-1.5 text-[11px] leading-relaxed text-slate-500 line-clamp-2">{intel.visa.summary}</p>
-                )}
-              </div>
-            ) : (
-              <UnknownState label="Visa fit data not yet available for this role." />
-            )}
-          </SectionRow>
-        </PanelCard>
+              }
+            >
+              {hasBlocker ? (
+                <div className="flex items-start gap-2 rounded-lg bg-red-50 px-3 py-2.5 ring-1 ring-red-200">
+                  <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-red-700" aria-hidden />
+                  <div>
+                    <p className="text-[12px] font-semibold text-red-800">Sponsorship blocker detected</p>
+                    <p className="mt-0.5 text-[11px] leading-relaxed text-red-700/80">
+                      The posting contains language suggesting sponsorship may not be available. Verify before applying.
+                    </p>
+                  </div>
+                </div>
+              ) : visaLabelConfig && VisaIcon ? (
+                <div>
+                  <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-semibold ring-1", visaLabelConfig.classes)}>
+                    <VisaIcon className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                    {visaLabelConfig.verdict}
+                  </span>
+                  {intel.visa?.visaFitScore != null && (
+                    <p className="mt-1.5 text-[11px] text-slate-500">Score: {intel.visa.visaFitScore}/100 · {intel.visa.confidence} confidence</p>
+                  )}
+                  {intel.visa?.summary && (
+                    <p className="mt-1.5 text-[11px] leading-relaxed text-slate-500 line-clamp-2">{intel.visa.summary}</p>
+                  )}
+                </div>
+              ) : (
+                <UnknownState label="Visa fit data not yet available for this role." />
+              )}
+            </SectionRow>
+          </PanelCard>
+        </VisaIntelTrigger>
       )}
 
       {/* ── 4. Salary Intelligence ── */}
