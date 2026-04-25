@@ -14,6 +14,7 @@ import {
 } from "lucide-react"
 
 import dynamic from "next/dynamic"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 import CompanyLogo from "@/components/ui/CompanyLogo"
 import { useResumeContext } from "@/components/resume/ResumeProvider"
@@ -134,6 +135,7 @@ export default function JobCard({
   const companyName = job.company?.name ?? "Unknown company"
   const companyDomain = job.company?.domain ?? null
   const companyLogoUrl = job.company?.logo_url ?? null
+  const companyProfileHref = job.company?.id ? `/companies/${job.company.id}` : null
   const companyConf = job.company?.sponsorship_confidence ?? 0
 
   const cardView = resolveJobCardView(job)
@@ -317,7 +319,17 @@ export default function JobCard({
               </h3>
 
               <div className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-1">
-                <span className="text-[14px] font-medium text-slate-700">{companyName}</span>
+                {companyProfileHref ? (
+                  <Link
+                    href={companyProfileHref}
+                    onClick={(e) => e.stopPropagation()}
+                    className="text-[14px] font-medium text-slate-700 transition hover:text-[#2563EB] hover:underline"
+                  >
+                    {companyName}
+                  </Link>
+                ) : (
+                  <span className="text-[14px] font-medium text-slate-700">{companyName}</span>
+                )}
                 {showVerified && (
                   <BadgeCheck
                     className="h-4 w-4 shrink-0 text-[#2563EB]"

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { Briefcase, ExternalLink, Home, MapPin } from "lucide-react"
 import dynamic from "next/dynamic"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 import CompanyLogo from "@/components/ui/CompanyLogo"
 import { useResumeContext } from "@/components/resume/ResumeProvider"
@@ -78,6 +79,7 @@ export default function JobCardV2({
   const companyName = job.company?.name ?? "Unknown company"
   const companyDomain = job.company?.domain ?? null
   const companyLogoUrl = job.company?.logo_url ?? null
+  const companyProfileHref = job.company?.id ? `/companies/${job.company.id}` : null
 
   const intel = useMemo(() => getJobIntelligence(job), [job])
 
@@ -207,7 +209,17 @@ export default function JobCardV2({
 
             {/* Company + posted */}
             <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
-              <span className="text-[13px] font-semibold text-slate-700">{companyName}</span>
+              {companyProfileHref ? (
+                <Link
+                  href={companyProfileHref}
+                  onClick={(e) => e.stopPropagation()}
+                  className="text-[13px] font-semibold text-slate-700 transition hover:text-[#2563EB] hover:underline"
+                >
+                  {companyName}
+                </Link>
+              ) : (
+                <span className="text-[13px] font-semibold text-slate-700">{companyName}</span>
+              )}
               <span aria-hidden className="text-slate-300">·</span>
               <PostedTimeLabel firstDetectedAt={job.first_detected_at} now={now} />
             </div>

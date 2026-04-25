@@ -303,9 +303,18 @@ export default async function DashboardJobDetailPage({ params }: Props) {
                     {displayTitle}
                   </h1>
                   <div className="mt-1 flex items-center gap-1.5">
-                    <span className="text-[14px] font-semibold text-slate-700">
-                      {company?.name ?? "Unknown company"}
-                    </span>
+                    {company?.id ? (
+                      <Link
+                        href={`/companies/${company.id}`}
+                        className="text-[14px] font-semibold text-slate-700 transition hover:text-[#2563EB] hover:underline"
+                      >
+                        {company.name}
+                      </Link>
+                    ) : (
+                      <span className="text-[14px] font-semibold text-slate-700">
+                        {company?.name ?? "Unknown company"}
+                      </span>
+                    )}
                     <BadgeCheck className="h-4 w-4 text-[#2563EB]" strokeWidth={2.5} aria-hidden />
                   </div>
                   <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[13px] text-slate-600">
@@ -483,6 +492,15 @@ export default async function DashboardJobDetailPage({ params }: Props) {
                       <FileText className="h-3.5 w-3.5" aria-hidden />
                       Visit company careers
                     </a>
+                  ) : null}
+                  {company?.id ? (
+                    <Link
+                      href={`/companies/${company.id}`}
+                      className="ml-4 mt-3 inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#2563EB] hover:underline"
+                    >
+                      <Building2 className="h-3.5 w-3.5" aria-hidden />
+                      View immigration profile
+                    </Link>
                   ) : null}
                 </div>
               </div>

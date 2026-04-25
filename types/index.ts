@@ -668,6 +668,60 @@ export type CompanyImmigrationProfileSummary = {
   summary: string | null;
 };
 
+export type CompanyLcaRoleFamily = {
+  label: string;
+  count: number | null;
+  share: number | null;
+  recentFiscalYear: number | null;
+  confidence: IntelligenceConfidence;
+};
+
+export type CompanyLcaWorksite = {
+  label: string;
+  state: string | null;
+  count: number | null;
+  share: number | null;
+  confidence: IntelligenceConfidence;
+};
+
+export type CompanySalaryIntelligenceSummary = {
+  medianWage: number | null;
+  rangeMin: number | null;
+  rangeMax: number | null;
+  commonWageLevel: string | null;
+  sampleSize: number | null;
+  confidence: IntelligenceConfidence;
+  summary: string | null;
+};
+
+export type CompanyStemOptReadinessSummary = {
+  likelyEVerify: boolean | null;
+  hasStemRoleHistory: boolean | null;
+  readiness: 'likely' | 'possible' | 'unknown' | 'limited';
+  confidence: IntelligenceConfidence;
+  summary: string | null;
+};
+
+export type CompanyImmigrationProfile = {
+  companyId: string;
+  companyName: string;
+  overviewSummary: string;
+  sponsorshipHistory: CompanyImmigrationProfileSummary;
+  roleFamilies: CompanyLcaRoleFamily[];
+  worksites: CompanyLcaWorksite[];
+  salaryIntelligence: CompanySalaryIntelligenceSummary;
+  stemOptReadiness: CompanyStemOptReadinessSummary;
+  capExempt: CapExemptSignal;
+  hiringHealth: CompanyHiringHealth;
+  similarCompanyIds: string[];
+  faq: {
+    h1b: string;
+    opt: string;
+    stemOpt: string;
+    sponsoredRoles: string;
+  };
+};
+
 export type ApplicationVerdict = {
   recommendation: ApplyRecommendation | 'watch' | 'avoid' | 'unknown';
   confidence: IntelligenceConfidence;

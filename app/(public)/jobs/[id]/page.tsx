@@ -92,9 +92,13 @@ export default async function PublicJobPage({ params }: Props) {
         <nav className="mb-8 text-sm text-muted-foreground">
           <Link href="/companies" className="transition-colors hover:text-strong">Companies</Link>
           {" / "}
-          <Link href={`/companies/${company?.id}`} className="transition-colors hover:text-strong">
-            {company?.name}
-          </Link>
+          {company?.id ? (
+            <Link href={`/companies/${company.id}`} className="transition-colors hover:text-strong">
+              {company.name}
+            </Link>
+          ) : (
+            <span>Company</span>
+          )}
           {" / "}
           <span className="text-strong">{page.title}</span>
         </nav>
@@ -190,6 +194,14 @@ export default async function PublicJobPage({ params }: Props) {
             >
               Create a free account for alerts like this
             </Link>
+            {company?.id ? (
+              <Link
+                href={`/companies/${company.id}`}
+                className="inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-surface px-5 py-2.5 text-sm font-semibold text-brand-navy transition-colors hover:bg-brand-tint"
+              >
+                View {company.name} immigration profile
+              </Link>
+            ) : null}
           </div>
 
           <p className="mt-8 border-t border-border pt-6 text-center text-xs text-muted-foreground">
