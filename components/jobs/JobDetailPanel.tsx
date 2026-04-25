@@ -83,8 +83,8 @@ function SectionRow({
   children: React.ReactNode
 }) {
   return (
-    <div className="px-4 py-3">
-      <div className="mb-2 flex items-center justify-between gap-2">
+    <div className="px-4 pt-3 pb-4">
+      <div className="mb-2.5 flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5">
           <Icon className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden />
           <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-500">{label}</span>
@@ -93,7 +93,7 @@ function SectionRow({
           <button
             type="button"
             onClick={onViewBreakdown}
-            className="inline-flex items-center gap-0.5 text-[11px] font-semibold text-[#2563EB] hover:underline focus-visible:outline-none"
+            className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[11px] font-semibold text-[#2563EB] transition hover:bg-blue-50 focus-visible:outline-none"
           >
             Details
             <ChevronRight className="h-3 w-3" aria-hidden />

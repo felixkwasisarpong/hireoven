@@ -1,6 +1,7 @@
 "use client"
 
-import { useEffect, useId } from "react"
+import { useEffect, useId, useState } from "react"
+import { createPortal } from "react-dom"
 import {
   AlertTriangle,
   CheckCircle2,
@@ -152,6 +153,10 @@ function StatTile({ label, value }: { label: string; value: string }) {
 // ---------------------------------------------------------------------------
 
 export default function VisaIntelDrawer({ job, displayTitle, onClose }: Props) {
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => { setMounted(true) }, [])
+
   // Close on Escape
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose() }
@@ -198,19 +203,19 @@ export default function VisaIntelDrawer({ job, displayTitle, onClose }: Props) {
 
   const sponsorshipTrend = intel.companyHiringHealth?.sponsorshipTrend ?? "unknown"
 
-  return (
-    <div className="fixed inset-0 z-50 flex justify-end">
+  const drawer = (
+    <div className="fixed inset-0 z-[200] flex justify-end">
       {/* Backdrop */}
       <button
         type="button"
         aria-label="Close visa intelligence drawer"
-        className="absolute inset-0 bg-slate-900/40 backdrop-blur-[1px]"
+        className="animate-fade-in-backdrop absolute inset-0 bg-slate-900/40 backdrop-blur-[1px]"
         onClick={onClose}
       />
 
       {/* Drawer panel */}
       <aside
-        className="relative z-10 flex h-full w-full max-w-[520px] flex-col border-l border-slate-200 bg-white shadow-2xl"
+        className="animate-slide-in-right relative z-10 flex h-full w-full max-w-[520px] flex-col border-l border-slate-200 bg-white shadow-2xl"
         role="dialog"
         aria-modal="true"
         aria-label="Visa Intelligence breakdown"
@@ -482,4 +487,7 @@ export default function VisaIntelDrawer({ job, displayTitle, onClose }: Props) {
       </aside>
     </div>
   )
+
+  if (!mounted) return null
+  return createPortal(drawer, document.body)
 }
