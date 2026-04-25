@@ -733,11 +733,15 @@ export type CompanyImmigrationProfile = {
 };
 
 export type ApplicationVerdict = {
+  verdict: 'Apply Today' | 'Apply, But Customize Resume' | 'Maybe' | 'Skip' | 'High Risk' | 'Unknown';
   recommendation: ApplyRecommendation | 'watch' | 'avoid' | 'unknown';
   confidence: IntelligenceConfidence;
   score: number | null;
+  priorityScore: number | null;
   reasons: string[];
+  warnings: string[];
   blockers: string[];
+  recommendedNextAction: string | null;
   nextBestAction: string | null;
   computedAt: string | null;
 };

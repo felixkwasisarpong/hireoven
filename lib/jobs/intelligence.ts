@@ -17,6 +17,7 @@ import type {
   StemOptReadiness,
   VisaIntelligence,
 } from "@/types"
+import { applicationVerdictResultToIntelligence, calculateApplicationVerdict } from "@/lib/jobs/application-verdict"
 import { capExemptDetectionToSignal, detectCapExemptSignal } from "@/lib/jobs/cap-exempt-signal"
 import { calculateGhostJobRisk, ghostJobRiskResultToIntelligence } from "@/lib/jobs/ghost-job-risk"
 import { calculateLcaSalaryIntelligence } from "@/lib/jobs/lca-salary-intelligence"
@@ -243,11 +244,15 @@ export const createCompanyImmigrationProfileFallback = (
 export const createApplicationVerdictFallback = (
   application?: Pick<JobApplication, "match_score" | "created_at" | "updated_at"> | null
 ): ApplicationVerdict => ({
+  verdict: "Unknown",
   recommendation: "unknown",
   confidence: "unknown",
   score: clampIntelligenceScore(application?.match_score),
+  priorityScore: clampIntelligenceScore(application?.match_score),
   reasons: [],
+  warnings: [],
   blockers: [],
+  recommendedNextAction: null,
   nextBestAction: null,
   computedAt: application?.updated_at ?? application?.created_at ?? null,
 })
@@ -299,6 +304,23 @@ export const createJobIntelligenceFallback = (
 ): JobIntelligence => {
   const sources = options.sources ?? ["system"]
   const visa = createVisaIntelligenceFallback(job)
+  const lcaSalary = createLcaSalaryIntelligenceFallback(job)
+  const ghostJobRisk = createGhostJobRiskFallback(job, options.now)
+  const companyHiringHealth = createCompanyHiringHealthFallback(job?.company as Company | null)
+  const matchScore = createMatchScoreBreakdownFallback(job?.match_score)
+  const applicationVerdict = applicationVerdictResultToIntelligence(
+    calculateApplicationVerdict({
+      resumeMatchScore: matchScore.overallScore,
+      visaFitScore: visa.visaFitScore,
+      visaRelevant: Boolean(job?.sponsors_h1b || job?.company?.sponsors_h1b || job?.requires_authorization),
+      sponsorshipBlocker: visa.blockers.find((blocker) => blocker.detected) ?? null,
+      salaryAlignment: lcaSalary?.comparisonLabel ?? null,
+      ghostJobRisk,
+      jobFreshnessDays: ghostJobRisk.freshnessDays,
+      companyHiringHealth,
+    }),
+    null
+  )
 
   return {
     schemaVersion: INTELLIGENCE_SCHEMA_VERSION,
@@ -306,13 +328,13 @@ export const createJobIntelligenceFallback = (
     sources,
     visa,
     sponsorshipBlockers: [],
-    lcaSalary: createLcaSalaryIntelligenceFallback(job),
+    lcaSalary,
     stemOpt: createStemOptReadinessFallback(),
     capExempt: visa.capExempt,
-    ghostJobRisk: createGhostJobRiskFallback(job, options.now),
-    companyHiringHealth: createCompanyHiringHealthFallback(job?.company as Company | null),
-    applicationVerdict: null,
-    matchScore: createMatchScoreBreakdownFallback(job?.match_score),
+    ghostJobRisk,
+    companyHiringHealth,
+    applicationVerdict,
+    matchScore,
     postedFreshness: getPostedFreshness(job as Job | null, options.now),
     companyImmigrationProfile: createCompanyImmigrationProfileFallback(job?.company as Company | null),
     summary: null,

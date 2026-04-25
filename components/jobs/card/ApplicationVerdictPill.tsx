@@ -18,12 +18,12 @@ const CONFIG: Partial<
   apply_now: {
     icon: CheckCircle2,
     classes: "bg-emerald-50 text-emerald-800 ring-emerald-200",
-    text: "Apply Now",
+    text: "Apply Today",
   },
   apply_with_tweaks: {
     icon: Eye,
     classes: "bg-sky-50 text-sky-800 ring-sky-200",
-    text: "Apply with tweaks",
+    text: "Customize Resume",
   },
   watch: {
     icon: Eye,
@@ -38,7 +38,12 @@ const CONFIG: Partial<
   avoid: {
     icon: XCircle,
     classes: "bg-red-50 text-red-800 ring-red-200",
-    text: "Avoid",
+    text: "High Risk",
+  },
+  skip: {
+    icon: XCircle,
+    classes: "bg-red-50 text-red-800 ring-red-200",
+    text: "Skip",
   },
 }
 
@@ -60,7 +65,7 @@ export function ApplicationVerdictPill({ verdict, className }: ApplicationVerdic
       title={verdict.reasons?.[0] ?? undefined}
     >
       <Icon className="h-3 w-3 shrink-0" aria-hidden />
-      {config.text}
+      {verdict.verdict && verdict.verdict !== "Unknown" ? verdict.verdict : config.text}
     </span>
   )
 }

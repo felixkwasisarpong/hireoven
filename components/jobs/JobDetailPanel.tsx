@@ -609,18 +609,23 @@ export default function JobDetailPanel({
             <p className={cn(
               "text-[12px] font-semibold",
               intel.applicationVerdict.recommendation === "apply_now" ? "text-emerald-700" :
-              intel.applicationVerdict.recommendation === "avoid" ? "text-red-700" :
+              intel.applicationVerdict.recommendation === "avoid" || intel.applicationVerdict.recommendation === "skip" ? "text-red-700" :
               "text-slate-700"
             )}>
-              {intel.applicationVerdict.recommendation === "apply_now" ? "Apply now" :
-               intel.applicationVerdict.recommendation === "apply_with_tweaks" ? "Apply with tweaks" :
-               intel.applicationVerdict.recommendation === "stretch_role" ? "Stretch role" :
-               intel.applicationVerdict.recommendation === "avoid" ? "Not recommended" :
-               intel.applicationVerdict.recommendation === "watch" ? "Monitor this role" :
-               "Review carefully"}
+              {intel.applicationVerdict.verdict !== "Unknown"
+                ? intel.applicationVerdict.verdict
+                : intel.applicationVerdict.recommendation === "apply_now" ? "Apply Today" :
+                 intel.applicationVerdict.recommendation === "apply_with_tweaks" ? "Apply, But Customize Resume" :
+                 intel.applicationVerdict.recommendation === "avoid" ? "High Risk" :
+                 intel.applicationVerdict.recommendation === "skip" ? "Skip" :
+                 intel.applicationVerdict.recommendation === "watch" ? "Maybe" :
+                 "Review carefully"}
             </p>
-            {intel.applicationVerdict.nextBestAction && (
-              <p className="mt-1 text-[11px] text-slate-500">{intel.applicationVerdict.nextBestAction}</p>
+            {intel.applicationVerdict.recommendedNextAction && (
+              <p className="mt-1 text-[11px] text-slate-500">{intel.applicationVerdict.recommendedNextAction}</p>
+            )}
+            {intel.applicationVerdict.warnings.length > 0 && (
+              <p className="mt-1 text-[11px] text-amber-700">{intel.applicationVerdict.warnings.slice(0, 1).join(" ")}</p>
             )}
           </SectionRow>
         </PanelCard>
