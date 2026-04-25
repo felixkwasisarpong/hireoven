@@ -8,6 +8,7 @@ import {
   LayoutGrid,
   LifeBuoy,
   Mails,
+  Plane,
   Settings,
   Wand2,
 } from "lucide-react"
@@ -30,6 +31,7 @@ export const DASHBOARD_NAV_ITEMS: DashboardNavItem[] = [
   { label: "Watchlist", href: "/dashboard/watchlist", icon: BookmarkCheck },
   { label: "Alerts", href: "/dashboard/alerts", icon: Bell },
   { label: "Companies", href: "/dashboard/companies", icon: Building2 },
+  { label: "International", href: "/dashboard/international", icon: Plane },
   { label: "Settings", href: "/dashboard/billing", icon: Settings, dividerAbove: true },
   {
     label: "Help & support",

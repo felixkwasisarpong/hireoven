@@ -93,6 +93,31 @@ export default function InternationalPage() {
             <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.28em] text-muted-foreground">
               OPT Command Center
             </p>
+
+            {/* OPT Survival Dashboard CTA */}
+            <div className="surface-card mb-4 overflow-hidden rounded-2xl p-6">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-[10.5px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                    New
+                  </p>
+                  <h2 className="mt-1 text-[17px] font-semibold text-strong">
+                    OPT Survival Dashboard
+                  </h2>
+                  <p className="mt-1 max-w-md text-sm text-muted-foreground">
+                    Track your authorization timeline, unemployment days, and get a personalised weekly
+                    application target — all in one place.
+                  </p>
+                </div>
+                <Link
+                  href="/dashboard/international/opt-dashboard"
+                  className="shrink-0 rounded-xl bg-[hsl(var(--accent))] px-5 py-2.5 text-[13px] font-semibold text-white shadow-sm transition hover:opacity-90"
+                >
+                  Open dashboard →
+                </Link>
+              </div>
+            </div>
+
             <div className="surface-card p-6">
               <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
                 <div>
@@ -114,6 +139,13 @@ export default function InternationalPage() {
                     </p>
                     <div className="space-y-2">
                       <Link
+                        href="/dashboard/international/opt-dashboard"
+                        className="flex items-center justify-between rounded-xl border border-[hsl(var(--accent-soft-border))] bg-[hsl(var(--accent))]/8 px-4 py-3 text-sm font-semibold text-[hsl(var(--accent))] transition hover:bg-[hsl(var(--accent))]/12"
+                      >
+                        OPT Survival Dashboard
+                        <span>→</span>
+                      </Link>
+                      <Link
                         href="/dashboard/international#companies"
                         className="flex items-center justify-between rounded-xl border border-border bg-surface px-4 py-3 text-sm font-medium text-strong transition hover:border-[hsl(var(--accent-soft-border))] hover:bg-brand-tint"
                       >
@@ -132,13 +164,6 @@ export default function InternationalPage() {
                         className="flex items-center justify-between rounded-xl border border-border bg-surface px-4 py-3 text-sm font-medium text-strong transition hover:border-[hsl(var(--accent-soft-border))] hover:bg-brand-tint"
                       >
                         Search the DOL LCA database
-                        <span className="text-muted-foreground">→</span>
-                      </Link>
-                      <Link
-                        href="/dashboard/onboarding"
-                        className="flex items-center justify-between rounded-xl border border-border bg-surface px-4 py-3 text-sm font-medium text-strong transition hover:border-[hsl(var(--accent-soft-border))] hover:bg-brand-tint"
-                      >
-                        Update OPT end date
                         <span className="text-muted-foreground">→</span>
                       </Link>
                     </div>
