@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { Check, Facebook, Linkedin, Link2, Twitter } from "lucide-react"
 
 type Props = {
@@ -14,11 +14,11 @@ const BTN_BASE =
 
 export default function JobShareRow({ jobTitle, shareUrl }: Props) {
   const [copied, setCopied] = useState(false)
-
-  const url =
-    typeof window !== "undefined"
-      ? shareUrl ?? window.location.href
-      : shareUrl ?? ""
+  // Defer window.location to after hydration so server and client render identical hrefs
+  const [url, setUrl] = useState(shareUrl ?? "")
+  useEffect(() => {
+    setUrl(shareUrl ?? window.location.href)
+  }, [shareUrl])
 
   const copy = useCallback(async () => {
     try {
