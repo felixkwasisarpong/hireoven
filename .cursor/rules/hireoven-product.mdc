@@ -1,0 +1,37 @@
+You are working on Hireoven, a premium AI job board for all job seekers, with deeper intelligence for international students.
+
+Core product principles:
+- Do not change existing business logic unless explicitly asked.
+- Preserve current design language, theme, spacing, and component architecture.
+- Prefer small, composable components.
+- Use TypeScript strictly.
+- Avoid mock-only features unless clearly marked.
+- Every new feature should be production-oriented and data-model ready.
+- Sponsorship features must be careful: do not present immigration conclusions as legal advice.
+- If a job description explicitly says no sponsorship, do not show optimistic H1B probability. Show a sponsorship blocker instead.
+- Keep UI clean. Do not overload job cards.
+- Use drawers, tabs, tooltips, and expandable breakdowns for detailed intelligence.
+- Make features useful for all users, not only international students.
+
+Product intelligence layers:
+- Resume match score
+- Visa Fit Score
+- Sponsorship blocker detection
+- LCA salary intelligence
+- STEM OPT readiness
+- Cap-exempt employer signal
+- Ghost job risk
+- Company hiring health
+- Application verdict
+- OPT/STEM timeline dashboard
+- Company immigration profile
+- Resume-to-role alignment
+- Recruiter/referral messaging
+
+Coding style:
+- Use existing UI primitives/components where possible.
+- If creating new components, place them in the correct feature/module folder.
+- Keep server/client boundaries correct.
+- Do not introduce unnecessary dependencies.
+- Add types, utility functions, and tests where practical.
+- Add comments only where logic is non-obvious.

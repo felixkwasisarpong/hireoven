@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { Resend } from "resend"
 import { getRecentJobsFromEmail } from "@/lib/email/identity"
 import { requireCronAuth } from "@/lib/env"
+import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
 import { getPostgresPool } from "@/lib/postgres/server"
 
 export const dynamic = "force-dynamic"
@@ -263,6 +264,7 @@ export async function GET(request: NextRequest) {
          AND jms.overall_score >= 75
          AND jobs.first_detected_at >= $2
          AND jobs.is_active = true
+         AND ${sqlJobLocatedInUsa("jobs")}
        ORDER BY jms.overall_score DESC, jobs.first_detected_at DESC
        LIMIT 1000`,
       [resumeRecipients.map((user) => user.id), withResumeSince]
@@ -345,6 +347,7 @@ export async function GET(request: NextRequest) {
        FROM jobs
        LEFT JOIN companies ON companies.id = jobs.company_id
        WHERE jobs.is_active = true
+         AND ${sqlJobLocatedInUsa("jobs")}
          AND jobs.first_detected_at >= $1
        ORDER BY jobs.first_detected_at DESC
        LIMIT 5`,

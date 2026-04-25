@@ -16,6 +16,13 @@ function getInitials(name?: string | null, email?: string | null) {
     .join("")
 }
 
+function firstName(fullName?: string | null, email?: string | null) {
+  const fromName = fullName?.trim().split(/\s+/)[0]
+  if (fromName) return fromName
+  const local = email?.trim().split("@")[0]
+  return local || "Account"
+}
+
 export default function DashboardUserMenu() {
   const [open, setOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -38,7 +45,7 @@ export default function DashboardUserMenu() {
         type="button"
         onClick={() => setOpen((o) => !o)}
         className={cn(
-          "flex h-11 max-w-[200px] items-center gap-1.5 rounded-full border border-[#D7DCEA] bg-white py-1 pl-1 pr-2 transition-colors",
+          "flex h-9 max-w-[220px] items-center gap-2 rounded-full border border-[#D7DCEA] bg-white py-0.5 pl-0.5 pr-2.5 text-[13px] transition-colors",
           "hover:border-[#B9C3DE] hover:bg-[#F6F8FD]"
         )}
         aria-expanded={open}
@@ -50,13 +57,16 @@ export default function DashboardUserMenu() {
           <img
             src={profile.avatar_url}
             alt=""
-            className="h-8 w-8 rounded-lg object-cover"
+            className="h-7 w-7 rounded-full object-cover"
           />
         ) : (
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#FBEEDF] text-xs font-bold text-brand-navy">
+          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#FBEEDF] text-[11px] font-bold text-brand-navy">
             {getInitials(profile?.full_name, profile?.email)}
           </div>
         )}
+        <span className="hidden min-w-0 max-w-[120px] truncate font-medium text-slate-800 sm:inline">
+          {authLoading ? "…" : firstName(profile?.full_name, profile?.email ?? user?.email)}
+        </span>
         <ChevronDown
           className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")}
           aria-hidden

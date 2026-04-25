@@ -5,6 +5,7 @@ export type AtsType =
   | "workday"
   | "icims"
   | "bamboohr"
+  | "jobvite"
   | "custom"
 
 export type AtsEvidence = {
@@ -67,6 +68,17 @@ const RULES: SignatureRule[] = [
       if (url.includes(".icims.com")) return "URL host matches *.icims.com"
       if (html.includes(".icims.com")) return "HTML references icims domain"
       if (html.includes("icims applicant tracking")) return "iCIMS text marker found"
+      return null
+    },
+  },
+  {
+    atsType: "jobvite",
+    confidence: "high",
+    test: ({ url, html }) => {
+      if (url.includes("jobs.jobvite.com")) return "URL host matches jobs.jobvite.com"
+      if (url.includes("jobvite.com")) return "URL host matches jobvite.com"
+      if (html.includes("jobs.jobvite.com")) return "HTML references jobs.jobvite.com"
+      if (html.includes("jobvite")) return "Jobvite markers found"
       return null
     },
   },

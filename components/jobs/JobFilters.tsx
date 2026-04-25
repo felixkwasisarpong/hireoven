@@ -7,13 +7,6 @@ import {
   useSearchParams,
   type ReadonlyURLSearchParams,
 } from "next/navigation"
-import {
-  Briefcase,
-  ChevronRight,
-  ClipboardList,
-  Clock3,
-  Sparkles,
-} from "lucide-react"
 import { cn } from "@/lib/utils"
 import type {
   EmploymentType,
@@ -64,10 +57,61 @@ export const SORT_OPTIONS: {
   { value: "relevant", label: "Most relevant" },
 ]
 
-type FilterPill = {
+export type FilterPillTone =
+  | "sponsorship"
+  | "location"
+  | "employment"
+  | "posted"
+  | "remote"
+  | "skills"
+  | "industry"
+  | "default"
+
+export type FilterPill = {
   id: string
   label: string
   nextFilters: JobFilters
+  tone: FilterPillTone
+}
+
+/** Full filter reset for “clear all” (booleans explicit; sort preserved by caller if desired). */
+export function clearedJobFilters(): JobFilters {
+  return {
+    remote: false,
+    hybrid: false,
+    onsite: false,
+    sponsorship: false,
+    seniority: undefined,
+    employment_type: undefined,
+    within: "all",
+    company_ids: undefined,
+    sort: undefined,
+    locationQuery: undefined,
+    min_salary: undefined,
+    skills: undefined,
+    industryQuery: undefined,
+  }
+}
+
+export function pillToneClasses(tone: FilterPillTone): string {
+  switch (tone) {
+    case "sponsorship":
+      return "border-emerald-200/90 bg-emerald-50 text-emerald-900 hover:bg-emerald-100/90"
+    case "location":
+      return "border-sky-200/90 bg-sky-50 text-[#0052CC] hover:bg-sky-100/80"
+    case "employment":
+      return "border-violet-200/90 bg-violet-50 text-violet-900 hover:bg-violet-100/80"
+    case "posted":
+      return "border-slate-200/90 bg-slate-50 text-slate-800 hover:bg-slate-100/90"
+    case "remote":
+      return "border-cyan-200/90 bg-cyan-50 text-cyan-900 hover:bg-cyan-100/80"
+    case "skills":
+      return "border-amber-200/90 bg-amber-50 text-amber-950 hover:bg-amber-100/80"
+    case "industry":
+      return "border-teal-200/90 bg-teal-50 text-teal-900 hover:bg-teal-100/80"
+    default:
+      return "border-slate-200/90 bg-slate-50 text-slate-800 hover:bg-slate-100/90"
+  }
 }
 
 function parseList<T extends string>(
@@ -90,16 +134,35 @@ export function parseJobFilters(
   params: URLSearchParams | ReadonlyURLSearchParams
 ): JobFilters {
   const within = (params.get("within") as JobWithinWindow | null) ?? "all"
-  const sort = (params.get("sort") as JobSortOption | null) ?? "freshest"
+  const sortParam = params.get("sort") as JobSortOption | null
+  const sort = sortParam && ["freshest", "match", "relevant"].includes(sortParam)
+    ? (sortParam as JobSortOption)
+    : undefined
+
+  const minSalaryRaw = params.get("min_salary")
+  const minSalaryNum = minSalaryRaw ? Number(minSalaryRaw) : NaN
+  const min_salary = Number.isFinite(minSalaryNum) && minSalaryNum > 0
+    ? Math.floor(minSalaryNum)
+    : undefined
+
+  const skillsRaw = parseList<string>(params, "skills")
+  const skills =
+    skillsRaw?.map((s) => s.trim()).filter(Boolean).length ? skillsRaw.map((s) => s.trim()) : undefined
 
   return {
     remote: params.get("remote") === "true",
+    hybrid: params.get("hybrid") === "true",
+    onsite: params.get("onsite") === "true",
     sponsorship: params.get("sponsorship") === "true",
     seniority: parseList<SeniorityLevel>(params, "seniority"),
     employment_type: parseList<EmploymentType>(params, "employment"),
     within,
     company_ids: parseList<string>(params, "companies"),
     sort,
+    locationQuery: params.get("location")?.trim() || undefined,
+    min_salary,
+    skills,
+    industryQuery: params.get("industry")?.trim() || undefined,
   }
 }
 
@@ -108,10 +171,25 @@ export function filtersToSearchParams(
   filters: JobFilters
 ) {
   const next = new URLSearchParams(current.toString())
-  next.delete("location")
+
+  const loc = filters.locationQuery?.trim()
+  if (loc) next.set("location", loc)
+  else next.delete("location")
+
+  if (filters.min_salary != null && filters.min_salary > 0) {
+    next.set("min_salary", String(filters.min_salary))
+  } else {
+    next.delete("min_salary")
+  }
 
   if (filters.remote) next.set("remote", "true")
   else next.delete("remote")
+
+  if (filters.hybrid) next.set("hybrid", "true")
+  else next.delete("hybrid")
+
+  if (filters.onsite) next.set("onsite", "true")
+  else next.delete("onsite")
 
   if (filters.sponsorship) next.set("sponsorship", "true")
   else next.delete("sponsorship")
@@ -131,8 +209,16 @@ export function filtersToSearchParams(
   if (companyIds?.length) next.set("companies", companyIds.join(","))
   else next.delete("companies")
 
-  if (filters.sort && filters.sort !== "freshest") next.set("sort", filters.sort)
+  if (filters.sort) next.set("sort", filters.sort)
   else next.delete("sort")
+
+  const skills = normalizeArray(filters.skills)
+  if (skills?.length) next.set("skills", skills.join(","))
+  else next.delete("skills")
+
+  const industry = filters.industryQuery?.trim()
+  if (industry) next.set("industry", industry)
+  else next.delete("industry")
 
   return next
 }
@@ -145,40 +231,58 @@ export function buildFilterPills(filters: JobFilters): FilterPill[] {
       id: "remote",
       label: "Remote only",
       nextFilters: { ...filters, remote: false },
+      tone: "remote",
+    })
+  }
+
+  if (filters.hybrid) {
+    pills.push({
+      id: "hybrid",
+      label: "Hybrid",
+      nextFilters: { ...filters, hybrid: false },
+      tone: "default",
+    })
+  }
+
+  if (filters.onsite) {
+    pills.push({
+      id: "onsite",
+      label: "On-site",
+      nextFilters: { ...filters, onsite: false },
+      tone: "default",
     })
   }
 
   if (filters.sponsorship) {
     pills.push({
       id: "sponsorship",
-      label: "Needs sponsorship",
+      label: "Sponsorship available",
       nextFilters: { ...filters, sponsorship: false },
+      tone: "sponsorship",
     })
   }
 
-  for (const option of SENIORITY_OPTIONS) {
-    if (!filters.seniority?.includes(option.value)) continue
+  if (filters.seniority?.length) {
+    const labels = filters.seniority
+      .map((v) => SENIORITY_OPTIONS.find((o) => o.value === v)?.label ?? v)
+      .join(", ")
     pills.push({
-      id: `seniority-${option.value}`,
-      label: option.label,
-      nextFilters: {
-        ...filters,
-        seniority: filters.seniority.filter((value) => value !== option.value),
-      },
+      id: "seniority-group",
+      label: labels,
+      nextFilters: { ...filters, seniority: undefined },
+      tone: "default",
     })
   }
 
-  for (const option of EMPLOYMENT_OPTIONS) {
-    if (!filters.employment_type?.includes(option.value)) continue
+  if (filters.employment_type?.length) {
+    const labels = filters.employment_type
+      .map((v) => EMPLOYMENT_OPTIONS.find((o) => o.value === v)?.label ?? v)
+      .join(", ")
     pills.push({
-      id: `employment-${option.value}`,
-      label: option.label,
-      nextFilters: {
-        ...filters,
-        employment_type: filters.employment_type.filter(
-          (value) => value !== option.value
-        ),
-      },
+      id: "employment-group",
+      label: labels,
+      nextFilters: { ...filters, employment_type: undefined },
+      tone: "employment",
     })
   }
 
@@ -189,6 +293,7 @@ export function buildFilterPills(filters: JobFilters): FilterPill[] {
         id: "within",
         label: option.label,
         nextFilters: { ...filters, within: "all" },
+        tone: "posted",
       })
     }
   }
@@ -201,6 +306,43 @@ export function buildFilterPills(filters: JobFilters): FilterPill[] {
           ? "1 company selected"
           : `${filters.company_ids.length} companies selected`,
       nextFilters: { ...filters, company_ids: undefined },
+      tone: "default",
+    })
+  }
+
+  if (filters.locationQuery?.trim()) {
+    pills.push({
+      id: "location",
+      label: filters.locationQuery.trim(),
+      nextFilters: { ...filters, locationQuery: undefined },
+      tone: "location",
+    })
+  }
+
+  if (filters.min_salary && filters.min_salary > 0) {
+    pills.push({
+      id: "min_salary",
+      label: `$${(filters.min_salary / 1000).toFixed(0)}k+`,
+      nextFilters: { ...filters, min_salary: undefined },
+      tone: "default",
+    })
+  }
+
+  if (filters.skills?.length) {
+    pills.push({
+      id: "skills",
+      label: filters.skills.join(", "),
+      nextFilters: { ...filters, skills: undefined },
+      tone: "skills",
+    })
+  }
+
+  if (filters.industryQuery?.trim()) {
+    pills.push({
+      id: "industry",
+      label: filters.industryQuery.trim(),
+      nextFilters: { ...filters, industryQuery: undefined },
+      tone: "industry",
     })
   }
 
@@ -228,24 +370,27 @@ function FilterToggle({
       role="switch"
       aria-checked={checked}
       onClick={() => onChange(!checked)}
-      className="flex w-full items-center justify-between rounded-xl border border-transparent px-2 py-1 text-left transition-colors"
+      className="flex w-full items-center justify-between rounded-xl border border-transparent px-2 py-1.5 text-left transition-colors hover:bg-black/[0.02]"
     >
       <span
-        className={`text-sm ${
-          accent ? "font-medium text-[#5C4EE5]" : "text-[#223050]"
-        }`}
+        className={cn(
+          "text-[13px] font-medium",
+          accent ? "text-[#5C4EE5]" : "text-[#344054]"
+        )}
       >
         {label}
       </span>
       <span
-        className={`relative inline-flex h-6 w-10 items-center rounded-full transition-colors ${
-          checked ? "bg-[#614DF0]" : "bg-[#D6DBE7]"
-        }`}
+        className={cn(
+          "relative inline-flex h-6 w-10 shrink-0 items-center rounded-full transition-colors",
+          checked ? "bg-[#F97316]" : "bg-[#E5E7EB]"
+        )}
       >
         <span
-          className={`inline-block h-4 w-4 rounded-full bg-white shadow transition ${
+          className={cn(
+            "inline-block h-4 w-4 rounded-full bg-white shadow transition",
             checked ? "translate-x-5" : "translate-x-1"
-          }`}
+          )}
         />
       </span>
     </button>
@@ -266,19 +411,19 @@ function CheckboxOption<T extends string>({
   onChange: (checked: boolean) => void
 }) {
   return (
-    <label className="flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors hover:bg-[#F3F5FC]">
+    <label className="flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors hover:bg-black/[0.03]">
       <input
         type="checkbox"
         checked={checked}
         onChange={(event) => onChange(event.target.checked)}
-        className="h-4 w-4 rounded border-[#C8CFDF] text-[#5E4EF1] focus:ring-[#5E4EF1]"
+        className="h-4 w-4 rounded border-[#D0D5DD] text-[#F97316] focus:ring-[#F97316]/40"
       />
       {Icon && (
         <span className={cn("inline-flex h-4 w-4 items-center justify-center rounded-md", iconClassName)}>
           <Icon className="h-3 w-3" />
         </span>
       )}
-      <span className="text-sm text-strong">{label}</span>
+      <span className="text-[13px] font-medium text-[#344054]">{label}</span>
     </label>
   )
 }
@@ -317,91 +462,87 @@ export default function JobFilters({
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
-          Filters
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#98A2B3]">
+          Filter jobs
         </p>
         {pills.length > 0 && (
           <button
             type="button"
             onClick={() =>
               replaceFilters({
-                ...filters,
-                remote: false,
-                sponsorship: false,
-                seniority: undefined,
-                employment_type: undefined,
-                company_ids: undefined,
-                within: "all",
+                ...clearedJobFilters(),
+                sort: filters.sort,
               })
             }
-            className="text-xs font-medium text-muted-foreground transition-colors hover:text-strong"
+            className="text-xs font-semibold text-[#F97316] transition-colors hover:text-[#EA580C]"
           >
             Clear
           </button>
         )}
       </div>
 
-      <div className="space-y-3 border-b border-border/70 pb-4">
-        <FilterToggle
-          checked={Boolean(filters.remote)}
-          label="Remote only"
-          onChange={(checked) =>
-            replaceFilters({ ...filters, remote: checked || undefined })
-          }
-        />
-        <FilterToggle
-          checked={Boolean(filters.sponsorship)}
-          label="Needs sponsorship"
-          accent={isInternational}
-          onChange={(checked) =>
-            replaceFilters({ ...filters, sponsorship: checked || undefined })
-          }
-        />
+      <div className="space-y-2 border-b border-[#E9ECF2] pb-4">
+        <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#98A2B3]">Work mode</p>
+        <div className="space-y-1">
+          <FilterToggle
+            checked={Boolean(filters.remote)}
+            label="Remote only"
+            onChange={(checked) =>
+              replaceFilters({ ...filters, remote: checked || undefined })
+            }
+          />
+          <FilterToggle
+            checked={Boolean(filters.hybrid)}
+            label="Hybrid"
+            onChange={(checked) =>
+              replaceFilters({ ...filters, hybrid: checked || undefined })
+            }
+          />
+          <FilterToggle
+            checked={Boolean(filters.onsite)}
+            label="On-site"
+            onChange={(checked) =>
+              replaceFilters({ ...filters, onsite: checked || undefined })
+            }
+          />
+        </div>
+        {isInternational && (
+          <div className="pt-1">
+            <FilterToggle
+              checked={Boolean(filters.sponsorship)}
+              label="Visa / sponsorship"
+              accent
+              onChange={(checked) =>
+                replaceFilters({ ...filters, sponsorship: checked || undefined })
+              }
+            />
+          </div>
+        )}
       </div>
 
-      <div className="border-b border-border/70 pb-4">
-        <p className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Seniority level</p>
-        <div className="space-y-1">
+      <div className="border-b border-[#E9ECF2] pb-4">
+        <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.16em] text-[#98A2B3]">Experience level</p>
+        <div className="space-y-0.5">
           {SENIORITY_OPTIONS.map((option) => (
             <CheckboxOption
               key={option.value}
               checked={filters.seniority?.includes(option.value) ?? false}
               label={option.label}
-              onChange={(checked) =>
-                toggleArray("seniority", option.value, checked)
-              }
+              onChange={(checked) => toggleArray("seniority", option.value, checked)}
             />
           ))}
         </div>
       </div>
 
-      <div className="border-b border-border/70 pb-4">
-        <p className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Employment type</p>
-        <div className="space-y-1">
+      <div className="border-b border-[#E9ECF2] pb-4">
+        <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.16em] text-[#98A2B3]">Job type</p>
+        <div className="space-y-0.5">
           {EMPLOYMENT_OPTIONS.map((option) => (
             <CheckboxOption
               key={option.value}
               checked={filters.employment_type?.includes(option.value) ?? false}
               label={option.label}
-              icon={
-                option.value === "fulltime"
-                  ? Briefcase
-                  : option.value === "parttime"
-                    ? Clock3
-                    : option.value === "contract"
-                      ? ClipboardList
-                      : Sparkles
-              }
-              iconClassName={
-                option.value === "fulltime"
-                  ? "bg-emerald-100 text-emerald-700"
-                  : option.value === "parttime"
-                    ? "bg-violet-100 text-violet-700"
-                    : option.value === "contract"
-                      ? "bg-blue-100 text-blue-700"
-                      : "bg-orange-100 text-orange-700"
-              }
               onChange={(checked) =>
                 toggleArray("employment_type", option.value, checked)
               }
@@ -411,7 +552,7 @@ export default function JobFilters({
       </div>
 
       <div>
-        <p className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Posted within</p>
+        <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.16em] text-[#98A2B3]">Posted within</p>
         <select
           value={filters.within ?? "all"}
           onChange={(event) =>
@@ -420,7 +561,7 @@ export default function JobFilters({
               within: event.target.value as JobWithinWindow,
             })
           }
-          className="w-full rounded-xl border border-[#D7DCEA] bg-white px-3 py-2.5 text-sm text-strong outline-none transition-colors focus:border-[#897EFB] focus:ring-2 focus:ring-[#DBD6FF]"
+          className="w-full rounded-xl border border-[#E4E7EC] bg-white px-3 py-2.5 text-[13px] font-medium text-[#344054] outline-none transition-colors focus:border-[#F97316] focus:ring-2 focus:ring-[#FDBA74]/40"
         >
           {WITHIN_OPTIONS.map((option) => (
             <option key={option.value} value={option.value}>
@@ -428,28 +569,6 @@ export default function JobFilters({
             </option>
           ))}
         </select>
-      </div>
-
-      <div className="rounded-xl border border-[#DCD5F8] bg-[#EEE9FF] p-3">
-        <div className="flex items-start gap-2">
-          <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-[#FCEFD4] text-[#F39B2F]">
-            <Sparkles className="h-4 w-4" />
-          </span>
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-[#1E2A4E]">Unlock all filters</p>
-            <p className="mt-0.5 text-xs leading-4 text-[#7A84A3]">
-              Get better recommendations and priority support.
-            </p>
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={() => router.push("/dashboard/upgrade")}
-          className="mt-3 inline-flex w-full items-center justify-between rounded-lg border border-[#D7CCFF] bg-[#F7F4FF] px-3 py-2 text-sm font-semibold text-[#5E4EF1] transition-colors hover:bg-[#EFEAFF]"
-        >
-          Upgrade now
-          <ChevronRight className="h-4 w-4" />
-        </button>
       </div>
     </div>
   )

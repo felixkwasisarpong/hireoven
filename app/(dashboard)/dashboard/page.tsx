@@ -1,4 +1,6 @@
 import { Suspense } from "react"
+import { getSessionUser } from "@/lib/auth/session-user"
+import { getPostgresPool } from "@/lib/postgres/server"
 import DashboardHomeClient from "./DashboardHomeClient"
 
 function DashboardHomeFallback() {
@@ -15,14 +17,34 @@ function DashboardHomeFallback() {
 }
 
 /**
- * Server Component wrapper so `useSearchParams` inside the client child is bounded by
- * a real Suspense boundary (required by Next.js App Router — client-only page + Suspense
- * often still renders a blank tree).
+ * Pre-resolves the user's primary-resume status server-side so the client doesn't have to
+ * wait for `/api/auth/session` → `/api/resume` round-trips before it knows whether to
+ * request match scores. Eliminates the double-fetch on refresh.
  */
-export default function DashboardPage() {
+async function getInitialPrimaryResumeReady() {
+  const session = await getSessionUser()
+  if (!session?.sub) return false
+  try {
+    const result = await getPostgresPool().query<{ exists: boolean }>(
+      `SELECT EXISTS (
+         SELECT 1 FROM resumes
+         WHERE user_id = $1
+           AND is_primary = true
+           AND parse_status = 'complete'
+       ) AS exists`,
+      [session.sub]
+    )
+    return Boolean(result.rows[0]?.exists)
+  } catch {
+    return false
+  }
+}
+
+export default async function DashboardPage() {
+  const initialPrimaryResumeReady = await getInitialPrimaryResumeReady()
   return (
     <Suspense fallback={<DashboardHomeFallback />}>
-      <DashboardHomeClient />
+      <DashboardHomeClient initialPrimaryResumeReady={initialPrimaryResumeReady} />
     </Suspense>
   )
 }

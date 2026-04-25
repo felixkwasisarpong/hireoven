@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
 import { getPostgresPool } from "@/lib/postgres/server"
 
 export const dynamic = "force-dynamic"
@@ -9,7 +10,9 @@ export async function GET() {
 
     const [companiesResult, jobsResult, crawlResult] = await Promise.all([
       pool.query<{ count: string }>("SELECT COUNT(*)::text AS count FROM companies WHERE is_active = true"),
-      pool.query<{ count: string }>("SELECT COUNT(*)::text AS count FROM jobs WHERE is_active = true"),
+      pool.query<{ count: string }>(
+        `SELECT COUNT(*)::text AS count FROM jobs WHERE is_active = true AND ${sqlJobLocatedInUsa("jobs")}`
+      ),
       pool.query<{ crawled_at: string | null }>(
         "SELECT crawled_at FROM crawl_logs ORDER BY crawled_at DESC LIMIT 1"
       ),

@@ -5,54 +5,54 @@
 @layer base {
   :root {
     /* Core shadcn-compatible */
-    --background: 228 26% 96%;
+    --background: 210 40% 98%;
     --foreground: 222 47% 11%;
     --card: 0 0% 100%;
     --card-foreground: 222 47% 11%;
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
-    --primary: 19 100% 55%;
+    --primary: 220 65% 33%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 220 14% 96%;
+    --secondary: 214 24% 96%;
     --secondary-foreground: 222 47% 11%;
-    --muted: 220 14% 96%;
-    --muted-foreground: 220 9% 42%;
-    --accent: 214 32% 94%;
-    --accent-foreground: 214 84% 18%;
+    --muted: 214 24% 96%;
+    --muted-foreground: 215 16% 47%;
+    --accent: 220 60% 96%;
+    --accent-foreground: 220 65% 22%;
     --destructive: 0 72% 48%;
     --destructive-foreground: 0 0% 100%;
-    --border: 220 13% 88%;
-    --input: 220 13% 88%;
-    --ring: 19 100% 55%;
-    --radius: 0.625rem;
+    --border: 214 32% 91%;
+    --input: 214 24% 88%;
+    --ring: 220 65% 33%;
+    --radius: 0.5rem;
 
     /* Semantic product tokens */
-    --primary-hover: 19 90% 47%;
+    --primary-hover: 220 72% 48%;
     --surface: 0 0% 100%;
-    --surface-alt: 220 16% 96%;
-    --surface-muted: 220 18% 94%;
-    --surface-inset: 220 20% 92%;
+    --surface-alt: 214 24% 97%;
+    --surface-muted: 214 24% 94%;
+    --surface-inset: 214 24% 92%;
     --elev-1: 220 40% 2%;
     --elev-2: 220 30% 6%;
     --text-strong: 222 47% 9%;
-    --text-muted: 220 9% 40%;
-    --text-subtle: 220 8% 48%;
-    --accent-brand: 214 84% 16%;
-    --accent-soft: 24 100% 96%;
-    --accent-soft-border: 24 90% 88%;
-    --success: 152 56% 36%;
-    --success-soft: 152 45% 94%;
+    --text-muted: 215 16% 45%;
+    --text-subtle: 215 14% 52%;
+    --accent-brand: 220 65% 22%;
+    --accent-soft: 220 100% 97%;
+    --accent-soft-border: 220 80% 87%;
+    --success: 142 71% 36%;
+    --success-soft: 142 50% 94%;
     --warning: 32 92% 44%;
     --warning-soft: 38 92% 94%;
     --danger: 0 72% 48%;
     --danger-soft: 0 86% 96%;
 
-    /* Legacy brand hex references (gradients, one-off fixes) */
-    --brand: #ff5c18;
-    --brand-dark: #e14f0e;
-    --brand-navy: #062246;
-    --brand-tint: #fff1e8;
-    --brand-tint-mid: #ffd2b8;
+    /* Brand hex: orange = accent/CTA, navy = primary identity */
+    --brand: #F97316;
+    --brand-dark: #EA580C;
+    --brand-navy: #1E3A8A;
+    --brand-tint: #FFF7ED;
+    --brand-tint-mid: #FED7AA;
   }
 }
 
@@ -67,21 +67,16 @@
 
   body {
     @apply bg-background text-foreground;
-    font-family:
-      var(--font-sans),
-      "Manrope",
-      "Avenir Next",
-      "Segoe UI",
-      sans-serif;
-    font-feature-settings: "ss01" on, "cv01" on, "cv11" on;
+    font-family: var(--font-sans), "Plus Jakarta Sans", system-ui, sans-serif;
+    font-feature-settings: "ss02" on;
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
-    line-height: 1.45;
+    line-height: 1.5;
   }
 
   body.site-chroma {
     position: relative;
-    background: hsl(228 26% 96%);
+    background: hsl(220 20% 97%);
   }
 
   body.site-chroma::before,
@@ -111,7 +106,7 @@
   }
 
   ::selection {
-    background: rgba(255, 92, 24, 0.16);
+    background: rgba(30, 58, 138, 0.12);
   }
 
   *:focus-visible {
@@ -126,13 +121,8 @@
   h5,
   h6 {
     text-wrap: balance;
-    font-family:
-      var(--font-display),
-      "Space Grotesk",
-      "Sora",
-      "Manrope",
-      sans-serif;
-    letter-spacing: -0.018em;
+    font-family: var(--font-sans), "Plus Jakarta Sans", system-ui, sans-serif;
+    letter-spacing: -0.025em;
   }
 
   p {
@@ -146,7 +136,10 @@
   .app-page {
     @apply min-h-screen;
     background-color: hsl(var(--background));
-    background-image: linear-gradient(180deg, hsl(228 26% 96%), hsl(228 28% 95%));
+    background-image:
+      radial-gradient(1100px 480px at 5% -5%, hsl(214 60% 96% / 0.7), transparent 55%),
+      radial-gradient(800px 380px at 95% 0%, hsl(220 50% 97% / 0.6), transparent 50%),
+      linear-gradient(180deg, hsl(210 40% 98%), hsl(214 32% 97%));
   }
 
   .app-shell {
@@ -224,7 +217,7 @@
   /* ── Job rows / lists ───────────────────────────────────────── */
 
   .job-feed-panel {
-    @apply surface-panel overflow-hidden rounded-[14px];
+    @apply surface-panel overflow-hidden rounded-xl;
   }
 
   .data-list-row {
@@ -243,8 +236,8 @@
   }
 
   .dash-header-bar {
-    @apply sticky top-0 z-40 border-b border-border bg-[#F5F6FB]/95 backdrop-blur-xl;
-    background-image: linear-gradient(180deg, hsl(228 26% 96% / 0.98), hsl(228 28% 95% / 0.94));
+    @apply sticky top-0 z-40 border-b border-border/80 bg-white/80 backdrop-blur-xl backdrop-saturate-150;
+    box-shadow: 0 1px 0 hsl(220 14% 91% / 0.65);
   }
 
   .dash-header-bar::after {
@@ -260,14 +253,19 @@
     content: none;
   }
 
+  /** Scoped tokens for the main job feed (mockup-aligned shell). */
+  .dashboard-feed-skin {
+    --dash-primary: #2563eb;
+  }
+
   .neo-hero {
-    @apply surface-panel relative overflow-hidden rounded-[14px] border px-5 py-5 sm:px-7 sm:py-7;
+    @apply surface-panel relative overflow-hidden rounded-xl border px-5 py-5 sm:px-7 sm:py-7;
     background-image:
       linear-gradient(
         90deg,
-        hsl(216 52% 87%) 0%,
-        hsl(218 56% 90%) 54%,
-        hsl(299 42% 88%) 100%
+        hsl(220 55% 91%) 0%,
+        hsl(214 60% 93%) 54%,
+        hsl(220 50% 91%) 100%
       );
     box-shadow: none;
   }
@@ -281,7 +279,7 @@
   }
 
   .neo-strip {
-    @apply rounded-[14px] border border-[#F3DCCF] bg-[#FFF7F1] px-4 py-3;
+    @apply rounded-xl border border-[#FED7AA] bg-[#FFF7ED] px-4 py-3;
     box-shadow: none;
   }
 
@@ -294,9 +292,11 @@
   }
 
   .neo-toolbar {
-    @apply rounded-[14px] border border-border bg-[hsl(var(--surface))] p-3 sm:p-4;
-    background-image: linear-gradient(180deg, hsl(0 0% 100%), hsl(0 0% 100%));
-    box-shadow: none;
+    @apply rounded-xl border border-border/90 bg-[hsl(var(--surface))] p-3 sm:p-4;
+    background-image: linear-gradient(180deg, hsl(0 0% 100%), hsl(220 20% 99.5%));
+    box-shadow:
+      0 1px 2px hsl(220 40% 2% / 0.04),
+      0 4px 12px -4px hsl(220 35% 10% / 0.07);
   }
 
   .neo-toolbar::before {
@@ -304,9 +304,11 @@
   }
 
   .neo-rail-card {
-    @apply overflow-hidden rounded-[14px] border border-border bg-[hsl(var(--surface))] p-4;
-    background-image: linear-gradient(180deg, hsl(0 0% 100%), hsl(0 0% 100%));
-    box-shadow: none;
+    @apply overflow-hidden rounded-xl border border-border/90 bg-[hsl(var(--surface))] p-4;
+    background-image: linear-gradient(180deg, hsl(0 0% 100%), hsl(220 18% 99.5%));
+    box-shadow:
+      0 1px 2px hsl(220 40% 2% / 0.035),
+      0 6px 16px -8px hsl(220 30% 12% / 0.08);
   }
 
   .neo-rail-card::before {
@@ -324,30 +326,52 @@
   }
 
   .neo-nav-link {
-    @apply relative flex items-center gap-3 rounded-[0.95rem] px-3 py-2.5 text-[13px] font-semibold tracking-tight transition-all duration-200;
+    @apply relative flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-semibold tracking-tight transition-all duration-150;
     border: 1px solid transparent;
   }
 
   .neo-nav-link-active {
     @apply text-white;
-    border-color: hsl(249 88% 63% / 0.68);
-    background: linear-gradient(110deg, hsl(238 90% 58%) 0%, hsl(268 88% 64%) 100%);
-    box-shadow: 0 8px 18px -14px rgba(88, 60, 225, 0.8);
+    border-color: hsl(220 65% 28% / 0.25);
+    background: hsl(220 65% 33%);
+    box-shadow:
+      0 1px 0 hsl(0 0% 100% / 0.12) inset,
+      0 4px 10px -5px hsl(220 65% 22% / 0.4);
   }
 
   .neo-nav-link-idle {
-    @apply text-muted-foreground hover:text-strong;
+    color: hsl(215 16% 47%);
     border-color: transparent;
     background: transparent;
   }
 
   .neo-nav-link-idle:hover {
-    border-color: hsl(215 30% 86%);
-    background: hsl(0 0% 100% / 0.8);
+    border-color: hsl(214 32% 91%);
+    background: hsl(210 40% 98%);
+    color: hsl(222 47% 11%);
+  }
+
+  /* White sidebar rail */
+  .neo-sidebar-rail {
+    border-width: 1px;
+    border-style: solid;
+    border-color: hsl(214 32% 91%);
+    background: #FFFFFF;
+    box-shadow: none;
+  }
+
+  .neo-sidebar-rail .neo-nav-link-idle {
+    color: hsl(215 16% 47%);
+  }
+
+  .neo-sidebar-rail .neo-nav-link-idle:hover {
+    border-color: hsl(214 32% 91%);
+    background: hsl(210 40% 98%);
+    color: hsl(222 47% 11%);
   }
 
   .neo-live-pill {
-    @apply inline-flex items-center gap-2 rounded-full border border-[#DDDDF3] bg-white px-3 py-1 text-[11px] font-semibold text-[#6256DB];
+    @apply inline-flex items-center gap-2 rounded-full border border-[#BFDBFE] bg-white px-3 py-1 text-[11px] font-semibold text-[#1E3A8A];
   }
 
   .neo-live-dot {
@@ -355,7 +379,7 @@
     width: 0.5rem;
     height: 0.5rem;
     border-radius: 9999px;
-    background: hsl(250 82% 62%);
+    background: hsl(220 65% 52%);
   }
 
   .neo-live-dot::after {
@@ -363,7 +387,7 @@
     position: absolute;
     inset: -0.35rem;
     border-radius: 9999px;
-    border: 1px solid hsl(250 82% 62% / 0.4);
+    border: 1px solid hsl(220 65% 52% / 0.4);
     animation: pulse-ring 2s ease-out infinite;
   }
 
@@ -429,22 +453,27 @@
   /* ── Product app skin (dashboard, auth, public — not landing) ─────────────── */
 
   .product-skin {
-    --background: 228 26% 96%;
+    --background: 210 40% 98%;
     --surface: 0 0% 100%;
-    --surface-alt: 226 22% 95%;
-    --border: 223 24% 86%;
-    --accent: 24 100% 95%;
-    --accent-foreground: 195 86% 22%;
+    --surface-alt: 214 24% 97%;
+    --border: 214 32% 91%;
+    --accent: 220 100% 97%;
+    --accent-foreground: 220 65% 22%;
   }
 
   .product-skin .app-page {
-    background-image: linear-gradient(180deg, hsl(228 26% 96%), hsl(228 28% 95%));
+    background-image:
+      radial-gradient(1100px 480px at 5% -5%, hsl(214 60% 96% / 0.7), transparent 55%),
+      radial-gradient(800px 380px at 95% 0%, hsl(220 50% 97% / 0.6), transparent 50%),
+      linear-gradient(180deg, hsl(210 40% 98%), hsl(214 32% 97%));
   }
 
   .product-skin .surface-panel {
-    border-color: hsl(223 24% 86%);
-    background-image: linear-gradient(180deg, hsl(0 0% 100%), hsl(0 0% 100%));
-    box-shadow: 0 10px 24px -20px rgba(15, 23, 42, 0.24);
+    border-color: hsl(220 14% 91%);
+    background-image: linear-gradient(180deg, hsl(0 0% 100%), hsl(220 18% 99.5%));
+    box-shadow:
+      0 1px 2px hsl(220 40% 2% / 0.04),
+      0 8px 24px -12px hsl(220 30% 12% / 0.1);
   }
 
   .product-skin .surface-card {
@@ -460,7 +489,7 @@
   }
 
   .product-skin .dash-header-bar {
-    background-image: linear-gradient(180deg, hsl(228 26% 96% / 0.98), hsl(228 28% 95% / 0.95));
+    background-image: linear-gradient(180deg, hsl(0 0% 100% / 0.92), hsl(220 20% 99% / 0.88));
   }
 
   .product-skin .glass-nav {
@@ -468,27 +497,27 @@
   }
 
   .product-skin .chip-control:hover {
-    border-color: hsl(245 88% 78%);
-    background: hsl(248 90% 98%);
+    border-color: hsl(220 60% 78%);
+    background: hsl(220 100% 98%);
   }
 
   .product-skin .chip-control-active {
-    border-color: hsl(249 88% 70%);
-    background: hsl(250 100% 98%);
-    color: hsl(247 80% 56%);
+    border-color: hsl(220 60% 75%);
+    background: hsl(220 100% 97%);
+    color: hsl(220 65% 33%);
   }
 
   .product-skin .section-kicker {
-    color: hsl(247 80% 56%);
+    color: hsl(220 65% 38%);
     text-shadow: none;
   }
 
   .product-skin .soft-scrollbar {
-    scrollbar-color: hsl(245 60% 70% / 0.35) transparent;
+    scrollbar-color: hsl(214 32% 75% / 0.4) transparent;
   }
 
   .product-skin .soft-scrollbar::-webkit-scrollbar-thumb {
-    background: hsl(245 60% 70% / 0.35);
+    background: hsl(214 32% 75% / 0.4);
   }
 
   /* Auth & marketing sub-surfaces */
@@ -505,18 +534,18 @@
   }
 
   .auth-chrome .auth-form-card {
-    border-radius: 1.35rem;
+    border-radius: 1rem;
     border: 1px solid hsl(0 0% 100% / 0.7);
     background: linear-gradient(
       160deg,
       hsl(0 0% 100% / 0.94) 0%,
       hsl(220 50% 99% / 0.9) 45%,
-      hsl(24 100% 99% / 0.88) 100%
+      hsl(214 60% 99% / 0.88) 100%
     );
     box-shadow:
-      0 0 0 1px hsl(19 100% 55% / 0.1),
-      0 28px 56px -16px hsl(280 60% 45% / 0.16),
-      0 8px 20px -6px hsl(200 80% 40% / 0.1);
+      0 0 0 1px hsl(220 65% 33% / 0.08),
+      0 28px 56px -16px hsl(220 60% 30% / 0.14),
+      0 8px 20px -6px hsl(214 60% 40% / 0.08);
     backdrop-filter: blur(14px);
   }
 
@@ -547,20 +576,11 @@
 
   /* Job cards in product area */
   .product-skin .job-card-surface {
-    background-image: linear-gradient(
-      90deg,
-      hsl(0 0% 100% / 0.02) 0%,
-      hsl(0 0% 100% / 0.98) 100%
-    );
+    background-image: none;
   }
 
   .product-skin .job-card-surface:hover {
-    background-image: linear-gradient(
-      100deg,
-      hsl(247 100% 99% / 0.74) 0%,
-      hsl(24 100% 99% / 0.72) 100%
-    );
-    box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.8);
+    background-image: none;
   }
 }
 

@@ -180,6 +180,8 @@ test("detectSourceAdapter recognizes ats-prefixed external ids", () => {
   assert.equal(detectSourceAdapter({ externalId: "oracle:abc" }), "oracle")
   assert.equal(detectSourceAdapter({ externalId: "phenom:abc" }), "phenom")
   assert.equal(detectSourceAdapter({ externalId: "google:abc" }), "google")
+  assert.equal(detectSourceAdapter({ externalId: "jobvite:abc" }), "jobvite")
+  assert.equal(detectSourceAdapter({ applyUrl: "https://jobs.jobvite.com/acme/job/oXyz" }), "jobvite")
 })
 
 test("adaptRawCrawlerJob extracts structured sections for ats sources", () => {

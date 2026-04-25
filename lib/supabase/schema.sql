@@ -21,6 +21,8 @@ CREATE TABLE companies (
   h1b_sponsor_count_3yr INTEGER DEFAULT 0,
   sponsors_h1b BOOLEAN DEFAULT false,
   sponsorship_confidence INTEGER DEFAULT 0, -- 0-100 score
+  immigration_profile_summary JSONB,
+  hiring_health JSONB,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -56,6 +58,7 @@ CREATE TABLE jobs (
   skills TEXT[], -- extracted skills array
   normalized_title TEXT, -- AI cleaned title
   raw_data JSONB, -- original scraped data + normalization payload snapshots
+  job_intelligence JSONB,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -255,6 +258,7 @@ CREATE TABLE IF NOT EXISTS job_applications (
   timeline JSONB DEFAULT '[]'::jsonb,
   interviews JSONB DEFAULT '[]'::jsonb,
   offer_details JSONB,
+  application_verdict JSONB,
   is_archived BOOLEAN DEFAULT false,
   source TEXT DEFAULT 'hireoven',
   created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -290,6 +294,7 @@ CREATE TABLE IF NOT EXISTS job_match_scores (
   total_required_skills INTEGER DEFAULT 0,
   skills_match_rate DECIMAL,
   score_method TEXT DEFAULT 'fast',
+  score_breakdown JSONB,
   computed_at TIMESTAMPTZ DEFAULT NOW(),
   resume_version INTEGER DEFAULT 1,
   UNIQUE(user_id, resume_id, job_id)
@@ -1163,6 +1168,14 @@ END $$;
 -- Cache prediction results per job (so batch/feed renders are cheap).
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS h1b_prediction JSONB;
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS h1b_prediction_at TIMESTAMPTZ;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS job_intelligence JSONB;
+
+-- Optional snapshots for the additive job intelligence layer. Existing reads
+-- should continue to rely on their current columns until APIs opt in.
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS immigration_profile_summary JSONB;
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS hiring_health JSONB;
+ALTER TABLE job_applications ADD COLUMN IF NOT EXISTS application_verdict JSONB;
+ALTER TABLE job_match_scores ADD COLUMN IF NOT EXISTS score_breakdown JSONB;
 
 -- Expose the employer display name on the aggregate so admin UIs can show it
 -- without re-joining to lca_records.

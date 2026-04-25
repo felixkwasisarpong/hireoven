@@ -79,14 +79,9 @@ const HEADING_RULES: Rule[] = [
 
 const CONTENT_RULES: Rule[] = [
   {
-    key: "responsibilities",
-    pattern:
-      /\b(own|build|design|deliver|partner with|lead|ship|drive|collaborate|maintain|develop)\b/i,
-  },
-  {
     key: "requirements",
     pattern:
-      /\b(required|must|minimum|years of experience|bachelor|degree|proficiency|knowledge of|experience with)\b/i,
+      /\b(required|must|minimum|qualification|years? of experience|bachelor|master'?s|degree|proficiency|knowledge of|experience with|familiarity with|ability to|you have|you bring)\b/i,
   },
   {
     key: "preferred_qualifications",
@@ -102,6 +97,11 @@ const CONTENT_RULES: Rule[] = [
     key: "compensation",
     pattern:
       /\b(\$\d|usd|base salary|pay range|total compensation|annually|yearly|per year)\b/i,
+  },
+  {
+    key: "responsibilities",
+    pattern:
+      /\b(own|build|design|deliver|partner with|ship|drive|collaborate|maintain|develop|implement|support|manage)\b/i,
   },
   {
     key: "visa",
@@ -141,6 +141,17 @@ export function classifyTextByHeuristic(text: string): {
 } {
   const normalized = text.trim()
   if (!normalized) return { key: "other", confidence: 0.25 }
+
+  const requirementHit = CONTENT_RULES.find((rule) => rule.key === "requirements")?.pattern.test(normalized)
+  const preferredHit = CONTENT_RULES.find((rule) => rule.key === "preferred_qualifications")?.pattern.test(normalized)
+  const benefitHit = CONTENT_RULES.find((rule) => rule.key === "benefits")?.pattern.test(normalized)
+  const compensationHit = CONTENT_RULES.find((rule) => rule.key === "compensation")?.pattern.test(normalized)
+  const responsibilityHit = CONTENT_RULES.find((rule) => rule.key === "responsibilities")?.pattern.test(normalized)
+
+  if (benefitHit) return { key: "benefits", confidence: 0.78 }
+  if (compensationHit) return { key: "compensation", confidence: 0.78 }
+  if (preferredHit) return { key: "preferred_qualifications", confidence: 0.76 }
+  if (requirementHit) return { key: "requirements", confidence: responsibilityHit ? 0.74 : 0.78 }
 
   for (const rule of CONTENT_RULES) {
     if (rule.pattern.test(normalized)) {

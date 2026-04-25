@@ -279,7 +279,7 @@ export default function AdminJobsPage() {
           </div>
           <AdminSelect value={atsFilter} onChange={(event) => setAtsFilter(event.target.value)}>
             <option value="">All ATS types</option>
-            {["greenhouse", "lever", "ashby", "workday", "bamboohr", "icims", "custom"].map(
+            {["greenhouse", "lever", "ashby", "workday", "bamboohr", "icims", "jobvite", "custom"].map(
               (ats) => (
                 <option key={ats} value={ats}>
                   {ats}

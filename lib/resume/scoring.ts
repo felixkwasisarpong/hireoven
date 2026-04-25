@@ -1,3 +1,4 @@
+import { normalizeSkillList } from "@/lib/skills/taxonomy"
 import type { Resume, ResumeSnapshot, Skills, WorkExperience } from "@/types"
 
 export type ResumeScoreBreakdown = {
@@ -57,13 +58,7 @@ export function deriveTopSkills(
     ...safeArray(existing),
   ]
 
-  return Array.from(
-    new Set(
-      merged
-        .map((skill) => skill.trim())
-        .filter(Boolean)
-    )
-  ).slice(0, 10)
+  return normalizeSkillList(merged, 10)
 }
 
 export function buildResumeScoreBreakdown(

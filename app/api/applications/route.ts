@@ -22,8 +22,8 @@ export async function GET(request: NextRequest) {
     const result = await pool.query<{ id: string; status: string; applied_at: string | null }>(
       `SELECT id, status, applied_at
        FROM job_applications
-       WHERE user_id = $1
-         AND job_id = $2
+       WHERE user_id = $1::uuid
+         AND job_id = $2::uuid
          AND is_archived = false
        ORDER BY applied_at DESC NULLS LAST
        LIMIT 1`,

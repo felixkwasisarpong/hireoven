@@ -194,9 +194,9 @@ export default function H1BPredictionDrawer({
         className="absolute inset-0 bg-slate-900/40"
         onClick={onClose}
       />
-      <aside className="relative h-full w-full max-w-md overflow-y-auto border-l border-slate-200 bg-white shadow-xl sm:w-[28rem]">
+      <aside className="relative z-10 h-full w-full max-w-md overflow-y-auto border-l border-slate-200 bg-white shadow-xl sm:w-[28rem]">
         {/* Header */}
-        <header className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-slate-100 bg-white/95 px-5 py-4 backdrop-blur">
+        <header className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-slate-100 bg-white px-5 py-4">
           <div className="min-w-0">
             <p className="truncate text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
               H1B approval prediction
@@ -218,7 +218,7 @@ export default function H1BPredictionDrawer({
 
         <div className="space-y-6 px-5 py-5">
           {/* Disclaimer */}
-          <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] leading-relaxed text-slate-500">
+          <p className="rounded-md border border-slate-200 bg-white px-3 py-2 text-[11px] leading-relaxed text-slate-500">
             Based on DOL LCA data and historical patterns. Not legal advice -
             consult an immigration attorney for case-specific guidance.
           </p>
@@ -281,7 +281,7 @@ export default function H1BPredictionDrawer({
 
           {/* Employer data */}
           {prediction?.employerStats ? (
-            <section className="space-y-3 rounded-lg border border-slate-200 bg-slate-50/60 p-3">
+            <section className="space-y-3 rounded-lg border border-slate-200 bg-white p-3">
               <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
                 {companyName} H1B history
               </h3>
@@ -379,7 +379,7 @@ export default function H1BPredictionDrawer({
                 )}
               </>
             ) : (
-              <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+              <div className="space-y-2 rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-600">
                 <p>
                   Upgrade to Pro International for AI-powered detailed H1B
                   assessment - employer context, SOC fit, wage-level risk, and

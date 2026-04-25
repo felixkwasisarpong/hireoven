@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 import type { Profile } from "@/types"
 
@@ -23,27 +23,7 @@ export function useAuth() {
     isLoading: true,
   })
 
-  useEffect(() => {
-    const supabase = createClient()
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
-        void fetchProfile({
-          id: session.user.id,
-          email: session.user.email ?? null,
-          user_metadata: (session.user as { user_metadata?: { full_name?: string | null } }).user_metadata,
-        })
-      } else {
-        setState({ user: null, profile: null, isLoading: false })
-      }
-    })
-
-    return () => subscription.unsubscribe()
-  }, [])
-
-  async function fetchProfile(user: SessionUserLite) {
+  const fetchProfile = useCallback(async (user: SessionUserLite) => {
     try {
       const res = await fetch("/api/profile", { credentials: "include", cache: "no-store" })
       if (res.ok) {
@@ -73,7 +53,38 @@ export function useAuth() {
     } catch {
       setState({ user, profile: null, isLoading: false })
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    const supabase = createClient()
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        void fetchProfile({
+          id: session.user.id,
+          email: session.user.email ?? null,
+          user_metadata: (session.user as { user_metadata?: { full_name?: string | null } }).user_metadata,
+        })
+      } else {
+        setState({ user: null, profile: null, isLoading: false })
+      }
+    })
+
+    return () => subscription.unsubscribe()
+  }, [fetchProfile])
+
+  const refetchProfile = useCallback(async () => {
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    await fetchProfile({
+      id: user.id,
+      email: user.email ?? null,
+      user_metadata: (user as { user_metadata?: { full_name?: string | null } }).user_metadata,
+    })
+  }, [fetchProfile])
 
   async function signOut() {
     const supabase = createClient()
@@ -81,5 +92,5 @@ export function useAuth() {
     window.location.assign("/")
   }
 
-  return { ...state, signOut }
+  return { ...state, signOut, refetchProfile }
 }

@@ -89,30 +89,36 @@ async function processResumeInBackground({
       ]
     )
 
-    const profileResult = await pool.query<Pick<Profile, "desired_roles">>(
-      `SELECT desired_roles
-       FROM profiles
-       WHERE id = $1
-       LIMIT 1`,
-      [userId]
-    )
-    const profile = profileResult.rows[0] ?? null
+    try {
+      const profileResult = await pool.query<Pick<Profile, "desired_roles">>(
+        `SELECT desired_roles
+         FROM profiles
+         WHERE id = $1
+         LIMIT 1`,
+        [userId]
+      )
+      const profile = profileResult.rows[0] ?? null
 
-    await pool.query(
-      `UPDATE profiles
-       SET
-         desired_roles = $1::text[],
-         seniority_level = $2,
-         top_skills = $3::text[],
-         updated_at = now()
-       WHERE id = $4`,
-      [
-        mergeRoles((profile as Pick<Profile, "desired_roles"> | null)?.desired_roles ?? null, parsed.primary_role) ?? [],
-        parsed.seniority_level,
-        parsed.top_skills ?? [],
-        userId,
-      ]
-    )
+      await pool.query(
+        `UPDATE profiles
+         SET
+           desired_roles = $1::text[],
+           seniority_level = $2,
+           top_skills = $3::text[],
+           updated_at = now()
+         WHERE id = $4`,
+        [
+          mergeRoles((profile as Pick<Profile, "desired_roles"> | null)?.desired_roles ?? null, parsed.primary_role) ?? [],
+          parsed.seniority_level,
+          parsed.top_skills ?? [],
+          userId,
+        ]
+      )
+    } catch (profileError) {
+      // Some local/restored datasets may not include every profile enrichment column.
+      // Parsing should still succeed and keep the uploaded resume usable.
+      console.warn("Skipped profile enrichment after resume parse", profileError)
+    }
   } catch (error) {
     console.error("Resume parsing failed", error)
     await pool.query(
@@ -151,7 +157,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  const isPro = plan === "pro" || plan === "pro_international"
   const pool = getPostgresPool()
 
   const existingResumesResult = await pool.query<Array<{ id: string; is_primary: boolean }>[number]>(
@@ -164,15 +169,13 @@ export async function POST(request: Request) {
   const existingResumes = existingResumesResult.rows
 
   const existingCount = existingResumes?.length ?? 0
-  const maxResumes = isPro ? 3 : 1
+  const maxResumes = 3
 
   if (existingCount >= maxResumes) {
     return NextResponse.json(
       {
-        error: isPro
-          ? "You can upload up to 3 resumes"
-          : "Free accounts can keep one resume. Upgrade to Pro to upload more.",
-        requiredPlan: isPro ? null : "pro",
+        error: "You can upload up to 3 resumes",
+        requiredPlan: null,
       },
       { status: 403 }
     )

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { deriveResumeFields } from "@/lib/resume/scoring"
 import { buildResumeRawText } from "@/lib/resume/state"
+import { normalizeSkillsBuckets } from "@/lib/skills/taxonomy"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { deleteResume, getResumeUrl } from "@/lib/supabase/storage"
 import { createClient } from "@/lib/supabase/server"
@@ -160,7 +161,7 @@ export async function PATCH(
   }
 
   if (body.skills && typeof body.skills === "object") {
-    updates.skills = body.skills as Skills
+    updates.skills = normalizeSkillsBuckets(body.skills as Skills)
   }
 
   if (Array.isArray(body.projects)) {

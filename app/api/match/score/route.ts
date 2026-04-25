@@ -7,6 +7,8 @@ import type { JobMatchScore } from "@/types"
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
+const FAST_SCORE_ALGORITHM_UPDATED_AT = new Date("2026-04-24T23:45:00.000Z").getTime()
+
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient()
@@ -41,7 +43,14 @@ export async function GET(request: NextRequest) {
     )
     const existing = existingResult.rows[0]
 
-    if (existing) {
+    const existingComputedAt = existing ? new Date(existing.computed_at).getTime() : 0
+    const resumeUpdatedAt = new Date(context.resume.updated_at).getTime()
+    if (
+      existing &&
+      Number.isFinite(existingComputedAt) &&
+      existingComputedAt >= resumeUpdatedAt &&
+      existingComputedAt >= FAST_SCORE_ALGORITHM_UPDATED_AT
+    ) {
       return NextResponse.json({ score: existing as JobMatchScore })
     }
 

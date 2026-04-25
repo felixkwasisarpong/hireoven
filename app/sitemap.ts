@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next"
+import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
 import { getPostgresPool } from "@/lib/postgres/server"
 
 export const dynamic = "force-dynamic"
@@ -23,7 +24,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         `SELECT id, updated_at FROM companies WHERE is_active = true ORDER BY job_count DESC`
       ),
       pool.query<{ id: string; updated_at: string }>(
-        `SELECT id, updated_at FROM jobs WHERE is_active = true ORDER BY first_detected_at DESC NULLS LAST LIMIT 1000`
+        `SELECT id, updated_at FROM jobs WHERE is_active = true AND ${sqlJobLocatedInUsa(
+          "jobs"
+        )} ORDER BY first_detected_at DESC NULLS LAST LIMIT 1000`
       ),
     ])
 

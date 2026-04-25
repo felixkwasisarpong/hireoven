@@ -1,42 +1,39 @@
 "use client"
 
 import Link from "next/link"
-import { Sun } from "lucide-react"
-import GlobalSearchBar from "@/components/search/GlobalSearchBar"
+import { MessageSquare } from "lucide-react"
+import DashboardFeedSearch from "@/components/dashboard/DashboardFeedSearch"
 import DashboardUserMenu from "@/components/dashboard/DashboardUserMenu"
 import NotificationBell from "@/components/notifications/NotificationBell"
-import HireovenLogo from "@/components/ui/HireovenLogo"
 import { useAuth } from "@/lib/hooks/useAuth"
 
+/**
+ * Header for all `/dashboard/*` routes. The logo lives in the left rail, so the header
+ * is just: search pill + bell + messages + user menu — flat white, slate borders.
+ */
 export default function DashboardHeader() {
   const { user } = useAuth()
 
   return (
-    <header className="dash-header-bar relative">
-      <div className="mx-auto flex max-w-[1720px] flex-col gap-3 px-3 py-3 md:flex-row md:items-center md:gap-4 lg:px-4 xl:mx-0 xl:grid xl:max-w-none xl:grid-cols-[252px_minmax(0,1fr)_220px] xl:items-center xl:gap-0 xl:px-0">
-        <div className="flex min-w-0 shrink-0 items-center justify-between gap-3 md:w-[220px] md:justify-start lg:w-[240px] xl:w-auto xl:px-4">
+    <header className="dashboard-feed-skin sticky top-0 z-30 border-b border-slate-200 bg-white">
+      <div className="flex items-center gap-3 px-4 py-2 sm:px-5">
+        <div className="min-w-0 flex-1">
+          <DashboardFeedSearch />
+        </div>
+
+        <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+          <NotificationBell
+            userId={user?.id}
+            badgeVariant="product"
+            buttonClassName="h-10 w-10 border-0 bg-transparent text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+          />
           <Link
-            href="/dashboard"
-            className="flex min-w-0 shrink-0 items-center rounded-xl border border-transparent px-1 py-0.5 transition-all hover:border-border hover:bg-white/70"
-            aria-label="Hireoven dashboard home"
+            href="/dashboard/notifications"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
+            aria-label="Activity and messages"
           >
-            <HireovenLogo className="h-10 w-auto max-w-[178px]" priority />
+            <MessageSquare className="h-4 w-4" />
           </Link>
-        </div>
-
-        <div className="min-w-0 flex-1 xl:px-8">
-          <GlobalSearchBar />
-        </div>
-
-        <div className="flex shrink-0 items-center justify-end gap-2 md:gap-2.5 xl:px-4">
-          <NotificationBell userId={user?.id} />
-          <button
-            type="button"
-            className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-[#D7DCEA] bg-white text-[#556186] transition-colors hover:border-[#B9C3DE] hover:bg-[#F6F8FD]"
-            aria-label="Theme"
-          >
-            <Sun className="h-4.5 w-4.5" />
-          </button>
           <DashboardUserMenu />
         </div>
       </div>

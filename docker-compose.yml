@@ -1,0 +1,87 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: hireoven-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-busy}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-busy_local_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-hireoven}
+    ports:
+      - "${POSTGRES_PORT:-54329}:5432"
+    volumes:
+      - hireoven_postgres_data:/var/lib/postgresql/data
+      - ./lib/postgres/auth-bootstrap.sql:/docker-entrypoint-initdb.d/01-auth-bootstrap.sql:ro
+      - ./docker/postgres/02-profiles.sql:/docker-entrypoint-initdb.d/02-profiles.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-busy} -d ${POSTGRES_DB:-hireoven}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  minio:
+    image: minio/minio:latest
+    container_name: hireoven-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    ports:
+      - "${MINIO_API_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - hireoven_minio_data:/data
+
+  minio-init:
+    image: minio/mc:latest
+    container_name: hireoven-minio-init
+    depends_on:
+      - minio
+    restart: "no"
+    entrypoint: >
+      /bin/sh -c "
+      until (/usr/bin/mc alias set local http://minio:9000 ${MINIO_ROOT_USER:-minioadmin} ${MINIO_ROOT_PASSWORD:-minioadmin}) do
+        echo 'waiting for minio...' && sleep 2;
+      done;
+      /usr/bin/mc mb -p local/${MINIO_BUCKET:-hireoven-resumes} || true;
+      /usr/bin/mc anonymous set none local/${MINIO_BUCKET:-hireoven-resumes} || true;
+      "
+
+  app:
+    image: node:20-bookworm
+    container_name: hireoven-app
+    working_dir: /app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    env_file:
+      - .env.local
+    environment:
+      NODE_ENV: development
+      HOSTNAME: 0.0.0.0
+      PORT: 3000
+      DATABASE_URL: postgres://${POSTGRES_USER:-busy}:${POSTGRES_PASSWORD:-busy_local_dev}@postgres:5432/${POSTGRES_DB:-hireoven}
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_BUCKET: ${MINIO_BUCKET:-hireoven-resumes}
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      NEXT_PUBLIC_SITE_URL: http://localhost:3000
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    volumes:
+      - ./:/app
+      - hireoven_node_modules:/app/node_modules
+      - hireoven_next_cache:/app/.next
+    command: >
+      /bin/sh -c "
+      npm ci &&
+      npm run dev
+      "
+
+volumes:
+  hireoven_postgres_data:
+  hireoven_minio_data:
+  hireoven_node_modules:
+  hireoven_next_cache:

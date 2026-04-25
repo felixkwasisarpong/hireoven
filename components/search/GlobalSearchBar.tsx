@@ -154,11 +154,11 @@ export default function GlobalSearchBar() {
   }
 
   return (
-    <div ref={containerRef} className="relative w-full max-w-[840px]">
-      <div className={`flex items-center gap-2.5 rounded-2xl border border-[#D7DCEA] bg-white px-4 py-2.5 transition-colors ${
-        isFocused ? 'border-[#8A80FA] ring-2 ring-[#D9D5FF]' : 'hover:border-[#C5CCE0]'
+    <div ref={containerRef} className="relative w-full max-w-[min(100%,520px)]">
+      <div className={`flex h-7 items-center gap-1.5 rounded-lg border bg-white px-2 py-0.5 transition-colors ${
+        isFocused ? 'border-[#F97316] ring-1 ring-[#FED7AA]/40' : 'border-[#D7DCEA] hover:border-[#C5CCE0]'
       }`}>
-        <Search className="h-4 w-4 flex-shrink-0 text-[#64729A]" />
+        <Search className="h-3 w-3 flex-shrink-0 text-[#9CA3AF]" />
         <input
           ref={inputRef}
           type="text"
@@ -166,23 +166,27 @@ export default function GlobalSearchBar() {
           onChange={(e) => setQuery(e.target.value)}
           onFocus={handleFocus}
           onKeyDown={handleKeyDown}
-          placeholder="Search jobs and companies…"
-          className="flex-1 bg-transparent text-sm text-strong outline-none placeholder:text-[#64729A]"
+          placeholder="Search jobs, companies…"
+          className="flex-1 min-h-0 min-w-0 bg-transparent text-[12px] leading-tight text-strong outline-none placeholder:text-[#9CA3AF]"
         />
-        {query ? (
+        {query && (
           <button
             type="button"
             onClick={() => { setQuery(''); setPreviewJobs([]); setPreviewCompanies([]) }}
-            className="flex-shrink-0 rounded-md text-muted-foreground transition-colors hover:bg-[#F3F5FB] hover:text-strong"
+            className="flex-shrink-0 rounded p-0.5 text-[#9CA3AF] transition-colors hover:text-[#374151]"
             aria-label="Clear"
           >
-            <X className="h-4 w-4" />
+            <X className="h-3 w-3" />
           </button>
-        ) : (
-          <kbd className="hidden flex-shrink-0 rounded border border-[#E2E6F1] bg-[#F2F4FB] px-1.5 py-0.5 text-[10px] font-medium text-[#586584] sm:inline">
-            ⌘K
-          </kbd>
         )}
+        <button
+          type="button"
+          onClick={() => navigate(query)}
+          className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md bg-[#F97316] text-white transition-colors hover:bg-[#EA6C0A]"
+          aria-label="Search"
+        >
+          <Search className="h-3 w-3" />
+        </button>
       </div>
 
       {showDropdown && (
@@ -196,7 +200,7 @@ export default function GlobalSearchBar() {
                     <button
                       key={job.id}
                       type="button"
-                      className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors ${selectedIdx === i ? 'bg-[#F4F1FF]' : 'hover:bg-[#F5F7FD]'}`}
+                      className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors ${selectedIdx === i ? 'bg-[#FFF7ED]' : 'hover:bg-[#F5F7FD]'}`}
                       onClick={() => { pushRecent(job.title); router.push(`/dashboard/search?q=${encodeURIComponent(job.title)}`); setIsFocused(false); setQuery('') }}
                     >
                       <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md bg-brand-tint text-xs font-bold text-brand-navy">
@@ -220,7 +224,7 @@ export default function GlobalSearchBar() {
                       <button
                         key={company.id}
                         type="button"
-                        className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors ${selectedIdx === idx ? 'bg-[#F4F1FF]' : 'hover:bg-[#F5F7FD]'}`}
+                        className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors ${selectedIdx === idx ? 'bg-[#FFF7ED]' : 'hover:bg-[#F5F7FD]'}`}
                         onClick={() => { router.push(`/dashboard/companies/${company.id}`); setIsFocused(false); setQuery('') }}
                       >
                         <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md bg-surface-muted text-xs font-bold text-muted-foreground">
@@ -253,7 +257,7 @@ export default function GlobalSearchBar() {
                     <button
                       key={label}
                       type="button"
-                      className={`flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors ${selectedIdx === i ? 'bg-[#F4F1FF]' : 'hover:bg-[#F5F7FD]'}`}
+                      className={`flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors ${selectedIdx === i ? 'bg-[#FFF7ED]' : 'hover:bg-[#F5F7FD]'}`}
                       onClick={() => navigate(label)}
                     >
                       <Search className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground/50" />
@@ -269,7 +273,7 @@ export default function GlobalSearchBar() {
                   <button
                     key={label}
                     type="button"
-                    className={`flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors ${selectedIdx === idx ? 'bg-[#F4F1FF]' : 'hover:bg-[#F5F7FD]'}`}
+                    className={`flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors ${selectedIdx === idx ? 'bg-[#FFF7ED]' : 'hover:bg-[#F5F7FD]'}`}
                     onClick={() => navigate(label)}
                   >
                     <span className="text-sm text-muted-foreground">{label}</span>

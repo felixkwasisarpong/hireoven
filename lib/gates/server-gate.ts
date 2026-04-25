@@ -8,19 +8,28 @@ export async function getUserPlan(request?: NextRequest): Promise<{ userId: stri
   if (!session) return { userId: null, plan: null }
 
   const pool = getPostgresPool()
-  const result = await pool.query<{ plan: string | null; status: string | null }>(
-    `SELECT plan, status
-     FROM subscriptions
-     WHERE user_id = $1
-       AND status IN ('active', 'trialing')
-     ORDER BY created_at DESC
-     LIMIT 1`,
-    [session.sub]
-  )
-  const sub = result.rows[0] ?? null
+  try {
+    const result = await pool.query<{ plan: string | null; status: string | null }>(
+      `SELECT plan, status
+       FROM subscriptions
+       WHERE user_id = $1
+         AND status IN ('active', 'trialing')
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [session.sub]
+    )
+    const sub = result.rows[0] ?? null
 
-  const plan: Plan = (sub?.plan as Plan) ?? "free"
-  return { userId: session.sub, plan }
+    const plan: Plan = (sub?.plan as Plan) ?? "free"
+    return { userId: session.sub, plan }
+  } catch (error) {
+    const code = typeof error === "object" && error !== null && "code" in error ? (error as { code?: string }).code : null
+    // Local/test restores may not include billing tables; default to free instead of hard-failing APIs.
+    if (code === "42P01") {
+      return { userId: session.sub, plan: "free" }
+    }
+    throw error
+  }
 }
 
 export function gateResponse(status: 401 | 403, message: string, requiredPlan?: string): NextResponse {

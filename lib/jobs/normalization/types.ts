@@ -13,6 +13,7 @@ export type SourceAdapterKind =
   | "workday"
   | "icims"
   | "bamboohr"
+  | "jobvite"
   | "oracle"
   | "phenom"
   | "google"
