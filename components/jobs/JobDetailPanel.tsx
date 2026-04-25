@@ -3,6 +3,7 @@
 import { useEffect, useId, useMemo, useState } from "react"
 import Link from "next/link"
 import VisaIntelTrigger from "@/components/jobs/VisaIntelTrigger"
+import RecruiterMessageDrawer from "@/components/jobs/RecruiterMessageDrawer"
 import {
   AlertTriangle,
   ArrowRight,
@@ -17,6 +18,7 @@ import {
   Ghost,
   Info,
   Loader2,
+  MessageSquare,
   Plane,
   ShieldAlert,
   ShieldCheck,
@@ -231,6 +233,7 @@ export default function JobDetailPanel({
 
   const [saved, setSaved] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [recruiterDrawerOpen, setRecruiterDrawerOpen] = useState(false)
 
   const intel = useMemo(() => getJobIntelligence(job), [job])
 
@@ -347,6 +350,7 @@ export default function JobDetailPanel({
   const hiringHealth = intel.companyHiringHealth
 
   return (
+    <>
     <div className="flex flex-col gap-3">
       {/* ── 1. Primary actions ── */}
       <PanelCard>
@@ -389,6 +393,15 @@ export default function JobDetailPanel({
             Track in pipeline
             <ArrowRight className="h-3.5 w-3.5" aria-hidden />
           </Link>
+
+          <button
+            type="button"
+            onClick={() => setRecruiterDrawerOpen(true)}
+            className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-slate-200 px-4 py-2 text-[12px] font-medium text-slate-500 transition hover:bg-slate-50 hover:text-slate-700"
+          >
+            <MessageSquare className="h-3.5 w-3.5" aria-hidden />
+            Message recruiter
+          </button>
 
           {/* Sponsorship status line */}
           {sponsorsConfirmed ? (
@@ -632,5 +645,13 @@ export default function JobDetailPanel({
       )}
 
     </div>
+
+    <RecruiterMessageDrawer
+      open={recruiterDrawerOpen}
+      onClose={() => setRecruiterDrawerOpen(false)}
+      jobTitle={displayTitle}
+      company={job.company?.name ?? ""}
+    />
+    </>
   )
 }
