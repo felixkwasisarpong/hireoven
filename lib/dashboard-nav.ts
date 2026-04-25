@@ -10,6 +10,7 @@ import {
   Mails,
   Plane,
   Settings,
+  ShieldAlert,
   Wand2,
 } from "lucide-react"
 
@@ -32,6 +33,7 @@ export const DASHBOARD_NAV_ITEMS: DashboardNavItem[] = [
   { label: "Alerts", href: "/dashboard/alerts", icon: Bell },
   { label: "Companies", href: "/dashboard/companies", icon: Building2 },
   { label: "International", href: "/dashboard/international", icon: Plane },
+  { label: "Offer Risk", href: "/dashboard/international/offer-risk", icon: ShieldAlert },
   { label: "Settings", href: "/dashboard/billing", icon: Settings, dividerAbove: true },
   {
     label: "Help & support",

@@ -49,6 +49,19 @@ export type OptTimelineImmigrationStatus =
   | 'Citizen'
   | 'Other';
 
+export type OfferRiskWorkAuthorizationStatus =
+  | 'F1_OPT'
+  | 'F1_STEM_OPT'
+  | 'H1B'
+  | 'needs_future_sponsorship'
+  | 'citizen_or_gc'
+  | 'other'
+  | 'unknown';
+
+export type OfferRiskWorkMode = 'remote' | 'hybrid' | 'on_site' | 'unknown';
+
+export type OfferRiskLabel = 'Low' | 'Medium' | 'High' | 'Unknown';
+
 export type OptTimelineEmploymentStatus =
   | 'employed'
   | 'unemployed'
@@ -590,6 +603,60 @@ export type LcaWageRecord = {
   wageLevel?: string | null;
   fiscalYear?: number | null;
   decisionDate?: string | null;
+};
+
+export type OfferRiskCompanySnapshot = {
+  companyName: string | null;
+  sponsorsH1b: boolean | null;
+  sponsorshipConfidence: number | null;
+  recentH1BCount: number | null;
+  totalLcaCount: number | null;
+  certificationRate: number | null;
+  topJobTitles: string[];
+  topWorksiteStates: string[];
+  eVerifyLikely?: boolean | null;
+};
+
+export type OfferRiskInput = {
+  company: string;
+  jobTitle: string;
+  location?: string | null;
+  salary?: number | null;
+  salaryMin?: number | null;
+  salaryMax?: number | null;
+  workAuthorizationStatus: OfferRiskWorkAuthorizationStatus;
+  needsOptStemSupport?: boolean;
+  needsH1B?: boolean;
+  needsFutureSponsorship?: boolean;
+  offerStartDate?: string | null;
+  workMode?: OfferRiskWorkMode;
+  sponsorshipStatement?: string | null;
+  companySnapshot?: OfferRiskCompanySnapshot | null;
+  lcaRecords?: LcaWageRecord[] | null;
+  asOf?: string | null;
+};
+
+export type OfferRiskAnalysis = {
+  riskLabel: OfferRiskLabel;
+  riskScore: number | null;
+  confidence: IntelligenceConfidence;
+  summary: string;
+  keyConcerns: string[];
+  positiveSignals: string[];
+  questionsToAskRecruiter: string[];
+  documentationChecklist: string[];
+  missingData: string[];
+  salaryIntelligence: LcaSalaryIntelligence;
+  visaFit: {
+    score: number;
+    label: VisaFitScoreLabel;
+    reasons: string[];
+    warnings: string[];
+    dataGaps: string[];
+  };
+  h1bTimingRisk: IntelligenceRiskLevel;
+  sponsorshipConflictDetected: boolean;
+  disclaimer: string;
 };
 
 export type LcaSalaryIntelligence = {
