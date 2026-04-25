@@ -2,6 +2,7 @@ import {
   createCompanyHiringHealthFallback,
   createCompanyImmigrationProfileFallback,
 } from "@/lib/jobs/intelligence"
+import { capExemptDetectionToSignal, detectCapExemptSignal } from "@/lib/jobs/cap-exempt-signal"
 import type {
   CapExemptSignal,
   Company,
@@ -88,22 +89,6 @@ const normalizeTopItems = (
     })
     .filter((item): item is { label: string; count: number | null } => Boolean(item))
     .slice(0, max)
-}
-
-const summarizeCapExempt = (company: Company): CapExemptSignal => {
-  const text = `${company.name} ${company.industry ?? ""}`.toLowerCase()
-  const isLikely =
-    /\buniversity\b|\bcollege\b|\bschool of medicine\b|\bresearch institute\b|\bmedical center\b|\bhospital\b/.test(text)
-
-  return {
-    isLikelyCapExempt: isLikely ? true : null,
-    category: isLikely ? "higher_education" : "unknown",
-    confidence: isLikely ? "low" : "unknown",
-    evidence: isLikely ? ["Company name or industry suggests education, research, or medical affiliation."] : [],
-    summary: isLikely
-      ? "This employer may have cap-exempt characteristics, but this is not confirmed."
-      : "No cap-exempt signal has been confirmed from available company data.",
-  }
 }
 
 export function buildCompanyImmigrationProfile(input: {
@@ -220,7 +205,7 @@ export function buildCompanyImmigrationProfile(input: {
     worksites,
     salaryIntelligence,
     stemOptReadiness,
-    capExempt: summarizeCapExempt(company),
+    capExempt: capExemptDetectionToSignal(detectCapExemptSignal(company)),
     hiringHealth,
     similarCompanyIds: input.similarCompanyIds ?? [],
     faq: {

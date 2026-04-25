@@ -656,7 +656,7 @@ export default async function PublicCompanyPage({ params }: Props) {
                   <div className={mergedBand}>
                     <div className="mb-4 flex items-center gap-2">
                       <Landmark className="h-4 w-4 text-[#2563EB]" aria-hidden />
-                      <h3 className="font-bold text-slate-950">Cap-exempt signal</h3>
+                      <h3 className="font-bold text-slate-950">Possible cap-exempt pathway</h3>
                     </div>
                     <p className="text-sm leading-6 text-slate-600">{profile.capExempt.summary}</p>
                     {profile.capExempt.evidence.length > 0 ? (

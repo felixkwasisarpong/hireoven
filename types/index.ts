@@ -570,6 +570,7 @@ export type VisaIntelligence = {
   blockers: SponsorshipBlocker[];
   positiveSignals: IntelligenceSignal[];
   riskSignals: IntelligenceSignal[];
+  capExempt: CapExemptSignal | null;
   summary: string | null;
 };
 
@@ -625,7 +626,14 @@ export type StemOptReadiness = {
 
 export type CapExemptSignal = {
   isLikelyCapExempt: boolean | null;
-  category: 'higher_education' | 'nonprofit_research' | 'government_research' | 'affiliated_nonprofit' | 'unknown';
+  category:
+    | 'higher_education'
+    | 'nonprofit_research'
+    | 'government_research'
+    | 'affiliated_nonprofit'
+    | 'academic_medical_center'
+    | 'national_laboratory'
+    | 'unknown';
   confidence: IntelligenceConfidence;
   evidence: string[];
   summary: string | null;

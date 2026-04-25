@@ -441,7 +441,7 @@ export default function VisaIntelDrawer({ open, onClose, job, displayTitle }: Pr
                 <div className="rounded-lg bg-sky-50 px-4 py-3 ring-1 ring-sky-200">
                   <div className="flex items-center gap-2">
                     <Plane className="h-4 w-4 text-sky-600" aria-hidden />
-                    <span className="text-[13px] font-semibold text-sky-800">Likely cap-exempt employer</span>
+                    <span className="text-[13px] font-semibold text-sky-800">Possible cap-exempt pathway</span>
                   </div>
                   <p className="mt-1 text-[12px] capitalize text-sky-700">
                     Category: {capExempt.category.replace(/_/g, " ")}

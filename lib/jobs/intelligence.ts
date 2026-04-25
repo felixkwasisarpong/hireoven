@@ -17,6 +17,7 @@ import type {
   StemOptReadiness,
   VisaIntelligence,
 } from "@/types"
+import { capExemptDetectionToSignal, detectCapExemptSignal } from "@/lib/jobs/cap-exempt-signal"
 import { calculateLcaSalaryIntelligence } from "@/lib/jobs/lca-salary-intelligence"
 import { calculateVisaFitScore } from "@/lib/jobs/visa-fit-score"
 
@@ -81,6 +82,7 @@ export const createVisaIntelligenceFallback = (
     : []
   const company = job?.company
   const companyProfile = getCompanyImmigrationProfile(company)
+  const capExemptSignal = capExemptDetectionToSignal(detectCapExemptSignal(company, job))
   const fit = calculateVisaFitScore({
     jobTitle: job?.title ?? job?.normalized_title ?? null,
     jobDescription: job?.description ?? null,
@@ -93,7 +95,7 @@ export const createVisaIntelligenceFallback = (
     locationLcaCount: null,
     wageLevelSignal: "unknown",
     eVerify: null,
-    capExempt: null,
+    capExempt: capExemptSignal,
     sponsorshipBlocker: blocker[0] ?? null,
     dataRecencyDays: null,
   })
@@ -129,6 +131,7 @@ export const createVisaIntelligenceFallback = (
       source: "system",
       confidence: fit.confidence,
     })),
+    capExempt: fit.capExempt,
     summary: fit.dataGaps.length > 0 ? `Missing signals: ${fit.dataGaps.join(", ")}` : null,
   }
 }
@@ -265,16 +268,17 @@ export const createJobIntelligenceFallback = (
   options: { sources?: IntelligenceSource[]; now?: Date } = {}
 ): JobIntelligence => {
   const sources = options.sources ?? ["system"]
+  const visa = createVisaIntelligenceFallback(job)
 
   return {
     schemaVersion: INTELLIGENCE_SCHEMA_VERSION,
     computedAt: null,
     sources,
-    visa: createVisaIntelligenceFallback(job),
+    visa,
     sponsorshipBlockers: [],
     lcaSalary: createLcaSalaryIntelligenceFallback(job),
     stemOpt: createStemOptReadinessFallback(),
-    capExempt: null,
+    capExempt: visa.capExempt,
     ghostJobRisk: createGhostJobRiskFallback(job as Job | null, options.now),
     companyHiringHealth: createCompanyHiringHealthFallback(job?.company as Company | null),
     applicationVerdict: null,
