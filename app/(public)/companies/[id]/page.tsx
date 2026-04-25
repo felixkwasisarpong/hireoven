@@ -75,9 +75,10 @@ type SimilarCompanyRow = Pick<
 type Props = { params: Promise<{ id: string }> }
 
 const sectionCard =
-  "rounded-3xl border border-slate-200/80 bg-white p-6 shadow-[0_18px_48px_rgba(15,23,42,0.05)]"
+  "rounded-[28px] border border-slate-200/70 bg-white p-6 shadow-[0_14px_42px_rgba(15,23,42,0.04)]"
 
-const mutedCard = "rounded-2xl border border-slate-200/70 bg-slate-50/80 p-4"
+const mutedCard = "rounded-2xl bg-slate-50/85 p-4 ring-1 ring-slate-200/55"
+const mergedBand = "rounded-3xl bg-slate-50/70 p-5 ring-1 ring-slate-200/55"
 
 function formatMoney(value: number | null | undefined) {
   if (value == null || !Number.isFinite(Number(value))) return "Unknown"
@@ -502,89 +503,172 @@ export default async function PublicCompanyPage({ params }: Props) {
             <section className={sectionCard}>
               <SectionHeader
                 icon={ShieldCheck}
-                eyebrow="Sponsorship history"
-                title="H-1B and LCA sponsorship summary"
-                description="Historical public filings can help prioritize applications, but they do not confirm current sponsorship policy."
+                eyebrow="Immigration intelligence"
+                title="Sponsorship, LCA, salary and OPT signals"
+                description="These related signals are grouped together so you can read the employer story without jumping across separate cards."
               />
-              <div className="grid gap-4 sm:grid-cols-3">
-                <MiniStat label="Historical signal" value={status.label} hint={status.description} />
-                <MiniStat
-                  label="Recent petitions"
-                  value={profile.sponsorshipHistory.recentH1BPetitions == null ? "Unknown" : profile.sponsorshipHistory.recentH1BPetitions.toLocaleString()}
-                  hint="Recent H-1B/LCA-style activity where connected."
-                />
-                <MiniStat
-                  label="Certification rate"
-                  value={formatProfilePercent(profile.sponsorshipHistory.lcaCertificationRate)}
-                  hint="Based on historical LCA outcomes."
-                />
-              </div>
-              <p className="mt-4 text-sm leading-6 text-slate-600">{profile.sponsorshipHistory.summary}</p>
-              {profile.sponsorshipHistory.riskFlags.length > 0 ? (
-                <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4">
-                  <p className="text-sm font-semibold text-amber-900">Signals to review</p>
-                  <ul className="mt-2 space-y-1 text-sm leading-6 text-amber-800">
-                    {profile.sponsorshipHistory.riskFlags.map((flag) => (
-                      <li key={flag}>• {flag}</li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-            </section>
 
-            <section className={sectionCard}>
-              <SectionHeader
-                icon={Sparkles}
-                eyebrow="LCA role families"
-                title="Roles this employer has historically sponsored"
-                description="Use this to compare a current role against prior sponsored job families."
-              />
-              {profile.roleFamilies.length === 0 ? (
-                <EmptyState>No role-family LCA breakdown is connected for {company.name} yet.</EmptyState>
-              ) : (
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {profile.roleFamilies.map((role) => (
-                    <div key={role.label} className={mutedCard}>
-                      <div className="flex items-start justify-between gap-3">
-                        <p className="font-semibold text-slate-900">{role.label}</p>
-                        {role.share != null ? (
-                          <span className="rounded-full bg-white px-2 py-0.5 text-xs font-bold text-slate-600 ring-1 ring-slate-200">
-                            {role.share}%
-                          </span>
-                        ) : null}
+              <div className="space-y-6">
+                <div className="grid gap-4 md:grid-cols-3">
+                  <MiniStat label="Historical signal" value={status.label} hint={status.description} />
+                  <MiniStat
+                    label="Recent petitions"
+                    value={profile.sponsorshipHistory.recentH1BPetitions == null ? "Unknown" : profile.sponsorshipHistory.recentH1BPetitions.toLocaleString()}
+                    hint="Recent H-1B/LCA-style activity where connected."
+                  />
+                  <MiniStat
+                    label="Certification rate"
+                    value={formatProfilePercent(profile.sponsorshipHistory.lcaCertificationRate)}
+                    hint="Based on historical LCA outcomes."
+                  />
+                </div>
+
+                <p className="text-sm leading-6 text-slate-600">{profile.sponsorshipHistory.summary}</p>
+
+                {profile.sponsorshipHistory.riskFlags.length > 0 ? (
+                  <div className="rounded-2xl bg-amber-50 px-4 py-3 ring-1 ring-amber-200/80">
+                    <p className="text-sm font-semibold text-amber-900">Signals to review</p>
+                    <ul className="mt-2 space-y-1 text-sm leading-6 text-amber-800">
+                      {profile.sponsorshipHistory.riskFlags.map((flag) => (
+                        <li key={flag}>• {flag}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+
+                <div className="grid gap-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(280px,0.85fr)]">
+                  <div className={mergedBand}>
+                    <div className="mb-4 flex items-start gap-3">
+                      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-2xl bg-white text-[#2563EB] ring-1 ring-slate-200/70">
+                        <Sparkles className="h-4 w-4" aria-hidden />
+                      </span>
+                      <div>
+                        <h3 className="font-bold text-slate-950">Sponsored role families</h3>
+                        <p className="mt-0.5 text-sm leading-6 text-slate-500">
+                          Compare the current job with historical sponsored role patterns.
+                        </p>
                       </div>
-                      <p className="mt-1 text-sm text-slate-500">
-                        {role.count == null ? "Historical count unknown" : `${role.count.toLocaleString()} historical filing${role.count === 1 ? "" : "s"}`}
-                      </p>
-                      <p className="mt-2 text-xs font-medium text-slate-400">{getProfileConfidenceLabel(role.confidence)}</p>
                     </div>
-                  ))}
-                </div>
-              )}
-            </section>
+                    {profile.roleFamilies.length === 0 ? (
+                      <EmptyState>No role-family LCA breakdown is connected for {company.name} yet.</EmptyState>
+                    ) : (
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        {profile.roleFamilies.map((role) => (
+                          <div key={role.label} className="rounded-2xl bg-white p-4 ring-1 ring-slate-200/60">
+                            <div className="flex items-start justify-between gap-3">
+                              <p className="font-semibold text-slate-900">{role.label}</p>
+                              {role.share != null ? (
+                                <span className="rounded-full bg-sky-50 px-2 py-0.5 text-xs font-bold text-sky-700">
+                                  {role.share}%
+                                </span>
+                              ) : null}
+                            </div>
+                            <p className="mt-1 text-sm text-slate-500">
+                              {role.count == null ? "Historical count unknown" : `${role.count.toLocaleString()} historical filing${role.count === 1 ? "" : "s"}`}
+                            </p>
+                            <p className="mt-2 text-xs font-medium text-slate-400">{getProfileConfidenceLabel(role.confidence)}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
 
-            <section className={sectionCard}>
-              <SectionHeader
-                icon={MapPin}
-                eyebrow="LCA locations"
-                title="Common worksites and states"
-                description="Location history can matter because sponsorship patterns often vary by worksite and team."
-              />
-              {profile.worksites.length === 0 ? (
-                <EmptyState>No worksite breakdown is connected for {company.name} yet.</EmptyState>
-              ) : (
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {profile.worksites.map((site) => (
-                    <div key={site.label} className={mutedCard}>
-                      <p className="font-semibold text-slate-900">{site.label}</p>
-                      <p className="mt-1 text-sm text-slate-500">
-                        {site.count == null ? "Count unknown" : `${site.count.toLocaleString()} historical filing${site.count === 1 ? "" : "s"}`}
-                      </p>
-                      {site.share != null ? <p className="mt-1 text-xs font-semibold text-sky-700">{site.share}% of connected filings</p> : null}
+                  <div className={mergedBand}>
+                    <div className="mb-4 flex items-start gap-3">
+                      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-2xl bg-white text-[#2563EB] ring-1 ring-slate-200/70">
+                        <MapPin className="h-4 w-4" aria-hidden />
+                      </span>
+                      <div>
+                        <h3 className="font-bold text-slate-950">Common worksites</h3>
+                        <p className="mt-0.5 text-sm leading-6 text-slate-500">
+                          Location history can vary by team and worksite.
+                        </p>
+                      </div>
                     </div>
-                  ))}
+                    {profile.worksites.length === 0 ? (
+                      <EmptyState>No worksite breakdown is connected for {company.name} yet.</EmptyState>
+                    ) : (
+                      <div className="space-y-2.5">
+                        {profile.worksites.map((site) => (
+                          <div key={site.label} className="flex items-center justify-between gap-3 rounded-2xl bg-white px-4 py-3 ring-1 ring-slate-200/60">
+                            <div>
+                              <p className="font-semibold text-slate-900">{site.label}</p>
+                              <p className="text-sm text-slate-500">
+                                {site.count == null ? "Count unknown" : `${site.count.toLocaleString()} filing${site.count === 1 ? "" : "s"}`}
+                              </p>
+                            </div>
+                            {site.share != null ? (
+                              <span className="rounded-full bg-sky-50 px-2.5 py-1 text-xs font-bold text-sky-700">
+                                {site.share}%
+                              </span>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              )}
+
+                <div className="grid gap-5 md:grid-cols-3">
+                  <div className={mergedBand}>
+                    <div className="mb-4 flex items-center gap-2">
+                      <Banknote className="h-4 w-4 text-[#2563EB]" aria-hidden />
+                      <h3 className="font-bold text-slate-950">Salary context</h3>
+                    </div>
+                    <div className="space-y-3">
+                      <MiniStat label="Median wage" value={formatMoney(profile.salaryIntelligence.medianWage)} />
+                      <MiniStat
+                        label="Historical range"
+                        value={
+                          profile.salaryIntelligence.rangeMin == null && profile.salaryIntelligence.rangeMax == null
+                            ? "Unknown"
+                            : `${formatMoney(profile.salaryIntelligence.rangeMin)} - ${formatMoney(profile.salaryIntelligence.rangeMax)}`
+                        }
+                      />
+                      <MiniStat
+                        label="Wage level"
+                        value={profile.salaryIntelligence.commonWageLevel ?? "Unknown"}
+                        hint={`${getProfileConfidenceLabel(profile.salaryIntelligence.confidence)} · ${
+                          profile.salaryIntelligence.sampleSize == null
+                            ? "sample size unknown"
+                            : `${profile.salaryIntelligence.sampleSize.toLocaleString()} wage records`
+                        }`}
+                      />
+                    </div>
+                    <p className="mt-4 text-sm leading-6 text-slate-600">{profile.salaryIntelligence.summary}</p>
+                  </div>
+
+                  <div className={mergedBand}>
+                    <div className="mb-4 flex items-center gap-2">
+                      <GraduationCap className="h-4 w-4 text-[#2563EB]" aria-hidden />
+                      <h3 className="font-bold text-slate-950">STEM OPT readiness</h3>
+                    </div>
+                    <p className="text-sm font-semibold capitalize text-slate-900">{profile.stemOptReadiness.readiness}</p>
+                    <p className="mt-2 text-sm leading-6 text-slate-600">{profile.stemOptReadiness.summary}</p>
+                    <div className="mt-4 flex items-start gap-2 rounded-2xl bg-white p-3 ring-1 ring-slate-200/60">
+                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" aria-hidden />
+                      <p className="text-xs leading-5 text-slate-500">
+                        E-Verify is {profile.stemOptReadiness.likelyEVerify === true ? "likely" : "not confirmed"} in the current data.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className={mergedBand}>
+                    <div className="mb-4 flex items-center gap-2">
+                      <Landmark className="h-4 w-4 text-[#2563EB]" aria-hidden />
+                      <h3 className="font-bold text-slate-950">Cap-exempt signal</h3>
+                    </div>
+                    <p className="text-sm leading-6 text-slate-600">{profile.capExempt.summary}</p>
+                    {profile.capExempt.evidence.length > 0 ? (
+                      <ul className="mt-3 space-y-1 text-sm leading-6 text-slate-500">
+                        {profile.capExempt.evidence.map((item) => (
+                          <li key={item}>• {item}</li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
             </section>
 
             <section className={sectionCard}>
@@ -610,64 +694,7 @@ export default async function PublicCompanyPage({ params }: Props) {
             </section>
           </div>
 
-          <aside className="space-y-6 lg:sticky lg:top-6 lg:self-start">
-            <section className={sectionCard}>
-              <SectionHeader
-                icon={Banknote}
-                eyebrow="Salary intelligence"
-                title="LCA wage context"
-              />
-              <div className="space-y-3">
-                <MiniStat label="Median wage" value={formatMoney(profile.salaryIntelligence.medianWage)} />
-                <MiniStat
-                  label="Historical range"
-                  value={
-                    profile.salaryIntelligence.rangeMin == null && profile.salaryIntelligence.rangeMax == null
-                      ? "Unknown"
-                      : `${formatMoney(profile.salaryIntelligence.rangeMin)} - ${formatMoney(profile.salaryIntelligence.rangeMax)}`
-                  }
-                />
-                <MiniStat
-                  label="Common wage level"
-                  value={profile.salaryIntelligence.commonWageLevel ?? "Unknown"}
-                  hint={`${getProfileConfidenceLabel(profile.salaryIntelligence.confidence)} · ${
-                    profile.salaryIntelligence.sampleSize == null
-                      ? "sample size unknown"
-                      : `${profile.salaryIntelligence.sampleSize.toLocaleString()} wage records`
-                  }`}
-                />
-              </div>
-              <p className="mt-4 text-sm leading-6 text-slate-600">{profile.salaryIntelligence.summary}</p>
-            </section>
-
-            <section className={sectionCard}>
-              <SectionHeader icon={GraduationCap} eyebrow="STEM OPT" title="STEM OPT readiness" />
-              <div className="space-y-3">
-                <div className={mutedCard}>
-                  <p className="text-sm font-semibold capitalize text-slate-900">{profile.stemOptReadiness.readiness}</p>
-                  <p className="mt-1 text-sm leading-6 text-slate-500">{profile.stemOptReadiness.summary}</p>
-                </div>
-                <div className="flex items-start gap-2 rounded-2xl border border-slate-200 bg-white p-3">
-                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" aria-hidden />
-                  <p className="text-xs leading-5 text-slate-500">
-                    E-Verify is {profile.stemOptReadiness.likelyEVerify === true ? "likely" : "not confirmed"} in the current data.
-                  </p>
-                </div>
-              </div>
-            </section>
-
-            <section className={sectionCard}>
-              <SectionHeader icon={Landmark} eyebrow="Cap-exempt" title="Cap-exempt signal" />
-              <p className="text-sm leading-6 text-slate-600">{profile.capExempt.summary}</p>
-              {profile.capExempt.evidence.length > 0 ? (
-                <ul className="mt-3 space-y-1 text-sm leading-6 text-slate-500">
-                  {profile.capExempt.evidence.map((item) => (
-                    <li key={item}>• {item}</li>
-                  ))}
-                </ul>
-              ) : null}
-            </section>
-
+          <aside className="lg:sticky lg:top-6 lg:self-start">
             <section className={sectionCard}>
               <SectionHeader icon={TrendingUp} eyebrow="Hiring health" title="Recent hiring activity" />
               <div className="grid grid-cols-2 gap-3">
@@ -677,9 +704,9 @@ export default async function PublicCompanyPage({ params }: Props) {
               <p className="mt-4 text-sm leading-6 text-slate-600">
                 {profile.hiringHealth.summary ?? "Hiring trend is unknown until more crawl history is available."}
               </p>
-            </section>
 
-            <section className={sectionCard}>
+              <div className="my-6 border-t border-slate-100" />
+
               <SectionHeader icon={Building2} eyebrow="Similar companies" title="Compare employers" />
               {similarCompanies.length === 0 ? (
                 <EmptyState>No similar company suggestions yet.</EmptyState>
