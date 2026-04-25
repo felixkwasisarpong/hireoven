@@ -1,7 +1,10 @@
 "use client"
 
-import { useEffect, useId, useMemo, useState } from "react"
+import { useEffect, useId, useMemo, useState, useCallback } from "react"
+import dynamic from "next/dynamic"
 import Link from "next/link"
+
+const VisaIntelDrawer = dynamic(() => import("@/components/jobs/VisaIntelDrawer"), { ssr: false })
 import {
   AlertTriangle,
   ArrowRight,
@@ -239,6 +242,9 @@ export default function JobDetailPanel({
 
   const [saved, setSaved] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [visaDrawerOpen, setVisaDrawerOpen] = useState(false)
+  const openVisaDrawer = useCallback(() => setVisaDrawerOpen(true), [])
+  const closeVisaDrawer = useCallback(() => setVisaDrawerOpen(false), [])
 
   const intel = useMemo(() => getJobIntelligence(job), [job])
 
@@ -433,7 +439,7 @@ export default function JobDetailPanel({
       {/* ── 3. Visa / Sponsorship Intelligence ── */}
       {(showVisaSignals || hasBlocker) && (
         <PanelCard>
-          <SectionRow icon={Plane} label="Visa Intelligence">
+          <SectionRow icon={Plane} label="Visa Intelligence" onViewBreakdown={openVisaDrawer}>
             {hasBlocker ? (
               <div className="flex items-start gap-2 rounded-lg bg-red-50 px-3 py-2.5 ring-1 ring-red-200">
                 <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-red-700" aria-hidden />
@@ -590,6 +596,15 @@ export default function JobDetailPanel({
             )}
           </SectionRow>
         </PanelCard>
+      )}
+
+      {/* ── Visa Intelligence drawer ── */}
+      {visaDrawerOpen && (
+        <VisaIntelDrawer
+          job={job}
+          displayTitle={displayTitle}
+          onClose={closeVisaDrawer}
+        />
       )}
     </div>
   )
