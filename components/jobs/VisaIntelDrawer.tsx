@@ -1,6 +1,7 @@
 "use client"
 
-import { useEffect, useId } from "react"
+import { useEffect, useId, useState } from "react"
+import { createPortal } from "react-dom"
 import {
   AlertTriangle,
   CheckCircle2,
@@ -152,6 +153,12 @@ function StatTile({ label, value }: { label: string; value: string }) {
 // ---------------------------------------------------------------------------
 
 export default function VisaIntelDrawer({ job, displayTitle, onClose }: Props) {
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
   // Close on Escape
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose() }
@@ -198,7 +205,7 @@ export default function VisaIntelDrawer({ job, displayTitle, onClose }: Props) {
 
   const sponsorshipTrend = intel.companyHiringHealth?.sponsorshipTrend ?? "unknown"
 
-  return (
+  const drawer = (
     <div className="fixed inset-0 z-[200] flex justify-end">
       {/* Backdrop */}
       <button
@@ -482,4 +489,7 @@ export default function VisaIntelDrawer({ job, displayTitle, onClose }: Props) {
       </aside>
     </div>
   )
+
+  if (!mounted) return null
+  return createPortal(drawer, document.body)
 }
