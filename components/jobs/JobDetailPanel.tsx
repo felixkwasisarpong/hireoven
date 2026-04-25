@@ -1,10 +1,8 @@
 "use client"
 
 import { useEffect, useId, useMemo, useState, useCallback } from "react"
-import dynamic from "next/dynamic"
 import Link from "next/link"
-
-const VisaIntelDrawer = dynamic(() => import("@/components/jobs/VisaIntelDrawer"), { ssr: false })
+import VisaIntelDrawer from "@/components/jobs/VisaIntelDrawer"
 import {
   AlertTriangle,
   ArrowRight,
