@@ -41,6 +41,69 @@ export type VisaStatus =
   | 'green_card'
   | 'other';
 
+export type OptTimelineImmigrationStatus =
+  | 'F1_OPT'
+  | 'F1_STEM_OPT'
+  | 'H1B'
+  | 'GC'
+  | 'Citizen'
+  | 'Other';
+
+export type OptTimelineEmploymentStatus =
+  | 'employed'
+  | 'unemployed'
+  | 'offer_accepted'
+  | 'not_started'
+  | 'unknown';
+
+export type OptTimelineUrgencyLevel = 'Low' | 'Medium' | 'High' | 'Emergency';
+
+export type OptTimelineFallbackCategory =
+  | 'sponsor_friendly_employers'
+  | 'e_verified_employers'
+  | 'contract_or_temp_roles'
+  | 'university_or_cap_exempt_roles'
+  | 'staffing_or_consulting_firms'
+  | 'bridge_education_options'
+  | 'non_visa_sensitive_roles'
+  | 'dso_or_immigration_review';
+
+export type OptTimelineSettings = {
+  immigrationStatus: OptTimelineImmigrationStatus;
+  optStartDate: string | null;
+  optEndDate: string | null;
+  stemOptStartDate: string | null;
+  stemOptEndDate: string | null;
+  unemploymentDaysUsed: number | null;
+  currentEmploymentStatus: OptTimelineEmploymentStatus;
+  targetWeeklyApplicationGoal: number | null;
+  manualOverrides?: {
+    daysRemaining?: number | null;
+    unemploymentDaysUsed?: number | null;
+    unemploymentDaysRemaining?: number | null;
+    urgencyLevel?: OptTimelineUrgencyLevel | null;
+  } | null;
+  updatedAt?: string | null;
+};
+
+export type OptTimelineDashboard = {
+  immigrationStatus: OptTimelineImmigrationStatus;
+  currentAuthorizationPeriod: 'OPT' | 'STEM_OPT' | 'not_tracked' | 'unknown';
+  daysRemaining: number | null;
+  unemploymentDaysUsed: number | null;
+  estimatedUnemploymentDaysRemaining: number | null;
+  unemploymentDaysLimit: number | null;
+  urgencyLevel: OptTimelineUrgencyLevel;
+  recommendedWeeklyApplicationTarget: number;
+  recommendedJobSearchStrategy: string;
+  recommendedFallbackCategories: OptTimelineFallbackCategory[];
+  warnings: string[];
+  dataGaps: string[];
+  assumptions: string[];
+  disclaimer: string;
+  calculatedAt: string;
+};
+
 export type AlertFrequency = 'instant' | 'daily' | 'weekly';
 
 export type NotificationChannel = 'email' | 'push' | 'both';
@@ -677,6 +740,7 @@ export type Profile = {
   is_international: boolean;
   visa_status: VisaStatus | null;
   opt_end_date: string | null;
+  opt_timeline_settings?: OptTimelineSettings | null;
   needs_sponsorship: boolean;
   alert_frequency: AlertFrequency;
   email_alerts: boolean;
