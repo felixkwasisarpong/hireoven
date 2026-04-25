@@ -90,12 +90,6 @@ export default function JobCardV2({
 
   const workModeLabel = job.is_remote ? "Remote" : job.is_hybrid ? "Hybrid" : job.location?.trim() ? "On-site" : null
 
-  const displaySkills = useMemo(() => {
-    if (job.skills && job.skills.length > 0) return job.skills.slice(0, 6)
-    if (cardView.skills.length > 0) return cardView.skills.slice(0, 6)
-    return []
-  }, [job.skills, cardView.skills])
-
   useEffect(() => {
     let cancelled = false
     void fetchJobSavedState(job.id).then((isSaved) => {
@@ -251,19 +245,6 @@ export default function JobCardV2({
               )}
             </div>
 
-            {/* Skill pills */}
-            {displaySkills.length > 0 && (
-              <div className="mt-2.5 flex flex-wrap gap-1.5">
-                {displaySkills.map((skill) => (
-                  <span
-                    key={skill}
-                    className="rounded-full bg-sky-50 px-2.5 py-0.5 text-[11px] font-medium text-sky-800"
-                  >
-                    {skill}
-                  </span>
-                ))}
-              </div>
-            )}
           </div>
 
           {showResumeSignal && (

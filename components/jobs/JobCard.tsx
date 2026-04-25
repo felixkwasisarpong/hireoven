@@ -151,12 +151,6 @@ export default function JobCard({
 
   const workModeLabel = job.is_remote ? "Remote" : job.is_hybrid ? "Hybrid" : job.location?.trim() ? "On-site" : null
 
-  const displaySkills = useMemo(() => {
-    if (job.skills && job.skills.length > 0) return job.skills
-    if (cardView.skills.length > 0) return cardView.skills
-    return []
-  }, [job.skills, cardView.skills])
-
   const metaItems = useMemo(() => {
     const items: { key: string; node: ReactNode }[] = []
     if (job.location?.trim()) {
@@ -353,19 +347,6 @@ export default function JobCard({
                   {metaItems.map((item) => (
                     <span key={item.key} className="inline-flex items-center">
                       {item.node}
-                    </span>
-                  ))}
-                </div>
-              )}
-
-              {displaySkills.length > 0 && (
-                <div className="mt-3 flex flex-wrap gap-1.5">
-                  {displaySkills.slice(0, 8).map((skill) => (
-                    <span
-                      key={skill}
-                      className="rounded-full bg-sky-50 px-2.5 py-1 text-[12px] font-medium text-sky-800"
-                    >
-                      {skill}
                     </span>
                   ))}
                 </div>

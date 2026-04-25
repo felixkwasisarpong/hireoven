@@ -14,6 +14,7 @@ import {
   Building2,
   CheckCircle2,
   ChevronRight,
+  ClipboardCheck,
   ExternalLink,
   Ghost,
   Info,
@@ -28,7 +29,7 @@ import {
 } from "lucide-react"
 import { useResumeContext } from "@/components/resume/ResumeProvider"
 import { useResumeAnalysis } from "@/lib/hooks/useResumeAnalysis"
-import { getJobIntelligence } from "@/lib/jobs/intelligence"
+import { createResumeLcaRoleAlignmentFallback, getJobIntelligence } from "@/lib/jobs/intelligence"
 import {
   JOB_APPLICATION_SAVED_EVENT,
   fetchJobSavedState,
@@ -236,6 +237,10 @@ export default function JobDetailPanel({
   const [recruiterDrawerOpen, setRecruiterDrawerOpen] = useState(false)
 
   const intel = useMemo(() => getJobIntelligence(job), [job])
+  const resumeAlignment = useMemo(
+    () => intel.resumeLcaRoleAlignment ?? createResumeLcaRoleAlignmentFallback(job, primaryResume),
+    [intel.resumeLcaRoleAlignment, job, primaryResume]
+  )
 
   // Sync server-preloaded score
   useEffect(() => {
@@ -450,7 +455,77 @@ export default function JobDetailPanel({
         </SectionRow>
       </PanelCard>
 
-      {/* ── 3. Visa / Sponsorship Intelligence ── */}
+      {/* ── 3. Resume Alignment ── */}
+      <PanelCard>
+        <SectionRow icon={ClipboardCheck} label="Resume Alignment">
+          {resumeAlignment.alignmentScore != null ? (
+            <div>
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-[22px] font-bold leading-none text-slate-900">
+                    {resumeAlignment.alignmentScore}%
+                  </p>
+                  <p className="mt-1 text-[11px] text-slate-500">
+                    {resumeAlignment.roleFamily ?? "Role alignment"} · {resumeAlignment.confidence} confidence
+                  </p>
+                </div>
+                <span className={cn(
+                  "rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1",
+                  resumeAlignment.alignmentScore >= 75
+                    ? "bg-emerald-50 text-emerald-800 ring-emerald-200"
+                    : resumeAlignment.alignmentScore >= 50
+                      ? "bg-blue-50 text-blue-800 ring-blue-200"
+                      : "bg-amber-50 text-amber-800 ring-amber-200"
+                )}>
+                  {resumeAlignment.alignmentScore >= 75 ? "Strong fit" : resumeAlignment.alignmentScore >= 50 ? "Can tailor" : "Needs tailoring"}
+                </span>
+              </div>
+
+              {resumeAlignment.strongMatches.length > 0 && (
+                <div className="mt-3">
+                  <p className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">Strong matches</p>
+                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                    {resumeAlignment.strongMatches.slice(0, 5).map((keyword) => (
+                      <span key={keyword} className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 ring-1 ring-emerald-100">
+                        {keyword}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {resumeAlignment.missingKeywords.length > 0 && (
+                <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
+                  Missing keywords to review: {resumeAlignment.missingKeywords.slice(0, 4).join(", ")}.
+                </p>
+              )}
+
+              <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
+                {resumeAlignment.resumeRewriteSuggestions[0] ?? resumeAlignment.explanation}
+              </p>
+
+              <Link
+                href={`/dashboard/resume/edit?jobId=${job.id}`}
+                className="mt-3 inline-flex items-center gap-1 text-[12px] font-semibold text-[#2563EB] hover:underline"
+              >
+                Tailor resume for this job <ArrowRight className="h-3 w-3" />
+              </Link>
+            </div>
+          ) : (
+            <div>
+              <UnknownState label={resumeAlignment.explanation} />
+              <Link
+                href="/dashboard/resume"
+                className="mt-2 inline-flex items-center gap-1 text-[12px] font-semibold text-[#2563EB] hover:underline"
+              >
+                Upload resume <ArrowRight className="h-3 w-3" />
+              </Link>
+            </div>
+          )}
+        </SectionRow>
+      </PanelCard>
+
+      {/* ── 4. Visa / Sponsorship Intelligence ── */}
       {(showVisaSignals || hasBlocker) && (
         <VisaIntelTrigger
           job={job}

@@ -13,6 +13,8 @@ import type {
   JobMatchScore,
   LcaSalaryIntelligence,
   MatchScoreBreakdown,
+  Resume,
+  ResumeLcaRoleAlignment,
   SponsorshipBlocker,
   StemOptReadiness,
   VisaIntelligence,
@@ -21,6 +23,7 @@ import { applicationVerdictResultToIntelligence, calculateApplicationVerdict } f
 import { capExemptDetectionToSignal, detectCapExemptSignal } from "@/lib/jobs/cap-exempt-signal"
 import { calculateGhostJobRisk, ghostJobRiskResultToIntelligence } from "@/lib/jobs/ghost-job-risk"
 import { calculateLcaSalaryIntelligence } from "@/lib/jobs/lca-salary-intelligence"
+import { calculateResumeLcaRoleAlignment } from "@/lib/jobs/resume-lca-role-alignment"
 import { calculateVisaFitScore } from "@/lib/jobs/visa-fit-score"
 
 const INTELLIGENCE_SCHEMA_VERSION = "2026-04-24" satisfies JobIntelligence["schemaVersion"]
@@ -298,6 +301,22 @@ export const getPostedFreshness = (
   }
 }
 
+export const createResumeLcaRoleAlignmentFallback = (
+  job?: (Partial<Job> & { company?: Partial<Company> | null }) | null,
+  resume?: Pick<Resume, "raw_text" | "skills" | "top_skills"> | null
+): ResumeLcaRoleAlignment =>
+  calculateResumeLcaRoleAlignment({
+    resumeText: resume?.raw_text ?? null,
+    resumeSkills: resume?.skills ?? null,
+    resumeTopSkills: resume?.top_skills ?? null,
+    jobTitle: job?.title ?? job?.normalized_title ?? null,
+    jobDescription: job?.description ?? null,
+    inferredRoleFamily: job?.normalized_title ?? null,
+    jobSkills: job?.skills ?? null,
+    historicalSponsoredRoleKeywords: [],
+    companyCommonSkills: [],
+  })
+
 export const createJobIntelligenceFallback = (
   job?: (Partial<Job> & { company?: Partial<Company> | null; match_score?: Partial<JobMatchScore> | null }) | null,
   options: { sources?: IntelligenceSource[]; now?: Date } = {}
@@ -334,6 +353,7 @@ export const createJobIntelligenceFallback = (
     ghostJobRisk,
     companyHiringHealth,
     applicationVerdict,
+    resumeLcaRoleAlignment: null,
     matchScore,
     postedFreshness: getPostedFreshness(job as Job | null, options.now),
     companyImmigrationProfile: createCompanyImmigrationProfileFallback(job?.company as Company | null),

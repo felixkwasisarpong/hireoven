@@ -39,6 +39,7 @@ import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
 import { scoreJobsForUser } from "@/lib/matching/batch-scorer"
 import { getPostgresPool } from "@/lib/postgres/server"
 import {
+  extractSkillsFromText,
   getSkillsBucketValues,
   normalizeSkillList,
   skillMatches,
@@ -65,6 +66,7 @@ type SimilarJob = {
 type ResumeSkillRow = {
   skills: Skills | null
   top_skills: string[] | null
+  raw_text: string | null
 }
 
 const EXPERIENCE_BY_SENIORITY: Record<string, string> = {
@@ -134,7 +136,6 @@ function BulletList({ items }: { items: string[] }) {
     </ul>
   )
 }
-
 
 export default async function DashboardJobDetailPage({ params }: Props) {
   const { id } = await params
@@ -219,7 +220,7 @@ export default async function DashboardJobDetailPage({ params }: Props) {
       : Promise.resolve(new Map<string, JobMatchScore>()),
     session?.sub
       ? pool.query<ResumeSkillRow>(
-          `SELECT skills, top_skills
+          `SELECT skills, top_skills, raw_text
            FROM resumes
            WHERE user_id = $1
              AND parse_status = 'complete'
@@ -241,12 +242,22 @@ export default async function DashboardJobDetailPage({ params }: Props) {
         )
       : Promise.resolve({ rows: [] as SimilarJob[] }),
   ])
+
   const initialMatchScore = matchScoreMap.get(id) ?? null
+
+  // Resume skills: structured buckets + raw text fallback via taxonomy
   const resumeSkillLabels = normalizeSkillList([
     ...(resumeSkillResult.rows[0]?.top_skills ?? []),
     ...getSkillsBucketValues(resumeSkillResult.rows[0]?.skills ?? null),
+    ...extractSkillsFromText(resumeSkillResult.rows[0]?.raw_text ?? null),
   ])
-  const requirementSkillPills = normalizeSkillList([...(job.skills ?? []), ...page.skills]).map((skill) => ({
+
+  // Job skills come from the DB (crawl-time extraction) — no UI-side mining needed
+  const jobSkillCandidates = normalizeSkillList(
+    [...(job.skills ?? []), ...page.skills],
+    40
+  )
+  const requirementSkillPills = jobSkillCandidates.map((skill) => ({
     skill,
     matched: resumeSkillLabels.some((resumeSkill) => skillMatches(skill, resumeSkill)),
   }))
@@ -400,27 +411,27 @@ export default async function DashboardJobDetailPage({ params }: Props) {
                   </div>
                 )}
 
-                {qualificationItems.length > 0 && (
+                {(qualificationItems.length > 0 || requirementSkillPills.length > 0) && (
                   <div>
                     <SectionH icon={ClipboardList}>Requirements</SectionH>
                     {requirementSkillPills.length > 0 && (
                       <div className="mt-3">
                         <p className="text-[11.5px] font-semibold uppercase tracking-[0.12em] text-slate-400">
-                          Required skills
+                          Skills needed for this job
                         </p>
                         <div className="mt-2 flex flex-wrap gap-2">
                           {requirementSkillPills.map(({ skill, matched }) => (
                             <span
                               key={skill}
                               className={cn(
-                                "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-semibold ring-1",
+                                "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-semibold ring-1",
                                 matched
                                   ? "bg-emerald-50 text-emerald-800 ring-emerald-200"
-                                  : "bg-slate-50 text-slate-600 ring-slate-200"
+                                  : "bg-amber-50 text-amber-800 ring-amber-200"
                               )}
                             >
                               {matched && (
-                                <CheckCircle2 className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden />
+                                <CheckCircle2 className="h-3 w-3" strokeWidth={2.25} aria-hidden />
                               )}
                               {skill}
                             </span>
@@ -428,9 +439,11 @@ export default async function DashboardJobDetailPage({ params }: Props) {
                         </div>
                       </div>
                     )}
-                    <div className="mt-3">
-                      <BulletList items={qualificationItems} />
-                    </div>
+                    {qualificationItems.length > 0 && (
+                      <div className="mt-3">
+                        <BulletList items={qualificationItems} />
+                      </div>
+                    )}
                   </div>
                 )}
 

@@ -746,6 +746,17 @@ export type ApplicationVerdict = {
   computedAt: string | null;
 };
 
+export type ResumeLcaRoleAlignment = {
+  alignmentScore: number | null;
+  missingKeywords: string[];
+  strongMatches: string[];
+  roleFamily: string | null;
+  resumeRewriteSuggestions: string[];
+  explanation: string;
+  confidence: IntelligenceConfidence;
+  source: 'lca_history' | 'job_description' | 'mixed' | 'insufficient_data';
+};
+
 export type MatchScoreBreakdown = {
   overallScore: number | null;
   skillsScore: number | null;
@@ -777,6 +788,7 @@ export type JobIntelligence = {
   ghostJobRisk: GhostJobRisk | null;
   companyHiringHealth: CompanyHiringHealth | null;
   applicationVerdict: ApplicationVerdict | null;
+  resumeLcaRoleAlignment?: ResumeLcaRoleAlignment | null;
   matchScore: MatchScoreBreakdown | null;
   postedFreshness: {
     firstDetectedAt: string | null;
