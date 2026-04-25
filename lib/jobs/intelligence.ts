@@ -17,6 +17,7 @@ import type {
   StemOptReadiness,
   VisaIntelligence,
 } from "@/types"
+import { calculateLcaSalaryIntelligence } from "@/lib/jobs/lca-salary-intelligence"
 import { calculateVisaFitScore } from "@/lib/jobs/visa-fit-score"
 
 const INTELLIGENCE_SCHEMA_VERSION = "2026-04-24" satisfies JobIntelligence["schemaVersion"]
@@ -133,22 +134,17 @@ export const createVisaIntelligenceFallback = (
 }
 
 export const createLcaSalaryIntelligenceFallback = (
-  job?: Pick<Job, "salary_min" | "salary_max" | "salary_currency" | "location"> | null
-): LcaSalaryIntelligence => ({
-  salaryFitScore: null,
-  position: "unknown",
-  offeredSalaryMin: job?.salary_min ?? null,
-  offeredSalaryMax: job?.salary_max ?? null,
-  prevailingWage: null,
-  lcaWagePercentile: null,
-  comparableLcaCount: null,
-  wageLevel: null,
-  socCode: null,
-  socTitle: null,
-  worksiteState: null,
-  confidence: "unknown",
-  summary: null,
-})
+  job?: (Partial<Job> & { company?: Partial<Company> | null }) | null
+): LcaSalaryIntelligence =>
+  calculateLcaSalaryIntelligence({
+    salaryMin: job?.salary_min ?? null,
+    salaryMax: job?.salary_max ?? null,
+    jobTitle: job?.title ?? job?.normalized_title ?? null,
+    companyName: job?.company?.name ?? null,
+    location: job?.location ?? null,
+    roleFamily: job?.normalized_title ?? null,
+    records: [],
+  })
 
 export const createStemOptReadinessFallback = (): StemOptReadiness => ({
   eligible: null,
@@ -276,7 +272,7 @@ export const createJobIntelligenceFallback = (
     sources,
     visa: createVisaIntelligenceFallback(job),
     sponsorshipBlockers: [],
-    lcaSalary: createLcaSalaryIntelligenceFallback(job as Job | null),
+    lcaSalary: createLcaSalaryIntelligenceFallback(job),
     stemOpt: createStemOptReadinessFallback(),
     capExempt: null,
     ghostJobRisk: createGhostJobRiskFallback(job as Job | null, options.now),

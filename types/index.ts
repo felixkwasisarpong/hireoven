@@ -511,12 +511,33 @@ export type VisaIntelligence = {
 };
 
 export type LcaSalaryPosition = 'below_range' | 'within_range' | 'above_range' | 'unknown';
+export type LcaSalaryComparisonLabel = 'Below Market' | 'Aligned' | 'Above Market' | 'Unknown';
+
+export type LcaWageRecord = {
+  employerName?: string | null;
+  jobTitle?: string | null;
+  roleFamily?: string | null;
+  location?: string | null;
+  worksiteState?: string | null;
+  wageRateFrom: number | null;
+  wageRateTo?: number | null;
+  wageUnit?: 'Year' | 'Hour' | 'Month' | 'Week' | 'Bi-Weekly' | string | null;
+  prevailingWage?: number | null;
+  wageLevel?: string | null;
+  fiscalYear?: number | null;
+  decisionDate?: string | null;
+};
 
 export type LcaSalaryIntelligence = {
   salaryFitScore: number | null;
   position: LcaSalaryPosition;
   offeredSalaryMin: number | null;
   offeredSalaryMax: number | null;
+  historicalRangeMin: number | null;
+  historicalRangeMax: number | null;
+  medianWage: number | null;
+  commonWageLevel: string | null;
+  comparisonLabel: LcaSalaryComparisonLabel;
   prevailingWage: number | null;
   lcaWagePercentile: number | null;
   comparableLcaCount: number | null;
@@ -525,6 +546,7 @@ export type LcaSalaryIntelligence = {
   socTitle: string | null;
   worksiteState: string | null;
   confidence: IntelligenceConfidence;
+  explanation: string;
   summary: string | null;
 };
 
