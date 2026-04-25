@@ -253,6 +253,23 @@ export default function JobCardV2({
               </div>
             )}
           </div>
+
+          {showResumeSignal && (
+            <button
+              type="button"
+              onClick={openMatchDetail}
+              disabled={score === null && !isMatchScoreLoading}
+              className="self-start rounded-2xl bg-white p-1.5 ring-1 ring-slate-100 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]/25 sm:ml-2"
+              aria-label="View match score"
+            >
+              <MatchBadge
+                score={score}
+                loading={isMatchScoreLoading && score === null}
+                compact
+                className="rounded-2xl px-2.5 py-1.5"
+              />
+            </button>
+          )}
         </div>
 
         {/* Intelligence signal strip */}
@@ -260,19 +277,6 @@ export default function JobCardV2({
           className="flex min-h-[36px] flex-wrap items-center gap-2 border-t border-[#F1F5F9] bg-[#FAFAFA] px-5 py-2.5"
           onClick={(e) => e.stopPropagation()}
         >
-          {/* Match score compact */}
-          {showResumeSignal && (
-            <button
-              type="button"
-              onClick={openMatchDetail}
-              disabled={score === null && !isMatchScoreLoading}
-              className="focus-visible:outline-none"
-              aria-label="View match score"
-            >
-              <MatchBadge score={score} loading={isMatchScoreLoading && score === null} compact />
-            </button>
-          )}
-
           {/* Visa fit — only for international / enabled users */}
           {showVisaSignals && intel.visa?.label && (
             <button

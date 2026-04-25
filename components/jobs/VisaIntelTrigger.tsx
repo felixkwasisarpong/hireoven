@@ -20,7 +20,9 @@ type Props = {
  */
 export default function VisaIntelTrigger({ job, displayTitle, children, className }: Props) {
   const [open, setOpen] = useState(false)
-  const openDrawer = useCallback(() => setOpen(true), [])
+  const openDrawer = useCallback(() => {
+    setOpen(true)
+  }, [])
   const closeDrawer = useCallback(() => setOpen(false), [])
 
   return (
@@ -31,7 +33,15 @@ export default function VisaIntelTrigger({ job, displayTitle, children, classNam
           <button
             type="button"
             aria-label="Open Visa Intelligence details"
-            onClick={openDrawer}
+            onPointerDown={(event) => {
+              event.preventDefault()
+              event.stopPropagation()
+              openDrawer()
+            }}
+            onClick={(event) => {
+              event.preventDefault()
+              event.stopPropagation()
+            }}
             className="absolute inset-0 z-20 rounded-xl bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]/35"
           >
             <span className="sr-only">Open Visa Intelligence details</span>
@@ -40,7 +50,15 @@ export default function VisaIntelTrigger({ job, displayTitle, children, classNam
       ) : (
         <button
           type="button"
-          onClick={openDrawer}
+          onPointerDown={(event) => {
+            event.preventDefault()
+            event.stopPropagation()
+            openDrawer()
+          }}
+          onClick={(event) => {
+            event.preventDefault()
+            event.stopPropagation()
+          }}
           className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[11px] font-semibold text-[#2563EB] transition hover:bg-blue-50 focus-visible:outline-none"
         >
           Details

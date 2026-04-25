@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useId } from "react"
-import { createPortal } from "react-dom"
 import {
   AlertTriangle,
   CheckCircle2,
@@ -199,7 +198,7 @@ export default function VisaIntelDrawer({ job, displayTitle, onClose }: Props) {
 
   const sponsorshipTrend = intel.companyHiringHealth?.sponsorshipTrend ?? "unknown"
 
-  const drawer = (
+  return (
     <div className="fixed inset-0 z-[200] flex justify-end">
       {/* Backdrop */}
       <button
@@ -483,6 +482,4 @@ export default function VisaIntelDrawer({ job, displayTitle, onClose }: Props) {
       </aside>
     </div>
   )
-
-  return createPortal(drawer, document.body)
 }
