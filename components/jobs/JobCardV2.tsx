@@ -65,6 +65,7 @@ export default function JobCardV2({
   const { attachRef: h1bAttachRef, prediction: h1bPrediction, isLoading: h1bIsLoading } = useH1BPrediction(job.id)
   const now = nowProp ?? Date.now()
   const router = useRouter()
+  const detailHref = `/dashboard/jobs/${job.id}`
   const { primaryResume } = useResumeContext()
   const showResumeSignal = typeof hasPrimaryResume === "boolean" ? hasPrimaryResume : Boolean(primaryResume)
 
@@ -109,6 +110,12 @@ export default function JobCardV2({
     window.addEventListener(JOB_APPLICATION_SAVED_EVENT, onSync as EventListener)
     return () => window.removeEventListener(JOB_APPLICATION_SAVED_EVENT, onSync as EventListener)
   }, [job.id])
+
+  useEffect(() => {
+    // The whole card navigates via router.push, so Next cannot infer a prefetch
+    // like it can for <Link>. Prefetch visible feed cards to reduce click delay.
+    if (analysisIndex < 10) router.prefetch(detailHref)
+  }, [analysisIndex, detailHref, router])
 
   async function handleSave(e: React.MouseEvent) {
     e.stopPropagation()
@@ -162,11 +169,13 @@ export default function JobCardV2({
         ref={h1bAttachRef as (node: HTMLElement | null) => void}
         role="button"
         tabIndex={0}
-        onClick={() => router.push(`/dashboard/jobs/${job.id}`)}
+        onMouseEnter={() => router.prefetch(detailHref)}
+        onFocus={() => router.prefetch(detailHref)}
+        onClick={() => router.push(detailHref)}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault()
-            router.push(`/dashboard/jobs/${job.id}`)
+            router.push(detailHref)
           }
         }}
         className="group relative flex cursor-pointer flex-col overflow-hidden rounded-xl border border-[#E5E7EB] bg-white transition-shadow hover:shadow-[0_2px_12px_rgba(15,23,42,0.07)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]/20"
