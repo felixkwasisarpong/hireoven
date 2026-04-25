@@ -645,6 +645,8 @@ export type GhostJobRisk = {
   freshnessDays: number | null;
   repostCount: number | null;
   lastSeenAt: string | null;
+  reasons: string[];
+  recommendedAction: string | null;
   signals: IntelligenceSignal[];
   summary: string | null;
 };

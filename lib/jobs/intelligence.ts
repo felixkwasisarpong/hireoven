@@ -18,6 +18,7 @@ import type {
   VisaIntelligence,
 } from "@/types"
 import { capExemptDetectionToSignal, detectCapExemptSignal } from "@/lib/jobs/cap-exempt-signal"
+import { calculateGhostJobRisk, ghostJobRiskResultToIntelligence } from "@/lib/jobs/ghost-job-risk"
 import { calculateLcaSalaryIntelligence } from "@/lib/jobs/lca-salary-intelligence"
 import { calculateVisaFitScore } from "@/lib/jobs/visa-fit-score"
 
@@ -160,20 +161,49 @@ export const createStemOptReadinessFallback = (): StemOptReadiness => ({
 })
 
 export const createGhostJobRiskFallback = (
-  job?: Pick<Job, "first_detected_at" | "last_seen_at" | "is_active"> | null,
+  job?: (Partial<Job> & { company?: Partial<Company> | null }) | null,
   now: Date = new Date()
 ): GhostJobRisk => {
-  const freshness = getPostedFreshness(job, now)
-
-  return {
-    score: null,
-    riskLevel: "unknown",
-    freshnessDays: freshness.freshnessDays,
-    repostCount: null,
-    lastSeenAt: job?.last_seen_at ?? null,
-    signals: [],
-    summary: null,
+  const raw = isRecord(job?.raw_data) ? job.raw_data : {}
+  const toNumber = (...values: unknown[]): number | null => {
+    for (const value of values) {
+      if (typeof value === "number" && Number.isFinite(value)) return value
+      if (typeof value === "string" && value.trim()) {
+        const parsed = Number(value)
+        if (Number.isFinite(parsed)) return parsed
+      }
+    }
+    return null
   }
+  const toString = (...values: unknown[]): string | null => {
+    for (const value of values) {
+      if (typeof value === "string" && value.trim()) return value
+    }
+    return null
+  }
+  const locationCount =
+    toNumber(raw.location_count, raw.locationCount, raw.location_variants, raw.locationVariants) ??
+    (Array.isArray(raw.locations) ? raw.locations.length : null)
+
+  const result = calculateGhostJobRisk({
+    postedAt: job?.first_detected_at ?? null,
+    lastVerifiedAt: job?.last_seen_at ?? null,
+    applyUrlStatus: toString(raw.apply_url_status, raw.applyUrlStatus, raw.apply_status, raw.applyStatus),
+    timesSeen: toNumber(raw.times_seen, raw.timesSeen, raw.seen_count, raw.seenCount),
+    repostCount: toNumber(raw.repost_count, raw.repostCount),
+    locationCount,
+    duplicateCount: toNumber(raw.duplicate_count, raw.duplicateCount, raw.same_job_count, raw.sameJobCount),
+    description: job?.description ?? null,
+    salaryMin: job?.salary_min ?? null,
+    salaryMax: job?.salary_max ?? null,
+    atsType: job?.company?.ats_type ?? null,
+    applyUrl: job?.apply_url ?? null,
+    companyDomain: job?.company?.domain ?? null,
+    isRemote: job?.is_remote ?? null,
+    now,
+  })
+
+  return ghostJobRiskResultToIntelligence(result, job?.last_seen_at ?? null)
 }
 
 export const createCompanyHiringHealthFallback = (
@@ -279,7 +309,7 @@ export const createJobIntelligenceFallback = (
     lcaSalary: createLcaSalaryIntelligenceFallback(job),
     stemOpt: createStemOptReadinessFallback(),
     capExempt: visa.capExempt,
-    ghostJobRisk: createGhostJobRiskFallback(job as Job | null, options.now),
+    ghostJobRisk: createGhostJobRiskFallback(job, options.now),
     companyHiringHealth: createCompanyHiringHealthFallback(job?.company as Company | null),
     applicationVerdict: null,
     matchScore: createMatchScoreBreakdownFallback(job?.match_score),

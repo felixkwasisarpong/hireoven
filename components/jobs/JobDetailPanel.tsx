@@ -322,8 +322,23 @@ export default function JobDetailPanel({
   // Ghost risk
   const ghostRisk = intel.ghostJobRisk
   const ghostFreshness = ghostRisk?.freshnessDays
-  const ghostIsStale = typeof ghostFreshness === "number" && ghostFreshness > 45
   const ghostRiskLevel = ghostRisk?.riskLevel
+  const ghostTone =
+    ghostRiskLevel === "high"
+      ? "bg-red-50 text-red-800 ring-red-200"
+      : ghostRiskLevel === "medium"
+        ? "bg-amber-50 text-amber-800 ring-amber-200"
+        : ghostRiskLevel === "low"
+          ? "bg-emerald-50 text-emerald-800 ring-emerald-200"
+          : "bg-slate-50 text-slate-600 ring-slate-200"
+  const ghostLabel =
+    ghostRiskLevel === "high"
+      ? "High risk"
+      : ghostRiskLevel === "medium"
+        ? "Medium risk"
+        : ghostRiskLevel === "low"
+          ? "Low risk"
+          : "Unknown"
 
   // STEM OPT
   const stemOpt = intel.stemOpt
@@ -531,17 +546,29 @@ export default function JobDetailPanel({
       {/* ── 6. Ghost Job Risk ── */}
       <PanelCard>
         <SectionRow icon={Ghost} label="Ghost Job Risk">
-          {ghostIsStale || ghostRiskLevel === "high" ? (
-            <div className="flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 ring-1 ring-amber-200">
-              <Ghost className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-700" aria-hidden />
-              <p className="text-[12px] text-amber-800">
-                {ghostIsStale ? `Posting is ${ghostFreshness}d old — verify it's still active.` : "High ghost-job risk detected."}
-              </p>
+          {ghostRisk ? (
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className={cn("inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ring-1", ghostTone)}>
+                  <Ghost className="h-3 w-3" aria-hidden />
+                  {ghostLabel}
+                  {ghostRisk.score != null ? ` · ${ghostRisk.score}/100` : ""}
+                </span>
+                {ghostFreshness != null ? (
+                  <span className="text-[11px] text-slate-400">
+                    {ghostFreshness === 0 ? "Posted today" : `${ghostFreshness}d old`}
+                  </span>
+                ) : null}
+              </div>
+              {ghostRisk.recommendedAction ? (
+                <p className="mt-2 text-[12px] leading-relaxed text-slate-600">{ghostRisk.recommendedAction}</p>
+              ) : null}
+              {ghostRisk.reasons.length > 0 ? (
+                <p className="mt-1.5 text-[11px] leading-relaxed text-slate-400">
+                  {ghostRisk.reasons.slice(0, 2).join(" · ")}
+                </p>
+              ) : null}
             </div>
-          ) : ghostFreshness != null ? (
-            <p className="text-[12px] text-slate-600">
-              Posted <span className="font-semibold">{ghostFreshness === 0 ? "today" : `${ghostFreshness}d ago`}</span> — looks fresh.
-            </p>
           ) : (
             <UnknownState label="Freshness data unavailable." />
           )}
