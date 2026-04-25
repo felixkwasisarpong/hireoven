@@ -6,7 +6,10 @@ import {
   matchesLocationFilter,
   matchesSearchQuery,
 } from "@/lib/jobs/search-match"
+import { getJobIntelligence } from "@/lib/jobs/intelligence"
 import type { JobFilters, JobWithCompany, JobWithMatchScore } from "@/types"
+
+const GHOST_RISK_ORDER: Record<string, number> = { low: 0, medium: 1, high: 2, unknown: 3 }
 
 const PAGE_SIZE = 20
 const SEARCH_CHUNK_SIZE = 80
@@ -123,6 +126,58 @@ function matchesClientFilters(job: JobWithCompany, filters: JobFilters, query: s
     const needle = filters.industryQuery.trim().toLowerCase()
     const industry = job.company?.industry?.toLowerCase() ?? ""
     if (!industry.includes(needle)) return false
+  }
+
+  // --- Advanced / intelligence-based filters ---
+  if (filters.hide_blockers && job.requires_authorization) return false
+
+  if (filters.has_salary && job.salary_min == null && job.salary_max == null) return false
+
+  if (filters.direct_ats_only) {
+    const ats = job.company?.ats_type
+    if (!ats || ats === "custom") return false
+  }
+
+  // Intelligence-dependent filters — computed lazily (cheap fallback when not stored)
+  const hasIntelFilter =
+    filters.visa_fit?.length ||
+    filters.stem_opt_ready ||
+    filters.e_verify_signal ||
+    filters.cap_exempt_possible ||
+    filters.lca_salary_aligned ||
+    filters.ghost_risk_max
+
+  if (hasIntelFilter) {
+    const intel = getJobIntelligence(job)
+
+    if (filters.visa_fit?.length) {
+      const label = intel.visa?.label ?? "Unknown"
+      if (!filters.visa_fit.includes(label as never)) return false
+    }
+
+    if (filters.stem_opt_ready) {
+      const stemEligible =
+        intel.stemOpt?.eligible || intel.stemOpt?.eVerifyLikely
+      if (!stemEligible) return false
+    }
+
+    if (filters.e_verify_signal) {
+      if (!intel.stemOpt?.eVerifyLikely) return false
+    }
+
+    if (filters.cap_exempt_possible) {
+      if (!intel.capExempt?.isLikelyCapExempt) return false
+    }
+
+    if (filters.lca_salary_aligned) {
+      if (intel.lcaSalary?.comparisonLabel !== "Aligned") return false
+    }
+
+    if (filters.ghost_risk_max) {
+      const jobRisk = (intel.ghostJobRisk?.riskLevel ?? "unknown").toLowerCase()
+      const maxRisk = filters.ghost_risk_max
+      if ((GHOST_RISK_ORDER[jobRisk] ?? 3) > (GHOST_RISK_ORDER[maxRisk] ?? 1)) return false
+    }
   }
 
   return matchesSearch(job, query)

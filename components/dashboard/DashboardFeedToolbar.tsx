@@ -30,6 +30,7 @@ import {
   type FilterPill,
 } from "@/components/jobs/JobFilters"
 import { searchQueryToParams } from "@/components/jobs/JobSearch"
+import AdvancedFiltersDrawer from "@/components/jobs/AdvancedFiltersDrawer"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { cn } from "@/lib/utils"
 import type { EmploymentType, JobFilters, SeniorityLevel } from "@/types"
@@ -63,6 +64,7 @@ type Props = {
   filterDropdown: FeedToolbarDropdown
   setFilterDropdown: Dispatch<SetStateAction<FeedToolbarDropdown>>
   filtersBarRef: RefObject<HTMLDivElement | null>
+  isInternational?: boolean
 }
 
 export default function DashboardFeedToolbar({
@@ -72,6 +74,7 @@ export default function DashboardFeedToolbar({
   filterDropdown,
   setFilterDropdown,
   filtersBarRef,
+  isInternational = false,
 }: Props) {
   const pathname = usePathname()
   const router = useRouter()
@@ -82,6 +85,7 @@ export default function DashboardFeedToolbar({
   const [skillsDraft, setSkillsDraft] = useState(filters.skills?.join(", ") ?? "")
   const [industryDraft, setIndustryDraft] = useState(filters.industryQuery ?? "")
   const [keywordsDraft, setKeywordsDraft] = useState(searchQuery)
+  const [advancedOpen, setAdvancedOpen] = useState(false)
 
   const replaceFilters = (nextFilters: JobFilters) => {
     const next = filtersToSearchParams(searchParams, nextFilters)
@@ -108,6 +112,15 @@ export default function DashboardFeedToolbar({
     if (filters.hybrid) n++
     if (filters.onsite) n++
     if (filters.company_ids?.length) n++
+    if (filters.hide_blockers) n++
+    if (filters.visa_fit?.length) n++
+    if (filters.stem_opt_ready) n++
+    if (filters.e_verify_signal) n++
+    if (filters.cap_exempt_possible) n++
+    if (filters.lca_salary_aligned) n++
+    if (filters.ghost_risk_max) n++
+    if (filters.has_salary) n++
+    if (filters.direct_ats_only) n++
     return n
   }, [filters])
 
@@ -655,57 +668,36 @@ export default function DashboardFeedToolbar({
           )}
         </div>
 
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => openDropdown("more")}
-            className={cn(
-              "inline-flex h-8 items-center gap-1.5 rounded-lg border bg-white px-3 text-[13px] font-semibold transition shadow-sm",
-              moreFilterCount > 0
-                ? "border-[#0052CC]/30 bg-sky-50 text-[#0052CC] ring-1 ring-[#0052CC]/15"
-                : "border-[#E5E7EB] text-[#0052CC] hover:bg-sky-50/60"
-            )}
-          >
-            <SlidersHorizontal className="h-3.5 w-3.5" strokeWidth={2} />
-            More filters
-            {moreFilterCount > 0 && (
-              <span className="ml-0.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-[#0052CC] px-1 text-[10px] font-bold leading-none text-white">
-                {moreFilterCount}
-              </span>
-            )}
-          </button>
-          {filterDropdown === "more" && (
-            <div className="absolute left-0 top-full z-50 mt-1.5 w-[min(100vw-2rem,360px)] rounded-xl border border-slate-200 bg-white p-4 shadow-lg">
-              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Work mode</p>
-              <div className="mb-4 flex flex-wrap gap-2">
-                {(
-                  [
-                    { label: "Hybrid", key: "hybrid" as const },
-                    { label: "On-site", key: "onsite" as const },
-                  ] as const
-                ).map((opt) => (
-                  <button
-                    key={opt.key}
-                    type="button"
-                    onClick={() => replaceFilters({ ...filters, [opt.key]: !filters[opt.key] })}
-                    className={cn(
-                      "rounded-lg border px-3 py-1.5 text-sm font-medium transition",
-                      filters[opt.key]
-                        ? "border-[#0052CC]/30 bg-[#0052CC]/10 text-[#0052CC]"
-                        : "border-slate-200 text-slate-600 hover:bg-slate-50"
-                    )}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-              <p className="text-xs text-slate-500">
-                Tip: use the Remote pill in the bar for remote-only jobs (API filter).
-              </p>
-            </div>
+        <button
+          type="button"
+          onClick={() => {
+            setFilterDropdown(null)
+            setAdvancedOpen(true)
+          }}
+          className={cn(
+            "inline-flex h-8 items-center gap-1.5 rounded-lg border bg-white px-3 text-[13px] font-semibold transition shadow-sm",
+            moreFilterCount > 0
+              ? "border-[#0052CC]/30 bg-sky-50 text-[#0052CC] ring-1 ring-[#0052CC]/15"
+              : "border-[#E5E7EB] text-[#0052CC] hover:bg-sky-50/60"
           )}
-        </div>
+        >
+          <SlidersHorizontal className="h-3.5 w-3.5" strokeWidth={2} />
+          More filters
+          {moreFilterCount > 0 && (
+            <span className="ml-0.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-[#0052CC] px-1 text-[10px] font-bold leading-none text-white">
+              {moreFilterCount}
+            </span>
+          )}
+        </button>
       </div>
+
+      <AdvancedFiltersDrawer
+        open={advancedOpen}
+        onClose={() => setAdvancedOpen(false)}
+        filters={filters}
+        onFiltersChange={replaceFilters}
+        isInternational={isInternational}
+      />
 
       <div className="flex flex-wrap items-center gap-2 pt-1">
         {pills.map((pill) => (

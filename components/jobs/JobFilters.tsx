@@ -10,10 +10,12 @@ import {
 import { cn } from "@/lib/utils"
 import type {
   EmploymentType,
+  GhostRiskMax,
   JobFilters,
   JobSortOption,
   JobWithinWindow,
   SeniorityLevel,
+  VisaFitLabel,
 } from "@/types"
 
 export const SENIORITY_OPTIONS: {
@@ -46,6 +48,20 @@ export const WITHIN_OPTIONS: {
   { value: "6h", label: "Last 6 hours" },
   { value: "24h", label: "Last 24 hours" },
   { value: "3d", label: "Last 3 days" },
+  { value: "7d", label: "Last 7 days" },
+]
+
+export const VISA_FIT_OPTIONS: { value: VisaFitLabel; label: string }[] = [
+  { value: "Very Strong", label: "Very Strong" },
+  { value: "Strong", label: "Strong" },
+  { value: "Medium", label: "Medium" },
+  { value: "Weak", label: "Weak" },
+  { value: "Blocked", label: "Blocked" },
+]
+
+export const GHOST_RISK_OPTIONS: { value: GhostRiskMax; label: string }[] = [
+  { value: "low", label: "Low risk only" },
+  { value: "medium", label: "Low + Medium risk" },
 ]
 
 export const SORT_OPTIONS: {
@@ -65,6 +81,8 @@ export type FilterPillTone =
   | "remote"
   | "skills"
   | "industry"
+  | "visa"
+  | "quality"
   | "default"
 
 export type FilterPill = {
@@ -90,6 +108,16 @@ export function clearedJobFilters(): JobFilters {
     min_salary: undefined,
     skills: undefined,
     industryQuery: undefined,
+    // Advanced filters
+    hide_blockers: undefined,
+    visa_fit: undefined,
+    stem_opt_ready: undefined,
+    e_verify_signal: undefined,
+    cap_exempt_possible: undefined,
+    lca_salary_aligned: undefined,
+    ghost_risk_max: undefined,
+    has_salary: undefined,
+    direct_ats_only: undefined,
   }
 }
 
@@ -109,6 +137,10 @@ export function pillToneClasses(tone: FilterPillTone): string {
       return "border-amber-200/90 bg-amber-50 text-amber-950 hover:bg-amber-100/80"
     case "industry":
       return "border-teal-200/90 bg-teal-50 text-teal-900 hover:bg-teal-100/80"
+    case "visa":
+      return "border-indigo-200/90 bg-indigo-50 text-indigo-900 hover:bg-indigo-100/80"
+    case "quality":
+      return "border-orange-200/90 bg-orange-50 text-orange-900 hover:bg-orange-100/80"
     default:
       return "border-slate-200/90 bg-slate-50 text-slate-800 hover:bg-slate-100/90"
   }
@@ -149,6 +181,14 @@ export function parseJobFilters(
   const skills =
     skillsRaw?.map((s) => s.trim()).filter(Boolean).length ? skillsRaw.map((s) => s.trim()) : undefined
 
+  const ghostRiskRaw = params.get("ghost_risk_max")
+  const ghost_risk_max =
+    ghostRiskRaw === "low" || ghostRiskRaw === "medium"
+      ? (ghostRiskRaw as GhostRiskMax)
+      : undefined
+
+  const visaFitRaw = parseList<VisaFitLabel>(params, "visa_fit")
+
   return {
     remote: params.get("remote") === "true",
     hybrid: params.get("hybrid") === "true",
@@ -163,6 +203,16 @@ export function parseJobFilters(
     min_salary,
     skills,
     industryQuery: params.get("industry")?.trim() || undefined,
+    // Advanced filters
+    hide_blockers: params.get("hide_blockers") === "true" || undefined,
+    visa_fit: visaFitRaw?.length ? visaFitRaw : undefined,
+    stem_opt_ready: params.get("stem_opt_ready") === "true" || undefined,
+    e_verify_signal: params.get("e_verify_signal") === "true" || undefined,
+    cap_exempt_possible: params.get("cap_exempt_possible") === "true" || undefined,
+    lca_salary_aligned: params.get("lca_salary_aligned") === "true" || undefined,
+    ghost_risk_max,
+    has_salary: params.get("has_salary") === "true" || undefined,
+    direct_ats_only: params.get("direct_ats_only") === "true" || undefined,
   }
 }
 
@@ -219,6 +269,35 @@ export function filtersToSearchParams(
   const industry = filters.industryQuery?.trim()
   if (industry) next.set("industry", industry)
   else next.delete("industry")
+
+  // Advanced filters
+  if (filters.hide_blockers) next.set("hide_blockers", "true")
+  else next.delete("hide_blockers")
+
+  const visaFit = normalizeArray(filters.visa_fit)
+  if (visaFit?.length) next.set("visa_fit", visaFit.join(","))
+  else next.delete("visa_fit")
+
+  if (filters.stem_opt_ready) next.set("stem_opt_ready", "true")
+  else next.delete("stem_opt_ready")
+
+  if (filters.e_verify_signal) next.set("e_verify_signal", "true")
+  else next.delete("e_verify_signal")
+
+  if (filters.cap_exempt_possible) next.set("cap_exempt_possible", "true")
+  else next.delete("cap_exempt_possible")
+
+  if (filters.lca_salary_aligned) next.set("lca_salary_aligned", "true")
+  else next.delete("lca_salary_aligned")
+
+  if (filters.ghost_risk_max) next.set("ghost_risk_max", filters.ghost_risk_max)
+  else next.delete("ghost_risk_max")
+
+  if (filters.has_salary) next.set("has_salary", "true")
+  else next.delete("has_salary")
+
+  if (filters.direct_ats_only) next.set("direct_ats_only", "true")
+  else next.delete("direct_ats_only")
 
   return next
 }
@@ -343,6 +422,88 @@ export function buildFilterPills(filters: JobFilters): FilterPill[] {
       label: filters.industryQuery.trim(),
       nextFilters: { ...filters, industryQuery: undefined },
       tone: "industry",
+    })
+  }
+
+  // Advanced filter pills
+  if (filters.hide_blockers) {
+    pills.push({
+      id: "hide_blockers",
+      label: "No blockers",
+      nextFilters: { ...filters, hide_blockers: undefined },
+      tone: "visa",
+    })
+  }
+
+  if (filters.visa_fit?.length) {
+    pills.push({
+      id: "visa_fit",
+      label: `Visa: ${filters.visa_fit.join(" / ")}`,
+      nextFilters: { ...filters, visa_fit: undefined },
+      tone: "visa",
+    })
+  }
+
+  if (filters.stem_opt_ready) {
+    pills.push({
+      id: "stem_opt_ready",
+      label: "STEM OPT ready",
+      nextFilters: { ...filters, stem_opt_ready: undefined },
+      tone: "visa",
+    })
+  }
+
+  if (filters.e_verify_signal) {
+    pills.push({
+      id: "e_verify_signal",
+      label: "E-Verify",
+      nextFilters: { ...filters, e_verify_signal: undefined },
+      tone: "visa",
+    })
+  }
+
+  if (filters.cap_exempt_possible) {
+    pills.push({
+      id: "cap_exempt_possible",
+      label: "Cap-exempt possible",
+      nextFilters: { ...filters, cap_exempt_possible: undefined },
+      tone: "visa",
+    })
+  }
+
+  if (filters.lca_salary_aligned) {
+    pills.push({
+      id: "lca_salary_aligned",
+      label: "LCA aligned",
+      nextFilters: { ...filters, lca_salary_aligned: undefined },
+      tone: "visa",
+    })
+  }
+
+  if (filters.ghost_risk_max) {
+    pills.push({
+      id: "ghost_risk_max",
+      label: filters.ghost_risk_max === "low" ? "Low ghost risk" : "Max medium risk",
+      nextFilters: { ...filters, ghost_risk_max: undefined },
+      tone: "quality",
+    })
+  }
+
+  if (filters.has_salary) {
+    pills.push({
+      id: "has_salary",
+      label: "Salary listed",
+      nextFilters: { ...filters, has_salary: undefined },
+      tone: "quality",
+    })
+  }
+
+  if (filters.direct_ats_only) {
+    pills.push({
+      id: "direct_ats_only",
+      label: "Direct ATS",
+      nextFilters: { ...filters, direct_ats_only: undefined },
+      tone: "quality",
     })
   }
 

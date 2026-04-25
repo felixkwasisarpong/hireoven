@@ -112,7 +112,7 @@ export type NotificationType = 'alert' | 'watchlist';
 
 export type CrawlStatus = 'success' | 'failed' | 'unchanged';
 
-export type JobWithinWindow = 'all' | '1h' | '6h' | '24h' | '3d';
+export type JobWithinWindow = 'all' | '1h' | '6h' | '24h' | '3d' | '7d';
 
 export type JobSortOption = 'freshest' | 'match' | 'relevant';
 
@@ -1431,6 +1431,9 @@ export type H1BPredictionInput = {
 // UI filter state
 // ---------------------------------------------------------------------------
 
+export type VisaFitLabel = 'Very Strong' | 'Strong' | 'Medium' | 'Weak' | 'Blocked';
+export type GhostRiskMax = 'low' | 'medium';
+
 export type JobFilters = {
   remote?: boolean;
   hybrid?: boolean;
@@ -1449,6 +1452,28 @@ export type JobFilters = {
   skills?: string[];
   /** Substring match on `company.industry` (client-side) */
   industryQuery?: string;
+
+  // --- Advanced intelligence filters (client-side) ---
+  /** Hide jobs where requires_authorization is true (sponsorship blocker detected) */
+  hide_blockers?: boolean;
+  /** Only show jobs whose computed visa fit label is in this set */
+  visa_fit?: VisaFitLabel[];
+  /** Only show jobs where STEM OPT eligibility is signalled */
+  stem_opt_ready?: boolean;
+  /** Only show jobs where E-Verify is likely */
+  e_verify_signal?: boolean;
+  /** Only show employers that may be cap-exempt */
+  cap_exempt_possible?: boolean;
+  /** Only show jobs where LCA salary is aligned with market */
+  lca_salary_aligned?: boolean;
+  /** Maximum ghost-job risk level to allow through */
+  ghost_risk_max?: GhostRiskMax;
+
+  // --- Job quality filters (client-side) ---
+  /** Only show jobs that have a salary range listed */
+  has_salary?: boolean;
+  /** Only show jobs with a known ATS link (not generic/custom) */
+  direct_ats_only?: boolean;
 };
 
 // ---------------------------------------------------------------------------

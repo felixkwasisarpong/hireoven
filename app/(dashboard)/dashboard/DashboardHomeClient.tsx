@@ -76,6 +76,8 @@ export default function DashboardHomeClient({
   useEffect(() => {
     function onPointerDown(e: PointerEvent) {
       if (!filterDropdown) return
+      // Ignore clicks inside portalled drawers (data-portal attribute) or the filters bar itself
+      if (e.target instanceof Element && e.target.closest("[data-portal-drawer]")) return
       if (e.target instanceof Node && filtersBarRef.current && !filtersBarRef.current.contains(e.target)) {
         setFilterDropdown(null)
       }
