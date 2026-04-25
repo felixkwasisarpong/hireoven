@@ -162,25 +162,20 @@ export default function VisaIntelDrawer({ open, onClose, job, displayTitle }: Pr
   const panelRef = useRef<HTMLElement | null>(null)
 
   // ── Side effects only fire while open ───────────────────────────────────
+  // Non-blocking side-panel pattern: NO body-scroll lock and NO backdrop.
+  // The page behind stays fully visible and interactive. Close via X or Esc.
   useEffect(() => {
     if (!open) return
 
-    // Close on Escape
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose()
     }
     window.addEventListener("keydown", onKey)
 
-    // Lock body scroll
-    const prevOverflow = document.body.style.overflow
-    document.body.style.overflow = "hidden"
-
-    // Focus the panel for screen-reader / keyboard users
     panelRef.current?.focus()
 
     return () => {
       window.removeEventListener("keydown", onKey)
-      document.body.style.overflow = prevOverflow
     }
   }, [open, onClose])
 
@@ -210,30 +205,19 @@ export default function VisaIntelDrawer({ open, onClose, job, displayTitle }: Pr
   const recentPetitions = immigProfile.recentH1BPetitions
   const sponsorshipTrend = intel.companyHiringHealth?.sponsorshipTrend ?? "unknown"
 
+  // Non-modal side panel: pinned to the right edge, no backdrop, no scroll
+  // lock. Page underneath remains fully visible and interactive. Close via X
+  // button or Escape key.
   const drawer = (
-    <div
-      className="fixed inset-0 flex justify-end"
-      style={{ zIndex: Z_TOP }}
+    <aside
+      ref={panelRef}
+      tabIndex={-1}
       role="dialog"
-      aria-modal="true"
+      aria-modal="false"
       aria-label="Visa Intelligence breakdown"
+      className="animate-slide-in-right fixed inset-y-0 right-0 flex h-full w-full max-w-[480px] flex-col border-l border-slate-200 shadow-2xl outline-none"
+      style={{ ...WHITE, zIndex: Z_TOP }}
     >
-      {/* Backdrop — its own button so a click anywhere outside the panel closes */}
-      <button
-        type="button"
-        aria-label="Close visa intelligence drawer"
-        onClick={onClose}
-        className="animate-fade-in-backdrop absolute inset-0"
-        style={{ backgroundColor: "rgba(15, 23, 42, 0.45)", zIndex: Z_TOP }}
-      />
-
-      {/* Panel — focusable for keyboard / a11y */}
-      <aside
-        ref={panelRef}
-        tabIndex={-1}
-        className="animate-slide-in-right relative flex h-full w-full max-w-[520px] flex-col border-l border-slate-200 shadow-2xl outline-none"
-        style={{ ...WHITE, zIndex: Z_TOP + 1 }}
-      >
         {/* ── Header ── */}
         <header
           className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-4"
@@ -504,8 +488,7 @@ export default function VisaIntelDrawer({ open, onClose, job, displayTitle }: Pr
             <strong className="text-slate-500">Disclaimer:</strong> This is job-search guidance based on publicly available LCA and DOL data, not legal advice. Results may not reflect the most current employer policies. Always verify with the employer or an immigration attorney.
           </p>
         </footer>
-      </aside>
-    </div>
+    </aside>
   )
 
   return createPortal(drawer, document.body)
