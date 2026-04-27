@@ -181,25 +181,30 @@ CREATE TABLE IF NOT EXISTS resumes (
   file_url TEXT NOT NULL,
   storage_path TEXT NOT NULL,
   file_size INTEGER,
+  file_type TEXT,
   is_primary BOOLEAN DEFAULT false,
   parse_status TEXT DEFAULT 'pending',
+  parse_error TEXT,
   full_name TEXT,
   email TEXT,
   phone TEXT,
   location TEXT,
   linkedin_url TEXT,
   portfolio_url TEXT,
+  github_url TEXT,
   summary TEXT,
   work_experience JSONB,
   education JSONB,
   skills JSONB,
   projects JSONB,
+  certifications JSONB,
   seniority_level TEXT,
   years_of_experience INTEGER,
   primary_role TEXT,
   industries TEXT[],
   top_skills TEXT[],
   resume_score INTEGER,
+  ats_score INTEGER,
   raw_text TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -216,6 +221,40 @@ CREATE TABLE IF NOT EXISTS resume_versions (
   file_url TEXT,
   snapshot JSONB,
   changes_summary TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 11b. Resume tailoring analyses table
+-- Deterministic job-fit snapshots for Resume Hub tailoring
+CREATE TABLE IF NOT EXISTS resume_tailoring_analyses (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  resume_id UUID REFERENCES resumes(id) ON DELETE CASCADE,
+  job_id UUID REFERENCES jobs(id) ON DELETE SET NULL,
+  job_title TEXT,
+  company TEXT,
+  job_description TEXT NOT NULL,
+  match_score INTEGER NOT NULL,
+  present_keywords TEXT[] DEFAULT ARRAY[]::TEXT[],
+  missing_keywords TEXT[] DEFAULT ARRAY[]::TEXT[],
+  suggested_summary_rewrite TEXT,
+  suggested_skills_to_add TEXT[] DEFAULT ARRAY[]::TEXT[],
+  bullet_suggestions JSONB DEFAULT '[]'::jsonb,
+  warnings TEXT[] DEFAULT ARRAY[]::TEXT[],
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 11c. Resume Hub AI edits table
+-- Structured AI edit patches that are reviewable before applying
+CREATE TABLE IF NOT EXISTS resume_ai_edits (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  resume_id UUID REFERENCES resumes(id) ON DELETE CASCADE,
+  tool_id TEXT NOT NULL,
+  label TEXT,
+  input_snapshot JSONB,
+  output_patch JSONB,
+  status TEXT NOT NULL DEFAULT 'pending',
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -413,6 +452,8 @@ ALTER TABLE h1b_records ENABLE ROW LEVEL SECURITY;
 ALTER TABLE push_subscriptions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE resumes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE resume_versions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE resume_tailoring_analyses ENABLE ROW LEVEL SECURITY;
+ALTER TABLE resume_ai_edits ENABLE ROW LEVEL SECURITY;
 ALTER TABLE resume_edits ENABLE ROW LEVEL SECURITY;
 ALTER TABLE job_applications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE job_match_scores ENABLE ROW LEVEL SECURITY;
@@ -473,6 +514,28 @@ BEGIN
   ) THEN
     CREATE POLICY "Users manage own versions"
       ON resume_versions FOR ALL
+      USING (auth.uid() = user_id)
+      WITH CHECK (auth.uid() = user_id);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'resume_tailoring_analyses'
+      AND policyname = 'Users manage own tailoring analyses'
+  ) THEN
+    CREATE POLICY "Users manage own tailoring analyses"
+      ON resume_tailoring_analyses FOR ALL
+      USING (auth.uid() = user_id)
+      WITH CHECK (auth.uid() = user_id);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public' AND tablename = 'resume_ai_edits'
+      AND policyname = 'Users manage own AI edits'
+  ) THEN
+    CREATE POLICY "Users manage own AI edits"
+      ON resume_ai_edits FOR ALL
       USING (auth.uid() = user_id)
       WITH CHECK (auth.uid() = user_id);
   END IF;

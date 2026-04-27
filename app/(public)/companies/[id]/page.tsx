@@ -1,5 +1,4 @@
 import type { Metadata } from "next"
-import Image from "next/image"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import {
@@ -20,6 +19,7 @@ import {
   TrendingUp,
 } from "lucide-react"
 import Navbar from "@/components/layout/Navbar"
+import CompanyLogo from "@/components/ui/CompanyLogo"
 import { buildCompanyImmigrationProfile, formatProfilePercent, getProfileConfidenceLabel } from "@/lib/companies/immigration-profile"
 import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
 import { getPostgresPool, hasPostgresEnv } from "@/lib/postgres/server"
@@ -74,11 +74,10 @@ type SimilarCompanyRow = Pick<
 
 type Props = { params: Promise<{ id: string }> }
 
-const sectionCard =
-  "rounded-[28px] border border-slate-200/70 bg-white p-6 shadow-[0_14px_42px_rgba(15,23,42,0.04)]"
+const sectionCard = "border border-slate-200/80 bg-white p-6"
 
-const mutedCard = "rounded-2xl bg-slate-50/85 p-4 ring-1 ring-slate-200/55"
-const mergedBand = "rounded-3xl bg-slate-50/70 p-5 ring-1 ring-slate-200/55"
+const mutedCard = "border border-slate-200/75 bg-slate-50/75 p-4"
+const mergedBand = "border border-slate-200/70 bg-slate-50/55 p-5"
 
 function formatMoney(value: number | null | undefined) {
   if (value == null || !Number.isFinite(Number(value))) return "Unknown"
@@ -153,9 +152,9 @@ function SectionHeader({
   description?: string
 }) {
   return (
-    <div className="mb-5 flex items-start gap-3">
-      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-sky-50 text-[#2563EB]">
-        <Icon className="h-5 w-5" aria-hidden />
+    <div className="mb-5 flex items-start gap-3 border-b border-slate-200/75 pb-4">
+      <span className="grid h-9 w-9 shrink-0 place-items-center border border-sky-100 bg-sky-50/80 text-[#2563EB]">
+        <Icon className="h-4.5 w-4.5" aria-hidden />
       </span>
       <div>
         <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">{eyebrow}</p>
@@ -345,32 +344,25 @@ export default async function PublicCompanyPage({ params }: Props) {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
 
-      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
-        <section className="overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.06)]">
-          <div className="grid gap-8 p-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:p-8">
+      <main className="mx-auto w-full max-w-[92rem] px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
+        <section className="overflow-hidden border border-slate-200/85 bg-white">
+          <div className="grid gap-8 p-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:p-8">
             <div className="min-w-0">
               <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
-                {company.logo_url ? (
-                  <Image
-                    src={company.logo_url}
-                    alt={`${company.name} logo`}
-                    width={88}
-                    height={88}
-                    className="h-[88px] w-[88px] shrink-0 rounded-3xl border border-slate-100 bg-white object-contain p-2"
-                    priority
-                  />
-                ) : (
-                  <div className="grid h-[88px] w-[88px] shrink-0 place-items-center rounded-3xl bg-sky-50 text-3xl font-bold text-[#0C4A6E]">
-                    {company.name.charAt(0).toUpperCase()}
-                  </div>
-                )}
+                <CompanyLogo
+                  companyName={company.name}
+                  domain={company.domain}
+                  logoUrl={company.logo_url}
+                  priority
+                  className="h-[88px] w-[88px] shrink-0 border border-slate-200/70 bg-white"
+                />
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className={cn("rounded-full border px-3 py-1 text-xs font-semibold", status.tone)}>
+                    <span className={cn("border px-3 py-1 text-xs font-semibold", status.tone)}>
                       {status.label}
                     </span>
                     {company.ats_type ? (
-                      <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium capitalize text-slate-600">
+                      <span className="border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium capitalize text-slate-600">
                         {company.ats_type} ATS
                       </span>
                     ) : null}
@@ -384,7 +376,7 @@ export default async function PublicCompanyPage({ params }: Props) {
                   <div className="mt-5 flex flex-wrap gap-3">
                     <Link
                       href="#open-jobs"
-                      className="inline-flex items-center gap-2 rounded-2xl bg-[#2563EB] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#1D4ED8]"
+                      className="inline-flex items-center gap-2 rounded-sm bg-[#2563EB] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#1D4ED8]"
                     >
                       View open jobs
                       <ArrowRight className="h-4 w-4" aria-hidden />
@@ -393,7 +385,7 @@ export default async function PublicCompanyPage({ params }: Props) {
                       href={company.careers_url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                      className="inline-flex items-center gap-2 rounded-sm border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
                     >
                       Company careers
                       <ExternalLink className="h-4 w-4" aria-hidden />
@@ -403,7 +395,7 @@ export default async function PublicCompanyPage({ params }: Props) {
               </div>
             </div>
 
-            <aside className="rounded-3xl border border-slate-200 bg-slate-50/70 p-5">
+            <aside className="border border-slate-200/80 bg-slate-50/55 p-5">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Decision snapshot</p>
               <div className="mt-4 space-y-4">
                 <ProgressRow
@@ -420,7 +412,7 @@ export default async function PublicCompanyPage({ params }: Props) {
                   <MiniStat label="Open jobs" value={jobs.length.toLocaleString()} />
                   <MiniStat label="LCA records" value={totalLca == null ? "Unknown" : totalLca.toLocaleString()} />
                 </div>
-                <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-800">
+                <p className="border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-800">
                   Use this as a job-search signal. Sponsorship, OPT, STEM OPT, and cap-exempt support are never guaranteed by historical data.
                 </p>
               </div>
@@ -440,13 +432,13 @@ export default async function PublicCompanyPage({ params }: Props) {
               {jobs.length === 0 ? (
                 <EmptyState>No open roles are currently tracked for {company.name}.</EmptyState>
               ) : (
-                <div className="space-y-3">
+                <div className="divide-y divide-slate-200/80 border border-slate-200/75 bg-white">
                   {jobs.map((job) => {
                     const salary = formatSalary(job.salary_min, job.salary_max, job.salary_currency)
                     return (
                       <article
                         key={job.id}
-                        className="rounded-2xl border border-slate-200 bg-white p-4 transition hover:border-sky-200 hover:shadow-sm"
+                        className="p-4 transition hover:bg-sky-50/35"
                       >
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                           <div className="min-w-0">
@@ -486,7 +478,7 @@ export default async function PublicCompanyPage({ params }: Props) {
                               href={job.apply_url}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 rounded-xl bg-[#2563EB] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#1D4ED8]"
+                            className="inline-flex items-center gap-1 rounded-sm bg-[#2563EB] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#1D4ED8]"
                             >
                               Apply
                               <ExternalLink className="h-3 w-3" aria-hidden />
@@ -526,7 +518,7 @@ export default async function PublicCompanyPage({ params }: Props) {
                 <p className="text-sm leading-6 text-slate-600">{profile.sponsorshipHistory.summary}</p>
 
                 {profile.sponsorshipHistory.riskFlags.length > 0 ? (
-                  <div className="rounded-2xl bg-amber-50 px-4 py-3 ring-1 ring-amber-200/80">
+                  <div className="border border-amber-200/80 bg-amber-50 px-4 py-3">
                     <p className="text-sm font-semibold text-amber-900">Signals to review</p>
                     <ul className="mt-2 space-y-1 text-sm leading-6 text-amber-800">
                       {profile.sponsorshipHistory.riskFlags.map((flag) => (
@@ -554,11 +546,11 @@ export default async function PublicCompanyPage({ params }: Props) {
                     ) : (
                       <div className="grid gap-3 sm:grid-cols-2">
                         {profile.roleFamilies.map((role) => (
-                          <div key={role.label} className="rounded-2xl bg-white p-4 ring-1 ring-slate-200/60">
+                          <div key={role.label} className="border border-slate-200/70 bg-white p-4">
                             <div className="flex items-start justify-between gap-3">
                               <p className="font-semibold text-slate-900">{role.label}</p>
                               {role.share != null ? (
-                                <span className="rounded-full bg-sky-50 px-2 py-0.5 text-xs font-bold text-sky-700">
+                                <span className="border border-sky-200 bg-sky-50 px-2 py-0.5 text-xs font-bold text-sky-700">
                                   {role.share}%
                                 </span>
                               ) : null}
@@ -590,7 +582,7 @@ export default async function PublicCompanyPage({ params }: Props) {
                     ) : (
                       <div className="space-y-2.5">
                         {profile.worksites.map((site) => (
-                          <div key={site.label} className="flex items-center justify-between gap-3 rounded-2xl bg-white px-4 py-3 ring-1 ring-slate-200/60">
+                          <div key={site.label} className="flex items-center justify-between gap-3 border border-slate-200/70 bg-white px-4 py-3">
                             <div>
                               <p className="font-semibold text-slate-900">{site.label}</p>
                               <p className="text-sm text-slate-500">
@@ -598,7 +590,7 @@ export default async function PublicCompanyPage({ params }: Props) {
                               </p>
                             </div>
                             {site.share != null ? (
-                              <span className="rounded-full bg-sky-50 px-2.5 py-1 text-xs font-bold text-sky-700">
+                              <span className="border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-bold text-sky-700">
                                 {site.share}%
                               </span>
                             ) : null}
@@ -645,7 +637,7 @@ export default async function PublicCompanyPage({ params }: Props) {
                     </div>
                     <p className="text-sm font-semibold capitalize text-slate-900">{profile.stemOptReadiness.readiness}</p>
                     <p className="mt-2 text-sm leading-6 text-slate-600">{profile.stemOptReadiness.summary}</p>
-                    <div className="mt-4 flex items-start gap-2 rounded-2xl bg-white p-3 ring-1 ring-slate-200/60">
+                    <div className="mt-4 flex items-start gap-2 border border-slate-200/70 bg-white p-3">
                       <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" aria-hidden />
                       <p className="text-xs leading-5 text-slate-500">
                         E-Verify is {profile.stemOptReadiness.likelyEVerify === true ? "likely" : "not confirmed"} in the current data.
@@ -716,21 +708,14 @@ export default async function PublicCompanyPage({ params }: Props) {
                     <Link
                       key={similar.id}
                       href={`/companies/${similar.id}`}
-                      className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3 transition hover:border-sky-200 hover:bg-sky-50/30"
+                      className="flex items-center gap-3 border border-slate-200 bg-white p-3 transition hover:border-sky-200 hover:bg-sky-50/30"
                     >
-                      {similar.logo_url ? (
-                        <Image
-                          src={similar.logo_url}
-                          alt={`${similar.name} logo`}
-                          width={40}
-                          height={40}
-                          className="h-10 w-10 shrink-0 rounded-xl border border-slate-100 bg-white object-contain p-1"
-                        />
-                      ) : (
-                        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-slate-100 text-sm font-bold text-slate-600">
-                          {similar.name.charAt(0).toUpperCase()}
-                        </span>
-                      )}
+                      <CompanyLogo
+                        companyName={similar.name}
+                        domain={similar.domain}
+                        logoUrl={similar.logo_url}
+                        className="h-10 w-10 shrink-0 border border-slate-200/70 bg-white"
+                      />
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-semibold text-slate-900">{similar.name}</span>
                         <span className="block text-xs text-slate-500">

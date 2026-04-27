@@ -357,7 +357,7 @@ function FullAnalysisView({ analysis, job }: { analysis: ResumeAnalysis; job: Jo
           <ExternalLink className="h-4 w-4" />
         </a>
         <Link
-          href={`/dashboard/resume/edit?jobId=${job.id}`}
+          href={`/dashboard/resume/studio?mode=tailor&jobId=${job.id}`}
           className="inline-flex items-center gap-2 rounded-2xl border border-gray-200 px-5 py-3 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
         >
           Edit resume

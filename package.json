@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:fast": "next dev --turbo",
     "build": "next build",
     "start": "next start",
     "start:standalone": "node .next/standalone/server.js",

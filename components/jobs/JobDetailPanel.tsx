@@ -505,7 +505,7 @@ export default function JobDetailPanel({
               </p>
 
               <Link
-                href={`/dashboard/resume/edit?jobId=${job.id}`}
+                href={`/dashboard/resume/studio?mode=tailor&jobId=${job.id}`}
                 className="mt-3 inline-flex items-center gap-1 text-[12px] font-semibold text-[#2563EB] hover:underline"
               >
                 Tailor resume for this job <ArrowRight className="h-3 w-3" />

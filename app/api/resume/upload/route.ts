@@ -4,6 +4,7 @@ import { getPostgresPool } from "@/lib/postgres/server"
 import { uploadResume, deleteResume, getResumeUrl } from "@/lib/supabase/storage"
 import { createClient } from "@/lib/supabase/server"
 import { MAX_RESUME_SIZE_BYTES, isResumeFilename, isResumeMimeType } from "@/lib/resume/constants"
+import { calculateAtsReadability } from "@/lib/resume/hub"
 import { getUserPlan } from "@/lib/gates/server-gate"
 import type { Profile, Resume, ResumeInsert } from "@/types"
 
@@ -16,6 +17,17 @@ function defaultResumeName(fileName: string) {
 function mergeRoles(currentRoles: string[] | null, primaryRole: string | null) {
   if (!primaryRole) return currentRoles
   return Array.from(new Set([...(currentRoles ?? []), primaryRole]))
+}
+
+async function ensureResumeUploadColumns(pool: ReturnType<typeof getPostgresPool>) {
+  await pool.query(
+    `ALTER TABLE resumes
+       ADD COLUMN IF NOT EXISTS file_type TEXT,
+       ADD COLUMN IF NOT EXISTS parse_error TEXT,
+       ADD COLUMN IF NOT EXISTS github_url TEXT,
+       ADD COLUMN IF NOT EXISTS certifications JSONB,
+       ADD COLUMN IF NOT EXISTS ats_score INTEGER`
+  )
 }
 
 async function processResumeInBackground({
@@ -36,12 +48,25 @@ async function processResumeInBackground({
   try {
     const parsed = await parseResume(fileUrl, fileName)
     const refreshedUrl = await getResumeUrl(storagePath)
+    const atsScore = calculateAtsReadability({
+      ...parsed,
+      parse_status: "complete",
+      parse_error: null,
+      file_name: fileName,
+      file_type: fileName.toLowerCase().endsWith(".pdf")
+        ? "application/pdf"
+        : fileName.toLowerCase().endsWith(".docx")
+          ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+          : null,
+      certifications: null,
+    })
 
     await pool.query(
       `UPDATE resumes
        SET
          file_url = $1,
          parse_status = $2,
+         parse_error = NULL,
          full_name = $3,
          email = $4,
          phone = $5,
@@ -59,10 +84,11 @@ async function processResumeInBackground({
          industries = $17::text[],
          top_skills = $18::text[],
          resume_score = $19,
-         raw_text = $20,
+         ats_score = $20,
+         raw_text = $21,
          updated_at = now()
-       WHERE id = $21
-         AND user_id = $22`,
+       WHERE id = $22
+         AND user_id = $23`,
       [
         refreshedUrl,
         "complete",
@@ -83,6 +109,7 @@ async function processResumeInBackground({
         parsed.industries ?? [],
         parsed.top_skills ?? [],
         parsed.resume_score,
+        atsScore,
         parsed.raw_text,
         resumeId,
         userId,
@@ -123,10 +150,10 @@ async function processResumeInBackground({
     console.error("Resume parsing failed", error)
     await pool.query(
       `UPDATE resumes
-       SET parse_status = $1, updated_at = now()
-       WHERE id = $2
-         AND user_id = $3`,
-      ["failed", resumeId, userId]
+       SET parse_status = $1, parse_error = $2, updated_at = now()
+       WHERE id = $3
+         AND user_id = $4`,
+      ["failed", error instanceof Error ? error.message : "Resume parsing failed", resumeId, userId]
     )
   }
 }
@@ -158,6 +185,7 @@ export async function POST(request: Request) {
   }
 
   const pool = getPostgresPool()
+  await ensureResumeUploadColumns(pool)
 
   const existingResumesResult = await pool.query<Array<{ id: string; is_primary: boolean }>[number]>(
     `SELECT id, is_primary
@@ -206,25 +234,30 @@ export async function POST(request: Request) {
       file_url: url,
       storage_path: path,
       file_size: file.size,
+      file_type: file.type || null,
       is_primary: shouldBePrimary,
       parse_status: "processing",
+      parse_error: null,
       full_name: null,
       email: null,
       phone: null,
       location: null,
       linkedin_url: null,
       portfolio_url: null,
+      github_url: null,
       summary: null,
       work_experience: null,
       education: null,
       skills: null,
       projects: null,
+      certifications: null,
       seniority_level: null,
       years_of_experience: null,
       primary_role: null,
       industries: null,
       top_skills: null,
       resume_score: null,
+      ats_score: null,
       raw_text: null,
     }
 
@@ -236,31 +269,37 @@ export async function POST(request: Request) {
         file_url,
         storage_path,
         file_size,
+        file_type,
         is_primary,
         parse_status,
+        parse_error,
         full_name,
         email,
         phone,
         location,
         linkedin_url,
         portfolio_url,
+        github_url,
         summary,
         work_experience,
         education,
         skills,
         projects,
+        certifications,
         seniority_level,
         years_of_experience,
         primary_role,
         industries,
         top_skills,
         resume_score,
+        ats_score,
         raw_text
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8,
         $9, $10, $11, $12, $13, $14, $15,
-        $16::jsonb, $17::jsonb, $18::jsonb, $19::jsonb,
-        $20, $21, $22, $23::text[], $24::text[], $25, $26
+        $16, $17, $18, $19::jsonb, $20::jsonb, $21::jsonb,
+        $22::jsonb, $23::jsonb,
+        $24, $25, $26, $27::text[], $28::text[], $29, $30, $31
       )
       RETURNING *`,
       [
@@ -270,25 +309,30 @@ export async function POST(request: Request) {
         payload.file_url,
         payload.storage_path,
         payload.file_size,
+        payload.file_type ?? null,
         payload.is_primary,
         payload.parse_status,
+        payload.parse_error ?? null,
         payload.full_name,
         payload.email,
         payload.phone,
         payload.location,
         payload.linkedin_url,
         payload.portfolio_url,
+        payload.github_url ?? null,
         payload.summary,
         JSON.stringify(payload.work_experience ?? null),
         JSON.stringify(payload.education ?? null),
         JSON.stringify(payload.skills ?? null),
         JSON.stringify(payload.projects ?? null),
+        JSON.stringify(payload.certifications ?? null),
         payload.seniority_level,
         payload.years_of_experience,
         payload.primary_role,
         payload.industries ?? [],
         payload.top_skills ?? [],
         payload.resume_score,
+        payload.ats_score ?? null,
         payload.raw_text,
       ]
     )
@@ -310,6 +354,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       resumeId: resume.id,
       status: "processing",
+      resume,
     })
   } catch (error) {
     if (uploadedPath) {

@@ -17,7 +17,8 @@ const CONFIG: Partial<
 > = {
   apply_now: {
     icon: CheckCircle2,
-    classes: "bg-emerald-50 text-emerald-800 ring-emerald-200",
+    classes:
+      "border-0 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white ring-0 shadow-[0_2px_12px_rgba(5,150,105,0.45),inset_0_1px_0_rgba(255,255,255,0.18)] [&_svg]:text-white",
     text: "Apply Today",
   },
   apply_with_tweaks: {
@@ -58,7 +59,7 @@ export function ApplicationVerdictPill({ verdict, className }: ApplicationVerdic
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1 rounded-full ring-1 px-2.5 py-0.5 text-[11px] font-semibold",
+        "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-tight ring-1",
         config.classes,
         className
       )}

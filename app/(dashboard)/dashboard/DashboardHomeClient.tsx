@@ -16,6 +16,7 @@ import { useResumeContext } from "@/components/resume/ResumeProvider"
 import { parseJobFilters } from "@/components/jobs/JobFilters"
 import { getSearchQuery } from "@/components/jobs/JobSearch"
 import HireovenLogo from "@/components/ui/HireovenLogo"
+import type { WatchlistWithCompany } from "@/types"
 
 type DashboardHomeClientProps = {
   /**
@@ -24,10 +25,14 @@ type DashboardHomeClientProps = {
    * request instead of waiting for the resume context to hydrate over two round-trips.
    */
   initialPrimaryResumeReady?: boolean
+  initialWatchlist?: WatchlistWithCompany[]
+  initialWatchlistCount?: number
 }
 
 export default function DashboardHomeClient({
   initialPrimaryResumeReady = false,
+  initialWatchlist = [],
+  initialWatchlistCount = 0,
 }: DashboardHomeClientProps) {
   const pathname = usePathname()
   const router = useRouter()
@@ -166,7 +171,10 @@ export default function DashboardHomeClient({
             </div>
 
             <aside className="hidden min-h-0 min-w-0 xl:block xl:w-[300px] xl:flex-shrink-0 xl:overflow-y-auto">
-              <DashboardSpotlightColumn />
+              <DashboardSpotlightColumn
+                initialWatchlist={initialWatchlist}
+                initialWatchlistCount={initialWatchlistCount}
+              />
             </aside>
           </div>
         </div>

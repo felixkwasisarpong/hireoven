@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { deriveResumeFields } from "@/lib/resume/scoring"
+import { buildResumeScoreBreakdown } from "@/lib/resume/hub"
 import { buildResumeRawText } from "@/lib/resume/state"
 import { normalizeSkillsBuckets } from "@/lib/skills/taxonomy"
 import { getPostgresPool } from "@/lib/postgres/server"
@@ -21,6 +22,19 @@ async function getAuthedResume(id: string, userId: string) {
   )
 
   return result.rows[0] ?? null
+}
+
+async function ensureResumeLifecycleColumns() {
+  const pool = getPostgresPool()
+  await pool.query(
+    `ALTER TABLE resumes
+       ADD COLUMN IF NOT EXISTS file_type TEXT,
+       ADD COLUMN IF NOT EXISTS parse_error TEXT,
+       ADD COLUMN IF NOT EXISTS github_url TEXT,
+       ADD COLUMN IF NOT EXISTS certifications JSONB,
+       ADD COLUMN IF NOT EXISTS ats_score INTEGER,
+       ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ`
+  )
 }
 
 export async function GET(
@@ -73,10 +87,20 @@ export async function DELETE(
     return NextResponse.json({ error: "Resume not found" }, { status: 404 })
   }
 
-  try {
-    await deleteResume(resume.storage_path)
-  } catch (error) {
-    console.error("Failed to delete resume from storage", error)
+  const sharedFile = await pool.query<{ count: string }>(
+    `SELECT COUNT(*)::text AS count
+     FROM resumes
+     WHERE storage_path = $1
+       AND id <> $2`,
+    [resume.storage_path, resume.id]
+  )
+
+  if (Number(sharedFile.rows[0]?.count ?? 0) === 0) {
+    try {
+      await deleteResume(resume.storage_path)
+    } catch (error) {
+      console.error("Failed to delete resume from storage", error)
+    }
   }
 
   await pool.query(
@@ -124,6 +148,7 @@ export async function PATCH(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
   const pool = getPostgresPool()
+  await ensureResumeLifecycleColumns()
 
   const resume = await getAuthedResume(routeParams.id, user.id)
   if (!resume) {
@@ -146,10 +171,50 @@ export async function PATCH(
     )
 
     updates.is_primary = true
+    updates.archived_at = null
+  }
+
+  if (typeof body.archived === "boolean") {
+    updates.archived_at = body.archived ? new Date().toISOString() : null
+    if (body.archived) {
+      updates.is_primary = false
+    }
   }
 
   if (typeof body.summary === "string" || body.summary === null) {
     updates.summary = typeof body.summary === "string" ? body.summary.trim() : null
+  }
+
+  if (typeof body.full_name === "string" || body.full_name === null) {
+    updates.full_name = typeof body.full_name === "string" ? body.full_name.trim() : null
+  }
+
+  if (typeof body.email === "string" || body.email === null) {
+    updates.email = typeof body.email === "string" ? body.email.trim() : null
+  }
+
+  if (typeof body.phone === "string" || body.phone === null) {
+    updates.phone = typeof body.phone === "string" ? body.phone.trim() : null
+  }
+
+  if (typeof body.location === "string" || body.location === null) {
+    updates.location = typeof body.location === "string" ? body.location.trim() : null
+  }
+
+  if (typeof body.linkedin_url === "string" || body.linkedin_url === null) {
+    updates.linkedin_url = typeof body.linkedin_url === "string" ? body.linkedin_url.trim() : null
+  }
+
+  if (typeof body.portfolio_url === "string" || body.portfolio_url === null) {
+    updates.portfolio_url = typeof body.portfolio_url === "string" ? body.portfolio_url.trim() : null
+  }
+
+  if (typeof body.github_url === "string" || body.github_url === null) {
+    updates.github_url = typeof body.github_url === "string" ? body.github_url.trim() : null
+  }
+
+  if (typeof body.primary_role === "string" || body.primary_role === null) {
+    updates.primary_role = typeof body.primary_role === "string" ? body.primary_role.trim() : null
   }
 
   if (Array.isArray(body.work_experience)) {
@@ -168,7 +233,11 @@ export async function PATCH(
     updates.projects = body.projects as Project[]
   }
 
-  const contentChanged = ["summary", "work_experience", "education", "skills", "projects"].some(
+  if (Array.isArray(body.certifications)) {
+    updates.certifications = body.certifications
+  }
+
+  const contentChanged = ["summary", "work_experience", "education", "skills", "projects", "certifications", "primary_role"].some(
     (key) => key in updates
   )
 
@@ -180,6 +249,7 @@ export async function PATCH(
 
     updates.raw_text = buildResumeRawText(nextResume)
     Object.assign(updates, deriveResumeFields(nextResume))
+    updates.ats_score = buildResumeScoreBreakdown(nextResume).atsReadability
   }
 
   if (Object.keys(updates).length === 0) {
@@ -191,7 +261,7 @@ export async function PATCH(
   const setSql = entries.map(([key, value]) => {
     sqlParams.push(value)
     const idx = sqlParams.length
-    const jsonbFields = new Set(["work_experience", "education", "skills", "projects", "experience"])
+    const jsonbFields = new Set(["work_experience", "education", "skills", "projects", "experience", "certifications"])
     const cast = jsonbFields.has(String(key)) ? "::jsonb" : ""
     if (cast) {
       sqlParams[idx - 1] = JSON.stringify(value)
@@ -212,6 +282,29 @@ export async function PATCH(
 
   if (!data) {
     return NextResponse.json({ error: "Failed to update resume" }, { status: 500 })
+  }
+
+  if (body.archived === true && resume.is_primary) {
+    const nextPrimary = await pool.query<{ id: string }>(
+      `SELECT id
+       FROM resumes
+       WHERE user_id = $1
+         AND id <> $2
+         AND archived_at IS NULL
+       ORDER BY updated_at DESC, created_at DESC
+       LIMIT 1`,
+      [user.id, resume.id]
+    )
+    const nextPrimaryId = nextPrimary.rows[0]?.id
+    if (nextPrimaryId) {
+      await pool.query(
+        `UPDATE resumes
+         SET is_primary = true, updated_at = now()
+         WHERE id = $1
+           AND user_id = $2`,
+        [nextPrimaryId, user.id]
+      )
+    }
   }
 
   try {

@@ -1,5 +1,9 @@
+"use client"
+
 import Link from "next/link"
-import { Lightbulb, Search, TrendingUp } from "lucide-react"
+import { Bookmark, Building2, Search } from "lucide-react"
+import CompanyLogo from "@/components/ui/CompanyLogo"
+import type { WatchlistWithCompany } from "@/types"
 
 const POPULAR_SEARCHES = [
   "Software Engineer",
@@ -12,26 +16,20 @@ const POPULAR_SEARCHES = [
   "Backend Engineer",
 ] as const
 
-const TRENDING_FILTERS = [
-  { label: "Remote · last 24h", href: "/dashboard?remote=true&within=24h" },
-  { label: "Sponsorship + Senior", href: "/dashboard?sponsorship=true&seniority=senior" },
-  { label: "$150k+ roles", href: "/dashboard?min_salary=150000" },
-] as const
-
-const TIPS = [
-  "Apply within 24 hours of a posting going live — response rates drop fast after the first day.",
-  "Tailor your resume's top third to the role: titles, scope and tools matter most for recruiters skimming.",
-  "Filter by sponsorship signal first — saves hours of effort on roles that won't sponsor.",
-  "Use saved searches with daily alerts so fresh matches come to you, not the other way around.",
-]
-
 /**
- * Lightweight static side column. Pure server component — no client JS, no
- * data fetching, renders instantly at SSR. Avoid duplicating sidebar-nav
- * destinations (Resume, Applications, Saved, Companies, etc.).
+ * Lightweight side column for feed discovery and quick watchlist access.
  */
-export default function DashboardSpotlightColumn() {
-  const tip = TIPS[0]
+type DashboardSpotlightColumnProps = {
+  initialWatchlist: WatchlistWithCompany[]
+  initialWatchlistCount: number
+}
+
+export default function DashboardSpotlightColumn({
+  initialWatchlist,
+  initialWatchlistCount,
+}: DashboardSpotlightColumnProps) {
+  const visibleWatchlist = initialWatchlist.slice(0, 4)
+  const remainingWatchlistCount = Math.max(0, initialWatchlistCount - visibleWatchlist.length)
 
   return (
     <aside className="space-y-3">
@@ -54,32 +52,73 @@ export default function DashboardSpotlightColumn() {
       </section>
 
       <section className="rounded-xl border border-slate-200 bg-white p-4">
-        <div className="flex items-center gap-2">
-          <TrendingUp className="h-4 w-4 text-emerald-600" aria-hidden />
-          <h3 className="text-[13px] font-semibold text-slate-900">Quick filters</h3>
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Bookmark className="h-4 w-4 text-[#2563EB]" aria-hidden />
+            <h3 className="text-[13px] font-semibold text-slate-900">Watchlist</h3>
+          </div>
+          <Link
+            href="/dashboard/watchlist"
+            className="text-[11px] font-semibold text-[#2563EB] transition hover:text-[#1D4ED8] hover:underline"
+          >
+            Manage
+          </Link>
         </div>
-        <ul className="mt-2 space-y-0.5">
-          {TRENDING_FILTERS.map(({ label, href }) => (
-            <li key={href}>
-              <Link
-                href={href}
-                className="block rounded-md px-2 py-1.5 text-[12.5px] font-medium text-slate-700 transition hover:bg-slate-50 hover:text-[#2563EB]"
-              >
-                {label}
-              </Link>
-            </li>
-          ))}
-        </ul>
-      </section>
 
-      <section className="rounded-xl border border-amber-200/70 bg-amber-50/60 p-4">
-        <div className="flex items-center gap-2">
-          <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md bg-white text-amber-600 ring-1 ring-amber-200">
-            <Lightbulb className="h-4 w-4" aria-hidden />
-          </span>
-          <h3 className="text-[13px] font-semibold text-amber-900">Tip of the day</h3>
-        </div>
-        <p className="mt-2 text-[12px] leading-relaxed text-amber-900/85">{tip}</p>
+        {visibleWatchlist.length > 0 ? (
+          <div className="mt-3 space-y-1">
+            {visibleWatchlist.map((item) => {
+              const company = item.company
+              return (
+                <Link
+                  key={item.id}
+                  href={`/dashboard/companies/${company.id}`}
+                  className="flex items-center gap-2.5 rounded-lg px-1 py-1.5 transition hover:bg-slate-50"
+                >
+                  <CompanyLogo
+                    companyName={company.name}
+                    domain={company.domain}
+                    logoUrl={company.logo_url}
+                    className="h-8 w-8 rounded-lg"
+                  />
+                  <span className="min-w-0">
+                    <span className="block truncate text-[12.5px] font-semibold text-slate-800">
+                      {company.name}
+                    </span>
+                    <span className="block truncate text-[11px] text-slate-500">
+                      {company.industry || "Tracked company"}
+                    </span>
+                  </span>
+                </Link>
+              )
+            })}
+          </div>
+        ) : (
+          <div className="mt-3 rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-center">
+            <Building2 className="mx-auto h-5 w-5 text-slate-400" aria-hidden />
+            <p className="mt-2 text-[12px] font-semibold text-slate-700">No companies yet</p>
+            <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
+              Add companies to track fresh openings from the employers you care about.
+            </p>
+            <Link
+              href="/dashboard/watchlist"
+              className="mt-3 inline-flex rounded-md bg-[#2563EB] px-3 py-1.5 text-[11px] font-semibold text-white transition hover:bg-[#1D4ED8]"
+            >
+              Build watchlist
+            </Link>
+          </div>
+        )}
+
+        {remainingWatchlistCount > 0 && (
+          <div className="mt-3 border-t border-slate-100 pt-3">
+            <Link
+              href="/dashboard/watchlist"
+              className="block rounded-md px-2 py-1.5 text-center text-[12px] font-semibold text-slate-600 transition hover:bg-slate-50 hover:text-[#2563EB]"
+            >
+              View {remainingWatchlistCount} more
+            </Link>
+          </div>
+        )}
       </section>
     </aside>
   )

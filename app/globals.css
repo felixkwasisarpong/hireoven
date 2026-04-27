@@ -440,8 +440,8 @@
   }
 
   .dashboard-subpage-content > .app-page > .app-shell {
-    /* Fill the content column; let max-w-* on this element constrain width */
-    @apply w-full;
+    /* Fill the full post-sidebar column and avoid centered narrow layouts. */
+    @apply mx-0 w-full max-w-none px-4 sm:px-6 lg:px-8;
   }
 
   .soft-scrollbar {
@@ -770,6 +770,24 @@
 
   .animate-fade-in-backdrop {
     animation: fade-in-backdrop 0.18s ease-out both;
+  }
+}
+
+@layer components {
+  .resume-tab-shell > main {
+    min-height: calc(100vh - 8.5rem) !important;
+  }
+
+  .resume-tab-shell > main > div {
+    padding-top: 0.875rem !important;
+    padding-bottom: 0.875rem !important;
+  }
+
+  @media (min-width: 1024px) {
+    .resume-tab-shell > main > div {
+      max-height: calc(100vh - 8.5rem);
+      overflow-y: auto;
+    }
   }
 }
 

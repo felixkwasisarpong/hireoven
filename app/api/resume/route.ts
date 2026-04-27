@@ -17,11 +17,12 @@ export async function GET() {
 
   try {
     const pool = getPostgresPool()
+    await pool.query(`ALTER TABLE resumes ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ`)
     const result = await pool.query<Resume>(
       `SELECT *
        FROM resumes
        WHERE user_id = $1
-       ORDER BY created_at DESC`,
+       ORDER BY updated_at DESC, created_at DESC`,
       [user.id]
     )
     return NextResponse.json(result.rows)

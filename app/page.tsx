@@ -1,23 +1,14 @@
 import type { Metadata } from "next"
 import Link from "next/link"
-import {
-  ArrowRight,
-  Bell,
-  Bookmark,
-  CheckCircle2,
-  Clock,
-  FileCheck2,
-  Gauge,
-  Globe,
-  MousePointerClick,
-  Sparkles,
-  Target,
-  Wand2,
-  Zap,
-} from "lucide-react"
+import { ArrowRight, Bell, CheckCircle2, MousePointerClick } from "lucide-react"
 import Navbar from "@/components/layout/Navbar"
 import ComingSoonSection from "@/components/marketing/ComingSoonSection"
+import {
+  CoreFeaturesTable,
+  InternationalFeaturesTable,
+} from "@/components/marketing/MarketingFeatureBlocks"
 import LogoWall from "@/components/marketing/LogoWall"
+import { CORE_FEATURES, INTERNATIONAL_HIGHLIGHTS, LANDING_INTL_CTA } from "@/lib/marketing/product-features"
 import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
 import { getPostgresPool, hasPostgresEnv } from "@/lib/postgres/server"
 import { createClient } from "@/lib/supabase/server"
@@ -29,73 +20,6 @@ export const metadata: Metadata = {
 }
 
 export const dynamic = "force-dynamic"
-
-// ─── Feature copy ────────────────────────────────────────────────────────────
-// Benefit-first, never mechanism-first. The user cares about "I'll land
-// interviews faster", not "Bayesian posterior over employer LCA history".
-
-const CORE_FEATURES = [
-  {
-    icon: Zap,
-    title: "Fresh jobs, before the crowd",
-    body: "New roles land in your feed within minutes of going live. The first handful of applicants get the most eyes - we make sure you're in it.",
-    accent: "text-[#0369A1]",
-    ring: "border-[#BAE6FD] bg-[#F0F9FF]",
-  },
-  {
-    icon: Target,
-    title: "AI match scores on every role",
-    body: "Only see roles that actually fit your resume, seniority, and location. Low-fit postings are filtered out before you ever scroll past them.",
-    accent: "text-violet-700",
-    ring: "border-violet-200 bg-violet-50",
-  },
-  {
-    icon: Wand2,
-    title: "One-click apply, done",
-    body: "Greenhouse, Lever, Ashby, Workday - our autofill handles the tedious fields so you ship applications in seconds, not minutes.",
-    accent: "text-emerald-700",
-    ring: "border-emerald-200 bg-emerald-50",
-  },
-  {
-    icon: FileCheck2,
-    title: "Resume gap analysis",
-    body: "Paste a role, get a prioritized list of what's missing from your resume to hit the bar. Fix the weak spots before you apply.",
-    accent: "text-amber-700",
-    ring: "border-amber-200 bg-amber-50",
-  },
-  {
-    icon: Sparkles,
-    title: "Tailored cover letters",
-    body: "Generate a cover letter tuned to the exact role and company in under 30 seconds. Edit freely, ship confidently.",
-    accent: "text-fuchsia-700",
-    ring: "border-fuchsia-200 bg-fuchsia-50",
-  },
-  {
-    icon: Bookmark,
-    title: "Watchlist + instant alerts",
-    body: "Follow companies you love. The moment they post, you hear about it - email, push, or right inside your dashboard.",
-    accent: "text-rose-700",
-    ring: "border-rose-200 bg-rose-50",
-  },
-] as const
-
-const INTL_FEATURES = [
-  {
-    icon: Gauge,
-    title: "H-1B approval likelihood",
-    body: "Every role shows the odds that a sponsorship request there actually gets approved - not just whether the company will sponsor.",
-  },
-  {
-    icon: Globe,
-    title: "Sponsorship confidence score",
-    body: "0–100 score for every company based on their actual hiring history. Stop guessing which employers will back you.",
-  },
-  {
-    icon: Clock,
-    title: "OPT & STEM OPT countdown",
-    body: "The days left on your status are always visible in your dashboard. Urgency routing bubbles up the roles that move fastest.",
-  },
-] as const
 
 const HOW_IT_WORKS = [
   {
@@ -163,7 +87,9 @@ async function getFeaturedCompanies() {
          AND domain IS NOT NULL
          AND domain NOT ILIKE '%.uscis-employer'
          AND domain NOT ILIKE '%.lca-employer'
-       ORDER BY job_count DESC
+       ORDER BY
+         CASE WHEN logo_url IS NULL OR logo_url = '' THEN 1 ELSE 0 END ASC,
+         job_count DESC
        LIMIT 24`
     )
     return rows
@@ -218,9 +144,10 @@ export default async function HomePage() {
               </span>
             </h1>
             <p className="mt-5 max-w-xl text-lg text-gray-600 md:text-xl">
-              Real-time job alerts, AI match scores, one-click apply, and H-1B
-              approval intelligence - all in one place. Built for people who
-              want interviews, not just applications.
+              Real-time job alerts, AI match scores, one-click apply, and
+              international job-search signals—visa context, company history, and
+              offer checklists when you need them. Built for people who want
+              interviews, not just applications.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Link
@@ -366,71 +293,48 @@ export default async function HomePage() {
               No more spreadsheets, browser tabs, or copy-pasting. Hireoven replaces
               the awkward stack you&apos;ve been duct-taping together.
             </p>
+            <p className="mt-4">
+              <Link
+                href="/features"
+                className="text-sm font-semibold text-[#0369A1] transition hover:underline"
+              >
+                Full feature list →
+              </Link>
+            </p>
           </div>
 
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {CORE_FEATURES.map(({ icon: Icon, title, body, accent, ring }) => (
-              <div
-                key={title}
-                className="group relative rounded-3xl border border-gray-200 bg-white p-6 transition hover:-translate-y-0.5 hover:border-[#BAE6FD] hover:shadow-xl hover:shadow-slate-900/5"
-              >
-                <div className={`mb-5 inline-flex h-11 w-11 items-center justify-center rounded-2xl border ${ring}`}>
-                  <Icon className={`h-5 w-5 ${accent}`} />
-                </div>
-                <h3 className="mb-2 text-lg font-semibold text-gray-900">{title}</h3>
-                <p className="text-sm leading-relaxed text-gray-600">{body}</p>
-              </div>
-            ))}
-          </div>
+          <CoreFeaturesTable features={CORE_FEATURES} />
         </div>
       </section>
 
       {/* International candidates ─────────────────────────────────────────── */}
       <section className="border-y border-[#E0F2FE] bg-[#F0F9FF] px-6 py-24">
-        <div className="mx-auto grid max-w-6xl gap-12 md:grid-cols-[1fr,1.1fr] md:items-center">
+        <div className="mx-auto grid max-w-6xl gap-12 lg:grid-cols-[1fr,1.15fr] lg:items-start">
           <div>
             <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-[#0369A1]">
               For international candidates
             </p>
             <h2 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
-              Know your odds before you spend the application
+              {LANDING_INTL_CTA.title}
             </h2>
-            <p className="mt-4 text-lg text-gray-600">
-              Sponsorship confidence, H-1B approval likelihood, and visa language
-              scanning - on every role. Stop burning time on companies that
-              won&apos;t back you, and focus on the ones that will.
-            </p>
-            <Link
-              href="/signup"
-              className="mt-6 inline-flex items-center gap-2 rounded-2xl bg-[#0369A1] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#075985]"
-            >
-              See sponsorship odds
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            {INTL_FEATURES.map(({ icon: Icon, title, body }) => (
-              <div
-                key={title}
-                className="rounded-3xl border border-[#BAE6FD] bg-white p-6 shadow-sm"
+            <p className="mt-4 text-lg text-gray-600">{LANDING_INTL_CTA.body}</p>
+            <div className="mt-6 flex flex-wrap items-center gap-4">
+              <Link
+                href="/signup"
+                className="inline-flex items-center gap-2 rounded-2xl bg-[#0369A1] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#075985]"
               >
-                <div className="mb-4 inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-[#E0F2FE]">
-                  <Icon className="h-5 w-5 text-[#0369A1]" />
-                </div>
-                <h3 className="mb-2 font-semibold text-gray-900">{title}</h3>
-                <p className="text-sm leading-relaxed text-gray-500">{body}</p>
-              </div>
-            ))}
-            <div className="rounded-3xl border border-dashed border-[#BAE6FD] bg-[#F0F9FF] p-6 sm:col-span-2">
-              <p className="text-xs font-semibold uppercase tracking-widest text-[#0369A1]">
-                Not legal advice
-              </p>
-              <p className="mt-1 text-sm text-[#0C4A6E]">
-                Our signals help you prioritize where to apply. For anything
-                binding on your case, talk to an immigration attorney.
-              </p>
+                Get started
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+              <Link
+                href="/features"
+                className="text-sm font-semibold text-[#0369A1] transition hover:underline"
+              >
+                All intelligence features →
+              </Link>
             </div>
           </div>
+          <InternationalFeaturesTable items={INTERNATIONAL_HIGHLIGHTS} />
         </div>
       </section>
 
@@ -503,7 +407,7 @@ export default async function HomePage() {
             <FooterColumn
               title="Product"
               links={[
-                { href: "/#features", label: "Features" },
+                { href: "/features", label: "Features" },
                 { href: "/companies", label: "Companies" },
                 { href: "/pricing", label: "Pricing" },
               ]}

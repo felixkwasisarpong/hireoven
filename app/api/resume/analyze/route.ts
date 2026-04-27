@@ -34,7 +34,10 @@ export async function POST(request: Request) {
   if (gate instanceof NextResponse) return gate
 
   const supabase = await createClient()
-  const user = (await supabase.auth.getUser()).data.user!
+  const user = (await supabase.auth.getUser()).data.user
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
   const pool = getPostgresPool()
 
   const body = await request.json().catch(() => ({})) as { resumeId?: string; jobId?: string }

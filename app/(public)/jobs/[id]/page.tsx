@@ -1,9 +1,9 @@
 import type { Metadata } from "next"
 import Link from "next/link"
-import Image from "next/image"
 import { notFound } from "next/navigation"
 import { getPostgresPool, hasPostgresEnv } from "@/lib/postgres/server"
 import { AutofillButton } from "@/components/autofill/AutofillButton"
+import CompanyLogo from "@/components/ui/CompanyLogo"
 import Navbar from "@/components/layout/Navbar"
 import {
   resolveJobNormalization,
@@ -105,19 +105,12 @@ export default async function PublicJobPage({ params }: Props) {
 
         <div className="surface-panel rounded-lg p-6 sm:p-8">
           <div className="flex items-start gap-4 border-b border-border pb-6">
-            {company?.logo_url ? (
-              <Image
-                src={company.logo_url}
-                alt={company.name}
-                width={56}
-                height={56}
-                className="rounded-md border border-border object-contain flex-shrink-0"
-              />
-            ) : (
-              <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-md border border-border bg-brand-tint text-lg font-bold text-brand-navy">
-                {company?.name?.charAt(0).toUpperCase() ?? "?"}
-              </div>
-            )}
+            <CompanyLogo
+              companyName={company?.name ?? "Company"}
+              domain={company?.domain}
+              logoUrl={company?.logo_url}
+              className="h-14 w-14 shrink-0 rounded-md border border-border"
+            />
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">{company?.name}</p>
               <h1 className="mt-1 text-2xl font-semibold tracking-tight text-strong">{page.title}</h1>
