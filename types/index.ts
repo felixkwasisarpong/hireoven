@@ -4,6 +4,16 @@
 // `Record<string, unknown>` in Supabase SDK v2.100+ conditional types.
 // =============================================================================
 
+export type {
+  EmploymentTypeValue,
+  EvidenceBackedJobFact,
+  EvidenceSource,
+  JobEvidenceFacts,
+  JobFactConfidence,
+  NormalizedSalary,
+  WorkModeValue,
+} from "@/types/job-evidence-facts"
+
 // ---------------------------------------------------------------------------
 // Shared enums / union types
 // ---------------------------------------------------------------------------
