@@ -1,17 +1,7 @@
 "use client"
 
-import { useEffect, useMemo, useState, type ReactNode } from "react"
-import {
-  BadgeCheck,
-  Bookmark,
-  Briefcase,
-  Clock,
-  DollarSign,
-  ExternalLink,
-  Home,
-  MapPin,
-  Plane,
-} from "lucide-react"
+import { useEffect, useMemo, useState } from "react"
+import { BadgeCheck, Bookmark, Clock, ExternalLink, Plane, Trophy } from "lucide-react"
 
 import dynamic from "next/dynamic"
 import Link from "next/link"
@@ -30,7 +20,9 @@ import {
   fetchJobSavedState,
   saveJobToPipeline,
 } from "@/lib/applications/save-job-client"
+import { JobCardEvidenceFactChips } from "@/components/jobs/card/JobCardEvidenceFactChips"
 import { useToast } from "@/components/ui/ToastProvider"
+import { buildJobCardFactList, buildJobEvidenceFacts } from "@/lib/jobs/job-evidence-facts"
 import { cn } from "@/lib/utils"
 import type { JobMatchScore, JobWithCompany, JobWithMatchScore } from "@/types"
 
@@ -149,56 +141,8 @@ export default function JobCard({
     employerLikelySponsorsH1b(job) || (!job.requires_authorization && sponsorScore >= 55)
   const sponsorshipCopy = showSponsorshipBanner ? employerSponsorshipCardCopy(job) : null
 
-  const workModeLabel = job.is_remote ? "Remote" : job.is_hybrid ? "Hybrid" : job.location?.trim() ? "On-site" : null
-
-  const metaItems = useMemo(() => {
-    const items: { key: string; node: ReactNode }[] = []
-    if (job.location?.trim()) {
-      items.push({
-        key: "loc",
-        node: (
-          <span className="inline-flex items-center gap-1">
-            <MapPin className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-            <span className="line-clamp-1">{job.location}</span>
-          </span>
-        ),
-      })
-    }
-    if (cardView.employment_label) {
-      items.push({
-        key: "emp",
-        node: (
-          <span className="inline-flex items-center gap-1">
-            <Briefcase className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-            {cardView.employment_label}
-          </span>
-        ),
-      })
-    }
-    if (workModeLabel) {
-      items.push({
-        key: "mode",
-        node: (
-          <span className="inline-flex items-center gap-1">
-            <Home className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-            {workModeLabel}
-          </span>
-        ),
-      })
-    }
-    if (cardView.salary_label) {
-      items.push({
-        key: "salary",
-        node: (
-          <span className="inline-flex items-center gap-1 font-semibold text-emerald-700">
-            <DollarSign className="h-3.5 w-3.5 shrink-0" />
-            {cardView.salary_label}
-          </span>
-        ),
-      })
-    }
-    return items
-  }, [job.location, cardView.employment_label, workModeLabel, cardView.salary_label])
+  const evidenceFacts = useMemo(() => buildJobEvidenceFacts(job), [job])
+  const jobCardFactItems = useMemo(() => buildJobCardFactList(evidenceFacts, 4), [evidenceFacts])
 
   useEffect(() => {
     let cancelled = false
@@ -336,19 +280,18 @@ export default function JobCard({
                   Posted {freshness.label}
                 </span>
                 {isBestMatch && (
-                  <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-800">
-                    Top match
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.08em] text-amber-900">
+                    <span className="flex h-4 w-4 items-center justify-center rounded-full bg-amber-500 text-white">
+                      <Trophy className="h-2.5 w-2.5" aria-hidden />
+                    </span>
+                    Top Match
                   </span>
                 )}
               </div>
 
-              {metaItems.length > 0 && (
-                <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1 text-[13px] text-slate-500">
-                  {metaItems.map((item) => (
-                    <span key={item.key} className="inline-flex items-center">
-                      {item.node}
-                    </span>
-                  ))}
+              {jobCardFactItems.length > 0 && (
+                <div className="mt-2 text-[13px] text-slate-500">
+                  <JobCardEvidenceFactChips jobId={job.id} items={jobCardFactItems} />
                 </div>
               )}
 

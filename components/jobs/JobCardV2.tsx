@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { Briefcase, ExternalLink, Home, MapPin } from "lucide-react"
+import { ExternalLink, Trophy } from "lucide-react"
 import dynamic from "next/dynamic"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -27,7 +27,15 @@ import { SalaryIntelBadge } from "@/components/jobs/card/SalaryIntelBadge"
 import { GhostRiskBadge } from "@/components/jobs/card/GhostRiskBadge"
 import { ApplicationVerdictPill } from "@/components/jobs/card/ApplicationVerdictPill"
 import { SponsorshipBlockerBadge } from "@/components/jobs/card/SponsorshipBlockerBadge"
+import { JobCardEvidenceFactChips } from "@/components/jobs/card/JobCardEvidenceFactChips"
+import { OpportunitySignalBadges } from "@/components/jobs/card/OpportunitySignalBadges"
 import { PostedTimeLabel } from "@/components/jobs/card/PostedTimeLabel"
+import { buildJobCardFactList, buildJobEvidenceFacts } from "@/lib/jobs/job-evidence-facts"
+import {
+  buildSalaryStrongBadgeTitle,
+  buildTopApplicantOpportunityBadgeTitle,
+  shouldShowSalaryStrongBadge,
+} from "@/lib/jobs/job-card-badges"
 import type { JobMatchScore, JobWithCompany, JobWithMatchScore } from "@/types"
 
 const QuickAnalysisDrawer = dynamic(() => import("@/components/resume/QuickAnalysisDrawer"), { ssr: false })
@@ -88,7 +96,14 @@ export default function JobCardV2({
     showVisaSignals &&
     (employerLikelySponsorsH1b(job) || (!job.requires_authorization && effectiveEmployerSponsorshipScore(job) >= 55))
 
-  const workModeLabel = job.is_remote ? "Remote" : job.is_hybrid ? "Hybrid" : job.location?.trim() ? "On-site" : null
+  const evidenceFacts = useMemo(() => buildJobEvidenceFacts(job), [job])
+  const jobCardFactItems = useMemo(() => buildJobCardFactList(evidenceFacts, 4), [evidenceFacts])
+  const topApplicantBadge = useMemo(
+    () => buildTopApplicantOpportunityBadgeTitle(job, score),
+    [job, score]
+  )
+  const showSalaryStrong = shouldShowSalaryStrongBadge(evidenceFacts)
+  const salaryStrongTitle = useMemo(() => buildSalaryStrongBadgeTitle(evidenceFacts), [evidenceFacts])
 
   useEffect(() => {
     let cancelled = false
@@ -177,13 +192,13 @@ export default function JobCardV2({
         className="group relative flex cursor-pointer flex-col overflow-hidden rounded-xl border border-[#E5E7EB] bg-white transition-shadow hover:shadow-[0_2px_12px_rgba(15,23,42,0.07)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]/20"
       >
         {/* Header row */}
-        <div className="flex min-w-0 flex-col gap-4 p-5 sm:flex-row sm:items-start">
+        <div className="flex min-w-0 flex-col gap-5 p-5 sm:flex-row sm:items-start">
           <CompanyLogo
             companyName={companyName}
             domain={companyDomain}
             logoUrl={companyLogoUrl}
             priority={priorityLogo}
-            className="h-12 w-12 flex-shrink-0 rounded-lg border border-slate-100"
+            className="h-16 w-16 flex-shrink-0 rounded-none border-0 bg-transparent"
           />
 
           <div className="min-w-0 flex-1">
@@ -195,8 +210,11 @@ export default function JobCardV2({
                 </h3>
               </div>
               {isBestMatch && (
-                <span className="mt-0.5 flex-shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-800">
-                  Top match
+                <span className="mt-0.5 inline-flex flex-shrink-0 items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.08em] text-amber-900">
+                  <span className="flex h-4 w-4 items-center justify-center rounded-full bg-amber-500 text-white">
+                    <Trophy className="h-2.5 w-2.5" aria-hidden />
+                  </span>
+                  Top Match
                 </span>
               )}
             </div>
@@ -218,32 +236,11 @@ export default function JobCardV2({
               <PostedTimeLabel firstDetectedAt={job.first_detected_at} now={now} />
             </div>
 
-            {/* Location / employment / work mode / salary */}
-            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12.5px] text-slate-500">
-              {job.location?.trim() && (
-                <span className="inline-flex items-center gap-1">
-                  <MapPin className="h-3 w-3 shrink-0 text-slate-400" aria-hidden />
-                  {job.location}
-                </span>
-              )}
-              {cardView.employment_label && (
-                <span className="inline-flex items-center gap-1">
-                  <Briefcase className="h-3 w-3 shrink-0 text-slate-400" aria-hidden />
-                  {cardView.employment_label}
-                </span>
-              )}
-              {workModeLabel && (
-                <span className="inline-flex items-center gap-1">
-                  <Home className="h-3 w-3 shrink-0 text-slate-400" aria-hidden />
-                  {workModeLabel}
-                </span>
-              )}
-              {cardView.salary_label && (
-                <span className="font-semibold text-emerald-700">
-                  {cardView.salary_label}
-                </span>
-              )}
-            </div>
+            {jobCardFactItems.length > 0 && (
+              <div className="mt-2 text-[12.5px] text-slate-500">
+                <JobCardEvidenceFactChips jobId={job.id} items={jobCardFactItems} />
+              </div>
+            )}
 
           </div>
 
@@ -270,6 +267,13 @@ export default function JobCardV2({
           className="flex min-h-[36px] flex-wrap items-center gap-2 border-t border-[#F1F5F9] bg-[#FAFAFA] px-5 py-2.5"
           onClick={(e) => e.stopPropagation()}
         >
+          <OpportunitySignalBadges
+            showTopApplicant={topApplicantBadge.show}
+            showSalaryStrong={showSalaryStrong}
+            topApplicantTitle={topApplicantBadge.title}
+            salaryStrongTitle={salaryStrongTitle}
+            className="bg-white/85 shadow-sm"
+          />
           {/* Visa fit — only for international / enabled users */}
           {showVisaSignals && intel.visa?.label && (
             <button
@@ -278,18 +282,28 @@ export default function JobCardV2({
               className="focus-visible:outline-none"
               aria-label="Open visa fit details"
             >
-              <VisaFitBadge label={intel.visa.label} score={intel.visa.visaFitScore} />
+              <VisaFitBadge
+                label={intel.visa.label}
+                score={intel.visa.visaFitScore}
+                className="shadow-sm"
+              />
             </button>
           )}
 
           {/* Sponsorship blocker — show always when detected */}
           {hasBlocker && (
-            <SponsorshipBlockerBadge blockers={intel.visa?.blockers} />
+            <SponsorshipBlockerBadge
+              blockers={intel.visa?.blockers}
+              className="bg-white/85 shadow-sm"
+            />
           )}
 
           {/* LCA salary alignment */}
           {intel.lcaSalary?.comparisonLabel && intel.lcaSalary.comparisonLabel !== "Unknown" && (
-            <SalaryIntelBadge comparisonLabel={intel.lcaSalary.comparisonLabel} />
+            <SalaryIntelBadge
+              comparisonLabel={intel.lcaSalary.comparisonLabel}
+              className="bg-white/85 shadow-sm"
+            />
           )}
 
           {/* Ghost job risk */}
@@ -297,12 +311,16 @@ export default function JobCardV2({
             <GhostRiskBadge
               riskLevel={intel.ghostJobRisk.riskLevel}
               freshnessDays={intel.ghostJobRisk.freshnessDays}
+              className="bg-white/85 shadow-sm"
             />
           )}
 
           {/* Application verdict */}
           {intel.applicationVerdict && (
-            <ApplicationVerdictPill verdict={intel.applicationVerdict} />
+            <ApplicationVerdictPill
+              verdict={intel.applicationVerdict}
+              className="shadow-sm"
+            />
           )}
 
           {/* Spacer + actions */}
