@@ -127,7 +127,7 @@ export default function CompaniesPage() {
 
   return (
     <main className="app-page pb-[max(6rem,calc(env(safe-area-inset-bottom)+5.5rem))]">
-      <div className="app-shell max-w-7xl space-y-5 pb-[max(2rem,calc(env(safe-area-inset-bottom)+1rem))]">
+      <div className="app-shell w-full space-y-5 pb-[max(2rem,calc(env(safe-area-inset-bottom)+1rem))]">
         <DashboardPageHeader
           kicker="Company explorer"
           title="Companies we track"

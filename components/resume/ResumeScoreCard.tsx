@@ -68,7 +68,7 @@ export default function ResumeScoreCard({ resume }: { resume: Resume }) {
   ] as const
 
   return (
-    <div className="rounded-[20px] border border-slate-200/80 bg-white p-5 shadow-[0_6px_18px_rgba(15,23,42,0.035)]">
+    <div className="border-0 bg-transparent p-0 shadow-none">
       <div className="flex items-center gap-4">
         <div
           className="relative flex h-20 w-20 shrink-0 items-center justify-center rounded-full"
@@ -86,7 +86,7 @@ export default function ResumeScoreCard({ resume }: { resume: Resume }) {
             Resume quality
           </p>
           <p className="mt-1 text-xl font-semibold text-gray-900">{getScoreLabel(score)}</p>
-          <span className={cn("mt-2 inline-block rounded-full border px-2.5 py-1 text-xs font-medium", tone.chip)}>
+          <span className={cn("mt-2 inline-block rounded-sm border px-2.5 py-1 text-xs font-medium", tone.chip)}>
             {score >= 71 ? "Strong foundation" : score >= 41 ? "Room to improve" : "Needs work"}
           </span>
         </div>
@@ -121,7 +121,7 @@ export default function ResumeScoreCard({ resume }: { resume: Resume }) {
       </div>
 
       {tips.length > 0 && (
-        <div className="mt-6 rounded-[18px] border border-[#FFD9C2] bg-[#FFF8F4] px-4 py-4">
+        <div className="mt-6 border border-[#E8C4A8] bg-[#FFFBF7] px-4 py-4">
           <p className="text-sm font-semibold text-[#9A3412]">Improvement tips</p>
           <div className="mt-3 space-y-2 text-sm leading-6 text-gray-600">
             {tips.map((tip) => (

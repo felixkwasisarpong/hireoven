@@ -56,6 +56,7 @@ export function useResumeAnalysis(resumeId: string | null, jobId: string | null)
 
     const res = await fetch(`/api/resume/analyze?resumeId=${resumeId}&jobId=${jobId}`, {
       cache: "no-store",
+      credentials: "include",
     })
     if (!res.ok) return null
     const data = (await res.json()) as ResumeAnalysis | null
@@ -72,6 +73,7 @@ export function useResumeAnalysis(resumeId: string | null, jobId: string | null)
     try {
       const res = await fetch("/api/resume/analyze", {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ resumeId, jobId }),
       })

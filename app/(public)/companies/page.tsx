@@ -1,6 +1,6 @@
 import type { Metadata } from "next"
 import Link from "next/link"
-import Image from "next/image"
+import CompanyLogo from "@/components/ui/CompanyLogo"
 import { getPostgresPool, hasPostgresEnv } from "@/lib/postgres/server"
 import Navbar from "@/components/layout/Navbar"
 import type { Company } from "@/types"
@@ -59,7 +59,7 @@ export default async function PublicCompaniesPage() {
     <div className="min-h-dvh">
       <Navbar />
 
-      <main className="mx-auto max-w-6xl px-6 py-12">
+      <main className="mx-auto w-full max-w-[88rem] px-6 py-12">
         <div className="mb-10">
           <h1 className="text-4xl font-bold tracking-tight text-gray-900">
             Companies hiring now
@@ -99,19 +99,12 @@ export default async function PublicCompaniesPage() {
                     className="group flex items-start gap-4 rounded-2xl border border-gray-200 bg-white p-4 transition hover:border-[#BAE6FD] hover:shadow-md"
                   >
                     <div className="flex-shrink-0">
-                      {company.logo_url ? (
-                        <Image
-                          src={company.logo_url}
-                          alt={company.name}
-                          width={48}
-                          height={48}
-                          className="rounded-xl border border-gray-100 object-contain"
-                        />
-                      ) : (
-                        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#E0F2FE] text-sm font-bold text-[#0C4A6E]">
-                          {company.name.charAt(0).toUpperCase()}
-                        </div>
-                      )}
+                      <CompanyLogo
+                        companyName={company.name}
+                        domain={company.domain}
+                        logoUrl={company.logo_url}
+                        className="h-12 w-12 rounded-xl border border-gray-100"
+                      />
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="font-semibold text-gray-900 group-hover:text-[#0369A1] transition">

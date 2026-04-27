@@ -16,8 +16,8 @@ export async function GET(
   }
 
   const pool = getPostgresPool()
-  const result = await pool.query<{ parse_status: string; resume_score: number | null }>(
-    `SELECT parse_status, resume_score
+  const result = await pool.query<{ parse_status: string; parse_error: string | null; resume_score: number | null; ats_score: number | null }>(
+    `SELECT parse_status, parse_error, resume_score, ats_score
      FROM resumes
      WHERE id = $1
        AND user_id = $2

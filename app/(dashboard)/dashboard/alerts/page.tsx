@@ -192,7 +192,7 @@ export default function AlertsPage() {
 
   return (
     <main className="app-page">
-      <div className="app-shell max-w-7xl space-y-5">
+      <div className="app-shell w-full space-y-5">
         <DashboardPageHeader
           kicker="Alerts"
           title="Saved alerts that keep working for you"

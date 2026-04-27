@@ -83,7 +83,7 @@ function TrialReminderBanner() {
 
 function DashboardSubpageChrome({ children }: { children: React.ReactNode }) {
   return (
-    <div className="dashboard-subpage relative min-h-[100dvh] bg-white xl:flex xl:h-[100dvh] xl:overflow-hidden">
+    <div className="dashboard-subpage relative min-h-[100dvh] w-full bg-white xl:flex xl:h-[100dvh] xl:overflow-hidden">
       <DashboardSubpageSidebar />
 
       <div className="flex min-w-0 flex-1 flex-col xl:h-full xl:overflow-hidden">

@@ -37,14 +37,22 @@ function sortResumes(resumes: Resume[]) {
 
 export function ResumeProvider({ children }: { children: React.ReactNode }) {
   const [userId, setUserId] = useState<string | null>(null)
+  const [sessionResolved, setSessionResolved] = useState(false)
   const [resumes, setResumes] = useState<Resume[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    void fetchSessionUser().then((u) => setUserId(u?.id ?? null))
+    void fetchSessionUser().then((u) => {
+      setUserId(u?.id ?? null)
+      setSessionResolved(true)
+    })
   }, [])
 
   const refresh = useCallback(async () => {
+    if (!sessionResolved) {
+      return
+    }
+
     if (!userId) {
       setResumes([])
       setIsLoading(false)
@@ -63,10 +71,19 @@ export function ResumeProvider({ children }: { children: React.ReactNode }) {
 
     setResumes(sortResumes(data ?? []))
     setIsLoading(false)
-  }, [userId])
+  }, [sessionResolved, userId])
 
   useEffect(() => {
     void refresh()
+  }, [refresh])
+
+  useEffect(() => {
+    function handleResumeChange() {
+      void refresh()
+    }
+
+    window.addEventListener("hireoven:resumes-changed", handleResumeChange)
+    return () => window.removeEventListener("hireoven:resumes-changed", handleResumeChange)
   }, [refresh])
 
   useEffect(() => {

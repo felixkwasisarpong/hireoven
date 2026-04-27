@@ -176,7 +176,7 @@ export default function CoverLettersPage() {
 
   return (
     <main className="app-page">
-      <div className="app-shell max-w-6xl space-y-5">
+      <div className="app-shell w-full space-y-5">
         <DashboardPageHeader
           kicker="Cover letters"
           title="Saved drafts, tailored for real roles"

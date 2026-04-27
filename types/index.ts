@@ -1017,26 +1017,32 @@ export type Resume = {
   file_url: string;
   storage_path: string;
   file_size: number | null;
+  file_type?: string | null;
   is_primary: boolean;
   parse_status: ResumeParseStatus;
+  parse_error?: string | null;
   full_name: string | null;
   email: string | null;
   phone: string | null;
   location: string | null;
   linkedin_url: string | null;
   portfolio_url: string | null;
+  github_url?: string | null;
   summary: string | null;
   work_experience: WorkExperience[] | null;
   education: Education[] | null;
   skills: Skills | null;
   projects: Project[] | null;
+  certifications?: unknown[] | null;
   seniority_level: SeniorityLevel | null;
   years_of_experience: number | null;
   primary_role: string | null;
   industries: string[] | null;
   top_skills: string[] | null;
   resume_score: number | null;
+  ats_score?: number | null;
   raw_text: string | null;
+  archived_at?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -1057,17 +1063,20 @@ export type ResumeSnapshot = Pick<
   | 'location'
   | 'linkedin_url'
   | 'portfolio_url'
+  | 'github_url'
   | 'summary'
   | 'work_experience'
   | 'education'
   | 'skills'
   | 'projects'
+  | 'certifications'
   | 'seniority_level'
   | 'years_of_experience'
   | 'primary_role'
   | 'industries'
   | 'top_skills'
   | 'resume_score'
+  | 'ats_score'
   | 'raw_text'
 >;
 
@@ -1086,6 +1095,38 @@ export type ResumeVersion = {
 export type ResumeVersionInsert = Omit<ResumeVersion, 'id' | 'created_at'> & {
   id?: string;
   created_at?: string;
+};
+
+export type ResumeTailoringAnalysisRecord = {
+  id: string;
+  user_id: string;
+  resume_id: string;
+  job_id: string | null;
+  job_title: string | null;
+  company: string | null;
+  job_description: string;
+  match_score: number;
+  present_keywords: string[];
+  missing_keywords: string[];
+  suggested_summary_rewrite: string | null;
+  suggested_skills_to_add: string[];
+  bullet_suggestions: unknown[];
+  warnings: string[];
+  created_at: string;
+};
+
+export type ResumeAiEditStatus = 'pending' | 'complete' | 'failed';
+
+export type ResumeAiEditRecord = {
+  id: string;
+  user_id: string;
+  resume_id: string;
+  tool_id: string;
+  label: string | null;
+  input_snapshot: ResumeSnapshot | null;
+  output_patch: Record<string, unknown> | null;
+  status: ResumeAiEditStatus;
+  created_at: string;
 };
 
 export type JobApplicationUpdate = Partial<JobApplicationInsert>;

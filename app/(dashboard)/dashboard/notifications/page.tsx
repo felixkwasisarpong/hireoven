@@ -3,8 +3,9 @@
 import { useMemo, useState } from "react"
 import Link from "next/link"
 import { BellRing } from "lucide-react"
-import { useNotifications, type NotificationFilter } from "@/lib/hooks/useNotifications"
+import { useNotifications, type AppNotification, type LocalAppNotification, type NotificationFilter } from "@/lib/hooks/useNotifications"
 import { useAuth } from "@/lib/hooks/useAuth"
+import type { AlertNotificationWithDetails } from "@/types"
 
 const FILTERS: Array<{ value: NotificationFilter; label: string }> = [
   { value: "all", label: "All" },
@@ -24,6 +25,39 @@ function formatRelative(timestamp: string) {
   if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? "" : "s"} ago`
   const diffDays = Math.floor(diffHours / 24)
   return `${diffDays} day${diffDays === 1 ? "" : "s"} ago`
+}
+
+function isLocalNotification(notification: AppNotification): notification is LocalAppNotification {
+  return "source" in notification && notification.source === "local"
+}
+
+function isServerNotification(notification: AppNotification): notification is AlertNotificationWithDetails {
+  return !isLocalNotification(notification)
+}
+
+function notificationCategory(notification: AppNotification) {
+  if (isLocalNotification(notification)) return notification.notification_type === "resume" ? "Resume" : "System"
+  if (!isServerNotification(notification)) return "System"
+  return notification.notification_type === "watchlist"
+    ? "Watchlist"
+    : notification.alert?.name ?? "Saved alert"
+}
+
+function notificationTitle(notification: AppNotification) {
+  if (isLocalNotification(notification)) return notification.title
+  return notification.job?.title ?? "New job notification"
+}
+
+function notificationDescription(notification: AppNotification) {
+  if (isLocalNotification(notification)) return notification.message
+  if (!isServerNotification(notification)) return ""
+  return `${notification.job?.company?.name ?? "Tracked company"}${
+    notification.job?.location
+      ? ` · ${notification.job.location}`
+      : notification.job?.is_remote
+        ? " · Remote"
+        : ""
+  }`
 }
 
 export default function NotificationsPage() {
@@ -111,7 +145,9 @@ export default function NotificationsPage() {
                   type="button"
                   onClick={() => {
                     void markAsRead(notification.id, true)
-                    if (notification.job?.apply_url) {
+                    if (isLocalNotification(notification) && notification.href) {
+                      window.location.href = notification.href
+                    } else if (isServerNotification(notification) && notification.job?.apply_url) {
                       window.open(notification.job.apply_url, "_blank", "noopener,noreferrer")
                     }
                   }}
@@ -124,21 +160,14 @@ export default function NotificationsPage() {
                           <span className="h-2.5 w-2.5 rounded-full bg-[#FF5C18]" />
                         )}
                         <span className="text-xs font-semibold uppercase tracking-[0.22em] text-gray-400">
-                          {notification.notification_type === "watchlist"
-                            ? "Watchlist"
-                            : notification.alert?.name ?? "Saved alert"}
+                          {notificationCategory(notification)}
                         </span>
                       </div>
                       <h2 className="mt-3 text-lg font-semibold text-gray-900">
-                        {notification.job?.title ?? "New job notification"}
+                        {notificationTitle(notification)}
                       </h2>
                       <p className="mt-2 text-sm text-gray-500">
-                        {notification.job?.company?.name ?? "Tracked company"}
-                        {notification.job?.location
-                          ? ` · ${notification.job.location}`
-                          : notification.job?.is_remote
-                            ? " · Remote"
-                            : ""}
+                        {notificationDescription(notification)}
                       </p>
                     </div>
                     <div className="text-right">

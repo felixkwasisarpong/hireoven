@@ -1,9 +1,31 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getSessionUser } from "@/lib/auth/session-user"
 import { getPostgresPool } from "@/lib/postgres/server"
-import type { ResumeSnapshot, ResumeVersion } from "@/types"
+import { createResumeSnapshot, isUuid } from "@/lib/resume/hub"
+import type { Resume, ResumeSnapshot, ResumeVersion } from "@/types"
 
 export const runtime = "nodejs"
+
+async function ensureResumeVersionsTable() {
+  const pool = getPostgresPool()
+  await pool.query(
+    `CREATE TABLE IF NOT EXISTS resume_versions (
+      id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+      resume_id UUID REFERENCES resumes(id) ON DELETE CASCADE,
+      user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+      version_number INTEGER NOT NULL,
+      name TEXT,
+      file_url TEXT,
+      snapshot JSONB,
+      changes_summary TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`
+  )
+  await pool.query(
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_resume_versions_unique_number
+     ON resume_versions(resume_id, version_number)`
+  )
+}
 
 export async function GET(
   _request: NextRequest,
@@ -13,7 +35,9 @@ export async function GET(
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const resumeId = params.id
+  if (!isUuid(resumeId)) return NextResponse.json({ error: "Invalid resume id" }, { status: 400 })
   const pool = getPostgresPool()
+  await ensureResumeVersionsTable()
   const own = await pool.query(`SELECT 1 FROM resumes WHERE id = $1 AND user_id = $2 LIMIT 1`, [
     resumeId,
     user.sub,
@@ -41,6 +65,7 @@ export async function POST(
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const resumeId = params.id
+  if (!isUuid(resumeId)) return NextResponse.json({ error: "Invalid resume id" }, { status: 400 })
   const body = (await request.json().catch(() => ({}))) as {
     version_number?: number
     name?: string | null
@@ -50,11 +75,13 @@ export async function POST(
   }
 
   const pool = getPostgresPool()
-  const resume = await pool.query<{ id: string; user_id: string }>(
-    `SELECT id, user_id FROM resumes WHERE id = $1 AND user_id = $2 LIMIT 1`,
+  await ensureResumeVersionsTable()
+  const resume = await pool.query<Resume>(
+    `SELECT * FROM resumes WHERE id = $1 AND user_id = $2 LIMIT 1`,
     [resumeId, user.sub]
   )
-  if (!resume.rows[0]) {
+  const resumeRow = resume.rows[0]
+  if (!resumeRow) {
     return NextResponse.json({ error: "Not found" }, { status: 404 })
   }
 
@@ -76,7 +103,7 @@ export async function POST(
       nextNum,
       body.name ?? `Version ${nextNum}`,
       body.file_url ?? null,
-      body.snapshot ? JSON.stringify(body.snapshot) : null,
+      JSON.stringify(body.snapshot ?? createResumeSnapshot(resumeRow)),
       body.changes_summary ?? null,
     ]
   )

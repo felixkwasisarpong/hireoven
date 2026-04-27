@@ -116,6 +116,11 @@ function buildLogoSources(logoUrl: string | null | undefined, domain: string | n
   if (logoUrl && !invalidPlaceholderFavicon && googleFaviconOnly) push(logoUrl)
 
   if (canonicalDomain) {
+    // Try brand/logo providers before generic favicon so we avoid initials.
+    push(companyLogoUrlFromDomain(canonicalDomain, "clearbit"))
+    push(companyLogoUrlFromDomain(canonicalDomain, "unavatar"))
+    push(companyLogoUrlFromDomain(canonicalDomain, "icon-horse"))
+    push(companyLogoUrlFromDomain(canonicalDomain, "duckduckgo"))
     push(companyLogoUrlFromDomain(canonicalDomain, "google-favicon"))
   }
 

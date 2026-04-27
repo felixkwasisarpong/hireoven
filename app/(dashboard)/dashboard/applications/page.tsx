@@ -19,7 +19,6 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable"
 import {
-  BarChart2,
   ChevronDown,
   ChevronUp,
   LayoutGrid,
@@ -74,13 +73,13 @@ function KanbanColumn({ col, apps, onOpen, isOver }: {
     <div
       ref={setNodeRef}
       className={cn(
-        "flex min-w-[188px] flex-col overflow-hidden rounded-2xl border border-border border-t-[3px] bg-surface-alt/80 shadow-[0_1px_0_rgba(15,23,42,0.04)] transition",
+        "flex min-w-[188px] flex-col overflow-hidden rounded-2xl border border-slate-200 border-t-[3px] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition",
         col.accentClass,
-        isOver && "bg-brand-tint/40 ring-2 ring-primary/25"
+        isOver && "bg-sky-50/70 ring-2 ring-primary/25"
       )}
       style={{ minHeight: 420 }}
     >
-      <div className="flex items-center justify-between border-b border-border/60 px-3.5 py-3">
+      <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/70 px-3.5 py-3">
         <span className="text-[12px] font-semibold text-strong">{col.label}</span>
         <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-semibold", col.countClass)}>
           {apps.length}
@@ -123,10 +122,10 @@ const STATUS_COLOR: Record<ApplicationStatus, string> = {
 
 function TableView({ apps, onOpen }: { apps: JobApplication[]; onOpen: (a: JobApplication) => void }) {
   return (
-    <div className="surface-panel overflow-hidden rounded-xl shadow-[0_6px_18px_rgba(15,23,42,0.05)]">
+    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
       <table className="w-full min-w-[600px]">
         <thead>
-          <tr className="border-b border-border bg-surface-alt/50 text-left text-[10.5px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+          <tr className="border-b border-slate-100 bg-slate-50/80 text-left text-[10.5px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
             <th className="px-4 py-3.5">Company</th>
             <th className="px-4 py-3.5">Role</th>
             <th className="px-4 py-3.5">Status</th>
@@ -136,7 +135,7 @@ function TableView({ apps, onOpen }: { apps: JobApplication[]; onOpen: (a: JobAp
         </thead>
         <tbody>
           {apps.map((app) => (
-            <tr key={app.id} onClick={() => onOpen(app)} className="group cursor-pointer border-b border-border/80 last:border-0 transition hover:bg-surface-alt/80">
+            <tr key={app.id} onClick={() => onOpen(app)} className="group cursor-pointer border-b border-slate-100 last:border-0 transition hover:bg-slate-50/70">
               <td className="px-4 py-3">
                 <div className="flex items-center gap-2.5">
                   <CompanyLogo
@@ -246,10 +245,10 @@ export default function ApplicationsPage() {
   const currentApp = selectedApp ? (applications.find((a) => a.id === selectedApp.id) ?? selectedApp) : null
 
   return (
-    <main className="app-page">
-      <div className="app-shell max-w-[1680px] space-y-6 px-4 pb-10 pt-1 sm:px-6 lg:space-y-8 lg:px-8">
-        <section className="surface-hero rounded-xl border border-border p-5 sm:p-6 md:p-8">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+    <main className="app-page !bg-white">
+      <div className="app-shell w-full space-y-6 bg-white px-4 pb-10 pt-1 sm:px-6 lg:space-y-8 lg:px-8">
+        <section className="bg-white py-2">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
             <div className="min-w-0">
               <p className="section-kicker">Pipeline</p>
               <h1 className="section-title mt-2.5">Applications</h1>
@@ -258,13 +257,6 @@ export default function ApplicationsPage() {
               </p>
             </div>
             <div className="flex shrink-0 flex-wrap items-center gap-2.5">
-              <Link
-                href="/dashboard/applications/insights"
-                className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-surface px-3.5 py-2.5 text-[13px] font-semibold text-muted-foreground transition hover:border-border hover:bg-surface-alt hover:text-strong"
-              >
-                <BarChart2 className="h-4 w-4" />
-                Insights
-              </Link>
               <button
                 type="button"
                 onClick={() => {
@@ -278,49 +270,49 @@ export default function ApplicationsPage() {
               </button>
             </div>
           </div>
-        </section>
 
-        <section className="surface-panel rounded-xl border border-border p-4 sm:p-5">
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="relative min-w-48 flex-1">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <input
-                type="text"
-                placeholder="Search companies or roles…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full rounded-xl border border-border bg-surface py-2.5 pl-10 pr-3 text-sm text-strong placeholder:text-muted-foreground shadow-[0_1px_0_rgba(15,23,42,0.04)] focus:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/15"
-              />
-            </div>
+          <div className="mt-5 border-t border-slate-100 pt-5">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="relative min-w-48 flex-1">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  type="text"
+                  placeholder="Search companies or roles…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-3 text-sm text-strong placeholder:text-muted-foreground shadow-[0_1px_0_rgba(15,23,42,0.03)] focus:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/15"
+                />
+              </div>
 
-            <div className="flex items-center rounded-xl border border-border bg-surface-alt p-0.5">
-              {(["kanban", "table"] as const).map((mode) => (
+              <div className="flex items-center rounded-xl border border-slate-200 bg-slate-50 p-0.5">
+                {(["kanban", "table"] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setView(mode)}
+                    className={cn(
+                      "flex h-9 w-9 items-center justify-center rounded-[10px] transition",
+                      view === mode
+                        ? "bg-brand-navy text-white shadow-sm"
+                        : "text-muted-foreground hover:text-strong"
+                    )}
+                  >
+                    {mode === "kanban" ? <LayoutGrid className="h-4 w-4" /> : <List className="h-4 w-4" />}
+                  </button>
+                ))}
+              </div>
+
+              {stats && (
                 <button
-                  key={mode}
                   type="button"
-                  onClick={() => setView(mode)}
-                  className={cn(
-                    "flex h-9 w-9 items-center justify-center rounded-[10px] transition",
-                    view === mode
-                      ? "bg-brand-navy text-white shadow-sm"
-                      : "text-muted-foreground hover:text-strong"
-                  )}
+                  onClick={() => setStatsOpen((o) => !o)}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-[13px] font-semibold text-muted-foreground transition hover:bg-slate-50"
                 >
-                  {mode === "kanban" ? <LayoutGrid className="h-4 w-4" /> : <List className="h-4 w-4" />}
+                  Stats
+                  {statsOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
                 </button>
-              ))}
+              )}
             </div>
-
-            {stats && (
-              <button
-                type="button"
-                onClick={() => setStatsOpen((o) => !o)}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-surface px-3.5 py-2.5 text-[13px] font-semibold text-muted-foreground transition hover:bg-surface-alt"
-              >
-                Stats
-                {statsOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-              </button>
-            )}
           </div>
         </section>
 
@@ -378,7 +370,7 @@ export default function ApplicationsPage() {
 
       {/* Empty state */}
       {!isLoading && applications.length === 0 && (
-        <div className="empty-state rounded-xl">
+        <div className="rounded-xl border border-dashed border-slate-200 bg-white px-6 py-14 text-center">
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-tint">
             <LayoutGrid className="h-8 w-8 text-primary" />
           </div>

@@ -11,44 +11,51 @@ import type { Resume } from "@/types"
 
 const styles = StyleSheet.create({
   page: {
-    paddingTop: 54,
-    paddingBottom: 54,
-    paddingHorizontal: 54,
+    paddingTop: 42,
+    paddingBottom: 42,
+    paddingHorizontal: 48,
     fontFamily: "Helvetica",
-    fontSize: 10,
+    fontSize: 9.5,
     color: "#111111",
-    lineHeight: 1.4,
+    lineHeight: 1.35,
   },
   header: {
-    marginBottom: 18,
-    borderBottomWidth: 1,
-    borderBottomColor: "#D4D4D4",
-    paddingBottom: 10,
+    marginBottom: 12,
+    textAlign: "center",
   },
   name: {
-    fontSize: 20,
-    fontWeight: 700,
-    marginBottom: 6,
-  },
-  contactRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    fontSize: 9,
-    color: "#333333",
-  },
-  section: {
-    marginTop: 12,
-  },
-  sectionTitle: {
-    fontSize: 11,
+    fontSize: 17,
     fontWeight: 700,
     textTransform: "uppercase",
-    letterSpacing: 0.6,
-    marginBottom: 7,
+    letterSpacing: 0.8,
+    marginBottom: 4,
+  },
+  contactRow: {
+    fontSize: 8.5,
+    color: "#333333",
+    lineHeight: 1.25,
+  },
+  headline: {
+    marginTop: 7,
+    fontSize: 9.5,
+    fontWeight: 700,
+    color: "#111111",
+  },
+  section: {
+    marginTop: 9,
+  },
+  sectionTitle: {
+    fontSize: 9,
+    fontWeight: 700,
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#111111",
+    paddingBottom: 1,
+    marginBottom: 5,
   },
   paragraph: {
-    fontSize: 10,
+    fontSize: 9.3,
     color: "#222222",
   },
   rowBetween: {
@@ -58,20 +65,20 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   itemTitle: {
-    fontSize: 10,
+    fontSize: 9.4,
     fontWeight: 700,
   },
   itemSubtle: {
-    fontSize: 9,
+    fontSize: 8.5,
     color: "#444444",
   },
   bullet: {
     marginLeft: 8,
-    marginTop: 3,
-    fontSize: 9.5,
+    marginTop: 2,
+    fontSize: 9,
   },
   skillGroup: {
-    marginBottom: 5,
+    marginBottom: 3,
   },
 })
 
@@ -87,6 +94,7 @@ function joinContact(resume: Resume) {
 
 function ResumeDocument({ resume }: { resume: Resume }) {
   const contact = joinContact(resume)
+  const role = resume.primary_role ?? resume.name ?? null
   const h = React.createElement
   const skillsSection =
     resume.skills &&
@@ -98,12 +106,12 @@ function ResumeDocument({ resume }: { resume: Resume }) {
       ? h(
           View,
           { style: styles.section },
-          h(Text, { style: styles.sectionTitle }, "Skills"),
+          h(Text, { style: styles.sectionTitle }, "Technical Skills"),
           ...[
-            ["Technical", resume.skills.technical],
-            ["Soft", resume.skills.soft],
             ["Languages", resume.skills.languages],
+            ["Technical", resume.skills.technical],
             ["Certifications", resume.skills.certifications],
+            ["Soft Skills", resume.skills.soft],
           ]
             .filter(([, values]) => values.length > 0)
             .map(([label, values]) => {
@@ -134,21 +142,19 @@ function ResumeDocument({ resume }: { resume: Resume }) {
         { style: styles.header },
         h(Text, { style: styles.name }, resume.full_name ?? resume.name ?? resume.file_name),
         contact.length > 0
-          ? h(
-              View,
-              { style: styles.contactRow },
-              ...contact.map((value) => h(Text, { key: value }, value))
-            )
-          : null
+          ? h(Text, { style: styles.contactRow }, contact.join(" | "))
+          : null,
+        role ? h(Text, { style: styles.headline }, role) : null
       ),
       resume.summary
         ? h(
             View,
             { style: styles.section },
-            h(Text, { style: styles.sectionTitle }, "Summary"),
+            h(Text, { style: styles.sectionTitle }, "Professional Summary"),
             h(Text, { style: styles.paragraph }, resume.summary)
           )
         : null,
+      skillsSection,
       (resume.work_experience?.length ?? 0) > 0
         ? h(
             View,
@@ -164,8 +170,7 @@ function ResumeDocument({ resume }: { resume: Resume }) {
                   h(
                     View,
                     null,
-                    h(Text, { style: styles.itemTitle }, item.title),
-                    h(Text, { style: styles.itemSubtle }, item.company)
+                    h(Text, { style: styles.itemTitle }, `${item.title} | ${item.company}`)
                   ),
                   h(
                     Text,
@@ -173,7 +178,7 @@ function ResumeDocument({ resume }: { resume: Resume }) {
                     `${item.start_date || "Unknown"} - ${item.is_current ? "Present" : item.end_date ?? "Unknown"}`
                   )
                 ),
-                item.description ? h(Text, { style: styles.paragraph }, item.description) : null,
+                item.description ? h(Text, { style: styles.itemSubtle }, item.description) : null,
                 ...item.achievements.map((achievement, bulletIndex) =>
                   h(Text, { key: `${item.company}-${bulletIndex}`, style: styles.bullet }, `• ${achievement}`)
                 )
@@ -181,7 +186,6 @@ function ResumeDocument({ resume }: { resume: Resume }) {
             )
           )
         : null,
-      skillsSection,
       (resume.education?.length ?? 0) > 0
         ? h(
             View,

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import SponsorshipScore from '@/components/international/SponsorshipScore'
+import CompanyLogo from '@/components/ui/CompanyLogo'
 import type { Company } from '@/types'
 
 interface SimilarCompaniesProps {
@@ -53,18 +54,12 @@ export default function SimilarCompanies({ companyId, industry, limit = 3 }: Sim
           href={`/dashboard/companies/${company.id}`}
           className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-white p-3 transition hover:border-[#BAE6FD] hover:bg-[#F7FBFF]"
         >
-          {company.logo_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={company.logo_url}
-              alt={company.name}
-              className="h-10 w-10 flex-shrink-0 rounded-xl border border-gray-100 object-contain p-0.5"
-            />
-          ) : (
-            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-[#E0F2FE] text-sm font-bold text-[#0C4A6E]">
-              {company.name.charAt(0).toUpperCase()}
-            </div>
-          )}
+          <CompanyLogo
+            companyName={company.name}
+            domain={company.domain}
+            logoUrl={company.logo_url}
+            className="h-10 w-10 flex-shrink-0 rounded-xl border border-gray-100"
+          />
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-semibold text-gray-900">{company.name}</p>
             <p className="truncate text-xs text-gray-400">{company.industry ?? 'Technology'}</p>

@@ -1,6 +1,7 @@
 import { Suspense } from "react"
 import { getSessionUser } from "@/lib/auth/session-user"
 import { getPostgresPool } from "@/lib/postgres/server"
+import type { WatchlistWithCompany } from "@/types"
 import DashboardHomeClient from "./DashboardHomeClient"
 
 function DashboardHomeFallback() {
@@ -21,30 +22,70 @@ function DashboardHomeFallback() {
  * wait for `/api/auth/session` → `/api/resume` round-trips before it knows whether to
  * request match scores. Eliminates the double-fetch on refresh.
  */
-async function getInitialPrimaryResumeReady() {
+type DashboardInitialData = {
+  initialPrimaryResumeReady: boolean
+  initialWatchlist: WatchlistWithCompany[]
+  initialWatchlistCount: number
+}
+
+async function getDashboardInitialData(): Promise<DashboardInitialData> {
   const session = await getSessionUser()
-  if (!session?.sub) return false
+  if (!session?.sub) {
+    return {
+      initialPrimaryResumeReady: false,
+      initialWatchlist: [],
+      initialWatchlistCount: 0,
+    }
+  }
+
   try {
-    const result = await getPostgresPool().query<{ exists: boolean }>(
-      `SELECT EXISTS (
-         SELECT 1 FROM resumes
-         WHERE user_id = $1
-           AND is_primary = true
-           AND parse_status = 'complete'
-       ) AS exists`,
-      [session.sub]
-    )
-    return Boolean(result.rows[0]?.exists)
+    const pool = getPostgresPool()
+    const [resumeResult, watchlistResult] = await Promise.all([
+      pool.query<{ exists: boolean }>(
+        `SELECT EXISTS (
+           SELECT 1 FROM resumes
+           WHERE user_id = $1
+             AND is_primary = true
+             AND parse_status = 'complete'
+         ) AS exists`,
+        [session.sub]
+      ),
+      pool.query<WatchlistWithCompany & { total_count: string }>(
+        `SELECT w.*, to_jsonb(c.*) AS company, COUNT(*) OVER() AS total_count
+         FROM watchlist w
+         JOIN companies c ON c.id = w.company_id
+         WHERE w.user_id = $1
+         ORDER BY w.created_at DESC
+         LIMIT 5`,
+        [session.sub]
+      ),
+    ])
+
+    const initialWatchlist = watchlistResult.rows.map(({ total_count, ...item }) => item)
+    return {
+      initialPrimaryResumeReady: Boolean(resumeResult.rows[0]?.exists),
+      initialWatchlist,
+      initialWatchlistCount: Number(watchlistResult.rows[0]?.total_count ?? initialWatchlist.length),
+    }
   } catch {
-    return false
+    return {
+      initialPrimaryResumeReady: false,
+      initialWatchlist: [],
+      initialWatchlistCount: 0,
+    }
   }
 }
 
 export default async function DashboardPage() {
-  const initialPrimaryResumeReady = await getInitialPrimaryResumeReady()
+  const { initialPrimaryResumeReady, initialWatchlist, initialWatchlistCount } =
+    await getDashboardInitialData()
   return (
     <Suspense fallback={<DashboardHomeFallback />}>
-      <DashboardHomeClient initialPrimaryResumeReady={initialPrimaryResumeReady} />
+      <DashboardHomeClient
+        initialPrimaryResumeReady={initialPrimaryResumeReady}
+        initialWatchlist={initialWatchlist}
+        initialWatchlistCount={initialWatchlistCount}
+      />
     </Suspense>
   )
 }

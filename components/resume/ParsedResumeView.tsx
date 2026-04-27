@@ -21,28 +21,30 @@ function ResumeSection({
   const [open, setOpen] = useState(defaultOpen)
 
   return (
-    <section className="overflow-hidden rounded-[20px] border border-slate-200/80 bg-white">
+    <section className="border-b border-slate-200/85 last:border-b-0">
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className="flex w-full items-center justify-between gap-3 px-4 py-4 text-left"
+        className="flex w-full items-center justify-between gap-3 bg-slate-50/40 px-1 py-3.5 text-left transition hover:bg-slate-50/90 sm:px-0"
       >
-        <span className="text-sm font-semibold text-gray-900">{title}</span>
+        <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-600">
+          {title}
+        </span>
         <div className="flex items-center gap-2">
-          <span className="inline-flex items-center gap-1 rounded-full border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-500">
-            <PencilLine className="h-3.5 w-3.5" />
-            Edit soon
+          <span className="inline-flex items-center gap-1 border border-slate-200/90 bg-white px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-500">
+            <PencilLine className="h-3 w-3" />
+            Soon
           </span>
           <ChevronDown
             className={cn(
-              "h-4 w-4 text-gray-500 transition-transform",
+              "h-4 w-4 text-slate-500 transition-transform",
               open && "rotate-180"
             )}
           />
         </div>
       </button>
 
-      {open && <div className="border-t border-slate-200/75 px-4 py-4">{children}</div>}
+      {open && <div className="border-t border-slate-200/80 pb-6 pt-4">{children}</div>}
     </section>
   )
 }
@@ -60,9 +62,9 @@ export default function ParsedResumeView({ resume }: { resume: Resume }) {
   }, [resume.skills])
 
   return (
-    <div className="space-y-3">
+    <div className="border border-slate-200/85 bg-white">
       <ResumeSection id="contact" title="Contact" defaultOpen>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-px bg-slate-200/70 sm:grid-cols-2">
           {[
             ["Full name", resume.full_name],
             ["Email", resume.email],
@@ -71,18 +73,18 @@ export default function ParsedResumeView({ resume }: { resume: Resume }) {
             ["LinkedIn", resume.linkedin_url],
             ["Portfolio", resume.portfolio_url],
           ].map(([label, value]) => (
-            <div key={label as string} className="rounded-2xl border border-slate-200/80 bg-slate-50/60 px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">
+            <div key={label as string} className="bg-[#FDFDFC] px-3 py-3 sm:px-4">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">
                 {label}
               </p>
-              <p className="mt-2 break-words text-sm text-gray-700">{(value as string | null) ?? "Not detected"}</p>
+              <p className="mt-1.5 break-words text-sm leading-relaxed text-slate-800">{(value as string | null) ?? "—"}</p>
             </div>
           ))}
         </div>
       </ResumeSection>
 
       <ResumeSection id="summary" title="Summary">
-        <p className="text-sm leading-7 text-gray-600">
+        <p className="text-sm leading-[1.7] text-slate-700">
           {resume.summary ?? "No summary section detected."}
         </p>
       </ResumeSection>
@@ -91,21 +93,24 @@ export default function ParsedResumeView({ resume }: { resume: Resume }) {
         <div className="space-y-3">
           {(resume.work_experience?.length ?? 0) > 0 ? (
             resume.work_experience?.map((item, index) => (
-              <article key={`${item.company}-${item.title}-${index}`} className="rounded-2xl border border-slate-200/80 bg-slate-50/60 px-4 py-4">
+              <article
+                key={`${item.company}-${item.title}-${index}`}
+                className="border-b border-slate-200/80 py-4 last:border-b-0 last:pb-0"
+              >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <p className="text-base font-semibold text-gray-900">{item.title}</p>
-                    <p className="text-sm text-gray-500">{item.company}</p>
+                    <p className="font-serif text-base font-medium text-slate-900">{item.title}</p>
+                    <p className="text-sm text-slate-600">{item.company}</p>
                   </div>
-                  <p className="text-xs font-medium uppercase tracking-[0.16em] text-gray-400">
-                    {item.start_date || "Unknown"} - {item.is_current ? "Present" : item.end_date ?? "Unknown"}
+                  <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-slate-500">
+                    {item.start_date || "—"} – {item.is_current ? "Present" : item.end_date ?? "—"}
                   </p>
                 </div>
                 {item.description && (
-                  <p className="mt-3 text-sm leading-7 text-gray-600">{item.description}</p>
+                  <p className="mt-3 text-sm leading-[1.7] text-slate-700">{item.description}</p>
                 )}
                 {item.achievements.length > 0 && (
-                  <div className="mt-3 space-y-2 text-sm leading-6 text-gray-600">
+                  <div className="mt-3 space-y-2 text-sm leading-[1.65] text-slate-700">
                     {item.achievements.map((achievement) => (
                       <p key={achievement}>{achievement}</p>
                     ))}
@@ -123,13 +128,16 @@ export default function ParsedResumeView({ resume }: { resume: Resume }) {
         <div className="space-y-3">
           {(resume.education?.length ?? 0) > 0 ? (
             resume.education?.map((item, index) => (
-              <article key={`${item.institution}-${index}`} className="rounded-2xl border border-slate-200/80 bg-slate-50/60 px-4 py-4">
-                <p className="text-base font-semibold text-gray-900">{item.institution}</p>
-                <p className="mt-1 text-sm text-gray-600">
+              <article
+                key={`${item.institution}-${index}`}
+                className="border-b border-slate-200/80 py-4 last:border-b-0 last:pb-0"
+              >
+                <p className="font-serif text-base font-medium text-slate-900">{item.institution}</p>
+                <p className="mt-1 text-sm text-slate-700">
                   {[item.degree, item.field].filter(Boolean).join(" · ") || "Degree details not detected"}
                 </p>
-                <p className="mt-2 text-xs font-medium uppercase tracking-[0.16em] text-gray-400">
-                  {item.start_date || "Unknown"} - {item.end_date ?? "Unknown"}
+                <p className="mt-2 text-[10px] font-medium uppercase tracking-[0.16em] text-slate-500">
+                  {item.start_date || "—"} – {item.end_date ?? "—"}
                   {item.gpa ? ` · GPA ${item.gpa}` : ""}
                 </p>
               </article>
@@ -145,14 +153,14 @@ export default function ParsedResumeView({ resume }: { resume: Resume }) {
           {skills.length > 0 ? (
             skills.map(([label, values]) => (
               <div key={label}>
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">
                   {label}
                 </p>
-                <div className="mt-2 flex flex-wrap gap-2">
+                <div className="mt-2 flex flex-wrap gap-1.5">
                   {values.map((value) => (
                     <span
                       key={value}
-                      className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-700"
+                      className="border border-slate-200/90 bg-white px-2.5 py-0.5 text-sm text-slate-800"
                     >
                       {value}
                     </span>
@@ -170,15 +178,18 @@ export default function ParsedResumeView({ resume }: { resume: Resume }) {
         <div className="space-y-3">
           {(resume.projects?.length ?? 0) > 0 ? (
             resume.projects?.map((project, index) => (
-              <article key={`${project.name}-${index}`} className="rounded-2xl border border-slate-200/80 bg-slate-50/60 px-4 py-4">
-                <p className="text-base font-semibold text-gray-900">{project.name}</p>
-                <p className="mt-2 text-sm leading-7 text-gray-600">{project.description}</p>
+              <article
+                key={`${project.name}-${index}`}
+                className="border-b border-slate-200/80 py-4 last:border-b-0 last:pb-0"
+              >
+                <p className="font-serif text-base font-medium text-slate-900">{project.name}</p>
+                <p className="mt-2 text-sm leading-[1.7] text-slate-700">{project.description}</p>
                 {project.technologies.length > 0 && (
-                  <div className="mt-3 flex flex-wrap gap-2">
+                  <div className="mt-3 flex flex-wrap gap-1.5">
                     {project.technologies.map((technology) => (
                       <span
                         key={technology}
-                        className="rounded-full bg-[#FFF1E8] px-3 py-1 text-sm font-medium text-[#062246]"
+                        className="border border-slate-200/80 bg-slate-50/80 px-2 py-0.5 text-sm text-slate-800"
                       >
                         {technology}
                       </span>
@@ -186,7 +197,9 @@ export default function ParsedResumeView({ resume }: { resume: Resume }) {
                   </div>
                 )}
                 {project.url && (
-                  <p className="mt-3 text-sm text-[#FF5C18]">{project.url}</p>
+                  <p className="mt-3 text-sm text-slate-600 underline decoration-slate-300 underline-offset-2">
+                    {project.url}
+                  </p>
                 )}
               </article>
             ))

@@ -189,7 +189,7 @@ export default function ResumeUploader({
         if (file) handleFile(file)
       }}
       className={cn(
-        "rounded-[22px] border border-dashed bg-white transition",
+        "rounded-sm border border-dashed border-slate-300/90 bg-white transition",
         compact ? "p-4" : "p-5 sm:p-6",
         dragActive
           ? "border-[#FF5C18] bg-[#FFF7F2]"
@@ -208,7 +208,7 @@ export default function ResumeUploader({
       />
 
       <div className={cn("flex gap-4", compact ? "items-start" : "items-center")}>
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#FFF1E8] text-[#062246]">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-sm border border-slate-200/80 bg-slate-50/90 text-[#062246]">
           {phase === "uploading" || phase === "processing" ? (
             <Loader2 className="h-5 w-5 animate-spin" />
           ) : showPrompt ? (
@@ -241,7 +241,7 @@ export default function ResumeUploader({
       </div>
 
       {selectedFile ? (
-        <div className="mt-5 rounded-2xl border border-gray-200 bg-white px-4 py-3">
+        <div className="mt-5 rounded-sm border border-slate-200/90 bg-white px-4 py-3">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold text-gray-900">
@@ -289,7 +289,7 @@ export default function ResumeUploader({
           type="button"
           onClick={openPicker}
           className={cn(
-            "mt-5 flex w-full items-center justify-center gap-2 rounded-2xl border border-gray-200 bg-white text-sm font-medium text-gray-700 transition hover:border-[#FFB088] hover:bg-[#FFF8F4] hover:text-[#062246]",
+            "mt-5 flex w-full items-center justify-center gap-2 rounded-sm border border-slate-200/90 bg-white text-sm font-medium text-gray-700 transition hover:border-[#FFB088] hover:bg-[#FFF8F4] hover:text-[#062246]",
             compact ? "px-4 py-3" : "px-5 py-4"
           )}
         >
@@ -304,7 +304,7 @@ export default function ResumeUploader({
             type="button"
             onClick={startUpload}
             disabled={phase === "uploading" || phase === "processing"}
-            className="inline-flex items-center gap-2 rounded-2xl bg-[#FF5C18] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#E14F0E] disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex items-center gap-2 rounded-sm bg-[#FF5C18] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#E14F0E] disabled:cursor-not-allowed disabled:opacity-60"
           >
             {phase === "uploading" || phase === "processing" ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -318,7 +318,7 @@ export default function ResumeUploader({
             <button
               type="button"
               onClick={cancelUpload}
-              className="inline-flex items-center gap-2 rounded-2xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-600 transition hover:border-gray-300 hover:bg-gray-50"
+              className="inline-flex items-center gap-2 rounded-sm border border-slate-200/90 px-4 py-2.5 text-sm font-medium text-gray-600 transition hover:border-gray-300 hover:bg-gray-50"
             >
               Cancel upload
             </button>
@@ -326,7 +326,7 @@ export default function ResumeUploader({
             <button
               type="button"
               onClick={openPicker}
-              className="inline-flex items-center gap-2 rounded-2xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-600 transition hover:border-gray-300 hover:bg-gray-50"
+              className="inline-flex items-center gap-2 rounded-sm border border-slate-200/90 px-4 py-2.5 text-sm font-medium text-gray-600 transition hover:border-gray-300 hover:bg-gray-50"
             >
               Choose another
             </button>

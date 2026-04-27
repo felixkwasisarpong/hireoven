@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { Bell, ChevronRight } from "lucide-react"
-import { useNotifications } from "@/lib/hooks/useNotifications"
+import { useNotifications, type AppNotification, type LocalAppNotification } from "@/lib/hooks/useNotifications"
 import { cn } from "@/lib/utils"
 
 function formatRelative(timestamp: string) {
@@ -23,6 +23,25 @@ function formatRelative(timestamp: string) {
 
   const diffDays = Math.floor(diffHours / 24)
   return `${diffDays} day${diffDays === 1 ? "" : "s"} ago`
+}
+
+function isLocalNotification(notification: AppNotification): notification is LocalAppNotification {
+  return "source" in notification && notification.source === "local"
+}
+
+function notificationTitle(notification: AppNotification) {
+  return isLocalNotification(notification)
+    ? notification.title
+    : notification.job?.title ?? "New job notification"
+}
+
+function notificationDescription(notification: AppNotification) {
+  if (isLocalNotification(notification)) return notification.message
+  return `${notification.job?.company?.name ?? "Tracked company"} · ${
+    notification.notification_type === "watchlist"
+      ? "Watchlist"
+      : notification.alert?.name ?? "Saved alert"
+  }`
 }
 
 export default function NotificationBell({
@@ -69,6 +88,7 @@ export default function NotificationBell({
         onClick={() => setOpen((current) => !current)}
         className={cn(
           "relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#D7DCEA] bg-white text-slate-700 transition hover:border-[#B9C3DE] hover:bg-[#F6F8FD] hover:text-slate-900",
+          unreadCount > 0 && "text-[#2563EB] ring-2 ring-[#2563EB]/15",
           buttonClassName
         )}
         aria-label="Open notifications"
@@ -77,7 +97,7 @@ export default function NotificationBell({
         {unreadLabel && (
           <span
             className={cn(
-              "absolute -right-0.5 -top-0.5 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full px-1 text-[10px] font-bold leading-none text-white",
+              "absolute -right-0.5 -top-0.5 inline-flex h-4 min-w-[1rem] animate-pulse items-center justify-center rounded-full px-1 text-[10px] font-bold leading-none text-white",
               badgeVariant === "product"
                 ? "bg-[#2563EB]"
                 : "bg-red-500 shadow-[0_8px_14px_-8px_rgba(239,68,68,0.85)]"
@@ -123,7 +143,9 @@ export default function NotificationBell({
                   type="button"
                   onClick={() => {
                     void markAsRead(notification.id, true)
-                    if (notification.job?.apply_url) {
+                    if (isLocalNotification(notification) && notification.href) {
+                      window.location.href = notification.href
+                    } else if (!isLocalNotification(notification) && notification.job?.apply_url) {
                       window.open(notification.job.apply_url, "_blank", "noopener,noreferrer")
                     }
                     setOpen(false)
@@ -140,14 +162,10 @@ export default function NotificationBell({
 
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold text-slate-900">
-                      {notification.job?.title ?? "New job notification"}
+                      {notificationTitle(notification)}
                     </p>
                     <p className="mt-1 text-xs text-slate-500">
-                      {notification.job?.company?.name ?? "Tracked company"}
-                      {" · "}
-                      {notification.notification_type === "watchlist"
-                        ? "Watchlist"
-                        : notification.alert?.name ?? "Saved alert"}
+                      {notificationDescription(notification)}
                     </p>
                     <p className="mt-2 text-xs text-slate-400">
                       {formatRelative(notification.sent_at)}

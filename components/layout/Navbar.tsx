@@ -5,14 +5,14 @@ import HireovenLogo from "@/components/ui/HireovenLogo"
 export default function Navbar() {
   return (
     <nav className="glass-nav sticky top-0 z-40 px-4 py-3 lg:px-8">
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-4">
+      <div className="mx-auto flex w-full max-w-[88rem] items-center justify-between gap-4">
         <div className="flex min-w-0 items-center gap-6 sm:gap-8">
           <Link href="/" className="flex shrink-0 items-center">
             <HireovenLogo className="h-10 w-auto" priority />
           </Link>
           <div className="hidden items-center gap-6 md:flex">
             <Link
-              href="/#features"
+              href="/features"
               className="inline-flex items-center gap-2 text-sm font-semibold text-muted-foreground transition-colors hover:text-strong"
             >
               <Sparkles className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
