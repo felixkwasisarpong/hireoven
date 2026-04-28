@@ -221,6 +221,38 @@ const QA_LABELS: Record<string, string> = {
   "overtime|travel.*role|willing.*travel": "Willing to work overtime / travel?",
 }
 
+// ── EEO / Diversity options (EEOC-aligned so we can fuzzy-match ATS dropdowns) ─
+
+const GENDER_OPTIONS = [
+  "Male",
+  "Female",
+  "Non-binary / gender non-conforming",
+  "Prefer not to say",
+]
+
+const ETHNICITY_OPTIONS = [
+  "Hispanic or Latino",
+  "White (Not Hispanic or Latino)",
+  "Black or African American",
+  "Asian",
+  "American Indian or Alaska Native",
+  "Native Hawaiian or Other Pacific Islander",
+  "Two or More Races",
+  "Prefer not to answer",
+]
+
+const VETERAN_OPTIONS = [
+  "I am not a protected veteran",
+  "I identify as one or more classifications of a protected veteran",
+  "I don't wish to answer",
+]
+
+const DISABILITY_OPTIONS = [
+  "No, I don't have a disability",
+  "Yes, I have a disability",
+  "I don't wish to answer",
+]
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 type FormState = Omit<AutofillProfile, "id" | "user_id" | "created_at" | "updated_at">
@@ -711,15 +743,21 @@ export default function AutofillPage() {
         {/* Section 7 - Diversity */}
         <Section
           icon={<User className="h-4 w-4" />}
-          title="Diversity & inclusion"
-          subtitle="Optional - only filled if you turn it on"
+          title="EEO & diversity"
+          subtitle="Optional — controls whether Scout fills voluntary diversity questions on applications"
           defaultOpen={false}
         >
-          <p className="text-xs text-gray-500 -mt-2">
-            Many applications include optional diversity questions. These are always voluntary - you control whether we fill them.
-          </p>
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600 leading-relaxed -mt-1">
+            Most ATS platforms (Greenhouse, Lever, Workday, Ashby) include voluntary EEO questions.
+            These are always optional — enabling this means Scout will attempt to fill them using the
+            standardized values you choose below, fuzzy-matched to whatever options the ATS provides.
+          </div>
+
           <div className="flex items-center justify-between rounded-xl border border-gray-200 px-4 py-3">
-            <span className="text-sm font-medium text-gray-700">Auto-fill diversity questions</span>
+            <div>
+              <span className="text-sm font-medium text-gray-700">Auto-fill EEO / diversity questions</span>
+              <p className="text-xs text-gray-400 mt-0.5">We only fill these if you opt in here</p>
+            </div>
             <button
               type="button"
               role="switch"
@@ -729,7 +767,7 @@ export default function AutofillPage() {
                 setShowDiversity(!form.auto_fill_diversity)
               }}
               className={cn(
-                "relative inline-flex h-6 w-11 items-center rounded-full transition",
+                "relative inline-flex h-6 w-11 items-center rounded-full transition shrink-0",
                 form.auto_fill_diversity ? "bg-[#FF5C18]" : "bg-gray-200"
               )}
             >
@@ -742,20 +780,71 @@ export default function AutofillPage() {
             </button>
           </div>
 
-          {showDiversity && form.auto_fill_diversity && (
-            <div className="space-y-4 pt-1">
-              {[
-                { key: "gender" as const, label: "Gender identity", placeholder: "e.g. Woman, Man, Non-binary, Prefer not to say" },
-                { key: "ethnicity" as const, label: "Ethnicity / race", placeholder: "e.g. Asian, Hispanic, White, Prefer not to say" },
-                { key: "veteran_status" as const, label: "Veteran status", placeholder: "e.g. Not a veteran, Veteran, Prefer not to say" },
-                { key: "disability_status" as const, label: "Disability status", placeholder: "e.g. No disability, Have a disability, Prefer not to say" },
-              ].map(({ key, label, placeholder }) => (
-                <Field key={key} label={label}>
-                  <Input value={str(form[key])} onChange={(v) => set(key, v || null)} placeholder={placeholder} />
-                </Field>
-              ))}
-            </div>
-          )}
+          {/* Always show fields so user can pre-fill them — we gate sending them in the API */}
+          <div className="space-y-4 pt-1">
+            <Field
+              label="Gender identity"
+              hint="Used by most EEO forms. Choose the option that matches how you'd like to answer."
+            >
+              <select
+                value={str(form.gender)}
+                onChange={(e) => set("gender", e.target.value || null)}
+                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 outline-none focus:border-[#FF5C18] focus:ring-1 focus:ring-[#FF5C18] bg-white"
+              >
+                <option value="">Select…</option>
+                {GENDER_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+              </select>
+            </Field>
+
+            <Field
+              label="Race / ethnicity"
+              hint="EEOC-standard options — we fuzzy-match these to whatever the ATS uses."
+            >
+              <select
+                value={str(form.ethnicity)}
+                onChange={(e) => set("ethnicity", e.target.value || null)}
+                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 outline-none focus:border-[#FF5C18] focus:ring-1 focus:ring-[#FF5C18] bg-white"
+              >
+                <option value="">Select…</option>
+                {ETHNICITY_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+              </select>
+            </Field>
+
+            <Field
+              label="Veteran status"
+              hint="Required by OFCCP-covered employers. 'Prefer not to answer' is always a valid choice."
+            >
+              <select
+                value={str(form.veteran_status)}
+                onChange={(e) => set("veteran_status", e.target.value || null)}
+                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 outline-none focus:border-[#FF5C18] focus:ring-1 focus:ring-[#FF5C18] bg-white"
+              >
+                <option value="">Select…</option>
+                {VETERAN_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+              </select>
+            </Field>
+
+            <Field
+              label="Disability status"
+              hint="OFCCP Form CC-305. We match this to the exact wording the employer uses."
+            >
+              <select
+                value={str(form.disability_status)}
+                onChange={(e) => set("disability_status", e.target.value || null)}
+                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 outline-none focus:border-[#FF5C18] focus:ring-1 focus:ring-[#FF5C18] bg-white"
+              >
+                <option value="">Select…</option>
+                {DISABILITY_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+              </select>
+            </Field>
+
+            {!form.auto_fill_diversity && (
+              <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-700">
+                Enable &ldquo;Auto-fill EEO / diversity questions&rdquo; above to have Scout fill these fields on applications.
+                Your selections here are saved but won&rsquo;t be used until you opt in.
+              </p>
+            )}
+          </div>
         </Section>
 
         {/* Reserve space so the fixed save bar never covers the last form sections (esp. when it wraps on small screens). */}

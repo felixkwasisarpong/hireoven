@@ -27,6 +27,7 @@ import { getPostgresPool } from '@/lib/postgres/server'
 import { detectAtsFromHtml } from '@/lib/companies/ats-signatures'
 import { detectAtsFromUrl } from '@/lib/companies/detect-ats'
 import { companyLogoUrlFromDomain } from '@/lib/companies/logo-url'
+import { isAtsDomain } from '@/lib/companies/ats-domains'
 import type { Pool } from 'pg'
 
 export const runtime = 'nodejs'
@@ -275,6 +276,7 @@ async function enrichOne(
 
   const matchedOrigin = safeOrigin(detection.matchedUrl)
   const verifiedDomain = matchedOrigin?.host ?? guessed
+  const companyDomain = isAtsDomain(verifiedDomain) ? guessed : verifiedDomain
   const careersUrl =
     detection.matchedUrl ??
     (matchedOrigin ? `${matchedOrigin.origin}/careers` : row.careers_url)
@@ -284,7 +286,7 @@ async function enrichOne(
     name: row.name,
     atsType: detection.atsType,
     confidence: detection.confidence,
-    guessedDomain: verifiedDomain,
+    guessedDomain: companyDomain,
     status: 'discovered',
   })
 
@@ -297,11 +299,13 @@ async function enrichOne(
       ats_type: detection.atsType,
       careers_url: careersUrl,
       is_active: shouldActivate,
-      logo_url: verifiedDomain ? companyLogoUrlFromDomain(verifiedDomain) : row.logo_url,
+      logo_url: companyDomain && !isAtsDomain(companyDomain)
+        ? companyLogoUrlFromDomain(companyDomain)
+        : row.logo_url,
       raw_ats_config: {
         ...(row.raw_ats_config ?? {}),
-        guessed_domain: verifiedDomain,
-        domain_verified: Boolean(matchedOrigin),
+        guessed_domain: companyDomain,
+        domain_verified: Boolean(companyDomain && !isAtsDomain(companyDomain)),
         ats_discovery_status: 'checked',
         ats_detection: {
           confidence: detection.confidence,
@@ -312,7 +316,7 @@ async function enrichOne(
       },
       updated_at: new Date().toISOString(),
     },
-    verifiedDomain ?? undefined
+    companyDomain && !isAtsDomain(companyDomain) ? companyDomain : undefined
   )
 }
 

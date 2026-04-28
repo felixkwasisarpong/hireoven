@@ -112,6 +112,18 @@ export function ScoutMiniPanel({
     return () => window.removeEventListener("scout:reset-context", onReset)
   }, [])
 
+  // Open panel pre-filled from a job card hover "Ask Scout" button
+  useEffect(() => {
+    function onOpenWithJob(e: Event) {
+      const { prefillQuery } = (e as CustomEvent<{ jobId: string; prefillQuery: string }>).detail
+      setIsOpen(true)
+      setQuery(prefillQuery)
+      setTimeout(() => inputRef.current?.focus(), 80)
+    }
+    window.addEventListener("scout:open-with-job", onOpenWithJob as EventListener)
+    return () => window.removeEventListener("scout:open-with-job", onOpenWithJob as EventListener)
+  }, [])
+
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
     const message = query.trim()
@@ -128,7 +140,7 @@ export function ScoutMiniPanel({
     try {
       const res = await fetch("/api/scout/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { Accept: "application/json", "Content-Type": "application/json" },
         body: JSON.stringify({
           message,
           pagePath: resolvedPagePath,

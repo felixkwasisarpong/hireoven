@@ -404,6 +404,88 @@ async function init() {
 const nativeInputSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set
 const nativeTextareaSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")?.set
 
+/** Normalize a string for fuzzy matching: lowercase, strip punctuation, collapse whitespace */
+function normStr(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim()
+}
+
+/**
+ * Synonym groups for values that appear in many different wordings across ATS.
+ * Each entry is [canonicalKeywords[], synonymsToSearchInOptionText[]].
+ * canonicalKeywords: words that appear in the profile value
+ * synonyms: words/phrases to search for in an option's text
+ */
+const VALUE_SYNONYM_MAP: Array<[string[], string[]]> = [
+  // Gender
+  [["male", "man"],                     ["male", "man", "he him", "mr"]],
+  [["female", "woman"],                 ["female", "woman", "she her", "ms", "mrs"]],
+  [["non binary", "nonbinary", "non-binary", "gender non"], ["non binary", "nonbinary", "genderqueer", "they them", "gender non", "agender"]],
+
+  // Decline / prefer not to say (applies to all EEO fields)
+  [["prefer not", "decline", "don t wish", "do not wish", "choose not", "no answer", "not wish"],
+   ["prefer not", "decline", "don t wish", "do not wish", "choose not", "not to answer", "no response", "i d rather not", "not disclose"]],
+
+  // Race / Ethnicity
+  [["hispanic", "latino", "latina", "latinx"],   ["hispanic", "latino", "latina", "latinx", "spanish"]],
+  [["white", "caucasian"],                        ["white", "caucasian"]],
+  [["black", "african american"],                 ["black", "african american", "african-american"]],
+  [["asian"],                                     ["asian"]],
+  [["american indian", "alaska native", "native american"], ["american indian", "alaska native", "native american", "indigenous"]],
+  [["pacific islander", "native hawaiian"],       ["pacific islander", "native hawaiian", "pacific"]],
+  [["two or more", "multiracial", "biracial", "mixed"], ["two or more", "multiracial", "biracial", "mixed race", "more than one"]],
+
+  // Veteran status
+  [["not a protected veteran", "not a veteran", "not veteran", "i am not"],
+   ["not a protected", "not a veteran", "no veteran", "i am not", "non veteran"]],
+  [["protected veteran", "i identify", "i am a veteran", "i identify as"],
+   ["protected veteran", "i identify", "i am a veteran", "veteran who"]],
+
+  // Disability
+  [["no disability", "i do not have", "not disabled", "no i do not"],
+   ["no disability", "do not have a disability", "i do not have", "not disabled", "no i do not", "no, i"]],
+  [["yes disability", "i have a disability", "yes i have", "i have a"],
+   ["yes i have", "i have a disability", "yes, i", "yes disability", "disabled"]],
+]
+
+/** Find the best matching option in a <select> for a given profile value. */
+function findSelectOption(select: HTMLSelectElement, targetValue: string): HTMLOptionElement | null {
+  const targetNorm = normStr(targetValue)
+  if (!targetNorm) return null
+
+  const opts = Array.from(select.options).filter((o) => o.value !== "" && o.index !== 0)
+
+  // 1. Exact match on value or text
+  for (const opt of opts) {
+    if (normStr(opt.value) === targetNorm || normStr(opt.text) === targetNorm) return opt
+  }
+
+  // 2. Target starts with option text or vice versa
+  for (const opt of opts) {
+    const optNorm = normStr(opt.text)
+    if (optNorm && (targetNorm.startsWith(optNorm) || optNorm.startsWith(targetNorm))) return opt
+  }
+
+  // 3. Contains relationship
+  for (const opt of opts) {
+    const optNorm = normStr(opt.text)
+    if (optNorm && (targetNorm.includes(optNorm) || optNorm.includes(targetNorm))) return opt
+  }
+
+  // 4. Synonym map — search for the first synonym group whose canonical keywords
+  //    appear in the target value, then look for option text containing synonym phrases
+  for (const [canonicals, synonyms] of VALUE_SYNONYM_MAP) {
+    const targetMatchesGroup = canonicals.some((c) => targetNorm.includes(normStr(c)))
+    if (!targetMatchesGroup) continue
+
+    for (const opt of opts) {
+      const optNorm = normStr(opt.text)
+      if (synonyms.some((s) => optNorm.includes(normStr(s)))) return opt
+    }
+  }
+
+  return null
+}
+
 function fillField(elementRef: string, value: string): boolean {
   let el: HTMLElement | null = null
   try {
@@ -421,10 +503,7 @@ function fillField(elementRef: string, value: string): boolean {
 
   if (tag === "select") {
     const select = el as HTMLSelectElement
-    const option = Array.from(select.options).find(
-      (o) => o.value.toLowerCase() === value.toLowerCase() ||
-             o.text.toLowerCase() === value.toLowerCase()
-    )
+    const option = findSelectOption(select, value)
     if (option) {
       select.value = option.value
       select.dispatchEvent(new Event("change", { bubbles: true }))
@@ -434,8 +513,33 @@ function fillField(elementRef: string, value: string): boolean {
   }
 
   if (type === "checkbox" || type === "radio") {
-    const check = value === "true" || value === "Yes" || value === "1"
+    // For yes/no radio groups, we look for the sibling radio with matching label
+    const check = /^(true|yes|1)$/i.test(value)
     const input = el as HTMLInputElement
+    if (input.type === "radio") {
+      // Try to find a radio in the same group that matches the value text
+      const name = input.name
+      if (name) {
+        const siblings = Array.from(
+          document.querySelectorAll<HTMLInputElement>(`input[type="radio"][name="${name}"]`)
+        )
+        const targetNorm = normStr(value)
+        for (const sibling of siblings) {
+          const sibLabel =
+            (sibling.id ? document.querySelector(`label[for="${sibling.id}"]`)?.textContent?.trim() : "") ??
+            sibling.value
+          const sibNorm = normStr(sibLabel)
+          if (sibNorm && (sibNorm === targetNorm || targetNorm.includes(sibNorm) || sibNorm.includes(targetNorm))) {
+            if (!sibling.checked) {
+              sibling.checked = true
+              sibling.dispatchEvent(new Event("change", { bubbles: true }))
+            }
+            return true
+          }
+        }
+      }
+    }
+    // Fallback: boolean toggle
     if (input.checked !== check) {
       input.checked = check
       input.dispatchEvent(new Event("change", { bubbles: true }))
@@ -456,7 +560,6 @@ function fillField(elementRef: string, value: string): boolean {
   nativeInputSetter?.call(input, value)
   input.dispatchEvent(new Event("input", { bubbles: true }))
   input.dispatchEvent(new Event("change", { bubbles: true }))
-  // Trigger blur to satisfy validation libraries
   input.dispatchEvent(new Event("blur", { bubbles: true }))
   return true
 }

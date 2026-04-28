@@ -38,6 +38,7 @@ import { createClient } from '@supabase/supabase-js'
 import { detectAtsFromHtml } from '../lib/companies/ats-signatures'
 import { detectAtsFromUrl } from '../lib/companies/detect-ats'
 import { companyLogoUrlFromDomain } from '../lib/companies/logo-url'
+import { isAtsDomain } from '../lib/companies/ats-domains'
 
 loadEnvConfig(process.cwd())
 
@@ -561,7 +562,8 @@ async function enrichOne(row: PlaceholderRow): Promise<EnrichOutcome> {
   if (detection) {
     const origin = safeOrigin(detection.matchedUrl) ?? verifiedOrigin
     const verifiedDomain = origin?.host ?? primaryGuess ?? ''
-    if (!isDomainPlausible(row.name, verifiedDomain)) {
+    const companyDomain = isAtsDomain(verifiedDomain) ? primaryGuess ?? '' : verifiedDomain
+    if (!companyDomain || !isDomainPlausible(row.name, companyDomain)) {
       return { kind: 'fetch-failed', guessed: primaryGuess }
     }
     const careersUrl =
@@ -573,7 +575,7 @@ async function enrichOne(row: PlaceholderRow): Promise<EnrichOutcome> {
         kind: 'ats-detected',
         atsType: detection.atsType,
         confidence: detection.confidence,
-        domain: verifiedDomain,
+        domain: companyDomain,
         careersUrl,
       }
     }
@@ -586,13 +588,13 @@ async function enrichOne(row: PlaceholderRow): Promise<EnrichOutcome> {
         ats_type: detection.atsType,
         careers_url: careersUrl,
         is_active: shouldActivate,
-        logo_url: verifiedDomain
-          ? companyLogoUrlFromDomain(verifiedDomain)
+        logo_url: companyDomain
+          ? companyLogoUrlFromDomain(companyDomain)
           : row.logo_url,
         raw_ats_config: {
           ...(row.raw_ats_config ?? {}),
-          guessed_domain: verifiedDomain,
-          domain_verified: Boolean(origin),
+          guessed_domain: companyDomain,
+          domain_verified: Boolean(companyDomain && !isAtsDomain(companyDomain)),
           ats_discovery_status: 'checked',
           ats_detection: {
             kind: 'ats',
@@ -604,14 +606,14 @@ async function enrichOne(row: PlaceholderRow): Promise<EnrichOutcome> {
         } as never,
         updated_at: new Date().toISOString(),
       },
-      verifiedDomain || undefined
+      companyDomain || undefined
     )
 
     return {
       kind: 'ats-detected',
       atsType: detection.atsType,
       confidence: detection.confidence,
-      domain: verifiedDomain,
+      domain: companyDomain,
       careersUrl,
     }
   }

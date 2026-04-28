@@ -23,6 +23,10 @@ const anthropic = process.env.ANTHROPIC_API_KEY
 const MODEL = "claude-sonnet-4-6"
 const MODEL_PRICING = { inputPerMillion: 3, outputPerMillion: 15 }
 
+function scoutError(status: number, message: string) {
+  return NextResponse.json({ ok: false, status, message, error: message }, { status })
+}
+
 type RequestBody = {
   sessionId?: string
   jobId?: string
@@ -42,14 +46,11 @@ export async function POST(request: NextRequest) {
   } = await supabase.auth.getUser()
 
   if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    return scoutError(401, "Unauthorized")
   }
 
   if (!anthropic) {
-    return NextResponse.json(
-      { error: "AI service is not configured." },
-      { status: 503 }
-    )
+    return scoutError(503, "AI service is not configured.")
   }
 
   const body = (await request.json().catch(() => ({}))) as RequestBody
@@ -131,10 +132,7 @@ export async function POST(request: NextRequest) {
         "\nRaw:\n",
         responseText.slice(0, 1000)
       )
-      return NextResponse.json(
-        { error: "Scout couldn't generate an interview question right now. Please try again." },
-        { status: 500 }
-      )
+      return scoutError(500, "Scout couldn't generate an interview question right now. Please try again.")
     }
 
     // Cap totalQuestions for free users to 1 (they can only preview Q1)
@@ -150,9 +148,6 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error("[mock-interview] Claude error:", error)
-    return NextResponse.json(
-      { error: "Scout couldn't generate an interview question right now. Please try again." },
-      { status: 500 }
-    )
+    return scoutError(500, "Scout couldn't generate an interview question right now. Please try again.")
   }
 }

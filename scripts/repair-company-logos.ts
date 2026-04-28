@@ -23,6 +23,7 @@ import path from 'node:path'
 import { loadEnvConfig } from '@next/env'
 import { createClient } from '@supabase/supabase-js'
 import { companyLogoUrlFromDomain } from '@/lib/companies/logo-url'
+import { isAtsDomain } from '@/lib/companies/ats-domains'
 
 loadEnvConfig(process.cwd())
 
@@ -190,7 +191,7 @@ type DomainCandidate = {
 
 function domainScore(name: string, domain: string): DomainCandidate['score'] {
   const normalized = normalizeDomain(domain)
-  if (!normalized || isPlaceholderDomain(normalized)) return -100
+  if (!normalized || isPlaceholderDomain(normalized) || isAtsDomain(normalized)) return -100
   const [root, tld] = normalized.split('.')
   if (!root) return -100
 
@@ -218,7 +219,7 @@ function buildCandidates(row: CompanyRow): DomainCandidate[] {
   const out: DomainCandidate[] = []
   const add = (raw: string | null | undefined, source: DomainCandidate['source']) => {
     const d = normalizeDomain(raw)
-    if (!d || seen.has(d) || isPlaceholderDomain(d)) return
+    if (!d || seen.has(d) || isPlaceholderDomain(d) || isAtsDomain(d)) return
     seen.add(d)
     const root = d.split('.')[0] ?? ''
     out.push({

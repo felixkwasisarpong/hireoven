@@ -1,6 +1,6 @@
 "use client"
 
-import { Lock, Sparkles, Zap } from "lucide-react"
+import { CheckCircle2, Lock, Sparkles, Zap } from "lucide-react"
 import type { FeatureKey } from "@/lib/gates"
 import type { ScoutResponse } from "@/lib/scout/types"
 import { ScoutActionRenderer } from "./ScoutActionRenderer"
@@ -23,15 +23,88 @@ type Props = {
   onUpgrade: (feature: FeatureKey) => void
 }
 
+function stripCodeFence(text: string): string {
+  const fenced = text.match(/^```(?:json)?\s*\n?([\s\S]*?)\n?```\s*$/i)
+  return fenced ? fenced[1].trim() : text
+}
+
+function extractJsonObjectCandidate(text: string): string | null {
+  const cleaned = stripCodeFence(text.trim())
+  const start = cleaned.indexOf("{")
+  if (start === -1) return null
+
+  let depth = 0
+  let inString = false
+  let escaped = false
+
+  for (let i = start; i < cleaned.length; i++) {
+    const char = cleaned[i]
+
+    if (escaped) {
+      escaped = false
+      continue
+    }
+    if (char === "\\") {
+      escaped = inString
+      continue
+    }
+    if (char === '"') {
+      inString = !inString
+      continue
+    }
+    if (inString) continue
+
+    if (char === "{") depth += 1
+    if (char === "}") depth -= 1
+    if (depth === 0) return cleaned.slice(start, i + 1)
+  }
+
+  return null
+}
+
+function getReadableAnswer(answer: string): string {
+  const trimmed = answer.trim()
+  if (!trimmed) return ""
+
+  const jsonCandidate = extractJsonObjectCandidate(trimmed)
+  if (!jsonCandidate) return trimmed
+
+  try {
+    const parsed = JSON.parse(jsonCandidate) as unknown
+    if (
+      typeof parsed === "object" &&
+      parsed !== null &&
+      typeof (parsed as Record<string, unknown>).answer === "string"
+    ) {
+      return ((parsed as Record<string, unknown>).answer as string).trim()
+    }
+  } catch {
+    // If a malformed JSON payload leaks through, avoid showing it as chat copy.
+  }
+
+  if (/^\s*[{[]/.test(stripCodeFence(trimmed))) {
+    return "Scout prepared a structured response. Review the cards and actions below."
+  }
+
+  return trimmed
+}
+
 export function ScoutMessageBubble({ response, compact = false, onUpgrade }: Props) {
   const recConfig =
     RECOMMENDATION_CONFIG[response.recommendation] ?? RECOMMENDATION_CONFIG.Explore
+  const answer = getReadableAnswer(response.answer)
+  const hasStructuredDetails =
+    Boolean(response.explanations?.length) ||
+    Boolean(response.compare) ||
+    Boolean(response.interviewPrep) ||
+    Boolean(response.actions?.length) ||
+    Boolean(response.workflow)
 
   return (
-    <div className={`flex items-start ${compact ? "gap-2" : "gap-3"}`}>
+    <div className={`group flex items-start ${compact ? "gap-2" : "gap-3"}`}>
       {/* Avatar */}
       <div
-        className={`flex-shrink-0 mt-0.5 inline-flex items-center justify-center bg-[#ea580c] shadow-[0_2px_8px_rgba(234,88,12,0.28)] ${
+        className={`mt-0.5 inline-flex flex-shrink-0 items-center justify-center bg-[#ea580c] shadow-[0_2px_8px_rgba(234,88,12,0.28)] ${
           compact ? "h-7 w-7 rounded-lg" : "h-9 w-9 rounded-xl"
         }`}
       >
@@ -39,58 +112,58 @@ export function ScoutMessageBubble({ response, compact = false, onUpgrade }: Pro
       </div>
 
       {/* Bubble */}
-      <div className="flex-1 min-w-0 overflow-hidden rounded-2xl rounded-tl-sm border border-slate-200/80 bg-white shadow-[0_2px_12px_rgba(15,23,42,0.06)]">
+      <div className="min-w-0 flex-1 overflow-hidden rounded-[22px] rounded-tl-md border border-slate-200/80 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.06)] transition-shadow group-hover:shadow-[0_14px_36px_rgba(15,23,42,0.08)]">
         {/* Coloured accent bar keyed to recommendation */}
         <div className={`h-0.5 w-full ${recConfig.bg}`} />
 
         <div className={compact ? "p-3" : "p-4 sm:p-5"}>
           {/* Header badges */}
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span
-              className={`inline-flex items-center rounded-full border font-semibold uppercase tracking-wide ${recConfig.pill} ${
-                compact ? "px-2 py-0.5 text-[10px]" : "px-2.5 py-0.5 text-xs"
-              }`}
-            >
-              {response.recommendation}
-            </span>
-
-            {response.mode && (
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-1.5">
               <span
-                className={`rounded-full bg-slate-100 font-semibold uppercase tracking-wide text-slate-500 ${
-                  compact ? "px-2 py-0.5 text-[10px]" : "px-2.5 py-0.5 text-[11px]"
+                className={`inline-flex items-center gap-1 rounded-full border font-semibold uppercase tracking-wide ${recConfig.pill} ${
+                  compact ? "px-2 py-0.5 text-[10px]" : "px-2.5 py-0.5 text-xs"
                 }`}
               >
-                {response.mode}
+                <CheckCircle2 className="h-3 w-3" />
+                {response.recommendation}
               </span>
-            )}
 
-            {!compact && response.intent && (
-              <span
-                className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
-                  response.intent === "command"
-                    ? "border-orange-200 bg-orange-50 text-orange-700"
-                    : "border-slate-200 bg-slate-50 text-slate-600"
-                }`}
-              >
-                {response.intent}
-              </span>
-            )}
+              {response.mode && (
+                <span
+                  className={`rounded-full bg-slate-100 font-semibold uppercase tracking-wide text-slate-500 ${
+                    compact ? "px-2 py-0.5 text-[10px]" : "px-2.5 py-0.5 text-[11px]"
+                  }`}
+                >
+                  {response.mode}
+                </span>
+              )}
+            </div>
 
-            {!compact && typeof response.confidence === "number" && (
-              <span className="text-[10px] font-medium text-slate-400">
-                {Math.round(response.confidence * 100)}% confident
+            {!compact && (response.intent || typeof response.confidence === "number") && (
+              <span className="text-[10px] font-medium uppercase tracking-[0.16em] text-slate-400">
+                {response.intent ?? "Scout"}
+                {typeof response.confidence === "number"
+                  ? ` - ${Math.round(response.confidence * 100)}%`
+                  : ""}
               </span>
             )}
           </div>
 
           {/* Answer text */}
-          {response.answer && (
+          {answer && (
             <p
               className={`mt-2.5 whitespace-pre-wrap text-slate-800 ${
                 compact ? "text-xs leading-5" : "text-sm leading-7"
               }`}
             >
-              {response.answer}
+              {answer}
+            </p>
+          )}
+
+          {!answer && hasStructuredDetails && (
+            <p className={`mt-2.5 text-slate-600 ${compact ? "text-xs leading-5" : "text-sm leading-6"}`}>
+              Scout prepared the structured guidance below.
             </p>
           )}
 

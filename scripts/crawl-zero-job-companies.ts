@@ -83,6 +83,9 @@ async function main() {
         companyId: co.id,
         crawledAt: crawled.crawledAt,
         jobs: crawled.jobs,
+        sourceUrl: crawled.url,
+        normalizedUrl: crawled.normalizedUrl,
+        diagnostics: crawled.diagnostics,
       })
 
       console.log(`found=${crawled.jobs.length} inserted=${persisted.inserted} active=${persisted.activeCount}`)

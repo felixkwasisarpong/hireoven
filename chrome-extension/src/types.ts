@@ -114,6 +114,12 @@ export interface ExtensionSafeProfile {
   graduation_year: number | null
   gpa: string | null
   preferred_work_type: string | null
+  // EEO fields — only populated when the user has opted in via auto_fill_diversity
+  auto_fill_diversity: boolean
+  gender: string | null
+  ethnicity: string | null
+  veteran_status: string | null
+  disability_status: string | null
 }
 
 export type ContentResponseType =
@@ -165,6 +171,10 @@ export type BackgroundMessageType =
   | "GET_PAGE_INFO"
   | "GET_AUTOFILL_PREVIEW"
   | "EXECUTE_AUTOFILL"
+  | "GET_TAILOR_PREVIEW"
+  | "APPROVE_TAILORED_RESUME"
+  | "GENERATE_COVER_LETTER"
+  | "FILL_COVER_LETTER"
 
 export interface GetSessionMessage {
   type: "GET_SESSION"
@@ -188,12 +198,45 @@ export interface ExecuteAutofillMessage {
   fields: Array<{ elementRef: string; value: string }>
 }
 
+export interface GetTailorPreviewMessage {
+  type: "GET_TAILOR_PREVIEW"
+  jobId: string
+  resumeId?: string
+  /** Detected ATS system (workday | greenhouse | lever | ashby | icims | smartrecruiters | bamboohr | generic) */
+  ats?: string
+}
+
+export interface ApproveTailoredResumeMessage {
+  type: "APPROVE_TAILORED_RESUME"
+  jobId: string
+  resumeId?: string
+  ats?: string
+}
+
+export interface GenerateCoverLetterMessage {
+  type: "GENERATE_COVER_LETTER"
+  jobId: string
+  resumeId?: string
+  ats?: string
+}
+
+export interface FillCoverLetterMessage {
+  type: "FILL_COVER_LETTER"
+  /** CSS selector for the textarea to fill */
+  elementRef: string
+  text: string
+}
+
 export type BackgroundMessage =
   | GetSessionMessage
   | SaveJobMessage
   | GetPageInfoMessage
   | GetAutofillPreviewMessage
   | ExecuteAutofillMessage
+  | GetTailorPreviewMessage
+  | ApproveTailoredResumeMessage
+  | GenerateCoverLetterMessage
+  | FillCoverLetterMessage
 
 export type BackgroundResponseType =
   | "SESSION_RESULT"
@@ -201,6 +244,10 @@ export type BackgroundResponseType =
   | "PAGE_INFO_RESULT"
   | "AUTOFILL_PREVIEW_RESULT"
   | "AUTOFILL_EXECUTE_RESULT"
+  | "TAILOR_PREVIEW_RESULT"
+  | "TAILOR_APPROVE_RESULT"
+  | "COVER_LETTER_RESULT"
+  | "FILL_COVER_LETTER_RESULT"
   | "ERROR"
 
 export interface SessionResult {
@@ -245,12 +292,67 @@ export interface BackgroundError {
   message: string
 }
 
+// ── Tailor preview / approve ───────────────────────────────────────────────────
+
+export type TailorPreviewStatus = "ready" | "missing_resume" | "missing_job_context" | "gated"
+
+export interface TailorChangePreview {
+  section: "summary" | "skills" | "experience" | "ats_tip"
+  before?: string
+  after?: string
+  reason: string
+}
+
+export interface TailorPreviewResult {
+  type: "TAILOR_PREVIEW_RESULT"
+  status: TailorPreviewStatus
+  summary: string
+  atsTip: string | null
+  atsName: string | null
+  resumeId: string | null
+  resumeName: string | null
+  jobTitle: string | null
+  company: string | null
+  matchScore: number | null
+  changesPreview: TailorChangePreview[]
+  error?: string
+}
+
+export interface TailorApproveResult {
+  type: "TAILOR_APPROVE_RESULT"
+  success: boolean
+  versionId?: string
+  versionName?: string
+  resumeId?: string
+  matchScore?: number | null
+  error?: string
+}
+
+export interface CoverLetterResult {
+  type: "COVER_LETTER_RESULT"
+  success: boolean
+  coverLetter?: string
+  jobTitle?: string | null
+  company?: string | null
+  source?: "ai" | "template"
+  error?: string
+}
+
+export interface FillCoverLetterResult {
+  type: "FILL_COVER_LETTER_RESULT"
+  success: boolean
+}
+
 export type BackgroundResponse =
   | SessionResult
   | SaveResult
   | PageInfoResult
   | AutofillPreviewResult
   | AutofillExecuteResult
+  | TailorPreviewResult
+  | TailorApproveResult
+  | CoverLetterResult
+  | FillCoverLetterResult
   | BackgroundError
 
 // ── API shapes (matching web app routes) ─────────────────────────────────────
@@ -275,4 +377,32 @@ export interface ExtensionJobImportResponse {
   jobId?: string
   hireovanUrl?: string
   error?: string
+}
+
+export interface ExtensionTailorPreviewResponse {
+  status: TailorPreviewStatus
+  summary: string
+  atsTip: string | null
+  atsName: string | null
+  resumeId: string | null
+  resumeName: string | null
+  jobTitle: string | null
+  company: string | null
+  matchScore: number | null
+  changesPreview: TailorChangePreview[]
+}
+
+export interface ExtensionTailorApproveResponse {
+  versionId: string
+  versionName: string
+  resumeId: string
+  matchScore: number | null
+  changesApplied: number
+}
+
+export interface ExtensionCoverLetterResponse {
+  coverLetter: string
+  jobTitle: string | null
+  company: string | null
+  source: "ai" | "template"
 }

@@ -198,7 +198,7 @@ export function ScoutMockInterview({
       try {
         const res = await fetch("/api/scout/mock-interview", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { Accept: "application/json", "Content-Type": "application/json" },
           body: JSON.stringify({
             jobId,
             resumeId,

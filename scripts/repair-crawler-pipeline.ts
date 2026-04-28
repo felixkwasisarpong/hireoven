@@ -19,6 +19,7 @@ import { Pool } from "pg"
 import { detectAts } from "@/lib/companies/detect-ats"
 import { deriveCanonicalCareersUrl } from "@/lib/companies/canonical-careers-url"
 import { companyLogoUrlFromDomain } from "@/lib/companies/logo-url"
+import { isAtsDomain as isKnownAtsDomain } from "@/lib/companies/ats-domains"
 
 loadEnvConfig(process.cwd())
 
@@ -32,6 +33,7 @@ const ATS_SUBDOMAIN_PATTERNS = [
   ".lever.co",
   ".ashbyhq.com",
   ".myworkdayjobs.com",
+  ".smartrecruiters.com",
   ".bamboohr.com",
 ]
 
@@ -46,7 +48,7 @@ function normalizeDomain(raw: string | null | undefined): string {
 
 function isAtsDomain(domain: string | null | undefined): boolean {
   const d = normalizeDomain(domain)
-  return ATS_SUBDOMAIN_PATTERNS.some((p) => d.endsWith(p))
+  return isKnownAtsDomain(d) || ATS_SUBDOMAIN_PATTERNS.some((p) => d.endsWith(p))
 }
 
 function domainFromUrl(url: string | null | undefined): string {

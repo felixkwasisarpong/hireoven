@@ -253,6 +253,8 @@ export default function ResumeWorkspaceSection() {
             onUploadComplete={(resume) => {
               upsertResume(resume)
               setExpandedId(resume.id)
+              void refresh()
+              window.dispatchEvent(new Event("hireoven:resumes-changed"))
             }}
             showPrompt={!hasResume}
           />

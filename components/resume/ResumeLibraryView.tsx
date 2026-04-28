@@ -1,10 +1,11 @@
 
 "use client"
 
-import { useEffect, useMemo, useState, type ReactNode } from "react"
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import Link from "next/link"
 import {
   Archive,
+  CheckCircle2,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -14,11 +15,15 @@ import {
   Eye,
   FileText,
   FilePlus2,
+  Loader2,
   MoreHorizontal,
   Plus,
   Search,
+  Sparkles,
   Star,
   Trash2,
+  Upload,
+  X,
 } from "lucide-react"
 import { useResumeContext } from "@/components/resume/ResumeProvider"
 import { useToast } from "@/components/ui/ToastProvider"
@@ -28,9 +33,16 @@ import {
   removeResumeHandoff,
 } from "@/lib/resume/local-resume-handoff"
 import { useResumeHubData } from "@/lib/resume/use-resume-hub-data"
+import {
+  MAX_RESUME_SIZE_BYTES,
+  isResumeFilename,
+  isResumeMimeType,
+} from "@/lib/resume/constants"
 import { cn } from "@/lib/utils"
 import type { Resume } from "@/types"
 import type { ResumeStatus } from "@/types/resume-hub"
+
+type UploadPhase = "idle" | "uploading" | "processing" | "done" | "error"
 
 type FilterValue = "all" | ResumeStatus
 type SortValue = "latest" | "oldest" | "ats" | "match"
@@ -201,7 +213,7 @@ function FilterChip({ label, count, active, onClick }: { label: string; count: n
 }
 
 export default function ResumeLibraryView({ topSlot }: { topSlot?: ReactNode }) {
-  const { resumes, isLoading, refresh, removeResume } = useResumeContext()
+  const { resumes, isLoading, refresh, removeResume, upsertResume } = useResumeContext()
   const { data: hubData, refresh: refreshHubData } = useResumeHubData()
   const { pushToast } = useToast()
   const [filter, setFilter] = useState<FilterValue>("all")
@@ -211,6 +223,15 @@ export default function ResumeLibraryView({ topSlot }: { topSlot?: ReactNode }) 
   const [handoffResumes, setHandoffResumes] = useState<Resume[]>([])
   const [apiResumes, setApiResumes] = useState<Resume[]>([])
   const [isFetchingLibrary, setIsFetchingLibrary] = useState(true)
+
+  // Upload state
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const xhrRef = useRef<XMLHttpRequest | null>(null)
+  const [uploadPhase, setUploadPhase] = useState<UploadPhase>("idle")
+  const [uploadProgress, setUploadProgress] = useState(0)
+  const [uploadFileName, setUploadFileName] = useState("")
+  const [uploadError, setUploadError] = useState<string | null>(null)
+  const [uploadedAtsScore, setUploadedAtsScore] = useState<number | null>(null)
 
   async function loadLibraryResumes() {
     setIsFetchingLibrary(true)
@@ -227,6 +248,116 @@ export default function ResumeLibraryView({ topSlot }: { topSlot?: ReactNode }) 
     } finally {
       setIsFetchingLibrary(false)
     }
+  }
+
+  function triggerUpload() {
+    fileInputRef.current?.click()
+  }
+
+  function cancelUpload() {
+    xhrRef.current?.abort()
+    setUploadPhase("idle")
+    setUploadProgress(0)
+    setUploadFileName("")
+    setUploadError(null)
+    if (fileInputRef.current) fileInputRef.current.value = ""
+  }
+
+  async function pollUploadStatus(resumeId: string) {
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      await new Promise<void>((r) => setTimeout(r, 2000))
+      try {
+        const res = await fetch(`/api/resume/${resumeId}/status`, { cache: "no-store" })
+        if (!res.ok) continue
+        const status = (await res.json()) as { parse_status?: string; ats_score?: number }
+        if (status.parse_status === "complete") {
+          const resumeRes = await fetch(`/api/resume/${resumeId}`, { cache: "no-store" })
+          if (resumeRes.ok) upsertResume((await resumeRes.json()) as Resume)
+          setUploadedAtsScore(status.ats_score ?? null)
+          await refresh()
+          await loadLibraryResumes()
+          void refreshHubData()
+          window.dispatchEvent(new Event("hireoven:resumes-changed"))
+          setUploadPhase("done")
+          return
+        }
+        if (status.parse_status === "failed") {
+          setUploadError("AI parsing failed — you can still view the resume.")
+          setUploadPhase("error")
+          return
+        }
+      } catch {
+        // retry
+      }
+    }
+    setUploadError("Parsing timed out. Your resume was saved — refresh to view it.")
+    setUploadPhase("error")
+  }
+
+  function handleFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!fileInputRef.current) return
+    fileInputRef.current.value = ""
+    if (!file) return
+
+    if (!isResumeMimeType(file.type) && !isResumeFilename(file.name)) {
+      pushToast({ tone: "error", title: "Invalid file type", description: "Please upload a PDF or DOCX file." })
+      return
+    }
+    if (file.size > MAX_RESUME_SIZE_BYTES) {
+      pushToast({ tone: "error", title: "File too large", description: "Maximum file size is 5 MB." })
+      return
+    }
+
+    setUploadFileName(file.name)
+    setUploadProgress(0)
+    setUploadError(null)
+    setUploadedAtsScore(null)
+    setUploadPhase("uploading")
+
+    const formData = new FormData()
+    formData.append("file", file)
+
+    const xhr = new XMLHttpRequest()
+    xhrRef.current = xhr
+
+    xhr.upload.addEventListener("progress", (event) => {
+      if (event.lengthComputable) {
+        setUploadProgress(Math.round((event.loaded / event.total) * 100))
+      }
+    })
+
+    xhr.addEventListener("load", () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        const data = JSON.parse(xhr.responseText) as { resumeId?: string; id?: string; resume?: { id?: string } }
+        const resumeId = data.resumeId ?? data.id ?? data.resume?.id
+        if (resumeId) {
+          setUploadPhase("processing")
+          setUploadProgress(100)
+          void pollUploadStatus(resumeId)
+        } else {
+          setUploadError("Upload succeeded but no resume ID was returned.")
+          setUploadPhase("error")
+        }
+      } else {
+        const body = (() => { try { return JSON.parse(xhr.responseText) as { error?: string } } catch { return {} } })()
+        setUploadError((body as { error?: string }).error ?? "Upload failed. Please try again.")
+        setUploadPhase("error")
+      }
+    })
+
+    xhr.addEventListener("error", () => {
+      setUploadError("Network error. Please check your connection and try again.")
+      setUploadPhase("error")
+    })
+
+    xhr.addEventListener("abort", () => {
+      setUploadPhase("idle")
+    })
+
+    xhr.open("POST", "/api/resume/upload")
+    xhr.withCredentials = true
+    xhr.send(formData)
   }
 
   useEffect(() => {
@@ -426,20 +557,34 @@ export default function ResumeLibraryView({ topSlot }: { topSlot?: ReactNode }) 
 
   return (
     <main className="min-h-[calc(100vh-8.5rem)] bg-[#FAFBFF]">
+      {/* Hidden file input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        className="hidden"
+        onChange={handleFileSelected}
+      />
+
       <div className="w-full max-w-none space-y-3 px-4 py-3 sm:px-6 lg:px-8 xl:px-10 2xl:px-12">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h1 className="text-[22px] font-bold tracking-tight text-slate-950">Resume Library</h1>
             <p className="mt-1 text-[13px] text-slate-500">Manage all your resumes in one place</p>
           </div>
-          <Link
-            href="/dashboard/resume/studio?mode=preview"
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#5B4DFF] px-4 text-[13px] font-semibold text-white transition hover:bg-[#493EE6]"
-          >
-            <Plus className="h-4 w-4" />
-            New Resume
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={triggerUpload}
+              disabled={uploadPhase !== "idle"}
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#5B4DFF] px-4 text-[13px] font-semibold text-white transition hover:bg-[#493EE6] disabled:opacity-50"
+            >
+              <Plus className="h-4 w-4" />
+              New Resume
+            </button>
+          </div>
         </div>
+
 
         {topSlot}
 
@@ -659,6 +804,124 @@ export default function ResumeLibraryView({ topSlot }: { topSlot?: ReactNode }) 
           </div>
         )}
       </div>
+
+      {/* Full-page dimmed upload overlay */}
+      {uploadPhase !== "idle" && (
+        <div className="animate-fade-in-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="relative mx-4 w-full max-w-sm rounded-2xl bg-white p-8 shadow-2xl">
+
+            {/* Loading state */}
+            {(uploadPhase === "uploading" || uploadPhase === "processing") && (
+              <div className="flex flex-col items-center gap-5 text-center">
+                {/* Spinning ring */}
+                <div className="relative flex h-20 w-20 items-center justify-center">
+                  <svg className="absolute inset-0 h-full w-full animate-spin" viewBox="0 0 80 80" fill="none">
+                    <circle cx="40" cy="40" r="34" stroke="#E0E7FF" strokeWidth="6" />
+                    <path
+                      d="M40 6 a34 34 0 0 1 34 34"
+                      stroke="#5B4DFF"
+                      strokeWidth="6"
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-indigo-50">
+                    {uploadPhase === "uploading"
+                      ? <Upload className="h-5 w-5 text-[#5B4DFF]" />
+                      : <Sparkles className="h-5 w-5 animate-pulse text-[#5B4DFF]" />
+                    }
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-[15px] font-semibold text-slate-800">
+                    {uploadPhase === "uploading" ? "Uploading your resume…" : "Reading your resume…"}
+                  </p>
+                  <p className="mt-1 max-w-[220px] text-[13px] text-slate-500">
+                    {uploadPhase === "uploading"
+                      ? `${uploadProgress}% — hang tight`
+                      : "Our AI is scanning and parsing your file"}
+                  </p>
+                </div>
+
+                {/* Progress bar */}
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+                  {uploadPhase === "uploading" ? (
+                    <div
+                      className="h-full rounded-full bg-[#5B4DFF] transition-all duration-300"
+                      style={{ width: `${uploadProgress}%` }}
+                    />
+                  ) : (
+                    <div className="h-full w-full animate-[shimmer_1.6s_linear_infinite] rounded-full bg-gradient-to-r from-indigo-200 via-[#5B4DFF] to-indigo-200 bg-[length:200%_100%]" />
+                  )}
+                </div>
+
+                {uploadPhase === "uploading" && (
+                  <button
+                    type="button"
+                    onClick={cancelUpload}
+                    className="text-[12px] font-medium text-slate-400 hover:text-slate-600"
+                  >
+                    Cancel
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Done state */}
+            {uploadPhase === "done" && (
+              <div className="flex flex-col items-center gap-4 text-center">
+                <div className="flex h-20 w-20 items-center justify-center rounded-full bg-emerald-50">
+                  <CheckCircle2 className="h-10 w-10 text-emerald-500" />
+                </div>
+                <div>
+                  <p className="text-[16px] font-semibold text-slate-800">Resume uploaded!</p>
+                  <p className="mt-1 text-[13px] text-slate-500">
+                    {uploadedAtsScore != null
+                      ? `ATS score: ${uploadedAtsScore}/100 — it&apos;s in your library.`
+                      : "It's now in your resume library."}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setUploadPhase("idle")}
+                  className="mt-1 w-full rounded-xl bg-[#5B4DFF] px-4 py-2.5 text-[13px] font-semibold text-white transition hover:bg-[#493EE6]"
+                >
+                  Done
+                </button>
+              </div>
+            )}
+
+            {/* Error state */}
+            {uploadPhase === "error" && (
+              <div className="flex flex-col items-center gap-4 text-center">
+                <div className="flex h-20 w-20 items-center justify-center rounded-full bg-red-50">
+                  <X className="h-10 w-10 text-red-500" />
+                </div>
+                <div>
+                  <p className="text-[16px] font-semibold text-slate-800">Upload failed</p>
+                  <p className="mt-1 text-[13px] text-slate-500">{uploadError ?? "Please try again."}</p>
+                </div>
+                <div className="mt-1 flex w-full gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setUploadPhase("idle")}
+                    className="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-[13px] font-semibold text-slate-600 transition hover:bg-slate-50"
+                  >
+                    Dismiss
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setUploadPhase("idle"); triggerUpload() }}
+                    className="flex-1 rounded-xl bg-[#5B4DFF] px-4 py-2.5 text-[13px] font-semibold text-white transition hover:bg-[#493EE6]"
+                  >
+                    Try again
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </main>
   )
 }

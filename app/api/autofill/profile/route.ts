@@ -70,44 +70,53 @@ export async function POST(request: Request) {
   const pool = getPostgresPool()
   const existing = await getExistingProfile(user.id)
 
+  // pg serializes JS arrays using PG array syntax, not JSON — JSONB columns require
+  // an explicit JSON.stringify so the driver sends a plain string PostgreSQL can cast.
   const payload = {
     ...body,
+    custom_answers: body.custom_answers != null ? JSON.stringify(body.custom_answers) : null,
     user_id: user.id,
     updated_at: new Date().toISOString(),
   } as any
 
-  let profile: AutofillProfile | null = null
-  if (existing) {
-    const entries = Object.entries(payload)
-    const values: unknown[] = []
-    const setSql = entries.map(([key, value], idx) => {
-      values.push(value)
-      return `${key} = $${idx + 1}`
-    })
-    values.push(existing.id)
-    const result = await pool.query<AutofillProfile>(
-      `UPDATE autofill_profiles
-       SET ${setSql.join(", ")}
-       WHERE id = $${values.length}
-       RETURNING *`,
-      values
-    )
-    profile = result.rows[0] ?? null
-  } else {
-    const columns = Object.keys(payload)
-    const values = Object.values(payload)
-    const placeholders = values.map((_, i) => `$${i + 1}`).join(", ")
-    const result = await pool.query<AutofillProfile>(
-      `INSERT INTO autofill_profiles (${columns.join(", ")})
-       VALUES (${placeholders})
-       RETURNING *`,
-      values
-    )
-    profile = result.rows[0] ?? null
+  try {
+    let profile: AutofillProfile | null = null
+    if (existing) {
+      const entries = Object.entries(payload)
+      const values: unknown[] = []
+      const setSql = entries.map(([key, value], idx) => {
+        values.push(value)
+        return `${key} = $${idx + 1}`
+      })
+      values.push(existing.id)
+      const result = await pool.query<AutofillProfile>(
+        `UPDATE autofill_profiles
+         SET ${setSql.join(", ")}
+         WHERE id = $${values.length}
+         RETURNING *`,
+        values
+      )
+      profile = result.rows[0] ?? null
+    } else {
+      const columns = Object.keys(payload)
+      const values = Object.values(payload)
+      const placeholders = values.map((_, i) => `$${i + 1}`).join(", ")
+      const result = await pool.query<AutofillProfile>(
+        `INSERT INTO autofill_profiles (${columns.join(", ")})
+         VALUES (${placeholders})
+         RETURNING *`,
+        values
+      )
+      profile = result.rows[0] ?? null
+    }
+    if (!profile) return NextResponse.json({ error: "Failed to save profile" }, { status: 500 })
+    const completion = calcCompletion(profile)
+    return NextResponse.json({ profile, completion, completionPct: completion })
+  } catch (err) {
+    console.error("[autofill/profile POST]", err)
+    const msg = err instanceof Error ? err.message : "Database error"
+    return NextResponse.json({ error: msg }, { status: 500 })
   }
-  if (!profile) return NextResponse.json({ error: "Failed to save profile" }, { status: 500 })
-  const completion = calcCompletion(profile)
-  return NextResponse.json({ profile, completion, completionPct: completion })
 }
 
 export async function PATCH(request: Request) {
@@ -121,40 +130,47 @@ export async function PATCH(request: Request) {
 
   const payload = {
     ...body,
+    custom_answers: body.custom_answers != null ? JSON.stringify(body.custom_answers) : null,
     user_id: user.id,
     updated_at: new Date().toISOString(),
   } as any
 
-  let profile: AutofillProfile | null = null
-  if (existing) {
-    const entries = Object.entries(payload)
-    const values: unknown[] = []
-    const setSql = entries.map(([key, value], idx) => {
-      values.push(value)
-      return `${key} = $${idx + 1}`
-    })
-    values.push(existing.id)
-    const result = await pool.query<AutofillProfile>(
-      `UPDATE autofill_profiles
-       SET ${setSql.join(", ")}
-       WHERE id = $${values.length}
-       RETURNING *`,
-      values
-    )
-    profile = result.rows[0] ?? null
-  } else {
-    const columns = Object.keys(payload)
-    const values = Object.values(payload)
-    const placeholders = values.map((_, i) => `$${i + 1}`).join(", ")
-    const result = await pool.query<AutofillProfile>(
-      `INSERT INTO autofill_profiles (${columns.join(", ")})
-       VALUES (${placeholders})
-       RETURNING *`,
-      values
-    )
-    profile = result.rows[0] ?? null
+  try {
+    let profile: AutofillProfile | null = null
+    if (existing) {
+      const entries = Object.entries(payload)
+      const values: unknown[] = []
+      const setSql = entries.map(([key, value], idx) => {
+        values.push(value)
+        return `${key} = $${idx + 1}`
+      })
+      values.push(existing.id)
+      const result = await pool.query<AutofillProfile>(
+        `UPDATE autofill_profiles
+         SET ${setSql.join(", ")}
+         WHERE id = $${values.length}
+         RETURNING *`,
+        values
+      )
+      profile = result.rows[0] ?? null
+    } else {
+      const columns = Object.keys(payload)
+      const values = Object.values(payload)
+      const placeholders = values.map((_, i) => `$${i + 1}`).join(", ")
+      const result = await pool.query<AutofillProfile>(
+        `INSERT INTO autofill_profiles (${columns.join(", ")})
+         VALUES (${placeholders})
+         RETURNING *`,
+        values
+      )
+      profile = result.rows[0] ?? null
+    }
+    if (!profile) return NextResponse.json({ error: "Failed to save profile" }, { status: 500 })
+    const completion = calcCompletion(profile)
+    return NextResponse.json({ profile, completion, completionPct: completion })
+  } catch (err) {
+    console.error("[autofill/profile PATCH]", err)
+    const msg = err instanceof Error ? err.message : "Database error"
+    return NextResponse.json({ error: msg }, { status: 500 })
   }
-  if (!profile) return NextResponse.json({ error: "Failed to save profile" }, { status: 500 })
-  const completion = calcCompletion(profile)
-  return NextResponse.json({ profile, completion, completionPct: completion })
 }

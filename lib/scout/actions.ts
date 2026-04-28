@@ -17,6 +17,8 @@ const ALLOWED_ACTION_TYPES: ScoutActionType[] = [
   "OPEN_EXTENSION_BRIDGE",
   // Phase 2 — autofill preview hint from Scout.
   "OPEN_EXTENSION_AUTOFILL_PREVIEW",
+  // Phase 3 — tailor resume before autofill.
+  "PREPARE_TAILORED_AUTOFILL",
 ]
 
 const MAX_ACTIONS_PER_RESPONSE = 4
@@ -84,6 +86,10 @@ export function isAllowedScoutAction(action: unknown): action is ScoutAction {
       // Always valid — hint and url are optional
       return true
 
+    case "PREPARE_TAILORED_AUTOFILL":
+      // Always valid — jobId, url, and hint are all optional
+      return true
+
     default:
       return false
   }
@@ -132,6 +138,8 @@ export function getDefaultActionLabel(action: ScoutAction): string {
       return "Open Scout Extension"
     case "OPEN_EXTENSION_AUTOFILL_PREVIEW":
       return "Autofill this Application"
+    case "PREPARE_TAILORED_AUTOFILL":
+      return "Tailor Resume & Autofill"
     default:
       return "Execute Action"
   }

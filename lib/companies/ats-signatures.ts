@@ -4,6 +4,7 @@ export type AtsType =
   | "ashby"
   | "workday"
   | "icims"
+  | "smartrecruiters"
   | "bamboohr"
   | "jobvite"
   | "custom"
@@ -68,6 +69,16 @@ const RULES: SignatureRule[] = [
       if (url.includes(".icims.com")) return "URL host matches *.icims.com"
       if (html.includes(".icims.com")) return "HTML references icims domain"
       if (html.includes("icims applicant tracking")) return "iCIMS text marker found"
+      return null
+    },
+  },
+  {
+    atsType: "smartrecruiters",
+    confidence: "high",
+    test: ({ url, html }) => {
+      if (url.includes("jobs.smartrecruiters.com")) return "URL host matches jobs.smartrecruiters.com"
+      if (html.includes("jobs.smartrecruiters.com")) return "HTML references jobs.smartrecruiters.com"
+      if (html.includes("smartrecruiters")) return "SmartRecruiters marker found"
       return null
     },
   },

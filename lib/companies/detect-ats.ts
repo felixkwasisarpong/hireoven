@@ -1,9 +1,12 @@
+import { extractGreenhouseBoardToken, isGreenhouseHost } from "@/lib/companies/greenhouse-url"
+
 export type AtsType =
   | "greenhouse"
   | "lever"
   | "ashby"
   | "workday"
   | "icims"
+  | "smartrecruiters"
   | "bamboohr"
   | "custom"
 
@@ -34,8 +37,9 @@ export function detectAtsFromUrl(rawUrl: string): AtsDetection | null {
   const host = parsed.hostname.toLowerCase()
   const pathParts = parsed.pathname.split("/").filter(Boolean)
 
-  if (host === "boards.greenhouse.io" || host.endsWith(".greenhouse.io")) {
+  if (isGreenhouseHost(host)) {
     const identifier =
+      cleanIdentifier(extractGreenhouseBoardToken(rawUrl)) ??
       cleanIdentifier(pathParts[0]) ??
       cleanIdentifier(host.split(".")[0])
     return { atsType: "greenhouse", atsIdentifier: identifier, confidence: "high" }
@@ -57,6 +61,11 @@ export function detectAtsFromUrl(rawUrl: string): AtsDetection | null {
 
   if (host.endsWith(".icims.com") || host === "icims.com") {
     return { atsType: "icims", atsIdentifier: null, confidence: "high" }
+  }
+
+  if (host === "jobs.smartrecruiters.com") {
+    const identifier = cleanIdentifier(pathParts[0])
+    return { atsType: "smartrecruiters", atsIdentifier: identifier, confidence: "high" }
   }
 
   if (host.endsWith(".bamboohr.com") || host === "bamboohr.com") {

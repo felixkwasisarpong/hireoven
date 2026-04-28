@@ -900,7 +900,7 @@ function StickyResumePreview({
 export default function ResumeStudioPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { resumes, primaryResume } = useResumeContext()
+  const { resumes, primaryResume, upsertResume } = useResumeContext()
   const { data: hubData, refresh: refreshHubData } = useResumeHubData()
   const { pushToast } = useToast()
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
@@ -928,6 +928,7 @@ export default function ResumeStudioPage() {
   const [redoStack, setRedoStack] = useState<EditorSnapshot[]>([])
   const lastSnapshotRef = useRef<EditorSnapshot | null>(null)
   const restoringSnapshotRef = useRef(false)
+  const initializedResumeIdRef = useRef<string | null>(null)
   const [personalInfo, setPersonalInfo] = useState({
     title: "",
     firstName: "",
@@ -944,50 +945,12 @@ export default function ResumeStudioPage() {
     website: "",
   })
   const [personalCustomFields, setPersonalCustomFields] = useState<PersonalCustomField[]>([])
-  const [headline, setHeadline] = useState("Software Engineer | AI & Cloud Applications | Generative AI & Prompt Engineering")
-  const [skillsText, setSkillsText] = useState(
-    "Languages: Python, Java, SQL, Bash\nAI & ML Tools: PyTorch, Transformers, LangChain, OpenAI API, Hugging Face\nCloud & DevOps: AWS (EC2, Lambda, S3), Docker, GitHub Actions, Linux CLI\nConcepts: Prompt Engineering, Generative AI, Microservices, CI/CD, Data Structures & Algorithms\nFrameworks: Flask, FastAPI, React (basic)"
-  )
-  const [experienceDrafts, setExperienceDrafts] = useState<ExperienceDraft[]>([
-    {
-      company: "Dept. of Computer Science, Texas Tech University",
-      role: "Graduate Researcher",
-      city: "Lubbock",
-      country: "United States",
-      from: "01/2025",
-      to: "present",
-      current: true,
-      description:
-        "• Built web interfaces and backend APIs for privacy-preserving recommender systems using Flask + PyTorch + YAML.\n• Designed WGAN-based ML pipelines and automated hyperparameter tracking with Airflow, improving reproducibility.\n• Submitted results on the 31st ACM Symposium on Access Control Models and Technologies.",
-    },
-  ])
-  const [educationDrafts, setEducationDrafts] = useState<EducationDraft[]>([
-    {
-      school: "Texas Tech University",
-      field: "Computer Science",
-      degree: "M.S",
-      location: "Lubbock, Texas",
-      country: "United States",
-      from: "08/2024",
-      to: "present",
-      current: true,
-      description:
-        "• Thesis: Exploiting Differentially Private Recommendation Systems via Generative Adversarial Attacks\n• Focus: Privacy-Utility-Robustness Trade-off | Differential Privacy | Generative AI | Trustworthy ML",
-    },
-  ])
-  const [projectsDraft, setProjectsDraft] = useState(
-    "Generative AI Summarization System\n• Fine-tuned LLMs (Flan-T5, BioMedLM) for domain-specific text generation; applied prompt engineering for structured outputs.\n• Integrated LangChain and OpenAI API to build an interactive prompt-testing pipeline for clinical summaries.\n\nIoT Smart Irrigation Platform (MQTT + Kafka)\n• Collaborated with colleagues to stream sensor data via MQTT/Kafka for real-time irrigation automation.\n• Deployed on AWS EC2 and Docker containers, integrating ML models for predictive control.\n\nDifferentially Private Recommender System\n• Implemented Factorization Machines with DP-SGD and adversarial training to protect sensitive user attributes.\n• Combined ML and privacy research insights to build scalable DP pipelines."
-  )
-  const [publicationDrafts, setPublicationDrafts] = useState<PublicationDraft[]>([
-    {
-      title: "Exploiting Differentially Private Recommendation Systems.",
-      publisher: "ACM",
-      url: "",
-      date: "",
-      description:
-        "In Review\nF. Sarpong, S. Liao. \"Exploiting Differentially Private Recommendation Systems.\"\nSubmitted to the 31st ACM Symposium on Access Control Models and Technologies",
-    },
-  ])
+  const [headline, setHeadline] = useState("")
+  const [skillsText, setSkillsText] = useState("")
+  const [experienceDrafts, setExperienceDrafts] = useState<ExperienceDraft[]>([])
+  const [educationDrafts, setEducationDrafts] = useState<EducationDraft[]>([])
+  const [projectsDraft, setProjectsDraft] = useState("")
+  const [publicationDrafts, setPublicationDrafts] = useState<PublicationDraft[]>([])
   const [profileSummary, setProfileSummary] = useState("")
 
   useEffect(() => {
@@ -1130,37 +1093,88 @@ export default function ResumeStudioPage() {
   }, [educationDrafts, experienceDrafts, headline, personalInfo, profile, profileSummary, projectsDraft, selectedResume, skillsText])
 
   useEffect(() => {
-    const fullName = selectedResume?.full_name ?? profile?.full_name ?? ""
-    const nextNameParts = splitName(fullName)
+    if (!selectedResume || initializedResumeIdRef.current === selectedResume.id) return
+    initializedResumeIdRef.current = selectedResume.id
 
-    setPersonalInfo((current) => ({
-      ...current,
-      firstName: current.firstName || nextNameParts.firstName,
-      lastName: current.lastName || nextNameParts.lastName,
-      title: current.title || selectedResume?.primary_role || "",
-      phone: current.phone || selectedResume?.phone || "",
-      email: current.email || selectedResume?.email || profile?.email || "",
-      address: current.address || selectedResume?.location || "",
-      website: current.website || selectedResume?.portfolio_url || selectedResume?.linkedin_url || selectedResume?.github_url || "",
-    }))
+    const fullName = selectedResume.full_name ?? profile?.full_name ?? ""
+    const nameParts = splitName(fullName)
+    const locationParts = (selectedResume.location ?? "").split(/,\s*/)
 
-    setProfileSummary((current) => current || selectedResume?.summary || "")
-  }, [profile, selectedResume])
+    setPersonalInfo({
+      title: selectedResume.primary_role || "",
+      firstName: nameParts.firstName,
+      lastName: nameParts.lastName,
+      phone: selectedResume.phone || "",
+      email: selectedResume.email || profile?.email || "",
+      dateOfBirth: "",
+      nationality: "",
+      address: locationParts[0] ?? selectedResume.location ?? "",
+      city: locationParts[0] ?? "",
+      state: locationParts[1] ?? "",
+      country: locationParts[locationParts.length - 1] ?? "",
+      postalCode: "",
+      website: selectedResume.portfolio_url || selectedResume.linkedin_url || selectedResume.github_url || "",
+    })
 
-  useEffect(() => {
-    if (!isDirty) return
+    setHeadline(selectedResume.primary_role || "")
+    setProfileSummary(selectedResume.summary || "")
 
-    const timer = window.setTimeout(() => {
-      setIsSaving(true)
-      window.setTimeout(() => {
-        // TODO: Persist autosaved editor sections to PATCH /api/resume/:id.
-        setIsSaving(false)
-        setIsDirty(false)
-      }, 450)
-    }, 800)
+    const skills = selectedResume.skills as Record<string, string[]> | null
+    if (skills && typeof skills === "object") {
+      const buckets = Object.entries(skills)
+        .filter(([, values]) => Array.isArray(values) && values.length > 0)
+        .map(([key, values]) => `${key.charAt(0).toUpperCase() + key.slice(1)}: ${(values as string[]).join(", ")}`)
+      setSkillsText(buckets.length ? buckets.join("\n") : (selectedResume.top_skills ?? []).join(", "))
+    } else {
+      setSkillsText((selectedResume.top_skills ?? []).join(", "))
+    }
 
-    return () => window.clearTimeout(timer)
-  }, [isDirty])
+    setExperienceDrafts(
+      (selectedResume.work_experience ?? []).map((exp) => ({
+        company: exp.company ?? "",
+        role: exp.title ?? "",
+        city: "",
+        country: "",
+        from: exp.start_date ?? "",
+        to: exp.end_date ?? "",
+        current: exp.is_current ?? false,
+        description: [
+          exp.description ?? "",
+          ...(exp.achievements ?? []).map((a) => `• ${a}`),
+        ]
+          .filter(Boolean)
+          .join("\n"),
+      }))
+    )
+
+    setEducationDrafts(
+      (selectedResume.education ?? []).map((edu) => ({
+        school: edu.institution ?? "",
+        field: edu.field ?? "",
+        degree: edu.degree ?? "",
+        location: "",
+        country: "",
+        from: edu.start_date ?? "",
+        to: edu.end_date ?? "",
+        current: !edu.end_date,
+        description: "",
+      }))
+    )
+
+    const projectText = (selectedResume.projects ?? [])
+      .map((p) => `${p.name ?? ""}\n${p.description ?? ""}`.trim())
+      .filter(Boolean)
+      .join("\n\n")
+    setProjectsDraft(projectText)
+
+    setPersonalCustomFields([])
+    setIsDirty(false)
+    setUndoStack([])
+    setRedoStack([])
+    lastSnapshotRef.current = null
+  }, [selectedResume, profile])
+
+  // isDirty tracks unsaved changes; actual save is triggered by the Save button or before download
 
   function createEditorSnapshot(): EditorSnapshot {
     return cloneSnapshot({
@@ -1247,8 +1261,12 @@ export default function ResumeStudioPage() {
       if (!current[i]) return current
       const row = current[i]!
       const d = row.description
-      const next =
-        d.includes(fix.original) ? d.replace(fix.original, fix.suggested) : d.trim() ? `${d.trim()}\n${fix.suggested}` : fix.suggested
+      const originalFound = fix.original.length > 0 && d.includes(fix.original)
+      const next = originalFound
+        ? d.replace(fix.original, fix.suggested)
+        : d.trim()
+          ? `${d.trim()}\n${fix.suggested}`
+          : fix.suggested
       const rows = [...current]
       rows[i] = { ...row, description: next }
       return rows
@@ -1317,8 +1335,10 @@ export default function ResumeStudioPage() {
         const i = experienceIndexFromId(fix.experienceId)
         if (nextExp[i]) {
           const d = nextExp[i]!.description
-          const nextD =
-            d.includes(fix.original) ? d.replace(fix.original, fix.suggested) : d.trim()
+          const originalFound = fix.original.length > 0 && d.includes(fix.original)
+          const nextD = originalFound
+            ? d.replace(fix.original, fix.suggested)
+            : d.trim()
               ? `${d.trim()}\n${fix.suggested}`
               : fix.suggested
           nextExp[i] = { ...nextExp[i]!, description: nextD }
@@ -1434,14 +1454,83 @@ export default function ResumeStudioPage() {
     applyEditorSnapshot(next)
   }
 
-  function saveDraft() {
-    // TODO: Persist AI Studio draft to backend storage.
+  async function saveDraft(silent = false) {
+    if (!selectedResume?.id) {
+      if (!silent) pushToast({ tone: "info", title: "Select a resume to save." })
+      return
+    }
     setIsSaving(true)
-    window.setTimeout(() => {
-      setIsSaving(false)
+    try {
+      const fullName = `${personalInfo.firstName} ${personalInfo.lastName}`.trim() || null
+      const location = [personalInfo.city, personalInfo.state, personalInfo.country].filter(Boolean).join(", ") || personalInfo.address || null
+      const res = await fetch(`/api/resume/${selectedResume.id}`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: documentName !== "Untitled resume" ? documentName : undefined,
+          full_name: fullName,
+          email: personalInfo.email || null,
+          phone: personalInfo.phone || null,
+          location,
+          portfolio_url: personalInfo.website || null,
+          primary_role: headline || null,
+          summary: profileSummary || null,
+          work_experience: experienceDrafts.map((draft) => ({
+            title: draft.role,
+            company: draft.company,
+            start_date: draft.from,
+            end_date: draft.current ? null : draft.to,
+            is_current: draft.current,
+            description: draft.description,
+            achievements: draft.description
+              .split(/\n/)
+              .map((line) => line.replace(/^[-•]\s*/, "").trim())
+              .filter(Boolean),
+          })),
+          education: educationDrafts.map((draft) => ({
+            institution: draft.school,
+            degree: draft.degree,
+            field: draft.field,
+            start_date: draft.from,
+            end_date: draft.current ? null : draft.to,
+            gpa: null,
+          })),
+          projects: projectsDraft
+            .split(/\n{2,}/)
+            .map((block) => block.trim())
+            .filter(Boolean)
+            .map((block, index) => {
+              const [nameLine, ...descLines] = block.split(/\n/)
+              return {
+                name: nameLine?.replace(/^[-•]\s*/, "").trim() || `Project ${index + 1}`,
+                description: descLines.join("\n").replace(/[•]/g, "").trim() || nameLine || "",
+                url: null,
+              }
+            }),
+        }),
+      })
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string }
+        throw new Error(body.error ?? "Save failed")
+      }
+      const updated = (await res.json()) as Resume
+      upsertResume(updated)
       setIsDirty(false)
-      pushToast({ tone: "success", title: "Draft saved", description: "Your resume changes have been saved locally for now." })
-    }, 350)
+      if (!silent) {
+        pushToast({ tone: "success", title: "Resume saved", description: "Your changes have been saved." })
+      }
+    } catch (error) {
+      if (!silent) {
+        pushToast({
+          tone: "error",
+          title: "Could not save resume",
+          description: error instanceof Error ? error.message : "Please try again.",
+        })
+      }
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   function updatePersonalInfo(field: keyof typeof personalInfo, value: string) {
@@ -1729,23 +1818,42 @@ export default function ResumeStudioPage() {
 
   async function handleDownloadResume() {
     if (!selectedResume?.id) {
-      pushToast({ tone: "info", title: "No resume selected yet." })
+      pushToast({ tone: "info", title: "Select a resume first." })
       return
     }
 
-    try {
-      // TODO: Wire Download to real export endpoint.
-      const response = await fetch(`/api/resume/${selectedResume.id}`, { cache: "no-store" })
-      const data = (await response.json()) as Resume & { download_url?: string }
-      const url = data.download_url ?? data.file_url
-      if (url) {
-        window.open(url, "_blank", "noopener,noreferrer")
-        return
-      }
-    } catch {
-      // Fall through to toast.
+    if (isDirty) {
+      await saveDraft(true)
     }
-    pushToast({ tone: "info", title: "No resume selected yet." })
+
+    try {
+      const fileName = `${documentName || selectedResume.name || "resume"}.pdf`
+      const downloadUrl = `/api/resume/download?resumeId=${encodeURIComponent(selectedResume.id)}`
+      const response = await fetch(downloadUrl, { credentials: "include" })
+      if (!response.ok) {
+        const fallback = (await response.json().catch(() => ({}))) as { error?: string }
+        throw new Error(fallback.error ?? "Download failed")
+      }
+      const blob = await response.blob()
+      const objectUrl = URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      link.href = objectUrl
+      link.download = fileName
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(objectUrl)
+      pushToast({
+        tone: "success",
+        title: mode === "tailor" ? "Tailored resume downloaded" : "Resume downloaded",
+      })
+    } catch (error) {
+      pushToast({
+        tone: "error",
+        title: "Download failed",
+        description: error instanceof Error ? error.message : "Please try again.",
+      })
+    }
   }
 
   async function handleCreateTailoredVersion() {
@@ -2133,7 +2241,7 @@ export default function ResumeStudioPage() {
             </button>
             <button
               type="button"
-              onClick={saveDraft}
+              onClick={() => void saveDraft()}
               className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#5B4DFF] px-4 text-[12.5px] font-semibold text-white transition hover:bg-[#493EE6]"
             >
               <Save className="h-4 w-4" />

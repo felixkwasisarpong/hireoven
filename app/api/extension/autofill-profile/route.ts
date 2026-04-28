@@ -11,6 +11,7 @@
 import { NextResponse } from "next/server"
 import { getPostgresPool } from "@/lib/postgres/server"
 import {
+  extensionError,
   extensionCorsHeaders,
   requireExtensionAuth,
   handleExtensionPreflight,
@@ -38,7 +39,14 @@ export async function GET(request: Request) {
      ORDER BY updated_at DESC
      LIMIT 1`,
     [user.sub]
-  )
+  ).catch((err) => {
+    console.error("[extension/autofill-profile] profile fetch failed:", err)
+    return null
+  })
+
+  if (!result) {
+    return extensionError(request, 500, "Failed to fetch autofill profile")
+  }
 
   const profile = result.rows[0] ?? null
 
@@ -49,7 +57,9 @@ export async function GET(request: Request) {
     )
   }
 
-  // Return only safe fields for autofill — no diversity data, no internal ids
+  // Return only safe fields for autofill.
+  // Diversity fields (gender, ethnicity, veteran, disability) are included only
+  // when the user has explicitly opted in via auto_fill_diversity.
   const safeProfile = {
     first_name: profile.first_name,
     last_name: profile.last_name,
@@ -80,6 +90,12 @@ export async function GET(request: Request) {
     university: profile.university,
     graduation_year: profile.graduation_year,
     gpa: profile.gpa,
+    // EEO fields — only sent when user has explicitly opted in
+    auto_fill_diversity: profile.auto_fill_diversity ?? false,
+    gender: profile.auto_fill_diversity ? (profile.gender ?? null) : null,
+    ethnicity: profile.auto_fill_diversity ? (profile.ethnicity ?? null) : null,
+    veteran_status: profile.auto_fill_diversity ? (profile.veteran_status ?? null) : null,
+    disability_status: profile.auto_fill_diversity ? (profile.disability_status ?? null) : null,
   }
 
   return NextResponse.json(

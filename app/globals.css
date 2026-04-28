@@ -5,7 +5,7 @@
 @layer base {
   :root {
     /* Core shadcn-compatible */
-    --background: 210 40% 98%;
+    --background: 95 22% 96%;
     --foreground: 222 47% 11%;
     --card: 0 0% 100%;
     --card-foreground: 222 47% 11%;
@@ -29,9 +29,9 @@
     /* Semantic product tokens */
     --primary-hover: 17 91% 40%;
     --surface: 0 0% 100%;
-    --surface-alt: 214 24% 97%;
-    --surface-muted: 214 24% 94%;
-    --surface-inset: 214 24% 92%;
+    --surface-alt: 95 18% 94%;
+    --surface-muted: 95 14% 92%;
+    --surface-inset: 95 12% 90%;
     --elev-1: 220 40% 2%;
     --elev-2: 220 30% 6%;
     --text-strong: 222 47% 9%;
@@ -76,7 +76,7 @@
 
   body.site-chroma {
     position: relative;
-    background: hsl(220 20% 97%);
+    background: hsl(95 22% 96%);
   }
 
   body.site-chroma::before,
@@ -152,9 +152,9 @@
     @apply min-h-screen;
     background-color: hsl(var(--background));
     background-image:
-      radial-gradient(1100px 480px at 5% -5%, hsl(30 100% 97% / 0.7), transparent 55%),
-      radial-gradient(800px 380px at 95% 0%, hsl(38 100% 98% / 0.6), transparent 50%),
-      linear-gradient(180deg, hsl(210 40% 98%), hsl(214 32% 97%));
+      radial-gradient(1100px 480px at 5% -5%, hsl(38 80% 96% / 0.5), transparent 55%),
+      radial-gradient(800px 380px at 95% 0%, hsl(38 100% 96% / 0.35), transparent 50%),
+      linear-gradient(180deg, hsl(95 22% 96%), hsl(95 18% 95%));
   }
 
   .app-shell {
@@ -164,13 +164,13 @@
 
   /* Layered surfaces (panels, not floating cards) */
   .surface-panel {
-    @apply border border-border bg-[hsl(var(--surface))] shadow-[0_1px_0_rgba(15,23,42,0.04),0_10px_24px_-20px_rgba(15,23,42,0.25)];
-    background-image: linear-gradient(180deg, hsl(0 0% 100%), hsl(0 0% 100%));
+    @apply border border-border bg-[hsl(var(--surface))] shadow-[0_1px_0_rgba(15,23,42,0.06),0_14px_36px_-16px_rgba(15,23,42,0.38)];
+    background-image: linear-gradient(180deg, hsl(0 0% 100%), hsl(90 30% 99.5%));
     backdrop-filter: blur(4px);
   }
 
   .surface-panel-raised {
-    @apply border border-border bg-[hsl(var(--surface))] shadow-[0_1px_0_rgba(15,23,42,0.05),0_14px_34px_-24px_rgba(3,19,41,0.24)];
+    @apply border border-border bg-[hsl(var(--surface))] shadow-[0_1px_0_rgba(15,23,42,0.07),0_18px_44px_-20px_rgba(3,19,41,0.36)];
     backdrop-filter: blur(6px);
   }
 
@@ -188,8 +188,8 @@
   }
 
   .surface-card {
-    @apply border border-border bg-[hsl(var(--surface))] shadow-[0_1px_0_rgba(15,23,42,0.04),0_14px_30px_-24px_rgba(8,24,48,0.22)];
-    background-image: linear-gradient(180deg, hsl(0 0% 100%), hsl(0 0% 100%));
+    @apply border border-border bg-[hsl(var(--surface))] shadow-[0_1px_0_rgba(15,23,42,0.06),0_16px_36px_-20px_rgba(8,24,48,0.34)];
+    background-image: linear-gradient(180deg, hsl(0 0% 100%), hsl(90 30% 99.5%));
   }
 
   .surface-card-subtle {
@@ -201,8 +201,8 @@
   }
 
   .metric-tile {
-    @apply border border-border bg-[hsl(var(--surface))] p-4 shadow-[0_1px_0_rgba(15,23,42,0.03),0_12px_24px_-20px_rgba(14,35,60,0.24)];
-    background-image: linear-gradient(180deg, hsl(0 0% 100%), hsl(0 0% 100%));
+    @apply border border-border bg-[hsl(var(--surface))] p-4 shadow-[0_1px_0_rgba(15,23,42,0.05),0_14px_30px_-18px_rgba(14,35,60,0.34)];
+    background-image: linear-gradient(180deg, hsl(0 0% 100%), hsl(90 30% 99.5%));
   }
 
   /* ── Typography ──────────────────────────────────────────────── */
@@ -308,10 +308,10 @@
 
   .neo-toolbar {
     @apply rounded-xl border border-border/90 bg-[hsl(var(--surface))] p-3 sm:p-4;
-    background-image: linear-gradient(180deg, hsl(0 0% 100%), hsl(220 20% 99.5%));
+    background-image: linear-gradient(180deg, hsl(0 0% 100%), hsl(90 30% 99.5%));
     box-shadow:
-      0 1px 2px hsl(220 40% 2% / 0.04),
-      0 4px 12px -4px hsl(220 35% 10% / 0.07);
+      0 1px 2px hsl(100 30% 2% / 0.05),
+      0 6px 16px -4px hsl(100 20% 10% / 0.13);
   }
 
   .neo-toolbar::before {
@@ -320,10 +320,10 @@
 
   .neo-rail-card {
     @apply overflow-hidden rounded-xl border border-border/90 bg-[hsl(var(--surface))] p-4;
-    background-image: linear-gradient(180deg, hsl(0 0% 100%), hsl(220 18% 99.5%));
+    background-image: linear-gradient(180deg, hsl(0 0% 100%), hsl(90 30% 99.5%));
     box-shadow:
-      0 1px 2px hsl(220 40% 2% / 0.035),
-      0 6px 16px -8px hsl(220 30% 12% / 0.08);
+      0 1px 2px hsl(100 30% 2% / 0.05),
+      0 8px 22px -8px hsl(100 20% 12% / 0.18);
   }
 
   .neo-rail-card::before {
@@ -468,47 +468,47 @@
   /* ── Product app skin (dashboard, auth, public — not landing) ─────────────── */
 
   .product-skin {
-    --background: 210 40% 98%;
+    --background: 95 22% 96%;
     --surface: 0 0% 100%;
-    --surface-alt: 214 24% 97%;
-    --border: 214 32% 91%;
+    --surface-alt: 95 18% 94%;
+    --border: 100 14% 88%;
     --accent: 38 100% 97%;
     --accent-foreground: 24 93% 30%;
   }
 
   .product-skin .app-page {
     background-image:
-      radial-gradient(1100px 480px at 5% -5%, hsl(30 100% 97% / 0.7), transparent 55%),
-      radial-gradient(800px 380px at 95% 0%, hsl(38 100% 98% / 0.6), transparent 50%),
-      linear-gradient(180deg, hsl(210 40% 98%), hsl(214 32% 97%));
+      radial-gradient(1100px 480px at 5% -5%, hsl(38 80% 96% / 0.5), transparent 55%),
+      radial-gradient(800px 380px at 95% 0%, hsl(38 100% 96% / 0.35), transparent 50%),
+      linear-gradient(180deg, hsl(95 22% 96%), hsl(95 18% 95%));
   }
 
   .product-skin .surface-panel {
-    border-color: hsl(220 14% 91%);
-    background-image: linear-gradient(180deg, hsl(0 0% 100%), hsl(220 18% 99.5%));
+    border-color: hsl(100 14% 87%);
+    background-image: linear-gradient(180deg, hsl(0 0% 100%), hsl(95 12% 98.5%));
     box-shadow:
-      0 1px 2px hsl(220 40% 2% / 0.04),
-      0 8px 24px -12px hsl(220 30% 12% / 0.1);
+      0 1px 2px hsl(100 30% 2% / 0.05),
+      0 10px 28px -12px hsl(100 20% 12% / 0.18);
   }
 
   .product-skin .surface-card {
-    background-image: linear-gradient(180deg, hsl(0 0% 100%), hsl(0 0% 100%));
+    background-image: linear-gradient(180deg, hsl(0 0% 100%), hsl(95 12% 98.5%));
   }
 
   .product-skin .surface-toolbar {
-    background-image: linear-gradient(90deg, hsl(0 0% 100%), hsl(0 0% 100%));
+    background-image: linear-gradient(90deg, hsl(0 0% 100%), hsl(95 10% 98.5%));
   }
 
   .product-skin .metric-tile {
-    background-image: linear-gradient(180deg, hsl(0 0% 100%), hsl(0 0% 100%));
+    background-image: linear-gradient(180deg, hsl(0 0% 100%), hsl(95 12% 98.5%));
   }
 
   .product-skin .dash-header-bar {
-    background-image: linear-gradient(180deg, hsl(0 0% 100% / 0.92), hsl(220 20% 99% / 0.88));
+    background-image: linear-gradient(180deg, hsl(95 15% 97.5% / 0.93), hsl(95 12% 97% / 0.88));
   }
 
   .product-skin .glass-nav {
-    background-image: linear-gradient(90deg, hsl(0 0% 100%), hsl(0 0% 100%));
+    background-image: linear-gradient(90deg, hsl(0 0% 100%), hsl(95 10% 98.5%));
   }
 
   .product-skin .chip-control:hover {
@@ -770,6 +770,11 @@
 
   .animate-fade-in-backdrop {
     animation: fade-in-backdrop 0.18s ease-out both;
+  }
+
+  @keyframes shimmer {
+    0%   { background-position: 200% center; }
+    100% { background-position: -200% center; }
   }
 }
 

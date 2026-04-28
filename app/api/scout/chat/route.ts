@@ -84,6 +84,10 @@ const INTERVIEW_PREP_HINT_RE =
 
 const COMPARE_RECOMMENDATIONS = new Set<ScoutCompareRecommendation>(["Best", "Good", "Risky", "Skip"])
 
+function scoutError(status: number, message: string) {
+  return NextResponse.json({ ok: false, status, message, error: message }, { status })
+}
+
 function parseCompareResponse(
   raw: unknown,
   knownJobIds: Set<string>
@@ -294,6 +298,44 @@ function stripMarkdownCodeFence(text: string): string {
   return text
 }
 
+function extractJsonObjectCandidate(text: string): string | null {
+  const cleaned = stripMarkdownCodeFence(text.trim())
+  const start = cleaned.indexOf("{")
+  if (start === -1) return null
+
+  let depth = 0
+  let inString = false
+  let escaped = false
+
+  for (let i = start; i < cleaned.length; i++) {
+    const char = cleaned[i]
+
+    if (escaped) {
+      escaped = false
+      continue
+    }
+
+    if (char === "\\") {
+      escaped = inString
+      continue
+    }
+
+    if (char === '"') {
+      inString = !inString
+      continue
+    }
+
+    if (inString) continue
+
+    if (char === "{") depth += 1
+    if (char === "}") depth -= 1
+
+    if (depth === 0) return cleaned.slice(start, i + 1)
+  }
+
+  return null
+}
+
 /**
  * Attempt to build a validated ScoutResponse from a parsed JSON object.
  * Returns null if the shape is wrong.
@@ -379,6 +421,10 @@ function parseScoutResponse(
   const candidates = stripped.startsWith("{")
     ? [stripped]
     : [stripped, "{" + stripped]
+  const extractedJson = extractJsonObjectCandidate(trimmed)
+  if (extractedJson && !candidates.includes(extractedJson)) {
+    candidates.unshift(extractedJson)
+  }
 
   for (const candidate of candidates) {
     try {
@@ -611,7 +657,7 @@ export async function POST(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   
   if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    return scoutError(401, "Unauthorized")
   }
 
   if (!anthropic) {
@@ -649,10 +695,7 @@ export async function POST(request: NextRequest) {
   const mode = detectScoutMode(body.pagePath ?? "")
 
   if (!userMessage) {
-    return NextResponse.json(
-      { error: "message is required" },
-      { status: 400 }
-    )
+    return scoutError(400, "message is required")
   }
 
   if (DESTRUCTIVE_COMMAND_RE.test(userMessage)) {
@@ -861,7 +904,8 @@ User Input: ${userMessage}`
     // Parse compare response from raw JSON (separate pass, avoids touching main parser)
     if (context.compareJobs && context.compareJobs.length >= 2) {
       try {
-        const rawJson = JSON.parse(stripMarkdownCodeFence(responseText.trim())) as Record<string, unknown>
+        const compareJson = extractJsonObjectCandidate(responseText) ?? stripMarkdownCodeFence(responseText.trim())
+        const rawJson = JSON.parse(compareJson) as Record<string, unknown>
         if (rawJson.compare) {
           const compareMap = new Map(context.compareJobs.map((cj) => [cj.id, cj]))
           const parsed = parseCompareResponse(rawJson.compare, knownIds.jobIds)
@@ -960,11 +1004,15 @@ User Input: ${userMessage}`
 
     return NextResponse.json(
       {
+        ok: false,
+        status: 500,
+        message: "I encountered an error processing your request. Please try again in a moment.",
         answer: "I encountered an error processing your request. Please try again in a moment.",
         recommendation: "Wait",
         actions: [],
         explanations: [],
-      } satisfies ScoutResponse,
+        error: error instanceof Error ? error.message : "Unknown error",
+      },
       { status: 500 }
     )
   }

@@ -22,6 +22,13 @@ import type {
   PageInfoResult,
   AutofillPreviewResult,
   AutofillExecuteResult,
+  TailorPreviewResult,
+  TailorApproveResult,
+  CoverLetterResult,
+  FillCoverLetterResult,
+  ExtensionTailorPreviewResponse,
+  ExtensionTailorApproveResponse,
+  ExtensionCoverLetterResponse,
 } from "./types"
 
 // ── Config ─────────────────────────────────────────────────────────────────────
@@ -32,6 +39,20 @@ const APP_ORIGINS = [
 ] as const
 
 const SESSION_COOKIE_NAME = "ho_session"
+
+// ── Session-scoped tailor state ────────────────────────────────────────────────
+// Cleared when background SW restarts; stored in chrome.storage.local for cross-popup persistence.
+// approvedResumeVersionId is written on approve and can be read by future autofill calls.
+
+let approvedResumeVersionId: string | null = null
+let approvedResumeId: string | null = null
+
+function persistTailorState() {
+  void chrome.storage.local.set({
+    approvedResumeVersionId,
+    approvedResumeId,
+  })
+}
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -64,18 +85,36 @@ async function apiRequest<T>(
   if (!token) return null
 
   try {
+    const headers: Record<string, string> = {
+      Accept: "application/json",
+      Authorization: `Bearer ${token}`,
+      "X-Hireoven-Extension": "1",
+    }
+    if (body !== undefined) {
+      headers["Content-Type"] = "application/json"
+    }
+
     const res = await fetch(`${origin}${path}`, {
       method,
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-        "X-Hireoven-Extension": "1",
-      },
+      headers,
       body: body !== undefined ? JSON.stringify(body) : undefined,
     })
-    if (!res.ok) return null
-    return (await res.json()) as T
-  } catch {
+    const contentType = res.headers.get("content-type") ?? ""
+    const payload = contentType.includes("application/json")
+      ? ((await res.json().catch(() => null)) as T | { message?: string; error?: string } | null)
+      : null
+    if (!res.ok) {
+      const message = payload && typeof payload === "object" && "message" in payload
+        ? payload.message
+        : payload && typeof payload === "object" && "error" in payload
+        ? payload.error
+        : `Request failed with status ${res.status}`
+      console.warn(`[Hireoven extension] ${method} ${path}: ${message}`)
+      return null
+    }
+    return payload as T
+  } catch (err) {
+    console.warn(`[Hireoven extension] ${method} ${path} failed`, err)
     return null
   }
 }
@@ -136,6 +175,18 @@ async function handleMessage(message: BackgroundMessage): Promise<BackgroundResp
 
     case "EXECUTE_AUTOFILL":
       return handleExecuteAutofill(message.fields)
+
+    case "GET_TAILOR_PREVIEW":
+      return handleGetTailorPreview(message.jobId, message.resumeId, message.ats)
+
+    case "APPROVE_TAILORED_RESUME":
+      return handleApproveTailoredResume(message.jobId, message.resumeId, message.ats)
+
+    case "GENERATE_COVER_LETTER":
+      return handleGenerateCoverLetter(message.jobId, message.resumeId, message.ats)
+
+    case "FILL_COVER_LETTER":
+      return handleFillCoverLetter(message.elementRef, message.text)
   }
 }
 
@@ -267,6 +318,138 @@ async function handleExecuteAutofill(
     type: "AUTOFILL_EXECUTE_RESULT",
     filledCount: response.filledCount,
     skippedCount: response.skippedCount,
+  }
+}
+
+// ── Tailor preview ────────────────────────────────────────────────────────────
+
+async function handleGetTailorPreview(
+  jobId: string,
+  resumeId?: string,
+  ats?: string
+): Promise<TailorPreviewResult> {
+  const emptyError = (msg: string): TailorPreviewResult => ({
+    type: "TAILOR_PREVIEW_RESULT",
+    status: "missing_job_context",
+    summary: msg,
+    atsTip: null,
+    atsName: null,
+    resumeId: null,
+    resumeName: null,
+    jobTitle: null,
+    company: null,
+    matchScore: null,
+    changesPreview: [],
+    error: msg,
+  })
+
+  const data = await apiRequest<ExtensionTailorPreviewResponse>(
+    "POST",
+    "/api/extension/resume/tailor-preview",
+    { jobId, resumeId, ats }
+  )
+
+  if (!data) return emptyError("Could not reach Hireoven. Check your connection.")
+
+  return {
+    type: "TAILOR_PREVIEW_RESULT",
+    status: data.status,
+    summary: data.summary,
+    atsTip: data.atsTip ?? null,
+    atsName: data.atsName ?? null,
+    resumeId: data.resumeId,
+    resumeName: data.resumeName,
+    jobTitle: data.jobTitle,
+    company: data.company,
+    matchScore: data.matchScore,
+    changesPreview: data.changesPreview,
+  }
+}
+
+async function handleApproveTailoredResume(
+  jobId: string,
+  resumeId?: string,
+  ats?: string
+): Promise<TailorApproveResult> {
+  const data = await apiRequest<ExtensionTailorApproveResponse>(
+    "POST",
+    "/api/extension/resume/tailor-approve",
+    { jobId, resumeId, ats }
+  )
+
+  if (!data) {
+    return {
+      type: "TAILOR_APPROVE_RESULT",
+      success: false,
+      error: "Could not create tailored resume version. Check your connection.",
+    }
+  }
+
+  // Store approved version in session state and persist to local storage
+  approvedResumeVersionId = data.versionId
+  approvedResumeId = data.resumeId
+  persistTailorState()
+
+  return {
+    type: "TAILOR_APPROVE_RESULT",
+    success: true,
+    versionId: data.versionId,
+    versionName: data.versionName,
+    resumeId: data.resumeId,
+    matchScore: data.matchScore,
+  }
+}
+
+// ── Cover letter ──────────────────────────────────────────────────────────────
+
+async function handleGenerateCoverLetter(
+  jobId: string,
+  resumeId?: string,
+  ats?: string
+): Promise<CoverLetterResult> {
+  const data = await apiRequest<ExtensionCoverLetterResponse>(
+    "POST",
+    "/api/extension/cover-letter/generate",
+    { jobId, resumeId, ats }
+  )
+
+  if (!data) {
+    return {
+      type: "COVER_LETTER_RESULT",
+      success: false,
+      error: "Could not generate cover letter. Check your connection and try again.",
+    }
+  }
+
+  return {
+    type: "COVER_LETTER_RESULT",
+    success: true,
+    coverLetter: data.coverLetter,
+    jobTitle: data.jobTitle,
+    company: data.company,
+    source: data.source,
+  }
+}
+
+async function handleFillCoverLetter(
+  elementRef: string,
+  text: string
+): Promise<FillCoverLetterResult> {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+  if (!tab?.id) return { type: "FILL_COVER_LETTER_RESULT", success: false }
+
+  try {
+    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["dist/content.js"] })
+  } catch { /* already injected */ }
+
+  const response = await queryContentScript(tab.id, {
+    type: "FILL_FORM_FIELDS",
+    fields: [{ elementRef, value: text }],
+  } as ContentMessage)
+
+  return {
+    type: "FILL_COVER_LETTER_RESULT",
+    success: response?.type === "FORM_FILLED" && response.filledCount > 0,
   }
 }
 

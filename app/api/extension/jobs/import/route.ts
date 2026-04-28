@@ -16,8 +16,10 @@ import { NextResponse } from "next/server"
 import { randomUUID } from "crypto"
 import { getPostgresPool } from "@/lib/postgres/server"
 import {
+  extensionError,
   extensionCorsHeaders,
   handleExtensionPreflight,
+  readExtensionJsonBody,
   requireExtensionAuth,
 } from "@/lib/extension/auth"
 
@@ -106,11 +108,12 @@ export async function POST(request: Request) {
   const [user, errResponse] = await requireExtensionAuth(request)
   if (errResponse) return errResponse
 
-  const body: ImportJobBody = await request.json().catch(() => ({}))
+  const [body, bodyError] = await readExtensionJsonBody<ImportJobBody>(request)
+  if (bodyError) return bodyError
   const jobUrl = body.url?.trim()
 
   if (!jobUrl) {
-    return NextResponse.json({ error: "url is required" }, { status: 400, headers })
+    return extensionError(request, 400, "url is required", { headers })
   }
 
   const pool = getPostgresPool()
@@ -273,10 +276,7 @@ export async function POST(request: Request) {
     )
   } catch (err) {
     console.error("[extension/jobs/import] application insert failed:", err)
-    return NextResponse.json(
-      { error: "Failed to save job. Please try again." },
-      { status: 500, headers }
-    )
+    return extensionError(request, 500, "Failed to save job. Please try again.", { headers })
   }
 
   return NextResponse.json(

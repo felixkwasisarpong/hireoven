@@ -11,6 +11,8 @@ import { NextResponse } from "next/server"
 import { verifySessionJwt } from "@/lib/auth/jwt"
 import type { AppSessionClaims } from "@/lib/auth/jwt"
 
+type JsonInit = ResponseInit & { headers?: HeadersInit }
+
 // ── Origin helpers ─────────────────────────────────────────────────────────────
 
 /** Return true if the origin looks like a chrome-extension:// URL. */
@@ -28,8 +30,54 @@ export function extensionCorsHeaders(origin: string | null): Record<string, stri
   return {
     "Access-Control-Allow-Origin": allowedOrigin,
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Hireoven-Extension",
+    "Access-Control-Allow-Headers": "Accept, Content-Type, Authorization, X-Hireoven-Extension",
+    "Access-Control-Allow-Credentials": "true",
     "Access-Control-Max-Age": "86400",
+    "Vary": "Origin",
+  }
+}
+
+export function extensionJson<T>(request: Request, body: T, init: JsonInit = {}): NextResponse<T> {
+  const origin = request.headers.get("origin")
+  return NextResponse.json(body, {
+    ...init,
+    headers: {
+      ...extensionCorsHeaders(origin),
+      ...Object.fromEntries(new Headers(init.headers ?? {}).entries()),
+    },
+  })
+}
+
+export function extensionError(
+  request: Request,
+  status: number,
+  message: string,
+  init: JsonInit = {}
+): NextResponse {
+  return extensionJson(
+    request,
+    {
+      ok: false,
+      status,
+      message,
+      error: message,
+    },
+    { ...init, status }
+  )
+}
+
+export async function readExtensionJsonBody<T extends object>(
+  request: Request
+): Promise<[T, null] | [null, NextResponse]> {
+  const contentType = request.headers.get("content-type") ?? ""
+  if (!contentType.toLowerCase().includes("application/json")) {
+    return [null, extensionError(request, 415, "Content-Type must be application/json")]
+  }
+
+  try {
+    return [(await request.json()) as T, null]
+  } catch {
+    return [null, extensionError(request, 400, "Request body must be valid JSON")]
   }
 }
 
@@ -66,10 +114,7 @@ export async function requireExtensionAuth(
   if (!user) {
     return [
       null,
-      NextResponse.json(
-        { authenticated: false, error: "Unauthorized" },
-        { status: 401, headers: extensionCorsHeaders(origin) }
-      ),
+      extensionError(request, 401, "Unauthorized", { headers: extensionCorsHeaders(origin) }),
     ]
   }
   return [user, null]

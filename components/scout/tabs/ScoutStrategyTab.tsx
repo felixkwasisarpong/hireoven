@@ -156,6 +156,7 @@ export function ScoutStrategyTab({
       const response = await fetch("/api/scout/strategy", {
         method: "POST",
         headers: {
+          Accept: "application/json",
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ pagePath: "/dashboard/scout" }),
@@ -165,7 +166,8 @@ export function ScoutStrategyTab({
         throw new Error("Strategy generation failed")
       }
 
-      const data = await response.json()
+      const data = await response.json().catch(() => null)
+      if (!data) throw new Error("Strategy generation returned an invalid response")
       const strategy = data.strategy ?? data
 
       setGeneratedStrategy({

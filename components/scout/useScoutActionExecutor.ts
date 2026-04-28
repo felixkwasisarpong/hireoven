@@ -411,6 +411,43 @@ export function useScoutActionExecutor() {
           break
         }
 
+        case "PREPARE_TAILORED_AUTOFILL": {
+          // Phase 3 — guide user through tailor-before-autofill flow.
+          // Scout cannot control the extension directly; we show a step-by-step instruction.
+          const { jobId, url, hint } = action.payload
+
+          if (hint) {
+            showFeedback(hint)
+            break
+          }
+
+          // If a jobId is provided, navigate to the job page so the user can open the
+          // extension there to save + tailor before going to the application form.
+          if (jobId) {
+            router.push(`/dashboard/jobs/${jobId}`)
+          }
+
+          showConfirmation(
+            {
+              title: "Tailor Resume & Autofill — 4 steps",
+              details: [
+                jobId
+                  ? "1. Navigate to the employer's application form"
+                  : url
+                  ? `1. Open the application form: ${url}`
+                  : "1. Open the application form in your browser",
+                "2. Click the Hireoven icon → \"Tailor Resume\"",
+                "3. Review suggested changes and click \"Use this tailored resume\"",
+                "4. Click \"Preview Autofill\" → \"Autofill this application\"",
+              ],
+              canUndo: false,
+            },
+            undefined,
+            12000
+          )
+          break
+        }
+
         case "SET_FOCUS_MODE": {
           const previousSearchParams = searchParams.toString()
           const previousUrl = `${pathname}${previousSearchParams ? `?${previousSearchParams}` : ""}`

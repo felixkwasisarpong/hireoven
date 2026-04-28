@@ -228,6 +228,190 @@
         margin-top: 2px;
       }
 
+      /* ── Tailor section ─────────────────────────────────────── */
+      .tailor-section {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .tailor-header {
+        font-size: 12px;
+        font-weight: 700;
+        color: #0f172a;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+      }
+      .tailor-header svg { color: #f97316; }
+      .tailor-summary {
+        font-size: 11.5px;
+        color: #475569;
+        line-height: 1.5;
+      }
+      .tailor-score {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 8px;
+        border-radius: 99px;
+        font-size: 11px;
+        font-weight: 700;
+        background: #fff7ed;
+        border: 1px solid #fed7aa;
+        color: #c2410c;
+        align-self: flex-start;
+      }
+      .tailor-score.good { background: #f0fdf4; border-color: #bbf7d0; color: #15803d; }
+      .tailor-score.ok   { background: #fefce8; border-color: #fde68a; color: #92400e; }
+      .change-list {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        max-height: 160px;
+        overflow-y: auto;
+        scrollbar-width: thin;
+        scrollbar-color: #e2e8f0 transparent;
+        padding-right: 2px;
+      }
+      .change-list::-webkit-scrollbar { width: 4px; }
+      .change-list::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 99px; }
+      .change-row {
+        border: 1px solid #e2e8f0;
+        border-radius: 7px;
+        padding: 7px 9px;
+        font-size: 11.5px;
+        background: #f8fafc;
+      }
+      .change-section-badge {
+        display: inline-block;
+        font-size: 9.5px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        padding: 1px 5px;
+        border-radius: 4px;
+        margin-bottom: 4px;
+      }
+      .change-section-badge.summary    { background: #ede9fe; color: #6d28d9; }
+      .change-section-badge.skills     { background: #d1fae5; color: #065f46; }
+      .change-section-badge.experience { background: #dbeafe; color: #1d4ed8; }
+      .change-section-badge.ats-tip    { background: #fef3c7; color: #92400e; }
+      .change-after {
+        font-weight: 600;
+        color: #0f172a;
+        margin-top: 2px;
+      }
+      .change-before {
+        color: #94a3b8;
+        text-decoration: line-through;
+        font-size: 11px;
+        margin-top: 1px;
+      }
+      .change-reason {
+        color: #64748b;
+        font-size: 11px;
+        margin-top: 2px;
+      }
+      .tailor-approved {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        background: #f0fdf4;
+        border: 1px solid #bbf7d0;
+        border-radius: 8px;
+        padding: 9px 12px;
+        font-size: 12px;
+      }
+      .tailor-approved svg { flex-shrink: 0; margin-top: 1px; color: #15803d; }
+      .tailor-approved-title { font-weight: 700; color: #15803d; }
+      .tailor-approved-sub { font-size: 11px; color: #166534; margin-top: 2px; }
+      .tailor-divider {
+        height: 1px;
+        background: #f1f5f9;
+        margin: 2px 0;
+      }
+
+      /* ── Documents section ──────────────────────────────────── */
+      .docs-section {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .docs-header {
+        font-size: 11px;
+        font-weight: 700;
+        color: #64748b;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .docs-list {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .doc-row {
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 9px 12px;
+        font-size: 12px;
+        background: #f8fafc;
+      }
+      .doc-row-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      .doc-label { font-weight: 600; color: #1e293b; flex: 1; min-width: 0; }
+      .doc-label-sub { font-size: 10.5px; color: #94a3b8; margin-top: 1px; }
+      .doc-action {
+        flex-shrink: 0;
+        font-size: 11px;
+        font-weight: 600;
+        padding: 3px 9px;
+        border-radius: 5px;
+        border: none;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        text-decoration: none;
+      }
+      .doc-action:disabled { opacity: 0.5; cursor: not-allowed; }
+      .doc-action-blue  { background: #dbeafe; color: #1d4ed8; }
+      .doc-action-blue:hover:not(:disabled)  { background: #bfdbfe; }
+      .doc-action-green { background: #dcfce7; color: #15803d; }
+      .doc-action-green:hover:not(:disabled) { background: #bbf7d0; }
+      .doc-cover-wrap {
+        margin-top: 8px;
+      }
+      .doc-cover-textarea {
+        width: 100%;
+        height: 90px;
+        font-size: 11px;
+        line-height: 1.5;
+        resize: vertical;
+        border: 1px solid #e2e8f0;
+        border-radius: 5px;
+        padding: 6px 8px;
+        color: #0f172a;
+        background: #fff;
+        font-family: inherit;
+      }
+      .doc-cover-actions { display: flex; gap: 5px; margin-top: 5px; }
+      .doc-btn {
+        font-size: 11px; font-weight: 600; padding: 3px 9px;
+        border-radius: 5px; cursor: pointer; border: 1px solid #e2e8f0;
+      }
+      .doc-btn-copy  { background: #f1f5f9; color: #475569; }
+      .doc-btn-copy:hover  { background: #e2e8f0; }
+      .doc-btn-fill  { background: #dbeafe; color: #1d4ed8; border-color: #bfdbfe; }
+      .doc-btn-fill:hover  { background: #bfdbfe; }
+      .doc-loading { font-size: 11px; color: #94a3b8; margin-top: 6px; }
+
       /* ── Error / info text ──────────────────────────────────── */
       .info-text {
         font-size: 11.5px;
@@ -365,6 +549,29 @@
       <!-- Autofill section (application form mode) -->
       <div id="autofill-section" class="autofill-section hidden">
 
+        <!-- Tailor resume section -->
+        <div id="tailor-section" class="tailor-section hidden">
+          <div class="tailor-header">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+            </svg>
+            Tailor resume for this job
+          </div>
+          <p id="tailor-summary" class="tailor-summary hidden"></p>
+          <div id="tailor-score" class="tailor-score hidden"></div>
+          <div id="change-list" class="change-list hidden"></div>
+          <div id="tailor-approved" class="tailor-approved hidden">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M20 6L9 17l-5-5"/>
+            </svg>
+            <div>
+              <div class="tailor-approved-title" id="tailor-approved-title">Resume tailored!</div>
+              <div class="tailor-approved-sub" id="tailor-approved-sub">New version saved. Attach manually if needed.</div>
+            </div>
+          </div>
+          <div id="tailor-divider" class="tailor-divider hidden"></div>
+        </div>
+
         <!-- Stats -->
         <div id="autofill-stats" class="autofill-stats hidden">
           <span id="stat-detected" class="stat-chip detected hidden"></span>
@@ -383,6 +590,18 @@
 
         <!-- Field preview list -->
         <div id="field-list" class="field-list hidden"></div>
+
+        <!-- Documents section (resume + cover letter) -->
+        <div id="docs-section" class="docs-section hidden">
+          <div class="docs-header">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+            </svg>
+            Documents needed
+          </div>
+          <div id="docs-list" class="docs-list"></div>
+        </div>
 
         <!-- Autofill confirmation -->
         <div id="autofill-confirm" class="autofill-confirm hidden">
@@ -427,6 +646,12 @@
 
       <!-- Save button (after scan, job listing detected) -->
       <button id="save-btn" class="bar-btn bar-btn-primary hidden" disabled>Save job</button>
+
+      <!-- Tailor Resume button (application form detected, before preview) -->
+      <button id="tailor-btn" class="bar-btn bar-btn-secondary hidden">Tailor Resume</button>
+
+      <!-- Approve tailored resume button (after preview loaded) -->
+      <button id="approve-tailor-btn" class="bar-btn bar-btn-secondary hidden" disabled>Use tailored resume</button>
 
       <!-- Preview Autofill button (application form detected, before preview) -->
       <button id="preview-autofill-btn" class="bar-btn bar-btn-primary hidden">Preview Autofill</button>

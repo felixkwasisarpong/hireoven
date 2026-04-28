@@ -1,4 +1,5 @@
 import crypto from "crypto"
+import pLimit from "p-limit"
 import { NextRequest, NextResponse } from "next/server"
 import { crawlCareersPage, type CrawlTarget } from "@/lib/crawler"
 import { persistCrawlJobs } from "@/lib/crawler/persist"
@@ -14,6 +15,10 @@ const COMPANY_RETRY_BASE_DELAY_MS = Math.max(
   Number.parseInt(process.env.CRAWLER_COMPANY_RETRY_BASE_DELAY_MS ?? "1200", 10)
 )
 const MAX_ERROR_MESSAGE_LENGTH = 800
+const CRAWLER_COMPANY_CONCURRENCY = Math.max(
+  1,
+  Number.parseInt(process.env.CRAWLER_COMPANY_CONCURRENCY ?? "4", 10)
+)
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -185,8 +190,9 @@ export async function GET(request: NextRequest) {
 
     companiesCount = companies.length
 
+    const limitCompany = pLimit(CRAWLER_COMPANY_CONCURRENCY)
     const results = await Promise.all(
-      companies.map(async (company) => {
+      companies.map((company) => limitCompany(async () => {
         const companyStartedAt = Date.now()
         const target: CrawlTarget = {
           id: company.id,
@@ -214,6 +220,9 @@ export async function GET(request: NextRequest) {
                 companyId: company.id,
                 crawledAt: crawlResult.crawledAt,
                 jobs: crawlResult.jobs,
+                sourceUrl: crawlResult.url,
+                normalizedUrl: crawlResult.normalizedUrl,
+                diagnostics: crawlResult.diagnostics,
               })
               break
             } catch (error) {
@@ -271,7 +280,7 @@ export async function GET(request: NextRequest) {
             error: errorMessage,
           }
         }
-      })
+      }))
     )
 
     succeeded = results.filter((r) => r.status === "fulfilled").length

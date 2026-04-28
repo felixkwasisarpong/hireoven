@@ -249,7 +249,7 @@ export function ScoutAIStrategyPanel({ triggerRef }: ScoutAIStrategyPanelProps =
     try {
       const res = await fetch("/api/scout/strategy", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { Accept: "application/json", "Content-Type": "application/json" },
         body: JSON.stringify({ pagePath: "/dashboard/scout" }),
         cache: "no-store",
       })

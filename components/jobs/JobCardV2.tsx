@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
-import { Bookmark, ExternalLink, Gem, MapPin, TrendingUp, Trophy } from "lucide-react"
+import { useEffect, useMemo, useRef, useState } from "react"
+import { Bookmark, ExternalLink, Gem, MapPin, Sparkles, TrendingUp, Trophy } from "lucide-react"
 import dynamic from "next/dynamic"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -35,6 +35,36 @@ import {
   shouldShowSalaryStrongBadge,
 } from "@/lib/jobs/job-card-badges"
 import type { JobMatchScore, JobWithCompany, JobWithMatchScore } from "@/types"
+
+// ── Scout hover cache (per page session, keyed by job ID) ────────────────────
+type ScoutHoverEntry = { take: string; recommendation: string }
+const scoutHoverCache = new Map<string, ScoutHoverEntry>()
+
+const VERDICT_CONFIG = {
+  Apply:   { label: "Apply",         cls: "bg-emerald-500/25 text-emerald-300 border-emerald-500/30" },
+  Skip:    { label: "Skip",          cls: "bg-red-500/25    text-red-300    border-red-500/30"     },
+  Improve: { label: "Improve First", cls: "bg-amber-500/25  text-amber-300  border-amber-500/30"   },
+  Wait:    { label: "Hold Off",      cls: "bg-blue-500/25   text-blue-300   border-blue-500/30"    },
+  Explore: { label: "Worth a Look",  cls: "bg-orange-500/25 text-orange-300 border-orange-500/30"  },
+} as const
+
+function useTypewriter(text: string, speed = 14): string {
+  const [out, setOut] = useState("")
+  useEffect(() => {
+    setOut("")
+    if (!text) return
+    let i = 0
+    const id = setInterval(() => {
+      i++
+      setOut(text.slice(0, i))
+      if (i >= text.length) clearInterval(id)
+    }, speed)
+    return () => clearInterval(id)
+  }, [text, speed])
+  return out
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 function normalizeScore(value: unknown) {
   const numeric = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN
@@ -80,6 +110,50 @@ function MatchRing({ score, loading }: { score: number | null; loading: boolean 
   )
 }
 
+function OverlayRing({
+  score,
+  label,
+  color,
+  delay,
+  visible,
+}: {
+  score: number
+  label: string
+  color: string
+  delay: number
+  visible: boolean
+}) {
+  const r = 27
+  const c = 2 * Math.PI * r
+  const filled = (Math.min(100, Math.max(0, score)) / 100) * c
+  return (
+    <div
+      className="flex flex-col items-center gap-1.5"
+      style={{
+        opacity: visible ? 1 : 0,
+        transform: visible ? "scale(1)" : "scale(0.7)",
+        transition: `opacity 240ms ${delay}ms ease-out, transform 240ms ${delay}ms cubic-bezier(0.34,1.56,0.64,1)`,
+      }}
+    >
+      <div className="relative flex h-[68px] w-[68px] items-center justify-center">
+        <svg width="68" height="68" viewBox="0 0 68 68" className="-rotate-90" aria-hidden>
+          <circle cx="34" cy="34" r={r} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="4.5" />
+          <circle
+            cx="34" cy="34" r={r}
+            fill="none"
+            stroke={color}
+            strokeWidth="4.5"
+            strokeDasharray={`${filled} ${c}`}
+            strokeLinecap="round"
+          />
+        </svg>
+        <span className="absolute text-[13px] font-bold text-white">{score}%</span>
+      </div>
+      <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-400">{label}</span>
+    </div>
+  )
+}
+
 const QuickAnalysisDrawer = dynamic(() => import("@/components/resume/QuickAnalysisDrawer"), { ssr: false })
 const H1BPredictionDrawer = dynamic(() => import("@/components/h1b/H1BPredictionDrawer"), { ssr: false })
 
@@ -112,6 +186,13 @@ export default function JobCardV2({
   const [saving, setSaving] = useState(false)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [h1bDrawerOpen, setH1bDrawerOpen] = useState(false)
+
+  // Scout hover state
+  const [isHovered, setIsHovered] = useState(false)
+  const [scoutLoading, setScoutLoading] = useState(false)
+  const [scoutEntry, setScoutEntry] = useState<ScoutHoverEntry | null>(null)
+  const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const abortRef = useRef<AbortController | null>(null)
 
   const { attachRef: h1bAttachRef, prediction: h1bPrediction, isLoading: h1bIsLoading } = useH1BPrediction(job.id)
   const now = nowProp ?? Date.now()
@@ -152,6 +233,39 @@ export default function JobCardV2({
   const showSalaryStrong = shouldShowSalaryStrongBadge(evidenceFacts)
   const salaryStrongTitle = useMemo(() => buildSalaryStrongBadgeTitle(evidenceFacts), [evidenceFacts])
 
+  // Scout overlay chips — only things NOT already shown by the rings
+  const overlayInsights = useMemo(() => {
+    const items: string[] = []
+    if (showSalaryStrong) items.push("Salary transparent role")
+    if (topApplicantBadge.show) items.push("Top applicant opportunity")
+    if (intel.lcaSalary?.comparisonLabel && intel.lcaSalary.comparisonLabel !== "Unknown")
+      items.push(`LCA: ${intel.lcaSalary.comparisonLabel}`)
+    if (intel.applicationVerdict) items.push(`Status: ${intel.applicationVerdict}`)
+    if (items.length === 0 && job.location?.trim()) items.push(job.location.trim())
+    return items.slice(0, 3)
+  }, [showSalaryStrong, topApplicantBadge.show, intel, job.location])
+
+  // Verdict badge: live from Scout API, falls back to score-derived while loading
+  const staticVerdictLabel =
+    score === null ? "Explore Role" : score >= 80 ? "Strong Match" : score >= 60 ? "Good Fit" : "Worth a Look"
+  const staticVerdictCls =
+    score === null
+      ? "bg-white/10 text-slate-300 border-white/20"
+      : score >= 80
+        ? "bg-emerald-500/25 text-emerald-300 border-emerald-500/30"
+        : score >= 60
+          ? "bg-blue-500/25 text-blue-300 border-blue-500/30"
+          : "bg-orange-500/25 text-orange-300 border-orange-500/30"
+
+  const liveVerdict = scoutEntry
+    ? VERDICT_CONFIG[scoutEntry.recommendation as keyof typeof VERDICT_CONFIG]
+    : null
+  const verdictLabel = liveVerdict?.label ?? staticVerdictLabel
+  const verdictCls   = liveVerdict?.cls   ?? staticVerdictCls
+
+  const typedText = useTypewriter(scoutEntry?.take ?? "")
+  const isTyping  = !!scoutEntry && typedText.length < scoutEntry.take.length
+
   useEffect(() => {
     let cancelled = false
     void fetchJobSavedState(job.id).then((isSaved) => {
@@ -170,10 +284,60 @@ export default function JobCardV2({
   }, [job.id])
 
   useEffect(() => {
-    // The whole card navigates via router.push, so Next cannot infer a prefetch
-    // like it can for <Link>. Prefetch visible feed cards to reduce click delay.
     if (analysisIndex < 10) router.prefetch(detailHref)
   }, [analysisIndex, detailHref, router])
+
+  function handleMouseEnter() {
+    router.prefetch(detailHref)
+    setIsHovered(true)
+
+    const cached = scoutHoverCache.get(job.id)
+    if (cached) {
+      setScoutEntry(cached)
+      return
+    }
+
+    hoverTimerRef.current = setTimeout(() => {
+      setScoutLoading(true)
+      const ctrl = new AbortController()
+      abortRef.current = ctrl
+
+      void fetch("/api/scout/chat", {
+        method: "POST",
+        headers: { Accept: "application/json", "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: "In one sharp sentence, should I apply to this job? Be direct and specific — mention the role or company.",
+          jobId: job.id,
+          pagePath: "/dashboard/jobs",
+        }),
+        signal: ctrl.signal,
+      })
+        .then(async (res) => {
+          if (!res.ok) return
+          const data = await res.json().catch(() => null) as { answer?: string; recommendation?: string } | null
+          if (data?.answer) {
+            const entry: ScoutHoverEntry = {
+              take: data.answer,
+              recommendation: data.recommendation ?? "Explore",
+            }
+            scoutHoverCache.set(job.id, entry)
+            setScoutEntry(entry)
+          }
+        })
+        .catch(() => { /* abort or network error — silently ignore */ })
+        .finally(() => setScoutLoading(false))
+    }, 400)
+  }
+
+  function handleMouseLeave() {
+    setIsHovered(false)
+    if (hoverTimerRef.current) {
+      clearTimeout(hoverTimerRef.current)
+      hoverTimerRef.current = null
+    }
+    abortRef.current?.abort()
+    abortRef.current = null
+  }
 
   async function handleSave(e: React.MouseEvent) {
     e.stopPropagation()
@@ -227,7 +391,7 @@ export default function JobCardV2({
         ref={h1bAttachRef as (node: HTMLElement | null) => void}
         role="button"
         tabIndex={0}
-        onMouseEnter={() => router.prefetch(detailHref)}
+        onMouseLeave={handleMouseLeave}
         onFocus={() => router.prefetch(detailHref)}
         onClick={() => router.push(detailHref)}
         onKeyDown={(e) => {
@@ -236,12 +400,154 @@ export default function JobCardV2({
             router.push(detailHref)
           }
         }}
-        className="group relative flex cursor-pointer flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.04)] transition-all hover:border-orange-200 hover:shadow-[0_2px_8px_rgba(234,88,12,0.08)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-600/20"
+        className="group relative flex cursor-pointer flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.04)] transition-all hover:border-orange-200 hover:shadow-[0_4px_20px_rgba(234,88,12,0.12)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-600/20"
       >
-        {/* Left accent bar — premium hover signal */}
+        {/* Left accent bar */}
         <div className="absolute inset-y-0 left-0 w-0.5 bg-orange-600 opacity-0 transition-opacity group-hover:opacity-100" aria-hidden />
 
-        {/* Header */}
+        {/* Header area — overlay lives here, trigger is the strip below */}
+        <div className="relative">
+          {/* ── Scout Hover Overlay ──────────────────────────────────────── */}
+          <div
+            aria-hidden
+            onClick={(e) => e.stopPropagation()}
+            className={cn(
+              "absolute inset-0 z-10 flex flex-col rounded-t-xl overflow-hidden",
+              "bg-gradient-to-br from-[#071d38] via-[#0a2748] to-[#0d3460]",
+              "transition-all duration-[220ms] ease-out",
+              isHovered
+                ? "opacity-100 translate-y-0 pointer-events-auto"
+                : "opacity-0 translate-y-2 pointer-events-none select-none"
+            )}
+          >
+            {/* Shimmer bar */}
+            <div
+              className="absolute left-0 top-0 h-[2px] bg-gradient-to-r from-[#ea580c] via-[#f97316] to-[#fdba74] transition-[width] duration-[380ms] ease-out"
+              style={{ width: isHovered ? "100%" : "0%" }}
+            />
+
+            <div className="flex h-full flex-col gap-2.5 p-4 pt-5">
+
+              {/* Scout label + verdict */}
+              <div className="flex shrink-0 items-center gap-2">
+                <span
+                  className={cn(
+                    "inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-[#ea580c]",
+                    scoutLoading && "animate-pulse shadow-[0_0_14px_rgba(234,88,12,0.7)]"
+                  )}
+                >
+                  <Sparkles className="h-3 w-3 text-white" />
+                </span>
+                <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#ea580c]">Scout</span>
+                <span className={cn("ml-auto shrink-0 rounded-full border px-2.5 py-0.5 text-[10px] font-bold transition-all duration-300", verdictCls)}>
+                  {verdictLabel}
+                </span>
+              </div>
+
+              {/* Main body: left text, right rings */}
+              <div className="flex min-h-0 flex-1 gap-4">
+
+                {/* Left — text content, never expands card width */}
+                <div className="flex min-w-0 flex-1 flex-col justify-between overflow-hidden">
+
+                  {/* AI take or fallback chips */}
+                  <div
+                    style={{ opacity: isHovered ? 1 : 0, transition: "opacity 180ms 200ms ease-out" }}
+                  >
+                    {scoutLoading ? (
+                      <div className="flex items-center gap-1.5">
+                        {[0, 120, 240].map((d) => (
+                          <span key={d} className="h-1.5 w-1.5 rounded-full bg-slate-400 animate-bounce" style={{ animationDelay: `${d}ms` }} />
+                        ))}
+                        <span className="ml-1 text-[11px] text-slate-400">Scout is reading…</span>
+                      </div>
+                    ) : typedText ? (
+                      <p className="line-clamp-4 text-[12.5px] leading-relaxed text-slate-200">
+                        {typedText}
+                        {isTyping && (
+                          <span className="ml-[1px] inline-block h-[13px] w-[2px] translate-y-[1px] animate-pulse bg-[#ea580c] align-middle" />
+                        )}
+                      </p>
+                    ) : overlayInsights.length > 0 ? (
+                      <div className="flex flex-col gap-1.5">
+                        {overlayInsights.map((insight, i) => (
+                          <div
+                            key={insight}
+                            className="flex items-center gap-2"
+                            style={{
+                              opacity: isHovered ? 1 : 0,
+                              transform: isHovered ? "translateX(0)" : "translateX(-10px)",
+                              transition: `opacity 180ms ${120 + i * 50}ms ease-out, transform 180ms ${120 + i * 50}ms ease-out`,
+                            }}
+                          >
+                            <span className="h-1 w-1 shrink-0 rounded-full bg-[#ea580c]" />
+                            <span className="truncate text-[12px] text-slate-300">{insight}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+
+                  {/* Ask Scout */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      window.dispatchEvent(
+                        new CustomEvent("scout:open-with-job", {
+                          detail: {
+                            jobId: job.id,
+                            prefillQuery: `Should I apply to ${displayTitle} at ${companyName}?`,
+                          },
+                        })
+                      )
+                    }}
+                    style={{
+                      opacity: isHovered ? 1 : 0,
+                      transform: isHovered ? "translateY(0)" : "translateY(6px)",
+                      transition: "opacity 200ms 220ms ease-out, transform 200ms 220ms ease-out",
+                    }}
+                    className="mt-3 flex items-center justify-center gap-1.5 rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-[11px] font-semibold text-white transition hover:bg-white/20 active:scale-95"
+                  >
+                    <Sparkles className="h-3 w-3 shrink-0" />
+                    Ask Scout
+                  </button>
+                </div>
+
+                {/* Right — rings side by side */}
+                <div className="flex shrink-0 flex-row items-center justify-center gap-5">
+                  {score !== null && (
+                    <OverlayRing
+                      score={score}
+                      label="Match"
+                      color={score >= 80 ? "#10b981" : score >= 60 ? "#3b82f6" : "#f97316"}
+                      delay={60}
+                      visible={isHovered}
+                    />
+                  )}
+                  {showVisaSignals && intel.visa?.visaFitScore != null ? (
+                    <OverlayRing
+                      score={intel.visa.visaFitScore}
+                      label="Visa Fit"
+                      color={intel.visa.visaFitScore >= 70 ? "#10b981" : intel.visa.visaFitScore >= 40 ? "#3b82f6" : "#f97316"}
+                      delay={140}
+                      visible={isHovered}
+                    />
+                  ) : intel.ghostJobRisk ? (
+                    <OverlayRing
+                      score={intel.ghostJobRisk.riskLevel === "low" ? 85 : intel.ghostJobRisk.riskLevel === "medium" ? 50 : 18}
+                      label="Freshness"
+                      color={intel.ghostJobRisk.riskLevel === "low" ? "#10b981" : intel.ghostJobRisk.riskLevel === "medium" ? "#f59e0b" : "#ef4444"}
+                      delay={140}
+                      visible={isHovered}
+                    />
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          </div>
+          {/* ── End Scout Overlay ──────────────────────────────────────────── */}
+
         <div className="flex min-w-0 flex-col gap-4 px-5 pt-5 pb-4 sm:flex-row sm:items-start">
           <CompanyLogo
             companyName={companyName}
@@ -284,7 +590,7 @@ export default function JobCardV2({
               <PostedTimeLabel firstDetectedAt={job.first_detected_at} now={now} />
             </div>
 
-            {/* Meta row: clean location + evidence chips for type / mode / salary */}
+            {/* Meta row */}
             <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
               {job.location?.trim() && (
                 <span className="inline-flex items-center gap-1 text-[12.5px] text-slate-500">
@@ -297,7 +603,7 @@ export default function JobCardV2({
               )}
             </div>
 
-            {/* Top applicant opportunity — surfaced here so it gets seen */}
+            {/* Top applicant opportunity */}
             {topApplicantBadge.show && (
               <div className="mt-2.5">
                 <span
@@ -324,10 +630,12 @@ export default function JobCardV2({
             </button>
           )}
         </div>
+        </div>{/* end relative header wrapper */}
 
-        {/* Intelligence strip */}
+        {/* Intelligence strip — hover here triggers the Scout overlay above */}
         <div
           className="flex min-h-[40px] flex-wrap items-center gap-2 border-t border-slate-100 bg-white px-5 py-2.5"
+          onMouseEnter={handleMouseEnter}
           onClick={(e) => e.stopPropagation()}
         >
           {/* Salary strong */}

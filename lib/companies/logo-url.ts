@@ -1,9 +1,12 @@
+import { isAtsDomain } from "@/lib/companies/ats-domains"
+
 /**
  * Default company logo image URLs derived from email-style domain (e.g. stripe.com).
  * Used to backfill companies.logo_url when you don't store your own assets.
  */
 
 export type LogoProvider =
+  | "logo-dev"
   | "icon-horse"
   | "clearbit"
   | "unavatar"
@@ -93,9 +96,10 @@ const GOOGLE_FAVICON_URL_OVERRIDES: Record<string, string> = {
  */
 export function companyLogoUrlFromDomain(
   domain: string,
-  provider: LogoProvider = "google-favicon"
+  provider: LogoProvider = "logo-dev"
 ): string {
   const normalized = normalizeCompanyDomain(domain)
+  if (!normalized || isAtsDomain(normalized)) return ""
   const localLogo = LOCAL_LOGO_URL_BY_DOMAIN[normalized]
   if (localLogo) return localLogo
 
@@ -109,6 +113,16 @@ export function companyLogoUrlFromDomain(
   if (!d) return ""
 
   switch (provider) {
+    case "logo-dev": {
+      const token =
+        process.env.NEXT_PUBLIC_LOGO_DEV_TOKEN ??
+        process.env.LOGO_DEV_TOKEN ??
+        ""
+      if (token) {
+        return `https://img.logo.dev/${encodeURIComponent(d)}?token=${encodeURIComponent(token)}`
+      }
+      return `https://www.google.com/s2/favicons?sz=128&domain=${encodeURIComponent(d)}`
+    }
     case "icon-horse":
       return `https://icon.horse/icon/${encodeURIComponent(d)}`
     case "clearbit":

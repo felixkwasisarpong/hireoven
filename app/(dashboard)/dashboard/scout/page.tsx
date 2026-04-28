@@ -160,7 +160,10 @@ export default function ScoutPage() {
     let cancelled = false
     setStrategyLoading(true)
     setStrategyError(null)
-    fetch("/api/scout/strategy", { cache: "no-store" })
+    fetch("/api/scout/strategy", {
+      cache: "no-store",
+      headers: { Accept: "application/json" },
+    })
       .then(async (res) => {
         const data = (await res.json().catch(() => ({}))) as
           | { board?: ScoutStrategyBoard; error?: string }
@@ -179,7 +182,10 @@ export default function ScoutPage() {
   useEffect(() => {
     let cancelled = false
     setBehaviorLoading(true)
-    fetch("/api/scout/behavior", { cache: "no-store" })
+    fetch("/api/scout/behavior", {
+      cache: "no-store",
+      headers: { Accept: "application/json" },
+    })
       .then(async (res) => {
         const data = (await res.json().catch(() => ({}))) as
           | { signals?: ScoutBehaviorSignals | null }
@@ -210,7 +216,7 @@ export default function ScoutPage() {
     try {
       const res = await fetch("/api/scout/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { Accept: "application/json", "Content-Type": "application/json" },
         body: JSON.stringify({
           message: trimmedQuery,
           pagePath: pathname,
@@ -265,7 +271,7 @@ export default function ScoutPage() {
     try {
       const res = await fetch("/api/scout/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { Accept: "application/json", "Content-Type": "application/json" },
         body: JSON.stringify({
           message,
           pagePath: pathname,

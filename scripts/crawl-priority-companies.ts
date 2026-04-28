@@ -80,6 +80,9 @@ async function main() {
         companyId: co.id,
         crawledAt: result.crawledAt,
         jobs: result.jobs,
+        sourceUrl: result.url,
+        normalizedUrl: result.normalizedUrl,
+        diagnostics: result.diagnostics,
       })
 
       console.log(

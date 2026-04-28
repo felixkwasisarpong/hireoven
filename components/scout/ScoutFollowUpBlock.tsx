@@ -58,7 +58,7 @@ export function ScoutFollowUpBlock({ app }: Props) {
     try {
       const res = await fetch("/api/scout/follow-up", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { Accept: "application/json", "Content-Type": "application/json" },
         body: JSON.stringify({ applicationId: app.id }),
       })
       const data = (await res.json().catch(() => null)) as APIResponse | null

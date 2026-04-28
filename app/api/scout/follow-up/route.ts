@@ -19,6 +19,10 @@ const anthropic = process.env.ANTHROPIC_API_KEY
 const MODEL = "claude-haiku-4-5"
 const MODEL_PRICING = { inputPerMillion: 0.25, outputPerMillion: 1.25 }
 
+function scoutError(status: number, message: string) {
+  return NextResponse.json({ ok: false, status, message, error: message }, { status })
+}
+
 const DRAFT_SYSTEM = `You are helping a job candidate write a short, professional follow-up message.
 
 Rules:
@@ -97,17 +101,14 @@ export async function POST(request: NextRequest) {
   } = await supabase.auth.getUser()
 
   if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    return scoutError(401, "Unauthorized")
   }
 
   const body = (await request.json().catch(() => ({}))) as RequestBody
   const { applicationId, jobId } = body
 
   if (!applicationId && !jobId) {
-    return NextResponse.json(
-      { error: "applicationId or jobId is required" },
-      { status: 400 }
-    )
+    return scoutError(400, "applicationId or jobId is required")
   }
 
   // Fetch application — must belong to user
@@ -136,11 +137,11 @@ export async function POST(request: NextRequest) {
     }
   } catch (err) {
     console.error("[follow-up] DB query error:", err)
-    return NextResponse.json({ error: "Failed to fetch application." }, { status: 500 })
+    return scoutError(500, "Failed to fetch application.")
   }
 
   if (!app) {
-    return NextResponse.json({ error: "Application not found." }, { status: 404 })
+    return scoutError(404, "Application not found.")
   }
 
   const analysis = analyzeFollowUp(app)

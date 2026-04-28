@@ -11,6 +11,7 @@ import {
   normalizeJobApplyUrl,
 } from "@/lib/jobs/description"
 import { normalizeCrawlerJobForPersistence } from "@/lib/jobs/normalization"
+import { normalizeGreenhouseBoardUrl } from "@/lib/companies/greenhouse-url"
 import type { EmploymentType, SeniorityLevel } from "@/types"
 
 const DESCRIPTION_FETCH_CONCURRENCY = Math.max(
@@ -39,6 +40,20 @@ const JOB_DEACTIVATE_BATCH_SIZE = Math.max(
   25,
   Number.parseInt(process.env.CRAWLER_JOB_DEACTIVATE_BATCH_SIZE ?? "250", 10)
 )
+
+function shouldMarkGreenhouseManualReview(args: {
+  atsType: string | null
+  careersUrl: string | null
+  crawledJobCount: number
+}) {
+  const atsType = args.atsType?.toLowerCase() ?? ""
+  const careersUrl = args.careersUrl ?? ""
+  if (atsType !== "greenhouse" && !careersUrl.toLowerCase().includes("greenhouse.io")) {
+    return false
+  }
+  const normalized = normalizeGreenhouseBoardUrl(careersUrl)
+  return args.crawledJobCount === 0 && Boolean(normalized.boardToken)
+}
 
 const JOB_INSERT_COLUMNS = [
   "company_id",
@@ -229,13 +244,38 @@ export async function persistCrawlJobs({
   companyId,
   crawledAt,
   jobs,
+  sourceUrl,
+  normalizedUrl,
+  diagnostics,
 }: {
   companyId: string
   crawledAt: Date
   jobs: RawJob[]
+  sourceUrl?: string
+  normalizedUrl?: string
+  diagnostics?: Array<{
+    provider?: string | null
+    originalUrl: string
+    normalizedUrl: string | null
+    statusCode: number | null
+    reason: string
+    crawlResult?: string
+    errorReason?: string | null
+    retryCount?: number
+    fallbackUsed?: string | null
+  }>
 }) {
   const pool = getPostgresPool()
   const crawledAtIso = crawledAt.toISOString()
+  const companyResult = await pool.query<{
+    careers_url: string | null
+    ats_type: string | null
+    raw_ats_config: Record<string, unknown> | null
+  }>(
+    `SELECT careers_url, ats_type, raw_ats_config FROM companies WHERE id = $1`,
+    [companyId]
+  )
+  const company = companyResult.rows[0] ?? null
   const normalized = jobs
     .map((job) => ({
       ...job,
@@ -497,12 +537,57 @@ export async function persistCrawlJobs({
     [companyId]
   )
   const activeCount = Number(countResult.rows[0]?.count ?? 0)
+  const greenhouseManualReview = shouldMarkGreenhouseManualReview({
+    atsType: company?.ats_type ?? null,
+    careersUrl: sourceUrl ?? company?.careers_url ?? null,
+    crawledJobCount: dedupedJobs.length,
+  })
+  const currentRawAtsConfig = company?.raw_ats_config ?? {}
+  const diagnosticsForStorage = diagnostics && diagnostics.length > 0
+    ? {
+        provider: diagnostics.find((entry) => entry.provider)?.provider ?? null,
+        original_url: sourceUrl ?? company?.careers_url ?? null,
+        normalized_url: normalizedUrl ?? null,
+        attempts: diagnostics,
+        checked_at: crawledAtIso,
+        result: dedupedJobs.length > 0 ? "success" : "empty",
+        jobs_found: dedupedJobs.length,
+      }
+    : null
+  const greenhouseDiagnostics = diagnostics?.filter((entry) => {
+    const provider = entry.provider?.toLowerCase()
+    return (
+      provider === "greenhouse" ||
+      entry.originalUrl.toLowerCase().includes("greenhouse.io") ||
+      (entry.normalizedUrl ?? "").toLowerCase().includes("greenhouse.io")
+    )
+  })
+  const nextRawAtsConfig = {
+    ...currentRawAtsConfig,
+    crawl_diagnostics: diagnosticsForStorage
+      ? diagnosticsForStorage
+      : (currentRawAtsConfig as Record<string, unknown>).crawl_diagnostics,
+    greenhouse_crawl: greenhouseDiagnostics && greenhouseDiagnostics.length > 0
+      ? {
+          original_url: sourceUrl ?? company?.careers_url ?? null,
+          normalized_url: normalizedUrl ?? null,
+          attempts: greenhouseDiagnostics,
+          checked_at: crawledAtIso,
+        }
+      : (currentRawAtsConfig as Record<string, unknown>).greenhouse_crawl,
+    needs_manual_review: greenhouseManualReview
+      ? true
+      : (currentRawAtsConfig as Record<string, unknown>).needs_manual_review ?? false,
+    manual_review_reason: greenhouseManualReview
+      ? "greenhouse_stable_board_resolution_failed"
+      : (currentRawAtsConfig as Record<string, unknown>).manual_review_reason ?? null,
+  }
 
   await pool.query(
     `UPDATE companies
-     SET last_crawled_at = $1, job_count = $2, updated_at = $3
+     SET last_crawled_at = $1, job_count = $2, updated_at = $3, raw_ats_config = $5::jsonb
      WHERE id = $4`,
-    [crawledAtIso, activeCount, crawledAtIso, companyId]
+    [crawledAtIso, activeCount, crawledAtIso, companyId, JSON.stringify(nextRawAtsConfig)]
   )
 
   // Auto-detect and backfill ATS type from the apply URLs we just crawled.

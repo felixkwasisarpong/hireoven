@@ -23,6 +23,10 @@ const anthropic = process.env.ANTHROPIC_API_KEY
 const MODEL = "claude-sonnet-4-6"
 const MODEL_PRICING = { inputPerMillion: 3, outputPerMillion: 15 }
 
+function scoutError(status: number, message: string) {
+  return NextResponse.json({ ok: false, status, message, error: message }, { status })
+}
+
 /** GET /api/scout/strategy — returns the deterministic strategy board */
 export async function GET() {
   const supabase = await createClient()
@@ -31,7 +35,7 @@ export async function GET() {
   } = await supabase.auth.getUser()
 
   if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    return scoutError(401, "Unauthorized")
   }
 
   try {
@@ -39,10 +43,7 @@ export async function GET() {
     return NextResponse.json({ board })
   } catch (error) {
     console.error("Scout strategy board error:", error)
-    return NextResponse.json(
-      { error: "Unable to load Scout strategy board right now." },
-      { status: 500 }
-    )
+    return scoutError(500, "Unable to load Scout strategy board right now.")
   }
 }
 
@@ -54,14 +55,11 @@ export async function POST(request: NextRequest) {
   } = await supabase.auth.getUser()
 
   if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    return scoutError(401, "Unauthorized")
   }
 
   if (!anthropic) {
-    return NextResponse.json(
-      { error: "AI service is not configured." },
-      { status: 503 }
-    )
+    return scoutError(503, "AI service is not configured.")
   }
 
   const { plan } = await getUserPlan(request)
@@ -117,10 +115,7 @@ export async function POST(request: NextRequest) {
         "\nRaw Claude response:\n",
         responseText.slice(0, 2000)
       )
-      return NextResponse.json(
-        { error: "Scout was unable to generate a strategy right now. Please try again." },
-        { status: 500 }
-      )
+      return scoutError(500, "Scout was unable to generate a strategy right now. Please try again.")
     }
 
     // ── Apply gating for free users ──
@@ -149,9 +144,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ strategy, gated: null, isPremium: true })
   } catch (error) {
     console.error("Scout AI strategy error:", error)
-    return NextResponse.json(
-      { error: "Unable to generate strategy right now. Please try again." },
-      { status: 500 }
-    )
+    return scoutError(500, "Unable to generate strategy right now. Please try again.")
   }
 }

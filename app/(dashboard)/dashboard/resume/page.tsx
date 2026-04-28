@@ -827,6 +827,7 @@ function CleanOverviewPanel({ onTabChange }: { onTabChange: (tab: TabId) => void
               { id: "qa-refine", tab: "edit" as TabId, icon: Wand2, bg: "bg-orange-50", ic: "text-orange-500", label: "Refine" },
               { id: "qa-ats", tab: "edit" as TabId, icon: Shield, bg: "bg-indigo-50", ic: "text-[#5B4DFF]", label: "Optimize ATS" },
               { id: "qa-version", kind: "save-version" as const, icon: FileText, bg: "bg-blue-50", ic: "text-blue-600", label: "New Version" },
+              { id: "qa-upload", kind: "upload" as const, icon: Upload, bg: "bg-emerald-50", ic: "text-emerald-600", label: "Upload Resume" },
             ].map((item) => {
               const Icon = item.icon
               const content = (
@@ -848,6 +849,18 @@ function CleanOverviewPanel({ onTabChange }: { onTabChange: (tab: TabId) => void
                   >
                     {content}
                   </SaveResumeVersionAction>
+                )
+              }
+
+              if ("kind" in item && item.kind === "upload") {
+                return (
+                  <ResumeUploadAction
+                    key={item.id}
+                    className="flex h-[76px] flex-col items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white text-center transition hover:border-emerald-200 hover:bg-emerald-50/20"
+                    onUploaded={refreshHubData}
+                  >
+                    {content}
+                  </ResumeUploadAction>
                 )
               }
 
@@ -1224,6 +1237,7 @@ function OverviewPanel({ onTabChange }: { onTabChange: (tab: TabId) => void }) {
               { id: "ov-qa-refine", tab: "edit"     as TabId, icon: TrendingUp,bg: "bg-orange-50", ic: "text-orange-500", label: "Refine"  },
               { id: "ov-qa-ats", tab: "edit"     as TabId, icon: Shield,    bg: "bg-amber-50",  ic: "text-amber-600",  label: "Optimize ATS" },
               { id: "ov-qa-ver", kind: "save-version" as const, icon: Layers, bg: "bg-indigo-50", ic: "text-indigo-600", label: "New Version" },
+              { id: "ov-qa-upload", kind: "upload" as const, icon: Upload, bg: "bg-teal-50", ic: "text-teal-600", label: "Upload Resume" },
             ].map((item) => {
               const Icon = item.icon
               if ("kind" in item && item.kind === "save-version") {
@@ -1239,6 +1253,20 @@ function OverviewPanel({ onTabChange }: { onTabChange: (tab: TabId) => void }) {
                     </div>
                     <p className="text-[11.5px] font-medium leading-snug text-slate-700">{item.label}</p>
                   </SaveResumeVersionAction>
+                )
+              }
+              if ("kind" in item && item.kind === "upload") {
+                return (
+                  <ResumeUploadAction
+                    key={item.id}
+                    className="flex flex-col items-center gap-2 p-4 text-center transition hover:bg-slate-50"
+                    onUploaded={refreshHubData}
+                  >
+                    <div className={cn("flex h-11 w-11 items-center justify-center rounded-2xl", item.bg)}>
+                      <Icon className={cn("h-5 w-5", item.ic)} />
+                    </div>
+                    <p className="text-[11.5px] font-medium leading-snug text-slate-700">{item.label}</p>
+                  </ResumeUploadAction>
                 )
               }
               const { id, tab, label, bg, ic } = item

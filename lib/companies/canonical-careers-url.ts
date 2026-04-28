@@ -1,3 +1,5 @@
+import { normalizeAtsUrl } from "@/lib/companies/ats-url-normalization"
+
 /**
  * Derive a canonical public careers URL for a company row.
  * Prefer patterns learned from job apply URLs (most accurate), then ATS + identifier, then known domains.
@@ -46,43 +48,17 @@ export function inferCareersUrlFromApplyUrl(applyUrl: string): string | null {
     const u = new URL(applyUrl.trim())
     const host = u.hostname.toLowerCase()
 
-    if (host === "boards.greenhouse.io" || host.endsWith(".greenhouse.io")) {
-      const parts = u.pathname.split("/").filter(Boolean)
-      if (parts[0] && parts[0] !== "embed") {
-        return `https://${host}/${parts[0]}`
-      }
-    }
-
-    if (host === "jobs.lever.co") {
-      const parts = u.pathname.split("/").filter(Boolean)
-      if (parts[0]) {
-        return `https://jobs.lever.co/${parts[0]}`
-      }
-    }
-
-    if (host === "jobs.ashbyhq.com") {
-      const parts = u.pathname.split("/").filter(Boolean)
-      if (parts[0]) {
-        return `https://jobs.ashbyhq.com/${parts[0]}`
-      }
-    }
-
-    if (host.includes("myworkdayjobs.com")) {
-      return u.origin
-    }
-
-    if (host.endsWith("icims.com")) {
-      // Exclude the iCIMS marketing site — only return branded portals (*.icims.com with prefix).
-      if (host === "icims.com" || host === "www.icims.com") return null
-      return u.origin
-    }
-
-    if (host.endsWith("bamboohr.com") && u.pathname.includes("careers")) {
-      return `${u.origin}/careers`
-    }
-
-    if (host.endsWith("bamboohr.com")) {
-      return `${u.origin}/careers`
+    if (
+      host.endsWith("greenhouse.io") ||
+      host === "jobs.lever.co" ||
+      host === "jobs.ashbyhq.com" ||
+      host === "jobs.smartrecruiters.com" ||
+      host.includes("myworkdayjobs.com") ||
+      host.endsWith("icims.com") ||
+      host.endsWith("bamboohr.com")
+    ) {
+      const normalized = normalizeAtsUrl(u.toString())
+      return normalized.shouldPersist ? normalized.normalizedUrl : null
     }
 
     return null
@@ -131,6 +107,9 @@ function fromAtsIdentifier(c: CompanyUrlInput): string | null {
   if (ats === "ashby") {
     return `https://jobs.ashbyhq.com/${encodeURIComponent(slug)}`
   }
+  if (ats === "smartrecruiters") {
+    return `https://jobs.smartrecruiters.com/${encodeURIComponent(slug)}`
+  }
   if (ats === "bamboohr") {
     return `https://${encodeURIComponent(slug)}.bamboohr.com/careers`
   }
@@ -163,6 +142,14 @@ export function deriveCanonicalCareersUrl(
       const fixed = existing.startsWith("http://")
         ? `https://${existing.slice("http://".length)}`
         : existing
+      if (c.ats_type?.toLowerCase() === "greenhouse" || fixed.includes("greenhouse.io")) {
+        const normalized = normalizeAtsUrl(fixed, { atsType: c.ats_type })
+        if (normalized.shouldPersist) return normalized.normalizedUrl
+      }
+      const normalized = normalizeAtsUrl(fixed, { atsType: c.ats_type })
+      if (normalized.provider !== "custom" && normalized.shouldPersist) {
+        return normalized.normalizedUrl
+      }
       const u = new URL(fixed)
       if (u.protocol === "https:") {
         return stripTrailingSlashUnlessRoot(u.toString())

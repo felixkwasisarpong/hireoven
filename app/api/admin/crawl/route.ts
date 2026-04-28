@@ -204,6 +204,9 @@ export async function POST(request: NextRequest) {
               companyId: company.id,
               crawledAt: result.crawledAt,
               jobs: result.jobs,
+              sourceUrl: result.url,
+              normalizedUrl: result.normalizedUrl,
+              diagnostics: result.diagnostics,
             })
             break
           } catch (error) {

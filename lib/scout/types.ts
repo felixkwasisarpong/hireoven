@@ -16,6 +16,8 @@ export type ScoutActionType =
   | "OPEN_EXTENSION_BRIDGE"
   // Phase 2 — instructs user to open autofill preview for the current application page.
   | "OPEN_EXTENSION_AUTOFILL_PREVIEW"
+  // Phase 3 — full tailor-before-autofill flow: import job → tailor resume preview → autofill.
+  | "PREPARE_TAILORED_AUTOFILL"
 
 export const SCOUT_MODES = [
   "feed",
@@ -98,6 +100,20 @@ export type ScoutAction =
        */
       type: "OPEN_EXTENSION_AUTOFILL_PREVIEW"
       payload: { hint?: string; url?: string }
+      label?: string
+    }
+  | {
+      /**
+       * Phase 3 — full tailor-before-autofill flow.
+       * Instructs the user to:
+       *   1. Open the Hireoven extension on the job/application page.
+       *   2. Click "Tailor Resume" to preview AI-suggested changes.
+       *   3. Approve changes (creates a new resume version draft).
+       *   4. Then proceed with autofill.
+       * Scout cannot trigger the extension directly — this is a user-guided flow.
+       */
+      type: "PREPARE_TAILORED_AUTOFILL"
+      payload: { jobId?: string; url?: string; hint?: string }
       label?: string
     }
 

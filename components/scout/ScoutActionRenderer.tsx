@@ -12,6 +12,7 @@ import {
   Filter,
   Focus,
   HelpCircle,
+  Layers,
   Loader2,
   RefreshCw,
   RotateCcw,
@@ -41,6 +42,7 @@ const ACTION_STYLES: Record<string, { bg: string; text: string; icon: string; bo
   RESET_CONTEXT:           { bg: "bg-slate-50",   text: "text-slate-700",   icon: "text-slate-400",   border: "border-slate-200"  },
   OPEN_EXTENSION_BRIDGE:           { bg: "bg-violet-50",  text: "text-violet-700",  icon: "text-violet-500",  border: "border-violet-200" },
   OPEN_EXTENSION_AUTOFILL_PREVIEW: { bg: "bg-orange-50",  text: "text-orange-700",  icon: "text-orange-500",  border: "border-orange-200" },
+  PREPARE_TAILORED_AUTOFILL:       { bg: "bg-indigo-50",  text: "text-indigo-700",  icon: "text-indigo-500",  border: "border-indigo-200" },
 }
 
 function getActionIcon(action: ScoutAction) {
@@ -54,6 +56,7 @@ function getActionIcon(action: ScoutAction) {
     case "RESET_CONTEXT":           return <RefreshCw className="h-3.5 w-3.5" />
     case "OPEN_EXTENSION_BRIDGE":           return <Chrome className="h-3.5 w-3.5" />
     case "OPEN_EXTENSION_AUTOFILL_PREVIEW": return <Chrome className="h-3.5 w-3.5" />
+    case "PREPARE_TAILORED_AUTOFILL":       return <Layers className="h-3.5 w-3.5" />
     default:                                return <ExternalLink className="h-3.5 w-3.5" />
   }
 }

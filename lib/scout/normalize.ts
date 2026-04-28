@@ -29,31 +29,84 @@ function stripCodeFence(text: string): string {
   return text
 }
 
+function extractJsonObjectCandidate(text: string): string | null {
+  const cleaned = stripCodeFence(text.trim())
+  const start = cleaned.indexOf("{")
+  if (start === -1) return null
+
+  let depth = 0
+  let inString = false
+  let escaped = false
+
+  for (let i = start; i < cleaned.length; i++) {
+    const char = cleaned[i]
+
+    if (escaped) {
+      escaped = false
+      continue
+    }
+
+    if (char === "\\") {
+      escaped = inString
+      continue
+    }
+
+    if (char === '"') {
+      inString = !inString
+      continue
+    }
+
+    if (inString) continue
+
+    if (char === "{") depth += 1
+    if (char === "}") depth -= 1
+
+    if (depth === 0) return cleaned.slice(start, i + 1)
+  }
+
+  return null
+}
+
+function tryParseScoutResponseObject(text: string): Record<string, unknown> | null {
+  const candidate = extractJsonObjectCandidate(text)
+  if (!candidate) return null
+
+  try {
+    const parsed = JSON.parse(candidate) as unknown
+    if (typeof parsed === "object" && parsed !== null) {
+      return parsed as Record<string, unknown>
+    }
+  } catch {
+    // not valid JSON — leave as-is
+  }
+
+  return null
+}
+
 /**
  * Attempt to unwrap a double-encoded answer field.
  * Happens when the API-side JSON.parse fails (e.g. code-fence wrapper missed)
  * and the raw JSON string ends up stored in `answer`.
  */
 function tryUnwrapJsonAnswer(answer: string): Record<string, unknown> | null {
-  const cleaned = stripCodeFence(answer.trim())
-  if (!cleaned.startsWith("{")) return null
-  try {
-    const inner = JSON.parse(cleaned) as unknown
-    if (
-      typeof inner === "object" &&
-      inner !== null &&
-      "answer" in (inner as Record<string, unknown>) &&
-      "recommendation" in (inner as Record<string, unknown>)
-    ) {
-      return inner as Record<string, unknown>
-    }
-  } catch {
-    // not valid JSON — leave as-is
+  const inner = tryParseScoutResponseObject(answer)
+  if (
+    inner &&
+    "answer" in inner &&
+    "recommendation" in inner
+  ) {
+    return inner
   }
+
   return null
 }
 
 export function normalizeScoutResponse(raw: unknown): ScoutResponse {
+  if (typeof raw === "string") {
+    const parsed = tryParseScoutResponseObject(raw)
+    if (parsed) return normalizeScoutResponse(parsed)
+  }
+
   // Hard fallback for completely unexpected shapes
   if (typeof raw !== "object" || raw === null) {
     return {

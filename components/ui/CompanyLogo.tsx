@@ -7,6 +7,7 @@ import {
   companyLogoUrlFromDomain,
   normalizeCompanyDomain,
 } from "@/lib/companies/logo-url"
+import { isAtsDomain } from "@/lib/companies/ats-domains"
 
 const PLACEHOLDER_DOMAIN_RE = /\.(uscis-employer|lca-employer)$/i
 const MIN_CRISP_ICON_SIZE = 24
@@ -87,6 +88,11 @@ function isInvalidPlaceholderGoogleFaviconUrl(logoUrl: string | null | undefined
   }
 }
 
+function isInvalidAtsLogoUrl(logoUrl: string | null | undefined) {
+  const domain = domainFromLogoUrl(logoUrl)
+  return Boolean(domain && isAtsDomain(domain))
+}
+
 function buildLogoSources(logoUrl: string | null | undefined, domain: string | null | undefined) {
   const out: string[] = []
   const push = (u: string) => {
@@ -98,25 +104,27 @@ function buildLogoSources(logoUrl: string | null | undefined, domain: string | n
   const logoDomain = domainFromLogoUrl(logoUrl)
 
   const canonicalDomain = [logoDomain, explicitDomain].find(
-    (item) => item && !isPlaceholderDomain(item)
+    (item) => item && !isPlaceholderDomain(item) && !isAtsDomain(item)
   )
 
   const googleFaviconOnly = isGoogleFaviconUrl(logoUrl)
   const invalidPlaceholderFavicon = isInvalidPlaceholderGoogleFaviconUrl(logoUrl)
+  const invalidAtsLogo = isInvalidAtsLogoUrl(logoUrl)
   const isStaticAsset = !!logoUrl?.trim().startsWith("/")
   const isClearbit = isClearbitUrl(logoUrl)
 
   // Static assets and curated marks come first.
-  if (logoUrl && !invalidPlaceholderFavicon && isStaticAsset) push(logoUrl)
+  if (logoUrl && !invalidPlaceholderFavicon && !invalidAtsLogo && isStaticAsset) push(logoUrl)
 
   // Clearbit brand marks are high quality — try before the generic favicon fallback.
-  if (logoUrl && !invalidPlaceholderFavicon && isClearbit) push(logoUrl)
+  if (logoUrl && !invalidPlaceholderFavicon && !invalidAtsLogo && isClearbit) push(logoUrl)
 
   // Google favicon stored directly: push it before synthesising another.
-  if (logoUrl && !invalidPlaceholderFavicon && googleFaviconOnly) push(logoUrl)
+  if (logoUrl && !invalidPlaceholderFavicon && !invalidAtsLogo && googleFaviconOnly) push(logoUrl)
 
   if (canonicalDomain) {
     // Try brand/logo providers before generic favicon so we avoid initials.
+    push(companyLogoUrlFromDomain(canonicalDomain, "logo-dev"))
     push(companyLogoUrlFromDomain(canonicalDomain, "clearbit"))
     push(companyLogoUrlFromDomain(canonicalDomain, "unavatar"))
     push(companyLogoUrlFromDomain(canonicalDomain, "icon-horse"))
@@ -124,7 +132,14 @@ function buildLogoSources(logoUrl: string | null | undefined, domain: string | n
     push(companyLogoUrlFromDomain(canonicalDomain, "google-favicon"))
   }
 
-  if (logoUrl && !invalidPlaceholderFavicon && !isStaticAsset && !googleFaviconOnly && !isClearbit) {
+  if (
+    logoUrl &&
+    !invalidPlaceholderFavicon &&
+    !invalidAtsLogo &&
+    !isStaticAsset &&
+    !googleFaviconOnly &&
+    !isClearbit
+  ) {
     // Other legacy providers (unavatar, icon-horse, duckduckgo) as last resort.
     push(logoUrl)
   }
@@ -137,6 +152,7 @@ function shouldOptimizeWithNextImage(src: string): boolean {
   try {
     const { hostname } = new URL(src)
     if (hostname === "icon.horse") return true
+    if (hostname === "img.logo.dev") return true
     if (hostname === "logo.clearbit.com") return true
     if (hostname === "unavatar.io") return true
     if (hostname === "www.google.com" || hostname.endsWith(".gstatic.com")) return true
