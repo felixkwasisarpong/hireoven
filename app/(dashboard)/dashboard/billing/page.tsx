@@ -318,7 +318,7 @@ export default function BillingPage() {
             <button
               type="button"
               onClick={() => startCheckout("pro_international", resolvedInterval)}
-              className="flex-shrink-0 rounded-xl bg-[#1D4ED8] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1E40AF]"
+              className="flex-shrink-0 rounded-xl bg-[#ea580c] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#c2410c]"
             >
               Upgrade
             </button>
@@ -342,7 +342,7 @@ export default function BillingPage() {
                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide w-1/2">Feature</th>
                   <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wide">Free</th>
                   <th className="px-4 py-3 text-center text-xs font-semibold text-[#0369A1] uppercase tracking-wide bg-[#F0FDFA]/60">Pro</th>
-                  <th className="px-4 py-3 text-center text-xs font-semibold text-[#1D4ED8] uppercase tracking-wide">Pro Intl.</th>
+                  <th className="px-4 py-3 text-center text-xs font-semibold text-[#ea580c] uppercase tracking-wide">Pro Intl.</th>
                 </tr>
               </thead>
               <tbody>

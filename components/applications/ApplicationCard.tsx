@@ -88,7 +88,7 @@ export function ApplicationCard({ application, onOpen }: Props) {
           )}
         </div>
         {application.interviews?.length > 0 && (
-          <span className="rounded-full bg-violet-50 px-2 py-0.5 text-[10.5px] font-semibold text-violet-600">
+          <span className="rounded-full bg-orange-50 px-2 py-0.5 text-[10.5px] font-semibold text-orange-600">
             {application.interviews.length} round{application.interviews.length !== 1 ? "s" : ""}
           </span>
         )}

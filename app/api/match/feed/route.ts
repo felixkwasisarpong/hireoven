@@ -147,6 +147,7 @@ export async function GET(request: NextRequest) {
       user.id,
       jobs.map((job) => job.id)
     )
+    console.log(`[match/feed] scored ${scoreMap.size}/${jobs.length} jobs for user ${user.id}`)
   } catch (error) {
     console.error("Failed to score personalized feed", error)
   }

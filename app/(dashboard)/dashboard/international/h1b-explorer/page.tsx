@@ -462,7 +462,7 @@ export default function H1BExplorerPage() {
                                 </span>
                               )}
                               {employer.is_first_time_filer && (
-                                <span className="inline-flex rounded border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700">
+                                <span className="inline-flex rounded border border-orange-200 bg-orange-50 px-1.5 py-0.5 text-[10px] font-semibold text-orange-700">
                                   New filer
                                 </span>
                               )}

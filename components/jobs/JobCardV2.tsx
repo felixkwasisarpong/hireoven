@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { ExternalLink, Trophy } from "lucide-react"
+import { Bookmark, ExternalLink, Gem, MapPin, TrendingUp, Trophy } from "lucide-react"
 import dynamic from "next/dynamic"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -21,14 +21,12 @@ import {
 import { getJobIntelligence } from "@/lib/jobs/intelligence"
 import { useToast } from "@/components/ui/ToastProvider"
 import { cn } from "@/lib/utils"
-import { MatchBadge } from "@/components/jobs/card/MatchBadge"
 import { VisaFitBadge } from "@/components/jobs/card/VisaFitBadge"
 import { SalaryIntelBadge } from "@/components/jobs/card/SalaryIntelBadge"
 import { GhostRiskBadge } from "@/components/jobs/card/GhostRiskBadge"
 import { ApplicationVerdictPill } from "@/components/jobs/card/ApplicationVerdictPill"
 import { SponsorshipBlockerBadge } from "@/components/jobs/card/SponsorshipBlockerBadge"
 import { JobCardEvidenceFactChips } from "@/components/jobs/card/JobCardEvidenceFactChips"
-import { OpportunitySignalBadges } from "@/components/jobs/card/OpportunitySignalBadges"
 import { PostedTimeLabel } from "@/components/jobs/card/PostedTimeLabel"
 import { buildJobCardFactList, buildJobEvidenceFacts } from "@/lib/jobs/job-evidence-facts"
 import {
@@ -37,6 +35,50 @@ import {
   shouldShowSalaryStrongBadge,
 } from "@/lib/jobs/job-card-badges"
 import type { JobMatchScore, JobWithCompany, JobWithMatchScore } from "@/types"
+
+function normalizeScore(value: unknown) {
+  const numeric = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN
+  if (!Number.isFinite(numeric)) return null
+  return Math.min(100, Math.max(0, Math.round(numeric)))
+}
+
+function MatchRing({ score, loading }: { score: number | null; loading: boolean }) {
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center gap-0.5">
+        <div className="h-[52px] w-[52px] animate-pulse rounded-full bg-slate-100" />
+        <span className="text-[10px] text-slate-400">Scoring…</span>
+      </div>
+    )
+  }
+  if (score === null) return null
+
+  const radius = 20
+  const circumference = 2 * Math.PI * radius
+  const filled = (score / 100) * circumference
+  const color = score >= 80 ? "#059669" : score >= 60 ? "#2563EB" : "#EA580C"
+  const label = score >= 80 ? "Great Match" : score >= 60 ? "Good Match" : "Fair Match"
+
+  return (
+    <div className="flex flex-col items-center gap-0.5 shrink-0">
+      <div className="relative flex h-[52px] w-[52px] items-center justify-center">
+        <svg width="52" height="52" viewBox="0 0 52 52" className="-rotate-90" aria-hidden>
+          <circle cx="26" cy="26" r={radius} fill="none" stroke="#E2E8F0" strokeWidth="4" />
+          <circle
+            cx="26" cy="26" r={radius}
+            fill="none"
+            stroke={color}
+            strokeWidth="4"
+            strokeDasharray={`${filled} ${circumference}`}
+            strokeLinecap="round"
+          />
+        </svg>
+        <span className="absolute text-sm font-bold text-slate-900">{score}%</span>
+      </div>
+      <span className="text-[10px] font-semibold leading-none" style={{ color }}>{label}</span>
+    </div>
+  )
+}
 
 const QuickAnalysisDrawer = dynamic(() => import("@/components/resume/QuickAnalysisDrawer"), { ssr: false })
 const H1BPredictionDrawer = dynamic(() => import("@/components/h1b/H1BPredictionDrawer"), { ssr: false })
@@ -79,7 +121,7 @@ export default function JobCardV2({
   const showResumeSignal = typeof hasPrimaryResume === "boolean" ? hasPrimaryResume : Boolean(primaryResume)
 
   const resolvedMatchScore = matchScoreProp ?? ("match_score" in job ? (job.match_score ?? null) : null)
-  const score = resolvedMatchScore?.overall_score ?? null
+  const score = normalizeScore(resolvedMatchScore?.overall_score)
 
   const cardView = resolveJobCardView(job)
   const displayTitle = cardView.title
@@ -97,7 +139,12 @@ export default function JobCardV2({
     (employerLikelySponsorsH1b(job) || (!job.requires_authorization && effectiveEmployerSponsorshipScore(job) >= 55))
 
   const evidenceFacts = useMemo(() => buildJobEvidenceFacts(job), [job])
-  const jobCardFactItems = useMemo(() => buildJobCardFactList(evidenceFacts, 4), [evidenceFacts])
+  const jobCardFactItems = useMemo(
+    () => buildJobCardFactList(evidenceFacts, 4).filter(
+      (item) => item.id !== "location" || !job.location?.trim()
+    ),
+    [evidenceFacts, job.location]
+  )
   const topApplicantBadge = useMemo(
     () => buildTopApplicantOpportunityBadgeTitle(job, score),
     [job, score]
@@ -172,7 +219,7 @@ export default function JobCardV2({
     }
   }
 
-  const showScorePanel = showResumeSignal && (score !== null || isMatchScoreLoading)
+  const showScorePanel = score !== null || (showResumeSignal && isMatchScoreLoading)
 
   return (
     <>
@@ -189,26 +236,27 @@ export default function JobCardV2({
             router.push(detailHref)
           }
         }}
-        className="group relative flex cursor-pointer flex-col overflow-hidden rounded-xl border border-[#E5E7EB] bg-white transition-shadow hover:shadow-[0_2px_12px_rgba(15,23,42,0.07)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]/20"
+        className="group relative flex cursor-pointer flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.04)] transition-all hover:border-orange-200 hover:shadow-[0_2px_8px_rgba(234,88,12,0.08)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-600/20"
       >
-        {/* Header row */}
-        <div className="flex min-w-0 flex-col gap-5 p-5 sm:flex-row sm:items-start">
+        {/* Left accent bar — premium hover signal */}
+        <div className="absolute inset-y-0 left-0 w-0.5 bg-orange-600 opacity-0 transition-opacity group-hover:opacity-100" aria-hidden />
+
+        {/* Header */}
+        <div className="flex min-w-0 flex-col gap-4 px-5 pt-5 pb-4 sm:flex-row sm:items-start">
           <CompanyLogo
             companyName={companyName}
             domain={companyDomain}
             logoUrl={companyLogoUrl}
             priority={priorityLogo}
-            className="h-16 w-16 flex-shrink-0 rounded-none border-0 bg-transparent"
+            className="h-12 w-12 flex-shrink-0 rounded-xl border border-slate-100 bg-slate-50 object-contain p-1"
           />
 
           <div className="min-w-0 flex-1">
-            {/* Title + saved + top-match */}
-            <div className="flex items-start justify-between gap-2 pr-1">
-              <div className="min-w-0 flex-1">
-                <h3 className="line-clamp-2 text-[16px] font-bold leading-snug text-slate-900 transition-colors group-hover:text-[#2563EB]">
-                  {displayTitle}
-                </h3>
-              </div>
+            {/* Title + top-match badge */}
+            <div className="flex items-start justify-between gap-2">
+              <h3 className="line-clamp-2 text-[15px] font-bold leading-snug text-slate-950 transition-colors group-hover:text-orange-600">
+                {displayTitle}
+              </h3>
               {isBestMatch && (
                 <span className="mt-0.5 inline-flex flex-shrink-0 items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.08em] text-amber-900">
                   <span className="flex h-4 w-4 items-center justify-center rounded-full bg-amber-500 text-white">
@@ -219,13 +267,13 @@ export default function JobCardV2({
               )}
             </div>
 
-            {/* Company + posted */}
-            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+            {/* Company + posted time */}
+            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
               {companyProfileHref ? (
                 <Link
                   href={companyProfileHref}
                   onClick={(e) => e.stopPropagation()}
-                  className="text-[13px] font-semibold text-slate-700 transition hover:text-[#2563EB] hover:underline"
+                  className="text-[13px] font-semibold text-slate-700 transition hover:text-orange-600 hover:underline"
                 >
                   {companyName}
                 </Link>
@@ -236,45 +284,64 @@ export default function JobCardV2({
               <PostedTimeLabel firstDetectedAt={job.first_detected_at} now={now} />
             </div>
 
-            {jobCardFactItems.length > 0 && (
-              <div className="mt-2 text-[12.5px] text-slate-500">
+            {/* Meta row: clean location + evidence chips for type / mode / salary */}
+            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
+              {job.location?.trim() && (
+                <span className="inline-flex items-center gap-1 text-[12.5px] text-slate-500">
+                  <MapPin className="h-3 w-3 shrink-0 text-slate-400" aria-hidden />
+                  {job.location}
+                </span>
+              )}
+              {jobCardFactItems.length > 0 && (
                 <JobCardEvidenceFactChips jobId={job.id} items={jobCardFactItems} />
+              )}
+            </div>
+
+            {/* Top applicant opportunity — surfaced here so it gets seen */}
+            {topApplicantBadge.show && (
+              <div className="mt-2.5">
+                <span
+                  title={topApplicantBadge.title}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-orange-50 px-2.5 py-1 text-[11px] font-semibold text-orange-700"
+                >
+                  <Gem className="h-3 w-3 shrink-0" aria-hidden />
+                  Top Applicant Opportunity
+                </span>
               </div>
             )}
-
           </div>
 
-          {showResumeSignal && (
+          {/* Match ring */}
+          {showScorePanel && (
             <button
               type="button"
               onClick={openMatchDetail}
               disabled={score === null && !isMatchScoreLoading}
-              className="self-start rounded-2xl bg-white p-1.5 ring-1 ring-slate-100 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]/25 sm:ml-2"
+              className="flex flex-col items-center self-start rounded-xl p-1 transition hover:bg-orange-50/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-600/25 sm:ml-2"
               aria-label="View match score"
             >
-              <MatchBadge
-                score={score}
-                loading={isMatchScoreLoading && score === null}
-                compact
-                className="rounded-2xl px-2.5 py-1.5"
-              />
+              <MatchRing score={score} loading={isMatchScoreLoading && score === null} />
             </button>
           )}
         </div>
 
-        {/* Intelligence signal strip */}
+        {/* Intelligence strip */}
         <div
-          className="flex min-h-[36px] flex-wrap items-center gap-2 border-t border-[#F1F5F9] bg-[#FAFAFA] px-5 py-2.5"
+          className="flex min-h-[40px] flex-wrap items-center gap-2 border-t border-slate-100 bg-white px-5 py-2.5"
           onClick={(e) => e.stopPropagation()}
         >
-          <OpportunitySignalBadges
-            showTopApplicant={topApplicantBadge.show}
-            showSalaryStrong={showSalaryStrong}
-            topApplicantTitle={topApplicantBadge.title}
-            salaryStrongTitle={salaryStrongTitle}
-            className="bg-white/85 shadow-sm"
-          />
-          {/* Visa fit — only for international / enabled users */}
+          {/* Salary strong */}
+          {showSalaryStrong && (
+            <span
+              className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-900"
+              title={salaryStrongTitle}
+            >
+              <TrendingUp className="h-3 w-3 shrink-0" aria-hidden />
+              Salary strong
+            </span>
+          )}
+
+          {/* Visa fit */}
           {showVisaSignals && intel.visa?.label && (
             <button
               type="button"
@@ -282,28 +349,18 @@ export default function JobCardV2({
               className="focus-visible:outline-none"
               aria-label="Open visa fit details"
             >
-              <VisaFitBadge
-                label={intel.visa.label}
-                score={intel.visa.visaFitScore}
-                className="shadow-sm"
-              />
+              <VisaFitBadge label={intel.visa.label} score={intel.visa.visaFitScore} />
             </button>
           )}
 
-          {/* Sponsorship blocker — show always when detected */}
+          {/* Sponsorship blocker */}
           {hasBlocker && (
-            <SponsorshipBlockerBadge
-              blockers={intel.visa?.blockers}
-              className="bg-white/85 shadow-sm"
-            />
+            <SponsorshipBlockerBadge blockers={intel.visa?.blockers} />
           )}
 
           {/* LCA salary alignment */}
           {intel.lcaSalary?.comparisonLabel && intel.lcaSalary.comparisonLabel !== "Unknown" && (
-            <SalaryIntelBadge
-              comparisonLabel={intel.lcaSalary.comparisonLabel}
-              className="bg-white/85 shadow-sm"
-            />
+            <SalaryIntelBadge comparisonLabel={intel.lcaSalary.comparisonLabel} />
           )}
 
           {/* Ghost job risk */}
@@ -311,34 +368,30 @@ export default function JobCardV2({
             <GhostRiskBadge
               riskLevel={intel.ghostJobRisk.riskLevel}
               freshnessDays={intel.ghostJobRisk.freshnessDays}
-              className="bg-white/85 shadow-sm"
             />
           )}
 
           {/* Application verdict */}
           {intel.applicationVerdict && (
-            <ApplicationVerdictPill
-              verdict={intel.applicationVerdict}
-              className="shadow-sm"
-            />
+            <ApplicationVerdictPill verdict={intel.applicationVerdict} />
           )}
 
-          {/* Spacer + actions */}
-          <div className="ml-auto flex items-center gap-3">
-            {/* Save */}
+          {/* Actions */}
+          <div className="ml-auto flex items-center gap-2">
             <button
               type="button"
               onClick={handleSave}
               disabled={saving}
               aria-label={saved ? "Saved" : "Save job"}
               className={cn(
-                "text-[12px] font-semibold transition",
+                "inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[12px] font-semibold transition",
                 saved
-                  ? "text-amber-600 hover:text-amber-700"
-                  : "text-slate-500 hover:text-slate-900"
+                  ? "border-orange-200 bg-orange-50 text-orange-600"
+                  : "border-slate-200 text-slate-700 hover:border-orange-200 hover:bg-orange-50"
               )}
             >
-              {saved ? "Saved ✓" : "Save"}
+              <Bookmark className={cn("h-3.5 w-3.5", saved && "fill-current")} />
+              {saved ? "Saved" : "Save"}
             </button>
 
             <a
@@ -346,10 +399,10 @@ export default function JobCardV2({
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
-              className="inline-flex items-center gap-1 rounded-md bg-[#2563EB] px-3 py-1.5 text-[12px] font-semibold text-white transition hover:bg-[#1D4ED8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]/40"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-orange-600 px-4 py-1.5 text-[13px] font-semibold text-white transition hover:bg-orange-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-600/40"
             >
-              Apply
-              <ExternalLink className="h-3 w-3" strokeWidth={2.5} aria-hidden />
+              Apply Now
+              <ExternalLink className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
             </a>
           </div>
         </div>

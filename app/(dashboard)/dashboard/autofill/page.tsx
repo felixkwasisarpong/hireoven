@@ -521,7 +521,7 @@ export default function AutofillPage() {
           {needsSponsorship && (
             <div className="rounded-2xl border border-[#FFD2B8] bg-[#FFF7F2] p-4 space-y-3">
               <div>
-                <p className="text-sm font-semibold text-[#062246] mb-1">Your sponsorship statement</p>
+                <p className="text-sm font-semibold text-[#ea580c] mb-1">Your sponsorship statement</p>
                 <p className="text-xs text-[#FF5C18]">
                   This is what we&rsquo;ll use when applications ask about visa sponsorship.
                   Edit it to sound like you.

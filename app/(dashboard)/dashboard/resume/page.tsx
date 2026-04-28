@@ -83,7 +83,7 @@ function deriveStatus(resume: Resume): ResumeStatus {
 const STATUS_META: Record<ResumeStatus, { label: string; dot: string; text: string; bg: string; border: string }> = {
   active:   { label: "Active",   dot: "bg-blue-500",   text: "text-blue-700",   bg: "bg-blue-50",   border: "border-blue-200"   },
   draft:    { label: "Draft",    dot: "bg-slate-400",  text: "text-slate-600",  bg: "bg-slate-100", border: "border-slate-200"  },
-  tailored: { label: "Tailored", dot: "bg-violet-500", text: "text-violet-700", bg: "bg-violet-50", border: "border-violet-200" },
+  tailored: { label: "Tailored", dot: "bg-orange-500", text: "text-orange-700", bg: "bg-orange-50", border: "border-orange-200" },
   archived: { label: "Archived", dot: "bg-slate-300",  text: "text-slate-400",  bg: "bg-slate-50",  border: "border-slate-200"  },
 }
 
@@ -1109,8 +1109,8 @@ function OverviewPanel({ onTabChange }: { onTabChange: (tab: TabId) => void }) {
                     <CheckCircle2 className="h-5 w-5" style={{ color: ring }} />
                   </div>
                 ) : (
-                  <div className="flex h-14 w-14 items-center justify-center rounded-full border-4 border-violet-200 bg-violet-50">
-                    <History className="h-5 w-5 text-violet-600" />
+                  <div className="flex h-14 w-14 items-center justify-center rounded-full border-4 border-orange-200 bg-orange-50">
+                    <History className="h-5 w-5 text-orange-600" />
                   </div>
                 )}
                 <div>
@@ -1219,7 +1219,7 @@ function OverviewPanel({ onTabChange }: { onTabChange: (tab: TabId) => void }) {
           </div>
           <div className="grid grid-cols-3 divide-x divide-y divide-slate-100">
             {[
-              { id: "ov-qa-preview", tab: "generate" as TabId, icon: Sparkles,  bg: "bg-violet-50", ic: "text-violet-600", label: "Preview" },
+              { id: "ov-qa-preview", tab: "generate" as TabId, icon: Sparkles,  bg: "bg-orange-50", ic: "text-orange-600", label: "Preview" },
               { id: "ov-qa-tailor", tab: "tailor"   as TabId, icon: Target,    bg: "bg-emerald-50",ic: "text-emerald-600",label: "Tailor resume"   },
               { id: "ov-qa-refine", tab: "edit"     as TabId, icon: TrendingUp,bg: "bg-orange-50", ic: "text-orange-500", label: "Refine"  },
               { id: "ov-qa-ats", tab: "edit"     as TabId, icon: Shield,    bg: "bg-amber-50",  ic: "text-amber-600",  label: "Optimize ATS" },
@@ -1780,7 +1780,7 @@ function ResumeHubContent() {
             <TabRedirectPanel
               href="/dashboard/resume/studio?mode=preview"
               icon={Sparkles}
-              color="bg-violet-500"
+              color="bg-orange-500"
               title="Preview"
               description="Open the studio in preview mode to see your resume, edit sections, and export."
             />

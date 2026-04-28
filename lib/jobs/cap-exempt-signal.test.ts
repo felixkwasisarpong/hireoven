@@ -64,6 +64,7 @@ test("capExemptDetectionToSignal uses possible language", () => {
   )
 
   assert.equal(signal.isLikelyCapExempt, true)
-  assert.match(signal.summary ?? "", /Possible cap-exempt pathway/)
+  assert.ok(signal.likelihood === "likely" || signal.likelihood === "possible")
+  assert.match(signal.summary ?? "", /cap-exempt likelihood/i)
   assert.doesNotMatch(signal.summary ?? "", /guaranteed/i)
 })

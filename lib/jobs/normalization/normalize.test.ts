@@ -216,3 +216,15 @@ test("adaptRawCrawlerJob keeps generic sources unstructured", () => {
   assert.equal((adapted.structuredSections.responsibilities ?? []).length, 0)
   assert.equal((adapted.structuredSections.requirements ?? []).length, 0)
 })
+
+test("adaptRawCrawlerJob trims crawler CTA noise from location", () => {
+  const adapted = adaptRawCrawlerJob({
+    externalId: "url:pyramid-1",
+    title: "AI Data Engineer",
+    url: "https://jobs.example.com/openings/ai-data-engineer",
+    description: "Contract role for AI data engineering projects.",
+    location: "U.S(Remote). Please review the job description below and contact me ASAP if you are interested.",
+  })
+
+  assert.equal(adapted.location, "U.S(Remote)")
+})

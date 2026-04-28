@@ -11,6 +11,7 @@ import {
   Plane,
   Settings,
   ShieldAlert,
+  Sparkles,
   Wand2,
 } from "lucide-react"
 
@@ -25,6 +26,7 @@ export type DashboardNavItem = {
 /** Single source of truth for dashboard sidebar links (feed + all subpages). Profile lives in the header. */
 export const DASHBOARD_NAV_ITEMS: DashboardNavItem[] = [
   { label: "Feed", href: "/dashboard", icon: LayoutGrid },
+  { label: "Scout", href: "/dashboard/scout", icon: Sparkles },
   { label: "Applications", href: "/dashboard/applications", icon: ClipboardList },
   { label: "Resume", href: "/dashboard/resume", icon: FileText },
   { label: "Cover letters", href: "/dashboard/cover-letters", icon: Mails },

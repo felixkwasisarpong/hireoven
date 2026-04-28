@@ -213,7 +213,7 @@ export default function SearchPage() {
                           // eslint-disable-next-line @next/next/no-img-element
                           <img src={company.logo_url} alt={company.name} className="h-10 w-10 flex-shrink-0 rounded-xl border border-gray-100 object-contain bg-white p-0.5" />
                         ) : (
-                          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-[#FFF1E8] text-sm font-bold text-[#062246]">
+                          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-[#FFF1E8] text-sm font-bold text-[#ea580c]">
                             {company.name.charAt(0).toUpperCase()}
                           </div>
                         )}

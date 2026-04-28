@@ -56,7 +56,7 @@ export function detectAtsFromUrl(rawUrl: string): AtsDetection | null {
   }
 
   if (host.endsWith(".icims.com") || host === "icims.com") {
-    return { atsType: "icims", atsIdentifier: null, confidence: "medium" }
+    return { atsType: "icims", atsIdentifier: null, confidence: "high" }
   }
 
   if (host.endsWith(".bamboohr.com") || host === "bamboohr.com") {

@@ -26,6 +26,30 @@ function toStringOrNull(value: unknown): string | null {
   return normalized.length > 0 ? normalized : null
 }
 
+function looksLikeLocation(value: string): boolean {
+  if (!value) return false
+  if (value.length > 80) return false
+  if (/(https?:\/\/|www\.|@)/i.test(value)) return false
+  if (/\b(please|review|description|contact|asap|apply now|responsibilities|requirements)\b/i.test(value)) {
+    return false
+  }
+  return true
+}
+
+function sanitizeLocation(value: unknown): string | null {
+  const raw = toStringOrNull(value)
+  if (!raw) return null
+
+  const singleLine = raw.replace(/\s+/g, " ").trim().replace(/^location\s*:\s*/i, "")
+  if (!singleLine) return null
+
+  // Some crawlers append CTA/description text after location.
+  const firstSentence = singleLine.split(/[.!?](?:\s+|$)/)[0]?.trim() ?? ""
+  if (looksLikeLocation(firstSentence)) return firstSentence
+  if (looksLikeLocation(singleLine)) return singleLine
+  return null
+}
+
 export function detectSourceAdapter(input: {
   externalId?: string | null
   applyUrl?: string | null
@@ -84,7 +108,7 @@ export function adaptRawCrawlerJob(input: SourceRawJobInput): AdaptedJobInput {
     title: input.title.trim(),
     applyUrl: normalizeJobApplyUrl(input.url),
     description: cleanedDescription,
-    location: toStringOrNull(input.location),
+    location: sanitizeLocation(input.location),
     postedAt: toStringOrNull(input.postedAt),
     structuredSections: structured.sections,
     structuredCompensationText: structured.compensationText,
@@ -116,7 +140,7 @@ export function adaptPersistedJob(job: PersistedJobForNormalization): AdaptedJob
     title: job.title,
     applyUrl: normalizeJobApplyUrl(job.apply_url),
     description: cleanedDescription,
-    location: job.location,
+    location: sanitizeLocation(job.location),
     postedAt: job.first_detected_at ?? null,
     structuredSections: structured.sections,
     structuredCompensationText: structured.compensationText,

@@ -66,7 +66,7 @@ export default function CompanyHeader({ company, showWatchButton = true, newJobs
             onClick={() => void (watching ? removeCompany(company.id) : addCompany(company.id))}
             className={`rounded-2xl px-5 py-2.5 text-sm font-semibold transition ${
               watching
-                ? 'border border-[#FFD2B8] bg-[#FFF7F2] text-[#062246] hover:bg-[#FFD9C2]'
+                ? 'border border-[#FFD2B8] bg-[#FFF7F2] text-[#ea580c] hover:bg-[#FFD9C2]'
                 : 'bg-[#FF5C18] text-white hover:bg-[#E14F0E]'
             }`}
           >

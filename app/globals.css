@@ -11,23 +11,23 @@
     --card-foreground: 222 47% 11%;
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
-    --primary: 220 65% 33%;
+    --primary: 24 93% 48%;
     --primary-foreground: 0 0% 100%;
     --secondary: 214 24% 96%;
     --secondary-foreground: 222 47% 11%;
     --muted: 214 24% 96%;
     --muted-foreground: 215 16% 47%;
-    --accent: 220 60% 96%;
-    --accent-foreground: 220 65% 22%;
+    --accent: 38 100% 95%;
+    --accent-foreground: 24 93% 30%;
     --destructive: 0 72% 48%;
     --destructive-foreground: 0 0% 100%;
     --border: 214 32% 91%;
     --input: 214 24% 88%;
-    --ring: 220 65% 33%;
+    --ring: 24 93% 48%;
     --radius: 0.5rem;
 
     /* Semantic product tokens */
-    --primary-hover: 220 72% 48%;
+    --primary-hover: 17 91% 40%;
     --surface: 0 0% 100%;
     --surface-alt: 214 24% 97%;
     --surface-muted: 214 24% 94%;
@@ -37,9 +37,9 @@
     --text-strong: 222 47% 9%;
     --text-muted: 215 16% 45%;
     --text-subtle: 215 14% 52%;
-    --accent-brand: 220 65% 22%;
-    --accent-soft: 220 100% 97%;
-    --accent-soft-border: 220 80% 87%;
+    --accent-brand: 24 93% 40%;
+    --accent-soft: 38 100% 97%;
+    --accent-soft-border: 30 100% 82%;
     --success: 142 71% 36%;
     --success-soft: 142 50% 94%;
     --warning: 32 92% 44%;
@@ -47,10 +47,10 @@
     --danger: 0 72% 48%;
     --danger-soft: 0 86% 96%;
 
-    /* Brand hex: orange = accent/CTA, navy = primary identity */
+    /* Brand hex: orange = primary identity */
     --brand: #F97316;
     --brand-dark: #EA580C;
-    --brand-navy: #1E3A8A;
+    --brand-navy: #9a3412;
     --brand-tint: #FFF7ED;
     --brand-tint-mid: #FED7AA;
   }
@@ -121,7 +121,7 @@
   }
 
   ::selection {
-    background: rgba(30, 58, 138, 0.12);
+    background: rgba(234, 88, 12, 0.12);
   }
 
   *:focus-visible {
@@ -152,8 +152,8 @@
     @apply min-h-screen;
     background-color: hsl(var(--background));
     background-image:
-      radial-gradient(1100px 480px at 5% -5%, hsl(214 60% 96% / 0.7), transparent 55%),
-      radial-gradient(800px 380px at 95% 0%, hsl(220 50% 97% / 0.6), transparent 50%),
+      radial-gradient(1100px 480px at 5% -5%, hsl(30 100% 97% / 0.7), transparent 55%),
+      radial-gradient(800px 380px at 95% 0%, hsl(38 100% 98% / 0.6), transparent 50%),
       linear-gradient(180deg, hsl(210 40% 98%), hsl(214 32% 97%));
   }
 
@@ -270,7 +270,7 @@
 
   /** Scoped tokens for the main job feed (mockup-aligned shell). */
   .dashboard-feed-skin {
-    --dash-primary: #2563eb;
+    --dash-primary: #ea580c;
   }
 
   .neo-hero {
@@ -278,9 +278,9 @@
     background-image:
       linear-gradient(
         90deg,
-        hsl(220 55% 91%) 0%,
-        hsl(214 60% 93%) 54%,
-        hsl(220 50% 91%) 100%
+        hsl(30 100% 95%) 0%,
+        hsl(38 100% 96%) 54%,
+        hsl(30 100% 95%) 100%
       );
     box-shadow: none;
   }
@@ -347,11 +347,11 @@
 
   .neo-nav-link-active {
     @apply text-white;
-    border-color: hsl(220 65% 28% / 0.25);
-    background: hsl(220 65% 33%);
+    border-color: hsl(24 93% 35% / 0.25);
+    background: hsl(24 93% 48%);
     box-shadow:
       0 1px 0 hsl(0 0% 100% / 0.12) inset,
-      0 4px 10px -5px hsl(220 65% 22% / 0.4);
+      0 4px 10px -5px hsl(24 93% 30% / 0.4);
   }
 
   .neo-nav-link-idle {
@@ -386,7 +386,7 @@
   }
 
   .neo-live-pill {
-    @apply inline-flex items-center gap-2 rounded-full border border-[#BFDBFE] bg-white px-3 py-1 text-[11px] font-semibold text-[#1E3A8A];
+    @apply inline-flex items-center gap-2 rounded-full border border-[#FED7AA] bg-white px-3 py-1 text-[11px] font-semibold text-[#9a3412];
   }
 
   .neo-live-dot {
@@ -394,7 +394,7 @@
     width: 0.5rem;
     height: 0.5rem;
     border-radius: 9999px;
-    background: hsl(220 65% 52%);
+    background: hsl(24 93% 48%);
   }
 
   .neo-live-dot::after {
@@ -402,7 +402,7 @@
     position: absolute;
     inset: -0.35rem;
     border-radius: 9999px;
-    border: 1px solid hsl(220 65% 52% / 0.4);
+    border: 1px solid hsl(24 93% 48% / 0.4);
     animation: pulse-ring 2s ease-out infinite;
   }
 
@@ -472,14 +472,14 @@
     --surface: 0 0% 100%;
     --surface-alt: 214 24% 97%;
     --border: 214 32% 91%;
-    --accent: 220 100% 97%;
-    --accent-foreground: 220 65% 22%;
+    --accent: 38 100% 97%;
+    --accent-foreground: 24 93% 30%;
   }
 
   .product-skin .app-page {
     background-image:
-      radial-gradient(1100px 480px at 5% -5%, hsl(214 60% 96% / 0.7), transparent 55%),
-      radial-gradient(800px 380px at 95% 0%, hsl(220 50% 97% / 0.6), transparent 50%),
+      radial-gradient(1100px 480px at 5% -5%, hsl(30 100% 97% / 0.7), transparent 55%),
+      radial-gradient(800px 380px at 95% 0%, hsl(38 100% 98% / 0.6), transparent 50%),
       linear-gradient(180deg, hsl(210 40% 98%), hsl(214 32% 97%));
   }
 
@@ -512,18 +512,18 @@
   }
 
   .product-skin .chip-control:hover {
-    border-color: hsl(220 60% 78%);
-    background: hsl(220 100% 98%);
+    border-color: hsl(30 100% 78%);
+    background: hsl(38 100% 98%);
   }
 
   .product-skin .chip-control-active {
-    border-color: hsl(220 60% 75%);
-    background: hsl(220 100% 97%);
-    color: hsl(220 65% 33%);
+    border-color: hsl(30 100% 75%);
+    background: hsl(38 100% 97%);
+    color: hsl(24 93% 40%);
   }
 
   .product-skin .section-kicker {
-    color: hsl(220 65% 38%);
+    color: hsl(24 93% 48%);
     text-shadow: none;
   }
 
@@ -558,9 +558,9 @@
       hsl(214 60% 99% / 0.88) 100%
     );
     box-shadow:
-      0 0 0 1px hsl(220 65% 33% / 0.08),
-      0 28px 56px -16px hsl(220 60% 30% / 0.14),
-      0 8px 20px -6px hsl(214 60% 40% / 0.08);
+      0 0 0 1px hsl(24 93% 48% / 0.08),
+      0 28px 56px -16px hsl(24 93% 30% / 0.14),
+      0 8px 20px -6px hsl(24 80% 40% / 0.08);
     backdrop-filter: blur(14px);
   }
 

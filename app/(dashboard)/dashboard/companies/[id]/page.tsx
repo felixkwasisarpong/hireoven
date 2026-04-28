@@ -8,6 +8,7 @@ import CompanyHeader from "@/components/companies/CompanyHeader"
 import SimilarCompanies from "@/components/companies/SimilarCompanies"
 import SponsorshipScore from "@/components/international/SponsorshipScore"
 import JobCard from "@/components/jobs/JobCard"
+import { ScoutMiniPanel } from "@/components/scout/ScoutMiniPanel"
 import { cn } from "@/lib/utils"
 import type { Company, EmployerLCAStats, EmploymentType, H1BRecord, JobWithCompany, SeniorityLevel } from "@/types"
 
@@ -425,7 +426,7 @@ export default function CompanyProfilePage() {
                       </span>
                     )}
                     {lcaStats.is_first_time_filer && (
-                      <span className="inline-flex rounded border border-violet-200 bg-violet-50 px-2 py-0.5 text-[11px] font-semibold text-violet-700">
+                      <span className="inline-flex rounded border border-orange-200 bg-orange-50 px-2 py-0.5 text-[11px] font-semibold text-orange-700">
                         First-time filer
                       </span>
                     )}
@@ -589,6 +590,11 @@ export default function CompanyProfilePage() {
         {/* Extra scroll room so last job row clears viewport / home indicator (py-0 on .app-page in layout was cancelling pb before). */}
         <div aria-hidden className="h-[clamp(3rem,10vh,6rem)] shrink-0" />
       </div>
+      <ScoutMiniPanel
+        pagePath={`/dashboard/companies/${id}`}
+        companyId={id}
+        suggestionChips={["Is this company worth targeting?"]}
+      />
     </main>
   )
 }

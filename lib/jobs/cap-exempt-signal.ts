@@ -167,13 +167,24 @@ export function detectCapExemptSignal(company?: CompanyLike, job?: JobLike): Cap
 }
 
 export function capExemptDetectionToSignal(result: CapExemptDetectionResult): CapExemptSignal {
+  const likelihood: CapExemptSignal["likelihood"] =
+    result.possibleCapExempt
+      ? result.confidence === "high"
+        ? "likely"
+        : "possible"
+      : result.confidence === "unknown"
+        ? "unknown"
+        : "unlikely"
+
   return {
+    likelihood,
+    source: result.possibleCapExempt ? "inferred" : "none",
     isLikelyCapExempt: result.possibleCapExempt ? true : null,
     category: result.category,
     confidence: result.confidence,
     evidence: result.reasons,
     summary: result.possibleCapExempt
-      ? "Possible cap-exempt pathway detected from employer naming or affiliation signals. This is a discovery signal only, not a legal conclusion."
-      : "No cap-exempt-friendly employer pattern is confirmed from available data.",
+      ? "Cap-exempt likelihood inferred from employer naming or affiliation signals. This is not a legal conclusion."
+      : "Cap-exempt likelihood is unknown from available data.",
   }
 }

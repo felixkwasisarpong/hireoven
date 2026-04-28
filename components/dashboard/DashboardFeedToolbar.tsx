@@ -1,7 +1,7 @@
 "use client"
 
 import type { Dispatch, RefObject, SetStateAction } from "react"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import {
   Briefcase,
   Building2,
@@ -34,6 +34,21 @@ import AdvancedFiltersDrawer from "@/components/jobs/AdvancedFiltersDrawer"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { cn } from "@/lib/utils"
 import type { EmploymentType, JobFilters, SeniorityLevel } from "@/types"
+
+/**
+ * Small Sparkles badge that appears on a filter button when Scout just changed it.
+ * Sits in the top-right corner of the button's relative wrapper.
+ */
+function ScoutPulseBadge() {
+  return (
+    <span
+      className="pointer-events-none absolute -right-1 -top-1 z-10 flex h-4 w-4 items-center justify-center rounded-full bg-orange-500 shadow-sm ring-2 ring-white"
+      aria-hidden
+    >
+      <Sparkles className="h-2.5 w-2.5 text-white" />
+    </span>
+  )
+}
 
 const SALARY_TIERS = [
   { label: "Any", value: undefined as number | undefined },
@@ -86,6 +101,44 @@ export default function DashboardFeedToolbar({
   const [industryDraft, setIndustryDraft] = useState(filters.industryQuery ?? "")
   const [keywordsDraft, setKeywordsDraft] = useState(searchQuery)
   const [advancedOpen, setAdvancedOpen] = useState(false)
+  // Set of toolbar button keys that Scout just changed — cleared after the pulse animation
+  const [scoutPulse, setScoutPulse] = useState<Set<string>>(new Set())
+  const scoutPulseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Map APPLY_FILTERS URL param keys → toolbar button identifiers
+  const PARAM_TO_BUTTON: Record<string, string> = {
+    q: "keywords",
+    location: "location",
+    sponsorship: "sponsorship",
+    workMode: "remote",
+  }
+
+  useEffect(() => {
+    function handleFiltersApplied(e: Event) {
+      const paramKeys: string[] =
+        (e as CustomEvent<{ paramKeys: string[] }>).detail?.paramKeys ?? []
+      const buttonKeys = new Set(
+        paramKeys.flatMap((k) => (PARAM_TO_BUTTON[k] ? [PARAM_TO_BUTTON[k]] : []))
+      )
+      if (buttonKeys.size === 0) return
+      if (scoutPulseTimerRef.current) clearTimeout(scoutPulseTimerRef.current)
+      setScoutPulse(buttonKeys)
+      scoutPulseTimerRef.current = setTimeout(() => setScoutPulse(new Set()), 2800)
+    }
+
+    function handleFiltersRestored() {
+      if (scoutPulseTimerRef.current) clearTimeout(scoutPulseTimerRef.current)
+      setScoutPulse(new Set())
+    }
+
+    window.addEventListener("scout:filters-applied", handleFiltersApplied)
+    window.addEventListener("scout:filters-restored", handleFiltersRestored)
+    return () => {
+      window.removeEventListener("scout:filters-applied", handleFiltersApplied)
+      window.removeEventListener("scout:filters-restored", handleFiltersRestored)
+      if (scoutPulseTimerRef.current) clearTimeout(scoutPulseTimerRef.current)
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const replaceFilters = (nextFilters: JobFilters) => {
     const next = filtersToSearchParams(searchParams, nextFilters)
@@ -200,9 +253,9 @@ export default function DashboardFeedToolbar({
       activeIcon: "text-sky-600",
     },
     violet: {
-      idleIcon: "text-violet-500",
-      activeWrap: "border-violet-200 bg-violet-50 text-violet-800 ring-1 ring-violet-200/70",
-      activeIcon: "text-violet-600",
+      idleIcon: "text-orange-500",
+      activeWrap: "border-orange-200 bg-orange-50 text-orange-800 ring-1 ring-orange-200/70",
+      activeIcon: "text-orange-600",
     },
     indigo: {
       idleIcon: "text-indigo-500",
@@ -291,10 +344,14 @@ export default function DashboardFeedToolbar({
 
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative">
+          {scoutPulse.has("keywords") && <ScoutPulseBadge />}
           <button
             type="button"
             onClick={() => (filterDropdown === "keywords" ? setFilterDropdown(null) : openDropdown("keywords"))}
-            className={filterBtn(Boolean(searchQuery.trim()), "blue")}
+            className={cn(
+              filterBtn(Boolean(searchQuery.trim()), "blue"),
+              scoutPulse.has("keywords") && "ring-2 ring-orange-400/60 ring-offset-1"
+            )}
           >
             <Search className={iconCls(Boolean(searchQuery.trim()), "blue")} />
             Keywords
@@ -345,12 +402,13 @@ export default function DashboardFeedToolbar({
         </div>
 
         <div className="relative">
+          {scoutPulse.has("location") && <ScoutPulseBadge />}
           <button
             type="button"
             onClick={() => openDropdown("location")}
-            className={filterBtn(
-              Boolean(filters.locationQuery?.trim()) || Boolean(filters.remote),
-              "sky"
+            className={cn(
+              filterBtn(Boolean(filters.locationQuery?.trim()) || Boolean(filters.remote), "sky"),
+              scoutPulse.has("location") && "ring-2 ring-orange-400/60 ring-offset-1"
             )}
           >
             <MapPin
@@ -526,14 +584,20 @@ export default function DashboardFeedToolbar({
           )}
         </div>
 
-        <button
-          type="button"
-          onClick={() => replaceFilters({ ...filters, sponsorship: !filters.sponsorship })}
-          className={filterBtn(Boolean(filters.sponsorship), "emerald")}
-        >
-          <Plane className={iconCls(Boolean(filters.sponsorship), "emerald")} />
-          Sponsorship
-        </button>
+        <div className="relative">
+          {scoutPulse.has("sponsorship") && <ScoutPulseBadge />}
+          <button
+            type="button"
+            onClick={() => replaceFilters({ ...filters, sponsorship: !filters.sponsorship })}
+            className={cn(
+              filterBtn(Boolean(filters.sponsorship), "emerald"),
+              scoutPulse.has("sponsorship") && "ring-2 ring-orange-400/60 ring-offset-1"
+            )}
+          >
+            <Plane className={iconCls(Boolean(filters.sponsorship), "emerald")} />
+            Sponsorship
+          </button>
+        </div>
 
         <div className="relative">
           <button
@@ -578,14 +642,20 @@ export default function DashboardFeedToolbar({
           )}
         </div>
 
-        <button
-          type="button"
-          onClick={() => replaceFilters({ ...filters, remote: !filters.remote ? true : false })}
-          className={filterBtn(Boolean(filters.remote), "cyan")}
-        >
-          <Globe2 className={iconCls(Boolean(filters.remote), "cyan")} />
-          Remote
-        </button>
+        <div className="relative">
+          {scoutPulse.has("remote") && <ScoutPulseBadge />}
+          <button
+            type="button"
+            onClick={() => replaceFilters({ ...filters, remote: !filters.remote ? true : false })}
+            className={cn(
+              filterBtn(Boolean(filters.remote), "cyan"),
+              scoutPulse.has("remote") && "ring-2 ring-orange-400/60 ring-offset-1"
+            )}
+          >
+            <Globe2 className={iconCls(Boolean(filters.remote), "cyan")} />
+            Remote
+          </button>
+        </div>
 
         <div className="relative">
           <button

@@ -349,7 +349,7 @@ function RichTextEditor({
               if (sectionId && sectionType) onAiWrite?.(value, sectionId, sectionType)
             }}
             disabled={!sectionId || !sectionType || aiLoading}
-            className="inline-flex h-9 items-center gap-2 rounded-lg bg-gradient-to-r from-[#5B4DFF] to-violet-500 px-4 text-[12px] font-bold text-white"
+            className="inline-flex h-9 items-center gap-2 rounded-lg bg-gradient-to-r from-[#5B4DFF] to-orange-500 px-4 text-[12px] font-bold text-white"
           >
             {aiLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
             {aiLoading ? "Writing..." : "AI Writer"}
@@ -594,14 +594,14 @@ function TailorMatchInsightPanel({ analysis, matchingSkills }: { analysis: Tailo
 
   return (
     <section
-      className="overflow-hidden rounded-2xl border border-indigo-200/55 bg-gradient-to-br from-white via-indigo-50/35 to-violet-50/45 shadow-[0_10px_40px_-18px_rgba(91,77,255,0.35)]"
+      className="overflow-hidden rounded-2xl border border-indigo-200/55 bg-gradient-to-br from-white via-indigo-50/35 to-orange-50/45 shadow-[0_10px_40px_-18px_rgba(91,77,255,0.35)]"
       aria-label="Resume match breakdown"
     >
-      <div className="relative border-b border-indigo-100/90 bg-gradient-to-r from-indigo-600/[0.06] via-violet-600/[0.05] to-fuchsia-500/[0.06] px-4 py-3 sm:px-5 sm:py-4">
+      <div className="relative border-b border-indigo-100/90 bg-gradient-to-r from-indigo-600/[0.06] via-orange-600/[0.05] to-fuchsia-500/[0.06] px-4 py-3 sm:px-5 sm:py-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-indigo-700/85">Match score</p>
-            <p className="mt-0.5 bg-gradient-to-r from-[#5B4DFF] via-violet-600 to-indigo-600 bg-clip-text text-3xl font-black tabular-nums tracking-tight text-transparent sm:text-[2.4rem]">
+            <p className="mt-0.5 bg-gradient-to-r from-[#5B4DFF] via-orange-600 to-indigo-600 bg-clip-text text-3xl font-black tabular-nums tracking-tight text-transparent sm:text-[2.4rem]">
               {matchScore}
               <span className="text-[0.55em] font-extrabold text-indigo-600/90">%</span>
             </p>

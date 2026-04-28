@@ -36,6 +36,7 @@ import { ApplicationCard } from "@/components/applications/ApplicationCard"
 import { ApplicationDrawer } from "@/components/applications/ApplicationDrawer"
 import { AddApplicationModal } from "@/components/applications/AddApplicationModal"
 import { PipelineStatsPanel } from "@/components/applications/PipelineStats"
+import { ScoutMiniPanel } from "@/components/scout/ScoutMiniPanel"
 import type { ApplicationStatus, JobApplication } from "@/types"
 
 // ─── Column config ────────────────────────────────────────────────────────────
@@ -53,7 +54,7 @@ const COLUMNS: ColumnDef[] = [
   { id: "saved", label: "Saved", statuses: ["saved"], accentClass: "border-t-slate-400", countClass: "bg-slate-100 text-slate-600", dropStatus: "saved" },
   { id: "applied", label: "Applied", statuses: ["applied"], accentClass: "border-t-blue-400", countClass: "bg-blue-50 text-blue-700", dropStatus: "applied" },
   { id: "phone_screen", label: "Screen", statuses: ["phone_screen"], accentClass: "border-t-amber-400", countClass: "bg-amber-50 text-amber-700", dropStatus: "phone_screen" },
-  { id: "interview", label: "Interview", statuses: ["interview"], accentClass: "border-t-violet-400", countClass: "bg-violet-50 text-violet-700", dropStatus: "interview" },
+  { id: "interview", label: "Interview", statuses: ["interview"], accentClass: "border-t-orange-400", countClass: "bg-orange-50 text-orange-700", dropStatus: "interview" },
   { id: "final_round", label: "Final", statuses: ["final_round"], accentClass: "border-t-indigo-500", countClass: "bg-indigo-50 text-indigo-700", dropStatus: "final_round" },
   { id: "offer", label: "Offer", statuses: ["offer"], accentClass: "border-t-emerald-500", countClass: "bg-emerald-50 text-emerald-700", dropStatus: "offer" },
   { id: "closed", label: "Closed", statuses: ["rejected", "withdrawn"], accentClass: "border-t-red-400", countClass: "bg-red-50 text-red-600", dropStatus: "rejected" },
@@ -113,7 +114,7 @@ const STATUS_COLOR: Record<ApplicationStatus, string> = {
   saved: "bg-slate-100 text-slate-600 border-slate-200",
   applied: "bg-blue-50 text-blue-700 border-blue-200",
   phone_screen: "bg-amber-50 text-amber-700 border-amber-200",
-  interview: "bg-violet-50 text-violet-700 border-violet-200",
+  interview: "bg-orange-50 text-orange-700 border-orange-200",
   final_round: "bg-indigo-50 text-indigo-700 border-indigo-200",
   offer: "bg-emerald-50 text-emerald-700 border-emerald-200",
   rejected: "bg-red-50 text-red-600 border-red-200",
@@ -409,6 +410,14 @@ export default function ApplicationsPage() {
           }}
         />
       )}
+      <ScoutMiniPanel
+        pagePath="/dashboard/applications"
+        applicationId={currentApp?.id}
+        suggestionChips={[
+          "What needs follow-up?",
+          "Where am I wasting time?",
+        ]}
+      />
       </div>
     </main>
   )

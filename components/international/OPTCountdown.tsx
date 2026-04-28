@@ -73,7 +73,7 @@ export default function OPTCountdown({ optEndDate, visaStatus, compact = false }
           <p className="text-sm text-gray-500 mt-0.5">days remaining</p>
         </div>
         {isStem && (
-          <span className="px-2.5 py-1 bg-[#FFF1E8] text-[#062246] text-xs font-semibold rounded-full border border-[#FFD9C2]">
+          <span className="px-2.5 py-1 bg-[#FFF1E8] text-[#ea580c] text-xs font-semibold rounded-full border border-[#FFD9C2]">
             STEM OPT
           </span>
         )}

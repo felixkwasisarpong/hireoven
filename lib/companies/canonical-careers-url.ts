@@ -72,6 +72,8 @@ export function inferCareersUrlFromApplyUrl(applyUrl: string): string | null {
     }
 
     if (host.endsWith("icims.com")) {
+      // Exclude the iCIMS marketing site — only return branded portals (*.icims.com with prefix).
+      if (host === "icims.com" || host === "www.icims.com") return null
       return u.origin
     }
 

@@ -17,8 +17,7 @@ const CONFIG: Partial<
 > = {
   apply_now: {
     icon: CheckCircle2,
-    classes:
-      "border-0 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white ring-0 shadow-[0_2px_12px_rgba(5,150,105,0.45),inset_0_1px_0_rgba(255,255,255,0.18)] [&_svg]:text-white",
+    classes: "border-0 bg-emerald-600 text-white ring-0",
     text: "Apply Today",
   },
   apply_with_tweaks: {

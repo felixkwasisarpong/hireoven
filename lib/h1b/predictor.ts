@@ -22,7 +22,7 @@
 
 import Anthropic from '@anthropic-ai/sdk'
 import { getPostgresPool } from '@/lib/postgres/server'
-import { normalizeEmployerName } from '@/lib/h1b/lca-importer'
+import { normalizeEmployerName } from '@/lib/h1b/normalize-employer'
 import type {
   EmployerLCAStats,
   H1BConfidence,
@@ -49,7 +49,7 @@ const HIGH_VOLUME_STATES = new Set(['CA', 'WA', 'TX', 'NY', 'NJ', 'IL', 'MA', 'V
 
 export function isLikelyUSJob(location: string | null, state: string | null, isRemote: boolean): boolean {
   if (state && US_STATE_ABBRS.has(state.toUpperCase())) return true
-  if (!location) return isRemote // remote jobs w/ no location - assume US default
+  if (!location) return false
   const loc = location.toLowerCase()
   if (/\b(usa|united states|u\.s\.|u\.s\.a\.|us)\b/.test(loc)) return true
   for (const abbr of US_STATE_ABBRS) {
@@ -388,6 +388,25 @@ type EmployerSignal = {
   yearsCovered: number[]
 }
 
+function deriveRecency(
+  lca: EmployerLCAStats | null,
+  uscis: EmployerSignal | null
+): { status: "recent" | "stale" | "unknown"; asOfDate: string | null; source: "lca" | "h1b" | "mixed" | "unknown" } {
+  const now = new Date()
+  const lcaDate = lca?.last_updated ? new Date(lca.last_updated) : null
+  const uscisYear = uscis?.yearsCovered?.length ? Math.max(...uscis.yearsCovered) : null
+  const uscisDate = uscisYear ? new Date(Date.UTC(uscisYear, 11, 31)) : null
+  const candidates = [lcaDate, uscisDate].filter((d): d is Date => Boolean(d && Number.isFinite(d.getTime())))
+  if (candidates.length === 0) return { status: "unknown", asOfDate: null, source: "unknown" }
+  const latest = new Date(Math.max(...candidates.map((d) => d.getTime())))
+  const months = (now.getTime() - latest.getTime()) / (1000 * 60 * 60 * 24 * 30)
+  return {
+    status: months <= 24 ? "recent" : "stale",
+    asOfDate: latest.toISOString(),
+    source: lcaDate && uscisDate ? "mixed" : lcaDate ? "lca" : "h1b",
+  }
+}
+
 async function fetchEmployerStats(
   companyId: string | null,
   companyName: string
@@ -504,6 +523,9 @@ export async function predictH1BApproval(
       topRisk: null,
       computedAt: new Date().toISOString(),
       isUSJob: false,
+      roleFamilyEvidence: null,
+      locationEvidence: null,
+      dataRecency: { status: "unknown", asOfDate: null, source: "unknown" },
     }
   }
 
@@ -519,6 +541,7 @@ export async function predictH1BApproval(
   const stats = lca
   const missingEmployerData = lca === null && uscis === null
   const signal = pickEmployerSignal(lca, uscis)
+  const recency = deriveRecency(lca, uscis)
 
   const { rate: socBaseRate, source: priorSource } = socBaseRateResult
   // Normalize the prior source into the shape the posterior expects (the
@@ -652,6 +675,11 @@ export async function predictH1BApproval(
   // --- 2. Title --------------------------------------------------------
   const titleRisk = scoreTitle(input.jobTitle, input.normalizedTitle)
   const jobTitleScore = titleRisk.score
+  const roleFamilyEvidence: NonNullable<H1BPrediction["roleFamilyEvidence"]> = input.socCode
+    ? { count: signal.certified + signal.denied, matchMethod: "soc_code", confidence: "high", sampleSize: signal.certified + signal.denied }
+    : input.socTitle
+      ? { count: signal.certified + signal.denied, matchMethod: "soc_title", confidence: "medium", sampleSize: signal.certified + signal.denied }
+      : { count: signal.certified + signal.denied, matchMethod: "title_family", confidence: "low", sampleSize: signal.certified + signal.denied }
   const titleSignal: PredictionSignal = {
     factor: `Role type - ${titleRisk.category}`,
     impact: jobTitleScore >= 75 ? 'positive' : jobTitleScore >= 60 ? 'neutral' : 'negative',
@@ -661,9 +689,21 @@ export async function predictH1BApproval(
 
   // --- 3. Location ------------------------------------------------------
   let locationScore = 70
+  let locationEvidence: NonNullable<H1BPrediction["locationEvidence"]> = { count: null, matchLevel: "unknown", confidence: "unknown" }
   if (input.isRemote) locationScore = 80
   else if (stateGuess && HIGH_VOLUME_STATES.has(stateGuess)) locationScore = 85
   else if (stateGuess) locationScore = 68
+  if (input.isRemote) {
+    locationEvidence = {
+      count: signal.certified + signal.denied,
+      matchLevel: stateGuess ? "state" : "employer_wide_remote",
+      confidence: stateGuess ? "medium" : "low",
+    }
+  } else if (input.location && stateGuess) {
+    locationEvidence = { count: signal.certified + signal.denied, matchLevel: "state", confidence: "medium" }
+  } else if (!input.location) {
+    locationEvidence = { count: signal.certified + signal.denied, matchLevel: "employer_wide", confidence: "low" }
+  }
 
   const locationSignal: PredictionSignal = {
     factor: 'Location',
@@ -811,6 +851,9 @@ export async function predictH1BApproval(
     topRisk,
     computedAt: new Date().toISOString(),
     isUSJob: true,
+    roleFamilyEvidence,
+    locationEvidence,
+    dataRecency: recency,
   }
 }
 

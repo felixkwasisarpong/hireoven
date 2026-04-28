@@ -594,6 +594,8 @@ export type VisaIntelligence = {
   positiveSignals: IntelligenceSignal[];
   riskSignals: IntelligenceSignal[];
   capExempt: CapExemptSignal | null;
+  dataRecency?: VisaDataRecency | null;
+  eVerifySignal?: EVerifySignal | null;
   summary: string | null;
 };
 
@@ -604,6 +606,8 @@ export type LcaWageRecord = {
   employerName?: string | null;
   jobTitle?: string | null;
   roleFamily?: string | null;
+  socCode?: string | null;
+  socTitle?: string | null;
   location?: string | null;
   worksiteState?: string | null;
   wageRateFrom: number | null;
@@ -666,6 +670,23 @@ export type OfferRiskAnalysis = {
   };
   h1bTimingRisk: IntelligenceRiskLevel;
   sponsorshipConflictDetected: boolean;
+  roleFamilyEvidence?: {
+    count: number | null;
+    matchMethod: "soc_code" | "soc_title" | "title_family" | "unknown";
+    confidence: IntelligenceConfidence;
+    sampleSize?: number;
+  };
+  locationEvidence?: {
+    count: number | null;
+    matchLevel:
+      | "exact_city_state"
+      | "county_state"
+      | "state"
+      | "employer_wide_remote"
+      | "employer_wide"
+      | "unknown";
+    confidence: IntelligenceConfidence;
+  };
   disclaimer: string;
 };
 
@@ -702,6 +723,8 @@ export type StemOptReadiness = {
 };
 
 export type CapExemptSignal = {
+  likelihood?: "likely" | "possible" | "unlikely" | "unknown";
+  source?: "inferred" | "explicit" | "none";
   isLikelyCapExempt: boolean | null;
   category:
     | 'higher_education'
@@ -714,6 +737,18 @@ export type CapExemptSignal = {
   confidence: IntelligenceConfidence;
   evidence: string[];
   summary: string | null;
+};
+
+export type VisaDataRecency = {
+  status: "recent" | "stale" | "unknown";
+  asOfDate: string | null;
+  source: "lca" | "h1b" | "mixed" | "unknown";
+};
+
+export type EVerifySignal = {
+  status: "participates" | "not_found" | "unknown";
+  source: "independent_source" | "none";
+  confidence: IntelligenceConfidence;
 };
 
 export type GhostJobRisk = {
@@ -1525,6 +1560,24 @@ export type H1BPrediction = {
   topRisk: string | null;
   computedAt: string;
   isUSJob: boolean;
+  roleFamilyEvidence?: {
+    count: number | null;
+    matchMethod: "soc_code" | "soc_title" | "title_family" | "unknown";
+    confidence: IntelligenceConfidence;
+    sampleSize?: number;
+  } | null;
+  locationEvidence?: {
+    count: number | null;
+    matchLevel:
+      | "exact_city_state"
+      | "county_state"
+      | "state"
+      | "employer_wide_remote"
+      | "employer_wide"
+      | "unknown";
+    confidence: IntelligenceConfidence;
+  } | null;
+  dataRecency?: VisaDataRecency | null;
 };
 
 export type H1BPredictionInput = {
@@ -1542,6 +1595,7 @@ export type H1BPredictionInput = {
   seniorityLevel: SeniorityLevel | null;
   employmentType: EmploymentType | null;
   socCode?: string | null;
+  socTitle?: string | null;
   description?: string | null;
 };
 

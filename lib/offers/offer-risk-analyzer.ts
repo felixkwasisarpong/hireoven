@@ -63,6 +63,25 @@ function inferRoleFamily(title: string | null | undefined) {
   return null
 }
 
+type RoleFamilyEvidence = {
+  count: number | null
+  matchMethod: "soc_code" | "soc_title" | "title_family" | "unknown"
+  confidence: "high" | "medium" | "low" | "unknown"
+  sampleSize?: number
+}
+
+type LocationLcaEvidence = {
+  count: number | null
+  matchLevel:
+    | "exact_city_state"
+    | "county_state"
+    | "state"
+    | "employer_wide_remote"
+    | "employer_wide"
+    | "unknown"
+  confidence: "high" | "medium" | "low" | "unknown"
+}
+
 function detectSponsorshipBlocker(statement: string | null | undefined): SponsorshipBlocker | null {
   const text = statement?.trim()
   if (!text) return null
@@ -85,22 +104,91 @@ function detectSponsorshipBlocker(statement: string | null | undefined): Sponsor
   }
 }
 
-function roleFamilyCount(input: OfferRiskInput) {
-  const roleFamily = inferRoleFamily(input.jobTitle)
-  if (!roleFamily) return null
+function roleFamilyEvidence(input: OfferRiskInput): RoleFamilyEvidence {
+  const records = input.lcaRecords ?? []
+  const description = normalize(`${input.jobTitle ?? ""} ${input.sponsorshipStatement ?? ""}`)
+  const socCodeHint =
+    description.match(/\b\d{2}-\d{4}\b/)?.[0] ??
+    normalize(input.jobTitle).match(/\b\d{2}\s?\d{4}\b/)?.[0]?.replace(/\s+/g, "-") ??
+    null
+  const socTitleHint = normalize(input.jobTitle)
 
+  if (socCodeHint) {
+    const count = records.filter((record) => normalize(record.socCode) === normalize(socCodeHint)).length
+    return {
+      count,
+      matchMethod: "soc_code",
+      confidence: count > 0 ? "high" : "medium",
+      sampleSize: records.length,
+    }
+  }
+
+  if (socTitleHint) {
+    const bySocTitle = records.filter((record) => {
+      const socTitle = normalize(record.socTitle)
+      return socTitle.length > 0 && (socTitle.includes(socTitleHint) || socTitleHint.includes(socTitle))
+    }).length
+    if (bySocTitle > 0) {
+      return {
+        count: bySocTitle,
+        matchMethod: "soc_title",
+        confidence: "medium",
+        sampleSize: records.length,
+      }
+    }
+  }
+
+  const roleFamily = inferRoleFamily(input.jobTitle)
+  if (!roleFamily) return { count: null, matchMethod: "unknown", confidence: "unknown", sampleSize: records.length }
   const familyKey = normalize(roleFamily)
-  return (input.lcaRecords ?? []).filter((record) => {
+  const count = records.filter((record) => {
     const title = normalize(record.jobTitle)
     const explicitFamily = normalize(record.roleFamily)
     return explicitFamily.includes(familyKey) || familyKey.split(" ").some((part) => part.length > 4 && title.includes(part))
   }).length
+  return {
+    count,
+    matchMethod: "title_family",
+    confidence: count > 0 ? "low" : "unknown",
+    sampleSize: records.length,
+  }
 }
 
-function locationCount(input: OfferRiskInput) {
-  const state = stateFromLocation(input.location)
-  if (!state) return null
-  return (input.lcaRecords ?? []).filter((record) => record.worksiteState?.toUpperCase() === state).length
+function locationEvidence(input: OfferRiskInput): LocationLcaEvidence {
+  const records = input.lcaRecords ?? []
+  if (records.length === 0) return { count: null, matchLevel: "unknown", confidence: "unknown" }
+
+  const locationRaw = input.location?.trim()
+  const state = stateFromLocation(locationRaw)
+  const city = locationRaw?.split(",")[0]?.trim().toLowerCase() ?? null
+  const isRemote = input.workMode === "remote" || /\bremote\b/i.test(locationRaw ?? "")
+
+  if (city && state) {
+    const exactCount = records.filter((record) => {
+      const recordCity = (record.location ?? "").split(",")[0]?.trim().toLowerCase()
+      return recordCity === city && (record.worksiteState?.toUpperCase() === state)
+    }).length
+    if (exactCount > 0) {
+      return { count: exactCount, matchLevel: "exact_city_state", confidence: "high" }
+    }
+  }
+
+  if (state) {
+    const stateCount = records.filter((record) => record.worksiteState?.toUpperCase() === state).length
+    if (stateCount > 0) {
+      return { count: stateCount, matchLevel: "state", confidence: "medium" }
+    }
+  }
+
+  if (isRemote) {
+    return { count: records.length, matchLevel: "employer_wide_remote", confidence: "low" }
+  }
+
+  if (!locationRaw) {
+    return { count: records.length, matchLevel: "employer_wide", confidence: "low" }
+  }
+
+  return { count: 0, matchLevel: "unknown", confidence: "unknown" }
 }
 
 function confidenceFromCoverage(parts: Array<unknown>): IntelligenceConfidence {
@@ -160,8 +248,8 @@ export function calculateOfferRisk(input: OfferRiskInput): OfferRiskAnalysis {
   const company = input.companySnapshot ?? null
   const roleFamily = inferRoleFamily(input.jobTitle)
   const blocker = detectSponsorshipBlocker(input.sponsorshipStatement)
-  const roleCount = roleFamilyCount(input)
-  const sameLocationCount = locationCount(input)
+  const roleEvidence = roleFamilyEvidence(input)
+  const locationLca = locationEvidence(input)
 
   const salaryIntelligence = calculateLcaSalaryIntelligence({
     salaryMin,
@@ -187,15 +275,17 @@ export function calculateOfferRisk(input: OfferRiskInput): OfferRiskAnalysis {
     sponsorshipScore: company?.sponsorshipConfidence ?? null,
     priorLcaCount: company?.totalLcaCount ?? null,
     recentLcaCount: company?.recentH1BCount ?? null,
-    roleFamilyLcaCount: roleCount,
-    locationLcaCount: sameLocationCount,
+    roleFamilyLcaCount: roleEvidence.count,
+    locationLcaCount: locationLca.count,
     wageLevelSignal:
       salaryIntelligence.comparisonLabel === "Aligned"
         ? "strong"
         : salaryIntelligence.comparisonLabel === "Below Market"
           ? "weak"
-          : "unknown",
-    eVerify: company?.eVerifyLikely ?? null,
+          : salaryIntelligence.comparisonLabel === "Above Market"
+            ? "moderate"
+            : "unknown",
+    eVerify: null,
     sponsorshipBlocker: blocker,
   })
 
@@ -225,18 +315,32 @@ export function calculateOfferRisk(input: OfferRiskInput): OfferRiskAnalysis {
     keyConcerns.push("The company is not currently marked as an H-1B sponsor in available Hireoven data.")
   }
 
-  if (roleCount != null && roleCount > 0) {
+  if (roleEvidence.count != null && roleEvidence.count > 0) {
     score -= 8
-    positiveSignals.push("Comparable sponsored role history was found for this role family.")
-  } else if (requiresSupport && roleCount === 0) {
+    positiveSignals.push(
+      roleEvidence.matchMethod === "soc_code"
+        ? "Comparable sponsored role history found by SOC code."
+        : roleEvidence.matchMethod === "soc_title"
+          ? "Comparable sponsored role history found by SOC title."
+          : "Comparable sponsored role history found by title family."
+    )
+  } else if (requiresSupport && roleEvidence.count === 0) {
     score += 10
     keyConcerns.push("No comparable sponsored role-family history was found in available LCA records.")
   }
 
-  if (sameLocationCount != null && sameLocationCount > 0) {
+  if (locationLca.count != null && locationLca.count > 0) {
     score -= 5
-    positiveSignals.push("Historical LCA records exist for the same worksite state.")
-  } else if (sameLocationCount === 0 && input.workMode !== "remote") {
+    positiveSignals.push(
+      locationLca.matchLevel === "exact_city_state"
+        ? "Historical LCA records exist for the same city and state."
+        : locationLca.matchLevel === "state"
+          ? "Historical LCA records exist for the same worksite state."
+          : locationLca.matchLevel === "employer_wide_remote"
+            ? "Remote-compatible employer-wide LCA history exists."
+            : "Employer-wide LCA history exists."
+    )
+  } else if (locationLca.count === 0 && input.workMode !== "remote") {
     score += 6
     keyConcerns.push("No same-location LCA history was found for the stated worksite.")
   }
@@ -252,12 +356,12 @@ export function calculateOfferRisk(input: OfferRiskInput): OfferRiskAnalysis {
   }
 
   if (input.needsOptStemSupport || input.workAuthorizationStatus === "F1_STEM_OPT") {
-    if (company?.eVerifyLikely === true || visaFit.stemOptReadiness.eVerifyLikely === true) {
+    if (false) {
       score -= 7
       positiveSignals.push("E-Verify/STEM OPT readiness signal is present, but still needs employer confirmation.")
     } else {
       score += 8
-      keyConcerns.push("E-Verify and STEM OPT employer support are not confirmed.")
+      keyConcerns.push("E-Verify participation is unknown and should be confirmed independently.")
     }
   }
 
@@ -276,6 +380,7 @@ export function calculateOfferRisk(input: OfferRiskInput): OfferRiskAnalysis {
   if (!input.sponsorshipStatement?.trim()) missingData.push("Sponsorship statement or HR response was not provided.")
   if (!company) missingData.push("Company sponsorship history could not be matched yet.")
   if (!(input.lcaRecords?.length)) missingData.push("Historical LCA records were not available for this analysis.")
+  missingData.push("E-Verify status defaults to unknown unless an independent source is connected.")
 
   const coreDataMissing = !input.company.trim() || !input.jobTitle.trim()
   const confidence = coreDataMissing ? "unknown" : confidenceFromCoverage([
@@ -339,6 +444,8 @@ export function calculateOfferRisk(input: OfferRiskInput): OfferRiskAnalysis {
     },
     h1bTimingRisk: timingRisk,
     sponsorshipConflictDetected: Boolean(blocker?.detected),
+    roleFamilyEvidence: roleEvidence,
+    locationEvidence: locationLca,
     disclaimer: OFFER_RISK_DISCLAIMER,
   }
 }

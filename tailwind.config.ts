@@ -67,9 +67,9 @@ const config: Config = {
         brand: {
           DEFAULT: "hsl(var(--primary))",
           hover: "hsl(var(--primary-hover))",
-          navy: "#062246",
-          tint: "#FFF1E8",
-          "tint-strong": "#FFD2B8",
+          navy: "#9a3412",
+          tint: "#FFF7ED",
+          "tint-strong": "#FED7AA",
         },
         surface: {
           DEFAULT: "hsl(var(--surface))",

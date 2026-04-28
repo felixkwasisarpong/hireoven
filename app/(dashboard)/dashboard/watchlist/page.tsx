@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { BookmarkMinus, Plus, Search, Sparkles } from "lucide-react"
-import DashboardPageHeader from "@/components/layout/DashboardPageHeader"
 import CompanyLogo from "@/components/ui/CompanyLogo"
 import { useAuth } from "@/lib/hooks/useAuth"
 import { useWatchlist } from "@/lib/hooks/useWatchlist"
@@ -117,30 +116,25 @@ export default function WatchlistPage() {
   return (
     <main className="app-page">
       <div className="app-shell w-full space-y-5">
-        <DashboardPageHeader
-          kicker="Watchlist"
-          title="Companies worth stalking closely"
-          description="Track the employers you care about, see who is posting now, and remove friction when something fresh lands."
-          backHref="/dashboard"
-          backLabel="Back to feed"
-        />
-
         <section className="surface-card p-5">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">
-                Add companies
-              </p>
-              <h2 className="mt-2 text-xl font-semibold tracking-tight text-gray-900">
-                Build your shortlist
-              </h2>
-              <p className="mt-2 text-sm leading-6 text-gray-500">
-                Keep the employers you care about in one place and expand the list as new targets appear.
-              </p>
-            </div>
-          </div>
+          <a
+            href="/dashboard"
+            className="mb-4 inline-flex items-center rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 transition hover:bg-blue-100"
+          >
+            ← Back to feed
+          </a>
 
-          <div className="mt-5 rounded-[18px] border border-slate-200/80 bg-slate-50/55 p-4">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-600">
+            Watchlist
+          </p>
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-900">
+            Companies worth stalking closely
+          </h1>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+            Track the employers you care about, see who is posting now, and expand your shortlist as new targets appear.
+          </p>
+
+          <div className="mt-6 rounded-[18px] border border-slate-200/80 bg-slate-50/55 p-4">
             <div className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-3">
               <Search className="h-4 w-4 text-gray-400" />
               <input
@@ -157,7 +151,7 @@ export default function WatchlistPage() {
                   key={company.id}
                   type="button"
                   onClick={() => void addCompany(company.id)}
-                  className="flex items-center justify-between rounded-2xl border border-gray-200 bg-white px-4 py-3 text-left transition hover:border-[#FFD2B8] hover:bg-[#FCFEFE]"
+                  className="flex items-center justify-between rounded-2xl border border-gray-200 bg-white px-4 py-3 text-left transition hover:border-blue-200 hover:bg-blue-50/40"
                 >
                   <div className="flex min-w-0 items-center gap-3">
                     <CompanyLogo
@@ -175,7 +169,7 @@ export default function WatchlistPage() {
                       </p>
                     </div>
                   </div>
-                  <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-[#FFF7F2] text-[#FF5C18]">
+                  <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
                     <Plus className="h-4 w-4" />
                   </span>
                 </button>
@@ -186,7 +180,7 @@ export default function WatchlistPage() {
 
         {watchlist.length === 0 && !isLoading ? (
           <section className="empty-state py-12">
-            <Sparkles className="mx-auto h-10 w-10 text-[#FF5C18]" />
+            <Sparkles className="mx-auto h-10 w-10 text-blue-600" />
             <h2 className="mt-4 text-2xl font-semibold text-gray-900">
               Your watchlist is empty
             </h2>
@@ -196,7 +190,7 @@ export default function WatchlistPage() {
             </p>
           </section>
         ) : (
-          <section className="grid gap-4 lg:grid-cols-2">
+          <section className="grid gap-4 lg:grid-cols-3">
             {watchlist.map((item) => {
               const company = item.company
               const companyInsights = insights[item.company_id]
@@ -238,27 +232,29 @@ export default function WatchlistPage() {
                     </button>
                   </div>
 
-                  <div className="grid border-t border-slate-200/80 sm:grid-cols-2 sm:divide-x sm:divide-slate-200/80">
-                    <div className="px-5 py-4">
-                      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-gray-400">
-                        This week
-                      </p>
-                      <p className="mt-2 text-2xl font-semibold text-gray-900">
-                        {(companyInsights?.newJobsThisWeek ?? 0).toLocaleString()}
-                      </p>
-                      <p className="text-sm text-gray-500">new jobs this week</p>
-                    </div>
+                  <div className="border-t border-slate-200/80 px-5 py-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.22em] text-gray-400">
+                          This week
+                        </p>
+                        <p className="mt-2 text-2xl font-semibold text-gray-900">
+                          {(companyInsights?.newJobsThisWeek ?? 0).toLocaleString()}
+                        </p>
+                        <p className="text-sm text-gray-500">new jobs this week</p>
+                      </div>
 
-                    <div className="border-t border-slate-200/80 px-5 py-4 sm:border-t-0">
-                      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-gray-400">
-                        Latest post
-                      </p>
-                      <p className="mt-2 text-sm font-semibold text-gray-900">
-                        {companyInsights?.latestJobTitle || "No live jobs yet"}
-                      </p>
-                      <p className="mt-1 text-sm text-gray-500">
-                        {formatRelativeDate(companyInsights?.latestJobDetectedAt)}
-                      </p>
+                      <div className="max-w-[56%] text-right">
+                        <p className="text-xs font-semibold uppercase tracking-[0.22em] text-gray-400">
+                          Latest post
+                        </p>
+                        <p className="mt-2 line-clamp-2 text-sm font-semibold text-gray-900">
+                          {companyInsights?.latestJobTitle || "No live jobs yet"}
+                        </p>
+                        <p className="mt-1 text-sm text-gray-500">
+                          {formatRelativeDate(companyInsights?.latestJobDetectedAt)}
+                        </p>
+                      </div>
                     </div>
                   </div>
 
@@ -273,7 +269,7 @@ export default function WatchlistPage() {
                     </div>
                     <div className="mt-3 h-3 overflow-hidden rounded-full bg-gray-100">
                       <div
-                        className="h-full rounded-full bg-gradient-to-r from-[#062246] via-[#FF5C18] to-[#7DD3FC]"
+                        className="h-full rounded-full bg-[#2563EB]"
                         style={{ width: `${confidence}%` }}
                       />
                     </div>

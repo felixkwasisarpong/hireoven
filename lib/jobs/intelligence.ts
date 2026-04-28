@@ -12,6 +12,8 @@ import type {
   JobIntelligence,
   JobMatchScore,
   LcaSalaryIntelligence,
+  EVerifySignal,
+  VisaDataRecency,
   MatchScoreBreakdown,
   Resume,
   ResumeLcaRoleAlignment,
@@ -88,6 +90,12 @@ export const createVisaIntelligenceFallback = (
   const company = job?.company
   const companyProfile = getCompanyImmigrationProfile(company)
   const capExemptSignal = capExemptDetectionToSignal(detectCapExemptSignal(company, job))
+  const recency: VisaDataRecency = immigProfileRecency(companyProfile)
+  const eVerifySignal: EVerifySignal = {
+    status: "unknown",
+    source: "none",
+    confidence: "unknown",
+  }
   const fit = calculateVisaFitScore({
     jobTitle: job?.title ?? job?.normalized_title ?? null,
     jobDescription: job?.description ?? null,
@@ -102,7 +110,9 @@ export const createVisaIntelligenceFallback = (
     eVerify: null,
     capExempt: capExemptSignal,
     sponsorshipBlocker: blocker[0] ?? null,
-    dataRecencyDays: null,
+    dataRecencyDays: recency.asOfDate
+      ? Math.max(0, Math.floor((Date.now() - new Date(recency.asOfDate).getTime()) / 86_400_000))
+      : null,
   })
 
   return {
@@ -137,7 +147,23 @@ export const createVisaIntelligenceFallback = (
       confidence: fit.confidence,
     })),
     capExempt: fit.capExempt,
-    summary: fit.dataGaps.length > 0 ? `Missing signals: ${fit.dataGaps.join(", ")}` : null,
+    dataRecency: recency,
+    eVerifySignal,
+    summary:
+      fit.dataGaps.length > 0
+        ? "Evidence strength: Partial. Some employer-level evidence exists, but role/location-specific signals are limited."
+        : "Evidence strength: Good.",
+  }
+}
+
+function immigProfileRecency(profile: CompanyImmigrationProfileSummary): VisaDataRecency {
+  const asOfDate = profile.lastUpdatedAt ?? null
+  if (!asOfDate) return { status: "unknown", asOfDate: null, source: "unknown" }
+  const ageDays = Math.max(0, Math.floor((Date.now() - new Date(asOfDate).getTime()) / 86_400_000))
+  return {
+    status: ageDays <= 730 ? "recent" : "stale",
+    asOfDate,
+    source: "lca",
   }
 }
 

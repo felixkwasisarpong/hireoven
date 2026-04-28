@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef } from "react"
+import { createPortal } from "react-dom"
 import {
   AlertTriangle,
   BadgeCheck,
@@ -24,6 +25,10 @@ import {
   VISA_FIT_OPTIONS,
 } from "@/components/jobs/JobFilters"
 import type { GhostRiskMax, JobFilters, VisaFitLabel } from "@/types"
+
+// Inline z-index so global `body.site-chroma > * { z-index: 1 }` cannot stack
+// portaled nodes behind the dashboard. Same pattern as VisaIntelDrawer.
+const Z_TOP = 2_147_483_647
 
 interface Props {
   open: boolean
@@ -203,10 +208,11 @@ export default function AdvancedFiltersDrawer({
 
   if (!open) return null
 
-  return (
+  return createPortal(
     <>
       <div
-        className="fixed inset-0 z-[9998] bg-black/20"
+        className="bg-black/20"
+        style={{ position: "fixed", inset: 0, zIndex: Z_TOP - 1 }}
         onClick={onClose}
         aria-hidden="true"
       />
@@ -214,7 +220,15 @@ export default function AdvancedFiltersDrawer({
       <div
         ref={drawerRef}
         data-portal-drawer
-        className="app-drawer fixed right-0 top-0 z-[9999] flex h-full w-[min(100vw,400px)] flex-col bg-white shadow-2xl"
+        className="app-drawer flex h-full w-[min(100vw,400px)] flex-col bg-white shadow-2xl"
+        style={{
+          position: "fixed",
+          top: 0,
+          right: 0,
+          height: "100%",
+          zIndex: Z_TOP,
+          backgroundColor: "#ffffff",
+        }}
         role="dialog"
         aria-modal="true"
         aria-label="Advanced filters"
@@ -277,7 +291,7 @@ export default function AdvancedFiltersDrawer({
                 label="Hybrid"
                 description="Office + remote flexibility"
                 icon={Building2}
-                iconColor="bg-violet-500"
+                iconColor="bg-orange-500"
                 onChange={(v) => set({ hybrid: v || undefined })}
               />
               <ToggleRow
@@ -374,7 +388,7 @@ export default function AdvancedFiltersDrawer({
                   label="Possible cap-exempt employer"
                   description="Universities, nonprofits, research institutes"
                   icon={ShieldCheck}
-                  iconColor="bg-violet-600"
+                  iconColor="bg-orange-600"
                   accent
                   onChange={(v) => set({ cap_exempt_possible: v || undefined })}
                 />
@@ -447,6 +461,7 @@ export default function AdvancedFiltersDrawer({
           </button>
         </div>
       </div>
-    </>
+    </>,
+    document.body
   )
 }

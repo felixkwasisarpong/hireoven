@@ -208,7 +208,7 @@ export default function ResumeUploader({
       />
 
       <div className={cn("flex gap-4", compact ? "items-start" : "items-center")}>
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-sm border border-slate-200/80 bg-slate-50/90 text-[#062246]">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-sm border border-slate-200/80 bg-slate-50/90 text-[#ea580c]">
           {phase === "uploading" || phase === "processing" ? (
             <Loader2 className="h-5 w-5 animate-spin" />
           ) : showPrompt ? (
@@ -272,7 +272,7 @@ export default function ResumeUploader({
                   style={{ width: `${Math.max(progress, phase === "processing" ? 100 : 6)}%` }}
                 />
               </div>
-              <p className="text-sm text-[#062246]">
+              <p className="text-sm text-[#ea580c]">
                 {phase === "uploading" ? `Uploading... ${progress}%` : "AI is reading your resume..."}
               </p>
             </div>
@@ -289,7 +289,7 @@ export default function ResumeUploader({
           type="button"
           onClick={openPicker}
           className={cn(
-            "mt-5 flex w-full items-center justify-center gap-2 rounded-sm border border-slate-200/90 bg-white text-sm font-medium text-gray-700 transition hover:border-[#FFB088] hover:bg-[#FFF8F4] hover:text-[#062246]",
+            "mt-5 flex w-full items-center justify-center gap-2 rounded-sm border border-slate-200/90 bg-white text-sm font-medium text-gray-700 transition hover:border-[#FFB088] hover:bg-[#FFF8F4] hover:text-[#ea580c]",
             compact ? "px-4 py-3" : "px-5 py-4"
           )}
         >

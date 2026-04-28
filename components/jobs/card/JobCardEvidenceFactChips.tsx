@@ -207,7 +207,7 @@ function FactChip({
         id={anchorId}
         onClick={onToggle}
         className={cn(
-          "inline-flex max-w-full items-center gap-1 rounded-md px-0.5 text-left text-[12.5px] text-slate-500 transition hover:bg-slate-50/80 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]/20",
+          "inline-flex max-w-full items-center gap-1 rounded-md px-0.5 text-left text-[12.5px] text-slate-500 transition hover:bg-slate-50/80 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-600/20",
           isOpen && "text-slate-800"
         )}
       >

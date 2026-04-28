@@ -15,6 +15,49 @@ import type {
 
 export const H1B_PREDICTION_CACHE_TTL_MS = 1000 * 60 * 60 * 24 * 7 // 7 days
 
+function pickString(value: unknown): string | null {
+  if (typeof value !== "string") return null
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : null
+}
+
+function extractSocHints(job: Job): { socCode: string | null; socTitle: string | null } {
+  const raw = job.raw_data
+  if (!raw || typeof raw !== "object") return { socCode: null, socTitle: null }
+  const root = raw as Record<string, unknown>
+  const normalized = (root.normalized && typeof root.normalized === "object")
+    ? (root.normalized as Record<string, unknown>)
+    : null
+
+  const candidatesSocCode = [
+    root.soc_code,
+    root.socCode,
+    root.SOC_CODE,
+    normalized?.soc_code,
+    normalized?.socCode,
+    normalized?.SOC_CODE,
+    (normalized?.header && typeof normalized.header === "object")
+      ? (normalized.header as Record<string, unknown>).soc_code
+      : null,
+  ]
+  const candidatesSocTitle = [
+    root.soc_title,
+    root.socTitle,
+    root.SOC_TITLE,
+    normalized?.soc_title,
+    normalized?.socTitle,
+    normalized?.SOC_TITLE,
+    (normalized?.header && typeof normalized.header === "object")
+      ? (normalized.header as Record<string, unknown>).soc_title
+      : null,
+  ]
+
+  return {
+    socCode: candidatesSocCode.map(pickString).find(Boolean) ?? null,
+    socTitle: candidatesSocTitle.map(pickString).find(Boolean) ?? null,
+  }
+}
+
 export async function predictForJob(
   jobId: string,
   options: { force?: boolean } = {}
@@ -55,6 +98,7 @@ export async function predictForJob(
 export async function runPrediction(
   job: Job & { company: Company }
 ): Promise<H1BPrediction> {
+  const { socCode, socTitle } = extractSocHints(job)
   const input: H1BPredictionInput = {
     jobTitle: job.title,
     normalizedTitle: job.normalized_title,
@@ -66,7 +110,8 @@ export async function runPrediction(
     salaryMax: job.salary_max,
     seniorityLevel: job.seniority_level,
     employmentType: job.employment_type,
-    socCode: null,
+    socCode,
+    socTitle,
     description: job.description,
   }
 

@@ -30,9 +30,12 @@ const nextConfig = {
         headers: [
           { key: "Access-Control-Allow-Origin", value: process.env.NEXT_PUBLIC_APP_URL ?? "*" },
           { key: "Access-Control-Allow-Methods", value: "GET,POST,PUT,DELETE,OPTIONS" },
-          { key: "Access-Control-Allow-Headers", value: "Content-Type, Authorization" },
+          // Include X-Hireoven-Extension so the Scout Bridge can identify itself.
+          { key: "Access-Control-Allow-Headers", value: "Content-Type, Authorization, X-Hireoven-Extension" },
         ],
       },
+      // Extension routes handle their own per-request CORS (reflecting the
+      // chrome-extension:// origin) so no static header override is needed here.
       {
         source: "/:path*",
         headers: [

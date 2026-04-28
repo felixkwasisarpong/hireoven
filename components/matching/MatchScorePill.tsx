@@ -27,8 +27,8 @@ function scoreStyles(score: number, method: ScoreMethod | null) {
 
   if (score >= 70) {
     return method === "deep"
-      ? "border-violet-200 bg-violet-100 text-violet-800"
-      : "border-violet-200 bg-violet-50 text-violet-700"
+      ? "border-orange-200 bg-orange-100 text-orange-800"
+      : "border-orange-200 bg-orange-50 text-orange-700"
   }
 
   if (score >= 50) {

@@ -47,7 +47,7 @@ function StatCard({
   const colors = {
     sky: "bg-[#FFF1E8] text-[#FF5C18]",
     green: "bg-green-50 text-green-600",
-    violet: "bg-violet-50 text-violet-600",
+    violet: "bg-orange-50 text-orange-600",
     amber: "bg-amber-50 text-amber-600",
   }
   return (
@@ -88,7 +88,7 @@ function AtsBadge({ ats }: { ats: string | null }) {
   const colors: Record<string, string> = {
     greenhouse: "bg-emerald-100 text-emerald-700",
     lever: "bg-blue-100 text-blue-700",
-    ashby: "bg-purple-100 text-purple-700",
+    ashby: "bg-orange-100 text-orange-700",
     workday: "bg-orange-100 text-orange-700",
   }
   return (

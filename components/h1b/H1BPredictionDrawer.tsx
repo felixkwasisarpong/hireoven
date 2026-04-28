@@ -245,6 +245,11 @@ export default function H1BPredictionDrawer({
                   Prediction confidence: {prediction.confidenceLevel}
                   {prediction.confidenceLevel === "low" && " - limited data"}
                 </p>
+                <p className="text-[11px] text-slate-400">
+                  {prediction.dataRecency?.asOfDate
+                    ? `Data as of ${new Date(prediction.dataRecency.asOfDate).toLocaleDateString()}`
+                    : "Recency unknown"}
+                </p>
               </div>
             </section>
           )}
@@ -276,6 +281,10 @@ export default function H1BPredictionDrawer({
                   </li>
                 ))}
               </ul>
+              <p className="text-[11px] text-slate-400">
+                Sample size: {prediction.roleFamilyEvidence?.sampleSize ?? "unavailable"} · Evidence strength:{" "}
+                {prediction.roleFamilyEvidence?.confidence ?? "partial"}
+              </p>
             </section>
           )}
 
