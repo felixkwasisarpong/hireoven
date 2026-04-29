@@ -2,7 +2,7 @@
 
 import { useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
-import { GripVertical, Sparkles } from "lucide-react"
+import { Sparkles } from "lucide-react"
 import CompanyLogo from "@/components/ui/CompanyLogo"
 import { cn } from "@/lib/utils"
 import type { JobApplication } from "@/types"
@@ -19,37 +19,29 @@ type Props = {
 }
 
 export function ApplicationCard({ application, onOpen }: Props) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: application.id,
-  })
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
     transition,
-    opacity: isDragging ? 0.35 : 1,
-  }
+    isDragging,
+  } = useSortable({ id: application.id })
 
   return (
     <div
       ref={setNodeRef}
-      style={style}
-      className={cn(
-        "group relative cursor-pointer select-none rounded-[14px] border border-slate-200/80 bg-white p-3.5",
-        "shadow-[0_1px_0_rgba(15,23,42,0.04),0_4px_12px_rgba(15,23,42,0.04)]",
-        "transition hover:shadow-[0_8px_24px_rgba(15,23,42,0.09)] hover:border-slate-300",
-        isDragging && "ring-2 ring-[#FF5C18] ring-opacity-30 shadow-2xl"
-      )}
+      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.3 : 1 }}
+      {...attributes}
+      {...listeners}
       onClick={onOpen}
+      className={cn(
+        "group relative select-none rounded-[14px] border border-slate-200/80 bg-white p-3.5",
+        "shadow-[0_1px_0_rgba(15,23,42,0.04),0_4px_12px_rgba(15,23,42,0.04)]",
+        "transition-shadow hover:shadow-[0_8px_24px_rgba(15,23,42,0.09)] hover:border-slate-300",
+        isDragging ? "cursor-grabbing ring-2 ring-orange-400/30 shadow-2xl" : "cursor-grab"
+      )}
     >
-      <div
-        {...attributes}
-        {...listeners}
-        className="absolute right-2 top-2 cursor-grab touch-none opacity-0 transition group-hover:opacity-40 active:cursor-grabbing"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <GripVertical className="h-4 w-4 text-slate-400" />
-      </div>
-
       <div className="flex items-start gap-2.5">
         <CompanyLogo
           companyName={application.company_name}
@@ -57,8 +49,7 @@ export function ApplicationCard({ application, onOpen }: Props) {
           logoUrl={application.company_logo_url}
           className="h-9 w-9 rounded-xl"
         />
-
-        <div className="min-w-0 flex-1 pr-5">
+        <div className="min-w-0 flex-1">
           <p className="truncate text-[10.5px] font-semibold uppercase tracking-[0.18em] text-slate-400">
             {application.company_name}
           </p>
@@ -76,20 +67,15 @@ export function ApplicationCard({ application, onOpen }: Props) {
               {application.match_score}%
             </span>
           )}
-          {application.applied_at && (
+          {(application.applied_at ?? application.created_at) && (
             <span className="text-[10.5px] text-slate-400">
-              {new Date(application.applied_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-            </span>
-          )}
-          {!application.applied_at && application.created_at && (
-            <span className="text-[10.5px] text-slate-400">
-              {new Date(application.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+              {new Date((application.applied_at ?? application.created_at)!).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
             </span>
           )}
         </div>
         {application.interviews?.length > 0 && (
           <span className="rounded-full bg-orange-50 px-2 py-0.5 text-[10.5px] font-semibold text-orange-600">
-            {application.interviews.length} round{application.interviews.length !== 1 ? "s" : ""}
+            {application.interviews.length}×
           </span>
         )}
       </div>
