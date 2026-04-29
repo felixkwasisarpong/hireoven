@@ -36,5 +36,12 @@ export function useResumeHubData() {
     void refresh()
   }, [refresh])
 
+  // Re-fetch whenever any part of the app signals a resume change
+  useEffect(() => {
+    function onResumeChange() { void refresh() }
+    window.addEventListener("hireoven:resumes-changed", onResumeChange)
+    return () => window.removeEventListener("hireoven:resumes-changed", onResumeChange)
+  }, [refresh])
+
   return { data, isLoading, refresh }
 }
