@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ElementType, type ReactNode } from "react"
+import { flushSync } from "react-dom"
 import { useRouter, useSearchParams } from "next/navigation"
 import {
   closestCenter,
@@ -1649,6 +1650,7 @@ export default function ResumeStudioPage() {
         }
         if (versionOk) {
           window.dispatchEvent(new Event("hireoven:resumes-changed"))
+          void refreshHubData()
         }
         if (!silent) {
           if (versionOk) {
@@ -1924,8 +1926,8 @@ export default function ResumeStudioPage() {
     setAiLoadingSectionId(sectionId)
     try {
       const text = await requestAiSectionText(sectionType, currentText, instruction)
-      if (sectionType === "profile") setProfileSummary(text)
-      else if (sectionType === "skills") setSkillsText(text)
+      if (sectionType === "profile") flushSync(() => setProfileSummary(text))
+      else if (sectionType === "skills") flushSync(() => setSkillsText(text))
       else if (sectionType === "experience") {
         const index = Number(sectionId.split("-")[1] ?? 0)
         setExperienceDrafts((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, description: text } : item))
