@@ -1164,7 +1164,7 @@ export default function ResumeStudioPage() {
     const locationParts = (selectedResume.location ?? "").split(/,\s*/)
 
     setPersonalInfo({
-      title: selectedResume.primary_role || "",
+      title: "",
       firstName: nameParts.firstName,
       lastName: nameParts.lastName,
       phone: selectedResume.phone || "",
