@@ -1580,6 +1580,7 @@ export default function ResumeStudioPage() {
       clearTimeout(autoSaveTimerRef.current)
       autoSaveTimerRef.current = null
     }
+    let savedOk = false
     try {
       const fullName = `${personalInfo.firstName} ${personalInfo.lastName}`.trim() || null
       const location = [personalInfo.city, personalInfo.state, personalInfo.country].filter(Boolean).join(", ") || personalInfo.address || null
@@ -1637,7 +1638,7 @@ export default function ResumeStudioPage() {
       }
       const updated = (await res.json()) as Resume
       upsertResume(updated)
-      setIsDirty(false)
+      savedOk = true
 
       if (createVersion) {
         const snapshot = createResumeSnapshot(livePreviewResume)
@@ -1680,6 +1681,7 @@ export default function ResumeStudioPage() {
         })
       }
     } finally {
+      if (savedOk) setIsDirty(false)   // batched with isSaving=false → single render
       isSavingRef.current = false
       setIsSaving(false)
     }
