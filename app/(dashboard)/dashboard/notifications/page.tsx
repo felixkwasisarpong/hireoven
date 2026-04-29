@@ -36,7 +36,15 @@ function isServerNotification(notification: AppNotification): notification is Al
 }
 
 function notificationCategory(notification: AppNotification) {
-  if (isLocalNotification(notification)) return notification.notification_type === "resume" ? "Resume" : "System"
+  if (isLocalNotification(notification)) {
+    if (notification.notification_type === "resume") return "Resume"
+    if (notification.notification_type === "application") return "Applications"
+    if (notification.notification_type === "visa") return "Visa Signal"
+    if (notification.notification_type === "risk") return "Risk Alert"
+    if (notification.notification_type === "job_match") return "Match Signal"
+    if (notification.notification_type === "autofill") return "Autofill"
+    return "System"
+  }
   if (!isServerNotification(notification)) return "System"
   return notification.notification_type === "watchlist"
     ? "Watchlist"

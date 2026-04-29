@@ -8,6 +8,7 @@ import { useAuth } from "@/lib/hooks/useAuth"
 import { useSubscription } from "@/lib/hooks/useSubscription"
 import { useMatchScores } from "@/lib/hooks/useMatchScores"
 import { useJobs } from "@/lib/hooks/useJobs"
+import { publishFeedSignalNotifications } from "@/lib/notifications/feed-signals"
 import type { JobFilters } from "@/types"
 
 interface JobFeedProps {
@@ -96,6 +97,7 @@ export default function JobFeed({
     const id = window.setInterval(() => setNow(Date.now()), 60_000)
     return () => window.clearInterval(id)
   }, [])
+  const signalFingerprintRef = useRef("")
 
   const lastMetaRef = useRef({ totalCount: -1, lastHourCount: -1 })
   useEffect(() => {
@@ -122,6 +124,18 @@ export default function JobFeed({
     observer.observe(sentinelRef.current)
     return () => observer.disconnect()
   }, [hasMore, loadMore])
+
+  useEffect(() => {
+    if (isLoading || jobs.length === 0) return
+    const fingerprint = jobs
+      .slice(0, 18)
+      .map((job) => `${job.id}:${job.match_score?.overall_score ?? "na"}:${job.sponsorship_score}:${job.first_detected_at}`)
+      .join("|")
+    if (!fingerprint || signalFingerprintRef.current === fingerprint) return
+    signalFingerprintRef.current = fingerprint
+
+    publishFeedSignalNotifications(jobs, { source: "hireoven", maxPerRun: 2 })
+  }, [isLoading, jobs])
 
   /** “Best match” must follow the same % as the card, not feed position #1 (rank blends freshness). */
   let bestMatchJobId: string | null = null

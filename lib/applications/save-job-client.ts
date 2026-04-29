@@ -1,5 +1,7 @@
 /** Shared client helpers for saving a job to the pipeline (job_applications). */
 
+import { publishLocalNotification } from "@/lib/hooks/useNotifications"
+
 export const JOB_APPLICATION_SAVED_EVENT = "hireoven:application-saved"
 
 export type SaveJobToPipelineInput = {
@@ -58,6 +60,26 @@ export async function saveJobToPipeline(input: SaveJobToPipelineInput): Promise<
       message: body.error ?? "Could not save this job.",
     }
   }
+
+  publishLocalNotification({
+    type: "application",
+    tone: "success",
+    title: "Saved to pipeline",
+    message: `${input.jobTitle} at ${input.companyName} is now in Applications.`,
+    href: "/dashboard/applications",
+    tags: [
+      ...(typeof input.matchScore === "number" && Number.isFinite(input.matchScore)
+        ? [{ label: `${Math.round(input.matchScore)}% match`, tone: "success" as const }]
+        : []),
+      { label: "Pipeline", tone: "info" },
+    ],
+    context: {
+      source: "hireoven",
+      jobId: input.jobId,
+      company: input.companyName,
+      matchScore: input.matchScore ?? null,
+    },
+  })
 
   return { ok: true }
 }

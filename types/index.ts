@@ -1340,7 +1340,7 @@ export type AlertNotificationInsert = Omit<AlertNotification, 'id' | 'sent_at' |
 };
 
 export type AlertNotificationWithDetails = AlertNotification & {
-  job: JobWithCompany;
+  job: JobWithMatchScore;
   alert: JobAlert | null;
 };
 

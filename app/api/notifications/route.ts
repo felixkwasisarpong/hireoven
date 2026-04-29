@@ -27,11 +27,22 @@ export async function GET(request: NextRequest) {
   const [notifResult, countResult] = await Promise.all([
     pool.query<AlertNotificationWithDetails>(
       `SELECT n.*,
-              to_jsonb(j.*) || jsonb_build_object('company', to_jsonb(c.*)) AS job,
+              to_jsonb(j.*) || jsonb_build_object(
+                'company', to_jsonb(c.*),
+                'match_score', COALESCE(ms.match_score, 'null'::jsonb)
+              ) AS job,
               to_jsonb(a.*) AS alert
        FROM alert_notifications n
        LEFT JOIN jobs j ON j.id = n.job_id
        LEFT JOIN companies c ON c.id = j.company_id
+       LEFT JOIN LATERAL (
+         SELECT to_jsonb(s.*) AS match_score
+         FROM job_match_scores s
+         WHERE s.user_id = n.user_id
+           AND s.job_id = n.job_id
+         ORDER BY s.computed_at DESC
+         LIMIT 1
+       ) ms ON true
        LEFT JOIN job_alerts a ON a.id = n.alert_id
        WHERE ${where.join(" AND ")}
        ORDER BY n.sent_at DESC

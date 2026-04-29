@@ -1,6 +1,7 @@
 import crypto from "crypto"
 import pLimit from "p-limit"
 import { NextRequest, NextResponse } from "next/server"
+import { sendCrawlTopMatchDigests, type CrawlTopMatchDigestSummary } from "@/lib/alerts/crawl-match-digest"
 import { crawlCareersPage, type CrawlTarget } from "@/lib/crawler"
 import { persistCrawlJobs } from "@/lib/crawler/persist"
 import { requireCronAuth } from "@/lib/env"
@@ -152,6 +153,7 @@ export async function GET(request: NextRequest) {
   let totalDurationMs = 0
   let completed = false
   let lastErrorMessage: string | null = null
+  let topMatchDigest: CrawlTopMatchDigestSummary | null = null
 
   await upsertCrawlRuntime({
     state: "running",
@@ -294,6 +296,34 @@ export async function GET(request: NextRequest) {
           )
         : 0
 
+    const digestWindowEndIso = new Date().toISOString()
+    if (inserted > 0) {
+      try {
+        topMatchDigest = await sendCrawlTopMatchDigests({
+          windowStartIso: startedAtIso,
+          windowEndIso: digestWindowEndIso,
+          minScore: 80,
+          maxJobsPerUser: 5,
+        })
+      } catch (digestError) {
+        const message = digestError instanceof Error ? digestError.message : String(digestError)
+        console.error(`[crawl] top-match digest failed: ${message}`)
+      }
+    } else {
+      topMatchDigest = {
+        enabled: Boolean(process.env.RESEND_API_KEY),
+        windowStartIso: startedAtIso,
+        windowEndIso: digestWindowEndIso,
+        minScore: 80,
+        maxJobsPerUser: 5,
+        jobsInsertedInWindow: 0,
+        matchedUsers: 0,
+        emailsSent: 0,
+        emailsFailed: 0,
+        skippedReason: "No new jobs inserted in this crawl window",
+      }
+    }
+
     completed = true
     return NextResponse.json({
       success: true,
@@ -303,6 +333,7 @@ export async function GET(request: NextRequest) {
       inserted,
       totalDurationMs,
       avgCompanyDurationMs,
+      topMatchDigest,
       timestamp: new Date().toISOString(),
     })
   } catch (error) {
