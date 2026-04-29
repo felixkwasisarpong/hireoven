@@ -122,6 +122,15 @@ type PersonalCustomField = {
   value: string
 }
 
+type StructuredEntry = {
+  id: string
+  title: string
+  org: string
+  date: string
+  credId: string
+  description: string
+}
+
 type EditorSnapshot = {
   sections: ResumeSectionState[]
   customSections: Record<string, ResumePreviewCustomSection>
@@ -489,7 +498,6 @@ function EditableResumeSection({
               className="min-w-0 max-w-[320px] rounded-lg border border-transparent bg-transparent px-2 py-1 text-[18px] font-bold uppercase tracking-wide text-slate-800 outline-none transition focus:border-[#5B4DFF]/30 focus:bg-white focus:ring-2 focus:ring-[#5B4DFF]/10"
               aria-label={`Rename ${section.title} section`}
             />
-            {section.premium && <PremiumBadge />}
             {section.collapsed && <span className="text-[11px] font-semibold text-slate-400">Collapsed</span>}
           </div>
         </div>
@@ -979,6 +987,8 @@ export default function ResumeStudioPage() {
   const [isDirty, setIsDirty] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isDownloading, setIsDownloading] = useState(false)
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const saveDraftLatestRef = useRef<() => Promise<void>>(() => Promise.resolve())
   const [undoStack, setUndoStack] = useState<EditorSnapshot[]>([])
   const [redoStack, setRedoStack] = useState<EditorSnapshot[]>([])
   const lastSnapshotRef = useRef<EditorSnapshot | null>(null)
@@ -1006,6 +1016,7 @@ export default function ResumeStudioPage() {
   const [educationDrafts, setEducationDrafts] = useState<EducationDraft[]>([])
   const [projectsDraft, setProjectsDraft] = useState("")
   const [publicationDrafts, setPublicationDrafts] = useState<PublicationDraft[]>([])
+  const [sectionEntries, setSectionEntries] = useState<Record<string, StructuredEntry[]>>({})
   const [profileSummary, setProfileSummary] = useState("")
 
   useEffect(() => {
@@ -1316,6 +1327,34 @@ export default function ResumeStudioPage() {
 
   function markDirty() {
     setIsDirty(true)
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current)
+    autoSaveTimerRef.current = setTimeout(() => void saveDraftLatestRef.current(), 3000)
+  }
+
+  function getEntries(sectionId: string): StructuredEntry[] {
+    return sectionEntries[sectionId] ?? []
+  }
+
+  function addEntry(sectionId: string) {
+    const entry: StructuredEntry = { id: `${sectionId}-${Date.now()}`, title: "", org: "", date: "", credId: "", description: "" }
+    setSectionEntries((prev) => ({ ...prev, [sectionId]: [...(prev[sectionId] ?? []), entry] }))
+    markDirty()
+  }
+
+  function updateEntry(sectionId: string, entryId: string, patch: Partial<StructuredEntry>) {
+    setSectionEntries((prev) => ({
+      ...prev,
+      [sectionId]: (prev[sectionId] ?? []).map((e) => e.id === entryId ? { ...e, ...patch } : e),
+    }))
+    markDirty()
+  }
+
+  function removeEntry(sectionId: string, entryId: string) {
+    setSectionEntries((prev) => ({
+      ...prev,
+      [sectionId]: (prev[sectionId] ?? []).filter((e) => e.id !== entryId),
+    }))
+    markDirty()
   }
 
   function experienceIndexFromId(experienceId: string) {
@@ -1546,7 +1585,7 @@ export default function ResumeStudioPage() {
     applyEditorSnapshot(next)
   }
 
-  async function saveDraft(silent = false) {
+  async function saveDraft(silent = false, createVersion = false) {
     if (!selectedResume?.id) {
       if (!silent) pushToast({ tone: "info", title: "Select a resume to save." })
       return
@@ -1610,7 +1649,23 @@ export default function ResumeStudioPage() {
       const updated = (await res.json()) as Resume
       upsertResume(updated)
       setIsDirty(false)
-      if (!silent) {
+
+      if (createVersion) {
+        const snapshot = createResumeSnapshot(livePreviewResume)
+        await fetch(`/api/resume/${selectedResume.id}/versions`, {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: `${documentName} — ${new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`,
+            changes_summary: "Saved from studio",
+            snapshot,
+          }),
+        }).catch(() => {})
+        if (!silent) {
+          pushToast({ tone: "success", title: "Version saved", description: "Your resume and a version snapshot have been saved." })
+        }
+      } else if (!silent) {
         pushToast({ tone: "success", title: "Resume saved", description: "Your changes have been saved." })
       }
     } catch (error) {
@@ -2332,6 +2387,76 @@ export default function ResumeStudioPage() {
       )
     }
 
+    // ── Structured sections: awards, certificates, achievements ──────────────
+    if (section.type === "awards" || section.type === "certificates" || section.type === "achievements") {
+      const entries = getEntries(section.id)
+      const isCert = section.type === "certificates"
+      const isAward = section.type === "awards"
+      const entryLabel = isCert ? "Certificate" : isAward ? "Award" : "Achievement"
+      return (
+        <EditableResumeSection key={section.id} {...commonProps} addLabel={`Add ${entryLabel}`} onAdd={() => addEntry(section.id)}>
+          <div className="space-y-3">
+            {entries.length === 0 && (
+              <button
+                type="button"
+                onClick={() => addEntry(section.id)}
+                className="flex h-12 w-full items-center justify-center rounded-xl border border-dashed border-slate-300 text-[13px] font-bold text-slate-500 hover:bg-slate-50"
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Add your first {entryLabel.toLowerCase()}
+              </button>
+            )}
+            {entries.map((entry, idx) => (
+              <div key={entry.id} className="rounded-xl border border-slate-200 bg-slate-50">
+                <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2.5">
+                  <p className="text-[13px] font-semibold text-slate-700">{entry.title || `${entryLabel} ${idx + 1}`}</p>
+                  <button
+                    type="button"
+                    onClick={() => removeEntry(section.id, entry.id)}
+                    className="text-red-400 transition hover:text-red-600"
+                    aria-label={`Remove ${entryLabel.toLowerCase()}`}
+                  >
+                    <TrashIcon />
+                  </button>
+                </div>
+                <div className="grid gap-3 p-3 sm:grid-cols-2">
+                  <TextInput
+                    label={isCert ? "Certificate name" : isAward ? "Award name" : "Achievement title"}
+                    value={entry.title}
+                    onChange={(v) => updateEntry(section.id, entry.id, { title: v })}
+                  />
+                  <TextInput
+                    label={isCert ? "Issuing organization" : isAward ? "Awarding body" : "Organization / Context"}
+                    value={entry.org}
+                    onChange={(v) => updateEntry(section.id, entry.id, { org: v })}
+                  />
+                  <TextInput
+                    label={isCert ? "Issue date" : "Year / Date"}
+                    value={entry.date}
+                    onChange={(v) => updateEntry(section.id, entry.id, { date: v })}
+                  />
+                  {isCert && (
+                    <TextInput
+                      label="Credential ID (optional)"
+                      value={entry.credId}
+                      onChange={(v) => updateEntry(section.id, entry.id, { credId: v })}
+                    />
+                  )}
+                  <div className={isCert ? "sm:col-span-2" : undefined}>
+                    <TextInput
+                      label="Description (optional)"
+                      value={entry.description}
+                      onChange={(v) => updateEntry(section.id, entry.id, { description: v })}
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </EditableResumeSection>
+      )
+    }
+
     const custom = customSections[section.id] ?? { title: section.title, content: "" }
     return (
       <EditableResumeSection key={section.id} {...commonProps}>
@@ -2352,33 +2477,41 @@ export default function ResumeStudioPage() {
     )
   }
 
+  // Always keep ref current so the auto-save timer calls the latest saveDraft
+  saveDraftLatestRef.current = () => saveDraft(true)
+
   return (
     <main className="min-h-[calc(100vh-8.5rem)] bg-[#FAFBFF]">
       <div className="w-full max-w-none space-y-4 px-4 py-3 sm:px-6 lg:px-8 xl:px-10 2xl:px-12">
         <header className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <h1 className="text-[24px] font-bold tracking-tight text-slate-950">AI Resume Studio</h1>
-            <p className="mt-1 text-[13px] text-slate-500">Preview, edit, and tailor your resume in one workspace.</p>
+            <h1 className="text-[24px] font-bold tracking-tight text-slate-950">Resume Studio</h1>
+            <p className="mt-1 text-[13px] text-slate-500">Edit, preview, and tailor your resume.</p>
           </div>
           <div className="flex flex-wrap gap-2">
+            {/* Download — always visible */}
             <button
               type="button"
               onClick={() => void handleDownloadResume()}
               disabled={!selectedResume?.id || isDownloading || isSaving}
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-[12.5px] font-semibold text-[#5B4DFF] transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-[12.5px] font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isDownloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-              {isDownloading ? "Downloading..." : "Download Resume"}
+              {isDownloading ? "Downloading…" : "Download"}
             </button>
-            <button
-              type="button"
-              onClick={() => void saveDraft()}
-              disabled={!selectedResume?.id || isSaving}
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#5B4DFF] px-4 text-[12.5px] font-semibold text-white transition hover:bg-[#493EE6] disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              {isSaving ? "Saving..." : "Save Draft"}
-            </button>
+
+            {/* Preview mode: Save + Version — tailor mode has its own save in the workflow */}
+            {mode === "preview" && (
+              <button
+                type="button"
+                onClick={() => void saveDraft(false, true)}
+                disabled={!selectedResume?.id || isSaving}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-orange-500 px-4 text-[12.5px] font-semibold text-white shadow-sm transition hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                {isSaving ? "Saving…" : "Save Version"}
+              </button>
+            )}
           </div>
         </header>
 
@@ -2488,7 +2621,6 @@ export default function ResumeStudioPage() {
                           <Icon className="h-4 w-4" />
                           {label}
                         </span>
-                        {premium && <PremiumBadge />}
                       </button>
                     ))}
                   </div>
@@ -2496,7 +2628,6 @@ export default function ResumeStudioPage() {
                     <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
                       <div className="flex items-center gap-2">
                         <p className="text-[14px] font-bold text-slate-950">{selectedAddSection}</p>
-                        {["Projects", "Publications", "Graphs"].includes(selectedAddSection) && <PremiumBadge />}
                       </div>
                       <p className="mt-3 text-[13px] leading-relaxed text-slate-600">
                         {selectedAddSection === "Achievements"
