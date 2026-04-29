@@ -969,6 +969,7 @@ export default function ResumeStudioPage() {
   const [isDownloading, setIsDownloading] = useState(false)
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const saveDraftLatestRef = useRef<() => Promise<void>>(() => Promise.resolve())
+  const isSavingRef = useRef(false)
   const [undoStack, setUndoStack] = useState<EditorSnapshot[]>([])
   const [redoStack, setRedoStack] = useState<EditorSnapshot[]>([])
   const lastSnapshotRef = useRef<EditorSnapshot | null>(null)
@@ -1307,6 +1308,7 @@ export default function ResumeStudioPage() {
 
   function markDirty() {
     setIsDirty(true)
+    if (isSavingRef.current) return  // don't race with an active save
     if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current)
     autoSaveTimerRef.current = setTimeout(() => void saveDraftLatestRef.current(), 3000)
   }
@@ -1566,11 +1568,18 @@ export default function ResumeStudioPage() {
   }
 
   async function saveDraft(silent = false, createVersion = false) {
+    if (isSavingRef.current) return  // prevent concurrent saves
     if (!selectedResume?.id) {
       if (!silent) pushToast({ tone: "info", title: "Select a resume to save." })
       return
     }
+    isSavingRef.current = true
     setIsSaving(true)
+    // cancel any pending auto-save so it doesn't race with this call
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current)
+      autoSaveTimerRef.current = null
+    }
     try {
       const fullName = `${personalInfo.firstName} ${personalInfo.lastName}`.trim() || null
       const location = [personalInfo.city, personalInfo.state, personalInfo.country].filter(Boolean).join(", ") || personalInfo.address || null
@@ -1671,6 +1680,7 @@ export default function ResumeStudioPage() {
         })
       }
     } finally {
+      isSavingRef.current = false
       setIsSaving(false)
     }
   }
