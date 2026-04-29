@@ -5,15 +5,17 @@ import Link from "next/link"
 import { useParams } from "next/navigation"
 import {
   ArrowLeft,
+  ArrowRight,
+  Check,
   CheckCircle2,
-  ChevronRight,
   ExternalLink,
-  Lightbulb,
-  XCircle,
+  Plus,
+  Sparkles,
+  X,
 } from "lucide-react"
 import AnalysisScoreCircle from "@/components/resume/AnalysisScoreCircle"
+import CompanyLogo from "@/components/ui/CompanyLogo"
 import { useResumeContext } from "@/components/resume/ResumeProvider"
-import SkillsGapChart from "@/components/resume/SkillsGapChart"
 import { PLAN_NAMES } from "@/lib/gates"
 import { useFeatureAccess } from "@/lib/hooks/useFeatureAccess"
 import { useResumeAnalysis } from "@/lib/hooks/useResumeAnalysis"
@@ -22,56 +24,46 @@ import type { ApplyRecommendation, Company, Job, ResumeAnalysis } from "@/types"
 
 type JobWithCompany = Job & { company: Company }
 
+// ─── Config maps ─────────────────────────────────────────────────────────────
+
 const VERDICT_LABEL: Record<string, string> = {
-  strong_match: "Strong Match",
-  good_match: "Good Match",
-  partial_match: "Partial Match",
-  weak_match: "Weak Match",
+  strong_match: "Strong match",
+  good_match: "Good match",
+  partial_match: "Partial match",
+  weak_match: "Weak match",
 }
 
-const APPLY_CONFIG: Record<ApplyRecommendation, { label: string; sub: string; className: string }> = {
+const APPLY_CONFIG: Record<ApplyRecommendation, { label: string; sub: string; tone: string }> = {
   apply_now: {
     label: "Apply now",
-    sub: "You're a strong fit for this role.",
-    className: "border-emerald-200 bg-emerald-50 text-emerald-800",
+    sub: "You're a strong fit — go for it.",
+    tone: "bg-emerald-50 text-emerald-800 ring-emerald-200",
   },
   apply_with_tweaks: {
-    label: "Apply after updating your resume",
-    sub: "A few changes could significantly improve your chances.",
-    className: "border-amber-200 bg-amber-50 text-amber-800",
+    label: "Apply after a few tweaks",
+    sub: "Small resume updates could significantly improve your chances.",
+    tone: "bg-amber-50 text-amber-800 ring-amber-200",
   },
   stretch_role: {
     label: "Stretch role",
-    sub: "Apply if you're confident - expect tough questions on the gaps.",
-    className: "border-amber-200 bg-amber-50 text-amber-800",
+    sub: "Apply if you're confident — expect tough questions on the gaps.",
+    tone: "bg-amber-50 text-amber-800 ring-amber-200",
   },
   skip: {
     label: "Consider skipping",
-    sub: "Significant gaps exist. Consider building more experience first.",
-    className: "border-red-200 bg-red-50 text-red-800",
+    sub: "Significant gaps exist. Build more experience first.",
+    tone: "bg-red-50 text-red-800 ring-red-200",
   },
 }
 
-const PRIORITY_STYLES = {
-  high: "border-red-200 bg-red-50 text-red-700",
-  medium: "border-amber-200 bg-amber-50 text-amber-700",
-  low: "border-gray-200 bg-gray-50 text-gray-600",
-}
+// ─── Loading state ────────────────────────────────────────────────────────────
 
-const CATEGORY_ICONS: Record<string, React.ReactNode> = {
-  skills: <CheckCircle2 className="h-4 w-4" />,
-  experience: <ChevronRight className="h-4 w-4" />,
-  keywords: <Lightbulb className="h-4 w-4" />,
-  format: <Lightbulb className="h-4 w-4" />,
-}
-
-// Loading steps shown while analysis is running
 const STEPS = [
   "Reading your resume…",
-  "Analyzing job requirements…",
+  "Analysing job requirements…",
   "Comparing skills and experience…",
   "Generating recommendations…",
-  "Finalizing your match score…",
+  "Finalising your match score…",
 ]
 
 function AnalysisLoader({ isAnalyzing }: { isAnalyzing: boolean }) {
@@ -87,23 +79,26 @@ function AnalysisLoader({ isAnalyzing }: { isAnalyzing: boolean }) {
   }, [isAnalyzing])
 
   return (
-    <div className="flex min-h-[400px] flex-col items-center justify-center gap-8 py-16">
-      <div className="space-y-3 w-full max-w-sm">
+    <div className="flex flex-col items-center justify-center gap-8 py-20">
+      <div className="relative h-14 w-14">
+        <div className="absolute inset-0 animate-spin rounded-full border-[3px] border-slate-100 border-t-orange-500" />
+      </div>
+      <div className="w-full max-w-[260px] space-y-3">
         {STEPS.map((label, i) => (
           <div key={label} className="flex items-center gap-3">
             {i < step ? (
-              <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-500" />
+              <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
             ) : i === step ? (
-              <div className="h-5 w-5 shrink-0 animate-spin rounded-full border-2 border-[#FF5C18] border-t-transparent" />
+              <div className="h-4 w-4 shrink-0 rounded-full bg-orange-100 ring-2 ring-orange-400" />
             ) : (
-              <div className="h-5 w-5 shrink-0 rounded-full border-2 border-gray-200" />
+              <div className="h-4 w-4 shrink-0 rounded-full ring-1 ring-slate-200" />
             )}
             <span
               className={cn(
-                "text-sm",
+                "text-[13px]",
                 i < step && "text-emerald-600",
-                i === step && "font-semibold text-[#FF5C18]",
-                i > step && "text-gray-400"
+                i === step && "font-semibold text-slate-900",
+                i > step && "text-slate-400"
               )}
             >
               {label}
@@ -111,33 +106,37 @@ function AnalysisLoader({ isAnalyzing }: { isAnalyzing: boolean }) {
           </div>
         ))}
       </div>
-      <p className="text-xs text-gray-400">This usually takes 5–15 seconds</p>
+      <p className="text-[11.5px] text-slate-400">Usually takes 5–15 seconds</p>
     </div>
   )
 }
 
-function ScoreBar({ label, score }: { label: string; score: number | null }) {
-  const value = score ?? 0
-  const color = value >= 70 ? "bg-emerald-500" : value >= 40 ? "bg-amber-400" : "bg-red-400"
+// ─── Factor tile ──────────────────────────────────────────────────────────────
+
+function FactorTile({ label, score }: { label: string; score: number | null }) {
+  const v = score ?? 0
+  const barColor = v >= 70 ? "bg-emerald-400" : v >= 45 ? "bg-orange-400" : "bg-red-400"
+  const numColor = v >= 70 ? "text-emerald-600" : v >= 45 ? "text-orange-500" : "text-red-500"
   return (
-    <div className="rounded-2xl border border-gray-200 bg-[#FAFCFF] px-4 py-4">
-      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">{label}</p>
-      <p className="mt-1 text-2xl font-semibold text-gray-900">{value}</p>
-      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-gray-200">
-        <div className={cn("h-full rounded-full transition-all duration-700", color)} style={{ width: `${value}%` }} />
+    <div className="rounded-xl bg-slate-50 px-4 py-4 ring-1 ring-slate-200/50">
+      <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-slate-400">{label}</p>
+      <p className={cn("mt-1.5 text-[28px] font-bold leading-none tabular-nums", numColor)}>{v}</p>
+      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-200">
+        <div
+          className={cn("h-full rounded-full transition-[width] duration-700", barColor)}
+          style={{ width: `${v}%` }}
+        />
       </div>
     </div>
   )
 }
 
-function FullAnalysisView({ analysis, job }: { analysis: ResumeAnalysis; job: JobWithCompany }) {
-  const applyConfig = analysis.apply_recommendation
-    ? APPLY_CONFIG[analysis.apply_recommendation]
-    : null
+// ─── Main analysis view ───────────────────────────────────────────────────────
 
-  const sortedDensity = Object.entries(analysis.keyword_density ?? {})
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 15)
+const sec = "border-t border-slate-100 px-6 py-7"
+
+function FullAnalysisView({ analysis, job }: { analysis: ResumeAnalysis; job: JobWithCompany }) {
+  const applyConfig = analysis.apply_recommendation ? APPLY_CONFIG[analysis.apply_recommendation] : null
 
   const sortedRecs = [...(analysis.recommendations ?? [])].sort((a, b) => {
     const order = { high: 0, medium: 1, low: 2 }
@@ -146,232 +145,312 @@ function FullAnalysisView({ analysis, job }: { analysis: ResumeAnalysis; job: Jo
 
   const expMatch = analysis.experience_match
 
+  const missingKws = analysis.missing_keywords ?? []
+  const matchingKws = analysis.matching_keywords ?? []
+
   return (
-    <div className="space-y-6">
-      {/* Overall score + verdict */}
-      <div className="surface-card p-6">
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-center">
-          <AnalysisScoreCircle score={analysis.overall_score ?? 0} size="lg" />
-          <div className="flex-1">
-            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-gray-400">
+    <div className="overflow-hidden rounded-2xl bg-white shadow-[0_1px_4px_rgba(15,23,42,0.06)] ring-1 ring-slate-200/60">
+
+      {/* ── Overall score ── */}
+      <section className="px-6 py-8">
+        <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:gap-8">
+          <div className="shrink-0 text-center">
+            <AnalysisScoreCircle score={analysis.overall_score ?? 0} size="lg" animated />
+            <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-400">
               Overall match
             </p>
-            <p className="mt-1 text-3xl font-semibold text-gray-900">
+          </div>
+
+          <div className="flex-1 min-w-0">
+            <h2 className="text-[26px] font-bold tracking-tight text-slate-900">
               {VERDICT_LABEL[analysis.verdict ?? "partial_match"]}
-            </p>
+            </h2>
             {analysis.verdict_summary && (
-              <p className="mt-3 text-sm leading-7 text-gray-600">{analysis.verdict_summary}</p>
+              <p className="mt-2.5 text-[14px] leading-[1.7] text-slate-600">
+                {analysis.verdict_summary}
+              </p>
+            )}
+            {applyConfig && (
+              <div className={cn("mt-4 inline-flex items-start gap-2.5 rounded-xl px-4 py-3 ring-1", applyConfig.tone)}>
+                <Sparkles className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+                <div>
+                  <p className="text-[13px] font-semibold">{applyConfig.label}</p>
+                  <p className="mt-0.5 text-[12px] opacity-80">{applyConfig.sub}</p>
+                  {analysis.apply_reasoning && (
+                    <p className="mt-1.5 text-[11.5px] leading-relaxed opacity-70">{analysis.apply_reasoning}</p>
+                  )}
+                </div>
+              </div>
             )}
           </div>
-          {applyConfig && (
-            <div className={cn("rounded-2xl border px-5 py-4 lg:max-w-xs", applyConfig.className)}>
-              <p className="text-sm font-semibold">{applyConfig.label}</p>
-              <p className="mt-1 text-xs opacity-80">{applyConfig.sub}</p>
-              {analysis.apply_reasoning && (
-                <p className="mt-2 text-xs leading-5 opacity-70">{analysis.apply_reasoning}</p>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Score breakdown */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <ScoreBar label="Skills" score={analysis.skills_score} />
-        <ScoreBar label="Experience" score={analysis.experience_score} />
-        <ScoreBar label="Education" score={analysis.education_score} />
-        <ScoreBar label="Keywords" score={analysis.keywords_score} />
-      </div>
-
-      {/* Skills gap */}
-      <section className="surface-card p-6">
-        <h2 className="mb-4 text-sm font-semibold uppercase tracking-[0.22em] text-gray-400">
-          Skills analysis
-        </h2>
-        <SkillsGapChart
-          matching={analysis.matching_skills ?? []}
-          missing={analysis.missing_skills ?? []}
-          bonus={analysis.bonus_skills ?? []}
-        />
-      </section>
-
-      {/* Keywords */}
-      <section className="surface-card p-6">
-        <h2 className="text-sm font-semibold uppercase tracking-[0.22em] text-gray-400">
-          ATS keyword analysis
-        </h2>
-        <p className="mt-2 text-sm text-gray-500">
-          Most companies filter resumes automatically before a human sees them. These keywords appear in the job description but may be missing from your resume.
-        </p>
-
-        {(analysis.missing_keywords ?? []).length > 0 && (
-          <div className="mt-5 rounded-2xl border border-orange-200 bg-orange-50 p-4">
-            <p className="text-xs font-semibold text-orange-800 mb-3">
-              Add these to pass ATS screening:
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {(analysis.missing_keywords ?? []).slice(0, 5).map((kw) => {
-                const count = analysis.keyword_density?.[kw]
-                return (
-                  <span key={kw} className="inline-flex items-center gap-1.5 rounded-full border border-orange-300 bg-white px-3 py-1.5 text-xs font-medium text-orange-800">
-                    {kw}
-                    {count != null && <span className="opacity-60">×{count}</span>}
-                  </span>
-                )
-              })}
-            </div>
-          </div>
-        )}
-
-        <div className="mt-5 grid gap-4 sm:grid-cols-2">
-          {/* Missing */}
-          <div>
-            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-gray-400">
-              Missing ({(analysis.missing_keywords ?? []).length})
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {sortedDensity
-                .filter(([kw]) => analysis.missing_keywords?.includes(kw))
-                .map(([kw, count]) => (
-                  <span key={kw} className="inline-flex items-center gap-1.5 rounded-full border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700">
-                    <XCircle className="h-3 w-3" />
-                    {kw}
-                    <span className="opacity-60">×{count}</span>
-                  </span>
-                ))}
-              {(analysis.missing_keywords ?? [])
-                .filter((kw) => !sortedDensity.find(([k]) => k === kw))
-                .map((kw) => (
-                  <span key={kw} className="inline-flex items-center gap-1.5 rounded-full border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700">
-                    <XCircle className="h-3 w-3" />
-                    {kw}
-                  </span>
-                ))}
-            </div>
-          </div>
-          {/* Present */}
-          <div>
-            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-gray-400">
-              Present ({(analysis.matching_keywords ?? []).length})
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {(analysis.matching_keywords ?? []).map((kw) => (
-                <span key={kw} className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700">
-                  <CheckCircle2 className="h-3 w-3" />
-                  {kw}
-                </span>
-              ))}
-            </div>
-          </div>
         </div>
       </section>
 
-      {/* Experience gap */}
-      {expMatch && (
-        <section className="surface-card p-6">
-          <h2 className="mb-4 text-sm font-semibold uppercase tracking-[0.22em] text-gray-400">
-            Experience match
-          </h2>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="rounded-2xl border border-gray-200 bg-[#FAFCFF] p-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-400">
-                Years required
-              </p>
-              <p className="mt-2 text-2xl font-semibold text-gray-900">
-                {expMatch.required_years != null ? `${expMatch.required_years}+` : "Not specified"}
-              </p>
-            </div>
-            <div className="rounded-2xl border border-gray-200 bg-[#FAFCFF] p-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-400">
-                Your experience
-              </p>
-              <p className="mt-2 text-2xl font-semibold text-gray-900">
-                {expMatch.candidate_years} years
-              </p>
-            </div>
+      {/* ── Factor breakdown ── */}
+      <section className={sec}>
+        <h3 className="text-[17px] font-semibold tracking-tight text-slate-900">Score breakdown</h3>
+        <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <FactorTile label="Skills" score={analysis.skills_score} />
+          <FactorTile label="Experience" score={analysis.experience_score} />
+          <FactorTile label="Education" score={analysis.education_score} />
+          <FactorTile label="Keywords" score={analysis.keywords_score} />
+        </div>
+      </section>
+
+      {/* ── Skills ── */}
+      {((analysis.matching_skills?.length ?? 0) > 0 ||
+        (analysis.missing_skills?.length ?? 0) > 0 ||
+        (analysis.bonus_skills?.length ?? 0) > 0) && (
+        <section className={sec}>
+          <h3 className="text-[17px] font-semibold tracking-tight text-slate-900">Skills analysis</h3>
+
+          <div className="mt-5 space-y-5">
+            {(analysis.matching_skills?.length ?? 0) > 0 && (
+              <div>
+                <p className="mb-2.5 text-[11px] font-semibold text-slate-500">
+                  You have · {analysis.matching_skills!.length}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {analysis.matching_skills!.map((skill) => (
+                    <span
+                      key={skill}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-1 text-[12.5px] font-medium text-emerald-700 ring-1 ring-emerald-200/70"
+                    >
+                      <Check className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                      {skill}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {(analysis.missing_skills?.length ?? 0) > 0 && (
+              <div>
+                <p className="mb-2.5 text-[11px] font-semibold text-slate-500">
+                  Missing · {analysis.missing_skills!.length}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {analysis.missing_skills!.map((skill) => (
+                    <span
+                      key={skill}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-orange-50 px-3 py-1 text-[12.5px] font-medium text-orange-600 ring-1 ring-orange-200/70"
+                    >
+                      <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                      {skill}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {(analysis.bonus_skills?.length ?? 0) > 0 && (
+              <div>
+                <p className="mb-2.5 text-[11px] font-semibold text-slate-500">
+                  Bonus · {analysis.bonus_skills!.length}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {analysis.bonus_skills!.map((skill) => (
+                    <span
+                      key={skill}
+                      className="rounded-lg bg-slate-50 px-3 py-1 text-[12.5px] font-medium text-slate-500 ring-1 ring-slate-200"
+                    >
+                      {skill}
+                    </span>
+                  ))}
+                </div>
+                <p className="mt-2 text-[11.5px] text-slate-400">
+                  These won&apos;t hurt, but aren&apos;t required.
+                </p>
+              </div>
+            )}
           </div>
-          {expMatch.matching_roles.length > 0 && (
-            <div className="mt-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-400 mb-2">
-                Relevant roles
+        </section>
+      )}
+
+      {/* ── ATS Keywords ── */}
+      {(missingKws.length > 0 || matchingKws.length > 0) && (
+        <section className={sec}>
+          <h3 className="text-[17px] font-semibold tracking-tight text-slate-900">ATS keywords</h3>
+          <p className="mt-1.5 text-[13.5px] leading-relaxed text-slate-500">
+            Most companies filter resumes automatically. Add missing keywords to pass ATS screening.
+          </p>
+
+          {missingKws.length > 0 && (
+            <div className="mt-5">
+              <p className="mb-2.5 text-[11px] font-semibold text-slate-500">
+                Add to your resume · {missingKws.length}
               </p>
               <div className="flex flex-wrap gap-2">
+                {missingKws.map((kw) => (
+                  <span
+                    key={kw}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-1 text-[12.5px] font-medium text-red-700 ring-1 ring-red-200/70"
+                  >
+                    <X className="h-3 w-3 shrink-0" aria-hidden />
+                    {kw}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {matchingKws.length > 0 && (
+            <div className="mt-5">
+              <p className="mb-2.5 text-[11px] font-semibold text-slate-500">
+                Already present · {matchingKws.length}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {matchingKws.map((kw) => (
+                  <span
+                    key={kw}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-1 text-[12.5px] font-medium text-emerald-700 ring-1 ring-emerald-200/60"
+                  >
+                    <CheckCircle2 className="h-3 w-3 shrink-0" aria-hidden />
+                    {kw}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* ── Experience ── */}
+      {expMatch && (
+        <section className={sec}>
+          <h3 className="text-[17px] font-semibold tracking-tight text-slate-900">Experience match</h3>
+          <div className="mt-5 grid grid-cols-2 gap-3">
+            <div className="rounded-xl bg-slate-50 px-4 py-4 ring-1 ring-slate-200/50">
+              <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-slate-400">Required</p>
+              <p className="mt-1.5 text-[26px] font-bold leading-none text-slate-800">
+                {expMatch.required_years != null ? `${expMatch.required_years}+` : "—"}
+              </p>
+              <p className="mt-1 text-[12px] text-slate-400">years</p>
+            </div>
+            <div className={cn(
+              "rounded-xl px-4 py-4 ring-1",
+              expMatch.candidate_years >= (expMatch.required_years ?? 0)
+                ? "bg-emerald-50 ring-emerald-200/60"
+                : "bg-amber-50 ring-amber-200/60"
+            )}>
+              <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-slate-400">You have</p>
+              <p className={cn(
+                "mt-1.5 text-[26px] font-bold leading-none",
+                expMatch.candidate_years >= (expMatch.required_years ?? 0) ? "text-emerald-700" : "text-amber-700"
+              )}>
+                {expMatch.candidate_years}
+              </p>
+              <p className="mt-1 text-[12px] text-slate-400">years</p>
+            </div>
+          </div>
+
+          {expMatch.matching_roles.length > 0 && (
+            <div className="mt-5">
+              <p className="mb-2.5 text-[11px] font-semibold text-slate-500">Relevant roles</p>
+              <div className="flex flex-wrap gap-2">
                 {expMatch.matching_roles.map((role) => (
-                  <span key={role} className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700">
+                  <span key={role} className="rounded-lg bg-emerald-50 px-3 py-1 text-[12.5px] font-medium text-emerald-700 ring-1 ring-emerald-200/60">
                     {role}
                   </span>
                 ))}
               </div>
             </div>
           )}
+
           {expMatch.gaps.length > 0 && (
-            <div className="mt-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-400 mb-2">
-                Experience gaps
-              </p>
-              <div className="space-y-1">
+            <div className="mt-5">
+              <p className="mb-2.5 text-[11px] font-semibold text-slate-500">Gaps identified</p>
+              <ul className="space-y-1.5">
                 {expMatch.gaps.map((gap) => (
-                  <p key={gap} className="text-sm text-gray-600">- {gap}</p>
+                  <li key={gap} className="flex gap-2.5 text-[13.5px] text-slate-600">
+                    <span aria-hidden className="mt-[0.55em] h-[5px] w-[5px] shrink-0 rounded-full bg-amber-400" />
+                    {gap}
+                  </li>
                 ))}
-              </div>
+              </ul>
             </div>
           )}
         </section>
       )}
 
-      {/* Recommendations */}
+      {/* ── Recommendations ── */}
       {sortedRecs.length > 0 && (
-        <section className="surface-card p-6">
-          <h2 className="mb-4 text-sm font-semibold uppercase tracking-[0.22em] text-gray-400">
-            Recommendations
-          </h2>
-          <div className="space-y-3">
+        <section className={sec}>
+          <h3 className="text-[17px] font-semibold tracking-tight text-slate-900">Recommendations</h3>
+          <div className="mt-5 space-y-3">
             {sortedRecs.map((rec, i) => (
-              <div key={i} className="rounded-2xl border border-gray-200 bg-[#FAFCFF] p-4">
-                <div className="flex flex-wrap items-center gap-2 mb-2">
-                  <span className={cn("rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em]", PRIORITY_STYLES[rec.priority])}>
+              <div
+                key={i}
+                className={cn(
+                  "rounded-xl p-4 ring-1",
+                  rec.priority === "high"
+                    ? "bg-red-50 ring-red-200/60"
+                    : rec.priority === "medium"
+                      ? "bg-amber-50 ring-amber-200/60"
+                      : "bg-slate-50 ring-slate-200/50"
+                )}
+              >
+                <div className="mb-2 flex items-center gap-2">
+                  <span
+                    className={cn(
+                      "h-2 w-2 shrink-0 rounded-full",
+                      rec.priority === "high" ? "bg-red-500" :
+                      rec.priority === "medium" ? "bg-amber-500" : "bg-slate-400"
+                    )}
+                    aria-hidden
+                  />
+                  <span
+                    className={cn(
+                      "text-[10.5px] font-bold uppercase tracking-[0.1em]",
+                      rec.priority === "high" ? "text-red-600" :
+                      rec.priority === "medium" ? "text-amber-600" : "text-slate-500"
+                    )}
+                  >
                     {rec.priority}
                   </span>
-                  <span className="inline-flex items-center gap-1 rounded-full border border-gray-200 px-2.5 py-1 text-[10px] font-medium text-gray-500 capitalize">
-                    {CATEGORY_ICONS[rec.category]}
-                    {rec.category}
-                  </span>
+                  <span className="text-[10.5px] text-slate-400">·</span>
+                  <span className="text-[10.5px] capitalize text-slate-500">{rec.category}</span>
                 </div>
-                <p className="text-sm font-semibold text-gray-900">{rec.issue}</p>
-                <p className="mt-1 text-sm leading-6 text-gray-600">{rec.fix}</p>
+                <p className="text-[13.5px] font-semibold text-slate-900">{rec.issue}</p>
+                <p className="mt-1 text-[13px] leading-relaxed text-slate-600">{rec.fix}</p>
               </div>
             ))}
           </div>
         </section>
       )}
 
-      {/* Action buttons */}
-      <div className="flex flex-wrap gap-3 pb-10">
-        <a
-          href={job.apply_url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-2 rounded-2xl bg-[#FF5C18] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#E14F0E]"
-        >
-          Apply directly
-          <ExternalLink className="h-4 w-4" />
-        </a>
-        <Link
-          href={`/dashboard/resume/studio?mode=tailor&jobId=${job.id}`}
-          className="inline-flex items-center gap-2 rounded-2xl border border-gray-200 px-5 py-3 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
-        >
-          Edit resume
-        </Link>
-        <Link
-          href={`/dashboard/cover-letter/${job.id}`}
-          className="inline-flex items-center gap-2 rounded-2xl border border-gray-200 px-5 py-3 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
-        >
-          Generate cover letter
-        </Link>
+      {/* ── Actions ── */}
+      <div className="border-t border-slate-100 px-6 py-6">
+        <div className="flex flex-wrap gap-3">
+          <a
+            href={job.apply_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 rounded-xl bg-orange-500 px-5 py-2.5 text-[13px] font-bold text-white shadow-sm transition hover:bg-orange-400"
+          >
+            Apply now
+            <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+          </a>
+          <Link
+            href={`/dashboard/resume/studio?mode=tailor&jobId=${job.id}`}
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-[13px] font-medium text-slate-700 transition hover:bg-slate-50"
+          >
+            Tailor resume
+            <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+          </Link>
+          <Link
+            href={`/dashboard/cover-letters/${job.id}`}
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-[13px] font-medium text-slate-700 transition hover:bg-slate-50"
+          >
+            Cover letter
+          </Link>
+        </div>
       </div>
     </div>
   )
 }
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function AnalyzePage() {
   const params = useParams<{ jobId: string }>()
@@ -394,15 +473,10 @@ export default function AnalyzePage() {
     canRunAnalysis ? jobId : null
   )
 
-  // Fetch job details
   useEffect(() => {
     async function load() {
       const res = await fetch(`/api/jobs/${jobId}`, { cache: "no-store" })
-      if (!res.ok) {
-        setJob(null)
-        setJobLoading(false)
-        return
-      }
+      if (!res.ok) { setJob(null); setJobLoading(false); return }
       const body = (await res.json()) as { job: JobWithCompany | null }
       setJob(body.job ?? null)
       setJobLoading(false)
@@ -410,7 +484,6 @@ export default function AnalyzePage() {
     void load()
   }, [jobId])
 
-  // Trigger analysis if none exists
   useEffect(() => {
     if (!canRunAnalysis || !resumeId || isLoading || isAnalyzing || analysis || error) return
     void triggerAnalysis()
@@ -423,104 +496,94 @@ export default function AnalyzePage() {
   const planName = analysisRequiredPlan ? PLAN_NAMES[analysisRequiredPlan] : "Pro"
 
   return (
-    <main className="app-page">
-      <div className="app-shell max-w-6xl space-y-5 pb-8">
-        {/* Back */}
-        <Link
-          href="/dashboard"
-          className="inline-flex items-center gap-2 text-sm font-medium text-gray-500 transition hover:text-gray-900"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to feed
-        </Link>
+    <main className="min-h-full bg-slate-50 pb-20">
 
-        {/* Job header */}
-        {job && (
-          <div className="surface-hero px-6 py-4 sm:px-8 sm:py-6 lg:px-10">
-            <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:gap-6">
-              <div className="flex min-w-0 items-center gap-4">
-                {job.company.logo_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={job.company.logo_url}
-                    alt={job.company.name}
-                    className="h-14 w-14 rounded-2xl border border-gray-200 object-cover"
+      {/* ── Header ───────────────────────────────────────────── */}
+      <div className="relative bg-[#0C1222]">
+        <div className="pointer-events-none absolute -left-32 -top-32 h-80 w-80 rounded-full bg-orange-600/8 blur-3xl" aria-hidden />
+        <div className="mx-auto w-full max-w-4xl px-4 py-5 sm:px-6">
+          <Link
+            href={`/dashboard/jobs/${jobId}`}
+            className="inline-flex items-center gap-1.5 text-[12px] font-medium text-slate-500 transition hover:text-slate-200"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" strokeWidth={2.25} />
+            Back to job
+          </Link>
+
+          {job && (
+            <div className="mt-5 flex items-start justify-between gap-4">
+              <div className="flex min-w-0 items-start gap-3">
+                <div className="shrink-0 overflow-hidden rounded-xl border border-white/10 bg-white/5 p-1">
+                  <CompanyLogo
+                    companyName={job.company.name}
+                    domain={job.company.domain ?? null}
+                    logoUrl={job.company.logo_url ?? null}
+                    className="h-11 w-11 rounded-lg border-0"
                   />
-                ) : (
-                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#FFF1E8] text-xl font-bold text-[#ea580c]">
-                    {job.company.name.charAt(0).toUpperCase()}
-                  </div>
-                )}
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">
-                    {job.company.name}
-                  </p>
-                  <h1 className="mt-1 text-2xl font-semibold leading-tight text-gray-900">
-                    {job.title}
-                  </h1>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {job.is_remote && (
-                      <span className="rounded-full border border-[#FFD2B8] bg-[#FFF7F2] px-2.5 py-1 text-xs font-medium text-[#9A3412]">
-                        Remote
-                      </span>
-                    )}
-                    {job.sponsors_h1b && (
-                      <span className="rounded-full border border-[#FFD2B8] bg-[#FFF7F2] px-2.5 py-1 text-xs font-semibold text-[#9A3412]">
-                        Sponsors H1B
-                      </span>
-                    )}
-                    {job.seniority_level && (
-                      <span className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs font-medium text-gray-600 capitalize">
-                        {job.seniority_level}
-                      </span>
-                    )}
-                  </div>
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[11.5px] font-semibold text-slate-400">{job.company.name}</p>
+                  <h1 className="text-[18px] font-bold leading-tight text-white">{job.title}</h1>
                 </div>
               </div>
               <a
                 href={job.apply_url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#FF5C18] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#E14F0E] sm:w-auto sm:justify-self-end sm:self-center"
+                className="hidden shrink-0 items-center gap-1.5 rounded-xl bg-orange-500 px-4 py-2 text-[13px] font-bold text-white shadow-sm transition hover:bg-orange-400 sm:inline-flex"
               >
                 Apply
-                <ExternalLink className="h-4 w-4" />
+                <ExternalLink className="h-3.5 w-3.5" aria-hidden />
               </a>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* No resume state */}
+          <div className="mt-5 border-t border-white/8 pt-3">
+            <p className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-slate-500">
+              Resume analysis
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Content ──────────────────────────────────────────── */}
+      <div className="mx-auto w-full max-w-4xl px-4 py-7 sm:px-6">
+
+        {/* No resume */}
         {!resumeId && !isLoading && (
-          <div className="surface-card px-6 py-8 text-center sm:px-8 sm:py-9">
-            <p className="text-lg font-semibold text-gray-900">Resume not ready</p>
-            <p className="mt-2 text-sm text-gray-500">
+          <div className="flex flex-col items-center rounded-2xl bg-white px-6 py-12 text-center ring-1 ring-slate-200/60 shadow-sm">
+            <p className="text-[17px] font-semibold text-slate-900">Resume not ready</p>
+            <p className="mt-2 text-[13.5px] text-slate-500">
               Your resume needs to finish parsing before analysis can run.
             </p>
             <Link
               href="/dashboard/resume"
-              className="mt-5 inline-flex rounded-2xl bg-[#FF5C18] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#E14F0E]"
+              className="mt-5 inline-flex items-center gap-1.5 rounded-xl bg-orange-500 px-5 py-2.5 text-[13px] font-bold text-white transition hover:bg-orange-400"
             >
-              Go to resume page
+              Go to resume
+              <ArrowRight className="h-3.5 w-3.5" aria-hidden />
             </Link>
           </div>
         )}
 
-        {/* Loading state */}
-        {resumeId && analysisBusy && <AnalysisLoader isAnalyzing={isAnalyzing} />}
+        {/* Loading */}
+        {resumeId && analysisBusy && (
+          <div className="rounded-2xl bg-white ring-1 ring-slate-200/60 shadow-sm">
+            <AnalysisLoader isAnalyzing={isAnalyzing} />
+          </div>
+        )}
 
         {/* Plan gate */}
         {!busy && (isPlanBlocked || isPlanError) && (
-          <div className="rounded-[28px] border border-[#FFD2B8] bg-[#FFF7F2] px-4 py-4 sm:px-5 sm:py-5">
-            <p className="text-xl font-semibold text-[#9A3412]">Deep analysis is locked</p>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-[#C2410C]">
-              This feature requires the {planName} plan. Upgrade to unlock full resume-to-job
-              analysis.
+          <div className="rounded-2xl bg-white px-6 py-8 ring-1 ring-slate-200/60 shadow-sm">
+            <p className="text-[17px] font-semibold text-slate-900">Deep analysis is locked</p>
+            <p className="mt-2 text-[13.5px] leading-relaxed text-slate-500">
+              This feature requires the {planName} plan. Upgrade to unlock full resume-to-job analysis.
             </p>
             <button
               type="button"
               onClick={showUpgradePrompt}
-              className="mt-4 rounded-2xl bg-[#FF5C18] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#E14F0E]"
+              className="mt-5 inline-flex items-center gap-1.5 rounded-xl bg-orange-500 px-5 py-2.5 text-[13px] font-bold text-white transition hover:bg-orange-400"
             >
               Upgrade to {planName}
             </button>
@@ -529,13 +592,13 @@ export default function AnalyzePage() {
 
         {/* Error */}
         {!busy && !isPlanError && !isPlanBlocked && error && (
-          <div className="rounded-[28px] border border-red-200 bg-white px-4 py-4 sm:px-5 sm:py-5">
-            <p className="font-semibold text-red-700">Analysis failed</p>
-            <p className="mt-1 text-sm text-red-600">{error}</p>
+          <div className="rounded-2xl bg-white px-6 py-8 ring-1 ring-red-200/60 shadow-sm">
+            <p className="text-[15px] font-semibold text-red-700">Analysis failed</p>
+            <p className="mt-1.5 text-[13.5px] text-slate-500">{error}</p>
             <button
               type="button"
               onClick={() => void triggerAnalysis()}
-              className="mt-4 rounded-2xl bg-[#FF5C18] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#E14F0E]"
+              className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-orange-500 px-5 py-2.5 text-[13px] font-bold text-white transition hover:bg-orange-400"
             >
               Retry
             </button>

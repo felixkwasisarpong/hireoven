@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react"
 import {
   ArrowUpRight,
-  BarChart3,
   BadgeCheck,
   Banknote,
   Bookmark,
@@ -400,6 +399,11 @@ export default function JobCardV2({
   // LinkedIn indicator: detect from the apply URL
   const isLinkedIn = /linkedin\.com/i.test(job.apply_url ?? "")
 
+  // Autofill & Apply: use the internal autofill wizard when the job has a known ATS.
+  // 'custom' means we couldn't detect the ATS — fall back to external Quick Apply.
+  const atsType = job.company?.ats_type
+  const canAutofill = atsType != null && atsType !== "custom"
+
   const intelMatchScore = useMemo(() => getJobIntelligence(job).matchScore, [job])
 
   const visaCardLabel = useMemo(
@@ -795,14 +799,6 @@ export default function JobCardV2({
               </button>
               <button
                 type="button"
-                onClick={() => router.push(`/dashboard/scout?jobId=${job.id}`)}
-                aria-label="Compare"
-                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-400 transition hover:border-indigo-200 hover:text-indigo-500"
-              >
-                <BarChart3 className="h-3.5 w-3.5" />
-              </button>
-              <button
-                type="button"
                 onClick={() => router.push(detailHref)}
                 aria-label="View details"
                 className="inline-flex h-8 items-center justify-center gap-1 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 text-[12px] font-semibold text-indigo-600 transition hover:bg-indigo-100"
@@ -982,27 +978,30 @@ export default function JobCardV2({
                     <Bookmark className={cn("h-3.5 w-3.5", saved && "fill-current")} />
                     {saved ? "Saved" : "Save"}
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => router.push(`/dashboard/scout?jobId=${job.id}`)}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-2 text-[12px] font-semibold text-slate-300 transition hover:bg-white/15 hover:text-white"
-                  >
-                    <BarChart3 className="h-3.5 w-3.5" />
-                    Compare
-                  </button>
                 </div>
 
                 <div className="flex gap-2">
-                  <a
-                    href={job.apply_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={(e) => e.stopPropagation()}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-white/20 bg-white/5 px-3.5 py-2 text-[12px] font-semibold text-white transition hover:bg-white/10"
-                  >
-                    <Zap className="h-3.5 w-3.5 text-amber-400" aria-hidden />
-                    Quick Apply
-                  </a>
+                  {canAutofill ? (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/autofill/fill/${job.id}`) }}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-white/20 bg-white/5 px-3.5 py-2 text-[12px] font-semibold text-white transition hover:bg-white/10"
+                    >
+                      <Sparkles className="h-3.5 w-3.5 text-violet-400" aria-hidden />
+                      Autofill & Apply
+                    </button>
+                  ) : (
+                    <a
+                      href={job.apply_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-white/20 bg-white/5 px-3.5 py-2 text-[12px] font-semibold text-white transition hover:bg-white/10"
+                    >
+                      <Zap className="h-3.5 w-3.5 text-amber-400" aria-hidden />
+                      Quick Apply
+                    </a>
+                  )}
                   <button
                     type="button"
                     onClick={() => router.push(detailHref)}
