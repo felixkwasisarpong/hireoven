@@ -110,6 +110,7 @@ type EducationDraft = {
 
 type PublicationDraft = {
   title: string
+  authors: string
   publisher: string
   url: string
   date: string
@@ -415,7 +416,7 @@ function RichTextEditor({
             className="inline-flex h-9 items-center gap-2 rounded-lg bg-gradient-to-r from-[#5B4DFF] to-orange-500 px-4 text-[12px] font-bold text-white"
           >
             {aiLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-            {aiLoading ? "Writing..." : "AI Writer"}
+            {aiLoading ? "Writing..." : "Scout Writer"}
           </button>
           <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700">
             OK
@@ -1764,14 +1765,13 @@ export default function ResumeStudioPage() {
   function addPublicationDraft() {
     setPublicationDrafts((current) => [
       ...current,
-      {
-        title: "",
-        publisher: "",
-        url: "",
-        date: "",
-        description: "",
-      },
+      { title: "", authors: "", publisher: "", url: "", date: "", description: "" },
     ])
+    markDirty()
+  }
+
+  function removePublicationDraft(index: number) {
+    setPublicationDrafts((current) => current.filter((_, i) => i !== index))
     markDirty()
   }
 
@@ -1952,7 +1952,7 @@ export default function ResumeStudioPage() {
       markDirty()
       pushToast({ tone: "success", title: "AI updated this section." })
     } catch {
-      pushToast({ tone: "error", title: "AI Writer failed." })
+      pushToast({ tone: "error", title: "Scout Writer failed." })
     } finally {
       setAiLoadingSectionId(null)
     }
@@ -2351,20 +2351,34 @@ export default function ResumeStudioPage() {
               const entryId = `publications-${index}`
               return (
                 <div key={entryId} className="rounded-xl border border-slate-200 bg-slate-50">
-                  <div className="flex items-center justify-between border-b border-slate-200 px-3 py-3">
+                  <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2.5">
                     <p className="text-[13px] font-semibold text-slate-700">{publicationDraft.title || `Publication ${index + 1}`}</p>
-                    <ChevronDown className="h-4 w-4 rotate-180 text-slate-600" />
+                    <button
+                      type="button"
+                      onClick={() => removePublicationDraft(index)}
+                      className="text-red-400 transition hover:text-red-600"
+                      aria-label="Remove publication"
+                    >
+                      <TrashIcon />
+                    </button>
                   </div>
                   <div className="grid gap-3 p-3 sm:grid-cols-2">
-                    <TextInput label="Publication title" value={publicationDraft.title} onChange={(value) => updatePublication(index, "title", value)} />
-                    <TextInput label="Publisher" value={publicationDraft.publisher} onChange={(value) => updatePublication(index, "publisher", value)} />
-                    <TextInput label="URL of publication / ISBN" value={publicationDraft.url} onChange={(value) => updatePublication(index, "url", value)} />
-                    <TextInput label="Publication date" value={publicationDraft.date} onChange={(value) => updatePublication(index, "date", value)} />
+                    <div className="sm:col-span-2">
+                      <TextInput label="Publication title" value={publicationDraft.title} onChange={(value) => updatePublication(index, "title", value)} />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <TextInput label="Authors" value={publicationDraft.authors} placeholder="e.g. Smith J, Doe A, Johnson B" onChange={(value) => updatePublication(index, "authors", value)} />
+                    </div>
+                    <TextInput label="Publisher / Journal" value={publicationDraft.publisher} onChange={(value) => updatePublication(index, "publisher", value)} />
+                    <TextInput label="Publication date" value={publicationDraft.date} placeholder="e.g. Mar 2024" onChange={(value) => updatePublication(index, "date", value)} />
+                    <div className="sm:col-span-2">
+                      <TextInput label="URL / DOI / ISBN" value={publicationDraft.url} placeholder="https:// or 10.xxxx/..." onChange={(value) => updatePublication(index, "url", value)} />
+                    </div>
                     <div className="sm:col-span-2">
                       <RichTextEditor
-                        label="Description"
+                        label="Abstract / Description"
                         value={publicationDraft.description}
-                        rows={6}
+                        rows={5}
                         onChange={(value) => updatePublication(index, "description", value)}
                         sectionId={entryId}
                         sectionType={section.type}
