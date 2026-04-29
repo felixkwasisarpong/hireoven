@@ -1,19 +1,12 @@
 "use client"
 
 import Link from "next/link"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useState } from "react"
 import { useParams } from "next/navigation"
 import { ArrowLeft, Loader2, RefreshCw, Save } from "lucide-react"
-import {
-  AdminBadge,
-  AdminButton,
-  AdminInput,
-  AdminPageHeader,
-  AdminPanel,
-  AdminSelect,
-} from "@/components/admin/AdminPrimitives"
 import { useToast } from "@/components/ui/ToastProvider"
 import { formatDateTime, formatRelativeTime } from "@/lib/admin/format"
+import { cn } from "@/lib/utils"
 import type { AtsType, Company, CompanySize, CrawlLog } from "@/types"
 
 const ATS_OPTIONS: AtsType[] = [
@@ -25,8 +18,56 @@ const ATS_OPTIONS: AtsType[] = [
   "icims",
   "custom",
 ]
-
 const SIZE_OPTIONS: CompanySize[] = ["startup", "small", "medium", "large", "enterprise"]
+
+const LOG_STATUS_STYLE: Record<string, { dot: string; text: string }> = {
+  success: { dot: "bg-emerald-500 ring-emerald-100", text: "text-emerald-600" },
+  failed: { dot: "bg-red-500 ring-red-100", text: "text-red-600" },
+  blocked: { dot: "bg-red-500 ring-red-100", text: "text-red-600" },
+  fetch_error: { dot: "bg-red-500 ring-red-100", text: "text-red-600" },
+  bad_url: { dot: "bg-amber-400 ring-amber-100", text: "text-amber-600" },
+}
+
+function SectionHeader({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="mb-4 text-[10px] font-semibold uppercase tracking-[0.25em] text-gray-400">
+      {children}
+    </p>
+  )
+}
+
+function FieldLabel({
+  label,
+  children,
+}: {
+  label: string
+  children: React.ReactNode
+}) {
+  return (
+    <label className="block">
+      <span className="mb-1.5 block text-xs font-medium text-gray-500">{label}</span>
+      {children}
+    </label>
+  )
+}
+
+function FieldInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
+  return (
+    <input
+      {...props}
+      className="w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 outline-none placeholder:text-gray-400 transition focus:border-sky-400 focus:ring-2 focus:ring-sky-400/15"
+    />
+  )
+}
+
+function FieldSelect(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
+  return (
+    <select
+      {...props}
+      className="w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-400/15"
+    />
+  )
+}
 
 export default function EditCompanyPage() {
   const { id } = useParams<{ id: string }>()
@@ -39,7 +80,7 @@ export default function EditCompanyPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    async function loadCompany() {
+    async function load() {
       setLoading(true)
       const [companyRes, logsRes] = await Promise.all([
         fetch(`/api/companies/${encodeURIComponent(id)}`),
@@ -56,25 +97,21 @@ export default function EditCompanyPage() {
           setRawConfig(JSON.stringify(typed.raw_ats_config ?? {}, null, 2))
         }
         const logsData: CrawlLog[] = logsRes.ok
-          ? ((await logsRes.json()) as { crawlLogs: CrawlLog[] }).crawlLogs.filter(
-              (l) => l.company_id === id
-            ).slice(0, 20)
+          ? ((await logsRes.json()) as { crawlLogs: CrawlLog[] }).crawlLogs
+              .filter((l) => l.company_id === id)
+              .slice(0, 20)
           : []
         setLogs(logsData)
       }
-
       setLoading(false)
     }
-
-    void loadCompany()
+    void load()
   }, [id, pushToast])
 
   async function saveCompany(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!company) return
-
     setSaving(true)
-
     try {
       const parsedConfig = JSON.parse(rawConfig || "{}")
       const res = await fetch(`/api/admin/companies/${company.id}`, {
@@ -92,15 +129,8 @@ export default function EditCompanyPage() {
           is_active: company.is_active,
         }),
       })
-      const error = res.ok ? null : new Error("Request failed")
-
-      if (error) throw error
-
-      pushToast({
-        tone: "success",
-        title: "Company updated",
-        description: company.name,
-      })
+      if (!res.ok) throw new Error("Request failed")
+      pushToast({ tone: "success", title: "Company updated", description: company.name })
     } catch (error) {
       pushToast({
         tone: "error",
@@ -114,15 +144,13 @@ export default function EditCompanyPage() {
 
   async function triggerCrawl() {
     if (!company) return
-
-    const response = await fetch("/api/admin/crawl", {
+    const res = await fetch("/api/admin/crawl", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ type: "company", id: company.id }),
     })
-
-    if (!response.ok) {
-      const body = (await response.json()) as { error?: string }
+    if (!res.ok) {
+      const body = (await res.json()) as { error?: string }
       pushToast({
         tone: "error",
         title: "Unable to trigger crawl",
@@ -130,7 +158,6 @@ export default function EditCompanyPage() {
       })
       return
     }
-
     pushToast({
       tone: "success",
       title: "Crawl started",
@@ -140,272 +167,342 @@ export default function EditCompanyPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-[50vh] items-center justify-center text-gray-500">
-        <Loader2 className="mr-3 h-5 w-5 animate-spin" />
-        Loading company
+      <div className="flex min-h-[50vh] items-center justify-center gap-3 text-gray-400">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        <span className="text-sm">Loading company…</span>
       </div>
     )
   }
 
   if (!company) {
     return (
-      <div className="rounded-3xl border border-red-200 bg-red-50 p-6 text-red-700">
+      <div className="m-8 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm font-medium text-red-700">
         Company not found.
       </div>
     )
   }
 
   return (
-    <div className="space-y-6">
-      <AdminPageHeader
-        eyebrow="Company edit"
-        title={company.name}
-        description="Tune ATS config, keep internal notes, review crawl history, and push this company back through the crawler when needed."
-        actions={
-          <>
+    <div>
+      {/* ── Company hero ────────────────────────────────────── */}
+      <div className="border-b border-gray-100 bg-white px-8 py-5">
+        <div className="flex items-start justify-between gap-6">
+          <div className="flex items-center gap-4">
+            {/* Avatar */}
+            <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-sky-100 to-sky-200 text-lg font-bold text-sky-700">
+              {company.logo_url ? (
+                <img
+                  src={company.logo_url}
+                  alt=""
+                  className="h-full w-full object-contain"
+                />
+              ) : (
+                company.name.charAt(0).toUpperCase()
+              )}
+            </div>
+
+            {/* Meta */}
+            <div>
+              <div className="flex flex-wrap items-center gap-2.5">
+                <h1 className="text-xl font-semibold tracking-tight text-gray-950">
+                  {company.name}
+                </h1>
+                <span
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold",
+                    company.is_active
+                      ? "bg-emerald-50 text-emerald-700"
+                      : "bg-gray-100 text-gray-500"
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "h-1.5 w-1.5 rounded-full",
+                      company.is_active ? "bg-emerald-500" : "bg-gray-400"
+                    )}
+                  />
+                  {company.is_active ? "Active" : "Inactive"}
+                </span>
+              </div>
+              <p className="mt-0.5 flex items-center gap-2 text-sm text-gray-400">
+                {company.domain}
+                {company.ats_type && (
+                  <span className="inline-flex items-center rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                    {company.ats_type}
+                  </span>
+                )}
+                {company.industry && (
+                  <span className="text-gray-300">·</span>
+                )}
+                {company.industry && (
+                  <span className="text-xs text-gray-400">{company.industry}</span>
+                )}
+              </p>
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="flex flex-shrink-0 items-center gap-2">
             <Link
               href="/admin/companies"
-              className="inline-flex items-center rounded-2xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-700 transition hover:border-gray-300 hover:bg-gray-50"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-500 transition hover:bg-gray-50"
             >
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to companies
+              <ArrowLeft className="h-3.5 w-3.5" />
+              Back
             </Link>
-            <AdminButton tone="secondary" onClick={() => void triggerCrawl()}>
-              <RefreshCw className="mr-2 h-4 w-4" />
-              Force re-crawl
-            </AdminButton>
+            <button
+              onClick={() => void triggerCrawl()}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-500 transition hover:bg-gray-50"
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              Force crawl
+            </button>
             <Link
               href={`/admin/jobs?company=${company.id}`}
-              className="inline-flex items-center rounded-2xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-700 transition hover:border-gray-300 hover:bg-gray-50"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-sky-700 px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-sky-800"
             >
               View all jobs
             </Link>
-          </>
-        }
-      />
+          </div>
+        </div>
+      </div>
 
-      <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-        <AdminPanel
-          title="Company settings"
-          description="Core crawl configuration and admin-only metadata."
-        >
-          <form className="space-y-5" onSubmit={saveCompany}>
-            <div className="grid gap-4 md:grid-cols-2">
-              <label className="space-y-2 text-sm font-medium text-gray-700">
-                Company name
-                <AdminInput
+      {/* ── Body ────────────────────────────────────────────── */}
+      <div className="grid gap-10 p-8 xl:grid-cols-[1fr_360px]">
+        {/* ── Form ──────────────────────────────────────────── */}
+        <form onSubmit={saveCompany} className="space-y-8">
+          {/* Identity */}
+          <div>
+            <SectionHeader>Identity</SectionHeader>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FieldLabel label="Company name">
+                <FieldInput
                   value={company.name}
-                  onChange={(event) =>
-                    setCompany((current) =>
-                      current ? { ...current, name: event.target.value } : current
-                    )
-                  }
+                  onChange={(e) => setCompany((c) => (c ? { ...c, name: e.target.value } : c))}
                 />
-              </label>
-              <label className="space-y-2 text-sm font-medium text-gray-700">
-                Domain
-                <AdminInput
+              </FieldLabel>
+              <FieldLabel label="Domain">
+                <FieldInput
                   value={company.domain}
-                  onChange={(event) =>
-                    setCompany((current) =>
-                      current ? { ...current, domain: event.target.value } : current
-                    )
-                  }
+                  onChange={(e) => setCompany((c) => (c ? { ...c, domain: e.target.value } : c))}
                 />
-              </label>
+              </FieldLabel>
+              <FieldLabel label="Industry">
+                <FieldInput
+                  value={company.industry ?? ""}
+                  onChange={(e) =>
+                    setCompany((c) => (c ? { ...c, industry: e.target.value } : c))
+                  }
+                  placeholder="e.g. Technology"
+                />
+              </FieldLabel>
+              <FieldLabel label="Logo URL">
+                <FieldInput
+                  value={company.logo_url ?? ""}
+                  onChange={(e) =>
+                    setCompany((c) => (c ? { ...c, logo_url: e.target.value } : c))
+                  }
+                  placeholder="https://…"
+                />
+              </FieldLabel>
             </div>
+          </div>
 
-            <label className="space-y-2 text-sm font-medium text-gray-700">
-              Careers page URL
-              <AdminInput
-                value={company.careers_url}
-                onChange={(event) =>
-                  setCompany((current) =>
-                    current ? { ...current, careers_url: event.target.value } : current
-                  )
-                }
-              />
-            </label>
+          <div className="border-t border-gray-100" />
 
-            <div className="grid gap-4 md:grid-cols-3">
-              <label className="space-y-2 text-sm font-medium text-gray-700">
-                ATS type
-                <AdminSelect
+          {/* Crawl config */}
+          <div>
+            <SectionHeader>Crawl configuration</SectionHeader>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <FieldLabel label="ATS type">
+                <FieldSelect
                   value={company.ats_type ?? ""}
-                  onChange={(event) =>
-                    setCompany((current) =>
-                      current
-                        ? { ...current, ats_type: (event.target.value || null) as AtsType | null }
-                        : current
+                  onChange={(e) =>
+                    setCompany((c) =>
+                      c ? { ...c, ats_type: (e.target.value || null) as AtsType | null } : c
                     )
                   }
                 >
                   <option value="">Select ATS</option>
-                  {ATS_OPTIONS.map((value) => (
-                    <option key={value} value={value}>
-                      {value}
+                  {ATS_OPTIONS.map((v) => (
+                    <option key={v} value={v}>
+                      {v}
                     </option>
                   ))}
-                </AdminSelect>
-              </label>
-              <label className="space-y-2 text-sm font-medium text-gray-700">
-                ATS identifier
-                <AdminInput
+                </FieldSelect>
+              </FieldLabel>
+              <FieldLabel label="ATS identifier">
+                <FieldInput
                   value={company.ats_identifier ?? ""}
-                  onChange={(event) =>
-                    setCompany((current) =>
-                      current ? { ...current, ats_identifier: event.target.value } : current
-                    )
+                  onChange={(e) =>
+                    setCompany((c) => (c ? { ...c, ats_identifier: e.target.value } : c))
                   }
                 />
-              </label>
-              <label className="space-y-2 text-sm font-medium text-gray-700">
-                Size
-                <AdminSelect
+              </FieldLabel>
+              <FieldLabel label="Company size">
+                <FieldSelect
                   value={company.size ?? ""}
-                  onChange={(event) =>
-                    setCompany((current) =>
-                      current
-                        ? {
-                            ...current,
-                            size: (event.target.value || null) as CompanySize | null,
-                          }
-                        : current
+                  onChange={(e) =>
+                    setCompany((c) =>
+                      c ? { ...c, size: (e.target.value || null) as CompanySize | null } : c
                     )
                   }
                 >
                   <option value="">Select size</option>
-                  {SIZE_OPTIONS.map((value) => (
-                    <option key={value} value={value}>
-                      {value}
+                  {SIZE_OPTIONS.map((v) => (
+                    <option key={v} value={v}>
+                      {v}
                     </option>
                   ))}
-                </AdminSelect>
-              </label>
+                </FieldSelect>
+              </FieldLabel>
             </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <label className="space-y-2 text-sm font-medium text-gray-700">
-                Industry
-                <AdminInput
-                  value={company.industry ?? ""}
-                  onChange={(event) =>
-                    setCompany((current) =>
-                      current ? { ...current, industry: event.target.value } : current
-                    )
+            <div className="mt-4">
+              <FieldLabel label="Careers page URL">
+                <FieldInput
+                  value={company.careers_url}
+                  onChange={(e) =>
+                    setCompany((c) => (c ? { ...c, careers_url: e.target.value } : c))
                   }
                 />
-              </label>
-              <label className="space-y-2 text-sm font-medium text-gray-700">
-                Logo URL
-                <AdminInput
-                  value={company.logo_url ?? ""}
-                  onChange={(event) =>
-                    setCompany((current) =>
-                      current ? { ...current, logo_url: event.target.value } : current
-                    )
-                  }
-                />
-              </label>
+              </FieldLabel>
             </div>
-
-            <label className="flex items-center gap-3 rounded-2xl border border-gray-200 px-4 py-3">
-              <input
-                type="checkbox"
-                checked={company.is_active}
-                onChange={(event) =>
-                  setCompany((current) =>
-                    current ? { ...current, is_active: event.target.checked } : current
-                  )
-                }
-              />
-              <span className="text-sm font-medium text-gray-700">
-                Mark company as active
-              </span>
-            </label>
-
-            <label className="space-y-2 text-sm font-medium text-gray-700">
-              Internal notes
-              <textarea
-                value={notes}
-                onChange={(event) => setNotes(event.target.value)}
-                rows={5}
-                className="w-full rounded-2xl border border-gray-200 px-3 py-2.5 text-sm text-gray-900 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-500/15"
-                placeholder="Admin-only notes, crawl quirks, manual fixes..."
-              />
-            </label>
-
-            <label className="space-y-2 text-sm font-medium text-gray-700">
-              Raw ATS config (JSON)
-              <textarea
-                value={rawConfig}
-                onChange={(event) => setRawConfig(event.target.value)}
-                rows={10}
-                className="w-full rounded-2xl border border-gray-200 px-3 py-2.5 font-mono text-xs text-gray-900 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-500/15"
-              />
-            </label>
-
-            <div className="flex items-center gap-3">
-              <AdminButton type="submit" disabled={saving}>
-                {saving ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Saving
-                  </>
-                ) : (
-                  <>
-                    <Save className="mr-2 h-4 w-4" />
-                    Save changes
-                  </>
-                )}
-              </AdminButton>
-              <AdminBadge tone={company.is_active ? "success" : "neutral"}>
-                {company.is_active ? "Active" : "Inactive"}
-              </AdminBadge>
-            </div>
-          </form>
-        </AdminPanel>
-
-        <AdminPanel
-          title="Crawl history"
-          description="Last 20 crawl logs for this company."
-        >
-          <div className="space-y-3">
-            {logs.map((log) => (
-              <div
-                key={log.id}
-                className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <AdminBadge
-                        tone={
-                          log.status === "failed"
-                            ? "danger"
-                            : log.status === "success"
-                              ? "success"
-                              : "neutral"
-                        }
-                      >
-                        {log.status}
-                      </AdminBadge>
-                      <AdminBadge tone="info">+{log.new_jobs} new</AdminBadge>
-                      <AdminBadge>{log.duration_ms ?? 0}ms</AdminBadge>
-                    </div>
-                    {log.error_message ? (
-                      <p className="mt-2 text-sm text-red-600">{log.error_message}</p>
-                    ) : null}
-                  </div>
-                  <div className="text-right text-xs text-gray-500">
-                    <p>{formatRelativeTime(log.crawled_at)}</p>
-                    <p className="mt-1">{formatDateTime(log.crawled_at)}</p>
-                  </div>
-                </div>
-              </div>
-            ))}
           </div>
-        </AdminPanel>
+
+          <div className="border-t border-gray-100" />
+
+          {/* Notes & raw config */}
+          <div>
+            <SectionHeader>Notes & raw config</SectionHeader>
+            <div className="space-y-4">
+              <FieldLabel label="Internal notes">
+                <textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  rows={4}
+                  placeholder="Admin-only notes, crawl quirks, manual fixes…"
+                  className="w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 outline-none placeholder:text-gray-400 transition focus:border-sky-400 focus:ring-2 focus:ring-sky-400/15"
+                />
+              </FieldLabel>
+              <FieldLabel label="Raw ATS config (JSON)">
+                <textarea
+                  value={rawConfig}
+                  onChange={(e) => setRawConfig(e.target.value)}
+                  rows={10}
+                  spellCheck={false}
+                  className="w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 font-mono text-xs text-gray-900 outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-400/15"
+                />
+              </FieldLabel>
+            </div>
+          </div>
+
+          <div className="border-t border-gray-100" />
+
+          {/* Active toggle + save */}
+          <div className="flex items-center justify-between">
+            <label className="flex cursor-pointer items-center gap-3">
+              <div className="relative h-5 w-9">
+                <input
+                  type="checkbox"
+                  checked={company.is_active}
+                  onChange={(e) =>
+                    setCompany((c) => (c ? { ...c, is_active: e.target.checked } : c))
+                  }
+                  className="peer sr-only"
+                />
+                <div className="h-5 w-9 rounded-full bg-gray-200 transition-colors peer-checked:bg-sky-600" />
+                <div className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform peer-checked:translate-x-4" />
+              </div>
+              <span className="text-sm font-medium text-gray-700">Company is active</span>
+            </label>
+
+            <button
+              type="submit"
+              disabled={saving}
+              className="inline-flex items-center gap-2 rounded-xl bg-sky-700 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-sky-800 disabled:opacity-60"
+            >
+              {saving ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Saving…
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4" />
+                  Save changes
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+
+        {/* ── Crawl history timeline ─────────────────────────── */}
+        <div>
+          <SectionHeader>Crawl history</SectionHeader>
+          {logs.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-gray-200 py-14 text-center">
+              <p className="text-sm text-gray-400">No crawl logs yet</p>
+            </div>
+          ) : (
+            <div className="relative pl-7">
+              {/* Vertical line */}
+              <div className="absolute bottom-2 left-3 top-2 w-px bg-gray-100" />
+
+              <div className="space-y-0">
+                {logs.map((log) => {
+                  const style = LOG_STATUS_STYLE[log.status] ?? {
+                    dot: "bg-gray-300 ring-gray-100",
+                    text: "text-gray-500",
+                  }
+                  return (
+                    <div key={log.id} className="relative py-3">
+                      {/* Timeline dot */}
+                      <span
+                        className={cn(
+                          "absolute -left-4 top-4 h-2.5 w-2.5 rounded-full ring-4",
+                          style.dot
+                        )}
+                      />
+
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className={cn("text-xs font-semibold", style.text)}>
+                              {log.status}
+                            </span>
+                            {log.new_jobs > 0 && (
+                              <span className="rounded-full bg-sky-50 px-1.5 py-0.5 text-[10px] font-semibold text-sky-600">
+                                +{log.new_jobs} jobs
+                              </span>
+                            )}
+                            {log.duration_ms != null && (
+                              <span className="text-[10px] text-gray-400">
+                                {log.duration_ms}ms
+                              </span>
+                            )}
+                          </div>
+                          {log.error_message && (
+                            <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-red-500">
+                              {log.error_message}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex-shrink-0 text-right">
+                          <p className="text-[10px] font-medium text-gray-500">
+                            {formatRelativeTime(log.crawled_at)}
+                          </p>
+                          <p className="mt-0.5 text-[10px] text-gray-400">
+                            {formatDateTime(log.crawled_at)}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )
