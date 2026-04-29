@@ -30,6 +30,11 @@ import { useResumeContext } from "@/components/resume/ResumeProvider"
 import { useResumeAnalysis } from "@/lib/hooks/useResumeAnalysis"
 import { createResumeLcaRoleAlignmentFallback, getJobIntelligence } from "@/lib/jobs/intelligence"
 import {
+  getMatchVerdict,
+  resolveOverallMatchScore,
+} from "@/lib/jobs/match-score-display"
+import { resolveH1BSponsorshipDisplay } from "@/lib/jobs/sponsorship-employer-signal"
+import {
   JOB_APPLICATION_SAVED_EVENT,
   fetchJobSavedState,
   saveJobToPipeline,
@@ -59,14 +64,6 @@ type JobDetailPanelProps = {
 function clamp(value: number | null | undefined): number {
   if (value == null || !Number.isFinite(value)) return 0
   return Math.max(0, Math.min(100, Math.round(value)))
-}
-
-function verdictText(score: number | null) {
-  if (score == null) return { label: "No score yet", color: "text-slate-400" }
-  if (score >= 85) return { label: "Excellent match", color: "text-emerald-600" }
-  if (score >= 70) return { label: "Good match", color: "text-emerald-500" }
-  if (score >= 50) return { label: "Partial match", color: "text-orange-500" }
-  return { label: "Low match", color: "text-slate-400" }
 }
 
 function CircleScore({ value }: { value: number | null }) {
@@ -251,8 +248,13 @@ export default function JobDetailPanel({
 
   // ─── Derived ──────────────────────────────────────────────────────────────
 
-  const overall = analysis?.overall_score ?? fastScore?.overall_score ?? null
-  const verdict = verdictText(overall)
+  const overall = resolveOverallMatchScore({
+    analysisOverallScore: analysis?.overall_score,
+    preferredScore: fastScore,
+    fallbackScore: initialMatchScore ?? null,
+    rawData: job.raw_data,
+  })
+  const verdict = getMatchVerdict(overall)
 
   const allFactors = [
     { label: "Skills",     value: analysis?.skills_score     ?? fastScore?.skills_score     ?? null },
@@ -306,6 +308,11 @@ export default function JobDetailPanel({
   const showHiringHealth =
     (hiringHealth?.status && hiringHealth.status !== "unknown") ||
     (hiringHealth?.activeJobCount != null && hiringHealth.activeJobCount > 0)
+
+  const resolvedSponsorshipDisplay = useMemo(
+    () => resolveH1BSponsorshipDisplay({ ...job, company: job.company ?? undefined }),
+    [job]
+  )
 
   // ─── Render ───────────────────────────────────────────────────────────────
 
@@ -364,7 +371,30 @@ export default function JobDetailPanel({
             <ArrowRight className="h-3.5 w-3.5" aria-hidden />
           </Link>
 
-          {(sponsorsConfirmed || sponsorshipPill.label !== "Sponsorship not specified") && (
+          {resolvedSponsorshipDisplay ? (
+            <div
+              className={cn(
+                "flex items-start gap-2 rounded-xl px-3.5 py-2.5 ring-1 ring-inset",
+                resolvedSponsorshipDisplay.tone === "emerald"
+                  ? "bg-emerald-50 text-emerald-800 ring-emerald-200/60"
+                  : resolvedSponsorshipDisplay.tone === "sky"
+                    ? "bg-sky-50 text-sky-800 ring-sky-200/60"
+                    : resolvedSponsorshipDisplay.tone === "amber"
+                      ? "bg-amber-50 text-amber-800 ring-amber-200/60"
+                      : "bg-rose-50 text-rose-800 ring-rose-200/60"
+              )}
+            >
+              {resolvedSponsorshipDisplay.tone === "rose" ? (
+                <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+              ) : (
+                <Plane className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+              )}
+              <div className="min-w-0">
+                <p className="text-[12px] font-semibold">{resolvedSponsorshipDisplay.label}</p>
+                <p className="text-[10.5px] leading-relaxed opacity-80">{resolvedSponsorshipDisplay.sublabel}</p>
+              </div>
+            </div>
+          ) : (sponsorsConfirmed || sponsorshipPill.label !== "Sponsorship not specified") ? (
             sponsorsConfirmed ? (
               <div className="flex items-center gap-1.5 rounded-xl bg-emerald-50 px-3.5 py-2.5 ring-1 ring-emerald-200/60">
                 <Plane className="h-3.5 w-3.5 shrink-0 text-emerald-600" aria-hidden />
@@ -376,7 +406,7 @@ export default function JobDetailPanel({
                 <span className="text-[12px] font-semibold">{sponsorshipPill.label}</span>
               </div>
             )
-          )}
+          ) : null}
         </div>
 
         {/* ── Match Score ── */}
@@ -404,7 +434,7 @@ export default function JobDetailPanel({
               <div className="flex items-center gap-4">
                 <CircleScore value={overall} />
                 <div className="min-w-0">
-                  <p className={cn("text-[16px] font-bold leading-tight", verdict.color)}>
+                  <p className={cn("text-[16px] font-bold leading-tight", verdict.colorClass)}>
                     {verdict.label}
                   </p>
                   {activeFactors.length > 0 && (

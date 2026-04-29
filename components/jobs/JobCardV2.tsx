@@ -28,7 +28,15 @@ import {
   formatSalaryLabel,
   resolveJobCardView,
 } from "@/lib/jobs/normalization"
-import { employerLikelySponsorsH1b } from "@/lib/jobs/sponsorship-employer-signal"
+import {
+  employerLikelySponsorsH1b,
+  resolveH1BSponsorshipDisplay,
+  type SponsorshipVisaCardLabel,
+} from "@/lib/jobs/sponsorship-employer-signal"
+import {
+  getMatchCardLabel,
+  resolveOverallMatchScore,
+} from "@/lib/jobs/match-score-display"
 import { buildTopApplicantOpportunityBadgeTitle } from "@/lib/jobs/job-card-badges"
 import {
   JOB_APPLICATION_SAVED_EVENT,
@@ -47,12 +55,6 @@ import type { JobMatchScore, JobWithCompany, JobWithMatchScore } from "@/types"
 
 type RawRecord = Record<string, unknown>
 
-function normalizeScore(value: unknown) {
-  const numeric = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN
-  if (!Number.isFinite(numeric)) return null
-  return Math.min(100, Math.max(0, Math.round(numeric)))
-}
-
 function readRawRecord(job: JobWithCompany | JobWithMatchScore): RawRecord {
   if (job.raw_data && typeof job.raw_data === "object") return job.raw_data as RawRecord
   return {}
@@ -62,15 +64,6 @@ function pickRawString(raw: RawRecord, keys: string[]) {
   for (const key of keys) {
     const value = raw[key]
     if (typeof value === "string" && value.trim()) return value.trim()
-  }
-  return null
-}
-
-function pickRawNumber(raw: RawRecord, keys: string[]) {
-  for (const key of keys) {
-    const value = raw[key]
-    const numeric = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN
-    if (Number.isFinite(numeric)) return Math.round(numeric)
   }
   return null
 }
@@ -116,18 +109,10 @@ function formatPostedLabel(timestamp: string, now: number) {
   return `${ageDays}d ago`
 }
 
-function getMatchLabel(score: number | null) {
-  if (score === null) return "Match unavailable"
-  if (score >= 85) return "Excellent"
-  if (score >= 70) return "Strong"
-  if (score >= 55) return "Moderate"
-  return "Low"
-}
-
 function resolveVisaCardLabel(
   job: JobWithCompany | JobWithMatchScore,
-  normLabel: "Sponsors" | "No sponsorship" | "Historical sponsorship signal" | null
-): "Sponsors" | "No sponsorship" | "Historical sponsorship signal" | null {
+  normLabel: SponsorshipVisaCardLabel
+): SponsorshipVisaCardLabel {
   if (normLabel !== null) return normLabel
   const hasCompanyH1bData =
     employerLikelySponsorsH1b(job) ||
@@ -325,9 +310,11 @@ export default function JobCardV2({
 
   const raw = useMemo(() => readRawRecord(job), [job])
   const resolvedMatchScore = matchScoreProp ?? ("match_score" in job ? (job.match_score ?? null) : null)
-  const rawScore = pickRawNumber(raw, ["matchScore", "match_score"])
-  const score = normalizeScore(resolvedMatchScore?.overall_score ?? rawScore)
-  const matchLabel = getMatchLabel(score)
+  const score = resolveOverallMatchScore({
+    preferredScore: resolvedMatchScore,
+    rawData: raw,
+  })
+  const matchLabel = getMatchCardLabel(score)
 
   const cardView = resolveJobCardView(job)
   const displayTitle = cardView.title
@@ -415,23 +402,18 @@ export default function JobCardV2({
   const jdBlocksSponsorship =
     visaCardLabel === "No sponsorship" || job.requires_authorization === true
 
-  // Sponsorship row shown in the card body — factual, never invented.
-  // Positive company signals are gated by jdBlocksSponsorship.
-  const sponsorshipDisplay = (() => {
-    if (jdBlocksSponsorship) {
-      return { label: "No sponsorship", sub: "from posting", tone: "rose" } as const
-    }
-    if (visaCardLabel === "Sponsors" || job.sponsors_h1b === true) {
-      return { label: "Sponsorship available", sub: "from job description", tone: "emerald" } as const
-    }
-    if (companySponsorsH1b && h1bCount1yr > 0) {
-      return { label: "H-1B sponsor", sub: `${h1bCount1yr} petition${h1bCount1yr === 1 ? "" : "s"} last yr`, tone: "emerald" } as const
-    }
-    if (h1bCount1yr > 0) {
-      return { label: `${h1bCount1yr} H-1B petition${h1bCount1yr === 1 ? "" : "s"} last yr`, sub: "historical signal", tone: "sky" } as const
-    }
-    return null
-  })()
+  const sponsorshipDisplay = useMemo(
+    () => resolveH1BSponsorshipDisplay(job, { visaCardLabel }),
+    [job, visaCardLabel]
+  )
+  const sponsorshipStrengthText =
+    sponsorshipDisplay?.strength === "strong"
+      ? "Strong signal"
+      : sponsorshipDisplay?.strength === "moderate"
+        ? "Moderate signal"
+        : sponsorshipDisplay?.strength === "limited"
+          ? "Limited signal"
+          : null
 
 
   const rawTopApplicantFlag = pickRawBoolean(raw, ["topApplicantSignal", "top_applicant_signal"]) === true
@@ -717,6 +699,8 @@ export default function JobCardV2({
                       ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
                       : sponsorshipDisplay.tone === "sky"
                         ? "bg-sky-50 text-sky-700 ring-sky-200"
+                        : sponsorshipDisplay.tone === "amber"
+                          ? "bg-amber-50 text-amber-700 ring-amber-200"
                         : "bg-rose-50 text-rose-600 ring-rose-200"
                   )}>
                     {sponsorshipDisplay.tone !== "rose"
@@ -725,7 +709,7 @@ export default function JobCardV2({
                     }
                     {sponsorshipDisplay.label}
                   </span>
-                  <span className="text-[11px] text-slate-400">{sponsorshipDisplay.sub}</span>
+                  <span className="text-[11px] text-slate-400">{sponsorshipDisplay.sublabel}</span>
                 </div>
               )}
 
@@ -850,18 +834,24 @@ export default function JobCardV2({
                     {/* Status badge */}
                     <span className={cn(
                       "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold",
-                      jdBlocksSponsorship
+                      sponsorshipDisplay?.tone === "rose" || jdBlocksSponsorship
                         ? "bg-rose-500/15 text-rose-400"
-                        : companySponsorsH1b
+                        : sponsorshipDisplay?.tone === "emerald"
                           ? "bg-emerald-500/15 text-emerald-400"
-                          : "bg-sky-500/15 text-sky-400"
+                          : sponsorshipDisplay?.tone === "amber"
+                            ? "bg-amber-500/15 text-amber-400"
+                            : "bg-sky-500/15 text-sky-400"
                     )}>
-                      <ShieldCheck className="h-3 w-3" aria-hidden />
-                      {jdBlocksSponsorship
+                      {sponsorshipDisplay?.tone === "rose" || jdBlocksSponsorship ? (
+                        <ShieldX className="h-3 w-3" aria-hidden />
+                      ) : (
+                        <ShieldCheck className="h-3 w-3" aria-hidden />
+                      )}
+                      {sponsorshipDisplay?.tone === "rose" || jdBlocksSponsorship
                         ? "Posting says no sponsorship"
-                        : companySponsorsH1b
-                          ? "Active H-1B sponsor"
-                          : "Historical signal"}
+                        : sponsorshipStrengthText
+                          ? `${sponsorshipDisplay?.label} · ${sponsorshipStrengthText}`
+                          : sponsorshipDisplay?.label ?? "Historical signal"}
                     </span>
 
                     {/* Confidence bar */}
