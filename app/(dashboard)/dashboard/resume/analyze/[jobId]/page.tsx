@@ -496,12 +496,12 @@ export default function AnalyzePage() {
   const planName = analysisRequiredPlan ? PLAN_NAMES[analysisRequiredPlan] : "Pro"
 
   return (
-    <main className="min-h-full bg-slate-50 pb-20">
+    <main className="app-page">
 
       {/* ── Header ───────────────────────────────────────────── */}
       <div className="relative bg-[#0C1222]">
         <div className="pointer-events-none absolute -left-32 -top-32 h-80 w-80 rounded-full bg-orange-600/8 blur-3xl" aria-hidden />
-        <div className="mx-auto w-full max-w-4xl px-4 py-5 sm:px-6">
+        <div className="px-4 py-5 sm:px-6 lg:px-8">
           <Link
             href={`/dashboard/jobs/${jobId}`}
             className="inline-flex items-center gap-1.5 text-[12px] font-medium text-slate-500 transition hover:text-slate-200"
@@ -547,7 +547,7 @@ export default function AnalyzePage() {
       </div>
 
       {/* ── Content ──────────────────────────────────────────── */}
-      <div className="mx-auto w-full max-w-4xl px-4 py-7 sm:px-6">
+      <div className="app-shell bg-slate-50 pb-12 pt-7">
 
         {/* No resume */}
         {!resumeId && !isLoading && (
