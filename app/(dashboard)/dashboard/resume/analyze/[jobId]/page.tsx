@@ -2,19 +2,21 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
-import { useParams } from "next/navigation"
+import { useParams, useRouter } from "next/navigation"
 import {
   ArrowLeft,
   ArrowRight,
   Check,
   CheckCircle2,
   ExternalLink,
+  Loader2,
   Plus,
   X,
 } from "lucide-react"
 import AnalysisScoreCircle from "@/components/resume/AnalysisScoreCircle"
 import CompanyLogo from "@/components/ui/CompanyLogo"
 import { useResumeContext } from "@/components/resume/ResumeProvider"
+import { saveJobToPipeline } from "@/lib/applications/save-job-client"
 import { PLAN_NAMES } from "@/lib/gates"
 import { useFeatureAccess } from "@/lib/hooks/useFeatureAccess"
 import { useResumeAnalysis } from "@/lib/hooks/useResumeAnalysis"
@@ -122,7 +124,22 @@ const FACTORS = [
 ] as const
 
 function FullAnalysisView({ analysis, job }: { analysis: ResumeAnalysis; job: JobWithCompany }) {
+  const router = useRouter()
+  const [tailoring, setTailoring] = useState(false)
   const applyConfig = analysis.apply_recommendation ? APPLY_CONFIG[analysis.apply_recommendation] : null
+
+  async function handleTailor() {
+    setTailoring(true)
+    await saveJobToPipeline({
+      jobId: job.id,
+      jobTitle: job.title,
+      companyName: job.company.name,
+      applyUrl: job.apply_url ?? "",
+      companyLogoUrl: job.company.logo_url ?? null,
+      source: "hireoven_tailor",
+    }).catch(() => {})
+    router.push(`/dashboard/resume/studio?mode=tailor&jobId=${job.id}`)
+  }
 
   const sortedRecs = [...(analysis.recommendations ?? [])].sort((a, b) => {
     const order = { high: 0, medium: 1, low: 2 }
@@ -413,13 +430,17 @@ function FullAnalysisView({ analysis, job }: { analysis: ResumeAnalysis; job: Jo
             Apply now
             <ExternalLink className="h-3.5 w-3.5" aria-hidden />
           </a>
-          <Link
-            href={`/dashboard/resume/studio?mode=tailor&jobId=${job.id}`}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-[13px] font-medium text-slate-700 transition hover:bg-slate-50"
+          <button
+            type="button"
+            onClick={handleTailor}
+            disabled={tailoring}
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-[13px] font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
           >
+            {tailoring
+              ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+              : <ArrowRight className="h-3.5 w-3.5" aria-hidden />}
             Tailor resume
-            <ArrowRight className="h-3.5 w-3.5" aria-hidden />
-          </Link>
+          </button>
           <Link
             href={`/dashboard/cover-letters/${job.id}`}
             className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-[13px] font-medium text-slate-700 transition hover:bg-slate-50"

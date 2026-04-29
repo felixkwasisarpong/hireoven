@@ -1017,6 +1017,22 @@ export default function ResumeStudioPage() {
     setMode(validMode(searchParams.get("mode")))
   }, [searchParams])
 
+  // Auto-select a job when navigating from the analyze page (?jobId=...)
+  const didAutoSelectJob = useRef(false)
+  useEffect(() => {
+    if (didAutoSelectJob.current) return
+    const preselectedJobId = searchParams.get("jobId")
+    if (!preselectedJobId || hubData.targetJobs.length === 0) return
+    const job = hubData.targetJobs.find((j) => j.id === preselectedJobId)
+    if (!job) return
+    didAutoSelectJob.current = true
+    setJobSource("saved")
+    setSelectedTargetJobId(preselectedJobId)
+    setJobTitle(job.title ?? "")
+    setCompany(job.company ?? "")
+    if (job.description) setJobDescription(job.description)
+  }, [hubData.targetJobs, searchParams])
+
   useEffect(() => {
     async function loadProfile() {
       const response = await fetch("/api/profile", { credentials: "include", cache: "no-store" })
