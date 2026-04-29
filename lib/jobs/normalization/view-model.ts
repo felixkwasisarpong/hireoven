@@ -52,13 +52,43 @@ export function formatDetectedTime(value: string | null | undefined, now = Date.
 }
 
 function sponsorshipLabel(job: CanonicalJob): string {
-  if (job.visa.sponsors_h1b.value === true) return "H1B sponsorship available"
-  if (job.visa.requires_authorization.value === true) return "Work authorization required"
-
-  const sponsorshipScore = job.visa.sponsorship_score.value ?? 0
-  if (sponsorshipScore >= 65) return "Likely sponsorship"
-
+  const explicit = job.visa.explicit_sponsorship_status?.value
+  if (explicit === "sponsors" || job.visa.sponsors_h1b.value === true) {
+    return "H1B sponsorship available"
+  }
+  if (explicit === "no_sponsorship") return "No sponsorship"
+  if (job.visa.requires_authorization.value === true) {
+    // Work authorization required — does NOT mean no sponsorship; visa type unclear.
+    return "Work authorization required"
+  }
   return "Sponsorship not specified"
+}
+
+/**
+ * Strict visa card label — derived ONLY from explicit JD text detection.
+ * null means no data; the calling UI must hide all visa display.
+ *
+ * Note: requires_authorization is intentionally excluded. A description can
+ * require work authorization (accepting OPT, TN, etc.) without refusing to
+ * sponsor H-1B. Using it here would produce false "No sponsorship" labels.
+ * Company H1B records ("Historical sponsorship signal") are added by the UI
+ * layer which has access to the full company row.
+ */
+function deriveVisaCardLabel(
+  job: CanonicalJob
+): "Sponsors" | "No sponsorship" | "Historical sponsorship signal" | null {
+  // explicit_sponsorship_status was added after initial schema — may be absent on
+  // canonical jobs deserialized from raw_data that predate the field.
+  const explicit = job.visa.explicit_sponsorship_status?.value
+  if (explicit === "sponsors" || job.visa.sponsors_h1b.value === true) return "Sponsors"
+  if (explicit === "no_sponsorship") return "No sponsorship"
+  return null
+}
+
+function deriveShowVisaDrawer(job: CanonicalJob): boolean {
+  const label = deriveVisaCardLabel(job)
+  // Only open the drawer when we have positive sponsorship evidence.
+  return label === "Sponsors" || label === "Historical sponsorship signal"
 }
 
 function deriveHighlights(job: CanonicalJob, salaryLabel: string | null): string[] {
@@ -139,6 +169,7 @@ export function mapCanonicalToJobPageView(job: CanonicalJob): JobPageViewModel {
     sections.other,
   ]
 
+  const visaCardLabel = deriveVisaCardLabel(job)
   return {
     schema_version: job.schema_version,
     title: job.header.title.value ?? "Untitled role",
@@ -157,11 +188,15 @@ export function mapCanonicalToJobPageView(job: CanonicalJob): JobPageViewModel {
     skill_groups: job.skill_groups,
     confidence_score: job.validation.confidence_score,
     requires_review: job.validation.requires_review,
+    visa_card_label: visaCardLabel,
+    show_visa_drawer: deriveShowVisaDrawer(job),
   }
 }
 
 export function mapCanonicalToJobCardView(job: CanonicalJob): JobCardViewModel {
   const sponsorshipScore = job.visa.sponsorship_score.value ?? 0
+  const explicit = job.visa.explicit_sponsorship_status?.value
+  const visaCardLabel = deriveVisaCardLabel(job)
 
   return {
     title: job.header.title.value ?? "Untitled role",
@@ -180,13 +215,16 @@ export function mapCanonicalToJobCardView(job: CanonicalJob): JobCardViewModel {
       null,
     skills: (job.skills.value ?? []).slice(0, 8),
     skill_groups: job.skill_groups,
+    // Backward compat: kept for sponsorship-employer-signal.ts
     sponsorship_badge:
-      job.visa.sponsors_h1b.value === true
+      explicit === "sponsors" || job.visa.sponsors_h1b.value === true  // explicit may be undefined on old canonical
         ? "sponsors"
-        : job.visa.requires_authorization.value === true
+        : explicit === "no_sponsorship" || job.visa.requires_authorization.value === true
           ? "no_sponsorship"
           : sponsorshipScore >= 65
             ? "likely"
             : null,
+    visa_card_label: visaCardLabel,
+    show_visa_drawer: deriveShowVisaDrawer(job),
   }
 }

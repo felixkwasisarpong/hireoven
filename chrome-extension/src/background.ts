@@ -34,6 +34,8 @@ import type {
   ScoutOverlayInsightsPayload,
   ExtensionJobFingerprint,
   ExtensionJobResolveResponse,
+  ListResumesResult,
+  ExtensionResumeSummary,
 } from "./types"
 
 // ── Config ─────────────────────────────────────────────────────────────────────
@@ -136,14 +138,29 @@ async function queryContentScript(
   tabId: number,
   message: ContentMessage
 ): Promise<ContentResponse | null> {
+  const send = (): Promise<ContentResponse | null> =>
+    new Promise((resolve) => {
+      chrome.tabs.sendMessage(tabId, message, (response: ContentResponse | undefined) => {
+        if (chrome.runtime.lastError) {
+          resolve(null)
+          return
+        }
+        resolve(response ?? null)
+      })
+    })
+
+  // Prefer messaging first to avoid duplicate content-script executions.
+  const direct = await send()
+  if (direct) return direct
+
+  // Fallback: inject once, then retry the message.
   try {
-    // Ensure the content script is injected (handles tabs opened before the extension).
     await chrome.scripting.executeScript({
       target: { tabId },
       files: ["dist/content.js"],
     })
   } catch {
-    // Script may already be injected — that's fine.
+    // Injection may be blocked on this host or already available; retry message anyway.
   }
 
   return new Promise((resolve) => {
@@ -209,6 +226,9 @@ async function handleMessage(
 
     case "GET_SCOUT_OVERLAY":
       return handleGetScoutOverlay(message.jobId)
+
+    case "LIST_RESUMES":
+      return handleListResumes()
 
     default:
       return {
@@ -374,18 +394,11 @@ async function handleGetAutofillPreview(sender: chrome.runtime.MessageSender): P
   const tabId = await resolveTargetTabId(sender)
   if (tabId == null) return empty
 
-  // 3. Ensure content script is loaded
-  try {
-    await chrome.scripting.executeScript({ target: { tabId }, files: ["dist/content.js"] })
-  } catch {
-    /* already injected */
-  }
-
-  // 4. Get detected page ATS
+  // 3. Get detected page ATS
   const pageResponse = await queryContentScript(tabId, { type: "DETECT_PAGE" })
   const ats = pageResponse?.type === "PAGE_DETECTED" ? pageResponse.page.ats : "generic"
 
-  // 5. Send form detection request to content script
+  // 4. Send form detection request to content script
   const fieldsResponse = await queryContentScript(tabId, {
     type: "DETECT_FORM_FIELDS",
     profile: profileData.profile,
@@ -419,12 +432,6 @@ async function handleExecuteAutofill(
 
   const tabId = await resolveTargetTabId(sender)
   if (tabId == null) return empty
-
-  try {
-    await chrome.scripting.executeScript({ target: { tabId }, files: ["dist/content.js"] })
-  } catch {
-    /* already injected */
-  }
 
   const response = await queryContentScript(tabId, {
     type: "FILL_FORM_FIELDS",
@@ -557,10 +564,6 @@ async function handleFillCoverLetter(
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
   if (!tab?.id) return { type: "FILL_COVER_LETTER_RESULT", success: false }
 
-  try {
-    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["dist/content.js"] })
-  } catch { /* already injected */ }
-
   const response = await queryContentScript(tab.id, {
     type: "FILL_FORM_FIELDS",
     fields: [{ elementRef, value: text }],
@@ -570,6 +573,34 @@ async function handleFillCoverLetter(
     type: "FILL_COVER_LETTER_RESULT",
     success: response?.type === "FORM_FILLED" && response.filledCount > 0,
   }
+}
+
+async function handleListResumes(): Promise<ListResumesResult> {
+  interface RawResume {
+    id: string
+    name: string | null
+    file_name: string
+    is_primary: boolean
+    resume_score: number | null
+    ats_score: number | null
+    archived_at: string | null
+  }
+
+  const rows = await apiRequest<RawResume[]>("GET", "/api/resume")
+  if (!rows || !Array.isArray(rows)) {
+    return { type: "LIST_RESUMES_RESULT", resumes: [] }
+  }
+
+  const resumes: ExtensionResumeSummary[] = rows
+    .filter((r) => !r.archived_at)
+    .map((r) => ({
+      id: r.id,
+      name: r.name ?? r.file_name,
+      isPrimary: Boolean(r.is_primary),
+      score: r.ats_score ?? r.resume_score ?? null,
+    }))
+
+  return { type: "LIST_RESUMES_RESULT", resumes }
 }
 
 // ── Extension install / update lifecycle ──────────────────────────────────────

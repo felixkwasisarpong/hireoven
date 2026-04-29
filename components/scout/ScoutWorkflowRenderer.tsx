@@ -56,6 +56,7 @@ export function ScoutWorkflowRenderer({ workflow }: ScoutWorkflowRendererProps) 
             const isCompleted = completedSteps.has(step.id)
             const isLocked = !canExecuteAllSteps && index > 0
             const isActive = !isCompleted && !isLocked
+            const action = step.action
 
             return (
               <li
@@ -109,7 +110,7 @@ export function ScoutWorkflowRenderer({ workflow }: ScoutWorkflowRendererProps) 
 
                   {/* Action button */}
                   <div className="mt-2">
-                    {step.action ? (
+                    {action ? (
                       <button
                         type="button"
                         onClick={() => {
@@ -117,7 +118,7 @@ export function ScoutWorkflowRenderer({ workflow }: ScoutWorkflowRendererProps) 
                             showUpgrade("scout_strategy")
                             return
                           }
-                          executeAction(step.action, { onExecuted: () => markComplete(step.id) })
+                          executeAction(action, { onExecuted: () => markComplete(step.id) })
                         }}
                         className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition ${
                           isCompleted
@@ -134,7 +135,7 @@ export function ScoutWorkflowRenderer({ workflow }: ScoutWorkflowRendererProps) 
                             Unlock step
                           </>
                         ) : (
-                          step.action.label || getDefaultActionLabel(step.action)
+                          action.label || getDefaultActionLabel(action)
                         )}
                       </button>
                     ) : !isCompleted && isActive ? (

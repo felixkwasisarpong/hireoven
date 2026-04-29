@@ -5,6 +5,7 @@ import { AlertCircle, ArrowRight, CheckCircle2 } from "lucide-react"
 import Link from "next/link"
 import { ScoutActivityTimeline } from "@/components/scout/ScoutActivityTimeline"
 import { analyzeFollowUp } from "@/lib/scout/follow-up"
+import type { FollowUpUrgency } from "@/lib/scout/follow-up"
 import type { JobApplication } from "@/types"
 
 // ── Stale applications nudge ──────────────────────────────────────────────────
@@ -14,7 +15,7 @@ type StaleApp = {
   company_name: string
   job_title: string
   daysStale: number
-  urgency: string | null
+  urgency: FollowUpUrgency | null
 }
 
 function FollowUpNudgePanel() {

@@ -131,6 +131,8 @@ export type ScoutContext = {
   compareJobs: CompareJobContext[] | null
 }
 
+type ScoutContextResume = NonNullable<ScoutContext["resume"]>
+
 /**
  * Retrieves grounded Scout context for the authenticated user.
  * Only returns data the user has access to. Returns null for missing data.
@@ -362,8 +364,8 @@ export async function getScoutContext(input: ScoutContextInput): Promise<ScoutCo
           skills: resume.skills,
           seniority_level: resume.seniority_level,
           updated_at: resume.updated_at ?? null,
-          work_experience: resume.work_experience as ScoutContext["resume"]["work_experience"],
-          education: resume.education as ScoutContext["resume"]["education"],
+          work_experience: resume.work_experience as ScoutContextResume["work_experience"],
+          education: resume.education as ScoutContextResume["education"],
         }
       : null,
     matchScore: matchScore
@@ -409,9 +411,9 @@ export function formatScoutContextForClaude(context: ScoutContext): string {
     const profile = context.user.profile
     sections.push(`User Profile:
 - Visa Status: ${profile.visa_status ?? "Not specified"}
-- Preferred Locations: ${profile.preferred_locations?.join(", ") ?? "Any"}
-- Years of Experience: ${profile.years_of_experience ?? "Not specified"}
-- Requires Sponsorship: ${profile.requires_sponsorship ? "Yes" : "No"}`)
+- Preferred Locations: ${profile.desired_locations?.join(", ") ?? "Any"}
+- Years of Experience: Not specified
+- Requires Sponsorship: ${profile.needs_sponsorship ? "Yes" : "No"}`)
   }
 
   // Resume

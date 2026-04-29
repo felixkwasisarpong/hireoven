@@ -10,7 +10,14 @@ import {
   fetchJobDescription,
   normalizeJobApplyUrl,
 } from "@/lib/jobs/description"
-import { normalizeCrawlerJobForPersistenceWithAI } from "@/lib/jobs/normalization"
+import {
+  normalizeCrawlerJobForPersistence,
+  normalizeCrawlerJobForPersistenceWithAI,
+} from "@/lib/jobs/normalization"
+import {
+  getCrawlerAiEnrichmentMode,
+  shouldAttemptAiEnrichment,
+} from "@/lib/crawler/enrichment-mode"
 import { normalizeGreenhouseBoardUrl } from "@/lib/companies/greenhouse-url"
 import type { EmploymentType, SeniorityLevel } from "@/types"
 
@@ -436,12 +443,14 @@ export async function persistCrawlJobs({
 
   const toInsert: Array<Record<string, unknown>> = []
   const toUpdate: Array<{ id: string; payload: Record<string, unknown> }> = []
+  const aiEnrichmentMode = getCrawlerAiEnrichmentMode()
+  const aiAvailable = aiEnrichmentMode !== "off" && Boolean(process.env.ANTHROPIC_API_KEY)
+  let aiQueued = 0
 
   for (const job of dedupedJobs) {
     const normalizedPostedAt = normalizePostedAtToIso(job.postedAt, crawledAt)
     const existing = existingByExternalId.get(job.externalId)
-    // Deterministic crawl/extraction remains primary; Haiku runs as a bounded enrichment layer.
-    const normalization = await normalizeCrawlerJobForPersistenceWithAI({
+    const normalizationInput = {
       rawJob: {
         externalId: job.externalId,
         title: job.title,
@@ -484,7 +493,35 @@ export async function persistCrawlJobs({
         sponsorship_score: existing?.sponsorship_score ?? null,
         visa_language_detected: existing?.visa_language_detected ?? null,
       },
-    })
+    }
+
+    // Deterministic crawl/extraction remains primary. AI enrichment is optional:
+    // sync mode applies it inline, async mode marks jobs for background processing.
+    const deterministicNormalization = normalizeCrawlerJobForPersistence(normalizationInput)
+    const shouldEnrich = aiAvailable && shouldAttemptAiEnrichment(deterministicNormalization)
+    let normalization = deterministicNormalization
+    let aiStatus: "done" | "pending" | "skipped" | "disabled" = aiAvailable
+      ? "skipped"
+      : "disabled"
+    let aiAttempts = 0
+    let aiLastError: string | null = null
+    const nowIso = new Date().toISOString()
+
+    if (shouldEnrich && aiEnrichmentMode === "sync") {
+      try {
+        normalization = await normalizeCrawlerJobForPersistenceWithAI(normalizationInput)
+        aiStatus = "done"
+        aiAttempts = 1
+      } catch (error) {
+        aiStatus = "pending"
+        aiAttempts = 1
+        aiLastError = error instanceof Error ? error.message.slice(0, 500) : String(error).slice(0, 500)
+        aiQueued += 1
+      }
+    } else if (shouldEnrich && aiEnrichmentMode === "async") {
+      aiStatus = "pending"
+      aiQueued += 1
+    }
 
     const cleanedTitle = cleanJobTitle(job.title)
     const companyEmployeeCount =
@@ -495,6 +532,14 @@ export async function persistCrawlJobs({
       companyFoundedYearRaw && companyFoundedYearRaw >= 1800 && companyFoundedYearRaw <= new Date().getUTCFullYear() + 1
         ? companyFoundedYearRaw
         : null
+    // Promote company_info from the normalizer when the crawler didn't provide a summary.
+    // This ensures raw_data.companySummary is populated for standard ATS jobs where the
+    // JD contains an "About us / Who we are" section even if the crawler signal is absent.
+    const companySummaryFromNormalization =
+      normalization.canonical.sections.company_info.items.find(
+        (item) => typeof item === "string" && item.trim().length >= 20
+      ) ?? null
+
     const cardSignals = compactRecord({
       companyLogo: toOptionalString(job.companyLogo, 1200),
       companyVerified: toOptionalBoolean(job.companyVerified),
@@ -507,7 +552,9 @@ export async function persistCrawlJobs({
       matchedSkills: toOptionalStringArray(job.matchedSkills, 10),
       missingSkills: toOptionalStringArray(job.missingSkills, 10),
       sponsorshipSignal: toOptionalString(job.sponsorshipSignal, 180),
-      companySummary: toOptionalString(job.companySummary, 2000),
+      companySummary:
+        toOptionalString(job.companySummary, 2000) ??
+        toOptionalString(companySummaryFromNormalization, 2000),
       companyFoundedYear,
       companyEmployeeCount,
       companyIndustry: toOptionalString(job.companyIndustry, 180),
@@ -560,6 +607,14 @@ export async function persistCrawlJobs({
           completeness_score: normalization.canonical.validation.completeness_score,
           requires_review: normalization.canonical.validation.requires_review,
           issues: normalization.canonical.validation.issues,
+          ai_enrichment: {
+            mode: aiEnrichmentMode,
+            status: aiStatus,
+            attempts: aiAttempts,
+            queued_at: aiStatus === "pending" ? nowIso : null,
+            enriched_at: aiStatus === "done" ? nowIso : null,
+            last_error: aiLastError,
+          },
         },
         normalized: normalization.canonical,
         structured_job: normalization.structuredData,
@@ -712,5 +767,6 @@ export async function persistCrawlJobs({
     updated: toUpdate.length,
     deactivated: staleIds.length,
     activeCount,
+    aiQueued,
   }
 }

@@ -185,7 +185,7 @@ export default function JobFeed({
                 scoresLoading &&
                 !getScore(job.id)
               }
-              showVisaSignals={h1bEnabled}
+
             />
           ))}
         </div>

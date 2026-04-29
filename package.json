@@ -95,6 +95,7 @@
   },
   "devDependencies": {
     "@types/bcryptjs": "^3.0.0",
+    "@types/chrome": "^0.1.40",
     "@types/node": "^20",
     "@types/pg": "^8.20.0",
     "@types/react": "^18",

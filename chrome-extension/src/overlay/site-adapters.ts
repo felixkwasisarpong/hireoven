@@ -1,7 +1,7 @@
 import type { ATSProvider, ExtractedJob } from "../types"
 import { detectATS } from "../detectors/ats"
 
-export type OverlaySite = "linkedin" | "glassdoor" | "generic"
+export type OverlaySite = "linkedin" | "glassdoor" | "indeed" | "generic"
 export type OverlayCardRole = "result" | "detail"
 
 export interface JobCardSnapshot {
@@ -118,6 +118,7 @@ function hostnameSite(): OverlaySite {
   const h = window.location.hostname.replace(/^www\./, "").toLowerCase()
   if (h.includes("linkedin.com")) return "linkedin"
   if (h.includes("glassdoor.com")) return "glassdoor"
+  if (h.includes("indeed.com")) return "indeed"
   return "generic"
 }
 
@@ -146,6 +147,11 @@ function canonicalJobUrl(url: string): string {
     if (h.includes("glassdoor.com")) {
       const p = u.pathname.replace(/\/$/, "")
       return `glassdoor:${p}`
+    }
+    if (h.includes("indeed.com")) {
+      const jk = u.searchParams.get("jk") ?? u.searchParams.get("vjk")
+      if (jk) return `indeed:jk/${jk}`
+      return `indeed:${u.pathname}`
     }
     return `${u.origin}${u.pathname}`
   } catch {
@@ -456,6 +462,152 @@ function glassdoorDetailFallback(): JobCardSnapshot[] {
   ]
 }
 
+function findIndeedCards(): HTMLElement[] {
+  const buckets = [
+    ...Array.from(document.querySelectorAll<HTMLElement>("[data-testid='slider_item']")),
+    ...Array.from(document.querySelectorAll<HTMLElement>(".job_seen_beacon")),
+    ...Array.from(document.querySelectorAll<HTMLElement>(".cardOutline")),
+    ...Array.from(document.querySelectorAll<HTMLElement>("[data-jk]")),
+  ]
+  const seen = new Set<HTMLElement>()
+  const cards: HTMLElement[] = []
+  for (const item of buckets) {
+    if (seen.has(item)) continue
+    seen.add(item)
+    if (!visible(item)) continue
+    if (!item.querySelector("h2.jobTitle a, [data-testid='job-title'], a[href*='viewjob'], a[href*='/jk=']")) continue
+    cards.push(item)
+    if (cards.length >= MAX_CARDS) break
+  }
+  return cards
+}
+
+function mapIndeedCards(hosts: HTMLElement[]): JobCardSnapshot[] {
+  return hosts.map((host, idx) => {
+    const link = firstLink(host, [
+      "h2.jobTitle a",
+      "[data-testid='job-title']",
+      "a[href*='viewjob']",
+      "a.tapItem",
+    ])
+
+    const title =
+      text(host, ["h2.jobTitle span[title]", "h2.jobTitle", "[data-testid='job-title']"]) ??
+      link?.textContent?.trim() ??
+      null
+
+    const company = text(host, [
+      "[data-testid='company-name']",
+      ".companyName",
+      "span.companyName",
+    ])
+
+    const location = text(host, [
+      "[data-testid='text-location']",
+      ".companyLocation",
+      "div.companyLocation",
+    ])
+
+    const description = text(host, [
+      "[data-testid='job-snippet']",
+      ".job-snippet",
+      ".underShelfFooter",
+    ])
+
+    const hostText = nodeText(host)
+    const salary = detectSalary(hostText) ?? text(host, ["[data-testid='attribute_snippet_testid']"])
+    const url = asAbsUrl(link?.href ?? null)
+
+    return {
+      key: makeKey("indeed", url, title, company, location, "result", idx),
+      host,
+      title,
+      company,
+      location,
+      workMode: detectWorkMode(location, hostText),
+      employmentType: detectEmploymentType(hostText),
+      postedAt: detectPostedAt(hostText),
+      description,
+      salary,
+      salaryRange: salary,
+      easyApply:
+        /\beasily apply\b|\bapply now\b/i.test(hostText) ||
+        Boolean(host.querySelector("[data-testid='indeedApply']")),
+      url,
+      ats: "generic",
+      site: "indeed",
+      role: "result",
+    }
+  })
+}
+
+function indeedDetailFallback(): JobCardSnapshot[] {
+  const top = document.querySelector<HTMLElement>(
+    "[data-testid='jobsearch-JobInfoHeader-title'], .jobsearch-JobInfoHeader-title, h1.jobTitle, h1",
+  )
+  const root =
+    document.querySelector<HTMLElement>(".jobsearch-RightPane, .jobsearch-ViewJobLayout, main") ?? top
+  if (!visible(root)) return []
+
+  const title = text(document, [
+    "[data-testid='jobsearch-JobInfoHeader-title']",
+    ".jobsearch-JobInfoHeader-title",
+    "h1.jobTitle",
+    "h1",
+  ])
+  const company = text(document, [
+    "[data-testid='inlineHeader-companyName']",
+    ".jobsearch-CompanyInfoContainer a",
+    "[data-company-name]",
+  ])
+  const location = text(document, [
+    "[data-testid='inlineHeader-companyLocation']",
+    "[data-testid='job-location']",
+    ".companyLocation",
+  ])
+  const description = text(document, [
+    "#jobDescriptionText",
+    "[data-testid='jobDescriptionText']",
+    ".jobsearch-JobComponent-description",
+  ])
+  const detailText = nodeText(root ?? document)
+  const salary = detectSalary(detailText) ?? text(document, ["[data-testid='attribute_snippet_testid']"])
+  const url = window.location.href
+
+  return [
+    {
+      key: makeKey("indeed", url, title, company, location, "detail", 0),
+      host: root,
+      title,
+      company,
+      location,
+      workMode: detectWorkMode(location, detailText),
+      employmentType: detectEmploymentType(detailText),
+      postedAt: detectPostedAt(detailText),
+      description,
+      salary,
+      salaryRange: salary,
+      easyApply:
+        /\bapply now\b|\beasily apply\b/i.test(detailText) ||
+        Boolean(document.querySelector("[data-testid='indeedApplyButton']")),
+      sponsorshipSignal: (() => {
+        const source = `${detailText} ${description ?? ""}`.toLowerCase()
+        if (/(?:no|not)\s+(?:visa|sponsorship)|without sponsorship|cannot sponsor/.test(source)) {
+          return "No sponsorship"
+        }
+        if (/(visa|sponsorship|h-1b|h1b|opt|cpt|work authorization)/.test(source)) {
+          return "Visa details mentioned"
+        }
+        return null
+      })(),
+      url,
+      ats: "generic",
+      site: "indeed",
+      role: "detail",
+    },
+  ]
+}
+
 function genericDetailFallback(): JobCardSnapshot[] {
   const host =
     document.querySelector<HTMLElement>("main article,main,[role='main'],article") ?? document.body
@@ -508,6 +660,7 @@ function inferSearchPage(site: OverlaySite, cardsLen: number): boolean {
   const path = `${window.location.pathname}${window.location.search}`.toLowerCase()
   if (site === "linkedin" && /\/jobs\/search/.test(path)) return true
   if (site === "glassdoor" && /\/job\//.test(path) && /(?:jobs\.htm|srch_|findjobs|keyword)/.test(path)) return true
+  if (site === "indeed" && /\/jobs(?:\?|$)/.test(path)) return true
   return false
 }
 
@@ -535,6 +688,24 @@ export function extractSiteContext(): SiteContext {
   if (site === "glassdoor") {
     const resultCards = mapGlassdoorCards(findGlassdoorCards())
     const detailCard = glassdoorDetailFallback()[0] ?? null
+    let resolved = resultCards
+
+    if (resolved.length === 0 && detailCard) {
+      resolved = [detailCard]
+    } else if (resolved.length > 0 && detailCard) {
+      resolved = [...resolved, detailCard]
+    }
+
+    return {
+      site,
+      isSearchPage: inferSearchPage(site, resultCards.length),
+      cards: resolved,
+    }
+  }
+
+  if (site === "indeed") {
+    const resultCards = mapIndeedCards(findIndeedCards())
+    const detailCard = indeedDetailFallback()[0] ?? null
     let resolved = resultCards
 
     if (resolved.length === 0 && detailCard) {
@@ -603,6 +774,14 @@ export function findDetailDescriptionRoot(card: JobCardSnapshot): HTMLElement | 
     return (
       document.querySelector<HTMLElement>(
         "#JobDescriptionContainer,[id='JobDescriptionContent'],[class*='JobDescription'],[data-test='jobDescription']",
+      ) ?? null
+    )
+  }
+
+  if (card.site === "indeed") {
+    return (
+      document.querySelector<HTMLElement>(
+        "#jobDescriptionText,[data-testid='jobDescriptionText'],.jobsearch-JobComponent-description",
       ) ?? null
     )
   }

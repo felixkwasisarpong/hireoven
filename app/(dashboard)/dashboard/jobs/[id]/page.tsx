@@ -184,17 +184,29 @@ export default async function DashboardJobDetailPage({ params }: Props) {
     page.sections.responsibilities.items.length > 0
       ? page.sections.responsibilities.items
       : []
-  const requirements =
-    page.sections.requirements.items.length > 0 ? page.sections.requirements.items : []
-  const qualifications = page.sections.qualifications.items
-  const niceToHave = page.sections.preferred_qualifications.items
-  const benefits = page.sections.benefits.items
-  const compensation = page.sections.compensation.items
+
+  // "Required" = requirements + qualifications (deduped); shown under one heading.
+  const requiredItems = dedupe([
+    ...page.sections.requirements.items,
+    ...page.sections.qualifications.items,
+  ])
+  // "Preferred" kept separate — must not be mixed into required.
+  const preferredItems = dedupe(page.sections.preferred_qualifications.items)
+
+  // Benefits and compensation rendered as distinct sections.
+  const benefitItems = page.sections.benefits.items
+  const compensationItems = page.sections.compensation.items
 
   const skills = page.skills.slice(0, 8)
 
   const sponsorshipPill = employerSponsorshipPill({ ...job, company })
   const sponsorsConfirmed = employerLikelySponsorsH1b({ ...job, company })
+
+  // Show visa section only when explicit JD evidence exists or company has LCA data.
+  const showVisaJdSection =
+    page.sections.visa.items.length > 0 ||
+    page.visa_card_label !== null ||
+    sponsorsConfirmed
 
   const workModel = job.is_remote ? "Remote" : job.is_hybrid ? "Hybrid" : "On-site"
   const workModelLong = job.is_remote
@@ -274,13 +286,8 @@ export default async function DashboardJobDetailPage({ params }: Props) {
   }
   const similarJobs = [...similarMap.values()].slice(0, 3)
 
-  const qualificationItems = dedupe([...requirements, ...qualifications])
-  const niceToHaveItems = dedupe(niceToHave)
-  const skillsAndBenefits = dedupe([
-    ...page.sections.skills.items,
-    ...benefits,
-    ...compensation,
-  ])
+  // Skill pills: drawn from job.skills + page.skills (no benefits/compensation mixed in).
+  const skillPillItems = dedupe([...page.sections.skills.items])
 
   const facts: { icon: LucideIcon; label: string; value: string }[] = [
     { icon: CalendarClock, label: "Posted", value: postedLabel },
@@ -411,6 +418,7 @@ export default async function DashboardJobDetailPage({ params }: Props) {
                   </div>
                 </div>
 
+                {/* Responsibilities */}
                 {responsibilities.length > 0 && (
                   <div>
                     <SectionH icon={ListChecks}>What you&apos;ll do</SectionH>
@@ -420,13 +428,14 @@ export default async function DashboardJobDetailPage({ params }: Props) {
                   </div>
                 )}
 
-                {(qualificationItems.length > 0 || requirementSkillPills.length > 0) && (
+                {/* Required qualifications + matched skill pills */}
+                {(requiredItems.length > 0 || requirementSkillPills.length > 0) && (
                   <div>
-                    <SectionH icon={ClipboardList}>Requirements</SectionH>
+                    <SectionH icon={ClipboardList}>Required qualifications</SectionH>
                     {requirementSkillPills.length > 0 && (
                       <div className="mt-3">
                         <p className="text-[11.5px] font-semibold uppercase tracking-[0.12em] text-slate-400">
-                          Skills needed for this job
+                          Skills needed for this role
                         </p>
                         <div className="mt-2 flex flex-wrap gap-2">
                           {requirementSkillPills.map(({ skill, matched }) => (
@@ -448,38 +457,76 @@ export default async function DashboardJobDetailPage({ params }: Props) {
                         </div>
                       </div>
                     )}
-                    {qualificationItems.length > 0 && (
+                    {requiredItems.length > 0 && (
                       <div className="mt-3">
-                        <BulletList items={qualificationItems} />
+                        <BulletList items={requiredItems} />
                       </div>
                     )}
                   </div>
                 )}
 
-                {niceToHaveItems.length > 0 && (
+                {/* Preferred qualifications — kept separate from required */}
+                {preferredItems.length > 0 && (
                   <div>
-                    <SectionH icon={Star}>Nice to have</SectionH>
+                    <SectionH icon={Star}>Preferred qualifications</SectionH>
                     <div className="mt-3">
-                      <BulletList items={niceToHaveItems} />
+                      <BulletList items={preferredItems} />
                     </div>
                   </div>
                 )}
 
-                {skillsAndBenefits.length > 0 && (
+                {/* Skills — only from skills sections, not mixed with benefits */}
+                {skillPillItems.length > 0 && (
                   <div>
-                    <SectionH icon={CheckCircle2}>Skills &amp; benefits</SectionH>
-                    <div className="mt-3">
-                      <BulletList items={skillsAndBenefits} />
+                    <SectionH icon={CheckCircle2}>Skills</SectionH>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {skillPillItems.map((skill) => (
+                        <span
+                          key={skill}
+                          className="rounded-full bg-sky-50 px-2.5 py-0.5 text-[11.5px] font-medium text-sky-800 ring-1 ring-sky-100"
+                        >
+                          {skill}
+                        </span>
+                      ))}
                     </div>
                   </div>
                 )}
 
-                {page.sections.visa.items.length > 0 && (
+                {/* Benefits — separate section */}
+                {benefitItems.length > 0 && (
                   <div>
-                    <SectionH icon={Plane}>Sponsorship / visa outlook</SectionH>
+                    <SectionH icon={CheckCircle2}>Benefits</SectionH>
                     <div className="mt-3">
-                      <BulletList items={page.sections.visa.items} />
+                      <BulletList items={benefitItems} />
                     </div>
+                  </div>
+                )}
+
+                {/* Compensation — separate section, only shown when content exists */}
+                {compensationItems.length > 0 && (
+                  <div>
+                    <SectionH icon={Banknote}>Compensation</SectionH>
+                    <div className="mt-3">
+                      <BulletList items={compensationItems} />
+                    </div>
+                  </div>
+                )}
+
+                {/* Visa / sponsorship — only shown when explicit evidence exists */}
+                {showVisaJdSection && (
+                  <div>
+                    <SectionH icon={Plane}>Sponsorship / visa</SectionH>
+                    {page.sections.visa.items.length > 0 ? (
+                      <div className="mt-3">
+                        <BulletList items={page.sections.visa.items} />
+                      </div>
+                    ) : (
+                      <p className="mt-3 text-[14px] text-slate-600">
+                        {sponsorsConfirmed
+                          ? "This employer has a historical H-1B sponsorship signal based on LCA records. Verify current policy before applying."
+                          : "The job description mentions visa or authorization requirements. Review the full posting for details."}
+                      </p>
+                    )}
                   </div>
                 )}
 
@@ -623,7 +670,7 @@ export default async function DashboardJobDetailPage({ params }: Props) {
               applyUrl={page.apply_url}
               sponsorsConfirmed={sponsorsConfirmed}
               sponsorshipPill={sponsorshipPill}
-              showVisaSignals={true}
+
             />
           </aside>
         </div>

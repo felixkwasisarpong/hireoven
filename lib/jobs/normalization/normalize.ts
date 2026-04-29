@@ -25,6 +25,7 @@ import {
 import type {
   CanonicalField,
   CanonicalJob,
+  ExplicitSponsorshipStatus,
   FieldProvenance,
   NormalizationResult,
   PersistedJobForNormalization,
@@ -104,41 +105,46 @@ function extractVisaLanguage(description: string | null): string | null {
   return null
 }
 
-function inferSponsorshipFromText(
-  description: string | null
-): { sponsors_h1b: boolean | null; sponsorship_score: number } {
+// Explicit POSITIVE sponsorship patterns — unambiguous affirmative language.
+// Deliberately excludes "provides? sponsorship" which is also present in
+// negative contexts ("unable to provide sponsorship").
+const EXPLICIT_SPONSORS_RE =
+  /\b(we (do |will )?sponsor|visa sponsorship (is |will be )?available|h-?1b sponsorship (provided|offered|available|supported)?|will sponsor (visa|h-?1b|work authorization)|open to sponsorship|sponsorship provided|sponsorship (is )?offered|eligible for( visa| h-?1b)? sponsorship)\b/i
+
+// Explicit NEGATIVE sponsorship patterns — company or role explicitly declines.
+// Checked BEFORE the positive regex so negation context ("unable to provide")
+// is never mis-classified as affirmative.
+const EXPLICIT_NO_SPONSORSHIP_RE =
+  /\b(no (visa |work |h-?1b )?sponsorship|sponsorship (is )?not (available|provided|offered)|cannot (provide |offer )?sponsorship|unable to (provide |offer |sponsor)|does not (provide |offer |sponsor)|will not (provide |offer |sponsor)|must (be|have) (an? )?(valid |current |unrestricted )?(work |employment )?authorization|must be (legally )?authorized to work|not eligible for sponsorship|sponsorship not available|no h-?1b|h-?1b not (available|supported|offered|provided))\b/i
+
+// Ambiguous visa mentions — terms present but intent unclear.
+const VISA_MENTION_RE =
+  /\b(visa|sponsorship|work authorization|h-?1b|opt|tn visa|e-?3|green card)\b/i
+
+function inferSponsorshipFromText(description: string | null): {
+  sponsors_h1b: boolean | null
+  sponsorship_score: number
+  explicit_status: ExplicitSponsorshipStatus
+} {
   if (!description) {
-    return {
-      sponsors_h1b: null,
-      sponsorship_score: 60,
-    }
+    return { sponsors_h1b: null, sponsorship_score: 60, explicit_status: "not_detected" }
   }
 
-  if (/\b(we sponsor|visa sponsorship available|h-?1b sponsorship|will sponsor)\b/i.test(description)) {
-    return {
-      sponsors_h1b: true,
-      sponsorship_score: 95,
-    }
+  // Test negative FIRST — ensures "unable to provide sponsorship" is not
+  // misclassified as affirmative when it also contains generic terms.
+  if (EXPLICIT_NO_SPONSORSHIP_RE.test(description)) {
+    return { sponsors_h1b: false, sponsorship_score: 10, explicit_status: "no_sponsorship" }
   }
 
-  if (/\b(no sponsorship|without sponsorship|must be authorized to work|cannot sponsor)\b/i.test(description)) {
-    return {
-      sponsors_h1b: false,
-      sponsorship_score: 10,
-    }
+  if (EXPLICIT_SPONSORS_RE.test(description)) {
+    return { sponsors_h1b: true, sponsorship_score: 95, explicit_status: "sponsors" }
   }
 
-  if (/\b(visa|sponsorship|work authorization|h-?1b|opt)\b/i.test(description)) {
-    return {
-      sponsors_h1b: null,
-      sponsorship_score: 55,
-    }
+  if (VISA_MENTION_RE.test(description)) {
+    return { sponsors_h1b: null, sponsorship_score: 55, explicit_status: "unclear" }
   }
 
-  return {
-    sponsors_h1b: null,
-    sponsorship_score: 60,
-  }
+  return { sponsors_h1b: null, sponsorship_score: 60, explicit_status: "not_detected" }
 }
 
 function getAnthropicClient(): Anthropic | null {
@@ -330,6 +336,7 @@ function toStructuredJobData(input: {
     skillGroups: job.skill_groups,
     seniority: job.header.seniority_level.value,
     visaSponsorshipSignal: job.visa.visa_language.value,
+    explicitSponsorshipStatus: job.visa.explicit_sponsorship_status?.value ?? null,
     remoteSignal,
     jobCardSummary: input.shortSummary ?? null,
   }
@@ -879,6 +886,11 @@ function normalizeFromCoreInput(input: {
               source_excerpt: visaLanguage,
             }
           : inferredProvenance
+      ),
+      explicit_sponsorship_status: field(
+        visaSignals.explicit_status,
+        visaSignals.explicit_status !== "not_detected" ? 0.88 : 0.6,
+        inferredProvenance
       ),
     },
     skills: field(nextColumns.skills, nextColumns.skills.length > 0 ? 0.74 : 0.4, inferredProvenance),

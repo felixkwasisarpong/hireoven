@@ -146,6 +146,13 @@ function readStoredCardView(
       payload.sponsorship_badge === "likely"
         ? payload.sponsorship_badge
         : null,
+    visa_card_label:
+      payload.visa_card_label === "Sponsors" ||
+      payload.visa_card_label === "No sponsorship" ||
+      payload.visa_card_label === "Historical sponsorship signal"
+        ? payload.visa_card_label
+        : null,
+    show_visa_drawer: payload.show_visa_drawer === true,
   }
 }
 
@@ -187,6 +194,15 @@ export function resolveJobCardView(job: JobCardFallbackInput): JobCardViewModel 
   if (stored) {
     const livePreview = cleanedDescription?.slice(0, 220) ?? null
 
+    // If stored data predates the visa fields, compute them from DB columns.
+    const visaCardLabel =
+      stored.visa_card_label ??
+      (job.sponsors_h1b === true
+        ? "Sponsors"
+        : job.requires_authorization === true
+          ? "No sponsorship"
+          : null)
+
     return {
       ...stored,
       location: stored.location ?? job.location,
@@ -199,10 +215,21 @@ export function resolveJobCardView(job: JobCardFallbackInput): JobCardViewModel 
         stored.skills.length > 0
           ? stored.skill_groups
           : categorizeSkills(liveSkills.slice(0, 8)),
+      visa_card_label: visaCardLabel,
+      show_visa_drawer: stored.show_visa_drawer ?? visaCardLabel === "Sponsors",
     }
   }
 
   const sponsorshipScore = job.sponsorship_score ?? 0
+
+  // Compute strict visa_card_label from explicit DB columns only — no score invention.
+  const fallbackVisaCardLabel =
+    job.sponsors_h1b === true
+      ? "Sponsors"
+      : job.requires_authorization === true
+        ? "No sponsorship"
+        : null
+
   return {
     title: cleanJobTitle(job.title),
     location: job.location,
@@ -220,5 +247,7 @@ export function resolveJobCardView(job: JobCardFallbackInput): JobCardViewModel 
           : sponsorshipScore >= 65
             ? "likely"
             : null,
+    visa_card_label: fallbackVisaCardLabel,
+    show_visa_drawer: fallbackVisaCardLabel === "Sponsors",
   }
 }

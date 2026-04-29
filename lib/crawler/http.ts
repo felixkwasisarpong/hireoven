@@ -4,19 +4,19 @@ const USER_AGENT =
 const DEFAULT_TIMEOUT_MS = Number.parseInt(process.env.CRAWLER_FETCH_TIMEOUT_MS ?? "12000", 10)
 const DEFAULT_MAX_ATTEMPTS = Number.parseInt(process.env.CRAWLER_HTTP_MAX_ATTEMPTS ?? "3", 10)
 const DEFAULT_DOMAIN_CONCURRENCY = Number.parseInt(
-  process.env.CRAWLER_DOMAIN_CONCURRENCY ?? "2",
+  process.env.CRAWLER_DOMAIN_CONCURRENCY ?? "3",
   10
 )
 const DEFAULT_MIN_DELAY_MS = Number.parseInt(
-  process.env.CRAWLER_REQUEST_MIN_DELAY_MS ?? "2000",
+  process.env.CRAWLER_REQUEST_MIN_DELAY_MS ?? "250",
   10
 )
 const DEFAULT_MAX_DELAY_MS = Number.parseInt(
-  process.env.CRAWLER_REQUEST_MAX_DELAY_MS ?? "5000",
+  process.env.CRAWLER_REQUEST_MAX_DELAY_MS ?? "900",
   10
 )
 const DEFAULT_BACKOFF_MS = Number.parseInt(
-  process.env.CRAWLER_HTTP_RETRY_BASE_DELAY_MS ?? "800",
+  process.env.CRAWLER_HTTP_RETRY_BASE_DELAY_MS ?? "500",
   10
 )
 

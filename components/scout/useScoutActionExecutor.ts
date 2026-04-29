@@ -263,7 +263,10 @@ export function useScoutActionExecutor() {
           }
 
           const label = action.label ?? (applied.length > 0 ? applied.join(" · ") : "Filters")
-          const { previousStateSummary, newStateSummary } = buildStateSummaries(action, searchParams)
+          const { previousStateSummary, newStateSummary } = buildStateSummaries(
+            action,
+            new URLSearchParams(searchParams.toString())
+          )
           const ts = Date.now()
           const auditEntry: ScoutAuditEntry = {
             actionType: "APPLY_FILTERS",
@@ -328,7 +331,10 @@ export function useScoutActionExecutor() {
           const count = action.payload.jobIds.length
           setHighlightedJobs(action.payload.jobIds)
 
-          const { previousStateSummary: prevSum, newStateSummary: newSum } = buildStateSummaries(action, searchParams)
+          const { previousStateSummary: prevSum, newStateSummary: newSum } = buildStateSummaries(
+            action,
+            new URLSearchParams(searchParams.toString())
+          )
           const ts = Date.now()
           const auditEntry: ScoutAuditEntry = {
             actionType: "HIGHLIGHT_JOBS",
@@ -458,7 +464,10 @@ export function useScoutActionExecutor() {
             params.set("sort", "match")
             router.push(`/dashboard?${params.toString()}`)
 
-            const { previousStateSummary, newStateSummary } = buildStateSummaries(action, searchParams)
+            const { previousStateSummary, newStateSummary } = buildStateSummaries(
+              action,
+              new URLSearchParams(searchParams.toString())
+            )
             const ts = Date.now()
             const auditEntry: ScoutAuditEntry = {
               actionType: "SET_FOCUS_MODE",

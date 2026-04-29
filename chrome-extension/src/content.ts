@@ -1,17 +1,14 @@
 /**
- * Hireoven Scout Bridge - Content Script
+ * Hireoven Scout Bridge — Content Script
  *
- * Page-aware in-page controls for job and application pages.
- * This injects the floating Hireoven action bar + drawers and also keeps
- * the message bridge used by popup/background for detection/extraction/filling.
+ * Boots the page-aware overlay on supported job sites and proxies
+ * messages from background/popup to detection/extraction/fill helpers.
  *
- * Safety:
- * - Never auto-submit
- * - Never auto-fill without explicit user click
+ * Safety: never auto-submit, never auto-fill without explicit user click.
  */
 
 import { detectFormFields } from "./autofill/form-detector"
-import { detectPage, looksLikeLikelyJobPage } from "./detectors/ats"
+import { detectPage } from "./detectors/ats"
 import { extractJobWithMeta } from "./extractors/job"
 import { PageAwareControlSystem } from "./overlay/page-aware-control-system"
 import type {
@@ -21,8 +18,32 @@ import type {
   FillFormFieldsMessage,
 } from "./types"
 
-let overlaySystem: PageAwareControlSystem | null = null
-let overlayInitInFlight = false
+type HireovenContentWindow = Window & {
+  __hoContentBootstrapped?: boolean
+}
+
+const OVERLAY_HOST_ALLOWLIST: readonly RegExp[] = [
+  /(?:^|\.)linkedin\.com$/i,
+  /(?:^|\.)glassdoor\.com$/i,
+  /(?:^|\.)indeed\.com$/i,
+  /(?:^|\.)greenhouse\.io$/i,
+  /(?:^|\.)lever\.co$/i,
+  /(?:^|\.)ashbyhq\.com$/i,
+  /(?:^|\.)myworkdayjobs\.com$/i,
+  /(?:^|\.)workday\.com$/i,
+  /(?:^|\.)icims\.com$/i,
+  /(?:^|\.)smartrecruiters\.com$/i,
+  /(?:^|\.)bamboohr\.com$/i,
+  /(?:^|\.)welcometothejungle\.com$/i,
+  /(?:^|\.)wellfound\.com$/i,
+  /(?:^|\.)builtin\.com$/i,
+  /(?:^|\.)otta\.com$/i,
+  /(?:^|\.)ziprecruiter\.com$/i,
+  /(?:^|\.)monster\.com$/i,
+]
+
+const CAREER_PATH_PATTERN =
+  /\/(?:job|jobs|career|careers|opening|openings|position|positions|vacancy|vacancies|opportunity|opportunities|apply|application)(?:\/|$|\?)/i
 
 function resolveAppOrigin(): Promise<string> {
   return new Promise((resolve) => {
@@ -32,89 +53,21 @@ function resolveAppOrigin(): Promise<string> {
   })
 }
 
-function overlayCandidateHost(): boolean {
-  const h = window.location.hostname.replace(/^www\./, "").toLowerCase()
-  if (h.includes("linkedin.com")) return true
-  if (h.includes("glassdoor.com")) return true
-  if (h.includes("greenhouse.io")) return true
-  if (h.includes("lever.co")) return true
-  if (h.includes("ashbyhq.com")) return true
-  if (h.includes("myworkdayjobs.com")) return true
-  if (h.includes("icims.com")) return true
-  if (h.includes("smartrecruiters.com")) return true
-  if (h.includes("bamboohr.com")) return true
-  return false
-}
-
-function shouldRunOverlay(): boolean {
-  const page = detectPage()
-  if (page.pageType === "job_listing" || page.pageType === "application_form") return true
-  if (overlayCandidateHost() && looksLikeLikelyJobPage(window.location.href)) return true
-  if (overlayCandidateHost() && /\/jobs\//i.test(window.location.pathname)) return true
-  return false
-}
-
-async function ensureOverlay(): Promise<void> {
-  if (overlaySystem || overlayInitInFlight) return
-  if (!shouldRunOverlay()) return
-
-  overlayInitInFlight = true
+function isTopFrame(): boolean {
   try {
-    const runtime = new PageAwareControlSystem({ resolveAppOrigin })
-    await runtime.mount()
-    overlaySystem = runtime
+    return window.self === window.top
   } catch {
-    overlaySystem = null
-  } finally {
-    overlayInitInFlight = false
+    return false
   }
 }
 
-function reconcileOverlayLifecycle(): void {
-  if (shouldRunOverlay()) {
-    void ensureOverlay()
-    return
-  }
-  if (overlaySystem) {
-    overlaySystem.destroy()
-    overlaySystem = null
-  }
+function shouldOverlayThisHost(): boolean {
+  const host = window.location.hostname.replace(/^www\./i, "").toLowerCase()
+  if (OVERLAY_HOST_ALLOWLIST.some((re) => re.test(host))) return true
+  if (CAREER_PATH_PATTERN.test(window.location.pathname)) return true
+  return false
 }
 
-function wireHistoryHooks(): void {
-  const w = window as Window & { __hoScoutOverlayHooks?: boolean }
-  if (w.__hoScoutOverlayHooks) return
-  w.__hoScoutOverlayHooks = true
-
-  const onNav = () => window.setTimeout(() => reconcileOverlayLifecycle(), 80)
-
-  const push = history.pushState.bind(history)
-  history.pushState = (...args: Parameters<typeof history.pushState>) => {
-    push(...args)
-    onNav()
-  }
-
-  const replace = history.replaceState.bind(history)
-  history.replaceState = (...args: Parameters<typeof history.replaceState>) => {
-    replace(...args)
-    onNav()
-  }
-
-  window.addEventListener("popstate", onNav)
-  window.addEventListener("hashchange", onNav)
-}
-
-function startUrlMutationWatcher(): void {
-  let lastUrl = window.location.href
-  const observer = new MutationObserver(() => {
-    if (window.location.href === lastUrl) return
-    lastUrl = window.location.href
-    reconcileOverlayLifecycle()
-  })
-  if (document.body) observer.observe(document.body, { childList: true, subtree: true })
-}
-
-// Native setter trick for React/Vue/Angular controlled inputs.
 const nativeInputSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set
 const nativeTextareaSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")?.set
 
@@ -126,9 +79,7 @@ const VALUE_SYNONYM_MAP: Array<[string[], string[]]> = [
   [["male", "man"], ["male", "man", "he him", "mr"]],
   [["female", "woman"], ["female", "woman", "she her", "ms", "mrs"]],
   [["non binary", "nonbinary", "non-binary", "gender non"], ["non binary", "nonbinary", "genderqueer", "they them", "gender non", "agender"]],
-
   [["prefer not", "decline", "don t wish", "do not wish", "choose not", "no answer", "not wish"], ["prefer not", "decline", "don t wish", "do not wish", "choose not", "not to answer", "no response", "i d rather not", "not disclose"]],
-
   [["hispanic", "latino", "latina", "latinx"], ["hispanic", "latino", "latina", "latinx", "spanish"]],
   [["white", "caucasian"], ["white", "caucasian"]],
   [["black", "african american"], ["black", "african american", "african-american"]],
@@ -136,10 +87,8 @@ const VALUE_SYNONYM_MAP: Array<[string[], string[]]> = [
   [["american indian", "alaska native", "native american"], ["american indian", "alaska native", "native american", "indigenous"]],
   [["pacific islander", "native hawaiian"], ["pacific islander", "native hawaiian", "pacific"]],
   [["two or more", "multiracial", "biracial", "mixed"], ["two or more", "multiracial", "biracial", "mixed race", "more than one"]],
-
   [["not a protected veteran", "not a veteran", "not veteran", "i am not"], ["not a protected", "not a veteran", "no veteran", "i am not", "non veteran"]],
   [["protected veteran", "i identify", "i am a veteran", "i identify as"], ["protected veteran", "i identify", "i am a veteran", "veteran who"]],
-
   [["no disability", "i do not have", "not disabled", "no i do not"], ["no disability", "do not have a disability", "i do not have", "not disabled", "no i do not", "no, i"]],
   [["yes disability", "i have a disability", "yes i have", "i have a"], ["yes i have", "i have a disability", "yes, i", "yes disability", "disabled"]],
 ]
@@ -153,27 +102,21 @@ function findSelectOption(select: HTMLSelectElement, targetValue: string): HTMLO
   for (const opt of opts) {
     if (normStr(opt.value) === targetNorm || normStr(opt.text) === targetNorm) return opt
   }
-
   for (const opt of opts) {
     const optNorm = normStr(opt.text)
     if (optNorm && (targetNorm.startsWith(optNorm) || optNorm.startsWith(targetNorm))) return opt
   }
-
   for (const opt of opts) {
     const optNorm = normStr(opt.text)
     if (optNorm && (targetNorm.includes(optNorm) || optNorm.includes(targetNorm))) return opt
   }
-
   for (const [canonicals, synonyms] of VALUE_SYNONYM_MAP) {
-    const targetMatchesGroup = canonicals.some((c) => targetNorm.includes(normStr(c)))
-    if (!targetMatchesGroup) continue
-
+    if (!canonicals.some((c) => targetNorm.includes(normStr(c)))) continue
     for (const opt of opts) {
       const optNorm = normStr(opt.text)
       if (synonyms.some((s) => optNorm.includes(normStr(s)))) return opt
     }
   }
-
   return null
 }
 
@@ -188,7 +131,6 @@ function fillField(elementRef: string, value: string): boolean {
 
   const tag = el.tagName.toLowerCase()
   const type = ((el as HTMLInputElement).type ?? "").toLowerCase()
-
   if (type === "file" || type === "submit" || type === "hidden") return false
 
   if (tag === "select") {
@@ -205,26 +147,23 @@ function fillField(elementRef: string, value: string): boolean {
   if (type === "checkbox" || type === "radio") {
     const check = /^(true|yes|1)$/i.test(value)
     const input = el as HTMLInputElement
-    if (input.type === "radio") {
-      const name = input.name
-      if (name) {
-        const siblings = Array.from(
-          document.querySelectorAll<HTMLInputElement>(`input[type=\"radio\"][name=\"${name}\"]`),
-        )
-        const targetNorm = normStr(value)
-        for (const sibling of siblings) {
-          const sibLabel =
-            (sibling.id
-              ? document.querySelector(`label[for=\"${sibling.id}\"]`)?.textContent?.trim()
-              : "") ?? sibling.value
-          const sibNorm = normStr(sibLabel)
-          if (sibNorm && (sibNorm === targetNorm || targetNorm.includes(sibNorm) || sibNorm.includes(targetNorm))) {
-            if (!sibling.checked) {
-              sibling.checked = true
-              sibling.dispatchEvent(new Event("change", { bubbles: true }))
-            }
-            return true
+    if (input.type === "radio" && input.name) {
+      const siblings = Array.from(
+        document.querySelectorAll<HTMLInputElement>(`input[type=\"radio\"][name=\"${input.name}\"]`),
+      )
+      const targetNorm = normStr(value)
+      for (const sibling of siblings) {
+        const sibLabel =
+          (sibling.id
+            ? document.querySelector(`label[for=\"${sibling.id}\"]`)?.textContent?.trim()
+            : "") ?? sibling.value
+        const sibNorm = normStr(sibLabel)
+        if (sibNorm && (sibNorm === targetNorm || targetNorm.includes(sibNorm) || sibNorm.includes(targetNorm))) {
+          if (!sibling.checked) {
+            sibling.checked = true
+            sibling.dispatchEvent(new Event("change", { bubbles: true }))
           }
+          return true
         }
       }
     }
@@ -252,58 +191,75 @@ function fillField(elementRef: string, value: string): boolean {
   return true
 }
 
-chrome.runtime.onMessage.addListener(
-  (message: ContentMessage, _sender, sendResponse: (r: ContentResponse) => void) => {
-    switch (message.type) {
-      case "DETECT_PAGE": {
-        const page: DetectedPage = detectPage()
-        sendResponse({ type: "PAGE_DETECTED", page })
-        break
-      }
-
-      case "EXTRACT_JOB": {
-        const page = detectPage()
-        const { job } = extractJobWithMeta(page.ats)
-        sendResponse({ type: "JOB_EXTRACTED", job })
-        break
-      }
-
-      case "DETECT_FORM_FIELDS": {
-        const page = detectPage()
-        const result = detectFormFields(message.profile, page.ats)
-        sendResponse({
-          type: "FORM_FIELDS_DETECTED",
-          formFound: result.formFound,
-          fields: result.fields,
-        })
-        break
-      }
-
-      case "FILL_FORM_FIELDS": {
-        const msg = message as FillFormFieldsMessage
-        let filledCount = 0
-        let skippedCount = 0
-        for (const { elementRef, value } of msg.fields) {
-          const filled = fillField(elementRef, value)
-          if (filled) filledCount++
-          else skippedCount++
+function registerMessageBridge(): void {
+  chrome.runtime.onMessage.addListener(
+    (message: ContentMessage, _sender, sendResponse: (r: ContentResponse) => void) => {
+      switch (message.type) {
+        case "DETECT_PAGE": {
+          const page: DetectedPage = detectPage()
+          sendResponse({ type: "PAGE_DETECTED", page })
+          break
         }
-        sendResponse({ type: "FORM_FILLED", filledCount, skippedCount })
-        break
+        case "EXTRACT_JOB": {
+          const page = detectPage()
+          const { job } = extractJobWithMeta(page.ats)
+          sendResponse({ type: "JOB_EXTRACTED", job })
+          break
+        }
+        case "DETECT_FORM_FIELDS": {
+          const page = detectPage()
+          const result = detectFormFields(message.profile, page.ats)
+          sendResponse({
+            type: "FORM_FIELDS_DETECTED",
+            formFound: result.formFound,
+            fields: result.fields,
+          })
+          break
+        }
+        case "FILL_FORM_FIELDS": {
+          const msg = message as FillFormFieldsMessage
+          let filledCount = 0
+          let skippedCount = 0
+          for (const { elementRef, value } of msg.fields) {
+            if (fillField(elementRef, value)) filledCount++
+            else skippedCount++
+          }
+          sendResponse({ type: "FORM_FILLED", filledCount, skippedCount })
+          break
+        }
+        default:
+          sendResponse({ type: "ERROR", message: "Unknown message type" })
       }
+      return true
+    },
+  )
+}
 
-      default:
-        sendResponse({ type: "ERROR", message: "Unknown message type" })
-    }
+async function mountOverlayWhenReady(): Promise<void> {
+  if (!isTopFrame()) return
+  if (!shouldOverlayThisHost()) return
 
-    return true
-  },
-)
+  if (!document.body) {
+    await new Promise<void>((resolve) => {
+      const onReady = () => {
+        document.removeEventListener("DOMContentLoaded", onReady)
+        resolve()
+      }
+      document.addEventListener("DOMContentLoaded", onReady)
+    })
+  }
 
-wireHistoryHooks()
-startUrlMutationWatcher()
-reconcileOverlayLifecycle()
+  const runtime = new PageAwareControlSystem({ resolveAppOrigin })
+  await runtime.mount()
+}
 
-window.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible") reconcileOverlayLifecycle()
-})
+function bootstrap(): void {
+  const w = window as HireovenContentWindow
+  if (w.__hoContentBootstrapped) return
+  w.__hoContentBootstrapped = true
+
+  registerMessageBridge()
+  void mountOverlayWhenReady()
+}
+
+bootstrap()

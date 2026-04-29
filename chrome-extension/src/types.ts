@@ -215,6 +215,14 @@ export type BackgroundMessageType =
   | "GENERATE_COVER_LETTER"
   | "FILL_COVER_LETTER"
   | "GET_SCOUT_OVERLAY"
+  | "LIST_RESUMES"
+
+export interface ExtensionResumeSummary {
+  id: string
+  name: string
+  isPrimary: boolean
+  score: number | null
+}
 
 export interface GetSessionMessage {
   type: "GET_SESSION"
@@ -277,6 +285,15 @@ export interface GetScoutOverlayMessage {
   jobId: string
 }
 
+export interface ListResumesMessage {
+  type: "LIST_RESUMES"
+}
+
+export interface ListResumesResult {
+  type: "LIST_RESUMES_RESULT"
+  resumes: ExtensionResumeSummary[]
+}
+
 export type ScoutOverlayInsightsPayload = {
   ok: true
   matchPercent: number | null
@@ -305,6 +322,7 @@ export type BackgroundMessage =
   | GenerateCoverLetterMessage
   | FillCoverLetterMessage
   | GetScoutOverlayMessage
+  | ListResumesMessage
 
 export interface ExtensionSessionUser {
   id: string
@@ -427,6 +445,7 @@ export type BackgroundResponse =
   | CoverLetterResult
   | FillCoverLetterResult
   | ScoutOverlayResult
+  | ListResumesResult
   | BackgroundError
 
 // ── API shapes (matching web app routes) ─────────────────────────────────────

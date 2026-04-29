@@ -158,7 +158,8 @@ function shouldOptimizeWithNextImage(src: string): boolean {
   try {
     const { hostname } = new URL(src)
     if (hostname === "img.logo.dev") return true
-    if (hostname === "www.google.com" || hostname.endsWith(".gstatic.com")) return true
+    // Google favicon is excluded: the service 404s for many domains, which Next.js logs as
+    // server-side errors. Plain <img> lets the browser handle 404s silently via onError.
     if (hostname.endsWith(".supabase.co") || hostname.endsWith(".supabase.in")) return true
     return false
   } catch {

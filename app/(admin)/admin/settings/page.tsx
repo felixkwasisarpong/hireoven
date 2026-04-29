@@ -16,6 +16,7 @@ import {
   Sparkles,
   Zap,
 } from "lucide-react"
+import type { LucideIcon } from "lucide-react"
 import {
   AdminButton,
   AdminInput,
@@ -179,7 +180,7 @@ function SettingsSection({
   accent,
 }: {
   id: string
-  icon: React.ComponentType<{ className?: string; "aria-hidden"?: boolean }>
+  icon: LucideIcon
   eyebrow?: string
   title: string
   description?: string
@@ -907,7 +908,7 @@ function DangerCard({
   title: string
   description: string
   accent: "destructive" | "severe" | "neutral"
-  icon: React.ComponentType<{ className?: string }>
+  icon: LucideIcon
   busy?: boolean
   onClick: () => void
 }) {

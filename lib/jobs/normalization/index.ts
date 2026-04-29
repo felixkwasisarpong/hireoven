@@ -7,6 +7,7 @@ export type {
   CanonicalJob,
   CanonicalSection,
   CanonicalSectionKey,
+  ExplicitSponsorshipStatus,
   JobCardViewModel,
   JobPageSectionView,
   JobPageViewModel,

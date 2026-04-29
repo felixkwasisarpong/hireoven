@@ -82,11 +82,11 @@ export function formatStrategyContext(
     const p = context.user.profile
     const profileLines = [
       `- Visa status: ${p.visa_status ?? "Not specified"}`,
-      `- Requires sponsorship: ${p.requires_sponsorship ? "Yes" : "No"}`,
-      `- Years of experience: ${p.years_of_experience ?? "Not specified"}`,
+      `- Requires sponsorship: ${p.needs_sponsorship ? "Yes" : "No"}`,
+      `- Years of experience: Not specified`,
     ]
-    if (Array.isArray(p.preferred_locations) && p.preferred_locations.length > 0) {
-      profileLines.push(`- Preferred locations: ${p.preferred_locations.join(", ")}`)
+    if (Array.isArray(p.desired_locations) && p.desired_locations.length > 0) {
+      profileLines.push(`- Preferred locations: ${p.desired_locations.join(", ")}`)
     }
     parts.push(`User Profile:\n${profileLines.join("\n")}`)
   }

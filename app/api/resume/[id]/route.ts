@@ -33,7 +33,14 @@ async function ensureResumeLifecycleColumns() {
        ADD COLUMN IF NOT EXISTS github_url TEXT,
        ADD COLUMN IF NOT EXISTS certifications JSONB,
        ADD COLUMN IF NOT EXISTS ats_score INTEGER,
-       ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ`
+       ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ,
+       ADD COLUMN IF NOT EXISTS raw_text TEXT,
+       ADD COLUMN IF NOT EXISTS top_skills JSONB,
+       ADD COLUMN IF NOT EXISTS years_of_experience NUMERIC,
+       ADD COLUMN IF NOT EXISTS resume_score INTEGER,
+       ADD COLUMN IF NOT EXISTS primary_role TEXT,
+       ADD COLUMN IF NOT EXISTS seniority_level TEXT,
+       ADD COLUMN IF NOT EXISTS industries JSONB`
   )
 }
 
@@ -261,7 +268,7 @@ export async function PATCH(
   const setSql = entries.map(([key, value]) => {
     sqlParams.push(value)
     const idx = sqlParams.length
-    const jsonbFields = new Set(["work_experience", "education", "skills", "projects", "experience", "certifications"])
+    const jsonbFields = new Set(["work_experience", "education", "skills", "projects", "experience", "certifications", "top_skills", "industries"])
     const cast = jsonbFields.has(String(key)) ? "::jsonb" : ""
     if (cast) {
       sqlParams[idx - 1] = JSON.stringify(value)
@@ -270,15 +277,23 @@ export async function PATCH(
   })
   sqlParams.push(resume.id, user.id)
 
-  const result = await pool.query<Resume>(
-    `UPDATE resumes
-     SET ${setSql.join(", ")}, updated_at = now()
-     WHERE id = $${sqlParams.length - 1}
-       AND user_id = $${sqlParams.length}
-     RETURNING *`,
-    sqlParams
-  )
-  const data = result.rows[0]
+  let patchRows: Resume[]
+  try {
+    const patchResult = await pool.query<Resume>(
+      `UPDATE resumes
+       SET ${setSql.join(", ")}, updated_at = now()
+       WHERE id = $${sqlParams.length - 1}
+         AND user_id = $${sqlParams.length}
+       RETURNING *`,
+      sqlParams
+    )
+    patchRows = patchResult.rows
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error("[resume PATCH] SQL failed:", msg)
+    return NextResponse.json({ error: `Save failed: ${msg}` }, { status: 500 })
+  }
+  const data = patchRows[0]
 
   if (!data) {
     return NextResponse.json({ error: "Failed to update resume" }, { status: 500 })

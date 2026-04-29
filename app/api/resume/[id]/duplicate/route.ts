@@ -14,7 +14,14 @@ async function ensureResumeLifecycleColumns() {
        ADD COLUMN IF NOT EXISTS github_url TEXT,
        ADD COLUMN IF NOT EXISTS certifications JSONB,
        ADD COLUMN IF NOT EXISTS ats_score INTEGER,
-       ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ`
+       ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ,
+       ADD COLUMN IF NOT EXISTS raw_text TEXT,
+       ADD COLUMN IF NOT EXISTS top_skills JSONB,
+       ADD COLUMN IF NOT EXISTS years_of_experience NUMERIC,
+       ADD COLUMN IF NOT EXISTS resume_score INTEGER,
+       ADD COLUMN IF NOT EXISTS primary_role TEXT,
+       ADD COLUMN IF NOT EXISTS seniority_level TEXT,
+       ADD COLUMN IF NOT EXISTS industries JSONB`
   )
 }
 

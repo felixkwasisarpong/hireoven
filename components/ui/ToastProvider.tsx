@@ -14,11 +14,17 @@ import { AlertCircle, CheckCircle2, Info, X } from "lucide-react"
 
 type ToastTone = "success" | "error" | "info"
 
+type ToastAction = {
+  label: string
+  href: string
+}
+
 type Toast = {
   id: string
   title: string
   description?: string
   tone: ToastTone
+  action?: ToastAction
 }
 
 type ToastInput = Omit<Toast, "id">
@@ -99,6 +105,14 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                   <p className="text-sm font-semibold">{toast.title}</p>
                   {toast.description ? (
                     <p className="mt-1 text-sm opacity-80">{toast.description}</p>
+                  ) : null}
+                  {toast.action ? (
+                    <a
+                      href={toast.action.href}
+                      className="mt-2 inline-flex items-center text-xs font-bold underline underline-offset-2 opacity-90 hover:opacity-100"
+                    >
+                      {toast.action.label} →
+                    </a>
                   ) : null}
                 </div>
                 <button

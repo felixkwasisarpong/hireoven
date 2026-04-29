@@ -89,11 +89,26 @@ export type CanonicalCompensation = {
   pay_text: CanonicalField<string>
 }
 
+/**
+ * Explicit sponsorship status derived strictly from JD text.
+ * - "sponsors"       → JD explicitly states sponsorship is available.
+ * - "no_sponsorship" → JD explicitly states no sponsorship / authorization required.
+ * - "unclear"        → Visa/sponsorship terms found but intent ambiguous.
+ * - "not_detected"   → No visa/sponsorship language found at all.
+ */
+export type ExplicitSponsorshipStatus =
+  | "sponsors"
+  | "no_sponsorship"
+  | "unclear"
+  | "not_detected"
+
 export type CanonicalVisa = {
   sponsors_h1b: CanonicalField<boolean>
   requires_authorization: CanonicalField<boolean>
   sponsorship_score: CanonicalField<number>
   visa_language: CanonicalField<string>
+  /** Derived from JD text only — never invented from score heuristics. */
+  explicit_sponsorship_status: CanonicalField<ExplicitSponsorshipStatus>
 }
 
 export type ValidationIssue = {
@@ -161,6 +176,13 @@ export type JobPageViewModel = {
   skill_groups: CategorizedSkills
   confidence_score: number
   requires_review: boolean
+  /**
+   * Label derived from EXPLICIT JD evidence only. Never invented from score.
+   * null means no visa data was detected — do not show visa UI.
+   */
+  visa_card_label: "Sponsors" | "No sponsorship" | "Historical sponsorship signal" | null
+  /** True only when visa_card_label indicates positive sponsorship evidence. */
+  show_visa_drawer: boolean
 }
 
 export type JobCardViewModel = {
@@ -172,7 +194,15 @@ export type JobCardViewModel = {
   preview_description: string | null
   skills: string[]
   skill_groups: CategorizedSkills
+  /** Kept for backward compat with sponsorship-employer-signal.ts. */
   sponsorship_badge: "sponsors" | "no_sponsorship" | "likely" | null
+  /**
+   * Visa label for card display, derived from EXPLICIT JD evidence only.
+   * null means no visa data detected — hide all visa UI on the card.
+   */
+  visa_card_label: "Sponsors" | "No sponsorship" | "Historical sponsorship signal" | null
+  /** True only when visa_card_label has positive evidence; gates the H1B drawer. */
+  show_visa_drawer: boolean
 }
 
 export type PersistedJobForNormalization = Pick<

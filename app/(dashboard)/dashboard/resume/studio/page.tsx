@@ -198,6 +198,28 @@ function validMode(value: string | null): StudioMode {
   return value === "tailor" ? "tailor" : "preview"
 }
 
+function skillsTextToSkills(text: string): { technical: string[]; soft: string[]; languages: string[]; certifications: string[] } {
+  const result = { technical: [] as string[], soft: [] as string[], languages: [] as string[], certifications: [] as string[] }
+  if (!text.trim()) return result
+
+  const hasCategories = text.split("\n").some((line) => /^[A-Za-z][A-Za-z\s]+:\s*.+/.test(line.trim()))
+  if (hasCategories) {
+    for (const line of text.split(/\r?\n/)) {
+      const m = line.match(/^([A-Za-z][A-Za-z\s]+):\s*(.+)/)
+      if (!m) continue
+      const key = m[1]!.toLowerCase().trim()
+      const vals = m[2]!.split(/[,;]+/).map((s) => s.trim()).filter(Boolean)
+      if (/lang/.test(key)) result.languages.push(...vals)
+      else if (/cert|licen/.test(key)) result.certifications.push(...vals)
+      else if (/soft|interpersonal|people|commun/.test(key)) result.soft.push(...vals)
+      else result.technical.push(...vals)
+    }
+  } else {
+    result.technical = text.split(/[,;\n]+/).map((s) => s.trim()).filter(Boolean)
+  }
+  return result
+}
+
 function splitName(fullName?: string | null) {
   const parts = (fullName ?? "").trim().split(/\s+/).filter(Boolean)
   return {
@@ -211,6 +233,38 @@ function splitTextLines(value: string) {
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean)
+}
+
+function normalizeForBulletMatch(s: string): string {
+  return s
+    .replace(/^[•–—‘’“”•\-–—*]\s*/, "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/["""'']/g, '"')
+}
+
+function findBestMatchingLineIndex(description: string, original: string): number {
+  const lines = description.split(/\r?\n/)
+  if (!original.trim()) return -1
+  const normOrig = normalizeForBulletMatch(original)
+
+  // 1. Exact normalized match
+  for (let i = 0; i < lines.length; i++) {
+    if (normalizeForBulletMatch(lines[i]!) === normOrig) return i
+  }
+  // 2. Substring containment in either direction
+  for (let i = 0; i < lines.length; i++) {
+    const normLine = normalizeForBulletMatch(lines[i]!)
+    if (normLine && normOrig && (normLine.includes(normOrig) || normOrig.includes(normLine))) return i
+  }
+  // 3. First-6-words prefix match
+  const origHead = normOrig.split(/\s+/).slice(0, 6).join(" ")
+  for (let i = 0; i < lines.length; i++) {
+    const lineHead = normalizeForBulletMatch(lines[i]!).split(/\s+/).slice(0, 6).join(" ")
+    if (origHead.length > 10 && lineHead.length > 10 && origHead === lineHead) return i
+  }
+  return -1
 }
 
 function cloneSnapshot<T>(value: T): T {
@@ -924,6 +978,7 @@ export default function ResumeStudioPage() {
   const [aiLoadingSectionId, setAiLoadingSectionId] = useState<string | null>(null)
   const [isDirty, setIsDirty] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [isDownloading, setIsDownloading] = useState(false)
   const [undoStack, setUndoStack] = useState<EditorSnapshot[]>([])
   const [redoStack, setRedoStack] = useState<EditorSnapshot[]>([])
   const lastSnapshotRef = useRef<EditorSnapshot | null>(null)
@@ -1067,18 +1122,19 @@ export default function ResumeStudioPage() {
       summary: profileSummary,
       primary_role: headline || selectedResume?.primary_role || "Software Engineer",
       top_skills: skillTokens,
+      skills: skillsTextToSkills(skillsText),
       work_experience: experienceDrafts.map((experienceDraft) => ({
         title: experienceDraft.role,
         company: experienceDraft.company,
         start_date: experienceDraft.from,
         end_date: experienceDraft.current ? null : experienceDraft.to,
         is_current: experienceDraft.current,
-        description: experienceDraft.description,
+        description: "",
         achievements: experienceDraft.description
             .split(/\n/)
             .map((line) => line.replace(/^[-•]\s*/, "").trim())
             .filter(Boolean)
-            .slice(0, 5),
+            .slice(0, 6),
       })),
       education: educationDrafts.map((educationDraft) => ({
         institution: educationDraft.school,
@@ -1253,24 +1309,23 @@ export default function ResumeStudioPage() {
 
   function applySkillFix(fix: Extract<TailorFix, { type: "add_skill" }>) {
     setSkillsText((prev) => addSkillToSkillsText(prev, fix.skill))
+    setSections((current) =>
+      current.map((s) => s.type === "skills" ? { ...s, collapsed: false } : s)
+    )
   }
 
-  function applyBulletFix(fix: Extract<TailorFix, { type: "replace_bullet" }>) {
+  function applyBulletFix(fix: Extract<TailorFix, { type: "replace_bullet" }>): boolean {
     const i = experienceIndexFromId(fix.experienceId)
-    setExperienceDrafts((current) => {
-      if (!current[i]) return current
-      const row = current[i]!
-      const d = row.description
-      const originalFound = fix.original.length > 0 && d.includes(fix.original)
-      const next = originalFound
-        ? d.replace(fix.original, fix.suggested)
-        : d.trim()
-          ? `${d.trim()}\n${fix.suggested}`
-          : fix.suggested
-      const rows = [...current]
-      rows[i] = { ...row, description: next }
-      return rows
-    })
+    const row = experienceDrafts[i]
+    if (!row) return false
+    const idx = findBestMatchingLineIndex(row.description, fix.original)
+    if (idx < 0) return false
+    const lines = row.description.split(/\r?\n/)
+    lines[idx] = fix.suggested
+    const next = [...experienceDrafts]
+    next[i] = { ...row, description: lines.join("\n") }
+    setExperienceDrafts(next)
+    return true
   }
 
   function applySummaryFix(fix: Extract<TailorFix, { type: "replace_summary" }>) {
@@ -1288,21 +1343,36 @@ export default function ResumeStudioPage() {
       }
       setApplyingFixId(fix.id)
       try {
-        if (fix.type === "add_skill") applySkillFix(fix)
-        else if (fix.type === "replace_bullet") applyBulletFix(fix)
-        else applySummaryFix(fix)
+        if (fix.type === "add_skill") {
+          applySkillFix(fix)
+        } else if (fix.type === "replace_bullet") {
+          const matched = applyBulletFix(fix)
+          if (!matched) {
+            pushToast({ tone: "info", title: "Couldn't locate the original bullet", description: "Edit the experience section directly to apply this change." })
+            queueMicrotask(() => setApplyingFixId(null))
+            return
+          }
+        } else {
+          applySummaryFix(fix)
+        }
         setAppliedFixIds((current) => (current.includes(fix.id) ? current : [...current, fix.id]))
         setTailorStep("applied")
         markDirty()
-        if (fix.type === "add_skill") focusEditorSectionFromPreview("skills")
-        if (fix.type === "replace_bullet") focusEditorSectionFromPreview("experience")
-        if (fix.type === "replace_summary") focusEditorSectionFromPreview("profile")
-        pushToast({ tone: "success", title: "Fix applied" })
+        if (fix.type === "add_skill") {
+          focusEditorSectionFromPreview("skills")
+          pushToast({ tone: "success", title: `Skill added: ${fix.skill}`, description: "Visible in the Skills section and resume preview." })
+        } else if (fix.type === "replace_bullet") {
+          focusEditorSectionFromPreview("experience")
+          pushToast({ tone: "success", title: "Bullet updated", description: "Review the change in the preview." })
+        } else {
+          focusEditorSectionFromPreview("profile")
+          pushToast({ tone: "success", title: "Summary updated", description: "Review the change in the resume preview." })
+        }
       } finally {
         queueMicrotask(() => setApplyingFixId(null))
       }
     },
-    [appliedFixIds, focusEditorSectionFromPreview, pushToast]
+    [appliedFixIds, experienceDrafts, focusEditorSectionFromPreview, pushToast]
   )
 
   const applyAllSafeFixes = useCallback(() => {
@@ -1334,21 +1404,23 @@ export default function ResumeStudioPage() {
       } else {
         const i = experienceIndexFromId(fix.experienceId)
         if (nextExp[i]) {
-          const d = nextExp[i]!.description
-          const originalFound = fix.original.length > 0 && d.includes(fix.original)
-          const nextD = originalFound
-            ? d.replace(fix.original, fix.suggested)
-            : d.trim()
-              ? `${d.trim()}\n${fix.suggested}`
-              : fix.suggested
-          nextExp[i] = { ...nextExp[i]!, description: nextD }
-          nextApplied.add(fix.id)
+          const row = nextExp[i]!
+          const lines = row.description.split(/\r?\n/)
+          const idx = findBestMatchingLineIndex(row.description, fix.original)
+          if (idx >= 0) {
+            lines[idx] = fix.suggested
+            nextExp[i] = { ...row, description: lines.join("\n") }
+            nextApplied.add(fix.id)
+          }
+          // If no match found, skip this fix — don't append
         }
       }
     }
     const before = appliedFixIds.length
-    if (nextApplied.size === before) {
-      pushToast({ tone: "info", title: "No changes applied." })
+    const applied = nextApplied.size - before
+    const skipped = pending.length - applied
+    if (applied === 0) {
+      pushToast({ tone: "info", title: "No changes applied.", description: skipped > 0 ? `${skipped} bullet fix(es) couldn't locate their original text — apply them individually.` : undefined })
       return
     }
     setSkillsText(nextSkills)
@@ -1358,7 +1430,11 @@ export default function ResumeStudioPage() {
     setTailorStep("applied")
     markDirty()
     focusEditorSectionFromPreview("profile")
-    pushToast({ tone: "success", title: `Applied ${nextApplied.size - before} safe fix(es)` })
+    pushToast({
+      tone: "success",
+      title: `Applied ${applied} safe fix${applied === 1 ? "" : "es"}`,
+      description: skipped > 0 ? `${skipped} bullet fix${skipped === 1 ? "" : "es"} skipped — apply them individually.` : undefined,
+    })
   }, [analysis, appliedFixIds, experienceDrafts, focusEditorSectionFromPreview, profileSummary, pushToast, skillsText])
 
   async function handleAnalyzeTailorMatch() {
@@ -1496,6 +1572,7 @@ export default function ResumeStudioPage() {
             end_date: draft.current ? null : draft.to,
             gpa: null,
           })),
+          skills: skillsTextToSkills(skillsText),
           projects: projectsDraft
             .split(/\n{2,}/)
             .map((block) => block.trim())
@@ -1821,18 +1898,23 @@ export default function ResumeStudioPage() {
       pushToast({ tone: "info", title: "Select a resume first." })
       return
     }
+    if (isDownloading) return
 
     if (isDirty) {
       await saveDraft(true)
     }
 
+    setIsDownloading(true)
     try {
-      const fileName = `${documentName || selectedResume.name || "resume"}.pdf`
+      const fileName = `${documentName || selectedResume.name || "resume"}.docx`
       const downloadUrl = `/api/resume/download?resumeId=${encodeURIComponent(selectedResume.id)}`
       const response = await fetch(downloadUrl, { credentials: "include" })
       if (!response.ok) {
-        const fallback = (await response.json().catch(() => ({}))) as { error?: string }
-        throw new Error(fallback.error ?? "Download failed")
+        const ct = response.headers.get("content-type") ?? ""
+        const fallback = ct.includes("application/json")
+          ? (await response.json().catch(() => ({}))) as { error?: string }
+          : {}
+        throw new Error(fallback.error ?? `Download failed (${response.status})`)
       }
       const blob = await response.blob()
       const objectUrl = URL.createObjectURL(blob)
@@ -1853,6 +1935,8 @@ export default function ResumeStudioPage() {
         title: "Download failed",
         description: error instanceof Error ? error.message : "Please try again.",
       })
+    } finally {
+      setIsDownloading(false)
     }
   }
 
@@ -1877,65 +1961,95 @@ export default function ResumeStudioPage() {
 
     setIsTailoring(true)
     try {
+      // Flush editor state to DB first so the base resume is current before we duplicate it.
+      await saveDraft(true)
+
       const jt = jobTitle || selectedTargetJob?.title || "Tailored"
-      const name = `${jt} Resume`
+      const resumeName = `${jt} Resume`
+
+      // 1. Save a version snapshot for history.
       const snapshot = createResumeSnapshot(livePreviewResume)
-      const res = await fetch(`/api/resume/${selectedResume.id}/versions`, {
+      const versionRes = await fetch(`/api/resume/${selectedResume.id}/versions`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name,
-          changes_summary: `Tailored for ${jobTitle || selectedTargetJob?.title || "target role"}. Match score: ${analysis.matchScore}/100. Applied fix ids: ${appliedFixIds.length ? appliedFixIds.join(", ") : "none"}.`,
+          name: resumeName,
+          changes_summary: `Tailored for ${jt}. Match score: ${analysis.matchScore}/100. Applied ${appliedFixIds.length} fix(es).`,
           snapshot,
         }),
       })
-      if (!res.ok) {
-        pushToast({ tone: "error", title: "Could not create version" })
+      if (!versionRes.ok) {
+        pushToast({ tone: "error", title: "Could not save version history. Try again." })
         return
       }
-      let createdLibraryCopy = false
+
+      // 2. Duplicate the base resume then patch it with ALL current editor state
+      //    (personal info + tailored content) to create the library copy.
+      let savedResumeId: string | null = null
       try {
-        const duplicateRes = await fetch(`/api/resume/${selectedResume.id}/duplicate`, {
+        const dupRes = await fetch(`/api/resume/${selectedResume.id}/duplicate`, {
           method: "POST",
           credentials: "include",
         })
-        if (duplicateRes.ok) {
-          const duplicateData = (await duplicateRes.json().catch(() => ({}))) as { resume?: Resume }
-          const duplicatedResumeId = duplicateData.resume?.id
-          if (duplicatedResumeId) {
-            const patchRes = await fetch(`/api/resume/${duplicatedResumeId}`, {
-              method: "PATCH",
-              credentials: "include",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                name,
-                summary: livePreviewResume.summary ?? null,
-                primary_role: livePreviewResume.primary_role ?? null,
-                work_experience: livePreviewResume.work_experience ?? [],
-                education: livePreviewResume.education ?? [],
-                skills: livePreviewResume.skills ?? null,
-                projects: livePreviewResume.projects ?? [],
-                certifications: livePreviewResume.certifications ?? [],
-              }),
-            })
-            if (patchRes.ok) {
-              createdLibraryCopy = true
-              window.dispatchEvent(new Event("hireoven:resumes-changed"))
-            }
-          }
+        if (!dupRes.ok) throw new Error("duplicate_failed")
+
+        const dupData = (await dupRes.json().catch(() => ({}))) as { resume?: Resume }
+        const dupId = dupData.resume?.id
+        if (!dupId) throw new Error("no_duplicate_id")
+
+        const fullName = `${personalInfo.firstName} ${personalInfo.lastName}`.trim() || null
+        const location = [personalInfo.city, personalInfo.state, personalInfo.country].filter(Boolean).join(", ") || personalInfo.address || null
+
+        const patchRes = await fetch(`/api/resume/${dupId}`, {
+          method: "PATCH",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: resumeName,
+            full_name: fullName,
+            email: personalInfo.email || null,
+            phone: personalInfo.phone || null,
+            location,
+            portfolio_url: personalInfo.website || null,
+            primary_role: livePreviewResume.primary_role ?? null,
+            summary: livePreviewResume.summary ?? null,
+            skills: livePreviewResume.skills ?? null,
+            work_experience: livePreviewResume.work_experience ?? [],
+            education: livePreviewResume.education ?? [],
+            projects: livePreviewResume.projects ?? [],
+            certifications: livePreviewResume.certifications ?? [],
+          }),
+        })
+        if (!patchRes.ok) throw new Error("patch_failed")
+
+        const patched = (await patchRes.json().catch(() => null)) as Resume | null
+        if (patched?.id) {
+          savedResumeId = patched.id
+          upsertResume(patched)
+          window.dispatchEvent(new Event("hireoven:resumes-changed"))
         }
       } catch {
-        // Keep success path for version save even if library-copy creation fails.
+        // Version history already saved — library copy is a bonus. Log and continue.
       }
+
       await refreshHubData()
-      pushToast({
-        tone: "success",
-        title: createdLibraryCopy ? "Tailored version created" : "Version created",
-        description: createdLibraryCopy
-          ? "Saved in Version History and added as a new resume in Library."
-          : "Saved in Version History. Could not auto-create a Library copy.",
-      })
+
+      if (savedResumeId) {
+        pushToast({
+          tone: "success",
+          title: `"${resumeName}" saved to your Library`,
+          description: "Tailored content, skills, and personal info saved as a new resume.",
+          action: { label: "Open Library", href: "/dashboard/resume/library" },
+        })
+      } else {
+        pushToast({
+          tone: "success",
+          title: "Version saved to history",
+          description: "Could not create a Library copy — duplicate it from Version History.",
+          action: { label: "View History", href: "/dashboard/resume/versions" },
+        })
+      }
     } finally {
       setIsTailoring(false)
     }
@@ -2234,18 +2348,20 @@ export default function ResumeStudioPage() {
             <button
               type="button"
               onClick={() => void handleDownloadResume()}
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-[12.5px] font-semibold text-[#5B4DFF] transition hover:bg-slate-50"
+              disabled={!selectedResume?.id || isDownloading || isSaving}
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-[12.5px] font-semibold text-[#5B4DFF] transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <Download className="h-4 w-4" />
-              Download Resume
+              {isDownloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+              {isDownloading ? "Downloading..." : "Download Resume"}
             </button>
             <button
               type="button"
               onClick={() => void saveDraft()}
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#5B4DFF] px-4 text-[12.5px] font-semibold text-white transition hover:bg-[#493EE6]"
+              disabled={!selectedResume?.id || isSaving}
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#5B4DFF] px-4 text-[12.5px] font-semibold text-white transition hover:bg-[#493EE6] disabled:cursor-not-allowed disabled:opacity-60"
             >
-              <Save className="h-4 w-4" />
-              Save Draft
+              {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              {isSaving ? "Saving..." : "Save Draft"}
             </button>
           </div>
         </header>
@@ -2401,7 +2517,7 @@ export default function ResumeStudioPage() {
             />
           </div>
         ) : (
-          <div className="grid gap-5 xl:grid-cols-[minmax(0,0.8fr)_minmax(320px,0.7fr)_minmax(560px,1fr)]">
+          <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(300px,0.8fr)] xl:grid-cols-[minmax(0,0.8fr)_minmax(320px,0.7fr)_minmax(560px,1fr)]">
             <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
               <ResumeSelect resumes={resumes} selectedId={selectedResume?.id ?? null} onChange={setSelectedId} />
 
@@ -2504,19 +2620,39 @@ export default function ResumeStudioPage() {
                 </ol>
               </details>
 
-              <button
-                type="button"
-                onClick={() => void handleAnalyzeTailorMatch()}
-                disabled={isTailorRefining || isTailoring || !jobDescription.trim()}
-                className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-[#5B4DFF] bg-indigo-50 text-[12.5px] font-bold text-[#5B4DFF] transition hover:bg-indigo-100 disabled:opacity-60"
-              >
-                {isTailorRefining ? <Loader2 className="h-4 w-4 animate-spin" /> : <Target className="h-4 w-4" />}
-                {isTailorRefining
-                  ? "Refining with AI…"
-                  : tailorStep === "analyzed" || tailorStep === "applied"
-                    ? "Re-analyze"
-                    : "Analyze Match"}
-              </button>
+              {/* Single progressive CTA: Analyze → Save Tailored Version */}
+              {appliedFixIds.length > 0 ? (
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    onClick={() => void handleCreateTailoredVersion()}
+                    disabled={isTailoring || !selectedResume || !jobDescription.trim() || !analysis}
+                    className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-[#5B4DFF] text-[12.5px] font-semibold text-white transition hover:bg-[#493EE6] disabled:opacity-60"
+                  >
+                    {isTailoring ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                    {isTailoring ? "Saving tailored version…" : `Save Tailored Version (${appliedFixIds.length} fix${appliedFixIds.length === 1 ? "" : "es"} applied)`}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleAnalyzeTailorMatch()}
+                    disabled={isTailorRefining || isTailoring || !jobDescription.trim()}
+                    className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white text-[12px] font-semibold text-slate-600 transition hover:bg-slate-50 disabled:opacity-60"
+                  >
+                    {isTailorRefining ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Target className="h-3.5 w-3.5" />}
+                    {isTailorRefining ? "Refining…" : "Re-analyze"}
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => void handleAnalyzeTailorMatch()}
+                  disabled={isTailorRefining || isTailoring || !jobDescription.trim()}
+                  className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-[#5B4DFF] bg-indigo-50 text-[12.5px] font-bold text-[#5B4DFF] transition hover:bg-indigo-100 disabled:opacity-60"
+                >
+                  {isTailorRefining ? <Loader2 className="h-4 w-4 animate-spin" /> : <Target className="h-4 w-4" />}
+                  {isTailorRefining ? "Refining with AI…" : analysis ? "Re-analyze" : "Analyze Match"}
+                </button>
+              )}
             </section>
 
             <div className="flex min-h-0 max-h-[calc(100vh-7.5rem)] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -2535,37 +2671,25 @@ export default function ResumeStudioPage() {
                   onApplyAllSafe={applyAllSafeFixes}
                   disabled={isTailoring}
                 />
-                <div className="shrink-0 rounded-xl border border-amber-100 bg-amber-50 px-3 py-2.5">
-                  <div className="flex gap-2">
-                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-                    <p className="text-[12px] leading-relaxed text-amber-800">
-                      Add only skills and experience that are true. Do not fabricate experience.
-                    </p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => void handleCreateTailoredVersion()}
-                  disabled={isTailoring || !selectedResume || !jobDescription.trim() || !analysis}
-                  className="inline-flex h-10 w-full shrink-0 items-center justify-center gap-2 rounded-lg bg-[#5B4DFF] text-[12.5px] font-semibold text-white transition hover:bg-[#493EE6] disabled:opacity-60"
-                >
-                  {isTailoring ? <Loader2 className="h-4 w-4 animate-spin" /> : <Target className="h-4 w-4" />}
-                  {isTailoring ? "Creating Tailored Version..." : "Create Tailored Version"}
-                </button>
+                <p className="shrink-0 rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-800">
+                  Only apply suggestions that are true. Do not add skills or experience you don&apos;t have.
+                </p>
               </div>
             </div>
 
-            <StickyResumePreview
-              title="Tailored Resume Preview"
-              badge="Draft tailored version"
-              resume={livePreviewResume}
-              profile={profile}
-              sections={orderedSections}
-              customSections={previewCustomSections}
-              personalFields={previewPersonalFields}
-              onPreviewSectionNavigate={focusEditorSectionFromPreview}
-              onDownload={() => void handleDownloadResume()}
-            />
+            <div className="hidden xl:contents">
+              <StickyResumePreview
+                title="Tailored Resume Preview"
+                badge="Draft tailored version"
+                resume={livePreviewResume}
+                profile={profile}
+                sections={orderedSections}
+                customSections={previewCustomSections}
+                personalFields={previewPersonalFields}
+                onPreviewSectionNavigate={focusEditorSectionFromPreview}
+                onDownload={() => void handleDownloadResume()}
+              />
+            </div>
           </div>
         )}
       </div>
