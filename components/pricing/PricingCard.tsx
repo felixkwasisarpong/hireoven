@@ -44,12 +44,12 @@ const CARD_STYLES: Record<PlanKey, { border: string; bg: string; badgeBg: string
     featureAccent: "text-[#0369A1]",
   },
   pro_international: {
-    border: "border-[#1D4ED8]/20",
+    border: "border-[#ea580c]/20",
     bg: "bg-white",
-    badgeBg: "bg-[#1D4ED8]",
+    badgeBg: "bg-[#ea580c]",
     badgeText: "text-white",
-    ctaClass: "bg-[#1D4ED8] text-white hover:bg-[#1E40AF] shadow-[0_4px_16px_rgba(29,78,216,0.24)]",
-    featureAccent: "text-[#1D4ED8]",
+    ctaClass: "bg-[#ea580c] text-white hover:bg-[#c2410c] shadow-[0_4px_16px_rgba(234,88,12,0.24)]",
+    featureAccent: "text-[#ea580c]",
   },
 }
 

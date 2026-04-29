@@ -12,6 +12,8 @@ import DashboardSidebarNav from "@/components/dashboard/DashboardSidebarNav"
 import DashboardSpotlightColumn from "@/components/dashboard/DashboardSpotlightColumn"
 import JobFeed from "@/components/jobs/JobFeed"
 import PushNotificationSetup from "@/components/notifications/PushNotificationSetup"
+import { ScoutMiniPanel } from "@/components/scout/ScoutMiniPanel"
+import { ScoutFocusBanner } from "@/components/scout/ScoutFocusBanner"
 import { useResumeContext } from "@/components/resume/ResumeProvider"
 import { parseJobFilters } from "@/components/jobs/JobFilters"
 import { getSearchQuery } from "@/components/jobs/JobSearch"
@@ -27,12 +29,15 @@ type DashboardHomeClientProps = {
   initialPrimaryResumeReady?: boolean
   initialWatchlist?: WatchlistWithCompany[]
   initialWatchlistCount?: number
+  /** Jobs first detected (or created) today, keyed by watched company id (server snapshot). */
+  initialJobsTodayByCompanyId?: Record<string, number>
 }
 
 export default function DashboardHomeClient({
   initialPrimaryResumeReady = false,
   initialWatchlist = [],
   initialWatchlistCount = 0,
+  initialJobsTodayByCompanyId = {},
 }: DashboardHomeClientProps) {
   const pathname = usePathname()
   const router = useRouter()
@@ -51,14 +56,30 @@ export default function DashboardHomeClient({
    * Default to `sort=match` once a resume is ready without rewriting the URL
    * (the old rewrite caused a visible double-fetch on first load).
    */
+  const focusMode = searchParams.get("focus") === "1"
+
   const filters = useMemo(() => {
     const parsed = parseJobFilters(searchParams)
+    // Focus mode always sorts by match; fall back to match when resume is ready and no sort param is set
+    if (focusMode) return { ...parsed, sort: "match" as const }
     if (!parsed.sort && primaryResumeReady) return { ...parsed, sort: "match" as const }
     return parsed
-  }, [searchParams, primaryResumeReady])
+  }, [searchParams, primaryResumeReady, focusMode])
   const searchQuery = useMemo(() => getSearchQuery(searchParams), [searchParams])
 
   const [feedMeta, setFeedMeta] = useState({ totalCount: 0, lastHourCount: 0 })
+
+  // Notify Scout components (e.g. confirmation banner) whenever the feed count
+  // updates — no new AI call required, purely client-side piggyback
+  useEffect(() => {
+    if (feedMeta.totalCount > 0 && typeof window !== "undefined") {
+      window.dispatchEvent(
+        new CustomEvent("scout:feed-updated", {
+          detail: { totalCount: feedMeta.totalCount },
+        })
+      )
+    }
+  }, [feedMeta.totalCount])
   const [upgradeModal, setUpgradeModal] = useState<{ open: boolean; plan: string }>({ open: false, plan: "" })
   const [filterDropdown, setFilterDropdown] = useState<FeedToolbarDropdown>(null)
   const filtersBarRef = useRef<HTMLDivElement>(null)
@@ -148,7 +169,7 @@ export default function DashboardHomeClient({
         <DashboardHeader />
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           <div className="flex min-h-0 flex-1 flex-col gap-5 px-4 py-4 sm:px-5 xl:flex-row xl:gap-5">
-            <div className="min-h-0 min-w-0 flex-1 overflow-y-auto xl:soft-scrollbar">
+            <div className="relative z-20 min-h-0 min-w-0 flex-1 overflow-y-auto xl:soft-scrollbar">
               <section className="min-w-0 space-y-3">
                 <PushNotificationSetup />
 
@@ -161,6 +182,8 @@ export default function DashboardHomeClient({
                   filtersBarRef={filtersBarRef}
                 />
 
+                {focusMode && <ScoutFocusBanner />}
+
                 <JobFeed
                   filters={filters}
                   searchQuery={searchQuery}
@@ -170,15 +193,23 @@ export default function DashboardHomeClient({
               </section>
             </div>
 
-            <aside className="hidden min-h-0 min-w-0 xl:block xl:w-[300px] xl:flex-shrink-0 xl:overflow-y-auto">
+            <aside className="relative z-10 hidden min-h-0 min-w-0 xl:block xl:w-[300px] xl:flex-shrink-0 xl:overflow-y-auto">
               <DashboardSpotlightColumn
                 initialWatchlist={initialWatchlist}
                 initialWatchlistCount={initialWatchlistCount}
+                initialJobsTodayByCompanyId={initialJobsTodayByCompanyId}
               />
             </aside>
           </div>
         </div>
       </div>
+      <ScoutMiniPanel
+        pagePath="/dashboard"
+        suggestionChips={[
+          "Show jobs worth my time",
+          "Filter high sponsorship jobs",
+        ]}
+      />
     </main>
   )
 }

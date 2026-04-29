@@ -2,6 +2,17 @@ import {
   cleanJobDescription,
   normalizeJobApplyUrl,
 } from "@/lib/jobs/description"
+import {
+  extractGreenhouseBoardToken,
+  normalizeGreenhouseBoardUrl,
+} from "@/lib/companies/greenhouse-url"
+import { normalizeAtsUrl } from "@/lib/companies/ats-url-normalization"
+import {
+  fetchCrawlerJson,
+  fetchCrawlerResponse,
+  fetchCrawlerText,
+} from "@/lib/crawler/http"
+import { renderCareersHtmlWithPlaywright } from "@/lib/crawler/playwright-fallback"
 
 export interface CrawlTarget {
   id: string
@@ -18,17 +29,45 @@ export interface RawJob {
   description?: string
   location?: string
   postedAt?: string
+  companyLogo?: string
+  workMode?: string
+  employmentType?: string
+  salaryRange?: string
+  matchScore?: number
+  matchLabel?: string
+  matchedSkills?: string[]
+  missingSkills?: string[]
+  sponsorshipSignal?: string
+  companySummary?: string
+  companyFoundedYear?: number
+  companyEmployeeCount?: string
+  companyIndustry?: string
+  easyApply?: boolean
+  activelyHiring?: boolean
+  topApplicantSignal?: boolean
+  companyVerified?: boolean
 }
 
 export interface CrawlResult {
   url: string
+  normalizedUrl?: string
   jobs: RawJob[]
   crawledAt: Date
+  diagnostics?: CrawlDiagnostic[]
 }
 
-const USER_AGENT =
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-const FETCH_TIMEOUT_MS = 12_000
+export type CrawlDiagnostic = {
+  provider?: string | null
+  originalUrl: string
+  normalizedUrl: string | null
+  statusCode: number | null
+  reason: string
+  crawlResult?: "success" | "failed" | "empty" | "normalized" | "fallback"
+  errorReason?: string | null
+  retryCount?: number
+  fallbackUsed?: string | null
+}
+
 const MAX_DISCOVERED_ATS_CANDIDATES = 12
 const MAX_GENERIC_JOBS = 250
 const WORKDAY_FALLBACK_MAX_ATTEMPTS = 48
@@ -162,15 +201,7 @@ const COMPANY_STOPWORDS = new Set([
 ])
 
 function parseGreenhouseBoard(url: URL) {
-  const host = url.hostname.toLowerCase()
-  if (host === "boards.greenhouse.io" || host === "job-boards.greenhouse.io") {
-    const slug = url.pathname.split("/").filter(Boolean)[0]
-    return slug ?? null
-  }
-  if (host.endsWith(".greenhouse.io")) {
-    return host.split(".")[0] ?? null
-  }
-  return null
+  return extractGreenhouseBoardToken(url.toString())
 }
 
 function parseLeverCompany(url: URL) {
@@ -180,6 +211,11 @@ function parseLeverCompany(url: URL) {
 
 function parseAshbyCompany(url: URL) {
   if (url.hostname.toLowerCase() !== "jobs.ashbyhq.com") return null
+  return url.pathname.split("/").filter(Boolean)[0] ?? null
+}
+
+function parseSmartRecruitersCompany(url: URL) {
+  if (url.hostname.toLowerCase() !== "jobs.smartrecruiters.com") return null
   return url.pathname.split("/").filter(Boolean)[0] ?? null
 }
 
@@ -282,55 +318,65 @@ type WorkdayPosting = {
   jobDescription?: string
 }
 
-function buildRequestHeaders(extra?: HeadersInit): Headers {
-  const headers = new Headers(extra ?? {})
-  if (!headers.has("user-agent")) {
-    headers.set("user-agent", USER_AGENT)
-  }
-  return headers
-}
-
 async function fetchText(
   url: string,
   init: RequestInit = {}
 ): Promise<string | null> {
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
-  try {
-    const response = await fetch(url, {
-      ...init,
-      signal: controller.signal,
-      headers: buildRequestHeaders(init.headers),
+  const result = await fetchCrawlerText(url, init)
+  return result.ok ? result.data : null
+}
+
+async function checkUrlStatus(url: string, init: RequestInit = {}): Promise<number | null> {
+  const result = await fetchCrawlerResponse(url, {
+    method: "GET",
+    redirect: "follow",
+    ...init,
+  })
+  return result.statusCode
+}
+
+async function resolveStableGreenhouseBoardUrl(
+  rawUrl: string
+): Promise<{ url: URL; diagnostics: CrawlDiagnostic[]; boardToken: string | null }> {
+  const normalized = normalizeGreenhouseBoardUrl(rawUrl)
+  const diagnostics: CrawlDiagnostic[] = []
+
+  if (!normalized.boardToken || normalized.candidates.length === 0) {
+    diagnostics.push({
+      originalUrl: normalized.originalUrl,
+      normalizedUrl: normalized.normalizedUrl,
+      statusCode: null,
+      reason: normalized.reason,
     })
-    if (!response.ok) return null
-    return await response.text()
-  } catch {
-    return null
-  } finally {
-    clearTimeout(timeout)
+    return { url: new URL(rawUrl), diagnostics, boardToken: null }
   }
+
+  for (const candidate of normalized.candidates) {
+    const statusCode = await checkUrlStatus(candidate)
+    const ok = statusCode !== null && statusCode >= 200 && statusCode < 400
+    diagnostics.push({
+      originalUrl: normalized.originalUrl,
+      normalizedUrl: candidate,
+      statusCode,
+      reason: ok
+        ? `${normalized.reason}:stable_board_resolved`
+        : `${normalized.reason}:stable_board_failed`,
+    })
+    console.log(
+      `[crawler:greenhouse] original=${normalized.originalUrl} normalized=${candidate} status=${statusCode ?? "fetch_error"} reason=${diagnostics[diagnostics.length - 1].reason}`
+    )
+    if (ok) return { url: new URL(candidate), diagnostics, boardToken: normalized.boardToken }
+  }
+
+  return { url: new URL(rawUrl), diagnostics, boardToken: normalized.boardToken }
 }
 
 async function fetchJson<T>(
   url: string,
   init: RequestInit = {}
 ): Promise<T | null> {
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
-  try {
-    const response = await fetch(url, {
-      method: "GET",
-      ...init,
-      signal: controller.signal,
-      headers: buildRequestHeaders(init.headers),
-    })
-    if (!response.ok) return null
-    return (await response.json()) as T
-  } catch {
-    return null
-  } finally {
-    clearTimeout(timeout)
-  }
+  const result = await fetchCrawlerJson<T>(url, init)
+  return result.ok ? result.data : null
 }
 
 async function fetchWorkdayPostings(
@@ -345,15 +391,14 @@ async function fetchWorkdayPostings(
   let sawHttp200 = false
 
   for (let offset = 0; offset < 100; offset += 20) {
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
     try {
-      const response = await fetch(jobsApi, {
+      const result = await fetchCrawlerJson<{
+        jobPostings?: WorkdayPosting[]
+      }>(jobsApi, {
         method: "POST",
-        signal: controller.signal,
-        headers: buildRequestHeaders({
+        headers: {
           "content-type": "application/json",
-        }),
+        },
         body: JSON.stringify({
           appliedFacets: {},
           limit: 20,
@@ -361,21 +406,15 @@ async function fetchWorkdayPostings(
           searchText: "",
         }),
       })
-      if (!response.ok) break
-      sawHttp200 = true
+      if (!result.ok) break
+      if (result.statusCode === 200) sawHttp200 = true
 
-      const payload = (await response.json()) as {
-        jobPostings?: WorkdayPosting[]
-      }
-
-      const postings = payload?.jobPostings ?? []
+      const postings = result.data?.jobPostings ?? []
       if (postings.length === 0) break
       collected.push(...postings)
       if (postings.length < 20) break
     } catch {
       break
-    } finally {
-      clearTimeout(timeout)
     }
   }
 
@@ -671,6 +710,56 @@ async function crawlAshby(careersUrl: URL): Promise<RawJob[]> {
   }
 
   return jobs
+}
+
+async function crawlSmartRecruiters(careersUrl: URL): Promise<RawJob[]> {
+  const company = parseSmartRecruitersCompany(careersUrl)
+  if (!company) return []
+
+  const payload = await fetchJson<{
+    content?: Array<{
+      id?: string
+      uuid?: string
+      name?: string
+      refNumber?: string
+      releasedDate?: string
+      location?: {
+        city?: string
+        region?: string
+        country?: string
+        remote?: boolean
+      }
+      postingUrl?: string
+    }>
+  }>(
+    `https://api.smartrecruiters.com/v1/companies/${encodeURIComponent(
+      company
+    )}/postings?limit=100`
+  )
+
+  const jobs = payload?.content ?? []
+  return jobs
+    .filter((job) => job?.name && (job.id || job.uuid || job.refNumber))
+    .map((job) => {
+      const id = job.id ?? job.uuid ?? job.refNumber!
+      const location = [
+        job.location?.city,
+        job.location?.region,
+        job.location?.country,
+      ]
+        .filter(Boolean)
+        .join(", ")
+
+      return {
+        externalId: `smartrecruiters:${id}`,
+        title: job.name!,
+        url: normalizeJobApplyUrl(
+          job.postingUrl ?? `https://jobs.smartrecruiters.com/${company}/${id}`
+        ),
+        location: location || (job.location?.remote ? "Remote" : undefined),
+        postedAt: job.releasedDate,
+      }
+    })
 }
 
 async function crawlWorkday(careersUrl: URL): Promise<RawJob[]> {
@@ -1569,6 +1658,52 @@ function extractJobsFromJsonLd(html: string, baseUrl: URL): RawJob[] {
       if (seen.has(url)) return
       seen.add(url)
 
+      const hiringOrganization =
+        node.hiringOrganization && typeof node.hiringOrganization === "object"
+          ? (node.hiringOrganization as Record<string, unknown>)
+          : null
+      const employmentTypeRaw = node.employmentType
+      const employmentType = Array.isArray(employmentTypeRaw)
+        ? String(employmentTypeRaw[0] ?? "").trim() || undefined
+        : String(employmentTypeRaw ?? "").trim() || undefined
+      const logoValue = hiringOrganization?.logo
+      const companyLogo =
+        typeof logoValue === "string"
+          ? logoValue.trim() || undefined
+          : logoValue && typeof logoValue === "object"
+            ? String((logoValue as Record<string, unknown>).url ?? "").trim() || undefined
+            : undefined
+      const salarySpec =
+        node.baseSalary && typeof node.baseSalary === "object"
+          ? (node.baseSalary as Record<string, unknown>)
+          : null
+      const salaryValue =
+        salarySpec?.value && typeof salarySpec.value === "object"
+          ? (salarySpec.value as Record<string, unknown>)
+          : null
+      const salaryMin =
+        typeof salaryValue?.minValue === "number"
+          ? salaryValue.minValue
+          : typeof salaryValue?.value === "number"
+            ? salaryValue.value
+            : null
+      const salaryMax =
+        typeof salaryValue?.maxValue === "number" ? salaryValue.maxValue : null
+      const salaryUnit = String(salaryValue?.unitText ?? "").trim()
+      const salaryRange =
+        salaryMin && salaryMax
+          ? `$${salaryMin.toLocaleString()} - $${salaryMax.toLocaleString()}${salaryUnit ? ` / ${salaryUnit}` : ""}`
+          : salaryMin
+            ? `$${salaryMin.toLocaleString()}${salaryUnit ? ` / ${salaryUnit}` : ""}`
+            : undefined
+      const jobLocationType = String(node.jobLocationType ?? "").toLowerCase()
+      const workMode =
+        jobLocationType.includes("telecommute")
+          ? "Remote"
+          : undefined
+      const companySummary = cleanJobDescription(String(hiringOrganization?.description ?? "").trim()) ?? undefined
+      const companyIndustry = String(hiringOrganization?.industry ?? "").trim() || undefined
+
       out.push({
         externalId:
           String(
@@ -1579,6 +1714,12 @@ function extractJobsFromJsonLd(html: string, baseUrl: URL): RawJob[] {
         description: cleanJobDescription(String(node.description ?? "").trim()) ?? undefined,
         location: extractJobLocation(node),
         postedAt: String(node.datePosted ?? "").trim() || undefined,
+        companyLogo,
+        workMode,
+        employmentType,
+        salaryRange,
+        companySummary,
+        companyIndustry,
       })
     })
   }
@@ -1841,6 +1982,11 @@ async function crawlByKnownAts(careersUrl: URL): Promise<RawJob[]> {
     return crawlAshby(careersUrl)
   }
 
+  const smartRecruitersCompany = parseSmartRecruitersCompany(careersUrl)
+  if (smartRecruitersCompany) {
+    return crawlSmartRecruiters(careersUrl)
+  }
+
   const workdayContext = parseWorkdayContext(careersUrl)
   if (workdayContext) {
     return crawlWorkday(careersUrl)
@@ -1870,16 +2016,18 @@ async function crawlByKnownAts(careersUrl: URL): Promise<RawJob[]> {
 }
 
 async function discoverAndCrawlFromHtml(careersUrl: URL): Promise<RawJob[]> {
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
   try {
-    const response = await fetch(careersUrl.toString(), {
+    const response = await fetchCrawlerText(careersUrl.toString(), {
       method: "GET",
-      signal: controller.signal,
-      headers: buildRequestHeaders(),
     })
-    if (!response.ok) return []
-    const html = await response.text()
+    let html = response.ok && response.data ? response.data : null
+    if (!html) {
+      html = await renderCareersHtmlWithPlaywright(
+        careersUrl.toString(),
+        response.errorReason ?? `http_${response.statusCode ?? "unknown"}`
+      )
+    }
+    if (!html) return []
 
     if (looksLikeIcimsJibeSearchHtml(html)) {
       const icimsJobs = await crawlIcimsJibeSearchPage(careersUrl, html)
@@ -1915,6 +2063,7 @@ async function discoverAndCrawlFromHtml(careersUrl: URL): Promise<RawJob[]> {
         Boolean(parseGreenhouseBoard(candidate)) ||
         Boolean(parseLeverCompany(candidate)) ||
         Boolean(parseAshbyCompany(candidate)) ||
+        Boolean(parseSmartRecruitersCompany(candidate)) ||
         Boolean(parseWorkdayContext(candidate)) ||
         parseIcimsPortal(candidate) ||
         parseBambooPortal(candidate) ||
@@ -1992,11 +2141,18 @@ async function discoverAndCrawlFromHtml(careersUrl: URL): Promise<RawJob[]> {
       )
     }
 
-    return dedupeJobs(oneHopJobs)
+    const dedupedOneHopJobs = dedupeJobs(oneHopJobs)
+    if (dedupedOneHopJobs.length > 0) return dedupedOneHopJobs
+
+    const renderedHtml = await renderCareersHtmlWithPlaywright(careersUrl.toString(), "empty_jobs")
+    if (!renderedHtml) return []
+    return dedupeJobs([
+      ...extractGreenhouseEmbeddedJobsFromHtml(renderedHtml, careersUrl),
+      ...extractJobsFromJsonLd(renderedHtml, careersUrl),
+      ...extractGenericJobsFromHtml(renderedHtml, careersUrl),
+    ])
   } catch {
     return []
-  } finally {
-    clearTimeout(timeout)
   }
 }
 
@@ -2013,7 +2169,30 @@ function dedupeJobs(jobs: RawJob[]) {
 export async function crawlCareersPage(
   target: CrawlTarget
 ): Promise<CrawlResult> {
-  const careersUrl = new URL(target.careersUrl)
+  const normalized = normalizeAtsUrl(target.careersUrl, { atsType: target.atsType })
+  const diagnostics: CrawlDiagnostic[] = [
+    {
+      provider: normalized.provider,
+      originalUrl: normalized.originalUrl,
+      normalizedUrl: normalized.normalizedUrl,
+      statusCode: null,
+      reason: normalized.reason,
+      crawlResult: "normalized",
+    },
+  ]
+  const greenhouseResolution =
+    normalized.provider === "greenhouse"
+      ? await resolveStableGreenhouseBoardUrl(normalized.normalizedUrl)
+      : null
+  if (greenhouseResolution?.diagnostics.length) {
+    diagnostics.push(
+      ...greenhouseResolution.diagnostics.map((entry) => ({
+        ...entry,
+        provider: "greenhouse",
+      }))
+    )
+  }
+  const careersUrl = greenhouseResolution?.url ?? new URL(normalized.normalizedUrl)
   const fromKnownAts = await crawlByKnownAts(careersUrl)
   let jobs =
     fromKnownAts.length > 0
@@ -2029,7 +2208,19 @@ export async function crawlCareersPage(
 
   return {
     url: target.careersUrl,
+    normalizedUrl: careersUrl.toString(),
     jobs: dedupeJobs(jobs),
     crawledAt: new Date(),
+    diagnostics: [
+      ...diagnostics,
+      {
+        provider: normalized.provider,
+        originalUrl: target.careersUrl,
+        normalizedUrl: careersUrl.toString(),
+        statusCode: null,
+        reason: jobs.length > 0 ? "success" : "empty_job_list",
+        crawlResult: jobs.length > 0 ? "success" : "empty",
+      },
+    ],
   }
 }

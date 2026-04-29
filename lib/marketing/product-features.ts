@@ -33,8 +33,8 @@ export const CORE_FEATURES: {
     icon: Target,
     title: "AI match scores on every role",
     body: "Only see roles that actually fit your resume, seniority, and location. Low-fit postings are filtered out before you ever scroll past them.",
-    accent: "text-violet-700",
-    ring: "border-violet-200 bg-violet-50",
+    accent: "text-orange-700",
+    ring: "border-orange-200 bg-orange-50",
   },
   {
     icon: Wand2,

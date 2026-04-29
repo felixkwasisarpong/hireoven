@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { createClient } from "@/lib/supabase/server"
 import Anthropic from "@anthropic-ai/sdk"
+import { SONNET_MODEL } from "@/lib/ai/anthropic-models"
 import { requireFeature } from "@/lib/gates/server-gate"
 
 export const runtime = "nodejs"
@@ -50,7 +51,8 @@ export async function POST(request: NextRequest) {
     }
 
     const message = await anthropic.messages.create({
-      model: "claude-opus-4-7",
+      // Interview coaching needs high-quality reasoning, but Sonnet is the default tier for this workload.
+      model: SONNET_MODEL,
       max_tokens: 600,
       messages: [{
         role: "user",
@@ -80,7 +82,8 @@ Respond in JSON: { "score": 1-10, "strengths": ["..."], "improvements": ["..."],
     : "No prior rounds"
 
   const message = await anthropic.messages.create({
-    model: "claude-opus-4-7",
+    // Question generation is quality-sensitive but does not require Opus-tier fallback by default.
+    model: SONNET_MODEL,
     max_tokens: 1200,
     messages: [{
       role: "user",

@@ -83,7 +83,7 @@ function deriveStatus(resume: Resume): ResumeStatus {
 const STATUS_META: Record<ResumeStatus, { label: string; dot: string; text: string; bg: string; border: string }> = {
   active:   { label: "Active",   dot: "bg-blue-500",   text: "text-blue-700",   bg: "bg-blue-50",   border: "border-blue-200"   },
   draft:    { label: "Draft",    dot: "bg-slate-400",  text: "text-slate-600",  bg: "bg-slate-100", border: "border-slate-200"  },
-  tailored: { label: "Tailored", dot: "bg-violet-500", text: "text-violet-700", bg: "bg-violet-50", border: "border-violet-200" },
+  tailored: { label: "Tailored", dot: "bg-orange-500", text: "text-orange-700", bg: "bg-orange-50", border: "border-orange-200" },
   archived: { label: "Archived", dot: "bg-slate-300",  text: "text-slate-400",  bg: "bg-slate-50",  border: "border-slate-200"  },
 }
 
@@ -827,6 +827,7 @@ function CleanOverviewPanel({ onTabChange }: { onTabChange: (tab: TabId) => void
               { id: "qa-refine", tab: "edit" as TabId, icon: Wand2, bg: "bg-orange-50", ic: "text-orange-500", label: "Refine" },
               { id: "qa-ats", tab: "edit" as TabId, icon: Shield, bg: "bg-indigo-50", ic: "text-[#5B4DFF]", label: "Optimize ATS" },
               { id: "qa-version", kind: "save-version" as const, icon: FileText, bg: "bg-blue-50", ic: "text-blue-600", label: "New Version" },
+              { id: "qa-upload", kind: "upload" as const, icon: Upload, bg: "bg-emerald-50", ic: "text-emerald-600", label: "Upload Resume" },
             ].map((item) => {
               const Icon = item.icon
               const content = (
@@ -848,6 +849,18 @@ function CleanOverviewPanel({ onTabChange }: { onTabChange: (tab: TabId) => void
                   >
                     {content}
                   </SaveResumeVersionAction>
+                )
+              }
+
+              if ("kind" in item && item.kind === "upload") {
+                return (
+                  <ResumeUploadAction
+                    key={item.id}
+                    className="flex h-[76px] flex-col items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white text-center transition hover:border-emerald-200 hover:bg-emerald-50/20"
+                    onUploaded={refreshHubData}
+                  >
+                    {content}
+                  </ResumeUploadAction>
                 )
               }
 
@@ -1109,8 +1122,8 @@ function OverviewPanel({ onTabChange }: { onTabChange: (tab: TabId) => void }) {
                     <CheckCircle2 className="h-5 w-5" style={{ color: ring }} />
                   </div>
                 ) : (
-                  <div className="flex h-14 w-14 items-center justify-center rounded-full border-4 border-violet-200 bg-violet-50">
-                    <History className="h-5 w-5 text-violet-600" />
+                  <div className="flex h-14 w-14 items-center justify-center rounded-full border-4 border-orange-200 bg-orange-50">
+                    <History className="h-5 w-5 text-orange-600" />
                   </div>
                 )}
                 <div>
@@ -1219,11 +1232,12 @@ function OverviewPanel({ onTabChange }: { onTabChange: (tab: TabId) => void }) {
           </div>
           <div className="grid grid-cols-3 divide-x divide-y divide-slate-100">
             {[
-              { id: "ov-qa-preview", tab: "generate" as TabId, icon: Sparkles,  bg: "bg-violet-50", ic: "text-violet-600", label: "Preview" },
+              { id: "ov-qa-preview", tab: "generate" as TabId, icon: Sparkles,  bg: "bg-orange-50", ic: "text-orange-600", label: "Preview" },
               { id: "ov-qa-tailor", tab: "tailor"   as TabId, icon: Target,    bg: "bg-emerald-50",ic: "text-emerald-600",label: "Tailor resume"   },
               { id: "ov-qa-refine", tab: "edit"     as TabId, icon: TrendingUp,bg: "bg-orange-50", ic: "text-orange-500", label: "Refine"  },
               { id: "ov-qa-ats", tab: "edit"     as TabId, icon: Shield,    bg: "bg-amber-50",  ic: "text-amber-600",  label: "Optimize ATS" },
               { id: "ov-qa-ver", kind: "save-version" as const, icon: Layers, bg: "bg-indigo-50", ic: "text-indigo-600", label: "New Version" },
+              { id: "ov-qa-upload", kind: "upload" as const, icon: Upload, bg: "bg-teal-50", ic: "text-teal-600", label: "Upload Resume" },
             ].map((item) => {
               const Icon = item.icon
               if ("kind" in item && item.kind === "save-version") {
@@ -1239,6 +1253,20 @@ function OverviewPanel({ onTabChange }: { onTabChange: (tab: TabId) => void }) {
                     </div>
                     <p className="text-[11.5px] font-medium leading-snug text-slate-700">{item.label}</p>
                   </SaveResumeVersionAction>
+                )
+              }
+              if ("kind" in item && item.kind === "upload") {
+                return (
+                  <ResumeUploadAction
+                    key={item.id}
+                    className="flex flex-col items-center gap-2 p-4 text-center transition hover:bg-slate-50"
+                    onUploaded={refreshHubData}
+                  >
+                    <div className={cn("flex h-11 w-11 items-center justify-center rounded-2xl", item.bg)}>
+                      <Icon className={cn("h-5 w-5", item.ic)} />
+                    </div>
+                    <p className="text-[11.5px] font-medium leading-snug text-slate-700">{item.label}</p>
+                  </ResumeUploadAction>
                 )
               }
               const { id, tab, label, bg, ic } = item
@@ -1780,7 +1808,7 @@ function ResumeHubContent() {
             <TabRedirectPanel
               href="/dashboard/resume/studio?mode=preview"
               icon={Sparkles}
-              color="bg-violet-500"
+              color="bg-orange-500"
               title="Preview"
               description="Open the studio in preview mode to see your resume, edit sections, and export."
             />

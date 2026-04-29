@@ -459,7 +459,7 @@ function MiniStat({
   tone: "violet" | "blue" | "emerald"
 }) {
   const tones = {
-    violet: "bg-violet-50 text-violet-700 border-violet-100",
+    violet: "bg-orange-50 text-orange-700 border-orange-100",
     blue: "bg-sky-50 text-sky-700 border-sky-100",
     emerald: "bg-emerald-50 text-emerald-700 border-emerald-100",
   } as const

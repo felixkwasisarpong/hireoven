@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hireoven</title>
+    <style>
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+      body {
+        width: 360px;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        font-size: 13px;
+        color: #0f172a;
+        background: #ffffff;
+        display: flex;
+        flex-direction: column;
+        min-height: 64px;
+      }
+
+      /* ── Content area ───────────────────────────────────────── */
+      .content {
+        flex: 1;
+        padding: 14px 16px 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        min-height: 0;
+      }
+
+      /* ── Pill row ───────────────────────────────────────────── */
+      .pill-row { display: flex; gap: 6px; flex-wrap: wrap; }
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 8px;
+        border-radius: 99px;
+        font-size: 11px;
+        font-weight: 600;
+        border: 1px solid transparent;
+      }
+      .pill.page-type { background: #f8fafc; border-color: #e2e8f0; color: #475569; }
+      .pill.ats { background: #fff7ed; border-color: #fed7aa; color: #c2410c; }
+
+      /* ── Job card ───────────────────────────────────────────── */
+      .job-card {
+        border: 1px solid #f1f5f9;
+        border-radius: 10px;
+        padding: 10px 12px;
+        background: #fafafa;
+      }
+      .job-title {
+        font-weight: 700;
+        font-size: 13px;
+        color: #0f172a;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .job-meta {
+        font-size: 11.5px;
+        color: #64748b;
+        margin-top: 3px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .job-salary {
+        display: inline-block;
+        margin-top: 5px;
+        font-size: 11px;
+        font-weight: 600;
+        color: #16a34a;
+        background: #f0fdf4;
+        border-radius: 99px;
+        padding: 1px 7px;
+      }
+
+      /* ── Autofill section ───────────────────────────────────── */
+      .autofill-section {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      /* Stats row */
+      .autofill-stats {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+      .stat-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 3px 9px;
+        border-radius: 99px;
+        font-size: 11px;
+        font-weight: 600;
+        border: 1px solid transparent;
+      }
+      .stat-chip.detected { background: #f8fafc; border-color: #e2e8f0; color: #475569; }
+      .stat-chip.matched  { background: #f0fdf4; border-color: #bbf7d0; color: #15803d; }
+      .stat-chip.review   { background: #fefce8; border-color: #fde68a; color: #92400e; }
+
+      /* Field list */
+      .field-list {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        max-height: 200px;
+        overflow-y: auto;
+        scrollbar-width: thin;
+        scrollbar-color: #e2e8f0 transparent;
+        padding-right: 2px;
+      }
+      .field-list::-webkit-scrollbar { width: 4px; }
+      .field-list::-webkit-scrollbar-track { background: transparent; }
+      .field-list::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 99px; }
+
+      .field-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        padding: 6px 10px;
+        border-radius: 7px;
+        border: 1px solid transparent;
+        font-size: 12px;
+      }
+      .field-row.ready   { background: #f0fdf4; border-color: #d1fae5; }
+      .field-row.review  { background: #fefce8; border-color: #fde68a; }
+      .field-row.file    { background: #f8fafc; border-color: #e2e8f0; }
+
+      .field-dot {
+        width: 7px; height: 7px;
+        border-radius: 50%;
+        margin-top: 4px;
+        flex-shrink: 0;
+      }
+      .ready  .field-dot { background: #22c55e; }
+      .review .field-dot { background: #eab308; }
+      .file   .field-dot { background: #94a3b8; }
+
+      .field-info { flex: 1; min-width: 0; }
+      .field-label {
+        font-weight: 600;
+        color: #1e293b;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .field-value {
+        font-size: 11px;
+        color: #64748b;
+        margin-top: 1px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .field-badge {
+        flex-shrink: 0;
+        font-size: 10px;
+        font-weight: 700;
+        padding: 1px 6px;
+        border-radius: 99px;
+        letter-spacing: 0.02em;
+        align-self: center;
+      }
+      .ready  .field-badge { background: #dcfce7; color: #15803d; }
+      .review .field-badge { background: #fef9c3; color: #92400e; }
+      .file   .field-badge { background: #f1f5f9; color: #94a3b8; }
+
+      /* Profile missing warning */
+      .profile-warning {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        background: #fff7ed;
+        border: 1px solid #fed7aa;
+        border-radius: 8px;
+        padding: 9px 12px;
+        font-size: 12px;
+        color: #92400e;
+      }
+      .profile-warning svg { flex-shrink: 0; margin-top: 1px; }
+
+      /* Divider */
+      .section-divider {
+        height: 1px;
+        background: #f1f5f9;
+        margin: 0 -2px;
+      }
+
+      /* ── Saved banner ───────────────────────────────────────── */
+      .saved-banner {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: #f0fdf4;
+        border: 1px solid #bbf7d0;
+        border-radius: 8px;
+        padding: 9px 12px;
+        color: #15803d;
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      /* ── Autofill confirmation ───────────────────────────────── */
+      .autofill-confirm {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        background: #f0fdf4;
+        border: 1px solid #bbf7d0;
+        border-radius: 8px;
+        padding: 9px 12px;
+      }
+      .autofill-confirm svg { flex-shrink: 0; margin-top: 1px; }
+      .autofill-confirm-title {
+        font-size: 12px;
+        font-weight: 700;
+        color: #15803d;
+      }
+      .autofill-confirm-sub {
+        font-size: 11px;
+        color: #166534;
+        margin-top: 2px;
+      }
+
+      /* ── Tailor section ─────────────────────────────────────── */
+      .tailor-section {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .tailor-header {
+        font-size: 12px;
+        font-weight: 700;
+        color: #0f172a;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+      }
+      .tailor-header svg { color: #f97316; }
+      .tailor-summary {
+        font-size: 11.5px;
+        color: #475569;
+        line-height: 1.5;
+      }
+      .tailor-score {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 8px;
+        border-radius: 99px;
+        font-size: 11px;
+        font-weight: 700;
+        background: #fff7ed;
+        border: 1px solid #fed7aa;
+        color: #c2410c;
+        align-self: flex-start;
+      }
+      .tailor-score.good { background: #f0fdf4; border-color: #bbf7d0; color: #15803d; }
+      .tailor-score.ok   { background: #fefce8; border-color: #fde68a; color: #92400e; }
+      .change-list {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        max-height: 160px;
+        overflow-y: auto;
+        scrollbar-width: thin;
+        scrollbar-color: #e2e8f0 transparent;
+        padding-right: 2px;
+      }
+      .change-list::-webkit-scrollbar { width: 4px; }
+      .change-list::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 99px; }
+      .change-row {
+        border: 1px solid #e2e8f0;
+        border-radius: 7px;
+        padding: 7px 9px;
+        font-size: 11.5px;
+        background: #f8fafc;
+      }
+      .change-section-badge {
+        display: inline-block;
+        font-size: 9.5px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        padding: 1px 5px;
+        border-radius: 4px;
+        margin-bottom: 4px;
+      }
+      .change-section-badge.summary    { background: #ede9fe; color: #6d28d9; }
+      .change-section-badge.skills     { background: #d1fae5; color: #065f46; }
+      .change-section-badge.experience { background: #dbeafe; color: #1d4ed8; }
+      .change-section-badge.ats-tip    { background: #fef3c7; color: #92400e; }
+      .change-after {
+        font-weight: 600;
+        color: #0f172a;
+        margin-top: 2px;
+      }
+      .change-before {
+        color: #94a3b8;
+        text-decoration: line-through;
+        font-size: 11px;
+        margin-top: 1px;
+      }
+      .change-reason {
+        color: #64748b;
+        font-size: 11px;
+        margin-top: 2px;
+      }
+      .tailor-approved {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        background: #f0fdf4;
+        border: 1px solid #bbf7d0;
+        border-radius: 8px;
+        padding: 9px 12px;
+        font-size: 12px;
+      }
+      .tailor-approved svg { flex-shrink: 0; margin-top: 1px; color: #15803d; }
+      .tailor-approved-title { font-weight: 700; color: #15803d; }
+      .tailor-approved-sub { font-size: 11px; color: #166534; margin-top: 2px; }
+      .tailor-divider {
+        height: 1px;
+        background: #f1f5f9;
+        margin: 2px 0;
+      }
+
+      /* ── Documents section ──────────────────────────────────── */
+      .docs-section {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .docs-header {
+        font-size: 11px;
+        font-weight: 700;
+        color: #64748b;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .docs-list {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .doc-row {
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 9px 12px;
+        font-size: 12px;
+        background: #f8fafc;
+      }
+      .doc-row-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      .doc-label { font-weight: 600; color: #1e293b; flex: 1; min-width: 0; }
+      .doc-label-sub { font-size: 10.5px; color: #94a3b8; margin-top: 1px; }
+      .doc-action {
+        flex-shrink: 0;
+        font-size: 11px;
+        font-weight: 600;
+        padding: 3px 9px;
+        border-radius: 5px;
+        border: none;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        text-decoration: none;
+      }
+      .doc-action:disabled { opacity: 0.5; cursor: not-allowed; }
+      .doc-action-blue  { background: #dbeafe; color: #1d4ed8; }
+      .doc-action-blue:hover:not(:disabled)  { background: #bfdbfe; }
+      .doc-action-green { background: #dcfce7; color: #15803d; }
+      .doc-action-green:hover:not(:disabled) { background: #bbf7d0; }
+      .doc-cover-wrap {
+        margin-top: 8px;
+      }
+      .doc-cover-textarea {
+        width: 100%;
+        height: 90px;
+        font-size: 11px;
+        line-height: 1.5;
+        resize: vertical;
+        border: 1px solid #e2e8f0;
+        border-radius: 5px;
+        padding: 6px 8px;
+        color: #0f172a;
+        background: #fff;
+        font-family: inherit;
+      }
+      .doc-cover-actions { display: flex; gap: 5px; margin-top: 5px; }
+      .doc-btn {
+        font-size: 11px; font-weight: 600; padding: 3px 9px;
+        border-radius: 5px; cursor: pointer; border: 1px solid #e2e8f0;
+      }
+      .doc-btn-copy  { background: #f1f5f9; color: #475569; }
+      .doc-btn-copy:hover  { background: #e2e8f0; }
+      .doc-btn-fill  { background: #dbeafe; color: #1d4ed8; border-color: #bfdbfe; }
+      .doc-btn-fill:hover  { background: #bfdbfe; }
+      .doc-loading { font-size: 11px; color: #94a3b8; margin-top: 6px; }
+
+      /* ── Error / info text ──────────────────────────────────── */
+      .info-text {
+        font-size: 11.5px;
+        color: #94a3b8;
+        text-align: center;
+        padding: 4px 0;
+      }
+
+      /* ── Spinner ────────────────────────────────────────────── */
+      .spinner-wrap {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: #94a3b8;
+        font-size: 12px;
+        padding: 2px 0;
+      }
+      .spinner {
+        width: 14px;
+        height: 14px;
+        border: 2px solid #e2e8f0;
+        border-top-color: #f97316;
+        border-radius: 50%;
+        animation: spin 0.7s linear infinite;
+        flex-shrink: 0;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+
+      /* ── Bottom bar ─────────────────────────────────────────── */
+      .bottom-bar {
+        border-top: 1px solid #f1f5f9;
+        background: #0f172a;
+        padding: 10px 12px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: nowrap;
+      }
+
+      /* Logo in bar */
+      .bar-logo {
+        width: 26px;
+        height: 26px;
+        border-radius: 7px;
+        background: linear-gradient(135deg, #f97316, #fb923c);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+      }
+      .bar-logo svg { width: 13px; height: 13px; fill: #fff; }
+
+      .bar-label {
+        flex: 1;
+        min-width: 0;
+        font-size: 12px;
+        font-weight: 600;
+        color: #e2e8f0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .bar-label span {
+        font-weight: 400;
+        color: #64748b;
+        font-size: 11px;
+      }
+
+      /* Bar buttons */
+      .bar-btn {
+        flex-shrink: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 5px;
+        padding: 6px 12px;
+        border-radius: 7px;
+        font-size: 12px;
+        font-weight: 600;
+        border: none;
+        cursor: pointer;
+        transition: opacity 0.15s, background 0.15s;
+        white-space: nowrap;
+      }
+      .bar-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+      .bar-btn-primary {
+        background: #f97316;
+        color: #fff;
+      }
+      .bar-btn-primary:hover:not(:disabled) { background: #ea6c0a; }
+
+      .bar-btn-secondary {
+        background: rgba(255,255,255,0.09);
+        color: #cbd5e1;
+        border: 1px solid rgba(255,255,255,0.10);
+      }
+      .bar-btn-secondary:hover:not(:disabled) { background: rgba(255,255,255,0.14); color: #f1f5f9; }
+
+      .bar-btn-ghost {
+        background: transparent;
+        color: #94a3b8;
+        padding: 6px 8px;
+      }
+      .bar-btn-ghost:hover:not(:disabled) { color: #e2e8f0; }
+
+      /* ── Utility ────────────────────────────────────────────── */
+      .hidden { display: none !important; }
+    </style>
+  </head>
+  <body>
+
+    <!-- Content area (hidden until scan runs) -->
+    <div id="content" class="content hidden">
+
+      <!-- Loading spinner -->
+      <div id="loading" class="spinner-wrap hidden">
+        <div class="spinner"></div>
+        <span id="loading-text">Scanning page…</span>
+      </div>
+
+      <!-- Detected pills -->
+      <div id="pill-row" class="pill-row hidden">
+        <span id="pill-page-type" class="pill page-type"></span>
+        <span id="pill-ats" class="pill ats hidden"></span>
+      </div>
+
+      <!-- Job card (job listing mode) -->
+      <div id="job-card" class="job-card hidden">
+        <div id="job-title" class="job-title"></div>
+        <div id="job-meta" class="job-meta"></div>
+        <span id="job-salary" class="job-salary hidden"></span>
+      </div>
+
+      <!-- Autofill section (application form mode) -->
+      <div id="autofill-section" class="autofill-section hidden">
+
+        <!-- Tailor resume section -->
+        <div id="tailor-section" class="tailor-section hidden">
+          <div class="tailor-header">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+            </svg>
+            Tailor resume for this job
+          </div>
+          <p id="tailor-summary" class="tailor-summary hidden"></p>
+          <div id="tailor-score" class="tailor-score hidden"></div>
+          <div id="change-list" class="change-list hidden"></div>
+          <div id="tailor-approved" class="tailor-approved hidden">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M20 6L9 17l-5-5"/>
+            </svg>
+            <div>
+              <div class="tailor-approved-title" id="tailor-approved-title">Resume tailored!</div>
+              <div class="tailor-approved-sub" id="tailor-approved-sub">New version saved. Attach manually if needed.</div>
+            </div>
+          </div>
+          <div id="tailor-divider" class="tailor-divider hidden"></div>
+        </div>
+
+        <!-- Stats -->
+        <div id="autofill-stats" class="autofill-stats hidden">
+          <span id="stat-detected" class="stat-chip detected hidden"></span>
+          <span id="stat-matched"  class="stat-chip matched hidden"></span>
+          <span id="stat-review"   class="stat-chip review hidden"></span>
+        </div>
+
+        <!-- Profile missing warning -->
+        <div id="profile-warning" class="profile-warning hidden">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+            <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+          <span>No autofill profile found. <a id="profile-link" href="#" style="color:#c2410c;text-decoration:underline;">Set up profile ↗</a></span>
+        </div>
+
+        <!-- Field preview list -->
+        <div id="field-list" class="field-list hidden"></div>
+
+        <!-- Documents section (resume + cover letter) -->
+        <div id="docs-section" class="docs-section hidden">
+          <div class="docs-header">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+            </svg>
+            Documents needed
+          </div>
+          <div id="docs-list" class="docs-list"></div>
+        </div>
+
+        <!-- Autofill confirmation -->
+        <div id="autofill-confirm" class="autofill-confirm hidden">
+          <svg width="14" height="14" fill="none" stroke="#15803d" stroke-width="2.5" viewBox="0 0 24 24">
+            <path d="M20 6L9 17l-5-5"/>
+          </svg>
+          <div>
+            <div class="autofill-confirm-title" id="autofill-confirm-title">Fields filled!</div>
+            <div class="autofill-confirm-sub">Review carefully before submitting.</div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Saved confirmation (job save flow) -->
+      <div id="saved-banner" class="saved-banner hidden">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>
+        Job saved to Hireoven!
+      </div>
+
+      <!-- Info line (no job / not signed in / error) -->
+      <p id="info-text" class="info-text hidden"></p>
+
+    </div>
+
+    <!-- Bottom bar — always visible -->
+    <div class="bottom-bar">
+      <div class="bar-logo">
+        <svg viewBox="0 0 16 16"><path d="M8 1L2 5v9l6 1 6-1V5L8 1zm0 2.5L12 6v6.5L8 13.5 4 12.5V6l4-2.5z"/></svg>
+      </div>
+
+      <!-- Label changes with state -->
+      <div class="bar-label" id="bar-label">
+        Hireoven Scout <span id="bar-sub">· click to scan</span>
+      </div>
+
+      <!-- Sign in button (unauthenticated) -->
+      <button id="signin-btn" class="bar-btn bar-btn-primary hidden">Sign in</button>
+
+      <!-- Scan button (idle) -->
+      <button id="scan-btn" class="bar-btn bar-btn-primary">Scan</button>
+
+      <!-- Save button (after scan, job listing detected) -->
+      <button id="save-btn" class="bar-btn bar-btn-primary hidden" disabled>Save job</button>
+
+      <!-- Tailor Resume button (application form detected, before preview) -->
+      <button id="tailor-btn" class="bar-btn bar-btn-secondary hidden">Tailor Resume</button>
+
+      <!-- Approve tailored resume button (after preview loaded) -->
+      <button id="approve-tailor-btn" class="bar-btn bar-btn-secondary hidden" disabled>Use tailored resume</button>
+
+      <!-- Preview Autofill button (application form detected, before preview) -->
+      <button id="preview-autofill-btn" class="bar-btn bar-btn-primary hidden">Preview Autofill</button>
+
+      <!-- Autofill button (after preview loaded) -->
+      <button id="autofill-btn" class="bar-btn bar-btn-primary hidden" disabled>Autofill this application</button>
+
+      <!-- Open in dashboard (after save) -->
+      <button id="open-btn" class="bar-btn bar-btn-ghost hidden">
+        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+      </button>
+    </div>
+
+    <script src="../dist/popup.js"></script>
+  </body>
+</html>

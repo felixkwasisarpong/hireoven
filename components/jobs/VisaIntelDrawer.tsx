@@ -262,6 +262,11 @@ export default function VisaIntelDrawer({ open, onClose, job, displayTitle }: Pr
               <div className="mt-2">
                 <ConfidencePip level={visa?.confidence ?? "unknown"} />
               </div>
+              <p className="mt-1 text-[11px] text-slate-500">
+                {visa?.dataRecency?.asOfDate
+                  ? `Data as of ${new Date(visa.dataRecency.asOfDate).toLocaleDateString()} (${visa.dataRecency.status}).`
+                  : "Recency unknown."}
+              </p>
               {visa?.summary && !dataGapSummary?.startsWith("Missing") && (
                 <p className="mt-2 text-[12.5px] leading-relaxed text-slate-600">{visa.summary}</p>
               )}
@@ -436,12 +441,14 @@ export default function VisaIntelDrawer({ open, onClose, job, displayTitle }: Pr
 
             {/* 9. Cap-exempt */}
             <Divider />
-            <DrawerSection title="Cap-Exempt Signal">
-              {capExempt?.isLikelyCapExempt === true ? (
+            <DrawerSection title="Cap-Exempt Likelihood">
+              {capExempt?.likelihood === "likely" || capExempt?.likelihood === "possible" ? (
                 <div className="rounded-lg bg-sky-50 px-4 py-3 ring-1 ring-sky-200">
                   <div className="flex items-center gap-2">
                     <Plane className="h-4 w-4 text-sky-600" aria-hidden />
-                    <span className="text-[13px] font-semibold text-sky-800">Possible cap-exempt pathway</span>
+                    <span className="text-[13px] font-semibold text-sky-800">
+                      {capExempt.likelihood === "likely" ? "Likely cap-exempt pathway" : "Possible cap-exempt pathway"}
+                    </span>
                   </div>
                   <p className="mt-1 text-[12px] capitalize text-sky-700">
                     Category: {capExempt.category.replace(/_/g, " ")}
@@ -454,12 +461,12 @@ export default function VisaIntelDrawer({ open, onClose, job, displayTitle }: Pr
                     </ul>
                   )}
                 </div>
-              ) : capExempt?.isLikelyCapExempt === false ? (
+              ) : capExempt?.likelihood === "unlikely" ? (
                 <p className="text-[12.5px] text-slate-600">
-                  This employer does not appear to be cap-exempt — standard H-1B lottery may apply.
+                  Cap-exempt pathway appears unlikely from available records.
                 </p>
               ) : (
-                <p className="text-[12.5px] italic text-slate-400">Cap-exempt status not yet determined.</p>
+                <p className="text-[12.5px] italic text-slate-400">Cap-exempt likelihood is unknown.</p>
               )}
             </DrawerSection>
 

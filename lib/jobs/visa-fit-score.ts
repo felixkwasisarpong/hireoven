@@ -6,7 +6,7 @@ import type {
   VisaFitScoreLabel,
 } from "@/types"
 
-export type WageLevelSignal = "strong" | "acceptable" | "weak" | "unknown"
+export type WageLevelSignal = "strong" | "moderate" | "weak" | "unknown"
 
 export type CalculateVisaFitScoreInput = {
   jobTitle?: string | null
@@ -225,9 +225,9 @@ export const calculateVisaFitScore = (input: CalculateVisaFitScoreInput): VisaFi
     if (input.wageLevelSignal === "strong") {
       score += 6
       reasons.push("Wage signal appears compatible with LCA expectations.")
-    } else if (input.wageLevelSignal === "acceptable") {
+    } else if (input.wageLevelSignal === "moderate") {
       score += 2
-      reasons.push("Wage signal is acceptable.")
+      reasons.push("Wage signal is moderate.")
     } else {
       score -= 6
       warnings.push("Wage signal may be weak for sponsorship support.")

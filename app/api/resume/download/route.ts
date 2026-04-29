@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { generateResumePDF } from "@/lib/resume/pdf-generator"
+import { generateResumeDocx } from "@/lib/resume/docx-generator"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { createClient } from "@/lib/supabase/server"
 import type { Resume } from "@/types"
@@ -33,19 +33,29 @@ export async function GET(request: Request) {
      LIMIT 1`,
     [resumeId, user.id]
   )
-  const data = result.rows[0]
+  const resume = result.rows[0]
 
-  if (!data) {
+  if (!resume) {
     return NextResponse.json({ error: "Resume not found" }, { status: 404 })
   }
 
-  const resume = data as Resume
-  const pdfBuffer = await generateResumePDF(resume)
+  let docxBuffer: Buffer
+  try {
+    docxBuffer = await generateResumeDocx(resume)
+  } catch (err) {
+    console.error("[resume/download] DOCX generation failed", err)
+    return NextResponse.json({ error: "Failed to generate document. Please try again." }, { status: 500 })
+  }
 
-  return new NextResponse(new Uint8Array(pdfBuffer), {
+  if (!docxBuffer || docxBuffer.length === 0) {
+    return NextResponse.json({ error: "Generated document was empty. Please try again." }, { status: 500 })
+  }
+
+  const safeName = (resume.name ?? resume.file_name ?? "resume").replace(/["\\]/g, "").replace(/\.pdf$/i, "")
+  return new NextResponse(new Uint8Array(docxBuffer), {
     headers: {
-      "Content-Type": "application/pdf",
-      "Content-Disposition": `attachment; filename="${(resume.name ?? resume.file_name ?? "resume").replace(/\"/g, "")}.pdf"`,
+      "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "Content-Disposition": `attachment; filename="${safeName}.docx"`,
       "Cache-Control": "no-store",
     },
   })

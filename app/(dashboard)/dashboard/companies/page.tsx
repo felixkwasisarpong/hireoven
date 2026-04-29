@@ -3,9 +3,8 @@
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
-import { Building2, ChevronDown, SlidersHorizontal } from "lucide-react"
+import { ArrowLeft, Building2, ChevronDown, Search, SlidersHorizontal } from "lucide-react"
 import CompanyCard from "@/components/companies/CompanyCard"
-import DashboardPageHeader from "@/components/layout/DashboardPageHeader"
 import { useAuth } from "@/lib/hooks/useAuth"
 import { useWatchlist } from "@/lib/hooks/useWatchlist"
 import { cn } from "@/lib/utils"
@@ -55,6 +54,25 @@ export default function CompaniesPage() {
   const sponsorsH1b    = searchParams.get("sponsors_h1b") === "1"
   const hasJobs        = searchParams.get("has_jobs") === "1"
   const sort           = searchParams.get("sort") ?? "job_count"
+  const qParam         = searchParams.get("q") ?? ""
+  const [searchDraft, setSearchDraft] = useState(qParam)
+
+  useEffect(() => {
+    setSearchDraft(qParam)
+  }, [qParam])
+
+  useEffect(() => {
+    const trimmed = searchDraft.trim()
+    if (trimmed === qParam.trim()) return
+    const id = window.setTimeout(() => {
+      const next = new URLSearchParams(searchParams.toString())
+      if (trimmed) next.set("q", trimmed)
+      else next.delete("q")
+      setOffset(0)
+      router.replace(`?${next.toString()}`, { scroll: false })
+    }, 350)
+    return () => window.clearTimeout(id)
+  }, [searchDraft, qParam, router, searchParams])
 
   function update(key: string, value: string | null) {
     const next = new URLSearchParams(searchParams.toString())
@@ -78,6 +96,7 @@ export default function CompaniesPage() {
       if (selectedAts) params.set("ats_type", selectedAts)
       if (sponsorsH1b) params.set("sponsors_h1b", "true")
       if (hasJobs) params.set("has_jobs", "true")
+      if (qParam.trim()) params.set("q", qParam.trim())
 
       const res = await fetch(`/api/companies?${params}`)
       if (res.ok) {
@@ -91,7 +110,7 @@ export default function CompaniesPage() {
 
     void load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedIndustries.join(","), selectedSizes.join(","), selectedAts, sponsorsH1b, hasJobs, sort, offset])
+  }, [selectedIndustries.join(","), selectedSizes.join(","), selectedAts, sponsorsH1b, hasJobs, sort, qParam, offset])
 
   // Fetch distinct industries for the filter dropdown
   useEffect(() => {
@@ -122,33 +141,31 @@ export default function CompaniesPage() {
   }, [])
 
   const activeFilterCount =
-    selectedIndustries.length + selectedSizes.length +
-    (selectedAts ? 1 : 0) + (sponsorsH1b ? 1 : 0) + (hasJobs ? 1 : 0)
+    selectedIndustries.length +
+    selectedSizes.length +
+    (selectedAts ? 1 : 0) +
+    (sponsorsH1b ? 1 : 0) +
+    (hasJobs ? 1 : 0) +
+    (qParam.trim() ? 1 : 0)
 
   return (
     <main className="app-page pb-[max(6rem,calc(env(safe-area-inset-bottom)+5.5rem))]">
       <div className="app-shell w-full space-y-5 pb-[max(2rem,calc(env(safe-area-inset-bottom)+1rem))]">
-        <DashboardPageHeader
-          kicker="Company explorer"
-          title="Companies we track"
-          description={`Tracking ${total.toLocaleString()} companies${activeFilterCount > 0 ? ` · ${activeFilterCount} active filter${activeFilterCount !== 1 ? "s" : ""}` : ""}`}
-          backHref="/dashboard"
-          backLabel="Back to dashboard"
-          meta={
-            <Link
-              href="/dashboard/search"
-              className="subpage-back"
-            >
-              Search jobs and companies
-            </Link>
-          }
-        />
-
-        {/* Header */}
+        {/* Toolbar: back, search, sort, filters — single card */}
         <section className="surface-card rounded-lg px-5 py-5 md:px-6 md:py-6">
+          <div className="mb-4">
+            <Link
+              href="/dashboard"
+              className="inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 transition hover:bg-blue-100"
+            >
+              <ArrowLeft className="h-3.5 w-3.5 shrink-0" aria-hidden />
+              Back to dashboard
+            </Link>
+          </div>
+
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <div className="flex items-center gap-2 mb-2">
+            <div className="min-w-0 flex-1">
+              <div className="mb-2 flex items-center gap-2">
                 <div className="flex h-9 w-9 items-center justify-center rounded-[16px] bg-[#FFF1E8]">
                   <Building2 className="h-5 w-5 text-[#FF5C18]" />
                 </div>
@@ -156,48 +173,70 @@ export default function CompaniesPage() {
                   Company Explorer
                 </p>
               </div>
-              <h2 className="text-xl font-semibold tracking-tight text-gray-900">
-                Refine the list
-              </h2>
-              <p className="mt-2 text-sm text-gray-500">
-                Sort by hiring volume, sponsorship signal, or ATS footprint and narrow the list to the companies worth attention now.
+              <h1 className="text-xl font-semibold tracking-tight text-gray-900">Companies we track</h1>
+              <p className="mt-1 text-sm text-gray-500">
+                {total.toLocaleString()} companies
+                {activeFilterCount > 0
+                  ? ` · ${activeFilterCount} active filter${activeFilterCount !== 1 ? "s" : ""}`
+                  : ""}
+                . Search by name, then sort or filter.
               </p>
             </div>
 
-            <div className="flex flex-wrap gap-3">
-              {/* Sort */}
+            <div className="flex w-full flex-col gap-3 lg:max-w-md">
+              <label className="sr-only" htmlFor="companies-search">
+                Search companies by name
+              </label>
               <div className="relative">
-                <select
-                  value={sort}
-                  onChange={(e) => update("sort", e.target.value)}
-                  className="appearance-none rounded-2xl border border-gray-200 bg-white pl-4 pr-9 py-2.5 text-sm font-medium text-gray-700 outline-none transition focus:border-[#FF5C18] focus:ring-2 focus:ring-[#FF5C18]/15"
-                >
-                  {SORT_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>{o.label}</option>
-                  ))}
-                </select>
-                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" aria-hidden />
+                <input
+                  id="companies-search"
+                  type="search"
+                  value={searchDraft}
+                  onChange={(e) => setSearchDraft(e.target.value)}
+                  placeholder="Search companies by name…"
+                  autoComplete="off"
+                  className="w-full rounded-2xl border border-gray-200 bg-white py-2.5 pl-10 pr-4 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15"
+                />
               </div>
 
-              {/* Filters toggle */}
-              <button
-                type="button"
-                onClick={() => setShowFilters((v) => !v)}
-                className={cn(
-                  "inline-flex items-center gap-2 rounded-2xl border px-4 py-2.5 text-sm font-medium transition",
-                  showFilters || activeFilterCount > 0
-                    ? "border-[#FF5C18] bg-[#FFF1E8] text-[#FF5C18]"
-                    : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
-                )}
-              >
-                <SlidersHorizontal className="h-4 w-4" />
-                Filters
-                {activeFilterCount > 0 && (
-                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#FF5C18] text-[10px] font-bold text-white">
-                    {activeFilterCount}
-                  </span>
-                )}
-              </button>
+              <div className="flex flex-wrap gap-3">
+                {/* Sort */}
+                <div className="relative min-w-[10rem] flex-1 sm:flex-initial">
+                  <select
+                    value={sort}
+                    onChange={(e) => update("sort", e.target.value)}
+                    className="w-full appearance-none rounded-2xl border border-gray-200 bg-white pl-4 pr-9 py-2.5 text-sm font-medium text-gray-700 outline-none transition focus:border-[#FF5C18] focus:ring-2 focus:ring-[#FF5C18]/15"
+                  >
+                    {SORT_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                </div>
+
+                {/* Filters toggle */}
+                <button
+                  type="button"
+                  onClick={() => setShowFilters((v) => !v)}
+                  className={cn(
+                    "inline-flex flex-1 items-center justify-center gap-2 rounded-2xl border px-4 py-2.5 text-sm font-medium transition sm:flex-initial",
+                    showFilters || activeFilterCount > 0
+                      ? "border-[#FF5C18] bg-[#FFF1E8] text-[#FF5C18]"
+                      : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+                  )}
+                >
+                  <SlidersHorizontal className="h-4 w-4" />
+                  Filters
+                  {activeFilterCount > 0 && (
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#FF5C18] text-[10px] font-bold text-white">
+                      {activeFilterCount}
+                    </span>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
 

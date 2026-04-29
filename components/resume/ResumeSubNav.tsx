@@ -69,13 +69,13 @@ export default function ResumeSubNav() {
                 className={cn(
                   "group relative flex shrink-0 items-center gap-2 border-b-2 px-3 py-3 text-[13px] font-medium transition-colors sm:px-4",
                   active
-                    ? "border-violet-600 bg-violet-50/50 text-violet-950"
+                    ? "border-orange-600 bg-orange-50/50 text-orange-950"
                     : "border-transparent text-slate-600 hover:bg-slate-50/80 hover:text-slate-900"
                 )}
               >
                 {active && (
                   <span
-                    className="absolute left-0 top-1/2 hidden h-5 w-0.5 -translate-y-1/2 rounded-full bg-violet-600 sm:block"
+                    className="absolute left-0 top-1/2 hidden h-5 w-0.5 -translate-y-1/2 rounded-full bg-orange-600 sm:block"
                     aria-hidden
                   />
                 )}
@@ -83,7 +83,7 @@ export default function ResumeSubNav() {
                   className={cn(
                     "flex h-7 w-7 items-center justify-center rounded-md border transition-colors",
                     active
-                      ? "border-violet-200 bg-white text-violet-700"
+                      ? "border-orange-200 bg-white text-orange-700"
                       : "border-slate-200/80 bg-slate-50 text-slate-500 group-hover:border-slate-300 group-hover:text-slate-700"
                   )}
                 >

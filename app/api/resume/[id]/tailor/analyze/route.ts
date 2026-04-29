@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import Anthropic from "@anthropic-ai/sdk"
 import { getSessionUser } from "@/lib/auth/session-user"
+import { SONNET_MODEL } from "@/lib/ai/anthropic-models"
 import {
   buildLocalTailorAnalysis,
   mergeTailorResults,
@@ -16,7 +17,8 @@ export const runtime = "nodejs"
 const anthropic = process.env.ANTHROPIC_API_KEY
   ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
   : null
-const MODEL = "claude-sonnet-4-6"
+// Tailoring analysis needs consistent reasoning and structured output quality.
+const MODEL = SONNET_MODEL
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- allow runtime JSON from LLM
 function extractJsonObject(text: string): any {
@@ -108,7 +110,12 @@ export async function POST(request: Request, { params }: { params: { id: string 
         "Use add_skill only for concrete tools, languages, platforms, frameworks, and domain technologies (e.g. Terraform, TypeScript, Kafka). " +
         "Do NOT use add_skill for traits like 'communication', 'stakeholder management', or generic hiring adjectives. " +
         "Include replace_bullet items for: (1) vague or duty-style lines, (2) short bullets with no impact signal, and (3) lines that omit posting tools that already appear elsewhere in the same work experience. " +
-        "For bullet rewrites, propose 1–2 strong alternatives that thread real tools from the job into facts implied by the resume. " +
+        "CRITICAL — bullet `suggested` field rules: " +
+        "(1) Write a complete, ready-to-paste bullet that starts with a past-tense action verb (e.g. 'Engineered', 'Reduced', 'Delivered'). " +
+        "(2) Include at least one concrete metric, technology, or outcome drawn from the resume or the job description. " +
+        "(3) Never use placeholders like <outcome>, <metric>, <result>, <tool>, or similar. " +
+        "(4) Never include meta-instructions, parenthetical tips, draft notes, or verification prompts (e.g. do NOT write '[Draft—verify]', 'Add a metric here', 'make this bullet the one that...'). " +
+        "(5) If you cannot write a complete bullet with real facts, set requiresConfirmation: true and write the BEST approximate bullet you can — still no placeholders. " +
         "You must only suggest additions that are supported by the resume or clearly mark them as requiring confirmation. " +
         "Never invent employers, dates, certifications, tools, metrics, or responsibilities. Return JSON only, no markdown wrapper.",
       messages: [

@@ -10,7 +10,7 @@ const STATUS_BARS = [
   { key: "saved", label: "Saved", color: "bg-slate-400" },
   { key: "applied", label: "Applied", color: "bg-blue-400" },
   { key: "phone_screen", label: "Phone Screen", color: "bg-amber-400" },
-  { key: "interview", label: "Interview", color: "bg-violet-400" },
+  { key: "interview", label: "Interview", color: "bg-orange-400" },
   { key: "final_round", label: "Final Round", color: "bg-indigo-500" },
   { key: "offer", label: "Offer", color: "bg-emerald-500" },
   { key: "rejected", label: "Rejected", color: "bg-red-400" },
@@ -76,7 +76,7 @@ export default function ApplicationInsightsPage() {
 
   const conversionData = [
     { label: "App → Screen", value: stats.conversion_rates.applied_to_phone, color: "bg-amber-400" },
-    { label: "Screen → Interview", value: stats.conversion_rates.phone_to_interview, color: "bg-violet-400" },
+    { label: "Screen → Interview", value: stats.conversion_rates.phone_to_interview, color: "bg-orange-400" },
     { label: "Interview → Offer", value: stats.conversion_rates.interview_to_offer, color: "bg-emerald-500" },
     { label: "Overall", value: stats.conversion_rates.overall, color: "bg-[#FF5C18]" },
   ]
@@ -109,7 +109,7 @@ export default function ApplicationInsightsPage() {
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard label="Total tracked" value={stats.total} sub={`${stats.applications_this_month} this month`} />
         <MetricCard label="Response rate" value={`${stats.response_rate}%`} sub={`avg ${stats.avg_days_to_response} days to respond`} accent="text-[#FF5C18]" />
-        <MetricCard label="Active rounds" value={activeCount} sub="screen · interview · final" accent="text-violet-600" />
+        <MetricCard label="Active rounds" value={activeCount} sub="screen · interview · final" accent="text-orange-600" />
         <MetricCard label="Offers" value={stats.by_status.offer ?? 0} sub={`${stats.conversion_rates.overall}% overall win rate`} accent="text-emerald-600" />
       </div>
 
@@ -161,7 +161,7 @@ export default function ApplicationInsightsPage() {
           <p className="mt-1 text-sm text-slate-500">applications submitted</p>
           <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-100">
             <div
-              className="h-full rounded-full bg-[#062246] transition-all duration-700"
+              className="h-full rounded-full bg-[#ea580c] transition-all duration-700"
               style={{ width: `${Math.min(100, (stats.applications_this_month / Math.max(stats.total, 1)) * 100)}%` }}
             />
           </div>

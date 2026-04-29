@@ -11,6 +11,9 @@ export type FeatureKey =
   | "autofill"
   | "match_scores"
   | "interview_prep"
+  | "scout_deep_analysis"
+  | "scout_actions"
+  | "scout_strategy"
   | "international"
 
 export const FEATURE_GATES: Record<FeatureKey, AccessLevel> = {
@@ -25,6 +28,9 @@ export const FEATURE_GATES: Record<FeatureKey, AccessLevel> = {
   cover_letter: "pro",
   autofill: "pro",
   interview_prep: "pro",
+  scout_deep_analysis: "pro",
+  scout_actions: "pro",
+  scout_strategy: "pro",
   // Pro + International add-on
   international: "pro_international",
 }
@@ -39,6 +45,9 @@ export const FEATURE_DESCRIPTIONS: Record<FeatureKey, string> = {
   autofill: "One-click job application autofill",
   match_scores: "See your match score for each job",
   interview_prep: "AI interview prep questions",
+  scout_deep_analysis: "Scout deep analysis and sponsorship intelligence",
+  scout_actions: "Scout advanced actions like resume tailoring",
+  scout_strategy: "Scout strategy plans and application performance insights",
   international: "International job listings and visa data",
 }
 

@@ -12,3 +12,5 @@ scripts/output/
 
 data.sql
 schema.sql
+# Cursor internal
+.claude/

@@ -20,7 +20,7 @@ type EvalResult = {
 
 const CATEGORY_STYLE: Record<string, string> = {
   behavioral: "bg-blue-50 text-blue-700 border-blue-200",
-  technical: "bg-violet-50 text-violet-700 border-violet-200",
+  technical: "bg-orange-50 text-orange-700 border-orange-200",
   culture: "bg-emerald-50 text-emerald-700 border-emerald-200",
   situational: "bg-amber-50 text-amber-700 border-amber-200",
   curveball: "bg-red-50 text-red-700 border-red-200",
@@ -155,7 +155,7 @@ export function InterviewPrep({ applicationId }: Props) {
                     type="button"
                     onClick={() => evaluateAnswer(q)}
                     disabled={!answers[q.id]?.trim() || evalLoading === q.id}
-                    className="inline-flex items-center gap-1.5 rounded-[10px] bg-[#062246] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[#0A3566] disabled:opacity-50"
+                    className="inline-flex items-center gap-1.5 rounded-[10px] bg-[#ea580c] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[#c2410c] disabled:opacity-50"
                   >
                     {evalLoading === q.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
                     {evalLoading === q.id ? "Evaluating…" : "Get feedback"}

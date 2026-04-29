@@ -19,6 +19,7 @@
 import * as XLSX from 'xlsx'
 import { parse as parseCSV } from 'csv-parse/sync'
 import { getPostgresPool } from '@/lib/postgres/server'
+import { normalizeEmployerName } from '@/lib/h1b/normalize-employer'
 import type {
   Company,
   EmployerLCAStats,
@@ -740,19 +741,6 @@ function stateAbbr(value: string | null): string | null {
   if (v.length === 2) return v
   const abbr = US_STATE_NAME_TO_ABBR[v]
   return abbr ?? null
-}
-
-export function normalizeEmployerName(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[.,]/g, ' ')
-    .replace(
-      /\b(incorporated|inc|llc|l\.l\.c|corp|corporation|ltd|limited|co|company|plc|holdings|group)\b/g,
-      ''
-    )
-    .replace(/[^a-z0-9& ]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
 }
 
 function normalizeLCARow(

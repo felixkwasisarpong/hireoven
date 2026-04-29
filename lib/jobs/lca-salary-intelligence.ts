@@ -16,17 +16,11 @@ export type CalculateLcaSalaryIntelligenceInput = {
   records?: LcaWageRecord[] | null
 }
 
-const ANNUALIZATION_FACTORS: Record<string, number> = {
+const ANNUALIZATION_FACTORS: Record<"year" | "hour" | "month" | "week" | "biweekly", number> = {
   year: 1,
-  yr: 1,
-  annual: 1,
   hour: 2_080,
-  hourly: 2_080,
   month: 12,
-  monthly: 12,
   week: 52,
-  weekly: 52,
-  "bi-weekly": 26,
   biweekly: 26,
 }
 
@@ -37,6 +31,19 @@ const clampScore = (value: number): number => Math.min(100, Math.max(0, Math.rou
 const normalizeText = (value: string | null | undefined): string =>
   value?.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim() ?? ""
 
+const normalizeWageUnit = (
+  unit: string | null | undefined
+): "year" | "hour" | "month" | "week" | "biweekly" | null => {
+  const normalized = normalizeText(unit ?? "")
+  if (!normalized) return "year"
+  if (normalized === "year" || normalized === "yr" || normalized === "yearly" || normalized === "annual" || normalized === "annually") return "year"
+  if (normalized === "hour" || normalized === "hourly" || normalized === "hr") return "hour"
+  if (normalized === "month" || normalized === "monthly") return "month"
+  if (normalized === "week" || normalized === "weekly") return "week"
+  if (normalized === "biweekly" || normalized === "bi weekly" || normalized === "bi week" || normalized === "bi weekly pay") return "biweekly"
+  return null
+}
+
 const isFinitePositive = (value: number | null | undefined): value is number =>
   typeof value === "number" && Number.isFinite(value) && value > 0
 
@@ -45,8 +52,9 @@ const annualizeWageValue = (value: number | null | undefined, unit: string | nul
     return null
   }
 
-  const normalizedUnit = normalizeText(unit ?? "year")
-  const factor = ANNUALIZATION_FACTORS[normalizedUnit] ?? 1
+  const normalizedUnit = normalizeWageUnit(unit)
+  if (!normalizedUnit) return null
+  const factor = ANNUALIZATION_FACTORS[normalizedUnit]
   return Math.round(value * factor)
 }
 

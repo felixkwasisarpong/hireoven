@@ -1,3 +1,16 @@
+import { normalizeAtsUrl } from "@/lib/companies/ats-url-normalization"
+import { isAtsDomain, isTemporaryCareersUrl } from "@/lib/companies/ats-domains"
+import {
+  scoreCareersUrl,
+  type CareersUrlConfidence,
+} from "@/lib/companies/careers-url-discovery"
+
+export type CanonicalCareersUrlResult = {
+  url: string
+  confidence: CareersUrlConfidence
+  reason: string
+}
+
 /**
  * Derive a canonical public careers URL for a company row.
  * Prefer patterns learned from job apply URLs (most accurate), then ATS + identifier, then known domains.
@@ -46,41 +59,17 @@ export function inferCareersUrlFromApplyUrl(applyUrl: string): string | null {
     const u = new URL(applyUrl.trim())
     const host = u.hostname.toLowerCase()
 
-    if (host === "boards.greenhouse.io" || host.endsWith(".greenhouse.io")) {
-      const parts = u.pathname.split("/").filter(Boolean)
-      if (parts[0] && parts[0] !== "embed") {
-        return `https://${host}/${parts[0]}`
-      }
-    }
-
-    if (host === "jobs.lever.co") {
-      const parts = u.pathname.split("/").filter(Boolean)
-      if (parts[0]) {
-        return `https://jobs.lever.co/${parts[0]}`
-      }
-    }
-
-    if (host === "jobs.ashbyhq.com") {
-      const parts = u.pathname.split("/").filter(Boolean)
-      if (parts[0]) {
-        return `https://jobs.ashbyhq.com/${parts[0]}`
-      }
-    }
-
-    if (host.includes("myworkdayjobs.com")) {
-      return u.origin
-    }
-
-    if (host.endsWith("icims.com")) {
-      return u.origin
-    }
-
-    if (host.endsWith("bamboohr.com") && u.pathname.includes("careers")) {
-      return `${u.origin}/careers`
-    }
-
-    if (host.endsWith("bamboohr.com")) {
-      return `${u.origin}/careers`
+    if (
+      host.endsWith("greenhouse.io") ||
+      host === "jobs.lever.co" ||
+      host === "jobs.ashbyhq.com" ||
+      host === "jobs.smartrecruiters.com" ||
+      host.includes("myworkdayjobs.com") ||
+      host.endsWith("icims.com") ||
+      host.endsWith("bamboohr.com")
+    ) {
+      const normalized = normalizeAtsUrl(u.toString())
+      return normalized.shouldPersist ? normalized.normalizedUrl : null
     }
 
     return null
@@ -129,11 +118,77 @@ function fromAtsIdentifier(c: CompanyUrlInput): string | null {
   if (ats === "ashby") {
     return `https://jobs.ashbyhq.com/${encodeURIComponent(slug)}`
   }
+  if (ats === "smartrecruiters") {
+    return `https://jobs.smartrecruiters.com/${encodeURIComponent(slug)}`
+  }
   if (ats === "bamboohr") {
     return `https://${encodeURIComponent(slug)}.bamboohr.com/careers`
   }
+  if (ats === "workday" && slug.includes("/")) {
+    // ats_identifier stored as "tenant/site" e.g. "acme/External_Careers"
+    const [tenant, site] = slug.split("/")
+    if (tenant && site) {
+      return `https://${encodeURIComponent(tenant)}.wd5.myworkdayjobs.com/${encodeURIComponent(site)}`
+    }
+  }
+  if (ats === "jobvite") {
+    return `https://jobs.jobvite.com/${encodeURIComponent(slug)}/jobs`
+  }
 
   return null
+}
+
+/**
+ * Returns true when the given `careers_url` looks like a company homepage or
+ * non-careers page rather than an actual job listings page. Used to detect
+ * bad stored URLs that should be flagged for review.
+ */
+export function careersUrlLooksLikeHomepage(url: string): boolean {
+  try {
+    const u = new URL(url.trim())
+    const path = u.pathname.replace(/\/+$/, "").toLowerCase()
+
+    // Root or typical homepage paths
+    if (path === "" || path === "/" || path === "/home") return true
+
+    // Obviously non-jobs paths
+    const nonJobsPaths = [
+      "/about",
+      "/about-us",
+      "/about/us",
+      "/contact",
+      "/contact-us",
+      "/team",
+      "/our-team",
+      "/people",
+      "/investors",
+      "/press",
+      "/news",
+      "/blog",
+      "/privacy",
+      "/terms",
+    ]
+    if (nonJobsPaths.some((p) => path === p || path.startsWith(p + "/"))) return true
+
+    return false
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Returns true when the URL path strongly suggests it is a job listings page.
+ */
+export function careersUrlLooksLikeJobListings(url: string): boolean {
+  try {
+    const u = new URL(url.trim())
+    const path = u.pathname.toLowerCase()
+    return /\/(careers?|jobs?|work-with-us|join|positions?|openings?|opportunities?|vacancies?|apply|hiring)\b/.test(
+      path
+    )
+  } catch {
+    return false
+  }
 }
 
 /**
@@ -161,15 +216,35 @@ export function deriveCanonicalCareersUrl(
       const fixed = existing.startsWith("http://")
         ? `https://${existing.slice("http://".length)}`
         : existing
-      const u = new URL(fixed)
-      if (u.protocol === "https:") {
-        return stripTrailingSlashUnlessRoot(u.toString())
+
+      if (c.ats_type?.toLowerCase() === "greenhouse" || fixed.includes("greenhouse.io")) {
+        const normalized = normalizeAtsUrl(fixed, { atsType: c.ats_type })
+        if (normalized.shouldPersist) return normalized.normalizedUrl
+      }
+
+      const normalized = normalizeAtsUrl(fixed, { atsType: c.ats_type })
+      if (normalized.provider !== "custom" && normalized.shouldPersist) {
+        return normalized.normalizedUrl
+      }
+
+      // For custom ATS or unknown providers: use the existing URL only when it
+      // does not appear to be a homepage or non-jobs page.
+      if (!isTemporaryCareersUrl(fixed)) {
+        const u = new URL(fixed)
+        if (!isAtsDomain(u.hostname) && u.protocol === "https:") {
+          // Prefer URLs that look like actual job listing pages over homepage URLs.
+          // Homepage-looking URLs still get stored but callers can check
+          // careersUrlLooksLikeHomepage() to decide whether to flag for review.
+          return stripTrailingSlashUnlessRoot(u.toString())
+        }
       }
     } catch {
       /* fall through */
     }
   }
 
+  // Fallback: construct a likely careers URL from the company domain.
+  // Note: this may not resolve to a real page — verify before crawling.
   return `https://${domain}/careers`
 }
 
@@ -177,4 +252,108 @@ function stripTrailingSlashUnlessRoot(url: string) {
   const u = new URL(url)
   if (u.pathname === "/" || u.pathname === "") return u.origin
   return url.replace(/\/+$/, "")
+}
+
+/**
+ * Confidence-aware variant of {@link deriveCanonicalCareersUrl}. Returns the
+ * derived URL alongside a confidence label and a machine-readable reason.
+ *
+ *   - high:   URL is on a known ATS host (greenhouse/lever/ashby/workday/
+ *             icims/smartrecruiters/bamboohr) and not temporary/share, OR is
+ *             a curated KNOWN_DOMAIN_CAREERS entry.
+ *   - medium: URL is on a non-ATS host with a careers/jobs path keyword.
+ *   - low:    URL is the synthetic `${domain}/careers` fallback or any
+ *             plain HTTPS URL with no listing signals — stored URL must NOT
+ *             be auto-rewritten over an existing one at this confidence.
+ *   - none:   no usable URL could be derived.
+ *
+ * Repair scripts should only auto-write when confidence === "high".
+ */
+export function deriveCanonicalCareersUrlWithConfidence(
+  c: CompanyUrlInput,
+  options?: { applyUrls?: string[] }
+): CanonicalCareersUrlResult {
+  const domain = normalizeDomain(c.domain)
+
+  const fromJobs =
+    options?.applyUrls?.length ? inferCareersUrlFromApplyUrls(options.applyUrls) : null
+  if (fromJobs) {
+    const stripped = stripTrailingSlashUnlessRoot(fromJobs)
+    return {
+      url: stripped,
+      confidence: "high",
+      reason: "derived_from_apply_urls",
+    }
+  }
+
+  const known = KNOWN_DOMAIN_CAREERS[domain]
+  if (known) {
+    return { url: known, confidence: "high", reason: "curated_known_domain" }
+  }
+
+  const fromAts = fromAtsIdentifier(c)
+  if (fromAts) {
+    const stripped = stripTrailingSlashUnlessRoot(fromAts)
+    return {
+      url: stripped,
+      confidence: "high",
+      reason: "derived_from_ats_identifier",
+    }
+  }
+
+  const existing = c.careers_url?.trim()
+  if (existing) {
+    try {
+      const fixed = existing.startsWith("http://")
+        ? `https://${existing.slice("http://".length)}`
+        : existing
+
+      if (c.ats_type?.toLowerCase() === "greenhouse" || fixed.includes("greenhouse.io")) {
+        const normalized = normalizeAtsUrl(fixed, { atsType: c.ats_type })
+        if (normalized.shouldPersist) {
+          return {
+            url: normalized.normalizedUrl,
+            confidence: "high",
+            reason: `normalized:${normalized.reason}`,
+          }
+        }
+      }
+
+      const normalized = normalizeAtsUrl(fixed, { atsType: c.ats_type })
+      if (normalized.provider !== "custom" && normalized.shouldPersist) {
+        return {
+          url: normalized.normalizedUrl,
+          confidence: "high",
+          reason: `normalized:${normalized.reason}`,
+        }
+      }
+
+      if (!isTemporaryCareersUrl(fixed)) {
+        const u = new URL(fixed)
+        if (!isAtsDomain(u.hostname) && u.protocol === "https:") {
+          const stripped = stripTrailingSlashUnlessRoot(u.toString())
+          const score = scoreCareersUrl(stripped)
+          return {
+            url: stripped,
+            confidence: score.confidence === "none" ? "low" : score.confidence,
+            reason: `existing_url:${score.reason}`,
+          }
+        }
+      }
+    } catch {
+      /* fall through */
+    }
+  }
+
+  if (!domain) {
+    return { url: "", confidence: "none", reason: "missing_domain" }
+  }
+
+  // Synthetic fallback. Marked LOW so repair scripts never overwrite real
+  // data with a guess at high confidence.
+  return {
+    url: `https://${domain}/careers`,
+    confidence: "low",
+    reason: "synthetic_domain_fallback",
+  }
 }

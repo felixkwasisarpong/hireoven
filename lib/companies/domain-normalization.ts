@@ -1,4 +1,5 @@
 import { companyLogoUrlFromDomain, normalizeCompanyDomain } from "@/lib/companies/logo-url"
+import { isAtsDomain } from "@/lib/companies/ats-domains"
 
 const PLACEHOLDER_DOMAIN_RE = /\.(uscis-employer|lca-employer)$/i
 
@@ -63,10 +64,30 @@ export function resolveCompanyDomain({
   const normalizedCareers = domainFromUrlLike(careersUrl)
   const normalizedLogo = domainFromLogoUrl(logoUrl)
 
-  if (normalizedDomain && !isPlaceholderCompanyDomain(normalizedDomain)) return normalizedDomain
-  if (normalizedCareers && !isPlaceholderCompanyDomain(normalizedCareers)) return normalizedCareers
-  if (normalizedLogo && !isPlaceholderCompanyDomain(normalizedLogo)) return normalizedLogo
-  return normalizedDomain || normalizedCareers || normalizedLogo || null
+  if (
+    normalizedDomain &&
+    !isPlaceholderCompanyDomain(normalizedDomain) &&
+    !isAtsDomain(normalizedDomain)
+  ) {
+    return normalizedDomain
+  }
+  if (
+    normalizedCareers &&
+    !isPlaceholderCompanyDomain(normalizedCareers) &&
+    !isAtsDomain(normalizedCareers)
+  ) {
+    return normalizedCareers
+  }
+  if (
+    normalizedLogo &&
+    !isPlaceholderCompanyDomain(normalizedLogo) &&
+    !isAtsDomain(normalizedLogo)
+  ) {
+    return normalizedLogo
+  }
+  return [normalizedDomain, normalizedCareers, normalizedLogo].find((value) => {
+    return value && !isAtsDomain(value)
+  }) ?? null
 }
 
 export function resolveCompanyLogoUrl({
@@ -78,6 +99,6 @@ export function resolveCompanyLogoUrl({
 }): string | null {
   if (logoUrl?.trim()) return logoUrl
   const normalizedDomain = domain ? normalizeCompanyDomain(domain) : ""
-  if (!normalizedDomain) return null
+  if (!normalizedDomain || isAtsDomain(normalizedDomain)) return null
   return companyLogoUrlFromDomain(normalizedDomain)
 }

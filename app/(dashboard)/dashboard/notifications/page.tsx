@@ -174,7 +174,7 @@ export default function NotificationsPage() {
                       <p className="text-xs text-gray-400">
                         {formatRelative(notification.sent_at)}
                       </p>
-                      <p className="mt-2 text-xs font-medium text-[#062246]">
+                      <p className="mt-2 text-xs font-medium text-[#ea580c]">
                         Open job
                       </p>
                     </div>

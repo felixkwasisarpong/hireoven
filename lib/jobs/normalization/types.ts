@@ -3,6 +3,7 @@ import type {
   Job,
   SeniorityLevel,
 } from "@/types"
+import type { CategorizedSkills } from "@/lib/skills/taxonomy"
 
 export const JOB_NORMALIZATION_VERSION = "job_normalization_v2"
 
@@ -12,6 +13,7 @@ export type SourceAdapterKind =
   | "ashby"
   | "workday"
   | "icims"
+  | "smartrecruiters"
   | "bamboohr"
   | "jobvite"
   | "oracle"
@@ -27,9 +29,12 @@ export type CanonicalSectionKey =
   | "about_role"
   | "responsibilities"
   | "requirements"
+  | "qualifications"
   | "preferred_qualifications"
+  | "skills"
   | "benefits"
   | "company_info"
+  | "equal_opportunity"
   | "application_info"
   | "other"
 
@@ -84,11 +89,26 @@ export type CanonicalCompensation = {
   pay_text: CanonicalField<string>
 }
 
+/**
+ * Explicit sponsorship status derived strictly from JD text.
+ * - "sponsors"       → JD explicitly states sponsorship is available.
+ * - "no_sponsorship" → JD explicitly states no sponsorship / authorization required.
+ * - "unclear"        → Visa/sponsorship terms found but intent ambiguous.
+ * - "not_detected"   → No visa/sponsorship language found at all.
+ */
+export type ExplicitSponsorshipStatus =
+  | "sponsors"
+  | "no_sponsorship"
+  | "unclear"
+  | "not_detected"
+
 export type CanonicalVisa = {
   sponsors_h1b: CanonicalField<boolean>
   requires_authorization: CanonicalField<boolean>
   sponsorship_score: CanonicalField<number>
   visa_language: CanonicalField<string>
+  /** Derived from JD text only — never invented from score heuristics. */
+  explicit_sponsorship_status: CanonicalField<ExplicitSponsorshipStatus>
 }
 
 export type ValidationIssue = {
@@ -113,10 +133,19 @@ export type CanonicalJob = {
     external_id: string | null
     crawl_url: string
   }
+  company: {
+    name: string | null
+    domain: string | null
+  }
+  descriptions: {
+    raw: string | null
+    clean: string | null
+  }
   header: CanonicalJobHeader
   compensation: CanonicalCompensation
   visa: CanonicalVisa
   skills: CanonicalField<string[]>
+  skill_groups: CategorizedSkills
   sections: Record<CanonicalSectionKey, CanonicalSection>
   validation: NormalizationValidation
 }
@@ -144,8 +173,16 @@ export type JobPageViewModel = {
   ordered_sections: JobPageSectionView[]
   highlights: string[]
   skills: string[]
+  skill_groups: CategorizedSkills
   confidence_score: number
   requires_review: boolean
+  /**
+   * Label derived from EXPLICIT JD evidence only. Never invented from score.
+   * null means no visa data was detected — do not show visa UI.
+   */
+  visa_card_label: "Sponsors" | "No sponsorship" | "Historical sponsorship signal" | null
+  /** True only when visa_card_label indicates positive sponsorship evidence. */
+  show_visa_drawer: boolean
 }
 
 export type JobCardViewModel = {
@@ -156,7 +193,16 @@ export type JobCardViewModel = {
   seniority_label: string | null
   preview_description: string | null
   skills: string[]
+  skill_groups: CategorizedSkills
+  /** Kept for backward compat with sponsorship-employer-signal.ts. */
   sponsorship_badge: "sponsors" | "no_sponsorship" | "likely" | null
+  /**
+   * Visa label for card display, derived from EXPLICIT JD evidence only.
+   * null means no visa data detected — hide all visa UI on the card.
+   */
+  visa_card_label: "Sponsors" | "No sponsorship" | "Historical sponsorship signal" | null
+  /** True only when visa_card_label has positive evidence; gates the H1B drawer. */
+  show_visa_drawer: boolean
 }
 
 export type PersistedJobForNormalization = Pick<
@@ -191,6 +237,25 @@ export type SourceRawJobInput = {
   description?: string
   location?: string
   postedAt?: string
+  company?: string | null
+  companyDomain?: string | null
+  companyLogo?: string | null
+  workMode?: string | null
+  employmentType?: string | null
+  salaryRange?: string | null
+  matchScore?: number | null
+  matchLabel?: string | null
+  matchedSkills?: string[] | null
+  missingSkills?: string[] | null
+  sponsorshipSignal?: string | null
+  companySummary?: string | null
+  companyFoundedYear?: number | null
+  companyEmployeeCount?: string | null
+  companyIndustry?: string | null
+  easyApply?: boolean | null
+  activelyHiring?: boolean | null
+  topApplicantSignal?: boolean | null
+  companyVerified?: boolean | null
 }
 
 export type NormalizationResult = {
@@ -215,4 +280,5 @@ export type NormalizationResult = {
     skills: string[]
   }
   rawSnapshot: Record<string, unknown>
+  structuredData: Record<string, unknown>
 }

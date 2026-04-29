@@ -128,7 +128,7 @@ export function pillToneClasses(tone: FilterPillTone): string {
     case "location":
       return "border-sky-200/90 bg-sky-50 text-[#0052CC] hover:bg-sky-100/80"
     case "employment":
-      return "border-violet-200/90 bg-violet-50 text-violet-900 hover:bg-violet-100/80"
+      return "border-orange-200/90 bg-orange-50 text-orange-900 hover:bg-orange-100/80"
     case "posted":
       return "border-slate-200/90 bg-slate-50 text-slate-800 hover:bg-slate-100/90"
     case "remote":

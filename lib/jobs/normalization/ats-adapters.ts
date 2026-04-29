@@ -59,12 +59,22 @@ const COMMON_HEADING_RULES: HeadingRule[] = [
   {
     key: "requirements",
     pattern:
-      /\b(requirements|qualifications|minimum qualifications|required qualifications|basic qualifications|must have|what you bring|who you are|your profile)\b/i,
+      /\b(requirements|minimum qualifications|required qualifications|basic qualifications|must have|who you are|your profile)\b/i,
   },
   {
     key: "preferred_qualifications",
     pattern:
       /\b(preferred qualifications|nice to have|bonus|plus|ideal candidate|additional qualifications)\b/i,
+  },
+  {
+    key: "qualifications",
+    pattern:
+      /\b(qualifications|what you bring|candidate profile)\b/i,
+  },
+  {
+    key: "skills",
+    pattern:
+      /\b(skills|technical skills|key skills|technologies|tech stack|tools)\b/i,
   },
   {
     key: "benefits",
@@ -89,7 +99,12 @@ const COMMON_HEADING_RULES: HeadingRule[] = [
   {
     key: "application_info",
     pattern:
-      /\b(how to apply|application process|equal opportunity|eeo|accommodation|interview process|privacy notice|next steps)\b/i,
+      /\b(how to apply|application process|interview process|privacy notice|next steps)\b/i,
+  },
+  {
+    key: "equal_opportunity",
+    pattern:
+      /\b(equal opportunity|eeo|accommodation|reasonable accommodation|protected veteran|affirmative action)\b/i,
   },
 ]
 
@@ -142,6 +157,8 @@ const INLINE_HEADING_MARKERS: Partial<Record<SourceAdapterKind, string[]>> = {
     "Requirements",
     "Qualifications",
     "Preferred Qualifications",
+    "Skills",
+    "Technical Skills",
     "Benefits",
     "Compensation",
   ],
@@ -153,6 +170,8 @@ const INLINE_HEADING_MARKERS: Partial<Record<SourceAdapterKind, string[]>> = {
     "Requirements",
     "Qualifications",
     "Nice to Have",
+    "Skills",
+    "Technical Skills",
     "Benefits",
     "Compensation",
   ],
@@ -163,6 +182,8 @@ const INLINE_HEADING_MARKERS: Partial<Record<SourceAdapterKind, string[]>> = {
     "Requirements",
     "Qualifications",
     "Nice to have",
+    "Skills",
+    "Technical Skills",
     "Benefits",
     "Interview Process",
   ],
@@ -178,6 +199,8 @@ const INLINE_HEADING_MARKERS: Partial<Record<SourceAdapterKind, string[]>> = {
     "Required Qualifications",
     "Preferred Qualifications",
     "Additional Qualifications",
+    "Skills",
+    "Technical Skills",
     "Benefits",
     "Compensation",
     "Work Authorization",
@@ -195,6 +218,8 @@ const INLINE_HEADING_MARKERS: Partial<Record<SourceAdapterKind, string[]>> = {
     "Minimum Qualifications",
     "Preferred Qualifications",
     "Nice to Have",
+    "Skills",
+    "Technical Skills",
     "Benefits",
     "Compensation",
     "EEO",
@@ -214,17 +239,20 @@ const SECTION_KEY_ALIASES: Array<[CanonicalSectionKey, string[]]> = [
       "required_qualifications",
     ],
   ],
+  ["qualifications", ["qualifications", "candidate_profile", "what_you_bring"]],
   [
     "preferred_qualifications",
     ["preferred_qualifications", "nice_to_have", "bonus_points"],
   ],
+  ["skills", ["skills", "technical_skills", "key_skills", "technologies", "tech_stack"]],
   ["benefits", ["benefits", "perks", "what_we_offer"]],
   ["compensation", ["compensation", "salary", "salary_range", "pay_range", "total_compensation"]],
   ["visa", ["visa", "work_authorization", "sponsorship", "visa_sponsorship"]],
   ["company_info", ["company_info", "about_company", "about_us", "company_description"]],
+  ["equal_opportunity", ["equal_opportunity", "eeo", "accommodation"]],
   [
     "application_info",
-    ["application_info", "how_to_apply", "application_process", "equal_opportunity"],
+    ["application_info", "how_to_apply", "application_process"],
   ],
 ]
 
@@ -238,13 +266,18 @@ const COMMON_INLINE_ALIASES: HeadingAlias[] = [
   { key: "responsibilities", alias: "What you'll do" },
   { key: "responsibilities", alias: "What you will do" },
   { key: "requirements", alias: "Requirements" },
-  { key: "requirements", alias: "Qualifications" },
   { key: "requirements", alias: "Minimum qualifications" },
   { key: "requirements", alias: "Basic qualifications" },
   { key: "requirements", alias: "Required qualifications" },
+  { key: "qualifications", alias: "Qualifications" },
+  { key: "qualifications", alias: "What you bring" },
   { key: "preferred_qualifications", alias: "Preferred qualifications" },
   { key: "preferred_qualifications", alias: "Additional qualifications" },
   { key: "preferred_qualifications", alias: "Nice to have" },
+  { key: "skills", alias: "Skills" },
+  { key: "skills", alias: "Technical skills" },
+  { key: "skills", alias: "Key skills" },
+  { key: "skills", alias: "Technologies" },
   { key: "benefits", alias: "Benefits" },
   { key: "benefits", alias: "Perks" },
   { key: "benefits", alias: "What we offer" },
@@ -256,6 +289,8 @@ const COMMON_INLINE_ALIASES: HeadingAlias[] = [
   { key: "visa", alias: "Sponsorship" },
   { key: "company_info", alias: "About us" },
   { key: "company_info", alias: "Who we are" },
+  { key: "equal_opportunity", alias: "Equal opportunity" },
+  { key: "equal_opportunity", alias: "EEO" },
   { key: "application_info", alias: "Application process" },
   { key: "application_info", alias: "How to apply" },
   { key: "application_info", alias: "Equal opportunity" },

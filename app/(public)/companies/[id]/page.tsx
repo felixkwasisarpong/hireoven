@@ -72,6 +72,14 @@ type SimilarCompanyRow = Pick<
   "id" | "name" | "domain" | "logo_url" | "industry" | "job_count" | "sponsors_h1b" | "sponsorship_confidence"
 >
 
+type H1bRecordRow = {
+  year: number
+  total_petitions: number
+  approved: number
+  denied: number
+  initial_approvals: number
+}
+
 type Props = { params: Promise<{ id: string }> }
 
 const sectionCard = "border border-slate-200/80 bg-white p-6"
@@ -199,7 +207,7 @@ function EmptyState({ children }: { children: React.ReactNode }) {
 
 async function loadCompany(id: string) {
   const pool = getPostgresPool()
-  const [companyResult, jobsResult, lcaStatsResult, salaryStatsResult] = await Promise.all([
+  const [companyResult, jobsResult, lcaStatsResult, salaryStatsResult, h1bResult] = await Promise.all([
     pool.query<Company>(`SELECT * FROM companies WHERE id = $1::uuid LIMIT 1`, [id]),
     pool.query<CompanyJobListRow>(
       `SELECT id, title, location, is_remote, is_hybrid, seniority_level, employment_type,
@@ -232,6 +240,13 @@ async function loadCompany(id: string) {
          AND (wage_unit IS NULL OR wage_unit ILIKE 'year%')`,
       [id]
     ),
+    pool.query<H1bRecordRow>(
+      `SELECT year, total_petitions, approved, denied, initial_approvals
+       FROM h1b_records
+       WHERE company_id = $1::uuid
+       ORDER BY year DESC`,
+      [id]
+    ),
   ])
 
   const company = companyResult.rows[0]
@@ -239,6 +254,31 @@ async function loadCompany(id: string) {
   const jobs = jobsResult.rows
   const lcaStats = lcaStatsResult.rows[0] ?? null
   const salaryStats = salaryStatsResult.rows[0] ?? null
+  const h1bRecords = h1bResult.rows
+
+  // When employer_lca_stats is missing, compute fallback totals from h1b_records.
+  // H1B petition counts are a reasonable proxy for petition activity even though
+  // they come from a different USCIS source than LCA records.
+  const h1bTotalPetitions = h1bRecords.reduce((s, r) => s + r.total_petitions, 0)
+  const h1bApproved = h1bRecords.reduce((s, r) => s + r.approved, 0)
+  const h1bDenied = h1bRecords.reduce((s, r) => s + r.denied, 0)
+  const h1bApprovalRate = h1bTotalPetitions > 0 ? h1bApproved / h1bTotalPetitions : null
+
+  const effectiveLcaStats: LcaStatsRow | null =
+    lcaStats ??
+    (h1bRecords.length > 0
+      ? {
+          total_applications: h1bTotalPetitions,
+          total_certified: h1bApproved,
+          total_denied: h1bDenied,
+          certification_rate: h1bApprovalRate,
+          approval_trend: null,
+          has_high_denial_rate: h1bApprovalRate != null && h1bApprovalRate < 0.8 ? true : null,
+          top_job_titles: null,
+          top_states: null,
+          stats_by_wage_level: null,
+        }
+      : null)
 
   const stemRoleCount = jobs.filter((job) =>
     /software|engineer|developer|data|scientist|analyst|machine learning|ai/i.test(job.title)
@@ -246,7 +286,7 @@ async function loadCompany(id: string) {
 
   const profile = buildCompanyImmigrationProfile({
     company,
-    lcaStats,
+    lcaStats: effectiveLcaStats,
     salaryStats,
     jobSignal: {
       activeJobCount: jobs.length,
@@ -274,7 +314,8 @@ async function loadCompany(id: string) {
   return {
     company,
     jobs,
-    lcaStats,
+    h1bRecords,
+    lcaStats: effectiveLcaStats,
     salaryStats,
     profile: {
       ...profile,
@@ -320,7 +361,7 @@ export default async function PublicCompanyPage({ params }: Props) {
   const data = await loadCompany(id)
   if (!data) notFound()
 
-  const { company, jobs, profile, similarCompanies } = data
+  const { company, jobs, h1bRecords, profile, similarCompanies } = data
   const status = statusCopy(profile.sponsorshipHistory.sponsorsH1b, profile.sponsorshipHistory.sponsorshipConfidence)
   const sponsorConfidence = profile.sponsorshipHistory.sponsorshipConfidence
   const approvalRate = profile.sponsorshipHistory.lcaCertificationRate
@@ -410,7 +451,10 @@ export default async function PublicCompanyPage({ params }: Props) {
                 />
                 <div className="grid grid-cols-2 gap-3">
                   <MiniStat label="Open jobs" value={jobs.length.toLocaleString()} />
-                  <MiniStat label="LCA records" value={totalLca == null ? "Unknown" : totalLca.toLocaleString()} />
+                  <MiniStat
+                    label={totalLca != null ? "LCA records" : "H-1B petitions"}
+                    value={totalLca == null ? "Unknown" : totalLca.toLocaleString()}
+                  />
                 </div>
                 <p className="border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-800">
                   Use this as a job-search signal. Sponsorship, OPT, STEM OPT, and cap-exempt support are never guaranteed by historical data.
@@ -527,6 +571,77 @@ export default async function PublicCompanyPage({ params }: Props) {
                     </ul>
                   </div>
                 ) : null}
+
+                {/* H-1B petition history — only shown when records exist */}
+                {h1bRecords.length > 0 && (
+                  <div className={mergedBand}>
+                    <div className="mb-4 flex items-center gap-2">
+                      <Landmark className="h-4 w-4 text-[#2563EB]" aria-hidden />
+                      <h3 className="font-bold text-slate-950">H-1B petition history</h3>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-slate-200 text-left text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">
+                            <th className="pb-2 pr-6">Year</th>
+                            <th className="pb-2 pr-6">Petitions</th>
+                            <th className="pb-2 pr-6">Approved</th>
+                            <th className="pb-2 pr-6">Denied</th>
+                            <th className="pb-2">Approval rate</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {h1bRecords.map((row) => {
+                            const rate = row.total_petitions > 0
+                              ? Math.round((row.approved / row.total_petitions) * 100)
+                              : null
+                            return (
+                              <tr key={row.year} className="text-slate-700">
+                                <td className="py-2.5 pr-6 font-semibold text-slate-900">{row.year}</td>
+                                <td className="py-2.5 pr-6">{row.total_petitions.toLocaleString()}</td>
+                                <td className="py-2.5 pr-6 font-medium text-emerald-700">{row.approved.toLocaleString()}</td>
+                                <td className="py-2.5 pr-6 text-red-600">{row.denied}</td>
+                                <td className="py-2.5">
+                                  {rate != null ? (
+                                    <span className={cn(
+                                      "font-semibold",
+                                      rate >= 90 ? "text-emerald-700" : rate >= 70 ? "text-amber-700" : "text-red-600"
+                                    )}>
+                                      {rate}%
+                                    </span>
+                                  ) : "—"}
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                        <tfoot>
+                          <tr className="border-t border-slate-200 text-[12px] font-semibold text-slate-700">
+                            <td className="pt-2.5 pr-6">Total</td>
+                            <td className="pt-2.5 pr-6">{h1bRecords.reduce((s, r) => s + r.total_petitions, 0).toLocaleString()}</td>
+                            <td className="pt-2.5 pr-6 text-emerald-700">{h1bRecords.reduce((s, r) => s + r.approved, 0).toLocaleString()}</td>
+                            <td className="pt-2.5 pr-6 text-red-600">{h1bRecords.reduce((s, r) => s + r.denied, 0)}</td>
+                            <td className="pt-2.5">
+                              {(() => {
+                                const total = h1bRecords.reduce((s, r) => s + r.total_petitions, 0)
+                                const approved = h1bRecords.reduce((s, r) => s + r.approved, 0)
+                                const rate = total > 0 ? Math.round((approved / total) * 100) : null
+                                return rate != null ? (
+                                  <span className={cn("font-bold", rate >= 90 ? "text-emerald-700" : "text-amber-700")}>
+                                    {rate}%
+                                  </span>
+                                ) : "—"
+                              })()}
+                            </td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                    <p className="mt-3 text-xs leading-5 text-slate-400">
+                      Source: USCIS H-1B employer data. These are petition counts, not individual employees.
+                    </p>
+                  </div>
+                )}
 
                 <div className="grid gap-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(280px,0.85fr)]">
                   <div className={mergedBand}>

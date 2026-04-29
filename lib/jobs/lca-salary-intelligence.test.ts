@@ -110,3 +110,67 @@ test("calculateLcaSalaryIntelligence gracefully handles missing LCA records", ()
   assert.match(result.explanation, /No comparable LCA wage records/i)
 })
 
+test("calculateLcaSalaryIntelligence treats biweekly and bi-weekly wage units consistently", () => {
+  const biweeklyRecords: LcaWageRecord[] = [
+    {
+      employerName: "Acme",
+      jobTitle: "Software Engineer",
+      roleFamily: "software engineer",
+      location: "Remote",
+      worksiteState: "CA",
+      wageRateFrom: 5_000,
+      wageRateTo: 5_500,
+      wageUnit: "biweekly",
+      fiscalYear: 2025,
+    },
+    {
+      employerName: "Acme",
+      jobTitle: "Software Engineer",
+      roleFamily: "software engineer",
+      location: "Remote",
+      worksiteState: "CA",
+      wageRateFrom: 5_000,
+      wageRateTo: 5_500,
+      wageUnit: "bi-weekly",
+      fiscalYear: 2025,
+    },
+  ]
+
+  const result = calculateLcaSalaryIntelligence({
+    salaryMin: 130_000,
+    salaryMax: 150_000,
+    companyName: "Acme",
+    jobTitle: "Software Engineer",
+    records: biweeklyRecords,
+  })
+
+  assert.equal(result.comparisonLabel, "Aligned")
+  assert.ok((result.historicalRangeMin ?? 0) > 100_000)
+})
+
+test("calculateLcaSalaryIntelligence returns unknown for unsupported wage unit", () => {
+  const weirdUnit: LcaWageRecord[] = [
+    {
+      employerName: "Acme",
+      jobTitle: "Software Engineer",
+      roleFamily: "software engineer",
+      location: "Remote",
+      worksiteState: "CA",
+      wageRateFrom: 200,
+      wageUnit: "per_day",
+      fiscalYear: 2025,
+    },
+  ]
+
+  const result = calculateLcaSalaryIntelligence({
+    salaryMin: 130_000,
+    salaryMax: 150_000,
+    companyName: "Acme",
+    jobTitle: "Software Engineer",
+    records: weirdUnit,
+  })
+
+  assert.equal(result.comparisonLabel, "Unknown")
+  assert.equal(result.comparableLcaCount, 0)
+})
+

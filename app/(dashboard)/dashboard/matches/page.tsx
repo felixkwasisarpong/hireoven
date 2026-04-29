@@ -251,7 +251,7 @@ export default function MatchesPage() {
             onClick={() => void toggleNotifications(!notifyEnabled)}
             className={`inline-flex items-center gap-2 rounded-[14px] px-4 py-2.5 text-sm font-semibold transition ${
               notifyEnabled
-                ? "bg-[#062246] text-white"
+                ? "bg-[#ea580c] text-white"
                 : "border border-slate-200 bg-white text-slate-700 hover:border-slate-300"
             }`}
           >

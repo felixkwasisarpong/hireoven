@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk"
 import { NextResponse } from "next/server"
 import { logApiUsage } from "@/lib/admin/usage"
+import { ANTHROPIC_TIER_PRICING, SONNET_MODEL } from "@/lib/ai/anthropic-models"
 import { createClient } from "@/lib/supabase/server"
 
 export const runtime = "nodejs"
@@ -29,7 +30,8 @@ export async function POST(request: Request) {
   }
 
   const message = await anthropic.messages.create({
-    model: "claude-sonnet-4-6",
+    // This is user-facing copy with legal/immigration nuance; Sonnet is safer than Haiku.
+    model: SONNET_MODEL,
     max_tokens: 256,
     system:
       "You rewrite visa sponsorship statements for job applications. Make them confident, honest, and professional - not apologetic. One or two sentences. Return only the rewritten statement, no explanation.",
@@ -53,7 +55,12 @@ Return only the improved statement.`,
     service: "claude",
     operation: "improve_sponsorship_statement",
     tokens_used: inputTokens + outputTokens,
-    cost_usd: Number((((inputTokens / 1_000_000) * 3) + ((outputTokens / 1_000_000) * 15)).toFixed(6)),
+    cost_usd: Number(
+      (
+        (inputTokens / 1_000_000) * ANTHROPIC_TIER_PRICING.sonnet.inputPerMillion +
+        (outputTokens / 1_000_000) * ANTHROPIC_TIER_PRICING.sonnet.outputPerMillion
+      ).toFixed(6)
+    ),
   })
 
   const improved = message.content

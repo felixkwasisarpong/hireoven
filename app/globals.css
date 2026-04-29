@@ -5,41 +5,41 @@
 @layer base {
   :root {
     /* Core shadcn-compatible */
-    --background: 210 40% 98%;
+    --background: 95 22% 96%;
     --foreground: 222 47% 11%;
     --card: 0 0% 100%;
     --card-foreground: 222 47% 11%;
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
-    --primary: 220 65% 33%;
+    --primary: 24 93% 48%;
     --primary-foreground: 0 0% 100%;
     --secondary: 214 24% 96%;
     --secondary-foreground: 222 47% 11%;
     --muted: 214 24% 96%;
     --muted-foreground: 215 16% 47%;
-    --accent: 220 60% 96%;
-    --accent-foreground: 220 65% 22%;
+    --accent: 38 100% 95%;
+    --accent-foreground: 24 93% 30%;
     --destructive: 0 72% 48%;
     --destructive-foreground: 0 0% 100%;
     --border: 214 32% 91%;
     --input: 214 24% 88%;
-    --ring: 220 65% 33%;
+    --ring: 24 93% 48%;
     --radius: 0.5rem;
 
     /* Semantic product tokens */
-    --primary-hover: 220 72% 48%;
+    --primary-hover: 17 91% 40%;
     --surface: 0 0% 100%;
-    --surface-alt: 214 24% 97%;
-    --surface-muted: 214 24% 94%;
-    --surface-inset: 214 24% 92%;
+    --surface-alt: 95 18% 94%;
+    --surface-muted: 95 14% 92%;
+    --surface-inset: 95 12% 90%;
     --elev-1: 220 40% 2%;
     --elev-2: 220 30% 6%;
     --text-strong: 222 47% 9%;
     --text-muted: 215 16% 45%;
     --text-subtle: 215 14% 52%;
-    --accent-brand: 220 65% 22%;
-    --accent-soft: 220 100% 97%;
-    --accent-soft-border: 220 80% 87%;
+    --accent-brand: 24 93% 40%;
+    --accent-soft: 38 100% 97%;
+    --accent-soft-border: 30 100% 82%;
     --success: 142 71% 36%;
     --success-soft: 142 50% 94%;
     --warning: 32 92% 44%;
@@ -47,10 +47,10 @@
     --danger: 0 72% 48%;
     --danger-soft: 0 86% 96%;
 
-    /* Brand hex: orange = accent/CTA, navy = primary identity */
+    /* Brand hex: orange = primary identity */
     --brand: #F97316;
     --brand-dark: #EA580C;
-    --brand-navy: #1E3A8A;
+    --brand-navy: #9a3412;
     --brand-tint: #FFF7ED;
     --brand-tint-mid: #FED7AA;
   }
@@ -76,7 +76,7 @@
 
   body.site-chroma {
     position: relative;
-    background: hsl(220 20% 97%);
+    background: hsl(95 22% 96%);
   }
 
   body.site-chroma::before,
@@ -121,7 +121,7 @@
   }
 
   ::selection {
-    background: rgba(30, 58, 138, 0.12);
+    background: rgba(234, 88, 12, 0.12);
   }
 
   *:focus-visible {
@@ -152,9 +152,9 @@
     @apply min-h-screen;
     background-color: hsl(var(--background));
     background-image:
-      radial-gradient(1100px 480px at 5% -5%, hsl(214 60% 96% / 0.7), transparent 55%),
-      radial-gradient(800px 380px at 95% 0%, hsl(220 50% 97% / 0.6), transparent 50%),
-      linear-gradient(180deg, hsl(210 40% 98%), hsl(214 32% 97%));
+      radial-gradient(1100px 480px at 5% -5%, hsl(38 80% 96% / 0.5), transparent 55%),
+      radial-gradient(800px 380px at 95% 0%, hsl(38 100% 96% / 0.35), transparent 50%),
+      linear-gradient(180deg, hsl(95 22% 96%), hsl(95 18% 95%));
   }
 
   .app-shell {
@@ -164,13 +164,13 @@
 
   /* Layered surfaces (panels, not floating cards) */
   .surface-panel {
-    @apply border border-border bg-[hsl(var(--surface))] shadow-[0_1px_0_rgba(15,23,42,0.04),0_10px_24px_-20px_rgba(15,23,42,0.25)];
-    background-image: linear-gradient(180deg, hsl(0 0% 100%), hsl(0 0% 100%));
+    @apply border border-border bg-[hsl(var(--surface))] shadow-[0_1px_0_rgba(15,23,42,0.06),0_14px_36px_-16px_rgba(15,23,42,0.38)];
+    background-image: linear-gradient(180deg, hsl(0 0% 100%), hsl(90 30% 99.5%));
     backdrop-filter: blur(4px);
   }
 
   .surface-panel-raised {
-    @apply border border-border bg-[hsl(var(--surface))] shadow-[0_1px_0_rgba(15,23,42,0.05),0_14px_34px_-24px_rgba(3,19,41,0.24)];
+    @apply border border-border bg-[hsl(var(--surface))] shadow-[0_1px_0_rgba(15,23,42,0.07),0_18px_44px_-20px_rgba(3,19,41,0.36)];
     backdrop-filter: blur(6px);
   }
 
@@ -188,8 +188,8 @@
   }
 
   .surface-card {
-    @apply border border-border bg-[hsl(var(--surface))] shadow-[0_1px_0_rgba(15,23,42,0.04),0_14px_30px_-24px_rgba(8,24,48,0.22)];
-    background-image: linear-gradient(180deg, hsl(0 0% 100%), hsl(0 0% 100%));
+    @apply border border-border bg-[hsl(var(--surface))] shadow-[0_1px_0_rgba(15,23,42,0.06),0_16px_36px_-20px_rgba(8,24,48,0.34)];
+    background-image: linear-gradient(180deg, hsl(0 0% 100%), hsl(90 30% 99.5%));
   }
 
   .surface-card-subtle {
@@ -201,8 +201,8 @@
   }
 
   .metric-tile {
-    @apply border border-border bg-[hsl(var(--surface))] p-4 shadow-[0_1px_0_rgba(15,23,42,0.03),0_12px_24px_-20px_rgba(14,35,60,0.24)];
-    background-image: linear-gradient(180deg, hsl(0 0% 100%), hsl(0 0% 100%));
+    @apply border border-border bg-[hsl(var(--surface))] p-4 shadow-[0_1px_0_rgba(15,23,42,0.05),0_14px_30px_-18px_rgba(14,35,60,0.34)];
+    background-image: linear-gradient(180deg, hsl(0 0% 100%), hsl(90 30% 99.5%));
   }
 
   /* ── Typography ──────────────────────────────────────────────── */
@@ -270,7 +270,7 @@
 
   /** Scoped tokens for the main job feed (mockup-aligned shell). */
   .dashboard-feed-skin {
-    --dash-primary: #2563eb;
+    --dash-primary: #ea580c;
   }
 
   .neo-hero {
@@ -278,9 +278,9 @@
     background-image:
       linear-gradient(
         90deg,
-        hsl(220 55% 91%) 0%,
-        hsl(214 60% 93%) 54%,
-        hsl(220 50% 91%) 100%
+        hsl(30 100% 95%) 0%,
+        hsl(38 100% 96%) 54%,
+        hsl(30 100% 95%) 100%
       );
     box-shadow: none;
   }
@@ -308,10 +308,10 @@
 
   .neo-toolbar {
     @apply rounded-xl border border-border/90 bg-[hsl(var(--surface))] p-3 sm:p-4;
-    background-image: linear-gradient(180deg, hsl(0 0% 100%), hsl(220 20% 99.5%));
+    background-image: linear-gradient(180deg, hsl(0 0% 100%), hsl(90 30% 99.5%));
     box-shadow:
-      0 1px 2px hsl(220 40% 2% / 0.04),
-      0 4px 12px -4px hsl(220 35% 10% / 0.07);
+      0 1px 2px hsl(100 30% 2% / 0.05),
+      0 6px 16px -4px hsl(100 20% 10% / 0.13);
   }
 
   .neo-toolbar::before {
@@ -320,10 +320,10 @@
 
   .neo-rail-card {
     @apply overflow-hidden rounded-xl border border-border/90 bg-[hsl(var(--surface))] p-4;
-    background-image: linear-gradient(180deg, hsl(0 0% 100%), hsl(220 18% 99.5%));
+    background-image: linear-gradient(180deg, hsl(0 0% 100%), hsl(90 30% 99.5%));
     box-shadow:
-      0 1px 2px hsl(220 40% 2% / 0.035),
-      0 6px 16px -8px hsl(220 30% 12% / 0.08);
+      0 1px 2px hsl(100 30% 2% / 0.05),
+      0 8px 22px -8px hsl(100 20% 12% / 0.18);
   }
 
   .neo-rail-card::before {
@@ -347,11 +347,11 @@
 
   .neo-nav-link-active {
     @apply text-white;
-    border-color: hsl(220 65% 28% / 0.25);
-    background: hsl(220 65% 33%);
+    border-color: hsl(24 93% 35% / 0.25);
+    background: hsl(24 93% 48%);
     box-shadow:
       0 1px 0 hsl(0 0% 100% / 0.12) inset,
-      0 4px 10px -5px hsl(220 65% 22% / 0.4);
+      0 4px 10px -5px hsl(24 93% 30% / 0.4);
   }
 
   .neo-nav-link-idle {
@@ -386,7 +386,7 @@
   }
 
   .neo-live-pill {
-    @apply inline-flex items-center gap-2 rounded-full border border-[#BFDBFE] bg-white px-3 py-1 text-[11px] font-semibold text-[#1E3A8A];
+    @apply inline-flex items-center gap-2 rounded-full border border-[#FED7AA] bg-white px-3 py-1 text-[11px] font-semibold text-[#9a3412];
   }
 
   .neo-live-dot {
@@ -394,7 +394,7 @@
     width: 0.5rem;
     height: 0.5rem;
     border-radius: 9999px;
-    background: hsl(220 65% 52%);
+    background: hsl(24 93% 48%);
   }
 
   .neo-live-dot::after {
@@ -402,7 +402,7 @@
     position: absolute;
     inset: -0.35rem;
     border-radius: 9999px;
-    border: 1px solid hsl(220 65% 52% / 0.4);
+    border: 1px solid hsl(24 93% 48% / 0.4);
     animation: pulse-ring 2s ease-out infinite;
   }
 
@@ -468,62 +468,62 @@
   /* ── Product app skin (dashboard, auth, public — not landing) ─────────────── */
 
   .product-skin {
-    --background: 210 40% 98%;
+    --background: 95 22% 96%;
     --surface: 0 0% 100%;
-    --surface-alt: 214 24% 97%;
-    --border: 214 32% 91%;
-    --accent: 220 100% 97%;
-    --accent-foreground: 220 65% 22%;
+    --surface-alt: 95 18% 94%;
+    --border: 100 14% 88%;
+    --accent: 38 100% 97%;
+    --accent-foreground: 24 93% 30%;
   }
 
   .product-skin .app-page {
     background-image:
-      radial-gradient(1100px 480px at 5% -5%, hsl(214 60% 96% / 0.7), transparent 55%),
-      radial-gradient(800px 380px at 95% 0%, hsl(220 50% 97% / 0.6), transparent 50%),
-      linear-gradient(180deg, hsl(210 40% 98%), hsl(214 32% 97%));
+      radial-gradient(1100px 480px at 5% -5%, hsl(38 80% 96% / 0.5), transparent 55%),
+      radial-gradient(800px 380px at 95% 0%, hsl(38 100% 96% / 0.35), transparent 50%),
+      linear-gradient(180deg, hsl(95 22% 96%), hsl(95 18% 95%));
   }
 
   .product-skin .surface-panel {
-    border-color: hsl(220 14% 91%);
-    background-image: linear-gradient(180deg, hsl(0 0% 100%), hsl(220 18% 99.5%));
+    border-color: hsl(100 14% 87%);
+    background-image: linear-gradient(180deg, hsl(0 0% 100%), hsl(95 12% 98.5%));
     box-shadow:
-      0 1px 2px hsl(220 40% 2% / 0.04),
-      0 8px 24px -12px hsl(220 30% 12% / 0.1);
+      0 1px 2px hsl(100 30% 2% / 0.05),
+      0 10px 28px -12px hsl(100 20% 12% / 0.18);
   }
 
   .product-skin .surface-card {
-    background-image: linear-gradient(180deg, hsl(0 0% 100%), hsl(0 0% 100%));
+    background-image: linear-gradient(180deg, hsl(0 0% 100%), hsl(95 12% 98.5%));
   }
 
   .product-skin .surface-toolbar {
-    background-image: linear-gradient(90deg, hsl(0 0% 100%), hsl(0 0% 100%));
+    background-image: linear-gradient(90deg, hsl(0 0% 100%), hsl(95 10% 98.5%));
   }
 
   .product-skin .metric-tile {
-    background-image: linear-gradient(180deg, hsl(0 0% 100%), hsl(0 0% 100%));
+    background-image: linear-gradient(180deg, hsl(0 0% 100%), hsl(95 12% 98.5%));
   }
 
   .product-skin .dash-header-bar {
-    background-image: linear-gradient(180deg, hsl(0 0% 100% / 0.92), hsl(220 20% 99% / 0.88));
+    background-image: linear-gradient(180deg, hsl(95 15% 97.5% / 0.93), hsl(95 12% 97% / 0.88));
   }
 
   .product-skin .glass-nav {
-    background-image: linear-gradient(90deg, hsl(0 0% 100%), hsl(0 0% 100%));
+    background-image: linear-gradient(90deg, hsl(0 0% 100%), hsl(95 10% 98.5%));
   }
 
   .product-skin .chip-control:hover {
-    border-color: hsl(220 60% 78%);
-    background: hsl(220 100% 98%);
+    border-color: hsl(30 100% 78%);
+    background: hsl(38 100% 98%);
   }
 
   .product-skin .chip-control-active {
-    border-color: hsl(220 60% 75%);
-    background: hsl(220 100% 97%);
-    color: hsl(220 65% 33%);
+    border-color: hsl(30 100% 75%);
+    background: hsl(38 100% 97%);
+    color: hsl(24 93% 40%);
   }
 
   .product-skin .section-kicker {
-    color: hsl(220 65% 38%);
+    color: hsl(24 93% 48%);
     text-shadow: none;
   }
 
@@ -558,9 +558,9 @@
       hsl(214 60% 99% / 0.88) 100%
     );
     box-shadow:
-      0 0 0 1px hsl(220 65% 33% / 0.08),
-      0 28px 56px -16px hsl(220 60% 30% / 0.14),
-      0 8px 20px -6px hsl(214 60% 40% / 0.08);
+      0 0 0 1px hsl(24 93% 48% / 0.08),
+      0 28px 56px -16px hsl(24 93% 30% / 0.14),
+      0 8px 20px -6px hsl(24 80% 40% / 0.08);
     backdrop-filter: blur(14px);
   }
 
@@ -770,6 +770,11 @@
 
   .animate-fade-in-backdrop {
     animation: fade-in-backdrop 0.18s ease-out both;
+  }
+
+  @keyframes shimmer {
+    0%   { background-position: 200% center; }
+    100% { background-position: -200% center; }
   }
 }
 

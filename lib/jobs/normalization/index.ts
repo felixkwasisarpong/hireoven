@@ -7,6 +7,7 @@ export type {
   CanonicalJob,
   CanonicalSection,
   CanonicalSectionKey,
+  ExplicitSponsorshipStatus,
   JobCardViewModel,
   JobPageSectionView,
   JobPageViewModel,
@@ -20,7 +21,9 @@ export type {
 
 export {
   normalizeCrawlerJobForPersistence,
+  normalizeCrawlerJobForPersistenceWithAI,
   normalizePersistedJobRecord,
+  normalizePersistedJobRecordWithAI,
   readCanonicalFromRawData,
 } from "@/lib/jobs/normalization/normalize"
 

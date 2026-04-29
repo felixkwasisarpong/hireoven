@@ -81,6 +81,25 @@ describe("calculateOfferRisk", () => {
     assert.equal(result.salaryIntelligence.comparisonLabel, "Aligned")
     assert.ok(result.positiveSignals.length >= 3)
     assert.equal(result.h1bTimingRisk, "low")
+    assert.equal(result.roleFamilyEvidence?.matchMethod, "title_family")
+    assert.equal(result.locationEvidence?.matchLevel, "exact_city_state")
+  })
+
+  it("uses employer-wide-remote location evidence for remote offers", () => {
+    const result = calculateOfferRisk({
+      company: "Contoso",
+      jobTitle: "Software Engineer",
+      location: "Remote - US",
+      salary: 120_000,
+      workAuthorizationStatus: "H1B",
+      workMode: "remote",
+      lcaRecords: [
+        { employerName: "Contoso", jobTitle: "Software Engineer", worksiteState: "CA", wageRateFrom: 120_000, wageUnit: "Year" },
+      ],
+    })
+
+    assert.equal(result.locationEvidence?.matchLevel, "employer_wide_remote")
+    assert.equal(result.locationEvidence?.confidence, "low")
   })
 
   it("returns unknown when core data is missing", () => {

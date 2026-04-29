@@ -216,3 +216,420 @@ test("adaptRawCrawlerJob keeps generic sources unstructured", () => {
   assert.equal((adapted.structuredSections.responsibilities ?? []).length, 0)
   assert.equal((adapted.structuredSections.requirements ?? []).length, 0)
 })
+
+test("extractCanonicalSections does not leak nav/auth chrome into sections", () => {
+  const description = [
+    "Skip to main content",
+    "Sign in",
+    "Sign in to create job alert",
+    "Apply Now",
+    "Save this job",
+    "Cookie policy",
+    "About the role",
+    "We are building hiring infrastructure for international candidates worldwide.",
+    "Responsibilities:",
+    "- Build distributed backend services.",
+    "- Partner with product, design, and security teams.",
+    "Requirements:",
+    "- 5+ years of backend engineering experience.",
+    "- Strong fluency with TypeScript or Go.",
+    "Related jobs",
+    "Similar jobs",
+    "Back to results",
+  ].join("\n")
+
+  const sections = extractCanonicalSections({
+    adapter: "generic_html",
+    description,
+  })
+
+  const allItems = Object.values(sections).flatMap((section) => section.items)
+  for (const phrase of [
+    "skip to main content",
+    "sign in",
+    "sign in to create job alert",
+    "apply now",
+    "save this job",
+    "cookie policy",
+    "related jobs",
+    "similar jobs",
+    "back to results",
+  ]) {
+    assert.ok(
+      allItems.every((item) => !item.toLowerCase().includes(phrase)),
+      `chrome phrase "${phrase}" leaked into sections: ${JSON.stringify(allItems)}`
+    )
+  }
+
+  assert.ok(sections.responsibilities.items.some((item) => /distributed backend services/i.test(item)))
+  assert.ok(sections.requirements.items.some((item) => /5\+ years/i.test(item)))
+})
+
+test("normalizeCrawlerJobForPersistence keeps chrome-laden inputs out of all sections", () => {
+  const result = normalizeCrawlerJobForPersistence({
+    rawJob: {
+      externalId: "url:chrome-1",
+      title: "Senior Backend Engineer",
+      url: "https://jobs.example.com/openings/senior-backend-engineer",
+      description: [
+        "Skip to main content",
+        "Sign in to create job alert",
+        "Apply now",
+        "About the role:",
+        "We build the financial platform for global businesses.",
+        "Responsibilities:",
+        "- Own and operate critical APIs.",
+        "- Mentor mid-level engineers.",
+        "Requirements:",
+        "- 6+ years of backend engineering experience.",
+        "- Strong fluency in Go or Python.",
+        "Cookie Policy",
+        "Privacy Policy",
+        "Related jobs",
+      ].join("\n"),
+      location: "San Francisco, CA",
+    },
+    crawledAtIso: "2026-04-28T00:00:00.000Z",
+  })
+
+  const allItems = Object.values(result.canonical.sections).flatMap((section) => section.items)
+  for (const phrase of [
+    "skip to main content",
+    "sign in to create job alert",
+    "cookie policy",
+    "privacy policy",
+    "related jobs",
+  ]) {
+    assert.ok(
+      allItems.every((item) => !item.toLowerCase().includes(phrase)),
+      `phrase "${phrase}" leaked into normalized sections`
+    )
+  }
+})
+
+test("adaptRawCrawlerJob trims crawler CTA noise from location", () => {
+  const adapted = adaptRawCrawlerJob({
+    externalId: "url:pyramid-1",
+    title: "AI Data Engineer",
+    url: "https://jobs.example.com/openings/ai-data-engineer",
+    description: "Contract role for AI data engineering projects.",
+    location: "U.S(Remote). Please review the job description below and contact me ASAP if you are interested.",
+  })
+
+  assert.equal(adapted.location, "U.S(Remote)")
+})
+
+// ---------------------------------------------------------------------------
+// Visa / sponsorship detection — Phase 5
+// ---------------------------------------------------------------------------
+
+test("normalizeCrawlerJobForPersistence sets explicit_sponsorship_status=sponsors on clear positive text", () => {
+  const result = normalizeCrawlerJobForPersistence({
+    rawJob: {
+      externalId: "url:visa-pos-1",
+      title: "Software Engineer",
+      url: "https://jobs.example.com/openings/swe",
+      description:
+        "We will sponsor work visas for qualified candidates. Visa sponsorship available. Join our team and we will take care of the rest.",
+    },
+    crawledAtIso: "2026-04-28T00:00:00.000Z",
+  })
+
+  assert.equal(result.canonical.visa.explicit_sponsorship_status.value, "sponsors")
+  assert.equal(result.nextColumns.sponsors_h1b, true)
+  assert.equal(result.canonical.visa.sponsors_h1b.value, true)
+  // view model must reflect the confirmation
+  assert.equal(result.pageView.visa_card_label, "Sponsors")
+  assert.equal(result.pageView.show_visa_drawer, true)
+  assert.equal(result.cardView.visa_card_label, "Sponsors")
+  assert.equal(result.cardView.show_visa_drawer, true)
+})
+
+test("normalizeCrawlerJobForPersistence sets explicit_sponsorship_status=no_sponsorship on clear negative text", () => {
+  // Descriptions must be > 120 chars with > 80 letters to pass cleanJobDescription's
+  // plausibility check. Pad each phrase with a realistic role description suffix.
+  const suffix =
+    " We are looking for a skilled Product Manager with 5+ years of experience. You will define product strategy, work closely with engineering and design, and drive execution. Excellent communication skills required."
+  for (const phrase of [
+    "No sponsorship available for this position.",
+    "Candidates must be authorized to work in the US. We are unable to provide sponsorship.",
+    "H1B sponsorship is not available for this role.",
+  ]) {
+    const result = normalizeCrawlerJobForPersistence({
+      rawJob: {
+        externalId: `url:visa-neg-${phrase.length}`,
+        title: "Product Manager",
+        url: "https://jobs.example.com/openings/pm",
+        description: `${phrase}${suffix}`,
+      },
+      crawledAtIso: "2026-04-28T00:00:00.000Z",
+    })
+
+    assert.equal(
+      result.canonical.visa.explicit_sponsorship_status.value,
+      "no_sponsorship",
+      `Expected no_sponsorship for phrase: "${phrase}"`
+    )
+    assert.equal(result.nextColumns.sponsors_h1b, false)
+    // view model must NOT show a positive drawer label
+    assert.equal(result.cardView.visa_card_label, "No sponsorship")
+    assert.equal(result.cardView.show_visa_drawer, false)
+    assert.equal(result.pageView.show_visa_drawer, false)
+  }
+})
+
+test("normalizeCrawlerJobForPersistence sets explicit_sponsorship_status=unclear when visa terms present but ambiguous", () => {
+  const result = normalizeCrawlerJobForPersistence({
+    rawJob: {
+      externalId: "url:visa-unclear-1",
+      title: "Data Scientist",
+      url: "https://jobs.example.com/openings/ds",
+      description:
+        "Strong background in machine learning required. Work authorization is required to work in the United States; OPT is acceptable for this position. The role involves building predictive models, collaborating with product and data engineering teams. 5+ years of relevant experience with Python, SQL, and modern ML frameworks expected.",
+    },
+    crawledAtIso: "2026-04-28T00:00:00.000Z",
+  })
+
+  assert.equal(result.canonical.visa.explicit_sponsorship_status.value, "unclear")
+  assert.equal(result.nextColumns.sponsors_h1b, null)
+  // card label is null from normalizer — UI layer decides based on company records
+  assert.equal(result.cardView.visa_card_label, null)
+  assert.equal(result.cardView.show_visa_drawer, false)
+})
+
+test("normalizeCrawlerJobForPersistence sets explicit_sponsorship_status=not_detected when no visa terms", () => {
+  const result = normalizeCrawlerJobForPersistence({
+    rawJob: {
+      externalId: "url:visa-none-1",
+      title: "Marketing Manager",
+      url: "https://jobs.example.com/openings/marketing",
+      description:
+        "Lead integrated marketing campaigns. Develop brand strategy. 5+ years of marketing experience required. Excellent communication skills needed.",
+    },
+    crawledAtIso: "2026-04-28T00:00:00.000Z",
+  })
+
+  assert.equal(result.canonical.visa.explicit_sponsorship_status.value, "not_detected")
+  assert.equal(result.nextColumns.sponsors_h1b, null)
+  assert.equal(result.cardView.visa_card_label, null)
+  assert.equal(result.cardView.show_visa_drawer, false)
+  assert.equal(result.pageView.visa_card_label, null)
+  assert.equal(result.pageView.show_visa_drawer, false)
+})
+
+test("sponsorship_badge backward compat: 'likely' still emitted when score>=65 and no explicit status", () => {
+  // sponsorship_badge is kept for sponsorship-employer-signal.ts downstream;
+  // the new visa_card_label is what gates UI display.
+  const result = normalizeCrawlerJobForPersistence({
+    rawJob: {
+      externalId: "url:badge-likely-1",
+      title: "Software Engineer",
+      url: "https://jobs.example.com/openings/swe",
+      description: "Build cool things. No visa terms mentioned.",
+    },
+    crawledAtIso: "2026-04-28T00:00:00.000Z",
+    existing: {
+      description: null,
+      employment_type: null,
+      seniority_level: null,
+      is_remote: null,
+      is_hybrid: null,
+      requires_authorization: null,
+      salary_min: null,
+      salary_max: null,
+      salary_currency: null,
+      sponsors_h1b: null,
+      // Pre-existing high score (from prior LCA enrichment)
+      sponsorship_score: 80,
+      visa_language_detected: null,
+    },
+  })
+
+  // sponsorship_badge can be "likely" from score — backward compat maintained
+  assert.equal(result.cardView.sponsorship_badge, "likely")
+  // BUT visa_card_label must be null (no explicit JD text)
+  assert.equal(result.cardView.visa_card_label, null)
+  assert.equal(result.cardView.show_visa_drawer, false)
+})
+
+// ---------------------------------------------------------------------------
+// resolveJobCardView visa fields — explicit DB columns
+// ---------------------------------------------------------------------------
+
+test("resolveJobCardView returns visa_card_label=Sponsors when sponsors_h1b=true", () => {
+  const card = resolveJobCardView({
+    title: "Engineer",
+    location: "Remote",
+    salary_min: null,
+    salary_max: null,
+    salary_currency: "USD",
+    employment_type: null,
+    seniority_level: null,
+    description: null,
+    skills: [],
+    sponsors_h1b: true,
+    requires_authorization: false,
+    sponsorship_score: 0,
+    raw_data: null,
+  })
+
+  assert.equal(card.visa_card_label, "Sponsors")
+  assert.equal(card.show_visa_drawer, true)
+})
+
+test("resolveJobCardView returns visa_card_label=No sponsorship when requires_authorization=true", () => {
+  const card = resolveJobCardView({
+    title: "Engineer",
+    location: "Remote",
+    salary_min: null,
+    salary_max: null,
+    salary_currency: "USD",
+    employment_type: null,
+    seniority_level: null,
+    description: null,
+    skills: [],
+    sponsors_h1b: null,
+    requires_authorization: true,
+    sponsorship_score: 0,
+    raw_data: null,
+  })
+
+  assert.equal(card.visa_card_label, "No sponsorship")
+  assert.equal(card.show_visa_drawer, false)
+})
+
+test("resolveJobCardView returns visa_card_label=null when no explicit data", () => {
+  const card = resolveJobCardView({
+    title: "Engineer",
+    location: "Remote",
+    salary_min: null,
+    salary_max: null,
+    salary_currency: "USD",
+    employment_type: null,
+    seniority_level: null,
+    description: null,
+    skills: [],
+    sponsors_h1b: null,
+    requires_authorization: false,
+    sponsorship_score: 65,  // score alone must not produce a card label
+    raw_data: null,
+  })
+
+  assert.equal(card.visa_card_label, null)
+  assert.equal(card.show_visa_drawer, false)
+  // But sponsorship_badge backward compat still works
+  assert.equal(card.sponsorship_badge, "likely")
+})
+
+// ---------------------------------------------------------------------------
+// Top Applicant evidence gate — Phase 6
+// ---------------------------------------------------------------------------
+
+test("buildTopApplicantOpportunityBadgeTitle requires freshness AND evidence", async () => {
+  const { buildTopApplicantOpportunityBadgeTitle } = await import(
+    "@/lib/jobs/job-card-badges"
+  )
+  const baseJob = {
+    id: "job-1",
+    first_detected_at: new Date().toISOString(),  // fresh today
+    last_seen_at: new Date().toISOString(),
+    raw_data: null,
+  }
+
+  // Fresh + good match → show
+  const show1 = buildTopApplicantOpportunityBadgeTitle(baseJob as Parameters<typeof buildTopApplicantOpportunityBadgeTitle>[0], 75)
+  assert.equal(show1.show, true, "should show when fresh + match >= 60")
+
+  // Fresh + low match + no applicants → do NOT show
+  const show2 = buildTopApplicantOpportunityBadgeTitle(baseJob as Parameters<typeof buildTopApplicantOpportunityBadgeTitle>[0], 40)
+  assert.equal(show2.show, false, "should not show when match < 60 and no applicant count")
+
+  // Stale + good match → do NOT show
+  const staleJob = {
+    ...baseJob,
+    first_detected_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+  }
+  const show3 = buildTopApplicantOpportunityBadgeTitle(staleJob as Parameters<typeof buildTopApplicantOpportunityBadgeTitle>[0], 90)
+  assert.equal(show3.show, false, "should not show when posting is 5+ days old")
+
+  // Fresh + low match + few applicants → show
+  const fewApplicantsJob = {
+    ...baseJob,
+    raw_data: { applicant_count: 10 },
+  }
+  const show4 = buildTopApplicantOpportunityBadgeTitle(fewApplicantsJob as unknown as Parameters<typeof buildTopApplicantOpportunityBadgeTitle>[0], 40)
+  assert.equal(show4.show, true, "should show when fresh + few applicants even if match < 60")
+})
+
+// ---------------------------------------------------------------------------
+// Ghost job risk — Phase 7
+// ---------------------------------------------------------------------------
+
+test("calculateGhostJobRisk produces high risk for very old posting with dead URL", async () => {
+  const { calculateGhostJobRisk } = await import("@/lib/jobs/ghost-job-risk")
+  const now = new Date()
+  const result = calculateGhostJobRisk({
+    postedAt: new Date(now.getTime() - 120 * 24 * 60 * 60 * 1000).toISOString(), // 120 days old
+    applyUrlStatus: "dead",
+    description: "Build things at a fast-paced startup. Rockstar engineer wanted.",
+    now,
+  })
+
+  assert.equal(result.label, "High")
+  assert.ok(result.reasons.length > 0, "should have reasons for high ghost risk")
+  assert.ok(result.riskScore !== null && result.riskScore >= 70, "risk score should be >= 70")
+})
+
+test("calculateGhostJobRisk produces low risk for fresh posting from known ATS", async () => {
+  const { calculateGhostJobRisk } = await import("@/lib/jobs/ghost-job-risk")
+  const now = new Date()
+  const result = calculateGhostJobRisk({
+    postedAt: new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000).toISOString(), // 3 days old
+    applyUrlStatus: "ok",
+    atsType: "greenhouse",
+    applyUrl: "https://boards.greenhouse.io/example/jobs/123",
+    description: "We are building the hiring platform for international candidates worldwide. Responsibilities: Build frontend features. Requirements: 4+ years of experience with TypeScript. Benefits: Health, dental, vision.",
+    now,
+  })
+
+  assert.equal(result.label, "Low")
+  assert.ok(result.riskScore !== null && result.riskScore < 40, "risk score should be < 40")
+})
+
+test("adaptRawCrawlerJob rejects location strings dominated by chrome or commas", () => {
+  const chromeLocation = adaptRawCrawlerJob({
+    externalId: "url:chrome-loc-1",
+    title: "Engineer",
+    url: "https://jobs.example.com/openings/engineer",
+    description: "We build infrastructure.",
+    location: "Sign in to create job alert",
+  })
+  assert.equal(chromeLocation.location, null)
+
+  const sentenceFragment = adaptRawCrawlerJob({
+    externalId: "url:chrome-loc-2",
+    title: "Engineer",
+    url: "https://jobs.example.com/openings/engineer",
+    description: "We build infrastructure.",
+    location: "Many roles, many cities, many teams, many opportunities for growth",
+  })
+  assert.equal(sentenceFragment.location, null)
+
+  const requisitionLike = adaptRawCrawlerJob({
+    externalId: "url:chrome-loc-3",
+    title: "Engineer",
+    url: "https://jobs.example.com/openings/engineer",
+    description: "We build infrastructure.",
+    location: "REQ-12345-2026-04",
+  })
+  assert.equal(requisitionLike.location, null)
+
+  const valid = adaptRawCrawlerJob({
+    externalId: "url:chrome-loc-4",
+    title: "Engineer",
+    url: "https://jobs.example.com/openings/engineer",
+    description: "We build infrastructure.",
+    location: "San Francisco, CA",
+  })
+  assert.equal(valid.location, "San Francisco, CA")
+})

@@ -45,7 +45,7 @@ import type {
 
 function Card({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={cn("surface-card rounded-2xl p-5 sm:p-6", className)}>
+    <div className={cn("surface-card rounded-2xl p-4 sm:p-5", className)}>
       {children}
     </div>
   )
@@ -70,12 +70,12 @@ function CardTitle({ icon: Icon, children }: { icon: React.ElementType; children
 
 const URGENCY_STYLES: Record<
   OptTimelineDashboard["urgencyLevel"],
-  { card: string; badge: string; bar: string; dot: string; label: string }
+  { card: string; badge: string; bar: string; dot: string; label: string; labelClass: string }
 > = {
-  Low:       { card: "border-emerald-200/60 bg-emerald-50/40",  badge: "bg-emerald-100 text-emerald-800",  bar: "bg-gradient-to-r from-emerald-400 to-emerald-500",  dot: "bg-emerald-400",  label: "Low — you have time" },
-  Medium:    { card: "border-amber-200/60  bg-amber-50/40",     badge: "bg-amber-100   text-amber-800",    bar: "bg-gradient-to-r from-amber-400   to-amber-500",    dot: "bg-amber-400",    label: "Medium — keep momentum" },
-  High:      { card: "border-orange-200/60 bg-orange-50/40",   badge: "bg-orange-100  text-orange-800",   bar: "bg-gradient-to-r from-orange-400  to-orange-500",   dot: "bg-orange-400",   label: "High — prioritise now" },
-  Emergency: { card: "border-red-200/60    bg-red-50/40",       badge: "bg-red-100     text-red-800",      bar: "bg-gradient-to-r from-red-400     to-red-500",      dot: "bg-red-400",      label: "Emergency — act immediately" },
+  Low:       { card: "border-emerald-200/70 bg-emerald-50/45",  badge: "bg-emerald-100 text-emerald-800",  bar: "bg-gradient-to-r from-emerald-400 to-emerald-500",  dot: "bg-emerald-400",  label: "Low — you have time", labelClass: "text-emerald-800" },
+  Medium:    { card: "border-amber-200/70 bg-amber-50/45",      badge: "bg-amber-100 text-amber-800",      bar: "bg-gradient-to-r from-amber-400 to-amber-500",      dot: "bg-amber-400",    label: "Medium — keep momentum", labelClass: "text-amber-800" },
+  High:      { card: "border-orange-200/70 bg-orange-50/45",    badge: "bg-orange-100 text-orange-800",    bar: "bg-gradient-to-r from-orange-400 to-orange-500",    dot: "bg-orange-400",   label: "High — prioritise now", labelClass: "text-orange-800" },
+  Emergency: { card: "border-red-200/70 bg-red-50/45",          badge: "bg-red-100 text-red-800",          bar: "bg-gradient-to-r from-red-400 to-red-500",          dot: "bg-red-400",      label: "Emergency — act immediately", labelClass: "text-red-800" },
 }
 
 const CATEGORY_META: Record<
@@ -173,7 +173,7 @@ function SettingsForm({ initial, onSave, onCancel }: SettingsFormProps) {
   const labelCls = "mb-1 block text-[11.5px] font-semibold text-muted-foreground uppercase tracking-wide"
 
   return (
-    <div className="surface-card rounded-2xl p-5 sm:p-6">
+    <div className="surface-card rounded-2xl p-4 sm:p-5">
       <div className="mb-5 flex items-center justify-between gap-2">
         <h2 className="text-[15px] font-semibold text-strong">Update your OPT timeline</h2>
         <button
@@ -281,7 +281,7 @@ function SettingsForm({ initial, onSave, onCancel }: SettingsFormProps) {
         <button
           type="button"
           onClick={() => onSave(formToSettings(form))}
-          className="rounded-xl bg-[hsl(var(--accent))] px-5 py-2 text-[13px] font-semibold text-white shadow-sm transition hover:opacity-90"
+          className="rounded-xl border border-[hsl(var(--accent-soft-border))] bg-[hsl(var(--accent))]/14 px-5 py-2 text-[13px] font-semibold text-[hsl(var(--accent))] shadow-sm transition hover:bg-[hsl(var(--accent))]/20"
         >
           Save timeline
         </button>
@@ -329,7 +329,7 @@ function AuthorizationTimelineCard({ data }: { data: OptTimelineDashboard }) {
                   {authLabel}
                 </span>
               )}
-              <p className="mt-1 text-5xl font-extrabold tabular-nums text-strong">
+              <p className="mt-1 text-4xl font-extrabold tabular-nums text-strong sm:text-[2.7rem]">
                 {data.daysRemaining.toLocaleString()}
               </p>
               <p className="text-[12px] text-muted-foreground">days remaining in current authorization</p>
@@ -341,7 +341,7 @@ function AuthorizationTimelineCard({ data }: { data: OptTimelineDashboard }) {
 
           {daysPct != null && (
             <div className="mt-1">
-              <div className="h-2.5 overflow-hidden rounded-full bg-white/60">
+              <div className="h-2.5 overflow-hidden rounded-full bg-white/70 ring-1 ring-black/5">
                 <div
                   className={cn("h-full rounded-full transition-all duration-700", u.bar)}
                   style={{ width: `${daysPct}%` }}
@@ -409,7 +409,7 @@ function UnemploymentTrackerCard({ data }: { data: OptTimelineDashboard }) {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-3 gap-2.5">
             {[
               { label: "Used",      value: used,      accent: false },
               { label: "Remaining", value: remaining ?? "—", accent: true },
@@ -418,13 +418,13 @@ function UnemploymentTrackerCard({ data }: { data: OptTimelineDashboard }) {
               <div
                 key={label}
                 className={cn(
-                  "rounded-xl p-3 text-center",
+                  "rounded-xl p-2.5 text-center",
                   accent
                     ? "bg-[hsl(var(--accent))]/8 ring-1 ring-[hsl(var(--accent))]/20"
                     : "bg-surface-alt"
                 )}
               >
-                <p className={cn("text-2xl font-bold tabular-nums", accent ? "text-[hsl(var(--accent))]" : "text-strong")}>
+                <p className={cn("text-xl font-bold tabular-nums sm:text-2xl", accent ? "text-[hsl(var(--accent))]" : "text-strong")}>
                   {typeof value === "number" ? value.toLocaleString() : value}
                 </p>
                 <p className="mt-0.5 text-[10.5px] text-muted-foreground">{label}</p>
@@ -476,8 +476,7 @@ function UrgencyCard({ data }: { data: OptTimelineDashboard }) {
       <CardTitle icon={Zap}>Urgency level</CardTitle>
       <div className="mb-4 flex items-center gap-3">
         <span className={cn("h-3 w-3 rounded-full", u.dot)} />
-        <span className={cn("text-[15px] font-semibold", u.badge.replace("bg-", "text-").replace("text-", "text-")
-          .replace(/bg-\w+-100\s/, ""))}>
+        <span className={cn("text-[15px] font-semibold", u.labelClass)}>
           {u.label}
         </span>
       </div>
@@ -507,7 +506,7 @@ function WeeklyTargetCard({ data }: { data: OptTimelineDashboard }) {
     <Card>
       <CardTitle icon={Target}>Weekly application target</CardTitle>
       <div className="mb-3 flex items-end gap-3">
-        <span className="text-5xl font-extrabold tabular-nums text-strong">
+        <span className="text-4xl font-extrabold tabular-nums text-strong sm:text-[2.6rem]">
           {data.recommendedWeeklyApplicationTarget}
         </span>
         <span className="mb-1.5 text-[12px] text-muted-foreground">applications / week</span>
@@ -617,7 +616,7 @@ function QuickActionsCard() {
                 <p className="text-[13px] font-medium text-strong group-hover:text-[hsl(var(--accent))] transition">
                   {a.label}
                 </p>
-                <p className="text-[11.5px] text-muted-foreground">{a.description}</p>
+                <p className="line-clamp-2 text-[11.5px] leading-5 text-muted-foreground">{a.description}</p>
               </div>
             </Link>
           )
@@ -739,7 +738,7 @@ export default function OPTDashboard({ profile }: OPTDashboardProps) {
       activeSettings.immigrationStatus !== "Other")
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4 sm:space-y-5">
       {/* Setup CTA when dates are entirely missing */}
       {!isEditing && !dashboard?.daysRemaining && !isNotTracked && (
         <div className="rounded-2xl border border-dashed border-[hsl(var(--accent))]/40 bg-[hsl(var(--accent))]/5 px-5 py-5">
@@ -753,7 +752,7 @@ export default function OPTDashboard({ profile }: OPTDashboardProps) {
             <button
               type="button"
               onClick={() => setIsEditing(true)}
-              className="shrink-0 rounded-xl bg-[hsl(var(--accent))] px-4 py-2 text-[13px] font-semibold text-white shadow-sm transition hover:opacity-90"
+              className="shrink-0 rounded-xl border border-[hsl(var(--accent-soft-border))] bg-[hsl(var(--accent))]/14 px-4 py-2 text-[13px] font-semibold text-[hsl(var(--accent))] shadow-sm transition hover:bg-[hsl(var(--accent))]/20"
             >
               Add dates
             </button>
@@ -820,9 +819,9 @@ export default function OPTDashboard({ profile }: OPTDashboardProps) {
           </div>
 
           {/* Grid layout */}
-          <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
             {/* Main column */}
-            <div className="space-y-5">
+            <div className="space-y-4">
               <AuthorizationTimelineCard data={dashboard} />
               <UnemploymentTrackerCard data={dashboard} />
               <PriorityJobCategoriesCard data={dashboard} />
@@ -830,7 +829,7 @@ export default function OPTDashboard({ profile }: OPTDashboardProps) {
             </div>
 
             {/* Sidebar */}
-            <div className="space-y-5 xl:sticky xl:top-6 xl:self-start">
+            <div className="space-y-4 xl:sticky xl:top-4 xl:self-start">
               <UrgencyCard data={dashboard} />
               <WeeklyTargetCard data={dashboard} />
               <QuickActionsCard />

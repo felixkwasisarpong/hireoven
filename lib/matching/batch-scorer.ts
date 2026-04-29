@@ -22,6 +22,33 @@ function chunkArray<T>(items: T[], size: number) {
   return chunks
 }
 
+function makeDefaultProfile(userId: string): Profile {
+  const now = new Date().toISOString()
+  return {
+    id: userId,
+    email: null,
+    full_name: null,
+    avatar_url: null,
+    desired_roles: null,
+    desired_locations: [],
+    desired_seniority: null,
+    desired_employment_types: [],
+    seniority_level: null,
+    top_skills: null,
+    remote_only: false,
+    is_international: false,
+    visa_status: null,
+    opt_end_date: null,
+    needs_sponsorship: false,
+    alert_frequency: "daily",
+    email_alerts: false,
+    push_alerts: false,
+    is_admin: false,
+    created_at: now,
+    updated_at: now,
+  }
+}
+
 export async function getScoringContextForUser(userId: string) {
   const pool = getPostgresPool()
 
@@ -48,11 +75,11 @@ export async function getScoringContextForUser(userId: string) {
     ),
   ])
 
-  const profile = profileResult.rows[0] ?? null
+  const profile = profileResult.rows[0] ?? makeDefaultProfile(userId)
   const resume =
     ((primaryResumeResult.rows[0] ?? fallbackResumeResult.rows[0] ?? null) as Resume | null)
 
-  if (!profile || !resume) return null
+  if (!resume) return null
 
   return { profile, resume }
 }
@@ -159,7 +186,10 @@ export async function scoreJobsForUser(userId: string, jobIds: string[]) {
   if (uniqueJobIds.length === 0) return new Map<string, JobMatchScore>()
 
   const context = await getScoringContextForUser(userId)
-  if (!context) return new Map<string, JobMatchScore>()
+  if (!context) {
+    console.warn("[scorer] no context for user", userId, "— resume missing or not complete")
+    return new Map<string, JobMatchScore>()
+  }
 
   const pool = getPostgresPool()
   const existingScoresResult = await pool.query<JobMatchScore>(
@@ -183,6 +213,7 @@ export async function scoreJobsForUser(userId: string, jobIds: string[]) {
 
   const existingMap = new Map(existingFreshScores.map((row) => [row.job_id, row]))
   const missingJobIds = uniqueJobIds.filter((jobId) => !existingMap.has(jobId))
+  console.log(`[scorer] user=${userId} total=${uniqueJobIds.length} cached=${existingMap.size} missing=${missingJobIds.length}`)
   if (missingJobIds.length === 0) return existingMap
 
   const jobs = await getJobsByIds(missingJobIds)

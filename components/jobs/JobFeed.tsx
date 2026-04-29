@@ -74,8 +74,13 @@ export default function JobFeed({
     refresh,
   } = useJobs(filters, searchQuery, { personalized, withScores: hasPrimaryResume && !personalized })
   const sentinelRef = useRef<HTMLDivElement | null>(null)
-  /** Embedded `match_score` from /api/jobs covers most jobs; only fetch any that arrive without one. */
-  const missingScoreIds = hasPrimaryResume && !personalized
+  /**
+   * Collect job IDs that still need a score:
+   * - Non-personalized: jobs that didn't get an embedded score from /api/jobs
+   * - Personalized: jobs where /api/match/feed returned match_score: null (scorer failed server-side)
+   * Both cases fall back to the batch scorer to fill the gap.
+   */
+  const missingScoreIds = hasPrimaryResume
     ? jobs.filter((job) => !job.match_score).map((job) => job.id)
     : []
   const { getScore, isLoading: scoresLoading } = useMatchScores(missingScoreIds)
@@ -135,7 +140,7 @@ export default function JobFeed({
 
   return (
     <H1BPredictionProvider enabled={h1bEnabled}>
-    <div className="space-y-4">
+    <div className="space-y-4 rounded-[28px] bg-slate-50 p-3 sm:p-4">
       {newJobsCount > 0 && (
         <button
           type="button"
@@ -176,12 +181,11 @@ export default function JobFeed({
               matchScore={job.match_score ?? getScore(job.id)}
               isMatchScoreLoading={
                 hasPrimaryResume &&
-                !personalized &&
                 !job.match_score &&
                 scoresLoading &&
                 !getScore(job.id)
               }
-              showVisaSignals={h1bEnabled}
+
             />
           ))}
         </div>

@@ -1,13 +1,15 @@
 /**
- * Set companies.logo_url from each row's domain (Clearbit / Unavatar / Google favicon).
+ * Set companies.logo_url from each row's domain using logo.dev (primary) or a
+ * specified fallback provider.
  *
  * Requires: NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+ * For logo-dev (default): also requires LOGO_DEV_TOKEN
  *
  * Usage:
  *   npx tsx scripts/backfill-company-logo-urls.ts --dry-run
  *   npx tsx scripts/backfill-company-logo-urls.ts
  *   npx tsx scripts/backfill-company-logo-urls.ts --force
- *   npx tsx scripts/backfill-company-logo-urls.ts --provider=unavatar
+ *   npx tsx scripts/backfill-company-logo-urls.ts --provider=google-favicon
  */
 
 import { loadEnvConfig } from "@next/env"
@@ -27,6 +29,7 @@ function getProvider(): LogoProvider {
   const arg = process.argv.find((a) => a.startsWith("--provider="))
   const v = arg?.split("=")[1]?.toLowerCase()
   if (
+    v === "logo-dev" ||
     v === "icon-horse" ||
     v === "unavatar" ||
     v === "google-favicon" ||
@@ -35,7 +38,7 @@ function getProvider(): LogoProvider {
   ) {
     return v
   }
-  return "google-favicon"
+  return "logo-dev"
 }
 
 async function main() {

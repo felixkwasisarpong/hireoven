@@ -22,7 +22,7 @@ function ProcessingResumeCard({ resume }: { resume: Resume }) {
   return (
     <div className="surface-card rounded-none p-6 shadow-sm">
       <div className="flex items-center gap-4">
-        <div className="flex h-14 w-14 items-center justify-center rounded-sm border border-slate-200/80 bg-slate-50/90 text-[#062246]">
+        <div className="flex h-14 w-14 items-center justify-center rounded-sm border border-slate-200/80 bg-slate-50/90 text-[#ea580c]">
           <Loader2 className="h-6 w-6 animate-spin" />
         </div>
         <div>
@@ -253,6 +253,8 @@ export default function ResumeWorkspaceSection() {
             onUploadComplete={(resume) => {
               upsertResume(resume)
               setExpandedId(resume.id)
+              void refresh()
+              window.dispatchEvent(new Event("hireoven:resumes-changed"))
             }}
             showPrompt={!hasResume}
           />
@@ -261,7 +263,7 @@ export default function ResumeWorkspaceSection() {
 
       {!isLoading && !hasResume && (
         <section className="surface-card rounded-none border-slate-200/90 py-12 text-center shadow-sm">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-sm border border-slate-200/80 bg-slate-50/80 text-[#062246]">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-sm border border-slate-200/80 bg-slate-50/80 text-[#ea580c]">
             <Sparkles className="h-6 w-6" />
           </div>
           <h2 className="mt-6 font-serif text-2xl font-normal tracking-tight text-gray-900 sm:text-[1.65rem]">
@@ -404,7 +406,7 @@ export default function ResumeWorkspaceSection() {
                         {meta?.jobId && meta.jobTitle && (
                           <Link
                             href={`/dashboard/resume/studio?mode=tailor&jobId=${meta.jobId}`}
-                            className="rounded-sm border border-[#FFD2B8] bg-[#FFF7F2] px-4 py-2 text-sm font-medium text-[#062246] transition hover:bg-[#FFF1E8]"
+                            className="rounded-sm border border-[#FFD2B8] bg-[#FFF7F2] px-4 py-2 text-sm font-medium text-[#ea580c] transition hover:bg-[#FFF1E8]"
                           >
                             Optimize for {meta.jobTitle}
                           </Link>

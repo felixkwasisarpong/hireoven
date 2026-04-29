@@ -26,6 +26,8 @@ type DashboardInitialData = {
   initialPrimaryResumeReady: boolean
   initialWatchlist: WatchlistWithCompany[]
   initialWatchlistCount: number
+  /** Jobs first seen (or created) today (UTC calendar day), keyed by company id */
+  initialJobsTodayByCompanyId: Record<string, number>
 }
 
 async function getDashboardInitialData(): Promise<DashboardInitialData> {
@@ -35,6 +37,7 @@ async function getDashboardInitialData(): Promise<DashboardInitialData> {
       initialPrimaryResumeReady: false,
       initialWatchlist: [],
       initialWatchlistCount: 0,
+      initialJobsTodayByCompanyId: {},
     }
   }
 
@@ -62,29 +65,62 @@ async function getDashboardInitialData(): Promise<DashboardInitialData> {
     ])
 
     const initialWatchlist = watchlistResult.rows.map(({ total_count, ...item }) => item)
+    const companyIds = [
+      ...new Set(
+        initialWatchlist.map((w) => w.company?.id).filter((id): id is string => Boolean(id)),
+      ),
+    ]
+
+    let initialJobsTodayByCompanyId: Record<string, number> = {}
+    if (companyIds.length > 0) {
+      try {
+        const todayCounts = await pool.query<{ company_id: string; n: number }>(
+          `SELECT company_id::text AS company_id, COUNT(*)::int AS n
+           FROM jobs
+           WHERE company_id = ANY($1::uuid[])
+             AND COALESCE(is_active, true) = true
+             AND COALESCE(first_detected_at, created_at)::date = CURRENT_DATE
+           GROUP BY company_id`,
+          [companyIds]
+        )
+        initialJobsTodayByCompanyId = Object.fromEntries(
+          todayCounts.rows.map((r) => [r.company_id, r.n]),
+        )
+      } catch {
+        initialJobsTodayByCompanyId = {}
+      }
+    }
+
     return {
       initialPrimaryResumeReady: Boolean(resumeResult.rows[0]?.exists),
       initialWatchlist,
       initialWatchlistCount: Number(watchlistResult.rows[0]?.total_count ?? initialWatchlist.length),
+      initialJobsTodayByCompanyId,
     }
   } catch {
     return {
       initialPrimaryResumeReady: false,
       initialWatchlist: [],
       initialWatchlistCount: 0,
+      initialJobsTodayByCompanyId: {},
     }
   }
 }
 
 export default async function DashboardPage() {
-  const { initialPrimaryResumeReady, initialWatchlist, initialWatchlistCount } =
-    await getDashboardInitialData()
+  const {
+    initialPrimaryResumeReady,
+    initialWatchlist,
+    initialWatchlistCount,
+    initialJobsTodayByCompanyId,
+  } = await getDashboardInitialData()
   return (
     <Suspense fallback={<DashboardHomeFallback />}>
       <DashboardHomeClient
         initialPrimaryResumeReady={initialPrimaryResumeReady}
         initialWatchlist={initialWatchlist}
         initialWatchlistCount={initialWatchlistCount}
+        initialJobsTodayByCompanyId={initialJobsTodayByCompanyId}
       />
     </Suspense>
   )

@@ -10,7 +10,15 @@ import {
   fetchJobDescription,
   normalizeJobApplyUrl,
 } from "@/lib/jobs/description"
-import { normalizeCrawlerJobForPersistence } from "@/lib/jobs/normalization"
+import {
+  normalizeCrawlerJobForPersistence,
+  normalizeCrawlerJobForPersistenceWithAI,
+} from "@/lib/jobs/normalization"
+import {
+  getCrawlerAiEnrichmentMode,
+  shouldAttemptAiEnrichment,
+} from "@/lib/crawler/enrichment-mode"
+import { normalizeGreenhouseBoardUrl } from "@/lib/companies/greenhouse-url"
 import type { EmploymentType, SeniorityLevel } from "@/types"
 
 const DESCRIPTION_FETCH_CONCURRENCY = Math.max(
@@ -39,6 +47,20 @@ const JOB_DEACTIVATE_BATCH_SIZE = Math.max(
   25,
   Number.parseInt(process.env.CRAWLER_JOB_DEACTIVATE_BATCH_SIZE ?? "250", 10)
 )
+
+function shouldMarkGreenhouseManualReview(args: {
+  atsType: string | null
+  careersUrl: string | null
+  crawledJobCount: number
+}) {
+  const atsType = args.atsType?.toLowerCase() ?? ""
+  const careersUrl = args.careersUrl ?? ""
+  if (atsType !== "greenhouse" && !careersUrl.toLowerCase().includes("greenhouse.io")) {
+    return false
+  }
+  const normalized = normalizeGreenhouseBoardUrl(careersUrl)
+  return args.crawledJobCount === 0 && Boolean(normalized.boardToken)
+}
 
 const JOB_INSERT_COLUMNS = [
   "company_id",
@@ -194,6 +216,49 @@ function normalizePostedAtToIso(
   return new Date(crawledAt.getTime() - amount * step).toISOString()
 }
 
+function toOptionalString(value: unknown, maxLength = 600): string | null {
+  if (typeof value !== "string") return null
+  const cleaned = value.trim()
+  if (!cleaned) return null
+  return cleaned.slice(0, maxLength)
+}
+
+function toOptionalBoolean(value: unknown): boolean | null {
+  if (typeof value === "boolean") return value
+  return null
+}
+
+function toOptionalRoundedNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return Math.round(value)
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value)
+    if (Number.isFinite(parsed)) return Math.round(parsed)
+  }
+  return null
+}
+
+function toOptionalStringArray(value: unknown, limit = 10): string[] {
+  if (!Array.isArray(value)) return []
+  const out: string[] = []
+  for (const item of value) {
+    const text = toOptionalString(item, 80)
+    if (!text) continue
+    if (!out.includes(text)) out.push(text)
+    if (out.length >= limit) break
+  }
+  return out
+}
+
+function compactRecord<T extends Record<string, unknown>>(input: T): T {
+  const out: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(input)) {
+    if (value == null) continue
+    if (Array.isArray(value) && value.length === 0) continue
+    out[key] = value
+  }
+  return out as T
+}
+
 async function runWithConcurrency<T>(
   tasks: Array<() => Promise<T>>,
   maxConcurrency: number
@@ -229,13 +294,40 @@ export async function persistCrawlJobs({
   companyId,
   crawledAt,
   jobs,
+  sourceUrl,
+  normalizedUrl,
+  diagnostics,
 }: {
   companyId: string
   crawledAt: Date
   jobs: RawJob[]
+  sourceUrl?: string
+  normalizedUrl?: string
+  diagnostics?: Array<{
+    provider?: string | null
+    originalUrl: string
+    normalizedUrl: string | null
+    statusCode: number | null
+    reason: string
+    crawlResult?: string
+    errorReason?: string | null
+    retryCount?: number
+    fallbackUsed?: string | null
+  }>
 }) {
   const pool = getPostgresPool()
   const crawledAtIso = crawledAt.toISOString()
+  const companyResult = await pool.query<{
+    name: string | null
+    domain: string | null
+    careers_url: string | null
+    ats_type: string | null
+    raw_ats_config: Record<string, unknown> | null
+  }>(
+    `SELECT name, domain, careers_url, ats_type, raw_ats_config FROM companies WHERE id = $1`,
+    [companyId]
+  )
+  const company = companyResult.rows[0] ?? null
   const normalized = jobs
     .map((job) => ({
       ...job,
@@ -257,9 +349,12 @@ export async function persistCrawlJobs({
       : missingDescriptionCandidates
 
   if (missingDescriptionIndexes.length > 0) {
+    // Pass the company's ATS type as a provider hint so that description
+    // fetching can use provider-specific content selectors.
+    const providerHint = company?.ats_type?.toLowerCase() ?? undefined
     await runWithConcurrency(
       missingDescriptionIndexes.map((entry) => async () => {
-        const description = await fetchJobDescription(entry.url)
+        const description = await fetchJobDescription(entry.url, undefined, providerHint)
         if (!description) return
         normalized[entry.index] = {
           ...normalized[entry.index],
@@ -348,11 +443,14 @@ export async function persistCrawlJobs({
 
   const toInsert: Array<Record<string, unknown>> = []
   const toUpdate: Array<{ id: string; payload: Record<string, unknown> }> = []
+  const aiEnrichmentMode = getCrawlerAiEnrichmentMode()
+  const aiAvailable = aiEnrichmentMode !== "off" && Boolean(process.env.ANTHROPIC_API_KEY)
+  let aiQueued = 0
 
   for (const job of dedupedJobs) {
     const normalizedPostedAt = normalizePostedAtToIso(job.postedAt, crawledAt)
     const existing = existingByExternalId.get(job.externalId)
-    const normalization = normalizeCrawlerJobForPersistence({
+    const normalizationInput = {
       rawJob: {
         externalId: job.externalId,
         title: job.title,
@@ -360,6 +458,25 @@ export async function persistCrawlJobs({
         description: job.description,
         location: job.location,
         postedAt: job.postedAt,
+        company: company?.name ?? null,
+        companyDomain: company?.domain ?? null,
+        companyLogo: job.companyLogo ?? null,
+        workMode: job.workMode ?? null,
+        employmentType: job.employmentType ?? null,
+        salaryRange: job.salaryRange ?? null,
+        matchScore: job.matchScore ?? null,
+        matchLabel: job.matchLabel ?? null,
+        matchedSkills: job.matchedSkills ?? null,
+        missingSkills: job.missingSkills ?? null,
+        sponsorshipSignal: job.sponsorshipSignal ?? null,
+        companySummary: job.companySummary ?? null,
+        companyFoundedYear: job.companyFoundedYear ?? null,
+        companyEmployeeCount: job.companyEmployeeCount ?? null,
+        companyIndustry: job.companyIndustry ?? null,
+        easyApply: job.easyApply ?? null,
+        activelyHiring: job.activelyHiring ?? null,
+        topApplicantSignal: job.topApplicantSignal ?? null,
+        companyVerified: job.companyVerified ?? null,
       },
       crawledAtIso,
       existing: {
@@ -376,9 +493,75 @@ export async function persistCrawlJobs({
         sponsorship_score: existing?.sponsorship_score ?? null,
         visa_language_detected: existing?.visa_language_detected ?? null,
       },
-    })
+    }
+
+    // Deterministic crawl/extraction remains primary. AI enrichment is optional:
+    // sync mode applies it inline, async mode marks jobs for background processing.
+    const deterministicNormalization = normalizeCrawlerJobForPersistence(normalizationInput)
+    const shouldEnrich = aiAvailable && shouldAttemptAiEnrichment(deterministicNormalization)
+    let normalization = deterministicNormalization
+    let aiStatus: "done" | "pending" | "skipped" | "disabled" = aiAvailable
+      ? "skipped"
+      : "disabled"
+    let aiAttempts = 0
+    let aiLastError: string | null = null
+    const nowIso = new Date().toISOString()
+
+    if (shouldEnrich && aiEnrichmentMode === "sync") {
+      try {
+        normalization = await normalizeCrawlerJobForPersistenceWithAI(normalizationInput)
+        aiStatus = "done"
+        aiAttempts = 1
+      } catch (error) {
+        aiStatus = "pending"
+        aiAttempts = 1
+        aiLastError = error instanceof Error ? error.message.slice(0, 500) : String(error).slice(0, 500)
+        aiQueued += 1
+      }
+    } else if (shouldEnrich && aiEnrichmentMode === "async") {
+      aiStatus = "pending"
+      aiQueued += 1
+    }
 
     const cleanedTitle = cleanJobTitle(job.title)
+    const companyEmployeeCount =
+      toOptionalString(job.companyEmployeeCount, 120) ??
+      (toOptionalRoundedNumber(job.companyEmployeeCount)?.toLocaleString() ?? null)
+    const companyFoundedYearRaw = toOptionalRoundedNumber(job.companyFoundedYear)
+    const companyFoundedYear =
+      companyFoundedYearRaw && companyFoundedYearRaw >= 1800 && companyFoundedYearRaw <= new Date().getUTCFullYear() + 1
+        ? companyFoundedYearRaw
+        : null
+    // Promote company_info from the normalizer when the crawler didn't provide a summary.
+    // This ensures raw_data.companySummary is populated for standard ATS jobs where the
+    // JD contains an "About us / Who we are" section even if the crawler signal is absent.
+    const companySummaryFromNormalization =
+      normalization.canonical.sections.company_info.items.find(
+        (item) => typeof item === "string" && item.trim().length >= 20
+      ) ?? null
+
+    const cardSignals = compactRecord({
+      companyLogo: toOptionalString(job.companyLogo, 1200),
+      companyVerified: toOptionalBoolean(job.companyVerified),
+      workMode: toOptionalString(job.workMode, 80),
+      employmentType: toOptionalString(job.employmentType, 80),
+      salaryRange: toOptionalString(job.salaryRange, 180),
+      postedAt: toOptionalString(job.postedAt, 120),
+      matchScore: toOptionalRoundedNumber(job.matchScore),
+      matchLabel: toOptionalString(job.matchLabel, 80),
+      matchedSkills: toOptionalStringArray(job.matchedSkills, 10),
+      missingSkills: toOptionalStringArray(job.missingSkills, 10),
+      sponsorshipSignal: toOptionalString(job.sponsorshipSignal, 180),
+      companySummary:
+        toOptionalString(job.companySummary, 2000) ??
+        toOptionalString(companySummaryFromNormalization, 2000),
+      companyFoundedYear,
+      companyEmployeeCount,
+      companyIndustry: toOptionalString(job.companyIndustry, 180),
+      easyApply: toOptionalBoolean(job.easyApply),
+      activelyHiring: toOptionalBoolean(job.activelyHiring),
+      topApplicantSignal: toOptionalBoolean(job.topApplicantSignal),
+    })
     const payload: Record<string, unknown> = {
       company_id: companyId,
       title: cleanedTitle,
@@ -408,6 +591,7 @@ export async function persistCrawlJobs({
         posted_at: job.postedAt ?? null,
         posted_at_normalized: normalizedPostedAt,
         description_captured: Boolean(normalization.nextColumns.description),
+        ...cardSignals,
         raw: {
           title: job.title,
           url: job.url,
@@ -423,8 +607,17 @@ export async function persistCrawlJobs({
           completeness_score: normalization.canonical.validation.completeness_score,
           requires_review: normalization.canonical.validation.requires_review,
           issues: normalization.canonical.validation.issues,
+          ai_enrichment: {
+            mode: aiEnrichmentMode,
+            status: aiStatus,
+            attempts: aiAttempts,
+            queued_at: aiStatus === "pending" ? nowIso : null,
+            enriched_at: aiStatus === "done" ? nowIso : null,
+            last_error: aiLastError,
+          },
         },
         normalized: normalization.canonical,
+        structured_job: normalization.structuredData,
         view: {
           page: normalization.pageView,
           card: normalization.cardView,
@@ -497,12 +690,57 @@ export async function persistCrawlJobs({
     [companyId]
   )
   const activeCount = Number(countResult.rows[0]?.count ?? 0)
+  const greenhouseManualReview = shouldMarkGreenhouseManualReview({
+    atsType: company?.ats_type ?? null,
+    careersUrl: sourceUrl ?? company?.careers_url ?? null,
+    crawledJobCount: dedupedJobs.length,
+  })
+  const currentRawAtsConfig = company?.raw_ats_config ?? {}
+  const diagnosticsForStorage = diagnostics && diagnostics.length > 0
+    ? {
+        provider: diagnostics.find((entry) => entry.provider)?.provider ?? null,
+        original_url: sourceUrl ?? company?.careers_url ?? null,
+        normalized_url: normalizedUrl ?? null,
+        attempts: diagnostics,
+        checked_at: crawledAtIso,
+        result: dedupedJobs.length > 0 ? "success" : "empty",
+        jobs_found: dedupedJobs.length,
+      }
+    : null
+  const greenhouseDiagnostics = diagnostics?.filter((entry) => {
+    const provider = entry.provider?.toLowerCase()
+    return (
+      provider === "greenhouse" ||
+      entry.originalUrl.toLowerCase().includes("greenhouse.io") ||
+      (entry.normalizedUrl ?? "").toLowerCase().includes("greenhouse.io")
+    )
+  })
+  const nextRawAtsConfig = {
+    ...currentRawAtsConfig,
+    crawl_diagnostics: diagnosticsForStorage
+      ? diagnosticsForStorage
+      : (currentRawAtsConfig as Record<string, unknown>).crawl_diagnostics,
+    greenhouse_crawl: greenhouseDiagnostics && greenhouseDiagnostics.length > 0
+      ? {
+          original_url: sourceUrl ?? company?.careers_url ?? null,
+          normalized_url: normalizedUrl ?? null,
+          attempts: greenhouseDiagnostics,
+          checked_at: crawledAtIso,
+        }
+      : (currentRawAtsConfig as Record<string, unknown>).greenhouse_crawl,
+    needs_manual_review: greenhouseManualReview
+      ? true
+      : (currentRawAtsConfig as Record<string, unknown>).needs_manual_review ?? false,
+    manual_review_reason: greenhouseManualReview
+      ? "greenhouse_stable_board_resolution_failed"
+      : (currentRawAtsConfig as Record<string, unknown>).manual_review_reason ?? null,
+  }
 
   await pool.query(
     `UPDATE companies
-     SET last_crawled_at = $1, job_count = $2, updated_at = $3
+     SET last_crawled_at = $1, job_count = $2, updated_at = $3, raw_ats_config = $5::jsonb
      WHERE id = $4`,
-    [crawledAtIso, activeCount, crawledAtIso, companyId]
+    [crawledAtIso, activeCount, crawledAtIso, companyId, JSON.stringify(nextRawAtsConfig)]
   )
 
   // Auto-detect and backfill ATS type from the apply URLs we just crawled.
@@ -529,5 +767,6 @@ export async function persistCrawlJobs({
     updated: toUpdate.length,
     deactivated: staleIds.length,
     activeCount,
+    aiQueued,
   }
 }

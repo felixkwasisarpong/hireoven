@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk"
 import { logApiUsage } from "@/lib/admin/usage"
+import { ANTHROPIC_TIER_PRICING, SONNET_MODEL } from "@/lib/ai/anthropic-models"
 import { getPostgresPool } from "@/lib/postgres/server"
 import type {
   CoverLetter,
@@ -14,8 +15,9 @@ const anthropic = process.env.ANTHROPIC_API_KEY
   ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
   : null
 
-const MODEL = "claude-sonnet-4-6"
-const MODEL_PRICING = { inputPerMillion: 3, outputPerMillion: 15 }
+// Cover letters are high-impact long-form generation; keep them on Sonnet.
+const MODEL = SONNET_MODEL
+const MODEL_PRICING = ANTHROPIC_TIER_PRICING.sonnet
 
 const TONE_GUIDE = {
   professional:

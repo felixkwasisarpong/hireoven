@@ -246,7 +246,7 @@ export default function AlertsPage() {
                       <span
                         className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
                           alert.is_active
-                            ? "bg-[#FFF7F2] text-[#062246]"
+                            ? "bg-[#FFF7F2] text-[#ea580c]"
                             : "bg-gray-100 text-gray-500"
                         }`}
                       >
@@ -268,7 +268,7 @@ export default function AlertsPage() {
                       className={`rounded-2xl px-4 py-2.5 text-sm font-medium transition ${
                         alert.is_active
                           ? "border border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50"
-                          : "bg-[#FFF7F2] text-[#062246] hover:bg-[#FFD9C2]"
+                          : "bg-[#FFF7F2] text-[#ea580c] hover:bg-[#FFD9C2]"
                       }`}
                     >
                       {alert.is_active ? "Pause" : "Activate"}
@@ -386,7 +386,7 @@ export default function AlertsPage() {
                       }
                       className={`rounded-2xl px-3 py-3 text-sm font-medium transition ${
                         draft.frequency === option.value
-                          ? "bg-[#FFF7F2] text-[#062246]"
+                          ? "bg-[#FFF7F2] text-[#ea580c]"
                           : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                       }`}
                     >
@@ -427,7 +427,7 @@ export default function AlertsPage() {
                   }
                   className={`rounded-2xl border px-4 py-3 text-left text-sm font-medium transition ${
                     draft.remoteOnly
-                      ? "border-[#FFD2B8] bg-[#FFF7F2] text-[#062246]"
+                      ? "border-[#FFD2B8] bg-[#FFF7F2] text-[#ea580c]"
                       : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
                   }`}
                 >
@@ -443,7 +443,7 @@ export default function AlertsPage() {
                   }
                   className={`rounded-2xl border px-4 py-3 text-left text-sm font-medium transition ${
                     draft.sponsorshipRequired
-                      ? "border-[#FFD2B8] bg-[#FFF7F2] text-[#062246]"
+                      ? "border-[#FFD2B8] bg-[#FFF7F2] text-[#ea580c]"
                       : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
                   }`}
                 >
@@ -492,7 +492,7 @@ export default function AlertsPage() {
                           className="h-10 w-10 rounded-2xl object-cover"
                         />
                       ) : (
-                        <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#FFF1E8] text-sm font-semibold text-[#062246]">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#FFF1E8] text-sm font-semibold text-[#ea580c]">
                           {company.name.charAt(0).toUpperCase()}
                         </div>
                       )}

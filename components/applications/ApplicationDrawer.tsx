@@ -1,7 +1,9 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
+import Link from "next/link"
 import {
+  Briefcase,
   Building2,
   Calendar,
   CalendarCheck,
@@ -19,12 +21,13 @@ import { cn } from "@/lib/utils"
 import type { ApplicationStatus, InterviewFormat, InterviewOutcome, InterviewRound, JobApplication, OfferDetails } from "@/types"
 import { InterviewPrep } from "./InterviewPrep"
 import FeatureGate from "@/components/gates/FeatureGate"
+import { ScoutFollowUpBlock } from "@/components/scout/ScoutFollowUpBlock"
 
 const STATUS_META: Record<ApplicationStatus, { label: string; color: string }> = {
   saved: { label: "Saved", color: "bg-slate-100 text-slate-600 border-slate-200" },
   applied: { label: "Applied", color: "bg-blue-50 text-blue-700 border-blue-200" },
   phone_screen: { label: "Phone Screen", color: "bg-amber-50 text-amber-700 border-amber-200" },
-  interview: { label: "Interview", color: "bg-violet-50 text-violet-700 border-violet-200" },
+  interview: { label: "Interview", color: "bg-orange-50 text-orange-700 border-orange-200" },
   final_round: { label: "Final Round", color: "bg-indigo-50 text-indigo-700 border-indigo-200" },
   offer: { label: "Offer", color: "bg-emerald-50 text-emerald-700 border-emerald-200" },
   rejected: { label: "Rejected", color: "bg-red-50 text-red-700 border-red-200" },
@@ -53,7 +56,15 @@ function formatTime(iso: string) {
 
 // ─── Overview Tab ────────────────────────────────────────────────────────────
 
-function OverviewTab({ app, onUpdate }: { app: JobApplication; onUpdate: Props["onUpdate"] }) {
+function OverviewTab({
+  app,
+  onUpdate,
+  onClose,
+}: {
+  app: JobApplication
+  onUpdate: Props["onUpdate"]
+  onClose: () => void
+}) {
   const [notes, setNotes] = useState(app.notes ?? "")
   const [saving, setSaving] = useState(false)
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -72,6 +83,25 @@ function OverviewTab({ app, onUpdate }: { app: JobApplication; onUpdate: Props["
 
   return (
     <div className="space-y-5">
+      {app.job_id && (
+        <div className="rounded-[12px] border border-orange-100 bg-[linear-gradient(to_bottom_right,#FFF7F2,#FFFFFF)] p-4">
+          <p className="inline-flex items-center gap-2 text-[11.5px] font-semibold uppercase tracking-[0.18em] text-[#EA580C]">
+            <Briefcase className="h-3.5 w-3.5" aria-hidden />
+            Job profile
+          </p>
+          <p className="mt-2 text-[13px] leading-snug text-slate-700">
+            Open your Hireoven listing for posting text, sponsorship signals, match tools, and Scout.
+          </p>
+          <Link
+            href={`/dashboard/jobs/${app.job_id}`}
+            className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-[10px] bg-[#FF5C18] px-4 py-2.5 text-[13px] font-semibold text-white shadow-sm transition hover:bg-[#ea580c] sm:w-auto"
+            onClick={onClose}
+          >
+            View full job details <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+          </Link>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-3">
         <div className="rounded-[12px] border border-slate-200/70 bg-slate-50/60 p-3.5">
           <p className="text-[10.5px] font-semibold uppercase tracking-[0.18em] text-slate-400">Status</p>
@@ -119,6 +149,8 @@ function OverviewTab({ app, onUpdate }: { app: JobApplication; onUpdate: Props["
           className="w-full resize-none rounded-[10px] border border-slate-200 bg-slate-50/60 px-3 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none"
         />
       </div>
+
+      <ScoutFollowUpBlock app={app} />
     </div>
   )
 }
@@ -164,7 +196,7 @@ function TimelineTab({
           type="button"
           onClick={addNote}
           disabled={adding || !note.trim()}
-          className="inline-flex items-center gap-1.5 rounded-[10px] bg-[#062246] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#0A3566] disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 rounded-[10px] bg-[#ea580c] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#c2410c] disabled:opacity-50"
         >
           {adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
         </button>
@@ -348,7 +380,7 @@ function InterviewsTab({ app, onUpdate }: { app: JobApplication; onUpdate: Props
               type="button"
               onClick={saveRound}
               disabled={saving || !newRound.round_name?.trim()}
-              className="inline-flex items-center gap-1.5 rounded-[8px] bg-[#062246] px-4 py-2 text-xs font-semibold text-white disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-[8px] bg-[#ea580c] px-4 py-2 text-xs font-semibold text-white disabled:opacity-50"
             >
               {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
               Save
@@ -565,7 +597,7 @@ export function ApplicationDrawer({ application, onClose, onUpdate, onDelete, on
         {/* Content */}
         <div className="flex-1 overflow-y-auto px-5 py-5">
           {tab === "Overview" && (
-            <OverviewTab app={application} onUpdate={onUpdate} />
+            <OverviewTab app={application} onUpdate={onUpdate} onClose={onClose} />
           )}
           {tab === "Timeline" && (
             <TimelineTab app={application} onAddTimeline={onAddTimeline} onRemoveTimeline={onRemoveTimeline} />

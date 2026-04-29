@@ -1,5 +1,6 @@
 import { parse } from 'csv-parse/sync'
 import { getPostgresPool } from '@/lib/postgres/server'
+import { normalizeEmployerName } from '@/lib/h1b/normalize-employer'
 import type { Company, CompanyUpdate, H1BRecordInsert } from '@/types'
 
 /**
@@ -49,14 +50,6 @@ function detectDelimiter(text: string): ',' | '\t' {
   const tabs = (firstLine.match(/\t/g) ?? []).length
   const commas = (firstLine.match(/,/g) ?? []).length
   return tabs > commas ? '\t' : ','
-}
-
-function normalizeEmployerName(name: string): string {
-  return name
-    .toUpperCase()
-    .replace(/\b(INC|LLC|CORP|CORPORATION|LTD|LIMITED|CO|COMPANY|PLC|HOLDINGS|GROUP|TECHNOLOGIES|TECHNOLOGY|SYSTEMS|SOLUTIONS|SERVICES)\b\.?,?\s*/g, '')
-    .replace(/[,.]$/, '')
-    .trim()
 }
 
 function levenshtein(a: string, b: string): number {

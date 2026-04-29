@@ -196,19 +196,6 @@ export async function POST(request: Request) {
   )
   const existingResumes = existingResumesResult.rows
 
-  const existingCount = existingResumes?.length ?? 0
-  const maxResumes = 3
-
-  if (existingCount >= maxResumes) {
-    return NextResponse.json(
-      {
-        error: "You can upload up to 3 resumes",
-        requiredPlan: null,
-      },
-      { status: 403 }
-    )
-  }
-
   let uploadedPath = ""
 
   try {
@@ -352,6 +339,7 @@ export async function POST(request: Request) {
     })
 
     return NextResponse.json({
+      id: resume.id,
       resumeId: resume.id,
       status: "processing",
       resume,

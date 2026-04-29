@@ -1,4 +1,5 @@
 import crypto from "crypto"
+import pLimit from "p-limit"
 import { NextRequest, NextResponse } from "next/server"
 import { assertAdminAccess } from "@/lib/admin/auth"
 import { crawlCareersPage, type CrawlTarget } from "@/lib/crawler"
@@ -13,6 +14,10 @@ const MAX_COMPANY_ATTEMPTS = Math.max(
 const COMPANY_RETRY_BASE_DELAY_MS = Math.max(
   250,
   Number.parseInt(process.env.CRAWLER_COMPANY_RETRY_BASE_DELAY_MS ?? "1200", 10)
+)
+const CRAWLER_COMPANY_CONCURRENCY = Math.max(
+  1,
+  Number.parseInt(process.env.CRAWLER_COMPANY_CONCURRENCY ?? "4", 10)
 )
 const MAX_ERROR_MESSAGE_LENGTH = 800
 
@@ -167,124 +172,121 @@ export async function POST(request: NextRequest) {
   try {
     const companies = await getTargetCompanies(action)
     companiesCount = companies.length
-    const results: Array<{
-      companyId: string
-      companyName: string
-      status: "success" | "failed" | "unchanged"
-      newJobs: number
-      durationMs: number
-      error?: string
-    }> = []
+    const limitCompany = pLimit(CRAWLER_COMPANY_CONCURRENCY)
+    const results = await Promise.all(
+      companies.map((company) => limitCompany(async () => {
+        const startedAt = Date.now()
+        const target: CrawlTarget = {
+          id: company.id,
+          companyName: company.name,
+          careersUrl: company.careers_url,
+          lastCrawledAt: company.last_crawled_at ? new Date(company.last_crawled_at) : null,
+          atsType: company.ats_type ?? null,
+        }
 
-    for (const company of companies) {
-      const startedAt = Date.now()
-      const target: CrawlTarget = {
-        id: company.id,
-        companyName: company.name,
-        careersUrl: company.careers_url,
-        lastCrawledAt: company.last_crawled_at ? new Date(company.last_crawled_at) : null,
-        atsType: company.ats_type ?? null,
-      }
+        try {
+          let result: Awaited<ReturnType<typeof crawlCareersPage>> | null = null
+          let persistResult:
+            | Awaited<
+                ReturnType<typeof persistCrawlJobs>
+              >
+            | null = null
+          let lastErrorMessage = ""
+          let attempts = 0
 
-      try {
-        let result: Awaited<ReturnType<typeof crawlCareersPage>> | null = null
-        let persistResult:
-          | Awaited<
-              ReturnType<typeof persistCrawlJobs>
-            >
-          | null = null
-        let lastErrorMessage = ""
-        let attempts = 0
-
-        for (let attempt = 1; attempt <= MAX_COMPANY_ATTEMPTS; attempt += 1) {
-          attempts = attempt
-          try {
-            result = await crawlCareersPage(target)
-            persistResult = await persistCrawlJobs({
-              companyId: company.id,
-              crawledAt: result.crawledAt,
-              jobs: result.jobs,
-            })
-            break
-          } catch (error) {
-            const message = sanitizeErrorMessage(toErrorMessage(error))
-            lastErrorMessage = message
-            if (!isTransientCrawlerError(message) || attempt >= MAX_COMPANY_ATTEMPTS) {
-              throw new Error(message)
+          for (let attempt = 1; attempt <= MAX_COMPANY_ATTEMPTS; attempt += 1) {
+            attempts = attempt
+            try {
+              result = await crawlCareersPage(target)
+              persistResult = await persistCrawlJobs({
+                companyId: company.id,
+                crawledAt: result.crawledAt,
+                jobs: result.jobs,
+                sourceUrl: result.url,
+                normalizedUrl: result.normalizedUrl,
+                diagnostics: result.diagnostics,
+              })
+              break
+            } catch (error) {
+              const message = sanitizeErrorMessage(toErrorMessage(error))
+              lastErrorMessage = message
+              if (!isTransientCrawlerError(message) || attempt >= MAX_COMPANY_ATTEMPTS) {
+                throw new Error(message)
+              }
+              await sleep(COMPANY_RETRY_BASE_DELAY_MS * attempt)
             }
-            await sleep(COMPANY_RETRY_BASE_DELAY_MS * attempt)
+          }
+
+          if (!result || !persistResult) {
+            throw new Error(lastErrorMessage || "Company crawl failed")
+          }
+
+          const durationMs = Date.now() - startedAt
+          const status = result.jobs.length > 0 ? "success" : "unchanged"
+
+          try {
+            await pool.query(
+              `INSERT INTO crawl_logs (company_id, status, jobs_found, new_jobs, duration_ms, crawled_at, error_message)
+               VALUES ($1::uuid, $2, $3, $4, $5, $6::timestamptz, $7)`,
+              [
+                company.id,
+                status,
+                result.jobs.length,
+                persistResult.inserted,
+                durationMs,
+                result.crawledAt.toISOString(),
+                attempts > 1 ? `Recovered after ${attempts} attempts` : null,
+              ]
+            )
+          } catch (logError) {
+            console.error(
+              `[admin/crawl] Unable to insert crawl log for ${company.id}:`,
+              logError instanceof Error ? logError.message : logError
+            )
+          }
+
+          return {
+            companyId: company.id,
+            companyName: company.name,
+            status,
+            newJobs: persistResult.inserted,
+            durationMs,
+          }
+        } catch (error) {
+          const durationMs = Date.now() - startedAt
+          const errorMessage = sanitizeErrorMessage(toErrorMessage(error))
+          try {
+            await pool.query(
+              `INSERT INTO crawl_logs (company_id, status, jobs_found, new_jobs, duration_ms, crawled_at, error_message)
+               VALUES ($1::uuid, $2, $3, $4, $5, $6::timestamptz, $7)`,
+              [
+                company.id,
+                "failed",
+                0,
+                0,
+                durationMs,
+                new Date().toISOString(),
+                errorMessage,
+              ]
+            )
+          } catch (logError) {
+            console.error(
+              `[admin/crawl] Unable to insert failed crawl log for ${company.id}:`,
+              logError instanceof Error ? logError.message : logError
+            )
+          }
+
+          return {
+            companyId: company.id,
+            companyName: company.name,
+            status: "failed" as const,
+            newJobs: 0,
+            durationMs,
+            error: errorMessage,
           }
         }
-
-        if (!result || !persistResult) {
-          throw new Error(lastErrorMessage || "Company crawl failed")
-        }
-
-        const durationMs = Date.now() - startedAt
-        const status = result.jobs.length > 0 ? "success" : "unchanged"
-
-        try {
-          await pool.query(
-            `INSERT INTO crawl_logs (company_id, status, jobs_found, new_jobs, duration_ms, crawled_at, error_message)
-             VALUES ($1::uuid, $2, $3, $4, $5, $6::timestamptz, $7)`,
-            [
-              company.id,
-              status,
-              result.jobs.length,
-              persistResult.inserted,
-              durationMs,
-              result.crawledAt.toISOString(),
-              attempts > 1 ? `Recovered after ${attempts} attempts` : null,
-            ]
-          )
-        } catch (logError) {
-          console.error(
-            `[admin/crawl] Unable to insert crawl log for ${company.id}:`,
-            logError instanceof Error ? logError.message : logError
-          )
-        }
-
-        results.push({
-          companyId: company.id,
-          companyName: company.name,
-          status,
-          newJobs: persistResult.inserted,
-          durationMs,
-        })
-      } catch (error) {
-        const durationMs = Date.now() - startedAt
-        const errorMessage = sanitizeErrorMessage(toErrorMessage(error))
-        try {
-          await pool.query(
-            `INSERT INTO crawl_logs (company_id, status, jobs_found, new_jobs, duration_ms, crawled_at, error_message)
-             VALUES ($1::uuid, $2, $3, $4, $5, $6::timestamptz, $7)`,
-            [
-              company.id,
-              "failed",
-              0,
-              0,
-              durationMs,
-              new Date().toISOString(),
-              errorMessage,
-            ]
-          )
-        } catch (logError) {
-          console.error(
-            `[admin/crawl] Unable to insert failed crawl log for ${company.id}:`,
-            logError instanceof Error ? logError.message : logError
-          )
-        }
-
-        results.push({
-          companyId: company.id,
-          companyName: company.name,
-          status: "failed",
-          newJobs: 0,
-          durationMs,
-          error: errorMessage,
-        })
-      }
-    }
+      }))
+    )
 
     succeeded = results.filter((result) => result.status !== "failed").length
     failed = results.filter((result) => result.status === "failed").length

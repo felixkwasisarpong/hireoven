@@ -59,7 +59,7 @@ test("calculateVisaFitScore warns when sponsor has no role-family match", () => 
     recentLcaCount: 12,
     roleFamilyLcaCount: 0,
     locationLcaCount: 6,
-    wageLevelSignal: "acceptable",
+    wageLevelSignal: "moderate",
     dataRecencyDays: 220,
   })
 

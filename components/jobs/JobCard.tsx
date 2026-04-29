@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { BadgeCheck, Bookmark, Clock, ExternalLink, Plane, Trophy } from "lucide-react"
+import { BadgeCheck, Bookmark, Clock, ExternalLink, MapPin, Plane, Trophy } from "lucide-react"
 
 import dynamic from "next/dynamic"
 import Link from "next/link"
@@ -132,6 +132,7 @@ export default function JobCard({
 
   const cardView = resolveJobCardView(job)
   const displayTitle = cardView.title
+  const topSkills = cardView.skills.slice(0, 3)
 
   const showVerified =
     employerLikelySponsorsH1b(job) || companyConf >= 35 || Boolean(job.company?.sponsors_h1b)
@@ -142,7 +143,10 @@ export default function JobCard({
   const sponsorshipCopy = showSponsorshipBanner ? employerSponsorshipCardCopy(job) : null
 
   const evidenceFacts = useMemo(() => buildJobEvidenceFacts(job), [job])
-  const jobCardFactItems = useMemo(() => buildJobCardFactList(evidenceFacts, 4), [evidenceFacts])
+  const jobCardFactItems = useMemo(
+    () => buildJobCardFactList(evidenceFacts, 4).filter((item) => item.id !== "location" || !job.location?.trim()),
+    [evidenceFacts, job.location]
+  )
 
   useEffect(() => {
     let cancelled = false
@@ -201,7 +205,7 @@ export default function JobCard({
     }
   }
 
-  const showScorePanel = showResumeSignal && (score !== null || isMatchScoreLoading)
+  const showScorePanel = score !== null || (showResumeSignal && isMatchScoreLoading)
 
   function openMatchDetail(e: React.MouseEvent) {
     e.stopPropagation()
@@ -226,8 +230,9 @@ export default function JobCard({
             router.push(`/dashboard/jobs/${job.id}`)
           }
         }}
-        className="group relative flex cursor-pointer flex-col overflow-hidden rounded-xl border border-[#E5E7EB] bg-white shadow-none transition-colors hover:border-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]/20"
+        className="relative flex cursor-pointer flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-600/20"
       >
+
         <button
           type="button"
           onClick={(e) => void handleBookmark(e)}
@@ -252,7 +257,7 @@ export default function JobCard({
             />
 
             <div className="min-w-0 flex-1">
-              <h3 className="text-[17px] font-bold leading-tight text-slate-900 transition-colors group-hover:text-[#2563EB] pr-8">
+              <h3 className="text-[17px] font-bold leading-tight text-slate-950 pr-8">
                 {displayTitle}
               </h3>
 
@@ -261,7 +266,7 @@ export default function JobCard({
                   <Link
                     href={companyProfileHref}
                     onClick={(e) => e.stopPropagation()}
-                    className="text-[14px] font-medium text-slate-700 transition hover:text-[#2563EB] hover:underline"
+                    className="text-[14px] font-medium text-slate-700 transition hover:text-orange-600 hover:underline"
                   >
                     {companyName}
                   </Link>
@@ -270,7 +275,7 @@ export default function JobCard({
                 )}
                 {showVerified && (
                   <BadgeCheck
-                    className="h-4 w-4 shrink-0 text-[#2563EB]"
+                    className="h-4 w-4 shrink-0 text-orange-600"
                     aria-label="Verified employer signal"
                   />
                 )}
@@ -289,9 +294,29 @@ export default function JobCard({
                 )}
               </div>
 
+              {job.location?.trim() && (
+                <div className="mt-1.5 inline-flex items-center gap-1 text-[13px] text-slate-500">
+                  <MapPin className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden />
+                  <span>{job.location}</span>
+                </div>
+              )}
+
               {jobCardFactItems.length > 0 && (
                 <div className="mt-2 text-[13px] text-slate-500">
                   <JobCardEvidenceFactChips jobId={job.id} items={jobCardFactItems} />
+                </div>
+              )}
+
+              {topSkills.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {topSkills.map((skill) => (
+                    <span
+                      key={skill}
+                      className="rounded-full bg-slate-100 px-2 py-0.5 text-[10.5px] font-semibold text-slate-600"
+                    >
+                      {skill}
+                    </span>
+                  ))}
                 </div>
               )}
 
@@ -299,7 +324,7 @@ export default function JobCard({
           </div>
 
           <div
-            className="flex w-full shrink-0 flex-col gap-2 border-t border-[#E5E7EB] px-5 py-4 sm:w-[220px] sm:justify-center sm:border-l sm:border-t-0 sm:px-4"
+            className="flex w-full shrink-0 flex-col gap-2 border-t border-slate-200 px-5 py-4 sm:w-[220px] sm:justify-center sm:border-l sm:border-t-0 sm:px-4"
             onClick={(e) => e.stopPropagation()}
           >
             <a
@@ -307,7 +332,7 @@ export default function JobCard({
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
-              className="group/apply inline-flex items-center gap-1 self-end text-[12px] font-semibold text-[#2563EB] transition hover:text-[#1D4ED8] focus-visible:outline-none focus-visible:underline"
+              className="group/apply inline-flex items-center gap-1 self-end text-[12px] font-semibold text-orange-600 transition hover:text-orange-700 focus-visible:outline-none focus-visible:underline"
             >
               Apply Now
               <ExternalLink
@@ -346,7 +371,7 @@ export default function JobCard({
 
           {showScorePanel && (
             <div
-              className="flex w-full min-w-0 flex-shrink-0 flex-col items-center justify-center gap-1 border-t border-[#E5E7EB] px-4 py-4 sm:w-[132px] sm:border-l sm:border-t-0"
+              className="flex w-full min-w-0 flex-shrink-0 flex-col items-center justify-center gap-1 border-t border-slate-200 px-4 py-4 sm:w-[132px] sm:border-l sm:border-t-0"
               onClick={(e) => e.stopPropagation()}
             >
               {isMatchScoreLoading && score === null ? (
@@ -361,8 +386,8 @@ export default function JobCard({
                   className="flex w-full flex-col items-center focus-visible:outline-none"
                 >
                   <MatchGauge score={score} />
-                  <p className="mt-0.5 text-[11px] font-medium text-slate-600">Match Score</p>
-                  <span className="mt-1.5 text-[12px] font-semibold text-[#2563EB] hover:underline">
+                  <span className="mt-0.5 text-[11px] font-medium text-slate-600">Match Score</span>
+                  <span className="mt-1.5 text-[12px] font-semibold text-orange-600 hover:underline">
                     View match
                   </span>
                 </button>
