@@ -143,6 +143,10 @@ function parseLogoDomain(logoUrl: string | null): string {
         u.searchParams.get('domain') ?? u.searchParams.get('domain_url') ?? ''
       )
     }
+    // logo.dev: https://img.logo.dev/{domain}?token=...
+    if (host === 'img.logo.dev') {
+      return normalizeDomain(u.pathname.replace(/^\//, '').split('?')[0] ?? '')
+    }
     if (host === 'logo.clearbit.com' || host === 'unavatar.io') {
       return normalizeDomain(u.pathname.replace(/^\//, '').split('/')[0] ?? '')
     }

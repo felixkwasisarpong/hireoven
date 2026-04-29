@@ -11,6 +11,7 @@ import {
   formatMockInterviewContext,
   parseMockInterviewResponse,
 } from "@/lib/scout/mock-interview-prompt"
+import { ANTHROPIC_TIER_PRICING, SONNET_MODEL } from "@/lib/ai/anthropic-models"
 import type { ScoutMockInterviewTurn } from "@/lib/scout/types"
 
 export const runtime = "nodejs"
@@ -20,8 +21,9 @@ const anthropic = process.env.ANTHROPIC_API_KEY
   ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
   : null
 
-const MODEL = "claude-sonnet-4-6"
-const MODEL_PRICING = { inputPerMillion: 3, outputPerMillion: 15 }
+// Mock interviews require coherent coaching feedback and stable multi-turn behavior.
+const MODEL = SONNET_MODEL
+const MODEL_PRICING = ANTHROPIC_TIER_PRICING.sonnet
 
 function scoutError(status: number, message: string) {
   return NextResponse.json({ ok: false, status, message, error: message }, { status })

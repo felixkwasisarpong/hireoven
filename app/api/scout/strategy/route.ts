@@ -9,6 +9,7 @@ import {
   formatStrategyContext,
   parseStrategyResponse,
 } from "@/lib/scout/strategy-prompt"
+import { ANTHROPIC_TIER_PRICING, SONNET_MODEL } from "@/lib/ai/anthropic-models"
 import type { ScoutAIStrategy, ScoutAIStrategyGated } from "@/lib/scout/types"
 import { getUserPlan } from "@/lib/gates/server-gate"
 import { canAccess } from "@/lib/gates"
@@ -20,8 +21,9 @@ const anthropic = process.env.ANTHROPIC_API_KEY
   ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
   : null
 
-const MODEL = "claude-sonnet-4-6"
-const MODEL_PRICING = { inputPerMillion: 3, outputPerMillion: 15 }
+// Strategy planning needs stronger reasoning than extraction/cleanup tasks.
+const MODEL = SONNET_MODEL
+const MODEL_PRICING = ANTHROPIC_TIER_PRICING.sonnet
 
 function scoutError(status: number, message: string) {
   return NextResponse.json({ ok: false, status, message, error: message }, { status })

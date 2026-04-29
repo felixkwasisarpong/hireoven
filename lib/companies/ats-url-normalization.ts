@@ -1,4 +1,5 @@
 import { normalizeGreenhouseBoardUrl } from "@/lib/companies/greenhouse-url"
+import { isTemporaryCareersUrl } from "@/lib/companies/ats-domains"
 
 export type NormalizedAtsProvider =
   | "greenhouse"
@@ -91,6 +92,20 @@ export function normalizeAtsUrl(
     }
   }
 
+  // Hard-reject URLs that carry transient/share/embed signals — those reflect
+  // a single browsing session rather than a stable careers entry point. The
+  // crawler must never store these as the canonical URL for a company.
+  if (isTemporaryCareersUrl(originalUrl)) {
+    return {
+      provider: "custom",
+      originalUrl,
+      normalizedUrl: originalUrl,
+      atsIdentifier: null,
+      reason: "temporary_or_share_url",
+      shouldPersist: false,
+    }
+  }
+
   const host = url.hostname.toLowerCase()
   const pathParts = url.pathname.split("/").filter(Boolean)
   const hintedProvider = context?.atsType?.toLowerCase() ?? ""
@@ -147,11 +162,16 @@ export function normalizeAtsUrl(
 
   if (host.includes("myworkdayjobs.com")) {
     const sitePath = workdaySitePath(url)
+    // Store tenant/site as identifier so canonical-careers-url.ts can reconstruct
+    // the Workday URL when the stored careers_url is stale.
+    const tenant = host.split(".")[0] ?? null
+    const siteSlug = sitePath.split("/").filter(Boolean).at(-1) ?? null
+    const identifier = tenant && siteSlug ? `${tenant}/${siteSlug}` : null
     return {
       provider: "workday",
       originalUrl,
       normalizedUrl: trimTrailingSlash(`${url.origin}${sitePath}`),
-      atsIdentifier: null,
+      atsIdentifier: identifier,
       reason: sitePath ? "workday_tenant_site_url" : "workday_tenant_origin",
       shouldPersist: true,
     }
@@ -169,6 +189,20 @@ export function normalizeAtsUrl(
     }
   }
 
+  if (hintedProvider === "icims") {
+    // Branded iCIMS portals use a custom host (e.g. careers.company.com) but
+    // are real careers pages. Persist them; they are crawlable via the iCIMS
+    // Jibe API and generic HTML fallback.
+    return {
+      provider: "icims",
+      originalUrl,
+      normalizedUrl: trimTrailingSlash(stripTransientParams(url).toString()),
+      atsIdentifier: null,
+      reason: "icims_branded_portal_url",
+      shouldPersist: true,
+    }
+  }
+
   if (host === "bamboohr.com" || host.endsWith(".bamboohr.com")) {
     const tenant = cleanIdentifier(host.split(".")[0])
     return {
@@ -183,7 +217,7 @@ export function normalizeAtsUrl(
 
   const clean = stripTransientParams(url)
   return {
-    provider: hintedProvider === "custom" ? "custom" : "custom",
+    provider: "custom",
     originalUrl,
     normalizedUrl: trimTrailingSlash(clean.toString()),
     atsIdentifier: null,

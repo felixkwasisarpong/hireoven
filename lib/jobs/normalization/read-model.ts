@@ -14,6 +14,7 @@ import {
 import { cleanJobDescription } from "@/lib/jobs/description"
 import { extractSalaryRange } from "@/lib/jobs/metadata"
 import { cleanJobTitle } from "@/lib/jobs/title"
+import { categorizeSkills, emptyCategorizedSkills } from "@/lib/skills/taxonomy"
 import type {
   CanonicalJob,
   JobCardViewModel,
@@ -32,6 +33,17 @@ function shouldRecomputeFromCurrentRow(
   job: PersistedJobForNormalization,
   stored: CanonicalJob
 ) {
+  // `extractCanonicalSections` always returns every key as a CanonicalSection
+  // object (never null/undefined), so truthiness checks like `!stored.sections.qualifications`
+  // always return false. Check `.items.length` instead to detect empty sections.
+  const missingStructure =
+    stored.sections.qualifications.items.length === 0 &&
+    stored.sections.skills.items.length === 0 &&
+    stored.sections.equal_opportunity.items.length === 0 &&
+    !stored.skill_groups
+
+  if (missingStructure) return true
+
   const cleanedDescription = cleanJobDescription(job.description)
   const hasCurrentDescription = Boolean(cleanedDescription && cleanedDescription.length >= 120)
 
@@ -121,6 +133,13 @@ function readStoredCardView(
     skills: Array.isArray(payload.skills)
       ? payload.skills.filter((skill): skill is string => typeof skill === "string")
       : [],
+    skill_groups:
+      payload.skill_groups && typeof payload.skill_groups === "object"
+        ? {
+            ...emptyCategorizedSkills(),
+            ...(payload.skill_groups as Record<string, string[]>),
+          }
+        : emptyCategorizedSkills(),
     sponsorship_badge:
       payload.sponsorship_badge === "sponsors" ||
       payload.sponsorship_badge === "no_sponsorship" ||
@@ -176,6 +195,10 @@ export function resolveJobCardView(job: JobCardFallbackInput): JobCardViewModel 
       seniority_label: stored.seniority_label ?? formatSeniorityLabel(job.seniority_level),
       preview_description: stored.preview_description ?? livePreview,
       skills: stored.skills.length > 0 ? stored.skills : liveSkills.slice(0, 8),
+      skill_groups:
+        stored.skills.length > 0
+          ? stored.skill_groups
+          : categorizeSkills(liveSkills.slice(0, 8)),
     }
   }
 
@@ -188,6 +211,7 @@ export function resolveJobCardView(job: JobCardFallbackInput): JobCardViewModel 
     seniority_label: formatSeniorityLabel(job.seniority_level),
     preview_description: cleanedDescription?.slice(0, 220) ?? null,
     skills: liveSkills.slice(0, 8),
+    skill_groups: categorizeSkills(liveSkills.slice(0, 8)),
     sponsorship_badge:
       job.sponsors_h1b
         ? "sponsors"

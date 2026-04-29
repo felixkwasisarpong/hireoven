@@ -14,6 +14,7 @@ import {
 } from "@/lib/scout/gating"
 import { canAccess } from "@/lib/gates"
 import { getUserPlan } from "@/lib/gates/server-gate"
+import { ANTHROPIC_TIER_PRICING, SONNET_MODEL } from "@/lib/ai/anthropic-models"
 import {
   isScoutIntent,
   isScoutMode,
@@ -71,8 +72,9 @@ const anthropic = process.env.ANTHROPIC_API_KEY
   ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
   : null
 
-const MODEL = "claude-sonnet-4-6"
-const MODEL_PRICING = { inputPerMillion: 3, outputPerMillion: 15 }
+// Grounded Scout Q&A/compare workflows need better instruction following and reasoning depth.
+const MODEL = SONNET_MODEL
+const MODEL_PRICING = ANTHROPIC_TIER_PRICING.sonnet
 const COMMAND_VERB_RE = /^(show|filter|find|open|compare|improve|prepare|focus|hide|narrow|sort)\b/i
 const WORKFLOW_HINT_RE = /\b(workflow|plan|steps|step-by-step|checklist|roadmap)\b/i
 const ANALYSIS_HINT_RE = /\b(analyz|analysis|score|fit|verdict|breakdown|evaluate|assess)\b/i

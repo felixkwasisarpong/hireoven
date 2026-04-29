@@ -6,6 +6,7 @@ import { getUserPlan } from "@/lib/gates/server-gate"
 import { canAccess } from "@/lib/gates"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { analyzeFollowUp } from "@/lib/scout/follow-up"
+import { ANTHROPIC_TIER_PRICING, HAIKU_MODEL } from "@/lib/ai/anthropic-models"
 import type { JobApplication } from "@/types"
 
 export const runtime = "nodejs"
@@ -15,9 +16,9 @@ const anthropic = process.env.ANTHROPIC_API_KEY
   ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
   : null
 
-// Using Haiku for short drafts — cheap, fast, sufficient
-const MODEL = "claude-haiku-4-5"
-const MODEL_PRICING = { inputPerMillion: 0.25, outputPerMillion: 1.25 }
+// Follow-up drafts are short and latency-sensitive; Haiku is sufficient here.
+const MODEL = HAIKU_MODEL
+const MODEL_PRICING = ANTHROPIC_TIER_PRICING.haiku
 
 function scoutError(status: number, message: string) {
   return NextResponse.json({ ok: false, status, message, error: message }, { status })

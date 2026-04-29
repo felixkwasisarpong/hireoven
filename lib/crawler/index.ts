@@ -29,6 +29,23 @@ export interface RawJob {
   description?: string
   location?: string
   postedAt?: string
+  companyLogo?: string
+  workMode?: string
+  employmentType?: string
+  salaryRange?: string
+  matchScore?: number
+  matchLabel?: string
+  matchedSkills?: string[]
+  missingSkills?: string[]
+  sponsorshipSignal?: string
+  companySummary?: string
+  companyFoundedYear?: number
+  companyEmployeeCount?: string
+  companyIndustry?: string
+  easyApply?: boolean
+  activelyHiring?: boolean
+  topApplicantSignal?: boolean
+  companyVerified?: boolean
 }
 
 export interface CrawlResult {
@@ -1641,6 +1658,52 @@ function extractJobsFromJsonLd(html: string, baseUrl: URL): RawJob[] {
       if (seen.has(url)) return
       seen.add(url)
 
+      const hiringOrganization =
+        node.hiringOrganization && typeof node.hiringOrganization === "object"
+          ? (node.hiringOrganization as Record<string, unknown>)
+          : null
+      const employmentTypeRaw = node.employmentType
+      const employmentType = Array.isArray(employmentTypeRaw)
+        ? String(employmentTypeRaw[0] ?? "").trim() || undefined
+        : String(employmentTypeRaw ?? "").trim() || undefined
+      const logoValue = hiringOrganization?.logo
+      const companyLogo =
+        typeof logoValue === "string"
+          ? logoValue.trim() || undefined
+          : logoValue && typeof logoValue === "object"
+            ? String((logoValue as Record<string, unknown>).url ?? "").trim() || undefined
+            : undefined
+      const salarySpec =
+        node.baseSalary && typeof node.baseSalary === "object"
+          ? (node.baseSalary as Record<string, unknown>)
+          : null
+      const salaryValue =
+        salarySpec?.value && typeof salarySpec.value === "object"
+          ? (salarySpec.value as Record<string, unknown>)
+          : null
+      const salaryMin =
+        typeof salaryValue?.minValue === "number"
+          ? salaryValue.minValue
+          : typeof salaryValue?.value === "number"
+            ? salaryValue.value
+            : null
+      const salaryMax =
+        typeof salaryValue?.maxValue === "number" ? salaryValue.maxValue : null
+      const salaryUnit = String(salaryValue?.unitText ?? "").trim()
+      const salaryRange =
+        salaryMin && salaryMax
+          ? `$${salaryMin.toLocaleString()} - $${salaryMax.toLocaleString()}${salaryUnit ? ` / ${salaryUnit}` : ""}`
+          : salaryMin
+            ? `$${salaryMin.toLocaleString()}${salaryUnit ? ` / ${salaryUnit}` : ""}`
+            : undefined
+      const jobLocationType = String(node.jobLocationType ?? "").toLowerCase()
+      const workMode =
+        jobLocationType.includes("telecommute")
+          ? "Remote"
+          : undefined
+      const companySummary = cleanJobDescription(String(hiringOrganization?.description ?? "").trim()) ?? undefined
+      const companyIndustry = String(hiringOrganization?.industry ?? "").trim() || undefined
+
       out.push({
         externalId:
           String(
@@ -1651,6 +1714,12 @@ function extractJobsFromJsonLd(html: string, baseUrl: URL): RawJob[] {
         description: cleanJobDescription(String(node.description ?? "").trim()) ?? undefined,
         location: extractJobLocation(node),
         postedAt: String(node.datePosted ?? "").trim() || undefined,
+        companyLogo,
+        workMode,
+        employmentType,
+        salaryRange,
+        companySummary,
+        companyIndustry,
       })
     })
   }

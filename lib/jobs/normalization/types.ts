@@ -3,6 +3,7 @@ import type {
   Job,
   SeniorityLevel,
 } from "@/types"
+import type { CategorizedSkills } from "@/lib/skills/taxonomy"
 
 export const JOB_NORMALIZATION_VERSION = "job_normalization_v2"
 
@@ -12,6 +13,7 @@ export type SourceAdapterKind =
   | "ashby"
   | "workday"
   | "icims"
+  | "smartrecruiters"
   | "bamboohr"
   | "jobvite"
   | "oracle"
@@ -27,9 +29,12 @@ export type CanonicalSectionKey =
   | "about_role"
   | "responsibilities"
   | "requirements"
+  | "qualifications"
   | "preferred_qualifications"
+  | "skills"
   | "benefits"
   | "company_info"
+  | "equal_opportunity"
   | "application_info"
   | "other"
 
@@ -113,10 +118,19 @@ export type CanonicalJob = {
     external_id: string | null
     crawl_url: string
   }
+  company: {
+    name: string | null
+    domain: string | null
+  }
+  descriptions: {
+    raw: string | null
+    clean: string | null
+  }
   header: CanonicalJobHeader
   compensation: CanonicalCompensation
   visa: CanonicalVisa
   skills: CanonicalField<string[]>
+  skill_groups: CategorizedSkills
   sections: Record<CanonicalSectionKey, CanonicalSection>
   validation: NormalizationValidation
 }
@@ -144,6 +158,7 @@ export type JobPageViewModel = {
   ordered_sections: JobPageSectionView[]
   highlights: string[]
   skills: string[]
+  skill_groups: CategorizedSkills
   confidence_score: number
   requires_review: boolean
 }
@@ -156,6 +171,7 @@ export type JobCardViewModel = {
   seniority_label: string | null
   preview_description: string | null
   skills: string[]
+  skill_groups: CategorizedSkills
   sponsorship_badge: "sponsors" | "no_sponsorship" | "likely" | null
 }
 
@@ -191,6 +207,25 @@ export type SourceRawJobInput = {
   description?: string
   location?: string
   postedAt?: string
+  company?: string | null
+  companyDomain?: string | null
+  companyLogo?: string | null
+  workMode?: string | null
+  employmentType?: string | null
+  salaryRange?: string | null
+  matchScore?: number | null
+  matchLabel?: string | null
+  matchedSkills?: string[] | null
+  missingSkills?: string[] | null
+  sponsorshipSignal?: string | null
+  companySummary?: string | null
+  companyFoundedYear?: number | null
+  companyEmployeeCount?: string | null
+  companyIndustry?: string | null
+  easyApply?: boolean | null
+  activelyHiring?: boolean | null
+  topApplicantSignal?: boolean | null
+  companyVerified?: boolean | null
 }
 
 export type NormalizationResult = {
@@ -215,4 +250,5 @@ export type NormalizationResult = {
     skills: string[]
   }
   rawSnapshot: Record<string, unknown>
+  structuredData: Record<string, unknown>
 }

@@ -127,11 +127,14 @@ export function mapCanonicalToJobPageView(job: CanonicalJob): JobPageViewModel {
     sections.about_role,
     sections.responsibilities,
     sections.requirements,
+    sections.qualifications,
     sections.preferred_qualifications,
+    sections.skills,
     sections.benefits,
-    sections.company_info,
-    sections.application_info,
     sections.compensation,
+    sections.company_info,
+    sections.equal_opportunity,
+    sections.application_info,
     sections.visa,
     sections.other,
   ]
@@ -151,6 +154,7 @@ export function mapCanonicalToJobPageView(job: CanonicalJob): JobPageViewModel {
     ordered_sections,
     highlights: deriveHighlights(job, salaryLabel),
     skills: job.skills.value ?? [],
+    skill_groups: job.skill_groups,
     confidence_score: job.validation.confidence_score,
     requires_review: job.validation.requires_review,
   }
@@ -175,6 +179,7 @@ export function mapCanonicalToJobCardView(job: CanonicalJob): JobCardViewModel {
       job.sections.requirements.items[0] ??
       null,
     skills: (job.skills.value ?? []).slice(0, 8),
+    skill_groups: job.skill_groups,
     sponsorship_badge:
       job.visa.sponsors_h1b.value === true
         ? "sponsors"

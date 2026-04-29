@@ -18,6 +18,7 @@ import type {
   ExtractedJob,
   ExtensionSafeProfile,
   SessionResult,
+  ResolveJobResult,
   SaveResult,
   PageInfoResult,
   AutofillPreviewResult,
@@ -29,6 +30,10 @@ import type {
   ExtensionTailorPreviewResponse,
   ExtensionTailorApproveResponse,
   ExtensionCoverLetterResponse,
+  ScoutOverlayResult,
+  ScoutOverlayInsightsPayload,
+  ExtensionJobFingerprint,
+  ExtensionJobResolveResponse,
 } from "./types"
 
 // ── Config ─────────────────────────────────────────────────────────────────────
@@ -63,15 +68,21 @@ async function resolveOrigin(): Promise<string> {
   return result.devMode === false ? APP_ORIGINS[1] : APP_ORIGINS[0]
 }
 
-/** Get the session JWT from hireoven.com cookies. */
+/** Get the session JWT from hireoven cookies (apex + www fallback for production). */
 async function getSessionToken(origin: string): Promise<string | null> {
-  const url = origin + "/"
-  try {
-    const cookie = await chrome.cookies.get({ url, name: SESSION_COOKIE_NAME })
-    return cookie?.value ?? null
-  } catch {
-    return null
+  const urls = [`${origin}/`]
+  if (origin === APP_ORIGINS[1]) {
+    urls.push("https://www.hireoven.com/")
   }
+  for (const url of urls) {
+    try {
+      const cookie = await chrome.cookies.get({ url, name: SESSION_COOKIE_NAME })
+      if (cookie?.value) return cookie.value
+    } catch {
+      // try next
+    }
+  }
+  return null
 }
 
 /** Make an authenticated request to the extension API. */
@@ -151,15 +162,20 @@ async function queryContentScript(
 chrome.runtime.onMessage.addListener(
   (
     message: BackgroundMessage,
-    _sender,
-    sendResponse: (response: BackgroundResponse) => void
+    sender,
+    sendResponse: (response: BackgroundResponse) => void,
   ) => {
-    handleMessage(message).then(sendResponse)
+    handleMessage(message, sender).then(sendResponse).catch(() => {
+      sendResponse({ type: "ERROR", message: "Unhandled error" })
+    })
     return true // keep the message channel open for async response
-  }
+  },
 )
 
-async function handleMessage(message: BackgroundMessage): Promise<BackgroundResponse> {
+async function handleMessage(
+  message: BackgroundMessage,
+  sender: chrome.runtime.MessageSender,
+): Promise<BackgroundResponse> {
   switch (message.type) {
     case "GET_SESSION":
       return handleGetSession()
@@ -170,11 +186,14 @@ async function handleMessage(message: BackgroundMessage): Promise<BackgroundResp
     case "SAVE_JOB":
       return handleSaveJob(message.job)
 
+    case "RESOLVE_JOB":
+      return handleResolveJob(message.fingerprint)
+
     case "GET_AUTOFILL_PREVIEW":
-      return handleGetAutofillPreview()
+      return handleGetAutofillPreview(sender)
 
     case "EXECUTE_AUTOFILL":
-      return handleExecuteAutofill(message.fields)
+      return handleExecuteAutofill(message.fields, sender)
 
     case "GET_TAILOR_PREVIEW":
       return handleGetTailorPreview(message.jobId, message.resumeId, message.ats)
@@ -187,7 +206,71 @@ async function handleMessage(message: BackgroundMessage): Promise<BackgroundResp
 
     case "FILL_COVER_LETTER":
       return handleFillCoverLetter(message.elementRef, message.text)
+
+    case "GET_SCOUT_OVERLAY":
+      return handleGetScoutOverlay(message.jobId)
+
+    default:
+      return {
+        type: "ERROR",
+        message: "Unknown extension message type",
+      }
   }
+}
+
+async function handleGetScoutOverlay(jobId: string): Promise<ScoutOverlayResult> {
+  const origin = await resolveOrigin()
+  const token = await getSessionToken(origin)
+  if (!token) {
+    return { type: "SCOUT_OVERLAY_RESULT", ok: false, error: "no_session" }
+  }
+
+  try {
+    const res = await fetch(
+      `${origin}/api/extension/jobs/${encodeURIComponent(jobId)}/scout-overlay`,
+      {
+        method: "GET",
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${token}`,
+          "X-Hireoven-Extension": "1",
+        },
+      },
+    )
+    const payload = (await res.json().catch(() => null)) as Record<string, unknown> | null
+    if (!payload || typeof payload !== "object") {
+      return { type: "SCOUT_OVERLAY_RESULT", ok: false, error: "parse" }
+    }
+
+    if (payload.ok === false) {
+      return {
+        type: "SCOUT_OVERLAY_RESULT",
+        ok: false,
+        error: typeof payload.error === "string" ? payload.error : "not_ready",
+        message: typeof payload.message === "string" ? payload.message : undefined,
+      }
+    }
+
+    if (payload.ok === true) {
+      const p = payload as unknown as ScoutOverlayInsightsPayload
+      return {
+        type: "SCOUT_OVERLAY_RESULT",
+        ok: true,
+        matchPercent: p.matchPercent,
+        sponsorshipLikely: p.sponsorshipLikely,
+        sponsorshipLabel: p.sponsorshipLabel,
+        visaInsight: p.visaInsight,
+        missingSkills: p.missingSkills,
+        resumeAlignmentNote: p.resumeAlignmentNote,
+        autofillReady: p.autofillReady,
+        jobIntelligenceStale: p.jobIntelligenceStale,
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+
+  return { type: "SCOUT_OVERLAY_RESULT", ok: false, error: "unreachable" }
 }
 
 async function handleGetSession(): Promise<SessionResult> {
@@ -235,9 +318,38 @@ async function handleSaveJob(job: ExtractedJob): Promise<SaveResult> {
   return { type: "SAVE_RESULT", saved: true, jobId: data.jobId, hireovanUrl }
 }
 
+async function handleResolveJob(fingerprint: ExtensionJobFingerprint): Promise<ResolveJobResult> {
+  const data = await apiRequest<ExtensionJobResolveResponse>(
+    "POST",
+    "/api/extension/jobs/resolve",
+    fingerprint,
+  )
+
+  if (!data) {
+    return {
+      type: "RESOLVE_JOB_RESULT",
+      exists: false,
+      status: "needs_import",
+    }
+  }
+
+  return {
+    type: "RESOLVE_JOB_RESULT",
+    exists: Boolean(data.exists),
+    jobId: data.jobId,
+    status: data.status,
+  }
+}
+
 // ── Autofill preview ──────────────────────────────────────────────────────────
 
-async function handleGetAutofillPreview(): Promise<AutofillPreviewResult> {
+async function resolveTargetTabId(sender: chrome.runtime.MessageSender): Promise<number | undefined> {
+  if (sender.tab?.id != null) return sender.tab.id
+  const [active] = await chrome.tabs.query({ active: true, currentWindow: true })
+  return active?.id
+}
+
+async function handleGetAutofillPreview(sender: chrome.runtime.MessageSender): Promise<AutofillPreviewResult> {
   const empty: AutofillPreviewResult = {
     type: "AUTOFILL_PREVIEW_RESULT",
     formFound: false,
@@ -258,21 +370,23 @@ async function handleGetAutofillPreview(): Promise<AutofillPreviewResult> {
     return { ...empty, profileMissing: true }
   }
 
-  // 2. Get active tab
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
-  if (!tab?.id) return empty
+  // 2. Target tab — content script callers must supply sender.tab (popup uses active tab)
+  const tabId = await resolveTargetTabId(sender)
+  if (tabId == null) return empty
 
   // 3. Ensure content script is loaded
   try {
-    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["dist/content.js"] })
-  } catch { /* already injected */ }
+    await chrome.scripting.executeScript({ target: { tabId }, files: ["dist/content.js"] })
+  } catch {
+    /* already injected */
+  }
 
   // 4. Get detected page ATS
-  const pageResponse = await queryContentScript(tab.id, { type: "DETECT_PAGE" })
+  const pageResponse = await queryContentScript(tabId, { type: "DETECT_PAGE" })
   const ats = pageResponse?.type === "PAGE_DETECTED" ? pageResponse.page.ats : "generic"
 
   // 5. Send form detection request to content script
-  const fieldsResponse = await queryContentScript(tab.id, {
+  const fieldsResponse = await queryContentScript(tabId, {
     type: "DETECT_FORM_FIELDS",
     profile: profileData.profile,
   } as ContentMessage)
@@ -281,7 +395,9 @@ async function handleGetAutofillPreview(): Promise<AutofillPreviewResult> {
 
   const { formFound, fields } = fieldsResponse
   const matchedFields = fields.filter((f) => f.detectedValue && !f.needsReview).length
-  const reviewFields = fields.filter((f) => f.needsReview || (f.suggestedProfileKey === "resume" || f.suggestedProfileKey === "cover_letter")).length
+  const reviewFields = fields.filter(
+    (f) => f.needsReview || f.suggestedProfileKey === "resume" || f.suggestedProfileKey === "cover_letter",
+  ).length
 
   return {
     type: "AUTOFILL_PREVIEW_RESULT",
@@ -296,18 +412,21 @@ async function handleGetAutofillPreview(): Promise<AutofillPreviewResult> {
 }
 
 async function handleExecuteAutofill(
-  fieldsToFill: Array<{ elementRef: string; value: string }>
+  fieldsToFill: Array<{ elementRef: string; value: string }>,
+  sender: chrome.runtime.MessageSender,
 ): Promise<AutofillExecuteResult> {
   const empty: AutofillExecuteResult = { type: "AUTOFILL_EXECUTE_RESULT", filledCount: 0, skippedCount: 0 }
 
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
-  if (!tab?.id) return empty
+  const tabId = await resolveTargetTabId(sender)
+  if (tabId == null) return empty
 
   try {
-    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["dist/content.js"] })
-  } catch { /* already injected */ }
+    await chrome.scripting.executeScript({ target: { tabId }, files: ["dist/content.js"] })
+  } catch {
+    /* already injected */
+  }
 
-  const response = await queryContentScript(tab.id, {
+  const response = await queryContentScript(tabId, {
     type: "FILL_FORM_FIELDS",
     fields: fieldsToFill,
   } as ContentMessage)

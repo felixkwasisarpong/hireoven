@@ -217,6 +217,96 @@ test("adaptRawCrawlerJob keeps generic sources unstructured", () => {
   assert.equal((adapted.structuredSections.requirements ?? []).length, 0)
 })
 
+test("extractCanonicalSections does not leak nav/auth chrome into sections", () => {
+  const description = [
+    "Skip to main content",
+    "Sign in",
+    "Sign in to create job alert",
+    "Apply Now",
+    "Save this job",
+    "Cookie policy",
+    "About the role",
+    "We are building hiring infrastructure for international candidates worldwide.",
+    "Responsibilities:",
+    "- Build distributed backend services.",
+    "- Partner with product, design, and security teams.",
+    "Requirements:",
+    "- 5+ years of backend engineering experience.",
+    "- Strong fluency with TypeScript or Go.",
+    "Related jobs",
+    "Similar jobs",
+    "Back to results",
+  ].join("\n")
+
+  const sections = extractCanonicalSections({
+    adapter: "generic_html",
+    description,
+  })
+
+  const allItems = Object.values(sections).flatMap((section) => section.items)
+  for (const phrase of [
+    "skip to main content",
+    "sign in",
+    "sign in to create job alert",
+    "apply now",
+    "save this job",
+    "cookie policy",
+    "related jobs",
+    "similar jobs",
+    "back to results",
+  ]) {
+    assert.ok(
+      allItems.every((item) => !item.toLowerCase().includes(phrase)),
+      `chrome phrase "${phrase}" leaked into sections: ${JSON.stringify(allItems)}`
+    )
+  }
+
+  assert.ok(sections.responsibilities.items.some((item) => /distributed backend services/i.test(item)))
+  assert.ok(sections.requirements.items.some((item) => /5\+ years/i.test(item)))
+})
+
+test("normalizeCrawlerJobForPersistence keeps chrome-laden inputs out of all sections", () => {
+  const result = normalizeCrawlerJobForPersistence({
+    rawJob: {
+      externalId: "url:chrome-1",
+      title: "Senior Backend Engineer",
+      url: "https://jobs.example.com/openings/senior-backend-engineer",
+      description: [
+        "Skip to main content",
+        "Sign in to create job alert",
+        "Apply now",
+        "About the role:",
+        "We build the financial platform for global businesses.",
+        "Responsibilities:",
+        "- Own and operate critical APIs.",
+        "- Mentor mid-level engineers.",
+        "Requirements:",
+        "- 6+ years of backend engineering experience.",
+        "- Strong fluency in Go or Python.",
+        "Cookie Policy",
+        "Privacy Policy",
+        "Related jobs",
+      ].join("\n"),
+      location: "San Francisco, CA",
+    },
+    crawledAtIso: "2026-04-28T00:00:00.000Z",
+  })
+
+  const allItems = Object.values(result.canonical.sections).flatMap((section) => section.items)
+  for (const phrase of [
+    "skip to main content",
+    "sign in to create job alert",
+    "cookie policy",
+    "privacy policy",
+    "related jobs",
+  ]) {
+    assert.ok(
+      allItems.every((item) => !item.toLowerCase().includes(phrase)),
+      `phrase "${phrase}" leaked into normalized sections`
+    )
+  }
+})
+
 test("adaptRawCrawlerJob trims crawler CTA noise from location", () => {
   const adapted = adaptRawCrawlerJob({
     externalId: "url:pyramid-1",
@@ -227,4 +317,42 @@ test("adaptRawCrawlerJob trims crawler CTA noise from location", () => {
   })
 
   assert.equal(adapted.location, "U.S(Remote)")
+})
+
+test("adaptRawCrawlerJob rejects location strings dominated by chrome or commas", () => {
+  const chromeLocation = adaptRawCrawlerJob({
+    externalId: "url:chrome-loc-1",
+    title: "Engineer",
+    url: "https://jobs.example.com/openings/engineer",
+    description: "We build infrastructure.",
+    location: "Sign in to create job alert",
+  })
+  assert.equal(chromeLocation.location, null)
+
+  const sentenceFragment = adaptRawCrawlerJob({
+    externalId: "url:chrome-loc-2",
+    title: "Engineer",
+    url: "https://jobs.example.com/openings/engineer",
+    description: "We build infrastructure.",
+    location: "Many roles, many cities, many teams, many opportunities for growth",
+  })
+  assert.equal(sentenceFragment.location, null)
+
+  const requisitionLike = adaptRawCrawlerJob({
+    externalId: "url:chrome-loc-3",
+    title: "Engineer",
+    url: "https://jobs.example.com/openings/engineer",
+    description: "We build infrastructure.",
+    location: "REQ-12345-2026-04",
+  })
+  assert.equal(requisitionLike.location, null)
+
+  const valid = adaptRawCrawlerJob({
+    externalId: "url:chrome-loc-4",
+    title: "Engineer",
+    url: "https://jobs.example.com/openings/engineer",
+    description: "We build infrastructure.",
+    location: "San Francisco, CA",
+  })
+  assert.equal(valid.location, "San Francisco, CA")
 })

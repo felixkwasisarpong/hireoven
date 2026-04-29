@@ -4,10 +4,42 @@ type SkillDefinition = {
   label: string
   aliases: string[]
   patterns?: RegExp[]
+  /**
+   * When true, the skill is only matched via `patterns` (not raw aliases).
+   * Use for skills whose aliases are common English words that produce false
+   * positives in non-technical text (e.g. "Rust" → "rust", "ML" → "ml").
+   */
+  requiresPattern?: boolean
 }
+
+export type SkillCategory =
+  | "programmingLanguages"
+  | "frameworks"
+  | "cloud"
+  | "databases"
+  | "devops"
+  | "aiMl"
+  | "data"
+  | "security"
+  | "softSkills"
+
+export type CategorizedSkills = Record<SkillCategory, string[]>
 
 const GO_LANGUAGE_SIGNAL_RE =
   /\b(?:go\s+language|go\s+(?:developer|engineer|backend|services?|microservices?|sdk|runtime)|golang|written in go|using go|experience\s+(?:with|in)\s+go|proficien(?:cy|t)\s+(?:with|in)\s+go|knowledge of go|expertise in go|fluency in go|(?:python|java|rust|kotlin|scala|typescript|javascript|c\+\+|c#|ruby|php)\s*(?:,|\/|\band\b)\s*go|go\s*(?:,|\/|\band\b)\s*(?:python|java|rust|kotlin|scala|typescript|javascript|c\+\+|c#|ruby|php))\b/i
+
+const RUST_LANGUAGE_SIGNAL_RE =
+  /\b(?:rust\s+(?:language|developer|engineer|programming|crate|crates|ownership|borrow|async|tokio|axum)|written in rust|using rust|experience\s+(?:with|in)\s+rust|proficien(?:cy|t)\s+(?:with|in)\s+rust|knowledge of rust|(?:python|java|go|kotlin|c\+\+|typescript|javascript)\s*(?:,|\/|\band\b)\s*rust|rust\s*(?:,|\/|\band\b)\s*(?:python|java|go|kotlin|c\+\+|typescript|javascript))\b/i
+
+const MACHINE_LEARNING_SIGNAL_RE =
+  /\b(?:machine learning|ml engineer|ml platform|ml model|ml pipeline|ml ops|mlops|ml infrastructure|train(?:ing)?\s+(?:a\s+)?(?:model|algorithm)|ml\s+(?:framework|project|team|experience|background)|deploy(?:ing)?\s+ml|build(?:ing)?\s+ml)\b/i
+
+const NLP_SIGNAL_RE =
+  /\b(?:natural language processing|nlp\s+(?:model|pipeline|engineer|experience|techniques?|tasks?)|(?:text|language)\s+(?:model|processing|classification|generation)|transformer(?:s|\s+model)?|bert|gpt)\b/i
+
+const COMPUTER_VISION_SIGNAL_RE =
+  /\b(?:computer vision|cv\s+(?:model|engineer|pipeline|experience|techniques?)|image\s+(?:classification|detection|segmentation|recognition)|object detection|opencv|yolo)\b/i
+
 
 export const SKILL_DEFINITIONS: SkillDefinition[] = [
   // ─── Languages ────────────────────────────────────────────────────────────
@@ -16,7 +48,7 @@ export const SKILL_DEFINITIONS: SkillDefinition[] = [
   { label: "Python",      aliases: ["python"] },
   { label: "Java",        aliases: ["java"] },
   { label: "Go",          aliases: ["go", "golang"], patterns: [GO_LANGUAGE_SIGNAL_RE] },
-  { label: "Rust",        aliases: ["rust"] },
+  { label: "Rust",        aliases: ["rust"], patterns: [RUST_LANGUAGE_SIGNAL_RE], requiresPattern: true },
   { label: "C++",         aliases: ["c++", "cpp"] },
   { label: "C#",          aliases: ["c#", "csharp"] },
   { label: "Ruby",        aliases: ["ruby"] },
@@ -103,7 +135,7 @@ export const SKILL_DEFINITIONS: SkillDefinition[] = [
   { label: "OpenAPI",    aliases: ["openapi", "swagger"] },
 
   // ─── Data & ML ────────────────────────────────────────────────────────────
-  { label: "Machine Learning",  aliases: ["machine learning", "ml"] },
+  { label: "Machine Learning",  aliases: ["machine learning", "ml"], patterns: [MACHINE_LEARNING_SIGNAL_RE], requiresPattern: false },
   { label: "Deep Learning",     aliases: ["deep learning"] },
   { label: "TensorFlow",        aliases: ["tensorflow"] },
   { label: "PyTorch",           aliases: ["pytorch"] },
@@ -116,8 +148,8 @@ export const SKILL_DEFINITIONS: SkillDefinition[] = [
   { label: "Data Analysis",     aliases: ["data analysis", "data analytics"] },
   { label: "Data Engineering",  aliases: ["data engineering", "data pipelines", "etl", "elt"] },
   { label: "Data Visualization", aliases: ["data visualization", "data viz", "tableau", "power bi", "looker"] },
-  { label: "NLP",               aliases: ["nlp", "natural language processing"] },
-  { label: "Computer Vision",   aliases: ["computer vision", "cv"] },
+  { label: "NLP",               aliases: ["nlp", "natural language processing"], patterns: [NLP_SIGNAL_RE], requiresPattern: false },
+  { label: "Computer Vision",   aliases: ["computer vision", "cv"], patterns: [COMPUTER_VISION_SIGNAL_RE], requiresPattern: false },
   { label: "LLMs",              aliases: ["llm", "llms", "large language models", "generative ai", "gen ai", "rag"] },
   { label: "Statistics",        aliases: ["statistics", "statistical analysis", "statistical modeling"] },
   { label: "A/B Testing",       aliases: ["a/b testing", "a/b test", "experimentation", "hypothesis testing"] },
@@ -258,6 +290,139 @@ for (const skill of SKILL_DEFINITIONS) {
   }
 }
 
+const PROGRAMMING_LANGUAGE_SKILLS = new Set([
+  "JavaScript",
+  "TypeScript",
+  "Python",
+  "Java",
+  "Go",
+  "Rust",
+  "C++",
+  "C#",
+  "Ruby",
+  "PHP",
+  "Swift",
+  "Kotlin",
+  "Scala",
+  "R",
+  "MATLAB",
+  "Bash",
+  "Dart",
+  "Elixir",
+  "Haskell",
+])
+
+const FRAMEWORK_SKILLS = new Set([
+  "React",
+  "Next.js",
+  "Vue.js",
+  "Angular",
+  "Svelte",
+  "Tailwind CSS",
+  "Redux",
+  "React Native",
+  "Flutter",
+  "Node.js",
+  "Django",
+  "FastAPI",
+  "Flask",
+  "Spring",
+  "Rails",
+  "Laravel",
+  "Express",
+  ".NET",
+  "GraphQL",
+  "REST",
+  "gRPC",
+  "WebSockets",
+])
+
+const CLOUD_SKILLS = new Set(["AWS", "GCP", "Azure"])
+
+const DATABASE_SKILLS = new Set([
+  "SQL",
+  "PostgreSQL",
+  "MySQL",
+  "MongoDB",
+  "Redis",
+  "Elasticsearch",
+  "Cassandra",
+  "DynamoDB",
+  "BigQuery",
+  "Snowflake",
+  "Redshift",
+  "SQLite",
+  "Databricks",
+])
+
+const DEVOPS_SKILLS = new Set([
+  "Docker",
+  "Kubernetes",
+  "Terraform",
+  "Ansible",
+  "Helm",
+  "CI/CD",
+  "GitHub Actions",
+  "Jenkins",
+  "CircleCI",
+  "Linux",
+  "Nginx",
+  "Prometheus",
+  "Grafana",
+  "Datadog",
+  "Kafka",
+  "RabbitMQ",
+])
+
+const AI_ML_SKILLS = new Set([
+  "Machine Learning",
+  "Deep Learning",
+  "TensorFlow",
+  "PyTorch",
+  "scikit-learn",
+  "NLP",
+  "Computer Vision",
+  "LLMs",
+])
+
+const DATA_SKILLS = new Set([
+  "Pandas",
+  "NumPy",
+  "Spark",
+  "Airflow",
+  "dbt",
+  "Data Analysis",
+  "Data Engineering",
+  "Data Visualization",
+  "Statistics",
+  "A/B Testing",
+])
+
+const SECURITY_SKILLS = new Set([
+  "Cybersecurity",
+  "Penetration Testing",
+  "Network Security",
+  "SIEM",
+  "Compliance",
+  "OAuth",
+])
+
+const SOFT_SKILLS = new Set([
+  "Leadership",
+  "Communication",
+  "Collaboration",
+  "Problem Solving",
+  "Critical Thinking",
+  "Time Management",
+  "Mentoring",
+  "Public Speaking",
+  "Writing",
+  "Adaptability",
+  "Organizational Skills",
+  "Project Management",
+  "Stakeholder Management",
+])
+
 function escapeRegex(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
 }
@@ -303,18 +468,73 @@ export function extractSkillsFromText(...parts: Array<string | null | undefined>
 
   const found: string[] = []
   for (const skill of SKILL_DEFINITIONS) {
+    // Skills that require pattern match: only count them when a specific tech
+    // context pattern fires (prevents ambiguous aliases like "rust" from
+    // matching unrelated text).
+    if (skill.requiresPattern) {
+      if (skill.patterns?.some((pattern) => pattern.test(blob))) {
+        found.push(skill.label)
+      }
+      continue
+    }
+
+    // "Go" needs special handling: the bare alias is too short and common, so
+    // we check aliases except "go" itself and rely on the pattern for that case.
     const aliasesToCheck =
       skill.label === "Go"
         ? skill.aliases.filter((alias) => normalizeSkillKey(alias) !== "go")
         : skill.aliases
-    const matched =
-      Boolean(skill.patterns?.some((pattern) => pattern.test(blob))) ||
-      aliasesToCheck.some((alias) => aliasPattern(alias).test(blob))
 
-    if (matched) found.push(skill.label)
+    const patternMatch = Boolean(skill.patterns?.some((pattern) => pattern.test(blob)))
+    const aliasMatch = aliasesToCheck.some((alias) => aliasPattern(alias).test(blob))
+
+    if (patternMatch || aliasMatch) found.push(skill.label)
   }
 
   return normalizeSkillList(found)
+}
+
+export function emptyCategorizedSkills(): CategorizedSkills {
+  return {
+    programmingLanguages: [],
+    frameworks: [],
+    cloud: [],
+    databases: [],
+    devops: [],
+    aiMl: [],
+    data: [],
+    security: [],
+    softSkills: [],
+  }
+}
+
+export function categorizeSkills(values: Array<string | null | undefined>): CategorizedSkills {
+  const buckets = emptyCategorizedSkills()
+  const normalized = normalizeSkillList(values)
+
+  for (const skill of normalized) {
+    if (PROGRAMMING_LANGUAGE_SKILLS.has(skill)) {
+      buckets.programmingLanguages.push(skill)
+    } else if (FRAMEWORK_SKILLS.has(skill)) {
+      buckets.frameworks.push(skill)
+    } else if (CLOUD_SKILLS.has(skill)) {
+      buckets.cloud.push(skill)
+    } else if (DATABASE_SKILLS.has(skill)) {
+      buckets.databases.push(skill)
+    } else if (DEVOPS_SKILLS.has(skill)) {
+      buckets.devops.push(skill)
+    } else if (AI_ML_SKILLS.has(skill)) {
+      buckets.aiMl.push(skill)
+    } else if (DATA_SKILLS.has(skill)) {
+      buckets.data.push(skill)
+    } else if (SECURITY_SKILLS.has(skill)) {
+      buckets.security.push(skill)
+    } else if (SOFT_SKILLS.has(skill)) {
+      buckets.softSkills.push(skill)
+    }
+  }
+
+  return buckets
 }
 
 export function getAllResumeSkillLabels(resume: Pick<Resume, "skills" | "top_skills"> | null | undefined) {

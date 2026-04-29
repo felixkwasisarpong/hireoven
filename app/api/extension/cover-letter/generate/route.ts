@@ -19,6 +19,7 @@
 import { NextResponse } from "next/server"
 import Anthropic from "@anthropic-ai/sdk"
 import { getPostgresPool } from "@/lib/postgres/server"
+import { SONNET_MODEL } from "@/lib/ai/anthropic-models"
 import { getAtsProfile } from "@/lib/resume/ats-tailor"
 import {
   extensionError,
@@ -269,7 +270,8 @@ Return ONLY the cover letter text. No commentary, no JSON wrapper, no preamble.`
 
   try {
     const message = await anthropic.messages.create({
-      model: "claude-sonnet-4-6",
+      // Cover letters are long-form, high-impact output; Sonnet quality is required.
+      model: SONNET_MODEL,
       max_tokens: 1200,
       system: systemPrompt,
       messages: [{ role: "user", content: userPrompt }],

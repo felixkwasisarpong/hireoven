@@ -53,7 +53,9 @@ export function validateCanonicalJob(job: CanonicalJob): NormalizationValidation
 
   const hasAboutRole = job.sections.about_role.items.length > 0
   const hasResponsibilities = job.sections.responsibilities.items.length > 0
-  const hasRequirements = job.sections.requirements.items.length > 0
+  const hasRequirements =
+    job.sections.requirements.items.length > 0 ||
+    job.sections.qualifications.items.length > 0
 
   if (!hasAboutRole && !hasResponsibilities && !hasRequirements) {
     pushIssue(issues, {
@@ -95,6 +97,7 @@ export function validateCanonicalJob(job: CanonicalJob): NormalizationValidation
     hasResponsibilities ? 1 : 0,
     hasRequirements ? 1 : 0,
     job.sections.preferred_qualifications.items.length > 0 ? 1 : 0,
+    job.sections.skills.items.length > 0 || (job.skills.value?.length ?? 0) > 0 ? 1 : 0,
     job.sections.benefits.items.length > 0 ? 1 : 0,
     job.sections.company_info.items.length > 0 ? 1 : 0,
   ]
@@ -112,6 +115,8 @@ export function validateCanonicalJob(job: CanonicalJob): NormalizationValidation
     job.sections.about_role.confidence,
     job.sections.responsibilities.confidence,
     job.sections.requirements.confidence,
+    job.sections.qualifications.confidence,
+    job.sections.skills.confidence,
     job.sections.benefits.confidence,
     job.sections.company_info.confidence,
     job.compensation.pay_text.confidence,

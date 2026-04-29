@@ -12,6 +12,23 @@ export type ATSProvider =
 
 export type PageType = "job_listing" | "application_form" | "unknown"
 
+export type ExtensionPageMode =
+  | "job_detail"
+  | "application_form"
+  | "search_results"
+  | "unknown"
+
+export type ExtensionCommand =
+  | "RESOLVE_JOB"
+  | "SAVE_JOB"
+  | "CHECK_MATCH"
+  | "TAILOR_RESUME"
+  | "GENERATE_COVER_LETTER"
+  | "OPEN_AUTOFILL_DRAWER"
+  | "FILL_SAFE_FIELDS"
+  | "OPEN_PROFILE_MENU"
+  | "OPEN_HIREOVEN"
+
 export interface DetectedPage {
   pageType: PageType
   ats: ATSProvider
@@ -24,9 +41,30 @@ export interface DetectedPage {
 export interface ExtractedJob {
   title: string | null
   company: string | null
+  companyLogo: string | null
+  companyVerified?: boolean | null
   location: string | null
+  workMode?: string | null
+  employmentType?: string | null
+  postedAt?: string | null
   description: string | null
   salary: string | null
+  salaryRange?: string | null
+  easyApply?: boolean | null
+  activelyHiring?: boolean | null
+  topApplicantSignal?: boolean | null
+  companySummary?: string | null
+  companyFoundedYear?: number | null
+  companyEmployeeCount?: string | null
+  companyIndustry?: string | null
+  sponsorshipSignal?: string | null
+  matchedSkills?: string[] | null
+  missingSkills?: string[] | null
+  matchScore?: number | null
+  matchLabel?: string | null
+  sourceUrl?: string | null
+  applyUrl?: string | null
+  externalJobId?: string | null
   url: string
   ats: ATSProvider
 }
@@ -167,6 +205,7 @@ export type ContentResponse =
 
 export type BackgroundMessageType =
   | "GET_SESSION"
+  | "RESOLVE_JOB"
   | "SAVE_JOB"
   | "GET_PAGE_INFO"
   | "GET_AUTOFILL_PREVIEW"
@@ -175,6 +214,7 @@ export type BackgroundMessageType =
   | "APPROVE_TAILORED_RESUME"
   | "GENERATE_COVER_LETTER"
   | "FILL_COVER_LETTER"
+  | "GET_SCOUT_OVERLAY"
 
 export interface GetSessionMessage {
   type: "GET_SESSION"
@@ -183,6 +223,11 @@ export interface GetSessionMessage {
 export interface SaveJobMessage {
   type: "SAVE_JOB"
   job: ExtractedJob
+}
+
+export interface ResolveJobMessage {
+  type: "RESOLVE_JOB"
+  fingerprint: ExtensionJobFingerprint
 }
 
 export interface GetPageInfoMessage {
@@ -227,8 +272,30 @@ export interface FillCoverLetterMessage {
   text: string
 }
 
+export interface GetScoutOverlayMessage {
+  type: "GET_SCOUT_OVERLAY"
+  jobId: string
+}
+
+export type ScoutOverlayInsightsPayload = {
+  ok: true
+  matchPercent: number | null
+  sponsorshipLikely: boolean | null
+  sponsorshipLabel: string | null
+  visaInsight: string | null
+  missingSkills: string[]
+  resumeAlignmentNote: string | null
+  autofillReady: boolean
+  jobIntelligenceStale: boolean
+}
+
+export type ScoutOverlayResult =
+  | ({ type: "SCOUT_OVERLAY_RESULT" } & ScoutOverlayInsightsPayload)
+  | { type: "SCOUT_OVERLAY_RESULT"; ok: false; error?: string; message?: string }
+
 export type BackgroundMessage =
   | GetSessionMessage
+  | ResolveJobMessage
   | SaveJobMessage
   | GetPageInfoMessage
   | GetAutofillPreviewMessage
@@ -237,23 +304,21 @@ export type BackgroundMessage =
   | ApproveTailoredResumeMessage
   | GenerateCoverLetterMessage
   | FillCoverLetterMessage
+  | GetScoutOverlayMessage
 
-export type BackgroundResponseType =
-  | "SESSION_RESULT"
-  | "SAVE_RESULT"
-  | "PAGE_INFO_RESULT"
-  | "AUTOFILL_PREVIEW_RESULT"
-  | "AUTOFILL_EXECUTE_RESULT"
-  | "TAILOR_PREVIEW_RESULT"
-  | "TAILOR_APPROVE_RESULT"
-  | "COVER_LETTER_RESULT"
-  | "FILL_COVER_LETTER_RESULT"
-  | "ERROR"
+export interface ExtensionSessionUser {
+  id: string
+  email: string | null
+  /** From `profiles.full_name` when available */
+  fullName?: string | null
+  /** From `profiles.avatar_url` — same origin or absolute URL */
+  avatarUrl?: string | null
+}
 
 export interface SessionResult {
   type: "SESSION_RESULT"
   authenticated: boolean
-  user: { id: string; email: string | null } | null
+  user: ExtensionSessionUser | null
 }
 
 export interface SaveResult {
@@ -262,6 +327,13 @@ export interface SaveResult {
   jobId?: string
   hireovanUrl?: string
   error?: string
+}
+
+export interface ResolveJobResult {
+  type: "RESOLVE_JOB_RESULT"
+  exists: boolean
+  jobId?: string
+  status: "found" | "created" | "needs_import"
 }
 
 export interface PageInfoResult {
@@ -345,6 +417,7 @@ export interface FillCoverLetterResult {
 
 export type BackgroundResponse =
   | SessionResult
+  | ResolveJobResult
   | SaveResult
   | PageInfoResult
   | AutofillPreviewResult
@@ -353,13 +426,14 @@ export type BackgroundResponse =
   | TailorApproveResult
   | CoverLetterResult
   | FillCoverLetterResult
+  | ScoutOverlayResult
   | BackgroundError
 
 // ── API shapes (matching web app routes) ─────────────────────────────────────
 
 export interface ExtensionSessionValidateResponse {
   authenticated: boolean
-  user: { id: string; email: string | null } | null
+  user: ExtensionSessionUser | null
 }
 
 export interface ExtensionJobImportRequest {
@@ -370,6 +444,21 @@ export interface ExtensionJobImportRequest {
   salary: string | null
   url: string
   ats: ATSProvider
+}
+
+export interface ExtensionJobFingerprint {
+  sourceUrl: string
+  applyUrl: string
+  atsProvider: ATSProvider | string
+  externalJobId?: string | null
+  title: string | null
+  company: string | null
+}
+
+export interface ExtensionJobResolveResponse {
+  exists: boolean
+  jobId?: string
+  status: "found" | "created" | "needs_import"
 }
 
 export interface ExtensionJobImportResponse {

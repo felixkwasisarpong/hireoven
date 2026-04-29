@@ -140,7 +140,7 @@ export default function JobFeed({
 
   return (
     <H1BPredictionProvider enabled={h1bEnabled}>
-    <div className="space-y-4">
+    <div className="space-y-4 rounded-[28px] bg-slate-50 p-3 sm:p-4">
       {newJobsCount > 0 && (
         <button
           type="button"

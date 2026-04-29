@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { logApiUsage } from '@/lib/admin/usage'
+import { ANTHROPIC_TIER_PRICING, HAIKU_MODEL } from "@/lib/ai/anthropic-models"
 import {
   cleanJobTitle,
   extractSkillsFromText,
@@ -26,13 +27,6 @@ function getAnthropicClient() {
   return anthropic
 }
 
-const MODEL_PRICING: Record<string, { inputPerMillion: number; outputPerMillion: number }> = {
-  'claude-haiku-4-5-20251001': {
-    inputPerMillion: 0.8,
-    outputPerMillion: 4,
-  },
-}
-
 export interface VisaAnalysis {
   sponsors_h1b: boolean | null
   requires_authorization: boolean
@@ -45,7 +39,8 @@ export async function detectVisaLanguage(description: string): Promise<VisaAnaly
   const client = getAnthropicClient()
 
   const message = await client.messages.create({
-    model: 'claude-haiku-4-5-20251001',
+    // Visa-language extraction is structured classification, so Haiku is sufficient.
+    model: HAIKU_MODEL,
     max_tokens: 256,
     messages: [
       {
@@ -70,12 +65,11 @@ Return ONLY valid JSON.`,
     ],
   })
 
-  const pricing = MODEL_PRICING['claude-haiku-4-5-20251001']
   const inputTokens = message.usage?.input_tokens ?? 0
   const outputTokens = message.usage?.output_tokens ?? 0
   const estimatedCost =
-    (inputTokens / 1_000_000) * pricing.inputPerMillion +
-    (outputTokens / 1_000_000) * pricing.outputPerMillion
+    (inputTokens / 1_000_000) * ANTHROPIC_TIER_PRICING.haiku.inputPerMillion +
+    (outputTokens / 1_000_000) * ANTHROPIC_TIER_PRICING.haiku.outputPerMillion
 
   await logApiUsage({
     service: 'claude',

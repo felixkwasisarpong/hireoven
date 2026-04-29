@@ -5,21 +5,26 @@
  *   1. ATS type backfill  — detectAts() from careers_url + apply URLs
  *   2. Careers URL repair — deriveCanonicalCareersUrl() per company
  *   3. Logo repair        — fix ATS-subdomain domains + Clearbit 404s
+ *   4. Domain audit       — detect ATS-contaminated/null domains; flag 0-job companies
  *
  * Usage:
- *   npx tsx scripts/repair-crawler-pipeline.ts           # dry-run (safe)
- *   npx tsx scripts/repair-crawler-pipeline.ts --execute # write changes
+ *   npx tsx scripts/repair-crawler-pipeline.ts              # dry-run (safe)
+ *   npx tsx scripts/repair-crawler-pipeline.ts --execute    # write changes
  *   npx tsx scripts/repair-crawler-pipeline.ts --step=ats --execute
  *   npx tsx scripts/repair-crawler-pipeline.ts --step=careers --execute
  *   npx tsx scripts/repair-crawler-pipeline.ts --step=logos --execute
+ *   npx tsx scripts/repair-crawler-pipeline.ts --step=domains --execute  # CSV export
  */
 
 import { loadEnvConfig } from "@next/env"
 import { Pool } from "pg"
 import { detectAts } from "@/lib/companies/detect-ats"
 import { deriveCanonicalCareersUrl } from "@/lib/companies/canonical-careers-url"
-import { companyLogoUrlFromDomain } from "@/lib/companies/logo-url"
-import { isAtsDomain as isKnownAtsDomain } from "@/lib/companies/ats-domains"
+import { companyLogoUrlFromDomain, isLogoUrlSafe } from "@/lib/companies/logo-url"
+import {
+  isAtsDomain as isKnownAtsDomain,
+  isTemporaryCareersUrl,
+} from "@/lib/companies/ats-domains"
 
 loadEnvConfig(process.cwd())
 
@@ -171,21 +176,30 @@ async function stepCareers(pool: Pool) {
 
   for (const co of companies.rows) {
     if (!co.domain) continue
+    const applyUrls = applyByCompany.get(co.id) ?? []
     const next = deriveCanonicalCareersUrl(
       { domain: co.domain, careers_url: co.careers_url ?? "", ats_type: co.ats_type, ats_identifier: co.ats_identifier },
-      { applyUrls: applyByCompany.get(co.id) ?? [] }
+      { applyUrls }
     )
     const prev = (co.careers_url ?? "").trim()
     if (prev === next) { unchanged++; continue }
+    const needsReview = isTemporaryCareersUrl(prev) && applyUrls.length === 0
 
     console.log(
-      `  ${execute ? "" : "[dry] "}${co.name.slice(0, 36).padEnd(36)}\n    ${prev || "(empty)"}\n    → ${next}`
+      `  ${execute ? "" : "[dry] "}${co.name.slice(0, 36).padEnd(36)}${needsReview ? " [needs review]" : ""}\n    ${prev || "(empty)"}\n    → ${next}`
     )
 
     if (execute) {
       await pool.query(
-        `UPDATE companies SET careers_url=$1, updated_at=NOW() WHERE id=$2`,
-        [next, co.id]
+        `UPDATE companies
+         SET careers_url=$1,
+             raw_ats_config = CASE
+               WHEN $3::boolean THEN COALESCE(raw_ats_config, '{}'::jsonb) || '{"needs_manual_review": true, "manual_review_reason": "temporary_careers_url_repaired_without_apply_url_evidence"}'::jsonb
+               ELSE raw_ats_config
+             END,
+             updated_at=NOW()
+         WHERE id=$2`,
+        [next, co.id, needsReview]
       )
     }
     changed++
@@ -215,15 +229,22 @@ async function stepLogos(pool: Pool) {
     const logoUrl = co.logo_url ?? ""
 
     const isBrokenDomain = isAtsDomain(domain) || isPlaceholderDomain(domain)
-    const isClearbit = logoUrl.startsWith("https://logo.clearbit.com/")
+    const logoIsUnsafe = !isLogoUrlSafe(logoUrl)
     const logoHasAtsDomain = ATS_SUBDOMAIN_PATTERNS.some((p) =>
       logoUrl.toLowerCase().includes(p.slice(1))
     )
 
-    if (!isBrokenDomain && !isClearbit && !logoHasAtsDomain) continue
+    // Also repair companies with null/empty logos when a valid domain exists
+    const logoIsMissing = !logoUrl
+
+    const needsRepair = isBrokenDomain || logoIsUnsafe || logoHasAtsDomain || logoIsMissing
+    if (!needsRepair) continue
 
     // Try to derive a better domain from careers_url or raw_ats_config
     const careersHost = domainFromUrl(co.careers_url)
+    // Skip ATS hosts from careers_url
+    const safeCareersHost = careersHost && !isAtsDomain(careersHost) ? careersHost : ""
+
     const matchedUrlHost = domainFromUrl(
       (co.raw_ats_config as Record<string, unknown> | null)?.ats_detection
         ? ((co.raw_ats_config as Record<string, { matchedUrl?: string }>)
@@ -240,7 +261,7 @@ async function stepLogos(pool: Pool) {
         : ""
 
     // Pick best candidate that isn't an ATS subdomain or placeholder
-    const candidates = [guessedDomain, domain, careersHost, matchedUrlHost].filter(
+    const candidates = [guessedDomain, !isBrokenDomain ? domain : "", safeCareersHost, matchedUrlHost].filter(
       (d) => d && !isAtsDomain(d) && !isPlaceholderDomain(d) && d.includes(".")
     )
     const bestDomain = candidates[0] ?? null
@@ -252,11 +273,22 @@ async function stepLogos(pool: Pool) {
     }
 
     const nextLogo = companyLogoUrlFromDomain(bestDomain)
-    if (nextLogo === logoUrl) continue
+    // If we already have a safe logo and the domain isn't broken, skip unless domain changes
+    if (!isBrokenDomain && isLogoUrlSafe(logoUrl) && nextLogo === logoUrl) continue
+    if (nextLogo === logoUrl && bestDomain === domain) continue
 
-    const reason = isBrokenDomain ? "ats-domain" : isClearbit ? "clearbit" : "ats-logo-domain"
+    const reason = isBrokenDomain
+      ? "ats-domain"
+      : logoHasAtsDomain
+      ? "ats-logo-domain"
+      : logoIsUnsafe
+      ? "unsafe-logo"
+      : logoIsMissing
+      ? "missing-logo"
+      : "logo-refresh"
+
     console.log(
-      `  ${execute ? "" : "[dry] "}${co.name.slice(0, 36).padEnd(36)} [${reason}]\n    domain: ${domain} → ${bestDomain}\n    logo:   ${logoUrl.slice(0, 60)}\n         → ${nextLogo}`
+      `  ${execute ? "" : "[dry] "}${co.name.slice(0, 36).padEnd(36)} [${reason}]\n    domain: ${domain} → ${bestDomain}\n    logo:   ${(logoUrl || "(none)").slice(0, 60)}\n         → ${nextLogo}`
     )
 
     if (execute) {
@@ -271,7 +303,132 @@ async function stepLogos(pool: Pool) {
   console.log(`\n  Logos: ${execute ? "fixed" : "would fix"} ${fixed}, needs manual review: ${reviewed}`)
 }
 
-// ── Step 4: Diagnostics Summary ───────────────────────────────────────────────
+// ── Step 4: Domain Audit ──────────────────────────────────────────────────────
+
+/**
+ * Identify companies with ATS-contaminated, null, or placeholder domains and
+ * flag companies with 0 jobs that have homepage-looking career URLs.
+ *
+ * In --execute mode this writes a CSV to stdout for manual review.
+ * Without --execute it prints a summary and sample rows.
+ */
+async function stepDomains(pool: Pool) {
+  console.log("\n═══ STEP 4: DOMAIN AUDIT ═══")
+
+  const companies = await pool.query<{
+    id: string
+    name: string
+    domain: string | null
+    careers_url: string | null
+    logo_url: string | null
+    ats_type: string | null
+    ats_identifier: string | null
+    job_count: number | null
+    last_crawled_at: string | null
+  }>(
+    `SELECT id, name, domain, careers_url, logo_url, ats_type, ats_identifier,
+            job_count, last_crawled_at
+     FROM companies
+     WHERE is_active = true
+     ORDER BY name`
+  )
+
+  type DomainIssue = {
+    id: string
+    name: string
+    domain: string | null
+    careers_url: string | null
+    ats_type: string | null
+    job_count: number | null
+    issues: string[]
+  }
+
+  const flagged: DomainIssue[] = []
+
+  for (const co of companies.rows) {
+    const domain = normalizeDomain(co.domain)
+    const issues: string[] = []
+
+    // Domain issues
+    if (!domain) {
+      issues.push("domain_missing")
+    } else if (isAtsDomain(domain)) {
+      issues.push("domain_is_ats")
+    } else if (isPlaceholderDomain(domain)) {
+      issues.push("domain_is_placeholder")
+    }
+
+    // Logo issues
+    if (!isLogoUrlSafe(co.logo_url)) {
+      issues.push("logo_unsafe_or_missing")
+    }
+
+    // Career URL issues
+    if (!co.careers_url) {
+      issues.push("careers_url_missing")
+    } else {
+      try {
+        const careersHost = new URL(co.careers_url).hostname.toLowerCase()
+        if (isAtsDomain(careersHost) && co.ats_type === "custom") {
+          issues.push("careers_url_is_ats_for_custom")
+        }
+      } catch {
+        issues.push("careers_url_invalid")
+      }
+    }
+
+    // 0-job issue
+    if ((co.job_count ?? 0) === 0) {
+      issues.push("zero_jobs")
+    }
+
+    if (issues.length > 0) {
+      flagged.push({
+        id: co.id,
+        name: co.name,
+        domain: co.domain,
+        careers_url: co.careers_url,
+        ats_type: co.ats_type,
+        job_count: co.job_count,
+        issues,
+      })
+    }
+  }
+
+  console.log(`\n  Total active companies: ${companies.rows.length}`)
+  console.log(`  Companies with domain issues: ${flagged.length}`)
+
+  // Group by issue type for summary
+  const issueCounts = new Map<string, number>()
+  for (const f of flagged) {
+    for (const issue of f.issues) {
+      issueCounts.set(issue, (issueCounts.get(issue) ?? 0) + 1)
+    }
+  }
+  console.log("\n  Issue breakdown:")
+  for (const [issue, count] of [...issueCounts.entries()].sort((a, b) => b[1] - a[1])) {
+    console.log(`    ${issue.padEnd(32)} ${count}`)
+  }
+
+  if (execute) {
+    // Export CSV to stdout for spreadsheet review
+    const header = "id,name,domain,careers_url,ats_type,job_count,issues"
+    const rows = flagged.map((f) => {
+      const esc = (v: string | null | number | undefined) =>
+        `"${String(v ?? "").replace(/"/g, '""')}"`
+      return [esc(f.id), esc(f.name), esc(f.domain), esc(f.careers_url), esc(f.ats_type), esc(f.job_count), esc(f.issues.join("|"))].join(",")
+    })
+    console.log("\n" + [header, ...rows].join("\n"))
+  } else {
+    // Sample of flagged companies
+    console.log("\n  Sample flagged companies (up to 20):")
+    for (const f of flagged.slice(0, 20)) {
+      console.log(`    [${f.issues.join(",")}] ${f.name.slice(0, 40)} — domain: ${f.domain ?? "null"}, jobs: ${f.job_count ?? 0}`)
+    }
+  }
+}
+
+// ── Step 5: Diagnostics Summary ───────────────────────────────────────────────
 
 async function stepDiagnostics(pool: Pool) {
   console.log("\n═══ DIAGNOSTICS SUMMARY ═══")
@@ -332,6 +489,7 @@ async function main() {
     if (runStep("ats"))     await stepAts(pool)
     if (runStep("careers")) await stepCareers(pool)
     if (runStep("logos"))   await stepLogos(pool)
+    if (runStep("domains")) await stepDomains(pool)
 
     console.log("\n" + "═".repeat(60))
     console.log(execute

@@ -79,9 +79,14 @@ export default async function PublicJobPage({ params }: Props) {
     page.sections.about_role,
     page.sections.responsibilities,
     page.sections.requirements,
+    page.sections.qualifications,
     page.sections.preferred_qualifications,
+    page.sections.skills,
     page.sections.benefits,
+    page.sections.compensation,
     page.sections.company_info,
+    page.sections.equal_opportunity,
+    page.sections.visa,
   ].filter((section) => section.items.length > 0)
 
   return (

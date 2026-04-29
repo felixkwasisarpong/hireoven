@@ -29,12 +29,15 @@ type DashboardHomeClientProps = {
   initialPrimaryResumeReady?: boolean
   initialWatchlist?: WatchlistWithCompany[]
   initialWatchlistCount?: number
+  /** Jobs first detected (or created) today, keyed by watched company id (server snapshot). */
+  initialJobsTodayByCompanyId?: Record<string, number>
 }
 
 export default function DashboardHomeClient({
   initialPrimaryResumeReady = false,
   initialWatchlist = [],
   initialWatchlistCount = 0,
+  initialJobsTodayByCompanyId = {},
 }: DashboardHomeClientProps) {
   const pathname = usePathname()
   const router = useRouter()
@@ -194,6 +197,7 @@ export default function DashboardHomeClient({
               <DashboardSpotlightColumn
                 initialWatchlist={initialWatchlist}
                 initialWatchlistCount={initialWatchlistCount}
+                initialJobsTodayByCompanyId={initialJobsTodayByCompanyId}
               />
             </aside>
           </div>

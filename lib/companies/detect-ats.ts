@@ -1,4 +1,5 @@
 import { extractGreenhouseBoardToken, isGreenhouseHost } from "@/lib/companies/greenhouse-url"
+import { detectAtsFromHtml } from "@/lib/companies/ats-signatures"
 
 export type AtsType =
   | "greenhouse"
@@ -8,12 +9,14 @@ export type AtsType =
   | "icims"
   | "smartrecruiters"
   | "bamboohr"
+  | "jobvite"
   | "custom"
 
 export type AtsDetection = {
   atsType: AtsType
   atsIdentifier: string | null
   confidence: "high" | "medium" | "low"
+  source?: "url" | "html"
 }
 
 function safeUrl(value: string) {
@@ -79,9 +82,17 @@ export function detectAtsFromUrl(rawUrl: string): AtsDetection | null {
 export function detectAts({
   careersUrl,
   applyUrls,
+  html,
 }: {
   careersUrl: string | null
   applyUrls: string[]
+  /**
+   * Optional rendered HTML of the careers page. When provided and URL-based
+   * detection is inconclusive, the HTML is scanned for ATS signatures
+   * (boards.greenhouse.io scripts, jobs.lever.co references, Workday markers,
+   * etc.) so that branded portals — most notably iCIMS — are recognized.
+   */
+  html?: string | null
 }): AtsDetection | null {
   const fromApply = applyUrls
     .map((url) => detectAtsFromUrl(url))
@@ -101,12 +112,28 @@ export function detectAts({
         atsType: bestType,
         atsIdentifier: bestId,
         confidence: withType.length >= 2 ? "high" : "medium",
+        source: "url",
       }
     }
   }
 
   if (careersUrl) {
-    return detectAtsFromUrl(careersUrl)
+    const fromUrl = detectAtsFromUrl(careersUrl)
+    if (fromUrl) return { ...fromUrl, source: "url" }
+  }
+
+  // Fall back to HTML signature detection — useful for branded portals
+  // (e.g. careers.acme.com proxying iCIMS) where URL alone is uninformative.
+  if (html && careersUrl) {
+    const fromHtml = detectAtsFromHtml({ url: careersUrl, html })
+    if (fromHtml) {
+      return {
+        atsType: fromHtml.atsType,
+        atsIdentifier: null,
+        confidence: fromHtml.confidence,
+        source: "html",
+      }
+    }
   }
 
   return null

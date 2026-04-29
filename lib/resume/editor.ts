@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk"
 import { logApiUsage } from "@/lib/admin/usage"
+import { ANTHROPIC_TIER_PRICING, SONNET_MODEL } from "@/lib/ai/anthropic-models"
 import { calculateResumeScore, deriveResumeFields } from "@/lib/resume/scoring"
 import type {
   Job,
@@ -15,11 +16,9 @@ const anthropic = process.env.ANTHROPIC_API_KEY
   ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
   : null
 
-const MODEL = "claude-sonnet-4-20250514"
-const MODEL_PRICING = {
-  inputPerMillion: 3,
-  outputPerMillion: 15,
-}
+// Resume editing is quality-sensitive and directly user-visible.
+const MODEL = SONNET_MODEL
+const MODEL_PRICING = ANTHROPIC_TIER_PRICING.sonnet
 
 type TargetJobContext = Pick<Job, "title" | "description">
 

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import Anthropic from "@anthropic-ai/sdk"
+import { ANTHROPIC_TIER_PRICING, SONNET_MODEL } from "@/lib/ai/anthropic-models"
 import { logApiUsage } from "@/lib/admin/usage"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { buildResumeScoreBreakdown, createGeneratedResume } from "@/lib/resume/hub"
@@ -20,8 +21,9 @@ export const runtime = "nodejs"
 const anthropic = process.env.ANTHROPIC_API_KEY
   ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
   : null
-const MODEL = "claude-sonnet-4-6"
-const MODEL_PRICING = { inputPerMillion: 3, outputPerMillion: 15 }
+// Resume generation is long-form and quality-critical for user-facing output.
+const MODEL = SONNET_MODEL
+const MODEL_PRICING = ANTHROPIC_TIER_PRICING.sonnet
 const SOURCE_TYPES = new Set<ResumeSourceType>(["profile", "upload", "linkedin", "manual"])
 const EXPERIENCE_LEVELS = new Set<ResumeExperienceLevel>(["internship", "entry", "mid", "senior", "executive"])
 const STYLES = new Set<ResumeStyle>(["concise", "technical", "executive", "new_grad"])

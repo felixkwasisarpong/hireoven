@@ -186,7 +186,10 @@ export default async function DashboardJobDetailPage({ params }: Props) {
       : []
   const requirements =
     page.sections.requirements.items.length > 0 ? page.sections.requirements.items : []
+  const qualifications = page.sections.qualifications.items
   const niceToHave = page.sections.preferred_qualifications.items
+  const benefits = page.sections.benefits.items
+  const compensation = page.sections.compensation.items
 
   const skills = page.skills.slice(0, 8)
 
@@ -271,8 +274,13 @@ export default async function DashboardJobDetailPage({ params }: Props) {
   }
   const similarJobs = [...similarMap.values()].slice(0, 3)
 
-  const qualificationItems = dedupe([...requirements])
+  const qualificationItems = dedupe([...requirements, ...qualifications])
   const niceToHaveItems = dedupe(niceToHave)
+  const skillsAndBenefits = dedupe([
+    ...page.sections.skills.items,
+    ...benefits,
+    ...compensation,
+  ])
 
   const facts: { icon: LucideIcon; label: string; value: string }[] = [
     { icon: CalendarClock, label: "Posted", value: postedLabel },
@@ -453,6 +461,24 @@ export default async function DashboardJobDetailPage({ params }: Props) {
                     <SectionH icon={Star}>Nice to have</SectionH>
                     <div className="mt-3">
                       <BulletList items={niceToHaveItems} />
+                    </div>
+                  </div>
+                )}
+
+                {skillsAndBenefits.length > 0 && (
+                  <div>
+                    <SectionH icon={CheckCircle2}>Skills &amp; benefits</SectionH>
+                    <div className="mt-3">
+                      <BulletList items={skillsAndBenefits} />
+                    </div>
+                  </div>
+                )}
+
+                {page.sections.visa.items.length > 0 && (
+                  <div>
+                    <SectionH icon={Plane}>Sponsorship / visa outlook</SectionH>
+                    <div className="mt-3">
+                      <BulletList items={page.sections.visa.items} />
                     </div>
                   </div>
                 )}

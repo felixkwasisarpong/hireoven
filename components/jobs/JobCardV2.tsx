@@ -1,7 +1,24 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
-import { Bookmark, ExternalLink, Gem, MapPin, Sparkles, TrendingUp, Trophy } from "lucide-react"
+import { useEffect, useMemo, useState } from "react"
+import {
+  ArrowUpRight,
+  BarChart3,
+  BadgeCheck,
+  Bookmark,
+  Briefcase,
+  Building2,
+  Calendar,
+  Check,
+  Clock3,
+  MapPin,
+  ShieldCheck,
+  Sparkles,
+  Star,
+  Trophy,
+  Users,
+  Zap,
+} from "lucide-react"
 import dynamic from "next/dynamic"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -21,50 +38,14 @@ import {
 import { getJobIntelligence } from "@/lib/jobs/intelligence"
 import { useToast } from "@/components/ui/ToastProvider"
 import { cn } from "@/lib/utils"
-import { VisaFitBadge } from "@/components/jobs/card/VisaFitBadge"
-import { SalaryIntelBadge } from "@/components/jobs/card/SalaryIntelBadge"
-import { GhostRiskBadge } from "@/components/jobs/card/GhostRiskBadge"
-import { ApplicationVerdictPill } from "@/components/jobs/card/ApplicationVerdictPill"
-import { SponsorshipBlockerBadge } from "@/components/jobs/card/SponsorshipBlockerBadge"
-import { JobCardEvidenceFactChips } from "@/components/jobs/card/JobCardEvidenceFactChips"
-import { PostedTimeLabel } from "@/components/jobs/card/PostedTimeLabel"
-import { buildJobCardFactList, buildJobEvidenceFacts } from "@/lib/jobs/job-evidence-facts"
 import {
-  buildSalaryStrongBadgeTitle,
-  buildTopApplicantOpportunityBadgeTitle,
-  shouldShowSalaryStrongBadge,
-} from "@/lib/jobs/job-card-badges"
+  getAllResumeSkillLabels,
+  normalizeSkillList,
+  skillMatches,
+} from "@/lib/skills/taxonomy"
 import type { JobMatchScore, JobWithCompany, JobWithMatchScore } from "@/types"
 
-// ── Scout hover cache (per page session, keyed by job ID) ────────────────────
-type ScoutHoverEntry = { take: string; recommendation: string }
-const scoutHoverCache = new Map<string, ScoutHoverEntry>()
-
-const VERDICT_CONFIG = {
-  Apply:   { label: "Apply",         cls: "bg-emerald-500/25 text-emerald-300 border-emerald-500/30" },
-  Skip:    { label: "Skip",          cls: "bg-red-500/25    text-red-300    border-red-500/30"     },
-  Improve: { label: "Improve First", cls: "bg-amber-500/25  text-amber-300  border-amber-500/30"   },
-  Wait:    { label: "Hold Off",      cls: "bg-blue-500/25   text-blue-300   border-blue-500/30"    },
-  Explore: { label: "Worth a Look",  cls: "bg-orange-500/25 text-orange-300 border-orange-500/30"  },
-} as const
-
-function useTypewriter(text: string, speed = 14): string {
-  const [out, setOut] = useState("")
-  useEffect(() => {
-    setOut("")
-    if (!text) return
-    let i = 0
-    const id = setInterval(() => {
-      i++
-      setOut(text.slice(0, i))
-      if (i >= text.length) clearInterval(id)
-    }, speed)
-    return () => clearInterval(id)
-  }, [text, speed])
-  return out
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
+type RawRecord = Record<string, unknown>
 
 function normalizeScore(value: unknown) {
   const numeric = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN
@@ -72,84 +53,162 @@ function normalizeScore(value: unknown) {
   return Math.min(100, Math.max(0, Math.round(numeric)))
 }
 
+function readRawRecord(job: JobWithCompany | JobWithMatchScore): RawRecord {
+  if (job.raw_data && typeof job.raw_data === "object") {
+    return job.raw_data as RawRecord
+  }
+  return {}
+}
+
+function pickRawString(raw: RawRecord, keys: string[]) {
+  for (const key of keys) {
+    const value = raw[key]
+    if (typeof value === "string" && value.trim()) return value.trim()
+  }
+  return null
+}
+
+function pickRawNumber(raw: RawRecord, keys: string[]) {
+  for (const key of keys) {
+    const value = raw[key]
+    const numeric = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN
+    if (Number.isFinite(numeric)) return Math.round(numeric)
+  }
+  return null
+}
+
+function pickRawBoolean(raw: RawRecord, keys: string[]) {
+  for (const key of keys) {
+    const value = raw[key]
+    if (typeof value === "boolean") return value
+    if (typeof value === "string") {
+      const normalized = value.trim().toLowerCase()
+      if (normalized === "true") return true
+      if (normalized === "false") return false
+    }
+  }
+  return null
+}
+
+function formatWorkMode(job: JobWithCompany | JobWithMatchScore) {
+  if (job.is_remote) return "Remote"
+  if (job.is_hybrid) return "Hybrid"
+  return "On-site"
+}
+
+function formatCompanySizeLabel(value: JobWithCompany["company"]["size"] | null | undefined) {
+  if (!value) return null
+  if (value === "startup") return "Startup"
+  if (value === "small") return "Small team"
+  if (value === "medium") return "Mid-size"
+  if (value === "large") return "Large"
+  if (value === "enterprise") return "Enterprise"
+  return null
+}
+
+function formatPostedLabel(timestamp: string, now: number) {
+  const normalizedText = timestamp.replace(/^posted\s+/i, "").trim()
+  const postedTs = Date.parse(timestamp)
+  if (!Number.isFinite(postedTs)) return normalizedText || timestamp
+  const ageMinutes = Math.max(1, Math.floor((now - postedTs) / 60_000))
+  if (ageMinutes < 60) return `${ageMinutes} min ago`
+  const ageHours = Math.floor(ageMinutes / 60)
+  if (ageHours < 24) return `${ageHours} hour${ageHours === 1 ? "" : "s"} ago`
+  const ageDays = Math.floor(ageHours / 24)
+  return `${ageDays} day${ageDays === 1 ? "" : "s"} ago`
+}
+
+function getMatchLabel(score: number | null) {
+  if (score === null) return "Match unavailable"
+  if (score >= 85) return "Excellent"
+  if (score >= 70) return "Strong"
+  if (score >= 55) return "Moderate"
+  return "Low"
+}
+
+function getVisaSupportLabel(job: JobWithCompany | JobWithMatchScore, visaLabel: string | null) {
+  if (job.requires_authorization) return "Authorization restriction detected"
+  if (visaLabel === "Very Strong" || visaLabel === "Strong") return "Likely visa support"
+  if (visaLabel === "Medium") return "Possible visa support"
+  if (visaLabel === "Weak" || visaLabel === "Blocked") return "Visa support risk"
+
+  const sponsorshipScore = effectiveEmployerSponsorshipScore(job)
+  if (employerLikelySponsorsH1b(job) || sponsorshipScore >= 70) return "Likely visa support"
+  if (sponsorshipScore >= 55) return "Possible visa support"
+  return "Visa support unclear"
+}
+
+function buildSkillDiff(
+  explicitMatched: string[],
+  explicitMissing: string[],
+  jobSkills: string[],
+  resumeSkills: string[]
+) {
+  if (explicitMatched.length > 0 || explicitMissing.length > 0) {
+    return {
+      matched: explicitMatched.slice(0, 6),
+      missing: explicitMissing.slice(0, 6),
+    }
+  }
+
+  if (!jobSkills.length || !resumeSkills.length) {
+    return { matched: [] as string[], missing: [] as string[] }
+  }
+
+  const matched: string[] = []
+  const missing: string[] = []
+
+  for (const skill of jobSkills) {
+    const found = resumeSkills.some((candidate) => skillMatches(skill, candidate))
+    if (found) matched.push(skill)
+    else missing.push(skill)
+  }
+
+  return {
+    matched: matched.slice(0, 6),
+    missing: missing.slice(0, 6),
+  }
+}
+
 function MatchRing({ score, loading }: { score: number | null; loading: boolean }) {
+  const radius = 45
+  const size = 120
+  const circumference = 2 * Math.PI * radius
+  const percent = score === null ? 0 : Math.max(0, Math.min(100, score))
+  const dash = (percent / 100) * circumference
+  const color = "#f04b0b"
+
   if (loading) {
     return (
-      <div className="flex flex-col items-center gap-0.5">
-        <div className="h-[52px] w-[52px] animate-pulse rounded-full bg-slate-100" />
-        <span className="text-[10px] text-slate-400">Scoring…</span>
+      <div className="flex h-[120px] w-[120px] items-center justify-center rounded-full border-[9px] border-slate-200 bg-white">
+        <span className="text-xs font-medium text-slate-400">Scoring</span>
       </div>
     )
   }
-  if (score === null) return null
-
-  const radius = 20
-  const circumference = 2 * Math.PI * radius
-  const filled = (score / 100) * circumference
-  const color = score >= 80 ? "#059669" : score >= 60 ? "#2563EB" : "#EA580C"
-  const label = score >= 80 ? "Great Match" : score >= 60 ? "Good Match" : "Fair Match"
 
   return (
-    <div className="flex flex-col items-center gap-0.5 shrink-0">
-      <div className="relative flex h-[52px] w-[52px] items-center justify-center">
-        <svg width="52" height="52" viewBox="0 0 52 52" className="-rotate-90" aria-hidden>
-          <circle cx="26" cy="26" r={radius} fill="none" stroke="#E2E8F0" strokeWidth="4" />
-          <circle
-            cx="26" cy="26" r={radius}
-            fill="none"
-            stroke={color}
-            strokeWidth="4"
-            strokeDasharray={`${filled} ${circumference}`}
-            strokeLinecap="round"
-          />
-        </svg>
-        <span className="absolute text-sm font-bold text-slate-900">{score}%</span>
+    <div className="relative h-[120px] w-[120px] shrink-0">
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="-rotate-90" aria-hidden>
+        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="#fbe8df" strokeWidth="9" />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          stroke={color}
+          strokeWidth="9"
+          strokeDasharray={`${dash} ${circumference}`}
+          strokeLinecap="round"
+        />
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className="text-[40px] font-extrabold leading-none tracking-[-0.04em] text-slate-950">
+          {score ?? "--"}
+          <span className="ml-0.5 text-[14px] font-bold tracking-normal text-slate-950">%</span>
+        </span>
+        <span className="mt-0.5 text-[12px] font-semibold text-[#f04b0b]">Match</span>
       </div>
-      <span className="text-[10px] font-semibold leading-none" style={{ color }}>{label}</span>
-    </div>
-  )
-}
-
-function OverlayRing({
-  score,
-  label,
-  color,
-  delay,
-  visible,
-}: {
-  score: number
-  label: string
-  color: string
-  delay: number
-  visible: boolean
-}) {
-  const r = 27
-  const c = 2 * Math.PI * r
-  const filled = (Math.min(100, Math.max(0, score)) / 100) * c
-  return (
-    <div
-      className="flex flex-col items-center gap-1.5"
-      style={{
-        opacity: visible ? 1 : 0,
-        transform: visible ? "scale(1)" : "scale(0.7)",
-        transition: `opacity 240ms ${delay}ms ease-out, transform 240ms ${delay}ms cubic-bezier(0.34,1.56,0.64,1)`,
-      }}
-    >
-      <div className="relative flex h-[68px] w-[68px] items-center justify-center">
-        <svg width="68" height="68" viewBox="0 0 68 68" className="-rotate-90" aria-hidden>
-          <circle cx="34" cy="34" r={r} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="4.5" />
-          <circle
-            cx="34" cy="34" r={r}
-            fill="none"
-            stroke={color}
-            strokeWidth="4.5"
-            strokeDasharray={`${filled} ${c}`}
-            strokeLinecap="round"
-          />
-        </svg>
-        <span className="absolute text-[13px] font-bold text-white">{score}%</span>
-      </div>
-      <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-400">{label}</span>
+      <span className="absolute bottom-[13px] right-[8px] h-[14px] w-[14px] rounded-full border-[4px] border-emerald-50 bg-emerald-600" />
     </div>
   )
 }
@@ -187,91 +246,167 @@ export default function JobCardV2({
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [h1bDrawerOpen, setH1bDrawerOpen] = useState(false)
 
-  // Scout hover state
-  const [isHovered, setIsHovered] = useState(false)
-  const [scoutLoading, setScoutLoading] = useState(false)
-  const [scoutEntry, setScoutEntry] = useState<ScoutHoverEntry | null>(null)
-  const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const abortRef = useRef<AbortController | null>(null)
-
   const { attachRef: h1bAttachRef, prediction: h1bPrediction, isLoading: h1bIsLoading } = useH1BPrediction(job.id)
   const now = nowProp ?? Date.now()
   const router = useRouter()
   const detailHref = `/dashboard/jobs/${job.id}`
   const { primaryResume } = useResumeContext()
   const showResumeSignal = typeof hasPrimaryResume === "boolean" ? hasPrimaryResume : Boolean(primaryResume)
+  void isBestMatch
 
+  const raw = useMemo(() => readRawRecord(job), [job])
   const resolvedMatchScore = matchScoreProp ?? ("match_score" in job ? (job.match_score ?? null) : null)
-  const score = normalizeScore(resolvedMatchScore?.overall_score)
+  const rawScore = pickRawNumber(raw, ["matchScore", "match_score"])
+  const score = normalizeScore(resolvedMatchScore?.overall_score ?? rawScore)
+  const matchLabel = pickRawString(raw, ["matchLabel", "match_label"]) ?? getMatchLabel(score)
 
   const cardView = resolveJobCardView(job)
   const displayTitle = cardView.title
-
   const companyName = job.company?.name ?? "Unknown company"
   const companyDomain = job.company?.domain ?? null
-  const companyLogoUrl = job.company?.logo_url ?? null
+  const companyLogoUrl = job.company?.logo_url ?? pickRawString(raw, ["companyLogo", "company_logo"]) ?? null
   const companyProfileHref = job.company?.id ? `/companies/${job.company.id}` : null
 
+  const workMode = pickRawString(raw, ["workMode", "work_mode"]) ?? formatWorkMode(job)
+  const employmentType = cardView.employment_label ?? pickRawString(raw, ["employmentType", "employment_type"]) ?? "Not specified"
+  const salaryRange = cardView.salary_label ?? pickRawString(raw, ["salaryRange", "salary_range", "salary"]) ?? "Not disclosed"
+  const postedSource =
+    pickRawString(raw, ["postedAtNormalized", "posted_at_normalized", "postedAt", "posted_at"]) ??
+    job.first_detected_at
+  const postedAt = formatPostedLabel(postedSource, now)
+
+  const companySummary = pickRawString(raw, [
+    "companySummary",
+    "company_summary",
+    "companyDescription",
+    "company_description",
+    "companyOverview",
+    "company_overview",
+  ])
+  const companyFoundedYear = pickRawNumber(raw, ["companyFoundedYear", "company_founded_year", "foundedYear", "founded_year", "founded"])
+  const companyEmployeeCountRaw =
+    pickRawString(raw, ["companyEmployeeCount", "company_employee_count", "employee_count", "headcount"]) ??
+    (pickRawNumber(raw, ["companyEmployeeCount", "company_employee_count", "employee_count", "headcount"])?.toLocaleString() ?? null)
+  const companyEmployeeCount =
+    companyEmployeeCountRaw ??
+    formatCompanySizeLabel(job.company?.size)
+  const companyIndustry = job.company?.industry ?? pickRawString(raw, ["companyIndustry", "company_industry", "industry"])
+  const companyVerified = pickRawBoolean(raw, ["companyVerified", "company_verified", "verifiedCompany", "verified_company"]) === true
+
+  const easyApply = pickRawBoolean(raw, ["easyApply", "easy_apply", "quickApply", "quick_apply"]) ?? false
+  const activelyHiring = pickRawBoolean(raw, ["activelyHiring", "actively_hiring", "urgent_hiring"]) ?? false
+
   const intel = useMemo(() => getJobIntelligence(job), [job])
+  const visaSupportLabel = getVisaSupportLabel(job, intel.visa?.label ?? null)
 
-  const hasBlocker = intel.visa?.blockers?.some((b) => b.detected) ?? false
-  const showSponsorshipPanel =
-    showVisaSignals &&
-    (employerLikelySponsorsH1b(job) || (!job.requires_authorization && effectiveEmployerSponsorshipScore(job) >= 55))
+  const topApplicantSignal = pickRawBoolean(raw, ["topApplicantSignal", "top_applicant_signal"]) === true
 
-  const evidenceFacts = useMemo(() => buildJobEvidenceFacts(job), [job])
-  const jobCardFactItems = useMemo(
-    () => buildJobCardFactList(evidenceFacts, 4).filter(
-      (item) => item.id !== "location" || !job.location?.trim()
+  const explicitMatchedSkills = useMemo(
+    () => normalizeSkillList(
+      [
+        ...(resolvedMatchScore?.score_breakdown?.matchedSkills ?? []),
+        ...(intel.matchScore?.matchedSkills ?? []),
+      ],
+      8
     ),
-    [evidenceFacts, job.location]
+    [resolvedMatchScore?.score_breakdown?.matchedSkills, intel.matchScore?.matchedSkills]
   )
-  const topApplicantBadge = useMemo(
-    () => buildTopApplicantOpportunityBadgeTitle(job, score),
-    [job, score]
+
+  const explicitMissingSkills = useMemo(
+    () => normalizeSkillList(
+      [
+        ...(resolvedMatchScore?.score_breakdown?.missingSkills ?? []),
+        ...(intel.matchScore?.missingSkills ?? []),
+      ],
+      8
+    ),
+    [resolvedMatchScore?.score_breakdown?.missingSkills, intel.matchScore?.missingSkills]
   )
-  const showSalaryStrong = shouldShowSalaryStrongBadge(evidenceFacts)
-  const salaryStrongTitle = useMemo(() => buildSalaryStrongBadgeTitle(evidenceFacts), [evidenceFacts])
 
-  // Scout overlay chips — only things NOT already shown by the rings
-  const overlayInsights = useMemo(() => {
-    const items: string[] = []
-    if (showSalaryStrong) items.push("Salary transparent role")
-    if (topApplicantBadge.show) items.push("Top applicant opportunity")
-    if (intel.lcaSalary?.comparisonLabel && intel.lcaSalary.comparisonLabel !== "Unknown")
-      items.push(`LCA: ${intel.lcaSalary.comparisonLabel}`)
-    if (intel.applicationVerdict) items.push(`Status: ${intel.applicationVerdict}`)
-    if (items.length === 0 && job.location?.trim()) items.push(job.location.trim())
-    return items.slice(0, 3)
-  }, [showSalaryStrong, topApplicantBadge.show, intel, job.location])
+  const resumeSkills = useMemo(
+    () => getAllResumeSkillLabels(primaryResume),
+    [primaryResume]
+  )
 
-  // Verdict badge: live from Scout API, falls back to score-derived while loading
-  const staticVerdictLabel =
-    score === null ? "Explore Role" : score >= 80 ? "Strong Match" : score >= 60 ? "Good Fit" : "Worth a Look"
-  const staticVerdictCls =
-    score === null
-      ? "bg-white/10 text-slate-300 border-white/20"
-      : score >= 80
-        ? "bg-emerald-500/25 text-emerald-300 border-emerald-500/30"
-        : score >= 60
-          ? "bg-blue-500/25 text-blue-300 border-blue-500/30"
-          : "bg-orange-500/25 text-orange-300 border-orange-500/30"
+  const jobSkills = useMemo(
+    () => normalizeSkillList([...(job.skills ?? []), ...cardView.skills], 10),
+    [job.skills, cardView.skills]
+  )
 
-  const liveVerdict = scoutEntry
-    ? VERDICT_CONFIG[scoutEntry.recommendation as keyof typeof VERDICT_CONFIG]
-    : null
-  const verdictLabel = liveVerdict?.label ?? staticVerdictLabel
-  const verdictCls   = liveVerdict?.cls   ?? staticVerdictCls
+  const skillDiff = useMemo(
+    () =>
+      buildSkillDiff(
+        explicitMatchedSkills,
+        explicitMissingSkills,
+        jobSkills,
+        showResumeSignal ? resumeSkills : []
+      ),
+    [explicitMatchedSkills, explicitMissingSkills, jobSkills, resumeSkills, showResumeSignal]
+  )
 
-  const typedText = useTypewriter(scoutEntry?.take ?? "")
-  const isTyping  = !!scoutEntry && typedText.length < scoutEntry.take.length
+  const matchedSkills = skillDiff.matched
+  const missingSkills = skillDiff.missing
+  const matchedSkillsVisible = matchedSkills.slice(0, 4)
+  const missingSkillsVisible = missingSkills.slice(0, 3)
+  const matchedSkillsExtra = Math.max(0, matchedSkills.length - matchedSkillsVisible.length)
+  const missingSkillsExtra = Math.max(0, missingSkills.length - missingSkillsVisible.length)
+  const sponsorshipSignalRaw = pickRawString(raw, [
+    "sponsorshipSignal",
+    "sponsorship_signal",
+    "visaSupport",
+    "visa_support",
+  ])
+  const sponsorshipSignal =
+    sponsorshipSignalRaw ??
+    (job.requires_authorization
+      ? "Authorization required"
+      : employerLikelySponsorsH1b(job) || effectiveEmployerSponsorshipScore(job) >= 55
+        ? "Visa support likely"
+        : "Visa support unclear")
+  const visaSupportTitle =
+    visaSupportLabel === "Likely visa support"
+      ? "Strong Visa Support"
+      : visaSupportLabel === "Possible visa support"
+        ? "Visa Support"
+        : "Visa Review Needed"
+  const showCompanySnapshot = Boolean(companySummary || companyFoundedYear || companyEmployeeCount || companyIndustry)
+
+  const whyMatchBullets = useMemo(() => {
+    const bullets: string[] = []
+
+    if (score !== null) {
+      if (score >= 85) bullets.push("High match score based on your current resume and profile.")
+      else if (score >= 70) bullets.push("Strong overall alignment for this role.")
+      else if (score >= 55) bullets.push("Moderate match with room to improve before applying.")
+    }
+
+    if (matchedSkills.length > 0) {
+      bullets.push(`Skills overlap: ${matchedSkills.slice(0, 3).join(", ")}.`)
+    }
+
+    if (visaSupportLabel === "Likely visa support" || visaSupportLabel === "Possible visa support") {
+      bullets.push("Visa support signals are favorable compared with similar listings.")
+    }
+
+    if (topApplicantSignal || activelyHiring) {
+      bullets.push("Competition signal suggests this can be a timely application.")
+    }
+
+    if (bullets.length === 0) {
+      bullets.push("Core role signals align with your current search preferences.")
+    }
+
+    return bullets.slice(0, 2)
+  }, [score, matchedSkills, visaSupportLabel, topApplicantSignal, activelyHiring])
 
   useEffect(() => {
     let cancelled = false
     void fetchJobSavedState(job.id).then((isSaved) => {
       if (!cancelled) setSaved(isSaved)
     })
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [job.id])
 
   useEffect(() => {
@@ -286,58 +421,6 @@ export default function JobCardV2({
   useEffect(() => {
     if (analysisIndex < 10) router.prefetch(detailHref)
   }, [analysisIndex, detailHref, router])
-
-  function handleMouseEnter() {
-    router.prefetch(detailHref)
-    setIsHovered(true)
-
-    const cached = scoutHoverCache.get(job.id)
-    if (cached) {
-      setScoutEntry(cached)
-      return
-    }
-
-    hoverTimerRef.current = setTimeout(() => {
-      setScoutLoading(true)
-      const ctrl = new AbortController()
-      abortRef.current = ctrl
-
-      void fetch("/api/scout/chat", {
-        method: "POST",
-        headers: { Accept: "application/json", "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: "In one sharp sentence, should I apply to this job? Be direct and specific — mention the role or company.",
-          jobId: job.id,
-          pagePath: "/dashboard/jobs",
-        }),
-        signal: ctrl.signal,
-      })
-        .then(async (res) => {
-          if (!res.ok) return
-          const data = await res.json().catch(() => null) as { answer?: string; recommendation?: string } | null
-          if (data?.answer) {
-            const entry: ScoutHoverEntry = {
-              take: data.answer,
-              recommendation: data.recommendation ?? "Explore",
-            }
-            scoutHoverCache.set(job.id, entry)
-            setScoutEntry(entry)
-          }
-        })
-        .catch(() => { /* abort or network error — silently ignore */ })
-        .finally(() => setScoutLoading(false))
-    }, 400)
-  }
-
-  function handleMouseLeave() {
-    setIsHovered(false)
-    if (hoverTimerRef.current) {
-      clearTimeout(hoverTimerRef.current)
-      hoverTimerRef.current = null
-    }
-    abortRef.current?.abort()
-    abortRef.current = null
-  }
 
   async function handleSave(e: React.MouseEvent) {
     e.stopPropagation()
@@ -383,15 +466,13 @@ export default function JobCardV2({
     }
   }
 
-  const showScorePanel = score !== null || (showResumeSignal && isMatchScoreLoading)
-
   return (
     <>
       <article
         ref={h1bAttachRef as (node: HTMLElement | null) => void}
         role="button"
         tabIndex={0}
-        onMouseLeave={handleMouseLeave}
+        onMouseEnter={() => router.prefetch(detailHref)}
         onFocus={() => router.prefetch(detailHref)}
         onClick={() => router.push(detailHref)}
         onKeyDown={(e) => {
@@ -400,318 +481,348 @@ export default function JobCardV2({
             router.push(detailHref)
           }
         }}
-        className="group relative flex cursor-pointer flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.04)] transition-all hover:border-orange-200 hover:shadow-[0_4px_20px_rgba(234,88,12,0.12)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-600/20"
+        className="group relative flex cursor-pointer flex-col overflow-hidden rounded-[26px] border border-slate-200 bg-white shadow-[0_6px_16px_rgba(15,23,42,0.05)] transition-all duration-150 hover:-translate-y-0.5 hover:border-orange-300 hover:shadow-[0_10px_24px_rgba(15,23,42,0.08)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-600/20"
       >
-        {/* Left accent bar */}
-        <div className="absolute inset-y-0 left-0 w-0.5 bg-orange-600 opacity-0 transition-opacity group-hover:opacity-100" aria-hidden />
+        <div className="px-5 pb-5 pt-5 sm:px-6">
+          <div className="flex min-w-0 flex-col gap-5 lg:flex-row lg:items-start lg:gap-6">
+            <div className="min-w-0 lg:flex-[1.08] lg:border-r lg:border-slate-200 lg:pr-6">
+              <div className="flex min-w-0 gap-4">
+                <CompanyLogo
+                  companyName={companyName}
+                  domain={companyDomain}
+                  logoUrl={companyLogoUrl}
+                  priority={priorityLogo}
+                  className="h-[104px] w-[104px] flex-shrink-0 rounded-2xl border border-slate-200 bg-slate-50 p-1.5 sm:h-[112px] sm:w-[112px]"
+                />
 
-        {/* Header area — overlay lives here, trigger is the strip below */}
-        <div className="relative">
-          {/* ── Scout Hover Overlay ──────────────────────────────────────── */}
-          <div
-            aria-hidden
-            onClick={(e) => e.stopPropagation()}
-            className={cn(
-              "absolute inset-0 z-10 flex flex-col rounded-t-xl overflow-hidden",
-              "bg-gradient-to-br from-[#071d38] via-[#0a2748] to-[#0d3460]",
-              "transition-all duration-[220ms] ease-out",
-              isHovered
-                ? "opacity-100 translate-y-0 pointer-events-auto"
-                : "opacity-0 translate-y-2 pointer-events-none select-none"
-            )}
-          >
-            {/* Shimmer bar */}
-            <div
-              className="absolute left-0 top-0 h-[2px] bg-gradient-to-r from-[#ea580c] via-[#f97316] to-[#fdba74] transition-[width] duration-[380ms] ease-out"
-              style={{ width: isHovered ? "100%" : "0%" }}
-            />
-
-            <div className="flex h-full flex-col gap-2.5 p-4 pt-5">
-
-              {/* Scout label + verdict */}
-              <div className="flex shrink-0 items-center gap-2">
-                <span
-                  className={cn(
-                    "inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-[#ea580c]",
-                    scoutLoading && "animate-pulse shadow-[0_0_14px_rgba(234,88,12,0.7)]"
-                  )}
-                >
-                  <Sparkles className="h-3 w-3 text-white" />
-                </span>
-                <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#ea580c]">Scout</span>
-                <span className={cn("ml-auto shrink-0 rounded-full border px-2.5 py-0.5 text-[10px] font-bold transition-all duration-300", verdictCls)}>
-                  {verdictLabel}
-                </span>
-              </div>
-
-              {/* Main body: left text, right rings */}
-              <div className="flex min-h-0 flex-1 gap-4">
-
-                {/* Left — text content, never expands card width */}
-                <div className="flex min-w-0 flex-1 flex-col justify-between overflow-hidden">
-
-                  {/* AI take or fallback chips */}
-                  <div
-                    style={{ opacity: isHovered ? 1 : 0, transition: "opacity 180ms 200ms ease-out" }}
-                  >
-                    {scoutLoading ? (
-                      <div className="flex items-center gap-1.5">
-                        {[0, 120, 240].map((d) => (
-                          <span key={d} className="h-1.5 w-1.5 rounded-full bg-slate-400 animate-bounce" style={{ animationDelay: `${d}ms` }} />
-                        ))}
-                        <span className="ml-1 text-[11px] text-slate-400">Scout is reading…</span>
-                      </div>
-                    ) : typedText ? (
-                      <p className="line-clamp-4 text-[12.5px] leading-relaxed text-slate-200">
-                        {typedText}
-                        {isTyping && (
-                          <span className="ml-[1px] inline-block h-[13px] w-[2px] translate-y-[1px] animate-pulse bg-[#ea580c] align-middle" />
-                        )}
-                      </p>
-                    ) : overlayInsights.length > 0 ? (
-                      <div className="flex flex-col gap-1.5">
-                        {overlayInsights.map((insight, i) => (
-                          <div
-                            key={insight}
-                            className="flex items-center gap-2"
-                            style={{
-                              opacity: isHovered ? 1 : 0,
-                              transform: isHovered ? "translateX(0)" : "translateX(-10px)",
-                              transition: `opacity 180ms ${120 + i * 50}ms ease-out, transform 180ms ${120 + i * 50}ms ease-out`,
-                            }}
-                          >
-                            <span className="h-1 w-1 shrink-0 rounded-full bg-[#ea580c]" />
-                            <span className="truncate text-[12px] text-slate-300">{insight}</span>
-                          </div>
-                        ))}
-                      </div>
-                    ) : null}
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-start gap-2">
+                    <h3 className="line-clamp-2 text-[16px] font-bold leading-tight text-slate-950">{displayTitle}</h3>
                   </div>
 
-                  {/* Ask Scout */}
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      window.dispatchEvent(
-                        new CustomEvent("scout:open-with-job", {
-                          detail: {
-                            jobId: job.id,
-                            prefillQuery: `Should I apply to ${displayTitle} at ${companyName}?`,
-                          },
-                        })
-                      )
-                    }}
-                    style={{
-                      opacity: isHovered ? 1 : 0,
-                      transform: isHovered ? "translateY(0)" : "translateY(6px)",
-                      transition: "opacity 200ms 220ms ease-out, transform 200ms 220ms ease-out",
-                    }}
-                    className="mt-3 flex items-center justify-center gap-1.5 rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-[11px] font-semibold text-white transition hover:bg-white/20 active:scale-95"
-                  >
-                    <Sparkles className="h-3 w-3 shrink-0" />
-                    Ask Scout
-                  </button>
-                </div>
+                  <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+                    {companyProfileHref ? (
+                      <Link
+                        href={companyProfileHref}
+                        onClick={(e) => e.stopPropagation()}
+                        className="text-[14px] font-semibold text-slate-900 transition hover:text-orange-600 hover:underline"
+                      >
+                        {companyName}
+                      </Link>
+                    ) : (
+                      <span className="text-[14px] font-semibold text-slate-900">{companyName}</span>
+                    )}
+                    {companyVerified && (
+                      <BadgeCheck className="h-4 w-4 shrink-0 text-orange-600" aria-label="Verified company" />
+                    )}
+                  </div>
 
-                {/* Right — rings side by side */}
-                <div className="flex shrink-0 flex-row items-center justify-center gap-5">
-                  {score !== null && (
-                    <OverlayRing
-                      score={score}
-                      label="Match"
-                      color={score >= 80 ? "#10b981" : score >= 60 ? "#3b82f6" : "#f97316"}
-                      delay={60}
-                      visible={isHovered}
-                    />
+                  <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-slate-600">
+                    {job.location?.trim() && (
+                      <span className="inline-flex items-center gap-1">
+                        <MapPin className="h-4 w-4 text-slate-500" aria-hidden />
+                        {job.location}
+                      </span>
+                    )}
+                    <span className="text-slate-300" aria-hidden>•</span>
+                    <span>{workMode}</span>
+                    <span className="text-slate-300" aria-hidden>•</span>
+                    <span className="inline-flex items-center gap-1">
+                      <Briefcase className="h-4 w-4 text-slate-500" aria-hidden />
+                      {employmentType}
+                    </span>
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    {activelyHiring && (
+                      <span className="inline-flex items-center gap-1.5 rounded-[10px] bg-emerald-50 px-3 py-1.5 text-[12px] font-medium text-emerald-700">
+                        <Sparkles className="h-3.5 w-3.5" aria-hidden />
+                        Actively hiring
+                      </span>
+                    )}
+                    {easyApply && (
+                      <span className="inline-flex items-center gap-1.5 rounded-[10px] bg-blue-50 px-3 py-1.5 text-[12px] font-medium text-blue-700">
+                        <span className="inline-flex h-4 w-4 items-center justify-center rounded-[4px] bg-blue-600 text-[9px] font-bold text-white">
+                          in
+                        </span>
+                        Easy Apply
+                      </span>
+                    )}
+                    {topApplicantSignal && (
+                      <span className="inline-flex items-center gap-1.5 rounded-[10px] bg-orange-50 px-3 py-1.5 text-[12px] font-medium text-orange-700">
+                        <Trophy className="h-3.5 w-3.5" aria-hidden />
+                        Top Applicant
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="min-w-0 lg:flex-[0.95] lg:pr-1">
+              {matchedSkills.length > 0 && (
+                <>
+                  <p className="text-[12px] font-semibold text-emerald-700">Top matched skills</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {matchedSkillsVisible.map((skill) => (
+                      <span
+                        key={`match-${job.id}-${skill}`}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[11px] font-medium text-emerald-700"
+                      >
+                        <Check className="h-3.5 w-3.5" aria-hidden />
+                        {skill}
+                      </span>
+                    ))}
+                    {matchedSkillsExtra > 0 && (
+                      <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] font-medium text-slate-500">
+                        +{matchedSkillsExtra} more
+                      </span>
+                    )}
+                  </div>
+                </>
+              )}
+
+              {missingSkills.length > 0 && (
+                <>
+                  <p className={cn("text-[12px] font-semibold text-orange-600", matchedSkills.length > 0 ? "mt-4" : "mt-0")}>
+                    Skills to improve
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {missingSkillsVisible.map((skill) => (
+                      <span
+                        key={`missing-${job.id}-${skill}`}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-orange-200 bg-white px-3 py-1.5 text-[11px] font-medium text-orange-600"
+                      >
+                        <span className="text-[14px] leading-none">+</span>
+                        {skill}
+                      </span>
+                    ))}
+                    {missingSkillsExtra > 0 && (
+                      <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] font-medium text-slate-500">
+                        +{missingSkillsExtra} more
+                      </span>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="flex shrink-0 items-center justify-between gap-3 lg:w-[180px] lg:flex-col lg:items-end lg:justify-start">
+              <button
+                type="button"
+                onClick={openMatchDetail}
+                disabled={score === null && !isMatchScoreLoading}
+                aria-label={matchLabel}
+                className="rounded-2xl p-1 transition hover:bg-orange-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-600/30 disabled:cursor-default"
+              >
+                <MatchRing score={score} loading={isMatchScoreLoading && score === null} />
+              </button>
+
+              <div
+                className="flex items-center gap-1.5 transition-opacity duration-150 group-hover:pointer-events-none group-hover:opacity-0 group-focus-within:pointer-events-none group-focus-within:opacity-0"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  disabled={saving}
+                  aria-label={saved ? "Saved" : "Save"}
+                  className={cn(
+                    "inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 transition hover:border-orange-200 hover:text-orange-600",
+                    saved && "text-orange-600"
                   )}
-                  {showVisaSignals && intel.visa?.visaFitScore != null ? (
-                    <OverlayRing
-                      score={intel.visa.visaFitScore}
-                      label="Visa Fit"
-                      color={intel.visa.visaFitScore >= 70 ? "#10b981" : intel.visa.visaFitScore >= 40 ? "#3b82f6" : "#f97316"}
-                      delay={140}
-                      visible={isHovered}
-                    />
-                  ) : intel.ghostJobRisk ? (
-                    <OverlayRing
-                      score={intel.ghostJobRisk.riskLevel === "low" ? 85 : intel.ghostJobRisk.riskLevel === "medium" ? 50 : 18}
-                      label="Freshness"
-                      color={intel.ghostJobRisk.riskLevel === "low" ? "#10b981" : intel.ghostJobRisk.riskLevel === "medium" ? "#f59e0b" : "#ef4444"}
-                      delay={140}
-                      visible={isHovered}
-                    />
-                  ) : null}
+                >
+                  <Bookmark className={cn("h-4 w-4", saved && "fill-current")} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => router.push(`/dashboard/scout?jobId=${job.id}`)}
+                  aria-label="Compare"
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 transition hover:border-orange-200 hover:text-orange-600"
+                >
+                  <BarChart3 className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => router.push(detailHref)}
+                  aria-label="View details"
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-orange-600 transition hover:border-orange-200 hover:bg-orange-50"
+                >
+                  <ArrowUpRight className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="overflow-hidden">
+          <div className="max-h-0 -translate-y-1 opacity-0 transition-all duration-150 ease-out group-hover:max-h-[420px] group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:max-h-[420px] group-focus-within:translate-y-0 group-focus-within:opacity-100">
+            <div className="px-5 pb-2 sm:px-6">
+              <div className="rounded-2xl border border-slate-200 bg-white">
+                <div
+                  className={cn(
+                    "grid",
+                    showCompanySnapshot
+                      ? "lg:grid-cols-[232px_1fr_1fr_214px]"
+                      : "lg:grid-cols-[232px_1fr_214px]"
+                  )}
+                >
+                  <div className="space-y-3 border-b border-slate-200 p-3 lg:border-b-0 lg:border-r">
+                    <div className="flex items-start gap-3">
+                      <Calendar className="mt-0.5 h-4 w-4 text-slate-600" />
+                      <div>
+                        <p className="text-[13px] font-semibold text-slate-900">{salaryRange}</p>
+                        <p className="text-[11px] text-slate-500">Est. Salary</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        if (showVisaSignals) setH1bDrawerOpen(true)
+                      }}
+                      className="flex items-start gap-3 text-left"
+                    >
+                      <ShieldCheck className={cn("mt-0.5 h-4 w-4", visaSupportTitle.includes("Strong") ? "text-emerald-700" : "text-orange-600")} />
+                      <div>
+                        <p className={cn("text-[13px] font-semibold", visaSupportTitle.includes("Strong") ? "text-emerald-700" : "text-orange-600")}>
+                          {visaSupportTitle}
+                        </p>
+                        <p className="text-[11px] text-slate-500">{sponsorshipSignal}</p>
+                      </div>
+                    </button>
+                    <div className="flex items-start gap-3">
+                      <Clock3 className="mt-0.5 h-4 w-4 text-slate-600" />
+                      <div>
+                        <p className="text-[13px] font-medium text-slate-700">Posted {postedAt}</p>
+                        <p className="text-[11px] font-medium text-orange-600">Quick Apply</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="border-b border-slate-200 p-3 lg:border-b-0 lg:border-r">
+                    <p className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-slate-900">
+                      <Sparkles className="h-3.5 w-3.5 text-orange-500" />
+                      Why this job is a great match
+                    </p>
+                    <div className="mt-2 space-y-1">
+                      {whyMatchBullets.map((bullet, index) => (
+                        <p key={`${job.id}-match-bullet-${index}`} className="flex items-start gap-2 text-[12px] text-slate-700">
+                          <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                          <span>{bullet}</span>
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+
+                  {showCompanySnapshot && (
+                    <div className="border-b border-slate-200 p-3 lg:border-b-0 lg:border-r">
+                      <p className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-slate-900">
+                        <Building2 className="h-3.5 w-3.5 text-slate-600" />
+                        About {companyName}
+                      </p>
+                      {companySummary && (
+                        <p className="mt-2 line-clamp-3 text-[12px] leading-5 text-slate-700">{companySummary}</p>
+                      )}
+
+                      {(companyFoundedYear || companyEmployeeCount || companyIndustry) && (
+                        <div className="mt-2.5 flex flex-wrap gap-x-2.5 gap-y-1">
+                          {companyFoundedYear && (
+                            <span className="inline-flex items-center gap-1 text-[11px] text-slate-700">
+                              <Calendar className="h-3 w-3 text-slate-500" />
+                              {companyFoundedYear} Founded
+                            </span>
+                          )}
+                          {companyEmployeeCount && (
+                            <span className="inline-flex items-center gap-1 text-[11px] text-slate-700">
+                              <Users className="h-3 w-3 text-slate-500" />
+                              {companyEmployeeCount} Employees
+                            </span>
+                          )}
+                          {companyIndustry && (
+                            <span className="inline-flex items-center gap-1 text-[11px] text-slate-700">
+                              <Building2 className="h-3 w-3 text-slate-500" />
+                              {companyIndustry}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="p-3">
+                    <div className="h-full rounded-2xl border border-slate-200 bg-white p-3">
+                      <p className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-slate-900">
+                        <Sparkles className="h-3.5 w-3.5 text-orange-500" />
+                        Improve your odds
+                      </p>
+                      <p className="mt-1.5 text-[12px] leading-5 text-slate-700">
+                        Tailor your resume for this role in 30 seconds.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          router.push(`/dashboard/resume/analyze/${job.id}`)
+                        }}
+                        className="mt-2.5 inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-[#f04b0b] px-3.5 py-2 text-[13px] font-semibold text-white transition hover:bg-orange-700"
+                      >
+                        Tailor Resume
+                        <Sparkles className="h-3 w-3" />
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-          {/* ── End Scout Overlay ──────────────────────────────────────────── */}
 
-        <div className="flex min-w-0 flex-col gap-4 px-5 pt-5 pb-4 sm:flex-row sm:items-start">
-          <CompanyLogo
-            companyName={companyName}
-            domain={companyDomain}
-            logoUrl={companyLogoUrl}
-            priority={priorityLogo}
-            className="h-12 w-12 flex-shrink-0 rounded-xl border border-slate-100 bg-slate-50 object-contain p-1"
-          />
-
-          <div className="min-w-0 flex-1">
-            {/* Title + top-match badge */}
-            <div className="flex items-start justify-between gap-2">
-              <h3 className="line-clamp-2 text-[15px] font-bold leading-snug text-slate-950 transition-colors group-hover:text-orange-600">
-                {displayTitle}
-              </h3>
-              {isBestMatch && (
-                <span className="mt-0.5 inline-flex flex-shrink-0 items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.08em] text-amber-900">
-                  <span className="flex h-4 w-4 items-center justify-center rounded-full bg-amber-500 text-white">
-                    <Trophy className="h-2.5 w-2.5" aria-hidden />
-                  </span>
-                  Top Match
-                </span>
-              )}
-            </div>
-
-            {/* Company + posted time */}
-            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
-              {companyProfileHref ? (
-                <Link
-                  href={companyProfileHref}
-                  onClick={(e) => e.stopPropagation()}
-                  className="text-[13px] font-semibold text-slate-700 transition hover:text-orange-600 hover:underline"
+            <div className="flex flex-col gap-1.5 border-t border-slate-100 px-5 pb-3 pt-2.5 sm:flex-row sm:items-center sm:justify-between sm:px-6" onClick={(e) => e.stopPropagation()}>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  disabled={saving}
+                  className={cn(
+                    "inline-flex min-w-[108px] items-center justify-center gap-1.5 rounded-xl border px-3 py-2 text-[13px] font-medium transition",
+                    saved
+                      ? "border-orange-200 bg-orange-50 text-orange-700"
+                      : "border-slate-200 bg-white text-slate-800 hover:border-orange-200 hover:bg-orange-50"
+                  )}
                 >
-                  {companyName}
-                </Link>
-              ) : (
-                <span className="text-[13px] font-semibold text-slate-700">{companyName}</span>
-              )}
-              <span aria-hidden className="text-slate-300">·</span>
-              <PostedTimeLabel firstDetectedAt={job.first_detected_at} now={now} />
-            </div>
-
-            {/* Meta row */}
-            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
-              {job.location?.trim() && (
-                <span className="inline-flex items-center gap-1 text-[12.5px] text-slate-500">
-                  <MapPin className="h-3 w-3 shrink-0 text-slate-400" aria-hidden />
-                  {job.location}
-                </span>
-              )}
-              {jobCardFactItems.length > 0 && (
-                <JobCardEvidenceFactChips jobId={job.id} items={jobCardFactItems} />
-              )}
-            </div>
-
-            {/* Top applicant opportunity */}
-            {topApplicantBadge.show && (
-              <div className="mt-2.5">
-                <span
-                  title={topApplicantBadge.title}
-                  className="inline-flex items-center gap-1.5 rounded-md bg-orange-50 px-2.5 py-1 text-[11px] font-semibold text-orange-700"
+                  <Star className={cn("h-5 w-5", saved && "fill-current")} />
+                  {saved ? "Saved" : "Save"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => router.push(`/dashboard/scout?jobId=${job.id}`)}
+                  className="inline-flex min-w-[122px] items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[13px] font-medium text-slate-800 transition hover:border-orange-200 hover:bg-orange-50"
                 >
-                  <Gem className="h-3 w-3 shrink-0" aria-hidden />
-                  Top Applicant Opportunity
-                </span>
+                  <BarChart3 className="h-4 w-4" />
+                  Compare
+                </button>
               </div>
-            )}
-          </div>
 
-          {/* Match ring */}
-          {showScorePanel && (
-            <button
-              type="button"
-              onClick={openMatchDetail}
-              disabled={score === null && !isMatchScoreLoading}
-              className="flex flex-col items-center self-start rounded-xl p-1 transition hover:bg-orange-50/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-600/25 sm:ml-2"
-              aria-label="View match score"
-            >
-              <MatchRing score={score} loading={isMatchScoreLoading && score === null} />
-            </button>
-          )}
-        </div>
-        </div>{/* end relative header wrapper */}
-
-        {/* Intelligence strip — hover here triggers the Scout overlay above */}
-        <div
-          className="flex min-h-[40px] flex-wrap items-center gap-2 border-t border-slate-100 bg-white px-5 py-2.5"
-          onMouseEnter={handleMouseEnter}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {/* Salary strong */}
-          {showSalaryStrong && (
-            <span
-              className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-900"
-              title={salaryStrongTitle}
-            >
-              <TrendingUp className="h-3 w-3 shrink-0" aria-hidden />
-              Salary strong
-            </span>
-          )}
-
-          {/* Visa fit */}
-          {showVisaSignals && intel.visa?.label && (
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); if (showSponsorshipPanel) setH1bDrawerOpen(true) }}
-              className="focus-visible:outline-none"
-              aria-label="Open visa fit details"
-            >
-              <VisaFitBadge label={intel.visa.label} score={intel.visa.visaFitScore} />
-            </button>
-          )}
-
-          {/* Sponsorship blocker */}
-          {hasBlocker && (
-            <SponsorshipBlockerBadge blockers={intel.visa?.blockers} />
-          )}
-
-          {/* LCA salary alignment */}
-          {intel.lcaSalary?.comparisonLabel && intel.lcaSalary.comparisonLabel !== "Unknown" && (
-            <SalaryIntelBadge comparisonLabel={intel.lcaSalary.comparisonLabel} />
-          )}
-
-          {/* Ghost job risk */}
-          {intel.ghostJobRisk && (
-            <GhostRiskBadge
-              riskLevel={intel.ghostJobRisk.riskLevel}
-              freshnessDays={intel.ghostJobRisk.freshnessDays}
-            />
-          )}
-
-          {/* Application verdict */}
-          {intel.applicationVerdict && (
-            <ApplicationVerdictPill verdict={intel.applicationVerdict} />
-          )}
-
-          {/* Actions */}
-          <div className="ml-auto flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={saving}
-              aria-label={saved ? "Saved" : "Save job"}
-              className={cn(
-                "inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[12px] font-semibold transition",
-                saved
-                  ? "border-orange-200 bg-orange-50 text-orange-600"
-                  : "border-slate-200 text-slate-700 hover:border-orange-200 hover:bg-orange-50"
-              )}
-            >
-              <Bookmark className={cn("h-3.5 w-3.5", saved && "fill-current")} />
-              {saved ? "Saved" : "Save"}
-            </button>
-
-            <a
-              href={job.apply_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-orange-600 px-4 py-1.5 text-[13px] font-semibold text-white transition hover:bg-orange-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-600/40"
-            >
-              Apply Now
-              <ExternalLink className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
-            </a>
+              <div className="flex flex-wrap items-center gap-2 rounded-2xl bg-orange-50/50 p-1.5 sm:justify-end">
+                <a
+                  href={job.apply_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="inline-flex min-w-[156px] items-center justify-center gap-1.5 rounded-xl border border-orange-200 bg-white px-3.5 py-2 text-[13px] font-semibold text-orange-600 transition hover:bg-orange-50"
+                >
+                  <Zap className="h-4 w-4" />
+                  Quick Apply
+                </a>
+                <button
+                  type="button"
+                  onClick={() => router.push(detailHref)}
+                  className="inline-flex min-w-[176px] items-center justify-center gap-1.5 rounded-xl bg-[#f04b0b] px-3.5 py-2 text-[13px] font-semibold text-white transition hover:bg-orange-700"
+                >
+                  View Details
+                  <ArrowUpRight className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </article>

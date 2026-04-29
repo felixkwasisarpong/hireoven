@@ -36,13 +36,16 @@ const COMPANY_LIKE_RE =
   /\b(we are|we(?:'|’)re looking|our mission|our values|our culture|founded|part of|customers|global team|across [a-z]+ countries|we offer|about us)\b/i
 
 const APPLICATION_LIKE_RE =
-  /\b(apply for this role|apply now|application process|how to apply|interview process|equal opportunity|eeo|accommodation|encouraged to apply)\b/i
+  /\b(apply for this role|apply now|application process|how to apply|interview process|encouraged to apply)\b/i
+
+const EQUAL_OPPORTUNITY_LIKE_RE =
+  /\b(equal opportunity|eeo|reasonable accommodation|accommodation|protected veteran|affirmative action|diverse workforce|diversity and inclusion)\b/i
 
 const LOCATION_META_LIKE_RE =
   /\b(office locations?|office-assigned|job type|work model|on-site|onsite|hybrid|remote|location[s]?)\b/i
 
 const PROMOTIONAL_LIKE_RE =
-  /\b(opportunity|career advancement|grow your skills|grow and develop|personal development plans|join [a-z][a-z ]+ and do work that matters|stand out|set you apart|extraordinary twists and turns|welcome diverse perspectives|challenge assumptions)\b/i
+  /\b(career advancement|grow your skills|grow and develop|personal development plans|join [a-z][a-z ]+ and do work that matters|stand out|set you apart|extraordinary twists and turns|welcome diverse perspectives|challenge assumptions|make a difference|be part of something|impact millions)\b/i
 
 const COMPENSATION_LIKE_RE =
   /\b(\$\s?\d|usd|salary|pay range|base salary|on target earnings|annual(?:ly)?|per year|ote)\b/i
@@ -58,6 +61,17 @@ const ABOUT_BLOCKED_RE =
 
 const SECTION_MARKER_RE =
   /\b(minimum qualifications|minimum requirements|basic qualifications|required qualifications|preferred qualifications|responsibilities|benefits|compensation)\b/i
+
+// Lines that are definitively navigation / UI chrome surviving HTML parsing.
+// Matched case-insensitively on the trimmed item string.
+const UI_CHROME_RE =
+  /^(sign in|sign up|log in|log out|login|apply now|apply|save( this)? job|share( this)? job|skip to|related jobs?|similar jobs?|back to (search|results|jobs)|cookie|privacy policy|terms of (service|use)|create (a )?job alert|get notified|easy apply|promoted|be an early applicant|\d+ applicants?|menu|home|search jobs?|find jobs?|view all (jobs?|openings?)|read more|see more|learn more|accessibility)$/i
+
+// Phrases that, when present anywhere in an item, indicate the item is chrome
+// rather than substantive job content. Used to drop full items whose body
+// contains UI/auth/nav strings even if the item also has surrounding text.
+const CHROME_SUBSTRING_RE =
+  /\b(skip to (main )?content|sign in to (save|create|get|set up)|create (a |an )?job alert|get notified about (similar|new) jobs|cookie (policy|notice|preferences|settings|banner)|privacy (policy|notice)|terms of (service|use)|back to (search|results|jobs)|related jobs?|similar jobs?|recommended jobs?|you may also like|easy apply|be an early applicant)\b/i
 
 type InlineHeadingAlias = {
   key: CanonicalSectionKey
@@ -78,26 +92,87 @@ const INLINE_SECTION_ALIASES: InlineHeadingAlias[] = [
   { key: "responsibilities", alias: "What you'll do" },
   { key: "responsibilities", alias: "What you will do" },
   { key: "requirements", alias: "Requirements" },
-  { key: "requirements", alias: "Qualifications" },
   { key: "requirements", alias: "Minimum requirements" },
   { key: "requirements", alias: "Minimum qualifications" },
   { key: "requirements", alias: "Basic qualifications" },
   { key: "requirements", alias: "Required qualifications" },
   { key: "requirements", alias: "Who you are" },
+  { key: "qualifications", alias: "Qualifications" },
+  { key: "qualifications", alias: "What you bring" },
   { key: "preferred_qualifications", alias: "Preferred qualifications" },
   { key: "preferred_qualifications", alias: "Additional qualifications" },
   { key: "preferred_qualifications", alias: "Nice to have" },
+  { key: "skills", alias: "Skills" },
+  { key: "skills", alias: "Technical skills" },
+  { key: "skills", alias: "Key skills" },
+  { key: "skills", alias: "Technologies" },
   { key: "benefits", alias: "Benefits" },
   { key: "benefits", alias: "Perks" },
   { key: "benefits", alias: "What we offer" },
   { key: "benefits", alias: "Additional benefits" },
   { key: "company_info", alias: "Who we are" },
   { key: "company_info", alias: "About us" },
+  { key: "equal_opportunity", alias: "Equal opportunity" },
+  { key: "equal_opportunity", alias: "EEO" },
   { key: "application_info", alias: "How to apply" },
   { key: "application_info", alias: "Application process" },
   { key: "application_info", alias: "Apply for this role" },
   { key: "application_info", alias: "Office locations" },
   { key: "application_info", alias: "Job type" },
+  // Expanded aliases for common real-world heading variations
+  { key: "about_role", alias: "The opportunity" },
+  { key: "about_role", alias: "The position" },
+  { key: "about_role", alias: "Your role" },
+  { key: "about_role", alias: "The role" },
+  { key: "about_role", alias: "Job summary" },
+  { key: "about_role", alias: "Position summary" },
+  { key: "responsibilities", alias: "Key responsibilities" },
+  { key: "responsibilities", alias: "In this role" },
+  { key: "responsibilities", alias: "What you'll be doing" },
+  { key: "responsibilities", alias: "How you'll make an impact" },
+  { key: "responsibilities", alias: "How you'll spend your time" },
+  { key: "responsibilities", alias: "Your impact" },
+  { key: "requirements", alias: "What we're looking for" },
+  { key: "requirements", alias: "What you'll need" },
+  { key: "requirements", alias: "Required experience" },
+  { key: "requirements", alias: "Required skills" },
+  { key: "requirements", alias: "Must have" },
+  { key: "requirements", alias: "Must-have" },
+  { key: "qualifications", alias: "Your qualifications" },
+  { key: "preferred_qualifications", alias: "Nice-to-have" },
+  { key: "preferred_qualifications", alias: "Bonus qualifications" },
+  { key: "preferred_qualifications", alias: "Good to have" },
+  { key: "preferred_qualifications", alias: "Would be a plus" },
+  { key: "skills", alias: "Tech stack" },
+  { key: "skills", alias: "Tools" },
+  { key: "skills", alias: "Core skills" },
+  { key: "skills", alias: "Technical requirements" },
+  { key: "benefits", alias: "Why join us" },
+  { key: "benefits", alias: "Why work here" },
+  { key: "benefits", alias: "Our benefits" },
+  { key: "benefits", alias: "The perks" },
+  { key: "benefits", alias: "Life at" },
+  { key: "compensation", alias: "Salary" },
+  { key: "compensation", alias: "Pay range" },
+  { key: "compensation", alias: "Salary range" },
+  { key: "compensation", alias: "Total compensation" },
+  { key: "compensation", alias: "On-target earnings" },
+  { key: "company_info", alias: "About the company" },
+  { key: "company_info", alias: "About the team" },
+  { key: "company_info", alias: "Our mission" },
+  { key: "company_info", alias: "Our story" },
+  { key: "company_info", alias: "What we do" },
+  { key: "company_info", alias: "The team" },
+  { key: "equal_opportunity", alias: "Diversity and inclusion" },
+  { key: "equal_opportunity", alias: "Equal employment opportunity" },
+  { key: "application_info", alias: "Interview process" },
+  { key: "application_info", alias: "Next steps" },
+  { key: "application_info", alias: "The process" },
+  { key: "application_info", alias: "Recruitment process" },
+  { key: "visa", alias: "Work authorization" },
+  { key: "visa", alias: "Visa sponsorship" },
+  { key: "visa", alias: "Immigration" },
+  { key: "visa", alias: "Sponsorship" },
 ]
 
 function createEmptyBuckets(): Record<CanonicalSectionKey, SectionBucket> {
@@ -108,14 +183,17 @@ function createEmptyBuckets(): Record<CanonicalSectionKey, SectionBucket> {
     about_role: { items: [], confidences: [], provenance: [], isFallback: false },
     responsibilities: { items: [], confidences: [], provenance: [], isFallback: false },
     requirements: { items: [], confidences: [], provenance: [], isFallback: false },
+    qualifications: { items: [], confidences: [], provenance: [], isFallback: false },
     preferred_qualifications: {
       items: [],
       confidences: [],
       provenance: [],
       isFallback: false,
     },
+    skills: { items: [], confidences: [], provenance: [], isFallback: false },
     benefits: { items: [], confidences: [], provenance: [], isFallback: false },
     company_info: { items: [], confidences: [], provenance: [], isFallback: false },
+    equal_opportunity: { items: [], confidences: [], provenance: [], isFallback: false },
     application_info: { items: [], confidences: [], provenance: [], isFallback: false },
     other: { items: [], confidences: [], provenance: [], isFallback: false },
   }
@@ -137,7 +215,12 @@ function addItems(
         .replace(/\s+/g, " ")
         .trim()
     )
-    .filter((item) => item.length >= 3)
+    .filter(
+      (item) =>
+        item.length >= 3 &&
+        !UI_CHROME_RE.test(item) &&
+        !CHROME_SUBSTRING_RE.test(item)
+    )
 
   const unique = uniqCaseInsensitive([...bucket.items, ...trimmed], maxItems)
   const addedCount = Math.max(0, unique.length - bucket.items.length)
@@ -185,7 +268,7 @@ function flattenSectionContent(section: { bullets: string[]; paragraphs: string[
 }
 
 const EXPLICIT_HEADING_PATTERN =
-  /(about the role|about the team|role overview|job summary|what you(?:'|’)ll do|what you will do|responsibilities|qualifications|minimum qualifications|minimum requirements|required qualifications|basic qualifications|requirements|preferred qualifications|nice to have|benefits|compensation|about us|about the company|who we are|company|application process|how to apply|work authorization|visa|sponsorship)\s*:/gi
+  /(about the role|about the team|role overview|job summary|what you(?:'|’)ll do|what you will do|responsibilities|preferred qualifications|minimum qualifications|minimum requirements|required qualifications|basic qualifications|qualifications|requirements|nice to have|technical skills|key skills|skills|technologies|benefits|compensation|about us|about the company|who we are|company|equal opportunity|eeo|application process|how to apply|work authorization|visa|sponsorship)\s*:/gi
 
 function extractExplicitHeadingSegments(description: string): Array<{ heading: string; body: string }> {
   const matches = [...description.matchAll(EXPLICIT_HEADING_PATTERN)]
@@ -497,6 +580,7 @@ function splitApplicationInfoFragments(value: string): string[] {
 
 function looksLikeRequirementItem(value: string): boolean {
   if (NON_SUBSTANTIVE_REQUIREMENT_RE.test(value)) return false
+  if (UI_CHROME_RE.test(value)) return false
   if (APPLICATION_LIKE_RE.test(value) || LOCATION_META_LIKE_RE.test(value)) return false
   if (COMPENSATION_LIKE_RE.test(value) || BENEFITS_LIKE_RE.test(value)) return false
 
@@ -751,6 +835,22 @@ function sanitizeResponsibilitiesBucket(
         continue
       }
 
+      if (EQUAL_OPPORTUNITY_LIKE_RE.test(candidate)) {
+        addItems(
+          buckets.equal_opportunity,
+          [candidate],
+          0.7,
+          {
+            adapter,
+            method: "heuristic",
+            source_path: "responsibilities.sanitized",
+            source_excerpt: candidate.slice(0, 200),
+          },
+          10
+        )
+        continue
+      }
+
       if (APPLICATION_LIKE_RE.test(candidate) || LOCATION_META_LIKE_RE.test(candidate)) {
         const fragments = splitApplicationInfoFragments(candidate)
         for (const fragment of fragments.length > 0 ? fragments : [candidate]) {
@@ -941,6 +1041,22 @@ function sanitizeBenefitsBucket(
         .trim()
       if (normalizedCandidate.length < 12) continue
 
+      if (EQUAL_OPPORTUNITY_LIKE_RE.test(normalizedCandidate)) {
+        addItems(
+          buckets.equal_opportunity,
+          [normalizedCandidate],
+          0.7,
+          {
+            adapter,
+            method: "heuristic",
+            source_path: "benefits.sanitized",
+            source_excerpt: normalizedCandidate.slice(0, 200),
+          },
+          10
+        )
+        continue
+      }
+
       if (APPLICATION_LIKE_RE.test(normalizedCandidate) || LOCATION_META_LIKE_RE.test(normalizedCandidate)) {
         addItems(
           buckets.application_info,
@@ -1063,6 +1179,22 @@ function sanitizeApplicationInfoBucket(
         continue
       }
 
+      if (EQUAL_OPPORTUNITY_LIKE_RE.test(fragment)) {
+        addItems(
+          buckets.equal_opportunity,
+          [fragment],
+          0.72,
+          {
+            adapter,
+            method: "heuristic",
+            source_path: "application_info.sanitized",
+            source_excerpt: fragment.slice(0, 200),
+          },
+          10
+        )
+        continue
+      }
+
       if (APPLICATION_LIKE_RE.test(fragment) || LOCATION_META_LIKE_RE.test(fragment)) {
         kept.push(fragment)
       }
@@ -1124,12 +1256,15 @@ function removeCrossSectionDuplicates(
 ) {
   const seen = new Set<string>()
   const precedence: CanonicalSectionKey[] = [
-    "requirements",
+    "skills",
     "preferred_qualifications",
+    "requirements",
+    "qualifications",
     "responsibilities",
     "about_role",
     "benefits",
     "company_info",
+    "equal_opportunity",
     "application_info",
     "other",
   ]
@@ -1152,7 +1287,10 @@ function trimSectionItemCounts(buckets: Record<CanonicalSectionKey, SectionBucke
   buckets.about_role.items = buckets.about_role.items.slice(0, 3)
   buckets.responsibilities.items = buckets.responsibilities.items.slice(0, 10)
   buckets.requirements.items = buckets.requirements.items.slice(0, 10)
+  buckets.qualifications.items = buckets.qualifications.items.slice(0, 10)
   buckets.preferred_qualifications.items = buckets.preferred_qualifications.items.slice(0, 8)
+  buckets.skills.items = buckets.skills.items.slice(0, 12)
+  buckets.equal_opportunity.items = buckets.equal_opportunity.items.slice(0, 4)
 }
 
 export function extractCanonicalSections(input: {

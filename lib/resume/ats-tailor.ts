@@ -11,6 +11,7 @@
  */
 
 import Anthropic from "@anthropic-ai/sdk"
+import { SONNET_MODEL } from "@/lib/ai/anthropic-models"
 import type { Resume } from "@/types"
 import type { TailorAnalysisResult } from "@/types/tailor-analysis"
 import { buildLocalTailorAnalysis } from "@/lib/resume/tailor-analysis"
@@ -322,7 +323,8 @@ Return ONLY the rewritten summary text. No commentary, no labels, no quotes.`
 
   try {
     const message = await anthropic.messages.create({
-      model: "claude-sonnet-4-6",
+      // ATS summary rewrites are user-facing and nuance-heavy; Sonnet is the default tier.
+      model: SONNET_MODEL,
       max_tokens: 300,
       system:
         "You are an expert resume writer who specializes in ATS optimization. " +

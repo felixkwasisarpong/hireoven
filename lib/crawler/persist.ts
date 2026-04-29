@@ -10,7 +10,7 @@ import {
   fetchJobDescription,
   normalizeJobApplyUrl,
 } from "@/lib/jobs/description"
-import { normalizeCrawlerJobForPersistence } from "@/lib/jobs/normalization"
+import { normalizeCrawlerJobForPersistenceWithAI } from "@/lib/jobs/normalization"
 import { normalizeGreenhouseBoardUrl } from "@/lib/companies/greenhouse-url"
 import type { EmploymentType, SeniorityLevel } from "@/types"
 
@@ -209,6 +209,49 @@ function normalizePostedAtToIso(
   return new Date(crawledAt.getTime() - amount * step).toISOString()
 }
 
+function toOptionalString(value: unknown, maxLength = 600): string | null {
+  if (typeof value !== "string") return null
+  const cleaned = value.trim()
+  if (!cleaned) return null
+  return cleaned.slice(0, maxLength)
+}
+
+function toOptionalBoolean(value: unknown): boolean | null {
+  if (typeof value === "boolean") return value
+  return null
+}
+
+function toOptionalRoundedNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return Math.round(value)
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value)
+    if (Number.isFinite(parsed)) return Math.round(parsed)
+  }
+  return null
+}
+
+function toOptionalStringArray(value: unknown, limit = 10): string[] {
+  if (!Array.isArray(value)) return []
+  const out: string[] = []
+  for (const item of value) {
+    const text = toOptionalString(item, 80)
+    if (!text) continue
+    if (!out.includes(text)) out.push(text)
+    if (out.length >= limit) break
+  }
+  return out
+}
+
+function compactRecord<T extends Record<string, unknown>>(input: T): T {
+  const out: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(input)) {
+    if (value == null) continue
+    if (Array.isArray(value) && value.length === 0) continue
+    out[key] = value
+  }
+  return out as T
+}
+
 async function runWithConcurrency<T>(
   tasks: Array<() => Promise<T>>,
   maxConcurrency: number
@@ -268,11 +311,13 @@ export async function persistCrawlJobs({
   const pool = getPostgresPool()
   const crawledAtIso = crawledAt.toISOString()
   const companyResult = await pool.query<{
+    name: string | null
+    domain: string | null
     careers_url: string | null
     ats_type: string | null
     raw_ats_config: Record<string, unknown> | null
   }>(
-    `SELECT careers_url, ats_type, raw_ats_config FROM companies WHERE id = $1`,
+    `SELECT name, domain, careers_url, ats_type, raw_ats_config FROM companies WHERE id = $1`,
     [companyId]
   )
   const company = companyResult.rows[0] ?? null
@@ -297,9 +342,12 @@ export async function persistCrawlJobs({
       : missingDescriptionCandidates
 
   if (missingDescriptionIndexes.length > 0) {
+    // Pass the company's ATS type as a provider hint so that description
+    // fetching can use provider-specific content selectors.
+    const providerHint = company?.ats_type?.toLowerCase() ?? undefined
     await runWithConcurrency(
       missingDescriptionIndexes.map((entry) => async () => {
-        const description = await fetchJobDescription(entry.url)
+        const description = await fetchJobDescription(entry.url, undefined, providerHint)
         if (!description) return
         normalized[entry.index] = {
           ...normalized[entry.index],
@@ -392,7 +440,8 @@ export async function persistCrawlJobs({
   for (const job of dedupedJobs) {
     const normalizedPostedAt = normalizePostedAtToIso(job.postedAt, crawledAt)
     const existing = existingByExternalId.get(job.externalId)
-    const normalization = normalizeCrawlerJobForPersistence({
+    // Deterministic crawl/extraction remains primary; Haiku runs as a bounded enrichment layer.
+    const normalization = await normalizeCrawlerJobForPersistenceWithAI({
       rawJob: {
         externalId: job.externalId,
         title: job.title,
@@ -400,6 +449,25 @@ export async function persistCrawlJobs({
         description: job.description,
         location: job.location,
         postedAt: job.postedAt,
+        company: company?.name ?? null,
+        companyDomain: company?.domain ?? null,
+        companyLogo: job.companyLogo ?? null,
+        workMode: job.workMode ?? null,
+        employmentType: job.employmentType ?? null,
+        salaryRange: job.salaryRange ?? null,
+        matchScore: job.matchScore ?? null,
+        matchLabel: job.matchLabel ?? null,
+        matchedSkills: job.matchedSkills ?? null,
+        missingSkills: job.missingSkills ?? null,
+        sponsorshipSignal: job.sponsorshipSignal ?? null,
+        companySummary: job.companySummary ?? null,
+        companyFoundedYear: job.companyFoundedYear ?? null,
+        companyEmployeeCount: job.companyEmployeeCount ?? null,
+        companyIndustry: job.companyIndustry ?? null,
+        easyApply: job.easyApply ?? null,
+        activelyHiring: job.activelyHiring ?? null,
+        topApplicantSignal: job.topApplicantSignal ?? null,
+        companyVerified: job.companyVerified ?? null,
       },
       crawledAtIso,
       existing: {
@@ -419,6 +487,34 @@ export async function persistCrawlJobs({
     })
 
     const cleanedTitle = cleanJobTitle(job.title)
+    const companyEmployeeCount =
+      toOptionalString(job.companyEmployeeCount, 120) ??
+      (toOptionalRoundedNumber(job.companyEmployeeCount)?.toLocaleString() ?? null)
+    const companyFoundedYearRaw = toOptionalRoundedNumber(job.companyFoundedYear)
+    const companyFoundedYear =
+      companyFoundedYearRaw && companyFoundedYearRaw >= 1800 && companyFoundedYearRaw <= new Date().getUTCFullYear() + 1
+        ? companyFoundedYearRaw
+        : null
+    const cardSignals = compactRecord({
+      companyLogo: toOptionalString(job.companyLogo, 1200),
+      companyVerified: toOptionalBoolean(job.companyVerified),
+      workMode: toOptionalString(job.workMode, 80),
+      employmentType: toOptionalString(job.employmentType, 80),
+      salaryRange: toOptionalString(job.salaryRange, 180),
+      postedAt: toOptionalString(job.postedAt, 120),
+      matchScore: toOptionalRoundedNumber(job.matchScore),
+      matchLabel: toOptionalString(job.matchLabel, 80),
+      matchedSkills: toOptionalStringArray(job.matchedSkills, 10),
+      missingSkills: toOptionalStringArray(job.missingSkills, 10),
+      sponsorshipSignal: toOptionalString(job.sponsorshipSignal, 180),
+      companySummary: toOptionalString(job.companySummary, 2000),
+      companyFoundedYear,
+      companyEmployeeCount,
+      companyIndustry: toOptionalString(job.companyIndustry, 180),
+      easyApply: toOptionalBoolean(job.easyApply),
+      activelyHiring: toOptionalBoolean(job.activelyHiring),
+      topApplicantSignal: toOptionalBoolean(job.topApplicantSignal),
+    })
     const payload: Record<string, unknown> = {
       company_id: companyId,
       title: cleanedTitle,
@@ -448,6 +544,7 @@ export async function persistCrawlJobs({
         posted_at: job.postedAt ?? null,
         posted_at_normalized: normalizedPostedAt,
         description_captured: Boolean(normalization.nextColumns.description),
+        ...cardSignals,
         raw: {
           title: job.title,
           url: job.url,
@@ -465,6 +562,7 @@ export async function persistCrawlJobs({
           issues: normalization.canonical.validation.issues,
         },
         normalized: normalization.canonical,
+        structured_job: normalization.structuredData,
         view: {
           page: normalization.pageView,
           card: normalization.cardView,

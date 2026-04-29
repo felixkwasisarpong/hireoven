@@ -5,6 +5,70 @@ import { isAtsDomain } from "@/lib/companies/ats-domains"
  * Used to backfill companies.logo_url when you don't store your own assets.
  */
 
+/**
+ * Returns true when the stored `logo_url` value is safe to use as-is:
+ * - Non-empty string
+ * - Not an ATS-domain favicon (e.g. logo.clearbit.com/greenhouse.io)
+ * - Not a known placeholder pattern (USCIS-style .uscis-employer domains in Clearbit paths)
+ * - Local /company-logos/ paths are always safe
+ *
+ * Use this before deciding whether to overwrite the stored logo_url.
+ */
+export function isLogoUrlSafe(logoUrl: string | null | undefined): boolean {
+  if (!logoUrl?.trim()) return false
+  const url = logoUrl.trim()
+
+  // Local static assets are always safe
+  if (url.startsWith("/company-logos/")) return true
+  if (url.startsWith("/")) return true
+
+  try {
+    const u = new URL(url)
+
+    // Clearbit: reject when the path domain is an ATS domain or placeholder
+    if (u.hostname === "logo.clearbit.com") {
+      const pathDomain = u.pathname.replace(/^\/+/, "").split("/")[0] ?? ""
+      if (!pathDomain) return false
+      if (isAtsDomain(pathDomain)) return false
+      if (/\.(uscis-employer|lca-employer)$/.test(pathDomain)) return false
+      return true
+    }
+
+    // logo.dev: https://img.logo.dev/{domain}?token=... — reject ATS domains
+    if (u.hostname === "img.logo.dev") {
+      const domainParam = u.pathname.replace(/^\/+/, "").split("?")[0] ?? ""
+      if (!domainParam) return false
+      if (isAtsDomain(domainParam)) return false
+      return true
+    }
+
+    // Google favicon: reject ATS domains in the domain param
+    if (u.hostname === "www.google.com" && u.pathname.includes("/s2/favicons")) {
+      const domainParam = u.searchParams.get("domain") ?? ""
+      if (!domainParam) return false
+      if (isAtsDomain(domainParam)) return false
+      if (/\.(uscis-employer|lca-employer)$/.test(domainParam)) return false
+      return true
+    }
+
+    // icon.horse / unavatar / duckduckgo: reject ATS paths
+    if (
+      u.hostname === "icon.horse" ||
+      u.hostname === "unavatar.io" ||
+      u.hostname.includes("duckduckgo.com")
+    ) {
+      const pathDomain = u.pathname.replace(/^\/icon\/|^\//, "").split("?")[0] ?? ""
+      if (isAtsDomain(pathDomain)) return false
+      return true
+    }
+
+    // Any other https URL is considered safe
+    return u.protocol === "https:"
+  } catch {
+    return false
+  }
+}
+
 export type LogoProvider =
   | "logo-dev"
   | "icon-horse"

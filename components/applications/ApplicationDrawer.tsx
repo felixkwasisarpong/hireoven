@@ -1,7 +1,9 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
+import Link from "next/link"
 import {
+  Briefcase,
   Building2,
   Calendar,
   CalendarCheck,
@@ -54,7 +56,15 @@ function formatTime(iso: string) {
 
 // ─── Overview Tab ────────────────────────────────────────────────────────────
 
-function OverviewTab({ app, onUpdate }: { app: JobApplication; onUpdate: Props["onUpdate"] }) {
+function OverviewTab({
+  app,
+  onUpdate,
+  onClose,
+}: {
+  app: JobApplication
+  onUpdate: Props["onUpdate"]
+  onClose: () => void
+}) {
   const [notes, setNotes] = useState(app.notes ?? "")
   const [saving, setSaving] = useState(false)
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -73,6 +83,25 @@ function OverviewTab({ app, onUpdate }: { app: JobApplication; onUpdate: Props["
 
   return (
     <div className="space-y-5">
+      {app.job_id && (
+        <div className="rounded-[12px] border border-orange-100 bg-[linear-gradient(to_bottom_right,#FFF7F2,#FFFFFF)] p-4">
+          <p className="inline-flex items-center gap-2 text-[11.5px] font-semibold uppercase tracking-[0.18em] text-[#EA580C]">
+            <Briefcase className="h-3.5 w-3.5" aria-hidden />
+            Job profile
+          </p>
+          <p className="mt-2 text-[13px] leading-snug text-slate-700">
+            Open your Hireoven listing for posting text, sponsorship signals, match tools, and Scout.
+          </p>
+          <Link
+            href={`/dashboard/jobs/${app.job_id}`}
+            className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-[10px] bg-[#FF5C18] px-4 py-2.5 text-[13px] font-semibold text-white shadow-sm transition hover:bg-[#ea580c] sm:w-auto"
+            onClick={onClose}
+          >
+            View full job details <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+          </Link>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-3">
         <div className="rounded-[12px] border border-slate-200/70 bg-slate-50/60 p-3.5">
           <p className="text-[10.5px] font-semibold uppercase tracking-[0.18em] text-slate-400">Status</p>
@@ -568,7 +597,7 @@ export function ApplicationDrawer({ application, onClose, onUpdate, onDelete, on
         {/* Content */}
         <div className="flex-1 overflow-y-auto px-5 py-5">
           {tab === "Overview" && (
-            <OverviewTab app={application} onUpdate={onUpdate} />
+            <OverviewTab app={application} onUpdate={onUpdate} onClose={onClose} />
           )}
           {tab === "Timeline" && (
             <TimelineTab app={application} onAddTimeline={onAddTimeline} onRemoveTimeline={onRemoveTimeline} />

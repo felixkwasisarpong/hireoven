@@ -7,9 +7,12 @@ export const CANONICAL_SECTION_ORDER: CanonicalSectionKey[] = [
   "about_role",
   "responsibilities",
   "requirements",
+  "qualifications",
   "preferred_qualifications",
+  "skills",
   "benefits",
   "company_info",
+  "equal_opportunity",
   "application_info",
   "other",
 ]
@@ -21,9 +24,12 @@ export function sectionLabel(key: CanonicalSectionKey): string {
   if (key === "about_role") return "About the role"
   if (key === "responsibilities") return "Responsibilities"
   if (key === "requirements") return "Requirements"
+  if (key === "qualifications") return "Qualifications"
   if (key === "preferred_qualifications") return "Preferred qualifications"
+  if (key === "skills") return "Skills"
   if (key === "benefits") return "Benefits"
   if (key === "company_info") return "Company info"
+  if (key === "equal_opportunity") return "Equal opportunity"
   if (key === "application_info") return "Application info"
   return "Other"
 }
@@ -34,46 +40,65 @@ type Rule = {
 }
 
 const HEADING_RULES: Rule[] = [
-  { key: "about_role", pattern: /\b(about the role|role overview|job summary|overview|position summary|about this role)\b/i },
+  {
+    key: "about_role",
+    pattern:
+      /\b(about the role|about this role|role overview|job summary|position summary|overview|the opportunity|the position|role description|your role|the role|role purpose)\b/i,
+  },
   {
     key: "responsibilities",
     pattern:
-      /\b(responsibilit|what you(?:'|’)ll do|what you will do|what you(?:'|’)ll be doing|day-to-day|in this role|key duties|impact)\b/i,
+      /\b(responsibilit|what you(?:'|')ll do|what you will do|what you(?:'|')ll be doing|day-to-day|in this role|key duties|key responsibilities|your day|how you(?:'|')ll spend your time|how you(?:'|')ll make an impact|what you(?:'|')ll build|what you(?:'|')ll own|your impact|the work)\b/i,
   },
   {
     key: "requirements",
     pattern:
-      /\b(requirements|qualifications|minimum qualifications|required qualifications|basic qualifications|must have|what you bring|who you are|your profile|experience required)\b/i,
+      /\b(requirements|minimum qualifications|required qualifications|basic qualifications|must have|must-have|what you bring|who you are|your profile|experience required|what we(?:'|')re looking for|what we are looking for|what you(?:'|')ll need|what you need to succeed|required experience|required skills)\b/i,
   },
   {
     key: "preferred_qualifications",
     pattern:
-      /\b(preferred qualifications|nice to have|preferred|plus|bonus points|ideal candidate|good to have)\b/i,
+      /\b(preferred qualifications|nice to have|nice-to-have|bonus points|ideal candidate|good to have|would be a plus|additional qualifications|bonus qualifications|it(?:'|')s a plus|extra credit|great if you have|advantageous)\b/i,
+  },
+  {
+    key: "qualifications",
+    pattern:
+      /\b(qualifications|candidate profile|what you need|what makes you qualified|your qualifications|to be successful|to qualify)\b/i,
+  },
+  {
+    key: "skills",
+    pattern:
+      /\b(skills|technical skills|key skills|technologies|tech stack|tools|required tools|core skills|technical requirements)\b/i,
   },
   {
     key: "benefits",
     pattern:
-      /\b(benefits|perks|what we offer|total rewards|wellbeing|health benefits|paid time off|life at)\b/i,
+      /\b(benefits|perks|what we offer|total rewards|wellbeing|health benefits|paid time off|life at|why join|why work here|our benefits|the perks)\b/i,
   },
   {
     key: "compensation",
     pattern:
-      /\b(compensation|salary|pay range|total compensation|base pay|salary range|cash compensation)\b/i,
+      /\b(compensation|salary|pay range|total compensation|base pay|salary range|cash compensation|on-target earnings|ote)\b/i,
   },
   {
     key: "visa",
     pattern:
-      /\b(visa|work authorization|immigration|sponsorship|h-?1b|h1b|opt|stem opt|authorized to work)\b/i,
+      /\b(visa|work authorization|immigration|sponsorship|h-?1b|h1b|opt|stem opt|authorized to work|work permit|right to work)\b/i,
   },
   {
     key: "company_info",
     pattern:
-      /\b(about us|about the company|company|who we are|our mission|our values|culture|life at)\b/i,
+      /\b(about us|about the company|about the team|who we are|our mission|our values|culture|life at|company overview|our story|what we do|our product|the team|our team)\b/i,
   },
   {
     key: "application_info",
     pattern:
-      /\b(how to apply|application process|equal opportunity|eeo|accommodation|privacy notice|interview process|next steps)\b/i,
+      /\b(how to apply|application process|privacy notice|interview process|next steps|recruitment process|hiring process|what to expect)\b/i,
+  },
+  {
+    key: "equal_opportunity",
+    pattern:
+      /\b(equal opportunity|eeo|accommodation|reasonable accommodation|diverse workforce|protected veteran|affirmative action|diversity and inclusion|non-discrimination)\b/i,
   },
 ]
 
@@ -82,6 +107,11 @@ const CONTENT_RULES: Rule[] = [
     key: "requirements",
     pattern:
       /\b(required|must|minimum|qualification|years? of experience|bachelor|master'?s|degree|proficiency|knowledge of|experience with|familiarity with|ability to|you have|you bring)\b/i,
+  },
+  {
+    key: "skills",
+    pattern:
+      /\b(skills?|technologies|tools|programming languages?|frameworks?|cloud|databases?|devops)\b/i,
   },
   {
     key: "preferred_qualifications",
@@ -116,7 +146,12 @@ const CONTENT_RULES: Rule[] = [
   {
     key: "application_info",
     pattern:
-      /\b(apply|application|accommodation|equal opportunity|eeo|recruitment process|background check)\b/i,
+      /\b(apply|application|recruitment process|background check)\b/i,
+  },
+  {
+    key: "equal_opportunity",
+    pattern:
+      /\b(equal opportunity|eeo|accommodation|reasonable accommodation|protected veteran|affirmative action)\b/i,
   },
 ]
 

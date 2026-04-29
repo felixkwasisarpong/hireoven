@@ -21,6 +21,7 @@
  */
 
 import Anthropic from '@anthropic-ai/sdk'
+import { SONNET_MODEL } from '@/lib/ai/anthropic-models'
 import { getPostgresPool } from '@/lib/postgres/server'
 import { normalizeEmployerName } from '@/lib/h1b/normalize-employer'
 import type {
@@ -921,7 +922,8 @@ export async function deepH1BAnalysis(
 
   const client = new Anthropic({ apiKey })
 
-  const model = process.env.H1B_CLAUDE_MODEL ?? 'claude-sonnet-4-5'
+  // Deep H1B reasoning is analysis-heavy and user-facing, so default to Sonnet.
+  const model = SONNET_MODEL
   const recordSummary = recentLCARecords
     .slice(0, 10)
     .map(

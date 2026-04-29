@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import Anthropic from "@anthropic-ai/sdk"
 import { getSessionUser } from "@/lib/auth/session-user"
+import { SONNET_MODEL } from "@/lib/ai/anthropic-models"
 import {
   buildLocalTailorAnalysis,
   mergeTailorResults,
@@ -16,7 +17,8 @@ export const runtime = "nodejs"
 const anthropic = process.env.ANTHROPIC_API_KEY
   ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
   : null
-const MODEL = "claude-sonnet-4-6"
+// Tailoring analysis needs consistent reasoning and structured output quality.
+const MODEL = SONNET_MODEL
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- allow runtime JSON from LLM
 function extractJsonObject(text: string): any {

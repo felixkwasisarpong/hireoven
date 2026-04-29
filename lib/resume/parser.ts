@@ -1,6 +1,7 @@
 import { builtinModules, createRequire } from "node:module"
 import Anthropic from "@anthropic-ai/sdk"
 import { logApiUsage } from "@/lib/admin/usage"
+import { ANTHROPIC_TIER_PRICING, HAIKU_MODEL } from "@/lib/ai/anthropic-models"
 import {
   extractSkillsFromText,
   normalizeSkillList,
@@ -20,11 +21,9 @@ const anthropic = process.env.ANTHROPIC_API_KEY
   : null
 const nodeRequire = createRequire(import.meta.url)
 
-const MODEL = "claude-haiku-4-5-20251001"
-const MODEL_PRICING = {
-  inputPerMillion: 0.8,
-  outputPerMillion: 4,
-}
+// Resume parsing is structured extraction; Haiku is the default fast/cost-efficient tier.
+const MODEL = HAIKU_MODEL
+const MODEL_PRICING = ANTHROPIC_TIER_PRICING.haiku
 
 function clampScore(value: number | null | undefined) {
   if (typeof value !== "number" || Number.isNaN(value)) return null

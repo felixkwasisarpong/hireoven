@@ -132,6 +132,7 @@ export default function JobCard({
 
   const cardView = resolveJobCardView(job)
   const displayTitle = cardView.title
+  const topSkills = cardView.skills.slice(0, 3)
 
   const showVerified =
     employerLikelySponsorsH1b(job) || companyConf >= 35 || Boolean(job.company?.sponsors_h1b)
@@ -229,8 +230,9 @@ export default function JobCard({
             router.push(`/dashboard/jobs/${job.id}`)
           }
         }}
-        className="group relative flex cursor-pointer flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-none transition-colors hover:border-orange-200 hover:bg-orange-50/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-600/20"
+        className="relative flex cursor-pointer flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-600/20"
       >
+
         <button
           type="button"
           onClick={(e) => void handleBookmark(e)}
@@ -255,7 +257,7 @@ export default function JobCard({
             />
 
             <div className="min-w-0 flex-1">
-              <h3 className="text-[17px] font-bold leading-tight text-slate-950 transition-colors group-hover:text-orange-600 pr-8">
+              <h3 className="text-[17px] font-bold leading-tight text-slate-950 pr-8">
                 {displayTitle}
               </h3>
 
@@ -302,6 +304,19 @@ export default function JobCard({
               {jobCardFactItems.length > 0 && (
                 <div className="mt-2 text-[13px] text-slate-500">
                   <JobCardEvidenceFactChips jobId={job.id} items={jobCardFactItems} />
+                </div>
+              )}
+
+              {topSkills.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {topSkills.map((skill) => (
+                    <span
+                      key={skill}
+                      className="rounded-full bg-slate-100 px-2 py-0.5 text-[10.5px] font-semibold text-slate-600"
+                    >
+                      {skill}
+                    </span>
+                  ))}
                 </div>
               )}
 
@@ -355,8 +370,8 @@ export default function JobCard({
           </div>
 
           {showScorePanel && (
-          <div
-            className="flex w-full min-w-0 flex-shrink-0 flex-col items-center justify-center gap-1 border-t border-slate-200 px-4 py-4 sm:w-[132px] sm:border-l sm:border-t-0"
+            <div
+              className="flex w-full min-w-0 flex-shrink-0 flex-col items-center justify-center gap-1 border-t border-slate-200 px-4 py-4 sm:w-[132px] sm:border-l sm:border-t-0"
               onClick={(e) => e.stopPropagation()}
             >
               {isMatchScoreLoading && score === null ? (
@@ -371,7 +386,7 @@ export default function JobCard({
                   className="flex w-full flex-col items-center focus-visible:outline-none"
                 >
                   <MatchGauge score={score} />
-                  <p className="mt-0.5 text-[11px] font-medium text-slate-600">Match Score</p>
+                  <span className="mt-0.5 text-[11px] font-medium text-slate-600">Match Score</span>
                   <span className="mt-1.5 text-[12px] font-semibold text-orange-600 hover:underline">
                     View match
                   </span>

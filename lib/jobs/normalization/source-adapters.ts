@@ -15,6 +15,8 @@ export type AdaptedJobInput = {
   description: string | null
   location: string | null
   postedAt: string | null
+  company: string | null
+  companyDomain: string | null
   structuredSections: Partial<Record<CanonicalSectionKey, string[]>>
   structuredCompensationText: string | null
   structuredVisaText: string | null
@@ -28,11 +30,22 @@ function toStringOrNull(value: unknown): string | null {
 
 function looksLikeLocation(value: string): boolean {
   if (!value) return false
-  if (value.length > 80) return false
+  if (value.length < 2 || value.length > 80) return false
   if (/(https?:\/\/|www\.|@)/i.test(value)) return false
-  if (/\b(please|review|description|contact|asap|apply now|responsibilities|requirements)\b/i.test(value)) {
+  if (
+    /\b(please|review|description|contact|asap|apply now|apply|save (this )?job|share (this )?job|sign in|skip to|cookie|privacy policy|responsibilities|requirements|qualifications|benefits|compensation|salary|years? of experience|experience with|notification|alert)\b/i.test(
+      value
+    )
+  ) {
     return false
   }
+  // A location should not have more than two commas — anything denser is a
+  // sentence fragment rather than a place.
+  if ((value.match(/,/g)?.length ?? 0) > 2) return false
+  // Locations should be majority alphabetic. Reject strings that are mostly
+  // digits or punctuation (e.g. requisition IDs, dates).
+  const letters = (value.match(/[a-z]/gi) ?? []).length
+  if (letters < Math.max(2, Math.ceil(value.length * 0.4))) return false
   return true
 }
 
@@ -63,6 +76,7 @@ export function detectSourceAdapter(input: {
   if (externalId.startsWith("ashby:")) return "ashby"
   if (externalId.startsWith("workday:")) return "workday"
   if (externalId.startsWith("icims:") || externalId.startsWith("icims-jibe:")) return "icims"
+  if (externalId.startsWith("smartrecruiters:")) return "smartrecruiters"
   if (externalId.startsWith("bamboohr:")) return "bamboohr"
   if (externalId.startsWith("jobvite:")) return "jobvite"
   if (externalId.startsWith("oracle:")) return "oracle"
@@ -77,6 +91,7 @@ export function detectSourceAdapter(input: {
     if (host.includes("ashbyhq")) return "ashby"
     if (host.includes("myworkdayjobs")) return "workday"
     if (host.includes("icims") || host.includes("jibe")) return "icims"
+    if (host.includes("smartrecruiters")) return "smartrecruiters"
     if (host.includes("bamboohr")) return "bamboohr"
     if (host.includes("jobvite")) return "jobvite"
     if (host.includes("oracle")) return "oracle"
@@ -110,6 +125,8 @@ export function adaptRawCrawlerJob(input: SourceRawJobInput): AdaptedJobInput {
     description: cleanedDescription,
     location: sanitizeLocation(input.location),
     postedAt: toStringOrNull(input.postedAt),
+    company: toStringOrNull(input.company),
+    companyDomain: toStringOrNull(input.companyDomain),
     structuredSections: structured.sections,
     structuredCompensationText: structured.compensationText,
     structuredVisaText: structured.visaText,
@@ -142,6 +159,8 @@ export function adaptPersistedJob(job: PersistedJobForNormalization): AdaptedJob
     description: cleanedDescription,
     location: sanitizeLocation(job.location),
     postedAt: job.first_detected_at ?? null,
+    company: null,
+    companyDomain: null,
     structuredSections: structured.sections,
     structuredCompensationText: structured.compensationText,
     structuredVisaText: structured.visaText,

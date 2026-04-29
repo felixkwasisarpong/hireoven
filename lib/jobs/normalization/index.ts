@@ -20,7 +20,9 @@ export type {
 
 export {
   normalizeCrawlerJobForPersistence,
+  normalizeCrawlerJobForPersistenceWithAI,
   normalizePersistedJobRecord,
+  normalizePersistedJobRecordWithAI,
   readCanonicalFromRawData,
 } from "@/lib/jobs/normalization/normalize"
 
