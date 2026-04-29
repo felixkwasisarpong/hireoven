@@ -192,16 +192,13 @@ const SECTION_ICONS: Record<ResumeSectionType, ElementType> = {
 }
 
 const ADD_SECTIONS = [
-  { type: "achievements" as const, label: "Achievements", premium: false, icon: Trophy },
-  { type: "awards" as const, label: "Awards", premium: false, icon: Award },
-  { type: "certificates" as const, label: "Certificates", premium: false, icon: Medal },
-  { type: "education" as const, label: "Education", premium: false, icon: GraduationCap },
-  { type: "custom" as const, label: "Goal", premium: false, icon: Flag },
-  { type: "custom" as const, label: "Graphs", premium: true, icon: BarChart3 },
-  { type: "hobbies" as const, label: "Hobbies", premium: false, icon: Palette },
-  { type: "languages" as const, label: "Languages", premium: false, icon: Languages },
-  { type: "projects" as const, label: "Projects", premium: true, icon: Star },
-  { type: "publications" as const, label: "Publications", premium: true, icon: BookOpen },
+  { type: "achievements" as const, label: "Achievements", icon: Trophy,       desc: "Notable accomplishments with measurable impact" },
+  { type: "awards" as const,       label: "Awards",       icon: Award,        desc: "Prizes, honors, and recognitions received" },
+  { type: "certificates" as const, label: "Certificates", icon: Medal,        desc: "Professional certifications and credentials" },
+  { type: "education" as const,    label: "Education",    icon: GraduationCap, desc: "Degrees, diplomas, and academic history" },
+  { type: "languages" as const,    label: "Languages",    icon: Languages,    desc: "Languages spoken and proficiency levels" },
+  { type: "projects" as const,     label: "Projects",     icon: Star,         desc: "Side projects, open-source, and portfolio work" },
+  { type: "publications" as const, label: "Publications", icon: BookOpen,     desc: "Research papers, articles, and books" },
 ]
 
 function validMode(value: string | null): StudioMode {
@@ -981,7 +978,6 @@ export default function ResumeStudioPage() {
   const [applyingFixId, setApplyingFixId] = useState<string | null>(null)
   const [appliedFixIds, setAppliedFixIds] = useState<string[]>([])
   const [analysis, setAnalysis] = useState<TailorAnalysisResult | null>(null)
-  const [selectedAddSection, setSelectedAddSection] = useState("Achievements")
   const [sections, setSections] = useState<ResumeSectionState[]>(INITIAL_SECTIONS)
   const [customSections, setCustomSections] = useState<Record<string, ResumePreviewCustomSection>>({})
   const [aiLoadingSectionId, setAiLoadingSectionId] = useState<string | null>(null)
@@ -2612,56 +2608,25 @@ export default function ResumeStudioPage() {
                 </SortableContext>
               </DndContext>
 
-              <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                <div className="mb-4 flex items-center justify-between">
-                  <p className="text-[18px] font-bold text-slate-900">+ Add New Section</p>
-                  <button type="button" className="text-[12px] font-semibold text-slate-500 hover:text-[#5B4DFF]">
-                    Preview All Sections
-                  </button>
-                </div>
-                <div className="grid gap-4 lg:grid-cols-[220px_1fr]">
-                  <div className="divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white">
-                    {ADD_SECTIONS.map(({ label, premium, icon: Icon }) => (
-                      <button
-                        key={label}
-                        type="button"
-                        onClick={() => setSelectedAddSection(label)}
-                        className={cn(
-                          "flex w-full items-center justify-between gap-3 px-3 py-3 text-left text-[13px] font-semibold transition hover:bg-slate-50",
-                          selectedAddSection === label ? "text-[#5B4DFF]" : "text-slate-600"
-                        )}
-                      >
-                        <span className="flex items-center gap-2">
-                          <Icon className="h-4 w-4" />
-                          {label}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-                      <div className="flex items-center gap-2">
-                        <p className="text-[14px] font-bold text-slate-950">{selectedAddSection}</p>
+              <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <p className="mb-4 text-[13px] font-bold uppercase tracking-[0.08em] text-slate-400">Add a section</p>
+                <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
+                  {ADD_SECTIONS.map(({ type, label, icon: Icon, desc }) => (
+                    <button
+                      key={label}
+                      type="button"
+                      onClick={() => addSection(type, label)}
+                      className="group flex flex-col items-start gap-2.5 rounded-xl border border-slate-200 bg-slate-50/50 p-3.5 text-left transition hover:border-orange-300/70 hover:bg-orange-50/20"
+                    >
+                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white ring-1 ring-slate-200 transition group-hover:ring-orange-300">
+                        <Icon className="h-4 w-4 text-slate-400 transition group-hover:text-orange-500" />
                       </div>
-                      <p className="mt-3 text-[13px] leading-relaxed text-slate-600">
-                        {selectedAddSection === "Achievements"
-                          ? "Use action verbs to highlight your notable accomplishments. By doing this, you show your track record and erase doubts about your ability."
-                          : "Add this section to provide more context while keeping the resume concise and relevant."}
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const section = ADD_SECTIONS.find((item) => item.label === selectedAddSection) ?? ADD_SECTIONS[0]
-                          // TODO: Wire Add Section to POST /api/resume/:id/sections.
-                          addSection(section.type, section.label, section.premium)
-                        }}
-                        className="mt-4 inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#5B4DFF] px-4 text-[12.5px] font-bold text-white transition hover:bg-[#493EE6]"
-                      >
-                        <Plus className="h-4 w-4" />
-                        Add Section
-                      </button>
-                    </div>
-                  </div>
+                      <div>
+                        <p className="text-[13px] font-semibold text-slate-800">{label}</p>
+                        <p className="mt-0.5 text-[11px] leading-relaxed text-slate-400">{desc}</p>
+                      </div>
+                    </button>
+                  ))}
                 </div>
               </section>
             </section>
