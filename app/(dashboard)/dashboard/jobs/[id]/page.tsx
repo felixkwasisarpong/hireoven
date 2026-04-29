@@ -4,19 +4,16 @@ import {
   ArrowLeft,
   BadgeCheck,
   Banknote,
-  Building2,
   Briefcase,
-  CalendarClock,
+  Building2,
   CheckCircle2,
-  ClipboardList,
+  ChevronRight,
+  ExternalLink,
   FileText,
   Home as HomeIcon,
-  ListChecks,
   MapPin,
   Plane,
-  Star,
 } from "lucide-react"
-import type { LucideIcon } from "lucide-react"
 import JobDetailPanel from "@/components/jobs/JobDetailPanel"
 import JobShareRow from "@/components/jobs/JobShareRow"
 import { ScoutMiniPanel } from "@/components/scout/ScoutMiniPanel"
@@ -71,9 +68,9 @@ type ResumeSkillRow = {
 }
 
 const EXPERIENCE_BY_SENIORITY: Record<string, string> = {
-  intern: "0 - 1 years",
-  junior: "1 - 3 years",
-  mid: "3 - 6 years",
+  intern: "0 – 1 years",
+  junior: "1 – 3 years",
+  mid: "3 – 6 years",
   senior: "5+ years",
   staff: "8+ years",
   principal: "10+ years",
@@ -93,33 +90,16 @@ function dedupe(values: string[], max = Number.POSITIVE_INFINITY): string[] {
 }
 
 const TABS = [
-  { id: "job-details", label: "Job Details", icon: FileText },
-  { id: "about-company", label: "About Company", icon: Building2 },
-  { id: "similar-jobs", label: "Similar Jobs", icon: Briefcase },
+  { id: "job-details", label: "Job details", icon: FileText },
+  { id: "about-company", label: "About company", icon: Building2 },
+  { id: "similar-jobs", label: "Similar jobs", icon: Briefcase },
 ]
 
-function FactRow({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: string }) {
-  return (
-    <li className="flex items-start gap-3">
-      <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-md bg-slate-100 text-slate-500">
-        <Icon className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
-      </span>
-      <div className="min-w-0">
-        <div className="text-[12px] font-medium text-slate-500">{label}</div>
-        <div className="mt-0.5 text-[13px] font-semibold text-slate-900">{value}</div>
-      </div>
-    </li>
-  )
-}
+// ─── Local primitives ───────────────────────────────────────────────────────
 
-function SectionH({ children, icon: Icon }: { children: React.ReactNode; icon?: LucideIcon }) {
+function SectionHead({ children }: { children: React.ReactNode }) {
   return (
-    <h2 className="inline-flex items-center gap-2 text-[16px] font-semibold tracking-tight text-slate-900">
-      {Icon ? (
-        <span className="grid h-7 w-7 place-items-center rounded-lg bg-sky-50 text-[#2563EB]">
-          <Icon className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden />
-        </span>
-      ) : null}
+    <h2 className="text-[17px] font-semibold tracking-tight text-slate-900">
       {children}
     </h2>
   )
@@ -127,16 +107,20 @@ function SectionH({ children, icon: Icon }: { children: React.ReactNode; icon?: 
 
 function BulletList({ items }: { items: string[] }) {
   return (
-    <ul className="space-y-2 text-[14px] leading-relaxed text-slate-700">
+    <ul className="mt-3 space-y-2.5 text-[14px] leading-[1.7] text-slate-600">
       {items.map((item) => (
-        <li key={item} className="flex gap-2.5">
-          <span aria-hidden className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-slate-400" />
+        <li key={item} className="flex gap-3">
+          <span aria-hidden className="mt-[0.55em] h-[5px] w-[5px] shrink-0 rounded-full bg-orange-400/70" />
           <span>{item}</span>
         </li>
       ))}
     </ul>
   )
 }
+
+const div = "border-t border-slate-100"
+
+// ─── Page ───────────────────────────────────────────────────────────────────
 
 export default async function DashboardJobDetailPage({ params }: Props) {
   const { id } = await params
@@ -169,9 +153,7 @@ export default async function DashboardJobDetailPage({ params }: Props) {
   const seniorityLabel = page.seniority_label
   const experienceLabel =
     extractExperienceLabel(job.description) ??
-    (seniorityLabel
-      ? EXPERIENCE_BY_SENIORITY[(job.seniority_level ?? "") as string]
-      : null) ??
+    (seniorityLabel ? EXPERIENCE_BY_SENIORITY[(job.seniority_level ?? "") as string] : null) ??
     "Not specified"
   const educationLabel = extractEducationLabel(job.description) ?? "Not specified"
 
@@ -180,40 +162,30 @@ export default async function DashboardJobDetailPage({ params }: Props) {
       ? page.sections.about_role.items
       : ["We are still extracting this role summary from the source posting."]
 
-  const responsibilities =
-    page.sections.responsibilities.items.length > 0
-      ? page.sections.responsibilities.items
-      : []
+  const responsibilities = page.sections.responsibilities.items.length > 0
+    ? page.sections.responsibilities.items
+    : []
 
-  // "Required" = requirements + qualifications (deduped); shown under one heading.
   const requiredItems = dedupe([
     ...page.sections.requirements.items,
     ...page.sections.qualifications.items,
   ])
-  // "Preferred" kept separate — must not be mixed into required.
   const preferredItems = dedupe(page.sections.preferred_qualifications.items)
-
-  // Benefits and compensation rendered as distinct sections.
   const benefitItems = page.sections.benefits.items
   const compensationItems = page.sections.compensation.items
-
   const skills = page.skills.slice(0, 8)
+  const skillPillItems = dedupe([...page.sections.skills.items])
 
   const sponsorshipPill = employerSponsorshipPill({ ...job, company })
   const sponsorsConfirmed = employerLikelySponsorsH1b({ ...job, company })
 
-  // Show visa section only when explicit JD evidence exists or company has LCA data.
   const showVisaJdSection =
     page.sections.visa.items.length > 0 ||
     page.visa_card_label !== null ||
     sponsorsConfirmed
 
   const workModel = job.is_remote ? "Remote" : job.is_hybrid ? "Hybrid" : "On-site"
-  const workModelLong = job.is_remote
-    ? "Remote-first"
-    : job.is_hybrid
-      ? "Hybrid"
-      : "On-site"
+  const workModelLong = job.is_remote ? "Remote-first" : job.is_hybrid ? "Hybrid" : "On-site"
 
   const visaSponsorshipValue = sponsorsConfirmed
     ? "Historical signal"
@@ -238,8 +210,7 @@ export default async function DashboardJobDetailPage({ params }: Props) {
       ? pool.query<ResumeSkillRow>(
           `SELECT skills, top_skills, raw_text
            FROM resumes
-           WHERE user_id = $1
-             AND parse_status = 'complete'
+           WHERE user_id = $1 AND parse_status = 'complete'
            ORDER BY is_primary DESC, updated_at DESC
            LIMIT 1`,
           [session.sub]
@@ -247,7 +218,7 @@ export default async function DashboardJobDetailPage({ params }: Props) {
       : Promise.resolve({ rows: [] as ResumeSkillRow[] }),
     page.normalized_title && page.normalized_title.length > 0
       ? pool.query<SimilarJob>(
-          `${similarSql} AND j.normalized_title = $1 AND j.id <> $2::uuid LIMIT 3`,
+          `${similarSql} AND j.normalized_title = $1 AND j.id <> $2::uuid LIMIT 4`,
           [page.normalized_title, id]
         )
       : Promise.resolve({ rows: [] as SimilarJob[] }),
@@ -261,14 +232,12 @@ export default async function DashboardJobDetailPage({ params }: Props) {
 
   const initialMatchScore = matchScoreMap.get(id) ?? null
 
-  // Resume skills: structured buckets + raw text fallback via taxonomy
   const resumeSkillLabels = normalizeSkillList([
     ...(resumeSkillResult.rows[0]?.top_skills ?? []),
     ...getSkillsBucketValues(resumeSkillResult.rows[0]?.skills ?? null),
     ...extractSkillsFromText(resumeSkillResult.rows[0]?.raw_text ?? null),
   ])
 
-  // Job skills come from the DB (crawl-time extraction) — no UI-side mining needed
   const jobSkillCandidates = normalizeSkillList(
     [...(job.skills ?? []), ...page.skills],
     40
@@ -281,387 +250,429 @@ export default async function DashboardJobDetailPage({ params }: Props) {
   const similarMap = new Map<string, SimilarJob>()
   for (const entry of similarByTitleResult.rows ?? []) similarMap.set(entry.id, entry)
   for (const entry of similarByCompanyResult.rows ?? []) {
-    if (similarMap.size >= 3) break
+    if (similarMap.size >= 4) break
     similarMap.set(entry.id, entry)
   }
-  const similarJobs = [...similarMap.values()].slice(0, 3)
+  const similarJobs = [...similarMap.values()].slice(0, 4)
 
-  // Skill pills: drawn from job.skills + page.skills (no benefits/compensation mixed in).
-  const skillPillItems = dedupe([...page.sections.skills.items])
-
-  const facts: { icon: LucideIcon; label: string; value: string }[] = [
-    { icon: CalendarClock, label: "Posted", value: postedLabel },
-    { icon: Star, label: "Experience", value: experienceLabel },
-    { icon: Briefcase, label: "Employment type", value: employmentLabel },
-    { icon: HomeIcon, label: "Work model", value: workModelLong },
-    { icon: Banknote, label: "Salary", value: salaryLabel ?? "Not disclosed" },
-    { icon: Plane, label: "Visa sponsorship", value: visaSponsorshipValue },
+  const facts = [
+    { label: "Posted", value: postedLabel },
+    { label: "Experience", value: experienceLabel },
+    { label: "Employment", value: employmentLabel },
+    { label: "Work model", value: workModelLong },
+    { label: "Salary", value: salaryLabel ?? "Not disclosed" },
+    { label: "Visa sponsorship", value: visaSponsorshipValue },
   ]
 
-  const panel = "rounded-2xl bg-white shadow-[0_1px_3px_rgba(15,23,42,0.06)] ring-1 ring-slate-200/70"
-
   return (
-    <main className="min-h-full bg-[#F1F5F9] pb-16">
-      <div className="mx-auto w-full max-w-[1340px] px-4 py-6 sm:px-6 lg:px-8">
-        {/* Back link */}
-        <Link
-          href="/dashboard"
-          className="mb-5 inline-flex items-center gap-1.5 text-[13px] font-medium text-[#2563EB] hover:underline"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" strokeWidth={2.25} />
-          Back to jobs
-        </Link>
+    <main className="min-h-full bg-slate-50 pb-20">
 
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px] xl:gap-8">
-          {/* ──────────────────── Main column ──────────────────── */}
-          <div className="min-w-0 space-y-5">
+      {/* ── Hero ──────────────────────────────────────────────────── */}
+      <div className="relative overflow-hidden bg-[#0C1222]">
+        {/* Ambient glows */}
+        <div
+          className="pointer-events-none absolute -left-48 -top-48 h-[520px] w-[520px] rounded-full bg-orange-600/10 blur-3xl"
+          aria-hidden
+        />
+        <div
+          className="pointer-events-none absolute right-0 bottom-0 h-72 w-72 rounded-full bg-orange-500/5 blur-3xl"
+          aria-hidden
+        />
 
-            {/* Job header */}
-            <section id="job-details" className={cn(panel, "p-6")}>
-              <div className="flex min-w-0 items-start gap-5">
+        <div className="mx-auto w-full max-w-[1340px] px-4 pt-5 sm:px-6 lg:px-8">
+          {/* Back */}
+          <Link
+            href="/dashboard"
+            className="inline-flex items-center gap-1.5 text-[12px] font-medium text-slate-500 transition hover:text-slate-200"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" strokeWidth={2.25} />
+            Back to jobs
+          </Link>
+
+          {/* Identity row */}
+          <div className="mt-6 flex items-start justify-between gap-6 pb-7">
+            <div className="flex min-w-0 items-start gap-4 sm:gap-5">
+              {/* Logo */}
+              <div className="shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-1.5 backdrop-blur-sm">
                 <CompanyLogo
                   companyName={company?.name ?? "Company"}
                   domain={company?.domain ?? null}
                   logoUrl={company?.logo_url ?? null}
-                  className="h-[88px] w-[88px] shrink-0 rounded-xl border-0 bg-transparent"
+                  className="h-[60px] w-[60px] rounded-xl border-0 sm:h-[68px] sm:w-[68px]"
                 />
-                <div className="min-w-0 flex-1">
-                  <h1 className="text-[22px] font-bold leading-tight tracking-tight text-slate-900 sm:text-[24px]">
-                    {displayTitle}
-                  </h1>
-                  <div className="mt-1 flex items-center gap-1.5">
-                    {company?.id ? (
-                      <Link
-                        href={`/companies/${company.id}`}
-                        className="text-[14px] font-semibold text-slate-700 transition hover:text-[#2563EB] hover:underline"
-                      >
-                        {company.name}
-                      </Link>
-                    ) : (
-                      <span className="text-[14px] font-semibold text-slate-700">
-                        {company?.name ?? "Unknown company"}
-                      </span>
-                    )}
-                    <BadgeCheck className="h-4 w-4 text-[#2563EB]" strokeWidth={2.5} aria-hidden />
-                  </div>
-                  <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[13px] text-slate-600">
-                    {page.location ? (
-                      <span className="inline-flex items-center gap-1.5">
-                        <MapPin className="h-3.5 w-3.5 text-slate-400" strokeWidth={2} aria-hidden />
-                        {page.location}
-                      </span>
-                    ) : null}
-                    <span className="inline-flex items-center gap-1.5">
-                      <Briefcase className="h-3.5 w-3.5 text-slate-400" strokeWidth={2} aria-hidden />
-                      {employmentLabel}
-                    </span>
-                    <span className="inline-flex items-center gap-1.5">
-                      <HomeIcon className="h-3.5 w-3.5 text-slate-400" strokeWidth={2} aria-hidden />
-                      {workModel}
-                    </span>
-                    {salaryLabel ? (
-                      <span className="inline-flex items-center gap-1.5">
-                        <Banknote className="h-3.5 w-3.5 text-slate-400" strokeWidth={2} aria-hidden />
-                        {salaryLabel}
-                      </span>
-                    ) : null}
-                  </div>
-                  {skills.length > 0 ? (
-                    <div className="mt-3.5 flex flex-wrap gap-1.5">
-                      {skills.map((skill) => (
-                        <span
-                          key={skill}
-                          className="rounded-full bg-sky-50 px-2.5 py-0.5 text-[11.5px] font-medium text-sky-800"
-                        >
-                          {skill}
-                        </span>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
               </div>
 
-              {/* Tab nav */}
-              <nav className="mt-5 border-t border-slate-100 pt-1">
-                <div className="flex flex-wrap gap-x-1">
-                  {TABS.map((tab, index) => {
-                    const Icon = tab.icon
-                    return (
-                      <a
-                        key={tab.id}
-                        href={`#${tab.id}`}
-                        className={`relative inline-flex h-11 items-center gap-1.5 px-3.5 text-[13.5px] font-semibold transition-colors ${
-                          index === 0
-                            ? "text-[#2563EB]"
-                            : "text-slate-500 hover:text-slate-900"
-                        }`}
-                      >
-                        <Icon className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden />
-                        {tab.label}
-                        {index === 0 ? (
-                          <span className="absolute inset-x-2.5 bottom-0 h-[2px] rounded-full bg-[#2563EB]" />
-                        ) : null}
-                      </a>
-                    )
-                  })}
-                </div>
-              </nav>
+              <div className="min-w-0">
+                <h1 className="text-[22px] font-bold leading-tight tracking-tight text-white sm:text-[28px] lg:text-[30px]">
+                  {displayTitle}
+                </h1>
 
-              {/* Job description sections */}
-              <div className="mt-5 space-y-7">
-                <div>
-                  <SectionH icon={FileText}>About the role</SectionH>
-                  <div className="mt-3 space-y-3 text-[14px] leading-relaxed text-slate-700">
-                    {aboutRole.map((paragraph) => (
-                      <p key={paragraph}>{paragraph}</p>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Responsibilities */}
-                {responsibilities.length > 0 && (
-                  <div>
-                    <SectionH icon={ListChecks}>What you&apos;ll do</SectionH>
-                    <div className="mt-3">
-                      <BulletList items={responsibilities} />
-                    </div>
-                  </div>
-                )}
-
-                {/* Required qualifications + matched skill pills */}
-                {(requiredItems.length > 0 || requirementSkillPills.length > 0) && (
-                  <div>
-                    <SectionH icon={ClipboardList}>Required qualifications</SectionH>
-                    {requirementSkillPills.length > 0 && (
-                      <div className="mt-3">
-                        <p className="text-[11.5px] font-semibold uppercase tracking-[0.12em] text-slate-400">
-                          Skills needed for this role
-                        </p>
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          {requirementSkillPills.map(({ skill, matched }) => (
-                            <span
-                              key={skill}
-                              className={cn(
-                                "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-semibold ring-1",
-                                matched
-                                  ? "bg-emerald-50 text-emerald-800 ring-emerald-200"
-                                  : "bg-amber-50 text-amber-800 ring-amber-200"
-                              )}
-                            >
-                              {matched && (
-                                <CheckCircle2 className="h-3 w-3" strokeWidth={2.25} aria-hidden />
-                              )}
-                              {skill}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    {requiredItems.length > 0 && (
-                      <div className="mt-3">
-                        <BulletList items={requiredItems} />
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Preferred qualifications — kept separate from required */}
-                {preferredItems.length > 0 && (
-                  <div>
-                    <SectionH icon={Star}>Preferred qualifications</SectionH>
-                    <div className="mt-3">
-                      <BulletList items={preferredItems} />
-                    </div>
-                  </div>
-                )}
-
-                {/* Skills — only from skills sections, not mixed with benefits */}
-                {skillPillItems.length > 0 && (
-                  <div>
-                    <SectionH icon={CheckCircle2}>Skills</SectionH>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {skillPillItems.map((skill) => (
-                        <span
-                          key={skill}
-                          className="rounded-full bg-sky-50 px-2.5 py-0.5 text-[11.5px] font-medium text-sky-800 ring-1 ring-sky-100"
-                        >
-                          {skill}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Benefits — separate section */}
-                {benefitItems.length > 0 && (
-                  <div>
-                    <SectionH icon={CheckCircle2}>Benefits</SectionH>
-                    <div className="mt-3">
-                      <BulletList items={benefitItems} />
-                    </div>
-                  </div>
-                )}
-
-                {/* Compensation — separate section, only shown when content exists */}
-                {compensationItems.length > 0 && (
-                  <div>
-                    <SectionH icon={Banknote}>Compensation</SectionH>
-                    <div className="mt-3">
-                      <BulletList items={compensationItems} />
-                    </div>
-                  </div>
-                )}
-
-                {/* Visa / sponsorship — only shown when explicit evidence exists */}
-                {showVisaJdSection && (
-                  <div>
-                    <SectionH icon={Plane}>Sponsorship / visa</SectionH>
-                    {page.sections.visa.items.length > 0 ? (
-                      <div className="mt-3">
-                        <BulletList items={page.sections.visa.items} />
-                      </div>
-                    ) : (
-                      <p className="mt-3 text-[14px] text-slate-600">
-                        {sponsorsConfirmed
-                          ? "This employer has a historical H-1B sponsorship signal based on LCA records. Verify current policy before applying."
-                          : "The job description mentions visa or authorization requirements. Review the full posting for details."}
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                {educationLabel && educationLabel !== "Not specified" && (
-                  <p className="text-[12px] text-slate-500">
-                    Education preference: {educationLabel}
-                  </p>
-                )}
-              </div>
-
-              {/* Job facts — inside the same card */}
-              <div className="mt-7 border-t border-slate-100 pt-6">
-                <ul className="grid gap-4 sm:grid-cols-2">
-                  {facts.map((f) => (
-                    <FactRow key={f.label} icon={f.icon} label={f.label} value={f.value} />
-                  ))}
-                </ul>
-              </div>
-            </section>
-
-            {/* About company */}
-            <section id="about-company" className={cn(panel, "p-5 sm:p-6")}>
-              <SectionH icon={Building2}>About {company?.name ?? "the company"}</SectionH>
-              <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-start">
-                <CompanyLogo
-                  companyName={company?.name ?? "Company"}
-                  domain={company?.domain ?? null}
-                  logoUrl={company?.logo_url ?? null}
-                  className="h-14 w-14 shrink-0 rounded-xl border-0 bg-transparent"
-                />
-                <div className="min-w-0 flex-1">
-                  {page.sections.company_info.items.length > 0 ? (
-                    <div className="space-y-3 text-[14px] leading-relaxed text-slate-700">
-                      {page.sections.company_info.items.map((p) => (
-                        <p key={p}>{p}</p>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-[14px] leading-relaxed text-slate-700">
-                      {company?.name ?? "This company"} is actively hiring and regularly updates openings.
-                    </p>
-                  )}
-                  {company?.careers_url ? (
-                    <a
-                      href={company.careers_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="mt-3 inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#2563EB] hover:underline"
-                    >
-                      <FileText className="h-3.5 w-3.5" aria-hidden />
-                      Visit company careers
-                    </a>
-                  ) : null}
+                <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-slate-300">
                   {company?.id ? (
                     <Link
                       href={`/companies/${company.id}`}
-                      className="ml-4 mt-3 inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#2563EB] hover:underline"
+                      className="font-semibold text-slate-200 transition hover:text-white"
                     >
-                      <Building2 className="h-3.5 w-3.5" aria-hidden />
-                      View immigration profile
+                      {company.name}
                     </Link>
-                  ) : null}
+                  ) : (
+                    <span className="font-semibold text-slate-200">{company?.name ?? "Unknown company"}</span>
+                  )}
+                  {company?.id && (
+                    <BadgeCheck className="h-4 w-4 text-sky-400" strokeWidth={2.5} aria-hidden />
+                  )}
+                  {page.location && (
+                    <span className="inline-flex items-center gap-1.5">
+                      <MapPin className="h-3.5 w-3.5 text-slate-500" strokeWidth={2} aria-hidden />
+                      {page.location}
+                    </span>
+                  )}
+                  <span className="inline-flex items-center gap-1.5">
+                    <HomeIcon className="h-3.5 w-3.5 text-slate-500" strokeWidth={2} aria-hidden />
+                    {workModel}
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <Briefcase className="h-3.5 w-3.5 text-slate-500" strokeWidth={2} aria-hidden />
+                    {employmentLabel}
+                  </span>
+                </div>
+
+                {salaryLabel && (
+                  <p className="mt-1.5 inline-flex items-center gap-1.5 text-[14px] font-semibold text-orange-400">
+                    <Banknote className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+                    {salaryLabel}
+                  </p>
+                )}
+
+                {/* Skill chips */}
+                {skills.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {skills.map((skill) => (
+                      <span
+                        key={skill}
+                        className="rounded-md bg-white/6 px-2.5 py-1 text-[11.5px] font-medium text-slate-300 ring-1 ring-white/10"
+                      >
+                        {skill}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {/* Quick meta strip */}
+                <div className="mt-3.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-slate-500">
+                  <span>{postedLabel}</span>
+                  <span>·</span>
+                  <span>{experienceLabel}</span>
+                  {sponsorsConfirmed && (
+                    <>
+                      <span>·</span>
+                      <span className="flex items-center gap-1 text-emerald-400">
+                        <Plane className="h-3 w-3" strokeWidth={2} aria-hidden />
+                        H-1B sponsor signal
+                      </span>
+                    </>
+                  )}
                 </div>
               </div>
-            </section>
+            </div>
 
-            {/* Similar jobs */}
-            {similarJobs.length > 0 && (
-              <section id="similar-jobs" className={cn(panel, "p-5 sm:p-6")}>
-                <div className="mb-4 flex items-center justify-between gap-2">
-                  <SectionH icon={Briefcase}>Similar jobs</SectionH>
-                  <Link href="/dashboard" className="text-[13px] font-semibold text-[#2563EB] hover:underline">
-                    View all
-                  </Link>
+            {/* CTA — desktop */}
+            <div className="hidden shrink-0 flex-col items-end gap-2.5 sm:flex">
+              <a
+                href={page.apply_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 rounded-xl bg-orange-500 px-6 py-3 text-[14px] font-bold text-white shadow-[0_4px_24px_rgba(249,115,22,0.35)] transition hover:bg-orange-400 active:scale-[0.98]"
+              >
+                Apply Now
+                <ExternalLink className="h-4 w-4" strokeWidth={2.25} aria-hidden />
+              </a>
+            </div>
+          </div>
+
+          {/* Tab strip */}
+          <nav className="border-t border-white/8">
+            <div className="flex gap-0.5">
+              {TABS.map((tab, index) => {
+                const Icon = tab.icon
+                return (
+                  <a
+                    key={tab.id}
+                    href={`#${tab.id}`}
+                    className={cn(
+                      "relative inline-flex h-10 items-center gap-1.5 px-4 text-[12.5px] font-semibold transition",
+                      index === 0 ? "text-white" : "text-slate-500 hover:text-slate-200"
+                    )}
+                  >
+                    <Icon className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden />
+                    {tab.label}
+                    {index === 0 && (
+                      <span className="absolute inset-x-3 bottom-0 h-[2px] rounded-full bg-orange-400" />
+                    )}
+                  </a>
+                )
+              })}
+            </div>
+          </nav>
+        </div>
+      </div>
+
+      {/* ── Content ───────────────────────────────────────────────── */}
+      <div className="mx-auto w-full max-w-[1340px] px-4 py-7 sm:px-6 lg:px-8">
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px] xl:gap-8">
+
+          {/* ──────────── Main column ──────────── */}
+          <div className="min-w-0">
+            <div className="overflow-hidden rounded-2xl bg-white shadow-[0_1px_4px_rgba(15,23,42,0.06)] ring-1 ring-slate-200/60">
+
+              {/* About the role */}
+              <section id="job-details" className="px-6 py-7">
+                <SectionHead>About the role</SectionHead>
+                <div className="mt-3 space-y-3 text-[14px] leading-[1.7] text-slate-600">
+                  {aboutRole.map((p) => (
+                    <p key={p}>{p}</p>
+                  ))}
                 </div>
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {similarJobs.map((similar) => {
-                    const cardSalary = formatSalaryLabel(
-                      similar.salary_min,
-                      similar.salary_max,
-                      similar.salary_currency ?? "USD"
-                    )
-                    return (
-                      <Link
-                        key={similar.id}
-                        href={`/dashboard/jobs/${similar.id}`}
-                        className="rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200/60 transition hover:bg-white hover:shadow-sm"
+              </section>
+
+              {/* What you'll do */}
+              {responsibilities.length > 0 && (
+                <section className={cn("px-6 py-7", div)}>
+                  <SectionHead>What you&apos;ll do</SectionHead>
+                  <BulletList items={responsibilities} />
+                </section>
+              )}
+
+              {/* Required qualifications */}
+              {(requiredItems.length > 0 || requirementSkillPills.length > 0) && (
+                <section className={cn("px-6 py-7", div)}>
+                  <SectionHead>Required qualifications</SectionHead>
+
+                  {requirementSkillPills.length > 0 && (
+                    <div className="mt-5 rounded-xl bg-slate-50 p-4 ring-1 ring-slate-200/60">
+                      <div className="mb-3 flex items-center justify-between gap-2">
+                        <p className="text-[10.5px] font-bold uppercase tracking-[0.1em] text-slate-400">Skills</p>
+                        <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-800">
+                          {requirementSkillPills.filter((s) => s.matched).length} / {requirementSkillPills.length} matched
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {requirementSkillPills.map(({ skill, matched }) => (
+                          <span
+                            key={skill}
+                            className={cn(
+                              "inline-flex items-center gap-1.5 rounded-lg px-3 py-1 text-[12.5px] font-medium ring-1",
+                              matched
+                                ? "bg-white text-emerald-700 ring-emerald-200"
+                                : "bg-white text-slate-500 ring-slate-200"
+                            )}
+                          >
+                            {matched && (
+                              <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-500" strokeWidth={2} aria-hidden />
+                            )}
+                            {skill}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {requiredItems.length > 0 && <BulletList items={requiredItems} />}
+                </section>
+              )}
+
+              {/* Preferred qualifications */}
+              {preferredItems.length > 0 && (
+                <section className={cn("px-6 py-7", div)}>
+                  <SectionHead>Preferred qualifications</SectionHead>
+                  <BulletList items={preferredItems} />
+                </section>
+              )}
+
+              {/* Skills */}
+              {skillPillItems.length > 0 && (
+                <section className={cn("px-6 py-7", div)}>
+                  <SectionHead>Skills</SectionHead>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {skillPillItems.map((skill) => (
+                      <span
+                        key={skill}
+                        className="rounded-lg bg-slate-50 px-3 py-1 text-[12.5px] font-medium text-slate-600 ring-1 ring-slate-200"
                       >
-                        <div className="flex items-start gap-3">
+                        {skill}
+                      </span>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {/* Benefits */}
+              {benefitItems.length > 0 && (
+                <section className={cn("px-6 py-7", div)}>
+                  <SectionHead>Benefits</SectionHead>
+                  <BulletList items={benefitItems} />
+                </section>
+              )}
+
+              {/* Compensation */}
+              {compensationItems.length > 0 && (
+                <section className={cn("px-6 py-7", div)}>
+                  <SectionHead>Compensation</SectionHead>
+                  <BulletList items={compensationItems} />
+                </section>
+              )}
+
+              {/* Visa / sponsorship */}
+              {showVisaJdSection && (
+                <section className={cn("px-6 py-7", div)}>
+                  <SectionHead>Sponsorship &amp; visa</SectionHead>
+                  {page.sections.visa.items.length > 0 ? (
+                    <BulletList items={page.sections.visa.items} />
+                  ) : (
+                    <p className="mt-3 text-[14px] leading-[1.7] text-slate-600">
+                      {sponsorsConfirmed
+                        ? "This employer has a historical H-1B sponsorship signal based on LCA records. Verify current policy before applying."
+                        : "The job description mentions visa or authorization requirements. Review the full posting for details."}
+                    </p>
+                  )}
+                </section>
+              )}
+
+              {/* Job facts */}
+              <section className={cn("px-6 py-8", div)}>
+                <SectionHead>Job details</SectionHead>
+                <dl className="mt-5 grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+                  {facts.map((f) => (
+                    <div
+                      key={f.label}
+                      className="rounded-xl bg-slate-50 px-4 py-3.5 ring-1 ring-slate-200/50"
+                    >
+                      <dt className="text-[10px] font-bold uppercase tracking-[0.1em] text-slate-400">
+                        {f.label}
+                      </dt>
+                      <dd className="mt-1.5 text-[13.5px] font-semibold text-slate-800 leading-tight">{f.value}</dd>
+                    </div>
+                  ))}
+                </dl>
+                {educationLabel && educationLabel !== "Not specified" && (
+                  <p className="mt-4 text-[12px] text-slate-400">Education preference: {educationLabel}</p>
+                )}
+              </section>
+
+              {/* About company */}
+              <section id="about-company" className={cn("px-6 py-7", div)}>
+                <SectionHead>About {company?.name ?? "the company"}</SectionHead>
+                <div className="mt-4 flex gap-4">
+                  <CompanyLogo
+                    companyName={company?.name ?? "Company"}
+                    domain={company?.domain ?? null}
+                    logoUrl={company?.logo_url ?? null}
+                    className="h-12 w-12 shrink-0 rounded-xl border-0 bg-transparent"
+                  />
+                  <div className="min-w-0 flex-1">
+                    {page.sections.company_info.items.length > 0 ? (
+                      <div className="space-y-3 text-[14px] leading-[1.7] text-slate-600">
+                        {page.sections.company_info.items.map((p) => (
+                          <p key={p}>{p}</p>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-[14px] leading-[1.7] text-slate-600">
+                        {company?.name ?? "This company"} is actively hiring and regularly updates openings.
+                      </p>
+                    )}
+                    <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2">
+                      {company?.careers_url && (
+                        <a
+                          href={company.careers_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-orange-600 transition hover:text-orange-500 hover:underline"
+                        >
+                          <FileText className="h-3.5 w-3.5" aria-hidden />
+                          Careers page
+                        </a>
+                      )}
+                      {company?.id && (
+                        <Link
+                          href={`/companies/${company.id}`}
+                          className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-orange-600 transition hover:text-orange-500 hover:underline"
+                        >
+                          <Building2 className="h-3.5 w-3.5" aria-hidden />
+                          Immigration profile
+                        </Link>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              {/* Similar jobs */}
+              {similarJobs.length > 0 && (
+                <section id="similar-jobs" className={cn("px-6 py-7", div)}>
+                  <div className="flex items-center justify-between gap-2">
+                    <SectionHead>Similar jobs</SectionHead>
+                    <Link
+                      href="/dashboard"
+                      className="text-[12.5px] font-semibold text-orange-600 transition hover:text-orange-500 hover:underline"
+                    >
+                      View all →
+                    </Link>
+                  </div>
+                  <div className="mt-3 space-y-0.5">
+                    {similarJobs.map((similar) => {
+                      const cardSalary = formatSalaryLabel(
+                        similar.salary_min,
+                        similar.salary_max,
+                        similar.salary_currency ?? "USD"
+                      )
+                      return (
+                        <Link
+                          key={similar.id}
+                          href={`/dashboard/jobs/${similar.id}`}
+                          className="flex items-center gap-3 rounded-xl px-3 py-3 transition hover:bg-slate-50"
+                        >
                           <CompanyLogo
                             companyName={similar.company?.name ?? "Company"}
                             domain={similar.company?.domain ?? null}
                             logoUrl={similar.company?.logo_url ?? null}
-                            className="h-10 w-10 shrink-0 rounded-lg border-0 bg-transparent"
+                            className="h-9 w-9 shrink-0 rounded-lg border-0 bg-transparent"
                           />
-                          <div className="min-w-0">
+                          <div className="min-w-0 flex-1">
                             <p className="truncate text-[13px] font-semibold text-slate-900">
                               {cleanJobTitle(similar.title)}
                             </p>
-                            <p className="truncate text-[12px] text-slate-500">
+                            <p className="truncate text-[12px] text-slate-400">
                               {similar.company?.name ?? "Unknown company"}
+                              {similar.location ? ` · ${similar.location}` : ""}
                             </p>
-                            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-slate-500">
-                              {similar.location && (
-                                <span className="inline-flex items-center gap-1">
-                                  <MapPin className="h-3 w-3" aria-hidden />
-                                  {similar.location}
-                                </span>
-                              )}
-                              {cardSalary && (
-                                <span className="inline-flex items-center gap-1">
-                                  <Banknote className="h-3 w-3" aria-hidden />
-                                  {cardSalary}
-                                </span>
-                              )}
-                            </div>
                           </div>
-                        </div>
-                      </Link>
-                    )
-                  })}
-                </div>
-              </section>
-            )}
+                          {cardSalary && (
+                            <span className="shrink-0 text-[11.5px] font-medium text-slate-400">
+                              {cardSalary}
+                            </span>
+                          )}
+                          <ChevronRight className="h-4 w-4 shrink-0 text-slate-300" aria-hidden />
+                        </Link>
+                      )
+                    })}
+                  </div>
+                </section>
+              )}
 
-            {/* Share row */}
-            <section className={cn(panel, "p-5")}>
-              <h3 className="text-[13px] font-semibold text-slate-900">Share this job</h3>
-              <div className="mt-3">
-                <JobShareRow jobTitle={displayTitle} />
+              {/* Share */}
+              <div className={cn("px-6 py-5", div)}>
+                <div className="flex items-center justify-between gap-4">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400">
+                    Share this role
+                  </p>
+                  <JobShareRow jobTitle={displayTitle} />
+                </div>
               </div>
-            </section>
+            </div>
           </div>
 
-          {/* ──────────────────── Right panel ──────────────────── */}
+          {/* ──────────── Sidebar ──────────── */}
           <aside className="xl:sticky xl:top-6 xl:self-start xl:max-h-[calc(100vh-5rem)] xl:overflow-y-auto xl:pb-4 [&::-webkit-scrollbar]:w-0">
             <JobDetailPanel
               job={job as Parameters<typeof JobDetailPanel>[0]["job"]}
@@ -670,11 +681,11 @@ export default async function DashboardJobDetailPage({ params }: Props) {
               applyUrl={page.apply_url}
               sponsorsConfirmed={sponsorsConfirmed}
               sponsorshipPill={sponsorshipPill}
-
             />
           </aside>
         </div>
       </div>
+
       <ScoutMiniPanel
         pagePath={`/dashboard/jobs/${id}`}
         jobId={id}

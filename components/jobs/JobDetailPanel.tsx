@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useId, useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import VisaIntelTrigger from "@/components/jobs/VisaIntelTrigger"
 import RecruiterMessageDrawer from "@/components/jobs/RecruiterMessageDrawer"
@@ -15,10 +15,8 @@ import {
   Check,
   CheckCircle2,
   ChevronRight,
-  ClipboardCheck,
   ExternalLink,
   Ghost,
-  Info,
   Loader2,
   MessageSquare,
   Plane,
@@ -54,124 +52,85 @@ type JobDetailPanelProps = {
   applyUrl: string
   sponsorsConfirmed: boolean
   sponsorshipPill: { label: string; className: string }
-  showVisaSignals?: boolean
 }
 
-// ---------------------------------------------------------------------------
-// Primitives
-// ---------------------------------------------------------------------------
-
-function PanelCard({ children, className }: { children: React.ReactNode; className?: string }) {
-  return (
-    <div className={cn("rounded-xl bg-white ring-1 ring-slate-200/80 shadow-[0_1px_3px_rgba(15,23,42,0.05)]", className)}>
-      {children}
-    </div>
-  )
-}
-
-function SectionRow({
-  icon: Icon,
-  label,
-  action,
-  children,
-}: {
-  icon: React.ElementType
-  label: string
-  action?: React.ReactNode
-  children: React.ReactNode
-}) {
-  return (
-    <div className="px-4 pt-3 pb-4">
-      <div className="mb-2.5 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-1.5">
-          <Icon className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden />
-          <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-500">{label}</span>
-        </div>
-        {action}
-      </div>
-      {children}
-    </div>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// Match gauge
-// ---------------------------------------------------------------------------
+// ─── Helpers ────────────────────────────────────────────────────────────────
 
 function clamp(value: number | null | undefined): number {
   if (value == null || !Number.isFinite(value)) return 0
   return Math.max(0, Math.min(100, Math.round(value)))
 }
 
-function MatchGauge({ value }: { value: number | null }) {
-  const gradId = useId().replace(/:/g, "")
-  const size = 140
-  const stroke = 12
+function verdictText(score: number | null) {
+  if (score == null) return { label: "No score yet", color: "text-slate-400" }
+  if (score >= 85) return { label: "Excellent match", color: "text-emerald-600" }
+  if (score >= 70) return { label: "Good match", color: "text-emerald-500" }
+  if (score >= 50) return { label: "Partial match", color: "text-orange-500" }
+  return { label: "Low match", color: "text-slate-400" }
+}
+
+function CircleScore({ value }: { value: number | null }) {
+  const size = 80
+  const stroke = 7
   const r = (size - stroke) / 2
-  const cx = size / 2
-  const cy = size / 2
-  const arcLength = Math.PI * r
+  const circumference = 2 * Math.PI * r
   const pct = value == null ? 0 : clamp(value)
-  const dash = (pct / 100) * arcLength
+  const dash = (pct / 100) * circumference
+  const fillColor = pct >= 70 ? "#10B981" : pct >= 45 ? "#F97316" : "#EF4444"
 
   return (
-    <div className="relative mx-auto" style={{ width: size, height: size / 2 + 6 }}>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden className="absolute inset-x-0 top-0">
-        <defs>
-          <linearGradient id={`dp-grad-${gradId}`} x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor={pct >= 70 ? "#10B981" : pct >= 45 ? "#3B82F6" : "#F97316"} />
-            <stop offset="100%" stopColor={pct >= 70 ? "#34D399" : pct >= 45 ? "#60A5FA" : "#FB923C"} />
-          </linearGradient>
-        </defs>
-        <path
-          d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`}
-          fill="none" stroke="#E2E8F0" strokeWidth={stroke} strokeLinecap="round"
+    <div className="relative shrink-0" style={{ width: size, height: size }}>
+      <svg
+        width={size}
+        height={size}
+        viewBox={`0 0 ${size} ${size}`}
+        className="-rotate-90"
+        aria-hidden
+      >
+        <circle
+          cx={size / 2} cy={size / 2} r={r}
+          fill="none" stroke="#F1F5F9" strokeWidth={stroke}
         />
-        <path
-          d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`}
-          fill="none" stroke={`url(#dp-grad-${gradId})`} strokeWidth={stroke} strokeLinecap="round"
-          strokeDasharray={`${dash} ${arcLength}`}
+        <circle
+          cx={size / 2} cy={size / 2} r={r}
+          fill="none"
+          stroke={value == null ? "#E2E8F0" : fillColor}
+          strokeWidth={stroke}
+          strokeLinecap="round"
+          strokeDasharray={`${dash} ${circumference}`}
           className="transition-[stroke-dasharray] duration-700 ease-out"
         />
       </svg>
-      <div className="pointer-events-none absolute inset-x-0 top-[40%] flex flex-col items-center">
-        <span className="text-[28px] font-bold leading-none tracking-tight tabular-nums text-slate-900">
-          {value == null ? "—" : `${pct}%`}
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className="text-[20px] font-bold leading-none tabular-nums text-slate-900">
+          {value == null ? "–" : `${pct}`}
         </span>
+        {value != null && (
+          <span className="mt-0.5 text-[9px] font-bold uppercase tracking-wide text-slate-400">%</span>
+        )}
       </div>
     </div>
   )
-}
-
-function verdictText(score: number | null) {
-  if (score == null) return { label: "Upload resume to score", color: "text-slate-500" }
-  if (score >= 85) return { label: "Excellent match", color: "text-emerald-700" }
-  if (score >= 70) return { label: "Good match", color: "text-emerald-600" }
-  if (score >= 50) return { label: "Partial match", color: "text-amber-700" }
-  return { label: "Low match", color: "text-slate-500" }
 }
 
 function FactorBar({ label, value }: { label: string; value: number }) {
   const pct = clamp(value)
+  const barColor = pct >= 70 ? "bg-emerald-400" : pct >= 45 ? "bg-orange-400" : "bg-red-400"
   return (
-    <div className="flex items-center gap-2">
-      <span className="w-[80px] shrink-0 text-[11.5px] text-slate-600">{label}</span>
-      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100">
+    <div className="grid grid-cols-[64px_1fr_24px] items-center gap-2">
+      <span className="truncate text-[11.5px] text-slate-500">{label}</span>
+      <div className="h-2 overflow-hidden rounded-full bg-slate-100">
         <div
-          className={cn("h-full rounded-full", pct >= 70 ? "bg-emerald-400" : pct >= 45 ? "bg-blue-400" : "bg-orange-400")}
+          className={cn("h-full rounded-full transition-[width] duration-500", barColor)}
           style={{ width: `${pct}%` }}
         />
       </div>
-      <span className="w-8 shrink-0 text-right text-[11px] font-semibold tabular-nums text-slate-500">
-        {pct}%
-      </span>
+      <span className="text-right text-[11px] font-semibold tabular-nums text-slate-500">{pct}</span>
     </div>
   )
 }
 
-// ---------------------------------------------------------------------------
-// Visa config
-// ---------------------------------------------------------------------------
+// ─── Visa / salary config ───────────────────────────────────────────────────
 
 const VISA_LABEL_CONFIG: Record<
   VisaFitScoreLabel,
@@ -194,9 +153,20 @@ const SALARY_LABEL_CONFIG: Record<
   Unknown:        null,
 }
 
-// ---------------------------------------------------------------------------
-// Main component
-// ---------------------------------------------------------------------------
+// ─── Section header primitive ───────────────────────────────────────────────
+
+function IntelLabel({ children, action }: { children: React.ReactNode; action?: React.ReactNode }) {
+  return (
+    <div className="mb-3 flex items-center justify-between gap-2">
+      <p className="text-[10.5px] font-bold uppercase tracking-[0.1em] text-slate-400">{children}</p>
+      {action}
+    </div>
+  )
+}
+
+const sectionCls = "border-t border-slate-100 px-5 py-5"
+
+// ─── Main component ─────────────────────────────────────────────────────────
 
 export default function JobDetailPanel({
   job,
@@ -205,7 +175,6 @@ export default function JobDetailPanel({
   applyUrl,
   sponsorsConfirmed,
   sponsorshipPill,
-  showVisaSignals = false,
 }: JobDetailPanelProps) {
   const { pushToast } = useToast()
   const { primaryResume } = useResumeContext()
@@ -280,14 +249,11 @@ export default function JobDetailPanel({
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Derived
-  // ---------------------------------------------------------------------------
+  // ─── Derived ──────────────────────────────────────────────────────────────
 
   const overall = analysis?.overall_score ?? fastScore?.overall_score ?? null
   const verdict = verdictText(overall)
 
-  // Only render factor bars that have an actual value
   const allFactors = [
     { label: "Skills",     value: analysis?.skills_score     ?? fastScore?.skills_score     ?? null },
     { label: "Experience", value: analysis?.experience_score ?? fastScore?.seniority_score  ?? null },
@@ -298,7 +264,6 @@ export default function JobDetailPanel({
   ]
   const activeFactors = allFactors.filter((f): f is { label: string; value: number } => f.value != null)
 
-  // Skills: ResumeAnalysis uses matching_skills/missing_skills; JobMatchScore uses score_breakdown
   const matchedSkills = useMemo(() => normalizeSkillList([
     ...(analysis?.matching_skills ?? []),
     ...(fastScore?.score_breakdown?.matchedSkills ?? []),
@@ -309,23 +274,20 @@ export default function JobDetailPanel({
     ...(fastScore?.score_breakdown?.missingSkills ?? []),
   ], 6), [analysis?.missing_skills, fastScore?.score_breakdown?.missingSkills])
 
-  // Visa
   const hasBlocker = intel.visa?.blockers?.some((b) => b.detected) ?? job.requires_authorization
   const visaLabel = !hasBlocker ? (intel.visa?.label ?? null) : "Blocked"
   const visaLabelConfig = visaLabel ? VISA_LABEL_CONFIG[visaLabel] : null
   const VisaIcon = visaLabelConfig?.icon
+  const visaFitScore = intel.visa?.visaFitScore ?? null
+  const visaTopSignal = (intel.visa?.positiveSignals ?? []).find((s) => s.label && s.label.length < 80)
 
-  // Salary — only surface when there's a real comparison
   const salaryIntel = intel.lcaSalary
-  const hasSalaryData =
-    salaryIntel?.comparisonLabel != null &&
-    salaryIntel.comparisonLabel !== "Unknown"
+  const hasSalaryData = salaryIntel?.comparisonLabel != null && salaryIntel.comparisonLabel !== "Unknown"
   const salaryLabelConf = hasSalaryData && salaryIntel?.comparisonLabel
     ? SALARY_LABEL_CONFIG[salaryIntel.comparisonLabel]
     : null
   const SalaryIcon = salaryLabelConf?.icon
 
-  // Ghost risk — only show when we have freshness signal
   const ghostRisk = intel.ghostJobRisk
   const showGhostRisk = ghostRisk?.freshnessDays != null || ghostRisk?.riskLevel !== "unknown"
   const ghostRiskLevel = ghostRisk?.riskLevel
@@ -340,24 +302,24 @@ export default function JobDetailPanel({
     : ghostRiskLevel === "low"    ? "Low risk"
     : "Unknown"
 
-  // Hiring health — only show when status or count is meaningful
   const hiringHealth = intel.companyHiringHealth
   const showHiringHealth =
     (hiringHealth?.status && hiringHealth.status !== "unknown") ||
     (hiringHealth?.activeJobCount != null && hiringHealth.activeJobCount > 0)
 
+  // ─── Render ───────────────────────────────────────────────────────────────
+
   return (
     <>
-    <div className="flex flex-col gap-3">
+      <div className="overflow-hidden rounded-2xl bg-white shadow-[0_1px_4px_rgba(15,23,42,0.06)] ring-1 ring-slate-200/60">
 
-      {/* ── Actions ── */}
-      <PanelCard>
-        <div className="p-4 space-y-2.5">
+        {/* ── Actions ── */}
+        <div className="space-y-2.5 p-5">
           <a
             href={applyUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#2563EB] px-4 py-2.5 text-[13px] font-semibold text-white shadow-[0_4px_14px_rgba(37,99,235,0.25)] transition hover:bg-[#1D4ED8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]/40"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-orange-500 px-4 py-3 text-[13.5px] font-bold text-white shadow-[0_4px_16px_rgba(249,115,22,0.3)] transition hover:bg-orange-400 active:scale-[0.98]"
           >
             Apply Now
             <ExternalLink className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden />
@@ -369,9 +331,9 @@ export default function JobDetailPanel({
               onClick={handleSave}
               disabled={saving}
               className={cn(
-                "inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2.5 text-[12px] font-semibold ring-1 transition",
+                "inline-flex items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-[12.5px] font-semibold ring-1 transition",
                 saved
-                  ? "bg-amber-50 text-amber-800 ring-amber-200"
+                  ? "bg-amber-50 text-amber-700 ring-amber-200"
                   : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-50"
               )}
             >
@@ -387,7 +349,7 @@ export default function JobDetailPanel({
             <button
               type="button"
               onClick={() => setRecruiterOpen(true)}
-              className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2.5 text-[12px] font-medium text-slate-600 transition hover:bg-slate-50"
+              className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2.5 text-[12.5px] font-medium text-slate-600 transition hover:bg-slate-50"
             >
               <MessageSquare className="h-3.5 w-3.5" aria-hidden />
               Message
@@ -396,331 +358,282 @@ export default function JobDetailPanel({
 
           <Link
             href="/dashboard/applications"
-            className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-slate-200 px-4 py-2 text-[12px] font-medium text-slate-500 transition hover:bg-slate-50 hover:text-slate-700"
+            className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-slate-200 px-4 py-2.5 text-[12px] font-medium text-slate-500 transition hover:bg-slate-50 hover:text-slate-700"
           >
             Track in pipeline
             <ArrowRight className="h-3.5 w-3.5" aria-hidden />
           </Link>
 
-          {/* Sponsorship status — only when data exists */}
           {(sponsorsConfirmed || sponsorshipPill.label !== "Sponsorship not specified") && (
             sponsorsConfirmed ? (
-              <div className="flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-2 ring-1 ring-emerald-200/60">
-                <Plane className="h-3.5 w-3.5 shrink-0 text-emerald-700" aria-hidden />
-                <span className="text-[12px] font-semibold text-emerald-800">Historical sponsorship signal</span>
+              <div className="flex items-center gap-1.5 rounded-xl bg-emerald-50 px-3.5 py-2.5 ring-1 ring-emerald-200/60">
+                <Plane className="h-3.5 w-3.5 shrink-0 text-emerald-600" aria-hidden />
+                <span className="text-[12px] font-semibold text-emerald-800">Historical H-1B signal</span>
               </div>
             ) : (
-              <div className={cn("flex items-center gap-1.5 rounded-lg px-3 py-2 ring-1 ring-inset ring-slate-200/60", sponsorshipPill.className)}>
+              <div className={cn("flex items-center gap-1.5 rounded-xl px-3.5 py-2.5 ring-1 ring-inset", sponsorshipPill.className)}>
                 <Plane className="h-3.5 w-3.5 shrink-0" aria-hidden />
                 <span className="text-[12px] font-semibold">{sponsorshipPill.label}</span>
               </div>
             )
           )}
         </div>
-      </PanelCard>
 
-      {/* ── Match Score ── */}
-      <PanelCard>
-        <SectionRow icon={Info} label="Match Score">
+        {/* ── Match Score ── */}
+        <div className={sectionCls}>
           {resumeId === null ? (
-            <div className="pb-1">
-              <p className="text-[12px] text-slate-500">Upload your resume to see how well you match this role.</p>
-              <Link href="/dashboard/resume" className="mt-2 inline-flex items-center gap-1 text-[12px] font-semibold text-[#2563EB] hover:underline">
-                Upload resume <ArrowRight className="h-3 w-3" />
+            <div className="flex flex-col items-center py-2 text-center">
+              <div className="flex h-[80px] w-[80px] items-center justify-center rounded-full bg-slate-50 ring-2 ring-slate-200 ring-dashed">
+                <span className="text-[28px] font-bold text-slate-300">–</span>
+              </div>
+              <p className="mt-3 text-[13.5px] font-semibold text-slate-800">See your match score</p>
+              <p className="mt-1 max-w-[200px] text-[12px] leading-relaxed text-slate-400">
+                Upload a resume to get a personalized fit score for this role.
+              </p>
+              <Link
+                href="/dashboard/resume"
+                className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-orange-500 px-4 py-2 text-[12.5px] font-semibold text-white shadow-sm transition hover:bg-orange-400"
+              >
+                Upload resume
+                <ArrowRight className="h-3.5 w-3.5" aria-hidden />
               </Link>
             </div>
           ) : (
             <div>
-              <MatchGauge value={overall} />
-              <p className={cn("mt-1 text-center text-[12px] font-semibold", verdict.color)}>{verdict.label}</p>
+              {/* Score + verdict row */}
+              <div className="flex items-center gap-4">
+                <CircleScore value={overall} />
+                <div className="min-w-0">
+                  <p className={cn("text-[16px] font-bold leading-tight", verdict.color)}>
+                    {verdict.label}
+                  </p>
+                  {activeFactors.length > 0 && (
+                    <p className="mt-0.5 text-[11.5px] text-slate-400">
+                      {activeFactors.length} factor{activeFactors.length !== 1 ? "s" : ""} analyzed
+                    </p>
+                  )}
+                  <Link
+                    href={`/dashboard/resume/analyze/${job.id}`}
+                    className="mt-1.5 inline-flex items-center gap-0.5 text-[11.5px] font-semibold text-orange-600 hover:underline"
+                  >
+                    Full breakdown <ArrowRight className="h-3 w-3" />
+                  </Link>
+                </div>
+              </div>
 
+              {/* Factor bars */}
               {activeFactors.length > 0 && (
-                <div className="mt-3 space-y-1.5">
+                <div className="mt-4 space-y-2.5">
                   {activeFactors.map((f) => (
                     <FactorBar key={f.label} label={f.label} value={f.value} />
                   ))}
                 </div>
               )}
 
-              {/* Skill match pills from the match score */}
-              {matchedSkills.length > 0 && (
-                <div className="mt-3">
-                  <p className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-400 mb-1.5">Matched skills</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {matchedSkills.map((skill) => (
-                      <span
-                        key={skill}
-                        className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 ring-1 ring-emerald-100"
-                      >
-                        <Check className="h-3 w-3" aria-hidden />
-                        {skill}
-                      </span>
-                    ))}
-                  </div>
+              {/* Skill pills */}
+              {(matchedSkills.length > 0 || missingSkills.length > 0) && (
+                <div className="mt-4 space-y-3 border-t border-slate-100 pt-4">
+                  {matchedSkills.length > 0 && (
+                    <div>
+                      <p className="mb-2 text-[11px] font-semibold text-slate-500">Skills you have</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {matchedSkills.map((skill) => (
+                          <span
+                            key={skill}
+                            className="inline-flex items-center gap-1 rounded-lg bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700 ring-1 ring-emerald-100"
+                          >
+                            <Check className="h-3 w-3 shrink-0" aria-hidden />
+                            {skill}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {missingSkills.length > 0 && (
+                    <div>
+                      <p className="mb-2 text-[11px] font-semibold text-slate-500">Consider adding</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {missingSkills.map((skill) => (
+                          <span
+                            key={skill}
+                            className="inline-flex items-center gap-1 rounded-lg bg-orange-50 px-2.5 py-1 text-[11px] font-medium text-orange-600 ring-1 ring-orange-100"
+                          >
+                            <Plus className="h-3 w-3 shrink-0" aria-hidden />
+                            {skill}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
-
-              {missingSkills.length > 0 && (
-                <div className="mt-2.5">
-                  <p className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-400 mb-1.5">Skills to add</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {missingSkills.map((skill) => (
-                      <span
-                        key={skill}
-                        className="inline-flex items-center gap-1 rounded-full bg-orange-50 px-2 py-0.5 text-[11px] font-medium text-orange-600 ring-1 ring-orange-100"
-                      >
-                        <Plus className="h-3 w-3" aria-hidden />
-                        {skill}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <Link
-                href={`/dashboard/resume/analyze/${job.id}`}
-                className="mt-3 inline-flex items-center gap-1 text-[12px] font-semibold text-[#2563EB] hover:underline"
-              >
-                Full breakdown <ArrowRight className="h-3 w-3" />
-              </Link>
             </div>
           )}
-        </SectionRow>
-      </PanelCard>
+        </div>
 
-      {/* ── Visa Intelligence — moved to middle, shown inline ── */}
-      {(showVisaSignals || hasBlocker) && (() => {
-        const fitScore = intel.visa?.visaFitScore ?? null
-        const barColor =
-          fitScore == null ? "bg-slate-300"
-          : fitScore >= 70  ? "bg-emerald-500"
-          : fitScore >= 45  ? "bg-blue-500"
-          : "bg-amber-500"
-
-        // E-Verify: only show when we have a real positive signal
-        const eVerifyParticipates = intel.visa?.eVerifySignal?.status === "participates"
-        const eVerifyLikely = intel.stemOpt?.eVerifyLikely === true
-        const showEVerify = eVerifyParticipates || eVerifyLikely
-
-        // Cap-exempt: only show when detected
-        const capExempt = intel.visa?.capExempt?.isLikelyCapExempt === true
-
-        // Top positive signals (exclude very generic ones)
-        const positiveSignals = (intel.visa?.positiveSignals ?? [])
-          .filter((s) => s.label && s.label.length < 80)
-          .slice(0, 3)
-
-        return (
-          <PanelCard>
-            <SectionRow
-              icon={Plane}
-              label="Visa Intelligence"
-              action={
-                <VisaIntelTrigger job={job} displayTitle={displayTitle} />
-              }
-            >
+        {/* ── Visa Intelligence — always shown, full detail lives in the drawer ── */}
+        <div className={sectionCls}>
+          <IntelLabel>Visa intelligence</IntelLabel>
+          <VisaIntelTrigger job={job} displayTitle={displayTitle}>
+            <div className="group rounded-xl bg-slate-50 px-4 py-3.5 ring-1 ring-slate-200/60 transition hover:bg-white hover:ring-orange-300/60">
               {hasBlocker ? (
-                <div className="flex items-start gap-2 rounded-lg bg-red-50 px-3 py-2.5 ring-1 ring-red-200">
-                  <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-red-700" aria-hidden />
-                  <div>
-                    <p className="text-[12px] font-semibold text-red-800">Sponsorship blocker detected</p>
-                    <p className="mt-0.5 text-[11px] leading-relaxed text-red-700/80">
-                      Posting language suggests sponsorship may not be available. Verify before applying.
-                    </p>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-start gap-2.5">
+                    <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-red-500" aria-hidden />
+                    <div>
+                      <p className="text-[13px] font-semibold text-red-800">Blocker detected</p>
+                      <p className="mt-0.5 text-[11.5px] text-slate-500">Review posting before applying</p>
+                    </div>
                   </div>
+                  <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-slate-300 transition group-hover:text-orange-400" aria-hidden />
                 </div>
               ) : visaLabelConfig && VisaIcon ? (
-                <div className="space-y-3">
-                  {/* Label badge */}
-                  <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-semibold ring-1", visaLabelConfig.classes)}>
-                    <VisaIcon className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                    {visaLabelConfig.verdict}
-                  </span>
-
-                  {/* Score bar */}
-                  {fitScore != null && (
-                    <div>
-                      <div className="mb-1 flex items-center justify-between">
-                        <span className="text-[11px] text-slate-500">Fit score</span>
-                        <span className="text-[11px] font-semibold tabular-nums text-slate-700">{fitScore}/100 · {intel.visa?.confidence} confidence</span>
-                      </div>
-                      <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
-                        <div
-                          className={cn("h-full rounded-full transition-[width] duration-500", barColor)}
-                          style={{ width: `${fitScore}%` }}
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Positive signals */}
-                  {positiveSignals.length > 0 && (
-                    <div className="space-y-1.5">
-                      {positiveSignals.map((s) => (
-                        <div key={s.label} className="flex items-start gap-1.5">
-                          <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" aria-hidden />
-                          <p className="text-[11.5px] leading-relaxed text-slate-600">{s.label}</p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* E-Verify */}
-                  {showEVerify && (
-                    <div className="rounded-lg bg-sky-50 px-3 py-2 ring-1 ring-sky-200">
-                      <p className="text-[10px] font-semibold uppercase tracking-widest text-sky-500 mb-1">E-Verify</p>
-                      <div className="flex items-center gap-1.5">
-                        <span className="h-2 w-2 rounded-full bg-sky-500" aria-hidden />
-                        <p className="text-[12px] font-semibold text-sky-800">
-                          {eVerifyParticipates ? "Participant confirmed" : "Likely participant"}
-                        </p>
-                      </div>
-                      {intel.visa?.eVerifySignal?.confidence && intel.visa.eVerifySignal.confidence !== "unknown" && (
-                        <p className="mt-0.5 text-[10.5px] text-sky-600">
-                          {intel.visa.eVerifySignal.confidence} confidence · {intel.visa.eVerifySignal.source === "independent_source" ? "independent data" : "inferred"}
-                        </p>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11.5px] font-semibold ring-1", visaLabelConfig.classes)}>
+                        <VisaIcon className="h-3 w-3 shrink-0" aria-hidden />
+                        {visaLabelConfig.verdict}
+                      </span>
+                      {visaFitScore != null && (
+                        <span className="text-[11px] font-semibold tabular-nums text-slate-400">
+                          {visaFitScore}/100
+                        </span>
                       )}
                     </div>
-                  )}
-
-                  {/* Cap-exempt */}
-                  {capExempt && (
-                    <div className="flex items-center gap-1.5 rounded-lg bg-violet-50 px-3 py-2 ring-1 ring-violet-200">
-                      <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-violet-600" aria-hidden />
-                      <p className="text-[12px] font-semibold text-violet-800">Possible cap-exempt pathway</p>
-                    </div>
-                  )}
-
-                  {intel.visa?.summary && (
-                    <p className="text-[11px] leading-relaxed text-slate-500 line-clamp-2">{intel.visa.summary}</p>
-                  )}
+                    {visaTopSignal && (
+                      <p className="mt-2 text-[11.5px] leading-relaxed text-slate-500 line-clamp-2">
+                        {visaTopSignal.label}
+                      </p>
+                    )}
+                    <p className="mt-2 text-[11.5px] font-semibold text-orange-600">Full analysis →</p>
+                  </div>
+                  <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-slate-300 transition group-hover:text-orange-400" aria-hidden />
                 </div>
               ) : (
-                <p className="text-[12px] italic text-slate-400">Visa fit data not yet available for this role.</p>
-              )}
-            </SectionRow>
-          </PanelCard>
-        )
-      })()}
-
-      {/* ── Resume Alignment — only when score is available ── */}
-      {resumeAlignment.alignmentScore != null && (
-        <PanelCard>
-          <SectionRow icon={ClipboardCheck} label="Resume Alignment">
-            <div>
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-[22px] font-bold leading-none text-slate-900">
-                    {resumeAlignment.alignmentScore}%
-                  </p>
-                  <p className="mt-1 text-[11px] text-slate-500">
-                    {resumeAlignment.roleFamily ?? "Role alignment"} · {resumeAlignment.confidence} confidence
-                  </p>
-                </div>
-                <span className={cn(
-                  "rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1",
-                  resumeAlignment.alignmentScore >= 75
-                    ? "bg-emerald-50 text-emerald-800 ring-emerald-200"
-                    : resumeAlignment.alignmentScore >= 50
-                      ? "bg-blue-50 text-blue-800 ring-blue-200"
-                      : "bg-amber-50 text-amber-800 ring-amber-200"
-                )}>
-                  {resumeAlignment.alignmentScore >= 75 ? "Strong fit" : resumeAlignment.alignmentScore >= 50 ? "Can tailor" : "Needs tailoring"}
-                </span>
-              </div>
-
-              {resumeAlignment.strongMatches.length > 0 && (
-                <div className="mt-3">
-                  <p className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">Strong matches</p>
-                  <div className="mt-1.5 flex flex-wrap gap-1.5">
-                    {resumeAlignment.strongMatches.slice(0, 5).map((keyword) => (
-                      <span key={keyword} className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 ring-1 ring-emerald-100">
-                        {keyword}
-                      </span>
-                    ))}
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <p className="text-[13px] font-medium text-slate-700">Visa fit analysis</p>
+                    <p className="mt-0.5 text-[11.5px] text-slate-400">Tap to view full intelligence report</p>
                   </div>
+                  <ChevronRight className="h-4 w-4 shrink-0 text-slate-300 transition group-hover:text-orange-400" aria-hidden />
                 </div>
               )}
-
-              {resumeAlignment.missingKeywords.length > 0 && (
-                <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
-                  Missing: {resumeAlignment.missingKeywords.slice(0, 4).join(", ")}.
-                </p>
-              )}
-
-              <Link
-                href={`/dashboard/resume/studio?mode=tailor&jobId=${job.id}`}
-                className="mt-3 inline-flex items-center gap-1 text-[12px] font-semibold text-[#2563EB] hover:underline"
-              >
-                Tailor resume <ArrowRight className="h-3 w-3" />
-              </Link>
             </div>
-          </SectionRow>
-        </PanelCard>
-      )}
+          </VisaIntelTrigger>
+        </div>
 
-      {/* ── Salary Intelligence — only when real comparison exists ── */}
-      {hasSalaryData && salaryLabelConf && SalaryIcon && (
-        <PanelCard>
-          <SectionRow icon={Banknote} label="Salary Intelligence">
-            <div>
-              <div className="flex items-center gap-1.5">
-                <SalaryIcon className={cn("h-3.5 w-3.5 shrink-0", salaryLabelConf.classes)} aria-hidden />
-                <span className={cn("text-[12px] font-semibold", salaryLabelConf.classes)}>
-                  {salaryIntel?.comparisonLabel}
-                </span>
+        {/* ── Resume Alignment ── */}
+        {resumeAlignment.alignmentScore != null && (
+          <div className={sectionCls}>
+            <IntelLabel>Resume alignment</IntelLabel>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[22px] font-bold leading-none text-slate-900">
+                  {resumeAlignment.alignmentScore}%
+                </p>
+                <p className="mt-1 text-[11px] text-slate-400">
+                  {resumeAlignment.roleFamily ?? "Role alignment"} · {resumeAlignment.confidence} confidence
+                </p>
               </div>
-              {salaryIntel?.historicalRangeMin != null && salaryIntel.historicalRangeMax != null && (
-                <p className="mt-1 text-[11px] text-slate-500">
-                  LCA range: ${(salaryIntel.historicalRangeMin / 1000).toFixed(0)}k–${(salaryIntel.historicalRangeMax / 1000).toFixed(0)}k
-                  {salaryIntel.medianWage != null && ` · median $${(salaryIntel.medianWage / 1000).toFixed(0)}k`}
-                </p>
-              )}
-              {salaryIntel?.commonWageLevel && (
-                <p className="mt-0.5 text-[11px] text-slate-500">Common level: {salaryIntel.commonWageLevel}</p>
-              )}
-              {salaryIntel?.explanation && (
-                <p className="mt-1.5 text-[11px] italic leading-relaxed text-slate-400 line-clamp-2">{salaryIntel.explanation}</p>
-              )}
+              <span className={cn(
+                "rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1",
+                resumeAlignment.alignmentScore >= 75
+                  ? "bg-emerald-50 text-emerald-800 ring-emerald-200"
+                  : resumeAlignment.alignmentScore >= 50
+                    ? "bg-orange-50 text-orange-800 ring-orange-200"
+                    : "bg-amber-50 text-amber-800 ring-amber-200"
+              )}>
+                {resumeAlignment.alignmentScore >= 75 ? "Strong fit" : resumeAlignment.alignmentScore >= 50 ? "Can tailor" : "Needs work"}
+              </span>
             </div>
-          </SectionRow>
-        </PanelCard>
-      )}
 
-      {/* ── Ghost Job Risk — only when freshness data exists ── */}
-      {showGhostRisk && ghostRisk && (
-        <PanelCard>
-          <SectionRow icon={Ghost} label="Hiring freshness">
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <span className={cn("inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ring-1", ghostTone)}>
-                  <Ghost className="h-3 w-3" aria-hidden />
-                  {ghostLabel}
-                  {ghostRisk.score != null && ` · ${ghostRisk.score}/100`}
-                </span>
-                {ghostRisk.freshnessDays != null && (
-                  <span className="text-[11px] text-slate-400">
-                    {ghostRisk.freshnessDays === 0 ? "Posted today" : `${ghostRisk.freshnessDays}d old`}
-                  </span>
-                )}
+            {resumeAlignment.strongMatches.length > 0 && (
+              <div className="mt-3">
+                <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.1em] text-slate-400">Strong matches</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {resumeAlignment.strongMatches.slice(0, 5).map((keyword) => (
+                    <span key={keyword} className="rounded-lg bg-emerald-50 px-2.5 py-0.5 text-[11px] font-medium text-emerald-700 ring-1 ring-emerald-100">
+                      {keyword}
+                    </span>
+                  ))}
+                </div>
               </div>
-              {ghostRisk.recommendedAction && (
-                <p className="mt-2 text-[12px] leading-relaxed text-slate-600">{ghostRisk.recommendedAction}</p>
-              )}
-              {ghostRisk.reasons.length > 0 && (
-                <p className="mt-1.5 text-[11px] leading-relaxed text-slate-400">
-                  {ghostRisk.reasons.slice(0, 2).join(" · ")}
-                </p>
+            )}
+
+            {resumeAlignment.missingKeywords.length > 0 && (
+              <p className="mt-2 text-[11px] leading-relaxed text-slate-400">
+                Missing: {resumeAlignment.missingKeywords.slice(0, 4).join(", ")}.
+              </p>
+            )}
+
+            <Link
+              href={`/dashboard/resume/studio?mode=tailor&jobId=${job.id}`}
+              className="mt-3 inline-flex items-center gap-1 text-[12px] font-semibold text-orange-600 hover:underline"
+            >
+              Tailor resume <ArrowRight className="h-3 w-3" />
+            </Link>
+          </div>
+        )}
+
+        {/* ── Salary Intelligence ── */}
+        {hasSalaryData && salaryLabelConf && SalaryIcon && (
+          <div className={sectionCls}>
+            <IntelLabel>Salary intelligence</IntelLabel>
+            <div className="flex items-center gap-1.5">
+              <SalaryIcon className={cn("h-3.5 w-3.5 shrink-0", salaryLabelConf.classes)} aria-hidden />
+              <span className={cn("text-[12.5px] font-semibold", salaryLabelConf.classes)}>
+                {salaryIntel?.comparisonLabel}
+              </span>
+            </div>
+            {salaryIntel?.historicalRangeMin != null && salaryIntel.historicalRangeMax != null && (
+              <p className="mt-1.5 text-[11px] text-slate-400">
+                LCA range: ${(salaryIntel.historicalRangeMin / 1000).toFixed(0)}k–${(salaryIntel.historicalRangeMax / 1000).toFixed(0)}k
+                {salaryIntel.medianWage != null && ` · median $${(salaryIntel.medianWage / 1000).toFixed(0)}k`}
+              </p>
+            )}
+            {salaryIntel?.commonWageLevel && (
+              <p className="mt-0.5 text-[11px] text-slate-400">Common level: {salaryIntel.commonWageLevel}</p>
+            )}
+            {salaryIntel?.explanation && (
+              <p className="mt-1.5 text-[11px] italic leading-relaxed text-slate-400 line-clamp-2">
+                {salaryIntel.explanation}
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* ── Ghost Job Risk ── */}
+        {showGhostRisk && ghostRisk && (
+          <div className={sectionCls}>
+            <IntelLabel>Hiring freshness</IntelLabel>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className={cn("inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ring-1", ghostTone)}>
+                <Ghost className="h-3 w-3" aria-hidden />
+                {ghostLabel}
+                {ghostRisk.score != null && ` · ${ghostRisk.score}/100`}
+              </span>
+              {ghostRisk.freshnessDays != null && (
+                <span className="text-[11px] text-slate-400">
+                  {ghostRisk.freshnessDays === 0 ? "Posted today" : `${ghostRisk.freshnessDays}d old`}
+                </span>
               )}
             </div>
-          </SectionRow>
-        </PanelCard>
-      )}
+            {ghostRisk.recommendedAction && (
+              <p className="mt-2 text-[12px] leading-relaxed text-slate-600">{ghostRisk.recommendedAction}</p>
+            )}
+            {ghostRisk.reasons.length > 0 && (
+              <p className="mt-1.5 text-[11px] leading-relaxed text-slate-400">
+                {ghostRisk.reasons.slice(0, 2).join(" · ")}
+              </p>
+            )}
+          </div>
+        )}
 
-      {/* ── Company Hiring Health — only when meaningful ── */}
-      {showHiringHealth && (
-        <PanelCard>
-          <SectionRow icon={Building2} label="Company Hiring">
+        {/* ── Company Hiring Health ── */}
+        {showHiringHealth && (
+          <div className={sectionCls}>
+            <IntelLabel>Company hiring</IntelLabel>
             {hiringHealth?.status && hiringHealth.status !== "unknown" ? (
               <div>
                 <span className={cn(
@@ -729,10 +642,11 @@ export default function JobDetailPanel({
                   : hiringHealth.status === "slowing" ? "bg-amber-50 text-amber-800 ring-amber-200"
                   : "bg-slate-50 text-slate-700 ring-slate-200"
                 )}>
+                  <Building2 className="h-3 w-3" aria-hidden />
                   {hiringHealth.status === "growing" ? "Growing" : hiringHealth.status === "slowing" ? "Slowing" : "Steady"}
                 </span>
                 {hiringHealth.activeJobCount != null && (
-                  <p className="mt-1.5 text-[11px] text-slate-500">{hiringHealth.activeJobCount} active openings</p>
+                  <p className="mt-2 text-[11px] text-slate-400">{hiringHealth.activeJobCount} active openings</p>
                 )}
               </div>
             ) : (
@@ -740,47 +654,46 @@ export default function JobDetailPanel({
                 <span className="font-semibold">{hiringHealth?.activeJobCount}</span> active openings
               </p>
             )}
-          </SectionRow>
-        </PanelCard>
-      )}
+          </div>
+        )}
 
-      {/* ── Application Verdict — only when a real recommendation exists ── */}
-      {intel.applicationVerdict && intel.applicationVerdict.recommendation !== "unknown" && (
-        <PanelCard>
-          <SectionRow icon={Briefcase} label="Application Verdict">
+        {/* ── Application Verdict ── */}
+        {intel.applicationVerdict && intel.applicationVerdict.recommendation !== "unknown" && (
+          <div className={sectionCls}>
+            <IntelLabel>Application verdict</IntelLabel>
             <p className={cn(
-              "text-[12px] font-semibold",
-              intel.applicationVerdict.recommendation === "apply_now" ? "text-emerald-700"
-              : intel.applicationVerdict.recommendation === "avoid" || intel.applicationVerdict.recommendation === "skip" ? "text-red-700"
+              "text-[13px] font-bold",
+              intel.applicationVerdict.recommendation === "apply_now"   ? "text-emerald-700"
+              : intel.applicationVerdict.recommendation === "avoid"
+                || intel.applicationVerdict.recommendation === "skip"  ? "text-red-600"
               : "text-slate-700"
             )}>
               {intel.applicationVerdict.verdict !== "Unknown"
                 ? intel.applicationVerdict.verdict
-                : intel.applicationVerdict.recommendation === "apply_now" ? "Apply Today"
-                : intel.applicationVerdict.recommendation === "apply_with_tweaks" ? "Apply, But Customize Resume"
-                : intel.applicationVerdict.recommendation === "avoid" ? "High Risk"
-                : intel.applicationVerdict.recommendation === "skip" ? "Skip"
-                : intel.applicationVerdict.recommendation === "watch" ? "Maybe"
+                : intel.applicationVerdict.recommendation === "apply_now"       ? "Apply Today"
+                : intel.applicationVerdict.recommendation === "apply_with_tweaks" ? "Apply — Customize Resume"
+                : intel.applicationVerdict.recommendation === "avoid"           ? "High Risk"
+                : intel.applicationVerdict.recommendation === "skip"            ? "Skip"
+                : intel.applicationVerdict.recommendation === "watch"           ? "Watch"
                 : "Review carefully"}
             </p>
             {intel.applicationVerdict.recommendedNextAction && (
-              <p className="mt-1 text-[11px] text-slate-500">{intel.applicationVerdict.recommendedNextAction}</p>
+              <p className="mt-1 text-[11.5px] text-slate-500">{intel.applicationVerdict.recommendedNextAction}</p>
             )}
             {intel.applicationVerdict.warnings.length > 0 && (
-              <p className="mt-1 text-[11px] text-amber-700">{intel.applicationVerdict.warnings.slice(0, 1).join(" ")}</p>
+              <p className="mt-1.5 text-[11px] text-amber-600">{intel.applicationVerdict.warnings.slice(0, 1).join(" ")}</p>
             )}
-          </SectionRow>
-        </PanelCard>
-      )}
+          </div>
+        )}
 
-    </div>
+      </div>
 
-    <RecruiterMessageDrawer
-      open={recruiterOpen}
-      onClose={() => setRecruiterOpen(false)}
-      jobTitle={displayTitle}
-      company={job.company?.name ?? ""}
-    />
+      <RecruiterMessageDrawer
+        open={recruiterOpen}
+        onClose={() => setRecruiterOpen(false)}
+        jobTitle={displayTitle}
+        company={job.company?.name ?? ""}
+      />
     </>
   )
 }
