@@ -35,7 +35,7 @@ async function ensureResumeLifecycleColumns() {
        ADD COLUMN IF NOT EXISTS ats_score INTEGER,
        ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ,
        ADD COLUMN IF NOT EXISTS raw_text TEXT,
-       ADD COLUMN IF NOT EXISTS top_skills JSONB,
+       ADD COLUMN IF NOT EXISTS top_skills TEXT[],
        ADD COLUMN IF NOT EXISTS years_of_experience NUMERIC,
        ADD COLUMN IF NOT EXISTS resume_score INTEGER,
        ADD COLUMN IF NOT EXISTS primary_role TEXT,
@@ -268,12 +268,18 @@ export async function PATCH(
   const setSql = entries.map(([key, value]) => {
     sqlParams.push(value)
     const idx = sqlParams.length
-    const jsonbFields = new Set(["work_experience", "education", "skills", "projects", "experience", "certifications", "top_skills", "industries"])
-    const cast = jsonbFields.has(String(key)) ? "::jsonb" : ""
-    if (cast) {
+    const jsonbFields = new Set(["work_experience", "education", "skills", "projects", "experience", "certifications", "industries"])
+    const textArrayFields = new Set(["top_skills"])
+    const fieldKey = String(key)
+    if (jsonbFields.has(fieldKey)) {
       sqlParams[idx - 1] = JSON.stringify(value)
+      return `${fieldKey} = $${idx}::jsonb`
     }
-    return `${String(key)} = $${idx}${cast}`
+    if (textArrayFields.has(fieldKey)) {
+      // top_skills is text[] — send as native array, no JSON serialization
+      return `${fieldKey} = $${idx}::text[]`
+    }
+    return `${fieldKey} = $${idx}`
   })
   sqlParams.push(resume.id, user.id)
 
