@@ -6,18 +6,12 @@ import {
   DragEndEvent,
   DragOverlay,
   DragStartEvent,
-  KeyboardSensor,
   PointerSensor,
   closestCenter,
   useSensor,
   useSensors,
   useDroppable,
 } from "@dnd-kit/core"
-import {
-  SortableContext,
-  sortableKeyboardCoordinates,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable"
 import {
   LayoutGrid,
   List,
@@ -85,11 +79,9 @@ function KanbanColumn({ col, apps, onOpen, isOver }: {
 
       {/* Cards */}
       <div className="flex flex-1 flex-col gap-2 p-2.5">
-        <SortableContext items={apps.map((a) => a.id)} strategy={verticalListSortingStrategy}>
-          {apps.map((app) => (
-            <ApplicationCard key={app.id} application={app} onOpen={() => onOpen(app)} />
-          ))}
-        </SortableContext>
+        {apps.map((app) => (
+          <ApplicationCard key={app.id} application={app} onOpen={() => onOpen(app)} />
+        ))}
         {apps.length === 0 && (
           <div className="flex flex-1 items-center justify-center">
             <p className="text-[11.5px] text-slate-400">Drop here</p>
@@ -193,24 +185,14 @@ export default function ApplicationsPage() {
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   )
-
-  function resolveColumn(id: string): ColumnDef | undefined {
-    const byColId = COLUMNS.find((c) => c.id === id)
-    if (byColId) return byColId
-    const app = applications.find((a) => a.id === id)
-    if (app) return COLUMNS.find((c) => c.statuses.includes(app.status))
-    return undefined
-  }
 
   function handleDragStart(e: DragStartEvent) {
     setActiveId(e.active.id as string)
   }
 
   function handleDragOver(e: any) {
-    const col = e.over?.id ? resolveColumn(e.over.id as string) : undefined
-    setOverColId(col?.id ?? null)
+    setOverColId(e.over?.id ?? null)
   }
 
   function handleDragEnd(e: DragEndEvent) {
@@ -219,7 +201,7 @@ export default function ApplicationsPage() {
     const { active, over } = e
     if (!over) return
 
-    const targetCol = resolveColumn(over.id as string)
+    const targetCol = COLUMNS.find((c) => c.id === over.id)
     if (!targetCol) return
 
     const app = applications.find((a) => a.id === active.id)

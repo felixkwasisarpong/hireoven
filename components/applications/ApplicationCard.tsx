@@ -1,7 +1,6 @@
 "use client"
 
-import { useSortable } from "@dnd-kit/sortable"
-import { CSS } from "@dnd-kit/utilities"
+import { useDraggable } from "@dnd-kit/core"
 import { Sparkles } from "lucide-react"
 import CompanyLogo from "@/components/ui/CompanyLogo"
 import { cn } from "@/lib/utils"
@@ -19,19 +18,14 @@ type Props = {
 }
 
 export function ApplicationCard({ application, onOpen }: Props) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: application.id })
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: application.id,
+  })
 
   return (
     <div
       ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.3 : 1 }}
+      style={transform ? { transform: `translate3d(${transform.x}px,${transform.y}px,0)` } : undefined}
       {...attributes}
       {...listeners}
       onClick={onOpen}
@@ -39,7 +33,7 @@ export function ApplicationCard({ application, onOpen }: Props) {
         "group relative select-none rounded-[14px] border border-slate-200/80 bg-white p-3.5",
         "shadow-[0_1px_0_rgba(15,23,42,0.04),0_4px_12px_rgba(15,23,42,0.04)]",
         "transition-shadow hover:shadow-[0_8px_24px_rgba(15,23,42,0.09)] hover:border-slate-300",
-        isDragging ? "cursor-grabbing ring-2 ring-orange-400/30 shadow-2xl" : "cursor-grab"
+        isDragging ? "cursor-grabbing opacity-40" : "cursor-grab"
       )}
     >
       <div className="flex items-start gap-2.5">
