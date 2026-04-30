@@ -217,6 +217,7 @@ export type BackgroundMessageType =
   | "GET_SCOUT_OVERLAY"
   | "LIST_RESUMES"
   | "GET_WORKFLOW_STATE"
+  | "GET_ACTIVE_CONTEXT"
 
 export interface ExtensionResumeSummary {
   id: string
@@ -325,6 +326,7 @@ export type BackgroundMessage =
   | GetScoutOverlayMessage
   | ListResumesMessage
   | GetWorkflowStateMessage
+  | GetActiveContextMessage
 
 export interface ExtensionSessionUser {
   id: string
@@ -449,7 +451,50 @@ export type BackgroundResponse =
   | ScoutOverlayResult
   | ListResumesResult
   | WorkflowStateResult
+  | ActiveContextResult
   | BackgroundError
+
+// ── Active browser context ────────────────────────────────────────────────────
+//
+// Built from live page detection in the background service worker and pushed
+// to hireoven.com tabs so Scout can adapt its UI to the user's active tab.
+
+export type ActiveBrowserPageType =
+  | "search_results"
+  | "job_detail"
+  | "application_form"
+  | "company_page"
+  | "unknown"
+
+export interface ActiveBrowserContext {
+  pageType: ActiveBrowserPageType
+  atsProvider?: ATSProvider
+  url: string
+  title?: string
+  company?: string
+  location?: string
+  detectedJobId?: string
+  autofillAvailable?: boolean
+  detectedFieldsCount?: number
+  timestamp: number
+}
+
+/** Background → hireoven content script: push updated context */
+export interface BroadcastContextMessage {
+  type: "BROADCAST_CONTEXT"
+  context: ActiveBrowserContext | null
+}
+
+/** Popup / hireoven page bridge → background: request stored context */
+export interface GetActiveContextMessage {
+  type: "GET_ACTIVE_CONTEXT"
+}
+
+/** Background → requester: current stored active browser context */
+export interface ActiveContextResult {
+  type: "ACTIVE_CONTEXT_RESULT"
+  context: ActiveBrowserContext | null
+}
 
 // ── Workflow extension state ──────────────────────────────────────────────────
 //

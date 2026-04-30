@@ -16,6 +16,8 @@ import { ScoutCommandPalette } from "./ScoutCommandPalette"
 import { normalizeScoutResponse } from "@/lib/scout/normalize"
 import { useWorkflowEngine } from "@/lib/scout/workflows/engine"
 import { WorkflowPanel } from "@/components/scout/workflows/WorkflowPanel"
+import { useActiveBrowserContext } from "@/lib/scout/browser-context"
+import { getContextualChips, getContextualPlaceholder } from "@/lib/scout/context-chips"
 import { getScoutSuggestionChips } from "@/lib/scout/mode"
 import { getScoutNudges } from "@/lib/scout/nudges"
 import { detectScoutMode } from "@/lib/scout/mode"
@@ -108,6 +110,9 @@ export function ScoutWorkspaceShell() {
   // ── Workflow engine ─────────────────────────────────────────────────────────
   const workflowEngine = useWorkflowEngine()
 
+  // ── Active browser context (from extension) ─────────────────────────────────
+  const { context: browserContext } = useActiveBrowserContext()
+
   // ── Chat state ──────────────────────────────────────────────────────────────
   const [messages,  setMessages]  = useState<ChatMessage[]>([])
   const [query,     setQuery]     = useState("")
@@ -158,6 +163,28 @@ export function ScoutWorkspaceShell() {
   const firstName = fullName?.split(" ")[0] ?? "there"
   const hour      = new Date().getHours()
   const greeting  = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening"
+
+  // ── Adaptive chips — extension context overrides defaults when idle ──────────
+  const displayChips = useMemo(() => {
+    if (workspaceMode === "idle" && !hasSession && browserContext) {
+      const ctxChips = getContextualChips(browserContext)
+      if (ctxChips) return ctxChips
+    }
+    return chips
+  }, [workspaceMode, hasSession, browserContext, chips])
+
+  // ── Adaptive command bar placeholder ────────────────────────────────────────
+  const commandBarPlaceholder = useMemo(() => {
+    if (workspaceMode !== "idle") {
+      if (workspaceMode === "search")  return "Refine this search…"
+      if (workspaceMode === "compare") return "Ask about this comparison…"
+      return "Follow up with Scout…"
+    }
+    return getContextualPlaceholder(
+      browserContext,
+      "Ask Scout anything…  (/ or ⌘K for commands)",
+    )
+  }, [workspaceMode, browserContext])
 
   // ── Session restore ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -397,15 +424,10 @@ export function ScoutWorkspaceShell() {
 
         <ScoutCommandBar
           query={query} onChange={setQuery} onSubmit={handleSubmit}
-          isLoading={isLoading} chips={chips} onChipClick={handleChipClick}
+          isLoading={isLoading} chips={displayChips} onChipClick={handleChipClick}
           inputRef={inputRef} variant="dark" commandHistory={recentCommands}
           onOpenPalette={() => setPaletteOpen(true)}
-          placeholder={
-            workspaceMode === "idle"         ? "Ask Scout anything…  (/ or ⌘K for commands)" :
-            workspaceMode === "search"       ? "Refine this search…" :
-            workspaceMode === "compare"      ? "Ask about this comparison…" :
-                                               "Follow up with Scout…"
-          }
+          placeholder={commandBarPlaceholder}
         />
         <div className="h-5" />
       </div>

@@ -11,6 +11,8 @@
  */
 
 import type {
+  ActiveBrowserContext,
+  ActiveContextResult,
   BackgroundMessage,
   BackgroundResponse,
   ContentMessage,
@@ -36,6 +38,7 @@ import type {
   ExtensionJobResolveResponse,
   ListResumesResult,
   ExtensionResumeSummary,
+  WorkflowStateResult,
 } from "./types"
 
 // ── Config ─────────────────────────────────────────────────────────────────────
@@ -46,6 +49,106 @@ const APP_ORIGINS = [
 ] as const
 
 const SESSION_COOKIE_NAME = "ho_session"
+
+// ── Active browser context ─────────────────────────────────────────────────────
+// Lightweight tab context built from page detection and pushed to hireoven.com
+// tabs so Scout can adapt its UI to the user's current browsing state.
+
+let activeContextCache: ActiveBrowserContext | null = null
+let contextRefreshTimer: ReturnType<typeof setTimeout> | null = null
+
+/** Map a detected page type to the ActiveBrowserContext page type. */
+function mapPageType(
+  pageType: string,
+  ats: string,
+  url: string,
+): ActiveBrowserContext["pageType"] {
+  if (pageType === "application_form") return "application_form"
+  if (pageType === "job_listing") return "job_detail"
+  // Search-result heuristic based on URL patterns
+  if (
+    /linkedin\.com\/jobs\/search/i.test(url) ||
+    /glassdoor\.com\/job\//i.test(url) ||
+    /indeed\.com\/(jobs|rc\/clk)/i.test(url)
+  ) {
+    return "search_results"
+  }
+  // ATS job boards are always job_detail or application_form
+  if (["greenhouse", "lever", "ashby", "workday", "icims", "smartrecruiters", "bamboohr"].includes(ats)) {
+    return "job_detail"
+  }
+  return "unknown"
+}
+
+async function buildContextFromTab(tabId: number, tabUrl: string): Promise<ActiveBrowserContext | null> {
+  if (!/^https?:/.test(tabUrl)) return null
+  // Skip hireoven itself — that's the Scout dashboard, not an external job page
+  if (/hireoven\.com|localhost:3000/.test(tabUrl)) return null
+
+  try {
+    const pageResp = await queryContentScript(tabId, { type: "DETECT_PAGE" })
+    if (!pageResp || pageResp.type !== "PAGE_DETECTED") return null
+
+    const page = pageResp.page
+    const pageType = mapPageType(page.pageType, page.ats, page.url)
+
+    let company: string | undefined
+    let title: string | undefined
+
+    if (pageType === "job_detail" || pageType === "application_form") {
+      const jobResp = await queryContentScript(tabId, { type: "EXTRACT_JOB" })
+      if (jobResp?.type === "JOB_EXTRACTED" && jobResp.job) {
+        company = jobResp.job.company ?? undefined
+        title = jobResp.job.title ?? undefined
+      }
+    }
+
+    return {
+      pageType,
+      atsProvider: page.ats !== "generic" ? (page.ats as ActiveBrowserContext["atsProvider"]) : undefined,
+      url: page.url,
+      title: title || page.title || undefined,
+      company,
+      autofillAvailable: pageType === "application_form",
+      timestamp: Date.now(),
+    }
+  } catch {
+    return null
+  }
+}
+
+async function pushContextToHireovenTabs(context: ActiveBrowserContext | null): Promise<void> {
+  const origin = await resolveOrigin()
+  const patterns =
+    origin === APP_ORIGINS[1]
+      ? ["https://hireoven.com/*", "https://www.hireoven.com/*"]
+      : ["http://localhost:3000/*"]
+
+  for (const pattern of patterns) {
+    try {
+      const tabs = await chrome.tabs.query({ url: pattern })
+      for (const tab of tabs) {
+        if (!tab.id) continue
+        chrome.tabs.sendMessage(tab.id, { type: "BROADCAST_CONTEXT", context }).catch(() => {})
+      }
+    } catch {
+      // no matching tabs or query error — skip silently
+    }
+  }
+}
+
+function scheduleContextRefresh(tabId: number, tabUrl: string, delayMs = 700): void {
+  if (contextRefreshTimer) clearTimeout(contextRefreshTimer)
+  contextRefreshTimer = setTimeout(() => {
+    contextRefreshTimer = null
+    buildContextFromTab(tabId, tabUrl)
+      .then((context) => {
+        activeContextCache = context
+        void pushContextToHireovenTabs(context)
+      })
+      .catch(() => {})
+  }, delayMs)
+}
 
 // ── Session-scoped tailor state ────────────────────────────────────────────────
 // Cleared when background SW restarts; stored in chrome.storage.local for cross-popup persistence.
@@ -229,6 +332,12 @@ async function handleMessage(
 
     case "LIST_RESUMES":
       return handleListResumes()
+
+    case "GET_ACTIVE_CONTEXT":
+      return handleGetActiveContext()
+
+    case "GET_WORKFLOW_STATE":
+      return { type: "WORKFLOW_STATE_RESULT", state: null } as WorkflowStateResult
 
     default:
       return {
@@ -602,6 +711,26 @@ async function handleListResumes(): Promise<ListResumesResult> {
 
   return { type: "LIST_RESUMES_RESULT", resumes }
 }
+
+function handleGetActiveContext(): ActiveContextResult {
+  return { type: "ACTIVE_CONTEXT_RESULT", context: activeContextCache }
+}
+
+// ── Tab monitoring ─────────────────────────────────────────────────────────────
+// Track the active tab to keep activeContextCache fresh.
+// Debounced so rapid navigations (SPA route changes) don't flood the content script.
+
+chrome.tabs.onActivated.addListener((info) => {
+  chrome.tabs.get(info.tabId, (tab) => {
+    if (chrome.runtime.lastError || !tab.url) return
+    scheduleContextRefresh(info.tabId, tab.url, 900)
+  })
+})
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (changeInfo.status !== "complete" || !tab.active || !tab.url) return
+  scheduleContextRefresh(tabId, tab.url, 400)
+})
 
 // ── Extension install / update lifecycle ──────────────────────────────────────
 

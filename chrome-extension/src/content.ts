@@ -253,12 +253,76 @@ async function mountOverlayWhenReady(): Promise<void> {
   await runtime.mount()
 }
 
+// ── Hireoven dashboard ↔ extension bridge ─────────────────────────────────────
+//
+// This bridge runs ONLY on hireoven.com / localhost:3000 (the app itself).
+// It relays lightweight context between the Scout dashboard page and the
+// background service worker using window.postMessage as the page-facing
+// protocol and chrome.runtime.sendMessage as the extension-facing protocol.
+//
+// Protocol (page → extension):
+//   window.postMessage({ source: "hireoven-scout", type: "GET_ACTIVE_CONTEXT" })
+//
+// Protocol (extension → page):
+//   window.postMessage({ source: "hireoven-ext", type: "ACTIVE_CONTEXT_RESULT" | "ACTIVE_CONTEXT_PUSH", context })
+
+const SCOUT_SOURCE = "hireoven-scout"
+const EXT_SOURCE = "hireoven-ext"
+
+function isHireovenPage(): boolean {
+  const host = window.location.hostname.toLowerCase().replace(/^www\./, "")
+  return host === "hireoven.com" || host === "localhost"
+}
+
+function registerPageBridge(): void {
+  if (!isHireovenPage()) return
+
+  // Page → extension: Scout dashboard requests current context
+  window.addEventListener("message", (event) => {
+    if (event.source !== window) return
+    if (typeof event.data !== "object" || event.data === null) return
+    const msg = event.data as Record<string, unknown>
+    if (msg.source !== SCOUT_SOURCE) return
+
+    if (msg.type === "GET_ACTIVE_CONTEXT") {
+      chrome.runtime.sendMessage({ type: "GET_ACTIVE_CONTEXT" }, (response) => {
+        if (chrome.runtime.lastError) return
+        const ctx = (response as { context?: unknown })?.context ?? null
+        window.postMessage(
+          { source: EXT_SOURCE, type: "ACTIVE_CONTEXT_RESULT", context: ctx },
+          window.location.origin,
+        )
+      })
+    }
+  })
+
+  // Extension → page: background pushes context on tab/URL changes.
+  // Note: the existing registerMessageBridge() listener will catch BROADCAST_CONTEXT
+  // in its default case and send an ERROR response (harmless for push-only operations).
+  // This separate listener posts the context to the page window.
+  chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {
+    if (typeof message !== "object" || message === null) return false
+    const msg = message as Record<string, unknown>
+    if (msg.type !== "BROADCAST_CONTEXT") return false
+
+    window.postMessage(
+      { source: EXT_SOURCE, type: "ACTIVE_CONTEXT_PUSH", context: msg.context ?? null },
+      window.location.origin,
+    )
+    sendResponse({ ok: true })
+    return true
+  })
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 function bootstrap(): void {
   const w = window as HireovenContentWindow
   if (w.__hoContentBootstrapped) return
   w.__hoContentBootstrapped = true
 
   registerMessageBridge()
+  registerPageBridge()
   void mountOverlayWhenReady()
 }
 
