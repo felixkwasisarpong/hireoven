@@ -14,6 +14,8 @@ import { ApplicationMode } from "./ApplicationMode"
 import { ContextRail } from "./ContextRail"
 import { ScoutCommandPalette } from "./ScoutCommandPalette"
 import { normalizeScoutResponse } from "@/lib/scout/normalize"
+import { useWorkflowEngine } from "@/lib/scout/workflows/engine"
+import { WorkflowPanel } from "@/components/scout/workflows/WorkflowPanel"
 import { getScoutSuggestionChips } from "@/lib/scout/mode"
 import { getScoutNudges } from "@/lib/scout/nudges"
 import { detectScoutMode } from "@/lib/scout/mode"
@@ -102,6 +104,9 @@ export function ScoutWorkspaceShell() {
   const chatEndRef = useRef<HTMLDivElement>(null)
   const inputRef   = useRef<HTMLInputElement>(null)
   const prevResumeIdRef = useRef<string | null | undefined>(undefined)
+
+  // ── Workflow engine ─────────────────────────────────────────────────────────
+  const workflowEngine = useWorkflowEngine()
 
   // ── Chat state ──────────────────────────────────────────────────────────────
   const [messages,  setMessages]  = useState<ChatMessage[]>([])
@@ -291,6 +296,14 @@ export function ScoutWorkspaceShell() {
 
         // Active entities — carry through transitions
         setActiveEntities((prev) => extractEntities(normalized, prev))
+
+        // Workflow — start panel if Scout returns a workflow_directive
+        if (normalized.workflow_directive) {
+          workflowEngine.startWorkflow(
+            normalized.workflow_directive.workflowType,
+            normalized.workflow_directive.payload
+          )
+        }
 
         // Rail
         let newRail: WorkspaceRail | null = null
@@ -502,6 +515,18 @@ export function ScoutWorkspaceShell() {
             setTimeout(() => inputRef.current?.focus(), 50)
           }
         }}
+      />
+
+      {/* ── Workflow panel — floats bottom-right, non-intrusive ──────── */}
+      <WorkflowPanel
+        activeWorkflow={workflowEngine.activeWorkflow}
+        continueStep={workflowEngine.continueStep}
+        skipStep={workflowEngine.skipStep}
+        pauseWorkflow={workflowEngine.pauseWorkflow}
+        resumeWorkflow={workflowEngine.resumeWorkflow}
+        cancelWorkflow={workflowEngine.cancelWorkflow}
+        isExpanded={workflowEngine.isExpanded}
+        setExpanded={workflowEngine.setExpanded}
       />
     </main>
   )

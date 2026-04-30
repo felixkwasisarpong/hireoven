@@ -216,6 +216,7 @@ export type BackgroundMessageType =
   | "FILL_COVER_LETTER"
   | "GET_SCOUT_OVERLAY"
   | "LIST_RESUMES"
+  | "GET_WORKFLOW_STATE"
 
 export interface ExtensionResumeSummary {
   id: string
@@ -323,6 +324,7 @@ export type BackgroundMessage =
   | FillCoverLetterMessage
   | GetScoutOverlayMessage
   | ListResumesMessage
+  | GetWorkflowStateMessage
 
 export interface ExtensionSessionUser {
   id: string
@@ -446,7 +448,38 @@ export type BackgroundResponse =
   | FillCoverLetterResult
   | ScoutOverlayResult
   | ListResumesResult
+  | WorkflowStateResult
   | BackgroundError
+
+// ── Workflow extension state ──────────────────────────────────────────────────
+//
+// The extension content script can POST this state to the Scout dashboard
+// via window.postMessage when it detects a relevant page change.
+// The dashboard listens for "hireoven:extension-page-state" messages and
+// can update the active workflow step status accordingly.
+
+export interface WorkflowExtensionPageState {
+  pageMode: ExtensionPageMode
+  autofillReady: boolean
+  fieldsDetected: boolean
+  ats: ATSProvider
+  jobContext?: {
+    jobId?: string
+    title?: string | null
+    company?: string | null
+    url: string
+  }
+  timestamp: number
+}
+
+export interface GetWorkflowStateMessage {
+  type: "GET_WORKFLOW_STATE"
+}
+
+export interface WorkflowStateResult {
+  type: "WORKFLOW_STATE_RESULT"
+  state: WorkflowExtensionPageState | null
+}
 
 // ── API shapes (matching web app routes) ─────────────────────────────────────
 

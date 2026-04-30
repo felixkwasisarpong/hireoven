@@ -32,6 +32,7 @@ import {
   type ScoutMode,
   type ScoutResponse,
   type ScoutWorkflow,
+  type ScoutWorkflowDirective,
 } from "@/lib/scout/types"
 
 export const runtime = "nodejs"
@@ -215,6 +216,22 @@ function buildInterviewPrepPreview(input: {
     },
   }
 }
+// ── Workflow directive inference ──────────────────────────────────────────────
+
+const TAILOR_INTENT_RE = /\b(tailor|cover.?letter|autofill|prepare.?application|prepare.?my.?resume|full.?application|apply.?to.?this)\b/i
+const COMPARE_INTENT_RE = /\b(compare|prioritize|rank.*(jobs|saved|my)|which.*apply.*first|shortlist)\b/i
+const INTERVIEW_INTENT_RE = /\b(interview.?prep|prepare.*(for.*(this|the)|interview)|mock.?interview|practice.?questions)\b/i
+
+function inferWorkflowDirective(message: string, intent: ScoutIntent): ScoutWorkflowDirective | undefined {
+  if (intent !== "workflow") return undefined
+  if (TAILOR_INTENT_RE.test(message)) return { workflowType: "tailor_and_prepare" }
+  if (COMPARE_INTENT_RE.test(message)) return { workflowType: "compare_and_prioritize" }
+  if (INTERVIEW_INTENT_RE.test(message)) return { workflowType: "interview_prep" }
+  return undefined
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 const DESTRUCTIVE_COMMAND_RE =
   /\b(delete|remove|erase|clear|wipe)\b[\s\S]{0,40}\b(saved jobs|watchlist|applications|profile|resume|data|everything|all)\b/i
 const MAX_EXPLANATION_BLOCKS = 4
@@ -998,6 +1015,18 @@ User Input: ${userMessage}`
 
     if (safetyNotes.length > 0) {
       scoutResponse.answer = `${scoutResponse.answer}\n\nNote: ${safetyNotes.join(" ")}`
+    }
+
+    // Inject workflow_directive when the intent is workflow and keywords match a known type.
+    // This is server-side inference — Claude does not emit this field directly.
+    const workflowDirective = inferWorkflowDirective(userMessage, inferredIntent)
+    if (workflowDirective) {
+      // Pass context so the frontend can seed the workflow with relevant IDs
+      const ctxPayload: Record<string, unknown> = {}
+      if (body.jobId) ctxPayload.jobId = body.jobId
+      if (body.resumeId) ctxPayload.resumeId = body.resumeId
+      if (Object.keys(ctxPayload).length > 0) workflowDirective.payload = ctxPayload
+      scoutResponse.workflow_directive = workflowDirective
     }
 
     return NextResponse.json(scoutResponse)

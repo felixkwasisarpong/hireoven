@@ -15,6 +15,7 @@ import {
   type ScoutInterviewPrep,
   type ScoutResponse,
   type ScoutWorkflow,
+  type ScoutWorkflowDirective,
   type ScoutWorkspaceDirective,
   type ScoutWorkspaceMode,
 } from "@/lib/scout/types"
@@ -203,6 +204,7 @@ export function normalizeScoutResponse(raw: unknown): ScoutResponse {
       : undefined
 
   const workspace_directive = normalizeWorkspaceDirective(record.workspace_directive)
+  const workflow_directive = normalizeWorkflowDirective(record.workflow_directive)
 
   return {
     answer,
@@ -217,5 +219,19 @@ export function normalizeScoutResponse(raw: unknown): ScoutResponse {
     compare,
     interviewPrep,
     workspace_directive,
+    workflow_directive,
+  }
+}
+
+function normalizeWorkflowDirective(raw: unknown): ScoutWorkflowDirective | undefined {
+  if (typeof raw !== "object" || raw === null) return undefined
+  const r = raw as Record<string, unknown>
+  if (typeof r.workflowType !== "string" || !r.workflowType.trim()) return undefined
+  return {
+    workflowType: r.workflowType.trim(),
+    workflowId: typeof r.workflowId === "string" ? r.workflowId : undefined,
+    payload: typeof r.payload === "object" && r.payload !== null
+      ? (r.payload as Record<string, unknown>)
+      : undefined,
   }
 }

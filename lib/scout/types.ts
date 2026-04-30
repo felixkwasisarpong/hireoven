@@ -286,6 +286,22 @@ export type ScoutMockInterviewTurn = {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ── Workflow Directive ─────────────────────────────────────────────────────────
+
+/**
+ * When present in a ScoutResponse, the frontend should mount the workflow panel
+ * and start tracking the named workflow type.
+ * The backend infers this from intent + message keywords — Claude does not emit it directly.
+ */
+export type ScoutWorkflowDirective = {
+  /** One of the known workflow types: tailor_and_prepare | compare_and_prioritize | interview_prep */
+  workflowType: string
+  /** Optional: a pre-assigned workflow ID for deduplication */
+  workflowId?: string
+  /** Context passed from the response (job ID, resume ID, etc.) */
+  payload?: Record<string, unknown>
+}
+
 // ── Workspace Directive ────────────────────────────────────────────────────────
 
 export type ScoutWorkspaceMode = "idle" | "search" | "compare" | "tailor" | "applications"
@@ -335,6 +351,11 @@ export type ScoutResponse = {
    * remains as a fallback when this field is absent.
    */
   workspace_directive?: ScoutWorkspaceDirective
+  /**
+   * When present, the frontend mounts the workflow panel and starts tracking
+   * the named multi-step workflow. Only emitted when intent === "workflow".
+   */
+  workflow_directive?: ScoutWorkflowDirective
 }
 
 /** AI-generated weekly strategy plan returned from Strategy Mode. */
