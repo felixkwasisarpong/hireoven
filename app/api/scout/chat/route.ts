@@ -1049,6 +1049,30 @@ User Input: ${userMessage}`
             if (tjId) scoutResponse.workspace_directive = { mode: "tailor", payload: { jobId: tjId, resumeId: body.resumeId ?? context.resume?.id, title: resolvedJob?.title ?? context.job?.title, company: resolvedJob?.company ?? context.job?.company_name, detailUrl: resolvedJob?.detailUrl ?? `/dashboard/jobs/${tjId}`, source: resolvedJob?.source ?? "explicit" } }
           }
 
+          // Compare guard (streaming path) — mirrors the non-streaming guard below
+          if (isCompareIntent && context.compareJobs && context.compareJobs.length >= 2) {
+            if (!scoutResponse.workspace_directive) scoutResponse.workspace_directive = { mode: "compare" }
+            if (!scoutResponse.compare) {
+              scoutResponse.compare = {
+                summary: scoutResponse.answer?.trim()
+                  ? scoutResponse.answer.split(/[.!?]/)[0]?.trim() + "."
+                  : `Comparing your ${context.compareJobs.length} saved jobs.`,
+                items: context.compareJobs.map((cj) => ({
+                  jobId:             cj.id,
+                  title:             cj.title,
+                  company:           cj.company_name,
+                  companyId:         cj.company_id ?? null,
+                  matchScore:        cj.match_score ?? null,
+                  sponsorshipSignal: cj.sponsors_h1b === true ? "Sponsors H-1B" : cj.sponsors_h1b === false ? "Does not sponsor" : null,
+                  salaryRange:       cj.salary_min && cj.salary_max ? `$${Math.round(cj.salary_min / 1000)}k–$${Math.round(cj.salary_max / 1000)}k` : null,
+                  location:          cj.is_remote ? "Remote" : (cj.location ?? null),
+                  recommendation:    ((cj.match_score ?? 0) >= 50 ? "Good" : "Skip") as "Best" | "Good" | "Risky" | "Skip",
+                })),
+              }
+              for (const cj of context.compareJobs) { if (cj.company_id) knownIds.companyIds.add(cj.company_id) }
+            }
+          }
+
           // Emit workspace/workflow directives early so client can morph immediately
           if (scoutResponse.workspace_directive) emit({ type: "workspace_directive", payload: scoutResponse.workspace_directive })
           if (scoutResponse.workflow_directive)  emit({ type: "workflow_directive",  payload: scoutResponse.workflow_directive  })
