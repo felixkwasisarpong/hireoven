@@ -222,6 +222,29 @@ const TAILOR_INTENT_RE = /\b(tailor|cover.?letter|autofill|prepare.?application|
 const COMPARE_INTENT_RE = /\b(compare|prioritize|rank.*(jobs|saved|my)|which.*apply.*first|shortlist)\b/i
 const INTERVIEW_INTENT_RE = /\b(interview.?prep|prepare.*(for.*(this|the)|interview)|mock.?interview|practice.?questions)\b/i
 
+// Bulk application prep: "Prepare 5 applications for...", "Queue visa-friendly roles over 80 match", "Prepare applications for remote backend jobs"
+const BULK_PREP_RE = /\b(prepare|queue|batch|bulk)\b.{0,80}\b(application[s]?|apply|applying)\b/i
+
+function inferBulkWorkspaceDirective(message: string): import("@/lib/scout/types").ScoutWorkspaceDirective | undefined {
+  if (!BULK_PREP_RE.test(message)) return undefined
+  const countMatch = message.match(/\b(\d+)\b/)
+  const count = countMatch ? parseInt(countMatch[1], 10) : 10
+  const requireSponsorshipSignal = /\b(visa|h-?1b|sponsor)/i.test(message)
+  const workMode = /\bremote\b/i.test(message) ? "remote" : undefined
+  const scoreMatch = message.match(/\bover\s+(\d+)\b|\b(\d+)\s*(?:match|%)\b/i)
+  const minMatchScore = scoreMatch ? parseInt(scoreMatch[1] ?? scoreMatch[2], 10) : undefined
+
+  return {
+    mode: "bulk_application",
+    payload: { count, requireSponsorshipSignal, workMode, minMatchScore },
+    chips: [
+      "What's my queue status?",
+      "Skip jobs with no sponsorship",
+      "How do I improve my match scores?",
+    ],
+  }
+}
+
 function inferWorkflowDirective(message: string, intent: ScoutIntent): ScoutWorkflowDirective | undefined {
   if (intent !== "workflow") return undefined
   if (TAILOR_INTENT_RE.test(message)) return { workflowType: "tailor_and_prepare" }
@@ -1057,6 +1080,15 @@ User Input: ${userMessage}`
       if (body.resumeId) ctxPayload.resumeId = body.resumeId
       if (Object.keys(ctxPayload).length > 0) workflowDirective.payload = ctxPayload
       scoutResponse.workflow_directive = workflowDirective
+    }
+
+    // Inject bulk workspace directive when the message matches bulk preparation intent.
+    // Overrides workspace_directive only if none was already set by Claude.
+    if (!scoutResponse.workspace_directive) {
+      const bulkDirective = inferBulkWorkspaceDirective(userMessage)
+      if (bulkDirective) {
+        scoutResponse.workspace_directive = bulkDirective
+      }
     }
 
     return NextResponse.json(scoutResponse)

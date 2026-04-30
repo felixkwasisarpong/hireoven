@@ -11,10 +11,12 @@ import { SearchMode } from "./SearchMode"
 import { CompareMode } from "./CompareMode"
 import { TailorMode } from "./TailorMode"
 import { ApplicationMode } from "./ApplicationMode"
+import { BulkApplicationMode } from "./BulkApplicationMode"
 import { ContextRail } from "./ContextRail"
 import { ScoutCommandPalette } from "./ScoutCommandPalette"
 import { normalizeScoutResponse } from "@/lib/scout/normalize"
 import { useWorkflowEngine } from "@/lib/scout/workflows/engine"
+import { useBulkApplicationEngine } from "@/lib/scout/bulk-application/engine"
 import { WorkflowPanel } from "@/components/scout/workflows/WorkflowPanel"
 import { useActiveBrowserContext } from "@/lib/scout/browser-context"
 import { getContextualChips, getContextualPlaceholder } from "@/lib/scout/context-chips"
@@ -101,11 +103,12 @@ function buildNarrative(mode: WorkspaceMode, response: ScoutResponse): string {
   if (!answer || /^\s*[{[]/.test(answer)) {
     // JSON blob leaked — synthesise a generic strip
     const labels: Record<WorkspaceMode, string> = {
-      search:       "Scout prepared a filtered job search.",
-      compare:      "Scout compared your saved roles.",
-      tailor:       "Scout identified tailoring opportunities.",
-      applications: "Scout prepared a workflow plan.",
-      idle:         "",
+      search:            "Scout prepared a filtered job search.",
+      compare:           "Scout compared your saved roles.",
+      tailor:            "Scout identified tailoring opportunities.",
+      applications:      "Scout prepared a workflow plan.",
+      bulk_application:  "Scout is preparing your bulk application queue.",
+      idle:              "",
     }
     return labels[mode] ?? ""
   }
@@ -127,6 +130,9 @@ export function ScoutWorkspaceShell() {
 
   // ── Workflow engine ─────────────────────────────────────────────────────────
   const workflowEngine = useWorkflowEngine()
+
+  // ── Bulk application engine ─────────────────────────────────────────────────
+  const bulkEngine = useBulkApplicationEngine()
 
   // ── Active browser context (from extension) ─────────────────────────────────
   const { context: browserContext } = useActiveBrowserContext()
@@ -636,6 +642,19 @@ export function ScoutWorkspaceShell() {
                   <ApplicationMode
                     response={activeResponse} onFollowUp={handleFollowUp}
                     activeEntities={activeEntities}
+                  />
+                )
+              }
+              if (displayedMode === "bulk_application") {
+                const directive = activeResponse?.workspace_directive
+                const payload = directive?.mode === "bulk_application"
+                  ? (directive.payload ?? {})
+                  : {}
+                return (
+                  <BulkApplicationMode
+                    engine={bulkEngine}
+                    payload={payload as import("./BulkApplicationMode").BulkModePayload}
+                    onFollowUp={handleFollowUp}
                   />
                 )
               }

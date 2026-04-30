@@ -252,6 +252,32 @@ export const ALL_COMMANDS: ScoutCommand[] = [
     autoRun: true,
   },
 
+  // ── Bulk preparation ──────────────────────────────────────────────────────
+  {
+    id: "bulk-prepare-top10",
+    label: "Prepare my top 10 applications",
+    description: "Scout selects your best-matched saved jobs and prepares each application",
+    group: "applications",
+    query: "Prepare applications for my top 10 saved jobs",
+    autoRun: true,
+  },
+  {
+    id: "bulk-prepare-visa",
+    label: "Prepare visa-friendly applications",
+    description: "Filter for sponsorship-strong roles and prepare applications",
+    group: "applications",
+    query: "Prepare applications for visa-friendly roles over 80 match",
+    autoRun: true,
+  },
+  {
+    id: "bulk-prepare-remote",
+    label: "Prepare remote backend applications",
+    description: "Prepare applications for remote backend engineering roles",
+    group: "applications",
+    query: "Prepare 5 applications for remote backend jobs",
+    autoRun: true,
+  },
+
   // ── Applications ───────────────────────────────────────────────────────────
   {
     id: "apps-pipeline",

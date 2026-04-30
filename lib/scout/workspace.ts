@@ -16,6 +16,7 @@ export type WorkspaceRail = {
  */
 export function inferWorkspaceMode(response: ScoutResponse): WorkspaceMode {
   if (response.compare) return "compare"
+  if (response.workspace_directive?.mode === "bulk_application") return "bulk_application"
   if (response.interviewPrep || response.intent === "interview_prep") return "applications"
   if (response.workflow || response.intent === "workflow") return "applications"
   if (response.actions?.some((a) => a.type === "OPEN_RESUME_TAILOR")) return "tailor"
