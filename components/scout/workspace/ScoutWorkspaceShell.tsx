@@ -31,6 +31,8 @@ import {
 } from "@/lib/scout/search-profile"
 import { ScoutMemoryChips } from "@/components/scout/ScoutMemoryChips"
 import { getPersonalizedChips } from "@/lib/scout/mode"
+import { ScoutMarketRail } from "@/components/scout/ScoutMarketRail"
+import type { MarketSignal } from "@/lib/scout/market-intelligence"
 import { getScoutSuggestionChips } from "@/lib/scout/mode"
 import { getScoutNudges } from "@/lib/scout/nudges"
 import { detectScoutMode } from "@/lib/scout/mode"
@@ -128,6 +130,10 @@ export function ScoutWorkspaceShell() {
 
   // ── Search profile (persistent lightweight memory) ──────────────────────────
   const [searchProfile, setSearchProfile] = useState<ScoutSearchProfile | null>(null)
+
+  // ── Market intelligence signals ─────────────────────────────────────────────
+  const [marketSignals,   setMarketSignals]   = useState<MarketSignal[]>([])
+  const [marketLoading,   setMarketLoading]   = useState(true)
 
   // ── Chat state ──────────────────────────────────────────────────────────────
   const [messages,  setMessages]  = useState<ChatMessage[]>([])
@@ -301,6 +307,19 @@ export function ScoutWorkspaceShell() {
       })
       .catch(() => { if (!cancelled) setStrategyBoard(null) })
       .finally(() => { if (!cancelled) setStrategyLoading(false) })
+    return () => { cancelled = true }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    setMarketLoading(true)
+    fetch("/api/scout/market", { cache: "no-store", headers: { Accept: "application/json" } })
+      .then(async (res) => {
+        const data = (await res.json().catch(() => ({}))) as { signals?: MarketSignal[] } | undefined
+        if (!cancelled) setMarketSignals(data?.signals ?? [])
+      })
+      .catch(() => { if (!cancelled) setMarketSignals([]) })
+      .finally(() => { if (!cancelled) setMarketLoading(false) })
     return () => { cancelled = true }
   }, [])
 
@@ -592,24 +611,26 @@ export function ScoutWorkspaceShell() {
           />
         </div>
 
-        {/* Context rail — Scout-driven rail takes priority over browser context rail */}
-        {rail ? (
-          <div className={cn(
-            "hidden transition-all duration-200 lg:block",
-            "opacity-100 translate-x-0"
-          )}>
-            <ContextRail rail={rail} onClose={() => setRail(null)} />
+        {/* Right intelligence rail — Scout rail > browser context > market signals */}
+        {(rail || (browserContext && browserContext.pageType !== "unknown") || marketSignals.length > 0) && (
+          <div className="hidden lg:flex flex-col gap-4 transition-all duration-200 opacity-100 translate-x-0">
+            {rail ? (
+              <ContextRail rail={rail} onClose={() => setRail(null)} />
+            ) : browserContext && browserContext.pageType !== "unknown" ? (
+              <BrowserContextRail
+                context={browserContext}
+                activeWorkflow={workflowEngine.activeWorkflow}
+                onPreFill={handleSendCommand}
+                onExpandWorkflow={() => workflowEngine.setExpanded(true)}
+              />
+            ) : null}
+
+            {/* Market signals — show in idle mode when there's space */}
+            {workspaceMode === "idle" && (marketSignals.length > 0 || marketLoading) && (
+              <ScoutMarketRail signals={marketSignals} loading={marketLoading} />
+            )}
           </div>
-        ) : browserContext && browserContext.pageType !== "unknown" ? (
-          <div className="hidden transition-all duration-200 lg:block opacity-100 translate-x-0">
-            <BrowserContextRail
-              context={browserContext}
-              activeWorkflow={workflowEngine.activeWorkflow}
-              onPreFill={handleSendCommand}
-              onExpandWorkflow={() => workflowEngine.setExpanded(true)}
-            />
-          </div>
-        ) : null}
+        )}
       </div>
       {/* ── Command palette ──────────────────────────────────────────── */}
       <ScoutCommandPalette
