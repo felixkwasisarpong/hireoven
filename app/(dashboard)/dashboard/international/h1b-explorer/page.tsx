@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { Loader2, Search } from "lucide-react"
-import DashboardPageHeader from "@/components/layout/DashboardPageHeader"
+import { ArrowLeft, ChevronDown, Database, Loader2, Search } from "lucide-react"
+import { cn } from "@/lib/utils"
 import type { EmployerLCAStats, LCARecord } from "@/types"
 
 const PAGE_SIZE = 50
@@ -13,11 +13,11 @@ const CASE_STATUS_OPTIONS = [
   { value: "Certified", label: "Certified" },
   { value: "Denied", label: "Denied" },
   { value: "Withdrawn", label: "Withdrawn" },
-  { value: "Certified-Withdrawn", label: "Certified-Withdrawn" },
+  { value: "Certified-Withdrawn", label: "Cert-Withdrawn" },
 ]
 
 const WAGE_LEVEL_OPTIONS = [
-  { value: "", label: "All wage levels" },
+  { value: "", label: "All levels" },
   { value: "I", label: "Level I" },
   { value: "II", label: "Level II" },
   { value: "III", label: "Level III" },
@@ -34,7 +34,7 @@ const US_STATES = [
 type TabKey = "records" | "employers"
 
 function formatCurrency(value: number | null) {
-  if (value === null || Number.isNaN(value)) return "-"
+  if (value === null || Number.isNaN(value)) return "—"
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
@@ -42,23 +42,19 @@ function formatCurrency(value: number | null) {
   }).format(value)
 }
 
-function statusTone(status: string | null) {
-  if (!status) return "text-muted-foreground"
-  const lower = status.toLowerCase()
-  if (lower.includes("certified")) {
-    return lower.includes("withdrawn")
-      ? "text-amber-700 bg-amber-50 border-amber-200"
-      : "text-emerald-700 bg-emerald-50 border-emerald-200"
-  }
-  if (lower.includes("denied")) return "text-red-700 bg-red-50 border-red-200"
-  if (lower.includes("withdrawn"))
-    return "text-gray-600 bg-gray-50 border-gray-200"
-  return "text-slate-700 bg-slate-50 border-slate-200"
+function statusStyle(status: string | null) {
+  if (!status) return "border-gray-200 bg-gray-50 text-gray-500"
+  const s = status.toLowerCase()
+  if (s.includes("certified") && s.includes("withdrawn"))
+    return "border-amber-200 bg-amber-50 text-amber-700"
+  if (s.includes("certified")) return "border-emerald-200 bg-emerald-50 text-emerald-700"
+  if (s.includes("denied")) return "border-red-200 bg-red-50 text-red-700"
+  if (s.includes("withdrawn")) return "border-gray-200 bg-gray-50 text-gray-600"
+  return "border-slate-200 bg-slate-50 text-slate-700"
 }
 
 export default function H1BExplorerPage() {
   const [tab, setTab] = useState<TabKey>("records")
-
   const [query, setQuery] = useState("")
   const [debouncedQuery, setDebouncedQuery] = useState("")
   const [fiscalYear, setFiscalYear] = useState("")
@@ -66,20 +62,17 @@ export default function H1BExplorerPage() {
   const [caseStatus, setCaseStatus] = useState("")
   const [wageLevel, setWageLevel] = useState("")
   const [page, setPage] = useState(0)
-
   const [records, setRecords] = useState<LCARecord[]>([])
   const [employers, setEmployers] = useState<EmployerLCAStats[]>([])
   const [count, setCount] = useState<number | null>(null)
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    const handle = setTimeout(() => setDebouncedQuery(query.trim()), 300)
-    return () => clearTimeout(handle)
+    const t = setTimeout(() => setDebouncedQuery(query.trim()), 300)
+    return () => clearTimeout(t)
   }, [query])
 
-  useEffect(() => {
-    setPage(0)
-  }, [debouncedQuery, fiscalYear, state, caseStatus, wageLevel, tab])
+  useEffect(() => { setPage(0) }, [debouncedQuery, fiscalYear, state, caseStatus, wageLevel, tab])
 
   const fiscalYearOptions = useMemo(() => {
     const current = new Date().getFullYear()
@@ -90,24 +83,15 @@ export default function H1BExplorerPage() {
 
   const loadRecords = useCallback(async () => {
     setLoading(true)
-    const params = new URLSearchParams({
-      tab: "records",
-      page: String(page),
-      pageSize: String(PAGE_SIZE),
-    })
+    const params = new URLSearchParams({ tab: "records", page: String(page), pageSize: String(PAGE_SIZE) })
     if (debouncedQuery) params.set("q", debouncedQuery)
     if (fiscalYear) params.set("fiscalYear", fiscalYear)
     if (state) params.set("state", state)
     if (caseStatus) params.set("caseStatus", caseStatus)
     if (wageLevel) params.set("wageLevel", wageLevel)
-
     const res = await fetch(`/api/h1b/explorer?${params}`, { cache: "no-store" })
     setLoading(false)
-    if (!res.ok) {
-      setRecords([])
-      setCount(0)
-      return
-    }
+    if (!res.ok) { setRecords([]); setCount(0); return }
     const body = (await res.json()) as { records?: LCARecord[]; count?: number }
     setRecords(body.records ?? [])
     setCount(typeof body.count === "number" ? body.count : null)
@@ -115,20 +99,11 @@ export default function H1BExplorerPage() {
 
   const loadEmployers = useCallback(async () => {
     setLoading(true)
-    const params = new URLSearchParams({
-      tab: "employers",
-      page: String(page),
-      pageSize: String(PAGE_SIZE),
-    })
+    const params = new URLSearchParams({ tab: "employers", page: String(page), pageSize: String(PAGE_SIZE) })
     if (debouncedQuery) params.set("q", debouncedQuery)
-
     const res = await fetch(`/api/h1b/explorer?${params}`, { cache: "no-store" })
     setLoading(false)
-    if (!res.ok) {
-      setEmployers([])
-      setCount(0)
-      return
-    }
+    if (!res.ok) { setEmployers([]); setCount(0); return }
     const body = (await res.json()) as { employers?: EmployerLCAStats[]; count?: number }
     setEmployers(body.employers ?? [])
     setCount(typeof body.count === "number" ? body.count : null)
@@ -142,329 +117,320 @@ export default function H1BExplorerPage() {
   const totalPages = count ? Math.ceil(count / PAGE_SIZE) : 0
 
   return (
-    <main className="app-page">
-      <div className="app-shell max-w-7xl space-y-8">
-        <DashboardPageHeader
-          kicker="H-1B Explorer"
-          title="DOL LCA disclosure database"
-          description="Search the underlying Department of Labor Labor Condition Application data powering every H-1B approval prediction on Hireoven."
-          backHref="/dashboard/international"
-          backLabel="Back to International Hub"
-          meta={
-            <span className="inline-flex items-center rounded-full border border-border bg-brand-tint px-3 py-1 text-xs font-semibold text-brand-navy">
+    <main className="app-page pb-[max(6rem,calc(env(safe-area-inset-bottom)+5.5rem))]">
+      <div className="app-shell max-w-7xl space-y-5 pb-[max(2rem,calc(env(safe-area-inset-bottom)+1rem))]">
+
+        {/* ── Page header ───────────────────────────────────── */}
+        <div>
+          <Link
+            href="/dashboard/international"
+            className="inline-flex items-center gap-1.5 text-sm text-gray-400 transition hover:text-gray-700"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            International Hub
+          </Link>
+
+          <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl bg-emerald-50">
+                <Database className="h-5 w-5 text-emerald-600" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-emerald-600">
+                  DOL LCA Database
+                </p>
+                <h1 className="mt-0.5 text-xl font-semibold tracking-tight text-gray-900">
+                  H-1B LCA Explorer
+                </h1>
+              </div>
+            </div>
+            <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
               Public DOL data
             </span>
-          }
-        />
+          </div>
+        </div>
 
-        <div className="surface-card p-6">
-          <div className="mb-5 flex flex-wrap items-center gap-2 border-b border-border pb-4">
-            <button
-              type="button"
-              onClick={() => setTab("records")}
-              className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
-                tab === "records"
-                  ? "bg-brand-navy text-white"
-                  : "bg-surface-alt text-muted-foreground hover:bg-brand-tint hover:text-brand-navy"
-              }`}
-            >
-              LCA records
-            </button>
-            <button
-              type="button"
-              onClick={() => setTab("employers")}
-              className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
-                tab === "employers"
-                  ? "bg-brand-navy text-white"
-                  : "bg-surface-alt text-muted-foreground hover:bg-brand-tint hover:text-brand-navy"
-              }`}
-            >
-              Employer stats
-            </button>
-            <div className="ml-auto text-xs text-muted-foreground">
+        {/* ── Filter toolbar ─────────────────────────────────── */}
+        <div className="surface-card p-4">
+          {/* Tab switch + result count */}
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-px rounded-xl border border-gray-200 bg-white p-0.5">
+              {(["records", "employers"] as TabKey[]).map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setTab(t)}
+                  className={cn(
+                    "rounded-lg px-4 py-1.5 text-xs font-semibold transition",
+                    tab === t
+                      ? "bg-gray-900 text-white shadow-sm"
+                      : "text-gray-500 hover:text-gray-700"
+                  )}
+                >
+                  {t === "records" ? "LCA records" : "Employer stats"}
+                </button>
+              ))}
+            </div>
+            <div className="text-xs text-gray-400">
               {loading ? (
                 <span className="inline-flex items-center gap-1.5">
-                  <Loader2 className="h-3 w-3 animate-spin" /> Loading…
+                  <Loader2 className="h-3 w-3 animate-spin" /> Searching…
                 </span>
               ) : count !== null ? (
                 `${count.toLocaleString()} result${count === 1 ? "" : "s"}`
-              ) : (
-                ""
-              )}
+              ) : null}
             </div>
           </div>
 
-          <div className="grid gap-3 md:grid-cols-[1.4fr_repeat(4,1fr)]">
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+          {/* Filters */}
+          <div className="flex flex-wrap gap-2">
+            {/* Search */}
+            <div className="relative flex-1 min-w-[200px]">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
               <input
                 value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder={
-                  tab === "records"
-                    ? "Search employer or job title…"
-                    : "Search employer…"
-                }
-                className="h-10 w-full rounded-lg border border-border bg-surface pl-9 pr-3 text-sm text-strong placeholder:text-muted-foreground outline-none focus:border-brand-navy"
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder={tab === "records" ? "Search employer or job title…" : "Search employer…"}
+                className="h-8 w-full rounded-lg border border-gray-200 bg-white pl-8 pr-3 text-xs text-gray-900 outline-none placeholder:text-gray-400 transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/15"
               />
             </div>
+
             {tab === "records" && (
               <>
-                <select
-                  value={fiscalYear}
-                  onChange={(event) => setFiscalYear(event.target.value)}
-                  className="h-10 rounded-lg border border-border bg-surface px-3 text-sm text-strong outline-none focus:border-brand-navy"
-                >
-                  <option value="">All fiscal years</option>
-                  {fiscalYearOptions.map((year) => (
-                    <option key={year} value={year}>
-                      FY {year}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  value={state}
-                  onChange={(event) => setState(event.target.value)}
-                  className="h-10 rounded-lg border border-border bg-surface px-3 text-sm text-strong outline-none focus:border-brand-navy"
-                >
-                  <option value="">All states</option>
-                  {US_STATES.map((abbr) => (
-                    <option key={abbr} value={abbr}>
-                      {abbr}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  value={caseStatus}
-                  onChange={(event) => setCaseStatus(event.target.value)}
-                  className="h-10 rounded-lg border border-border bg-surface px-3 text-sm text-strong outline-none focus:border-brand-navy"
-                >
-                  {CASE_STATUS_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  value={wageLevel}
-                  onChange={(event) => setWageLevel(event.target.value)}
-                  className="h-10 rounded-lg border border-border bg-surface px-3 text-sm text-strong outline-none focus:border-brand-navy"
-                >
-                  {WAGE_LEVEL_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
+                {/* Fiscal year */}
+                <div className="relative">
+                  <select
+                    value={fiscalYear}
+                    onChange={(e) => setFiscalYear(e.target.value)}
+                    className={cn(
+                      "h-8 appearance-none rounded-lg border pl-3 pr-7 text-xs font-medium outline-none transition",
+                      fiscalYear
+                        ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+                        : "border-gray-200 bg-white text-gray-600 hover:border-gray-300"
+                    )}
+                  >
+                    <option value="">All years</option>
+                    {fiscalYearOptions.map((y) => (
+                      <option key={y} value={y}>FY {y}</option>
+                    ))}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2 text-gray-400" />
+                </div>
+
+                {/* State */}
+                <div className="relative">
+                  <select
+                    value={state}
+                    onChange={(e) => setState(e.target.value)}
+                    className={cn(
+                      "h-8 appearance-none rounded-lg border pl-3 pr-7 text-xs font-medium outline-none transition",
+                      state
+                        ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+                        : "border-gray-200 bg-white text-gray-600 hover:border-gray-300"
+                    )}
+                  >
+                    <option value="">All states</option>
+                    {US_STATES.map((s) => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2 text-gray-400" />
+                </div>
+
+                {/* Status */}
+                <div className="relative">
+                  <select
+                    value={caseStatus}
+                    onChange={(e) => setCaseStatus(e.target.value)}
+                    className={cn(
+                      "h-8 appearance-none rounded-lg border pl-3 pr-7 text-xs font-medium outline-none transition",
+                      caseStatus
+                        ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+                        : "border-gray-200 bg-white text-gray-600 hover:border-gray-300"
+                    )}
+                  >
+                    {CASE_STATUS_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2 text-gray-400" />
+                </div>
+
+                {/* Wage level */}
+                <div className="relative">
+                  <select
+                    value={wageLevel}
+                    onChange={(e) => setWageLevel(e.target.value)}
+                    className={cn(
+                      "h-8 appearance-none rounded-lg border pl-3 pr-7 text-xs font-medium outline-none transition",
+                      wageLevel
+                        ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+                        : "border-gray-200 bg-white text-gray-600 hover:border-gray-300"
+                    )}
+                  >
+                    {WAGE_LEVEL_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2 text-gray-400" />
+                </div>
               </>
             )}
           </div>
 
-          <div className="mt-4 text-[11px] text-muted-foreground">
-            Data source: U.S. Department of Labor LCA disclosure. Shown for research
-            only - not legal advice.
-          </div>
+          <p className="mt-3 text-[10px] text-gray-400">
+            U.S. Department of Labor LCA disclosure data · for research only, not legal advice
+          </p>
         </div>
 
-        {tab === "records" ? (
-          <div className="surface-card overflow-hidden p-0">
-            <div className="overflow-x-auto">
+        {/* ── Data table ─────────────────────────────────────── */}
+        <div className="surface-card overflow-hidden">
+          <div className="overflow-x-auto">
+            {tab === "records" ? (
               <table className="min-w-full text-left text-sm">
-                <thead className="bg-surface-alt text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-                  <tr>
-                    <th className="px-4 py-3">Employer</th>
-                    <th className="px-4 py-3">Job title</th>
-                    <th className="px-4 py-3">Location</th>
-                    <th className="px-4 py-3">Wage</th>
-                    <th className="px-4 py-3">Level</th>
-                    <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3">Decision</th>
+                <thead>
+                  <tr className="border-b border-gray-100 bg-gray-50/50">
+                    {["Employer", "Job title", "Location", "Wage", "Level", "Status", "Decision"].map((h) => (
+                      <th key={h} className="px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-400">
+                        {h}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-border">
+                <tbody className="divide-y divide-gray-50">
                   {loading && records.length === 0 ? (
                     <tr>
-                      <td
-                        colSpan={7}
-                        className="px-4 py-12 text-center text-sm text-muted-foreground"
-                      >
-                        <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />
-                        Searching LCA records…
+                      <td colSpan={7} className="px-4 py-16 text-center">
+                        <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin text-gray-400" />
+                        <p className="text-sm text-gray-400">Searching LCA records…</p>
                       </td>
                     </tr>
                   ) : records.length === 0 ? (
                     <tr>
-                      <td
-                        colSpan={7}
-                        className="px-4 py-12 text-center text-sm text-muted-foreground"
-                      >
+                      <td colSpan={7} className="px-4 py-16 text-center text-sm text-gray-400">
                         No LCA records match your filters.
                       </td>
                     </tr>
                   ) : (
                     records.map((record) => (
-                      <tr key={record.id} className="hover:bg-surface-alt/40">
-                        <td className="px-4 py-3 font-medium text-strong">
+                      <tr key={record.id} className="transition-colors hover:bg-gray-50/60">
+                        <td className="px-4 py-3 font-medium text-gray-900">
                           {record.company_id ? (
                             <Link
                               href={`/dashboard/companies/${record.company_id}`}
-                              className="hover:text-brand-navy hover:underline"
+                              className="transition hover:text-indigo-700 hover:underline"
                             >
                               {record.employer_name}
                             </Link>
-                          ) : (
-                            record.employer_name
+                          ) : record.employer_name}
+                        </td>
+                        <td className="px-4 py-3 text-gray-700">
+                          <p>{record.job_title ?? "—"}</p>
+                          {record.soc_title && (
+                            <p className="text-[11px] text-gray-400">{record.soc_title}</p>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-strong">
-                          {record.job_title ?? "-"}
-                          {record.soc_title ? (
-                            <div className="text-[11px] text-muted-foreground">
-                              {record.soc_title}
-                            </div>
-                          ) : null}
+                        <td className="px-4 py-3 text-gray-500">
+                          {record.worksite_city ?? "—"}
+                          {record.worksite_state_abbr ? `, ${record.worksite_state_abbr}` : ""}
                         </td>
-                        <td className="px-4 py-3 text-muted-foreground">
-                          {record.worksite_city ?? "-"}
-                          {record.worksite_state_abbr
-                            ? `, ${record.worksite_state_abbr}`
-                            : ""}
+                        <td className="px-4 py-3 text-gray-900">
+                          <p>{formatCurrency(record.wage_rate_from)}
+                            {record.wage_rate_to && record.wage_rate_to !== record.wage_rate_from
+                              ? ` – ${formatCurrency(record.wage_rate_to)}` : ""}
+                          </p>
+                          {record.wage_unit && (
+                            <p className="text-[11px] text-gray-400">per {record.wage_unit.toLowerCase()}</p>
+                          )}
                         </td>
-                        <td className="px-4 py-3 text-strong">
-                          {formatCurrency(record.wage_rate_from)}
-                          {record.wage_rate_to &&
-                          record.wage_rate_to !== record.wage_rate_from
-                            ? ` – ${formatCurrency(record.wage_rate_to)}`
-                            : ""}
-                          {record.wage_unit ? (
-                            <div className="text-[11px] text-muted-foreground">
-                              per {record.wage_unit.toLowerCase()}
-                            </div>
-                          ) : null}
-                        </td>
-                        <td className="px-4 py-3 text-muted-foreground">
-                          {record.wage_level ?? "-"}
-                        </td>
+                        <td className="px-4 py-3 text-gray-500">{record.wage_level ?? "—"}</td>
                         <td className="px-4 py-3">
-                          <span
-                            className={`inline-flex rounded border px-2 py-0.5 text-[11px] font-semibold ${statusTone(
-                              record.case_status
-                            )}`}
-                          >
+                          <span className={cn(
+                            "inline-flex rounded border px-2 py-0.5 text-[11px] font-semibold",
+                            statusStyle(record.case_status)
+                          )}>
                             {record.case_status ?? "Unknown"}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-muted-foreground">
-                          {record.decision_date ?? "-"}
-                          {record.fiscal_year ? (
-                            <div className="text-[11px] text-muted-foreground">
-                              FY {record.fiscal_year}
-                            </div>
-                          ) : null}
+                        <td className="px-4 py-3 text-gray-500">
+                          <p>{record.decision_date ?? "—"}</p>
+                          {record.fiscal_year && (
+                            <p className="text-[11px] text-gray-400">FY {record.fiscal_year}</p>
+                          )}
                         </td>
                       </tr>
                     ))
                   )}
                 </tbody>
               </table>
-            </div>
-          </div>
-        ) : (
-          <div className="surface-card overflow-hidden p-0">
-            <div className="overflow-x-auto">
+            ) : (
               <table className="min-w-full text-left text-sm">
-                <thead className="bg-surface-alt text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-                  <tr>
-                    <th className="px-4 py-3">Employer</th>
-                    <th className="px-4 py-3">Applications</th>
-                    <th className="px-4 py-3">Certified</th>
-                    <th className="px-4 py-3">Denied</th>
-                    <th className="px-4 py-3">Approval rate</th>
-                    <th className="px-4 py-3">Trend</th>
-                    <th className="px-4 py-3">Flags</th>
+                <thead>
+                  <tr className="border-b border-gray-100 bg-gray-50/50">
+                    {["Employer", "Applications", "Certified", "Denied", "Approval rate", "Trend", "Flags"].map((h) => (
+                      <th key={h} className="px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-400">
+                        {h}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-border">
+                <tbody className="divide-y divide-gray-50">
                   {loading && employers.length === 0 ? (
                     <tr>
-                      <td
-                        colSpan={7}
-                        className="px-4 py-12 text-center text-sm text-muted-foreground"
-                      >
-                        <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />
-                        Loading employer stats…
+                      <td colSpan={7} className="px-4 py-16 text-center">
+                        <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin text-gray-400" />
+                        <p className="text-sm text-gray-400">Loading employer stats…</p>
                       </td>
                     </tr>
                   ) : employers.length === 0 ? (
                     <tr>
-                      <td
-                        colSpan={7}
-                        className="px-4 py-12 text-center text-sm text-muted-foreground"
-                      >
+                      <td colSpan={7} className="px-4 py-16 text-center text-sm text-gray-400">
                         No employers match your search.
                       </td>
                     </tr>
                   ) : (
                     employers.map((employer) => {
-                      const approval =
-                        employer.certification_rate !== null
-                          ? Math.round(employer.certification_rate * 100)
-                          : null
+                      const approval = employer.certification_rate !== null
+                        ? Math.round(employer.certification_rate * 100)
+                        : null
                       return (
-                        <tr
-                          key={employer.id}
-                          className="hover:bg-surface-alt/40"
-                        >
-                          <td className="px-4 py-3 font-medium text-strong">
+                        <tr key={employer.id} className="transition-colors hover:bg-gray-50/60">
+                          <td className="px-4 py-3 font-medium text-gray-900">
                             {employer.company_id ? (
                               <Link
                                 href={`/dashboard/companies/${employer.company_id}`}
-                                className="hover:text-brand-navy hover:underline"
+                                className="transition hover:text-indigo-700 hover:underline"
                               >
-                                {employer.display_name ??
-                                  employer.employer_name_normalized}
+                                {employer.display_name ?? employer.employer_name_normalized}
                               </Link>
-                            ) : (
-                              employer.display_name ??
-                              employer.employer_name_normalized
-                            )}
+                            ) : (employer.display_name ?? employer.employer_name_normalized)}
                           </td>
-                          <td className="px-4 py-3 text-strong tabular-nums">
+                          <td className="px-4 py-3 tabular-nums text-gray-900">
                             {employer.total_applications.toLocaleString()}
                           </td>
-                          <td className="px-4 py-3 text-emerald-700 tabular-nums">
+                          <td className="px-4 py-3 tabular-nums font-medium text-emerald-700">
                             {employer.total_certified.toLocaleString()}
                           </td>
-                          <td className="px-4 py-3 text-red-700 tabular-nums">
+                          <td className="px-4 py-3 tabular-nums font-medium text-red-600">
                             {employer.total_denied.toLocaleString()}
                           </td>
-                          <td className="px-4 py-3 font-semibold tabular-nums text-strong">
-                            {approval === null ? "-" : `${approval}%`}
+                          <td className="px-4 py-3 font-semibold tabular-nums text-gray-900">
+                            {approval === null ? "—" : `${approval}%`}
                           </td>
-                          <td className="px-4 py-3 text-muted-foreground capitalize">
+                          <td className="px-4 py-3 capitalize text-gray-500">
                             {employer.approval_trend ?? "stable"}
                           </td>
                           <td className="px-4 py-3">
-                            <div className="flex flex-wrap gap-1.5">
+                            <div className="flex flex-wrap gap-1">
                               {employer.is_staffing_firm && (
-                                <span className="inline-flex rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
-                                  Staffing
-                                </span>
+                                <span className="inline-flex rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">Staffing</span>
                               )}
                               {employer.is_consulting_firm && (
-                                <span className="inline-flex rounded border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700">
-                                  Consulting
-                                </span>
+                                <span className="inline-flex rounded border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700">Consulting</span>
                               )}
                               {employer.has_high_denial_rate && (
-                                <span className="inline-flex rounded border border-red-200 bg-red-50 px-1.5 py-0.5 text-[10px] font-semibold text-red-700">
-                                  High denials
-                                </span>
+                                <span className="inline-flex rounded border border-red-200 bg-red-50 px-1.5 py-0.5 text-[10px] font-semibold text-red-700">High denials</span>
                               )}
                               {employer.is_first_time_filer && (
-                                <span className="inline-flex rounded border border-orange-200 bg-orange-50 px-1.5 py-0.5 text-[10px] font-semibold text-orange-700">
-                                  New filer
-                                </span>
+                                <span className="inline-flex rounded border border-orange-200 bg-orange-50 px-1.5 py-0.5 text-[10px] font-semibold text-orange-700">New filer</span>
                               )}
                             </div>
                           </td>
@@ -474,33 +440,36 @@ export default function H1BExplorerPage() {
                   )}
                 </tbody>
               </table>
-            </div>
+            )}
           </div>
-        )}
+        </div>
 
+        {/* Pagination */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-between gap-3 text-sm">
+          <div className="flex items-center justify-between gap-3">
             <button
               type="button"
               disabled={page === 0 || loading}
               onClick={() => setPage((p) => Math.max(0, p - 1))}
-              className="rounded-lg border border-border bg-surface px-4 py-2 font-semibold text-strong transition hover:border-brand-navy disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:border-gray-300 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
             >
               Previous
             </button>
-            <span className="text-muted-foreground">
+            <span className="text-sm text-gray-400">
               Page {page + 1} of {totalPages.toLocaleString()}
             </span>
             <button
               type="button"
               disabled={page + 1 >= totalPages || loading}
               onClick={() => setPage((p) => p + 1)}
-              className="rounded-lg border border-border bg-surface px-4 py-2 font-semibold text-strong transition hover:border-brand-navy disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:border-gray-300 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
             >
               Next
             </button>
           </div>
         )}
+
+        <div aria-hidden className="h-[clamp(2rem,5vh,4rem)] shrink-0" />
       </div>
     </main>
   )
