@@ -1,4 +1,5 @@
 import type { ScoutMode } from "./types"
+import type { ScoutSearchProfile } from "./search-profile"
 
 const SCOUT_MODE_SUGGESTIONS: Record<ScoutMode, string[]> = {
   feed: ["Show me jobs worth my time", "Filter high sponsorship roles"],
@@ -35,6 +36,48 @@ export function detectScoutMode(pagePath: string): ScoutMode {
 
 export function getScoutSuggestionChips(mode: ScoutMode): string[] {
   return SCOUT_MODE_SUGGESTIONS[mode]
+}
+
+/**
+ * Blends the user's learned search profile with the default mode chips.
+ * Profile-derived chips come first; defaults fill remaining slots.
+ * Returns at most 4 chips.
+ */
+export function getPersonalizedChips(
+  mode: ScoutMode,
+  profile: ScoutSearchProfile | null,
+): string[] {
+  const defaults = SCOUT_MODE_SUGGESTIONS[mode] ?? []
+  if (!profile) return defaults
+
+  const personal: string[] = []
+
+  if (profile.sponsorshipPreference === "required") {
+    personal.push("Show sponsorship-friendly roles")
+  } else if (profile.sponsorshipPreference === "preferred") {
+    personal.push("Filter high sponsorship roles")
+  }
+
+  if (profile.preferredWorkModes?.includes("remote") && mode !== "applications") {
+    personal.push("Remote-only roles")
+  }
+
+  if (profile.preferredRoles?.length && (mode === "feed" || mode === "scout")) {
+    personal.push(`Find ${profile.preferredRoles[0]} jobs`)
+  }
+
+  if (profile.companyPreferences?.liked?.length) {
+    const co = profile.companyPreferences.liked[0]
+    personal.push(`Companies like ${co}`)
+  }
+
+  // Fill remaining with defaults (no duplicates)
+  for (const d of defaults) {
+    if (personal.length >= 4) break
+    if (!personal.includes(d)) personal.push(d)
+  }
+
+  return personal.slice(0, 4)
 }
 
 export function getScoutModeLabel(mode: ScoutMode): string {

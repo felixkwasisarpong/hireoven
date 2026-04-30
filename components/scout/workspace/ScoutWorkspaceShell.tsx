@@ -20,6 +20,17 @@ import { useActiveBrowserContext } from "@/lib/scout/browser-context"
 import { getContextualChips, getContextualPlaceholder } from "@/lib/scout/context-chips"
 import { writePinnedContext } from "@/lib/scout/pinned-context"
 import { BrowserContextRail } from "@/components/scout/workspace/BrowserContextRail"
+import {
+  readSearchProfile,
+  writeSearchProfile,
+  clearSearchProfile,
+  mergeProfileUpdate,
+  extractProfileUpdate,
+  buildMemoryChips,
+  type ScoutSearchProfile,
+} from "@/lib/scout/search-profile"
+import { ScoutMemoryChips } from "@/components/scout/ScoutMemoryChips"
+import { getPersonalizedChips } from "@/lib/scout/mode"
 import { getScoutSuggestionChips } from "@/lib/scout/mode"
 import { getScoutNudges } from "@/lib/scout/nudges"
 import { detectScoutMode } from "@/lib/scout/mode"
@@ -115,6 +126,9 @@ export function ScoutWorkspaceShell() {
   // ── Active browser context (from extension) ─────────────────────────────────
   const { context: browserContext } = useActiveBrowserContext()
 
+  // ── Search profile (persistent lightweight memory) ──────────────────────────
+  const [searchProfile, setSearchProfile] = useState<ScoutSearchProfile | null>(null)
+
   // ── Chat state ──────────────────────────────────────────────────────────────
   const [messages,  setMessages]  = useState<ChatMessage[]>([])
   const [query,     setQuery]     = useState("")
@@ -166,6 +180,18 @@ export function ScoutWorkspaceShell() {
   const hour      = new Date().getHours()
   const greeting  = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening"
 
+  // ── Load search profile on mount + listen for memory-cleared events ──────────
+  useEffect(() => {
+    setSearchProfile(readSearchProfile())
+
+    function onMemoryCleared() {
+      clearSearchProfile()
+      setSearchProfile(null)
+    }
+    window.addEventListener("scout:memory-cleared", onMemoryCleared)
+    return () => window.removeEventListener("scout:memory-cleared", onMemoryCleared)
+  }, [])
+
   // ── Pin browser context to sessionStorage so workflows can read it ───────────
   useEffect(() => {
     if (!browserContext || browserContext.pageType === "unknown") return
@@ -178,14 +204,20 @@ export function ScoutWorkspaceShell() {
     })
   }, [browserContext])
 
-  // ── Adaptive chips — extension context overrides defaults when idle ──────────
+  // ── Adaptive chips — extension context > search profile > session > defaults ──
   const displayChips = useMemo(() => {
-    if (workspaceMode === "idle" && !hasSession && browserContext) {
-      const ctxChips = getContextualChips(browserContext)
-      if (ctxChips) return ctxChips
+    if (workspaceMode === "idle" && !hasSession) {
+      // Browser context (active job/search page) takes highest priority
+      if (browserContext) {
+        const ctxChips = getContextualChips(browserContext)
+        if (ctxChips) return ctxChips
+      }
+      // Search profile personalization as fallback
+      const personalChips = getPersonalizedChips(scoutMode, searchProfile)
+      if (personalChips.length > 0) return personalChips
     }
     return chips
-  }, [workspaceMode, hasSession, browserContext, chips])
+  }, [workspaceMode, hasSession, browserContext, searchProfile, scoutMode, chips])
 
   // ── Adaptive command bar placeholder ────────────────────────────────────────
   const commandBarPlaceholder = useMemo(() => {
@@ -311,6 +343,7 @@ export function ScoutWorkspaceShell() {
               sponsorship: searchParams.get("sponsorship") ?? undefined, workMode: searchParams.get("workMode") ?? undefined,
             },
             ...contextIds,
+            ...(searchProfile ? { searchProfile } : {}),
           }),
         })
 
@@ -337,6 +370,16 @@ export function ScoutWorkspaceShell() {
 
         // Active entities — carry through transitions
         setActiveEntities((prev) => extractEntities(normalized, prev))
+
+        // Search profile — extract preferences from this interaction
+        const profileUpdate = extractProfileUpdate(normalized, message)
+        if (Object.keys(profileUpdate).length > 0) {
+          setSearchProfile((prev) => {
+            const updated = mergeProfileUpdate(prev, profileUpdate)
+            writeSearchProfile(updated)
+            return updated
+          })
+        }
 
         // Workflow — start panel if Scout returns a workflow_directive
         if (normalized.workflow_directive) {
@@ -467,6 +510,30 @@ export function ScoutWorkspaceShell() {
               </button>
             </div>
           )}
+
+          {/* Scout learned — lightweight memory chips, idle only */}
+          {workspaceMode === "idle" && searchProfile && (() => {
+            const memChips = buildMemoryChips(searchProfile)
+            if (!memChips.length) return null
+            return (
+              <div className="mb-4">
+                <ScoutMemoryChips
+                  chips={memChips}
+                  onDismiss={(fieldKey) => {
+                    setSearchProfile((prev) => {
+                      if (!prev) return prev
+                      const updated = { ...prev, [fieldKey]: undefined, updatedAt: new Date().toISOString() }
+                      writeSearchProfile(updated)
+                      return updated
+                    })
+                  }}
+                  onClearAll={() => {
+                    window.dispatchEvent(new CustomEvent("scout:memory-cleared"))
+                  }}
+                />
+              </div>
+            )
+          })()}
 
           {/* WorkspaceSurface — smooth opacity fade between modes */}
           <WorkspaceSurface

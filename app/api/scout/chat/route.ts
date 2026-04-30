@@ -708,6 +708,14 @@ export async function POST(request: NextRequest) {
       sponsorship?: string
       workMode?: string
     }
+    /** Lightweight client-side search profile for soft personalization hints */
+    searchProfile?: {
+      preferredRoles?: string[]
+      preferredLocations?: string[]
+      preferredWorkModes?: string[]
+      sponsorshipPreference?: string
+      companyPreferences?: { liked?: string[] }
+    }
   }
 
   const userMessage = body.message?.trim()
@@ -846,13 +854,35 @@ export async function POST(request: NextRequest) {
       feedStateLines.push("- Active filters: none")
     }
 
+    // Build lightweight search profile hint for Claude (client-provided, soft hints only)
+    const sp = body.searchProfile
+    const searchProfileLines: string[] = []
+    if (sp?.sponsorshipPreference && sp.sponsorshipPreference !== "unknown") {
+      searchProfileLines.push(`- Sponsorship signal: ${sp.sponsorshipPreference}`)
+    }
+    if (sp?.preferredWorkModes?.length) {
+      searchProfileLines.push(`- Preferred work modes: ${sp.preferredWorkModes.join(", ")}`)
+    }
+    if (sp?.preferredRoles?.length) {
+      searchProfileLines.push(`- Role interests: ${sp.preferredRoles.slice(0, 4).join(", ")}`)
+    }
+    if (sp?.preferredLocations?.length) {
+      searchProfileLines.push(`- Location preference: ${sp.preferredLocations.slice(0, 3).join(", ")}`)
+    }
+    if (sp?.companyPreferences?.liked?.length) {
+      searchProfileLines.push(`- Liked companies/types: ${sp.companyPreferences.liked.slice(0, 3).join(", ")}`)
+    }
+    const searchProfileSection = searchProfileLines.length > 0
+      ? `\nSearch Profile (soft hints — do not over-weight, user message always takes priority):\n${searchProfileLines.join("\n")}\n`
+      : ""
+
     const contextualPrompt = `Active Scout Mode: ${mode}
 Current Page Path: ${body.pagePath ?? "Unknown"}
 Intent hint from UI/server: ${inferredIntent}
 
 Current Feed State (IMPORTANT — do not suggest actions that are already active):
 ${feedStateLines.join("\n")}
-
+${searchProfileSection}
 Scout Context:
 ${formattedContext}
 
