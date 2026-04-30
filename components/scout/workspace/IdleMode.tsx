@@ -18,6 +18,7 @@ import { useUpgradeModal } from "@/lib/context/UpgradeModalContext"
 import type { ScoutResponse } from "@/lib/scout/types"
 import type { ScoutNudge } from "@/lib/scout/nudges"
 import type { ScoutMission } from "@/lib/scout/missions/types"
+import type { ScoutProactiveEvent } from "@/lib/scout/proactive/types"
 import { cn } from "@/lib/utils"
 
 type ChatMessage =
@@ -46,6 +47,10 @@ type Props = {
   onMissionLaunch?: (query: string) => void
   onMissionDismiss?: (missionId: string) => void
   onMissionsDisable?: () => void
+  proactiveEvents?: ScoutProactiveEvent[]
+  onProactiveOpen?: (event: ScoutProactiveEvent) => void
+  onProactiveDismiss?: (eventId: string) => void
+  onProactiveSnooze?: (eventId: string) => void
 }
 
 const ACTION_TILES = [
@@ -132,6 +137,10 @@ export function IdleMode({
   onMissionLaunch,
   onMissionDismiss,
   onMissionsDisable,
+  proactiveEvents = [],
+  onProactiveOpen,
+  onProactiveDismiss,
+  onProactiveSnooze,
 }: Props) {
   const { showUpgrade } = useUpgradeModal()
   const hasConversation = messages.length > 0
@@ -186,6 +195,56 @@ export function IdleMode({
               onDismiss={onMissionDismiss}
               onDisableAll={onMissionsDisable}
             />
+          )}
+
+          {/* Proactive companion prompts */}
+          {proactiveEvents.length > 0 && onProactiveOpen && onProactiveDismiss && onProactiveSnooze && (
+            <div className="mb-6">
+              <p className="mb-2.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-gray-400">
+                Proactive Scout
+              </p>
+              <div className="space-y-2">
+                {proactiveEvents.slice(0, 2).map((event) => (
+                  <div
+                    key={event.id}
+                    className={cn(
+                      "rounded-xl border px-3.5 py-3",
+                      event.severity === "urgent"
+                        ? "border-red-200 bg-red-50/60"
+                        : event.severity === "important"
+                        ? "border-amber-200 bg-amber-50/60"
+                        : "border-slate-200 bg-slate-50/70"
+                    )}
+                  >
+                    <p className="text-[12.5px] font-semibold text-slate-800">{event.title}</p>
+                    <p className="mt-0.5 text-[11px] leading-4.5 text-slate-500">{event.summary}</p>
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => onProactiveOpen(event)}
+                        className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-semibold text-slate-700 transition hover:border-slate-900 hover:bg-slate-900 hover:text-white"
+                      >
+                        Open
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onProactiveSnooze(event.id)}
+                        className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] text-slate-500 transition hover:text-slate-700"
+                      >
+                        Snooze
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onProactiveDismiss(event.id)}
+                        className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] text-slate-400 transition hover:text-slate-600"
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
 
           {/* Nudge strip */}

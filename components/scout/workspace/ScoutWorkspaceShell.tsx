@@ -18,32 +18,33 @@ import { BulkReviewDrawer } from "@/components/scout/bulk/BulkReviewDrawer"
 import { ContextRail } from "./ContextRail"
 import { CompanyIntelRail } from "@/components/scout/CompanyIntelRail"
 import { ScoutCommandPalette } from "./ScoutCommandPalette"
-import { normalizeScoutResponse } from "@/lib/scout/normalize"
 import { useWorkflowEngine } from "@/lib/scout/workflows/engine"
 import { useBulkApplicationEngine } from "@/lib/scout/bulk-application/engine"
 import { useScoutStream } from "@/hooks/useScoutStream"
 import { useResearchStream } from "@/hooks/useResearchStream"
 import { detectPreflightMode, PREFLIGHT_NARRATIVE } from "@/lib/scout/streaming/intent-preflight"
-import { isResearchIntent, getResearchFollowUps } from "@/lib/scout/research/tasks"
+import { isResearchIntent } from "@/lib/scout/research/tasks"
 import { writeResearchTask, readResearchTask } from "@/lib/scout/research/store"
 import { ResearchMode } from "./ResearchMode"
 import { useScoutTimeline } from "@/hooks/useScoutTimeline"
 import { ScoutTimelinePanel } from "@/components/scout/timeline/ScoutTimelinePanel"
+import { useScoutProactive } from "@/hooks/useScoutProactive"
+import { ScoutProactiveStrip } from "@/components/scout/proactive/ScoutProactiveStrip"
+import { ScoutProactiveRail } from "@/components/scout/proactive/ScoutProactiveRail"
 import type {
   ScoutTimelineEvent,
   ScoutTimelineReplayAction,
 } from "@/lib/scout/timeline/types"
+import type { ScoutProactiveEvent } from "@/lib/scout/proactive/types"
 import type { ScoutResearchTask } from "@/lib/scout/research/types"
-import { ScoutStreamingText } from "@/components/scout/ScoutStreamingText"
 import { generateDailyMissions, buildMomentumLine } from "@/lib/scout/missions/generator"
 import {
   readMissionStore,
   writeMissionStore,
   patchMissionStatus,
   setMissionsDisabled,
-  activeMissions,
 } from "@/lib/scout/missions/store"
-import type { ScoutMission, ScoutMissionStore } from "@/lib/scout/missions/types"
+import type { ScoutMissionStore } from "@/lib/scout/missions/types"
 import { WorkflowPanel } from "@/components/scout/workflows/WorkflowPanel"
 import { useActiveBrowserContext } from "@/lib/scout/browser-context"
 import { getContextualChips, getContextualPlaceholder } from "@/lib/scout/context-chips"
@@ -82,6 +83,7 @@ import { useAuth } from "@/lib/hooks/useAuth"
 import type { ScoutResponse, ScoutStrategyBoard } from "@/lib/scout/types"
 import type { ScoutBehaviorSignals } from "@/lib/scout/behavior"
 import type { ScoutNudge } from "@/lib/scout/nudges"
+import type { OutcomeLearningResult } from "@/lib/scout/outcomes/types"
 import { cn } from "@/lib/utils"
 
 type ChatMessage =
@@ -159,6 +161,33 @@ function queueStatusLabel(status: string): string {
     case "skipped": return "Skipped"
     case "submitted": return "Submitted"
     default: return status
+  }
+}
+
+function proactiveCommandSuggestion(event: ScoutProactiveEvent): string {
+  switch (event.type) {
+    case "new_match":
+      return "Show me the new high-match jobs and rank them by fit"
+    case "sponsorship_signal":
+      return "Show sponsorship-friendly roles matching my profile"
+    case "stale_saved_job":
+      return "Review my stale saved roles and recommend the best next action"
+    case "workflow_reminder":
+      return "Resume my paused workflow and show the next step"
+    case "application_followup":
+      return "Which applications need follow-up this week?"
+    case "interview_reminder":
+      return "Prepare me for my upcoming interview"
+    case "market_shift":
+      return "Explain this market shift and how I should adjust my search"
+    case "company_activity":
+      return "Show company hiring activity and roles worth prioritizing"
+    case "skill_signal":
+      return "Help me close the top skill gap in my strongest matches"
+    case "queue_ready":
+      return "Open my prepared application queue for review"
+    default:
+      return "What should I prioritize next?"
   }
 }
 
@@ -251,6 +280,7 @@ export function ScoutWorkspaceShell() {
   const [strategyLoading, setStrategyLoading] = useState(true)
   const [behaviorSignals, setBehaviorSignals] = useState<ScoutBehaviorSignals | null>(null)
   const [behaviorLoading, setBehaviorLoading] = useState(true)
+  const [outcomeLearning, setOutcomeLearning] = useState<OutcomeLearningResult | null>(null)
 
   // ── Daily missions ──────────────────────────────────────────────────────────
   const [missionStore, setMissionStore] = useState<ScoutMissionStore | null>(null)
@@ -278,6 +308,15 @@ export function ScoutWorkspaceShell() {
   const firstName = fullName?.split(" ")[0] ?? "there"
   const hour      = new Date().getHours()
   const greeting  = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening"
+
+  const proactive = useScoutProactive({
+    marketSignals,
+    outcomeLearning,
+    searchProfile,
+    behaviorSignals,
+    activeWorkflow: workflowEngine.activeWorkflow,
+    bulkQueue: bulkEngine.queue,
+  })
 
   // ── Gate event bus — listens for permission requests from any executor ────────
   useEffect(() => {
@@ -405,20 +444,32 @@ export function ScoutWorkspaceShell() {
     })
   }, [browserContext])
 
+  const proactiveChip = useMemo(
+    () => (proactive.topEvent ? proactiveCommandSuggestion(proactive.topEvent) : null),
+    [proactive.topEvent]
+  )
+
   // ── Adaptive chips — extension context > search profile > session > defaults ──
   const displayChips = useMemo(() => {
+    let base = chips
+
     if (workspaceMode === "idle" && !hasSession) {
       // Browser context (active job/search page) takes highest priority
       if (browserContext) {
         const ctxChips = getContextualChips(browserContext)
-        if (ctxChips) return ctxChips
+        if (ctxChips) base = ctxChips
       }
       // Search profile personalization as fallback
-      const personalChips = getPersonalizedChips(scoutMode, searchProfile)
-      if (personalChips.length > 0) return personalChips
+      if (base === chips) {
+        const personalChips = getPersonalizedChips(scoutMode, searchProfile)
+        if (personalChips.length > 0) base = personalChips
+      }
     }
-    return chips
-  }, [workspaceMode, hasSession, browserContext, searchProfile, scoutMode, chips])
+
+    if (query.trim().length > 0 || !proactiveChip) return base
+    if (base.includes(proactiveChip)) return base
+    return [proactiveChip, ...base].slice(0, 5)
+  }, [workspaceMode, hasSession, browserContext, searchProfile, scoutMode, chips, proactiveChip, query])
 
   // ── Adaptive command bar placeholder ────────────────────────────────────────
   const commandBarPlaceholder = useMemo(() => {
@@ -441,6 +492,11 @@ export function ScoutWorkspaceShell() {
         )
         .slice(0, 6),
     [timeline.events]
+  )
+
+  const proactiveRailEvents = useMemo(
+    () => proactive.visibleEvents.slice(0, 3),
+    [proactive.visibleEvents]
   )
 
   // ── Session restore ─────────────────────────────────────────────────────────
@@ -541,6 +597,17 @@ export function ScoutWorkspaceShell() {
     return () => { cancelled = true }
   }, [])
 
+  useEffect(() => {
+    let cancelled = false
+    fetch("/api/scout/outcomes", { cache: "no-store", headers: { Accept: "application/json" } })
+      .then(async (res) => {
+        const data = (await res.json().catch(() => null)) as OutcomeLearningResult | null
+        if (!cancelled) setOutcomeLearning(data)
+      })
+      .catch(() => { if (!cancelled) setOutcomeLearning(null) })
+    return () => { cancelled = true }
+  }, [])
+
   // ── Company intel — fetched when company context changes ───────────────────────
   const [companyIntelData, setCompanyIntelData] = useState<{
     intel: import("@/lib/scout/company-intel/types").CompanyIntel
@@ -578,7 +645,7 @@ export function ScoutWorkspaceShell() {
       marketSignals,
       searchProfile,
       hasResume:       !!primaryResume,
-      outcomeLearning: null,  // fetched lazily in ApplicationMode when needed
+      outcomeLearning,
     }
     const missions      = generateDailyMissions(ctx)
     const momentumLine  = buildMomentumLine(ctx)
@@ -590,7 +657,7 @@ export function ScoutWorkspaceShell() {
     }
     writeMissionStore(store)
     setMissionStore(store)
-  }, [strategyLoading, behaviorLoading, strategyBoard, behaviorSignals, marketSignals, searchProfile, primaryResume])
+  }, [strategyLoading, behaviorLoading, strategyBoard, behaviorSignals, marketSignals, searchProfile, primaryResume, outcomeLearning])
 
   // ── Stream state effects ─────────────────────────────────────────────────────
 
@@ -1160,6 +1227,48 @@ export function ScoutWorkspaceShell() {
   function handleFollowUp(text: string)  { setQuery(text); setTimeout(() => inputRef.current?.focus(), 50) }
   function handleSendCommand(query: string) { setQuery(query); setTimeout(() => inputRef.current?.focus(), 50) }
 
+  function handleOpenProactive(event: ScoutProactiveEvent) {
+    proactive.snooze(event.id, 2 * 60 * 60 * 1000)
+    timeline.append({
+      type: "workspace_change",
+      title: `Proactive suggestion opened: ${event.title}`,
+      summary: event.type.replace(/_/g, " "),
+      timestamp: new Date().toISOString(),
+      severity: event.severity === "urgent" ? "warning" : "info",
+    })
+
+    switch (event.type) {
+      case "queue_ready":
+        setWorkspaceMode("bulk_application")
+        break
+      case "workflow_reminder":
+        workflowEngine.setExpanded(true)
+        setWorkspaceMode("applications")
+        break
+      case "company_activity":
+        if (event.relatedCompanyId) {
+          setActiveEntities((prev) => ({ ...prev, companyId: event.relatedCompanyId }))
+          setWorkspaceMode("company")
+          break
+        }
+        setQuery(proactiveCommandSuggestion(event))
+        setTimeout(() => inputRef.current?.focus(), 50)
+        break
+      case "interview_reminder":
+        if (event.relatedJobId) {
+          setActiveEntities((prev) => ({ ...prev, jobId: event.relatedJobId }))
+        }
+        setWorkspaceMode("applications")
+        setQuery(proactiveCommandSuggestion(event))
+        setTimeout(() => inputRef.current?.focus(), 50)
+        break
+      default:
+        setQuery(proactiveCommandSuggestion(event))
+        setTimeout(() => inputRef.current?.focus(), 50)
+        break
+    }
+  }
+
   // ── Timeline replay ─────────────────────────────────────────────────────────
   function handleReplay(action: ScoutTimelineReplayAction) {
     switch (action.type) {
@@ -1216,6 +1325,14 @@ export function ScoutWorkspaceShell() {
   // ── Render ───────────────────────────────────────────────────────────────────
 
   const showNarrative = narrative && !narrativeDismissed && workspaceMode !== "idle"
+  const showProactiveStrip =
+    proactive.settings.enabled &&
+    workspaceMode === "idle" &&
+    !isLoading &&
+    !scoutStream.isStreaming &&
+    !researchStream.isRunning &&
+    query.trim().length === 0 &&
+    Boolean(proactive.topEvent)
 
   return (
     <main className="app-page pb-[max(6rem,calc(env(safe-area-inset-bottom)+5.5rem))]">
@@ -1312,6 +1429,18 @@ export function ScoutWorkspaceShell() {
         {/* Main surface — no key remounting, CSS fade-through */}
         <div className="min-w-0 flex-1">
 
+          {/* Proactive companion strip (non-intrusive, idle only) */}
+          {showProactiveStrip && (
+            <ScoutProactiveStrip
+              event={proactive.topEvent}
+              enabled={proactive.settings.enabled}
+              onOpen={handleOpenProactive}
+              onDismiss={proactive.dismiss}
+              onSnooze={proactive.snooze}
+              onDisable={() => proactive.setEnabled(false)}
+            />
+          )}
+
           {/* Scout narrative strip */}
           {showNarrative && (
             <div className="mb-5 flex items-start gap-3 border-l-2 border-[#FF5C18] bg-white px-4 py-3">
@@ -1380,6 +1509,10 @@ export function ScoutWorkspaceShell() {
                       setMissionsDisabled(true)
                       setMissionStore((prev) => prev ? { ...prev, disabled: true } : prev)
                     }}
+                    proactiveEvents={proactive.visibleEvents}
+                    onProactiveOpen={handleOpenProactive}
+                    onProactiveDismiss={proactive.dismiss}
+                    onProactiveSnooze={proactive.snooze}
                   />
                 )
               }
@@ -1453,7 +1586,7 @@ export function ScoutWorkspaceShell() {
         </div>
 
         {/* Right intelligence rail — Timeline > Company intel > Scout rail > browser context > market signals */}
-        {(showTimeline || companyIntelData || companyIntelLoading || rail || (browserContext && browserContext.pageType !== "unknown") || marketSignals.length > 0) && (
+        {(showTimeline || companyIntelData || companyIntelLoading || rail || (browserContext && browserContext.pageType !== "unknown") || marketSignals.length > 0 || proactiveRailEvents.length > 0) && (
           <div className="hidden lg:flex flex-col gap-4 transition-all duration-200 opacity-100 translate-x-0">
             {/* Activity timeline panel */}
             {showTimeline && (
@@ -1482,10 +1615,26 @@ export function ScoutWorkspaceShell() {
                 context={browserContext}
                 activeWorkflow={workflowEngine.activeWorkflow}
                 latestEvents={latestRailEvents}
+                proactiveEvents={proactiveRailEvents}
                 onPreFill={handleSendCommand}
                 onExpandWorkflow={() => workflowEngine.setExpanded(true)}
+                onOpenProactive={handleOpenProactive}
               />
             ) : null}
+
+            {/* Proactive companion rail */}
+            <ScoutProactiveRail
+              events={proactiveRailEvents}
+              enabled={proactive.settings.enabled}
+              mutedCount={proactive.settings.mutedTypes.length}
+              loading={proactive.loading}
+              onOpen={handleOpenProactive}
+              onDismiss={proactive.dismiss}
+              onSnooze={proactive.snooze}
+              onMuteType={proactive.muteType}
+              onClearMutedTypes={proactive.clearMutedTypes}
+              onSetEnabled={proactive.setEnabled}
+            />
 
             {/* Market signals — show in idle mode when there's space */}
             {workspaceMode === "idle" && (marketSignals.length > 0 || marketLoading) && (

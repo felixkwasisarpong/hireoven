@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils"
 import type { ActiveBrowserContext } from "@/lib/scout/browser-context"
 import type { ScoutActiveWorkflow } from "@/lib/scout/workflows/types"
 import type { ScoutTimelineEvent } from "@/lib/scout/timeline/types"
+import type { ScoutProactiveEvent } from "@/lib/scout/proactive/types"
 
 // ── ATS display names ──────────────────────────────────────────────────────────
 
@@ -48,10 +49,14 @@ type Props = {
   activeWorkflow: ScoutActiveWorkflow | null
   /** Recent timeline activity for at-a-glance transparency in the rail */
   latestEvents?: ScoutTimelineEvent[]
+  /** Proactive companion events shown in compact rail form */
+  proactiveEvents?: ScoutProactiveEvent[]
   /** Pre-fills the Scout command bar — user reviews before submitting */
   onPreFill: (query: string) => void
   /** Expand the floating workflow panel */
   onExpandWorkflow: () => void
+  /** Opens a proactive suggestion (workspace restore or command prefill). */
+  onOpenProactive?: (event: ScoutProactiveEvent) => void
 }
 
 function shortTime(iso: string): string {
@@ -64,8 +69,10 @@ export function BrowserContextRail({
   context,
   activeWorkflow,
   latestEvents = [],
+  proactiveEvents = [],
   onPreFill,
   onExpandWorkflow,
+  onOpenProactive,
 }: Props) {
   const pageStyle = PAGE_STYLE[context.pageType as PageModeStyleKey] ?? PAGE_STYLE.unknown
   const pageLabel = PAGE_LABEL[context.pageType as PageModeStyleKey] ?? PAGE_LABEL.unknown
@@ -241,6 +248,39 @@ export function BrowserContextRail({
                   {event.type.replace(/_/g, " ")}{shortTime(event.timestamp) ? ` · ${shortTime(event.timestamp)}` : ""}
                 </p>
               </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Proactive Scout (compact) ─────────────────────────────────────── */}
+      {proactiveEvents.length > 0 && (
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_2px_12px_rgba(15,23,42,0.05)]">
+          <div className="border-b border-slate-100 px-4 py-2.5">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+              Proactive Scout
+            </p>
+          </div>
+          <div className="space-y-1.5 px-4 py-3">
+            {proactiveEvents.slice(0, 2).map((event) => (
+              <button
+                key={event.id}
+                type="button"
+                onClick={() => onOpenProactive?.(event)}
+                className={cn(
+                  "w-full rounded-lg border px-2.5 py-2 text-left transition",
+                  event.severity === "urgent"
+                    ? "border-red-200 bg-red-50/60 hover:bg-red-50"
+                    : event.severity === "important"
+                    ? "border-amber-200 bg-amber-50/60 hover:bg-amber-50"
+                    : "border-slate-200 bg-slate-50 hover:bg-slate-100",
+                )}
+              >
+                <p className="text-[11px] font-medium leading-snug text-slate-700">{event.title}</p>
+                <p className="mt-0.5 text-[10px] text-slate-400">
+                  {event.type.replace(/_/g, " ")}
+                </p>
+              </button>
             ))}
           </div>
         </div>
