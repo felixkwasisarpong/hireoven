@@ -507,6 +507,16 @@ export interface ActiveContextResult {
   context: ActiveBrowserContext | null
 }
 
+// ── Review submitted notification ─────────────────────────────────────────────
+
+/** Posted by the extension to hireoven.com via window.postMessage when the user
+ *  clicks "Mark submitted" in the Final Review panel on the job site. */
+export interface ReviewSubmittedMessage {
+  type:         "hireoven:review-submitted"
+  jobId?:       string
+  queueItemId?: string
+}
+
 /** Scout commands that hireoven.com page can send to the extension */
 export type ScoutExtensionCommandType =
   | "OPEN_AUTOFILL"

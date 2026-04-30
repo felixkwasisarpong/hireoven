@@ -33,6 +33,7 @@ import {
 } from "./job-screener-panel"
 import { MatchDetailPanel, type MatchDetailModel } from "./match-detail-panel"
 import { enrichFields, type AutofillIntelligenceResult, type AutofillIntelligentField } from "../autofill/intelligence"
+import { FinalReviewPanel } from "./final-review-panel"
 
 /**
  * Inline SVG of the Hireoven flame mark — extracted from hireoven-icon.svg
@@ -49,7 +50,7 @@ interface PageAwareOptions {
   resolveAppOrigin: () => Promise<string>
 }
 
-type DrawerMode = "none" | "autofill" | "tailor" | "cover"
+type DrawerMode = "none" | "autofill" | "tailor" | "cover" | "review"
 type BusyAction =
   | "session"
   | "save"
@@ -1221,6 +1222,7 @@ export class PageAwareControlSystem {
 
   private screenerPanel: JobScreenerPanel | null = null
   private screenerFilters: ScreenerFilters = { ...DEFAULT_SCREENER_FILTERS }
+  private finalReviewPanel: FinalReviewPanel | null = null
   private matchPanel: MatchDetailPanel | null = null
   private readonly autoMatchTriggered = new Set<string>()
   private autoMatchTimer: number | null = null
@@ -1937,6 +1939,54 @@ export class PageAwareControlSystem {
     })
   }
 
+  private openFinalReviewPanel(): void {
+    if (!this.authenticated) { this.openPath("/login"); return }
+
+    this.finalReviewPanel?.unmount()
+    this.finalReviewPanel = new FinalReviewPanel({
+      initialState: {
+        jobTitle:              this.activeJob?.title ?? null,
+        company:               this.activeJob?.company ?? null,
+        applyUrl:              window.location.href,
+        autofill:              this.fieldIntelligence ?? undefined,
+        resumeReady:           false,
+        coverLetterReady:      false,
+        sensitiveAcknowledged: false,
+      },
+      appOrigin: this.appOrigin,
+      onOpenAutofill: () => {
+        this.finalReviewPanel?.unmount()
+        this.finalReviewPanel = null
+        void this.openAutofillDrawer()
+      },
+      onMarkSubmitted: async (jobId?: string) => {
+        try {
+          await fetch(`${this.appOrigin}/api/scout/mark-submitted`, {
+            method:       "POST",
+            credentials:  "include",
+            headers:      { "Content-Type": "application/json" },
+            body:         JSON.stringify({
+              jobId:       jobId,
+              jobTitle:    this.activeJob?.title,
+              companyName: this.activeJob?.company,
+              applyUrl:    window.location.href,
+            }),
+          })
+        } catch {}
+      },
+      onClose: () => {
+        this.finalReviewPanel?.unmount()
+        this.finalReviewPanel = null
+      },
+    })
+    this.finalReviewPanel.mount()
+
+    // Pass the latest autofill intelligence if already loaded
+    if (this.fieldIntelligence) {
+      this.finalReviewPanel.updateAutofill(this.fieldIntelligence)
+    }
+  }
+
   private async fillSafeFields(): Promise<void> {
     const preview = this.autofillPreview
     if (!preview) return
@@ -2177,6 +2227,10 @@ export class PageAwareControlSystem {
 
       case "cover":
         await this.openCoverDrawer()
+        return
+
+      case "review-final":
+        this.openFinalReviewPanel()
         return
 
       case "fill-safe":
@@ -2560,6 +2614,7 @@ export class PageAwareControlSystem {
         </button>
         <button class="action" data-action="tailor" ${this.isBusy("tailor-load") ? "disabled" : ""}>Tailor Resume</button>
         <button class="action" data-action="cover" ${this.isBusy("cover-generate") ? "disabled" : ""}>Cover Letter</button>
+        <button class="action" data-action="review-final" style="border-color:#10b981;color:#065f46;">✓ Final Review</button>
       `
     }
 

@@ -212,6 +212,24 @@ export function ScoutWorkspaceShell() {
     return () => window.removeEventListener("scout:gate-open", onGateOpen)
   }, [])
 
+  // ── Extension review-submitted bridge ────────────────────────────────────────
+  // When the user clicks "Mark submitted" in the extension Final Review panel,
+  // it posts hireoven:review-submitted to the page. We update the queue here.
+  useEffect(() => {
+    function onReviewSubmitted(e: MessageEvent) {
+      if (e.data?.type !== "hireoven:review-submitted") return
+      const jobId = e.data?.jobId as string | undefined
+      if (jobId) {
+        // Find matching queue item by jobId and mark it submitted
+        bulkEngine.queue?.jobs.forEach((j) => {
+          if (j.jobId === jobId) bulkEngine.markSubmitted(j.queueId)
+        })
+      }
+    }
+    window.addEventListener("message", onReviewSubmitted)
+    return () => window.removeEventListener("message", onReviewSubmitted)
+  }, [bulkEngine])
+
   function dispatchGateResponse(approved: boolean, alwaysAllow = false) {
     setActiveGate(null)
     window.dispatchEvent(new CustomEvent("scout:gate-response", {
