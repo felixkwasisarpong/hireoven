@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { logApiUsage } from "@/lib/admin/usage"
 import { createClient } from "@/lib/supabase/server"
 import { getScoutContext, formatScoutContextForClaude } from "@/lib/scout/context"
+import { resolveJobContext, listTopSavedJobs } from "@/lib/scout/resolve-job-context"
 import { isAllowedScoutAction, normalizeScoutActions } from "@/lib/scout/actions"
 import { detectScoutMode } from "@/lib/scout/mode"
 import { getScoutSystemPrompt } from "@/lib/scout/prompts"
@@ -224,6 +225,9 @@ const INTERVIEW_INTENT_RE = /\b(interview.?prep|prepare.*(for.*(this|the)|interv
 
 // Bulk application prep: "Prepare 5 applications for...", "Queue visa-friendly roles over 80 match", "Prepare applications for remote backend jobs"
 const BULK_PREP_RE = /\b(prepare|queue|batch|bulk)\b.{0,80}\b(application[s]?|apply|applying)\b/i
+
+// Intents that require a resolved job context (tailor, workflow, "best job" open)
+const NEEDS_JOB_RESOLVE_RE = /\b(tailor|tailor.?my|prepare.?application|prepare.?my.?resume|workflow.*job|open.?strong|strongest.?match|best.?saved|my.?best.*job|best.*matching)\b/i
 
 function inferBulkWorkspaceDirective(message: string): import("@/lib/scout/types").ScoutWorkspaceDirective | undefined {
   if (!BULK_PREP_RE.test(message)) return undefined
@@ -822,13 +826,73 @@ export async function POST(request: NextRequest) {
   // Cap auto-compare to 2 jobs for free users, 5 for paid
   const compareLimit = canAccess(effectivePlan, "scout_deep_analysis") ? 5 : 2
 
+  // ── Job context resolver ────────────────────────────────────────────────────
+  // Detect commands that need a concrete job (tailor, workflow, "best saved job",
+  // "open strongest match") and resolve one server-side before calling getScoutContext.
+  // This ensures Claude's answer, action payloads, and workspace_directive all
+  // reference the same job — never a hallucinated or mismatched ID.
+  const needsJobResolve =
+    !body.jobId &&                        // no explicit jobId from client
+    !BULK_PREP_RE.test(userMessage) &&    // not a bulk-prep command
+    NEEDS_JOB_RESOLVE_RE.test(userMessage)
+
+  let resolvedJob: import("@/lib/scout/resolve-job-context").ResolvedJobContext | null = null
+  const pool = (await import("@/lib/postgres/server")).getPostgresPool()
+
+  if (needsJobResolve) {
+    resolvedJob = await resolveJobContext(user.id, pool, {}).catch(() => null)
+
+    if (process.env.NODE_ENV === "development") {
+      console.log("[scout:resolve]", {
+        message:      userMessage.slice(0, 60),
+        resolvedJobId: resolvedJob?.jobId ?? null,
+        source:        resolvedJob?.source ?? null,
+        confidence:    resolvedJob?.confidence ?? null,
+        detailUrl:     resolvedJob?.detailUrl ?? null,
+      })
+    }
+
+    // No saved jobs found → return early with a helpful "save a job first" response
+    if (!resolvedJob) {
+      const topSaved = await listTopSavedJobs(user.id, pool, 5).catch(() => [])
+      if (topSaved.length === 0) {
+        return NextResponse.json({
+          answer:
+            "I don't see any saved jobs in your list. To tailor your resume or prepare an application, save a job from the feed first — then come back and I can prepare everything for that specific role.",
+          recommendation: "Explore",
+          actions: [{ type: "APPLY_FILTERS", payload: { sponsorship: "high" }, label: "Find sponsorship-friendly roles" }],
+          explanations: [],
+          intent: "command",
+          confidence: 0.95,
+          mode,
+        } satisfies ScoutResponse)
+      }
+      // There are saved jobs but none with a resolved job_id — prompt selection
+      const jobList = topSaved
+        .map((j, i) => `${i + 1}. **${j.title}** at ${j.company}${j.score ? ` (${j.score}% match)` : ""}`)
+        .join("\n")
+      return NextResponse.json({
+        answer: `I found ${topSaved.length} saved job${topSaved.length !== 1 ? "s" : ""}. Which one should I tailor for?\n\n${jobList}\n\nNavigate to the job and open Scout from that page, or tell me which role to target.`,
+        recommendation: "Explore",
+        actions: [],
+        explanations: [],
+        intent: "command",
+        confidence: 0.9,
+        mode,
+      } satisfies ScoutResponse)
+    }
+  }
+
+  // Effective job ID: resolved > explicit body value
+  const effectiveJobId = resolvedJob?.jobId ?? body.jobId
+
   try {
     // Retrieve grounded context
     const context = await getScoutContext({
       userId: user.id,
       pagePath: body.pagePath,
       mode,
-      jobId: body.jobId,
+      jobId: effectiveJobId,
       companyId: body.companyId,
       resumeId: body.resumeId,
       applicationId: body.applicationId,
@@ -968,6 +1032,12 @@ User Input: ${userMessage}`
       contextResumeId: context.resume?.id,
     })
 
+    // Resolved job is now trusted — add to knownIds so its action survives filtering
+    if (resolvedJob) {
+      knownIds.jobIds.add(resolvedJob.jobId)
+      if (resolvedJob.companyId) knownIds.companyIds.add(resolvedJob.companyId)
+    }
+
     // Add compare job IDs + their company IDs to knownIds
     if (context.compareJobs) {
       for (const cj of context.compareJobs) {
@@ -1077,12 +1147,72 @@ User Input: ${userMessage}`
     // This is server-side inference — Claude does not emit this field directly.
     const workflowDirective = inferWorkflowDirective(userMessage, inferredIntent)
     if (workflowDirective) {
-      // Pass context so the frontend can seed the workflow with relevant IDs
+      // Always seed workflow payload with the resolved (or explicit) job context.
+      // This ensures the tailor step in tailor_and_prepare has a real jobId — never blank.
       const ctxPayload: Record<string, unknown> = {}
-      if (body.jobId) ctxPayload.jobId = body.jobId
-      if (body.resumeId) ctxPayload.resumeId = body.resumeId
+      const wfJobId  = resolvedJob?.jobId ?? body.jobId ?? context.job?.id
+      const wfResumeId = body.resumeId ?? context.resume?.id
+      if (wfJobId)    ctxPayload.jobId    = wfJobId
+      if (wfResumeId) ctxPayload.resumeId = wfResumeId
+      if (resolvedJob) {
+        ctxPayload.title    = resolvedJob.title
+        ctxPayload.company  = resolvedJob.company
+        ctxPayload.detailUrl = resolvedJob.detailUrl
+        ctxPayload.source   = resolvedJob.source
+      }
       if (Object.keys(ctxPayload).length > 0) workflowDirective.payload = ctxPayload
       scoutResponse.workflow_directive = workflowDirective
+    }
+
+    // Ensure every OPEN_RESUME_TAILOR action carries the resolved job ID.
+    // Claude may return no jobId or a hallucinated one — override with the resolved one.
+    if (resolvedJob || effectiveJobId) {
+      const resolvedJobId = resolvedJob?.jobId ?? effectiveJobId
+      scoutResponse.actions = scoutResponse.actions.map((action) => {
+        if (action.type !== "OPEN_RESUME_TAILOR") return action
+        return {
+          ...action,
+          payload: {
+            ...action.payload,
+            jobId: action.payload.jobId ?? resolvedJobId,
+          },
+        }
+      })
+      // Also patch workflow steps that have OPEN_RESUME_TAILOR
+      if (scoutResponse.workflow?.steps) {
+        scoutResponse.workflow.steps = scoutResponse.workflow.steps.map((step) => {
+          if (step.action?.type !== "OPEN_RESUME_TAILOR") return step
+          return {
+            ...step,
+            action: {
+              ...step.action,
+              payload: {
+                ...step.action.payload,
+                jobId: step.action.payload.jobId ?? resolvedJobId,
+              },
+            },
+          }
+        })
+      }
+    }
+
+    // Inject tailor workspace_directive with full resolved job payload.
+    // This ensures TailorMode shows the correct title/company/detailUrl.
+    if (!scoutResponse.workspace_directive && TAILOR_INTENT_RE.test(userMessage) && !BULK_PREP_RE.test(userMessage)) {
+      const tailorJobId = resolvedJob?.jobId ?? effectiveJobId ?? context.job?.id
+      if (tailorJobId) {
+        scoutResponse.workspace_directive = {
+          mode: "tailor",
+          payload: {
+            jobId:    tailorJobId,
+            resumeId: body.resumeId ?? context.resume?.id,
+            title:    resolvedJob?.title ?? context.job?.title,
+            company:  resolvedJob?.company ?? context.job?.company_name,
+            detailUrl: resolvedJob?.detailUrl ?? (tailorJobId ? `/dashboard/jobs/${tailorJobId}` : undefined),
+            source:   resolvedJob?.source ?? "explicit",
+          },
+        }
+      }
     }
 
     // Inject bulk workspace directive when the message matches bulk preparation intent.

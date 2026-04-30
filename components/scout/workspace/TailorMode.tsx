@@ -1,13 +1,13 @@
 "use client"
 
 import Link from "next/link"
-import { ArrowRight, FileText } from "lucide-react"
+import { ArrowRight, ArrowUpRight, FileText } from "lucide-react"
 import type { ScoutResponse, ScoutAction } from "@/lib/scout/types"
 import type { ActiveEntities } from "./ScoutWorkspaceShell"
 
 type Props = {
-  response: ScoutResponse
-  onFollowUp: (query: string) => void
+  response:      ScoutResponse
+  onFollowUp:    (query: string) => void
   activeEntities?: ActiveEntities
 }
 
@@ -24,18 +24,45 @@ const TAILOR_STEPS = [
 ]
 
 export function TailorMode({ response, onFollowUp, activeEntities }: Props) {
+  // ── Resolve job context from workspace_directive payload (server-resolved) ──
+  // The chat route now injects a full resolved-job payload into workspace_directive
+  // whenever a tailor command is detected. Read it first; fall back to the
+  // OPEN_RESUME_TAILOR action payload; last resort: activeEntities.
+  const wdPayload = response.workspace_directive?.mode === "tailor"
+    ? (response.workspace_directive.payload ?? {})
+    : {}
+
   const tailorAction = response.actions?.find(
     (a): a is Extract<ScoutAction, { type: "OPEN_RESUME_TAILOR" }> =>
       a.type === "OPEN_RESUME_TAILOR"
   )
-  const tailorUrl = tailorAction?.payload?.jobId
-    ? `/dashboard/resume/tailor?jobId=${tailorAction.payload.jobId}`
+
+  const resolvedJobId =
+    (wdPayload.jobId   as string | undefined) ??
+    tailorAction?.payload?.jobId
+
+  const resolvedTitle =
+    (wdPayload.title   as string | undefined) ??
+    tailorAction?.label ??
+    activeEntities?.jobTitle
+
+  const resolvedCompany =
+    (wdPayload.company as string | undefined) ??
+    activeEntities?.companyName
+
+  const resolvedDetailUrl =
+    (wdPayload.detailUrl as string | undefined) ??
+    (resolvedJobId ? `/dashboard/jobs/${resolvedJobId}` : null)
+
+  // Build the actual tailor URL — always carry the resolved jobId
+  const tailorUrl = resolvedJobId
+    ? `/dashboard/resume/tailor?jobId=${resolvedJobId}`
     : tailorAction?.payload?.resumeId
       ? `/dashboard/resume/tailor?resumeId=${tailorAction.payload.resumeId}`
       : "/dashboard/resume/tailor"
 
-  const answerText = getReadableAnswer(response.answer)
-  const hasEntity  = activeEntities?.jobTitle || activeEntities?.companyName
+  const hasJobContext = Boolean(resolvedJobId || resolvedTitle || resolvedCompany)
+  const answerText   = getReadableAnswer(response.answer)
 
   return (
     <div className="grid gap-5 lg:grid-cols-[1fr_240px]">
@@ -48,15 +75,38 @@ export function TailorMode({ response, onFollowUp, activeEntities }: Props) {
             <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl bg-slate-950">
               <FileText className="h-4 w-4 text-white" />
             </div>
-            <div>
+            <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold text-gray-900">Resume tailoring</p>
-              {hasEntity && (
-                <p className="text-[11px] text-gray-400">
-                  {activeEntities?.jobTitle ?? ""}{activeEntities?.jobTitle && activeEntities?.companyName ? " at " : ""}{activeEntities?.companyName ?? ""}
+              {hasJobContext && (
+                <p className="truncate text-[11px] text-gray-400">
+                  {resolvedTitle ?? ""}
+                  {resolvedTitle && resolvedCompany ? " at " : ""}
+                  {resolvedCompany ?? ""}
                 </p>
               )}
             </div>
+            {/* Link to job detail — consistent with what's being tailored for */}
+            {resolvedDetailUrl && (
+              <Link
+                href={resolvedDetailUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="View job detail"
+                className="flex-shrink-0 text-slate-400 transition hover:text-[#FF5C18]"
+              >
+                <ArrowUpRight className="h-4 w-4" />
+              </Link>
+            )}
           </div>
+
+          {/* No-job-context warning */}
+          {!hasJobContext && (
+            <div className="border-b border-amber-100 bg-amber-50 px-5 py-3">
+              <p className="text-xs text-amber-700">
+                No job selected. Open a job from your saved list first so Scout can tailor specifically for that role.
+              </p>
+            </div>
+          )}
 
           <div className="px-5 py-4">
             <ul className="mb-5 space-y-2.5 border-l-2 border-gray-100 pl-4">
@@ -101,21 +151,29 @@ export function TailorMode({ response, onFollowUp, activeEntities }: Props) {
           </div>
         )}
 
-        {hasEntity && (
+        {hasJobContext && (
           <div className={answerText ? "border-t border-gray-100 pt-4" : ""}>
             <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-gray-400">
               Target role
             </p>
-            {activeEntities?.jobTitle && (
-              <p className="text-sm font-semibold text-gray-800">{activeEntities.jobTitle}</p>
+            {resolvedTitle && (
+              <p className="text-sm font-semibold text-gray-800">{resolvedTitle}</p>
             )}
-            {activeEntities?.companyName && (
-              <p className="mt-0.5 text-xs text-gray-500">{activeEntities.companyName}</p>
+            {resolvedCompany && (
+              <p className="mt-0.5 text-xs text-gray-500">{resolvedCompany}</p>
+            )}
+            {resolvedDetailUrl && (
+              <Link
+                href={resolvedDetailUrl}
+                className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-medium text-[#FF5C18] hover:underline"
+              >
+                View job <ArrowUpRight className="h-3 w-3" />
+              </Link>
             )}
           </div>
         )}
 
-        <div className={hasEntity || answerText ? "border-t border-gray-100 pt-4" : ""}>
+        <div className={hasJobContext || answerText ? "border-t border-gray-100 pt-4" : ""}>
           <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-gray-400">
             Process
           </p>

@@ -155,8 +155,26 @@ export function preparePlan(
 ): ScoutActiveWorkflow {
   const template = TEMPLATES[type as ScoutWorkflowType] ?? TAILOR_AND_PREPARE
   const id = `wf-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
-  const steps = template.steps.map((s, i) =>
-    i === 0 && payload ? { ...s, payload } : { ...s }
-  )
+
+  // Distribute job context (jobId, title, company, detailUrl) to all steps that
+  // need it — not just the first one. This ensures the tailor step in
+  // tailor_and_prepare always has a real job context, never a blank payload.
+  const jobCtx = payload
+    ? {
+        jobId:     payload.jobId,
+        resumeId:  payload.resumeId,
+        title:     payload.title,
+        company:   payload.company,
+        detailUrl: payload.detailUrl,
+        source:    payload.source,
+      }
+    : null
+
+  const steps = template.steps.map((s) => {
+    if (!jobCtx) return { ...s }
+    // Merge job context into every step's payload — steps can ignore what they don't need
+    return { ...s, payload: { ...(s.payload ?? {}), ...jobCtx } }
+  })
+
   return { ...template, id, steps }
 }
