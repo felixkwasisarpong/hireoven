@@ -16,6 +16,14 @@ import { getScoutSuggestionChips } from "@/lib/scout/mode"
 import { getScoutNudges } from "@/lib/scout/nudges"
 import { detectScoutMode } from "@/lib/scout/mode"
 import { inferWorkspaceMode, type WorkspaceMode, type WorkspaceRail } from "@/lib/scout/workspace"
+import {
+  appendCommand,
+  clearScoutSession,
+  extractModeMetadata,
+  extractRailMetadata,
+  readScoutSession,
+  writeScoutSession,
+} from "@/lib/scout/session"
 import { useResumeContext } from "@/components/resume/ResumeProvider"
 import { useAuth } from "@/lib/hooks/useAuth"
 import type { ScoutResponse, ScoutStrategyBoard } from "@/lib/scout/types"
@@ -48,6 +56,10 @@ export function ScoutWorkspaceShell() {
   const [rail, setRail] = useState<WorkspaceRail | null>(null)
   const [chips, setChips] = useState<string[]>([])
 
+  // ── Session state ───────────────────────────────────────────────────────────
+  const [recentCommands, setRecentCommands] = useState<string[]>([])
+  const [hasSession,     setHasSession]     = useState(false)
+
   // ── Strategy / behavior data ────────────────────────────────────────────────
   const [strategyBoard,   setStrategyBoard]   = useState<ScoutStrategyBoard | null>(null)
   const [strategyLoading, setStrategyLoading] = useState(true)
@@ -79,9 +91,31 @@ export function ScoutWorkspaceShell() {
   const greeting =
     hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening"
 
-  // Populate chips from Scout mode suggestion list (updated on mount and when mode changes)
+  // ── Restore session on mount ────────────────────────────────────────────────
   useEffect(() => {
-    setChips(getScoutSuggestionChips(scoutMode))
+    const session = readScoutSession()
+    if (!session) {
+      // No session: populate chips from Scout mode defaults
+      setChips(getScoutSuggestionChips(scoutMode))
+      return
+    }
+    setHasSession(true)
+    setWorkspaceMode(session.mode)
+    setRecentCommands(session.recentCommands)
+    if (session.chips.length > 0) setChips(session.chips)
+    else setChips(getScoutSuggestionChips(scoutMode))
+    if (session.rail) {
+      // Restore label/summary only — no actions (may reference stale IDs)
+      setRail({ title: session.rail.title, summary: session.rail.summary })
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Populate chips from Scout mode suggestion list when no session on mount
+  useEffect(() => {
+    // Only run if session has not already set chips
+    if (!hasSession) setChips(getScoutSuggestionChips(scoutMode))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scoutMode])
 
   // ── Effects ─────────────────────────────────────────────────────────────────
@@ -107,11 +141,14 @@ export function ScoutWorkspaceShell() {
 
   useEffect(() => {
     function onReset() {
+      clearScoutSession()
       setMessages([])
       setError(null)
       setActiveResponse(null)
       setWorkspaceMode("idle")
       setRail(null)
+      setRecentCommands([])
+      setHasSession(false)
     }
     window.addEventListener("scout:reset-context", onReset)
     return () => window.removeEventListener("scout:reset-context", onReset)
@@ -203,24 +240,37 @@ export function ScoutWorkspaceShell() {
         setWorkspaceMode(newMode)
 
         // ── Context rail: prefer directive rail, fall back to action scan ───
+        let newRail: WorkspaceRail | null = null
         if (directive?.rail !== undefined) {
-          // directive explicitly sets or clears the rail
-          setRail(directive.rail ?? null)
+          newRail = directive.rail ?? null
         } else {
           const railActions = normalized.actions?.filter(
             (a) => ["OPEN_JOB", "OPEN_COMPANY", "OPEN_RESUME_TAILOR"].includes(a.type)
           )
-          setRail(
+          newRail =
             railActions && railActions.length > 0
               ? { title: "Scout context", summary: "Suggested next steps", actions: railActions }
               : null
-          )
         }
+        setRail(newRail)
 
         // ── Chips: prefer directive chips, keep current otherwise ────────────
+        const newChips = directive?.chips && directive.chips.length > 0 ? directive.chips : chips
         if (directive?.chips && directive.chips.length > 0) {
           setChips(directive.chips)
         }
+
+        // ── Persist session ──────────────────────────────────────────────────
+        const updatedCommands = appendCommand(recentCommands, message)
+        setRecentCommands(updatedCommands)
+        setHasSession(true)
+        writeScoutSession({
+          mode: newMode,
+          chips: newChips,
+          recentCommands: updatedCommands,
+          rail: extractRailMetadata(newRail),
+          modeMetadata: extractModeMetadata(newMode, normalized),
+        })
       } catch {
         setError("Network error. Please check your connection.")
       } finally {
@@ -246,6 +296,18 @@ export function ScoutWorkspaceShell() {
     setActiveResponse(null)
     setWorkspaceMode("idle")
     setRail(null)
+  }
+
+  function handleStartFresh() {
+    clearScoutSession()
+    setMessages([])
+    setError(null)
+    setActiveResponse(null)
+    setWorkspaceMode("idle")
+    setRail(null)
+    setRecentCommands([])
+    setHasSession(false)
+    setChips(getScoutSuggestionChips(scoutMode))
   }
 
   // ── Render ───────────────────────────────────────────────────────────────────
@@ -298,6 +360,7 @@ export function ScoutWorkspaceShell() {
           onChipClick={handleChipClick}
           inputRef={inputRef}
           variant="dark"
+          commandHistory={recentCommands}
           placeholder={
             workspaceMode === "idle"
               ? "Ask Scout anything…"
@@ -335,6 +398,9 @@ export function ScoutWorkspaceShell() {
                 onClearChat={handleClearChat}
                 onTileClick={(q) => { setQuery(q); setTimeout(() => inputRef.current?.focus(), 50) }}
                 chatEndRef={chatEndRef as React.RefObject<HTMLDivElement>}
+                recentCommands={recentCommands}
+                hasSession={hasSession}
+                onStartFresh={handleStartFresh}
               />
             )}
 

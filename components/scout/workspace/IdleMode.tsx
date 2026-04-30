@@ -7,6 +7,7 @@ import {
   Building2,
   FileText,
   RefreshCw,
+  RotateCcw,
   Search,
   Sparkles,
 } from "lucide-react"
@@ -32,6 +33,12 @@ type Props = {
   onClearChat: () => void
   onTileClick: (query: string) => void
   chatEndRef: React.RefObject<HTMLDivElement>
+  /** Restored command history from session */
+  recentCommands?: string[]
+  /** Whether there is a saved session to clear */
+  hasSession?: boolean
+  /** Clear the saved session and reset to blank state */
+  onStartFresh?: () => void
 }
 
 const ACTION_TILES = [
@@ -110,6 +117,9 @@ export function IdleMode({
   onClearChat,
   onTileClick,
   chatEndRef,
+  recentCommands = [],
+  hasSession = false,
+  onStartFresh,
 }: Props) {
   const { showUpgrade } = useUpgradeModal()
   const hasConversation = messages.length > 0
@@ -128,17 +138,31 @@ export function IdleMode({
       {/* ── Empty / idle state ── */}
       {!hasConversation && !isLoading && (
         <div>
-          {/* Greeting */}
-          <div className="mb-8">
-            <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-[#FF5C18]">
-              Scout workspace
-            </p>
-            <h2 className="mt-2 text-3xl font-bold tracking-tight text-gray-950">
-              {greeting}, {firstName}.
-            </h2>
-            <p className="mt-1.5 text-base text-gray-400">
-              What are you working on today?
-            </p>
+          {/* Greeting row */}
+          <div className="mb-8 flex items-start justify-between gap-4">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-[#FF5C18]">
+                Scout workspace
+              </p>
+              <h2 className="mt-2 text-3xl font-bold tracking-tight text-gray-950">
+                {greeting}, {firstName}.
+              </h2>
+              <p className="mt-1.5 text-base text-gray-400">
+                What are you working on today?
+              </p>
+            </div>
+
+            {/* Start fresh */}
+            {hasSession && onStartFresh && (
+              <button
+                type="button"
+                onClick={onStartFresh}
+                className="mt-1 inline-flex flex-shrink-0 items-center gap-1.5 rounded-xl border border-gray-200 px-3 py-2 text-xs font-medium text-gray-400 transition hover:border-gray-300 hover:text-gray-700"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                Start fresh
+              </button>
+            )}
           </div>
 
           {/* Nudge strip */}
@@ -173,6 +197,28 @@ export function IdleMode({
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* Recent commands — from saved session */}
+          {recentCommands.length > 0 && (
+            <div className="mb-7">
+              <p className="mb-2.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-gray-400">
+                Recent
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {recentCommands.slice(0, 4).map((cmd) => (
+                  <button
+                    key={cmd}
+                    type="button"
+                    onClick={() => onTileClick(cmd)}
+                    className="max-w-xs truncate rounded-xl border border-gray-200 bg-white px-3 py-2 text-left text-xs font-medium text-gray-600 transition hover:border-slate-950 hover:bg-slate-950 hover:text-white"
+                    title={cmd}
+                  >
+                    {cmd.length > 60 ? `${cmd.slice(0, 57)}…` : cmd}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 

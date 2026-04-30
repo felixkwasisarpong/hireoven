@@ -1,6 +1,7 @@
 "use client"
 
 import { Loader2, Mic, Send } from "lucide-react"
+import { useState } from "react"
 import { cn } from "@/lib/utils"
 
 type Props = {
@@ -14,6 +15,8 @@ type Props = {
   inputRef?: React.RefObject<HTMLInputElement>
   /** "dark" renders chips for a slate-950 container */
   variant?: "light" | "dark"
+  /** Command history for up/down navigation */
+  commandHistory?: string[]
 }
 
 export function ScoutCommandBar({
@@ -26,12 +29,62 @@ export function ScoutCommandBar({
   placeholder,
   inputRef,
   variant = "light",
+  commandHistory = [],
 }: Props) {
   const isDark = variant === "dark"
+  // -1 = current draft; 0..N-1 = history index
+  const [historyIndex, setHistoryIndex] = useState(-1)
+  const [draftQuery, setDraftQuery] = useState("")
+
+  function handleChange(value: string) {
+    // If user types while browsing history, reset index
+    if (historyIndex !== -1) setHistoryIndex(-1)
+    onChange(value)
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (!commandHistory.length) return
+
+    if (e.key === "ArrowUp") {
+      e.preventDefault()
+      if (historyIndex === -1) {
+        // Save current draft before navigating up
+        setDraftQuery(query)
+      }
+      const nextIndex = Math.min(historyIndex + 1, commandHistory.length - 1)
+      setHistoryIndex(nextIndex)
+      onChange(commandHistory[nextIndex] ?? "")
+    }
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault()
+      if (historyIndex <= 0) {
+        // Back to draft
+        setHistoryIndex(-1)
+        onChange(draftQuery)
+      } else {
+        const nextIndex = historyIndex - 1
+        setHistoryIndex(nextIndex)
+        onChange(commandHistory[nextIndex] ?? "")
+      }
+    }
+
+    if (e.key === "Escape" && historyIndex !== -1) {
+      e.preventDefault()
+      setHistoryIndex(-1)
+      onChange(draftQuery)
+    }
+  }
+
+  function handleSubmit(e: React.FormEvent) {
+    setHistoryIndex(-1)
+    setDraftQuery("")
+    onSubmit(e)
+  }
 
   return (
     <div>
-      <form onSubmit={onSubmit}>
+      <form onSubmit={handleSubmit}>
         <div
           className={cn(
             "flex items-center gap-3 rounded-2xl px-4 py-3 transition-all duration-150",
@@ -56,12 +109,20 @@ export function ScoutCommandBar({
           <input
             ref={inputRef}
             value={query}
-            onChange={(e) => onChange(e.target.value)}
+            onChange={(e) => handleChange(e.target.value)}
+            onKeyDown={handleKeyDown}
             disabled={isLoading}
             placeholder={placeholder ?? "Ask Scout anything…"}
             autoComplete="off"
             className="w-full bg-transparent text-[15px] text-gray-900 outline-none placeholder:text-gray-400 disabled:opacity-50"
           />
+
+          {/* History indicator */}
+          {historyIndex !== -1 && (
+            <span className="flex-shrink-0 text-[10px] font-semibold text-gray-400">
+              {historyIndex + 1}/{commandHistory.length}
+            </span>
+          )}
 
           <button
             type="submit"
@@ -84,7 +145,7 @@ export function ScoutCommandBar({
             <button
               key={chip}
               type="button"
-              onClick={() => onChipClick(chip)}
+              onClick={() => { setHistoryIndex(-1); onChipClick(chip) }}
               className={cn(
                 "rounded-full border px-3 py-1.5 text-xs font-medium transition",
                 isDark
