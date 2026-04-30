@@ -33,6 +33,8 @@ import { isCareerStrategyIntent } from "@/lib/scout/career/intent"
 import { useCareerStrategy } from "@/hooks/useCareerStrategy"
 import { useScoutBrowserOperator } from "@/hooks/useScoutBrowserOperator"
 import { BrowserActionStrip } from "./BrowserActionStrip"
+import { ScoutErrorBoundary } from "@/components/scout/ScoutErrorBoundary"
+import { SCOUT_FLAGS } from "@/lib/scout/flags"
 import { useScoutTimeline } from "@/hooks/useScoutTimeline"
 import { ScoutTimelinePanel } from "@/components/scout/timeline/ScoutTimelinePanel"
 import { useScoutProactive } from "@/hooks/useScoutProactive"
@@ -1666,6 +1668,7 @@ export function ScoutWorkspaceShell() {
           })()}
 
           {/* WorkspaceSurface — smooth opacity fade between modes */}
+          <ScoutErrorBoundary surface="Workspace" retryLabel="Reload workspace">
           <WorkspaceSurface
             mode={workspaceMode}
             render={(displayedMode) => {
@@ -1796,10 +1799,12 @@ export function ScoutWorkspaceShell() {
               return null
             }}
           />
+          </ScoutErrorBoundary>
         </div>
 
         {/* Right intelligence rail — Timeline > Company intel > Scout rail > browser context > market signals */}
         {(showTimeline || companyIntelData || companyIntelLoading || rail || (browserContext && browserContext.pageType !== "unknown") || marketSignals.length > 0 || proactiveRailEvents.length > 0) && (
+          <ScoutErrorBoundary surface="Context rail" retryLabel="Reload rail">
           <div className="hidden lg:flex flex-col gap-4 transition-all duration-200 opacity-100 translate-x-0">
             {/* Activity timeline panel */}
             {showTimeline && (
@@ -1862,6 +1867,7 @@ export function ScoutWorkspaceShell() {
               <ScoutMarketRail signals={marketSignals} loading={marketLoading} />
             )}
           </div>
+          </ScoutErrorBoundary>
         )}
       </div>
       {/* ── Command palette ──────────────────────────────────────────── */}
