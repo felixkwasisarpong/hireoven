@@ -183,12 +183,6 @@ export default function CompanyProfilePage() {
     )
   }
 
-  const tabs: { key: Tab; label: string }[] = [
-    { key: "roles", label: `Open roles${jobs.length > 0 ? ` (${jobs.length})` : ""}` },
-    { key: "intel", label: "Sponsorship intel" },
-    { key: "about", label: "About" },
-  ]
-
   return (
     <main className="app-page pb-[max(6rem,calc(env(safe-area-inset-bottom)+5.5rem))]">
       <div className="app-shell space-y-0 pb-[max(2rem,calc(env(safe-area-inset-bottom)+1rem))]">
@@ -205,27 +199,40 @@ export default function CompanyProfilePage() {
           <CompanyHeader company={company} newJobsThisWeek={newThisWeek} />
         </div>
 
-        {/* ── Tab nav (underline style) ──────────────────────── */}
-        <div className="sticky top-0 z-10 border-b border-gray-100 bg-white px-5 sm:px-6">
-          <div className="flex gap-0">
-            {tabs.map(({ key, label }) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setTab(key)}
-                className={cn(
-                  "relative mr-6 py-3.5 text-sm font-medium transition-colors",
-                  tab === key
-                    ? "text-gray-950"
-                    : "text-gray-400 hover:text-gray-700"
-                )}
-              >
-                {label}
-                {tab === key && (
-                  <span className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full bg-[#FF5C18]" />
-                )}
-              </button>
-            ))}
+        {/* ── Tab nav ───────────────────────────────────────── */}
+        <div className="sticky top-0 z-10 border-b border-gray-100 bg-white/95 px-5 py-3 backdrop-blur-sm sm:px-6">
+          <div className="inline-flex items-center gap-0.5 rounded-2xl bg-gray-100 p-1">
+            {(["roles", "intel", "about"] as Tab[]).map((key) => {
+              const isActive = tab === key
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setTab(key)}
+                  className={cn(
+                    "flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-all duration-150",
+                    isActive
+                      ? "bg-white text-gray-900 shadow-[0_1px_4px_rgba(15,23,42,0.12),0_0_0_1px_rgba(15,23,42,0.04)]"
+                      : "text-gray-500 hover:text-gray-700"
+                  )}
+                >
+                  {key === "roles" && "Open roles"}
+                  {key === "intel" && "Sponsorship intel"}
+                  {key === "about" && "About"}
+
+                  {key === "roles" && jobs.length > 0 && (
+                    <span
+                      className={cn(
+                        "inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full px-1 text-[10px] font-bold tabular-nums transition-colors",
+                        isActive ? "bg-[#FF5C18] text-white" : "bg-gray-200 text-gray-500"
+                      )}
+                    >
+                      {jobs.length}
+                    </span>
+                  )}
+                </button>
+              )
+            })}
           </div>
         </div>
 
