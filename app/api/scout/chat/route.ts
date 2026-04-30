@@ -289,6 +289,7 @@ function normalizeConfidence(raw: unknown): number | undefined {
 
 function inferIntentFromMessage(message: string): ScoutIntent {
   const normalized = message.trim()
+  if (BULK_PREP_RE.test(normalized)) return "workflow"
   if (WORKFLOW_HINT_RE.test(normalized)) return "workflow"
   if (COMMAND_VERB_RE.test(normalized)) return "command"
   if (ANALYSIS_HINT_RE.test(normalized)) return "analysis"
