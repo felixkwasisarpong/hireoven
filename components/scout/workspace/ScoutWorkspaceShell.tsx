@@ -248,35 +248,33 @@ export function ScoutWorkspaceShell() {
   return (
     <main className="app-page pb-[max(6rem,calc(env(safe-area-inset-bottom)+5.5rem))]">
 
-      {/* ── Command bar — sticky ──────────────────────────────────────────── */}
-      <div className="sticky top-0 z-20 border-b border-gray-100 bg-white px-5 py-5 sm:px-8">
-
-        {/* Logo row */}
-        <div className="mb-4 flex items-center justify-between">
+      {/* ── Command bar — dark, sticky ───────────────────────────────────── */}
+      <div className="sticky top-0 z-20 bg-slate-950 px-5 sm:px-8">
+        {/* Identity row */}
+        <div className="flex items-center justify-between pt-5 pb-4">
           <div className="flex items-center gap-2.5">
             <div className="relative flex-shrink-0">
-              <div className="absolute inset-0 rounded-xl bg-[#FF5C18]/30 blur-md" />
-              <span className="relative inline-flex h-8 w-8 items-center justify-center rounded-xl bg-[#FF5C18] shadow-[0_4px_12px_rgba(255,92,24,0.4)]">
+              <div className="absolute inset-0 rounded-xl bg-[#FF5C18]/40 blur-md" />
+              <span className="relative inline-flex h-8 w-8 items-center justify-center rounded-xl bg-[#FF5C18] shadow-[0_4px_14px_rgba(255,92,24,0.5)]">
                 <Sparkles className="h-4 w-4 text-white" />
               </span>
             </div>
             <div>
-              <p className="text-sm font-bold leading-none text-gray-950">Scout</p>
-              <p className="mt-0.5 text-[10px] text-gray-400">AI job search workspace</p>
+              <p className="text-sm font-bold leading-none text-white">Scout</p>
+              <p className="mt-0.5 text-[10px] text-slate-400">AI job search workspace</p>
             </div>
           </div>
 
-          {/* Mode indicator + advanced link */}
           <div className="flex items-center gap-3">
             {workspaceMode !== "idle" && (
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-gray-500">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-white/50">
                 <span className="h-1.5 w-1.5 rounded-full bg-[#FF5C18]" />
                 {workspaceMode}
               </span>
             )}
             <Link
               href="/dashboard/scout/legacy"
-              className="inline-flex items-center gap-1.5 text-[11px] font-medium text-gray-400 transition hover:text-gray-700"
+              className="inline-flex items-center gap-1.5 text-[11px] font-medium text-slate-500 transition hover:text-slate-300"
               title="Open classic Scout dashboard"
             >
               <LayoutDashboard className="h-3.5 w-3.5" />
@@ -285,6 +283,7 @@ export function ScoutWorkspaceShell() {
           </div>
         </div>
 
+        {/* Input */}
         <ScoutCommandBar
           query={query}
           onChange={setQuery}
@@ -293,6 +292,7 @@ export function ScoutWorkspaceShell() {
           chips={chips}
           onChipClick={handleChipClick}
           inputRef={inputRef}
+          variant="dark"
           placeholder={
             workspaceMode === "idle"
               ? "Ask Scout anything…"
@@ -303,6 +303,9 @@ export function ScoutWorkspaceShell() {
                   : "Follow up with Scout…"
           }
         />
+
+        {/* Bottom fade to workspace */}
+        <div className="h-5" />
       </div>
 
       {/* ── Workspace ────────────────────────────────────────────────────── */}
@@ -325,6 +328,7 @@ export function ScoutWorkspaceShell() {
                 strategyLoading={strategyLoading || behaviorLoading}
                 resumeRefreshedNotice={resumeRefreshedNotice}
                 onClearChat={handleClearChat}
+                onTileClick={(q) => { setQuery(q); setTimeout(() => inputRef.current?.focus(), 50) }}
                 chatEndRef={chatEndRef as React.RefObject<HTMLDivElement>}
               />
             )}

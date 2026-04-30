@@ -12,6 +12,8 @@ type Props = {
   onChipClick: (chip: string) => void
   placeholder?: string
   inputRef?: React.RefObject<HTMLInputElement>
+  /** "dark" renders chips for a slate-950 container */
+  variant?: "light" | "dark"
 }
 
 export function ScoutCommandBar({
@@ -23,25 +25,30 @@ export function ScoutCommandBar({
   onChipClick,
   placeholder,
   inputRef,
+  variant = "light",
 }: Props) {
+  const isDark = variant === "dark"
+
   return (
     <div>
-      {/* Main input */}
       <form onSubmit={onSubmit}>
         <div
           className={cn(
-            "flex items-center gap-3 rounded-2xl border-2 bg-white px-4 py-3 transition-all duration-150",
-            isLoading
-              ? "border-[#FF5C18]/30 shadow-[0_0_0_4px_rgba(255,92,24,0.06)]"
-              : "border-gray-200 focus-within:border-slate-950 focus-within:shadow-[0_0_0_4px_rgba(2,8,23,0.04)]"
+            "flex items-center gap-3 rounded-2xl px-4 py-3 transition-all duration-150",
+            isDark
+              ? "bg-white/95 ring-1 ring-white/10 focus-within:ring-2 focus-within:ring-[#FF5C18]/50"
+              : "border-2 border-gray-200 bg-white focus-within:border-slate-950 focus-within:shadow-[0_0_0_4px_rgba(2,8,23,0.04)]",
+            isLoading && !isDark && "border-[#FF5C18]/30"
           )}
         >
-          {/* Mic — placeholder, not functional yet */}
           <button
             type="button"
             aria-label="Voice input (coming soon)"
-            className="flex-shrink-0 text-gray-300 transition hover:text-gray-500"
             tabIndex={-1}
+            className={cn(
+              "flex-shrink-0 transition",
+              isDark ? "text-slate-400 hover:text-slate-200" : "text-gray-300 hover:text-gray-500"
+            )}
           >
             <Mic className="h-5 w-5" />
           </button>
@@ -60,7 +67,7 @@ export function ScoutCommandBar({
             type="submit"
             disabled={!query.trim() || isLoading}
             aria-label="Submit"
-            className="inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-[#FF5C18] text-white shadow-[0_4px_12px_rgba(255,92,24,0.3)] transition hover:bg-[#E14F0E] hover:shadow-[0_4px_16px_rgba(255,92,24,0.4)] disabled:opacity-40 disabled:shadow-none"
+            className="inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-[#FF5C18] text-white shadow-[0_4px_12px_rgba(255,92,24,0.35)] transition hover:bg-[#E14F0E] hover:shadow-[0_4px_16px_rgba(255,92,24,0.45)] disabled:opacity-40 disabled:shadow-none"
           >
             {isLoading ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -71,7 +78,6 @@ export function ScoutCommandBar({
         </div>
       </form>
 
-      {/* Suggestion chips */}
       {chips.length > 0 && !isLoading && (
         <div className="mt-3 flex flex-wrap gap-2">
           {chips.map((chip) => (
@@ -79,7 +85,12 @@ export function ScoutCommandBar({
               key={chip}
               type="button"
               onClick={() => onChipClick(chip)}
-              className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-500 transition hover:border-slate-950 hover:bg-slate-950 hover:text-white"
+              className={cn(
+                "rounded-full border px-3 py-1.5 text-xs font-medium transition",
+                isDark
+                  ? "border-white/12 text-white/50 hover:border-white/30 hover:bg-white/8 hover:text-white"
+                  : "border-gray-200 bg-white text-gray-500 hover:border-slate-950 hover:bg-slate-950 hover:text-white"
+              )}
             >
               {chip}
             </button>
