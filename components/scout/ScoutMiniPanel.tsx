@@ -285,6 +285,7 @@ export function ScoutMiniPanel({
                 <ScoutMessageBubble
                   key={msg.id}
                   response={msg.response}
+                  context="mini"
                   compact
                   onUpgrade={showUpgrade}
                 />

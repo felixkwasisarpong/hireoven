@@ -304,6 +304,7 @@ export function IdleMode({
               <ScoutMessageBubble
                 key={msg.id}
                 response={msg.response}
+                context="dashboard"
                 compact={false}
                 onUpgrade={showUpgrade}
               />
