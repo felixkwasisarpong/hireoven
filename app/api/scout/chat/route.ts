@@ -1283,6 +1283,42 @@ User Input: ${userMessage}`
       }
     }
 
+    // Compare guard: when compare context was loaded and compare intent fired, always
+    // activate compare mode — even if Claude returned APPLY_FILTERS instead of compare.
+    // Claude sometimes decides "your jobs are poor fits, let me redirect to search" and
+    // omits the compare field; we still need to show the comparison the user asked for.
+    if (isCompareIntent && context.compareJobs && context.compareJobs.length >= 2) {
+      if (!scoutResponse.workspace_directive) {
+        scoutResponse.workspace_directive = { mode: "compare" }
+      }
+      // If Claude omitted the compare field entirely, build a minimal fallback comparison
+      // from the context jobs so CompareMode has something to render.
+      if (!scoutResponse.compare) {
+        scoutResponse.compare = {
+          summary: scoutResponse.answer?.trim()
+            ? scoutResponse.answer.split(/[.!?]/)[0]?.trim() + "."
+            : `Here is a comparison of your ${context.compareJobs.length} saved jobs.`,
+          items: context.compareJobs.map((cj) => ({
+            jobId:              cj.id,
+            title:              cj.title,
+            company:            cj.company_name,
+            companyId:          cj.company_id ?? null,
+            matchScore:         cj.match_score ?? null,
+            sponsorshipSignal:  cj.sponsors_h1b === true ? "Sponsors H-1B" : cj.sponsors_h1b === false ? "Does not sponsor" : null,
+            salaryRange:        cj.salary_min && cj.salary_max
+              ? `$${Math.round(cj.salary_min / 1000)}k–$${Math.round(cj.salary_max / 1000)}k`
+              : null,
+            location:           cj.is_remote ? "Remote" : (cj.location ?? null),
+            recommendation:     (cj.match_score ?? 0) >= 75 ? "Good" : (cj.match_score ?? 0) >= 50 ? "Good" : "Skip" as "Best" | "Good" | "Risky" | "Skip",
+          })),
+        }
+        // Add injected company IDs so they survive the knownIds filter
+        for (const cj of context.compareJobs) {
+          if (cj.company_id) knownIds.companyIds.add(cj.company_id)
+        }
+      }
+    }
+
     // Inject tailor workspace_directive with full resolved job payload.
     // This ensures TailorMode shows the correct title/company/detailUrl.
     if (!scoutResponse.workspace_directive && TAILOR_INTENT_RE.test(userMessage) && !BULK_PREP_RE.test(userMessage)) {
