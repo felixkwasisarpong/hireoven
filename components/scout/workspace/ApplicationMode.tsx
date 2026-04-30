@@ -10,17 +10,12 @@ import { isOutcomeLearningDisabled } from "@/lib/scout/outcomes/store"
 import type { ScoutResponse } from "@/lib/scout/types"
 import type { ActiveEntities } from "./ScoutWorkspaceShell"
 import type { OutcomeLearningResult, ApplicationOutcome } from "@/lib/scout/outcomes/types"
+import { getScoutDisplayText as getReadableAnswer } from "@/lib/scout/display-text"
 
 type Props = {
   response:      ScoutResponse
   onFollowUp:    (query: string) => void
   activeEntities?: ActiveEntities
-}
-
-function getReadableAnswer(answer: string): string {
-  const trimmed = answer.trim()
-  if (/^\s*[{[]/.test(trimmed)) return ""
-  return trimmed
 }
 
 export function ApplicationMode({ response, onFollowUp, activeEntities }: Props) {

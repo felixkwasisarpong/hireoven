@@ -4,6 +4,7 @@ import Link from "next/link"
 import { ArrowRight, ArrowUpRight, FileText } from "lucide-react"
 import type { ScoutResponse, ScoutAction } from "@/lib/scout/types"
 import type { ActiveEntities } from "./ScoutWorkspaceShell"
+import { getScoutDisplayText } from "@/lib/scout/display-text"
 
 type Props = {
   response:      ScoutResponse
@@ -12,9 +13,7 @@ type Props = {
 }
 
 function getReadableAnswer(answer: string): string {
-  const trimmed = answer.trim()
-  if (/^\s*[{[]/.test(trimmed)) return ""
-  return trimmed
+  return getScoutDisplayText(answer)
 }
 
 const TAILOR_STEPS = [

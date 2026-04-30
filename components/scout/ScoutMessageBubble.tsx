@@ -1,13 +1,16 @@
 "use client"
 
-import { CheckCircle2, Lock, Sparkles, Zap } from "lucide-react"
+import { useState } from "react"
+import { CheckCircle2, ChevronDown, ChevronUp, Lock, Sparkles, Zap } from "lucide-react"
 import type { FeatureKey } from "@/lib/gates"
 import type { ScoutResponse } from "@/lib/scout/types"
+import { getScoutDisplayText } from "@/lib/scout/display-text"
 import { ScoutActionRenderer } from "./ScoutActionRenderer"
 import { ScoutCompareRenderer } from "./ScoutCompareRenderer"
 import { ScoutExplanationRenderer } from "./ScoutExplanationRenderer"
 import { ScoutInterviewPrepRenderer } from "./ScoutInterviewPrepRenderer"
 import { ScoutWorkflowRenderer } from "./ScoutWorkflowRenderer"
+import { ScoutGraphRenderer } from "./renderers/ScoutGraphRenderer"
 
 const RECOMMENDATION_CONFIG = {
   Apply:   { bg: "bg-emerald-500", pill: "bg-emerald-50 text-emerald-700 border-emerald-200" },
@@ -17,88 +20,52 @@ const RECOMMENDATION_CONFIG = {
   Explore: { bg: "bg-orange-500",  pill: "bg-orange-50 text-orange-700 border-orange-200" },
 } as const
 
+const IS_DEV = process.env.NODE_ENV === "development"
+
 type Props = {
-  response: ScoutResponse
-  compact?: boolean
+  response:  ScoutResponse
+  compact?:  boolean
   onUpgrade: (feature: FeatureKey) => void
 }
 
-function stripCodeFence(text: string): string {
-  const fenced = text.match(/^```(?:json)?\s*\n?([\s\S]*?)\n?```\s*$/i)
-  return fenced ? fenced[1].trim() : text
-}
+/** Collapsible raw payload panel — only rendered in development. */
+function DebugPanel({ response }: { response: ScoutResponse }) {
+  const [open, setOpen] = useState(false)
+  if (!IS_DEV) return null
 
-function extractJsonObjectCandidate(text: string): string | null {
-  const cleaned = stripCodeFence(text.trim())
-  const start = cleaned.indexOf("{")
-  if (start === -1) return null
-
-  let depth = 0
-  let inString = false
-  let escaped = false
-
-  for (let i = start; i < cleaned.length; i++) {
-    const char = cleaned[i]
-
-    if (escaped) {
-      escaped = false
-      continue
-    }
-    if (char === "\\") {
-      escaped = inString
-      continue
-    }
-    if (char === '"') {
-      inString = !inString
-      continue
-    }
-    if (inString) continue
-
-    if (char === "{") depth += 1
-    if (char === "}") depth -= 1
-    if (depth === 0) return cleaned.slice(start, i + 1)
-  }
-
-  return null
-}
-
-function getReadableAnswer(answer: string): string {
-  const trimmed = answer.trim()
-  if (!trimmed) return ""
-
-  const jsonCandidate = extractJsonObjectCandidate(trimmed)
-  if (!jsonCandidate) return trimmed
-
-  try {
-    const parsed = JSON.parse(jsonCandidate) as unknown
-    if (
-      typeof parsed === "object" &&
-      parsed !== null &&
-      typeof (parsed as Record<string, unknown>).answer === "string"
-    ) {
-      return ((parsed as Record<string, unknown>).answer as string).trim()
-    }
-  } catch {
-    // If a malformed JSON payload leaks through, avoid showing it as chat copy.
-  }
-
-  if (/^\s*[{[]/.test(stripCodeFence(trimmed))) {
-    return "Scout prepared a structured response. Review the cards and actions below."
-  }
-
-  return trimmed
+  return (
+    <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400"
+      >
+        Debug payload
+        {open ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+      </button>
+      {open && (
+        <pre className="overflow-x-auto border-t border-slate-200 px-3 py-2 text-[10px] leading-4 text-slate-600">
+          {JSON.stringify(response, null, 2)}
+        </pre>
+      )}
+    </div>
+  )
 }
 
 export function ScoutMessageBubble({ response, compact = false, onUpgrade }: Props) {
   const recConfig =
     RECOMMENDATION_CONFIG[response.recommendation] ?? RECOMMENDATION_CONFIG.Explore
-  const answer = getReadableAnswer(response.answer)
+
+  // ── Use canonical display-text utility — never raw `.answer` ──────────────
+  const answer = getScoutDisplayText(response.answer)
+
   const hasStructuredDetails =
     Boolean(response.explanations?.length) ||
     Boolean(response.compare) ||
     Boolean(response.interviewPrep) ||
     Boolean(response.actions?.length) ||
-    Boolean(response.workflow)
+    Boolean(response.workflow) ||
+    Boolean(response.graph)
 
   return (
     <div className={`group flex items-start ${compact ? "gap-2.5" : "gap-3"}`}>
@@ -152,7 +119,7 @@ export function ScoutMessageBubble({ response, compact = false, onUpgrade }: Pro
             )}
           </div>
 
-          {/* Answer text */}
+          {/* Answer text — sanitized, never raw JSON */}
           {answer && (
             <p
               className={`mt-2.5 whitespace-pre-wrap text-slate-800 ${
@@ -163,10 +130,16 @@ export function ScoutMessageBubble({ response, compact = false, onUpgrade }: Pro
             </p>
           )}
 
+          {/* Fallback when answer is empty but structured content exists */}
           {!answer && hasStructuredDetails && (
             <p className={`mt-2.5 text-slate-600 ${compact ? "text-xs leading-5" : "text-sm leading-6"}`}>
               Scout prepared the structured guidance below.
             </p>
+          )}
+
+          {/* Graph renderer — for score breakdowns, bar charts, market signals */}
+          {response.graph && (
+            <ScoutGraphRenderer graph={response.graph} compact={compact} />
           )}
 
           {/* Visual explanation blocks */}
@@ -225,6 +198,9 @@ export function ScoutMessageBubble({ response, compact = false, onUpgrade }: Pro
               </div>
             </div>
           )}
+
+          {/* Dev-only debug panel */}
+          <DebugPanel response={response} />
         </div>
       </div>
     </div>

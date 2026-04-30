@@ -337,6 +337,8 @@ export type ScoutResponse = {
   intent?: ScoutIntent
   confidence?: number
   mode?: ScoutMode
+  /** Optional structured graph payload — rendered by ScoutGraphRenderer, never shown as text */
+  graph?: import("@/components/scout/renderers/ScoutGraphRenderer").ScoutGraph
   compare?: ScoutCompareResponse
   interviewPrep?: ScoutInterviewPrep
   mockInterview?: ScoutMockInterview

@@ -290,6 +290,16 @@ Rules:
 - "explanations" MUST always be present as an array (use [] when empty)
 - If you cannot answer, still return a valid JSON object with your response in "answer"
 
+CRITICAL — answer field rules (NEVER violate):
+- The "answer" field MUST contain ONLY plain, human-readable prose.
+- NEVER put JSON, code, structured data, lists of numbers, or key-value pairs in "answer".
+- NEVER put a JSON object or array as the value of "answer" — it will be shown verbatim to the user.
+- If you want to return structured data (graphs, scores, comparisons), use the dedicated
+  fields: "explanations", "compare", "workflow", "interviewPrep", "actions".
+- The "answer" text should read naturally as a conversation message — 1–4 sentences max.
+- workspace_directive, workflow_directive, and graph payloads are NEVER shown in the UI as
+  text — they trigger components. Do NOT describe them in "answer".
+
 Required JSON schema (all fields except workflow are required):
 {
   "answer": "Your conversational response here",

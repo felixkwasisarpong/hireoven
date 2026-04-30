@@ -7,6 +7,7 @@ import type { ScoutResponse, ScoutAction } from "@/lib/scout/types"
 import type { ActiveEntities } from "./ScoutWorkspaceShell"
 import { buildFeedUrl } from "@/lib/scout/workspace"
 import { OpportunityPanel } from "@/components/scout/OpportunityPanel"
+import { getScoutDisplayText } from "@/lib/scout/display-text"
 
 type Props = {
   response: ScoutResponse
@@ -14,11 +15,8 @@ type Props = {
   activeEntities?: ActiveEntities
 }
 
-function getReadableAnswer(answer: string): string {
-  const trimmed = answer.trim()
-  if (/^\s*[{[]/.test(trimmed)) return ""
-  return trimmed
-}
+/** @deprecated — use getScoutDisplayText from lib/scout/display-text instead */
+const getReadableAnswer = getScoutDisplayText
 
 function FilterTag({ label, value }: { label: string; value: string }) {
   return (

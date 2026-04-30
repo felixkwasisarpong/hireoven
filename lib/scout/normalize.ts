@@ -206,6 +206,12 @@ export function normalizeScoutResponse(raw: unknown): ScoutResponse {
   const workspace_directive = normalizeWorkspaceDirective(record.workspace_directive)
   const workflow_directive = normalizeWorkflowDirective(record.workflow_directive)
 
+  // Pass graph through as-is — it's server-validated structural data
+  const graph =
+    typeof record.graph === "object" && record.graph !== null
+      ? (record.graph as ScoutResponse["graph"])
+      : undefined
+
   return {
     answer,
     recommendation,
@@ -220,6 +226,7 @@ export function normalizeScoutResponse(raw: unknown): ScoutResponse {
     interviewPrep,
     workspace_directive,
     workflow_directive,
+    graph,
   }
 }
 

@@ -4,17 +4,12 @@ import { BarChart2 } from "lucide-react"
 import { ScoutCompareRenderer } from "@/components/scout/ScoutCompareRenderer"
 import type { ScoutResponse } from "@/lib/scout/types"
 import type { ActiveEntities } from "./ScoutWorkspaceShell"
+import { getScoutDisplayText as getReadableAnswer } from "@/lib/scout/display-text"
 
 type Props = {
   response: ScoutResponse
   onFollowUp: (query: string) => void
   activeEntities?: ActiveEntities
-}
-
-function getReadableAnswer(answer: string): string {
-  const trimmed = answer.trim()
-  if (/^\s*[{[]/.test(trimmed)) return ""
-  return trimmed
 }
 
 export function CompareMode({ response, onFollowUp, activeEntities }: Props) {
