@@ -195,27 +195,32 @@ export function ScoutWorkspaceShell() {
           { id: `s-${Date.now()}`, role: "scout", response: normalized },
         ])
 
-        // Infer workspace mode from response
-        const newMode = inferWorkspaceMode(normalized)
-        setWorkspaceMode(newMode)
         setActiveResponse(normalized)
 
-        // Build context rail from meaningful actions
-        const railActions = normalized.actions?.filter(
-          (a) => ["OPEN_JOB", "OPEN_COMPANY", "OPEN_RESUME_TAILOR"].includes(a.type)
-        )
-        if (railActions && railActions.length > 0) {
-          setRail({
-            title: "Scout actions",
-            summary: "Suggested next steps from Scout",
-            actions: railActions,
-          })
+        // ── Mode: prefer explicit directive, fall back to inference ──────────
+        const directive = normalized.workspace_directive
+        const newMode = directive?.mode ?? inferWorkspaceMode(normalized)
+        setWorkspaceMode(newMode)
+
+        // ── Context rail: prefer directive rail, fall back to action scan ───
+        if (directive?.rail !== undefined) {
+          // directive explicitly sets or clears the rail
+          setRail(directive.rail ?? null)
         } else {
-          setRail(null)
+          const railActions = normalized.actions?.filter(
+            (a) => ["OPEN_JOB", "OPEN_COMPANY", "OPEN_RESUME_TAILOR"].includes(a.type)
+          )
+          setRail(
+            railActions && railActions.length > 0
+              ? { title: "Scout context", summary: "Suggested next steps", actions: railActions }
+              : null
+          )
         }
 
-        // Update suggestion chips from Scout response if provided
-        // (future: normalized.chips; for now keep current chips)
+        // ── Chips: prefer directive chips, keep current otherwise ────────────
+        if (directive?.chips && directive.chips.length > 0) {
+          setChips(directive.chips)
+        }
       } catch {
         setError("Network error. Please check your connection.")
       } finally {

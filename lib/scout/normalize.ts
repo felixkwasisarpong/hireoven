@@ -15,7 +15,36 @@ import {
   type ScoutInterviewPrep,
   type ScoutResponse,
   type ScoutWorkflow,
+  type ScoutWorkspaceDirective,
+  type ScoutWorkspaceMode,
 } from "@/lib/scout/types"
+
+const VALID_WORKSPACE_MODES = new Set<ScoutWorkspaceMode>([
+  "idle", "search", "compare", "tailor", "applications",
+])
+
+function isWorkspaceMode(v: unknown): v is ScoutWorkspaceMode {
+  return typeof v === "string" && VALID_WORKSPACE_MODES.has(v as ScoutWorkspaceMode)
+}
+
+function normalizeWorkspaceDirective(raw: unknown): ScoutWorkspaceDirective | undefined {
+  if (typeof raw !== "object" || raw === null) return undefined
+  const r = raw as Record<string, unknown>
+  if (!isWorkspaceMode(r.mode)) return undefined
+
+  const rail =
+    typeof r.rail === "object" && r.rail !== null
+      ? (r.rail as ScoutWorkspaceDirective["rail"])
+      : r.rail === null
+        ? null
+        : undefined
+
+  const chips = Array.isArray(r.chips) ? (r.chips as string[]).filter((c) => typeof c === "string") : undefined
+  const transition = typeof r.transition === "string" ? (r.transition as ScoutWorkspaceDirective["transition"]) : undefined
+  const payload = typeof r.payload === "object" && r.payload !== null ? (r.payload as Record<string, unknown>) : undefined
+
+  return { mode: r.mode, transition, payload, rail, chips }
+}
 
 const VALID_RECOMMENDATIONS = new Set(["Apply", "Skip", "Improve", "Wait", "Explore"])
 
@@ -173,6 +202,8 @@ export function normalizeScoutResponse(raw: unknown): ScoutResponse {
       ? (record.interviewPrep as ScoutInterviewPrep)
       : undefined
 
+  const workspace_directive = normalizeWorkspaceDirective(record.workspace_directive)
+
   return {
     answer,
     recommendation,
@@ -185,5 +216,6 @@ export function normalizeScoutResponse(raw: unknown): ScoutResponse {
     gated,
     compare,
     interviewPrep,
+    workspace_directive,
   }
 }

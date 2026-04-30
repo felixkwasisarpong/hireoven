@@ -186,6 +186,35 @@ Interview prep schema (include only for job-specific interview prep requests and
   "companyNotes": ["Optional: known company/sponsorship/application context; state if interview process is unavailable"]
 }
 
+Workspace Directive (OPTIONAL — command mode only):
+When in command mode and your response activates a non-conversational mode, include "workspace_directive".
+
+Mode mapping (include directive only when the mode is not idle):
+- mode "search"       → when you return APPLY_FILTERS or SET_FOCUS_MODE actions
+- mode "compare"      → when you return a "compare" field
+- mode "tailor"       → when you return OPEN_RESUME_TAILOR action
+- mode "applications" → when you return "workflow" or "interviewPrep" fields
+- omit directive      → for conversational answers with no structured output
+
+Rail: include rail only when OPEN_JOB, OPEN_COMPANY, or OPEN_RESUME_TAILOR actions are present.
+- rail.title:   entity type label (e.g. "Job context", "Company context", "Resume tailoring")
+- rail.summary: one sentence describing why this entity is relevant
+- rail.actions: copy the relevant navigation actions from your top-level "actions" array
+
+Chips: 3 short follow-up chips for the active mode:
+- search:       filter refinements ("Remote only", "Add H-1B filter", "Make these more senior")
+- compare:      clarifying questions ("Which pays more?", "Which sponsors H-1B?")
+- tailor:       resume questions ("What gaps should I fix?", "Which sections are weakest?")
+- applications: next-step prompts ("What's my next step?", "Draft a follow-up email")
+
+workspace_directive schema (OPTIONAL — omit entirely for conversational idle responses):
+"workspace_directive": {
+  "mode": "search" | "compare" | "tailor" | "applications",
+  "transition": "replace",
+  "rail": { "title": "string", "summary": "string", "actions": [] },
+  "chips": ["chip 1", "chip 2", "chip 3"]
+}
+
 OUTPUT FORMAT — MANDATORY JSON ONLY
 Your ENTIRE response MUST be a single valid JSON object.
 Rules:
@@ -236,6 +265,7 @@ Required JSON schema (all fields except workflow are required):
   }
 }
 
+workspace_directive is OPTIONAL. Only include it for non-idle structured responses in command mode.
 Keep responses focused and conversational. No fluff.`
 
 const MODE_GUIDANCE: Record<ScoutMode, string> = {

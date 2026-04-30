@@ -1,6 +1,8 @@
-import type { ScoutAction, ScoutResponse } from "./types"
+import type { ScoutAction, ScoutResponse, ScoutWorkspaceDirective, ScoutWorkspaceMode } from "./types"
 
-export type WorkspaceMode = "idle" | "search" | "compare" | "tailor" | "applications"
+export type { ScoutWorkspaceDirective, ScoutWorkspaceMode }
+
+export type WorkspaceMode = ScoutWorkspaceMode
 
 export type WorkspaceRail = {
   title: string
@@ -8,18 +10,9 @@ export type WorkspaceRail = {
   actions?: ScoutAction[]
 }
 
-export type ScoutWorkspaceDirective = {
-  mode: WorkspaceMode
-  transition?: "replace" | "push" | "slide-right" | "none"
-  payload?: Record<string, unknown>
-  rail?: WorkspaceRail | null
-  chips?: string[]
-}
-
 /**
  * Infers the workspace mode from a Scout response.
- * The server can explicitly set mode via workspace_directive (future);
- * for now, we pattern-match on the response shape.
+ * Used as a fallback when the response does not include a workspace_directive.
  */
 export function inferWorkspaceMode(response: ScoutResponse): WorkspaceMode {
   if (response.compare) return "compare"

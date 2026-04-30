@@ -286,6 +286,32 @@ export type ScoutMockInterviewTurn = {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ── Workspace Directive ────────────────────────────────────────────────────────
+
+export type ScoutWorkspaceMode = "idle" | "search" | "compare" | "tailor" | "applications"
+
+export type ScoutWorkspaceDirective = {
+  /** Which workspace panel to activate. */
+  mode: ScoutWorkspaceMode
+  /** How the workspace should transition. Defaults to "replace". */
+  transition?: "replace" | "push" | "slide-right" | "none"
+  /** Arbitrary mode-specific payload for the workspace component. */
+  payload?: Record<string, unknown>
+  /**
+   * Optional context rail to slide in alongside the workspace.
+   * Null explicitly closes any open rail.
+   */
+  rail?: {
+    title: string
+    summary?: string
+    actions?: ScoutAction[]
+  } | null
+  /** Follow-up suggestion chips relevant to the active mode. */
+  chips?: string[]
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export type ScoutResponse = {
   answer: string
   recommendation: ScoutRecommendation
@@ -303,6 +329,12 @@ export type ScoutResponse = {
     reason: string
     upgradeMessage: string
   }
+  /**
+   * When present, the workspace shell uses this directive to switch modes
+   * instead of inferring from the response shape. Frontend inference
+   * remains as a fallback when this field is absent.
+   */
+  workspace_directive?: ScoutWorkspaceDirective
 }
 
 /** AI-generated weekly strategy plan returned from Strategy Mode. */
