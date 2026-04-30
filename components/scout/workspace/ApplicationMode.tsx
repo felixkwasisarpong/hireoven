@@ -1,15 +1,19 @@
 "use client"
 
-import { CheckCircle2, Zap } from "lucide-react"
+import { useEffect, useState } from "react"
+import { CheckCircle2, TrendingUp, Zap } from "lucide-react"
 import { ScoutWorkflowRenderer } from "@/components/scout/ScoutWorkflowRenderer"
 import { ScoutActionRenderer } from "@/components/scout/ScoutActionRenderer"
 import { ScoutInterviewPrepRenderer } from "@/components/scout/ScoutInterviewPrepRenderer"
+import { ScoutFeedbackPrompt } from "@/components/scout/ScoutFeedbackPrompt"
+import { isOutcomeLearningDisabled } from "@/lib/scout/outcomes/store"
 import type { ScoutResponse } from "@/lib/scout/types"
 import type { ActiveEntities } from "./ScoutWorkspaceShell"
+import type { OutcomeLearningResult, ApplicationOutcome } from "@/lib/scout/outcomes/types"
 
 type Props = {
-  response: ScoutResponse
-  onFollowUp: (query: string) => void
+  response:      ScoutResponse
+  onFollowUp:    (query: string) => void
   activeEntities?: ActiveEntities
 }
 
@@ -20,15 +24,33 @@ function getReadableAnswer(answer: string): string {
 }
 
 export function ApplicationMode({ response, onFollowUp, activeEntities }: Props) {
-  const answerText    = getReadableAnswer(response.answer)
-  const hasWorkflow   = Boolean(response.workflow)
+  const answerText       = getReadableAnswer(response.answer)
+  const hasWorkflow      = Boolean(response.workflow)
   const hasInterviewPrep = Boolean(response.interviewPrep)
-  const hasActions    = (response.actions?.length ?? 0) > 0
+  const hasActions       = (response.actions?.length ?? 0) > 0
   const isInterviewFocused = hasInterviewPrep || response.intent === "interview_prep"
+
+  const [outcomeLearning, setOutcomeLearning] = useState<OutcomeLearningResult | null>(null)
+  const [learningDisabled] = useState(() => isOutcomeLearningDisabled())
+
+  // Fetch outcome learning data when in applications mode
+  useEffect(() => {
+    if (learningDisabled) return
+    fetch("/api/scout/outcomes")
+      .then(async (res) => {
+        if (!res.ok) return
+        const data = (await res.json().catch(() => null)) as OutcomeLearningResult | null
+        if (data) setOutcomeLearning(data)
+      })
+      .catch(() => {})
+  }, [learningDisabled])
 
   const followUpChips = isInterviewFocused
     ? ["Give me a practice question", "What should I research?", "How should I answer compensation?"]
     : ["What's my next action?", "Which application needs attention?", "Draft a follow-up email"]
+
+  const hasOutcomeSignals = (outcomeLearning?.signals?.length ?? 0) > 0
+  const hasFeedbackNeeded = (outcomeLearning?.feedbackNeeded?.length ?? 0) > 0
 
   return (
     <div className="grid gap-5 lg:grid-cols-[1fr_240px]">
@@ -57,6 +79,14 @@ export function ApplicationMode({ response, onFollowUp, activeEntities }: Props)
 
         {hasActions && !hasWorkflow && (
           <ScoutActionRenderer actions={response.actions} source="chat" />
+        )}
+
+        {/* Outcome feedback prompts — subtle, max 2, not nagging */}
+        {!learningDisabled && hasFeedbackNeeded && (
+          <ScoutFeedbackPrompt
+            items={outcomeLearning!.feedbackNeeded}
+            outcomeLearningDisabled={learningDisabled}
+          />
         )}
 
         <div className="flex flex-wrap gap-2">
@@ -95,6 +125,40 @@ export function ApplicationMode({ response, onFollowUp, activeEntities }: Props)
             {activeEntities?.companyName && (
               <p className="mt-0.5 text-xs text-gray-500">{activeEntities.companyName}</p>
             )}
+          </div>
+        )}
+
+        {/* Outcome learning signals — compact right rail */}
+        {!learningDisabled && hasOutcomeSignals && outcomeLearning && (
+          <div className="border-t border-gray-100 pt-4">
+            <div className="flex items-center gap-1.5 mb-2">
+              <TrendingUp className="h-3 w-3 text-[#FF5C18]" />
+              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-gray-400">
+                What&apos;s working
+              </p>
+            </div>
+            <ul className="space-y-2">
+              {outcomeLearning.signals.slice(0, 2).map((sig) => (
+                <li key={sig.id} className="text-[11px] leading-5 text-gray-500">
+                  {sig.signal}
+                </li>
+              ))}
+            </ul>
+            <div className="mt-3 grid grid-cols-3 gap-1 rounded-lg bg-gray-50 p-2.5">
+              <div className="text-center">
+                <p className="text-base font-bold text-gray-800">{outcomeLearning.stats.responseRate}%</p>
+                <p className="text-[9px] text-gray-400">Response</p>
+              </div>
+              <div className="text-center">
+                <p className="text-base font-bold text-gray-800">{outcomeLearning.stats.interviewRate}%</p>
+                <p className="text-[9px] text-gray-400">Interview</p>
+              </div>
+              <div className="text-center">
+                <p className="text-base font-bold text-gray-800">{outcomeLearning.stats.totalApplications}</p>
+                <p className="text-[9px] text-gray-400">Applied</p>
+              </div>
+            </div>
+            <p className="mt-2 text-[9px] text-gray-300">Based on recorded outcomes only</p>
           </div>
         )}
 

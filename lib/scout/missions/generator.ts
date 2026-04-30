@@ -17,13 +17,16 @@ import type { ScoutStrategyBoard } from "@/lib/scout/types"
 import type { ScoutBehaviorSignals } from "@/lib/scout/behavior"
 import type { MarketSignal } from "@/lib/scout/market-intelligence"
 import type { ScoutSearchProfile } from "@/lib/scout/search-profile"
+import type { OutcomeLearningResult } from "@/lib/scout/outcomes/types"
 
 export type MissionContext = {
-  board:         ScoutStrategyBoard | null
-  signals:       ScoutBehaviorSignals | null
-  marketSignals: MarketSignal[]
-  searchProfile: ScoutSearchProfile | null
-  hasResume:     boolean
+  board:            ScoutStrategyBoard | null
+  signals:          ScoutBehaviorSignals | null
+  marketSignals:    MarketSignal[]
+  searchProfile:    ScoutSearchProfile | null
+  hasResume:        boolean
+  /** Outcome learning — used to surface feedback missions when stale applications need updates */
+  outcomeLearning?: OutcomeLearningResult | null
 }
 
 type MissionCandidate = Omit<ScoutMission, "generatedAt" | "status">
@@ -181,6 +184,22 @@ export function buildMomentumLine(ctx: MissionContext): string | undefined {
   return lines.length > 0 ? lines.join(" ") : undefined
 }
 
+function outcomeFeedbackMission(ctx: MissionContext): MissionCandidate | null {
+  const needed = ctx.outcomeLearning?.feedbackNeeded ?? []
+  if (needed.length === 0) return null
+
+  const count = needed.length
+  const oldest = needed[0]
+  return {
+    id:       makeId("follow_up", "outcome-feedback"),
+    type:     "follow_up",
+    title:    `Update ${count} application outcome${count !== 1 ? "s" : ""}`,
+    summary:  `${count} application${count !== 1 ? "s" : ""} (${oldest.companyName} and ${count > 1 ? "others" : "more"}) haven't had outcomes recorded in ${oldest.daysSinceApplied}+ days. Update them so Scout can learn what's working.`,
+    priority: "medium" as const,
+    suggestedActions: ["Review my application outcomes and update any missing results"],
+  }
+}
+
 // ── Main generator ─────────────────────────────────────────────────────────────
 
 export function generateDailyMissions(ctx: MissionContext): ScoutMission[] {
@@ -193,6 +212,7 @@ export function generateDailyMissions(ctx: MissionContext): ScoutMission[] {
     missingResumeMission,      // blocker — always first if no resume
     sponsorshipMission,        // high priority for visa-sensitive users
     bulkApplicationMission,    // primary action driver
+    outcomeFeedbackMission,    // keep learning loop alive
     followUpMission,           // maintain pipeline
     compareMission,            // helps prioritize
     resumeTailorMission,       // quality improvement

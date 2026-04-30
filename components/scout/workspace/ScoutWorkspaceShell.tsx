@@ -434,11 +434,12 @@ export function ScoutWorkspaceShell() {
     if (!strategyBoard && !behaviorSignals) return
 
     const ctx = {
-      board:         strategyBoard,
-      signals:       behaviorSignals,
+      board:           strategyBoard,
+      signals:         behaviorSignals,
       marketSignals,
       searchProfile,
-      hasResume:     !!primaryResume,
+      hasResume:       !!primaryResume,
+      outcomeLearning: null,  // fetched lazily in ApplicationMode when needed
     }
     const missions      = generateDailyMissions(ctx)
     const momentumLine  = buildMomentumLine(ctx)

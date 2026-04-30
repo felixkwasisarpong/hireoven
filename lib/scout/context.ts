@@ -135,6 +135,8 @@ export type ScoutContext = {
   compareJobs: CompareJobContext[] | null
   /** Opportunity graph — populated when jobId or companyId is in context */
   opportunityGraph: OpportunityGraphResponse | null
+  /** Outcome learning signals — populated from application history */
+  outcomeLearning: import("@/lib/scout/outcomes/types").OutcomeLearningResult | null
 }
 
 type ScoutContextResume = NonNullable<ScoutContext["resume"]>
@@ -401,6 +403,7 @@ export async function getScoutContext(input: ScoutContextInput): Promise<ScoutCo
     behaviorSignals,
     compareJobs,
     opportunityGraph: null,
+    outcomeLearning:  null,
   }
 }
 
@@ -539,6 +542,21 @@ ${job.description.substring(0, 500)}...`)
   if (context.opportunityGraph) {
     const graphSection = formatOpportunitiesForClaude(context.opportunityGraph)
     if (graphSection) sections.push(graphSection)
+  }
+
+  // Outcome learning — appended when learning signals exist
+  if (context.outcomeLearning?.signals?.length) {
+    const ol = context.outcomeLearning
+    const lines = [
+      `Outcome Learning (based on recorded application history, phrase cautiously):`,
+      `Stats: ${ol.stats.totalApplications} applications, ${ol.stats.responseRate}% response rate, ${ol.stats.interviewRate}% reached interview stage`,
+    ]
+    for (const sig of ol.signals.slice(0, 3)) {
+      lines.push(`  - ${sig.signal}`)
+      if (sig.suggestedAction) lines.push(`    → ${sig.suggestedAction}`)
+    }
+    lines.push("Note: Use 'appears', 'based on recorded outcomes', 'seems to work better' — never guarantee outcomes")
+    sections.push(lines.join("\n"))
   }
 
   // Compare jobs — included when user asks for a comparison
