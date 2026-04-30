@@ -365,6 +365,57 @@ export default async function HomePage() {
 
       <ComingSoonSection />
 
+      {/* Scout section ────────────────────────────────────────────────────── */}
+      <section className="border-t border-gray-100 px-6 py-20">
+        <div className="mx-auto max-w-5xl">
+          <div className="mb-3 flex items-center justify-center gap-2">
+            <span className="inline-flex h-6 w-6 items-center justify-center rounded-lg bg-[#FF5C18]">
+              <MousePointerClick className="h-3.5 w-3.5 text-white" />
+            </span>
+            <span className="text-xs font-bold uppercase tracking-[0.25em] text-[#FF5C18]">
+              Scout AI
+            </span>
+          </div>
+          <h2 className="text-center text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
+            Your AI job search operating system
+          </h2>
+          <p className="mx-auto mt-4 max-w-xl text-center text-lg text-gray-500">
+            Scout lives inside your dashboard. Ask it anything. It handles the research, preparation, and workflows — you make the decisions.
+          </p>
+
+          <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {[
+              { emoji: "🔍", title: "Finds stronger opportunities", body: "Filters jobs by sponsorship, match score, remote, and more. No manual searching." },
+              { emoji: "✍️", title: "Tailors your resume", body: "Adapts your CV to each role. Keyword gaps flagged. Changes need your approval." },
+              { emoji: "🏢", title: "Researches companies", body: "H-1B sponsorship history, hiring velocity, and market signals — evidence-backed." },
+              { emoji: "🤖", title: "Autofills application forms", body: "Detects fields, suggests values, and waits for you to review before filling." },
+              { emoji: "📋", title: "Runs application workflows", body: "Tailor → cover letter → autofill — step by step with your approval at each stage." },
+              { emoji: "🛡️", title: "Keeps you in control", body: "Scout never submits applications. Every sensitive action requires your explicit OK." },
+            ].map(({ emoji, title, body }) => (
+              <div
+                key={title}
+                className="rounded-2xl border border-gray-200 bg-white p-5 transition hover:border-[#FF5C18]/25 hover:shadow-[0_8px_24px_rgba(255,92,24,0.06)]"
+              >
+                <span className="text-2xl" role="img" aria-label={title}>{emoji}</span>
+                <p className="mt-3 text-sm font-semibold text-gray-900">{title}</p>
+                <p className="mt-1 text-[13px] leading-5 text-gray-500">{body}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-10 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
+            <Link
+              href="/signup"
+              className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-7 py-3.5 text-sm font-semibold text-white transition hover:bg-slate-800"
+            >
+              Try Scout free
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+            <p className="text-xs text-gray-400">No credit card · Works with your existing profile</p>
+          </div>
+        </div>
+      </section>
+
       {/* Final CTA ────────────────────────────────────────────────────────── */}
       <section className="px-6 pb-24">
         <div className="mx-auto max-w-4xl overflow-hidden rounded-3xl border border-[#BAE6FD] bg-gradient-to-br from-[#F0F9FF] via-white to-sky-50 p-10 text-center md:p-14">

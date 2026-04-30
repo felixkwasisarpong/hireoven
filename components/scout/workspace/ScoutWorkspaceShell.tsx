@@ -35,6 +35,14 @@ import { useScoutBrowserOperator } from "@/hooks/useScoutBrowserOperator"
 import { BrowserActionStrip } from "./BrowserActionStrip"
 import { ScoutErrorBoundary } from "@/components/scout/ScoutErrorBoundary"
 import { SCOUT_FLAGS } from "@/lib/scout/flags"
+import {
+  isFirstRun as detectFirstRun,
+  markOnboarded,
+  isFirstRunBannerDismissed,
+  dismissFirstRunBanner,
+  isExtPromosDismissed,
+  dismissExtPromo,
+} from "@/lib/scout/first-run"
 import { useScoutTimeline } from "@/hooks/useScoutTimeline"
 import { ScoutTimelinePanel } from "@/components/scout/timeline/ScoutTimelinePanel"
 import { useScoutProactive } from "@/hooks/useScoutProactive"
@@ -295,6 +303,30 @@ export function ScoutWorkspaceShell() {
   const [activeGate,        setActiveGate]        = useState<import("@/components/scout/ScoutActionGate").GateRequest | null>(null)
   const [showPermissions,   setShowPermissions]   = useState(false)
   const [shellPermissions,  setShellPermissions]  = useState<ScoutPermissionState[]>(() => readPermissions())
+
+  // ── First-run + extension promo state — loaded after mount to avoid hydration mismatch ──
+  const [isFirstRun, setIsFirstRun] = useState(false)
+  const [bannerDismissed, setBannerDismissed] = useState(false)
+  const [extPromoDismissed, setExtPromoDismissed] = useState(false)
+  useEffect(() => {
+    setIsFirstRun(detectFirstRun() && !isFirstRunBannerDismissed())
+    setBannerDismissed(isFirstRunBannerDismissed())
+    setExtPromoDismissed(isExtPromosDismissed())
+  }, [])
+
+  const showFirstRun = isFirstRun && !bannerDismissed
+  const showExtPromo = !isExtensionConnected && !extPromoDismissed && SCOUT_FLAGS.extensionBridgeEnabled
+
+  const handleDismissFirstRun = useCallback(() => {
+    dismissFirstRunBanner()
+    setBannerDismissed(true)
+    setIsFirstRun(false)
+  }, [])
+
+  const handleDismissExtPromo = useCallback(() => {
+    dismissExtPromo()
+    setExtPromoDismissed(true)
+  }, [])
 
   // ── Browser operator — must be after browserContext, isExtensionConnected, shellPermissions ──
   const operator = useScoutBrowserOperator({
@@ -1329,6 +1361,13 @@ export function ScoutWorkspaceShell() {
       setNarrativeDismissed(false)
       commandStartedAtRef.current = Date.now()
 
+      // Mark user as onboarded on first command (clears first-run banner on next mount)
+      if (isFirstRun) {
+        markOnboarded()
+        setIsFirstRun(false)
+        setBannerDismissed(true)
+      }
+
       // Record every user command in the timeline
       timeline.append({
         type:      "command",
@@ -1502,6 +1541,10 @@ export function ScoutWorkspaceShell() {
   // ── Render ───────────────────────────────────────────────────────────────────
 
   const showNarrative = narrative && !narrativeDismissed && workspaceMode !== "idle"
+  // Derived: has the user accumulated any job/application data yet?
+  const hasData = (strategyBoard?.snapshot?.savedJobs ?? 0) > 0
+                  || (strategyBoard?.snapshot?.activeApplications ?? 0) > 0
+                  || hasSession
   const showProactiveStrip =
     proactive.settings.enabled &&
     workspaceMode === "idle" &&
@@ -1701,6 +1744,11 @@ export function ScoutWorkspaceShell() {
                     onProactiveOpen={handleOpenProactive}
                     onProactiveDismiss={proactive.dismiss}
                     onProactiveSnooze={proactive.snooze}
+                    isFirstRun={showFirstRun}
+                    showExtensionPromo={showExtPromo}
+                    hasData={hasData}
+                    onDismissFirstRun={handleDismissFirstRun}
+                    onDismissExtPromo={handleDismissExtPromo}
                   />
                 )
               }

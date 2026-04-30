@@ -14,6 +14,9 @@ import {
 import { ScoutMessageBubble } from "@/components/scout/ScoutMessageBubble"
 import { ScoutMissionStrip } from "@/components/scout/ScoutMissionStrip"
 import { ScoutStreamingText } from "@/components/scout/ScoutStreamingText"
+import { ScoutFirstRunBanner } from "@/components/scout/ScoutFirstRunBanner"
+import { ScoutExtensionPromo } from "@/components/scout/ScoutExtensionPromo"
+import { ScoutTrustBadge } from "@/components/scout/ScoutTrustBadge"
 import { useUpgradeModal } from "@/lib/context/UpgradeModalContext"
 import type { ScoutResponse } from "@/lib/scout/types"
 import type { ScoutNudge } from "@/lib/scout/nudges"
@@ -54,6 +57,14 @@ type Props = {
   onProactiveSnooze?: (eventId: string) => void
   continuationContexts?: ScoutResumableContext[]
   onContinuationOpen?: (context: ScoutResumableContext) => void
+  /** True on the user's very first Scout session — shows welcome banner */
+  isFirstRun?: boolean
+  /** True when the Hireoven extension is not connected */
+  showExtensionPromo?: boolean
+  /** True when the user has saved jobs / applications data */
+  hasData?: boolean
+  onDismissFirstRun?: () => void
+  onDismissExtPromo?: () => void
 }
 
 const ACTION_TILES = [
@@ -146,6 +157,11 @@ export function IdleMode({
   onProactiveSnooze,
   continuationContexts = [],
   onContinuationOpen,
+  isFirstRun = false,
+  showExtensionPromo = false,
+  hasData = true,
+  onDismissFirstRun,
+  onDismissExtPromo,
 }: Props) {
   const { showUpgrade } = useUpgradeModal()
   const hasConversation = messages.length > 0
@@ -164,32 +180,49 @@ export function IdleMode({
       {/* ── Empty / idle state ── */}
       {!hasConversation && !isLoading && (
         <div>
-          {/* Greeting row */}
-          <div className="mb-8 flex items-start justify-between gap-4">
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-[#FF5C18]">
-                Scout workspace
-              </p>
-              <h2 className="mt-2 text-3xl font-bold tracking-tight text-gray-950">
-                {greeting}, {firstName}.
-              </h2>
-              <p className="mt-1.5 text-base text-gray-400">
-                What are you working on today?
-              </p>
-            </div>
+          {/* First-run welcome banner — shown once on first session */}
+          {isFirstRun ? (
+            <ScoutFirstRunBanner
+              firstName={firstName}
+              onDismiss={onDismissFirstRun ?? (() => {})}
+              onTileClick={onTileClick}
+            />
+          ) : (
+            <>
+              {/* Regular greeting row */}
+              <div className="mb-6 flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-[#FF5C18]">
+                    Scout workspace
+                  </p>
+                  <h2 className="mt-2 text-3xl font-bold tracking-tight text-gray-950">
+                    {greeting}, {firstName}.
+                  </h2>
+                  <p className="mt-1.5 text-base text-gray-400">
+                    {!hasData
+                      ? "Scout prepares applications, research, and workflows — you stay in control."
+                      : "What are you working on today?"}
+                  </p>
+                </div>
 
-            {/* Start fresh */}
-            {hasSession && onStartFresh && (
-              <button
-                type="button"
-                onClick={onStartFresh}
-                className="mt-1 inline-flex flex-shrink-0 items-center gap-1.5 rounded-xl border border-gray-200 px-3 py-2 text-xs font-medium text-gray-400 transition hover:border-gray-300 hover:text-gray-700"
-              >
-                <RotateCcw className="h-3.5 w-3.5" />
-                Start fresh
-              </button>
-            )}
-          </div>
+                {hasSession && onStartFresh && (
+                  <button
+                    type="button"
+                    onClick={onStartFresh}
+                    className="mt-1 inline-flex flex-shrink-0 items-center gap-1.5 rounded-xl border border-gray-200 px-3 py-2 text-xs font-medium text-gray-400 transition hover:border-gray-300 hover:text-gray-700"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                    Start fresh
+                  </button>
+                )}
+              </div>
+
+              {/* Extension promo — shown when extension not connected + not dismissed */}
+              {showExtensionPromo && !hasSession && onDismissExtPromo && (
+                <ScoutExtensionPromo onDismiss={onDismissExtPromo} />
+              )}
+            </>
+          )}
 
           {/* Daily mission strip */}
           {!strategyLoading && missions.length > 0 && onMissionLaunch && onMissionDismiss && onMissionsDisable && (
@@ -361,6 +394,11 @@ export function IdleMode({
                 </button>
               )
             })}
+          </div>
+
+          {/* Trust + safety copy — persistent, subtle */}
+          <div className="mt-6">
+            <ScoutTrustBadge variant="strip" />
           </div>
         </div>
       )}
