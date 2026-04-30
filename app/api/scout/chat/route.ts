@@ -226,6 +226,17 @@ const TAILOR_INTENT_RE = /\b(tailor|cover.?letter|autofill|prepare.?application|
 const COMPARE_INTENT_RE = /\b(compare|prioritize|rank.*(jobs|saved|my)|which.*apply.*first|shortlist)\b/i
 const INTERVIEW_INTENT_RE = /\b(interview.?prep|prepare.*(for.*(this|the)|interview)|mock.?interview|practice.?questions)\b/i
 
+function detectInterviewType(message: string): string | undefined {
+  const m = message.toLowerCase()
+  if (/\b(recruiter|phone\s+screen|hr\s+screen)\b/.test(m)) return "recruiter_screen"
+  if (/\b(system.?design|architecture\s+round)\b/.test(m))  return "system_design"
+  if (/\b(technical|coding|algorithm|code\s+interview)\b/.test(m)) return "technical"
+  if (/\b(behavioral|behaviour|star\s+format|tell\s+me\s+about)\b/.test(m)) return "behavioral"
+  if (/\b(hiring\s+manager|manager\s+round)\b/.test(m)) return "manager"
+  if (/\b(onsite|on.?site|interview\s+loop|full\s+loop)\b/.test(m)) return "onsite"
+  return undefined
+}
+
 // Bulk application prep: "Prepare 5 applications for...", "Queue visa-friendly roles over 80 match", "Prepare applications for remote backend jobs"
 const BULK_PREP_RE = /\b(prepare|queue|batch|bulk)\b.{0,80}\b(application[s]?|apply|applying)\b/i
 
@@ -1162,6 +1173,21 @@ User Input: ${userMessage}`
             }
           }
 
+          // Interview guard (streaming path) — inject interview workspace_directive
+          if (scoutResponse.interviewPrep && !scoutResponse.workspace_directive) {
+            scoutResponse.workspace_directive = {
+              mode: "interview",
+              payload: {
+                interviewType: detectInterviewType(userMessage),
+                companyName:   context.job?.company_name ?? context.company?.name,
+                jobTitle:      context.job?.title,
+                jobId:         effectiveJobId,
+                companyId:     body.companyId ?? context.company?.id,
+              },
+              chips: ["Give me a tougher question", "How do I answer compensation?", "Draft a post-interview follow-up"],
+            }
+          }
+
           // Outreach guard (streaming path) — mirror of non-streaming guard below
           if (scoutResponse.outreach && !scoutResponse.workspace_directive) {
             const ctxName = context.job?.company_name ?? context.company?.name
@@ -1469,6 +1495,21 @@ User Input: ${userMessage}`
       const bulkDirective = inferBulkWorkspaceDirective(userMessage)
       if (bulkDirective) {
         scoutResponse.workspace_directive = bulkDirective
+      }
+    }
+
+    // Ensure interview mode is set whenever interviewPrep was generated.
+    if (scoutResponse.interviewPrep && !scoutResponse.workspace_directive) {
+      scoutResponse.workspace_directive = {
+        mode: "interview",
+        payload: {
+          interviewType: detectInterviewType(userMessage),
+          companyName:   context.job?.company_name ?? context.company?.name,
+          jobTitle:      context.job?.title,
+          jobId:         effectiveJobId,
+          companyId:     body.companyId ?? context.company?.id,
+        },
+        chips: ["Give me a tougher question", "How do I answer compensation?", "Draft a post-interview follow-up"],
       }
     }
 

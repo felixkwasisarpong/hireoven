@@ -27,6 +27,7 @@ import { isResearchIntent } from "@/lib/scout/research/tasks"
 import { writeResearchTask, readResearchTask } from "@/lib/scout/research/store"
 import { ResearchMode } from "./ResearchMode"
 import { OutreachMode } from "./OutreachMode"
+import { InterviewPrepMode } from "./InterviewPrepMode"
 import { useScoutTimeline } from "@/hooks/useScoutTimeline"
 import { ScoutTimelinePanel } from "@/components/scout/timeline/ScoutTimelinePanel"
 import { useScoutProactive } from "@/hooks/useScoutProactive"
@@ -146,6 +147,7 @@ function buildNarrative(mode: WorkspaceMode, response: ScoutResponse): string {
       company:           "Scout surfaced company intelligence.",
       research:          "Scout is running your research task.",
       outreach:          "Scout prepared your outreach draft.",
+      interview:         "Scout generated your interview prep plan.",
       idle:              "",
     }
     return labels[mode] ?? ""
@@ -1700,6 +1702,15 @@ export function ScoutWorkspaceShell() {
               if (displayedMode === "outreach" && activeResponse) {
                 return (
                   <OutreachMode
+                    response={activeResponse}
+                    onFollowUp={handleFollowUp}
+                    activeEntities={activeEntities}
+                  />
+                )
+              }
+              if (displayedMode === "interview" && activeResponse) {
+                return (
+                  <InterviewPrepMode
                     response={activeResponse}
                     onFollowUp={handleFollowUp}
                     activeEntities={activeEntities}

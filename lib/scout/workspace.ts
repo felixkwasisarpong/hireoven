@@ -19,7 +19,7 @@ export function inferWorkspaceMode(response: ScoutResponse): WorkspaceMode {
   if (response.compare) return "compare"
   if (response.workspace_directive?.mode === "bulk_application") return "bulk_application"
   if (response.workspace_directive?.mode === "company") return "company"
-  if (response.interviewPrep || response.intent === "interview_prep") return "applications"
+  if (response.interviewPrep || response.intent === "interview_prep") return "interview"
   if (response.workflow || response.intent === "workflow") return "applications"
   if (response.actions?.some((a) => a.type === "OPEN_RESUME_TAILOR")) return "tailor"
   if (response.actions?.some((a) => a.type === "OPEN_COMPANY")) return "company"

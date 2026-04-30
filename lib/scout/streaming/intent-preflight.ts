@@ -17,7 +17,8 @@ const BULK_PREP_RE  = /\b(prepare|queue|batch|bulk)\b.{0,80}\b(application[s]?|a
 const WORKFLOW_RE   = /\b(workflow|step.?by.?step|roadmap|prepare.*application)\b/i
 const SEARCH_RE     = /\b(find|search|show|filter|discover)\b.{0,40}\b(job[s]?|role[s]?|position[s]?)\b/i
 const COMPANY_RE    = /\b(tell me about|does|what about|company|employer|sponsor)\b.{0,20}\b(sponsor|visa|h-?1b|hire|hiring)\b/i
-const APPS_RE       = /\b(my applications?|pipeline|status|follow.?up|how am i doing|interview)\b/i
+const APPS_RE           = /\b(my applications?|pipeline|status|follow.?up|how am i doing)\b/i
+const INTERVIEW_PREP_RE = /\b(interview.?prep|prepare.{0,20}(for|interview)|what questions|how should i prepare|prep for (this|the)|ready for (this|the) interview)\b/i
 const RESEARCH_RE   = /^(research|analyze|analyse|investigate|find\s+companies|what\s+skills?)\b/i
 const OUTREACH_RE   = /\b(draft|write|compose|prepare)\b.{0,30}\b(message|outreach|linkedin|recruiter\s+(message|note)|email\s+to|follow.?up|referral\s+request)\b/i
 
@@ -39,6 +40,7 @@ export function detectPreflightMode(message: string): WorkspaceMode | null {
   if (COMPARE_RE.test(m))   return "compare"
   if (SEARCH_RE.test(m))    return "search"
   if (COMPANY_RE.test(m))   return "company"
+  if (INTERVIEW_PREP_RE.test(m)) return "interview"
   if (APPS_RE.test(m) || WORKFLOW_RE.test(m)) return "applications"
 
   return null
@@ -49,6 +51,7 @@ export function detectPreflightMode(message: string): WorkspaceMode | null {
  * Displayed immediately — replaced by actual Scout answer when stream completes.
  */
 export const PREFLIGHT_NARRATIVE: Partial<Record<WorkspaceMode, string>> = {
+  interview:        "Generating your interview prep plan…",
   outreach:         "Preparing your outreach draft…",
   research:         "Initialising research — gathering evidence…",
   compare:          "Comparing your strongest saved jobs…",

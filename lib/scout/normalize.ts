@@ -21,7 +21,7 @@ import {
 } from "@/lib/scout/types"
 
 const VALID_WORKSPACE_MODES = new Set<ScoutWorkspaceMode>([
-  "idle", "search", "compare", "tailor", "applications", "bulk_application", "company", "research", "outreach",
+  "idle", "search", "compare", "tailor", "applications", "bulk_application", "company", "research", "outreach", "interview",
 ])
 
 function isWorkspaceMode(v: unknown): v is ScoutWorkspaceMode {
