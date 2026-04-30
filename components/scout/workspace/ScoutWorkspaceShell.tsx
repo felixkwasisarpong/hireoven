@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { usePathname, useSearchParams } from "next/navigation"
 import Link from "next/link"
-import { LayoutDashboard, Sparkles, X } from "lucide-react"
+import { LayoutDashboard, Shield, Sparkles, X } from "lucide-react"
 import { ScoutCommandBar } from "./ScoutCommandBar"
 import { WorkspaceSurface } from "./WorkspaceSurface"
 import { IdleMode } from "./IdleMode"
@@ -33,6 +33,9 @@ import { ScoutMemoryChips } from "@/components/scout/ScoutMemoryChips"
 import { getPersonalizedChips } from "@/lib/scout/mode"
 import { ScoutMarketRail } from "@/components/scout/ScoutMarketRail"
 import type { MarketSignal } from "@/lib/scout/market-intelligence"
+import { ScoutActionGate } from "@/components/scout/ScoutActionGate"
+import { ScoutPermissionsPanel } from "@/components/scout/ScoutPermissionsPanel"
+import { readPermissions, type ScoutPermissionState } from "@/lib/scout/permissions"
 import { getScoutSuggestionChips } from "@/lib/scout/mode"
 import { getScoutNudges } from "@/lib/scout/nudges"
 import { detectScoutMode } from "@/lib/scout/mode"
@@ -135,6 +138,11 @@ export function ScoutWorkspaceShell() {
   const [marketSignals,   setMarketSignals]   = useState<MarketSignal[]>([])
   const [marketLoading,   setMarketLoading]   = useState(true)
 
+  // ── Permission gate (shell-level — handles events from any executor) ─────────
+  const [activeGate,        setActiveGate]        = useState<import("@/components/scout/ScoutActionGate").GateRequest | null>(null)
+  const [showPermissions,   setShowPermissions]   = useState(false)
+  const [shellPermissions,  setShellPermissions]  = useState<ScoutPermissionState[]>(() => readPermissions())
+
   // ── Chat state ──────────────────────────────────────────────────────────────
   const [messages,  setMessages]  = useState<ChatMessage[]>([])
   const [query,     setQuery]     = useState("")
@@ -185,6 +193,23 @@ export function ScoutWorkspaceShell() {
   const firstName = fullName?.split(" ")[0] ?? "there"
   const hour      = new Date().getHours()
   const greeting  = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening"
+
+  // ── Gate event bus — listens for permission requests from any executor ────────
+  useEffect(() => {
+    function onGateOpen(e: Event) {
+      const detail = (e as CustomEvent).detail
+      setActiveGate(detail)
+    }
+    window.addEventListener("scout:gate-open", onGateOpen)
+    return () => window.removeEventListener("scout:gate-open", onGateOpen)
+  }, [])
+
+  function dispatchGateResponse(approved: boolean, alwaysAllow = false) {
+    setActiveGate(null)
+    window.dispatchEvent(new CustomEvent("scout:gate-response", {
+      detail: { approved, alwaysAllow },
+    }))
+  }
 
   // ── Load search profile on mount + listen for memory-cleared events ──────────
   useEffect(() => {
@@ -489,6 +514,15 @@ export function ScoutWorkspaceShell() {
                 {workspaceMode}
               </span>
             )}
+            {/* Permissions button */}
+            <button
+              type="button"
+              onClick={() => setShowPermissions(true)}
+              title="Scout permissions"
+              className="inline-flex items-center gap-1.5 text-[11px] font-medium text-slate-500 transition hover:text-slate-300"
+            >
+              <Shield className="h-3.5 w-3.5" />
+            </button>
             <Link
               href="/dashboard/scout/legacy"
               className="inline-flex items-center gap-1.5 text-[11px] font-medium text-slate-500 transition hover:text-slate-300"
@@ -662,6 +696,25 @@ export function ScoutWorkspaceShell() {
         isExpanded={workflowEngine.isExpanded}
         setExpanded={workflowEngine.setExpanded}
       />
+
+      {/* ── Permission gate — bottom-center, not a modal ────────────── */}
+      {activeGate && (
+        <ScoutActionGate
+          gate={activeGate}
+          onAllowOnce={() => dispatchGateResponse(true, false)}
+          onAlwaysAllow={() => dispatchGateResponse(true, true)}
+          onCancel={() => dispatchGateResponse(false)}
+        />
+      )}
+
+      {/* ── Permissions panel — bottom-right slide-in ───────────────── */}
+      {showPermissions && (
+        <ScoutPermissionsPanel
+          permissions={shellPermissions}
+          onPermissionsChange={setShellPermissions}
+          onClose={() => setShowPermissions(false)}
+        />
+      )}
     </main>
   )
 }
