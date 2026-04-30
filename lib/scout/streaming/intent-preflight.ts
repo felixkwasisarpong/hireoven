@@ -19,6 +19,7 @@ const SEARCH_RE     = /\b(find|search|show|filter|discover)\b.{0,40}\b(job[s]?|r
 const COMPANY_RE    = /\b(tell me about|does|what about|company|employer|sponsor)\b.{0,20}\b(sponsor|visa|h-?1b|hire|hiring)\b/i
 const APPS_RE           = /\b(my applications?|pipeline|status|follow.?up|how am i doing)\b/i
 const INTERVIEW_PREP_RE = /\b(interview.?prep|prepare.{0,20}(for|interview)|what questions|how should i prepare|prep for (this|the)|ready for (this|the) interview)\b/i
+const CAREER_RE     = /\b(career\s+(direction|path|strategy|pivot|plan)|best\s+(fit|direction|path)\s+for\s+my|where\s+should\s+i\s+(focus|go|head)|strongest\s+traction|what\s+(sector|domain|field)\s+(fits|suits|works)|career\s+positioning)\b/i
 const RESEARCH_RE   = /^(research|analyze|analyse|investigate|find\s+companies|what\s+skills?)\b/i
 const OUTREACH_RE   = /\b(draft|write|compose|prepare)\b.{0,30}\b(message|outreach|linkedin|recruiter\s+(message|note)|email\s+to|follow.?up|referral\s+request)\b/i
 
@@ -32,6 +33,8 @@ export function detectPreflightMode(message: string): WorkspaceMode | null {
 
   // Outreach drafting takes highest priority (clear "draft/write message" signal)
   if (OUTREACH_RE.test(m))  return "outreach"
+  // Career strategy before research (research RE also catches "career direction")
+  if (CAREER_RE.test(m))    return "career_strategy"
   // Research takes priority over generic searches
   if (RESEARCH_RE.test(m))  return "research"
   // Bulk prep takes priority over tailor (both match "prepare")
@@ -51,6 +54,7 @@ export function detectPreflightMode(message: string): WorkspaceMode | null {
  * Displayed immediately — replaced by actual Scout answer when stream completes.
  */
 export const PREFLIGHT_NARRATIVE: Partial<Record<WorkspaceMode, string>> = {
+  career_strategy:  "Analysing your career profile and market signals…",
   interview:        "Generating your interview prep plan…",
   outreach:         "Preparing your outreach draft…",
   research:         "Initialising research — gathering evidence…",

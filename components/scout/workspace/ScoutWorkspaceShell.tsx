@@ -28,6 +28,9 @@ import { writeResearchTask, readResearchTask } from "@/lib/scout/research/store"
 import { ResearchMode } from "./ResearchMode"
 import { OutreachMode } from "./OutreachMode"
 import { InterviewPrepMode } from "./InterviewPrepMode"
+import { CareerStrategyMode } from "./CareerStrategyMode"
+import { isCareerStrategyIntent } from "@/lib/scout/career/intent"
+import { useCareerStrategy } from "@/hooks/useCareerStrategy"
 import { useScoutTimeline } from "@/hooks/useScoutTimeline"
 import { ScoutTimelinePanel } from "@/components/scout/timeline/ScoutTimelinePanel"
 import { useScoutProactive } from "@/hooks/useScoutProactive"
@@ -148,6 +151,7 @@ function buildNarrative(mode: WorkspaceMode, response: ScoutResponse): string {
       research:          "Scout is running your research task.",
       outreach:          "Scout prepared your outreach draft.",
       interview:         "Scout generated your interview prep plan.",
+      career_strategy:   "Scout analysed your career profile and directions.",
       idle:              "",
     }
     return labels[mode] ?? ""
@@ -262,6 +266,9 @@ export function ScoutWorkspaceShell() {
 
   // ── Research streaming ──────────────────────────────────────────────────────
   const researchStream = useResearchStream()
+
+  // ── Career strategy ─────────────────────────────────────────────────────────
+  const careerStrategy = useCareerStrategy()
 
   // ── Activity timeline ───────────────────────────────────────────────────────
   const timeline       = useScoutTimeline()
@@ -883,6 +890,24 @@ export function ScoutWorkspaceShell() {
     setIsLoading(false)
   }, [researchStream.error])
 
+  // Career strategy — data loaded
+  useEffect(() => {
+    if (careerStrategy.loading) return
+    setIsLoading(false)
+    if (careerStrategy.data) {
+      const dirCount = careerStrategy.data.directions.length
+      if (dirCount > 0) {
+        setNarrative(`Found ${dirCount} career direction${dirCount !== 1 ? "s" : ""} — review below`)
+        setChips(["Compare these directions", "What skills should I prioritize?", "Queue matching jobs"])
+      }
+    }
+    if (careerStrategy.error) {
+      setError(careerStrategy.error)
+      setWorkspaceMode("idle")
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [careerStrategy.loading, careerStrategy.data, careerStrategy.error])
+
   // ── Timeline tracking effects ───────────────────────────────────────────────
   // Each effect uses a ref to detect meaningful changes so events are never
   // duplicated. These effects are purely observational — they never modify
@@ -1300,6 +1325,18 @@ export function ScoutWorkspaceShell() {
           : undefined,
       })
 
+      // ── Career strategy — before research (research RE also catches career phrases) ──
+      if (isCareerStrategyIntent(message)) {
+        setWorkspaceMode("career_strategy")
+        setNarrative(PREFLIGHT_NARRATIVE.career_strategy ?? "")
+        careerStrategy.reset()
+        void careerStrategy.generate(message)
+        const updatedCmds = appendCommand(recentCommands, message)
+        setRecentCommands(updatedCmds)
+        setHasSession(true)
+        return
+      }
+
       // ── Research intent — route to research endpoint, not chat ────────────
       if (isResearchIntent(message)) {
         setWorkspaceMode("research")
@@ -1714,6 +1751,16 @@ export function ScoutWorkspaceShell() {
                     response={activeResponse}
                     onFollowUp={handleFollowUp}
                     activeEntities={activeEntities}
+                  />
+                )
+              }
+              if (displayedMode === "career_strategy") {
+                return (
+                  <CareerStrategyMode
+                    data={careerStrategy.data}
+                    loading={careerStrategy.loading}
+                    error={careerStrategy.error}
+                    onCommand={(cmd) => { setQuery(cmd); setTimeout(() => inputRef.current?.focus(), 50) }}
                   />
                 )
               }
