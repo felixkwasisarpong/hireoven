@@ -266,7 +266,7 @@ function StatusHero({
               <p className="mt-1 text-xs text-gray-500">days remaining</p>
               {daysPct != null && (
                 <div className="mt-3 space-y-1">
-                  <div className="h-2 overflow-hidden rounded-full bg-white/70">
+                  <div className="h-2 overflow-hidden rounded-full bg-black/10">
                     <div className={cn("h-full rounded-full transition-all duration-700", u.bar)} style={{ width: `${daysPct}%` }} />
                   </div>
                   <p className="text-[10px] text-gray-400">{daysPct}% of period remaining</p>
@@ -274,7 +274,7 @@ function StatusHero({
               )}
             </>
           ) : (
-            <div className="rounded-xl border border-dashed border-current/20 bg-white/40 px-4 py-4 text-center">
+            <div className="rounded-xl border border-dashed border-current/20 bg-white/80 px-4 py-4 text-center">
               <Calendar className="mx-auto mb-1.5 h-5 w-5 text-gray-400" />
               <p className="text-sm font-medium text-gray-600">End date not set</p>
               <p className="mt-0.5 text-[11px] text-gray-400">Add your OPT end date above</p>
@@ -297,14 +297,14 @@ function StatusHero({
               </div>
               <p className="mt-1 text-xs text-gray-500">days used of {limit}-day limit</p>
               <div className="mt-3 space-y-1">
-                <div className="h-2 overflow-hidden rounded-full bg-white/70">
+                <div className="h-2 overflow-hidden rounded-full bg-black/10">
                   <div className={cn("h-full rounded-full transition-all duration-700", uBarColor)} style={{ width: `${uPct ?? 0}%` }} />
                 </div>
                 <p className="text-[10px] text-gray-400">{uPct ?? 0}% of allowance used</p>
               </div>
             </>
           ) : (
-            <div className="rounded-xl border border-dashed border-current/20 bg-white/40 px-4 py-4 text-center">
+            <div className="rounded-xl border border-dashed border-current/20 bg-white/80 px-4 py-4 text-center">
               <Clock className="mx-auto mb-1.5 h-5 w-5 text-gray-400" />
               <p className="text-sm font-medium text-gray-600">Not tracked</p>
               <p className="mt-0.5 text-[11px] text-gray-400">Add unemployment days in settings</p>
