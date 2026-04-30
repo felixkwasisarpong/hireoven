@@ -32,6 +32,7 @@ import {
   type ScreenerFilters,
 } from "./job-screener-panel"
 import { MatchDetailPanel, type MatchDetailModel } from "./match-detail-panel"
+import { enrichFields, type AutofillIntelligenceResult, type AutofillIntelligentField } from "../autofill/intelligence"
 
 const BRAND_ICON_URL = chrome.runtime.getURL("icons/icon48.png")
 
@@ -735,6 +736,162 @@ const STYLE = `
     max-width: 720px;
   }
 
+  /* ── Autofill Intelligence styles ──────────────────────────────────── */
+
+  .intel-strip {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 92, 24, 0.22);
+    background: rgba(255, 92, 24, 0.06);
+    padding: 10px 12px;
+    margin-bottom: 12px;
+  }
+
+  .intel-strip .summary {
+    font-size: 12px;
+    font-weight: 650;
+    color: #c94010;
+    line-height: 1.4;
+  }
+
+  .intel-counts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .intel-count {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+
+  .intel-count.ready   { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+  .intel-count.review  { background: #fffbeb; color: #92400e; border: 1px solid #fde68a; }
+  .intel-count.missing { background: #f8fafc; color: #475569; border: 1px solid #e2e8f0; }
+  .intel-count.sensitive { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+
+  .field-section {
+    margin-bottom: 10px;
+  }
+
+  .field-section-head {
+    font-size: 10px;
+    font-weight: 720;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 6px 0 4px;
+    border-bottom: 1px solid #f1f5f9;
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .field-section-head.ready    { color: #15803d; }
+  .field-section-head.review   { color: #b45309; }
+  .field-section-head.sensitive { color: #dc2626; }
+  .field-section-head.missing  { color: #64748b; }
+  .field-section-head.upload   { color: #64748b; }
+
+  .ifield-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 6px 0;
+    border-bottom: 1px solid #f8fafc;
+  }
+
+  .ifield-row:last-child { border-bottom: none; }
+
+  .ifield-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    margin-top: 5px;
+  }
+
+  .ifield-dot.ready    { background: #22c55e; }
+  .ifield-dot.review   { background: #f59e0b; }
+  .ifield-dot.sensitive { background: #ef4444; }
+  .ifield-dot.missing  { background: #cbd5e1; }
+  .ifield-dot.upload   { background: #94a3b8; }
+
+  .ifield-content {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .ifield-label {
+    font-size: 11px;
+    font-weight: 650;
+    color: #0f172a;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .ifield-value {
+    font-size: 11px;
+    color: #475569;
+    margin-top: 1px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .ifield-value.empty { color: #94a3b8; font-style: italic; }
+
+  .ifield-note {
+    font-size: 10px;
+    color: #92400e;
+    margin-top: 3px;
+    line-height: 1.4;
+  }
+
+  .ifield-note.sensitive { color: #dc2626; }
+
+  .ifield-source {
+    font-size: 9px;
+    font-weight: 700;
+    padding: 1px 5px;
+    border-radius: 4px;
+    flex-shrink: 0;
+    margin-top: 3px;
+  }
+
+  .ifield-source.profile      { background: #f0f9ff; color: #0369a1; }
+  .ifield-source.cover_letter { background: #faf5ff; color: #7c3aed; }
+  .ifield-source.manual       { background: #f8fafc; color: #64748b; }
+
+  .intel-warn-strip {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    border-radius: 8px;
+    border: 1px solid #fde68a;
+    background: #fffbeb;
+    padding: 8px 10px;
+    margin-bottom: 8px;
+    font-size: 11px;
+    color: #92400e;
+    line-height: 1.4;
+  }
+
+  .intel-warn-strip.blocker {
+    border-color: #fecaca;
+    background: #fef2f2;
+    color: #991b1b;
+  }
+
   @media (max-width: 720px) {
     .bar { border-radius: 22px; }
     .title-sub { display: none; }
@@ -928,13 +1085,7 @@ function hasReachableApplySurface(): boolean {
   return actions.some((node) => /apply|easy apply|start application|continue application/i.test(node.textContent ?? ""))
 }
 
-function statusOfField(field: DetectedField): "ready" | "review" | "missing" {
-  if (!field.detectedValue) return "missing"
-  if (field.type === "file") return "review"
-  if (field.needsReview) return "review"
-  if (field.confidence < 0.65) return "review"
-  return "ready"
-}
+
 
 function safeFieldsToFill(fields: DetectedField[]): Array<{ elementRef: string; value: string }> {
   return fields
@@ -1073,6 +1224,7 @@ export class PageAwareControlSystem {
   private selectedResumeId: string | null = null
 
   private autofillPreview: AutofillPreviewResult | null = null
+  private fieldIntelligence: AutofillIntelligenceResult | null = null
   private autofillFilledCount: number | null = null
   private autofillUseTailored = true
   private autofillUseCover = true
@@ -1748,6 +1900,7 @@ export class PageAwareControlSystem {
     this.drawer = "autofill"
     this.profileOpen = false
     this.autofillFilledCount = null
+    this.fieldIntelligence = null
     this.render()
 
     void this.ensureResumeList()
@@ -1756,9 +1909,12 @@ export class PageAwareControlSystem {
       try {
         const raw = await sendToBackground({ type: "GET_AUTOFILL_PREVIEW" })
         this.autofillPreview = raw as AutofillPreviewResult
+        // Enrich fields with intelligence layer
+        this.fieldIntelligence = enrichFields(this.autofillPreview.fields)
         const coverField = this.autofillPreview.fields.find((field) => field.suggestedProfileKey === "cover_letter_text")
         this.coverLetterFieldRef = coverField?.elementRef ?? null
-        this.setStatus("Autofill preview loaded. Review before submitting.")
+        const c = this.fieldIntelligence.counts
+        this.setStatus(`${c.ready} ready · ${c.review} review · ${c.sensitive} sensitive`)
       } catch {
         this.autofillPreview = {
           type: "AUTOFILL_PREVIEW_RESULT",
@@ -2153,89 +2309,181 @@ export class PageAwareControlSystem {
     `
   }
 
+  // ── Intelligence field rendering helpers ─────────────────────────────────
+
+  private renderIntelligentField(f: AutofillIntelligentField): string {
+    const dot = `<span class="ifield-dot ${f.status === "missing_data" ? "missing" : f.status === "unsupported" ? "upload" : f.status}"></span>`
+    const sourceLabel = f.source === "cover_letter" ? "AI" : f.source === "manual" ? "manual" : "profile"
+    const valueHtml = f.value
+      ? `<div class="ifield-value">${esc(trimText(f.value, 48))}</div>`
+      : `<div class="ifield-value empty">—</div>`
+    const noteHtml = f.notes.length > 0
+      ? `<div class="ifield-note ${f.status === "sensitive" ? "sensitive" : ""}">${esc(f.notes[0])}</div>`
+      : ""
+    return `
+      <div class="ifield-row">
+        ${dot}
+        <div class="ifield-content">
+          <div class="ifield-label">${esc(f.label || f.profileKey || "Field")}</div>
+          ${valueHtml}
+          ${noteHtml}
+        </div>
+        <span class="ifield-source ${f.source}">${esc(sourceLabel)}</span>
+      </div>
+    `
+  }
+
+  private renderFieldSection(
+    title: string,
+    cssClass: string,
+    icon: string,
+    fields: AutofillIntelligentField[],
+  ): string {
+    if (fields.length === 0) return ""
+    return `
+      <div class="field-section">
+        <div class="field-section-head ${cssClass}">${icon} ${esc(title)} (${fields.length})</div>
+        ${fields.map((f) => this.renderIntelligentField(f)).join("")}
+      </div>
+    `
+  }
+
   private renderAutofillBody(): string {
     if (this.isBusy("autofill-load") && !this.autofillPreview) {
-      return `<div class="muted">Detecting form fields...</div>`
+      return `<div class="muted">Scanning form fields…</div>`
     }
 
     const preview = this.autofillPreview
     if (!preview) {
-      return `<div class="muted">No form detected on this page yet. Try opening the application form first.</div>`
+      return `<div class="muted">No application form detected yet. Navigate to the form page and reopen.</div>`
     }
-
     if (preview.profileMissing) {
-      return `<div class="muted">No autofill profile found yet. Set one up in your Hireoven dashboard, then come back.</div>`
+      return `<div class="muted">No autofill profile found. Set one up in your Hireoven dashboard first.</div>`
     }
 
+    // ── Post-fill results view ──────────────────────────────────────────────
     if (this.autofillFilledCount != null) {
       const total = preview.totalFields || this.autofillFilledCount
-      const requiredFilled = preview.fields.filter((f) => statusOfField(f) === "ready").length
-      const optional = preview.fields.slice(0, 16).map((f) => {
-        const s = statusOfField(f)
-        const icon = s === "ready" ? "✓" : s === "review" ? "!" : "—"
-        return `<div class="field-row"><span class="check ${s}">${icon}</span><span class="label">${esc(f.label || f.suggestedProfileKey || "Field")}</span><span class="meta">${esc(f.type)}</span></div>`
-      }).join("")
-
+      const pct = total === 0 ? 100 : Math.round((this.autofillFilledCount / total) * 100)
       return `
         <div class="progress">
-          <div class="progress-head"><span>${requiredFilled} OUT OF ${total} REQUIRED FIELDS FILLED</span><span>${total === 0 ? 100 : Math.round((requiredFilled / total) * 100)}%</span></div>
-          <div class="progress-track"><div class="progress-fill" style="width:${total === 0 ? 100 : Math.min(100, Math.round((requiredFilled / total) * 100))}%"></div></div>
+          <div class="progress-head">
+            <span>${this.autofillFilledCount} of ${total} fields filled</span>
+            <span>${pct}%</span>
+          </div>
+          <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
         </div>
-        <div class="section-label">Fields</div>
-        ${optional || `<div class="muted">No detail fields to show.</div>`}
-        <div class="warn">Never auto-submitted. Review every value before clicking Submit.</div>
+        <div class="warn">Never auto-submitted. Review every field before clicking Submit.</div>
       `
     }
 
-    const profileName = this.user?.fullName ?? this.user?.email ?? "Hireoven user"
-    const coverPreview = this.coverLetterText.trim() ? trimText(this.coverLetterText, 90) : "Generate from the Cover Letter drawer first"
+    // ── Intelligence-grouped view ───────────────────────────────────────────
+    const intel = this.fieldIntelligence
+    if (!intel) {
+      return `<div class="muted">Analyzing fields…</div>`
+    }
 
-    const resumePickerHtml = this.renderResumePicker()
-    const coverPreviewHtml = `
-      <div class="section-label" style="margin-top:14px">Cover Letter</div>
-      <div class="picker">
-        <span class="picker-icon">✉️</span>
-        <div class="picker-main">
-          <div class="picker-title">${this.coverLetterText.trim() ? "Generated cover letter ready" : "No cover letter yet"}</div>
-          <div class="picker-sub">${esc(coverPreview)}</div>
+    const { fields, counts, guidanceSummary, warnings } = intel
+
+    // Scout guidance strip
+    const stripColor = counts.sensitive > 0 ? "#fef2f2" : "rgba(255,92,24,0.06)"
+    const guidanceHtml = `
+      <div class="intel-strip" style="background:${stripColor}">
+        <div class="summary">${esc(guidanceSummary)}</div>
+        <div class="intel-counts">
+          ${counts.ready > 0 ? `<span class="intel-count ready">✓ ${counts.ready} ready</span>` : ""}
+          ${counts.review > 0 ? `<span class="intel-count review">⚠ ${counts.review} review</span>` : ""}
+          ${counts.sensitive > 0 ? `<span class="intel-count sensitive">⛔ ${counts.sensitive} sensitive</span>` : ""}
+          ${counts.missing > 0 ? `<span class="intel-count missing">— ${counts.missing} missing</span>` : ""}
         </div>
       </div>
+    `
+
+    // Warnings (top-level, non-field)
+    const warningsHtml = warnings
+      .filter((w) => w.level !== "info")
+      .map((w) => `<div class="intel-warn-strip${w.level === "blocker" ? " blocker" : ""}">⚠ ${esc(w.message)}</div>`)
+      .join("")
+
+    // Grouped field sections
+    const readyFields     = fields.filter((f) => f.status === "ready")
+    const reviewFields    = fields.filter((f) => f.status === "review_needed")
+    const sensitiveFields = fields.filter((f) => f.status === "sensitive")
+    const missingFields   = fields.filter((f) => f.status === "missing_data")
+    const uploadFields    = fields.filter((f) => f.status === "unsupported")
+
+    const sectionsHtml = [
+      this.renderFieldSection("Ready to fill", "ready",    "✓", readyFields),
+      this.renderFieldSection("Needs review",  "review",   "⚠", reviewFields),
+      this.renderFieldSection("Sensitive — review required", "sensitive", "⛔", sensitiveFields),
+      this.renderFieldSection("Missing data",  "missing",  "—", missingFields),
+      this.renderFieldSection("Manual upload", "upload",   "📎", uploadFields),
+    ].join("")
+
+    // Resume + cover letter handoff
+    const resumeHtml = this.renderResumePicker()
+    const coverStatus = this.coverLetterText.trim()
+      ? `<div class="picker-title">Cover letter ready</div><div class="picker-sub">${esc(trimText(this.coverLetterText, 72))}</div>`
+      : `<div class="picker-title" style="color:#94a3b8">No cover letter yet</div><div class="picker-sub">Generate from the Cover Letter tab</div>`
+
+    const handoffHtml = `
+      ${resumeHtml}
+      <div class="section-label" style="margin-top:12px">Cover Letter</div>
+      <div class="picker">
+        <span class="picker-icon">✉️</span>
+        <div class="picker-main">${coverStatus}</div>
+      </div>
       <label class="toggle-row">
-        <span class="label">Insert generated cover letter<small>Fills the cover-letter field on submit prep</small></span>
+        <span class="label">Insert cover letter<small>Fills the cover-letter field</small></span>
         <input type="checkbox" class="toggle" data-action="toggle-cover" ${this.autofillUseCover ? "checked" : ""} ${this.coverLetterText.trim() ? "" : "disabled"}/>
       </label>
     `
 
     return `
-      <div class="section-label">Applicant Profile <span class="req">*Required</span></div>
-      <div class="picker">
-        <span class="picker-icon">👤</span>
-        <div class="picker-main">
-          <div class="picker-title">${esc(profileName)}</div>
-          <div class="picker-sub">${esc(this.user?.email ?? "")}</div>
-        </div>
-        <span class="picker-tag">ACTIVE</span>
+      ${guidanceHtml}
+      ${warningsHtml}
+      ${sectionsHtml}
+      <div style="border-top:1px solid #f1f5f9;margin-top:10px;padding-top:12px">
+        ${handoffHtml}
       </div>
-
-      ${resumePickerHtml}
-      ${coverPreviewHtml}
-
-      <div class="warn">No auto-submit. We only fill — you click Submit.</div>
+      <div class="warn">No auto-submit ever. You click Fill, then you click Submit.</div>
     `
   }
 
   private renderAutofillFoot(): string {
     const preview = this.autofillPreview
+    const intel = this.fieldIntelligence
+
     if (this.autofillFilledCount != null) {
       return `
-        <button class="btn primary" data-action="reload-autofill" ${this.isBusy("autofill-load") ? "disabled" : ""}>${this.isBusy("autofill-load") ? "Refreshing" : "Continue Autofill"}</button>
+        <button class="btn primary" data-action="reload-autofill" ${this.isBusy("autofill-load") ? "disabled" : ""}>
+          ${this.isBusy("autofill-load") ? "Re-scanning…" : "Re-check fields"}
+        </button>
         <div class="credits">No fields are submitted automatically.</div>
       `
     }
+
     const safeCount = preview ? safeFieldsToFill(preview.fields).length : 0
+    const hasSensitive = (intel?.counts.sensitive ?? 0) > 0
+    const readiness = intel?.readiness ?? "ready"
+
+    const label = this.isBusy("autofill-fill")
+      ? "Filling…"
+      : hasSensitive
+      ? `Fill safe fields (${safeCount}) — review sensitive manually`
+      : `Fill ${safeCount} field${safeCount !== 1 ? "s" : ""}`
+
+    const warnNote = hasSensitive
+      ? `<div class="credits" style="color:#c94010">⚠ ${intel?.counts.sensitive} sensitive field${intel!.counts.sensitive > 1 ? "s" : ""} excluded — fill manually</div>`
+      : readiness === "needs_review"
+      ? `<div class="credits">Review flagged fields after filling.</div>`
+      : `<div class="credits">Review every value before submitting.</div>`
+
     return `
-      <button class="btn primary" data-action="fill-safe" ${!preview || safeCount === 0 || this.isBusy("autofill-fill") ? "disabled" : ""}>${this.isBusy("autofill-fill") ? "Filling..." : `Start Autofill (${safeCount})`}</button>
-      <div class="credits">Credits left today: 5/5</div>
+      <button class="btn primary" data-action="fill-safe" ${!preview || safeCount === 0 || this.isBusy("autofill-fill") ? "disabled" : ""}>
+        ${label}
+      </button>
+      ${warnNote}
     `
   }
 
