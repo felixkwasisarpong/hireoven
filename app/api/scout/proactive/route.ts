@@ -299,16 +299,16 @@ export async function GET() {
              AND j.skills IS NOT NULL
              AND j.first_detected_at >= NOW() - INTERVAL '30 days'
              AND (
-               COALESCE(array_length($2::text[], 1), 0) = 0
-               OR j.title ILIKE ANY($2::text[])
-               OR COALESCE(j.normalized_title, '') ILIKE ANY($2::text[])
+               COALESCE(array_length($1::text[], 1), 0) = 0
+               OR j.title ILIKE ANY($1::text[])
+               OR COALESCE(j.normalized_title, '') ILIKE ANY($1::text[])
              )
          ) demand
          GROUP BY LOWER(skill)
          HAVING COUNT(*) >= 3
          ORDER BY demand_count DESC
          LIMIT 60`,
-        [user.id, rolePatterns]
+        [rolePatterns]
       ),
     ])
 
