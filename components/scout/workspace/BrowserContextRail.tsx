@@ -27,7 +27,7 @@ const PAGE_STYLE: Record<PageModeStyleKey, string> = {
   job_detail:       "bg-blue-50 text-blue-700",
   application_form: "bg-amber-50 text-amber-700",
   search_results:   "bg-violet-50 text-violet-700",
-  company_page:     "bg-emerald-50 text-emerald-700",
+  company_page:     "bg-[#FF5C18]/8 text-[#c94010]",
   unknown:          "bg-slate-50 text-slate-500",
 }
 
@@ -110,8 +110,8 @@ export function BrowserContextRail({ context, activeWorkflow, onPreFill, onExpan
               {pageLabel}
             </span>
             {context.autofillAvailable && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+              <span className="inline-flex items-center gap-1 rounded-full bg-[#FF5C18]/8 px-2 py-0.5 text-[10px] font-semibold text-[#FF5C18]">
+                <span className="h-1.5 w-1.5 rounded-full bg-[#FF5C18]" />
                 Autofill ready
               </span>
             )}

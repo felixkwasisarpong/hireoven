@@ -139,13 +139,24 @@ const STYLE = `
     width: 32px;
     height: 32px;
     border-radius: 999px;
-    background: #10b981;
-    color: #052e1f;
+    background: #FF5C18;
+    color: #ffffff;
     font-size: 13px;
     font-weight: 800;
     letter-spacing: 0;
     flex: 0 0 auto;
-    box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.18);
+    box-shadow: 0 0 0 2px rgba(255, 92, 24, 0.3), inset 0 0 0 2px rgba(255, 255, 255, 0.18);
+    transition: background 200ms ease, box-shadow 200ms ease;
+  }
+
+  /* Mode-aware brand icon tint — subtle visual cue for which action set is active */
+  .bar[data-mode="application_form"] .brand {
+    background: #f59e0b;
+    box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.35), inset 0 0 0 2px rgba(255,255,255,0.18);
+  }
+  .bar[data-mode="search_results"] .brand {
+    background: #6366f1;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.35), inset 0 0 0 2px rgba(255,255,255,0.18);
   }
 
   .title {
@@ -184,8 +195,8 @@ const STYLE = `
   }
 
   .pill.queue {
-    background: rgba(16, 185, 129, 0.15);
-    color: #6ee7b7;
+    background: rgba(255, 92, 24, 0.13);
+    color: #ffb99c;
   }
 
   .action {
@@ -203,19 +214,19 @@ const STYLE = `
   }
 
   .action:hover {
-    border-color: rgba(16, 185, 129, 0.6);
-    background: rgba(16, 185, 129, 0.18);
+    border-color: rgba(255, 92, 24, 0.55);
+    background: rgba(255, 92, 24, 0.16);
   }
 
   .action.primary {
-    border-color: #10b981;
-    background: #10b981;
-    color: #052e1f;
+    border-color: #FF5C18;
+    background: #FF5C18;
+    color: #ffffff;
   }
 
   .action.primary:hover {
-    background: #34d399;
-    border-color: #34d399;
+    background: #ff7a40;
+    border-color: #ff7a40;
   }
 
   .action.icon {
@@ -335,8 +346,8 @@ const STYLE = `
     width: 30px;
     height: 30px;
     border-radius: 999px;
-    background: rgba(16, 185, 129, 0.15);
-    color: #047857;
+    background: rgba(255, 92, 24, 0.13);
+    color: #c94010;
     font-size: 16px;
   }
 
@@ -397,8 +408,8 @@ const STYLE = `
     width: 28px;
     height: 28px;
     border-radius: 999px;
-    background: #ecfdf5;
-    color: #047857;
+    background: #fff4f0;
+    color: #c94010;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -432,8 +443,8 @@ const STYLE = `
     font-size: 9px;
     font-weight: 700;
     letter-spacing: 0.04em;
-    color: #047857;
-    background: #d1fae5;
+    color: #c94010;
+    background: #ffe4d9;
     border-radius: 999px;
     padding: 2px 8px;
   }
@@ -487,7 +498,7 @@ const STYLE = `
   }
 
   .toggle:checked {
-    background: #10b981;
+    background: #FF5C18;
   }
 
   .toggle:checked::after {
@@ -517,7 +528,7 @@ const STYLE = `
 
   .progress-fill {
     height: 100%;
-    background: #10b981;
+    background: #FF5C18;
     border-radius: 999px;
   }
 
@@ -544,7 +555,7 @@ const STYLE = `
     flex: 0 0 auto;
   }
 
-  .field-row .check.ready { color: #047857; }
+  .field-row .check.ready { color: #c94010; }
   .field-row .check.review { color: #b45309; }
   .field-row .check.missing { color: #94a3b8; }
 
@@ -564,8 +575,8 @@ const STYLE = `
   }
 
   .btn.primary {
-    border-color: #10b981;
-    background: #10b981;
+    border-color: #FF5C18;
+    background: #FF5C18;
     color: #ffffff;
     width: 100%;
     min-height: 42px;
@@ -576,12 +587,12 @@ const STYLE = `
     gap: 6px;
   }
 
-  .btn.primary:hover { background: #34d399; border-color: #34d399; }
+  .btn.primary:hover { background: #ff7a40; border-color: #ff7a40; }
 
   .btn.ghost {
     background: transparent;
     border-color: transparent;
-    color: #047857;
+    color: #c94010;
   }
 
   .btn:disabled { opacity: 0.5; cursor: default; }
@@ -605,7 +616,7 @@ const STYLE = `
   .change-sec {
     font-size: 9px;
     font-weight: 760;
-    color: #047857;
+    color: #c94010;
     text-transform: uppercase;
     letter-spacing: 0.06em;
     margin-bottom: 4px;
@@ -684,7 +695,7 @@ const STYLE = `
     margin-bottom: 8px;
   }
 
-  .resume-select:focus { outline: none; border-color: #10b981; box-shadow: 0 0 0 2px rgba(16,185,129,0.18); }
+  .resume-select:focus { outline: none; border-color: #FF5C18; box-shadow: 0 0 0 2px rgba(16,185,129,0.18); }
 
   .resume-score {
     display: inline-flex;
@@ -692,8 +703,8 @@ const STYLE = `
     gap: 4px;
     font-size: 10px;
     font-weight: 700;
-    color: #047857;
-    background: #ecfdf5;
+    color: #c94010;
+    background: #fff4f0;
     border-radius: 999px;
     padding: 1px 7px;
     margin-left: 6px;
@@ -738,8 +749,8 @@ const BADGE_STYLE = `
     width: 18px;
     height: 18px;
     border-radius: 999px;
-    background: #10b981;
-    color: #052e1f;
+    background: #FF5C18;
+    color: #ffffff;
     font-size: 10px;
     font-weight: 800;
     flex: 0 0 auto;
@@ -777,9 +788,9 @@ const BADGE_STYLE = `
   }
 
   .chip.match.has {
-    background: #ecfdf5;
-    color: #047857;
-    border-color: #a7f3d0;
+    background: #fff4f0;
+    color: #c94010;
+    border-color: rgba(255, 92, 24, 0.32);
   }
 
   .chip.note {
@@ -801,12 +812,12 @@ const BADGE_STYLE = `
     white-space: nowrap;
   }
 
-  .save:hover { border-color: #10b981; color: #047857; }
+  .save:hover { border-color: #FF5C18; color: #c94010; }
 
   .save.saved {
-    background: #ecfdf5;
-    color: #047857;
-    border-color: #a7f3d0;
+    background: #fff4f0;
+    color: #c94010;
+    border-color: rgba(255, 92, 24, 0.32);
   }
 
   .save:disabled { opacity: 0.6; cursor: default; }
@@ -2052,6 +2063,19 @@ export class PageAwareControlSystem {
         this.gotoNextInQueue()
         return
 
+      case "toggle-h1b-filter": {
+        const next = !this.screenerFilters.h1bOnly
+        this.screenerFilters = {
+          ...this.screenerFilters,
+          h1bOnly: next,
+          // Keep enabled true as long as at least one filter is on
+          enabled: next || this.screenerFilters.eVerifyOnly || this.screenerFilters.hideNoSponsor || this.screenerFilters.hideViewed,
+        }
+        this.applyScreener()
+        this.render()
+        return
+      }
+
       case "open-dashboard":
       case "menu-open":
         this.openPath("/dashboard")
@@ -2242,34 +2266,66 @@ export class PageAwareControlSystem {
 
   private renderBarActions(): string {
     if (!this.authenticated) {
-      return `<button class="action primary" data-action="signin">Sign in</button>`
+      return `<button class="action primary" data-action="signin">Sign in to Hireoven</button>`
     }
 
+    // ── Application form — autofill is the hero action ────────────────────────
     if (this.mode === "application_form") {
+      if (this.autofillFilledCount != null) {
+        // Already filled — show re-check option
+        return `
+          <button class="action" data-action="reload-autofill" ${this.isBusy("autofill-load") ? "disabled" : ""}>
+            ${this.isBusy("autofill-load") ? "Loading…" : "Re-check fields"}
+          </button>
+        `
+      }
       return `
-        <button class="action primary" data-action="autofill" ${this.isBusy("autofill-load") ? "disabled" : ""}>Autofill</button>
-        <button class="action" data-action="tailor" ${this.isBusy("tailor-load") ? "disabled" : ""}>Tailor</button>
+        <button class="action primary" data-action="autofill" ${this.isBusy("autofill-load") ? "disabled" : ""}>
+          ${this.isBusy("autofill-load") ? "Detecting…" : "⚡ Autofill"}
+        </button>
+        <button class="action" data-action="tailor" ${this.isBusy("tailor-load") ? "disabled" : ""}>Tailor Resume</button>
         <button class="action" data-action="cover" ${this.isBusy("cover-generate") ? "disabled" : ""}>Cover Letter</button>
       `
     }
 
+    // ── Job detail — research + prep actions ─────────────────────────────────
     if (this.mode === "job_detail") {
       const queue = this.queuePosition()
-      const nextBtn = queue && queue.nextKey
-        ? `<button class="action" data-action="queue-next" title="Next job in results">Next →</button>`
+      const nextBtn = queue?.nextKey
+        ? `<button class="action" data-action="queue-next" title="Next job in list">Next →</button>`
+        : ""
+      const autofillBtn = this.hasReachableForm
+        ? `<button class="action primary" data-action="autofill" ${this.isBusy("autofill-load") ? "disabled" : ""}>Autofill</button>`
         : ""
       return `
         <button class="action" data-action="save" ${this.isBusy("save") ? "disabled" : ""}>Save</button>
-        <button class="action" data-action="match" ${this.isBusy("match") ? "disabled" : ""}>${this.isBusy("match") ? "Matching" : "Match"}</button>
+        <button class="action" data-action="match" ${this.isBusy("match") ? "disabled" : ""}>
+          ${this.isBusy("match") ? "Analyzing…" : "Match Score"}
+        </button>
         <button class="action" data-action="tailor" ${this.isBusy("tailor-load") ? "disabled" : ""}>Tailor</button>
-        <button class="action" data-action="cover" ${this.isBusy("cover-generate") ? "disabled" : ""}>Cover Letter</button>
-        ${this.hasReachableForm ? `<button class="action primary" data-action="autofill" ${this.isBusy("autofill-load") ? "disabled" : ""}>Autofill</button>` : ""}
+        <button class="action" data-action="cover" ${this.isBusy("cover-generate") ? "disabled" : ""}>Cover</button>
+        ${autofillBtn}
         ${nextBtn}
       `
     }
 
+    // ── Search results (LinkedIn, Glassdoor, Indeed) — filter + Scout ────────
     if (this.mode === "search_results") {
-      return `<button class="action" data-action="open-dashboard">Open Hireoven</button>`
+      const h1bOn = this.screenerFilters.h1bOnly
+      const activeFilterCount = [
+        this.screenerFilters.h1bOnly,
+        this.screenerFilters.eVerifyOnly,
+        this.screenerFilters.hideNoSponsor,
+        this.screenerFilters.hideViewed,
+      ].filter(Boolean).length
+
+      return `
+        <button class="action${h1bOn ? " primary" : ""}" data-action="toggle-h1b-filter" title="Show only H-1B sponsoring jobs">
+          ${h1bOn ? "✓ H-1B" : "H-1B filter"}
+        </button>
+        ${activeFilterCount > 1 ? `<span class="pill queue">${activeFilterCount} filters</span>` : ""}
+        <button class="action" data-action="open-dashboard">Open Scout →</button>
+      `
     }
 
     return `<button class="action" data-action="open-dashboard">Open Hireoven</button>`
@@ -2302,7 +2358,7 @@ export class PageAwareControlSystem {
     this.root.innerHTML = `
       ${this.renderDrawer()}
       <div class="bar-wrap">
-        <div class="bar" role="toolbar" aria-label="Hireoven command bar">
+        <div class="bar" data-mode="${this.mode}" role="toolbar" aria-label="Hireoven command bar">
           <span class="brand" title="Hireoven">H</span>
           <span class="title">${this.barTitleHtml()}</span>
           ${this.renderBarActions()}
