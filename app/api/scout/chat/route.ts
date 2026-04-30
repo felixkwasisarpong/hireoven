@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server"
 import { getScoutContext, formatScoutContextForClaude } from "@/lib/scout/context"
 import { resolveJobContext, listTopSavedJobs } from "@/lib/scout/resolve-job-context"
 import { encodeSSE } from "@/lib/scout/streaming/types"
+import { runOrchestrator, detectAgentIntent } from "@/lib/scout/agents/orchestrator"
 import { isAllowedScoutAction, normalizeScoutActions } from "@/lib/scout/actions"
 import { detectScoutMode } from "@/lib/scout/mode"
 import { getScoutSystemPrompt } from "@/lib/scout/prompts"
@@ -906,6 +907,41 @@ export async function POST(request: NextRequest) {
 
     const formattedContext = formatScoutContextForClaude(context)
 
+    // ── Multi-agent orchestrator ────────────────────────────────────────────────
+    // Runs specialist agents in parallel after context is loaded.
+    // Each agent contributes a context section injected into Claude's prompt.
+    // Failures are silent — agents degrade gracefully, never block the response.
+    const agentIntent = detectAgentIntent(userMessage)
+    const orchestratorResult = await runOrchestrator({
+      userId:          user.id,
+      message:         userMessage,
+      detectedIntent:  agentIntent,
+      pool,
+      jobId:           effectiveJobId,
+      companyId:       body.companyId,
+      resumeId:        body.resumeId,
+      resume:          context.resume
+        ? { id: context.resume.id, topSkills: context.resume.top_skills, skills: context.resume.skills as Record<string, string[]> | null, seniorityLevel: context.resume.seniority_level, summary: context.resume.summary }
+        : undefined,
+      company:         context.company
+        ? { id: context.company.id, name: context.company.name, industry: context.company.industry, size: context.company.size, sponsorsH1b: context.company.sponsors_h1b, sponsorshipConf: context.company.sponsorship_confidence, immigrationProfile: context.company.immigration_profile, hiringHealth: context.company.hiring_health }
+        : undefined,
+      job:             context.job
+        ? { id: context.job.id, title: context.job.title, companyName: context.job.company_name, skills: null, description: context.job.description, sponsorsH1b: context.job.sponsors_h1b }
+        : undefined,
+      compareJobs:     context.compareJobs ?? undefined,
+      preferredRoles:  context.behaviorSignals?.preferredRoles,
+      userSkills:      context.behaviorSignals?.commonSkills,
+      sponsorshipRequired: context.behaviorSignals?.sponsorshipSensitivity === "high",
+    }).catch(() => ({ contextSections: [], enrichments: {}, totalDurationMs: 0 }))
+
+    // Append agent context sections to the formatted context (before Claude sees it)
+    const agentContextBlock = orchestratorResult.contextSections.join("\n")
+    const fullContext = agentContextBlock
+      ? `${formattedContext}\n\n${agentContextBlock}`
+      : formattedContext
+    // ── End multi-agent orchestrator ────────────────────────────────────────────
+
     if (isInterviewPrepIntent && !context.job) {
       return NextResponse.json({
         answer:
@@ -977,7 +1013,7 @@ Current Feed State (IMPORTANT — do not suggest actions that are already active
 ${feedStateLines.join("\n")}
 ${searchProfileSection}
 Scout Context:
-${formattedContext}
+${fullContext}
 
 ---
 
