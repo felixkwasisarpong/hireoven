@@ -19,6 +19,7 @@ import type { ScoutResponse } from "@/lib/scout/types"
 import type { ScoutNudge } from "@/lib/scout/nudges"
 import type { ScoutMission } from "@/lib/scout/missions/types"
 import type { ScoutProactiveEvent } from "@/lib/scout/proactive/types"
+import type { ScoutResumableContext } from "@/lib/scout/continuation/types"
 import { cn } from "@/lib/utils"
 
 type ChatMessage =
@@ -51,6 +52,8 @@ type Props = {
   onProactiveOpen?: (event: ScoutProactiveEvent) => void
   onProactiveDismiss?: (eventId: string) => void
   onProactiveSnooze?: (eventId: string) => void
+  continuationContexts?: ScoutResumableContext[]
+  onContinuationOpen?: (context: ScoutResumableContext) => void
 }
 
 const ACTION_TILES = [
@@ -141,6 +144,8 @@ export function IdleMode({
   onProactiveOpen,
   onProactiveDismiss,
   onProactiveSnooze,
+  continuationContexts = [],
+  onContinuationOpen,
 }: Props) {
   const { showUpgrade } = useUpgradeModal()
   const hasConversation = messages.length > 0
@@ -195,6 +200,30 @@ export function IdleMode({
               onDismiss={onMissionDismiss}
               onDisableAll={onMissionsDisable}
             />
+          )}
+
+          {/* Proactive companion prompts */}
+          {continuationContexts.length > 0 && onContinuationOpen && (
+            <div className="mb-6">
+              <p className="mb-2.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-gray-400">
+                Continue session
+              </p>
+              <div className="space-y-2">
+                {continuationContexts.slice(0, 2).map((context) => (
+                  <button
+                    key={`${context.type}:${context.id}`}
+                    type="button"
+                    onClick={() => onContinuationOpen(context)}
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3.5 py-3 text-left transition hover:border-slate-300 hover:bg-slate-50"
+                  >
+                    <p className="text-[12.5px] font-semibold text-slate-800">{context.title}</p>
+                    <p className="mt-0.5 text-[11px] leading-4.5 text-slate-500">
+                      {context.type.replace(/_/g, " ")} · resume available
+                    </p>
+                  </button>
+                ))}
+              </div>
+            </div>
           )}
 
           {/* Proactive companion prompts */}

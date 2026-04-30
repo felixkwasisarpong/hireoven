@@ -65,10 +65,22 @@ export function SearchMode({ response, onFollowUp, activeEntities }: Props) {
           </div>
 
           {filterTags.length > 0 && (
-            <div className="border-b border-gray-100 px-5 pb-2 pt-3 divide-y divide-gray-50">
-              {filterTags.map(({ label, value }) => (
-                <FilterTag key={label} label={label} value={value} />
-              ))}
+            <div className="border-b border-gray-100 px-5 py-3">
+              <div className="flex gap-1.5 overflow-x-auto pb-0.5 sm:hidden">
+                {filterTags.map(({ label, value }) => (
+                  <span
+                    key={label}
+                    className="inline-flex whitespace-nowrap rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[10px] font-semibold text-gray-600"
+                  >
+                    {label}: {value}
+                  </span>
+                ))}
+              </div>
+              <div className="hidden divide-y divide-gray-50 sm:block">
+                {filterTags.map(({ label, value }) => (
+                  <FilterTag key={label} label={label} value={value} />
+                ))}
+              </div>
             </div>
           )}
 

@@ -108,7 +108,22 @@ export function TailorMode({ response, onFollowUp, activeEntities }: Props) {
           )}
 
           <div className="px-5 py-4">
-            <ul className="mb-5 space-y-2.5 border-l-2 border-gray-100 pl-4">
+            <p className="mb-3 text-sm text-gray-700">
+              Scout has a role-focused tailoring checklist ready.
+            </p>
+
+            <details className="mb-4 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 sm:hidden">
+              <summary className="cursor-pointer text-xs font-semibold text-gray-700">
+                Show tailoring checklist
+              </summary>
+              <ul className="mt-2 space-y-1.5 pl-4">
+                {TAILOR_STEPS.map((step) => (
+                  <li key={step} className="list-disc text-xs text-gray-600">{step}</li>
+                ))}
+              </ul>
+            </details>
+
+            <ul className="mb-5 hidden space-y-2.5 border-l-2 border-gray-100 pl-4 sm:block">
               {TAILOR_STEPS.map((step) => (
                 <li key={step} className="text-sm text-gray-600">{step}</li>
               ))}

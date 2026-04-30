@@ -89,10 +89,12 @@ function CompareCard({
   item,
   isWinner,
   resumeId,
+  className,
 }: {
   item: ScoutCompareItem
   isWinner: boolean
   resumeId?: string
+  className?: string
 }) {
   const cfg = item.recommendation ? REC_CONFIG[item.recommendation] : DEFAULT_CONFIG
   const { executeAction, feedback } = useScoutActionExecutor()
@@ -127,7 +129,7 @@ function CompareCard({
 
   return (
     <article
-      className={`relative flex flex-col overflow-hidden rounded-2xl border shadow-[0_2px_12px_rgba(15,23,42,0.06)] transition ${cfg.border} ${cfg.bg}`}
+      className={`relative flex flex-col overflow-hidden rounded-2xl border shadow-[0_2px_12px_rgba(15,23,42,0.06)] transition ${cfg.border} ${cfg.bg} ${className ?? ""}`}
     >
       {/* Accent top bar */}
       <div className={`h-1 w-full ${cfg.accent}`} />
@@ -278,8 +280,23 @@ export function ScoutCompareRenderer({ compare, resumeId }: ScoutCompareRenderer
       {/* Summary */}
       <p className="text-sm leading-6 text-slate-700">{summary}</p>
 
-      {/* Cards grid */}
-      <div className={`grid gap-3 ${gridCols}`}>
+      {/* Mobile swipe cards */}
+      <div className="-mx-1 md:hidden">
+        <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto px-1 pb-1">
+          {items.map((item) => (
+            <CompareCard
+              key={item.jobId}
+              item={item}
+              isWinner={!!winnerJobId && item.jobId === winnerJobId}
+              resumeId={resumeId}
+              className="min-w-[84%] snap-start"
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* Desktop grid */}
+      <div className={`hidden gap-3 md:grid ${gridCols}`}>
         {items.map((item) => (
           <CompareCard
             key={item.jobId}
