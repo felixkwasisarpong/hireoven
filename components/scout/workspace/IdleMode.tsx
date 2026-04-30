@@ -12,9 +12,11 @@ import {
   Sparkles,
 } from "lucide-react"
 import { ScoutMessageBubble } from "@/components/scout/ScoutMessageBubble"
+import { ScoutMissionStrip } from "@/components/scout/ScoutMissionStrip"
 import { useUpgradeModal } from "@/lib/context/UpgradeModalContext"
 import type { ScoutResponse } from "@/lib/scout/types"
 import type { ScoutNudge } from "@/lib/scout/nudges"
+import type { ScoutMission } from "@/lib/scout/missions/types"
 import { cn } from "@/lib/utils"
 
 type ChatMessage =
@@ -33,12 +35,15 @@ type Props = {
   onClearChat: () => void
   onTileClick: (query: string) => void
   chatEndRef: React.RefObject<HTMLDivElement>
-  /** Restored command history from session */
   recentCommands?: string[]
-  /** Whether there is a saved session to clear */
   hasSession?: boolean
-  /** Clear the saved session and reset to blank state */
   onStartFresh?: () => void
+  /** Daily missions — shown above the action tiles in idle state */
+  missions?: ScoutMission[]
+  momentumLine?: string
+  onMissionLaunch?: (query: string) => void
+  onMissionDismiss?: (missionId: string) => void
+  onMissionsDisable?: () => void
 }
 
 const ACTION_TILES = [
@@ -120,6 +125,11 @@ export function IdleMode({
   recentCommands = [],
   hasSession = false,
   onStartFresh,
+  missions = [],
+  momentumLine,
+  onMissionLaunch,
+  onMissionDismiss,
+  onMissionsDisable,
 }: Props) {
   const { showUpgrade } = useUpgradeModal()
   const hasConversation = messages.length > 0
@@ -164,6 +174,17 @@ export function IdleMode({
               </button>
             )}
           </div>
+
+          {/* Daily mission strip */}
+          {!strategyLoading && missions.length > 0 && onMissionLaunch && onMissionDismiss && onMissionsDisable && (
+            <ScoutMissionStrip
+              missions={missions}
+              momentumLine={momentumLine}
+              onLaunch={onMissionLaunch}
+              onDismiss={onMissionDismiss}
+              onDisableAll={onMissionsDisable}
+            />
+          )}
 
           {/* Nudge strip */}
           {!strategyLoading && nudges.length > 0 && (

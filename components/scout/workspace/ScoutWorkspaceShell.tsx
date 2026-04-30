@@ -19,6 +19,15 @@ import { ScoutCommandPalette } from "./ScoutCommandPalette"
 import { normalizeScoutResponse } from "@/lib/scout/normalize"
 import { useWorkflowEngine } from "@/lib/scout/workflows/engine"
 import { useBulkApplicationEngine } from "@/lib/scout/bulk-application/engine"
+import { generateDailyMissions, buildMomentumLine } from "@/lib/scout/missions/generator"
+import {
+  readMissionStore,
+  writeMissionStore,
+  patchMissionStatus,
+  setMissionsDisabled,
+  activeMissions,
+} from "@/lib/scout/missions/store"
+import type { ScoutMission, ScoutMissionStore } from "@/lib/scout/missions/types"
 import { WorkflowPanel } from "@/components/scout/workflows/WorkflowPanel"
 import { useActiveBrowserContext } from "@/lib/scout/browser-context"
 import { getContextualChips, getContextualPlaceholder } from "@/lib/scout/context-chips"
@@ -177,6 +186,9 @@ export function ScoutWorkspaceShell() {
   const [strategyLoading, setStrategyLoading] = useState(true)
   const [behaviorSignals, setBehaviorSignals] = useState<ScoutBehaviorSignals | null>(null)
   const [behaviorLoading, setBehaviorLoading] = useState(true)
+
+  // ── Daily missions ──────────────────────────────────────────────────────────
+  const [missionStore, setMissionStore] = useState<ScoutMissionStore | null>(null)
 
   // ── Derived ─────────────────────────────────────────────────────────────────
   const scoutMode   = detectScoutMode(pathname ?? "")
@@ -386,6 +398,33 @@ export function ScoutWorkspaceShell() {
       .finally(() => { if (!cancelled) setBehaviorLoading(false) })
     return () => { cancelled = true }
   }, [])
+
+  // ── Daily missions — generated once data loads, cached in localStorage ────────
+  useEffect(() => {
+    // Only generate when core data has loaded and we don't have today's missions yet
+    if (strategyLoading || behaviorLoading) return
+    const cached = readMissionStore()
+    if (cached) { setMissionStore(cached); return }
+    if (!strategyBoard && !behaviorSignals) return
+
+    const ctx = {
+      board:         strategyBoard,
+      signals:       behaviorSignals,
+      marketSignals,
+      searchProfile,
+      hasResume:     !!primaryResume,
+    }
+    const missions      = generateDailyMissions(ctx)
+    const momentumLine  = buildMomentumLine(ctx)
+    const store: ScoutMissionStore = {
+      date:         "",   // store.ts fills this in
+      missions,
+      momentumLine,
+      disabled:     false,
+    }
+    writeMissionStore(store)
+    setMissionStore(store)
+  }, [strategyLoading, behaviorLoading, strategyBoard, behaviorSignals, marketSignals, searchProfile, primaryResume])
 
   // ── Submit ───────────────────────────────────────────────────────────────────
 
@@ -641,6 +680,19 @@ export function ScoutWorkspaceShell() {
                     chatEndRef={chatEndRef as React.RefObject<HTMLDivElement>}
                     recentCommands={recentCommands} hasSession={hasSession}
                     onStartFresh={handleStartFresh}
+                    missions={missionStore?.disabled ? [] : (missionStore?.missions ?? [])}
+                    momentumLine={missionStore?.momentumLine}
+                    onMissionLaunch={(q) => {
+                      setQuery(q)
+                      setTimeout(() => inputRef.current?.focus(), 50)
+                    }}
+                    onMissionDismiss={(id) => {
+                      setMissionStore((prev) => prev ? patchMissionStatus(prev, id, "dismissed") : prev)
+                    }}
+                    onMissionsDisable={() => {
+                      setMissionsDisabled(true)
+                      setMissionStore((prev) => prev ? { ...prev, disabled: true } : prev)
+                    }}
                   />
                 )
               }
