@@ -196,6 +196,43 @@ const COMPARE_WATCHLIST_SELECT = `
   LIMIT $2
 `
 
+/**
+ * Fallback: resolve compare jobs from job_applications WHERE status = 'saved'.
+ * Used when the watchlist query returns fewer than 2 jobs — covers users who
+ * save jobs via the application tracker but don't use the company watchlist.
+ */
+const COMPARE_SAVED_APPS_SELECT = `
+  SELECT
+    j.id,
+    j.title,
+    COALESCE(c.name, ja.company_name)  AS company_name,
+    j.company_id                        AS company_id,
+    j.location,
+    j.is_remote,
+    j.salary_min,
+    j.salary_max,
+    j.sponsors_h1b,
+    j.requires_authorization,
+    j.visa_language_detected,
+    COALESCE(jms.overall_score, ja.match_score) AS match_score
+  FROM job_applications ja
+  INNER JOIN jobs j ON j.id = ja.job_id AND j.is_active = true
+  LEFT JOIN companies c ON c.id = j.company_id
+  LEFT JOIN LATERAL (
+    SELECT overall_score
+    FROM job_match_scores
+    WHERE user_id = $1 AND job_id = ja.job_id
+    ORDER BY computed_at DESC
+    LIMIT 1
+  ) AS jms ON TRUE
+  WHERE ja.user_id = $1
+    AND ja.status = 'saved'
+    AND ja.is_archived = false
+    AND ja.job_id IS NOT NULL
+  ORDER BY COALESCE(jms.overall_score, ja.match_score, 0) DESC, ja.created_at DESC
+  LIMIT $2
+`
+
 export async function getScoutContext(input: ScoutContextInput): Promise<ScoutContext> {
   const pool = getPostgresPool()
   const {
@@ -316,10 +353,29 @@ export async function getScoutContext(input: ScoutContextInput): Promise<ScoutCo
   } else if (autoCompare) {
     try {
       const limit = Math.min(compareLimit, 5)
-      const result = await pool.query<CompareJobContext>(COMPARE_WATCHLIST_SELECT, [userId, limit])
-      compareJobs = result.rows.length >= 2 ? result.rows : null
+
+      // Try watchlist (company-level) first
+      const watchlistResult = await pool.query<CompareJobContext>(COMPARE_WATCHLIST_SELECT, [userId, limit])
+      if (watchlistResult.rows.length >= 2) {
+        compareJobs = watchlistResult.rows
+      } else {
+        // Fallback: saved job applications — covers users who save jobs via
+        // the application tracker but don't use the company watchlist
+        const savedAppsResult = await pool.query<CompareJobContext>(COMPARE_SAVED_APPS_SELECT, [userId, limit])
+        if (savedAppsResult.rows.length >= 2) {
+          compareJobs = savedAppsResult.rows
+        } else if (watchlistResult.rows.length + savedAppsResult.rows.length >= 2) {
+          // Merge both sources (deduplicate by job ID)
+          const seen = new Set<string>()
+          const merged: CompareJobContext[] = []
+          for (const row of [...watchlistResult.rows, ...savedAppsResult.rows]) {
+            if (!seen.has(row.id)) { seen.add(row.id); merged.push(row) }
+          }
+          compareJobs = merged.length >= 2 ? merged.slice(0, limit) : null
+        }
+      }
     } catch (err) {
-      console.error("[Scout] COMPARE_WATCHLIST_SELECT failed:", err)
+      console.error("[Scout] compare context resolution failed:", err)
       compareJobs = null
     }
   }
