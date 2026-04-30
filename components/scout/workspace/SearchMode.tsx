@@ -1,111 +1,101 @@
 "use client"
 
 import Link from "next/link"
-import { ArrowRight, Search, Sparkles } from "lucide-react"
+import { ArrowRight, Search } from "lucide-react"
 import { cn } from "@/lib/utils"
-import type { ScoutResponse } from "@/lib/scout/types"
-import type { ScoutAction } from "@/lib/scout/types"
+import type { ScoutResponse, ScoutAction } from "@/lib/scout/types"
+import type { ActiveEntities } from "./ScoutWorkspaceShell"
 import { buildFeedUrl } from "@/lib/scout/workspace"
 
 type Props = {
   response: ScoutResponse
   onFollowUp: (query: string) => void
-}
-
-function FilterTag({ label, value }: { label: string; value: string }) {
-  return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 py-1 text-xs">
-      <span className="font-medium text-gray-400">{label}</span>
-      <span className="font-semibold text-gray-900">{value}</span>
-    </span>
-  )
+  activeEntities?: ActiveEntities
 }
 
 function getReadableAnswer(answer: string): string {
   const trimmed = answer.trim()
-  if (/^\s*[{[]/.test(trimmed)) return "Scout prepared a search based on your request."
+  if (/^\s*[{[]/.test(trimmed)) return ""
   return trimmed
 }
 
-export function SearchMode({ response, onFollowUp }: Props) {
+function FilterTag({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-baseline gap-1.5 py-1.5">
+      <span className="w-20 flex-shrink-0 text-[10px] font-semibold uppercase tracking-[0.16em] text-gray-400">
+        {label}
+      </span>
+      <span className="text-sm font-medium text-gray-800">{value}</span>
+    </div>
+  )
+}
+
+export function SearchMode({ response, onFollowUp, activeEntities }: Props) {
   const filterAction = response.actions?.find(
     (a): a is Extract<ScoutAction, { type: "APPLY_FILTERS" }> => a.type === "APPLY_FILTERS"
   )
   const filters = filterAction?.payload
   const feedUrl = buildFeedUrl(response)
-  const answerText = getReadableAnswer(response.answer)
 
   const filterTags: { label: string; value: string }[] = []
-  if (filters?.query) filterTags.push({ label: "Role", value: String(filters.query) })
-  if (filters?.location) filterTags.push({ label: "Location", value: String(filters.location) })
-  if (filters?.workMode) filterTags.push({ label: "Work mode", value: String(filters.workMode) })
-  if (filters?.sponsorship) filterTags.push({ label: "Sponsorship", value: String(filters.sponsorship) })
+  if (filters?.query)       filterTags.push({ label: "Role",       value: String(filters.query) })
+  if (filters?.location)    filterTags.push({ label: "Location",   value: String(filters.location) })
+  if (filters?.workMode)    filterTags.push({ label: "Work mode",  value: String(filters.workMode) })
+  if (filters?.sponsorship) filterTags.push({ label: "H-1B",       value: String(filters.sponsorship) })
+
+  const answerText = getReadableAnswer(response.answer)
 
   return (
-    <div className="space-y-5">
-      {/* Scout answer strip */}
-      <div className="flex items-start gap-3">
-        <span className="mt-0.5 inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-xl bg-[#FF5C18] shadow-[0_4px_14px_rgba(255,92,24,0.3)]">
-          <Sparkles className="h-3.5 w-3.5 text-white" />
-        </span>
-        <div className="min-w-0 flex-1 rounded-2xl rounded-tl-sm border border-slate-100 bg-white px-4 py-3 shadow-sm">
-          <div className="h-[3px] w-full rounded-full bg-[#FF5C18] opacity-80 -mt-3 -mx-4 mb-3 rounded-t-2xl w-[calc(100%+2rem)]" />
-          <p className="text-sm leading-6 text-gray-700">{answerText}</p>
-        </div>
-      </div>
+    <div className="grid gap-5 lg:grid-cols-[1fr_240px]">
 
-      {/* Search result card */}
-      <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center gap-3 border-b border-gray-100 px-5 py-4">
-          <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl bg-slate-950">
-            <Search className="h-4 w-4 text-white" />
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-gray-900">Job search ready</p>
-            <p className="text-[11px] text-gray-400">
-              Scout prepared a filtered search based on your request
-            </p>
-          </div>
-        </div>
+      {/* ── Left: main action ─────────────────────────────────────────── */}
+      <div className="space-y-4">
 
-        {/* Filters */}
-        {filterTags.length > 0 && (
-          <div className="border-b border-gray-100 px-5 py-4">
-            <p className="mb-2.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-gray-400">
-              Applied filters
-            </p>
-            <div className="flex flex-wrap gap-2">
+        {/* Search CTA card */}
+        <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
+          <div className="flex items-center gap-3 border-b border-gray-100 px-5 py-4">
+            <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl bg-slate-950">
+              <Search className="h-4 w-4 text-white" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-gray-900">Job search ready</p>
+              <p className="text-[11px] text-gray-400">
+                Filtered by Scout based on your request
+              </p>
+            </div>
+          </div>
+
+          {filterTags.length > 0 && (
+            <div className="border-b border-gray-100 px-5 pb-2 pt-3 divide-y divide-gray-50">
               {filterTags.map(({ label, value }) => (
                 <FilterTag key={label} label={label} value={value} />
               ))}
             </div>
+          )}
+
+          <div className="px-5 py-4">
+            <Link
+              href={feedUrl}
+              className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
+            >
+              Open job feed
+              <ArrowRight className="h-4 w-4" />
+            </Link>
           </div>
-        )}
-
-        {/* CTA */}
-        <div className="px-5 py-4">
-          <Link
-            href={feedUrl}
-            className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
-          >
-            Open job feed
-            <ArrowRight className="h-4 w-4" />
-          </Link>
-          <p className="mt-2 text-[11px] text-gray-400">
-            The feed will show jobs matching Scout&apos;s suggested filters.
-          </p>
         </div>
-      </div>
 
-      {/* Quick follow-up suggestions */}
-      <div>
-        <p className="mb-2.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-gray-400">
-          Refine this search
-        </p>
-        <div className="flex flex-wrap gap-2">
-          {["Make these more senior", "Remote only", "Add H-1B sponsorship filter", "Sort by most recent"].map(
-            (chip) => (
+        {/* Refine chips */}
+        <div>
+          <p className="mb-2.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-gray-400">
+            Refine
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {[
+              "Make these more senior",
+              "Remote only",
+              "Add H-1B sponsorship filter",
+              "Sort by most recent",
+            ].map((chip) => (
               <button
                 key={chip}
                 type="button"
@@ -114,9 +104,57 @@ export function SearchMode({ response, onFollowUp }: Props) {
               >
                 {chip}
               </button>
-            )
-          )}
+            ))}
+          </div>
         </div>
+      </div>
+
+      {/* ── Right: intelligence pane ───────────────────────────────────── */}
+      <div className="hidden space-y-4 lg:block">
+        {/* Scout reasoning */}
+        {answerText && (
+          <div>
+            <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-gray-400">
+              Scout reasoning
+            </p>
+            <p className="text-xs leading-5 text-gray-600">{answerText}</p>
+          </div>
+        )}
+
+        {/* Active entity context */}
+        {(activeEntities?.companyName || activeEntities?.jobTitle) && (
+          <div className="border-t border-gray-100 pt-4">
+            <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-gray-400">
+              Context
+            </p>
+            {activeEntities.companyName && (
+              <p className="text-xs text-gray-600">
+                <span className="font-medium">Company:</span> {activeEntities.companyName}
+              </p>
+            )}
+            {activeEntities.jobTitle && (
+              <p className="mt-1 text-xs text-gray-600">
+                <span className="font-medium">Role:</span> {activeEntities.jobTitle}
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Filters summary */}
+        {filterTags.length > 0 && (
+          <div className="border-t border-gray-100 pt-4">
+            <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-gray-400">
+              Active filters
+            </p>
+            <div className="space-y-1">
+              {filterTags.map(({ label, value }) => (
+                <p key={label} className="text-xs text-gray-500">
+                  <span className="font-medium text-gray-700">{label}:</span> {value}
+                </p>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

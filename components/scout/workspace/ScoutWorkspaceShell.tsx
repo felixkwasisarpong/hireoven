@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { usePathname, useSearchParams } from "next/navigation"
 import Link from "next/link"
-import { LayoutDashboard, Sparkles } from "lucide-react"
+import { LayoutDashboard, Sparkles, X } from "lucide-react"
 import { ScoutCommandBar } from "./ScoutCommandBar"
+import { WorkspaceSurface } from "./WorkspaceSurface"
 import { IdleMode } from "./IdleMode"
 import { SearchMode } from "./SearchMode"
 import { CompareMode } from "./CompareMode"
@@ -29,32 +30,93 @@ import { useAuth } from "@/lib/hooks/useAuth"
 import type { ScoutResponse, ScoutStrategyBoard } from "@/lib/scout/types"
 import type { ScoutBehaviorSignals } from "@/lib/scout/behavior"
 import type { ScoutNudge } from "@/lib/scout/nudges"
+import { cn } from "@/lib/utils"
 
 type ChatMessage =
   | { id: string; role: "user"; text: string }
   | { id: string; role: "scout"; response: ScoutResponse }
 
+/** Entities carried across workspace mode transitions */
+export type ActiveEntities = {
+  jobId?: string
+  jobTitle?: string
+  companyId?: string
+  companyName?: string
+}
+
+/** Extract safe entity identifiers from a Scout response (no text content). */
+function extractEntities(
+  response: ScoutResponse,
+  current: ActiveEntities
+): ActiveEntities {
+  const next: ActiveEntities = { ...current }
+
+  for (const action of response.actions ?? []) {
+    if (action.type === "OPEN_JOB") next.jobId = action.payload.jobId
+    if (action.type === "OPEN_COMPANY") next.companyId = action.payload.companyId
+  }
+
+  // Compare mode: use the winner or first item as the active job
+  if (response.compare?.winnerJobId) {
+    next.jobId = response.compare.winnerJobId
+    const winner = response.compare.items.find(
+      (i) => i.jobId === response.compare!.winnerJobId
+    )
+    if (winner) {
+      if (winner.title)   next.jobTitle   = winner.title
+      if (winner.company) next.companyName = winner.company
+      if (winner.companyId) next.companyId = winner.companyId ?? undefined
+    }
+  }
+
+  return next
+}
+
+/** Derive a short Scout narrative string from a response. */
+function buildNarrative(mode: WorkspaceMode, response: ScoutResponse): string {
+  const answer = response.answer?.trim()
+  if (!answer || /^\s*[{[]/.test(answer)) {
+    // JSON blob leaked — synthesise a generic strip
+    const labels: Record<WorkspaceMode, string> = {
+      search:       "Scout prepared a filtered job search.",
+      compare:      "Scout compared your saved roles.",
+      tailor:       "Scout identified tailoring opportunities.",
+      applications: "Scout prepared a workflow plan.",
+      idle:         "",
+    }
+    return labels[mode] ?? ""
+  }
+  // Trim to one sentence / 140 chars for the strip
+  const sentence = answer.split(/\.[\s\n]/)[0]
+  return sentence.length <= 140 ? sentence : `${sentence.slice(0, 137)}…`
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export function ScoutWorkspaceShell() {
-  const pathname = usePathname()
+  const pathname   = usePathname()
   const searchParams = useSearchParams()
   const { primaryResume } = useResumeContext()
   const { user, profile } = useAuth()
   const chatEndRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
+  const inputRef   = useRef<HTMLInputElement>(null)
   const prevResumeIdRef = useRef<string | null | undefined>(undefined)
 
   // ── Chat state ──────────────────────────────────────────────────────────────
-  const [messages,   setMessages]   = useState<ChatMessage[]>([])
-  const [query,      setQuery]      = useState("")
-  const [isLoading,  setIsLoading]  = useState(false)
-  const [error,      setError]      = useState<string | null>(null)
+  const [messages,  setMessages]  = useState<ChatMessage[]>([])
+  const [query,     setQuery]     = useState("")
+  const [isLoading, setIsLoading] = useState(false)
+  const [error,     setError]     = useState<string | null>(null)
   const [resumeRefreshedNotice, setResumeRefreshedNotice] = useState(false)
 
   // ── Workspace state ─────────────────────────────────────────────────────────
-  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("idle")
-  const [activeResponse, setActiveResponse] = useState<ScoutResponse | null>(null)
-  const [rail, setRail] = useState<WorkspaceRail | null>(null)
-  const [chips, setChips] = useState<string[]>([])
+  const [workspaceMode,   setWorkspaceMode]   = useState<WorkspaceMode>("idle")
+  const [activeResponse,  setActiveResponse]  = useState<ScoutResponse | null>(null)
+  const [rail,            setRail]            = useState<WorkspaceRail | null>(null)
+  const [chips,           setChips]           = useState<string[]>([])
+  const [activeEntities,  setActiveEntities]  = useState<ActiveEntities>({})
+  const [narrative,       setNarrative]       = useState<string>("")
+  const [narrativeDismissed, setNarrativeDismissed] = useState(false)
 
   // ── Session state ───────────────────────────────────────────────────────────
   const [recentCommands, setRecentCommands] = useState<string[]>([])
@@ -67,7 +129,7 @@ export function ScoutWorkspaceShell() {
   const [behaviorLoading, setBehaviorLoading] = useState(true)
 
   // ── Derived ─────────────────────────────────────────────────────────────────
-  const scoutMode = detectScoutMode(pathname ?? "")
+  const scoutMode   = detectScoutMode(pathname ?? "")
   const isFocusMode = searchParams.get("focus") === "1"
 
   const nudges: ScoutNudge[] = useMemo(() => {
@@ -79,41 +141,30 @@ export function ScoutWorkspaceShell() {
   }, [strategyBoard, behaviorSignals, scoutMode, isFocusMode, primaryResume?.id])
 
   const contextIds = {
-    jobId: searchParams.get("jobId") ?? undefined,
-    companyId: searchParams.get("companyId") ?? undefined,
-    resumeId: searchParams.get("resumeId") ?? undefined,
+    jobId:         searchParams.get("jobId")         ?? undefined,
+    companyId:     searchParams.get("companyId")     ?? undefined,
+    resumeId:      searchParams.get("resumeId")      ?? undefined,
     applicationId: searchParams.get("applicationId") ?? undefined,
   }
 
-  const fullName = profile?.full_name ?? user?.user_metadata?.full_name ?? null
+  const fullName  = profile?.full_name ?? user?.user_metadata?.full_name ?? null
   const firstName = fullName?.split(" ")[0] ?? "there"
-  const hour = new Date().getHours()
-  const greeting =
-    hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening"
+  const hour      = new Date().getHours()
+  const greeting  = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening"
 
-  // ── Restore session on mount ────────────────────────────────────────────────
+  // ── Session restore ─────────────────────────────────────────────────────────
   useEffect(() => {
     const session = readScoutSession()
-    if (!session) {
-      // No session: populate chips from Scout mode defaults
-      setChips(getScoutSuggestionChips(scoutMode))
-      return
-    }
+    if (!session) { setChips(getScoutSuggestionChips(scoutMode)); return }
     setHasSession(true)
     setWorkspaceMode(session.mode)
     setRecentCommands(session.recentCommands)
-    if (session.chips.length > 0) setChips(session.chips)
-    else setChips(getScoutSuggestionChips(scoutMode))
-    if (session.rail) {
-      // Restore label/summary only — no actions (may reference stale IDs)
-      setRail({ title: session.rail.title, summary: session.rail.summary })
-    }
+    setChips(session.chips.length > 0 ? session.chips : getScoutSuggestionChips(scoutMode))
+    if (session.rail) setRail({ title: session.rail.title, summary: session.rail.summary })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Populate chips from Scout mode suggestion list when no session on mount
   useEffect(() => {
-    // Only run if session has not already set chips
     if (!hasSession) setChips(getScoutSuggestionChips(scoutMode))
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scoutMode])
@@ -127,11 +178,9 @@ export function ScoutWorkspaceShell() {
   useEffect(() => {
     const currentId = primaryResume?.id ?? null
     if (prevResumeIdRef.current !== undefined && prevResumeIdRef.current !== currentId) {
-      setMessages([])
-      setError(null)
-      setActiveResponse(null)
-      setWorkspaceMode("idle")
-      setRail(null)
+      setMessages([]); setError(null); setActiveResponse(null)
+      setWorkspaceMode("idle"); setRail(null); setNarrative("")
+      setActiveEntities({})
       setResumeRefreshedNotice(true)
       const t = setTimeout(() => setResumeRefreshedNotice(false), 5_000)
       return () => clearTimeout(t)
@@ -142,19 +191,14 @@ export function ScoutWorkspaceShell() {
   useEffect(() => {
     function onReset() {
       clearScoutSession()
-      setMessages([])
-      setError(null)
-      setActiveResponse(null)
-      setWorkspaceMode("idle")
-      setRail(null)
-      setRecentCommands([])
-      setHasSession(false)
+      setMessages([]); setError(null); setActiveResponse(null)
+      setWorkspaceMode("idle"); setRail(null); setNarrative("")
+      setActiveEntities({}); setRecentCommands([]); setHasSession(false)
     }
     window.addEventListener("scout:reset-context", onReset)
     return () => window.removeEventListener("scout:reset-context", onReset)
   }, [])
 
-  // Load strategy board
   useEffect(() => {
     let cancelled = false
     setStrategyLoading(true)
@@ -168,7 +212,6 @@ export function ScoutWorkspaceShell() {
     return () => { cancelled = true }
   }, [])
 
-  // Load behavior signals
   useEffect(() => {
     let cancelled = false
     setBehaviorLoading(true)
@@ -182,7 +225,7 @@ export function ScoutWorkspaceShell() {
     return () => { cancelled = true }
   }, [])
 
-  // ── Submit handler ───────────────────────────────────────────────────────────
+  // ── Submit ───────────────────────────────────────────────────────────────────
 
   const handleSubmit = useCallback(
     async (event: React.FormEvent) => {
@@ -194,52 +237,48 @@ export function ScoutWorkspaceShell() {
       setQuery("")
       setIsLoading(true)
       setError(null)
+      setNarrative("")
+      setNarrativeDismissed(false)
 
       try {
         const res = await fetch("/api/scout/chat", {
           method: "POST",
           headers: { Accept: "application/json", "Content-Type": "application/json" },
           body: JSON.stringify({
-            message,
-            pagePath: pathname,
-            commandMode: true,
-            focusMode: isFocusMode,
+            message, pagePath: pathname, commandMode: true, focusMode: isFocusMode,
             activeFilters: {
-              q: searchParams.get("q") ?? undefined,
-              location: searchParams.get("location") ?? undefined,
-              sponsorship: searchParams.get("sponsorship") ?? undefined,
-              workMode: searchParams.get("workMode") ?? undefined,
+              q: searchParams.get("q") ?? undefined, location: searchParams.get("location") ?? undefined,
+              sponsorship: searchParams.get("sponsorship") ?? undefined, workMode: searchParams.get("workMode") ?? undefined,
             },
             ...contextIds,
           }),
         })
 
         const raw = (await res.json().catch(() => null)) as unknown
-
         if (!res.ok) {
-          const errMsg =
-            typeof raw === "object" && raw !== null && "error" in (raw as Record<string, unknown>)
-              ? String((raw as Record<string, unknown>).error)
-              : "Scout could not respond right now."
-          setError(errMsg)
-          return
+          const errMsg = typeof raw === "object" && raw !== null && "error" in (raw as Record<string, unknown>)
+            ? String((raw as Record<string, unknown>).error) : "Scout could not respond right now."
+          setError(errMsg); return
         }
 
         const normalized = normalizeScoutResponse(raw)
-
-        setMessages((prev) => [
-          ...prev,
-          { id: `s-${Date.now()}`, role: "scout", response: normalized },
-        ])
-
+        setMessages((prev) => [...prev, { id: `s-${Date.now()}`, role: "scout", response: normalized }])
         setActiveResponse(normalized)
 
-        // ── Mode: prefer explicit directive, fall back to inference ──────────
+        // Mode
         const directive = normalized.workspace_directive
-        const newMode = directive?.mode ?? inferWorkspaceMode(normalized)
+        const newMode   = directive?.mode ?? inferWorkspaceMode(normalized)
         setWorkspaceMode(newMode)
 
-        // ── Context rail: prefer directive rail, fall back to action scan ───
+        // Narrative strip
+        if (newMode !== "idle") {
+          setNarrative(buildNarrative(newMode, normalized))
+        }
+
+        // Active entities — carry through transitions
+        setActiveEntities((prev) => extractEntities(normalized, prev))
+
+        // Rail
         let newRail: WorkspaceRail | null = null
         if (directive?.rail !== undefined) {
           newRail = directive.rail ?? null
@@ -247,29 +286,23 @@ export function ScoutWorkspaceShell() {
           const railActions = normalized.actions?.filter(
             (a) => ["OPEN_JOB", "OPEN_COMPANY", "OPEN_RESUME_TAILOR"].includes(a.type)
           )
-          newRail =
-            railActions && railActions.length > 0
-              ? { title: "Scout context", summary: "Suggested next steps", actions: railActions }
-              : null
+          newRail = railActions?.length
+            ? { title: "Scout context", summary: "Suggested next steps", actions: railActions }
+            : null
         }
         setRail(newRail)
 
-        // ── Chips: prefer directive chips, keep current otherwise ────────────
-        const newChips = directive?.chips && directive.chips.length > 0 ? directive.chips : chips
-        if (directive?.chips && directive.chips.length > 0) {
-          setChips(directive.chips)
-        }
+        // Chips
+        const newChips = directive?.chips?.length ? directive.chips : chips
+        if (directive?.chips?.length) setChips(directive.chips)
 
-        // ── Persist session ──────────────────────────────────────────────────
+        // Session
         const updatedCommands = appendCommand(recentCommands, message)
         setRecentCommands(updatedCommands)
         setHasSession(true)
         writeScoutSession({
-          mode: newMode,
-          chips: newChips,
-          recentCommands: updatedCommands,
-          rail: extractRailMetadata(newRail),
-          modeMetadata: extractModeMetadata(newMode, normalized),
+          mode: newMode, chips: newChips, recentCommands: updatedCommands,
+          rail: extractRailMetadata(newRail), modeMetadata: extractModeMetadata(newMode, normalized),
         })
       } catch {
         setError("Network error. Please check your connection.")
@@ -277,47 +310,33 @@ export function ScoutWorkspaceShell() {
         setIsLoading(false)
       }
     },
-    [query, isLoading, pathname, isFocusMode, searchParams, contextIds]
+    [query, isLoading, pathname, isFocusMode, searchParams, contextIds, chips, recentCommands]
   )
 
-  function handleChipClick(chip: string) {
-    setQuery(chip)
-    setTimeout(() => inputRef.current?.focus(), 50)
-  }
-
-  function handleFollowUp(text: string) {
-    setQuery(text)
-    setTimeout(() => inputRef.current?.focus(), 50)
-  }
+  function handleChipClick(chip: string) { setQuery(chip); setTimeout(() => inputRef.current?.focus(), 50) }
+  function handleFollowUp(text: string)  { setQuery(text); setTimeout(() => inputRef.current?.focus(), 50) }
 
   function handleClearChat() {
-    setMessages([])
-    setError(null)
-    setActiveResponse(null)
-    setWorkspaceMode("idle")
-    setRail(null)
+    setMessages([]); setError(null); setActiveResponse(null)
+    setWorkspaceMode("idle"); setRail(null); setNarrative(""); setActiveEntities({})
   }
 
   function handleStartFresh() {
     clearScoutSession()
-    setMessages([])
-    setError(null)
-    setActiveResponse(null)
-    setWorkspaceMode("idle")
-    setRail(null)
-    setRecentCommands([])
-    setHasSession(false)
-    setChips(getScoutSuggestionChips(scoutMode))
+    setMessages([]); setError(null); setActiveResponse(null)
+    setWorkspaceMode("idle"); setRail(null); setNarrative(""); setActiveEntities({})
+    setRecentCommands([]); setHasSession(false); setChips(getScoutSuggestionChips(scoutMode))
   }
 
   // ── Render ───────────────────────────────────────────────────────────────────
 
+  const showNarrative = narrative && !narrativeDismissed && workspaceMode !== "idle"
+
   return (
     <main className="app-page pb-[max(6rem,calc(env(safe-area-inset-bottom)+5.5rem))]">
 
-      {/* ── Command bar — dark, sticky ───────────────────────────────────── */}
+      {/* ── Command bar — dark, sticky ─────────────────────────────────── */}
       <div className="sticky top-0 z-20 bg-slate-950 px-5 sm:px-8">
-        {/* Identity row */}
         <div className="flex items-center justify-between pt-5 pb-4">
           <div className="flex items-center gap-2.5">
             <div className="relative flex-shrink-0">
@@ -342,7 +361,6 @@ export function ScoutWorkspaceShell() {
             <Link
               href="/dashboard/scout/legacy"
               className="inline-flex items-center gap-1.5 text-[11px] font-medium text-slate-500 transition hover:text-slate-300"
-              title="Open classic Scout dashboard"
             >
               <LayoutDashboard className="h-3.5 w-3.5" />
               Advanced
@@ -350,97 +368,105 @@ export function ScoutWorkspaceShell() {
           </div>
         </div>
 
-        {/* Input */}
         <ScoutCommandBar
-          query={query}
-          onChange={setQuery}
-          onSubmit={handleSubmit}
-          isLoading={isLoading}
-          chips={chips}
-          onChipClick={handleChipClick}
-          inputRef={inputRef}
-          variant="dark"
-          commandHistory={recentCommands}
+          query={query} onChange={setQuery} onSubmit={handleSubmit}
+          isLoading={isLoading} chips={chips} onChipClick={handleChipClick}
+          inputRef={inputRef} variant="dark" commandHistory={recentCommands}
           placeholder={
-            workspaceMode === "idle"
-              ? "Ask Scout anything…"
-              : workspaceMode === "search"
-                ? "Refine this search…"
-                : workspaceMode === "compare"
-                  ? "Ask about this comparison…"
-                  : "Follow up with Scout…"
+            workspaceMode === "idle"         ? "Ask Scout anything…" :
+            workspaceMode === "search"       ? "Refine this search…" :
+            workspaceMode === "compare"      ? "Ask about this comparison…" :
+                                               "Follow up with Scout…"
           }
         />
-
-        {/* Bottom fade to workspace */}
         <div className="h-5" />
       </div>
 
-      {/* ── Workspace ────────────────────────────────────────────────────── */}
-      <div className="app-shell flex w-full max-w-6xl gap-6 py-7 pb-16">
+      {/* ── Workspace ─────────────────────────────────────────────────── */}
+      <div className="app-shell flex w-full max-w-6xl gap-6 py-6 pb-16">
 
-        {/* Main workspace area */}
+        {/* Main surface — no key remounting, CSS fade-through */}
         <div className="min-w-0 flex-1">
-          <div
-            key={workspaceMode}
-            className="animate-in fade-in slide-in-from-bottom-2 duration-200"
-          >
-            {workspaceMode === "idle" && (
-              <IdleMode
-                greeting={greeting}
-                firstName={firstName}
-                messages={messages}
-                isLoading={isLoading}
-                error={error}
-                nudges={nudges}
-                strategyLoading={strategyLoading || behaviorLoading}
-                resumeRefreshedNotice={resumeRefreshedNotice}
-                onClearChat={handleClearChat}
-                onTileClick={(q) => { setQuery(q); setTimeout(() => inputRef.current?.focus(), 50) }}
-                chatEndRef={chatEndRef as React.RefObject<HTMLDivElement>}
-                recentCommands={recentCommands}
-                hasSession={hasSession}
-                onStartFresh={handleStartFresh}
-              />
-            )}
 
-            {workspaceMode === "search" && activeResponse && (
-              <SearchMode
-                response={activeResponse}
-                onFollowUp={handleFollowUp}
-              />
-            )}
+          {/* Scout narrative strip */}
+          {showNarrative && (
+            <div className="mb-5 flex items-start gap-3 border-l-2 border-[#FF5C18] bg-white px-4 py-3">
+              <Sparkles className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-[#FF5C18]" />
+              <p className="flex-1 text-sm leading-5 text-gray-700">{narrative}</p>
+              <button
+                type="button"
+                onClick={() => setNarrativeDismissed(true)}
+                className="flex-shrink-0 text-gray-400 transition hover:text-gray-600"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
 
-            {workspaceMode === "compare" && activeResponse && (
-              <CompareMode
-                response={activeResponse}
-                onFollowUp={handleFollowUp}
-              />
-            )}
-
-            {workspaceMode === "tailor" && activeResponse && (
-              <TailorMode
-                response={activeResponse}
-                onFollowUp={handleFollowUp}
-              />
-            )}
-
-            {workspaceMode === "applications" && activeResponse && (
-              <ApplicationMode
-                response={activeResponse}
-                onFollowUp={handleFollowUp}
-              />
-            )}
-          </div>
+          {/* WorkspaceSurface — smooth opacity fade between modes */}
+          <WorkspaceSurface
+            mode={workspaceMode}
+            render={(displayedMode) => {
+              if (displayedMode === "idle") {
+                return (
+                  <IdleMode
+                    greeting={greeting} firstName={firstName} messages={messages}
+                    isLoading={isLoading} error={error} nudges={nudges}
+                    strategyLoading={strategyLoading || behaviorLoading}
+                    resumeRefreshedNotice={resumeRefreshedNotice}
+                    onClearChat={handleClearChat}
+                    onTileClick={(q) => { setQuery(q); setTimeout(() => inputRef.current?.focus(), 50) }}
+                    chatEndRef={chatEndRef as React.RefObject<HTMLDivElement>}
+                    recentCommands={recentCommands} hasSession={hasSession}
+                    onStartFresh={handleStartFresh}
+                  />
+                )
+              }
+              if (displayedMode === "search" && activeResponse) {
+                return (
+                  <SearchMode
+                    response={activeResponse} onFollowUp={handleFollowUp}
+                    activeEntities={activeEntities}
+                  />
+                )
+              }
+              if (displayedMode === "compare" && activeResponse) {
+                return (
+                  <CompareMode
+                    response={activeResponse} onFollowUp={handleFollowUp}
+                    activeEntities={activeEntities}
+                  />
+                )
+              }
+              if (displayedMode === "tailor" && activeResponse) {
+                return (
+                  <TailorMode
+                    response={activeResponse} onFollowUp={handleFollowUp}
+                    activeEntities={activeEntities}
+                  />
+                )
+              }
+              if (displayedMode === "applications" && activeResponse) {
+                return (
+                  <ApplicationMode
+                    response={activeResponse} onFollowUp={handleFollowUp}
+                    activeEntities={activeEntities}
+                  />
+                )
+              }
+              // Fallback for restored session with no activeResponse
+              return null
+            }}
+          />
         </div>
 
-        {/* Context rail — slides in when Scout provides actions */}
+        {/* Context rail — slides in when Scout provides navigation actions */}
         {rail && (
-          <div className="hidden animate-in fade-in slide-in-from-right-4 duration-200 lg:block">
-            <ContextRail
-              rail={rail}
-              onClose={() => setRail(null)}
-            />
+          <div className={cn(
+            "hidden transition-all duration-200 lg:block",
+            rail ? "opacity-100 translate-x-0" : "opacity-0 translate-x-4"
+          )}>
+            <ContextRail rail={rail} onClose={() => setRail(null)} />
           </div>
         )}
       </div>

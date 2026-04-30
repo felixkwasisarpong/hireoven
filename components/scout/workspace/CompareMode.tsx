@@ -1,75 +1,106 @@
 "use client"
 
-import { BarChart2, Sparkles } from "lucide-react"
+import { BarChart2 } from "lucide-react"
 import { ScoutCompareRenderer } from "@/components/scout/ScoutCompareRenderer"
 import type { ScoutResponse } from "@/lib/scout/types"
+import type { ActiveEntities } from "./ScoutWorkspaceShell"
 
 type Props = {
   response: ScoutResponse
   onFollowUp: (query: string) => void
+  activeEntities?: ActiveEntities
 }
 
 function getReadableAnswer(answer: string): string {
   const trimmed = answer.trim()
-  if (/^\s*[{[]/.test(trimmed)) return "Scout prepared a comparison based on your saved jobs."
+  if (/^\s*[{[]/.test(trimmed)) return ""
   return trimmed
 }
 
-export function CompareMode({ response, onFollowUp }: Props) {
+export function CompareMode({ response, onFollowUp, activeEntities }: Props) {
   const compare = response.compare
-  const answerText = getReadableAnswer(response.answer)
-
   if (!compare) return null
+
+  const answerText = getReadableAnswer(response.answer)
 
   return (
     <div className="space-y-5">
-      {/* Scout answer strip */}
-      <div className="flex items-start gap-3">
-        <span className="mt-0.5 inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-xl bg-[#FF5C18] shadow-[0_4px_14px_rgba(255,92,24,0.3)]">
-          <Sparkles className="h-3.5 w-3.5 text-white" />
-        </span>
-        <div className="min-w-0 flex-1 rounded-2xl rounded-tl-sm border border-slate-100 bg-white px-4 py-3 shadow-sm">
-          <p className="text-sm leading-6 text-gray-700">{answerText}</p>
-        </div>
-      </div>
 
-      {/* Compare header */}
+      {/* Header row */}
       <div className="flex items-center gap-2.5">
         <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-slate-950">
           <BarChart2 className="h-3.5 w-3.5 text-white" />
         </div>
-        <p className="text-sm font-semibold text-gray-900">Job comparison</p>
-        <span className="ml-auto text-[11px] text-gray-400">
-          {compare.items.length} role{compare.items.length !== 1 ? "s" : ""}
-        </span>
+        <p className="text-sm font-semibold text-gray-900">
+          Comparing {compare.items.length} role{compare.items.length !== 1 ? "s" : ""}
+        </p>
       </div>
 
-      {/* Comparison grid — reuses existing renderer */}
+      {/* Comparison grid — full width (most important content) */}
       <ScoutCompareRenderer compare={compare} />
 
-      {/* Tradeoffs */}
-      {compare.tradeoffs && compare.tradeoffs.length > 0 && (
-        <div className="rounded-xl border border-gray-200 bg-white px-5 py-4">
-          <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-gray-400">
-            Key tradeoffs
-          </p>
-          <ul className="space-y-2">
-            {compare.tradeoffs.map((t, i) => (
-              <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
-                <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-[#FF5C18]" />
-                {t}
-              </li>
-            ))}
-          </ul>
+      {/* Split: tradeoffs left, intelligence right */}
+      {(compare.tradeoffs?.length || answerText) && (
+        <div className="grid gap-5 lg:grid-cols-[1fr_240px]">
+
+          {/* Tradeoffs */}
+          {compare.tradeoffs && compare.tradeoffs.length > 0 && (
+            <div>
+              <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-gray-400">
+                Key tradeoffs
+              </p>
+              <ul className="space-y-2.5 border-l-2 border-gray-100 pl-4">
+                {compare.tradeoffs.map((t, i) => (
+                  <li key={i} className="text-sm leading-5 text-gray-700">
+                    {t}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Intelligence pane */}
+          <div className="hidden space-y-4 lg:block">
+            {answerText && (
+              <div>
+                <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-gray-400">
+                  Scout summary
+                </p>
+                <p className="text-xs leading-5 text-gray-600">{answerText}</p>
+              </div>
+            )}
+
+            {compare.winnerJobId && (
+              <div className="border-t border-gray-100 pt-4">
+                <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-gray-400">
+                  Recommendation
+                </p>
+                {(() => {
+                  const winner = compare.items.find((i) => i.jobId === compare.winnerJobId)
+                  if (!winner) return null
+                  return (
+                    <div>
+                      <p className="text-sm font-semibold text-[#FF5C18]">
+                        {winner.title}
+                      </p>
+                      {winner.company && (
+                        <p className="text-xs text-gray-500">{winner.company}</p>
+                      )}
+                    </div>
+                  )
+                })()}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
-      {/* Quick follow-ups */}
+      {/* Follow-up chips */}
       <div className="flex flex-wrap gap-2">
         {[
-          "Which has better sponsorship?",
-          "Which pays more?",
-          "Which should I apply to first?",
+          "Which has better salary?",
+          "Which sponsors H-1B?",
+          "Apply to the best one",
         ].map((chip) => (
           <button
             key={chip}
