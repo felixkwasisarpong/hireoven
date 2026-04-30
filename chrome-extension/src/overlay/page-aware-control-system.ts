@@ -33,6 +33,8 @@ import {
 } from "./job-screener-panel"
 import { MatchDetailPanel, type MatchDetailModel } from "./match-detail-panel"
 
+const BRAND_ICON_URL = chrome.runtime.getURL("icons/icon48.png")
+
 interface PageAwareOptions {
   resolveAppOrigin: () => Promise<string>
 }
@@ -140,13 +142,18 @@ const STYLE = `
     height: 32px;
     border-radius: 999px;
     background: #FF5C18;
-    color: #ffffff;
-    font-size: 13px;
-    font-weight: 800;
-    letter-spacing: 0;
     flex: 0 0 auto;
-    box-shadow: 0 0 0 2px rgba(255, 92, 24, 0.3), inset 0 0 0 2px rgba(255, 255, 255, 0.18);
+    overflow: hidden;
+    box-shadow: 0 0 0 2px rgba(255, 92, 24, 0.35), inset 0 0 0 1.5px rgba(255, 255, 255, 0.22);
     transition: background 200ms ease, box-shadow 200ms ease;
+  }
+
+  .brand img {
+    width: 22px;
+    height: 22px;
+    object-fit: contain;
+    display: block;
+    border-radius: 4px;
   }
 
   /* Mode-aware brand icon tint — subtle visual cue for which action set is active */
@@ -345,10 +352,18 @@ const STYLE = `
     justify-content: center;
     width: 30px;
     height: 30px;
-    border-radius: 999px;
-    background: rgba(255, 92, 24, 0.13);
-    color: #c94010;
-    font-size: 16px;
+    border-radius: 10px;
+    background: #FF5C18;
+    overflow: hidden;
+    flex: 0 0 auto;
+    box-shadow: 0 2px 8px rgba(255,92,24,0.35);
+  }
+
+  .drawer-icon img {
+    width: 20px;
+    height: 20px;
+    object-fit: contain;
+    display: block;
   }
 
   .drawer-title {
@@ -746,14 +761,20 @@ const BADGE_STYLE = `
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 18px;
-    height: 18px;
-    border-radius: 999px;
+    width: 20px;
+    height: 20px;
+    border-radius: 6px;
     background: #FF5C18;
-    color: #ffffff;
-    font-size: 10px;
-    font-weight: 800;
     flex: 0 0 auto;
+    overflow: hidden;
+    box-shadow: 0 0 0 1.5px rgba(255,92,24,0.3);
+  }
+
+  .frog img {
+    width: 14px;
+    height: 14px;
+    object-fit: contain;
+    display: block;
   }
 
   .chip {
@@ -980,7 +1001,7 @@ class MiniJobBadge {
     const matchClass = model.matchPercent != null ? "chip match has" : "chip match"
     const matchLabel = model.matchPercent != null ? `${Math.round(model.matchPercent)}%` : "Match"
     return `
-      <span class="frog" title="Hireoven">H</span>
+      <span class="frog" title="Hireoven"><img src="${BRAND_ICON_URL}" alt="Hireoven" /></span>
       ${model.hasH1B ? `<span class="chip h1b">H1B</span>` : ""}
       ${model.hasEVerify ? `<span class="chip everify">E-Verify</span>` : ""}
       ${model.visaCaution ? `<span class="chip note">No sponsor</span>` : ""}
@@ -2122,7 +2143,7 @@ export class PageAwareControlSystem {
     return `
       <section class="drawer-shell" role="dialog" aria-label="${esc(title)}">
         <header class="drawer-head">
-          <span class="drawer-icon">H</span>
+          <span class="drawer-icon"><img src="${BRAND_ICON_URL}" alt="Hireoven" /></span>
           <div class="drawer-title">${esc(title)}</div>
           <button class="drawer-close" data-action="close-drawer" aria-label="Close">×</button>
         </header>
@@ -2359,7 +2380,7 @@ export class PageAwareControlSystem {
       ${this.renderDrawer()}
       <div class="bar-wrap">
         <div class="bar" data-mode="${this.mode}" role="toolbar" aria-label="Hireoven command bar">
-          <span class="brand" title="Hireoven">H</span>
+          <span class="brand" title="Hireoven"><img src="${BRAND_ICON_URL}" alt="Hireoven" /></span>
           <span class="title">${this.barTitleHtml()}</span>
           ${this.renderBarActions()}
           <button class="action icon" data-action="open-dashboard" aria-label="Open Hireoven">⌕</button>
