@@ -12,6 +12,8 @@ import { CompareMode } from "./CompareMode"
 import { TailorMode } from "./TailorMode"
 import { ApplicationMode } from "./ApplicationMode"
 import { BulkApplicationMode } from "./BulkApplicationMode"
+import { BulkConfirmDialog } from "@/components/scout/bulk/BulkConfirmDialog"
+import { BulkReviewDrawer } from "@/components/scout/bulk/BulkReviewDrawer"
 import { ContextRail } from "./ContextRail"
 import { ScoutCommandPalette } from "./ScoutCommandPalette"
 import { normalizeScoutResponse } from "@/lib/scout/normalize"
@@ -431,8 +433,19 @@ export function ScoutWorkspaceShell() {
           })
         }
 
-        // Workflow — start panel if Scout returns a workflow_directive
-        if (normalized.workflow_directive) {
+        // Bulk application prep — trigger immediately, independent of workspace transition
+        if (newMode === "bulk_application") {
+          const bulkPayload = directive?.payload ?? {}
+          void bulkEngine.initQueue({
+            count:                   typeof bulkPayload.count === "number" ? bulkPayload.count : 10,
+            requireSponsorshipSignal: Boolean(bulkPayload.requireSponsorshipSignal),
+            workMode:                typeof bulkPayload.workMode === "string" ? bulkPayload.workMode : undefined,
+            minMatchScore:           typeof bulkPayload.minMatchScore === "number" ? bulkPayload.minMatchScore : undefined,
+          })
+        }
+
+        // Workflow — start panel if Scout returns a workflow_directive (skip for bulk — handled above)
+        if (normalized.workflow_directive && newMode !== "bulk_application") {
           workflowEngine.startWorkflow(
             normalized.workflow_directive.workflowType,
             normalized.workflow_directive.payload
@@ -646,15 +659,11 @@ export function ScoutWorkspaceShell() {
                 )
               }
               if (displayedMode === "bulk_application") {
-                const directive = activeResponse?.workspace_directive
-                const payload = directive?.mode === "bulk_application"
-                  ? (directive.payload ?? {})
-                  : {}
                 return (
                   <BulkApplicationMode
                     engine={bulkEngine}
-                    payload={payload as import("./BulkApplicationMode").BulkModePayload}
                     onFollowUp={handleFollowUp}
+                    onOpenApp={(applyUrl) => window.open(applyUrl, "_blank", "noopener,noreferrer")}
                   />
                 )
               }
@@ -734,6 +743,33 @@ export function ScoutWorkspaceShell() {
           onClose={() => setShowPermissions(false)}
         />
       )}
+
+      {/* ── Bulk confirm dialog — modal, shown immediately on trigger ── */}
+      {bulkEngine.isConfirming && (
+        <BulkConfirmDialog
+          jobs={bulkEngine.confirmJobs}
+          onConfirm={bulkEngine.confirmStart}
+          onEditList={bulkEngine.cancelConfirm}
+          onCancel={bulkEngine.cancelConfirm}
+        />
+      )}
+
+      {/* ── Bulk review drawer — slides in from the right ───────────── */}
+      {(() => {
+        const reviewJob = bulkEngine.queue?.jobs.find(
+          (j) => j.queueId === bulkEngine.reviewingQueueId
+        )
+        if (!reviewJob) return null
+        return (
+          <BulkReviewDrawer
+            job={reviewJob}
+            onClose={bulkEngine.closeReview}
+            onOpenApp={(applyUrl) => window.open(applyUrl, "_blank", "noopener,noreferrer")}
+            onMarkSubmitted={bulkEngine.markSubmitted}
+            onSkip={bulkEngine.skipJob}
+          />
+        )
+      })()}
     </main>
   )
 }

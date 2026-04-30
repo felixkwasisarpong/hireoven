@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import type { BulkApplicationQueue, BulkJobItem, BulkJobStatus, BulkFailReason, BulkJobArtifacts, BulkJobWarning } from "./types"
 import { readBulkQueue, writeBulkQueue, clearBulkQueue } from "./store"
+import { selectJobsForBulk, type BulkJobCandidate, type BulkSelectionOptions } from "./selector"
 
 const MAX_CONCURRENT = 2
 
@@ -21,11 +22,17 @@ type BulkPrepareResponse = {
   error?:               string
 }
 
+export type BulkInitState = "idle" | "loading" | "done" | "error"
+
 export type BulkEngineActions = {
   queue:            BulkApplicationQueue | null
+  initState:        BulkInitState
+  initError:        string | null
+  /** Shell calls this when it detects a bulk prep directive from Scout. */
+  initQueue:        (opts: import("./selector").BulkSelectionOptions) => Promise<void>
   isConfirming:     boolean
   confirmJobs:      BulkJobItem[]
-  requestBulk:      (jobs: BulkJobItem[], title?: string) => void
+  requestBulk:      (jobs: BulkJobItem[]) => void
   confirmStart:     () => void
   cancelConfirm:    () => void
   retryJob:         (queueId: string) => void
@@ -37,8 +44,21 @@ export type BulkEngineActions = {
   closeReview:      () => void
 }
 
+type SavedApplication = {
+  id: string
+  job_id?: string | null
+  job_title?: string | null
+  company_name?: string | null
+  apply_url?: string | null
+  match_score?: number | null
+  sponsorship_signal?: string | null
+  ghost_risk?: string | null
+}
+
 export function useBulkApplicationEngine(): BulkEngineActions {
   const [queue,            setQueue]            = useState<BulkApplicationQueue | null>(null)
+  const [initState,        setInitState]        = useState<BulkInitState>("idle")
+  const [initError,        setInitError]        = useState<string | null>(null)
   const [isConfirming,     setIsConfirming]     = useState(false)
   const [confirmJobs,      setConfirmJobs]      = useState<BulkJobItem[]>([])
   const [reviewingQueueId, setReviewingQueueId] = useState<string | null>(null)
@@ -142,6 +162,58 @@ export function useBulkApplicationEngine(): BulkEngineActions {
     }
   }, [queue, prepareOne])
 
+  const initQueue = useCallback(async (opts: BulkSelectionOptions) => {
+    // If queue is already active or confirming, don't clobber it
+    setQueue((q) => {
+      if (q && !q.cancelledAt && !q.completedAt) return q
+      return q
+    })
+    setInitState("loading")
+    setInitError(null)
+
+    try {
+      const res = await fetch("/api/applications?status=saved&limit=100", {
+        headers: { Accept: "application/json" },
+      })
+      if (!res.ok) throw new Error("Could not load saved applications")
+
+      const data = (await res.json().catch(() => null)) as { applications?: SavedApplication[] } | null
+      const rows: SavedApplication[] = data?.applications ?? []
+
+      const candidates: BulkJobCandidate[] = rows
+        .filter((r) => r.job_id)
+        .map((r) => ({
+          jobId:              r.job_id!,
+          jobTitle:           r.job_title ?? "Unknown role",
+          company:            r.company_name ?? undefined,
+          applyUrl:           r.apply_url,
+          matchScore:         r.match_score,
+          sponsorshipSignal:  r.sponsorship_signal,
+          ghostRisk:          r.ghost_risk as BulkJobCandidate["ghostRisk"],
+          alreadyApplied:     false,
+        }))
+
+      const selected = selectJobsForBulk(candidates, opts)
+
+      if (selected.length === 0) {
+        setInitState("error")
+        setInitError(
+          rows.length === 0
+            ? "No saved applications found. Save jobs from the feed first, then run bulk prep."
+            : "No eligible jobs matched the criteria (missing apply URL, or filters too strict)."
+        )
+        return
+      }
+
+      setConfirmJobs(selected)
+      setIsConfirming(true)
+      setInitState("done")
+    } catch (err) {
+      setInitState("error")
+      setInitError(err instanceof Error ? err.message : "Could not load saved jobs")
+    }
+  }, [])
+
   const requestBulk = useCallback((jobs: BulkJobItem[]) => {
     setConfirmJobs(jobs)
     setIsConfirming(true)
@@ -191,7 +263,8 @@ export function useBulkApplicationEngine(): BulkEngineActions {
   const closeReview = useCallback(() => setReviewingQueueId(null), [])
 
   return {
-    queue, isConfirming, confirmJobs,
+    queue, initState, initError,
+    initQueue, isConfirming, confirmJobs,
     requestBulk, confirmStart, cancelConfirm,
     retryJob, skipJob, markSubmitted, cancelQueue,
     reviewingQueueId, openReview, closeReview,

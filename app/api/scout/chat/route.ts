@@ -247,6 +247,8 @@ function inferBulkWorkspaceDirective(message: string): import("@/lib/scout/types
 
 function inferWorkflowDirective(message: string, intent: ScoutIntent): ScoutWorkflowDirective | undefined {
   if (intent !== "workflow") return undefined
+  // Bulk prep is handled by workspace_directive — don't start a single-job workflow
+  if (BULK_PREP_RE.test(message)) return undefined
   if (TAILOR_INTENT_RE.test(message)) return { workflowType: "tailor_and_prepare" }
   if (COMPARE_INTENT_RE.test(message)) return { workflowType: "compare_and_prioritize" }
   if (INTERVIEW_INTENT_RE.test(message)) return { workflowType: "interview_prep" }
