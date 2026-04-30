@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { usePathname, useSearchParams } from "next/navigation"
 import Link from "next/link"
-import { LayoutDashboard, Shield, Sparkles, X } from "lucide-react"
+import { Clock, LayoutDashboard, Shield, Sparkles, X } from "lucide-react"
 import { ScoutCommandBar } from "./ScoutCommandBar"
 import { WorkspaceSurface } from "./WorkspaceSurface"
 import { IdleMode } from "./IdleMode"
@@ -25,8 +25,12 @@ import { useScoutStream } from "@/hooks/useScoutStream"
 import { useResearchStream } from "@/hooks/useResearchStream"
 import { detectPreflightMode, PREFLIGHT_NARRATIVE } from "@/lib/scout/streaming/intent-preflight"
 import { isResearchIntent, getResearchFollowUps } from "@/lib/scout/research/tasks"
-import { writeResearchTask } from "@/lib/scout/research/store"
+import { writeResearchTask, readResearchTask } from "@/lib/scout/research/store"
 import { ResearchMode } from "./ResearchMode"
+import { useScoutTimeline } from "@/hooks/useScoutTimeline"
+import { ScoutTimelinePanel } from "@/components/scout/timeline/ScoutTimelinePanel"
+import type { ScoutTimelineReplayAction } from "@/lib/scout/timeline/types"
+import type { ScoutResearchTask } from "@/lib/scout/research/types"
 import { ScoutStreamingText } from "@/components/scout/ScoutStreamingText"
 import { generateDailyMissions, buildMomentumLine } from "@/lib/scout/missions/generator"
 import {
@@ -140,6 +144,8 @@ function buildNarrative(mode: WorkspaceMode, response: ScoutResponse): string {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+const IS_DEV = process.env.NODE_ENV === "development"
+
 export function ScoutWorkspaceShell() {
   const pathname   = usePathname()
   const searchParams = useSearchParams()
@@ -159,8 +165,23 @@ export function ScoutWorkspaceShell() {
   const scoutStream    = useScoutStream()
   const streamMsgId    = useRef<string | null>(null)
 
+  // Refs for timeline change detection (avoid duplicate event emission)
+  const prevModeRef          = useRef<WorkspaceMode>("idle")
+  const prevWorkflowIdRef    = useRef<string | null>(null)
+  const prevWorkflowStepRef  = useRef<string | null>(null)
+  const prevBrowserCtxKey    = useRef<string | null>(null)
+  const prevResearchIdRef    = useRef<string | null>(null)
+  const prevFindingCountRef  = useRef<number>(0)
+  const prevGateKeyRef       = useRef<string | null>(null)
+
   // ── Research streaming ──────────────────────────────────────────────────────
   const researchStream = useResearchStream()
+
+  // ── Activity timeline ───────────────────────────────────────────────────────
+  const timeline       = useScoutTimeline()
+  const [showTimeline, setShowTimeline] = useState(false)
+  // Restored research task — used by session replay when research mode is re-entered
+  const [restoredResearchTask, setRestoredResearchTask] = useState<ScoutResearchTask | null>(null)
 
   // ── Active browser context (from extension) ─────────────────────────────────
   const { context: browserContext } = useActiveBrowserContext()
@@ -564,6 +585,191 @@ export function ScoutWorkspaceShell() {
     setIsLoading(false)
   }, [researchStream.error])
 
+  // ── Timeline tracking effects ───────────────────────────────────────────────
+  // Each effect uses a ref to detect meaningful changes so events are never
+  // duplicated. These effects are purely observational — they never modify
+  // any Scout state.
+
+  // 1. Workspace mode changes (skip idle — it's the default/return state)
+  useEffect(() => {
+    if (workspaceMode === prevModeRef.current || workspaceMode === "idle") {
+      prevModeRef.current = workspaceMode
+      return
+    }
+    prevModeRef.current = workspaceMode
+    const LABELS: Partial<Record<WorkspaceMode, string>> = {
+      search:           "Scout switched to job search view",
+      compare:          "Scout opened job comparison",
+      tailor:           "Scout opened resume tailoring",
+      applications:     "Scout opened application workflow",
+      bulk_application: "Scout opened bulk application queue",
+      company:          "Scout opened company intelligence",
+      research:         "Scout started a research task",
+    }
+    timeline.append({
+      type:      "workspace_change",
+      title:     LABELS[workspaceMode] ?? `Workspace changed to ${workspaceMode}`,
+      timestamp: new Date().toISOString(),
+      severity:  "info",
+      replayable: workspaceMode !== "bulk_application",
+      replayAction: { type: "restore_workspace", payload: { mode: workspaceMode } },
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspaceMode])
+
+  // 2. Workflow started + step changes
+  useEffect(() => {
+    const wf = workflowEngine.activeWorkflow
+    if (!wf) { prevWorkflowIdRef.current = null; prevWorkflowStepRef.current = null; return }
+
+    if (wf.id !== prevWorkflowIdRef.current) {
+      prevWorkflowIdRef.current = wf.id
+      prevWorkflowStepRef.current = wf.activeStepId ?? null
+      timeline.append({
+        type:     "workflow_started",
+        title:    `Workflow started: ${wf.title}`,
+        summary:  wf.goal,
+        timestamp: new Date().toISOString(),
+        severity: "info",
+        replayable: true,
+        replayAction: { type: "restart_workflow", payload: { workflowId: wf.id, title: wf.title } },
+        metadata: IS_DEV ? { workflowId: wf.id, stepCount: wf.steps.length } : undefined,
+      })
+      return
+    }
+
+    if (wf.activeStepId && wf.activeStepId !== prevWorkflowStepRef.current) {
+      prevWorkflowStepRef.current = wf.activeStepId
+      const step = wf.steps.find((s) => s.id === wf.activeStepId)
+      if (!step || step.status === "pending") return
+      timeline.append({
+        type:      "workflow_step",
+        title:     step.title,
+        summary:   step.description,
+        timestamp: new Date().toISOString(),
+        severity:  step.status === "failed" ? "error" : step.requiresConfirmation ? "warning" : "info",
+        metadata:  IS_DEV ? { stepId: step.id, status: step.status, actionType: step.actionType } : undefined,
+      })
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workflowEngine.activeWorkflow?.id, workflowEngine.activeWorkflow?.activeStepId])
+
+  // 3. Extension browser context (pageType + autofill)
+  useEffect(() => {
+    if (!browserContext || browserContext.pageType === "unknown") {
+      prevBrowserCtxKey.current = null
+      return
+    }
+    const key = `${browserContext.pageType}:${browserContext.atsProvider ?? ""}:${browserContext.autofillAvailable ?? false}`
+    if (key === prevBrowserCtxKey.current) return
+    const wasAutofill = prevBrowserCtxKey.current?.endsWith(":true") ?? false
+    prevBrowserCtxKey.current = key
+
+    if (browserContext.autofillAvailable && !wasAutofill) {
+      timeline.append({
+        type:      "autofill_detected",
+        title:     "Autofill available on active tab",
+        summary:   browserContext.atsProvider ? `ATS: ${browserContext.atsProvider}` : undefined,
+        timestamp: new Date().toISOString(),
+        severity:  "info",
+        metadata:  IS_DEV ? { ats: browserContext.atsProvider, fieldsCount: browserContext.detectedFieldsCount } : undefined,
+      })
+    } else {
+      timeline.append({
+        type:      "extension_detected_page",
+        title:     `Extension detected ${browserContext.pageType.replace(/_/g, " ")}`,
+        summary:   browserContext.atsProvider ? `ATS: ${browserContext.atsProvider}` : browserContext.company ?? undefined,
+        timestamp: new Date().toISOString(),
+        severity:  "info",
+        metadata:  IS_DEV ? { pageType: browserContext.pageType, ats: browserContext.atsProvider } : undefined,
+      })
+    }
+
+    if (browserContext.detectedJobId) {
+      const jobKey = `job:${browserContext.detectedJobId}`
+      if (jobKey !== prevBrowserCtxKey.current) {
+        timeline.append({
+          type:      "job_resolved",
+          title:     `Job resolved from active tab`,
+          summary:   browserContext.title ?? undefined,
+          timestamp: new Date().toISOString(),
+          severity:  "info",
+          metadata:  IS_DEV ? { jobId: browserContext.detectedJobId } : undefined,
+        })
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [browserContext?.pageType, browserContext?.autofillAvailable, browserContext?.detectedJobId])
+
+  // 4. Research task started + findings
+  useEffect(() => {
+    const task = researchStream.task
+    if (!task) return
+
+    if (task.id !== prevResearchIdRef.current) {
+      prevResearchIdRef.current = task.id
+      prevFindingCountRef.current = 0
+      timeline.append({
+        type:      "research_started",
+        title:     `Research: ${task.title}`,
+        summary:   task.objective.length > 100 ? `${task.objective.slice(0, 100)}…` : task.objective,
+        timestamp: new Date().toISOString(),
+        severity:  "info",
+        replayable: true,
+        replayAction: { type: "show_research", payload: { taskId: task.id } },
+        metadata:  IS_DEV ? { taskId: task.id, stepCount: task.steps.length } : undefined,
+      })
+    }
+
+    const count = task.findings?.length ?? 0
+    if (count > prevFindingCountRef.current) {
+      const newFindings = (task.findings ?? []).slice(prevFindingCountRef.current)
+      prevFindingCountRef.current = count
+      for (const finding of newFindings) {
+        timeline.append({
+          type:      "research_finding",
+          title:     finding.title,
+          summary:   finding.type.replace(/_/g, " "),
+          timestamp: new Date().toISOString(),
+          severity:  "info",
+          metadata:  IS_DEV ? { findingType: finding.type, confidence: finding.confidence } : undefined,
+        })
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [researchStream.task?.id, researchStream.task?.findings?.length])
+
+  // 5. Permission gates
+  useEffect(() => {
+    if (!activeGate) { prevGateKeyRef.current = null; return }
+    const key = activeGate.permission as string
+    if (key === prevGateKeyRef.current) return
+    prevGateKeyRef.current = key
+    timeline.append({
+      type:      "permission_prompt",
+      title:     `Permission required: ${key.replace(/_/g, " ")}`,
+      summary:   "Awaiting your approval before Scout proceeds",
+      timestamp: new Date().toISOString(),
+      severity:  "warning",
+      metadata:  IS_DEV ? { permission: key } : undefined,
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeGate])
+
+  // 6. Errors
+  useEffect(() => {
+    const err = scoutStream.error ?? researchStream.error
+    if (!err) return
+    timeline.append({
+      type:      "error",
+      title:     "Scout encountered an error",
+      summary:   err.length > 120 ? `${err.slice(0, 120)}…` : err,
+      timestamp: new Date().toISOString(),
+      severity:  "error",
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scoutStream.error, researchStream.error])
+
   // Early workspace directive — morph before Claude finishes
   useEffect(() => {
     if (!scoutStream.earlyDirective) return
@@ -592,6 +798,16 @@ export function ScoutWorkspaceShell() {
       setError(null)
       setNarrative("")
       setNarrativeDismissed(false)
+
+      // Record every user command in the timeline
+      timeline.append({
+        type:      "command",
+        title:     message.length > 80 ? `${message.slice(0, 80)}…` : message,
+        timestamp: new Date().toISOString(),
+        severity:  "info",
+        replayable: true,
+        replayAction: { type: "resend_command", payload: { message } },
+      })
 
       // ── Research intent — route to research endpoint, not chat ────────────
       if (isResearchIntent(message)) {
@@ -639,6 +855,31 @@ export function ScoutWorkspaceShell() {
   function handleChipClick(chip: string) { setQuery(chip); setTimeout(() => inputRef.current?.focus(), 50) }
   function handleFollowUp(text: string)  { setQuery(text); setTimeout(() => inputRef.current?.focus(), 50) }
   function handleSendCommand(query: string) { setQuery(query); setTimeout(() => inputRef.current?.focus(), 50) }
+
+  // ── Timeline replay ─────────────────────────────────────────────────────────
+  function handleReplay(action: ScoutTimelineReplayAction) {
+    switch (action.type) {
+      case "resend_command": {
+        const msg = action.payload?.message as string | undefined
+        if (msg) { setQuery(msg); setTimeout(() => inputRef.current?.focus(), 50) }
+        break
+      }
+      case "restart_workflow":
+        workflowEngine.setExpanded(true)
+        setWorkspaceMode("applications")
+        break
+      case "show_research": {
+        const cached = readResearchTask()
+        if (cached) { setRestoredResearchTask(cached); setWorkspaceMode("research") }
+        break
+      }
+      case "restore_workspace": {
+        const mode = action.payload?.mode as WorkspaceMode | undefined
+        if (mode && mode !== "idle") setWorkspaceMode(mode)
+        break
+      }
+    }
+  }
 
   function handleClearChat() {
     setMessages([]); setError(null); setActiveResponse(null)
@@ -699,6 +940,23 @@ export function ScoutWorkspaceShell() {
                 {workspaceMode}
               </span>
             )}
+            {/* Activity timeline toggle */}
+            <button
+              type="button"
+              onClick={() => setShowTimeline((v) => !v)}
+              title="Activity timeline"
+              className={cn(
+                "inline-flex items-center gap-1.5 text-[11px] font-medium transition",
+                showTimeline ? "text-[#FF5C18]" : "text-slate-500 hover:text-slate-300",
+              )}
+            >
+              <Clock className="h-3.5 w-3.5" />
+              {timeline.events.length > 0 && (
+                <span className="rounded-full bg-slate-700 px-1 py-0.5 text-[9px] tabular-nums text-slate-300">
+                  {timeline.events.length}
+                </span>
+              )}
+            </button>
             {/* Permissions button */}
             <button
               type="button"
@@ -862,7 +1120,7 @@ export function ScoutWorkspaceShell() {
               if (displayedMode === "research") {
                 return (
                   <ResearchMode
-                    task={researchStream.task}
+                    task={researchStream.task ?? restoredResearchTask}
                     isRunning={researchStream.isRunning}
                     onCommand={(cmd) => { setQuery(cmd); setTimeout(() => inputRef.current?.focus(), 50) }}
                   />
@@ -874,9 +1132,19 @@ export function ScoutWorkspaceShell() {
           />
         </div>
 
-        {/* Right intelligence rail — Company intel > Scout rail > browser context > market signals */}
-        {(companyIntelData || companyIntelLoading || rail || (browserContext && browserContext.pageType !== "unknown") || marketSignals.length > 0) && (
+        {/* Right intelligence rail — Timeline > Company intel > Scout rail > browser context > market signals */}
+        {(showTimeline || companyIntelData || companyIntelLoading || rail || (browserContext && browserContext.pageType !== "unknown") || marketSignals.length > 0) && (
           <div className="hidden lg:flex flex-col gap-4 transition-all duration-200 opacity-100 translate-x-0">
+            {/* Activity timeline panel */}
+            {showTimeline && (
+              <ScoutTimelinePanel
+                events={timeline.events}
+                onClose={() => setShowTimeline(false)}
+                onReplay={handleReplay}
+                onClear={timeline.clear}
+                isDev={IS_DEV}
+              />
+            )}
             {/* Company intel rail — shown when company context is active */}
             {(companyIntelData || companyIntelLoading) && activeEntities?.companyId ? (
               <CompanyIntelRail
