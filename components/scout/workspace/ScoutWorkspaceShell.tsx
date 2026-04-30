@@ -21,6 +21,9 @@ import { ScoutCommandPalette } from "./ScoutCommandPalette"
 import { normalizeScoutResponse } from "@/lib/scout/normalize"
 import { useWorkflowEngine } from "@/lib/scout/workflows/engine"
 import { useBulkApplicationEngine } from "@/lib/scout/bulk-application/engine"
+import { useScoutStream } from "@/hooks/useScoutStream"
+import { detectPreflightMode, PREFLIGHT_NARRATIVE } from "@/lib/scout/streaming/intent-preflight"
+import { ScoutStreamingText } from "@/components/scout/ScoutStreamingText"
 import { generateDailyMissions, buildMomentumLine } from "@/lib/scout/missions/generator"
 import {
   readMissionStore,
@@ -71,8 +74,9 @@ import type { ScoutNudge } from "@/lib/scout/nudges"
 import { cn } from "@/lib/utils"
 
 type ChatMessage =
-  | { id: string; role: "user"; text: string }
-  | { id: string; role: "scout"; response: ScoutResponse }
+  | { id: string; role: "user";           text: string }
+  | { id: string; role: "scout";          response: ScoutResponse }
+  | { id: string; role: "scout_streaming"; streamText: string }
 
 /** Entities carried across workspace mode transitions */
 export type ActiveEntities = {
@@ -147,6 +151,10 @@ export function ScoutWorkspaceShell() {
 
   // ── Bulk application engine ─────────────────────────────────────────────────
   const bulkEngine = useBulkApplicationEngine()
+
+  // ── Scout streaming ─────────────────────────────────────────────────────────
+  const scoutStream   = useScoutStream()
+  const streamMsgId   = useRef<string | null>(null)
 
   // ── Active browser context (from extension) ─────────────────────────────────
   const { context: browserContext } = useActiveBrowserContext()
@@ -453,122 +461,129 @@ export function ScoutWorkspaceShell() {
     setMissionStore(store)
   }, [strategyLoading, behaviorLoading, strategyBoard, behaviorSignals, marketSignals, searchProfile, primaryResume])
 
+  // ── Stream state effects ─────────────────────────────────────────────────────
+
+  // Live-update the streaming message bubble as text arrives
+  useEffect(() => {
+    const id = streamMsgId.current
+    if (!id || !scoutStream.isStreaming) return
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === id ? { ...m, role: "scout_streaming" as const, streamText: scoutStream.streamText } : m
+      )
+    )
+  }, [scoutStream.streamText, scoutStream.isStreaming])
+
+  // When the full response arrives, replace the streaming bubble with the final one
+  useEffect(() => {
+    const id = streamMsgId.current
+    if (!scoutStream.finalResponse || !id) return
+    const normalized = scoutStream.finalResponse
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === id ? { id, role: "scout" as const, response: normalized } : m
+      )
+    )
+    setIsLoading(false)
+    setActiveResponse(normalized)
+
+    const directive = normalized.workspace_directive
+    const newMode   = directive?.mode ?? inferWorkspaceMode(normalized)
+    setWorkspaceMode(newMode)
+    if (newMode !== "idle") setNarrative(buildNarrative(newMode, normalized))
+    setActiveEntities((prev) => extractEntities(normalized, prev))
+
+    const profileUpdate = extractProfileUpdate(normalized, "")
+    if (Object.keys(profileUpdate).length > 0) {
+      setSearchProfile((prev) => {
+        const updated = mergeProfileUpdate(prev, profileUpdate)
+        writeSearchProfile(updated)
+        return updated
+      })
+    }
+    if (newMode === "bulk_application") {
+      const bp = directive?.payload ?? {}
+      void bulkEngine.initQueue({ count: typeof bp.count === "number" ? bp.count : 10, requireSponsorshipSignal: Boolean(bp.requireSponsorshipSignal), workMode: typeof bp.workMode === "string" ? bp.workMode : undefined, minMatchScore: typeof bp.minMatchScore === "number" ? bp.minMatchScore : undefined })
+    }
+    if (normalized.workflow_directive && newMode !== "bulk_application") {
+      workflowEngine.startWorkflow(normalized.workflow_directive.workflowType, normalized.workflow_directive.payload)
+    }
+    const railActions = normalized.actions?.filter((a) => ["OPEN_JOB","OPEN_COMPANY","OPEN_RESUME_TAILOR"].includes(a.type))
+    const newRail = directive?.rail !== undefined ? (directive.rail ?? null) : railActions?.length ? { title: "Scout context", summary: "Suggested next steps", actions: railActions } : null
+    setRail(newRail)
+    if (directive?.chips?.length) setChips(directive.chips)
+    const updatedCmds = appendCommand(recentCommands, "")
+    setHasSession(true)
+    writeScoutSession({ mode: newMode, chips: directive?.chips ?? chips, recentCommands: updatedCmds, rail: extractRailMetadata(newRail), modeMetadata: extractModeMetadata(newMode, normalized) })
+    streamMsgId.current = null
+  }, [scoutStream.finalResponse])
+
+  // Handle stream errors
+  useEffect(() => {
+    if (!scoutStream.error || scoutStream.isStreaming) return
+    setError(scoutStream.error)
+    setIsLoading(false)
+    // Replace the streaming bubble with an error notice (remove it)
+    const id = streamMsgId.current
+    if (id) setMessages((prev) => prev.filter((m) => m.id !== id))
+    streamMsgId.current = null
+  }, [scoutStream.error, scoutStream.isStreaming])
+
+  // Early workspace directive — morph before Claude finishes
+  useEffect(() => {
+    if (!scoutStream.earlyDirective) return
+    const mode = scoutStream.earlyDirective.mode ?? "idle"
+    if (mode !== "idle") setWorkspaceMode(mode)
+  }, [scoutStream.earlyDirective])
+
   // ── Submit ───────────────────────────────────────────────────────────────────
 
   const handleSubmit = useCallback(
     async (event: React.FormEvent, overrideMessage?: string) => {
       event.preventDefault()
       const message = (overrideMessage ?? query).trim()
-      if (!message || isLoading) return
+      if (!message || isLoading || scoutStream.isStreaming) return
 
-      setMessages((prev) => [...prev, { id: `u-${Date.now()}`, role: "user", text: message }])
+      const msgId = `s-${Date.now()}`
+      streamMsgId.current = msgId
+
+      setMessages((prev) => [
+        ...prev,
+        { id: `u-${Date.now()}`, role: "user", text: message },
+        { id: msgId, role: "scout_streaming", streamText: "" },
+      ])
       setQuery("")
       setIsLoading(true)
       setError(null)
       setNarrative("")
       setNarrativeDismissed(false)
 
-      try {
-        const res = await fetch("/api/scout/chat", {
-          method: "POST",
-          headers: { Accept: "application/json", "Content-Type": "application/json" },
-          body: JSON.stringify({
-            message, pagePath: pathname, commandMode: true, focusMode: isFocusMode,
-            activeFilters: {
-              q: searchParams.get("q") ?? undefined, location: searchParams.get("location") ?? undefined,
-              sponsorship: searchParams.get("sponsorship") ?? undefined, workMode: searchParams.get("workMode") ?? undefined,
-            },
-            ...contextIds,
-            ...(searchProfile ? { searchProfile } : {}),
-          }),
-        })
-
-        const raw = (await res.json().catch(() => null)) as unknown
-        if (!res.ok) {
-          const errMsg = typeof raw === "object" && raw !== null && "error" in (raw as Record<string, unknown>)
-            ? String((raw as Record<string, unknown>).error) : "Scout could not respond right now."
-          setError(errMsg); return
-        }
-
-        const normalized = normalizeScoutResponse(raw)
-        setMessages((prev) => [...prev, { id: `s-${Date.now()}`, role: "scout", response: normalized }])
-        setActiveResponse(normalized)
-
-        // Mode
-        const directive = normalized.workspace_directive
-        const newMode   = directive?.mode ?? inferWorkspaceMode(normalized)
-        setWorkspaceMode(newMode)
-
-        // Narrative strip
-        if (newMode !== "idle") {
-          setNarrative(buildNarrative(newMode, normalized))
-        }
-
-        // Active entities — carry through transitions
-        setActiveEntities((prev) => extractEntities(normalized, prev))
-
-        // Search profile — extract preferences from this interaction
-        const profileUpdate = extractProfileUpdate(normalized, message)
-        if (Object.keys(profileUpdate).length > 0) {
-          setSearchProfile((prev) => {
-            const updated = mergeProfileUpdate(prev, profileUpdate)
-            writeSearchProfile(updated)
-            return updated
-          })
-        }
-
-        // Bulk application prep — trigger immediately, independent of workspace transition
-        if (newMode === "bulk_application") {
-          const bulkPayload = directive?.payload ?? {}
-          void bulkEngine.initQueue({
-            count:                   typeof bulkPayload.count === "number" ? bulkPayload.count : 10,
-            requireSponsorshipSignal: Boolean(bulkPayload.requireSponsorshipSignal),
-            workMode:                typeof bulkPayload.workMode === "string" ? bulkPayload.workMode : undefined,
-            minMatchScore:           typeof bulkPayload.minMatchScore === "number" ? bulkPayload.minMatchScore : undefined,
-          })
-        }
-
-        // Workflow — start panel if Scout returns a workflow_directive (skip for bulk — handled above)
-        if (normalized.workflow_directive && newMode !== "bulk_application") {
-          workflowEngine.startWorkflow(
-            normalized.workflow_directive.workflowType,
-            normalized.workflow_directive.payload
-          )
-        }
-
-        // Rail
-        let newRail: WorkspaceRail | null = null
-        if (directive?.rail !== undefined) {
-          newRail = directive.rail ?? null
-        } else {
-          const railActions = normalized.actions?.filter(
-            (a) => ["OPEN_JOB", "OPEN_COMPANY", "OPEN_RESUME_TAILOR"].includes(a.type)
-          )
-          newRail = railActions?.length
-            ? { title: "Scout context", summary: "Suggested next steps", actions: railActions }
-            : null
-        }
-        setRail(newRail)
-
-        // Chips
-        const newChips = directive?.chips?.length ? directive.chips : chips
-        if (directive?.chips?.length) setChips(directive.chips)
-
-        // Session
-        const updatedCommands = appendCommand(recentCommands, message)
-        setRecentCommands(updatedCommands)
-        setHasSession(true)
-        writeScoutSession({
-          mode: newMode, chips: newChips, recentCommands: updatedCommands,
-          rail: extractRailMetadata(newRail), modeMetadata: extractModeMetadata(newMode, normalized),
-        })
-      } catch {
-        setError("Network error. Please check your connection.")
-      } finally {
-        setIsLoading(false)
+      // ── Pre-flight: morph workspace immediately before network call ────────
+      const preflightMode = detectPreflightMode(message)
+      if (preflightMode) {
+        setWorkspaceMode(preflightMode)
+        const preflightNarrative = PREFLIGHT_NARRATIVE[preflightMode]
+        if (preflightNarrative) setNarrative(preflightNarrative)
       }
+
+      // ── Start SSE stream ───────────────────────────────────────────────────
+      void scoutStream.startStream("/api/scout/chat", {
+        message, pagePath: pathname, commandMode: true, focusMode: isFocusMode,
+        activeFilters: {
+          q: searchParams.get("q") ?? undefined, location: searchParams.get("location") ?? undefined,
+          sponsorship: searchParams.get("sponsorship") ?? undefined, workMode: searchParams.get("workMode") ?? undefined,
+        },
+        ...contextIds,
+        ...(searchProfile ? { searchProfile } : {}),
+      })
+
+      // Session command history (pre-record; final session write happens in stream effect)
+      const updatedCmds = appendCommand(recentCommands, message)
+      setRecentCommands(updatedCmds)
+      setHasSession(true)
     },
-    [query, isLoading, pathname, isFocusMode, searchParams, contextIds, chips, recentCommands]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [query, isLoading, pathname, isFocusMode, searchParams, contextIds, searchProfile, recentCommands]
   )
 
   function handleChipClick(chip: string) { setQuery(chip); setTimeout(() => inputRef.current?.focus(), 50) }
@@ -611,7 +626,24 @@ export function ScoutWorkspaceShell() {
           </div>
 
           <div className="flex items-center gap-3">
-            {workspaceMode !== "idle" && (
+            {/* Streaming activity indicator + cancel button */}
+            {scoutStream.isStreaming && (
+              <div className="flex items-center gap-2">
+                <span className="flex items-center gap-1.5 text-[10px] font-medium text-[#FF5C18]/80">
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#FF5C18]" />
+                  Thinking…
+                </span>
+                <button
+                  type="button"
+                  onClick={scoutStream.cancel}
+                  title="Stop Scout"
+                  className="rounded-lg border border-white/10 px-2 py-1 text-[10px] font-semibold text-slate-400 transition hover:border-red-500/40 hover:text-red-400"
+                >
+                  Stop
+                </button>
+              </div>
+            )}
+            {workspaceMode !== "idle" && !scoutStream.isStreaming && (
               <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-white/50">
                 <span className="h-1.5 w-1.5 rounded-full bg-[#FF5C18]" />
                 {workspaceMode}

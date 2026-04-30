@@ -13,6 +13,7 @@ import {
 } from "lucide-react"
 import { ScoutMessageBubble } from "@/components/scout/ScoutMessageBubble"
 import { ScoutMissionStrip } from "@/components/scout/ScoutMissionStrip"
+import { ScoutStreamingText } from "@/components/scout/ScoutStreamingText"
 import { useUpgradeModal } from "@/lib/context/UpgradeModalContext"
 import type { ScoutResponse } from "@/lib/scout/types"
 import type { ScoutNudge } from "@/lib/scout/nudges"
@@ -20,8 +21,9 @@ import type { ScoutMission } from "@/lib/scout/missions/types"
 import { cn } from "@/lib/utils"
 
 type ChatMessage =
-  | { id: string; role: "user"; text: string }
-  | { id: string; role: "scout"; response: ScoutResponse }
+  | { id: string; role: "user";            text: string }
+  | { id: string; role: "scout";           response: ScoutResponse }
+  | { id: string; role: "scout_streaming"; streamText: string }
 
 type Props = {
   greeting: string
@@ -293,14 +295,33 @@ export function IdleMode({
             </div>
           )}
 
-          {messages.map((msg) =>
-            msg.role === "user" ? (
-              <div key={msg.id} className="flex justify-end">
-                <div className="max-w-[82%] rounded-2xl rounded-tr-sm bg-[#FF5C18] px-4 py-3 text-sm leading-6 text-white shadow-[0_4px_12px_rgba(255,92,24,0.22)]">
-                  {msg.text}
+          {messages.map((msg) => {
+            if (msg.role === "user") {
+              return (
+                <div key={msg.id} className="flex justify-end">
+                  <div className="max-w-[82%] rounded-2xl rounded-tr-sm bg-[#FF5C18] px-4 py-3 text-sm leading-6 text-white shadow-[0_4px_12px_rgba(255,92,24,0.22)]">
+                    {msg.text}
+                  </div>
                 </div>
-              </div>
-            ) : (
+              )
+            }
+            if (msg.role === "scout_streaming") {
+              return (
+                <div key={msg.id} className="flex items-start gap-3">
+                  <span className="relative mt-0.5 flex-shrink-0 inline-flex h-9 w-9 items-center justify-center rounded-xl bg-[#FF5C18] shadow-[0_4px_16px_rgba(255,92,24,0.35)]">
+                    <Sparkles className="h-4 w-4 text-white animate-pulse" />
+                  </span>
+                  <div className="min-w-0 flex-1 overflow-hidden rounded-2xl rounded-tl-sm border border-slate-100 bg-white px-5 py-4 shadow-[0_4px_20px_rgba(15,23,42,0.07)]">
+                    <div className="h-[3px] w-full bg-[#FF5C18] opacity-80 -mx-5 -mt-4 mb-3 w-[calc(100%+2.5rem)]" />
+                    {msg.streamText
+                      ? <ScoutStreamingText text={msg.streamText} />
+                      : <span className="flex gap-1"><span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#FF5C18]/50" style={{ animationDelay: "0ms" }} /><span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#FF5C18]/50" style={{ animationDelay: "160ms" }} /><span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#FF5C18]/50" style={{ animationDelay: "320ms" }} /></span>
+                    }
+                  </div>
+                </div>
+              )
+            }
+            return (
               <ScoutMessageBubble
                 key={msg.id}
                 response={msg.response}
@@ -309,7 +330,7 @@ export function IdleMode({
                 onUpgrade={showUpgrade}
               />
             )
-          )}
+          })}
 
           {isLoading && <TypingIndicator />}
 

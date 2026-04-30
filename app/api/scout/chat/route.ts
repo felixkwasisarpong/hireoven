@@ -4,6 +4,7 @@ import { logApiUsage } from "@/lib/admin/usage"
 import { createClient } from "@/lib/supabase/server"
 import { getScoutContext, formatScoutContextForClaude } from "@/lib/scout/context"
 import { resolveJobContext, listTopSavedJobs } from "@/lib/scout/resolve-job-context"
+import { encodeSSE } from "@/lib/scout/streaming/types"
 import { isAllowedScoutAction, normalizeScoutActions } from "@/lib/scout/actions"
 import { detectScoutMode } from "@/lib/scout/mode"
 import { getScoutSystemPrompt } from "@/lib/scout/prompts"
@@ -746,6 +747,8 @@ export async function POST(request: NextRequest) {
       sponsorshipPreference?: string
       companyPreferences?: { liked?: string[] }
     }
+    /** When true, return SSE stream instead of JSON */
+    stream?: boolean
   }
 
   const userMessage = body.message?.trim()
@@ -985,6 +988,90 @@ User Input: ${userMessage}`
       (context.compareJobs && context.compareJobs.length >= 2) || isInterviewPrepIntent
         ? 1536
         : 1024
+
+    // ── Streaming branch ────────────────────────────────────────────────────────
+    // When body.stream === true, run the Anthropic call + post-processing inside
+    // a background IIFE, emit SSE events, and return the ReadableStream immediately.
+    // The non-streaming path below is completely unchanged.
+    if (body.stream === true) {
+      const enc = new TextEncoder()
+      let ctrl!: ReadableStreamDefaultController<Uint8Array>
+      const sseStream = new ReadableStream<Uint8Array>({
+        start: (c) => { ctrl = c },
+      })
+      const emit = (event: import("@/lib/scout/streaming/types").ScoutStreamEvent) => {
+        try { ctrl.enqueue(enc.encode(encodeSSE(event))) } catch {}
+      }
+
+      const systemPrompt = getScoutSystemPrompt(mode, {
+        premiumEnabled: canUsePremiumScoutFeatures(effectivePlan) && !premiumGate,
+      })
+      const msgParams = { model: MODEL, max_tokens: maxTokens, system: systemPrompt, messages: [{ role: "user" as const, content: contextualPrompt }] }
+
+      void (async () => {
+        try {
+          const stream = anthropic.messages.stream(msgParams)
+          stream.on("text", (text) => emit({ type: "text_delta", text }))
+          const msg = await stream.finalMessage()
+
+          const inputTokens  = msg.usage?.input_tokens  ?? 0
+          const outputTokens = msg.usage?.output_tokens ?? 0
+          const costUsd = (inputTokens / 1_000_000) * MODEL_PRICING.inputPerMillion + (outputTokens / 1_000_000) * MODEL_PRICING.outputPerMillion
+          await logApiUsage({ service: "claude", operation: "scout_chat_stream", tokens_used: inputTokens + outputTokens, cost_usd: Number(costUsd.toFixed(6)) })
+
+          const responseText = msg.content.filter((b) => b.type === "text").map((b) => b.text).join("\n").trim()
+          const { response: scoutResponse, safetyNotes } = parseScoutResponse(responseText, mode, inferredIntent)
+          if (!isInterviewPrepIntent || !canAccess(effectivePlan, "interview_prep")) scoutResponse.interviewPrep = undefined
+
+          const knownIds = getKnownScoutIds({ bodyJobId: body.jobId, bodyCompanyId: body.companyId, bodyResumeId: body.resumeId, contextJobId: context.job?.id, contextCompanyId: context.company?.id, contextResumeId: context.resume?.id })
+          if (resolvedJob) { knownIds.jobIds.add(resolvedJob.jobId); if (resolvedJob.companyId) knownIds.companyIds.add(resolvedJob.companyId) }
+          if (context.compareJobs) { for (const cj of context.compareJobs) { knownIds.jobIds.add(cj.id); if (cj.company_id) knownIds.companyIds.add(cj.company_id) } }
+          scoutResponse.actions = scoutResponse.actions.filter((action) => isActionUsingKnownIds(action, knownIds))
+          if (scoutResponse.workflow?.steps) { scoutResponse.workflow.steps = scoutResponse.workflow.steps.map((step) => ({ ...step, action: step.action && isActionUsingKnownIds(step.action, knownIds) ? step.action : undefined })) }
+          if (safetyNotes.length > 0) scoutResponse.answer = `${scoutResponse.answer}\n\nNote: ${safetyNotes.join(" ")}`
+
+          const wfDir = inferWorkflowDirective(userMessage, inferredIntent)
+          if (wfDir) {
+            const cp: Record<string, unknown> = {}
+            const wfJobId = resolvedJob?.jobId ?? body.jobId ?? context.job?.id
+            const wfResumeId = body.resumeId ?? context.resume?.id
+            if (wfJobId) cp.jobId = wfJobId; if (wfResumeId) cp.resumeId = wfResumeId
+            if (resolvedJob) { cp.title = resolvedJob.title; cp.company = resolvedJob.company; cp.detailUrl = resolvedJob.detailUrl; cp.source = resolvedJob.source }
+            if (Object.keys(cp).length > 0) wfDir.payload = cp
+            scoutResponse.workflow_directive = wfDir
+          }
+          if (!scoutResponse.workspace_directive) {
+            const bulkDir = inferBulkWorkspaceDirective(userMessage)
+            if (bulkDir) scoutResponse.workspace_directive = bulkDir
+          }
+          if (TAILOR_INTENT_RE.test(userMessage) && !BULK_PREP_RE.test(userMessage) && !scoutResponse.workspace_directive) {
+            const tjId = resolvedJob?.jobId ?? effectiveJobId ?? context.job?.id
+            if (tjId) scoutResponse.workspace_directive = { mode: "tailor", payload: { jobId: tjId, resumeId: body.resumeId ?? context.resume?.id, title: resolvedJob?.title ?? context.job?.title, company: resolvedJob?.company ?? context.job?.company_name, detailUrl: resolvedJob?.detailUrl ?? `/dashboard/jobs/${tjId}`, source: resolvedJob?.source ?? "explicit" } }
+          }
+
+          // Emit workspace/workflow directives early so client can morph immediately
+          if (scoutResponse.workspace_directive) emit({ type: "workspace_directive", payload: scoutResponse.workspace_directive })
+          if (scoutResponse.workflow_directive)  emit({ type: "workflow_directive",  payload: scoutResponse.workflow_directive  })
+
+          emit({ type: "response", payload: scoutResponse })
+          emit({ type: "done" })
+        } catch (err) {
+          emit({ type: "error", message: err instanceof Error ? err.message : "Scout encountered an error." })
+        } finally {
+          try { ctrl.close() } catch {}
+        }
+      })()
+
+      return new Response(sseStream, {
+        headers: {
+          "Content-Type":  "text/event-stream",
+          "Cache-Control": "no-cache, no-transform",
+          "Connection":    "keep-alive",
+          "X-Accel-Buffering": "no",
+        },
+      })
+    }
+    // ── End streaming branch ────────────────────────────────────────────────────
 
     const message = await anthropic.messages.create({
       model: MODEL,
