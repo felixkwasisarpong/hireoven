@@ -88,8 +88,15 @@ export function useScoutProactive({
 }: UseScoutProactiveInput): ScoutProactiveActions {
   const [loading, setLoading] = useState(false)
   const [snapshot, setSnapshot] = useState<ScoutProactiveSnapshot | null>(null)
-  const [events, setEvents] = useState<ScoutProactiveEvent[]>(() => readProactiveEvents())
-  const [settings, setSettings] = useState<ScoutProactiveSettings>(() => readProactiveSettings())
+  // Start with empty/default values — same initial HTML on server and client.
+  // The useEffect below loads persisted data from localStorage after mount.
+  const [events, setEvents] = useState<ScoutProactiveEvent[]>([])
+  const [settings, setSettings] = useState<ScoutProactiveSettings>({
+    enabled: true,
+    mutedTypes: [],
+    snoozedUntil: {},
+    dismissedAt: {},
+  })
 
   const refresh = useCallback(async () => {
     try {

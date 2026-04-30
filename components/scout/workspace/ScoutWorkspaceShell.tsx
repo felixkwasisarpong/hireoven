@@ -336,8 +336,13 @@ export function ScoutWorkspaceShell() {
 
   const fullName  = profile?.full_name ?? user?.user_metadata?.full_name ?? null
   const firstName = fullName?.split(" ")[0] ?? "there"
-  const hour      = new Date().getHours()
-  const greeting  = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening"
+  // Compute greeting client-side only — server UTC hour differs from client local
+  // hour causing a text content hydration mismatch.
+  const [greeting, setGreeting] = useState("Good morning")
+  useEffect(() => {
+    const h = new Date().getHours()
+    setGreeting(h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening")
+  }, [])
 
   const proactive = useScoutProactive({
     marketSignals,
