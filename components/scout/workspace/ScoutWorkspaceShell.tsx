@@ -12,6 +12,7 @@ import { CompareMode } from "./CompareMode"
 import { TailorMode } from "./TailorMode"
 import { ApplicationMode } from "./ApplicationMode"
 import { ContextRail } from "./ContextRail"
+import { ScoutCommandPalette } from "./ScoutCommandPalette"
 import { normalizeScoutResponse } from "@/lib/scout/normalize"
 import { getScoutSuggestionChips } from "@/lib/scout/mode"
 import { getScoutNudges } from "@/lib/scout/nudges"
@@ -115,8 +116,9 @@ export function ScoutWorkspaceShell() {
   const [rail,            setRail]            = useState<WorkspaceRail | null>(null)
   const [chips,           setChips]           = useState<string[]>([])
   const [activeEntities,  setActiveEntities]  = useState<ActiveEntities>({})
-  const [narrative,       setNarrative]       = useState<string>("")
+  const [narrative,        setNarrative]        = useState<string>("")
   const [narrativeDismissed, setNarrativeDismissed] = useState(false)
+  const [paletteOpen,      setPaletteOpen]      = useState(false)
 
   // ── Session state ───────────────────────────────────────────────────────────
   const [recentCommands, setRecentCommands] = useState<string[]>([])
@@ -199,6 +201,18 @@ export function ScoutWorkspaceShell() {
     return () => window.removeEventListener("scout:reset-context", onReset)
   }, [])
 
+  // Global Cmd+K / Ctrl+K → open command palette
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault()
+        setPaletteOpen((v) => !v)
+      }
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [])
+
   useEffect(() => {
     let cancelled = false
     setStrategyLoading(true)
@@ -228,9 +242,9 @@ export function ScoutWorkspaceShell() {
   // ── Submit ───────────────────────────────────────────────────────────────────
 
   const handleSubmit = useCallback(
-    async (event: React.FormEvent) => {
+    async (event: React.FormEvent, overrideMessage?: string) => {
       event.preventDefault()
-      const message = query.trim()
+      const message = (overrideMessage ?? query).trim()
       if (!message || isLoading) return
 
       setMessages((prev) => [...prev, { id: `u-${Date.now()}`, role: "user", text: message }])
@@ -372,8 +386,9 @@ export function ScoutWorkspaceShell() {
           query={query} onChange={setQuery} onSubmit={handleSubmit}
           isLoading={isLoading} chips={chips} onChipClick={handleChipClick}
           inputRef={inputRef} variant="dark" commandHistory={recentCommands}
+          onOpenPalette={() => setPaletteOpen(true)}
           placeholder={
-            workspaceMode === "idle"         ? "Ask Scout anything…" :
+            workspaceMode === "idle"         ? "Ask Scout anything…  (/ or ⌘K for commands)" :
             workspaceMode === "search"       ? "Refine this search…" :
             workspaceMode === "compare"      ? "Ask about this comparison…" :
                                                "Follow up with Scout…"
@@ -470,6 +485,24 @@ export function ScoutWorkspaceShell() {
           </div>
         )}
       </div>
+      {/* ── Command palette ──────────────────────────────────────────── */}
+      <ScoutCommandPalette
+        isOpen={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        workspaceMode={workspaceMode}
+        onSelect={(paletteQuery, autoRun) => {
+          if (autoRun) {
+            // Submit directly — bypass query state to avoid timing issue
+            setQuery("")
+            const fakeEvent = { preventDefault: () => {} } as React.FormEvent
+            void handleSubmit(fakeEvent, paletteQuery)
+          } else {
+            // Fill the bar for user to review before submitting
+            setQuery(paletteQuery)
+            setTimeout(() => inputRef.current?.focus(), 50)
+          }
+        }}
+      />
     </main>
   )
 }

@@ -1,6 +1,6 @@
 "use client"
 
-import { Loader2, Mic, MicOff, Send } from "lucide-react"
+import { Command, Loader2, Mic, MicOff, Send } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
 
@@ -132,6 +132,8 @@ type Props = {
   variant?: "light" | "dark"
   /** Command history for up/down navigation */
   commandHistory?: string[]
+  /** Open the command palette */
+  onOpenPalette?: () => void
 }
 
 export function ScoutCommandBar({
@@ -145,6 +147,7 @@ export function ScoutCommandBar({
   inputRef,
   variant = "light",
   commandHistory = [],
+  onOpenPalette,
 }: Props) {
   const isDark = variant === "dark"
   const [historyIndex, setHistoryIndex] = useState(-1)
@@ -167,6 +170,11 @@ export function ScoutCommandBar({
   // ── History navigation ──────────────────────────────────────────────────────
 
   function handleChange(value: string) {
+    // "/" as the first character in an empty bar opens the command palette
+    if (value === "/" && query === "" && onOpenPalette) {
+      onOpenPalette()
+      return
+    }
     if (historyIndex !== -1) setHistoryIndex(-1)
     onChange(value)
   }
@@ -275,6 +283,24 @@ export function ScoutCommandBar({
             <span className="flex-shrink-0 text-[10px] font-semibold text-gray-400">
               {historyIndex + 1}/{commandHistory.length}
             </span>
+          )}
+
+          {/* Command palette trigger */}
+          {onOpenPalette && (
+            <button
+              type="button"
+              onClick={onOpenPalette}
+              aria-label="Open command palette (⌘K)"
+              className={cn(
+                "inline-flex flex-shrink-0 items-center gap-1 rounded-lg px-1.5 py-1 transition",
+                isDark
+                  ? "text-slate-500 hover:bg-white/8 hover:text-slate-300"
+                  : "text-gray-300 hover:bg-gray-100 hover:text-gray-600"
+              )}
+            >
+              <Command className="h-3.5 w-3.5" />
+              <span className="hidden text-[10px] font-medium sm:inline">K</span>
+            </button>
           )}
 
           {/* Send */}
