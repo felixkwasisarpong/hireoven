@@ -53,6 +53,14 @@ export type ScoutExtensionCommand =
   | "START_TAILOR"
   | "START_COMPARE"
   | "START_WORKFLOW"
+  // Browser Operator V1 — supervised actions dispatched by useScoutBrowserOperator
+  | "OPERATOR_OPEN_TAB"
+  | "OPERATOR_NAVIGATE"
+  | "OPERATOR_FOCUS_FIELD"
+  | "OPERATOR_SCROLL_TO"
+  | "OPERATOR_HIGHLIGHT_FIELD"
+  | "OPERATOR_INSERT_TEXT"
+  | "OPERATOR_UPLOAD_RESUME"
 
 // ── Protocol constants ────────────────────────────────────────────────────────
 

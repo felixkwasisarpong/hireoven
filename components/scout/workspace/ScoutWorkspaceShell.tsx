@@ -31,6 +31,8 @@ import { InterviewPrepMode } from "./InterviewPrepMode"
 import { CareerStrategyMode } from "./CareerStrategyMode"
 import { isCareerStrategyIntent } from "@/lib/scout/career/intent"
 import { useCareerStrategy } from "@/hooks/useCareerStrategy"
+import { useScoutBrowserOperator } from "@/hooks/useScoutBrowserOperator"
+import { BrowserActionStrip } from "./BrowserActionStrip"
 import { useScoutTimeline } from "@/hooks/useScoutTimeline"
 import { ScoutTimelinePanel } from "@/components/scout/timeline/ScoutTimelinePanel"
 import { useScoutProactive } from "@/hooks/useScoutProactive"
@@ -278,7 +280,7 @@ export function ScoutWorkspaceShell() {
   const [restoredResearchTask, setRestoredResearchTask] = useState<ScoutResearchTask | null>(null)
 
   // ── Active browser context (from extension) ─────────────────────────────────
-  const { context: browserContext } = useActiveBrowserContext()
+  const { context: browserContext, isExtensionConnected } = useActiveBrowserContext()
 
   // ── Search profile (persistent lightweight memory) ──────────────────────────
   const [searchProfile, setSearchProfile] = useState<ScoutSearchProfile | null>(null)
@@ -291,6 +293,22 @@ export function ScoutWorkspaceShell() {
   const [activeGate,        setActiveGate]        = useState<import("@/components/scout/ScoutActionGate").GateRequest | null>(null)
   const [showPermissions,   setShowPermissions]   = useState(false)
   const [shellPermissions,  setShellPermissions]  = useState<ScoutPermissionState[]>(() => readPermissions())
+
+  // ── Browser operator — must be after browserContext, isExtensionConnected, shellPermissions ──
+  const operator = useScoutBrowserOperator({
+    permissions:          shellPermissions,
+    browserContext,
+    isExtensionConnected,
+    onTimelineEvent: ({ type, title, summary, severity }) => {
+      timeline.append({
+        type,
+        title,
+        summary,
+        severity: severity ?? "info",
+        timestamp: new Date().toISOString(),
+      })
+    },
+  })
 
   // ── Chat state ──────────────────────────────────────────────────────────────
   const [messages,  setMessages]  = useState<ChatMessage[]>([])
@@ -1580,6 +1598,16 @@ export function ScoutWorkspaceShell() {
         <div className="h-5" />
       </div>
 
+      {/* ── Browser action strip — non-intrusive, shown only when operator is active ── */}
+      {operator.activeAction && (
+        <BrowserActionStrip
+          action={operator.activeAction}
+          onApprove={operator.approve}
+          onCancel={operator.cancel}
+          onDismiss={operator.cancel}
+        />
+      )}
+
       {/* ── Workspace ─────────────────────────────────────────────────── */}
       <div className="app-shell flex w-full max-w-6xl gap-6 py-6 pb-16">
 
@@ -1801,7 +1829,15 @@ export function ScoutWorkspaceShell() {
                 activeWorkflow={workflowEngine.activeWorkflow}
                 latestEvents={latestRailEvents}
                 proactiveEvents={proactiveRailEvents}
-                onPreFill={handleSendCommand}
+                onPreFill={(query) => {
+                  // For autofill queries on application forms, also dispatch operator action
+                  if (/autofill/i.test(query) && browserContext.pageType === "application_form") {
+                    operator.execute("prepare_autofill", {
+                      context: { company: browserContext.company, atsProvider: browserContext.atsProvider },
+                    })
+                  }
+                  handleSendCommand(query)
+                }}
                 onExpandWorkflow={() => workflowEngine.setExpanded(true)}
                 onOpenProactive={handleOpenProactive}
               />

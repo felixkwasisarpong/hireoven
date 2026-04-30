@@ -46,6 +46,7 @@ const EVENT_META: Record<
   research_started:        { icon: Search,        label: "Research",          dot: "bg-[#FF5C18]"   },
   research_finding:        { icon: Lightbulb,     label: "Finding",           dot: "bg-orange-400"  },
   manual_submit:           { icon: Briefcase,     label: "Manual submit",     dot: "bg-teal-500"    },
+  browser_action:          { icon: Zap,           label: "Browser action",    dot: "bg-[#FF5C18]"   },
   error:                   { icon: AlertCircle,   label: "Error",             dot: "bg-red-500"     },
 }
 

@@ -28,6 +28,7 @@ export type ScoutTimelineEventType =
   | "research_started"         // autonomous research task began
   | "research_finding"         // research finding emitted
   | "manual_submit"            // user marked an application as submitted
+  | "browser_action"           // Scout browser operator dispatched an action
   | "error"                    // any Scout or extension error
 
 export type TimelineFilter =
@@ -73,7 +74,7 @@ export type ScoutTimelineEvent = {
 export const FILTER_EVENT_TYPES: Record<TimelineFilter, ScoutTimelineEventType[]> = {
   all:       [],
   workflows: ["workflow_started", "workflow_step"],
-  autofill:  ["autofill_detected", "autofill_reviewed", "permission_prompt"],
+  autofill:  ["autofill_detected", "autofill_reviewed", "permission_prompt", "browser_action"],
   research:  ["research_started", "research_finding"],
   applications: ["manual_submit", "job_resolved", "workflow_step", "workflow_started"],
   extension: ["extension_detected_page", "job_resolved"],
