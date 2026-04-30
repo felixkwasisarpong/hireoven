@@ -14,6 +14,7 @@ import type {
   JobMatchScore,
   JobIntelligence,
   CompanyImmigrationProfileSummary,
+  CompanyHiringHealth,
 } from "@/types"
 
 export type CompareJobContext = {
@@ -79,6 +80,7 @@ export type ScoutContext = {
     sponsorship_confidence: number
     h1b_sponsor_count_1yr: number
     immigration_profile: CompanyImmigrationProfileSummary | null
+    hiring_health: CompanyHiringHealth | null
   } | null
   resume: {
     id: string
@@ -352,6 +354,7 @@ export async function getScoutContext(input: ScoutContextInput): Promise<ScoutCo
           sponsorship_confidence: company.sponsorship_confidence,
           h1b_sponsor_count_1yr: company.h1b_sponsor_count_1yr,
           immigration_profile: company.immigration_profile_summary ?? null,
+          hiring_health: company.hiring_health ?? null,
         }
       : null,
     resume: resume
@@ -486,6 +489,16 @@ ${job.description.substring(0, 500)}...`)
 - Recent H-1B Petitions: ${profile.recentH1BPetitions ?? 0}
 - Total LCA Applications: ${profile.totalLcaApplications ?? 0}
 - LCA Certification Rate: ${profile.lcaCertificationRate ? `${(profile.lcaCertificationRate * 100).toFixed(1)}%` : "Unknown"}`)
+    }
+    if (company.hiring_health) {
+      const h = company.hiring_health
+      const lines: string[] = [`Hiring Health: ${h.status ?? "unknown"}`]
+      if (h.activeJobCount != null) lines.push(`Active openings: ${h.activeJobCount}`)
+      if (h.recentJobCount != null) lines.push(`Posted last 30 days: ${h.recentJobCount}`)
+      if (h.sponsorshipTrend && h.sponsorshipTrend !== "unknown") lines.push(`Sponsorship trend: ${h.sponsorshipTrend}`)
+      if (h.summary) lines.push(`Summary: ${h.summary}`)
+      lines.push("Note: Surface this cautiously — use 'appears', 'may indicate', 'based on posting patterns'")
+      sections.push(lines.join("\n"))
     }
   }
 

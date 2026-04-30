@@ -12,9 +12,11 @@ import { CompareMode } from "./CompareMode"
 import { TailorMode } from "./TailorMode"
 import { ApplicationMode } from "./ApplicationMode"
 import { BulkApplicationMode } from "./BulkApplicationMode"
+import { CompanyMode } from "./CompanyMode"
 import { BulkConfirmDialog } from "@/components/scout/bulk/BulkConfirmDialog"
 import { BulkReviewDrawer } from "@/components/scout/bulk/BulkReviewDrawer"
 import { ContextRail } from "./ContextRail"
+import { CompanyIntelRail } from "@/components/scout/CompanyIntelRail"
 import { ScoutCommandPalette } from "./ScoutCommandPalette"
 import { normalizeScoutResponse } from "@/lib/scout/normalize"
 import { useWorkflowEngine } from "@/lib/scout/workflows/engine"
@@ -119,6 +121,7 @@ function buildNarrative(mode: WorkspaceMode, response: ScoutResponse): string {
       tailor:            "Scout identified tailoring opportunities.",
       applications:      "Scout prepared a workflow plan.",
       bulk_application:  "Scout is preparing your bulk application queue.",
+      company:           "Scout surfaced company intelligence.",
       idle:              "",
     }
     return labels[mode] ?? ""
@@ -398,6 +401,29 @@ export function ScoutWorkspaceShell() {
       .finally(() => { if (!cancelled) setBehaviorLoading(false) })
     return () => { cancelled = true }
   }, [])
+
+  // ── Company intel — fetched when company context changes ───────────────────────
+  const [companyIntelData, setCompanyIntelData] = useState<{
+    intel: import("@/lib/scout/company-intel/types").CompanyIntel
+    summary: import("@/lib/scout/company-intel/types").CompanyIntelSummary
+    companyName: string
+  } | null>(null)
+  const [companyIntelLoading, setCompanyIntelLoading] = useState(false)
+
+  useEffect(() => {
+    const cid = activeEntities?.companyId
+    if (!cid) { setCompanyIntelData(null); return }
+    let cancelled = false
+    setCompanyIntelLoading(true)
+    fetch(`/api/scout/company-intel/${cid}`)
+      .then(async (res) => {
+        const data = await res.json().catch(() => null)
+        if (!cancelled && data?.intel) setCompanyIntelData(data)
+      })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setCompanyIntelLoading(false) })
+    return () => { cancelled = true }
+  }, [activeEntities?.companyId])
 
   // ── Daily missions — generated once data loads, cached in localStorage ────────
   useEffect(() => {
@@ -728,6 +754,19 @@ export function ScoutWorkspaceShell() {
                   />
                 )
               }
+              if (displayedMode === "company") {
+                const companyId = activeEntities?.companyId
+                  ?? activeResponse?.actions?.find((a) => a.type === "OPEN_COMPANY")?.payload?.companyId
+                  ?? activeResponse?.workspace_directive?.payload?.companyId as string | undefined
+                if (!companyId) return null
+                return (
+                  <CompanyMode
+                    companyId={companyId}
+                    companyName={activeEntities?.companyName}
+                    onFollowUp={handleFollowUp}
+                  />
+                )
+              }
               if (displayedMode === "bulk_application") {
                 return (
                   <BulkApplicationMode
@@ -743,10 +782,20 @@ export function ScoutWorkspaceShell() {
           />
         </div>
 
-        {/* Right intelligence rail — Scout rail > browser context > market signals */}
-        {(rail || (browserContext && browserContext.pageType !== "unknown") || marketSignals.length > 0) && (
+        {/* Right intelligence rail — Company intel > Scout rail > browser context > market signals */}
+        {(companyIntelData || companyIntelLoading || rail || (browserContext && browserContext.pageType !== "unknown") || marketSignals.length > 0) && (
           <div className="hidden lg:flex flex-col gap-4 transition-all duration-200 opacity-100 translate-x-0">
-            {rail ? (
+            {/* Company intel rail — shown when company context is active */}
+            {(companyIntelData || companyIntelLoading) && activeEntities?.companyId ? (
+              <CompanyIntelRail
+                companyId={activeEntities.companyId}
+                companyName={activeEntities.companyName ?? companyIntelData?.companyName ?? "Company"}
+                intel={companyIntelData?.intel ?? null}
+                summary={companyIntelData?.summary ?? null}
+                loading={companyIntelLoading}
+                onClose={() => setCompanyIntelData(null)}
+              />
+            ) : rail ? (
               <ContextRail rail={rail} onClose={() => setRail(null)} />
             ) : browserContext && browserContext.pageType !== "unknown" ? (
               <BrowserContextRail
