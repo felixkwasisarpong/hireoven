@@ -454,6 +454,43 @@ function buildResponseFromParsed(
     confidence,
     mode: isScoutMode(p.mode) ? p.mode : fallbackMode,
     interviewPrep: parseInterviewPrep(p.interviewPrep),
+    outreach: "outreach" in p ? parseScoutOutreach(p.outreach) : undefined,
+  }
+}
+
+// ── Outreach draft parser ────────────────────────────────────────────────────
+
+function parseScoutOutreach(raw: unknown): import("@/lib/scout/outreach/types").ScoutOutreachDraft | undefined {
+  if (!raw || typeof raw !== "object") return undefined
+  const p = raw as Record<string, unknown>
+  if (typeof p.draft !== "string" || !p.draft.trim()) return undefined
+
+  const VALID_TYPES  = new Set(["linkedin_message", "email", "follow_up", "referral_request"])
+  const VALID_TONES  = new Set(["professional", "warm", "direct"])
+
+  type OutreachType = import("@/lib/scout/outreach/types").ScoutOutreachType
+  type OutreachTone = import("@/lib/scout/outreach/types").ScoutOutreachTone
+
+  const parseStrList = (v: unknown, max: number): string[] | undefined => {
+    if (!Array.isArray(v)) return undefined
+    const strs = v.filter((s): s is string => typeof s === "string" && s.trim().length > 0).slice(0, max)
+    return strs.length > 0 ? strs : undefined
+  }
+
+  const generatedFrom = typeof p.generatedFrom === "object" && p.generatedFrom !== null
+    ? { job: Boolean((p.generatedFrom as Record<string, unknown>).job), resume: Boolean((p.generatedFrom as Record<string, unknown>).resume), companyIntel: Boolean((p.generatedFrom as Record<string, unknown>).companyIntel) }
+    : undefined
+
+  return {
+    id:            `outreach-${Date.now()}`,
+    type:          VALID_TYPES.has(p.type as string) ? p.type as OutreachType : "linkedin_message",
+    tone:          VALID_TONES.has(p.tone as string) ? p.tone as OutreachTone : "professional",
+    draft:         p.draft.trim().slice(0, 2500),
+    talkingPoints: parseStrList(p.talkingPoints, 5),
+    warnings:      parseStrList(p.warnings, 2),
+    recipientName: typeof p.recipientName === "string" ? p.recipientName.slice(0, 80) : undefined,
+    recipientRole: typeof p.recipientRole === "string" ? p.recipientRole.slice(0, 80) : undefined,
+    generatedFrom,
   }
 }
 
@@ -1125,6 +1162,16 @@ User Input: ${userMessage}`
             }
           }
 
+          // Outreach guard (streaming path) — mirror of non-streaming guard below
+          if (scoutResponse.outreach && !scoutResponse.workspace_directive) {
+            const ctxName = context.job?.company_name ?? context.company?.name
+            scoutResponse.workspace_directive = {
+              mode: "outreach",
+              payload: { companyName: ctxName, jobTitle: context.job?.title },
+              chips:   ["Make it more concise", "Use a warmer tone", "Prepare a follow-up version"],
+            }
+          }
+
           attachDebug(scoutResponse)
 
           // Emit workspace/workflow directives early so client can morph immediately
@@ -1422,6 +1469,20 @@ User Input: ${userMessage}`
       const bulkDirective = inferBulkWorkspaceDirective(userMessage)
       if (bulkDirective) {
         scoutResponse.workspace_directive = bulkDirective
+      }
+    }
+
+    // Ensure outreach mode is set whenever an outreach draft was generated.
+    // Claude may forget the workspace_directive even when it produces the outreach field.
+    if (scoutResponse.outreach && !scoutResponse.workspace_directive) {
+      const contextName = context.job?.company_name ?? context.company?.name
+      scoutResponse.workspace_directive = {
+        mode: "outreach",
+        payload: {
+          companyName: contextName,
+          jobTitle:    context.job?.title,
+        },
+        chips: ["Make it more concise", "Use a warmer tone", "Prepare a follow-up version"],
       }
     }
 

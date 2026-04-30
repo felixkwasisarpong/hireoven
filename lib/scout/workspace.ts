@@ -15,6 +15,7 @@ export type WorkspaceRail = {
  * Used as a fallback when the response does not include a workspace_directive.
  */
 export function inferWorkspaceMode(response: ScoutResponse): WorkspaceMode {
+  if (response.outreach) return "outreach"
   if (response.compare) return "compare"
   if (response.workspace_directive?.mode === "bulk_application") return "bulk_application"
   if (response.workspace_directive?.mode === "company") return "company"

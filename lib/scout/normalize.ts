@@ -21,7 +21,7 @@ import {
 } from "@/lib/scout/types"
 
 const VALID_WORKSPACE_MODES = new Set<ScoutWorkspaceMode>([
-  "idle", "search", "compare", "tailor", "applications", "bulk_application", "company", "research",
+  "idle", "search", "compare", "tailor", "applications", "bulk_application", "company", "research", "outreach",
 ])
 
 function isWorkspaceMode(v: unknown): v is ScoutWorkspaceMode {
@@ -217,6 +217,12 @@ export function normalizeScoutResponse(raw: unknown): ScoutResponse {
       ? (record.debug as ScoutResponse["debug"])
       : undefined
 
+  // Pass outreach through as-is — server-validated before writing to ScoutResponse
+  const outreach =
+    typeof record.outreach === "object" && record.outreach !== null
+      ? (record.outreach as ScoutResponse["outreach"])
+      : undefined
+
   return {
     answer,
     recommendation,
@@ -233,6 +239,7 @@ export function normalizeScoutResponse(raw: unknown): ScoutResponse {
     workflow_directive,
     graph,
     debug,
+    outreach,
   }
 }
 

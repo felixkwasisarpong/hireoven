@@ -304,7 +304,7 @@ export type ScoutWorkflowDirective = {
 
 // ── Workspace Directive ────────────────────────────────────────────────────────
 
-export type ScoutWorkspaceMode = "idle" | "search" | "compare" | "tailor" | "applications" | "bulk_application" | "company" | "research"
+export type ScoutWorkspaceMode = "idle" | "search" | "compare" | "tailor" | "applications" | "bulk_application" | "company" | "research" | "outreach"
 
 export type ScoutWorkspaceDirective = {
   /** Which workspace panel to activate. */
@@ -358,6 +358,11 @@ export type ScoutResponse = {
    * the named multi-step workflow. Only emitted when intent === "workflow".
    */
   workflow_directive?: ScoutWorkflowDirective
+  /**
+   * Recruiter copilot — generated outreach draft.
+   * User reviews and edits before sending. Scout never sends automatically.
+   */
+  outreach?: import("@/lib/scout/outreach/types").ScoutOutreachDraft
   /**
    * Development-only diagnostics. Never render directly in user-facing UI.
    * Used for timeline metadata and local debugging of orchestrator behavior.

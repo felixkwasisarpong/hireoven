@@ -19,6 +19,7 @@ const SEARCH_RE     = /\b(find|search|show|filter|discover)\b.{0,40}\b(job[s]?|r
 const COMPANY_RE    = /\b(tell me about|does|what about|company|employer|sponsor)\b.{0,20}\b(sponsor|visa|h-?1b|hire|hiring)\b/i
 const APPS_RE       = /\b(my applications?|pipeline|status|follow.?up|how am i doing|interview)\b/i
 const RESEARCH_RE   = /^(research|analyze|analyse|investigate|find\s+companies|what\s+skills?)\b/i
+const OUTREACH_RE   = /\b(draft|write|compose|prepare)\b.{0,30}\b(message|outreach|linkedin|recruiter\s+(message|note)|email\s+to|follow.?up|referral\s+request)\b/i
 
 /**
  * Returns the workspace mode to switch to immediately on submit,
@@ -28,7 +29,9 @@ export function detectPreflightMode(message: string): WorkspaceMode | null {
   const m = message.trim()
   if (!m) return null
 
-  // Research takes highest priority (explicit research intent)
+  // Outreach drafting takes highest priority (clear "draft/write message" signal)
+  if (OUTREACH_RE.test(m))  return "outreach"
+  // Research takes priority over generic searches
   if (RESEARCH_RE.test(m))  return "research"
   // Bulk prep takes priority over tailor (both match "prepare")
   if (BULK_PREP_RE.test(m)) return "bulk_application"
@@ -46,6 +49,7 @@ export function detectPreflightMode(message: string): WorkspaceMode | null {
  * Displayed immediately — replaced by actual Scout answer when stream completes.
  */
 export const PREFLIGHT_NARRATIVE: Partial<Record<WorkspaceMode, string>> = {
+  outreach:         "Preparing your outreach draft…",
   research:         "Initialising research — gathering evidence…",
   compare:          "Comparing your strongest saved jobs…",
   tailor:           "Preparing resume tailoring for this role…",

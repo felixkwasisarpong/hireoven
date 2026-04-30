@@ -56,7 +56,8 @@ export type ScoutResearchTask = {
   status:      ScoutResearchTaskStatus
   steps:       ScoutResearchStep[]
   findings?:   ScoutResearchFinding[]
-  createdAt:   string
+  createdAt:    string
+  updatedAt?:   string
   completedAt?: string
   followUpCommands?: string[]
 }

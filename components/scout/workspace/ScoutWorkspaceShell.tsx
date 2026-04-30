@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { usePathname, useSearchParams } from "next/navigation"
 import Link from "next/link"
-import { Clock, LayoutDashboard, Shield, Sparkles, X } from "lucide-react"
+import { Clock, LayoutDashboard, Mic, PanelBottomOpen, Shield, Sparkles, X } from "lucide-react"
 import { ScoutCommandBar } from "./ScoutCommandBar"
 import { WorkspaceSurface } from "./WorkspaceSurface"
 import { IdleMode } from "./IdleMode"
@@ -26,6 +26,7 @@ import { detectPreflightMode, PREFLIGHT_NARRATIVE } from "@/lib/scout/streaming/
 import { isResearchIntent } from "@/lib/scout/research/tasks"
 import { writeResearchTask, readResearchTask } from "@/lib/scout/research/store"
 import { ResearchMode } from "./ResearchMode"
+import { OutreachMode } from "./OutreachMode"
 import { useScoutTimeline } from "@/hooks/useScoutTimeline"
 import { ScoutTimelinePanel } from "@/components/scout/timeline/ScoutTimelinePanel"
 import { useScoutProactive } from "@/hooks/useScoutProactive"
@@ -50,6 +51,7 @@ import { useActiveBrowserContext } from "@/lib/scout/browser-context"
 import { getContextualChips, getContextualPlaceholder } from "@/lib/scout/context-chips"
 import { writePinnedContext } from "@/lib/scout/pinned-context"
 import { BrowserContextRail } from "@/components/scout/workspace/BrowserContextRail"
+import { MobileContextSheet } from "@/components/scout/workspace/MobileContextSheet"
 import {
   readSearchProfile,
   writeSearchProfile,
@@ -62,6 +64,7 @@ import {
 import { ScoutMemoryChips } from "@/components/scout/ScoutMemoryChips"
 import { getPersonalizedChips } from "@/lib/scout/mode"
 import { ScoutMarketRail } from "@/components/scout/ScoutMarketRail"
+import { ScoutContinuationStrip } from "@/components/scout/continuation/ScoutContinuationStrip"
 import type { MarketSignal } from "@/lib/scout/market-intelligence"
 import { ScoutActionGate } from "@/components/scout/ScoutActionGate"
 import { ScoutPermissionsPanel } from "@/components/scout/ScoutPermissionsPanel"
@@ -84,6 +87,9 @@ import type { ScoutResponse, ScoutStrategyBoard } from "@/lib/scout/types"
 import type { ScoutBehaviorSignals } from "@/lib/scout/behavior"
 import type { ScoutNudge } from "@/lib/scout/nudges"
 import type { OutcomeLearningResult } from "@/lib/scout/outcomes/types"
+import { useScoutContinuation } from "@/hooks/useScoutContinuation"
+import { mergeResumableContexts } from "@/lib/scout/continuation/sanitize"
+import type { ScoutResumableContext } from "@/lib/scout/continuation/types"
 import { cn } from "@/lib/utils"
 
 type ChatMessage =
@@ -139,6 +145,7 @@ function buildNarrative(mode: WorkspaceMode, response: ScoutResponse): string {
       bulk_application:  "Scout is preparing your bulk application queue.",
       company:           "Scout surfaced company intelligence.",
       research:          "Scout is running your research task.",
+      outreach:          "Scout prepared your outreach draft.",
       idle:              "",
     }
     return labels[mode] ?? ""
@@ -191,6 +198,27 @@ function proactiveCommandSuggestion(event: ScoutProactiveEvent): string {
   }
 }
 
+function continuationContextKey(context: ScoutResumableContext): string {
+  return `${context.type}:${context.id}`
+}
+
+function openContinuationPrompt(context: ScoutResumableContext): string {
+  switch (context.type) {
+    case "workflow":
+      return `Resume ${context.title}?`
+    case "compare":
+      return `Continue ${context.title.toLowerCase()}?`
+    case "tailor":
+      return `Continue tailoring for ${context.title}?`
+    case "research":
+      return `${context.title} is still available.`
+    case "application_queue":
+      return `${context.title} is ready for review.`
+    default:
+      return context.title
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 const IS_DEV = process.env.NODE_ENV === "development"
@@ -236,6 +264,7 @@ export function ScoutWorkspaceShell() {
   // ── Activity timeline ───────────────────────────────────────────────────────
   const timeline       = useScoutTimeline()
   const [showTimeline, setShowTimeline] = useState(false)
+  const [showMobileContext, setShowMobileContext] = useState(false)
   // Restored research task — used by session replay when research mode is re-entered
   const [restoredResearchTask, setRestoredResearchTask] = useState<ScoutResearchTask | null>(null)
 
@@ -274,6 +303,7 @@ export function ScoutWorkspaceShell() {
   // ── Session state ───────────────────────────────────────────────────────────
   const [recentCommands, setRecentCommands] = useState<string[]>([])
   const [hasSession,     setHasSession]     = useState(false)
+  const [dismissedContinuationIds, setDismissedContinuationIds] = useState<Set<string>>(new Set())
 
   // ── Strategy / behavior data ────────────────────────────────────────────────
   const [strategyBoard,   setStrategyBoard]   = useState<ScoutStrategyBoard | null>(null)
@@ -317,6 +347,8 @@ export function ScoutWorkspaceShell() {
     activeWorkflow: workflowEngine.activeWorkflow,
     bulkQueue: bulkEngine.queue,
   })
+
+  const continuation = useScoutContinuation()
 
   // ── Gate event bus — listens for permission requests from any executor ────────
   useEffect(() => {
@@ -498,6 +530,87 @@ export function ScoutWorkspaceShell() {
     () => proactive.visibleEvents.slice(0, 3),
     [proactive.visibleEvents]
   )
+
+  const generatedResumableContexts = useMemo<ScoutResumableContext[]>(() => {
+    const nowIso = new Date().toISOString()
+    const contexts: ScoutResumableContext[] = []
+
+    const wf = workflowEngine.activeWorkflow
+    if (wf) {
+      contexts.push({
+        type: "workflow",
+        id: wf.id,
+        title: wf.title,
+        updatedAt: wf.completedAt ?? wf.pausedAt ?? nowIso,
+      })
+    }
+
+    const compare = activeResponse?.compare
+    if (compare && compare.items.length > 0) {
+      const first = compare.items[0]
+      contexts.push({
+        type: "compare",
+        id: `compare:${compare.winnerJobId ?? first.jobId}`,
+        title: `Comparing ${compare.items.length} role${compare.items.length !== 1 ? "s" : ""}`,
+        updatedAt: nowIso,
+      })
+    }
+
+    if (workspaceMode === "tailor" && (activeEntities.jobId || activeEntities.companyId)) {
+      contexts.push({
+        type: "tailor",
+        id: activeEntities.jobId ?? activeEntities.companyId ?? "tailor",
+        title: activeEntities.jobTitle ?? activeEntities.companyName ?? "Resume tailoring",
+        updatedAt: nowIso,
+      })
+    }
+
+    const researchTask = researchStream.task ?? restoredResearchTask
+    if (researchTask && researchTask.status !== "failed") {
+      contexts.push({
+        type: "research",
+        id: researchTask.id,
+        title: researchTask.title,
+        updatedAt: researchTask.updatedAt ?? researchTask.createdAt ?? nowIso,
+      })
+    }
+
+    if (bulkEngine.queue) {
+      contexts.push({
+        type: "application_queue",
+        id: bulkEngine.queue.id,
+        title: bulkEngine.queue.title,
+        updatedAt: bulkEngine.queue.completedAt ?? nowIso,
+      })
+    }
+
+    return contexts
+  }, [
+    workflowEngine.activeWorkflow?.id,
+    workflowEngine.activeWorkflow?.activeStepId,
+    workflowEngine.activeWorkflow?.pausedAt,
+    workflowEngine.activeWorkflow?.completedAt,
+    activeResponse?.compare?.winnerJobId,
+    activeResponse?.compare?.items?.length,
+    workspaceMode,
+    activeEntities.jobId,
+    activeEntities.jobTitle,
+    activeEntities.companyId,
+    activeEntities.companyName,
+    researchStream.task?.id,
+    researchStream.task?.updatedAt,
+    researchStream.task?.status,
+    restoredResearchTask?.id,
+    restoredResearchTask?.updatedAt,
+    restoredResearchTask?.status,
+    bulkEngine.queue?.id,
+    bulkEngine.queue?.completedAt,
+  ])
+
+  const continuationContexts = useMemo(() => {
+    const source = continuation.state?.resumableContexts ?? []
+    return source.filter((context) => !dismissedContinuationIds.has(continuationContextKey(context)))
+  }, [continuation.state?.resumableContexts, dismissedContinuationIds])
 
   // ── Session restore ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -1576,6 +1689,15 @@ export function ScoutWorkspaceShell() {
                     task={researchStream.task ?? restoredResearchTask}
                     isRunning={researchStream.isRunning}
                     onCommand={(cmd) => { setQuery(cmd); setTimeout(() => inputRef.current?.focus(), 50) }}
+                  />
+                )
+              }
+              if (displayedMode === "outreach" && activeResponse) {
+                return (
+                  <OutreachMode
+                    response={activeResponse}
+                    onFollowUp={handleFollowUp}
+                    activeEntities={activeEntities}
                   />
                 )
               }
