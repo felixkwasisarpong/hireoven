@@ -30,14 +30,23 @@ export type ScoutTimelineEventType =
   | "manual_submit"            // user marked an application as submitted
   | "error"                    // any Scout or extension error
 
-export type TimelineFilter = "all" | "workflows" | "research" | "extension" | "errors"
+export type TimelineFilter =
+  | "all"
+  | "workflows"
+  | "autofill"
+  | "research"
+  | "applications"
+  | "extension"
+  | "errors"
 
 export type ScoutTimelineReplayAction = {
   type:
-    | "resend_command"     // pre-fill the command bar with the original message
-    | "restart_workflow"   // expand the workflow panel for the saved workflow type
-    | "show_research"      // restore research mode from the localStorage cache
-    | "restore_workspace"  // switch workspace to the saved mode
+    | "resend_command"      // pre-fill the command bar with the original message
+    | "reopen_workflow"     // restore workflow panel + applications workspace
+    | "reopen_compare"      // restore compare workspace
+    | "reopen_research"     // restore research mode from local cache
+    | "restore_workspace"   // switch workspace to the saved mode
+    | "restore_job_context" // restore active job/company context in workspace shell
   payload?: Record<string, unknown>
 }
 
@@ -64,7 +73,9 @@ export type ScoutTimelineEvent = {
 export const FILTER_EVENT_TYPES: Record<TimelineFilter, ScoutTimelineEventType[]> = {
   all:       [],
   workflows: ["workflow_started", "workflow_step"],
+  autofill:  ["autofill_detected", "autofill_reviewed", "permission_prompt"],
   research:  ["research_started", "research_finding"],
-  extension: ["extension_detected_page", "job_resolved", "autofill_detected", "autofill_reviewed"],
+  applications: ["manual_submit", "job_resolved", "workflow_step", "workflow_started"],
+  extension: ["extension_detected_page", "job_resolved"],
   errors:    ["error"],
 }

@@ -34,9 +34,13 @@ export function useScoutTimeline(): ScoutTimelineActions {
   const [events, setEvents] = useState<ScoutTimelineEvent[]>(() => readTimelineEvents())
 
   const append = useCallback((partial: Omit<ScoutTimelineEvent, "id">) => {
-    const event: ScoutTimelineEvent = { id: makeTimelineId(), ...partial }
+    const event: ScoutTimelineEvent = {
+      id: makeTimelineId(),
+      severity: "info",
+      ...partial,
+    }
     appendTimelineEvent(event)
-    setEvents((prev) => [event, ...prev].slice(0, 100))
+    setEvents((prev) => [event, ...prev].slice(0, 240))
   }, [])
 
   const filtered = useCallback(

@@ -79,6 +79,7 @@ const anthropic = process.env.ANTHROPIC_API_KEY
 // Grounded Scout Q&A/compare workflows need better instruction following and reasoning depth.
 const MODEL = SONNET_MODEL
 const MODEL_PRICING = ANTHROPIC_TIER_PRICING.sonnet
+const IS_DEV = process.env.NODE_ENV === "development"
 const COMMAND_VERB_RE = /^(show|filter|find|open|compare|improve|prepare|focus|hide|narrow|sort)\b/i
 const WORKFLOW_HINT_RE = /\b(workflow|plan|steps|step-by-step|checklist|roadmap)\b/i
 const ANALYSIS_HINT_RE = /\b(analyz|analysis|score|fit|verdict|breakdown|evaluate|assess)\b/i
@@ -704,6 +705,7 @@ function isActionUsingKnownIds(action: ScoutResponse["actions"][number], knownId
 }
 
 export async function POST(request: NextRequest) {
+  const requestStartedAt = Date.now()
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   
@@ -933,7 +935,21 @@ export async function POST(request: NextRequest) {
       preferredRoles:  context.behaviorSignals?.preferredRoles,
       userSkills:      context.behaviorSignals?.commonSkills,
       sponsorshipRequired: context.behaviorSignals?.sponsorshipSensitivity === "high",
-    }).catch(() => ({ contextSections: [], enrichments: {}, totalDurationMs: 0 }))
+    }).catch(() => ({ contextSections: [], enrichments: {}, totalDurationMs: 0, traces: undefined }))
+
+    function attachDebug(response: ScoutResponse): void {
+      if (!IS_DEV) return
+      response.debug = {
+        orchestrator: {
+          intent: agentIntent,
+          totalDurationMs: orchestratorResult.totalDurationMs,
+          traces: orchestratorResult.traces,
+        },
+        timing: {
+          responseMs: Date.now() - requestStartedAt,
+        },
+      }
+    }
 
     // Append agent context sections to the formatted context (before Claude sees it)
     const agentContextBlock = orchestratorResult.contextSections.join("\n")
@@ -1108,6 +1124,8 @@ User Input: ${userMessage}`
               for (const cj of context.compareJobs) { if (cj.company_id) knownIds.companyIds.add(cj.company_id) }
             }
           }
+
+          attachDebug(scoutResponse)
 
           // Emit workspace/workflow directives early so client can morph immediately
           if (scoutResponse.workspace_directive) emit({ type: "workspace_directive", payload: scoutResponse.workspace_directive })
@@ -1406,6 +1424,8 @@ User Input: ${userMessage}`
         scoutResponse.workspace_directive = bulkDirective
       }
     }
+
+    attachDebug(scoutResponse)
 
     return NextResponse.json(scoutResponse)
   } catch (error) {

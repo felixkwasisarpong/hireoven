@@ -212,6 +212,11 @@ export function normalizeScoutResponse(raw: unknown): ScoutResponse {
       ? (record.graph as ScoutResponse["graph"])
       : undefined
 
+  const debug =
+    typeof record.debug === "object" && record.debug !== null
+      ? (record.debug as ScoutResponse["debug"])
+      : undefined
+
   return {
     answer,
     recommendation,
@@ -227,6 +232,7 @@ export function normalizeScoutResponse(raw: unknown): ScoutResponse {
     workspace_directive,
     workflow_directive,
     graph,
+    debug,
   }
 }
 

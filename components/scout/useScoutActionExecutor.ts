@@ -72,6 +72,11 @@ export type ScoutActionRecordedDetail = {
   newStateSummary?: string
 }
 
+function emitTimelineSignal(detail: Record<string, unknown>) {
+  if (typeof window === "undefined") return
+  window.dispatchEvent(new CustomEvent("scout:timeline-signal", { detail }))
+}
+
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 function summarizeSearchParams(p: URLSearchParams): string {
@@ -535,6 +540,12 @@ export function useScoutActionExecutor() {
             action.payload.hint ??
               "Open the Hireoven Scout extension on a job page to capture it."
           )
+          emitTimelineSignal({
+            type: "extension_detected_page",
+            title: "Scout requested extension bridge action",
+            summary: "Open the Hireoven extension on your active job tab.",
+            severity: "info",
+          })
           break
         }
 
@@ -549,6 +560,12 @@ export function useScoutActionExecutor() {
             ? `Navigate to the application form, then click the Hireoven extension icon and choose "Preview Autofill": ${url}`
             : "Open the Hireoven Scout extension on the application form page and click \"Preview Autofill\" to fill your details."
           showFeedback(message)
+          emitTimelineSignal({
+            type: "autofill_reviewed",
+            title: "Scout prompted autofill review",
+            summary: "Autofill remains user-controlled and review-first.",
+            severity: "info",
+          })
           break
         }
 
@@ -586,6 +603,12 @@ export function useScoutActionExecutor() {
             undefined,
             12000
           )
+          emitTimelineSignal({
+            type: "workflow_started",
+            title: "Workflow started: Tailor + Prepare Application",
+            summary: "Scout prepared a review-first tailor/autofill workflow.",
+            severity: "info",
+          })
           break
         }
 

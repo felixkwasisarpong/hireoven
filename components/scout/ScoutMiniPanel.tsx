@@ -29,8 +29,8 @@ type ScoutMiniPanelProps = {
 function TypingIndicator() {
   return (
     <div className="flex items-start gap-2.5">
-      <span className="mt-0.5 inline-flex h-7 w-7 flex-shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[#FF5C18] shadow-[0_4px_14px_rgba(255,92,24,0.3)]">
-        <ScoutChatbotAnimation />
+      <span className="mt-0.5 inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-xl bg-[#FF5C18] shadow-[0_4px_14px_rgba(255,92,24,0.3)]">
+        <Sparkles className="h-3.5 w-3.5 text-white" />
       </span>
       <div className="flex items-center gap-1.5 rounded-2xl rounded-tl-sm border border-slate-100 bg-white px-4 py-3 shadow-sm">
         {[0, 160, 320].map((delay) => (
@@ -190,8 +190,8 @@ export function ScoutMiniPanel({
                 {/* Glowing Scout avatar */}
                 <div className="relative flex-shrink-0">
                   <div className="absolute inset-0 rounded-xl bg-[#FF5C18]/40 blur-md" />
-                  <span className="relative inline-flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl bg-[#FF5C18] shadow-[0_4px_16px_rgba(255,92,24,0.5)]">
-                    <ScoutChatbotAnimation />
+                  <span className="relative inline-flex h-9 w-9 items-center justify-center rounded-xl bg-[#FF5C18] shadow-[0_4px_16px_rgba(255,92,24,0.5)]">
+                    <Sparkles className="h-4.5 w-4.5 text-white" style={{ height: 18, width: 18 }} />
                   </span>
                 </div>
 
@@ -235,8 +235,8 @@ export function ScoutMiniPanel({
                 {/* Glowing avatar */}
                 <div className="relative mb-4">
                   <div className="absolute inset-0 scale-150 rounded-3xl bg-[#FF5C18]/15 blur-2xl" />
-                  <div className="relative inline-flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl bg-[#FF5C18] shadow-[0_8px_28px_rgba(255,92,24,0.4)]">
-                    <ScoutChatbotAnimation className="scale-[1.06]" />
+                  <div className="relative inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-[#FF5C18] shadow-[0_8px_28px_rgba(255,92,24,0.4)]">
+                    <Sparkles className="h-8 w-8 text-white" />
                   </div>
                 </div>
 
@@ -371,12 +371,14 @@ export function ScoutMiniPanel({
           <span className="absolute inset-0 rounded-full animate-ping bg-slate-800/60 duration-1000" />
         )}
 
-        <Sparkles
+        <span
           className={cn(
-            "h-4 w-4 transition-colors",
-            isOpen ? "text-slate-400" : "text-[#FF5C18]"
+            "inline-flex h-5 w-5 items-center justify-center overflow-hidden rounded-full transition-all",
+            isOpen ? "bg-slate-600/40" : "bg-[#FF5C18]/20"
           )}
-        />
+        >
+          <ScoutChatbotAnimation className={cn(isOpen ? "animate-none" : "animate-extension-breathe")} />
+        </span>
         <span>{isOpen ? "Close" : "Scout"}</span>
 
         {/* Unread badge */}

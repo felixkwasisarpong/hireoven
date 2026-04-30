@@ -16,6 +16,11 @@ import { computeReadiness } from "@/lib/scout/review/readiness"
 import { logReviewEvent } from "@/lib/scout/review/audit"
 import { ReviewChecklist } from "./ReviewChecklist"
 
+function emitTimelineSignal(detail: Record<string, unknown>) {
+  if (typeof window === "undefined") return
+  window.dispatchEvent(new CustomEvent("scout:timeline-signal", { detail }))
+}
+
 type Props = {
   job:            BulkJobItem
   onClose:        () => void
@@ -54,6 +59,16 @@ export function BulkReviewDrawer({ job, onClose, onOpenApp, onMarkSubmitted, onS
       warningCount: checklist.warnings.length,
     })
     onOpenApp(job.applyUrl, job.queueId)
+    emitTimelineSignal({
+      type: "manual_submit",
+      title: "Manual submission handoff opened",
+      summary: "Scout opened the application tab for your manual review and submit.",
+      severity: "info",
+      metadata: {
+        queueId: job.queueId,
+        jobId: job.jobId,
+      },
+    })
   }, [job, checklist, onOpenApp])
 
   const handleMarkSubmitted = useCallback(async () => {
@@ -81,6 +96,16 @@ export function BulkReviewDrawer({ job, onClose, onOpenApp, onMarkSubmitted, onS
     })
 
     onMarkSubmitted(job.queueId)
+    emitTimelineSignal({
+      type: "manual_submit",
+      title: "Application marked submitted manually",
+      summary: `${job.jobTitle} ${job.company ? `at ${job.company}` : ""}`.trim(),
+      severity: "info",
+      metadata: {
+        queueId: job.queueId,
+        jobId: job.jobId,
+      },
+    })
     onClose()
     setSubmitting(false)
   }, [job, checklist, onMarkSubmitted, onClose])
@@ -170,7 +195,19 @@ export function BulkReviewDrawer({ job, onClose, onOpenApp, onMarkSubmitted, onS
           {!sensitiveAcknowledged && (
             <button
               type="button"
-              onClick={() => setSensitiveAcknowledged(true)}
+              onClick={() => {
+                setSensitiveAcknowledged(true)
+                emitTimelineSignal({
+                  type: "autofill_reviewed",
+                  title: "Sensitive autofill fields reviewed",
+                  summary: "You confirmed sponsorship/legal/EEO fields were checked manually.",
+                  severity: "warning",
+                  metadata: {
+                    queueId: job.queueId,
+                    jobId: job.jobId,
+                  },
+                })
+              }}
               className="w-full rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-left text-xs text-amber-800 transition hover:bg-amber-100"
             >
               <span className="font-semibold">I have reviewed sensitive questions</span>

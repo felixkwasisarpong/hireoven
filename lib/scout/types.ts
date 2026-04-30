@@ -358,6 +358,26 @@ export type ScoutResponse = {
    * the named multi-step workflow. Only emitted when intent === "workflow".
    */
   workflow_directive?: ScoutWorkflowDirective
+  /**
+   * Development-only diagnostics. Never render directly in user-facing UI.
+   * Used for timeline metadata and local debugging of orchestrator behavior.
+   */
+  debug?: {
+    orchestrator?: {
+      intent?: string
+      totalDurationMs?: number
+      traces?: Array<{
+        agentId: string
+        durationMs: number
+        success: boolean
+        summary?: string
+        error?: string
+      }>
+    }
+    timing?: {
+      responseMs?: number
+    }
+  }
 }
 
 /** AI-generated weekly strategy plan returned from Strategy Mode. */
