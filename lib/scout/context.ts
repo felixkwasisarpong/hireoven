@@ -5,6 +5,8 @@ import {
   formatBehaviorSignalsForClaude,
   type ScoutBehaviorSignals,
 } from "@/lib/scout/behavior"
+import { formatOpportunitiesForClaude } from "@/lib/scout/opportunity-graph/formatter"
+import type { OpportunityGraphResponse } from "@/lib/scout/opportunity-graph/types"
 import type {
   Job,
   Company,
@@ -131,6 +133,8 @@ export type ScoutContext = {
   behaviorSignals: ScoutBehaviorSignals | null
   /** Jobs to compare — populated when compareJobIds or autoCompare is set */
   compareJobs: CompareJobContext[] | null
+  /** Opportunity graph — populated when jobId or companyId is in context */
+  opportunityGraph: OpportunityGraphResponse | null
 }
 
 type ScoutContextResume = NonNullable<ScoutContext["resume"]>
@@ -396,6 +400,7 @@ export async function getScoutContext(input: ScoutContextInput): Promise<ScoutCo
     pagePath: pagePath ?? null,
     behaviorSignals,
     compareJobs,
+    opportunityGraph: null,
   }
 }
 
@@ -528,6 +533,12 @@ ${job.description.substring(0, 500)}...`)
     if (behaviorSection) {
       sections.push(behaviorSection)
     }
+  }
+
+  // Opportunity graph — appended when job context is present
+  if (context.opportunityGraph) {
+    const graphSection = formatOpportunitiesForClaude(context.opportunityGraph)
+    if (graphSection) sections.push(graphSection)
   }
 
   // Compare jobs — included when user asks for a comparison

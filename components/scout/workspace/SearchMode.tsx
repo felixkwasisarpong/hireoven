@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils"
 import type { ScoutResponse, ScoutAction } from "@/lib/scout/types"
 import type { ActiveEntities } from "./ScoutWorkspaceShell"
 import { buildFeedUrl } from "@/lib/scout/workspace"
+import { OpportunityPanel } from "@/components/scout/OpportunityPanel"
 
 type Props = {
   response: ScoutResponse
@@ -83,6 +84,16 @@ export function SearchMode({ response, onFollowUp, activeEntities }: Props) {
             </Link>
           </div>
         </div>
+
+        {/* Adjacent opportunities — rendered when job or company context exists */}
+        {(activeEntities?.jobId || activeEntities?.companyId) && (
+          <OpportunityPanel
+            jobId={activeEntities?.jobId}
+            companyId={activeEntities?.companyId}
+            onLaunch={onFollowUp}
+            maxItems={4}
+          />
+        )}
 
         {/* Refine chips */}
         <div>
