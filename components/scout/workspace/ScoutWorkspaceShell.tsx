@@ -22,7 +22,11 @@ import { normalizeScoutResponse } from "@/lib/scout/normalize"
 import { useWorkflowEngine } from "@/lib/scout/workflows/engine"
 import { useBulkApplicationEngine } from "@/lib/scout/bulk-application/engine"
 import { useScoutStream } from "@/hooks/useScoutStream"
+import { useResearchStream } from "@/hooks/useResearchStream"
 import { detectPreflightMode, PREFLIGHT_NARRATIVE } from "@/lib/scout/streaming/intent-preflight"
+import { isResearchIntent, getResearchFollowUps } from "@/lib/scout/research/tasks"
+import { writeResearchTask } from "@/lib/scout/research/store"
+import { ResearchMode } from "./ResearchMode"
 import { ScoutStreamingText } from "@/components/scout/ScoutStreamingText"
 import { generateDailyMissions, buildMomentumLine } from "@/lib/scout/missions/generator"
 import {
@@ -118,7 +122,6 @@ function extractEntities(
 function buildNarrative(mode: WorkspaceMode, response: ScoutResponse): string {
   const answer = response.answer?.trim()
   if (!answer || /^\s*[{[]/.test(answer)) {
-    // JSON blob leaked — synthesise a generic strip
     const labels: Record<WorkspaceMode, string> = {
       search:            "Scout prepared a filtered job search.",
       compare:           "Scout compared your saved roles.",
@@ -126,11 +129,11 @@ function buildNarrative(mode: WorkspaceMode, response: ScoutResponse): string {
       applications:      "Scout prepared a workflow plan.",
       bulk_application:  "Scout is preparing your bulk application queue.",
       company:           "Scout surfaced company intelligence.",
+      research:          "Scout is running your research task.",
       idle:              "",
     }
     return labels[mode] ?? ""
   }
-  // Trim to one sentence / 140 chars for the strip
   const sentence = answer.split(/\.[\s\n]/)[0]
   return sentence.length <= 140 ? sentence : `${sentence.slice(0, 137)}…`
 }
@@ -153,8 +156,11 @@ export function ScoutWorkspaceShell() {
   const bulkEngine = useBulkApplicationEngine()
 
   // ── Scout streaming ─────────────────────────────────────────────────────────
-  const scoutStream   = useScoutStream()
-  const streamMsgId   = useRef<string | null>(null)
+  const scoutStream    = useScoutStream()
+  const streamMsgId    = useRef<string | null>(null)
+
+  // ── Research streaming ──────────────────────────────────────────────────────
+  const researchStream = useResearchStream()
 
   // ── Active browser context (from extension) ─────────────────────────────────
   const { context: browserContext } = useActiveBrowserContext()
@@ -529,6 +535,35 @@ export function ScoutWorkspaceShell() {
     streamMsgId.current = null
   }, [scoutStream.error, scoutStream.isStreaming])
 
+  // Research stream — task completion: persist, update chips, clear loading
+  useEffect(() => {
+    const task = researchStream.task
+    if (!task || researchStream.isRunning) return
+    setIsLoading(false)
+    if (task.status === "completed") {
+      writeResearchTask(task)
+      const followUps = task.followUpCommands ?? []
+      if (followUps.length) setChips(followUps)
+      const count = task.findings?.length ?? 0
+      setNarrative(count > 0
+        ? `Found ${count} insight${count !== 1 ? "s" : ""} — review findings below`
+        : ""
+      )
+    }
+    if (task.status === "failed") {
+      setError("Research could not produce findings. Try a more specific query.")
+      setWorkspaceMode("idle")
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [researchStream.isRunning])
+
+  // Research stream error
+  useEffect(() => {
+    if (!researchStream.error) return
+    setError(researchStream.error)
+    setIsLoading(false)
+  }, [researchStream.error])
+
   // Early workspace directive — morph before Claude finishes
   useEffect(() => {
     if (!scoutStream.earlyDirective) return
@@ -542,7 +577,7 @@ export function ScoutWorkspaceShell() {
     async (event: React.FormEvent, overrideMessage?: string) => {
       event.preventDefault()
       const message = (overrideMessage ?? query).trim()
-      if (!message || isLoading || scoutStream.isStreaming) return
+      if (!message || isLoading || scoutStream.isStreaming || researchStream.isRunning) return
 
       const msgId = `s-${Date.now()}`
       streamMsgId.current = msgId
@@ -557,6 +592,21 @@ export function ScoutWorkspaceShell() {
       setError(null)
       setNarrative("")
       setNarrativeDismissed(false)
+
+      // ── Research intent — route to research endpoint, not chat ────────────
+      if (isResearchIntent(message)) {
+        setWorkspaceMode("research")
+        setNarrative(PREFLIGHT_NARRATIVE.research ?? "")
+        researchStream.reset()
+        void researchStream.startStream("/api/scout/research", {
+          message,
+          ...contextIds,
+        })
+        const updatedCmds = appendCommand(recentCommands, message)
+        setRecentCommands(updatedCmds)
+        setHasSession(true)
+        return
+      }
 
       // ── Pre-flight: morph workspace immediately before network call ────────
       const preflightMode = detectPreflightMode(message)
@@ -627,15 +677,15 @@ export function ScoutWorkspaceShell() {
 
           <div className="flex items-center gap-3">
             {/* Streaming activity indicator + cancel button */}
-            {scoutStream.isStreaming && (
+            {(scoutStream.isStreaming || researchStream.isRunning) && (
               <div className="flex items-center gap-2">
                 <span className="flex items-center gap-1.5 text-[10px] font-medium text-[#FF5C18]/80">
                   <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#FF5C18]" />
-                  Thinking…
+                  {researchStream.isRunning ? "Researching…" : "Thinking…"}
                 </span>
                 <button
                   type="button"
-                  onClick={scoutStream.cancel}
+                  onClick={researchStream.isRunning ? researchStream.cancel : scoutStream.cancel}
                   title="Stop Scout"
                   className="rounded-lg border border-white/10 px-2 py-1 text-[10px] font-semibold text-slate-400 transition hover:border-red-500/40 hover:text-red-400"
                 >
@@ -806,6 +856,15 @@ export function ScoutWorkspaceShell() {
                     engine={bulkEngine}
                     onFollowUp={handleFollowUp}
                     onOpenApp={(applyUrl) => window.open(applyUrl, "_blank", "noopener,noreferrer")}
+                  />
+                )
+              }
+              if (displayedMode === "research") {
+                return (
+                  <ResearchMode
+                    task={researchStream.task}
+                    isRunning={researchStream.isRunning}
+                    onCommand={(cmd) => { setQuery(cmd); setTimeout(() => inputRef.current?.focus(), 50) }}
                   />
                 )
               }

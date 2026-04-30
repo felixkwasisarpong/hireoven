@@ -304,7 +304,7 @@ export type ScoutWorkflowDirective = {
 
 // ── Workspace Directive ────────────────────────────────────────────────────────
 
-export type ScoutWorkspaceMode = "idle" | "search" | "compare" | "tailor" | "applications" | "bulk_application" | "company"
+export type ScoutWorkspaceMode = "idle" | "search" | "compare" | "tailor" | "applications" | "bulk_application" | "company" | "research"
 
 export type ScoutWorkspaceDirective = {
   /** Which workspace panel to activate. */
