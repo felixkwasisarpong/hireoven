@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import {
   readTimelineEvents,
   appendTimelineEvent,
@@ -30,8 +30,15 @@ export type ScoutTimelineActions = {
 }
 
 export function useScoutTimeline(): ScoutTimelineActions {
-  // Seed state from localStorage on first render
-  const [events, setEvents] = useState<ScoutTimelineEvent[]>(() => readTimelineEvents())
+  // Start with empty array on both server and client (avoids hydration mismatch).
+  // localStorage is loaded after mount so the server-rendered HTML matches the
+  // initial client render before React takes over.
+  const [events, setEvents] = useState<ScoutTimelineEvent[]>([])
+
+  useEffect(() => {
+    const stored = readTimelineEvents()
+    if (stored.length > 0) setEvents(stored)
+  }, [])
 
   const append = useCallback((partial: Omit<ScoutTimelineEvent, "id">) => {
     const event: ScoutTimelineEvent = {
