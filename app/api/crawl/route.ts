@@ -3,6 +3,11 @@ import pLimit from "p-limit"
 import { NextRequest, NextResponse } from "next/server"
 import { sendCrawlTopMatchDigests, type CrawlTopMatchDigestSummary } from "@/lib/alerts/crawl-match-digest"
 import { crawlCareersPage, type CrawlTarget } from "@/lib/crawler"
+import {
+  applyCrawlQueuePolicy,
+  defaultCrawlPolicyOptions,
+  loadRecentCrawlSignals,
+} from "@/lib/crawler/scheduling"
 import { persistCrawlJobs } from "@/lib/crawler/persist"
 import { requireCronAuth } from "@/lib/env"
 import { getPostgresPool } from "@/lib/postgres/server"
@@ -97,6 +102,18 @@ function isTransientCrawlerError(message: string) {
   )
 }
 
+function crawlLogStatusFromResult(result: Awaited<ReturnType<typeof crawlCareersPage>>) {
+  if (result.jobs.length > 0) return "success"
+  if (result.outcomeStatus === "blocked") return "blocked"
+  if (result.outcomeStatus === "fetch_error") return "fetch_error"
+  if (result.outcomeStatus === "bad_url") return "bad_url"
+  return "unchanged"
+}
+
+function isFailureLikeStatus(status: string) {
+  return status === "failed" || status === "blocked" || status === "bad_url" || status === "fetch_error"
+}
+
 async function upsertCrawlRuntime(value: Record<string, unknown>) {
   const pool = getPostgresPool()
   await pool.query(
@@ -147,6 +164,14 @@ export async function GET(request: NextRequest) {
   const fullCrawlStartedAt = Date.now()
   const pool = getPostgresPool()
   let companiesCount = 0
+  let companiesConsidered = 0
+  let companiesSkipped = 0
+  let queuePolicySummary: {
+    selectedLaneCounts: Record<string, number>
+    skippedLaneCounts: Record<string, number>
+    skippedCooldown: number
+    skippedLaneExcluded: number
+  } | null = null
   let succeeded = 0
   let failed = 0
   let inserted = 0
@@ -164,13 +189,15 @@ export async function GET(request: NextRequest) {
   })
 
   try {
-    let companies: Array<{
+    let companiesRaw: Array<{
       id: string
       name: string
       careers_url: string
       last_crawled_at: string | null
       ats_type: string | null
-    }>
+      ats_identifier: string | null
+      job_count: number | null
+    }> = []
     try {
       const companyResult = await pool.query<{
         id: string
@@ -178,19 +205,40 @@ export async function GET(request: NextRequest) {
         careers_url: string
         last_crawled_at: string | null
         ats_type: string | null
+        ats_identifier: string | null
+        job_count: number | null
       }>(
-        `SELECT id, name, careers_url, last_crawled_at, ats_type
+        `SELECT id, name, careers_url, last_crawled_at, ats_type, ats_identifier, job_count
          FROM companies
          WHERE is_active = true
          ORDER BY last_crawled_at ASC NULLS FIRST`
       )
-      companies = companyResult.rows
+      companiesRaw = companyResult.rows
     } catch (error) {
       lastErrorMessage = error instanceof Error ? error.message : "Database query failed"
       return NextResponse.json({ error: lastErrorMessage }, { status: 500 })
     }
 
+    companiesConsidered = companiesRaw.length
+    const signalMap = await loadRecentCrawlSignals(
+      pool,
+      companiesRaw.map((company) => company.id),
+      6
+    )
+    const policy = applyCrawlQueuePolicy(
+      companiesRaw,
+      signalMap,
+      defaultCrawlPolicyOptions()
+    )
+    const companies = policy.selected
     companiesCount = companies.length
+    companiesSkipped = policy.skipped.length
+    queuePolicySummary = {
+      selectedLaneCounts: policy.selectedLaneCounts,
+      skippedLaneCounts: policy.skippedLaneCounts,
+      skippedCooldown: policy.skipped.filter((entry) => entry.reason === "cooldown_active").length,
+      skippedLaneExcluded: policy.skipped.filter((entry) => entry.reason === "lane_excluded").length,
+    }
 
     const limitCompany = pLimit(CRAWLER_COMPANY_CONCURRENCY)
     const results = await Promise.all(
@@ -202,6 +250,7 @@ export async function GET(request: NextRequest) {
           careersUrl: company.careers_url,
           lastCrawledAt: company.last_crawled_at ? new Date(company.last_crawled_at) : null,
           atsType: company.ats_type,
+          atsIdentifier: company.ats_identifier ?? null,
         }
 
         try {
@@ -242,7 +291,11 @@ export async function GET(request: NextRequest) {
           }
 
           const durationMs = Date.now() - companyStartedAt
-          const status = crawlResult.jobs.length > 0 ? "success" : "unchanged"
+          const status = crawlLogStatusFromResult(crawlResult)
+          const outcomeMessage =
+            status === "success" || status === "unchanged"
+              ? null
+              : crawlResult.outcomeReason ?? status
           await insertCrawlLogSafe("[crawl]", {
             companyId: company.id,
             status,
@@ -250,11 +303,15 @@ export async function GET(request: NextRequest) {
             newJobs: persistResult.inserted,
             durationMs,
             crawledAtIso: crawlResult.crawledAt.toISOString(),
-            errorMessage: attempts > 1 ? `Recovered after ${attempts} attempts` : null,
+            errorMessage:
+              attempts > 1
+                ? `Recovered after ${attempts} attempts${outcomeMessage ? ` | ${outcomeMessage}` : ""}`
+                : outcomeMessage,
           })
 
           return {
             status: "fulfilled" as const,
+            crawlStatus: status,
             companyId: company.id,
             jobsFound: crawlResult.jobs.length,
             newJobs: persistResult.inserted,
@@ -275,6 +332,7 @@ export async function GET(request: NextRequest) {
 
           return {
             status: "rejected" as const,
+            crawlStatus: "failed" as const,
             companyId: company.id,
             jobsFound: 0,
             newJobs: 0,
@@ -285,8 +343,8 @@ export async function GET(request: NextRequest) {
       }))
     )
 
-    succeeded = results.filter((r) => r.status === "fulfilled").length
-    failed = results.filter((r) => r.status === "rejected").length
+    succeeded = results.filter((r) => !isFailureLikeStatus(r.crawlStatus)).length
+    failed = results.filter((r) => isFailureLikeStatus(r.crawlStatus)).length
     inserted = results.reduce((sum, r) => sum + (r.newJobs ?? 0), 0)
     totalDurationMs = Date.now() - fullCrawlStartedAt
     const avgCompanyDurationMs =
@@ -327,10 +385,13 @@ export async function GET(request: NextRequest) {
     completed = true
     return NextResponse.json({
       success: true,
+      companiesConsidered,
       companiesCrawled: companiesCount,
+      companiesSkipped,
       succeeded,
       failed,
       inserted,
+      queuePolicy: queuePolicySummary,
       totalDurationMs,
       avgCompanyDurationMs,
       topMatchDigest,
@@ -350,6 +411,8 @@ export async function GET(request: NextRequest) {
       route: "api/crawl",
       trigger: "cron",
       companiesCrawled: companiesCount,
+      companiesConsidered,
+      companiesSkipped,
       succeeded,
       failed,
       inserted,
@@ -371,6 +434,7 @@ export async function POST(request: NextRequest) {
     careersUrl: string
     companyName: string
     atsType?: string | null
+    atsIdentifier?: string | null
     lastCrawledAt?: string | null
   }
 
@@ -380,6 +444,7 @@ export async function POST(request: NextRequest) {
     careersUrl: body.careersUrl,
     lastCrawledAt: body.lastCrawledAt ? new Date(body.lastCrawledAt) : null,
     atsType: body.atsType ?? null,
+    atsIdentifier: body.atsIdentifier ?? null,
   }
 
   const startedAt = Date.now()

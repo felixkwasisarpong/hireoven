@@ -19,6 +19,17 @@ const DEFAULT_BACKOFF_MS = Number.parseInt(
   process.env.CRAWLER_HTTP_RETRY_BASE_DELAY_MS ?? "500",
   10
 )
+const PROXY_FALLBACK_ENABLED = process.env.CRAWLER_PROXY_FALLBACK_ENABLED === "true"
+const PROXY_URL_TEMPLATE = process.env.CRAWLER_PROXY_URL_TEMPLATE?.trim() ?? ""
+const PROXY_AUTH_HEADER_NAME = process.env.CRAWLER_PROXY_AUTH_HEADER_NAME?.trim() ?? ""
+const PROXY_AUTH_HEADER_VALUE = process.env.CRAWLER_PROXY_AUTH_HEADER_VALUE?.trim() ?? ""
+const PROXY_ALLOWED_HOSTS = new Set(
+  (process.env.CRAWLER_PROXY_HOST_ALLOWLIST ?? "")
+    .split(",")
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean)
+)
+const PROXY_BLOCKED_ONLY = process.env.CRAWLER_PROXY_BLOCKED_ONLY !== "false"
 
 const RETRY_STATUSES = new Set([403, 406, 408, 425, 429, 500, 502, 503, 504])
 
@@ -35,6 +46,7 @@ export type CrawlerHttpResult<T = unknown> = {
   data: T | null
   errorReason: string | null
   retryCount: number
+  fallbackUsed: "proxy" | null
 }
 
 const gates = new Map<string, DomainGate>()
@@ -112,6 +124,49 @@ function classifyStatus(status: number | null) {
   return null
 }
 
+export function detectBlockedHtml(html: string | null | undefined): string | null {
+  if (!html) return null
+  const compact = html.toLowerCase()
+  if (compact.includes("access denied")) return "blocked_html_access_denied"
+  if (compact.includes("forbidden")) return "blocked_html_forbidden"
+  if (compact.includes("request blocked")) return "blocked_html_request_blocked"
+  if (compact.includes("attention required")) return "blocked_html_attention_required"
+  if (compact.includes("cloudflare")) return "blocked_html_cloudflare"
+  if (compact.includes("akamai")) return "blocked_html_akamai"
+  if (compact.includes("incapsula")) return "blocked_html_incapsula"
+  if (compact.includes("perimeterx")) return "blocked_html_perimeterx"
+  if (compact.includes("bot detection")) return "blocked_html_bot_detection"
+  return null
+}
+
+function isBlockedReason(reason: string | null | undefined) {
+  if (!reason) return false
+  const normalized = reason.toLowerCase()
+  return (
+    normalized.includes("blocked") ||
+    normalized.includes("forbidden") ||
+    normalized.includes("rate_limited") ||
+    normalized.includes("not_acceptable_406")
+  )
+}
+
+function isAllowedProxyHost(host: string) {
+  if (PROXY_ALLOWED_HOSTS.size === 0) return true
+  for (const allowed of PROXY_ALLOWED_HOSTS) {
+    if (host === allowed || host.endsWith(`.${allowed}`)) return true
+  }
+  return false
+}
+
+function buildProxyUrl(targetUrl: string): string | null {
+  if (!PROXY_URL_TEMPLATE) return null
+  if (PROXY_URL_TEMPLATE.includes("{url}")) {
+    return PROXY_URL_TEMPLATE.replace(/\{url\}/g, encodeURIComponent(targetUrl))
+  }
+  const separator = PROXY_URL_TEMPLATE.includes("?") ? "&" : "?"
+  return `${PROXY_URL_TEMPLATE}${separator}url=${encodeURIComponent(targetUrl)}`
+}
+
 function isRetriable(status: number | null, error: unknown) {
   if (error) return true
   return status !== null && RETRY_STATUSES.has(status)
@@ -124,6 +179,88 @@ async function readResponse<T>(
   if (responseType === "response") return null
   if (responseType === "text") return (await response.text()) as T
   return (await response.json()) as T
+}
+
+async function tryProxyFallback<T>(
+  targetUrl: string,
+  init: RequestInit,
+  options: { responseType: "json" | "text" | "response"; timeoutMs: number },
+  fallbackReason: string | null
+): Promise<CrawlerHttpResult<T> | null> {
+  if (!PROXY_FALLBACK_ENABLED) return null
+  const host = hostFor(targetUrl)
+  if (!isAllowedProxyHost(host)) return null
+  if (PROXY_BLOCKED_ONLY && !isBlockedReason(fallbackReason)) return null
+
+  const proxyUrl = buildProxyUrl(targetUrl)
+  if (!proxyUrl) return null
+
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), options.timeoutMs)
+  try {
+    const headers = buildCrawlerRequestHeaders(init.headers)
+    headers.set("x-crawler-target-url", targetUrl)
+    if (PROXY_AUTH_HEADER_NAME && PROXY_AUTH_HEADER_VALUE) {
+      headers.set(PROXY_AUTH_HEADER_NAME, PROXY_AUTH_HEADER_VALUE)
+    }
+
+    const response = await fetch(proxyUrl, {
+      method: "GET",
+      ...init,
+      signal: controller.signal,
+      headers,
+    })
+
+    if (!response.ok) {
+      return {
+        ok: false,
+        statusCode: response.status,
+        response,
+        data: null,
+        errorReason: classifyStatus(response.status),
+        retryCount: 0,
+        fallbackUsed: "proxy",
+      }
+    }
+
+    const data = await readResponse<T>(response, options.responseType)
+    if (options.responseType === "text") {
+      const blockedReason = detectBlockedHtml((data as string | null) ?? null)
+      if (blockedReason) {
+        return {
+          ok: false,
+          statusCode: response.status,
+          response,
+          data: null,
+          errorReason: blockedReason,
+          retryCount: 0,
+          fallbackUsed: "proxy",
+        }
+      }
+    }
+
+    return {
+      ok: true,
+      statusCode: response.status,
+      response,
+      data,
+      errorReason: null,
+      retryCount: 0,
+      fallbackUsed: "proxy",
+    }
+  } catch {
+    return {
+      ok: false,
+      statusCode: null,
+      response: null,
+      data: null,
+      errorReason: "proxy_fetch_error",
+      retryCount: 0,
+      fallbackUsed: "proxy",
+    }
+  } finally {
+    clearTimeout(timeout)
+  }
 }
 
 export async function crawlerFetch<T = unknown>(
@@ -158,7 +295,22 @@ export async function crawlerFetch<T = unknown>(
       lastStatus = response.status
       lastResponse = response
 
-      if (response.ok) {
+      if (response.ok && responseType === "text") {
+        const body = await response.text()
+        const blockedReason = detectBlockedHtml(body)
+        if (!blockedReason) {
+          return {
+            ok: true,
+            statusCode: response.status,
+            response,
+            data: body as T,
+            errorReason: null,
+            retryCount: attempt - 1,
+            fallbackUsed: null,
+          }
+        }
+        lastReason = blockedReason
+      } else if (response.ok) {
         try {
           const data = await readResponse<T>(response, responseType)
           return {
@@ -168,6 +320,7 @@ export async function crawlerFetch<T = unknown>(
             data,
             errorReason: null,
             retryCount: attempt - 1,
+            fallbackUsed: null,
           }
         } catch {
           return {
@@ -177,14 +330,33 @@ export async function crawlerFetch<T = unknown>(
             data: null,
             errorReason: responseType === "json" ? "invalid_json" : "invalid_body",
             retryCount: attempt - 1,
+            fallbackUsed: null,
           }
         }
+      } else {
+        lastReason = classifyStatus(response.status)
       }
 
-      lastReason = classifyStatus(response.status)
       try {
         await response.body?.cancel()
       } catch {}
+
+      const proxied = await tryProxyFallback<T>(
+        url,
+        init,
+        { responseType, timeoutMs },
+        lastReason
+      )
+      if (proxied?.ok) {
+        return {
+          ...proxied,
+          retryCount: attempt - 1,
+        }
+      }
+      if (proxied) {
+        lastStatus = proxied.statusCode
+        lastReason = proxied.errorReason
+      }
     } catch (error) {
       caught = error
       lastStatus = null
@@ -205,6 +377,7 @@ export async function crawlerFetch<T = unknown>(
     data: null,
     errorReason: lastReason ?? classifyStatus(lastStatus),
     retryCount: Math.max(0, maxAttempts - 1),
+    fallbackUsed: null,
   }
 }
 

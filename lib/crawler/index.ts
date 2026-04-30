@@ -2,12 +2,14 @@ import {
   cleanJobDescription,
   normalizeJobApplyUrl,
 } from "@/lib/jobs/description"
+import { deriveCanonicalCareersUrlWithConfidence } from "@/lib/companies/canonical-careers-url"
 import {
   extractGreenhouseBoardToken,
   normalizeGreenhouseBoardUrl,
 } from "@/lib/companies/greenhouse-url"
 import { normalizeAtsUrl } from "@/lib/companies/ats-url-normalization"
 import {
+  detectBlockedHtml,
   fetchCrawlerJson,
   fetchCrawlerResponse,
   fetchCrawlerText,
@@ -20,6 +22,8 @@ export interface CrawlTarget {
   careersUrl: string
   lastCrawledAt: Date | null
   atsType?: string | null
+  atsIdentifier?: string | null
+  domain?: string | null
 }
 
 export interface RawJob {
@@ -53,6 +57,8 @@ export interface CrawlResult {
   normalizedUrl?: string
   jobs: RawJob[]
   crawledAt: Date
+  outcomeStatus?: "success" | "empty" | "blocked" | "bad_url" | "fetch_error"
+  outcomeReason?: string
   diagnostics?: CrawlDiagnostic[]
 }
 
@@ -82,6 +88,31 @@ const GOOGLE_RESULTS_PAGE_SIZE = 20
 const GOOGLE_MAX_JOBS = 200
 const ICIMS_JIBE_PAGE_SIZE = 100
 const ICIMS_JIBE_MAX_JOBS = 500
+
+type DiscoverAndCrawlResult = {
+  jobs: RawJob[]
+  primaryStatusCode: number | null
+  primaryErrorReason: string | null
+  blocked: boolean
+  fallbackUsed: "playwright" | null
+}
+
+function isFetchFailure(
+  statusCode: number | null,
+  reason: string | null | undefined
+) {
+  const normalized = String(reason ?? "").toLowerCase()
+  if (statusCode !== null && statusCode >= 500) return true
+  return (
+    normalized === "timeout" ||
+    normalized === "fetch_error" ||
+    normalized === "proxy_fetch_error" ||
+    normalized.startsWith("server_") ||
+    normalized.startsWith("proxy_") ||
+    normalized === "invalid_body" ||
+    normalized === "invalid_html"
+  )
+}
 
 const WORKDAY_PATH_STOPWORDS = new Set([
   "job",
@@ -682,6 +713,47 @@ async function crawlLever(careersUrl: URL): Promise<RawJob[]> {
     }))
 }
 
+type AshbyJobPosting = {
+  id?: string
+  jobId?: string
+  jobRequisitionId?: string
+  title?: string
+  locationName?: string
+  locationExternalName?: string
+  publishedDate?: string
+  updatedAt?: string
+  workplaceType?: string
+  employmentType?: string
+  isListed?: boolean
+}
+
+type AshbyAppData = {
+  jobBoard?: {
+    jobPostings?: AshbyJobPosting[]
+    jobPostingsByDepartment?: Array<{
+      jobPostings?: AshbyJobPosting[]
+    }>
+  }
+}
+
+function extractAshbyJobPostings(markup: string): AshbyJobPosting[] {
+  const raw =
+    extractBalancedObjectAfter(markup, "window.__appData =") ??
+    extractBalancedObjectAfter(markup, "window.__appData=")
+  if (!raw) return []
+
+  try {
+    const parsed = JSON.parse(raw) as AshbyAppData
+    const direct = parsed?.jobBoard?.jobPostings ?? []
+    if (direct.length > 0) return direct
+
+    const byDepartment = parsed?.jobBoard?.jobPostingsByDepartment ?? []
+    return byDepartment.flatMap((group) => group?.jobPostings ?? [])
+  } catch {
+    return []
+  }
+}
+
 async function crawlAshby(careersUrl: URL): Promise<RawJob[]> {
   const company = parseAshbyCompany(careersUrl)
   if (!company) return []
@@ -690,6 +762,45 @@ async function crawlAshby(careersUrl: URL): Promise<RawJob[]> {
     `https://jobs.ashbyhq.com/${encodeURIComponent(company)}`
   )
   if (!markup) return []
+
+  const embeddedPostings = extractAshbyJobPostings(markup)
+  if (embeddedPostings.length > 0) {
+    const jobs: RawJob[] = []
+    const seen = new Set<string>()
+
+    for (const posting of embeddedPostings) {
+      if (posting.isListed === false) continue
+
+      const title = String(posting.title ?? "").trim()
+      const sourceId = String(
+        posting.id ?? posting.jobId ?? posting.jobRequisitionId ?? ""
+      ).trim()
+      if (!title || !sourceId) continue
+
+      const fullUrl = normalizeJobApplyUrl(
+        `https://jobs.ashbyhq.com/${encodeURIComponent(
+          company
+        )}/${encodeURIComponent(sourceId)}`
+      )
+      if (seen.has(fullUrl)) continue
+      seen.add(fullUrl)
+
+      const location =
+        String(posting.locationName ?? posting.locationExternalName ?? "").trim() ||
+        undefined
+      jobs.push({
+        externalId: `ashby:${sourceId}`,
+        title,
+        url: fullUrl,
+        location,
+        postedAt: String(posting.publishedDate ?? posting.updatedAt ?? "").trim() || undefined,
+        workMode: String(posting.workplaceType ?? "").trim() || undefined,
+        employmentType: String(posting.employmentType ?? "").trim() || undefined,
+      })
+    }
+
+    if (jobs.length > 0) return jobs
+  }
 
   const linkRegex = /href="(\/[^"]+\/job\/[^"]+)"/gi
   const jobs: RawJob[] = []
@@ -2015,43 +2126,93 @@ async function crawlByKnownAts(careersUrl: URL): Promise<RawJob[]> {
   return []
 }
 
-async function discoverAndCrawlFromHtml(careersUrl: URL): Promise<RawJob[]> {
+async function discoverAndCrawlFromHtml(careersUrl: URL): Promise<DiscoverAndCrawlResult> {
+  let primaryStatusCode: number | null = null
+  let primaryErrorReason: string | null = null
+  let blocked = false
+  let fallbackUsed: "playwright" | null = null
+
   try {
     const response = await fetchCrawlerText(careersUrl.toString(), {
       method: "GET",
     })
+    primaryStatusCode = response.statusCode
+    primaryErrorReason = response.errorReason
     let html = response.ok && response.data ? response.data : null
+    if (html && detectBlockedHtml(html)) blocked = true
     if (!html) {
       html = await renderCareersHtmlWithPlaywright(
         careersUrl.toString(),
         response.errorReason ?? `http_${response.statusCode ?? "unknown"}`
       )
+      if (html) fallbackUsed = "playwright"
+      if (html && detectBlockedHtml(html)) blocked = true
     }
-    if (!html) return []
+    if (!html) {
+      return { jobs: [], primaryStatusCode, primaryErrorReason, blocked, fallbackUsed }
+    }
 
     if (looksLikeIcimsJibeSearchHtml(html)) {
       const icimsJobs = await crawlIcimsJibeSearchPage(careersUrl, html)
-      if (icimsJobs.length > 0) return icimsJobs
+      if (icimsJobs.length > 0) {
+        return {
+          jobs: icimsJobs,
+          primaryStatusCode,
+          primaryErrorReason,
+          blocked,
+          fallbackUsed,
+        }
+      }
     }
 
     if (looksLikeOracleCandidateExperienceHtml(html)) {
       const oracleJobs = await crawlOracleCandidateExperience(careersUrl, html)
-      if (oracleJobs.length > 0) return oracleJobs
+      if (oracleJobs.length > 0) {
+        return {
+          jobs: oracleJobs,
+          primaryStatusCode,
+          primaryErrorReason,
+          blocked,
+          fallbackUsed,
+        }
+      }
     }
 
     if (looksLikePhenomHtml(html)) {
       const phenomJobs = await crawlPhenomPortal(careersUrl, html)
-      if (phenomJobs.length > 0) return phenomJobs
+      if (phenomJobs.length > 0) {
+        return {
+          jobs: phenomJobs,
+          primaryStatusCode,
+          primaryErrorReason,
+          blocked,
+          fallbackUsed,
+        }
+      }
     }
 
     if (isGoogleCareersPortal(careersUrl) || looksLikeGoogleJobsResultsHtml(html)) {
       const googleJobs = await crawlGoogleCareers(careersUrl, html)
-      if (googleJobs.length > 0) return googleJobs
+      if (googleJobs.length > 0) {
+        return {
+          jobs: googleJobs,
+          primaryStatusCode,
+          primaryErrorReason,
+          blocked,
+          fallbackUsed,
+        }
+      }
     }
 
     const greenhouseEmbeddedJobs = extractGreenhouseEmbeddedJobsFromHtml(html, careersUrl)
     if (greenhouseEmbeddedJobs.length > 0) {
-      return greenhouseEmbeddedJobs
+      return {
+        jobs: greenhouseEmbeddedJobs,
+        primaryStatusCode,
+        primaryErrorReason,
+        blocked,
+        fallbackUsed,
+      }
     }
 
     const discoveredUrls = extractAbsoluteUrlsFromHtml(html, careersUrl)
@@ -2081,13 +2242,29 @@ async function discoverAndCrawlFromHtml(careersUrl: URL): Promise<RawJob[]> {
 
     for (const candidate of knownAtsCandidates) {
       const jobs = await crawlByKnownAts(candidate)
-      if (jobs.length > 0) return jobs
+      if (jobs.length > 0) {
+        return {
+          jobs,
+          primaryStatusCode,
+          primaryErrorReason,
+          blocked,
+          fallbackUsed,
+        }
+      }
     }
 
     const jsonLdJobs = extractJobsFromJsonLd(html, careersUrl)
     const genericJobs = extractGenericJobsFromHtml(html, careersUrl)
     const combined = dedupeJobs([...greenhouseEmbeddedJobs, ...jsonLdJobs, ...genericJobs])
-    if (combined.length > 0) return combined
+    if (combined.length > 0) {
+      return {
+        jobs: combined,
+        primaryStatusCode,
+        primaryErrorReason,
+        blocked,
+        fallbackUsed,
+      }
+    }
 
     // One-hop fallback: follow "all jobs"/"search jobs" links on the same host.
     const oneHopCandidates = extractAnchorLinks(html, careersUrl)
@@ -2142,17 +2319,41 @@ async function discoverAndCrawlFromHtml(careersUrl: URL): Promise<RawJob[]> {
     }
 
     const dedupedOneHopJobs = dedupeJobs(oneHopJobs)
-    if (dedupedOneHopJobs.length > 0) return dedupedOneHopJobs
+    if (dedupedOneHopJobs.length > 0) {
+      return {
+        jobs: dedupedOneHopJobs,
+        primaryStatusCode,
+        primaryErrorReason,
+        blocked,
+        fallbackUsed,
+      }
+    }
 
     const renderedHtml = await renderCareersHtmlWithPlaywright(careersUrl.toString(), "empty_jobs")
-    if (!renderedHtml) return []
-    return dedupeJobs([
+    if (!renderedHtml) {
+      return { jobs: [], primaryStatusCode, primaryErrorReason, blocked, fallbackUsed }
+    }
+    fallbackUsed = "playwright"
+    if (detectBlockedHtml(renderedHtml)) blocked = true
+    return {
+      jobs: dedupeJobs([
       ...extractGreenhouseEmbeddedJobsFromHtml(renderedHtml, careersUrl),
       ...extractJobsFromJsonLd(renderedHtml, careersUrl),
       ...extractGenericJobsFromHtml(renderedHtml, careersUrl),
-    ])
+      ]),
+      primaryStatusCode,
+      primaryErrorReason,
+      blocked,
+      fallbackUsed,
+    }
   } catch {
-    return []
+    return {
+      jobs: [],
+      primaryStatusCode,
+      primaryErrorReason: primaryErrorReason ?? "discover_fetch_error",
+      blocked,
+      fallbackUsed,
+    }
   }
 }
 
@@ -2180,6 +2381,30 @@ export async function crawlCareersPage(
       crawlResult: "normalized",
     },
   ]
+
+  if (!normalized.shouldPersist || normalized.reason === "invalid_url") {
+    return {
+      url: target.careersUrl,
+      normalizedUrl: normalized.normalizedUrl,
+      jobs: [],
+      crawledAt: new Date(),
+      outcomeStatus: "bad_url",
+      outcomeReason: normalized.reason,
+      diagnostics: [
+        ...diagnostics,
+        {
+          provider: normalized.provider,
+          originalUrl: target.careersUrl,
+          normalizedUrl: normalized.normalizedUrl,
+          statusCode: null,
+          reason: normalized.reason,
+          crawlResult: "failed",
+          errorReason: normalized.reason,
+        },
+      ],
+    }
+  }
+
   const greenhouseResolution =
     normalized.provider === "greenhouse"
       ? await resolveStableGreenhouseBoardUrl(normalized.normalizedUrl)
@@ -2192,12 +2417,81 @@ export async function crawlCareersPage(
       }))
     )
   }
-  const careersUrl = greenhouseResolution?.url ?? new URL(normalized.normalizedUrl)
+
+  let careersUrl: URL
+  try {
+    careersUrl = greenhouseResolution?.url ?? new URL(normalized.normalizedUrl)
+  } catch {
+    return {
+      url: target.careersUrl,
+      normalizedUrl: normalized.normalizedUrl,
+      jobs: [],
+      crawledAt: new Date(),
+      outcomeStatus: "bad_url",
+      outcomeReason: "invalid_normalized_url",
+      diagnostics: [
+        ...diagnostics,
+        {
+          provider: normalized.provider,
+          originalUrl: target.careersUrl,
+          normalizedUrl: normalized.normalizedUrl,
+          statusCode: null,
+          reason: "invalid_normalized_url",
+          crawlResult: "failed",
+          errorReason: "invalid_normalized_url",
+        },
+      ],
+    }
+  }
+
+  let discoverMeta: DiscoverAndCrawlResult | null = null
   const fromKnownAts = await crawlByKnownAts(careersUrl)
-  let jobs =
-    fromKnownAts.length > 0
-      ? fromKnownAts
-      : await discoverAndCrawlFromHtml(careersUrl)
+  let jobs: RawJob[]
+  if (fromKnownAts.length > 0) {
+    jobs = fromKnownAts
+  } else {
+    let atsDirectJobs: RawJob[] = []
+    if (target.atsType && target.atsIdentifier) {
+      const derived = deriveCanonicalCareersUrlWithConfidence(
+        {
+          domain: target.domain ?? "",
+          careers_url: careersUrl.toString(),
+          ats_type: target.atsType ?? null,
+          ats_identifier: target.atsIdentifier ?? null,
+        },
+        { applyUrls: [] }
+      )
+      if (derived.confidence === "high" && derived.url !== careersUrl.toString()) {
+        try {
+          atsDirectJobs = await crawlByKnownAts(new URL(derived.url))
+          diagnostics.push({
+            provider: target.atsType?.toLowerCase() ?? null,
+            originalUrl: target.careersUrl,
+            normalizedUrl: derived.url,
+            statusCode: null,
+            reason: `ats_direct_candidate:${derived.reason}`,
+            crawlResult: atsDirectJobs.length > 0 ? "success" : "fallback",
+          })
+        } catch {
+          diagnostics.push({
+            provider: target.atsType?.toLowerCase() ?? null,
+            originalUrl: target.careersUrl,
+            normalizedUrl: derived.url,
+            statusCode: null,
+            reason: `ats_direct_candidate_error:${derived.reason}`,
+            crawlResult: "fallback",
+          })
+        }
+      }
+    }
+
+    if (atsDirectJobs.length > 0) {
+      jobs = atsDirectJobs
+    } else {
+      discoverMeta = await discoverAndCrawlFromHtml(careersUrl)
+      jobs = discoverMeta.jobs
+    }
+  }
 
   if (
     jobs.length === 0 &&
@@ -2206,20 +2500,68 @@ export async function crawlCareersPage(
     jobs = await crawlWorkdayByHeuristic(careersUrl, target.companyName)
   }
 
+  const dedupedJobs = dedupeJobs(jobs)
+  const outcomeStatus: CrawlResult["outcomeStatus"] =
+    dedupedJobs.length > 0
+      ? "success"
+      : discoverMeta?.blocked
+        ? "blocked"
+        : isFetchFailure(discoverMeta?.primaryStatusCode ?? null, discoverMeta?.primaryErrorReason)
+          ? "fetch_error"
+        : discoverMeta?.primaryStatusCode === 404 ||
+            discoverMeta?.primaryErrorReason === "not_found_404"
+          ? "bad_url"
+          : "empty"
+
+  const outcomeReason =
+    dedupedJobs.length > 0
+      ? "success"
+      : outcomeStatus === "blocked"
+        ? discoverMeta?.primaryErrorReason ?? "blocked"
+        : outcomeStatus === "fetch_error"
+          ? discoverMeta?.primaryErrorReason ?? "fetch_error"
+        : outcomeStatus === "bad_url"
+          ? discoverMeta?.primaryErrorReason ?? "not_found_404"
+          : discoverMeta?.primaryErrorReason ?? "empty_job_list"
+
+  if (discoverMeta?.primaryErrorReason || discoverMeta?.fallbackUsed) {
+    diagnostics.push({
+      provider: normalized.provider,
+      originalUrl: target.careersUrl,
+      normalizedUrl: careersUrl.toString(),
+      statusCode: discoverMeta?.primaryStatusCode ?? null,
+      reason: discoverMeta?.primaryErrorReason ?? "discover_attempt",
+      crawlResult: discoverMeta?.fallbackUsed ? "fallback" : "normalized",
+      errorReason: discoverMeta?.primaryErrorReason ?? null,
+      fallbackUsed: discoverMeta?.fallbackUsed ?? null,
+    })
+  }
+
   return {
     url: target.careersUrl,
     normalizedUrl: careersUrl.toString(),
-    jobs: dedupeJobs(jobs),
+    jobs: dedupedJobs,
     crawledAt: new Date(),
+    outcomeStatus,
+    outcomeReason,
     diagnostics: [
       ...diagnostics,
       {
         provider: normalized.provider,
         originalUrl: target.careersUrl,
         normalizedUrl: careersUrl.toString(),
-        statusCode: null,
-        reason: jobs.length > 0 ? "success" : "empty_job_list",
-        crawlResult: jobs.length > 0 ? "success" : "empty",
+        statusCode: discoverMeta?.primaryStatusCode ?? null,
+        reason: outcomeReason,
+        crawlResult:
+          outcomeStatus === "success"
+            ? "success"
+            : outcomeStatus === "blocked" ||
+                outcomeStatus === "bad_url" ||
+                outcomeStatus === "fetch_error"
+              ? "failed"
+              : "empty",
+        errorReason: outcomeStatus === "success" ? null : outcomeReason,
+        fallbackUsed: discoverMeta?.fallbackUsed ?? null,
       },
     ],
   }

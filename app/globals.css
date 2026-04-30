@@ -5,7 +5,7 @@
 @layer base {
   :root {
     /* Core shadcn-compatible */
-    --background: 95 22% 96%;
+    --background: 0 0% 100%;
     --foreground: 222 47% 11%;
     --card: 0 0% 100%;
     --card-foreground: 222 47% 11%;
@@ -76,7 +76,7 @@
 
   body.site-chroma {
     position: relative;
-    background: hsl(95 22% 96%);
+    background: hsl(0 0% 100%);
   }
 
   body.site-chroma::before,
@@ -151,10 +151,7 @@
   .app-page {
     @apply min-h-screen;
     background-color: hsl(var(--background));
-    background-image:
-      radial-gradient(1100px 480px at 5% -5%, hsl(38 80% 96% / 0.5), transparent 55%),
-      radial-gradient(800px 380px at 95% 0%, hsl(38 100% 96% / 0.35), transparent 50%),
-      linear-gradient(180deg, hsl(95 22% 96%), hsl(95 18% 95%));
+    background-image: none;
   }
 
   .app-shell {
@@ -468,7 +465,7 @@
   /* ── Product app skin (dashboard, auth, public — not landing) ─────────────── */
 
   .product-skin {
-    --background: 95 22% 96%;
+    --background: 0 0% 100%;
     --surface: 0 0% 100%;
     --surface-alt: 95 18% 94%;
     --border: 100 14% 88%;
@@ -477,10 +474,7 @@
   }
 
   .product-skin .app-page {
-    background-image:
-      radial-gradient(1100px 480px at 5% -5%, hsl(38 80% 96% / 0.5), transparent 55%),
-      radial-gradient(800px 380px at 95% 0%, hsl(38 100% 96% / 0.35), transparent 50%),
-      linear-gradient(180deg, hsl(95 22% 96%), hsl(95 18% 95%));
+    background-image: none;
   }
 
   .product-skin .surface-panel {

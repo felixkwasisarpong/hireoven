@@ -17,6 +17,7 @@
  * Usage:
  *   npx tsx scripts/preview-careers-url-repairs.ts
  *   npx tsx scripts/preview-careers-url-repairs.ts --probe       # try HTTP probing for low/none rows
+ *   npx tsx scripts/preview-careers-url-repairs.ts --zero-jobs-only
  *   npx tsx scripts/preview-careers-url-repairs.ts --limit=100
  *   npx tsx scripts/preview-careers-url-repairs.ts --csv          # full CSV
  */
@@ -38,6 +39,7 @@ loadEnvConfig(process.cwd())
 
 const probeEnabled = process.argv.includes("--probe")
 const csvOnly = process.argv.includes("--csv")
+const zeroJobsOnly = process.argv.includes("--zero-jobs-only")
 const limitArg = process.argv.find((arg) => arg.startsWith("--limit="))
 const limit = limitArg ? Math.max(1, Number(limitArg.split("=")[1])) : null
 const probeTimeoutMs = Math.max(
@@ -218,6 +220,7 @@ async function main() {
       `SELECT id, name, domain, careers_url, ats_type, ats_identifier
        FROM companies
        WHERE is_active = true
+         ${zeroJobsOnly ? "AND COALESCE(job_count, 0) = 0" : ""}
        ORDER BY name${limit ? ` LIMIT ${limit}` : ""}`
     )
 
@@ -275,7 +278,9 @@ async function main() {
       counts.set(row.decision, (counts.get(row.decision) ?? 0) + 1)
     }
 
-    console.log(`\nCareers-URL repair preview (probe=${probeEnabled})`)
+    console.log(
+      `\nCareers-URL repair preview (probe=${probeEnabled}, zeroJobsOnly=${zeroJobsOnly})`
+    )
     console.log(`Total scanned: ${repairRows.length}`)
     for (const decision of [
       "apply",

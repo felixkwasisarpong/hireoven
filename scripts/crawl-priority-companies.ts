@@ -11,6 +11,11 @@
 import { loadEnvConfig } from "@next/env"
 import { Pool } from "pg"
 import { crawlCareersPage } from "@/lib/crawler"
+import {
+  applyCrawlQueuePolicy,
+  defaultCrawlPolicyOptions,
+  loadRecentCrawlSignals,
+} from "@/lib/crawler/scheduling"
 import { persistCrawlJobs } from "@/lib/crawler/persist"
 
 loadEnvConfig(process.cwd())
@@ -41,9 +46,10 @@ async function main() {
 
   const result = await pool.query<{
     id: string; name: string; careers_url: string | null
-    ats_type: string | null; job_count: number; last_crawled_at: string | null
+    ats_type: string | null; ats_identifier: string | null
+    job_count: number; last_crawled_at: string | null
   }>(
-    `SELECT id, name, careers_url, ats_type, job_count, last_crawled_at
+    `SELECT id, name, careers_url, ats_type, ats_identifier, job_count, last_crawled_at
      FROM companies c
      WHERE is_active = true
        AND careers_url IS NOT NULL
@@ -54,8 +60,25 @@ async function main() {
     params
   )
 
-  const targets = result.rows
+  const signalMap = await loadRecentCrawlSignals(
+    pool,
+    result.rows.map((co) => co.id),
+    6
+  )
+  const policy = applyCrawlQueuePolicy(
+    result.rows,
+    signalMap,
+    defaultCrawlPolicyOptions({
+      includeBlocked: true,
+      includeDomainBroken: false,
+      includeLikelyInactive: true,
+    })
+  )
+  const targets = policy.selected
   console.log(`\nTargets: ${targets.length} companies\n`)
+  console.log(
+    `Lane selection: ${JSON.stringify(policy.selectedLaneCounts)} | skipped=${policy.skipped.length}`
+  )
 
   for (const co of targets) {
     const url = co.careers_url!
@@ -74,6 +97,7 @@ async function main() {
         careersUrl: url,
         lastCrawledAt: co.last_crawled_at ? new Date(co.last_crawled_at) : null,
         atsType: co.ats_type,
+        atsIdentifier: co.ats_identifier,
       })
 
       const persisted = await persistCrawlJobs({

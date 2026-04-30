@@ -17,6 +17,7 @@ import { cleanJobTitle } from "@/lib/jobs/title"
 import { categorizeSkills, emptyCategorizedSkills } from "@/lib/skills/taxonomy"
 import type {
   CanonicalJob,
+  CanonicalSectionKey,
   JobCardViewModel,
   JobPageViewModel,
   PersistedJobForNormalization,
@@ -33,13 +34,64 @@ function shouldRecomputeFromCurrentRow(
   job: PersistedJobForNormalization,
   stored: CanonicalJob
 ) {
-  // `extractCanonicalSections` always returns every key as a CanonicalSection
-  // object (never null/undefined), so truthiness checks like `!stored.sections.qualifications`
-  // always return false. Check `.items.length` instead to detect empty sections.
+  const requiredSections: CanonicalSectionKey[] = [
+    "about_role",
+    "responsibilities",
+    "requirements",
+    "qualifications",
+    "preferred_qualifications",
+    "skills",
+    "benefits",
+    "company_info",
+    "equal_opportunity",
+    "application_info",
+    "visa",
+    "other",
+    "header",
+    "compensation",
+  ]
+
+  const sections =
+    (stored as unknown as { sections?: Record<string, { items?: unknown[] }> })
+      .sections
+
+  const sectionHasItemsArray = (key: CanonicalSectionKey) =>
+    Array.isArray(sections?.[key]?.items)
+  const sectionLength = (key: CanonicalSectionKey) =>
+    sectionHasItemsArray(key) ? (sections?.[key]?.items?.length ?? 0) : 0
+
+  // Older normalized payloads can be missing some section keys even with the same schema_version.
+  // Recompute from the live row whenever canonical section structure is incomplete.
+  const hasCompleteSections = requiredSections.every(sectionHasItemsArray)
+  if (!hasCompleteSections) return true
+
+  const hasCoreFieldShape = Boolean(
+    stored.header?.title &&
+    stored.header?.normalized_title &&
+    stored.header?.location &&
+    stored.header?.apply_url &&
+    stored.header?.employment_type &&
+    stored.header?.seniority_level &&
+    stored.header?.is_remote &&
+    stored.header?.is_hybrid &&
+    stored.header?.posted_at &&
+    stored.compensation?.salary_min &&
+    stored.compensation?.salary_max &&
+    stored.compensation?.salary_currency &&
+    stored.compensation?.pay_text &&
+    stored.visa?.sponsors_h1b &&
+    stored.visa?.requires_authorization &&
+    stored.visa?.sponsorship_score &&
+    stored.visa?.visa_language
+  )
+  if (!hasCoreFieldShape) return true
+
+  // `extractCanonicalSections` always returns every key as a CanonicalSection object
+  // (never null/undefined), so we check `.items.length` to detect empty sections.
   const missingStructure =
-    stored.sections.qualifications.items.length === 0 &&
-    stored.sections.skills.items.length === 0 &&
-    stored.sections.equal_opportunity.items.length === 0 &&
+    sectionLength("qualifications") === 0 &&
+    sectionLength("skills") === 0 &&
+    sectionLength("equal_opportunity") === 0 &&
     !stored.skill_groups
 
   if (missingStructure) return true
@@ -48,9 +100,9 @@ function shouldRecomputeFromCurrentRow(
   const hasCurrentDescription = Boolean(cleanedDescription && cleanedDescription.length >= 120)
 
   const storedCoreSectionCount =
-    stored.sections.about_role.items.length +
-    stored.sections.responsibilities.items.length +
-    stored.sections.requirements.items.length
+    sectionLength("about_role") +
+    sectionLength("responsibilities") +
+    sectionLength("requirements")
 
   const hasCurrentSalary = job.salary_min != null && job.salary_max != null
   const storedHasSalary =

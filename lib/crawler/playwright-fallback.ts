@@ -3,6 +3,16 @@ const DEFAULT_TIMEOUT_MS = Number.parseInt(
   10
 )
 const MAX_PER_RUN = Number.parseInt(process.env.CRAWLER_PLAYWRIGHT_MAX_PER_RUN ?? "3", 10)
+const BLOCKED_ONLY = process.env.CRAWLER_PLAYWRIGHT_BLOCKED_ONLY !== "false"
+const HOST_ALLOWLIST = new Set(
+  (process.env.CRAWLER_PLAYWRIGHT_HOST_ALLOWLIST ?? "")
+    .split(",")
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean)
+)
+const PROXY_SERVER = process.env.CRAWLER_PLAYWRIGHT_PROXY_SERVER?.trim() ?? ""
+const PROXY_USERNAME = process.env.CRAWLER_PLAYWRIGHT_PROXY_USERNAME?.trim() ?? ""
+const PROXY_PASSWORD = process.env.CRAWLER_PLAYWRIGHT_PROXY_PASSWORD?.trim() ?? ""
 
 let usedThisRun = 0
 
@@ -10,6 +20,16 @@ export function shouldUsePlaywrightFallback(reason: string | null | undefined) {
   if (process.env.CRAWLER_PLAYWRIGHT_ENABLED !== "true") return false
   if (usedThisRun >= Math.max(0, MAX_PER_RUN)) return false
   const normalized = (reason ?? "").toLowerCase()
+  if (BLOCKED_ONLY) {
+    return (
+      normalized.includes("403") ||
+      normalized.includes("406") ||
+      normalized.includes("429") ||
+      normalized.includes("blocked") ||
+      normalized.includes("forbidden") ||
+      normalized.includes("not_acceptable")
+    )
+  }
   return (
     normalized.includes("403") ||
     normalized.includes("406") ||
@@ -25,10 +45,30 @@ export async function renderCareersHtmlWithPlaywright(
   reason: string | null | undefined
 ): Promise<string | null> {
   if (!shouldUsePlaywrightFallback(reason)) return null
+  try {
+    const host = new URL(url).hostname.toLowerCase()
+    if (HOST_ALLOWLIST.size > 0) {
+      const allowed = [...HOST_ALLOWLIST].some(
+        (entry) => host === entry || host.endsWith(`.${entry}`)
+      )
+      if (!allowed) return null
+    }
+  } catch {
+    return null
+  }
   usedThisRun += 1
 
   const { chromium } = await import("playwright")
-  const browser = await chromium.launch({ headless: true })
+  const browser = await chromium.launch({
+    headless: true,
+    proxy: PROXY_SERVER
+      ? {
+          server: PROXY_SERVER,
+          username: PROXY_USERNAME || undefined,
+          password: PROXY_PASSWORD || undefined,
+        }
+      : undefined,
+  })
   try {
     const page = await browser.newPage({
       userAgent:

@@ -133,7 +133,7 @@ export type NotificationChannel = 'email' | 'push' | 'both';
 
 export type NotificationType = 'alert' | 'watchlist';
 
-export type CrawlStatus = 'success' | 'failed' | 'unchanged';
+export type CrawlStatus = 'success' | 'failed' | 'unchanged' | 'blocked' | 'bad_url' | 'fetch_error';
 
 export type JobWithinWindow = 'all' | '1h' | '6h' | '24h' | '3d' | '7d';
 

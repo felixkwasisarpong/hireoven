@@ -9,8 +9,8 @@ import {
   RefreshCw,
   RotateCcw,
   Search,
-  Sparkles,
 } from "lucide-react"
+import { ScoutChatbotAnimation } from "@/components/scout/ScoutChatbotAnimation"
 import { ScoutMessageBubble } from "@/components/scout/ScoutMessageBubble"
 import { ScoutMissionStrip } from "@/components/scout/ScoutMissionStrip"
 import { ScoutStreamingText } from "@/components/scout/ScoutStreamingText"
@@ -96,8 +96,8 @@ const ACTION_TILES = [
 function TypingIndicator() {
   return (
     <div className="flex items-start gap-3">
-      <span className="mt-0.5 inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-xl bg-[#FF5C18] shadow-[0_4px_14px_rgba(255,92,24,0.3)]">
-        <Sparkles className="h-3.5 w-3.5 text-white" />
+      <span className="mt-0.5 inline-flex h-7 w-7 flex-shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[#FF5C18] shadow-[0_4px_14px_rgba(255,92,24,0.3)]">
+        <ScoutChatbotAnimation />
       </span>
       <div className="flex items-center gap-1.5 rounded-2xl rounded-tl-sm border border-slate-100 bg-white px-4 py-3 shadow-sm">
         {[0, 160, 320].map((delay) => (
@@ -308,8 +308,8 @@ export function IdleMode({
             if (msg.role === "scout_streaming") {
               return (
                 <div key={msg.id} className="flex items-start gap-3">
-                  <span className="relative mt-0.5 flex-shrink-0 inline-flex h-9 w-9 items-center justify-center rounded-xl bg-[#FF5C18] shadow-[0_4px_16px_rgba(255,92,24,0.35)]">
-                    <Sparkles className="h-4 w-4 text-white animate-pulse" />
+                  <span className="relative mt-0.5 flex-shrink-0 inline-flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl bg-[#FF5C18] shadow-[0_4px_16px_rgba(255,92,24,0.35)]">
+                    <ScoutChatbotAnimation />
                   </span>
                   <div className="min-w-0 flex-1 overflow-hidden rounded-2xl rounded-tl-sm border border-slate-100 bg-white px-5 py-4 shadow-[0_4px_20px_rgba(15,23,42,0.07)]">
                     <div className="h-[3px] w-full bg-[#FF5C18] opacity-80 -mx-5 -mt-4 mb-3 w-[calc(100%+2.5rem)]" />

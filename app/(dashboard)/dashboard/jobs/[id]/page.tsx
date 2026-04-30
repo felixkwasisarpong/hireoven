@@ -79,6 +79,15 @@ const EXPERIENCE_BY_SENIORITY: Record<string, string> = {
   exec: "12+ years",
 }
 
+function isLikelyAtomicSkill(value: string) {
+  const cleaned = value.trim()
+  if (!cleaned) return false
+  if (cleaned.length > 48) return false
+  const words = cleaned.split(/\s+/).filter(Boolean)
+  if (words.length > 6) return false
+  return true
+}
+
 function dedupe(values: string[], max = Number.POSITIVE_INFINITY): string[] {
   const out: string[] = []
   for (const value of values.map((entry) => entry.trim()).filter(Boolean)) {
@@ -173,8 +182,28 @@ export default async function DashboardJobDetailPage({ params }: Props) {
   const preferredItems = dedupe(page.sections.preferred_qualifications.items)
   const benefitItems = page.sections.benefits.items
   const compensationItems = page.sections.compensation.items
-  const skills = page.skills.slice(0, 8)
-  const skillPillItems = dedupe([...page.sections.skills.items])
+  const explicitSkillSignals = normalizeSkillList(
+    [...(job.skills ?? []), ...page.skills].filter((value): value is string => typeof value === "string"),
+    48
+  ).filter(isLikelyAtomicSkill)
+  const extractedSkillSignals = extractSkillsFromText(
+    displayTitle,
+    job.title,
+    ...page.sections.skills.items,
+    ...page.sections.requirements.items,
+    ...page.sections.qualifications.items,
+    ...page.sections.preferred_qualifications.items,
+    ...page.sections.responsibilities.items
+  )
+  const consolidatedJobSkills = normalizeSkillList(
+    [
+      ...explicitSkillSignals,
+      ...extractedSkillSignals,
+    ],
+    40
+  )
+  const skills = consolidatedJobSkills.slice(0, 8)
+  const skillPillItems = consolidatedJobSkills.slice(0, 24)
 
   const sponsorshipPill = employerSponsorshipPill({ ...job, company })
   const sponsorsConfirmed = employerLikelySponsorsH1b({ ...job, company })
@@ -238,10 +267,7 @@ export default async function DashboardJobDetailPage({ params }: Props) {
     ...extractSkillsFromText(resumeSkillResult.rows[0]?.raw_text ?? null),
   ])
 
-  const jobSkillCandidates = normalizeSkillList(
-    [...(job.skills ?? []), ...page.skills],
-    40
-  )
+  const jobSkillCandidates = consolidatedJobSkills
   const requirementSkillPills = jobSkillCandidates.map((skill) => ({
     skill,
     matched: resumeSkillLabels.some((resumeSkill) => skillMatches(skill, resumeSkill)),

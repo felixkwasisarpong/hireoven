@@ -4,6 +4,11 @@ import { NextRequest, NextResponse } from "next/server"
 import { assertAdminAccess } from "@/lib/admin/auth"
 import { sendCrawlTopMatchDigests, type CrawlTopMatchDigestSummary } from "@/lib/alerts/crawl-match-digest"
 import { crawlCareersPage, type CrawlTarget } from "@/lib/crawler"
+import {
+  applyCrawlQueuePolicy,
+  defaultCrawlPolicyOptions,
+  loadRecentCrawlSignals,
+} from "@/lib/crawler/scheduling"
 import { persistCrawlJobs } from "@/lib/crawler/persist"
 import { getPostgresPool } from "@/lib/postgres/server"
 import type { Company } from "@/types"
@@ -98,6 +103,18 @@ function isTransientCrawlerError(message: string) {
   )
 }
 
+function crawlLogStatusFromResult(result: Awaited<ReturnType<typeof crawlCareersPage>>) {
+  if (result.jobs.length > 0) return "success"
+  if (result.outcomeStatus === "blocked") return "blocked"
+  if (result.outcomeStatus === "fetch_error") return "fetch_error"
+  if (result.outcomeStatus === "bad_url") return "bad_url"
+  return "unchanged"
+}
+
+function isFailureLikeStatus(status: string) {
+  return status === "failed" || status === "blocked" || status === "bad_url" || status === "fetch_error"
+}
+
 type CrawlAction =
   | { type: "all" }
   | { type: "failed" }
@@ -131,7 +148,7 @@ async function getTargetCompanies(action: CrawlAction): Promise<Company[]> {
      SELECT c.*
      FROM companies c
      INNER JOIN latest l ON l.company_id = c.id
-     WHERE c.is_active = true AND l.status = 'failed'`
+     WHERE c.is_active = true AND l.status IN ('failed', 'blocked', 'bad_url', 'fetch_error')`
   )
   return rows
 }
@@ -149,6 +166,14 @@ export async function POST(request: NextRequest) {
   const pool = getPostgresPool()
   const runStartedAt = Date.now()
   let completed = false
+  let companiesConsidered = 0
+  let companiesSkipped = 0
+  let queuePolicySummary: {
+    selectedLaneCounts: Record<string, number>
+    skippedLaneCounts: Record<string, number>
+    skippedCooldown: number
+    skippedLaneExcluded: number
+  } | null = null
   let companiesCount = 0
   let succeeded = 0
   let failed = 0
@@ -172,8 +197,38 @@ export async function POST(request: NextRequest) {
   )
 
   try {
-    const companies = await getTargetCompanies(action)
+    const companiesRaw = await getTargetCompanies(action)
+    companiesConsidered = companiesRaw.length
+    const signalMap = await loadRecentCrawlSignals(
+      pool,
+      companiesRaw.map((company) => company.id),
+      6
+    )
+    const policyOptions =
+      action.type === "company"
+        ? defaultCrawlPolicyOptions({
+            bypassCooldown: true,
+            includeBlocked: true,
+            includeDomainBroken: true,
+            includeLikelyInactive: true,
+          })
+        : action.type === "failed"
+          ? defaultCrawlPolicyOptions({
+              includeBlocked: true,
+              includeDomainBroken: true,
+              includeLikelyInactive: true,
+            })
+          : defaultCrawlPolicyOptions()
+    const policy = applyCrawlQueuePolicy(companiesRaw, signalMap, policyOptions)
+    const companies = policy.selected
     companiesCount = companies.length
+    companiesSkipped = policy.skipped.length
+    queuePolicySummary = {
+      selectedLaneCounts: policy.selectedLaneCounts,
+      skippedLaneCounts: policy.skippedLaneCounts,
+      skippedCooldown: policy.skipped.filter((entry) => entry.reason === "cooldown_active").length,
+      skippedLaneExcluded: policy.skipped.filter((entry) => entry.reason === "lane_excluded").length,
+    }
     const limitCompany = pLimit(CRAWLER_COMPANY_CONCURRENCY)
     const results = await Promise.all(
       companies.map((company) => limitCompany(async () => {
@@ -184,6 +239,7 @@ export async function POST(request: NextRequest) {
           careersUrl: company.careers_url,
           lastCrawledAt: company.last_crawled_at ? new Date(company.last_crawled_at) : null,
           atsType: company.ats_type ?? null,
+          atsIdentifier: company.ats_identifier ?? null,
         }
 
         try {
@@ -224,7 +280,11 @@ export async function POST(request: NextRequest) {
           }
 
           const durationMs = Date.now() - startedAt
-          const status = result.jobs.length > 0 ? "success" : "unchanged"
+          const status = crawlLogStatusFromResult(result)
+          const outcomeMessage =
+            status === "success" || status === "unchanged"
+              ? null
+              : result.outcomeReason ?? status
 
           try {
             await pool.query(
@@ -237,7 +297,9 @@ export async function POST(request: NextRequest) {
                 persistResult.inserted,
                 durationMs,
                 result.crawledAt.toISOString(),
-                attempts > 1 ? `Recovered after ${attempts} attempts` : null,
+                attempts > 1
+                  ? `Recovered after ${attempts} attempts${outcomeMessage ? ` | ${outcomeMessage}` : ""}`
+                  : outcomeMessage,
               ]
             )
           } catch (logError) {
@@ -290,8 +352,8 @@ export async function POST(request: NextRequest) {
       }))
     )
 
-    succeeded = results.filter((result) => result.status !== "failed").length
-    failed = results.filter((result) => result.status === "failed").length
+    succeeded = results.filter((result) => !isFailureLikeStatus(result.status)).length
+    failed = results.filter((result) => isFailureLikeStatus(result.status)).length
     inserted = results.reduce((sum, result) => sum + result.newJobs, 0)
     const digestWindowEndIso = new Date().toISOString()
     if (inserted > 0) {
@@ -324,8 +386,11 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      companiesConsidered,
+      companiesSkipped,
       count: results.length,
       results,
+      queuePolicy: queuePolicySummary,
       topMatchDigest,
       totalDurationMs: Date.now() - runStartedAt,
     })
@@ -349,6 +414,8 @@ export async function POST(request: NextRequest) {
           route: "api/admin/crawl",
           trigger: `admin:${action.type}`,
           companiesCrawled: companiesCount,
+          companiesConsidered,
+          companiesSkipped,
           succeeded,
           failed,
           inserted,
