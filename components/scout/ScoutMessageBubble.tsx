@@ -101,20 +101,22 @@ export function ScoutMessageBubble({ response, compact = false, onUpgrade }: Pro
     Boolean(response.workflow)
 
   return (
-    <div className={`group flex items-start ${compact ? "gap-2" : "gap-3"}`}>
+    <div className={`group flex items-start ${compact ? "gap-2.5" : "gap-3"}`}>
       {/* Avatar */}
       <div
-        className={`mt-0.5 inline-flex flex-shrink-0 items-center justify-center bg-[#ea580c] shadow-[0_2px_8px_rgba(234,88,12,0.28)] ${
-          compact ? "h-7 w-7 rounded-lg" : "h-9 w-9 rounded-xl"
+        className={`relative mt-0.5 flex-shrink-0 inline-flex items-center justify-center bg-[#FF5C18] ${
+          compact
+            ? "h-7 w-7 rounded-xl shadow-[0_4px_14px_rgba(255,92,24,0.3)]"
+            : "h-9 w-9 rounded-xl shadow-[0_4px_16px_rgba(255,92,24,0.35)]"
         }`}
       >
         <Sparkles className={compact ? "h-3.5 w-3.5 text-white" : "h-4 w-4 text-white"} />
       </div>
 
       {/* Bubble */}
-      <div className="min-w-0 flex-1 overflow-hidden rounded-[22px] rounded-tl-md border border-slate-200/80 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.06)] transition-shadow group-hover:shadow-[0_14px_36px_rgba(15,23,42,0.08)]">
+      <div className="min-w-0 flex-1 overflow-hidden rounded-2xl rounded-tl-sm border border-slate-100 bg-white shadow-[0_4px_20px_rgba(15,23,42,0.07)] transition-shadow group-hover:shadow-[0_8px_28px_rgba(15,23,42,0.1)]">
         {/* Coloured accent bar keyed to recommendation */}
-        <div className={`h-0.5 w-full ${recConfig.bg}`} />
+        <div className={`h-[3px] w-full ${recConfig.bg} opacity-80`} />
 
         <div className={compact ? "p-3" : "p-4 sm:p-5"}>
           {/* Header badges */}

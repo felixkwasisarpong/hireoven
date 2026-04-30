@@ -9,6 +9,7 @@ import { ScoutContextChip } from "@/components/scout/ScoutContextChip"
 import { useUpgradeModal } from "@/lib/context/UpgradeModalContext"
 import { useResumeContext } from "@/components/resume/ResumeProvider"
 import { normalizeScoutResponse } from "@/lib/scout/normalize"
+import { cn } from "@/lib/utils"
 import type { ScoutResponse } from "@/lib/scout/types"
 
 type ChatMessage =
@@ -24,17 +25,17 @@ type ScoutMiniPanelProps = {
   suggestionChips: string[]
 }
 
-function CompactTypingIndicator() {
+function TypingIndicator() {
   return (
-    <div className="flex items-start gap-2">
-      <div className="flex-shrink-0 inline-flex h-7 w-7 items-center justify-center rounded-lg bg-[#ea580c]">
+    <div className="flex items-start gap-2.5">
+      <span className="mt-0.5 inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-xl bg-[#FF5C18] shadow-[0_4px_14px_rgba(255,92,24,0.3)]">
         <Sparkles className="h-3.5 w-3.5 text-white" />
-      </div>
-      <div className="flex items-center gap-1 rounded-2xl rounded-tl-sm border border-slate-200 bg-white px-3 py-2.5">
-        {[0, 150, 300].map((delay) => (
+      </span>
+      <div className="flex items-center gap-1.5 rounded-2xl rounded-tl-sm border border-slate-100 bg-white px-4 py-3 shadow-sm">
+        {[0, 160, 320].map((delay) => (
           <span
             key={delay}
-            className="h-1.5 w-1.5 rounded-full bg-slate-400 animate-bounce"
+            className="h-1.5 w-1.5 rounded-full bg-[#FF5C18]/50 animate-bounce"
             style={{ animationDelay: `${delay}ms` }}
           />
         ))}
@@ -77,19 +78,14 @@ export function ScoutMiniPanel({
     [applicationId, companyId, jobId, resumeId, searchParams]
   )
 
-  // Auto-scroll on new messages / loading
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages, isLoading])
 
-  // Focus input when panel opens
   useEffect(() => {
-    if (isOpen) {
-      setTimeout(() => inputRef.current?.focus(), 50)
-    }
+    if (isOpen) setTimeout(() => inputRef.current?.focus(), 80)
   }, [isOpen])
 
-  // Detect resume change and clear stale context
   useEffect(() => {
     const currentId = primaryResume?.id ?? null
     if (prevResumeIdRef.current !== undefined && prevResumeIdRef.current !== currentId) {
@@ -102,17 +98,12 @@ export function ScoutMiniPanel({
     prevResumeIdRef.current = currentId
   }, [primaryResume?.id])
 
-  // Listen for reset-context events (from RESET_CONTEXT action or chip button)
   useEffect(() => {
-    function onReset() {
-      setMessages([])
-      setError(null)
-    }
+    function onReset() { setMessages([]); setError(null) }
     window.addEventListener("scout:reset-context", onReset)
     return () => window.removeEventListener("scout:reset-context", onReset)
   }, [])
 
-  // Open panel pre-filled from a job card hover "Ask Scout" button
   useEffect(() => {
     function onOpenWithJob(e: Event) {
       const { prefillQuery } = (e as CustomEvent<{ jobId: string; prefillQuery: string }>).detail
@@ -129,10 +120,7 @@ export function ScoutMiniPanel({
     const message = query.trim()
     if (!message || isLoading) return
 
-    setMessages((prev) => [
-      ...prev,
-      { id: `u-${Date.now()}`, role: "user", text: message },
-    ])
+    setMessages((prev) => [...prev, { id: `u-${Date.now()}`, role: "user", text: message }])
     setQuery("")
     setIsLoading(true)
     setError(null)
@@ -158,9 +146,7 @@ export function ScoutMiniPanel({
       const raw = (await res.json().catch(() => null)) as unknown
       if (!res.ok) {
         const errMsg =
-          typeof raw === "object" &&
-          raw !== null &&
-          "error" in (raw as Record<string, unknown>)
+          typeof raw === "object" && raw !== null && "error" in (raw as Record<string, unknown>)
             ? String((raw as Record<string, unknown>).error)
             : "Scout could not respond right now."
         setError(errMsg)
@@ -168,10 +154,7 @@ export function ScoutMiniPanel({
       }
 
       const normalized = normalizeScoutResponse(raw)
-      setMessages((prev) => [
-        ...prev,
-        { id: `s-${Date.now()}`, role: "scout", response: normalized },
-      ])
+      setMessages((prev) => [...prev, { id: `s-${Date.now()}`, role: "scout", response: normalized }])
     } catch {
       setError("Network error. Please try again.")
     } finally {
@@ -185,70 +168,116 @@ export function ScoutMiniPanel({
   }
 
   const hasConversation = messages.length > 0
+  const userTurns = messages.filter((m) => m.role === "user").length
 
   return (
-    <div className="pointer-events-none fixed bottom-[max(0.75rem,calc(env(safe-area-inset-bottom)+4.5rem))] right-4 z-[55] md:bottom-6 md:right-6">
+    <div className="pointer-events-none fixed bottom-[max(0.75rem,calc(env(safe-area-inset-bottom)+4.5rem))] right-4 z-[55] flex flex-col items-end gap-3 md:bottom-6 md:right-6">
+
+      {/* ── Panel ───────────────────────────────────────────── */}
       {isOpen && (
         <section
-          className="pointer-events-auto mb-3 flex w-[min(92vw,26rem)] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_18px_48px_rgba(15,23,42,0.22)]"
-          style={{ maxHeight: "min(72vh,600px)" }}
+          className="pointer-events-auto flex w-[min(95vw,28rem)] flex-col overflow-hidden rounded-2xl bg-white shadow-[0_24px_72px_rgba(15,23,42,0.22),0_0_0_1px_rgba(15,23,42,0.06)]"
+          style={{ maxHeight: "min(80vh,640px)" }}
         >
-          {/* ── Panel header ── */}
-          <div className="flex flex-shrink-0 items-center justify-between border-b border-slate-100 bg-slate-50 px-4 py-3">
-            <div className="flex items-center gap-2">
-              <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-[#ea580c] text-white">
-                <Sparkles className="h-3.5 w-3.5" />
-              </span>
-              <p className="text-sm font-semibold text-slate-900">Ask Scout</p>
-              {hasConversation && (
-                <span className="rounded-full bg-[#ea580c]/10 px-2 py-0.5 text-[10px] font-semibold text-[#ea580c]">
-                  {messages.filter((m) => m.role === "user").length}
-                </span>
-              )}
+          {/* ── Header ── */}
+          <div className="relative flex-shrink-0 overflow-hidden bg-slate-950 px-4 py-4">
+            {/* Subtle orange glow behind avatar */}
+            <div className="pointer-events-none absolute left-4 top-1/2 h-12 w-12 -translate-y-1/2 rounded-full bg-[#FF5C18]/25 blur-xl" />
+
+            <div className="relative flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                {/* Glowing Scout avatar */}
+                <div className="relative flex-shrink-0">
+                  <div className="absolute inset-0 rounded-xl bg-[#FF5C18]/40 blur-md" />
+                  <span className="relative inline-flex h-9 w-9 items-center justify-center rounded-xl bg-[#FF5C18] shadow-[0_4px_16px_rgba(255,92,24,0.5)]">
+                    <Sparkles className="h-4.5 w-4.5 text-white" style={{ height: 18, width: 18 }} />
+                  </span>
+                </div>
+
+                <div>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-bold text-white">Scout</p>
+                    {hasConversation && (
+                      <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-[#FF5C18] text-[9px] font-bold text-white">
+                        {userTurns}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-slate-400">AI job search assistant</p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsOpen(false)}
+                aria-label="Close Scout"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-slate-500 transition hover:bg-white/10 hover:text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={() => setIsOpen(false)}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-200 hover:text-slate-700"
-              aria-label="Close Scout panel"
-            >
-              <X className="h-4 w-4" />
-            </button>
           </div>
 
           {/* ── Message area ── */}
-          <div className="flex-1 overflow-y-auto p-3 space-y-3 min-h-0">
+          <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50/40 p-4 space-y-3">
             {/* Resume refreshed notice */}
             {resumeRefreshedNotice && (
               <div className="flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700">
-                <RefreshCw className="h-3.5 w-3.5 shrink-0" />
+                <RefreshCw className="h-3.5 w-3.5 flex-shrink-0" />
                 Scout refreshed context for your updated resume.
               </div>
             )}
 
-            {/* Active context chip — shown only in empty state */}
-            {!hasConversation && !isLoading && (
-              <ScoutContextChip onReset={() => setMessages([])} />
-            )}
-
             {/* Empty state */}
             {!hasConversation && !isLoading && (
-              <div className="py-4 text-center">
-                <div className="mx-auto mb-3 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-[#ea580c]">
-                  <Sparkles className="h-5 w-5 text-white" />
+              <div className="flex flex-col items-center px-2 py-6 text-center">
+                {/* Glowing avatar */}
+                <div className="relative mb-4">
+                  <div className="absolute inset-0 scale-150 rounded-3xl bg-[#FF5C18]/15 blur-2xl" />
+                  <div className="relative inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-[#FF5C18] shadow-[0_8px_28px_rgba(255,92,24,0.4)]">
+                    <Sparkles className="h-8 w-8 text-white" />
+                  </div>
                 </div>
-                <p className="text-xs font-semibold text-slate-900">Scout is ready</p>
-                <p className="mt-0.5 text-[11px] text-slate-400">
-                  Ask anything about this page
+
+                <p className="text-base font-bold text-gray-900">How can I help?</p>
+                <p className="mt-1 text-[11px] text-gray-400 leading-5">
+                  Ask anything about this page, job, or your search
                 </p>
+
+                {/* Context chip */}
+                <div className="mt-4 w-full">
+                  <ScoutContextChip onReset={() => setMessages([])} />
+                </div>
+
+                {/* Suggestion cards */}
+                {suggestionChips.length > 0 && (
+                  <div className="mt-4 w-full space-y-2">
+                    {suggestionChips.map((chip) => (
+                      <button
+                        key={chip}
+                        type="button"
+                        onClick={() => fillChip(chip)}
+                        className="group flex w-full items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3 text-left text-sm font-medium text-gray-700 shadow-sm transition hover:border-[#FF5C18]/30 hover:bg-[#FFF8F5] hover:text-[#FF5C18]"
+                      >
+                        <span>{chip}</span>
+                        <span className="text-gray-300 transition group-hover:text-[#FF5C18]/60">→</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
+            )}
+
+            {/* Conversation context chip — small, when chatting */}
+            {hasConversation && (
+              <ScoutContextChip onReset={() => setMessages([])} />
             )}
 
             {/* Messages */}
             {messages.map((msg) =>
               msg.role === "user" ? (
                 <div key={msg.id} className="flex justify-end">
-                  <div className="max-w-[80%] rounded-2xl rounded-tr-sm bg-[#ea580c] px-3 py-2 text-xs leading-5 text-white shadow-sm">
+                  <div className="max-w-[82%] rounded-2xl rounded-tr-sm bg-[#FF5C18] px-3.5 py-2.5 text-xs leading-5 text-white shadow-[0_4px_12px_rgba(255,92,24,0.25)]">
                     {msg.text}
                   </div>
                 </div>
@@ -262,34 +291,31 @@ export function ScoutMiniPanel({
               )
             )}
 
-            {/* Typing indicator */}
-            {isLoading && <CompactTypingIndicator />}
+            {isLoading && <TypingIndicator />}
 
-            {/* Error */}
             {error && (
-              <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+              <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs text-red-700">
                 {error}
               </div>
             )}
 
-            {/* Auto-scroll anchor */}
             <div ref={chatEndRef} />
           </div>
 
-          {/* ── Session activity (shown only when entries exist) ── */}
+          {/* ── Session activity ── */}
           <ScoutActivityTimeline compact />
 
-          {/* ── Input area (pinned at bottom) ── */}
-          <div className="flex-shrink-0 bg-white p-3">
-            {/* Suggestion chips — shown when not loading */}
-            {!isLoading && (
+          {/* ── Input area ── */}
+          <div className="flex-shrink-0 border-t border-gray-100 bg-white p-3">
+            {/* Suggestion chips — compact, when already chatting */}
+            {!isLoading && hasConversation && suggestionChips.length > 0 && (
               <div className="mb-2.5 flex flex-wrap gap-1.5">
                 {suggestionChips.map((chip) => (
                   <button
                     key={chip}
                     type="button"
                     onClick={() => fillChip(chip)}
-                    className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-slate-600 transition hover:border-[#ea580c]/20 hover:bg-[#ea580c]/5 hover:text-[#ea580c]"
+                    className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-slate-500 transition hover:border-[#FF5C18]/30 hover:bg-[#FFF8F5] hover:text-[#FF5C18]"
                   >
                     {chip}
                   </button>
@@ -297,24 +323,26 @@ export function ScoutMiniPanel({
               </div>
             )}
 
-            {/* Input */}
             <form onSubmit={handleSubmit}>
-              <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 transition focus-within:border-slate-300 focus-within:bg-white">
+              <div className={cn(
+                "flex items-center gap-2 rounded-xl border-2 bg-white px-3 py-2 transition",
+                "border-gray-200 focus-within:border-[#FF5C18]/40 focus-within:shadow-[0_0_0_3px_rgba(255,92,24,0.07)]"
+              )}>
                 <input
                   ref={inputRef}
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   disabled={isLoading}
-                  placeholder={hasConversation ? "Follow up…" : "Ask Scout…"}
-                  className="w-full bg-transparent text-sm text-slate-800 outline-none placeholder:text-slate-400"
+                  placeholder={hasConversation ? "Follow up…" : "Ask Scout anything…"}
+                  className="w-full bg-transparent text-sm text-gray-800 outline-none placeholder:text-gray-400"
                 />
                 <button
                   type="submit"
                   disabled={!query.trim() || isLoading}
-                  className="inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-[#FF5C18] text-white transition hover:bg-[#E14F0E] disabled:opacity-40"
+                  className="inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-[#FF5C18] text-white shadow-[0_4px_12px_rgba(255,92,24,0.3)] transition hover:bg-[#E14F0E] hover:shadow-[0_4px_16px_rgba(255,92,24,0.4)] disabled:opacity-40 disabled:shadow-none"
                 >
                   {isLoading ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
                   ) : (
                     <Send className="h-3.5 w-3.5" />
                   )}
@@ -325,21 +353,34 @@ export function ScoutMiniPanel({
         </section>
       )}
 
-      {/* ── Floating trigger button ── */}
+      {/* ── Floating trigger button ──────────────────────────── */}
       <button
         type="button"
-        onClick={() => setIsOpen((open) => !open)}
-        className={`pointer-events-auto inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold text-white shadow-[0_8px_24px_rgba(11,46,86,0.35)] transition ${
+        onClick={() => setIsOpen((v) => !v)}
+        className={cn(
+          "pointer-events-auto relative inline-flex items-center gap-2.5 rounded-full px-5 py-3 text-sm font-bold text-white transition-all duration-200",
           isOpen
-            ? "bg-[#0A2546] hover:bg-[#ea580c]"
-            : "bg-[#0B2E56] hover:bg-[#0A2546]"
-        }`}
+            ? "bg-slate-800 shadow-[0_8px_24px_rgba(15,23,42,0.3)] hover:bg-slate-700"
+            : "bg-slate-950 shadow-[0_8px_32px_rgba(15,23,42,0.4)] hover:bg-slate-800"
+        )}
       >
-        <Sparkles className="h-4 w-4" />
-        {isOpen ? "Close Scout" : "Ask Scout"}
+        {/* Idle pulse ring */}
+        {!isOpen && !hasConversation && (
+          <span className="absolute inset-0 rounded-full animate-ping bg-slate-800/60 duration-1000" />
+        )}
+
+        <Sparkles
+          className={cn(
+            "h-4 w-4 transition-colors",
+            isOpen ? "text-slate-400" : "text-[#FF5C18]"
+          )}
+        />
+        <span>{isOpen ? "Close" : "Scout"}</span>
+
+        {/* Unread badge */}
         {hasConversation && !isOpen && (
           <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-[#FF5C18] text-[9px] font-bold">
-            {messages.filter((m) => m.role === "user").length}
+            {userTurns}
           </span>
         )}
       </button>
