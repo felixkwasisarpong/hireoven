@@ -34,7 +34,16 @@ import {
 import { MatchDetailPanel, type MatchDetailModel } from "./match-detail-panel"
 import { enrichFields, type AutofillIntelligenceResult, type AutofillIntelligentField } from "../autofill/intelligence"
 
-const BRAND_ICON_URL = chrome.runtime.getURL("icons/icon48.png")
+/**
+ * Inline SVG of the Hireoven flame mark — extracted from hireoven-icon.svg
+ * and normalised to a 24×24 viewBox so it renders cleanly at 14–20 px.
+ * Using inline SVG avoids the web_accessible_resources restriction that would
+ * block <img src="chrome-extension://..."> on external pages.
+ */
+const BRAND_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true">
+  <path d="M10.5 21L3.9 15.1L7.8 7.2L10.1 13.2L14.6 3L20.1 11.3L18.2 18.3Z" fill="white" opacity="0.92"/>
+  <path d="M12 20.6L8 15.7L11.2 10.4L13 15.1L16 8.7L18.6 15.3L16.7 20.2Z" fill="white" opacity="0.55"/>
+</svg>`
 
 interface PageAwareOptions {
   resolveAppOrigin: () => Promise<string>
@@ -149,12 +158,11 @@ const STYLE = `
     transition: background 200ms ease, box-shadow 200ms ease;
   }
 
-  .brand img {
-    width: 22px;
-    height: 22px;
-    object-fit: contain;
+  .brand svg {
+    width: 16px;
+    height: 16px;
     display: block;
-    border-radius: 4px;
+    flex-shrink: 0;
   }
 
   /* Mode-aware brand icon tint — subtle visual cue for which action set is active */
@@ -360,10 +368,9 @@ const STYLE = `
     box-shadow: 0 2px 8px rgba(255,92,24,0.35);
   }
 
-  .drawer-icon img {
-    width: 20px;
-    height: 20px;
-    object-fit: contain;
+  .drawer-icon svg {
+    width: 18px;
+    height: 18px;
     display: block;
   }
 
@@ -927,10 +934,9 @@ const BADGE_STYLE = `
     box-shadow: 0 0 0 1.5px rgba(255,92,24,0.3);
   }
 
-  .frog img {
-    width: 14px;
-    height: 14px;
-    object-fit: contain;
+  .frog svg {
+    width: 12px;
+    height: 12px;
     display: block;
   }
 
@@ -1152,7 +1158,7 @@ class MiniJobBadge {
     const matchClass = model.matchPercent != null ? "chip match has" : "chip match"
     const matchLabel = model.matchPercent != null ? `${Math.round(model.matchPercent)}%` : "Match"
     return `
-      <span class="frog" title="Hireoven"><img src="${BRAND_ICON_URL}" alt="Hireoven" /></span>
+      <span class="frog" title="Hireoven">${BRAND_ICON_SVG}</span>
       ${model.hasH1B ? `<span class="chip h1b">H1B</span>` : ""}
       ${model.hasEVerify ? `<span class="chip everify">E-Verify</span>` : ""}
       ${model.visaCaution ? `<span class="chip note">No sponsor</span>` : ""}
@@ -2299,7 +2305,7 @@ export class PageAwareControlSystem {
     return `
       <section class="drawer-shell" role="dialog" aria-label="${esc(title)}">
         <header class="drawer-head">
-          <span class="drawer-icon"><img src="${BRAND_ICON_URL}" alt="Hireoven" /></span>
+          <span class="drawer-icon">${BRAND_ICON_SVG}</span>
           <div class="drawer-title">${esc(title)}</div>
           <button class="drawer-close" data-action="close-drawer" aria-label="Close">×</button>
         </header>
@@ -2628,7 +2634,7 @@ export class PageAwareControlSystem {
       ${this.renderDrawer()}
       <div class="bar-wrap">
         <div class="bar" data-mode="${this.mode}" role="toolbar" aria-label="Hireoven command bar">
-          <span class="brand" title="Hireoven"><img src="${BRAND_ICON_URL}" alt="Hireoven" /></span>
+          <span class="brand" title="Hireoven">${BRAND_ICON_SVG}</span>
           <span class="title">${this.barTitleHtml()}</span>
           ${this.renderBarActions()}
           <button class="action icon" data-action="open-dashboard" aria-label="Open Hireoven">⌕</button>
