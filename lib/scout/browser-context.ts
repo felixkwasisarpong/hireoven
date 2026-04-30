@@ -6,12 +6,18 @@
  * The extension content script running on hireoven.com relays lightweight
  * page-state from the background service worker via window.postMessage.
  *
- * This hook listens for those messages and exposes current browser context
- * to Scout UI components for adaptive behavior (placeholder, chips, rail).
+ * Extension → Scout events (postMessage source: "hireoven-ext"):
+ *   ACTIVE_CONTEXT_CHANGED — page context updated (tab switch, URL change)
+ *   AUTOFILL_AVAILABLE     — active tab has an application form ready to fill
+ *   JOB_RESOLVED           — active job now has a Hireoven job ID
+ *   PAGE_MODE_CHANGED      — pageType changed (e.g. job_detail → application_form)
  *
- * Communication protocol:
- *   Page → Extension:   window.postMessage({ source: "hireoven-scout", type: "GET_ACTIVE_CONTEXT" })
- *   Extension → Page:   window.postMessage({ source: "hireoven-ext",   type: "ACTIVE_CONTEXT_RESULT" | "ACTIVE_CONTEXT_PUSH", context })
+ * Scout → Extension commands (postMessage source: "hireoven-scout"):
+ *   GET_ACTIVE_CONTEXT     — request current context snapshot
+ *   OPEN_AUTOFILL          — ask extension to open autofill drawer on active job tab
+ *   START_TAILOR           — ask extension to open tailor drawer
+ *   START_COMPARE          — hint to compare mode (informational)
+ *   START_WORKFLOW         — hint to start a workflow on the active job
  */
 
 import { useCallback, useEffect, useRef, useState } from "react"
@@ -41,11 +47,29 @@ export type ActiveBrowserContext = {
   timestamp: number
 }
 
-// ── Protocol markers ──────────────────────────────────────────────────────────
+export type ScoutExtensionCommand =
+  | "GET_ACTIVE_CONTEXT"
+  | "OPEN_AUTOFILL"
+  | "START_TAILOR"
+  | "START_COMPARE"
+  | "START_WORKFLOW"
 
-const FROM_SCOUT = "hireoven-scout"
-const FROM_EXT = "hireoven-ext"
-const DEBOUNCE_MS = 500
+// ── Protocol constants ────────────────────────────────────────────────────────
+
+export const FROM_SCOUT = "hireoven-scout"
+export const FROM_EXT   = "hireoven-ext"
+
+const HANDLED_EXT_EVENTS = new Set([
+  "ACTIVE_CONTEXT_CHANGED",
+  "AUTOFILL_AVAILABLE",
+  "JOB_RESOLVED",
+  "PAGE_MODE_CHANGED",
+  // Legacy names kept for backward compat during rollout
+  "ACTIVE_CONTEXT_RESULT",
+  "ACTIVE_CONTEXT_PUSH",
+])
+
+const DEBOUNCE_MS   = 500
 const STALE_AFTER_MS = 90_000
 
 // ── Hook ──────────────────────────────────────────────────────────────────────
@@ -80,9 +104,7 @@ export function useActiveBrowserContext(): BrowserContextState & {
       if (typeof event.data !== "object" || event.data === null) return
       const msg = event.data as Record<string, unknown>
       if (msg.source !== FROM_EXT) return
-
-      const type = msg.type as string
-      if (type !== "ACTIVE_CONTEXT_RESULT" && type !== "ACTIVE_CONTEXT_PUSH") return
+      if (!HANDLED_EXT_EVENTS.has(msg.type as string)) return
 
       const ctx = (msg.context ?? null) as ActiveBrowserContext | null
 
@@ -114,4 +136,25 @@ export function useActiveBrowserContext(): BrowserContextState & {
   }, [handleMessage, requestSync])
 
   return { ...state, requestSync }
+}
+
+// ── Scout → Extension command sender ─────────────────────────────────────────
+
+/**
+ * Posts a command to the extension via the hireoven.com content script bridge.
+ * The content script relays it to the background service worker, which forwards
+ * it to the most recently active job site tab.
+ *
+ * Commands are informational — they may open UI in the extension but never
+ * perform autonomous actions (no auto-submit, no silent autofill).
+ */
+export function sendExtensionCommand(
+  command: ScoutExtensionCommand,
+  payload?: Record<string, unknown>,
+): void {
+  if (typeof window === "undefined") return
+  window.postMessage(
+    { source: FROM_SCOUT, type: command, ...payload },
+    window.location.origin,
+  )
 }

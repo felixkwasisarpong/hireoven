@@ -1928,6 +1928,22 @@ export class PageAwareControlSystem {
     })
   }
 
+  /**
+   * Execute a Scout command by name — used when the background relays
+   * commands from the Scout dashboard (OPEN_AUTOFILL, START_TAILOR, etc.).
+   * Maps command names to the existing onAction action strings.
+   */
+  public executeAction(command: string): void {
+    const commandMap: Record<string, string> = {
+      OPEN_AUTOFILL: "autofill",
+      START_TAILOR:  "tailor",
+      START_COMPARE: "open-dashboard",
+      START_WORKFLOW: "open-dashboard",
+    }
+    const action = commandMap[command] ?? command.toLowerCase().replace(/_/g, "-")
+    void this.onAction(action)
+  }
+
   private openPath(path: string): void {
     window.open(`${this.appOrigin}${path}`, "_blank", "noopener")
   }

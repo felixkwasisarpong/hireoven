@@ -218,6 +218,7 @@ export type BackgroundMessageType =
   | "LIST_RESUMES"
   | "GET_WORKFLOW_STATE"
   | "GET_ACTIVE_CONTEXT"
+  | "RELAY_SCOUT_COMMAND"
 
 export interface ExtensionResumeSummary {
   id: string
@@ -327,6 +328,7 @@ export type BackgroundMessage =
   | ListResumesMessage
   | GetWorkflowStateMessage
   | GetActiveContextMessage
+  | RelayScoutCommandMessage
 
 export interface ExtensionSessionUser {
   id: string
@@ -452,6 +454,7 @@ export type BackgroundResponse =
   | ListResumesResult
   | WorkflowStateResult
   | ActiveContextResult
+  | RelayScoutCommandResult
   | BackgroundError
 
 // ── Active browser context ────────────────────────────────────────────────────
@@ -479,10 +482,18 @@ export interface ActiveBrowserContext {
   timestamp: number
 }
 
-/** Background → hireoven content script: push updated context */
+/** Background → hireoven content script: push context with named events to broadcast */
 export interface BroadcastContextMessage {
   type: "BROADCAST_CONTEXT"
   context: ActiveBrowserContext | null
+  /**
+   * Spec-named events to broadcast as separate window.postMessage calls:
+   *   ACTIVE_CONTEXT_CHANGED — always sent
+   *   AUTOFILL_AVAILABLE     — when pageType changes to application_form
+   *   JOB_RESOLVED           — when detectedJobId first appears
+   *   PAGE_MODE_CHANGED      — when pageType changes from a previous value
+   */
+  events: string[]
 }
 
 /** Popup / hireoven page bridge → background: request stored context */
@@ -494,6 +505,32 @@ export interface GetActiveContextMessage {
 export interface ActiveContextResult {
   type: "ACTIVE_CONTEXT_RESULT"
   context: ActiveBrowserContext | null
+}
+
+/** Scout commands that hireoven.com page can send to the extension */
+export type ScoutExtensionCommandType =
+  | "OPEN_AUTOFILL"
+  | "START_TAILOR"
+  | "START_COMPARE"
+  | "START_WORKFLOW"
+
+/** Content script on hireoven.com → background: relay a Scout UI command to the active job tab */
+export interface RelayScoutCommandMessage {
+  type: "RELAY_SCOUT_COMMAND"
+  command: ScoutExtensionCommandType
+  payload?: Record<string, unknown>
+}
+
+/** Background → content script on job site: execute a Scout command */
+export interface ExecuteScoutCommandMessage {
+  type: "EXECUTE_SCOUT_COMMAND"
+  command: ScoutExtensionCommandType
+  payload?: Record<string, unknown>
+}
+
+export interface RelayScoutCommandResult {
+  type: "RELAY_SCOUT_COMMAND_RESULT"
+  delivered: boolean
 }
 
 // ── Workflow extension state ──────────────────────────────────────────────────

@@ -19,6 +19,7 @@ import type {
   ContentResponse,
   ExtractedJob,
   ExtensionSafeProfile,
+  RelayScoutCommandResult,
   SessionResult,
   ResolveJobResult,
   SaveResult,
@@ -56,6 +57,12 @@ const SESSION_COOKIE_NAME = "ho_session"
 
 let activeContextCache: ActiveBrowserContext | null = null
 let contextRefreshTimer: ReturnType<typeof setTimeout> | null = null
+
+/**
+ * Most recently active tab that was a supported JOB page (not hireoven itself).
+ * Used to relay Scout→Extension commands to the right destination tab.
+ */
+let lastJobTabId: number | null = null
 
 /** Map a detected page type to the ActiveBrowserContext page type. */
 function mapPageType(
@@ -117,7 +124,34 @@ async function buildContextFromTab(tabId: number, tabUrl: string): Promise<Activ
   }
 }
 
-async function pushContextToHireovenTabs(context: ActiveBrowserContext | null): Promise<void> {
+/**
+ * Build the list of spec-named events to broadcast alongside a context update.
+ * The content script posts each event as a separate window.postMessage so the
+ * dashboard hook can react to fine-grained signals.
+ */
+function buildEventNames(
+  next: ActiveBrowserContext | null,
+  prev: ActiveBrowserContext | null,
+): string[] {
+  const events: string[] = ["ACTIVE_CONTEXT_CHANGED"]
+  if (!next) return events
+
+  if (next.autofillAvailable && !prev?.autofillAvailable) {
+    events.push("AUTOFILL_AVAILABLE")
+  }
+  if (next.detectedJobId && !prev?.detectedJobId) {
+    events.push("JOB_RESOLVED")
+  }
+  if (prev && next.pageType !== prev.pageType) {
+    events.push("PAGE_MODE_CHANGED")
+  }
+  return events
+}
+
+async function pushContextToHireovenTabs(
+  context: ActiveBrowserContext | null,
+  events: string[],
+): Promise<void> {
   const origin = await resolveOrigin()
   const patterns =
     origin === APP_ORIGINS[1]
@@ -129,7 +163,7 @@ async function pushContextToHireovenTabs(context: ActiveBrowserContext | null): 
       const tabs = await chrome.tabs.query({ url: pattern })
       for (const tab of tabs) {
         if (!tab.id) continue
-        chrome.tabs.sendMessage(tab.id, { type: "BROADCAST_CONTEXT", context }).catch(() => {})
+        chrome.tabs.sendMessage(tab.id, { type: "BROADCAST_CONTEXT", context, events }).catch(() => {})
       }
     } catch {
       // no matching tabs or query error — skip silently
@@ -143,8 +177,14 @@ function scheduleContextRefresh(tabId: number, tabUrl: string, delayMs = 700): v
     contextRefreshTimer = null
     buildContextFromTab(tabId, tabUrl)
       .then((context) => {
+        const prev = activeContextCache
         activeContextCache = context
-        void pushContextToHireovenTabs(context)
+        // Track which tab most recently had a job page so we can relay Scout commands to it
+        if (context && context.pageType !== "unknown") {
+          lastJobTabId = tabId
+        }
+        const events = buildEventNames(context, prev)
+        void pushContextToHireovenTabs(context, events)
       })
       .catch(() => {})
   }, delayMs)
@@ -335,6 +375,9 @@ async function handleMessage(
 
     case "GET_ACTIVE_CONTEXT":
       return handleGetActiveContext()
+
+    case "RELAY_SCOUT_COMMAND":
+      return handleRelayScoutCommand(message.command, message.payload)
 
     case "GET_WORKFLOW_STATE":
       return { type: "WORKFLOW_STATE_RESULT", state: null } as WorkflowStateResult
@@ -714,6 +757,26 @@ async function handleListResumes(): Promise<ListResumesResult> {
 
 function handleGetActiveContext(): ActiveContextResult {
   return { type: "ACTIVE_CONTEXT_RESULT", context: activeContextCache }
+}
+
+async function handleRelayScoutCommand(
+  command: string,
+  payload?: Record<string, unknown>,
+): Promise<RelayScoutCommandResult> {
+  if (!lastJobTabId) {
+    return { type: "RELAY_SCOUT_COMMAND_RESULT", delivered: false }
+  }
+  try {
+    await chrome.tabs.sendMessage(lastJobTabId, {
+      type: "EXECUTE_SCOUT_COMMAND",
+      command,
+      payload: payload ?? {},
+    })
+    return { type: "RELAY_SCOUT_COMMAND_RESULT", delivered: true }
+  } catch {
+    lastJobTabId = null // tab was closed or unresponsive
+    return { type: "RELAY_SCOUT_COMMAND_RESULT", delivered: false }
+  }
 }
 
 // ── Tab monitoring ─────────────────────────────────────────────────────────────

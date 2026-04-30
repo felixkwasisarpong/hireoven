@@ -18,6 +18,8 @@ import { useWorkflowEngine } from "@/lib/scout/workflows/engine"
 import { WorkflowPanel } from "@/components/scout/workflows/WorkflowPanel"
 import { useActiveBrowserContext } from "@/lib/scout/browser-context"
 import { getContextualChips, getContextualPlaceholder } from "@/lib/scout/context-chips"
+import { writePinnedContext } from "@/lib/scout/pinned-context"
+import { BrowserContextRail } from "@/components/scout/workspace/BrowserContextRail"
 import { getScoutSuggestionChips } from "@/lib/scout/mode"
 import { getScoutNudges } from "@/lib/scout/nudges"
 import { detectScoutMode } from "@/lib/scout/mode"
@@ -163,6 +165,18 @@ export function ScoutWorkspaceShell() {
   const firstName = fullName?.split(" ")[0] ?? "there"
   const hour      = new Date().getHours()
   const greeting  = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening"
+
+  // ── Pin browser context to sessionStorage so workflows can read it ───────────
+  useEffect(() => {
+    if (!browserContext || browserContext.pageType === "unknown") return
+    writePinnedContext({
+      company:    browserContext.company,
+      jobTitle:   browserContext.title,
+      ats:        browserContext.atsProvider,
+      pageUrl:    browserContext.url,
+      jobId:      browserContext.detectedJobId,
+    })
+  }, [browserContext])
 
   // ── Adaptive chips — extension context overrides defaults when idle ──────────
   const displayChips = useMemo(() => {
@@ -369,6 +383,7 @@ export function ScoutWorkspaceShell() {
 
   function handleChipClick(chip: string) { setQuery(chip); setTimeout(() => inputRef.current?.focus(), 50) }
   function handleFollowUp(text: string)  { setQuery(text); setTimeout(() => inputRef.current?.focus(), 50) }
+  function handleSendCommand(query: string) { setQuery(query); setTimeout(() => inputRef.current?.focus(), 50) }
 
   function handleClearChat() {
     setMessages([]); setError(null); setActiveResponse(null)
@@ -510,15 +525,24 @@ export function ScoutWorkspaceShell() {
           />
         </div>
 
-        {/* Context rail — slides in when Scout provides navigation actions */}
-        {rail && (
+        {/* Context rail — Scout-driven rail takes priority over browser context rail */}
+        {rail ? (
           <div className={cn(
             "hidden transition-all duration-200 lg:block",
-            rail ? "opacity-100 translate-x-0" : "opacity-0 translate-x-4"
+            "opacity-100 translate-x-0"
           )}>
             <ContextRail rail={rail} onClose={() => setRail(null)} />
           </div>
-        )}
+        ) : browserContext && browserContext.pageType !== "unknown" ? (
+          <div className="hidden transition-all duration-200 lg:block opacity-100 translate-x-0">
+            <BrowserContextRail
+              context={browserContext}
+              activeWorkflow={workflowEngine.activeWorkflow}
+              onPreFill={handleSendCommand}
+              onExpandWorkflow={() => workflowEngine.setExpanded(true)}
+            />
+          </div>
+        ) : null}
       </div>
       {/* ── Command palette ──────────────────────────────────────────── */}
       <ScoutCommandPalette

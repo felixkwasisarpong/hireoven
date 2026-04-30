@@ -235,6 +235,9 @@ function registerMessageBridge(): void {
   )
 }
 
+// Module-level ref so EXECUTE_SCOUT_COMMAND can reach the live overlay instance
+let overlayRuntime: PageAwareControlSystem | null = null
+
 async function mountOverlayWhenReady(): Promise<void> {
   if (!isTopFrame()) return
   if (!shouldOverlayThisHost()) return
@@ -249,9 +252,21 @@ async function mountOverlayWhenReady(): Promise<void> {
     })
   }
 
-  const runtime = new PageAwareControlSystem({ resolveAppOrigin })
-  await runtime.mount()
+  overlayRuntime = new PageAwareControlSystem({ resolveAppOrigin })
+  await overlayRuntime.mount()
 }
+
+// ── Receive Scout commands on job site tabs ───────────────────────────────────
+chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {
+  if (typeof message !== "object" || message === null) return false
+  const msg = message as Record<string, unknown>
+  if (msg.type !== "EXECUTE_SCOUT_COMMAND" || !overlayRuntime) return false
+
+  const cmd = msg.command as string
+  overlayRuntime.executeAction(cmd)
+  sendResponse({ ok: true })
+  return true
+})
 
 // ── Hireoven dashboard ↔ extension bridge ─────────────────────────────────────
 //
@@ -278,6 +293,9 @@ function registerPageBridge(): void {
   if (!isHireovenPage()) return
 
   // Page → extension: Scout dashboard requests current context
+  // ── Page → Extension: Scout dashboard sends requests and commands ────────────
+  const SCOUT_RELAY_COMMANDS = new Set(["OPEN_AUTOFILL", "START_TAILOR", "START_COMPARE", "START_WORKFLOW"])
+
   window.addEventListener("message", (event) => {
     if (event.source !== window) return
     if (typeof event.data !== "object" || event.data === null) return
@@ -285,30 +303,46 @@ function registerPageBridge(): void {
     if (msg.source !== SCOUT_SOURCE) return
 
     if (msg.type === "GET_ACTIVE_CONTEXT") {
+      // Pull: request stored context from background and echo back as ACTIVE_CONTEXT_CHANGED
       chrome.runtime.sendMessage({ type: "GET_ACTIVE_CONTEXT" }, (response) => {
         if (chrome.runtime.lastError) return
         const ctx = (response as { context?: unknown })?.context ?? null
         window.postMessage(
-          { source: EXT_SOURCE, type: "ACTIVE_CONTEXT_RESULT", context: ctx },
+          { source: EXT_SOURCE, type: "ACTIVE_CONTEXT_CHANGED", context: ctx },
           window.location.origin,
         )
+      })
+      return
+    }
+
+    // Scout UI commands — relay to background which forwards to active job tab
+    if (SCOUT_RELAY_COMMANDS.has(msg.type as string)) {
+      chrome.runtime.sendMessage({
+        type: "RELAY_SCOUT_COMMAND",
+        command: msg.type,
+        payload: typeof msg.payload === "object" ? msg.payload : {},
       })
     }
   })
 
-  // Extension → page: background pushes context on tab/URL changes.
-  // Note: the existing registerMessageBridge() listener will catch BROADCAST_CONTEXT
-  // in its default case and send an ERROR response (harmless for push-only operations).
-  // This separate listener posts the context to the page window.
+  // ── Extension → Page: background pushes context with spec-named events ────────
+  // The existing registerMessageBridge() listener catches BROADCAST_CONTEXT in its
+  // default case and sends an ERROR response — harmless; the window.postMessage still fires.
   chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {
     if (typeof message !== "object" || message === null) return false
     const msg = message as Record<string, unknown>
     if (msg.type !== "BROADCAST_CONTEXT") return false
 
-    window.postMessage(
-      { source: EXT_SOURCE, type: "ACTIVE_CONTEXT_PUSH", context: msg.context ?? null },
-      window.location.origin,
-    )
+    const context = msg.context ?? null
+    const events = Array.isArray(msg.events) ? (msg.events as string[]) : ["ACTIVE_CONTEXT_CHANGED"]
+
+    for (const eventType of events) {
+      window.postMessage(
+        { source: EXT_SOURCE, type: eventType, context },
+        window.location.origin,
+      )
+    }
+
     sendResponse({ ok: true })
     return true
   })
