@@ -37,6 +37,11 @@ export type LearningApplicationRow = {
   notes?:       string | null
   /** Inferred from the outcome note JSON if stored */
   outcome?:     ApplicationOutcome
+  // V2 enrichment — populated via company join in the API query
+  sponsors_h1b?:       boolean | null
+  company_industry?:   string | null
+  job_id?:             string | null
+  company_id?:         string | null
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -239,12 +244,200 @@ function computeStats(apps: LearningApplicationRow[]) {
   }
 }
 
+// ── V2 Signal generators ──────────────────────────────────────────────────────
+
+import { inferRoleCategory, inferSector } from "./categorizers"
+
+/**
+ * Role-type traction: which role category produces the most positive outcomes?
+ * Requires at least 6 terminal applications to derive a reliable pattern.
+ */
+function roleTypeTractionSignal(apps: LearningApplicationRow[]): OutcomeLearningSignal | null {
+  const terminal = apps.filter(isTerminal)
+  if (terminal.length < 6) return null
+
+  // Group by inferred role category
+  const buckets = new Map<string, Bucket>()
+  for (const app of terminal) {
+    const cat = inferRoleCategory(app.job_title)
+    const b = buckets.get(cat) ?? { total: 0, positive: 0 }
+    b.total++
+    if (isPositiveOutcome(app)) b.positive++
+    buckets.set(cat, b)
+  }
+
+  // Need at least 2 categories with ≥2 applications each to compare
+  const eligible = [...buckets.entries()].filter(([, b]) => b.total >= 2)
+  if (eligible.length < 2) return null
+
+  // Find the best-performing category vs rest
+  const ranked = eligible
+    .map(([cat, b]) => ({ cat, rate: rate(b), total: b.total, positive: b.positive }))
+    .sort((a, b) => b.rate - a.rate)
+
+  const best = ranked[0]
+  const rest = ranked.slice(1)
+  const avgRest = rest.length
+    ? Math.round(rest.reduce((s, x) => s + x.rate, 0) / rest.length)
+    : 0
+
+  if (best.rate - avgRest < 15) return null
+
+  const { ROLE_CATEGORY_LABELS } = require("./categorizers")
+  const label = ROLE_CATEGORY_LABELS[best.cat] ?? best.cat
+
+  return {
+    id:        `role-traction-${best.cat}`,
+    signal:    `${label} roles appear to produce stronger responses for your profile (${best.rate}% response vs ${avgRest}% avg for other categories).`,
+    evidence:  [`${best.positive} of ${best.total} ${label} applications advanced`],
+    confidence: confidenceFromCount(terminal.length),
+    suggestedAction: `Prioritise ${label.toLowerCase()} roles in your next application batch`,
+    dimension:  "role_type",
+  }
+}
+
+/**
+ * Sector traction: which industry sector responds better?
+ * Requires company name + industry data (V2 enriched row).
+ */
+function sectorTractionSignal(apps: LearningApplicationRow[]): OutcomeLearningSignal | null {
+  const terminal = apps.filter(isTerminal)
+  if (terminal.length < 6) return null
+
+  const buckets = new Map<string, Bucket>()
+  for (const app of terminal) {
+    const sector = inferSector(app.job_title, app.company_name, app.company_industry)
+    if (!sector) continue
+    const b = buckets.get(sector) ?? { total: 0, positive: 0 }
+    b.total++
+    if (isPositiveOutcome(app)) b.positive++
+    buckets.set(sector, b)
+  }
+
+  const eligible = [...buckets.entries()].filter(([, b]) => b.total >= 2)
+  if (eligible.length < 2) return null
+
+  const ranked = eligible
+    .map(([sector, b]) => ({ sector, rate: rate(b), total: b.total, positive: b.positive }))
+    .sort((a, b) => b.rate - a.rate)
+
+  const best = ranked[0]
+  const rest = ranked.slice(1)
+  const avgRest = rest.length
+    ? Math.round(rest.reduce((s, x) => s + x.rate, 0) / rest.length)
+    : 0
+
+  if (best.rate - avgRest < 15) return null
+
+  const { JOB_SECTOR_LABELS } = require("./categorizers")
+  const label = JOB_SECTOR_LABELS[best.sector] ?? best.sector
+
+  return {
+    id:        `sector-traction-${best.sector}`,
+    signal:    `${label} applications appear to convert better for your profile (${best.rate}% response vs ${avgRest}% for other sectors).`,
+    evidence:  [`${best.positive} of ${best.total} ${label} applications advanced`],
+    confidence: confidenceFromCount(terminal.length),
+    suggestedAction: `Target ${label.toLowerCase()} companies in your next applications`,
+    dimension:  "company_type",
+  }
+}
+
+/**
+ * Sponsorship-friendly companies: do H-1B sponsors respond better?
+ * Only computed when the enriched row includes sponsors_h1b.
+ */
+function sponsorshipFriendlySignal(apps: LearningApplicationRow[]): OutcomeLearningSignal | null {
+  const withSponsorData = apps.filter(
+    (a) => isTerminal(a) && typeof a.sponsors_h1b === "boolean",
+  )
+  if (withSponsorData.length < 5) return null
+
+  const sponsors    = withSponsorData.filter((a) => a.sponsors_h1b === true)
+  const nonSponsors = withSponsorData.filter((a) => a.sponsors_h1b === false)
+  if (sponsors.length < 2 || nonSponsors.length < 2) return null
+
+  const sponsorRate    = rate({ total: sponsors.length,    positive: sponsors.filter(isPositiveOutcome).length })
+  const nonSponsorRate = rate({ total: nonSponsors.length, positive: nonSponsors.filter(isPositiveOutcome).length })
+  const diff = sponsorRate - nonSponsorRate
+
+  if (Math.abs(diff) < 12) return null
+
+  if (diff > 0) {
+    return {
+      id:        "sponsorship-friendly-better",
+      signal:    `H-1B sponsoring companies appear to respond more often for your profile (${sponsorRate}% vs ${nonSponsorRate}% for non-sponsoring).`,
+      evidence:  [`${sponsors.filter(isPositiveOutcome).length} of ${sponsors.length} sponsor-company applications advanced`],
+      confidence: confidenceFromCount(withSponsorData.length),
+      suggestedAction: "Prioritise sponsorship-friendly companies when searching",
+      dimension:  "sponsorship",
+    }
+  } else {
+    return {
+      id:        "non-sponsor-better",
+      signal:    `Applications to non-sponsoring companies seem to progress further (${nonSponsorRate}% vs ${sponsorRate}% for H-1B sponsors). This can indicate application volume or role fit differences.`,
+      evidence:  [`${nonSponsors.filter(isPositiveOutcome).length} of ${nonSponsors.length} non-sponsor applications advanced`],
+      confidence: confidenceFromCount(withSponsorData.length),
+      suggestedAction: "Review application targeting — sponsorship signal alone may not be the deciding factor",
+      dimension:  "sponsorship",
+    }
+  }
+}
+
+/**
+ * Workflow conversion: applications from Scout's apply queue (source="scout_bulk")
+ * vs manually submitted — which converts better?
+ */
+function workflowConversionSignal(apps: LearningApplicationRow[]): OutcomeLearningSignal | null {
+  const terminal = apps.filter(isTerminal)
+  if (terminal.length < 6) return null
+
+  const workflow = terminal.filter((a) => a.source === "scout_bulk")
+  const manual   = terminal.filter((a) => a.source !== "scout_bulk")
+  if (workflow.length < 2 || manual.length < 2) return null
+
+  const workflowRate = rate({ total: workflow.length, positive: workflow.filter(isPositiveOutcome).length })
+  const manualRate   = rate({ total: manual.length,   positive: manual.filter(isPositiveOutcome).length })
+  const diff = workflowRate - manualRate
+
+  if (Math.abs(diff) < 10) return null
+
+  if (diff > 0) {
+    return {
+      id:        "workflow-converts-better",
+      signal:    `Applications prepared via Scout's apply queue appear to get more responses (${workflowRate}% vs ${manualRate}% for manually submitted). Tailored resumes and cover letters may be contributing.`,
+      evidence:  [`${workflow.filter(isPositiveOutcome).length} of ${workflow.length} queue-prepared applications advanced`],
+      confidence: confidenceFromCount(terminal.length),
+      suggestedAction: "Continue using Scout's apply queue with tailoring for new applications",
+      dimension:  "general",
+    }
+  } else {
+    return {
+      id:        "manual-converts-better",
+      signal:    `Manually submitted applications appear to advance at a slightly higher rate (${manualRate}% vs ${workflowRate}%). This could reflect targeted, high-intent applications.`,
+      evidence:  [`${manual.filter(isPositiveOutcome).length} of ${manual.length} manual applications advanced`],
+      confidence: confidenceFromCount(terminal.length),
+      suggestedAction: "Focus queue preparation on roles where you have a strong match score",
+      dimension:  "general",
+    }
+  }
+}
+
 // ── Main export ───────────────────────────────────────────────────────────────
 
 export function computeOutcomeLearning(apps: LearningApplicationRow[]): OutcomeLearningResult {
   const signals: OutcomeLearningSignal[] = []
 
-  const generators = [remoteVsOnsiteSignal, matchScoreSignal, velocitySignal, ghostingSignal]
+  const generators = [
+    remoteVsOnsiteSignal,
+    matchScoreSignal,
+    velocitySignal,
+    ghostingSignal,
+    // V2 generators
+    roleTypeTractionSignal,
+    sectorTractionSignal,
+    sponsorshipFriendlySignal,
+    workflowConversionSignal,
+  ]
   for (const gen of generators) {
     const s = gen(apps)
     if (s) signals.push(s)

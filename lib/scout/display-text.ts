@@ -9,8 +9,9 @@
  *   1. Empty / whitespace → return ""
  *   2. Markdown code fence wrapping JSON → unwrap + extract `.answer`
  *   3. Whole string is a JSON object with an `.answer` string → extract it
- *   4. String starts with `{` or `[` (looks like JSON) → return fallback
- *   5. Anything else → return trimmed text
+ *   4. JSON fragment text (e.g. `"answer": ...`) → attempt recovery
+ *   5. Structured-looking JSON/fragment text → return fallback
+ *   6. Anything else → return trimmed text
  */
 
 function stripCodeFence(text: string): string {
@@ -41,6 +42,28 @@ function extractJsonCandidate(text: string): string | null {
 }
 
 const JSON_START_RE = /^\s*[{[]/
+const JSON_FRAGMENT_START_RE = /^\s*"answer"\s*:/
+
+function tryParsePatchedObject(text: string): Record<string, unknown> | null {
+  const cleaned = stripCodeFence(text.trim())
+  if (!JSON_FRAGMENT_START_RE.test(cleaned)) return null
+  try {
+    const parsed = JSON.parse(`{${cleaned}`) as unknown
+    if (parsed && typeof parsed === "object") return parsed as Record<string, unknown>
+  } catch {
+    // Ignore malformed fragments.
+  }
+  return null
+}
+
+function looksLikeRawStructuredText(text: string): boolean {
+  const cleaned = stripCodeFence(text.trim())
+  if (!cleaned) return false
+  if (JSON_START_RE.test(cleaned)) return true
+  if (JSON_FRAGMENT_START_RE.test(cleaned)) return true
+  if (cleaned.includes('"recommendation"') && cleaned.includes('"actions"')) return true
+  return false
+}
 
 export function getScoutDisplayText(answer: string): string {
   if (!answer || !answer.trim()) return ""
@@ -64,8 +87,14 @@ export function getScoutDisplayText(answer: string): string {
     }
   }
 
+  const patched = tryParsePatchedObject(trimmed)
+  if (patched && typeof patched.answer === "string") {
+    const inner = patched.answer.trim()
+    if (inner && !looksLikeRawStructuredText(inner)) return inner
+  }
+
   // Whole string looks like JSON → never show it as prose
-  if (JSON_START_RE.test(stripCodeFence(trimmed))) {
+  if (looksLikeRawStructuredText(trimmed)) {
     return "Scout prepared a structured response — see the cards and actions below."
   }
 
@@ -78,5 +107,5 @@ export function getScoutDisplayText(answer: string): string {
  */
 export function isRawJson(text: string): boolean {
   if (!text) return false
-  return JSON_START_RE.test(stripCodeFence(text.trim()))
+  return looksLikeRawStructuredText(text)
 }

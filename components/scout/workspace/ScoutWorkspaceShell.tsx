@@ -3,21 +3,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { usePathname, useSearchParams } from "next/navigation"
 import Link from "next/link"
-import { Clock, LayoutDashboard, Mic, PanelBottomOpen, Shield, Sparkles, X } from "lucide-react"
+import dynamic from "next/dynamic"
+import { Brain, Clock, LayoutDashboard, Shield, Sparkles, X } from "lucide-react"
+import { runQualityControl, buildQCContext } from "@/lib/scout/quality-control"
 import { ScoutCommandBar } from "./ScoutCommandBar"
 import { WorkspaceSurface } from "./WorkspaceSurface"
 import { IdleMode } from "./IdleMode"
-import { SearchMode } from "./SearchMode"
-import { CompareMode } from "./CompareMode"
-import { TailorMode } from "./TailorMode"
-import { ApplicationMode } from "./ApplicationMode"
-import { BulkApplicationMode } from "./BulkApplicationMode"
-import { CompanyMode } from "./CompanyMode"
-import { BulkConfirmDialog } from "@/components/scout/bulk/BulkConfirmDialog"
-import { BulkReviewDrawer } from "@/components/scout/bulk/BulkReviewDrawer"
 import { ContextRail } from "./ContextRail"
-import { CompanyIntelRail } from "@/components/scout/CompanyIntelRail"
-import { ScoutCommandPalette } from "./ScoutCommandPalette"
+import { BrowserActionStrip } from "./BrowserActionStrip"
+import { ScoutErrorBoundary } from "@/components/scout/ScoutErrorBoundary"
+import { ScoutMemoryChips } from "@/components/scout/ScoutMemoryChips"
+import { ScoutProactiveStrip } from "@/components/scout/proactive/ScoutProactiveStrip"
+import { ScoutProactiveRail } from "@/components/scout/proactive/ScoutProactiveRail"
+import { ScoutMarketRail } from "@/components/scout/ScoutMarketRail"
+import { BrowserContextRail } from "@/components/scout/workspace/BrowserContextRail"
 import { useWorkflowEngine } from "@/lib/scout/workflows/engine"
 import { useBulkApplicationEngine } from "@/lib/scout/bulk-application/engine"
 import { useScoutStream } from "@/hooks/useScoutStream"
@@ -25,15 +24,9 @@ import { useResearchStream } from "@/hooks/useResearchStream"
 import { detectPreflightMode, PREFLIGHT_NARRATIVE } from "@/lib/scout/streaming/intent-preflight"
 import { isResearchIntent } from "@/lib/scout/research/tasks"
 import { writeResearchTask, readResearchTask } from "@/lib/scout/research/store"
-import { ResearchMode } from "./ResearchMode"
-import { OutreachMode } from "./OutreachMode"
-import { InterviewPrepMode } from "./InterviewPrepMode"
-import { CareerStrategyMode } from "./CareerStrategyMode"
 import { isCareerStrategyIntent } from "@/lib/scout/career/intent"
 import { useCareerStrategy } from "@/hooks/useCareerStrategy"
 import { useScoutBrowserOperator } from "@/hooks/useScoutBrowserOperator"
-import { BrowserActionStrip } from "./BrowserActionStrip"
-import { ScoutErrorBoundary } from "@/components/scout/ScoutErrorBoundary"
 import { SCOUT_FLAGS } from "@/lib/scout/flags"
 import {
   isFirstRun as detectFirstRun,
@@ -44,10 +37,7 @@ import {
   dismissExtPromo,
 } from "@/lib/scout/first-run"
 import { useScoutTimeline } from "@/hooks/useScoutTimeline"
-import { ScoutTimelinePanel } from "@/components/scout/timeline/ScoutTimelinePanel"
 import { useScoutProactive } from "@/hooks/useScoutProactive"
-import { ScoutProactiveStrip } from "@/components/scout/proactive/ScoutProactiveStrip"
-import { ScoutProactiveRail } from "@/components/scout/proactive/ScoutProactiveRail"
 import type {
   ScoutTimelineEvent,
   ScoutTimelineReplayAction,
@@ -62,12 +52,9 @@ import {
   setMissionsDisabled,
 } from "@/lib/scout/missions/store"
 import type { ScoutMissionStore } from "@/lib/scout/missions/types"
-import { WorkflowPanel } from "@/components/scout/workflows/WorkflowPanel"
 import { useActiveBrowserContext } from "@/lib/scout/browser-context"
 import { getContextualChips, getContextualPlaceholder } from "@/lib/scout/context-chips"
 import { writePinnedContext } from "@/lib/scout/pinned-context"
-import { BrowserContextRail } from "@/components/scout/workspace/BrowserContextRail"
-import { MobileContextSheet } from "@/components/scout/workspace/MobileContextSheet"
 import {
   readSearchProfile,
   writeSearchProfile,
@@ -77,13 +64,7 @@ import {
   buildMemoryChips,
   type ScoutSearchProfile,
 } from "@/lib/scout/search-profile"
-import { ScoutMemoryChips } from "@/components/scout/ScoutMemoryChips"
 import { getPersonalizedChips } from "@/lib/scout/mode"
-import { ScoutMarketRail } from "@/components/scout/ScoutMarketRail"
-import { ScoutContinuationStrip } from "@/components/scout/continuation/ScoutContinuationStrip"
-import type { MarketSignal } from "@/lib/scout/market-intelligence"
-import { ScoutActionGate } from "@/components/scout/ScoutActionGate"
-import { ScoutPermissionsPanel } from "@/components/scout/ScoutPermissionsPanel"
 import { readPermissions, type ScoutPermissionState } from "@/lib/scout/permissions"
 import { getScoutSuggestionChips } from "@/lib/scout/mode"
 import { getScoutNudges } from "@/lib/scout/nudges"
@@ -99,6 +80,7 @@ import {
 } from "@/lib/scout/session"
 import { useResumeContext } from "@/components/resume/ResumeProvider"
 import { useAuth } from "@/lib/hooks/useAuth"
+import type { ApplyAgentDirective } from "@/lib/scout/apply-agent/types"
 import type { ScoutResponse, ScoutStrategyBoard } from "@/lib/scout/types"
 import type { ScoutBehaviorSignals } from "@/lib/scout/behavior"
 import type { ScoutNudge } from "@/lib/scout/nudges"
@@ -106,7 +88,33 @@ import type { OutcomeLearningResult } from "@/lib/scout/outcomes/types"
 import { useScoutContinuation } from "@/hooks/useScoutContinuation"
 import { mergeResumableContexts } from "@/lib/scout/continuation/sanitize"
 import type { ScoutResumableContext } from "@/lib/scout/continuation/types"
+import type { MarketSignal } from "@/lib/scout/market-intelligence"
 import { cn } from "@/lib/utils"
+
+// ── Lazy-loaded workspace modes (only one is rendered at a time) ──────────────
+const SearchMode         = dynamic(() => import("./SearchMode").then(m => ({ default: m.SearchMode })), { ssr: false })
+const CompareMode        = dynamic(() => import("./CompareMode").then(m => ({ default: m.CompareMode })), { ssr: false })
+const TailorMode         = dynamic(() => import("./TailorMode").then(m => ({ default: m.TailorMode })), { ssr: false })
+const ApplicationMode    = dynamic(() => import("./ApplicationMode").then(m => ({ default: m.ApplicationMode })), { ssr: false })
+const BulkApplicationMode = dynamic(() => import("./BulkApplicationMode").then(m => ({ default: m.BulkApplicationMode })), { ssr: false })
+const CompanyMode        = dynamic(() => import("./CompanyMode").then(m => ({ default: m.CompanyMode })), { ssr: false })
+const ResearchMode       = dynamic(() => import("./ResearchMode").then(m => ({ default: m.ResearchMode })), { ssr: false })
+const OutreachMode       = dynamic(() => import("./OutreachMode").then(m => ({ default: m.OutreachMode })), { ssr: false })
+const InterviewPrepMode  = dynamic(() => import("./InterviewPrepMode").then(m => ({ default: m.InterviewPrepMode })), { ssr: false })
+const CareerStrategyMode = dynamic(() => import("./CareerStrategyMode").then(m => ({ default: m.CareerStrategyMode })), { ssr: false })
+const ApplyAgentFlow     = dynamic(() => import("@/components/scout/ApplyAgentFlow").then(m => ({ default: m.ApplyAgentFlow })), { ssr: false })
+
+// ── Lazy-loaded panels (opened on demand) ─────────────────────────────────────
+const ScoutTimelinePanel  = dynamic(() => import("@/components/scout/timeline/ScoutTimelinePanel").then(m => ({ default: m.ScoutTimelinePanel })), { ssr: false })
+const CompanyIntelRail    = dynamic(() => import("@/components/scout/CompanyIntelRail").then(m => ({ default: m.CompanyIntelRail })), { ssr: false })
+const ScoutCommandPalette = dynamic(() => import("./ScoutCommandPalette").then(m => ({ default: m.ScoutCommandPalette })), { ssr: false })
+const WorkflowPanel       = dynamic(() => import("@/components/scout/workflows/WorkflowPanel").then(m => ({ default: m.WorkflowPanel })), { ssr: false })
+const ScoutActionGate     = dynamic(() => import("@/components/scout/ScoutActionGate").then(m => ({ default: m.ScoutActionGate })), { ssr: false })
+const ScoutPermissionsPanel = dynamic(() => import("@/components/scout/ScoutPermissionsPanel").then(m => ({ default: m.ScoutPermissionsPanel })), { ssr: false })
+const ScoutMemoryPanel    = dynamic(() => import("@/components/scout/memory/ScoutMemoryPanel").then(m => ({ default: m.ScoutMemoryPanel })), { ssr: false })
+const BulkConfirmDialog   = dynamic(() => import("@/components/scout/bulk/BulkConfirmDialog").then(m => ({ default: m.BulkConfirmDialog })), { ssr: false })
+const BulkReviewDrawer    = dynamic(() => import("@/components/scout/bulk/BulkReviewDrawer").then(m => ({ default: m.BulkReviewDrawer })), { ssr: false })
+const ScoutContinuationStrip = dynamic(() => import("@/components/scout/continuation/ScoutContinuationStrip").then(m => ({ default: m.ScoutContinuationStrip })), { ssr: false })
 
 type ChatMessage =
   | { id: string; role: "user";           text: string }
@@ -285,7 +293,6 @@ export function ScoutWorkspaceShell() {
   // ── Activity timeline ───────────────────────────────────────────────────────
   const timeline       = useScoutTimeline()
   const [showTimeline, setShowTimeline] = useState(false)
-  const [showMobileContext, setShowMobileContext] = useState(false)
   // Restored research task — used by session replay when research mode is re-entered
   const [restoredResearchTask, setRestoredResearchTask] = useState<ScoutResearchTask | null>(null)
 
@@ -302,6 +309,7 @@ export function ScoutWorkspaceShell() {
   // ── Permission gate (shell-level — handles events from any executor) ─────────
   const [activeGate,        setActiveGate]        = useState<import("@/components/scout/ScoutActionGate").GateRequest | null>(null)
   const [showPermissions,   setShowPermissions]   = useState(false)
+  const [memoryPanelOpen,   setMemoryPanelOpen]   = useState(false)
   const [shellPermissions,  setShellPermissions]  = useState<ScoutPermissionState[]>(() => readPermissions())
 
   // ── First-run + extension promo state — loaded after mount to avoid hydration mismatch ──
@@ -360,6 +368,7 @@ export function ScoutWorkspaceShell() {
   const [narrative,        setNarrative]        = useState<string>("")
   const [narrativeDismissed, setNarrativeDismissed] = useState(false)
   const [paletteOpen,      setPaletteOpen]      = useState(false)
+  const [applyAgent,       setApplyAgent]       = useState<ApplyAgentDirective | null>(null)
 
   // ── Session state ───────────────────────────────────────────────────────────
   const [recentCommands, setRecentCommands] = useState<string[]>([])
@@ -377,8 +386,25 @@ export function ScoutWorkspaceShell() {
   const [missionStore, setMissionStore] = useState<ScoutMissionStore | null>(null)
 
   // ── Derived ─────────────────────────────────────────────────────────────────
-  const scoutMode   = detectScoutMode(pathname ?? "")
-  const isFocusMode = searchParams.get("focus") === "1"
+  const scoutMode = detectScoutMode(pathname ?? "")
+
+  // Focus mode persists across navigation: read from URL param (when on /dashboard)
+  // OR from localStorage (when the user navigated back to /dashboard/scout).
+  // The action executor writes/clears localStorage when SET_FOCUS_MODE fires.
+  const [localFocusMode, setLocalFocusMode] = useState(() => {
+    if (typeof window === "undefined") return false
+    return localStorage.getItem("hireoven:scout-focus-mode:v1") === "1"
+  })
+  const isFocusMode = searchParams.get("focus") === "1" || localFocusMode
+
+  // Sync localStorage → state when the URL focus param changes
+  // (e.g. user visits /dashboard?focus=1 and then navigates to Scout)
+  useEffect(() => {
+    if (searchParams.get("focus") === "1") {
+      try { localStorage.setItem("hireoven:scout-focus-mode:v1", "1") } catch {}
+      setLocalFocusMode(true)
+    }
+  }, [searchParams])
 
   const nudges: ScoutNudge[] = useMemo(() => {
     if (!strategyBoard || !behaviorSignals) return []
@@ -861,21 +887,36 @@ export function ScoutWorkspaceShell() {
       commandStartedAtRef.current = null
     }
     lastDebugRef.current = normalized.debug ?? null
+
+    // ── Quality Control pass ─────────────────────────────────────────────────
+    // Run before setActiveResponse so every downstream consumer sees the
+    // validated, repaired response. Context flags are best-effort — undefined
+    // means "unknown / don't enforce that rule".
+    const qcCtx = buildQCContext({
+      hasMatchScore:       typeof normalized.confidence === "number" && normalized.confidence > 0,
+      userRequestedReset:  /\b(reset|clear|start\s+fresh|start\s+over)\b/i.test(query),
+      renderContext:       "dashboard",
+    })
+    const { safeResponse, issues: qcIssues } = runQualityControl(normalized, qcCtx)
+    if (qcIssues.length > 0 && process.env.NODE_ENV === "development") {
+      console.warn("[Scout QC] Shell:", qcIssues)
+    }
+
     setMessages((prev) =>
       prev.map((m) =>
-        m.id === id ? { id, role: "scout" as const, response: normalized } : m
+        m.id === id ? { id, role: "scout" as const, response: safeResponse } : m
       )
     )
     setIsLoading(false)
-    setActiveResponse(normalized)
+    setActiveResponse(safeResponse)
 
-    const directive = normalized.workspace_directive
-    const newMode   = directive?.mode ?? inferWorkspaceMode(normalized)
+    const directive = safeResponse.workspace_directive
+    const newMode   = directive?.mode ?? inferWorkspaceMode(safeResponse)
     setWorkspaceMode(newMode)
-    if (newMode !== "idle") setNarrative(buildNarrative(newMode, normalized))
-    setActiveEntities((prev) => extractEntities(normalized, prev))
+    if (newMode !== "idle") setNarrative(buildNarrative(newMode, safeResponse))
+    setActiveEntities((prev) => extractEntities(safeResponse, prev))
 
-    const profileUpdate = extractProfileUpdate(normalized, "")
+    const profileUpdate = extractProfileUpdate(safeResponse, "")
     if (Object.keys(profileUpdate).length > 0) {
       setSearchProfile((prev) => {
         const updated = mergeProfileUpdate(prev, profileUpdate)
@@ -884,19 +925,29 @@ export function ScoutWorkspaceShell() {
       })
     }
     if (newMode === "bulk_application") {
-      const bp = directive?.payload ?? {}
-      void bulkEngine.initQueue({ count: typeof bp.count === "number" ? bp.count : 10, requireSponsorshipSignal: Boolean(bp.requireSponsorshipSignal), workMode: typeof bp.workMode === "string" ? bp.workMode : undefined, minMatchScore: typeof bp.minMatchScore === "number" ? bp.minMatchScore : undefined })
+      // Prefer server-selected apply-agent jobs when available.
+      // This avoids running the legacy manual queue and the agent loop in parallel.
+      if (safeResponse.apply_agent?.jobs?.length) {
+        setApplyAgent(safeResponse.apply_agent)
+        if (bulkEngine.isConfirming) bulkEngine.cancelConfirm()
+      } else {
+        setApplyAgent(null)
+        const bp = directive?.payload ?? {}
+        void bulkEngine.initQueue({ count: typeof bp.count === "number" ? bp.count : 10, requireSponsorshipSignal: Boolean(bp.requireSponsorshipSignal), workMode: typeof bp.workMode === "string" ? bp.workMode : undefined, minMatchScore: typeof bp.minMatchScore === "number" ? bp.minMatchScore : undefined })
+      }
+    } else {
+      setApplyAgent(null)
     }
-    if (normalized.workflow_directive && newMode !== "bulk_application") {
-      workflowEngine.startWorkflow(normalized.workflow_directive.workflowType, normalized.workflow_directive.payload)
+    if (safeResponse.workflow_directive && newMode !== "bulk_application") {
+      workflowEngine.startWorkflow(safeResponse.workflow_directive.workflowType, safeResponse.workflow_directive.payload)
     }
-    const railActions = normalized.actions?.filter((a) => ["OPEN_JOB","OPEN_COMPANY","OPEN_RESUME_TAILOR"].includes(a.type))
+    const railActions = safeResponse.actions?.filter((a) => ["OPEN_JOB","OPEN_COMPANY","OPEN_RESUME_TAILOR"].includes(a.type))
     const newRail = directive?.rail !== undefined ? (directive.rail ?? null) : railActions?.length ? { title: "Scout context", summary: "Suggested next steps", actions: railActions } : null
     setRail(newRail)
     if (directive?.chips?.length) setChips(directive.chips)
     const updatedCmds = appendCommand(recentCommands, "")
     setHasSession(true)
-    writeScoutSession({ mode: newMode, chips: directive?.chips ?? chips, recentCommands: updatedCmds, rail: extractRailMetadata(newRail), modeMetadata: extractModeMetadata(newMode, normalized) })
+    writeScoutSession({ mode: newMode, chips: directive?.chips ?? chips, recentCommands: updatedCmds, rail: extractRailMetadata(newRail), modeMetadata: extractModeMetadata(newMode, safeResponse) })
     streamMsgId.current = null
   }, [scoutStream.finalResponse])
 
@@ -1554,30 +1605,42 @@ export function ScoutWorkspaceShell() {
     query.trim().length === 0 &&
     Boolean(proactive.topEvent)
 
-  return (
-    <main className="app-page pb-[max(6rem,calc(env(safe-area-inset-bottom)+5.5rem))]">
+  const workspaceModeLabel =
+    workspaceMode === "idle"
+      ? "Idle"
+      : workspaceMode
+          .replace(/_/g, " ")
+          .replace(/\b\w/g, (char) => char.toUpperCase())
 
-      {/* ── Command bar — dark, sticky ─────────────────────────────────── */}
-      <div className="sticky top-0 z-20 bg-slate-950 px-5 sm:px-8">
-        <div className="flex items-center justify-between pt-5 pb-4">
+  const statusLine = scoutStream.isStreaming
+    ? "Scout is thinking and preparing your next move."
+    : researchStream.isRunning
+      ? "Scout is researching and collecting evidence."
+      : workspaceMode === "idle"
+        ? "Ask Scout to search, compare, tailor, or run an application workflow."
+        : `Agent mode: ${workspaceModeLabel}`
+
+  return (
+    <main className="app-page bg-[linear-gradient(180deg,#fff6f1_0%,#fafaf9_24%,#fafaf9_100%)] pb-[max(6rem,calc(env(safe-area-inset-bottom)+5.5rem))]">
+
+      {/* ── Command bar — light, sticky ─────────────────────────────────── */}
+      <div className="sticky top-0 z-20 border-b border-[#FFD8C4] bg-[linear-gradient(180deg,rgba(255,248,242,0.98)_0%,rgba(255,255,255,0.94)_100%)] px-5 backdrop-blur-sm sm:px-8">
+        <div className="flex items-center justify-between pt-4 pb-3">
           <div className="flex items-center gap-2.5">
-            <div className="relative flex-shrink-0">
-              <div className="absolute inset-0 rounded-xl bg-[#FF5C18]/40 blur-md" />
-              <span className="relative inline-flex h-8 w-8 items-center justify-center rounded-xl bg-[#FF5C18] shadow-[0_4px_14px_rgba(255,92,24,0.5)]">
-                <Sparkles className="h-4 w-4 text-white" />
-              </span>
-            </div>
+            <span className="inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-[#FF5C18] shadow-[0_2px_8px_rgba(255,92,24,0.35)]">
+              <Sparkles className="h-3.5 w-3.5 text-white" />
+            </span>
             <div>
-              <p className="text-sm font-bold leading-none text-white">Scout</p>
-              <p className="mt-0.5 text-[10px] text-slate-400">AI job search workspace</p>
+              <p className="text-sm font-semibold leading-none text-slate-900">Scout Agent</p>
+              <p className="mt-0.5 text-[11px] text-slate-600">{statusLine}</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5">
             {/* Streaming activity indicator + cancel button */}
             {(scoutStream.isStreaming || researchStream.isRunning) && (
-              <div className="flex items-center gap-2">
-                <span className="flex items-center gap-1.5 text-[10px] font-medium text-[#FF5C18]/80">
+              <div className="flex items-center gap-2 pr-1.5">
+                <span className="flex items-center gap-1.5 text-[10px] font-medium text-[#FF5C18]">
                   <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#FF5C18]" />
                   {researchStream.isRunning ? "Researching…" : "Thinking…"}
                 </span>
@@ -1585,14 +1648,14 @@ export function ScoutWorkspaceShell() {
                   type="button"
                   onClick={researchStream.isRunning ? researchStream.cancel : scoutStream.cancel}
                   title="Stop Scout"
-                  className="rounded-lg border border-white/10 px-2 py-1 text-[10px] font-semibold text-slate-400 transition hover:border-red-500/40 hover:text-red-400"
+                  className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-slate-500 transition hover:border-red-300 hover:text-red-500"
                 >
                   Stop
                 </button>
               </div>
             )}
             {workspaceMode !== "idle" && !scoutStream.isStreaming && (
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-white/50">
+              <span className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
                 <span className="h-1.5 w-1.5 rounded-full bg-[#FF5C18]" />
                 {workspaceMode}
               </span>
@@ -1603,32 +1666,49 @@ export function ScoutWorkspaceShell() {
               onClick={() => setShowTimeline((v) => !v)}
               title="Activity timeline"
               className={cn(
-                "inline-flex items-center gap-1.5 text-[11px] font-medium transition",
-                showTimeline ? "text-[#FF5C18]" : "text-slate-500 hover:text-slate-300",
+                "inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition",
+                showTimeline
+                  ? "bg-[#FFF3EC] text-[#FF5C18]"
+                  : "text-slate-500 hover:bg-slate-100 hover:text-slate-800",
               )}
             >
               <Clock className="h-3.5 w-3.5" />
               {timeline.events.length > 0 && (
-                <span className="rounded-full bg-slate-700 px-1 py-0.5 text-[9px] tabular-nums text-slate-300">
+                <span className="rounded-full bg-slate-100 px-1 py-0.5 text-[9px] tabular-nums text-slate-500">
                   {timeline.events.length}
                 </span>
               )}
+            </button>
+            {/* Memory button */}
+            <button
+              type="button"
+              onClick={() => setMemoryPanelOpen(true)}
+              title="Scout Memory"
+              className="rounded-md px-2 py-1 text-[11px] font-medium text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
+            >
+              <span className="inline-flex items-center gap-1">
+                <Brain className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Memory</span>
+              </span>
             </button>
             {/* Permissions button */}
             <button
               type="button"
               onClick={() => setShowPermissions(true)}
               title="Scout permissions"
-              className="inline-flex items-center gap-1.5 text-[11px] font-medium text-slate-500 transition hover:text-slate-300"
+              className="rounded-md px-2 py-1 text-[11px] font-medium text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
             >
-              <Shield className="h-3.5 w-3.5" />
+              <span className="inline-flex items-center gap-1">
+                <Shield className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Permissions</span>
+              </span>
             </button>
             <Link
               href="/dashboard/scout/legacy"
-              className="inline-flex items-center gap-1.5 text-[11px] font-medium text-slate-500 transition hover:text-slate-300"
+              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
             >
               <LayoutDashboard className="h-3.5 w-3.5" />
-              Advanced
+              <span className="hidden sm:inline">Advanced</span>
             </Link>
           </div>
         </div>
@@ -1636,11 +1716,11 @@ export function ScoutWorkspaceShell() {
         <ScoutCommandBar
           query={query} onChange={setQuery} onSubmit={handleSubmit}
           isLoading={isLoading} chips={displayChips} onChipClick={handleChipClick}
-          inputRef={inputRef} variant="dark" commandHistory={recentCommands}
+          inputRef={inputRef} variant="light" commandHistory={recentCommands}
           onOpenPalette={() => setPaletteOpen(true)}
           placeholder={commandBarPlaceholder}
         />
-        <div className="h-5" />
+        <div className="h-2.5" />
       </div>
 
       {/* ── Browser action strip — non-intrusive, shown only when operator is active ── */}
@@ -1654,7 +1734,7 @@ export function ScoutWorkspaceShell() {
       )}
 
       {/* ── Workspace ─────────────────────────────────────────────────── */}
-      <div className="app-shell flex w-full max-w-6xl gap-6 py-6 pb-16">
+      <div className="app-shell flex w-full max-w-[1280px] gap-6 py-5 pb-16">
 
         {/* Main surface — no key remounting, CSS fade-through */}
         <div className="min-w-0 flex-1">
@@ -1673,13 +1753,13 @@ export function ScoutWorkspaceShell() {
 
           {/* Scout narrative strip */}
           {showNarrative && (
-            <div className="mb-5 flex items-start gap-3 border-l-2 border-[#FF5C18] bg-white px-4 py-3">
-              <Sparkles className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-[#FF5C18]" />
-              <p className="flex-1 text-sm leading-5 text-gray-700">{narrative}</p>
+            <div className="mb-4 flex items-center gap-3 rounded-xl border border-orange-100 bg-orange-50/60 px-4 py-2.5">
+              <Sparkles className="h-3.5 w-3.5 flex-shrink-0 text-[#FF5C18]" />
+              <p className="flex-1 text-sm leading-5 text-slate-700">{narrative}</p>
               <button
                 type="button"
                 onClick={() => setNarrativeDismissed(true)}
-                className="flex-shrink-0 text-gray-400 transition hover:text-gray-600"
+                className="flex-shrink-0 text-slate-400 transition hover:text-slate-600"
               >
                 <X className="h-3.5 w-3.5" />
               </button>
@@ -1740,10 +1820,6 @@ export function ScoutWorkspaceShell() {
                       setMissionsDisabled(true)
                       setMissionStore((prev) => prev ? { ...prev, disabled: true } : prev)
                     }}
-                    proactiveEvents={proactive.visibleEvents}
-                    onProactiveOpen={handleOpenProactive}
-                    onProactiveDismiss={proactive.dismiss}
-                    onProactiveSnooze={proactive.snooze}
                     isFirstRun={showFirstRun}
                     showExtensionPromo={showExtPromo}
                     hasData={hasData}
@@ -1798,6 +1874,16 @@ export function ScoutWorkspaceShell() {
                 )
               }
               if (displayedMode === "bulk_application") {
+                // If Scout selected specific jobs server-side, use the agentic loop
+                if (applyAgent && applyAgent.jobs.length > 0) {
+                  return (
+                    <ApplyAgentFlow
+                      initialJobs={applyAgent.jobs}
+                      extensionConnected={isExtensionConnected}
+                      onFollowUp={(q) => { setQuery(q); setTimeout(() => handleSubmit({ preventDefault: () => {} } as React.FormEvent), 50) }}
+                    />
+                  )
+                }
                 return (
                   <BulkApplicationMode
                     engine={bulkEngine}
@@ -1966,6 +2052,11 @@ export function ScoutWorkspaceShell() {
           onPermissionsChange={setShellPermissions}
           onClose={() => setShowPermissions(false)}
         />
+      )}
+
+      {/* ── Scout Memory panel ──────────────────────────────────────────── */}
+      {memoryPanelOpen && (
+        <ScoutMemoryPanel onClose={() => setMemoryPanelOpen(false)} />
       )}
 
       {/* ── Bulk confirm dialog — modal, shown immediately on trigger ── */}

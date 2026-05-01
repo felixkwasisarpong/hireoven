@@ -2,6 +2,7 @@ import { sendToBackground } from "../bridge"
 import { detectExtensionPageMode, detectPage } from "../detectors/ats"
 import { extractJobWithMeta } from "../extractors/job"
 import type {
+  ApplyQueueState,
   AutofillExecuteResult,
   AutofillPreviewResult,
   CoverLetterResult,
@@ -11,6 +12,8 @@ import type {
   ExtensionResumeSummary,
   ExtractedJob,
   ListResumesResult,
+  QueueAddResult,
+  QueueStateResult,
   ResolveJobResult,
   SaveResult,
   ScoutOverlayResult,
@@ -20,6 +23,7 @@ import type {
 } from "../types"
 import {
   extractSiteContext,
+  findDetailDescriptionRoot,
   sponsorshipHintFromText,
   toExtractedJob,
   type JobCardSnapshot,
@@ -32,18 +36,26 @@ import {
   type ScreenerFilters,
 } from "./job-screener-panel"
 import { MatchDetailPanel, type MatchDetailModel } from "./match-detail-panel"
-import { enrichFields, type AutofillIntelligenceResult, type AutofillIntelligentField } from "../autofill/intelligence"
+import { enrichFields, type AutofillIntelligenceResult } from "../autofill/intelligence"
 import { FinalReviewPanel } from "./final-review-panel"
+import { ApplyQueuePanel } from "./apply-queue-panel"
+import { highlightKeywords } from "./keyword-highlighter"
 
 /**
- * Inline SVG of the Hireoven flame mark — extracted from hireoven-icon.svg
- * and normalised to a 24×24 viewBox so it renders cleanly at 14–20 px.
- * Using inline SVG avoids the web_accessible_resources restriction that would
- * block <img src="chrome-extension://..."> on external pages.
+ * Inline Hireoven oven-mark icon — sourced from public/brand/hireoven-icon.svg.
+ * Inlined so it works on external pages without web_accessible_resources restrictions.
  */
-const BRAND_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true">
-  <path d="M10.5 21L3.9 15.1L7.8 7.2L10.1 13.2L14.6 3L20.1 11.3L18.2 18.3Z" fill="white" opacity="0.92"/>
-  <path d="M12 20.6L8 15.7L11.2 10.4L13 15.1L16 8.7L18.6 15.3L16.7 20.2Z" fill="white" opacity="0.55"/>
+const BRAND_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" aria-hidden="true">
+  <rect x="90" y="155" width="332" height="190" rx="40" fill="#062246" stroke="#00142d" stroke-width="10"/>
+  <rect x="130" y="205" width="180" height="97" rx="12" fill="#b4260c" stroke="#ff7716" stroke-width="10"/>
+  <rect x="160" y="176" width="132" height="18" rx="8" fill="#ffd24a" stroke="#ffee7f" stroke-width="6"/>
+  <circle cx="366" cy="221" r="16" fill="#ebf3ff"/>
+  <circle cx="366" cy="271" r="16" fill="#ebf3ff"/>
+  <path d="M220 293 L185 262 L206 220 L218 252 L242 198 L271 242 L261 279 Z" fill="#ff9a2d"/>
+  <path d="M228 291 L207 265 L224 237 L233 262 L249 228 L263 263 L253 289 Z" fill="#fff4cd"/>
+  <line x1="190" y1="124" x2="224" y2="169" stroke="#ff9a2d" stroke-width="12" stroke-linecap="round"/>
+  <line x1="256" y1="111" x2="256" y2="153" stroke="#ff9a2d" stroke-width="12" stroke-linecap="round"/>
+  <line x1="321" y1="124" x2="287" y2="169" stroke="#ff9a2d" stroke-width="12" stroke-linecap="round"/>
 </svg>`
 
 interface PageAwareOptions {
@@ -61,6 +73,7 @@ type BusyAction =
   | "tailor-approve"
   | "cover-generate"
   | "cover-insert"
+  | "queue-add"
 
 interface CardInsights {
   matchPercent: number | null
@@ -72,8 +85,9 @@ interface CardInsights {
 interface CardMemory {
   canonicalId: string
   savedJobId: string | null
-  saving: boolean
-  insights: CardInsights | null
+  resolving:  boolean  // silently checking DB
+  saving:     boolean  // user-triggered save in progress
+  insights:   CardInsights | null
 }
 
 interface BadgeViewModel {
@@ -129,7 +143,7 @@ const STYLE = `
 
   .bar {
     pointer-events: auto;
-    min-height: 44px;
+    min-height: 60px;
     max-width: min(720px, calc(100vw - 24px));
     border-radius: 999px;
     border: 1px solid rgba(15, 23, 42, 0.6);
@@ -137,43 +151,30 @@ const STYLE = `
     box-shadow: 0 14px 36px rgba(2, 6, 23, 0.5);
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 6px;
-    overflow-x: auto;
-    scrollbar-width: none;
+    gap: 8px;
+    padding: 8px 8px;
+    overflow: hidden;
   }
-
-  .bar::-webkit-scrollbar { display: none; }
 
   .brand {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 32px;
-    height: 32px;
+    width: 42px;
+    height: 42px;
     border-radius: 999px;
     background: #FF5C18;
     flex: 0 0 auto;
     overflow: hidden;
     box-shadow: 0 0 0 2px rgba(255, 92, 24, 0.35), inset 0 0 0 1.5px rgba(255, 255, 255, 0.22);
-    transition: background 200ms ease, box-shadow 200ms ease;
+    transition: background 200ms ease;
   }
 
   .brand svg {
-    width: 16px;
-    height: 16px;
+    width: 20px;
+    height: 20px;
     display: block;
     flex-shrink: 0;
-  }
-
-  /* Mode-aware brand icon tint — subtle visual cue for which action set is active */
-  .bar[data-mode="application_form"] .brand {
-    background: #f59e0b;
-    box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.35), inset 0 0 0 2px rgba(255,255,255,0.18);
-  }
-  .bar[data-mode="search_results"] .brand {
-    background: #6366f1;
-    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.35), inset 0 0 0 2px rgba(255,255,255,0.18);
   }
 
   .title {
@@ -246,6 +247,36 @@ const STYLE = `
     border-color: #ff7a40;
   }
 
+  /* The large autofill button — theme orange, fills available space */
+  .autofill-btn {
+    flex: 1 1 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    height: 42px;
+    border-radius: 999px;
+    border: none;
+    background: #FF5C18;
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    padding: 0 20px;
+    white-space: nowrap;
+    transition: background 150ms ease, opacity 150ms ease;
+    min-width: 180px;
+  }
+
+  .autofill-btn:hover:not(:disabled) {
+    background: #e0511a;
+  }
+
+  .autofill-btn:disabled {
+    opacity: 0.7;
+    cursor: default;
+  }
+
   .action.icon {
     width: 30px;
     padding: 0;
@@ -261,14 +292,14 @@ const STYLE = `
   }
 
   .avatar {
-    width: 30px;
-    height: 30px;
+    width: 38px;
+    height: 38px;
     border-radius: 999px;
     border: 1px solid rgba(148, 163, 184, 0.3);
     background: #0f172a;
     color: #f8fafc;
-    font-size: 11px;
-    font-weight: 760;
+    font-size: 13px;
+    font-weight: 700;
     cursor: pointer;
     overflow: hidden;
     flex: 0 0 auto;
@@ -471,6 +502,181 @@ const STYLE = `
     background: #ffe4d9;
     border-radius: 999px;
     padding: 2px 8px;
+  }
+
+  /* ── Flat field rows ─────────────────────────────── */
+  .fr-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    margin-bottom: 12px;
+  }
+
+  .fr-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 4px;
+    border-bottom: 1px solid #f8fafc;
+  }
+
+  .fr-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .fr-dot.ready     { background: #22c55e; }
+  .fr-dot.review    { background: #f59e0b; }
+  .fr-dot.sensitive { background: #ef4444; }
+  .fr-dot.missing   { background: #cbd5e1; }
+  .fr-dot.upload    { background: #94a3b8; }
+
+  .fr-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #475569;
+    flex: 0 0 100px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .fr-value {
+    font-size: 11px;
+    color: #0f172a;
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .fr-value.muted { color: #94a3b8; font-style: italic; }
+
+  /* ── Post-fill result rows ───────────────────────── */
+  .fill-result-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .fill-result-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 8px;
+  }
+
+  .fill-result-row.filled   { background: rgba(34,197,94,0.07); }
+  .fill-result-row.failed   { background: rgba(239,68,68,0.07); }
+  .fill-result-row.sensitive{ background: rgba(245,158,11,0.07); }
+
+  .fill-result-icon {
+    font-size: 12px;
+    font-weight: 700;
+    flex-shrink: 0;
+    width: 14px;
+    text-align: center;
+  }
+
+  .fill-result-row.filled   .fill-result-icon { color: #16a34a; }
+  .fill-result-row.failed   .fill-result-icon { color: #dc2626; }
+  .fill-result-row.sensitive .fill-result-icon{ color: #d97706; }
+
+  .fill-result-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #334155;
+    flex: 1;
+  }
+
+  .fill-result-note {
+    font-size: 10px;
+    color: #94a3b8;
+    flex-shrink: 0;
+  }
+
+  .fill-result-row.failed .fill-result-note { color: #dc2626; }
+
+  /* ── Resume + Cover Letter sidebar sections ─────── */
+  .sidebar-sections-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    border-top: 1px solid #f1f5f9;
+    padding-top: 10px;
+  }
+
+  .sidebar-section {
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #fff;
+  }
+
+  .sidebar-section-head {
+    font-size: 11px;
+    font-weight: 700;
+    color: #64748b;
+    background: #f8fafc;
+    padding: 7px 12px;
+    border-bottom: 1px solid #f1f5f9;
+    letter-spacing: 0.02em;
+  }
+
+  .sidebar-section-body {
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .sidebar-section-name {
+    font-size: 12px;
+    font-weight: 600;
+    color: #1e293b;
+  }
+
+  .sidebar-section-preview {
+    font-size: 11px;
+    color: #64748b;
+    line-height: 1.5;
+    max-height: 54px;
+    overflow: hidden;
+  }
+
+  .sidebar-section-status {
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  .sidebar-section-status.done { color: #FF5C18; }
+
+  .sidebar-action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 30px;
+    border-radius: 8px;
+    border: 1.5px solid #FF5C18;
+    background: transparent;
+    color: #FF5C18;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    padding: 0 14px;
+    transition: background 150ms ease;
+    align-self: flex-start;
+  }
+
+  .sidebar-action-btn:hover:not(:disabled) {
+    background: rgba(255, 92, 24, 0.06);
+  }
+
+  .sidebar-action-btn:disabled {
+    opacity: 0.55;
+    cursor: default;
   }
 
   .toggle-row {
@@ -1192,6 +1398,74 @@ class MiniJobBadge {
   }
 }
 
+const COVER_LETTER_SCAN_PATTERNS = [
+  /cover[_\s-]?letter/i,
+  /coverletter/i,
+  /letter[_\s-]?of[_\s-]?interest/i,
+  /personal[_\s-]?statement/i,
+  /motivat/i,
+  /why[_\s-]?do[_\s-]?you[_\s-]?want/i,
+  /additional[_\s-]?information/i,
+  /tell[_\s-]?us[_\s-]?more/i,
+  /anything[_\s-]?else/i,
+]
+
+/**
+ * DOM scan for a cover letter text input when no cached elementRef is available.
+ * Returns a CSS selector that can locate the field, or null if none found.
+ */
+function findCoverLetterFieldRef(): string | null {
+  // 1. Try textarea elements
+  const textareas = Array.from(document.querySelectorAll<HTMLTextAreaElement>("textarea"))
+  for (const ta of textareas) {
+    const combined = [
+      ta.id,
+      ta.name,
+      ta.getAttribute("aria-label") ?? "",
+      ta.placeholder,
+      document.querySelector(`label[for="${ta.id}"]`)?.textContent ?? "",
+    ].join(" ").toLowerCase()
+
+    if (COVER_LETTER_SCAN_PATTERNS.some((p) => p.test(combined))) {
+      if (ta.id) return `#${CSS.escape(ta.id)}`
+      if (ta.name) return `textarea[name="${ta.name}"]`
+      const idx = textareas.indexOf(ta)
+      return `textarea:nth-of-type(${idx + 1})`
+    }
+  }
+
+  // 2. Try contenteditable divs (used by Quill/TipTap/Draft.js in some ATS)
+  const editables = Array.from(document.querySelectorAll<HTMLElement>('[contenteditable="true"],[contenteditable=""]'))
+  for (const el of editables) {
+    const ariaLabel = el.getAttribute("aria-label") ?? ""
+    const placeholder = el.getAttribute("data-placeholder") ?? el.getAttribute("placeholder") ?? ""
+    const combined = [ariaLabel, placeholder, el.id].join(" ").toLowerCase()
+
+    if (COVER_LETTER_SCAN_PATTERNS.some((p) => p.test(combined))) {
+      if (el.id) return `#${CSS.escape(el.id)}`
+      // Use a data attribute as a unique anchor
+      const unique = `ho-cl-target-${Date.now()}`
+      el.setAttribute("data-ho-cl", unique)
+      return `[data-ho-cl="${unique}"]`
+    }
+  }
+
+  // 3. Heuristic: largest textarea on the form (often the cover letter/additional info)
+  if (textareas.length > 0) {
+    const largest = textareas.reduce((best, ta) => {
+      const rows = parseInt(ta.getAttribute("rows") ?? "0", 10)
+      const bestRows = parseInt(best.getAttribute("rows") ?? "0", 10)
+      return rows > bestRows ? ta : best
+    })
+    if (largest.id) return `#${CSS.escape(largest.id)}`
+    if (largest.name) return `textarea[name="${largest.name}"]`
+    const idx = textareas.indexOf(largest)
+    return `textarea:nth-of-type(${idx + 1})`
+  }
+
+  return null
+}
+
 export class PageAwareControlSystem {
   private readonly options: PageAwareOptions
 
@@ -1234,6 +1508,7 @@ export class PageAwareControlSystem {
   private autofillPreview: AutofillPreviewResult | null = null
   private fieldIntelligence: AutofillIntelligenceResult | null = null
   private autofillFilledCount: number | null = null
+  private autofillFieldResults: Array<{ label: string; filled: boolean; sensitive?: boolean }> = []
   private autofillUseTailored = true
   private autofillUseCover = true
   private tailorPreview: TailorPreviewResult | null = null
@@ -1243,6 +1518,13 @@ export class PageAwareControlSystem {
   private currentTailorResumeId: string | null = null
 
   private readonly busy = new Set<BusyAction>()
+
+  // ── Apply Queue ──────────────────────────────────────────────────────────────
+  private queueState: ApplyQueueState | null = null
+  private queuePanel: ApplyQueuePanel | null = null
+
+  // Tracks whether ensureResumeList has been called at least once this session
+  private resumeListFetched = false
 
   private observer: MutationObserver | null = null
   private scanTimer: number | null = null
@@ -1260,6 +1542,7 @@ export class PageAwareControlSystem {
     this.appOrigin = await this.options.resolveAppOrigin()
     await this.refreshSession()
     this.scanNow()
+    void this.refreshQueueState()
 
     this.bindObservers()
   }
@@ -1279,6 +1562,8 @@ export class PageAwareControlSystem {
     this.screenerPanel = null
     this.matchPanel?.destroy()
     this.matchPanel = null
+    this.queuePanel?.unmount()
+    this.queuePanel = null
 
     this.host?.remove()
     this.host = null
@@ -1345,8 +1630,9 @@ export class PageAwareControlSystem {
     const created: CardMemory = {
       canonicalId,
       savedJobId: null,
-      saving: false,
-      insights: null,
+      resolving:  false,
+      saving:     false,
+      insights:   null,
     }
     this.memoryByCanonical.set(canonicalId, created)
     return created
@@ -1395,6 +1681,18 @@ export class PageAwareControlSystem {
 
     this.resultCardKeys = resultCards.map((c) => c.key)
 
+    // Pre-fetch resume list when on a page where Tailor eligibility matters,
+    // so the Tailor button shows the correct enabled/disabled state without
+    // waiting for the drawer to open.
+    if (
+      this.authenticated &&
+      !this.resumeListFetched &&
+      !this.resumeListLoading &&
+      (this.mode === "job_detail" || this.mode === "application_form")
+    ) {
+      void this.ensureResumeList()
+    }
+
     const showResultBadges = resultCards.length > 0 && (siteContext.isSearchPage || this.mode === "search_results")
     this.syncBadges(showResultBadges ? resultCards : [])
     this.syncScreenerPanel(showResultBadges ? resultCards : [], siteContext.site)
@@ -1402,6 +1700,19 @@ export class PageAwareControlSystem {
 
     if (this.activeCardKey && !this.cardsByKey.has(this.activeCardKey)) {
       this.activeCardKey = null
+    }
+
+    // Silently check DB on every scan — never saves automatically.
+    // Sets memory.savedJobId if found, which switches the bar to show Autofill.
+    if (
+      this.authenticated &&
+      this.activeJob &&
+      (this.mode === "job_detail" || this.mode === "application_form")
+    ) {
+      const canonicalId = this.activeCanonicalId()
+      if (canonicalId) {
+        void this.autoCheckJob(canonicalId, this.activeJob)
+      }
     }
 
     this.render()
@@ -1530,51 +1841,6 @@ export class PageAwareControlSystem {
     }
   }
 
-  private renderResumePicker(): string {
-    const label = `<div class="section-label">Target Resume <span style="color:#64748b">(Optional)</span></div>`
-
-    if (this.resumeListLoading) {
-      return `${label}<div class="muted" style="font-size:11px;padding:4px 0">Loading your resumes…</div>`
-    }
-
-    if (this.resumeList.length === 0) {
-      return `${label}<div class="muted" style="font-size:11px;padding:4px 0">No resumes found. Upload one in Hireoven first.</div>`
-    }
-
-    const selectedId = this.selectedResumeId ?? this.resumeList[0]?.id ?? ""
-    const selectedResume = this.resumeList.find((r) => r.id === selectedId)
-
-    const options = this.resumeList
-      .map((r) => {
-        const label = r.isPrimary ? `${r.name} (Primary)` : r.name
-        const score = r.score != null ? ` — ${Math.round(r.score)}%` : ""
-        return `<option value="${esc(r.id)}" ${r.id === selectedId ? "selected" : ""}>${esc(label)}${esc(score)}</option>`
-      })
-      .join("")
-
-    const scoreChip = selectedResume?.score != null
-      ? `<span class="resume-score">ATS ${Math.round(selectedResume.score)}%</span>`
-      : ""
-
-    const tailoredNote = this.approvedTailoredVersion
-      ? `<label class="toggle-row" style="margin-top:6px">
-           <span class="label">Use tailored version<small>${esc(this.approvedTailoredVersion)} — already applied</small></span>
-           <input type="checkbox" class="toggle" data-action="toggle-tailored" ${this.autofillUseTailored ? "checked" : ""}/>
-         </label>`
-      : ""
-
-    return `
-      ${label}
-      <div style="position:relative">
-        <select class="resume-select" data-action="select-resume" aria-label="Select resume">
-          ${options}
-        </select>
-      </div>
-      ${scoreChip}
-      ${tailoredNote}
-    `
-  }
-
   private effectiveResumeId(): string | undefined {
     return this.currentTailorResumeId ?? this.selectedResumeId ?? undefined
   }
@@ -1597,6 +1863,7 @@ export class PageAwareControlSystem {
       // leave empty — handled gracefully in UI
     } finally {
       this.resumeListLoading = false
+      this.resumeListFetched = true
       this.render()
     }
   }
@@ -1764,6 +2031,34 @@ export class PageAwareControlSystem {
     }
   }
 
+  /**
+   * Silent check — resolves whether this job is already in Hireoven DB.
+   * Sets memory.savedJobId if found. Never saves. Called automatically on scan.
+   */
+  private async autoCheckJob(canonicalId: string, job: ExtractedJob): Promise<void> {
+    const memory = this.ensureMemory(canonicalId)
+    if (memory.savedJobId || memory.resolving || memory.saving) return
+
+    memory.resolving = true
+    try {
+      const fingerprint = this.activeFingerprint(job)
+      const raw = await sendToBackground({ type: "RESOLVE_JOB", fingerprint })
+      const resolved = raw as ResolveJobResult
+      if (resolved.exists && resolved.jobId) {
+        memory.savedJobId = resolved.jobId
+      }
+    } catch {
+      // network error — will retry on next scan
+    } finally {
+      memory.resolving = false
+      this.render()
+    }
+  }
+
+  /**
+   * Triggered by user clicking "Save Job".
+   * Saves the job to Hireoven (company creation + full import).
+   */
   private async resolveOrSaveJob(canonicalId: string, job: ExtractedJob): Promise<string | null> {
     const memory = this.ensureMemory(canonicalId)
     if (memory.savedJobId) return memory.savedJobId
@@ -1771,11 +2066,10 @@ export class PageAwareControlSystem {
 
     memory.saving = true
     this.render()
-    this.scanNow()
 
     try {
+      // Check once more — may have been saved in another tab
       const fingerprint = this.activeFingerprint(job)
-
       try {
         const resolveRaw = await sendToBackground({ type: "RESOLVE_JOB", fingerprint })
         const resolved = resolveRaw as ResolveJobResult
@@ -1783,9 +2077,7 @@ export class PageAwareControlSystem {
           memory.savedJobId = resolved.jobId
           return resolved.jobId
         }
-      } catch {
-        // continue to save path
-      }
+      } catch { /* fall through to save */ }
 
       const saveRaw = await sendToBackground({ type: "SAVE_JOB", job: this.activeJobPayload(job) })
       const saved = saveRaw as SaveResult
@@ -1796,7 +2088,6 @@ export class PageAwareControlSystem {
       return null
     } finally {
       memory.saving = false
-      this.scanNow()
       this.render()
     }
   }
@@ -1841,8 +2132,7 @@ export class PageAwareControlSystem {
         this.setStatus("Saved to Hireoven.")
         return
       }
-
-      this.setStatus("Could not save this job yet.")
+      this.setStatus("Could not save this job. Try again.")
     })
   }
 
@@ -1880,6 +2170,15 @@ export class PageAwareControlSystem {
           }
           this.scanNow()
 
+          // Highlight missing keywords in the active detail card's JD text
+          const activeCard = this.activeCard()
+          if (activeCard) {
+            const descRoot = findDetailDescriptionRoot(activeCard)
+            if (descRoot && result.missingSkills?.length) {
+              highlightKeywords(descRoot, [], result.missingSkills)
+            }
+          }
+
           const pct = result.matchPercent == null ? "--" : `${Math.round(result.matchPercent)}%`
           const visa =
             result.sponsorshipLabel ??
@@ -1908,6 +2207,7 @@ export class PageAwareControlSystem {
     this.drawer = "autofill"
     this.profileOpen = false
     this.autofillFilledCount = null
+    this.autofillFieldResults = []
     this.fieldIntelligence = null
     this.render()
 
@@ -1917,10 +2217,14 @@ export class PageAwareControlSystem {
       try {
         const raw = await sendToBackground({ type: "GET_AUTOFILL_PREVIEW" })
         this.autofillPreview = raw as AutofillPreviewResult
-        // Enrich fields with intelligence layer
         this.fieldIntelligence = enrichFields(this.autofillPreview.fields)
-        const coverField = this.autofillPreview.fields.find((field) => field.suggestedProfileKey === "cover_letter_text")
-        this.coverLetterFieldRef = coverField?.elementRef ?? null
+
+        // Try to find cover letter field from preview first, then fall back to DOM scan
+        const coverFieldFromPreview = this.autofillPreview.fields.find(
+          (f) => f.suggestedProfileKey === "cover_letter_text" || f.suggestedProfileKey === "cover_letter",
+        )
+        this.coverLetterFieldRef = coverFieldFromPreview?.elementRef ?? findCoverLetterFieldRef()
+
         const c = this.fieldIntelligence.counts
         this.setStatus(`${c.ready} ready · ${c.review} review · ${c.sensitive} sensitive`)
       } catch {
@@ -1939,6 +2243,59 @@ export class PageAwareControlSystem {
     })
   }
 
+  /** Tailor resume inline inside the autofill drawer — no drawer switch. */
+  private async inlineTailorResume(): Promise<void> {
+    const jobId = await this.ensureActiveJobId()
+    if (!jobId) { this.setStatus("Save this job first to tailor your resume."); return }
+
+    await this.runBusy("tailor-load", async () => {
+      try {
+        const previewRaw = await sendToBackground({
+          type:     "GET_TAILOR_PREVIEW",
+          jobId,
+          resumeId: this.effectiveResumeId(),
+          ats:      this.activeJob?.ats,
+        })
+        this.tailorPreview = previewRaw as TailorPreviewResult
+        this.currentTailorResumeId = this.tailorPreview.resumeId ?? this.currentTailorResumeId
+      } catch {
+        this.setStatus("Could not load tailor preview.")
+        return
+      }
+    })
+
+    if (!this.tailorPreview || this.tailorPreview.status === "missing_job_context" || this.tailorPreview.status === "missing_resume") {
+      this.setStatus("Not enough context to tailor resume.")
+      return
+    }
+
+    await this.runBusy("tailor-approve", async () => {
+      try {
+        const approveRaw = await sendToBackground({
+          type:     "APPROVE_TAILORED_RESUME",
+          jobId,
+          resumeId: this.effectiveResumeId(),
+          ats:      this.activeJob?.ats,
+        })
+        const approved = approveRaw as TailorApproveResult
+        if (approved.success && approved.resumeId) {
+          this.currentTailorResumeId = approved.resumeId
+          this.approvedTailoredVersion = approved.versionName ?? "Tailored version"
+          this.setStatus("Resume tailored — click Fill to attach it.")
+        } else {
+          this.setStatus(approved.error ?? "Could not tailor resume.")
+        }
+      } catch {
+        this.setStatus("Could not tailor resume.")
+      }
+    })
+  }
+
+  /**
+   * One-click autofill:
+   *   Phase 1 (blocking): detect form fields → fill immediately
+   *   Phase 2 (background): generate cover letter + tailor resume → inject when ready
+   */
   private openFinalReviewPanel(): void {
     if (!this.authenticated) { this.openPath("/login"); return }
 
@@ -1991,36 +2348,68 @@ export class PageAwareControlSystem {
     const preview = this.autofillPreview
     if (!preview) return
 
-    const safe = safeFieldsToFill(preview.fields)
-    if (safe.length === 0 && !this.autofillUseCover) {
-      this.setStatus("No safe high-confidence fields to fill.")
+    const safe         = safeFieldsToFill(preview.fields)
+    const canFillCover = this.autofillUseCover && Boolean(this.coverLetterText.trim()) && Boolean(this.coverLetterFieldRef)
+    const resumeId     = this.effectiveResumeId()
+
+    if (safe.length === 0 && !canFillCover && !resumeId) {
+      this.setStatus("No fields to fill yet.")
       return
     }
 
     await this.runBusy("autofill-fill", async () => {
       try {
+        const fieldResults: Array<{ label: string; filled: boolean; sensitive?: boolean }> = []
         let filledCount = 0
-        if (safe.length > 0) {
-          const raw = await sendToBackground({ type: "EXECUTE_AUTOFILL", fields: safe })
-          const result = raw as AutofillExecuteResult
-          filledCount = result.filledCount
-        }
 
-        if (this.autofillUseCover && this.coverLetterText.trim() && this.coverLetterFieldRef) {
-          try {
-            await sendToBackground({
-              type: "FILL_COVER_LETTER",
-              elementRef: this.coverLetterFieldRef,
-              text: this.coverLetterText,
-            })
-            filledCount += 1
-          } catch {
-            // continue; user can retry from cover drawer
+        // ── Form fields ───────────────────────────────────────────────────────
+        if (safe.length > 0) {
+          const raw    = await sendToBackground({ type: "EXECUTE_AUTOFILL", fields: safe })
+          const result = raw as AutofillExecuteResult
+
+          // Map results back to field labels using index order
+          safe.forEach((field, i) => {
+            const filled = i < result.filledCount
+            const intel  = this.fieldIntelligence?.fields.find((f) => f.elementRef === field.elementRef)
+            fieldResults.push({ label: intel?.label ?? field.elementRef, filled })
+            if (filled) filledCount++
+          })
+
+          // Sensitive / skipped fields — mark as not filled with context
+          const intel = this.fieldIntelligence
+          if (intel) {
+            intel.fields
+              .filter((f) => f.status === "sensitive")
+              .forEach((f) => fieldResults.push({ label: f.label ?? f.profileKey ?? "Field", filled: false, sensitive: true }))
           }
         }
 
-        this.autofillFilledCount = filledCount
-        this.setStatus(`${filledCount} field${filledCount === 1 ? "" : "s"} filled. Review before submit.`)
+        // ── Cover letter ──────────────────────────────────────────────────────
+        if (canFillCover && this.coverLetterFieldRef) {
+          try {
+            await sendToBackground({ type: "FILL_COVER_LETTER", elementRef: this.coverLetterFieldRef, text: this.coverLetterText })
+            fieldResults.push({ label: "Cover Letter", filled: true })
+            filledCount++
+          } catch {
+            fieldResults.push({ label: "Cover Letter", filled: false })
+          }
+        }
+
+        // ── Resume file injection ─────────────────────────────────────────────
+        if (resumeId) {
+          try {
+            const injectRaw = await sendToBackground({ type: "INJECT_RESUME_FILE_IN_TAB", resumeId })
+            const injected  = (injectRaw as import("../types").InjectResumeFileInTabResult)?.injected ?? false
+            fieldResults.push({ label: "Resume", filled: injected })
+            if (injected) filledCount++
+          } catch {
+            fieldResults.push({ label: "Resume", filled: false })
+          }
+        }
+
+        this.autofillFilledCount  = filledCount
+        this.autofillFieldResults = fieldResults
+        this.setStatus(`${filledCount} of ${fieldResults.length} filled.`)
       } catch {
         this.setStatus("Autofill failed. Please retry.")
       }
@@ -2090,9 +2479,9 @@ export class PageAwareControlSystem {
         })
         const result = raw as TailorApproveResult
         if (result.success) {
-          this.approvedTailoredVersion = result.versionName ?? "Tailored version ready"
+          this.approvedTailoredVersion = result.versionName ?? "Tailored version"
           this.currentTailorResumeId = result.resumeId ?? this.currentTailorResumeId
-          this.setStatus("Tailored version approved. Original resume was not modified.")
+          this.setStatus("Tailored version saved. Download it to attach to this form.")
           return
         }
         this.setStatus(result.error ?? "Could not approve tailored version.")
@@ -2148,13 +2537,19 @@ export class PageAwareControlSystem {
   private async insertCoverLetter(): Promise<void> {
     if (!this.coverLetterText.trim()) return
 
+    // 1. Try cached ref from autofill preview
     if (!this.coverLetterFieldRef) {
       const field = this.autofillPreview?.fields.find((item) => item.suggestedProfileKey === "cover_letter_text")
       this.coverLetterFieldRef = field?.elementRef ?? null
     }
 
+    // 2. Fallback: scan the live DOM for a cover letter textarea/contenteditable
     if (!this.coverLetterFieldRef) {
-      this.setStatus("No cover-letter text field detected.")
+      this.coverLetterFieldRef = findCoverLetterFieldRef()
+    }
+
+    if (!this.coverLetterFieldRef) {
+      this.setStatus("No cover letter field found on this page. Navigate to the application form first.")
       return
     }
 
@@ -2217,8 +2612,15 @@ export class PageAwareControlSystem {
         return
 
       case "autofill":
+        await this.openAutofillDrawer()
+        return
+
       case "review-fields":
         await this.openAutofillDrawer()
+        return
+
+      case "inline-tailor":
+        await this.inlineTailorResume()
         return
 
       case "tailor":
@@ -2300,6 +2702,20 @@ export class PageAwareControlSystem {
         this.gotoNextInQueue()
         return
 
+      case "open-apply-url": {
+        const applyUrl = this.activeApplyUrl()
+        if (applyUrl) window.open(applyUrl, "_blank", "noopener")
+        return
+      }
+
+      case "queue-add-active":
+        await this.addActiveJobToQueue()
+        return
+
+      case "open-queue":
+        this.openQueuePanel()
+        return
+
       case "toggle-h1b-filter": {
         const next = !this.screenerFilters.h1bOnly
         this.screenerFilters = {
@@ -2339,6 +2755,109 @@ export class PageAwareControlSystem {
     }
   }
 
+  // ── Apply Queue methods ──────────────────────────────────────────────────────
+
+  private async refreshQueueState(): Promise<void> {
+    try {
+      const raw = await sendToBackground({ type: "QUEUE_GET_STATE" })
+      const result = raw as QueueStateResult
+      if (result.type === "QUEUE_STATE_RESULT") {
+        this.queueState = result.queue
+        if (this.queuePanel?.isOpen) this.queuePanel.update(this.queueState)
+        this.render()
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  private async addActiveJobToQueue(): Promise<void> {
+    if (!this.authenticated) { this.openPath("/login"); return }
+
+    const job = this.activeJob
+    if (!job?.url) {
+      this.setStatus("No job context found on this page.")
+      return
+    }
+
+    await this.runBusy("queue-add", async () => {
+      const jobId = await this.ensureActiveJobId()
+      const raw = await sendToBackground({
+        type: "QUEUE_ADD_JOB",
+        job: {
+          jobId: jobId ?? null,
+          jobTitle: job.title ?? "Unknown role",
+          company: job.company ?? null,
+          applyUrl: job.applyUrl ?? job.url,
+          matchScore: (this.activeCanonicalId()
+            ? this.memoryByCanonical.get(this.activeCanonicalId()!)?.insights?.matchPercent ?? null
+            : null),
+          sponsorshipSignal: job.sponsorshipSignal ?? null,
+        },
+      })
+      const result = raw as QueueAddResult
+      if (result.type === "QUEUE_ADD_RESULT") {
+        if (result.failReason) {
+          this.setStatus(`Cannot queue: ${result.failReason}`)
+        } else {
+          this.setStatus("Added to apply queue.")
+          await this.refreshQueueState()
+        }
+      }
+    })
+  }
+
+  private openQueuePanel(): void {
+    if (!this.queuePanel) {
+      this.queuePanel = new ApplyQueuePanel({
+        onSkip: (queueId) => void this.queueDoSkip(queueId),
+        onRetry: (queueId) => void this.queueDoRetry(queueId),
+        onOpen: (queueId) => void this.queueDoOpen(queueId),
+        onPause: () => void this.queueDoPause(true),
+        onResume: () => void this.queueDoPause(false),
+        onClear: () => void this.queueDoClear(),
+        onClose: () => {
+          this.queuePanel?.unmount()
+          this.render()
+        },
+      })
+    }
+    this.queuePanel.mount(this.queueState)
+    void this.refreshQueueState()
+  }
+
+  private async queueDoSkip(queueId: string): Promise<void> {
+    await sendToBackground({ type: "QUEUE_SKIP_JOB", queueId })
+    await this.refreshQueueState()
+  }
+
+  private async queueDoRetry(queueId: string): Promise<void> {
+    await sendToBackground({ type: "QUEUE_RETRY_JOB", queueId })
+    await this.refreshQueueState()
+    // Poll briefly for preparation status
+    setTimeout(() => void this.refreshQueueState(), 3000)
+    setTimeout(() => void this.refreshQueueState(), 8000)
+  }
+
+  private async queueDoOpen(queueId: string): Promise<void> {
+    const job = this.queueState?.jobs.find((j) => j.queueId === queueId)
+    if (!job?.applyUrl) return
+    // Open the apply URL — content scripts use window.open
+    window.open(job.applyUrl, "_blank", "noopener")
+    this.setStatus(`Opening ${job.jobTitle ?? "job"}…`)
+    await this.refreshQueueState()
+  }
+
+  private async queueDoPause(pause: boolean): Promise<void> {
+    await sendToBackground({ type: pause ? "QUEUE_PAUSE" : "QUEUE_RESUME" })
+    await this.refreshQueueState()
+  }
+
+  private async queueDoClear(): Promise<void> {
+    await sendToBackground({ type: "QUEUE_CLEAR" })
+    await this.refreshQueueState()
+  }
+
   private renderDrawer(): string {
     if (this.drawer === "none") return ""
 
@@ -2371,42 +2890,7 @@ export class PageAwareControlSystem {
 
   // ── Intelligence field rendering helpers ─────────────────────────────────
 
-  private renderIntelligentField(f: AutofillIntelligentField): string {
-    const dot = `<span class="ifield-dot ${f.status === "missing_data" ? "missing" : f.status === "unsupported" ? "upload" : f.status}"></span>`
-    const sourceLabel = f.source === "cover_letter" ? "AI" : f.source === "manual" ? "manual" : "profile"
-    const valueHtml = f.value
-      ? `<div class="ifield-value">${esc(trimText(f.value, 48))}</div>`
-      : `<div class="ifield-value empty">—</div>`
-    const noteHtml = f.notes.length > 0
-      ? `<div class="ifield-note ${f.status === "sensitive" ? "sensitive" : ""}">${esc(f.notes[0])}</div>`
-      : ""
-    return `
-      <div class="ifield-row">
-        ${dot}
-        <div class="ifield-content">
-          <div class="ifield-label">${esc(f.label || f.profileKey || "Field")}</div>
-          ${valueHtml}
-          ${noteHtml}
-        </div>
-        <span class="ifield-source ${f.source}">${esc(sourceLabel)}</span>
-      </div>
-    `
-  }
 
-  private renderFieldSection(
-    title: string,
-    cssClass: string,
-    icon: string,
-    fields: AutofillIntelligentField[],
-  ): string {
-    if (fields.length === 0) return ""
-    return `
-      <div class="field-section">
-        <div class="field-section-head ${cssClass}">${icon} ${esc(title)} (${fields.length})</div>
-        ${fields.map((f) => this.renderIntelligentField(f)).join("")}
-      </div>
-    `
-  }
 
   private renderAutofillBody(): string {
     if (this.isBusy("autofill-load") && !this.autofillPreview) {
@@ -2415,98 +2899,108 @@ export class PageAwareControlSystem {
 
     const preview = this.autofillPreview
     if (!preview) {
-      return `<div class="muted">No application form detected yet. Navigate to the form page and reopen.</div>`
+      return `<div class="muted">No application form detected. Make sure you're on an application page.</div>`
     }
     if (preview.profileMissing) {
-      return `<div class="muted">No autofill profile found. Set one up in your Hireoven dashboard first.</div>`
+      return `<div class="muted">No autofill profile found. Set one up in Hireoven first.</div>`
     }
 
-    // ── Post-fill results view ──────────────────────────────────────────────
-    if (this.autofillFilledCount != null) {
-      const total = preview.totalFields || this.autofillFilledCount
-      const pct = total === 0 ? 100 : Math.round((this.autofillFilledCount / total) * 100)
-      return `
-        <div class="progress">
-          <div class="progress-head">
-            <span>${this.autofillFilledCount} of ${total} fields filled</span>
-            <span>${pct}%</span>
-          </div>
-          <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
-        </div>
-        <div class="warn">Never auto-submitted. Review every field before clicking Submit.</div>
-      `
-    }
-
-    // ── Intelligence-grouped view ───────────────────────────────────────────
     const intel = this.fieldIntelligence
     if (!intel) {
       return `<div class="muted">Analyzing fields…</div>`
     }
 
-    const { fields, counts, guidanceSummary, warnings } = intel
+    // ── Post-fill: show per-field results ──────────────────────────────────
+    if (this.autofillFilledCount != null && this.autofillFieldResults.length > 0) {
+      const rows = this.autofillFieldResults.map((r) => `
+        <div class="fill-result-row ${r.filled ? "filled" : r.sensitive ? "sensitive" : "failed"}">
+          <span class="fill-result-icon">${r.filled ? "✓" : r.sensitive ? "⛔" : "✗"}</span>
+          <span class="fill-result-label">${esc(r.label)}</span>
+          ${!r.filled ? `<span class="fill-result-note">${r.sensitive ? "Fill manually" : "Couldn't fill"}</span>` : ""}
+        </div>
+      `).join("")
+      return `
+        <div class="fill-result-list">${rows}</div>
+      `
+    }
 
-    // Scout guidance strip
-    const stripColor = counts.sensitive > 0 ? "#fef2f2" : "rgba(255,92,24,0.06)"
-    const guidanceHtml = `
-      <div class="intel-strip" style="background:${stripColor}">
-        <div class="summary">${esc(guidanceSummary)}</div>
-        <div class="intel-counts">
-          ${counts.ready > 0 ? `<span class="intel-count ready">✓ ${counts.ready} ready</span>` : ""}
-          ${counts.review > 0 ? `<span class="intel-count review">⚠ ${counts.review} review</span>` : ""}
-          ${counts.sensitive > 0 ? `<span class="intel-count sensitive">⛔ ${counts.sensitive} sensitive</span>` : ""}
-          ${counts.missing > 0 ? `<span class="intel-count missing">— ${counts.missing} missing</span>` : ""}
+    // ── Field list ─────────────────────────────────────────────────────────
+    const allFields = intel.fields
+    const fieldRows = allFields.map((f) => {
+      const statusIcon =
+        f.status === "ready"        ? `<span class="fr-dot ready"></span>` :
+        f.status === "review_needed"? `<span class="fr-dot review"></span>` :
+        f.status === "sensitive"    ? `<span class="fr-dot sensitive"></span>` :
+        f.status === "missing_data" ? `<span class="fr-dot missing"></span>` :
+                                      `<span class="fr-dot upload"></span>`
+      const valueHtml = f.value
+        ? `<span class="fr-value">${esc(trimText(f.value, 32))}</span>`
+        : f.status === "sensitive"
+          ? `<span class="fr-value muted">Fill manually</span>`
+          : f.status === "missing_data"
+            ? `<span class="fr-value muted">Not in profile</span>`
+            : `<span class="fr-value muted">—</span>`
+
+      return `
+        <div class="fr-row">
+          ${statusIcon}
+          <span class="fr-label">${esc(f.label || f.profileKey || "Field")}</span>
+          ${valueHtml}
+        </div>
+      `
+    }).join("")
+
+    const fieldSection = allFields.length > 0
+      ? `<div class="fr-list">${fieldRows}</div>`
+      : `<div class="muted">No fillable fields detected on this page.</div>`
+
+    // ── Resume section ─────────────────────────────────────────────────────
+    const isTailoring  = this.isBusy("tailor-load") || this.isBusy("tailor-approve")
+    const tailorDone   = Boolean(this.currentTailorResumeId)
+    const resumeName   = this.tailorPreview?.resumeName ?? "Your resume"
+
+    const resumeSection = `
+      <div class="sidebar-section">
+        <div class="sidebar-section-head">📄 Resume</div>
+        <div class="sidebar-section-body">
+          <div class="sidebar-section-name">${esc(resumeName)}</div>
+          ${tailorDone
+            ? `<div class="sidebar-section-status done">✓ Tailored for this role</div>`
+            : `<button class="sidebar-action-btn" data-action="inline-tailor" ${isTailoring ? "disabled" : ""}>
+                 ${isTailoring ? "Tailoring…" : "Tailor Resume"}
+               </button>`
+          }
         </div>
       </div>
     `
 
-    // Warnings (top-level, non-field)
-    const warningsHtml = warnings
-      .filter((w) => w.level !== "info")
-      .map((w) => `<div class="intel-warn-strip${w.level === "blocker" ? " blocker" : ""}">⚠ ${esc(w.message)}</div>`)
-      .join("")
+    // ── Cover letter section (only if field detected) ──────────────────────
+    const isCoverGenerating = this.isBusy("cover-generate")
+    const coverDone         = Boolean(this.coverLetterText.trim()) && Boolean(this.coverLetterFieldRef)
+    const coverFieldPresent = Boolean(this.coverLetterFieldRef)
 
-    // Grouped field sections
-    const readyFields     = fields.filter((f) => f.status === "ready")
-    const reviewFields    = fields.filter((f) => f.status === "review_needed")
-    const sensitiveFields = fields.filter((f) => f.status === "sensitive")
-    const missingFields   = fields.filter((f) => f.status === "missing_data")
-    const uploadFields    = fields.filter((f) => f.status === "unsupported")
-
-    const sectionsHtml = [
-      this.renderFieldSection("Ready to fill", "ready",    "✓", readyFields),
-      this.renderFieldSection("Needs review",  "review",   "⚠", reviewFields),
-      this.renderFieldSection("Sensitive — review required", "sensitive", "⛔", sensitiveFields),
-      this.renderFieldSection("Missing data",  "missing",  "—", missingFields),
-      this.renderFieldSection("Manual upload", "upload",   "📎", uploadFields),
-    ].join("")
-
-    // Resume + cover letter handoff
-    const resumeHtml = this.renderResumePicker()
-    const coverStatus = this.coverLetterText.trim()
-      ? `<div class="picker-title">Cover letter ready</div><div class="picker-sub">${esc(trimText(this.coverLetterText, 72))}</div>`
-      : `<div class="picker-title" style="color:#94a3b8">No cover letter yet</div><div class="picker-sub">Generate from the Cover Letter tab</div>`
-
-    const handoffHtml = `
-      ${resumeHtml}
-      <div class="section-label" style="margin-top:12px">Cover Letter</div>
-      <div class="picker">
-        <span class="picker-icon">✉️</span>
-        <div class="picker-main">${coverStatus}</div>
+    const coverSection = coverFieldPresent ? `
+      <div class="sidebar-section">
+        <div class="sidebar-section-head">✉️ Cover Letter</div>
+        <div class="sidebar-section-body">
+          ${coverDone
+            ? `<div class="sidebar-section-preview">${esc(trimText(this.coverLetterText, 120))}</div>
+               <div class="sidebar-section-status done">✓ Ready to insert</div>`
+            : `<div class="sidebar-section-name">Field detected on this page</div>
+               <button class="sidebar-action-btn" data-action="cover" ${isCoverGenerating ? "disabled" : ""}>
+                 ${isCoverGenerating ? "Generating…" : "Generate Cover Letter"}
+               </button>`
+          }
+        </div>
       </div>
-      <label class="toggle-row">
-        <span class="label">Insert cover letter<small>Fills the cover-letter field</small></span>
-        <input type="checkbox" class="toggle" data-action="toggle-cover" ${this.autofillUseCover ? "checked" : ""} ${this.coverLetterText.trim() ? "" : "disabled"}/>
-      </label>
-    `
+    ` : ""
 
     return `
-      ${guidanceHtml}
-      ${warningsHtml}
-      ${sectionsHtml}
-      <div style="border-top:1px solid #f1f5f9;margin-top:10px;padding-top:12px">
-        ${handoffHtml}
+      ${fieldSection}
+      <div class="sidebar-sections-wrap">
+        ${resumeSection}
+        ${coverSection}
       </div>
-      <div class="warn">No auto-submit ever. You click Fill, then you click Submit.</div>
     `
   }
 
@@ -2523,27 +3017,25 @@ export class PageAwareControlSystem {
       `
     }
 
-    const safeCount = preview ? safeFieldsToFill(preview.fields).length : 0
+    const safeCount  = preview ? safeFieldsToFill(preview.fields).length : 0
+    const coverReady = Boolean(this.coverLetterText.trim()) && Boolean(this.coverLetterFieldRef)
+    const resumeReady = Boolean(this.effectiveResumeId())
     const hasSensitive = (intel?.counts.sensitive ?? 0) > 0
-    const readiness = intel?.readiness ?? "ready"
-
-    const label = this.isBusy("autofill-fill")
-      ? "Filling…"
-      : hasSensitive
-      ? `Fill safe fields (${safeCount}) — review sensitive manually`
-      : `Fill ${safeCount} field${safeCount !== 1 ? "s" : ""}`
-
-    const warnNote = hasSensitive
-      ? `<div class="credits" style="color:#c94010">⚠ ${intel?.counts.sensitive} sensitive field${intel!.counts.sensitive > 1 ? "s" : ""} excluded — fill manually</div>`
-      : readiness === "needs_review"
-      ? `<div class="credits">Review flagged fields after filling.</div>`
-      : `<div class="credits">Review every value before submitting.</div>`
+    const canFill = Boolean(preview) && (safeCount > 0 || coverReady || resumeReady)
+    const isFilling = this.isBusy("autofill-fill")
 
     return `
-      <button class="btn primary" data-action="fill-safe" ${!preview || safeCount === 0 || this.isBusy("autofill-fill") ? "disabled" : ""}>
-        ${label}
+      <button class="btn primary" data-action="fill-safe"
+        style="width:100%;justify-content:center;font-size:14px;padding:12px;"
+        ${!canFill || isFilling ? "disabled" : ""}>
+        ${isFilling ? "Filling…" : "Autofill"}
       </button>
-      ${warnNote}
+      ${canFill && !isFilling
+        ? `<div class="credits" style="text-align:center;margin-top:6px;">
+             ${hasSensitive ? `⚠ ${intel!.counts.sensitive} sensitive field${intel!.counts.sensitive > 1 ? "s" : ""} skipped — fill manually` : "Review every field before submitting"}
+           </div>`
+        : ""
+      }
     `
   }
 
@@ -2569,8 +3061,31 @@ export class PageAwareControlSystem {
 
   private renderTailorFoot(): string {
     const preview = this.tailorPreview
+
+    if (this.approvedTailoredVersion) {
+      // Show download link so user can grab the PDF and attach it manually
+      const versionId = this.currentTailorResumeId ?? ""
+      const downloadUrl = `${this.appOrigin}/api/resume/download?resumeId=${encodeURIComponent(versionId)}&versionName=${encodeURIComponent(this.approvedTailoredVersion)}`
+      return `
+        <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:10px 12px;margin-bottom:8px">
+          <div style="font-size:11px;font-weight:700;color:#166534;margin-bottom:4px">✓ Tailored version saved</div>
+          <div style="font-size:10px;color:#166534;margin-bottom:6px">${esc(this.approvedTailoredVersion)}</div>
+          <a href="${esc(downloadUrl)}" target="_blank" rel="noopener noreferrer"
+             style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;color:#c94010;text-decoration:none">
+            ⬇ Download tailored PDF → attach to form
+          </a>
+        </div>
+        <button class="btn ghost" data-action="open-tailor-editor" style="width:100%">Open full editor</button>
+      `
+    }
+
     return `
-      <button class="btn primary" data-action="approve-tailor" ${!preview || preview.status !== "ready" || this.isBusy("tailor-approve") ? "disabled" : ""}>${this.isBusy("tailor-approve") ? "Saving..." : "Use Tailored Resume"}</button>
+      <button class="btn primary" data-action="approve-tailor" ${!preview || preview.status !== "ready" || this.isBusy("tailor-approve") ? "disabled" : ""}>
+        ${this.isBusy("tailor-approve") ? "Saving…" : "Save tailored version"}
+      </button>
+      <div style="font-size:10px;color:#64748b;text-align:center;margin-top:6px">
+        Saves a tailored copy — your original resume is not changed
+      </div>
       <button class="btn ghost" data-action="open-tailor-editor" style="margin-top:6px;width:100%">Open full editor</button>
     `
   }
@@ -2593,53 +3108,234 @@ export class PageAwareControlSystem {
     `
   }
 
+  // ── Action eligibility helpers ───────────────────────────────────────────────
+
+  /** Resolved Hireoven job ID for the active card, or null if not yet imported. */
+  private jobResolvedId(): string | null {
+    const cid = this.activeCanonicalId()
+    if (!cid) return null
+    return this.memoryByCanonical.get(cid)?.savedJobId ?? null
+  }
+
+  /** Absolute apply URL from the active job, or null if missing/invalid. */
+  private activeApplyUrl(): string | null {
+    const url = this.activeJob?.applyUrl ?? this.activeJob?.url
+    return url?.startsWith("http") ? url : null
+  }
+
+  /** True when the job description has meaningful content. */
+  private hasJobDescription(): boolean {
+    const desc = this.activeJob?.description ?? ""
+    return desc.trim().length > 20
+  }
+
+  /**
+   * True when the active job has an explicit "no sponsorship" signal that
+   * makes it ineligible for the apply queue — keyword-matched OR from the
+   * scout overlay insights.
+   */
+  private hasNoSponsorHardBlock(): boolean {
+    const card = this.activeCard()
+    const cid = this.activeCanonicalId()
+    const mem = cid ? this.memoryByCanonical.get(cid) : null
+    if (mem?.insights?.sponsorshipLikely === false) return true
+    if (card && sponsorshipHintFromText(card) === false) return true
+    const sigText = `${card?.sponsorshipSignal ?? ""} ${this.activeJob?.sponsorshipSignal ?? ""}`.toLowerCase()
+    return /no sponsorship|does not sponsor|without sponsorship|cannot sponsor|unable to sponsor/i.test(sigText)
+  }
+
+  /** Eligibility for the Tailor Resume button. */
+  private tailorEligible(): { show: boolean; enabled: boolean; reason?: string } {
+    if (!this.authenticated) return { show: false, enabled: false }
+    const saved = Boolean(this.jobResolvedId())
+    const hasDesc = this.hasJobDescription()
+    // No description — hide entirely, user can't do anything
+    if (!hasDesc) return { show: false, enabled: false }
+    // Job not yet saved — show disabled with actionable reason
+    if (!saved) return { show: true, enabled: false, reason: "Save job first" }
+    // Resume list loaded and empty — show disabled with actionable reason
+    if (this.resumeListFetched && !this.resumeListLoading && this.resumeList.length === 0) {
+      return { show: true, enabled: false, reason: "Upload resume first" }
+    }
+    // Resume loading or present → enable
+    return { show: true, enabled: true }
+  }
+
+  /** Eligibility for the Cover Letter button. */
+  private coverEligible(): { show: boolean; enabled: boolean; reason?: string } {
+    if (!this.authenticated) return { show: false, enabled: false }
+    const saved = Boolean(this.jobResolvedId())
+    const hasDesc = this.hasJobDescription()
+    if (!hasDesc) return { show: false, enabled: false }
+    if (!saved) return { show: true, enabled: false, reason: "Save job first" }
+    return { show: true, enabled: true }
+  }
+
+  /** Eligibility for the Queue Apply button (add-to-queue action). */
+  private queueAddEligible(): { show: boolean; enabled: boolean; reason?: string } {
+    if (!this.authenticated) return { show: false, enabled: false }
+    if (!this.activeApplyUrl()) return { show: false, enabled: false }
+    if (this.hasNoSponsorHardBlock()) return { show: false, enabled: false }
+    const saved = Boolean(this.jobResolvedId())
+    if (!saved) return { show: true, enabled: false, reason: "Save job first" }
+    return { show: true, enabled: true }
+  }
+
+  /** Render a single action button respecting eligibility. Returns "" when hidden. */
+  private renderEligibleAction(
+    action: string,
+    label: string,
+    opts: { show: boolean; enabled: boolean; reason?: string },
+    busy?: boolean,
+    busyLabel?: string,
+    extra = "",
+  ): string {
+    if (!opts.show) return ""
+    const isBusy = Boolean(busy)
+    const disabled = isBusy || !opts.enabled
+    const title = opts.reason ? ` title="${esc(opts.reason)}"` : ""
+    const disabledAttr = disabled ? " disabled" : ""
+    const displayLabel = isBusy ? (busyLabel ?? label) : (opts.reason && !opts.enabled ? `${label}` : label)
+    return `<button class="action"${disabledAttr}${title} data-action="${action}"${extra}>${esc(displayLabel)}</button>`
+  }
+
+  private pendingQueueCount(): number {
+    return this.queueState?.jobs.filter(
+      (j) => !["submitted_manually", "skipped", "failed"].includes(j.status),
+    ).length ?? 0
+  }
+
+  private renderQueuePillOrAdd(): string {
+    const pending = this.pendingQueueCount()
+    if (pending > 0) {
+      return `<button class="action" data-action="open-queue" style="border-color:rgba(255,92,24,0.5);color:#c94010">Queue <span class="pill queue">${pending}</span></button>`
+    }
+    const el = this.queueAddEligible()
+    return this.renderEligibleAction(
+      "queue-add-active",
+      this.isBusy("queue-add") ? "Adding…" : "+ Queue",
+      el,
+      this.isBusy("queue-add"),
+    )
+  }
+
   private renderBarActions(): string {
     if (!this.authenticated) {
       return `<button class="action primary" data-action="signin">Sign in to Hireoven</button>`
     }
 
-    // ── Application form — autofill is the hero action ────────────────────────
+    // ── Application form ───────────────────────────────────────────────────────
     if (this.mode === "application_form") {
-      if (this.autofillFilledCount != null) {
-        // Already filled — show re-check option
+      const canonicalId = this.activeCanonicalId()
+      const memory      = canonicalId ? this.memoryByCanonical.get(canonicalId) : undefined
+      const isChecking  = memory?.resolving ?? false
+      const isSaving    = memory?.saving    ?? false
+      const isSaved     = Boolean(memory?.savedJobId)
+      const busy        = this.isBusy("autofill-load") || this.isBusy("autofill-fill")
+
+      // Silently checking DB
+      if (isChecking && !isSaved) {
         return `
-          <button class="action" data-action="reload-autofill" ${this.isBusy("autofill-load") ? "disabled" : ""}>
-            ${this.isBusy("autofill-load") ? "Loading…" : "Re-check fields"}
+          <button class="autofill-btn" disabled
+            style="background:rgba(255,255,255,0.06);color:#64748b;">
+            ⟳ Checking…
           </button>
         `
       }
+
+      // Post-fill confirmation
+      if (this.autofillFilledCount != null) {
+        return `
+          <button class="autofill-btn" data-action="autofill"
+            style="background:rgba(255,92,24,0.12);color:#FF5C18;border:1px solid rgba(255,92,24,0.3);">
+            ✓ ${this.autofillFilledCount} fields filled — Fill again
+          </button>
+          ${!isSaved ? `<button class="action" data-action="save" style="flex-shrink:0;">Save</button>` : ""}
+        `
+      }
+
+      if (isSaving) {
+        return `
+          <button class="autofill-btn" disabled
+            style="background:rgba(255,255,255,0.06);color:#64748b;">
+            ⟳ Saving…
+          </button>
+        `
+      }
+
+      // Job not in Hireoven — Autofill still works, Save is optional
+      if (!isSaved) {
+        return `
+          <button class="autofill-btn" data-action="autofill" ${busy ? "disabled" : ""}>
+            ${busy ? "⟳ Preparing…" : "⚡ Autofill"}
+          </button>
+          <button class="action" data-action="save" style="flex-shrink:0;">Save</button>
+        `
+      }
+
+      // Job is in Hireoven — full autofill button
       return `
-        <button class="action primary" data-action="autofill" ${this.isBusy("autofill-load") ? "disabled" : ""}>
-          ${this.isBusy("autofill-load") ? "Detecting…" : "⚡ Autofill"}
+        <button class="autofill-btn" data-action="autofill" ${busy ? "disabled" : ""}>
+          ${busy ? "⟳ Preparing…" : "⚡ Autofill this Application"}
         </button>
-        <button class="action" data-action="tailor" ${this.isBusy("tailor-load") ? "disabled" : ""}>Tailor Resume</button>
-        <button class="action" data-action="cover" ${this.isBusy("cover-generate") ? "disabled" : ""}>Cover Letter</button>
-        <button class="action" data-action="review-final" style="border-color:#10b981;color:#065f46;">✓ Final Review</button>
       `
     }
 
-    // ── Job detail — research + prep actions ─────────────────────────────────
+    // ── Job detail ─────────────────────────────────────────────────────────────
     if (this.mode === "job_detail") {
-      const queue = this.queuePosition()
-      const nextBtn = queue?.nextKey
-        ? `<button class="action" data-action="queue-next" title="Next job in list">Next →</button>`
+      const canonicalId = this.activeCanonicalId()
+      const memory      = canonicalId ? this.memoryByCanonical.get(canonicalId) : undefined
+      const isChecking  = memory?.resolving ?? false
+      const isSaving    = memory?.saving    ?? false
+      const isSaved     = Boolean(memory?.savedJobId)
+
+      const applyUrl = this.activeApplyUrl()
+      const nextPos  = this.queuePosition()
+      const nextBtn  = nextPos?.nextKey
+        ? `<button class="action" data-action="queue-next">Next →</button>`
         : ""
-      const autofillBtn = this.hasReachableForm
-        ? `<button class="action primary" data-action="autofill" ${this.isBusy("autofill-load") ? "disabled" : ""}>Autofill</button>`
+
+      // Still checking DB
+      if (isChecking && !isSaved) {
+        return `<span style="font-size:12px;color:#64748b;padding:0 6px;">⟳ Checking…</span>`
+      }
+
+      // Saving in progress (user clicked Save)
+      if (isSaving) {
+        return `<span style="font-size:12px;color:#64748b;padding:0 6px;">⟳ Saving…</span>`
+      }
+
+      // Job is in Hireoven — show actions
+      if (isSaved) {
+        const openAppBtn = applyUrl
+          ? `<button class="action primary" data-action="open-apply-url">Apply →</button>`
+          : ""
+        const tailorEl = this.renderEligibleAction("tailor", "Tailor", this.tailorEligible(), this.isBusy("tailor-load"), "Loading…")
+        const coverEl  = this.renderEligibleAction("cover", "Cover", this.coverEligible(), this.isBusy("cover-generate"), "Generating…")
+        const queueEl  = this.renderQueuePillOrAdd()
+        return `
+          <span style="font-size:11px;color:#FF5C18;padding:0 4px;font-weight:600;">✓ In Hireoven</span>
+          ${openAppBtn}
+          ${tailorEl}
+          ${coverEl}
+          ${queueEl}
+          ${nextBtn}
+        `
+      }
+
+      // Job not in Hireoven — autofill still available, save is optional
+      const openAppBtn = applyUrl
+        ? `<button class="action primary" data-action="open-apply-url">Apply →</button>`
         : ""
       return `
-        <button class="action" data-action="save" ${this.isBusy("save") ? "disabled" : ""}>Save</button>
-        <button class="action" data-action="match" ${this.isBusy("match") ? "disabled" : ""}>
-          ${this.isBusy("match") ? "Analyzing…" : "Match Score"}
-        </button>
-        <button class="action" data-action="tailor" ${this.isBusy("tailor-load") ? "disabled" : ""}>Tailor</button>
-        <button class="action" data-action="cover" ${this.isBusy("cover-generate") ? "disabled" : ""}>Cover</button>
-        ${autofillBtn}
+        ${openAppBtn}
+        <button class="action" data-action="save">Save</button>
         ${nextBtn}
       `
     }
 
-    // ── Search results (LinkedIn, Glassdoor, Indeed) — filter + Scout ────────
+    // ── Search / list pages — signal pills + filters only ────────────────────
+    // No Tailor, Cover, Autofill, or Queue Apply on list pages.
     if (this.mode === "search_results") {
       const h1bOn = this.screenerFilters.h1bOnly
       const activeFilterCount = [
@@ -2648,12 +3344,16 @@ export class PageAwareControlSystem {
         this.screenerFilters.hideNoSponsor,
         this.screenerFilters.hideViewed,
       ].filter(Boolean).length
-
+      const pending = this.pendingQueueCount()
+      const queuePill = pending > 0
+        ? `<button class="action" data-action="open-queue" style="border-color:rgba(255,92,24,0.5);color:#c94010">Queue <span class="pill queue">${pending}</span></button>`
+        : ""
       return `
         <button class="action${h1bOn ? " primary" : ""}" data-action="toggle-h1b-filter" title="Show only H-1B sponsoring jobs">
           ${h1bOn ? "✓ H-1B" : "H-1B filter"}
         </button>
         ${activeFilterCount > 1 ? `<span class="pill queue">${activeFilterCount} filters</span>` : ""}
+        ${queuePill}
         <button class="action" data-action="open-dashboard">Open Scout →</button>
       `
     }
@@ -2690,10 +3390,11 @@ export class PageAwareControlSystem {
       <div class="bar-wrap">
         <div class="bar" data-mode="${this.mode}" role="toolbar" aria-label="Hireoven command bar">
           <span class="brand" title="Hireoven">${BRAND_ICON_SVG}</span>
-          <span class="title">${this.barTitleHtml()}</span>
+          ${this.mode !== "application_form"
+            ? `<span class="title">${this.barTitleHtml()}</span>`
+            : ""
+          }
           ${this.renderBarActions()}
-          <button class="action icon" data-action="open-dashboard" aria-label="Open Hireoven">⌕</button>
-          <button class="action icon" data-action="profile-toggle" aria-label="More">⋮</button>
           <button class="avatar" data-action="profile-toggle" aria-label="Profile menu">${avatar}</button>
         </div>
       </div>

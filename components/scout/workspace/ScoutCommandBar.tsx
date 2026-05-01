@@ -96,8 +96,10 @@ function useVoiceRecognition(onTranscript: (text: string, isFinal: boolean) => v
     recognition.onend = () => {
       isListeningRef.current = false
       recognitionRef.current = null
-      // Only reset if we haven't already transitioned to processing/error
-      setVoiceState((prev) => (prev === "listening" ? "idle" : prev))
+      // Reset to idle after listen/finalize; keep explicit unsupported/error states.
+      setVoiceState((prev) =>
+        prev === "listening" || prev === "processing" ? "idle" : prev
+      )
     }
 
     recognitionRef.current = recognition
@@ -156,15 +158,11 @@ export function ScoutCommandBar({
   const { voiceState, toggle: toggleVoice, supported: voiceSupported } =
     useVoiceRecognition((text, isFinal) => {
       onChange(text)
-      // Brief "processing" state resolves to idle once transcript is set
-      if (isFinal) setTimeout(() => setVoiceState_("idle"), 600)
+      if (isFinal) return
     })
 
-  // Expose a stable setter for the post-final idle transition above
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const setVoiceState_ = useState<VoiceState>("idle")[1]
-
   const isListening = voiceState === "listening"
+  const isProcessing = voiceState === "processing"
   const statusText  = VOICE_STATUS[voiceState]
 
   // ── History navigation ──────────────────────────────────────────────────────
@@ -216,7 +214,7 @@ export function ScoutCommandBar({
       <form onSubmit={handleSubmit}>
         <div
           className={cn(
-            "flex items-center gap-3 rounded-2xl px-4 py-3 transition-all duration-150",
+            "flex items-center gap-3 rounded-xl px-4 py-2.5 transition-all duration-150",
             isDark
               ? cn(
                   "bg-white/95 ring-1",
@@ -225,39 +223,60 @@ export function ScoutCommandBar({
                     : "ring-white/10 focus-within:ring-2 focus-within:ring-[#FF5C18]/50"
                 )
               : cn(
-                  "border-2 bg-white",
+                  "border bg-white",
                   isListening
-                    ? "border-[#FF5C18] shadow-[0_0_0_4px_rgba(255,92,24,0.12)]"
-                    : "border-gray-200 focus-within:border-slate-950 focus-within:shadow-[0_0_0_4px_rgba(2,8,23,0.04)]"
+                    ? "border-[#FF5C18] shadow-[0_0_0_2px_rgba(255,92,24,0.16)]"
+                    : isProcessing
+                      ? "border-slate-300 shadow-[0_0_0_2px_rgba(148,163,184,0.14)]"
+                    : "border-[#FFD5C2] focus-within:border-[#FF5C18] focus-within:shadow-[0_0_0_2px_rgba(255,92,24,0.14)]"
                 )
-          )}
+            )}
         >
           {/* Mic button */}
-          <button
-            type="button"
-            onClick={toggleVoice}
-            aria-label={
-              !voiceSupported ? "Voice not supported" :
-              isListening ? "Stop listening" : "Start voice input"
-            }
-            disabled={isLoading}
-            className={cn(
-              "flex-shrink-0 transition",
-              !voiceSupported
-                ? "cursor-not-allowed opacity-30 text-gray-400"
-                : isListening
-                  ? "text-[#FF5C18] animate-pulse"
-                  : voiceState === "error"
-                    ? "text-amber-500 hover:text-amber-600"
-                    : isDark
-                      ? "text-slate-400 hover:text-slate-200"
-                      : "text-gray-400 hover:text-gray-600"
-            )}
-          >
-            {voiceState === "unsupported" || voiceState === "error"
-              ? <MicOff className="h-5 w-5" />
-              : <Mic className="h-5 w-5" />}
-          </button>
+          <div className="relative flex-shrink-0">
+            <span
+              aria-hidden
+              className={cn(
+                "pointer-events-none absolute inset-0 rounded-full",
+                !voiceSupported
+                  ? "bg-transparent"
+                  : isListening
+                    ? "animate-ping bg-[#FF5C18]/25"
+                    : isProcessing
+                      ? "animate-pulse bg-slate-300/35"
+                    : "animate-pulse bg-[#FF5C18]/10"
+              )}
+            />
+            <button
+              type="button"
+              onClick={toggleVoice}
+              aria-label={
+                !voiceSupported ? "Voice not supported" :
+                isListening ? "Stop listening" : "Start voice input"
+              }
+              disabled={isLoading}
+              className={cn(
+                "relative inline-flex h-9 w-9 items-center justify-center rounded-full border transition",
+                !voiceSupported
+                  ? "cursor-not-allowed border-slate-200 bg-slate-100 text-gray-400 opacity-50"
+                  : isListening
+                    ? "border-[#FF5C18] bg-[#FFF2EB] text-[#FF5C18] shadow-[0_0_0_3px_rgba(255,92,24,0.15)]"
+                    : isProcessing
+                      ? "border-slate-300 bg-slate-100 text-slate-500"
+                    : voiceState === "error"
+                      ? "border-amber-300 bg-amber-50 text-amber-600 hover:border-amber-400"
+                      : isDark
+                        ? "border-white/20 bg-white/10 text-slate-200 hover:border-white/40"
+                        : "border-[#FFD9C7] bg-white text-[#FF5C18] hover:border-[#FF5C18]/50 hover:bg-[#FFF8F5]"
+              )}
+            >
+              {isProcessing ? (
+                <Loader2 className="h-[18px] w-[18px] animate-spin" />
+              ) : voiceState === "unsupported" || voiceState === "error"
+                ? <MicOff className="h-[18px] w-[18px]" />
+                : <Mic className={cn("h-[18px] w-[18px]", isListening && "animate-pulse")} />}
+            </button>
+          </div>
 
           {/* Input */}
           <input
@@ -295,7 +314,7 @@ export function ScoutCommandBar({
                 "inline-flex flex-shrink-0 items-center gap-1 rounded-lg px-1.5 py-1 transition",
                 isDark
                   ? "text-slate-500 hover:bg-white/8 hover:text-slate-300"
-                  : "text-gray-300 hover:bg-gray-100 hover:text-gray-600"
+                  : "text-slate-400 hover:bg-slate-100 hover:text-slate-600"
               )}
             >
               <Command className="h-3.5 w-3.5" />
@@ -308,7 +327,7 @@ export function ScoutCommandBar({
             type="submit"
             disabled={!query.trim() || isLoading}
             aria-label="Submit"
-            className="inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-[#FF5C18] text-white shadow-[0_4px_12px_rgba(255,92,24,0.35)] transition hover:bg-[#E14F0E] hover:shadow-[0_4px_16px_rgba(255,92,24,0.45)] disabled:opacity-40 disabled:shadow-none"
+            className="inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-[#FF5C18] text-white shadow-[0_2px_8px_rgba(255,92,24,0.3)] transition hover:bg-[#E14F0E] disabled:opacity-40 disabled:shadow-none"
           >
             {isLoading ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -323,7 +342,7 @@ export function ScoutCommandBar({
       {statusText && (
         <p
           className={cn(
-            "mt-2 text-[11px] font-medium",
+            "mt-2 inline-flex items-center gap-1.5 text-[11px] font-medium",
             voiceState === "listening"  ? "text-[#FF5C18]" :
             voiceState === "processing" ? "text-gray-400" :
             voiceState === "error"      ? "text-amber-600" :
@@ -331,7 +350,11 @@ export function ScoutCommandBar({
           )}
         >
           {voiceState === "listening" && (
-            <span className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-[#FF5C18] animate-pulse" />
+            <span className="mr-0.5 inline-flex items-center gap-[2px]">
+              <span className="inline-block h-1.5 w-1 rounded-full bg-[#FF5C18] animate-pulse" />
+              <span className="inline-block h-2 w-1 rounded-full bg-[#FF5C18]/80 animate-pulse [animation-delay:120ms]" />
+              <span className="inline-block h-1.5 w-1 rounded-full bg-[#FF5C18] animate-pulse [animation-delay:220ms]" />
+            </span>
           )}
           {statusText}
         </p>
@@ -339,22 +362,32 @@ export function ScoutCommandBar({
 
       {/* Suggestion chips */}
       {chips.length > 0 && !isLoading && !isListening && (
-        <div className="mt-3 flex flex-wrap gap-2">
-          {chips.map((chip) => (
-            <button
-              key={chip}
-              type="button"
-              onClick={() => { setHistoryIndex(-1); onChipClick(chip) }}
-              className={cn(
-                "rounded-full border px-3 py-1.5 text-xs font-medium transition",
-                isDark
-                  ? "border-white/12 text-white/50 hover:border-white/30 hover:bg-white/8 hover:text-white"
-                  : "border-gray-200 bg-white text-gray-500 hover:border-slate-950 hover:bg-slate-950 hover:text-white"
-              )}
-            >
-              {chip}
-            </button>
-          ))}
+        <div className="mt-3">
+          <p
+            className={cn(
+              "mb-1.5 text-[10px] font-semibold uppercase tracking-[0.16em]",
+              isDark ? "text-white/50" : "text-slate-400"
+            )}
+          >
+            Quick prompts
+          </p>
+          <div className="-mx-0.5 flex gap-2 overflow-x-auto px-0.5 pb-1">
+            {chips.map((chip) => (
+              <button
+                key={chip}
+                type="button"
+                onClick={() => { setHistoryIndex(-1); onChipClick(chip) }}
+                className={cn(
+                  "whitespace-nowrap rounded-full border px-3 py-1 text-xs font-medium transition",
+                  isDark
+                    ? "border-white/12 text-white/60 hover:border-white/30 hover:bg-white/8 hover:text-white"
+                    : "border-slate-200 bg-transparent text-slate-600 hover:border-[#FF5C18]/40 hover:bg-[#FFF8F5] hover:text-[#FF5C18]"
+                )}
+              >
+                {chip}
+              </button>
+            ))}
+          </div>
         </div>
       )}
     </div>

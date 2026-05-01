@@ -125,11 +125,11 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  const suspended = await pool.query<{ suspended_at: string | null }>(
-    `SELECT suspended_at FROM profiles WHERE id = $1 LIMIT 1`,
+  const profileFlags = await pool.query<{ suspended_at: string | null; is_admin: boolean | null }>(
+    `SELECT suspended_at, is_admin FROM profiles WHERE id = $1 LIMIT 1`,
     [userId]
   )
-  if (suspended.rows[0]?.suspended_at) {
+  if (profileFlags.rows[0]?.suspended_at) {
     return NextResponse.redirect(new URL("/login?reason=suspended", url.origin))
   }
 
@@ -138,7 +138,12 @@ export async function GET(request: NextRequest) {
     [userId]
   )
 
-  const sessionToken = await signSessionJwt({ sub: userId!, email })
+  const sessionToken = await signSessionJwt({
+    sub: userId!,
+    email,
+    isAdmin: Boolean(profileFlags.rows[0]?.is_admin),
+    suspended: false,
+  })
   const res = NextResponse.redirect(new URL(claims.next, url.origin))
   res.headers.append("Set-Cookie", buildSessionSetCookie(sessionToken, 60 * 60 * 24 * 14))
   return res

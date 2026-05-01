@@ -35,6 +35,7 @@ import {
 } from "@/lib/jobs/sponsorship-employer-signal"
 import {
   getMatchCardLabel,
+  getMatchVerdict,
   resolveOverallMatchScore,
 } from "@/lib/jobs/match-score-display"
 import { buildTopApplicantOpportunityBadgeTitle } from "@/lib/jobs/job-card-badges"
@@ -228,35 +229,88 @@ function readNormalizedCompanyInfo(raw: RawRecord): string | null {
 function seniorityPillStyle(label: string | null): string {
   if (!label) return ""
   const l = label.toLowerCase()
-  if (l === "intern" || l === "junior") return "bg-sky-50 text-sky-700 ring-1 ring-sky-200"
-  if (l === "mid") return "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
-  if (l === "senior") return "bg-violet-50 text-violet-700 ring-1 ring-violet-200"
-  return "bg-purple-50 text-purple-700 ring-1 ring-purple-200"
+  if (l === "intern" || l === "junior") return "bg-sky-500 text-white"
+  if (l === "mid") return "bg-indigo-500 text-white"
+  if (l === "senior") return "bg-violet-600 text-white"
+  return "bg-purple-600 text-white"
 }
 
 // ---------------------------------------------------------------------------
-// Match badge (replaces the SVG ring)
+// Match ring
 // ---------------------------------------------------------------------------
 
+const RING_SIZE = 62
+const RING_SW = 5.5
+const RING_R = (RING_SIZE - RING_SW) / 2       // 28.25
+const RING_CX = RING_SIZE / 2                   // 31
+const RING_CIRC = 2 * Math.PI * RING_R          // ≈ 177.5
+
+function scoreRingColor(score: number | null): string {
+  if (score == null) return "#94a3b8"   // slate-400
+  if (score >= 85)   return "#10b981"   // emerald-500
+  if (score >= 70)   return "#3b82f6"   // blue-500
+  if (score >= 55)   return "#f59e0b"   // amber-500
+  return "#64748b"                       // slate-500
+}
+
 function MatchBadge({ score, loading }: { score: number | null; loading: boolean }) {
+  const progress   = score !== null ? Math.max(0, Math.min(100, score)) / 100 : 0
+  const dashOffset = RING_CIRC * (1 - progress)
+  const ringColor  = scoreRingColor(score)
+  const verdict    = getMatchVerdict(score)
+
   if (loading) {
     return (
-      <div className="flex h-[70px] w-[62px] shrink-0 flex-col items-center justify-center rounded-xl bg-slate-100">
-        <span className="text-[10px] font-semibold text-slate-400">Scoring</span>
+      <div className="flex shrink-0 flex-col items-center gap-1.5">
+        <div className="flex h-[62px] w-[62px] items-center justify-center">
+          <svg width={RING_SIZE} height={RING_SIZE} className="animate-spin">
+            <circle
+              cx={RING_CX} cy={RING_CX} r={RING_R}
+              fill="none" stroke="#e2e8f0" strokeWidth={RING_SW}
+            />
+            <circle
+              cx={RING_CX} cy={RING_CX} r={RING_R}
+              fill="none" stroke="#94a3b8" strokeWidth={RING_SW}
+              strokeLinecap="round"
+              strokeDasharray={`${RING_CIRC * 0.22} ${RING_CIRC * 0.78}`}
+            />
+          </svg>
+        </div>
+        <span className="text-[10px] font-medium text-slate-400">Scoring…</span>
       </div>
     )
   }
-  const gradient = scoreGradient(score)
+
   return (
-    <div className={cn("flex h-[70px] w-[62px] shrink-0 flex-col items-center justify-center rounded-xl bg-gradient-to-br text-white", gradient)}>
-      <span className="text-[24px] font-extrabold leading-none tabular-nums">
-        {score ?? "—"}
-      </span>
-      {score !== null && (
-        <span className="text-[10px] font-bold leading-none text-white/75">%</span>
-      )}
-      <span className="mt-1 text-[9px] font-bold uppercase tracking-widest text-white/70">
-        match
+    <div className="flex shrink-0 flex-col items-center gap-1.5">
+      <div className="relative flex h-[62px] w-[62px] items-center justify-center">
+        <svg width={RING_SIZE} height={RING_SIZE} className="-rotate-90" aria-hidden>
+          <circle
+            cx={RING_CX} cy={RING_CX} r={RING_R}
+            fill="none" stroke="#e2e8f0" strokeWidth={RING_SW}
+          />
+          <circle
+            cx={RING_CX} cy={RING_CX} r={RING_R}
+            fill="none"
+            stroke={ringColor}
+            strokeWidth={RING_SW}
+            strokeLinecap="round"
+            strokeDasharray={RING_CIRC}
+            strokeDashoffset={dashOffset}
+            style={{ transition: "stroke-dashoffset 0.45s ease" }}
+          />
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <span className="text-[17px] font-extrabold leading-none tabular-nums text-slate-900">
+            {score ?? "—"}
+          </span>
+          <span className="mt-0.5 text-[8.5px] font-bold uppercase tracking-widest text-slate-400">
+            match
+          </span>
+        </div>
+      </div>
+      <span className={cn("text-center text-[10px] font-semibold leading-tight", verdict.colorClass)}>
+        {verdict.label}
       </span>
     </div>
   )
@@ -541,10 +595,10 @@ export default function JobCardV2({
   // Work mode pill styling
   const workModePill =
     workMode === "Remote"
-      ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200"
+      ? "bg-emerald-500 text-white"
       : workMode === "Hybrid"
-        ? "bg-sky-50 text-sky-700 ring-1 ring-sky-200"
-        : "bg-slate-100 text-slate-600"
+        ? "bg-sky-500 text-white"
+        : "bg-slate-500 text-white"
 
   const showCompanySnippet = Boolean(companySummary || companySector || companySize)
 
@@ -670,19 +724,19 @@ export default function JobCardV2({
               {(activelyHiring || easyApply || topApplicantSignal) && (
                 <div className="mt-2.5 flex flex-wrap gap-1.5">
                   {activelyHiring && (
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-violet-50 px-2.5 py-1 text-[11px] font-semibold text-violet-700 ring-1 ring-violet-200">
-                      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-violet-500" aria-hidden />
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-violet-600 px-2.5 py-1 text-[11px] font-semibold text-white">
+                      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white/70" aria-hidden />
                       Actively recruiting
                     </span>
                   )}
                   {easyApply && (
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-sky-50 px-2.5 py-1 text-[11px] font-semibold text-sky-700 ring-1 ring-sky-200">
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-sky-500 px-2.5 py-1 text-[11px] font-semibold text-white">
                       <Zap className="h-3 w-3" aria-hidden />
                       Easy Apply
                     </span>
                   )}
                   {topApplicantSignal && (
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700 ring-1 ring-amber-200">
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500 px-2.5 py-1 text-[11px] font-semibold text-white">
                       <Trophy className="h-3 w-3" aria-hidden />
                       Top Applicant
                     </span>
@@ -694,14 +748,14 @@ export default function JobCardV2({
               {sponsorshipDisplay && (
                 <div className="mt-2.5 flex items-center gap-2">
                   <span className={cn(
-                    "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1",
+                    "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold text-white",
                     sponsorshipDisplay.tone === "emerald"
-                      ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
+                      ? "bg-emerald-500"
                       : sponsorshipDisplay.tone === "sky"
-                        ? "bg-sky-50 text-sky-700 ring-sky-200"
+                        ? "bg-sky-500"
                         : sponsorshipDisplay.tone === "amber"
-                          ? "bg-amber-50 text-amber-700 ring-amber-200"
-                        : "bg-rose-50 text-rose-600 ring-rose-200"
+                          ? "bg-amber-500"
+                        : "bg-rose-500"
                   )}>
                     {sponsorshipDisplay.tone !== "rose"
                       ? <ShieldCheck className="h-3 w-3 shrink-0" aria-hidden />
@@ -719,28 +773,28 @@ export default function JobCardV2({
                   {matchedVisible.map((skill) => (
                     <span
                       key={`m-${job.id}-${skill}`}
-                      className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-medium text-emerald-700 ring-1 ring-emerald-200"
+                      className="inline-flex items-center gap-1 rounded-full bg-emerald-500 px-2.5 py-0.5 text-[11px] font-medium text-white"
                     >
                       <Check className="h-3 w-3" aria-hidden />
                       {skill}
                     </span>
                   ))}
                   {matchedExtra > 0 && (
-                    <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-medium text-emerald-600 ring-1 ring-emerald-200">
+                    <span className="rounded-full bg-emerald-500 px-2.5 py-0.5 text-[11px] font-medium text-white">
                       +{matchedExtra}
                     </span>
                   )}
                   {missingVisible.map((skill) => (
                     <span
                       key={`x-${job.id}-${skill}`}
-                      className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2.5 py-0.5 text-[11px] font-medium text-rose-600 ring-1 ring-rose-200"
+                      className="inline-flex items-center gap-1 rounded-full bg-rose-500 px-2.5 py-0.5 text-[11px] font-medium text-white"
                     >
                       <span className="text-[12px] leading-none">+</span>
                       {skill}
                     </span>
                   ))}
                   {missingExtra > 0 && (
-                    <span className="rounded-full bg-rose-50 px-2.5 py-0.5 text-[11px] font-medium text-rose-500 ring-1 ring-rose-200">
+                    <span className="rounded-full bg-rose-500 px-2.5 py-0.5 text-[11px] font-medium text-white">
                       +{missingExtra} to learn
                     </span>
                   )}

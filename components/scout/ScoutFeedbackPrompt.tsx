@@ -5,12 +5,12 @@ import { X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ScoutOutcomePicker } from "./ScoutOutcomePicker"
 import { dismissFeedbackPrompt, isFeedbackDismissed } from "@/lib/scout/outcomes/store"
-import type { ApplicationFeedbackItem, ApplicationOutcome } from "@/lib/scout/outcomes/types"
+import type { ApplicationFeedbackItem, ScoutOutcomeType } from "@/lib/scout/outcomes/types"
 
 type SinglePromptProps = {
   item:        ApplicationFeedbackItem
   onDismiss:   (id: string) => void
-  onRecorded:  (id: string, outcome: ApplicationOutcome) => void
+  onRecorded:  (id: string, outcome: ScoutOutcomeType) => void
 }
 
 function SingleFeedbackPrompt({ item, onDismiss, onRecorded }: SinglePromptProps) {
@@ -68,7 +68,7 @@ function SingleFeedbackPrompt({ item, onDismiss, onRecorded }: SinglePromptProps
 type Props = {
   items:              ApplicationFeedbackItem[]
   outcomeLearningDisabled?: boolean
-  onOutcomeRecorded?: (applicationId: string, outcome: ApplicationOutcome) => void
+  onOutcomeRecorded?: (applicationId: string, outcome: ScoutOutcomeType) => void
 }
 
 export function ScoutFeedbackPrompt({ items, outcomeLearningDisabled, onOutcomeRecorded }: Props) {
@@ -88,7 +88,7 @@ export function ScoutFeedbackPrompt({ items, outcomeLearningDisabled, onOutcomeR
     setDismissed((prev) => new Set(prev).add(id))
   }
 
-  function handleRecorded(id: string, outcome: ApplicationOutcome) {
+  function handleRecorded(id: string, outcome: ScoutOutcomeType) {
     setRecorded((prev) => new Set(prev).add(id))
     onOutcomeRecorded?.(id, outcome)
   }

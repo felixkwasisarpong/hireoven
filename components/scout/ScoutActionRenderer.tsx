@@ -207,9 +207,9 @@ export function ScoutActionRenderer({ actions, source, reason }: ScoutActionRend
   }
 
   return (
-    <div className="mt-5 space-y-3">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">
-        Suggested Actions
+    <div className="mt-4 space-y-2.5">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-300">
+        Actions
       </p>
 
       <div className="flex flex-wrap gap-2">

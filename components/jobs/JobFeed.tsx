@@ -84,9 +84,8 @@ export default function JobFeed({
   const missingScoreIds = hasPrimaryResume
     ? jobs.filter((job) => !job.match_score).map((job) => job.id)
     : []
-  const { getScore, isLoading: scoresLoading } = useMatchScores(missingScoreIds)
-
-  const { profile } = useAuth()
+  const { user, profile } = useAuth()
+  const { getScore, isLoading: scoresLoading } = useMatchScores(missingScoreIds, user?.id)
   const { isProInternational } = useSubscription()
   const h1bEnabled = Boolean(
     profile?.needs_sponsorship || profile?.is_international || isProInternational

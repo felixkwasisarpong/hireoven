@@ -13,7 +13,8 @@ import type { WorkspaceMode } from "@/lib/scout/workspace"
 
 const COMPARE_RE    = /\b(compare|rank.*job|which.*apply.*first|side.?by.?side|shortlist)\b/i
 const TAILOR_RE     = /\b(tailor|tailor.?my.?resume|tailor.*resume|open.*resume.?studio)\b/i
-const BULK_PREP_RE  = /\b(prepare|queue|batch|bulk)\b.{0,80}\b(application[s]?|apply)\b/i
+const BULK_PREP_RE  =
+  /(?:\b(prepare|queue|batch|bulk)\b.{0,80}\b(application[s]?|apply)\b)|(?:\bapply\s+(?:to|for)\s+(?:(?:top|best|strongest|highest)\s+)?\d+\s+(?:(?:top|best|strongest|highest|matching|scored?)\s+){0,2}(?:jobs?|roles?|positions?|openings?|applications?))/i
 const WORKFLOW_RE   = /\b(workflow|step.?by.?step|roadmap|prepare.*application)\b/i
 const SEARCH_RE     = /\b(find|search|show|filter|discover)\b.{0,40}\b(job[s]?|role[s]?|position[s]?)\b/i
 const COMPANY_RE    = /\b(tell me about|does|what about|company|employer|sponsor)\b.{0,20}\b(sponsor|visa|h-?1b|hire|hiring)\b/i

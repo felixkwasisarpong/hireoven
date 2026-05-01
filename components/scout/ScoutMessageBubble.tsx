@@ -11,7 +11,7 @@
  * so renderer behavior is always identical across surfaces.
  */
 
-import { CheckCircle2, Lock, Zap, Sparkles } from "lucide-react"
+import { Lock, Zap, Sparkles } from "lucide-react"
 import type { FeatureKey } from "@/lib/gates"
 import type { ScoutResponse } from "@/lib/scout/types"
 import { ScoutResponseRenderer } from "./ScoutResponseRenderer"
@@ -37,61 +37,42 @@ export function ScoutMessageBubble({ response, context = "dashboard", compact = 
   const recConfig =
     RECOMMENDATION_CONFIG[response.recommendation] ?? RECOMMENDATION_CONFIG.Explore
   const isCompact = compact || context === "mini" || context === "extension"
+  const showRecommendation =
+    response.recommendation !== "Explore" ||
+    Boolean((response.actions?.length ?? 0) > 0 || response.workflow || response.compare)
 
   return (
     <div className={`group flex items-start ${isCompact ? "gap-2.5" : "gap-3"}`}>
       {/* Avatar */}
       <div
-        className={`relative mt-0.5 flex-shrink-0 inline-flex items-center justify-center bg-[#FF5C18] ${
-          isCompact
-            ? "h-7 w-7 rounded-xl shadow-[0_4px_14px_rgba(255,92,24,0.3)]"
-            : "h-9 w-9 rounded-xl shadow-[0_4px_16px_rgba(255,92,24,0.35)]"
+        className={`mt-0.5 flex-shrink-0 inline-flex items-center justify-center rounded-lg bg-[#FF5C18] shadow-[0_2px_8px_rgba(255,92,24,0.3)] ${
+          isCompact ? "h-6 w-6" : "h-7 w-7"
         }`}
       >
-        <Sparkles className={isCompact ? "h-3.5 w-3.5 text-white" : "h-4 w-4 text-white"} />
+        <Sparkles className={isCompact ? "h-3 w-3 text-white" : "h-3.5 w-3.5 text-white"} />
       </div>
 
       {/* Bubble */}
-      <div className="min-w-0 flex-1 overflow-hidden rounded-2xl rounded-tl-sm border border-slate-100 bg-white shadow-[0_4px_20px_rgba(15,23,42,0.07)] transition-shadow group-hover:shadow-[0_8px_28px_rgba(15,23,42,0.1)]">
-        {/* Coloured accent bar */}
-        <div className={`h-[3px] w-full ${recConfig.bg} opacity-80`} />
+      <div className="min-w-0 flex-1 overflow-hidden rounded-2xl rounded-tl-sm border border-slate-100 bg-white shadow-sm">
+        {/* Coloured accent line */}
+        <div className={`h-[2px] w-full ${recConfig.bg}`} />
 
         <div className={isCompact ? "p-3" : "p-4 sm:p-5"}>
-          {/* Header badges */}
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex flex-wrap items-center gap-1.5">
+          {/* Recommendation badge — compact single pill, no mode/confidence noise */}
+          {showRecommendation && (
+            <div className="flex items-center gap-2">
               <span
-                className={`inline-flex items-center gap-1 rounded-full border font-semibold uppercase tracking-wide ${recConfig.pill} ${
-                  isCompact ? "px-2 py-0.5 text-[10px]" : "px-2.5 py-0.5 text-xs"
+                className={`inline-flex items-center rounded-full border font-semibold uppercase tracking-wide ${recConfig.pill} ${
+                  isCompact ? "px-2 py-0.5 text-[10px]" : "px-2.5 py-0.5 text-[11px]"
                 }`}
               >
-                <CheckCircle2 className="h-3 w-3" />
                 {response.recommendation}
               </span>
-
-              {response.mode && (
-                <span
-                  className={`rounded-full bg-slate-100 font-semibold uppercase tracking-wide text-slate-500 ${
-                    isCompact ? "px-2 py-0.5 text-[10px]" : "px-2.5 py-0.5 text-[11px]"
-                  }`}
-                >
-                  {response.mode}
-                </span>
-              )}
             </div>
-
-            {!isCompact && (response.intent || typeof response.confidence === "number") && (
-              <span className="text-[10px] font-medium uppercase tracking-[0.16em] text-slate-400">
-                {response.intent ?? "Scout"}
-                {typeof response.confidence === "number"
-                  ? ` - ${Math.round(response.confidence * 100)}%`
-                  : ""}
-              </span>
-            )}
-          </div>
+          )}
 
           {/* ── All content routing via ScoutResponseRenderer ─────────── */}
-          <div className="mt-2.5">
+          <div className={showRecommendation ? "mt-2.5" : "mt-1"}>
             <ScoutResponseRenderer
               response={response}
               context={context}
@@ -102,7 +83,7 @@ export function ScoutMessageBubble({ response, context = "dashboard", compact = 
           {/* Gated upgrade card */}
           {response.gated && (
             <div
-              className={`rounded-xl border border-[#FFD2B8] bg-[#FFF7F2] ${
+              className={`rounded-xl border border-orange-100 bg-orange-50/60 ${
                 isCompact ? "mt-3 p-3" : "mt-4 p-4"
               }`}
             >

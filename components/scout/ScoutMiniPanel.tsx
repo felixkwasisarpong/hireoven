@@ -197,14 +197,14 @@ export function ScoutMiniPanel({
 
                 <div>
                   <div className="flex items-center gap-2">
-                    <p className="text-sm font-bold text-white">Scout</p>
+                    <p className="text-sm font-bold text-white">Scout Agent</p>
                     {hasConversation && (
                       <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-[#FF5C18] text-[9px] font-bold text-white">
                         {userTurns}
                       </span>
                     )}
                   </div>
-                  <p className="text-[10px] text-slate-400">AI job search assistant</p>
+                  <p className="text-[10px] text-slate-400">Execution copilot for your job search</p>
                 </div>
               </div>
 
@@ -240,9 +240,9 @@ export function ScoutMiniPanel({
                   </div>
                 </div>
 
-                <p className="text-base font-bold text-gray-900">How can I help?</p>
+                <p className="text-base font-bold text-gray-900">What should I run?</p>
                 <p className="mt-1 text-[11px] text-gray-400 leading-5">
-                  Ask anything about this page, job, or your search
+                  Ask Scout to search, compare, tailor, or prepare applications.
                 </p>
 
                 {/* Context chip */}
@@ -379,7 +379,7 @@ export function ScoutMiniPanel({
         >
           <ScoutChatbotAnimation className={cn(isOpen ? "animate-none" : "animate-extension-breathe")} />
         </span>
-        <span>{isOpen ? "Close" : "Scout"}</span>
+        <span>{isOpen ? "Close" : "Scout Agent"}</span>
 
         {/* Unread badge */}
         {hasConversation && !isOpen && (

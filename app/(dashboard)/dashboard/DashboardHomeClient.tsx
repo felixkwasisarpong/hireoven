@@ -12,8 +12,9 @@ import DashboardSidebarNav from "@/components/dashboard/DashboardSidebarNav"
 import DashboardSpotlightColumn from "@/components/dashboard/DashboardSpotlightColumn"
 import JobFeed from "@/components/jobs/JobFeed"
 import PushNotificationSetup from "@/components/notifications/PushNotificationSetup"
-import { ScoutMiniPanel } from "@/components/scout/ScoutMiniPanel"
-import { ScoutFocusBanner } from "@/components/scout/ScoutFocusBanner"
+import dynamic from "next/dynamic"
+const ScoutMiniPanel  = dynamic(() => import("@/components/scout/ScoutMiniPanel").then(m => ({ default: m.ScoutMiniPanel })), { ssr: false })
+const ScoutFocusBanner = dynamic(() => import("@/components/scout/ScoutFocusBanner").then(m => ({ default: m.ScoutFocusBanner })), { ssr: false })
 import { useResumeContext } from "@/components/resume/ResumeProvider"
 import { parseJobFilters } from "@/components/jobs/JobFilters"
 import { getSearchQuery } from "@/components/jobs/JobSearch"

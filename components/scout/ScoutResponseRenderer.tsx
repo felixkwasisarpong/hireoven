@@ -32,7 +32,7 @@ import type { ScoutResponse } from "@/lib/scout/types"
 import type { FeatureKey } from "@/lib/gates"
 import { cn } from "@/lib/utils"
 
-const IS_DEV = process.env.NODE_ENV === "development"
+const IS_DEV = false
 
 // ── Dev-only debug panel ──────────────────────────────────────────────────────
 

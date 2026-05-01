@@ -18,6 +18,10 @@ import {
 import { canAccess } from "@/lib/gates"
 import { getUserPlan } from "@/lib/gates/server-gate"
 import { ANTHROPIC_TIER_PRICING, SONNET_MODEL } from "@/lib/ai/anthropic-models"
+import { budgetTracker, calcCost, inferTier } from "@/lib/scout/budget/tracker"
+import { streamWithTimeout } from "@/lib/scout/budget/ai-call"
+import { routeScoutMessage, AI_TIMEOUTS } from "@/lib/scout/budget/router"
+import { scoutCache, CACHE_TTL, cacheKey, stableHash } from "@/lib/scout/budget/cache"
 import {
   isScoutIntent,
   isScoutMode,
@@ -237,8 +241,15 @@ function detectInterviewType(message: string): string | undefined {
   return undefined
 }
 
-// Bulk application prep: "Prepare 5 applications for...", "Queue visa-friendly roles over 80 match", "Prepare applications for remote backend jobs"
-const BULK_PREP_RE = /\b(prepare|queue|batch|bulk)\b.{0,80}\b(application[s]?|apply|applying)\b/i
+// Bulk application prep — matches explicit batch language OR "apply to/for N jobs/roles"
+// Examples that must match:
+//   "Prepare 5 applications for..."
+//   "Queue visa-friendly roles over 80 match"
+//   "apply to 2 jobs with match score greater than 80"
+//   "apply for 3 roles"
+//   "start applying to 10 positions"
+const BULK_PREP_RE =
+  /(?:\b(?:prepare|queue|batch|bulk)\b.{0,80}\b(?:jobs?|roles?|positions?|openings?|application[s]?|apply|applying)\b)|(?:\bapply\s+(?:to|for)\s+(?:(?:top|best|strongest|highest)\s+)?\d+\s+(?:(?:top|best|strongest|highest|matching|scored?)\s+){0,2}(?:jobs?|roles?|positions?|openings?|applications?))|(?:\bstart\s+applying\b)/i
 
 // Intents that require a resolved job context (tailor, workflow, "best job" open)
 const NEEDS_JOB_RESOLVE_RE = /\b(tailor|tailor.?my|prepare.?application|prepare.?my.?resume|workflow.*job|open.?strong|strongest.?match|best.?saved|my.?best.*job|best.*matching)\b/i
@@ -249,7 +260,10 @@ function inferBulkWorkspaceDirective(message: string): import("@/lib/scout/types
   const count = countMatch ? parseInt(countMatch[1], 10) : 10
   const requireSponsorshipSignal = /\b(visa|h-?1b|sponsor)/i.test(message)
   const workMode = /\bremote\b/i.test(message) ? "remote" : undefined
-  const scoreMatch = message.match(/\bover\s+(\d+)\b|\b(\d+)\s*(?:match|%)\b/i)
+  // Matches: "over 80", "above 80", "greater than 80", "more than 80", "> 80", ">= 80", "80 match", "80%"
+  const scoreMatch = message.match(
+    /\b(?:over|above|greater\s+than|more\s+than|higher\s+than|at\s+least|>=?)\s*(\d+)|(\d+)\s*(?:match|%)\b/i,
+  )
   const minMatchScore = scoreMatch ? parseInt(scoreMatch[1] ?? scoreMatch[2], 10) : undefined
 
   return {
@@ -309,6 +323,11 @@ function normalizeConfidence(raw: unknown): number | undefined {
 
 function inferIntentFromMessage(message: string): ScoutIntent {
   const normalized = message.trim()
+  // BULK_PREP_RE check must come before ANALYSIS_HINT_RE — phrases like
+  // "apply to 2 jobs with match score > 80" contain "score" which would
+  // otherwise match ANALYSIS_HINT_RE and produce a non-workflow intent,
+  // causing Claude to respond with an analysis answer instead of the
+  // bulk-queue confirmation and leaving workspace_directive unset.
   if (BULK_PREP_RE.test(normalized)) return "workflow"
   if (WORKFLOW_HINT_RE.test(normalized)) return "workflow"
   if (COMMAND_VERB_RE.test(normalized)) return "command"
@@ -822,6 +841,175 @@ export async function POST(request: NextRequest) {
     } satisfies ScoutResponse)
   }
 
+  // Bulk-prep intent — skip Claude entirely, build response deterministically.
+  // Claude would return JSON (per system prompt) which shows as raw text during streaming.
+  if (BULK_PREP_RE.test(userMessage)) {
+    const bulkDirective = inferBulkWorkspaceDirective(userMessage)
+    const bp = bulkDirective?.payload ?? {}
+    const countHint  = typeof bp.count === "number" ? bp.count : 10
+    const scoreHint  = typeof bp.minMatchScore === "number" ? ` with match score ${bp.minMatchScore}%+` : ""
+    const sponsorHint = bp.requireSponsorshipSignal ? " that sponsor H-1B" : ""
+
+    // Query matching jobs server-side
+    let applyAgentDirective: import("@/lib/scout/apply-agent/types").ApplyAgentDirective | undefined
+    try {
+      const params = new URLSearchParams()
+      if (bp.minMatchScore)          params.set("minMatchScore", String(bp.minMatchScore))
+      if (bp.count)                  params.set("count", String(bp.count))
+      if (bp.requireSponsorshipSignal) params.set("sponsorship", "true")
+      if (bp.workMode)               params.set("workMode", String(bp.workMode))
+      const origin = request.nextUrl.origin || process.env.NEXT_PUBLIC_APP_URL || "http://127.0.0.1:3000"
+      const res    = await fetch(`${origin}/api/scout/apply-agent?${params.toString()}`, {
+        headers: { cookie: request.headers.get("cookie") ?? "" },
+      })
+      if (res.ok) {
+        const data = await res.json() as { jobs: import("@/lib/scout/apply-agent/types").ApplyAgentJob[] }
+        if (data.jobs.length > 0) {
+          applyAgentDirective = {
+            jobs:     data.jobs,
+            criteria: {
+              minMatchScore:           bp.minMatchScore as number | undefined,
+              requireSponsorshipSignal: Boolean(bp.requireSponsorshipSignal),
+              workMode:                bp.workMode as string | undefined,
+              count:                   countHint,
+            },
+            currentIndex: 0,
+            phase:        "select",
+          }
+        }
+      }
+
+      // Fallback: derive queue from saved applications so "apply to N top jobs"
+      // still progresses when apply-agent pool selection is too strict.
+      if (!applyAgentDirective) {
+        const savedRes = await fetch(`${origin}/api/applications?status=saved&limit=200&sort=match_score`, {
+          headers: { cookie: request.headers.get("cookie") ?? "" },
+        })
+        if (savedRes.ok) {
+          const savedData = await savedRes.json() as {
+            applications?: Array<{
+              job_id?: string | null
+              job_title?: string | null
+              company_name?: string | null
+              apply_url?: string | null
+              match_score?: number | null
+              sponsorship_signal?: string | null
+              location?: string | null
+              is_remote?: boolean | null
+            }>
+          }
+          const rows = savedData.applications ?? []
+
+          const jobs = rows
+            .filter((r) => typeof r.job_id === "string" && r.job_id.length > 0)
+            .filter((r) => typeof r.apply_url === "string" && r.apply_url.length > 0)
+            .filter((r) => {
+              if (typeof bp.minMatchScore === "number" && typeof r.match_score === "number") {
+                return r.match_score >= bp.minMatchScore
+              }
+              return true
+            })
+            .filter((r) => {
+              if (!bp.requireSponsorshipSignal) return true
+              const sig = (r.sponsorship_signal ?? "").toLowerCase()
+              // Keep unknown/likely; drop explicit no-sponsorship signals.
+              return !(/\bno\b|\bnone\b|\bnot\b|\bdoes not sponsor\b|\bwithout sponsorship\b/.test(sig))
+            })
+            .sort((a, b) => (b.match_score ?? -1) - (a.match_score ?? -1))
+            .slice(0, countHint)
+            .map((r) => ({
+              jobId:             r.job_id!,
+              jobTitle:          r.job_title ?? "Saved job",
+              company:           r.company_name ?? null,
+              matchScore:        r.match_score ?? null,
+              applyUrl:          r.apply_url ?? null,
+              sponsorshipSignal: r.sponsorship_signal ?? null,
+              location:          r.location ?? null,
+              isRemote:          Boolean(r.is_remote),
+              status:            "pending" as const,
+            }))
+
+          if (jobs.length > 0) {
+            applyAgentDirective = {
+              jobs,
+              criteria: {
+                minMatchScore:            bp.minMatchScore as number | undefined,
+                requireSponsorshipSignal: Boolean(bp.requireSponsorshipSignal),
+                workMode:                 bp.workMode as string | undefined,
+                count:                    countHint,
+              },
+              currentIndex: 0,
+              phase:        "select",
+            }
+          }
+        }
+      }
+    } catch { /* non-critical */ }
+
+    const jobCount = applyAgentDirective?.jobs.length ?? 0
+    const answer   = jobCount > 0
+      ? `I found **${jobCount} job${jobCount !== 1 ? "s" : ""}**${scoreHint}${sponsorHint} in your list. I'll walk you through tailoring and applying to each one — starting with the best match.`
+      : `I didn't find any saved jobs${scoreHint}${sponsorHint}. Save some jobs from the feed first, then come back and I'll queue them up for you.`
+
+    const bulkResponse: ScoutResponse = {
+      answer,
+      recommendation: "Explore",
+      actions:        [],
+      explanations:   [],
+      intent:         "workflow",
+      confidence:     0.99,
+      mode,
+      workspace_directive: bulkDirective,
+      apply_agent:    applyAgentDirective,
+    }
+
+    // Client always uses stream:true — return SSE so the stream handler can process it
+    if (body.stream === true) {
+      const enc = new TextEncoder()
+      let ctrl!: ReadableStreamDefaultController<Uint8Array>
+      const sseStream = new ReadableStream<Uint8Array>({ start: (c) => { ctrl = c } })
+      void (async () => {
+        try {
+          if (bulkDirective) ctrl.enqueue(enc.encode(encodeSSE({ type: "workspace_directive", payload: bulkDirective })))
+          ctrl.enqueue(enc.encode(encodeSSE({ type: "response", payload: bulkResponse })))
+          ctrl.enqueue(enc.encode(encodeSSE({ type: "done" })))
+        } finally {
+          try { ctrl.close() } catch {}
+        }
+      })()
+      return new Response(sseStream, {
+        headers: {
+          "Content-Type":      "text/event-stream",
+          "Cache-Control":     "no-cache, no-transform",
+          "Connection":        "keep-alive",
+          "X-Accel-Buffering": "no",
+        },
+      })
+    }
+
+    return NextResponse.json(bulkResponse)
+  }
+
+  // Deterministic routing gate — no LLM needed for pure UI/filter commands
+  const routing = routeScoutMessage(userMessage)
+  if (!routing.useLLM) {
+    budgetTracker.record({
+      feature: "scout_chat", model: MODEL, tier: inferTier(MODEL),
+      inputTokens: 0, outputTokens: 0, latencyMs: 0, costUsd: 0,
+      success: true, cached: true, timedOut: false,
+      userId: undefined, timestamp: Date.now(),
+    })
+    return NextResponse.json({
+      answer: "Got it — applying that filter now.",
+      recommendation: "Explore",
+      actions: [],
+      explanations: [],
+      intent: "command",
+      confidence: 0.99,
+      mode,
+    } satisfies ScoutResponse)
+  }
+
   const { plan } = await getUserPlan(request)
   const effectivePlan = plan ?? "free"
   const inferredIntent = inferIntentFromMessage(userMessage)
@@ -941,7 +1129,7 @@ export async function POST(request: NextRequest) {
   const effectiveJobId = resolvedJob?.jobId ?? body.jobId
 
   try {
-    // Retrieve grounded context
+    // Retrieve grounded context (includes active memories via getScoutContext)
     const context = await getScoutContext({
       userId: user.id,
       pagePath: body.pagePath,
@@ -955,7 +1143,15 @@ export async function POST(request: NextRequest) {
       compareLimit,
     })
 
-    const formattedContext = formatScoutContextForClaude(context)
+    // ── Memory relevance filtering ──────────────────────────────────────────────
+    // Replace the full memory list with the top-N most relevant to this request
+    // so we never bloat the prompt with low-relevance memories.
+    if (context.memories.length > 0) {
+      const { selectRelevantMemories } = await import("@/lib/scout/memory/retriever")
+      context.memories = selectRelevantMemories(context.memories, { mode, message: userMessage })
+    }
+
+    const formattedContext = await formatScoutContextForClaude(context)
 
     // ── Multi-agent orchestrator ────────────────────────────────────────────────
     // Runs specialist agents in parallel after context is loaded.
@@ -1109,14 +1305,25 @@ User Input: ${userMessage}`
       const msgParams = { model: MODEL, max_tokens: maxTokens, system: systemPrompt, messages: [{ role: "user" as const, content: contextualPrompt }] }
 
       void (async () => {
+        const streamStart = Date.now()
         try {
-          const stream = anthropic.messages.stream(msgParams)
+          const rawStream = anthropic.messages.stream(msgParams)
+          const { stream, abort: abortStream } = streamWithTimeout(rawStream, AI_TIMEOUTS.scout_chat_stream)
           stream.on("text", (text) => emit({ type: "text_delta", text }))
-          const msg = await stream.finalMessage()
+          let msg: Awaited<ReturnType<typeof stream.finalMessage>>
+          try {
+            msg = await stream.finalMessage()
+          } catch {
+            abortStream()
+            emit({ type: "error", message: "Scout is taking too long — please try again." })
+            budgetTracker.record({ feature: "scout_chat_stream", model: MODEL, tier: inferTier(MODEL), inputTokens: 0, outputTokens: 0, latencyMs: Date.now() - streamStart, costUsd: 0, success: false, cached: false, timedOut: true, timestamp: Date.now() })
+            return
+          }
 
           const inputTokens  = msg.usage?.input_tokens  ?? 0
           const outputTokens = msg.usage?.output_tokens ?? 0
-          const costUsd = (inputTokens / 1_000_000) * MODEL_PRICING.inputPerMillion + (outputTokens / 1_000_000) * MODEL_PRICING.outputPerMillion
+          const costUsd = calcCost(inferTier(MODEL), inputTokens, outputTokens)
+          budgetTracker.record({ feature: "scout_chat_stream", model: MODEL, tier: inferTier(MODEL), inputTokens, outputTokens, latencyMs: Date.now() - streamStart, costUsd, success: true, cached: false, timedOut: false, timestamp: Date.now() })
           await logApiUsage({ service: "claude", operation: "scout_chat_stream", tokens_used: inputTokens + outputTokens, cost_usd: Number(costUsd.toFixed(6)) })
 
           const responseText = msg.content.filter((b) => b.type === "text").map((b) => b.text).join("\n").trim()
@@ -1224,25 +1431,31 @@ User Input: ${userMessage}`
     }
     // ── End streaming branch ────────────────────────────────────────────────────
 
-    const message = await anthropic.messages.create({
-      model: MODEL,
-      max_tokens: maxTokens,
-      system: getScoutSystemPrompt(mode, {
-        premiumEnabled: canUsePremiumScoutFeatures(effectivePlan) && !premiumGate,
-      }),
-      messages: [
-        {
-          role: "user",
-          content: contextualPrompt,
-        },
-      ],
-    })
+    const chatStart = Date.now()
+    const chatAbort = new AbortController()
+    const chatTimer = setTimeout(() => chatAbort.abort(), AI_TIMEOUTS.scout_chat)
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    const anthropicClient = anthropic!
+    let message: Anthropic.Message
+    try {
+      const createParams = {
+        model: MODEL,
+        max_tokens: maxTokens,
+        system: getScoutSystemPrompt(mode, { premiumEnabled: canUsePremiumScoutFeatures(effectivePlan) && !premiumGate }),
+        messages: [{ role: "user" as const, content: contextualPrompt }],
+      }
+      message = await anthropicClient.messages.create(createParams, { signal: chatAbort.signal })
+    } catch {
+      clearTimeout(chatTimer)
+      budgetTracker.record({ feature: "scout_chat", model: MODEL, tier: inferTier(MODEL), inputTokens: 0, outputTokens: 0, latencyMs: Date.now() - chatStart, costUsd: 0, success: false, cached: false, timedOut: true, timestamp: Date.now() })
+      return scoutError(503, "Scout is taking too long right now. Please try again in a moment.")
+    }
+    clearTimeout(chatTimer)
 
     const inputTokens = message.usage?.input_tokens ?? 0
     const outputTokens = message.usage?.output_tokens ?? 0
-    const costUsd =
-      (inputTokens / 1_000_000) * MODEL_PRICING.inputPerMillion +
-      (outputTokens / 1_000_000) * MODEL_PRICING.outputPerMillion
+    const costUsd = calcCost(inferTier(MODEL), inputTokens, outputTokens)
+    budgetTracker.record({ feature: "scout_chat", model: MODEL, tier: inferTier(MODEL), inputTokens, outputTokens, latencyMs: Date.now() - chatStart, costUsd, success: true, cached: false, timedOut: false, timestamp: Date.now() })
 
     await logApiUsage({
       service: "claude",
@@ -1489,12 +1702,45 @@ User Input: ${userMessage}`
       }
     }
 
-    // Inject bulk workspace directive when the message matches bulk preparation intent.
-    // Overrides workspace_directive only if none was already set by Claude.
+    // Inject bulk workspace directive + query matching jobs when bulk-prep intent fires.
     if (!scoutResponse.workspace_directive) {
       const bulkDirective = inferBulkWorkspaceDirective(userMessage)
       if (bulkDirective) {
         scoutResponse.workspace_directive = bulkDirective
+
+        // Fire-and-forget job query — attach results as apply_agent directive
+        const bp = bulkDirective.payload ?? {}
+        try {
+          const params = new URLSearchParams()
+          if (bp.minMatchScore) params.set("minMatchScore", String(bp.minMatchScore))
+          if (bp.count)         params.set("count", String(bp.count))
+          if (bp.requireSponsorshipSignal) params.set("sponsorship", "true")
+          if (bp.workMode)      params.set("workMode", String(bp.workMode))
+
+          // Self-call with forwarded auth cookie
+          const origin = request.nextUrl.origin || process.env.NEXT_PUBLIC_APP_URL || "http://127.0.0.1:3000"
+          const res = await fetch(`${origin}/api/scout/apply-agent?${params.toString()}`, {
+            headers: { cookie: request.headers.get("cookie") ?? "" },
+          })
+          if (res.ok) {
+            const data = await res.json() as { jobs: import("@/lib/scout/apply-agent/types").ApplyAgentJob[] }
+            if (data.jobs.length > 0) {
+              scoutResponse.apply_agent = {
+                jobs:        data.jobs,
+                criteria: {
+                  minMatchScore:          bp.minMatchScore as number | undefined,
+                  requireSponsorshipSignal: Boolean(bp.requireSponsorshipSignal),
+                  workMode:               bp.workMode as string | undefined,
+                  count:                  (bp.count as number | undefined) ?? 5,
+                },
+                currentIndex: 0,
+                phase:        "select",
+              }
+            }
+          }
+        } catch {
+          // Non-critical — UI falls back to the existing bulk_application workspace mode
+        }
       }
     }
 
@@ -1528,6 +1774,22 @@ User Input: ${userMessage}`
     }
 
     attachDebug(scoutResponse)
+
+    // ── Async memory extraction (fire-and-forget) ────────────────────────────
+    // Extract new memory candidates from this chat turn and persist those that
+    // clear the confidence threshold. Never blocks the response.
+    void (async () => {
+      try {
+        const { extractFromChatTurn } = await import("@/lib/scout/memory/extractor")
+        const { persistCandidates }   = await import("@/lib/scout/memory/store")
+        const candidates = extractFromChatTurn(userMessage, scoutResponse)
+        if (candidates.length > 0) {
+          await persistCandidates(user.id, pool, candidates)
+        }
+      } catch {
+        // Memory extraction is non-critical — never let it surface as an error
+      }
+    })()
 
     return NextResponse.json(scoutResponse)
   } catch (error) {

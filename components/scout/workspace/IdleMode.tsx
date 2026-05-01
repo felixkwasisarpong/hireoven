@@ -1,18 +1,14 @@
 "use client"
 
 import {
-  BarChart2,
-  BookOpen,
-  Briefcase,
-  Building2,
-  FileText,
   RefreshCw,
   RotateCcw,
-  Search,
   Sparkles,
 } from "lucide-react"
 import { ScoutMessageBubble } from "@/components/scout/ScoutMessageBubble"
 import { ScoutMissionStrip } from "@/components/scout/ScoutMissionStrip"
+import { ScoutNudgeStrip } from "@/components/scout/ScoutNudgeStrip"
+
 import { ScoutStreamingText } from "@/components/scout/ScoutStreamingText"
 import { ScoutFirstRunBanner } from "@/components/scout/ScoutFirstRunBanner"
 import { ScoutExtensionPromo } from "@/components/scout/ScoutExtensionPromo"
@@ -21,9 +17,8 @@ import { useUpgradeModal } from "@/lib/context/UpgradeModalContext"
 import type { ScoutResponse } from "@/lib/scout/types"
 import type { ScoutNudge } from "@/lib/scout/nudges"
 import type { ScoutMission } from "@/lib/scout/missions/types"
-import type { ScoutProactiveEvent } from "@/lib/scout/proactive/types"
+
 import type { ScoutResumableContext } from "@/lib/scout/continuation/types"
-import { cn } from "@/lib/utils"
 
 type ChatMessage =
   | { id: string; role: "user";            text: string }
@@ -51,10 +46,6 @@ type Props = {
   onMissionLaunch?: (query: string) => void
   onMissionDismiss?: (missionId: string) => void
   onMissionsDisable?: () => void
-  proactiveEvents?: ScoutProactiveEvent[]
-  onProactiveOpen?: (event: ScoutProactiveEvent) => void
-  onProactiveDismiss?: (eventId: string) => void
-  onProactiveSnooze?: (eventId: string) => void
   continuationContexts?: ScoutResumableContext[]
   onContinuationOpen?: (context: ScoutResumableContext) => void
   /** True on the user's very first Scout session — shows welcome banner */
@@ -67,62 +58,18 @@ type Props = {
   onDismissExtPromo?: () => void
 }
 
-const ACTION_TILES = [
-  {
-    icon: Search,
-    iconBg: "bg-slate-950 text-white",
-    title: "Find jobs",
-    description: "Search and filter live roles matching your profile",
-    query: "Find remote backend engineering jobs that sponsor H-1B",
-  },
-  {
-    icon: FileText,
-    iconBg: "bg-[#FF5C18] text-white",
-    title: "Tailor my resume",
-    description: "Adapt your CV to a specific role or company",
-    query: "Tailor my resume for a senior software engineer role",
-  },
-  {
-    icon: BarChart2,
-    iconBg: "bg-slate-900 text-white",
-    title: "Compare roles",
-    description: "Scout ranks your saved jobs and explains the tradeoffs",
-    query: "Compare my saved jobs and tell me which to apply to first",
-  },
-  {
-    icon: BookOpen,
-    iconBg: "bg-slate-950 text-white",
-    title: "Interview prep",
-    description: "Questions, topics, and talking points for your next interview",
-    query: "Help me prepare for a software engineering interview",
-  },
-  {
-    icon: Building2,
-    iconBg: "bg-[#FF5C18] text-white",
-    title: "Company intel",
-    description: "H-1B signals, LCA data, and sponsorship history",
-    query: "What are the strongest H-1B sponsoring companies in tech?",
-  },
-  {
-    icon: Briefcase,
-    iconBg: "bg-slate-900 text-white",
-    title: "My pipeline",
-    description: "Review your applications and plan next steps",
-    query: "What's the status of my applications and what should I do next?",
-  },
-]
 
 function TypingIndicator() {
   return (
-    <div className="flex items-start gap-3">
-      <span className="mt-0.5 inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-xl bg-[#FF5C18] shadow-[0_4px_14px_rgba(255,92,24,0.3)]">
-        <Sparkles className="h-3.5 w-3.5 text-white" />
+    <div className="flex items-start gap-2.5">
+      <span className="mt-0.5 inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-lg bg-[#FF5C18] shadow-[0_2px_8px_rgba(255,92,24,0.3)]">
+        <Sparkles className="h-3 w-3 text-white" />
       </span>
       <div className="flex items-center gap-1.5 rounded-2xl rounded-tl-sm border border-slate-100 bg-white px-4 py-3 shadow-sm">
         {[0, 160, 320].map((delay) => (
           <span
             key={delay}
-            className="h-1.5 w-1.5 rounded-full bg-[#FF5C18]/50 animate-bounce"
+            className="h-1.5 w-1.5 rounded-full bg-slate-300 animate-bounce"
             style={{ animationDelay: `${delay}ms` }}
           />
         ))}
@@ -151,10 +98,6 @@ export function IdleMode({
   onMissionLaunch,
   onMissionDismiss,
   onMissionsDisable,
-  proactiveEvents = [],
-  onProactiveOpen,
-  onProactiveDismiss,
-  onProactiveSnooze,
   continuationContexts = [],
   onContinuationOpen,
   isFirstRun = false,
@@ -165,17 +108,38 @@ export function IdleMode({
 }: Props) {
   const { showUpgrade } = useUpgradeModal()
   const hasConversation = messages.length > 0
+  const starterActions = hasData
+    ? [
+        {
+          title: "Find high-fit roles",
+          query: "Show jobs worth my time and rank them by fit",
+        },
+        {
+          title: "Compare saved jobs",
+          query: "Compare my top saved jobs and pick the best one",
+        },
+        {
+          title: "Tailor my resume",
+          query: "Tailor my resume for my strongest match",
+        },
+        {
+          title: "Run application workflow",
+          query: "Build my application workflow for this week",
+        },
+      ]
+    : [
+        {
+          title: "Start with a search plan",
+          query: "Create a practical search plan for me",
+        },
+        {
+          title: "Find sponsorship-friendly roles",
+          query: "Find sponsorship-friendly roles matching my profile",
+        },
+      ]
 
   return (
-    <div className="mx-auto w-full max-w-3xl">
-
-      {/* Resume refreshed notice */}
-      {resumeRefreshedNotice && (
-        <div className="mb-5 flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
-          <RefreshCw className="h-4 w-4 flex-shrink-0" />
-          Scout refreshed context for your updated resume.
-        </div>
-      )}
+    <div className="mx-auto w-full max-w-4xl">
 
       {/* ── Empty / idle state ── */}
       {!hasConversation && !isLoading && (
@@ -189,16 +153,17 @@ export function IdleMode({
             />
           ) : (
             <>
-              {/* Regular greeting row */}
-              <div className="mb-6 flex items-start justify-between gap-4">
+              {/* Salutation hero — first focal element in idle state */}
+              <div className="mb-5 flex items-start justify-between gap-4 border-b border-[#FFE0D2] pb-4">
                 <div>
-                  <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-[#FF5C18]">
-                    Scout workspace
+                  <p className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#FF5C18]">
+                    <Sparkles className="h-3 w-3" />
+                    Scout is ready
                   </p>
-                  <h2 className="mt-2 text-3xl font-bold tracking-tight text-gray-950">
+                  <h2 className="mt-1.5 text-3xl font-semibold tracking-tight text-slate-900">
                     {greeting}, {firstName}.
                   </h2>
-                  <p className="mt-1.5 text-base text-gray-400">
+                  <p className="mt-1 text-sm text-slate-600">
                     {!hasData
                       ? "Scout prepares applications, research, and workflows — you stay in control."
                       : "What are you working on today?"}
@@ -209,13 +174,21 @@ export function IdleMode({
                   <button
                     type="button"
                     onClick={onStartFresh}
-                    className="mt-1 inline-flex flex-shrink-0 items-center gap-1.5 rounded-xl border border-gray-200 px-3 py-2 text-xs font-medium text-gray-400 transition hover:border-gray-300 hover:text-gray-700"
+                    className="mt-1 inline-flex flex-shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-400 transition hover:border-slate-300 hover:text-slate-700"
                   >
-                    <RotateCcw className="h-3.5 w-3.5" />
-                    Start fresh
+                    <RotateCcw className="h-3 w-3" />
+                    New chat
                   </button>
                 )}
               </div>
+
+              {/* Resume refreshed notice */}
+              {resumeRefreshedNotice && (
+                <div className="mb-3 inline-flex items-center gap-2 text-xs text-slate-500">
+                  <RefreshCw className="h-3.5 w-3.5 flex-shrink-0 text-[#FF5C18]" />
+                  Scout refreshed context for your updated resume.
+                </div>
+              )}
 
               {/* Extension promo — shown when extension not connected + not dismissed */}
               {showExtensionPromo && !hasSession && onDismissExtPromo && (
@@ -223,6 +196,25 @@ export function IdleMode({
               )}
             </>
           )}
+
+          {/* Starter actions — compact command chips, not card grid */}
+          <div className="mb-6">
+            <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">
+              Run a command
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {starterActions.map((action) => (
+                <button
+                  key={action.title}
+                  type="button"
+                  onClick={() => onTileClick(action.query)}
+                  className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:border-[#FF5C18]/40 hover:bg-[#FFF8F5] hover:text-[#FF5C18]"
+                >
+                  {action.title}
+                </button>
+              ))}
+            </div>
+          </div>
 
           {/* Daily mission strip */}
           {!strategyLoading && missions.length > 0 && onMissionLaunch && onMissionDismiss && onMissionsDisable && (
@@ -235,23 +227,25 @@ export function IdleMode({
             />
           )}
 
-          {/* Proactive companion prompts */}
+          {/* Continue session — resume prior context */}
           {continuationContexts.length > 0 && onContinuationOpen && (
-            <div className="mb-6">
-              <p className="mb-2.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-gray-400">
-                Continue session
+            <div className="mb-5">
+              <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">
+                Continue where you left off
               </p>
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 {continuationContexts.slice(0, 2).map((context) => (
                   <button
                     key={`${context.type}:${context.id}`}
                     type="button"
                     onClick={() => onContinuationOpen(context)}
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3.5 py-3 text-left transition hover:border-slate-300 hover:bg-slate-50"
+                    className="group w-full text-left text-sm text-slate-700 transition hover:text-[#FF5C18]"
                   >
-                    <p className="text-[12.5px] font-semibold text-slate-800">{context.title}</p>
-                    <p className="mt-0.5 text-[11px] leading-4.5 text-slate-500">
-                      {context.type.replace(/_/g, " ")} · resume available
+                    <p className="font-medium">
+                      {context.title}
+                    </p>
+                    <p className="mt-0.5 text-xs text-slate-400 group-hover:text-slate-500">
+                      {context.type.replace(/_/g, " ")}
                     </p>
                   </button>
                 ))}
@@ -259,95 +253,17 @@ export function IdleMode({
             </div>
           )}
 
-          {/* Proactive companion prompts */}
-          {proactiveEvents.length > 0 && onProactiveOpen && onProactiveDismiss && onProactiveSnooze && (
-            <div className="mb-6">
-              <p className="mb-2.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-gray-400">
-                Proactive Scout
-              </p>
-              <div className="space-y-2">
-                {proactiveEvents.slice(0, 2).map((event) => (
-                  <div
-                    key={event.id}
-                    className={cn(
-                      "rounded-xl border px-3.5 py-3",
-                      event.severity === "urgent"
-                        ? "border-red-200 bg-red-50/60"
-                        : event.severity === "important"
-                        ? "border-amber-200 bg-amber-50/60"
-                        : "border-slate-200 bg-slate-50/70"
-                    )}
-                  >
-                    <p className="text-[12.5px] font-semibold text-slate-800">{event.title}</p>
-                    <p className="mt-0.5 text-[11px] leading-4.5 text-slate-500">{event.summary}</p>
-                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => onProactiveOpen(event)}
-                        className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-semibold text-slate-700 transition hover:border-slate-900 hover:bg-slate-900 hover:text-white"
-                      >
-                        Open
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onProactiveSnooze(event.id)}
-                        className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] text-slate-500 transition hover:text-slate-700"
-                      >
-                        Snooze
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onProactiveDismiss(event.id)}
-                        className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] text-slate-400 transition hover:text-slate-600"
-                      >
-                        Dismiss
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Nudge strip */}
+{/* Nudges — use the shared component for consistent icons + dismiss */}
           {!strategyLoading && nudges.length > 0 && (
-            <div className="mb-6 space-y-2">
-              {nudges.slice(0, 2).map((nudge, i) => (
-                <div
-                  key={i}
-                  className={cn(
-                    "flex items-start gap-3 rounded-xl border-l-2 px-4 py-3",
-                    nudge.severity === "warning"
-                      ? "border-amber-400 bg-amber-50"
-                      : nudge.severity === "opportunity"
-                        ? "border-[#FF5C18] bg-orange-50/50"
-                        : "border-gray-300 bg-gray-50"
-                  )}
-                >
-                  <div className="min-w-0">
-                    <p className={cn(
-                      "text-sm font-semibold",
-                      nudge.severity === "warning" ? "text-amber-800" :
-                      nudge.severity === "opportunity" ? "text-[#9A3412]" :
-                      "text-gray-800"
-                    )}>
-                      {nudge.title}
-                    </p>
-                    {nudge.description && (
-                      <p className="mt-0.5 text-xs text-gray-500 leading-5">
-                        {nudge.description}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              ))}
+            <div className="mb-5">
+              <ScoutNudgeStrip nudges={nudges} />
             </div>
           )}
 
           {/* Recent commands — from saved session */}
           {recentCommands.length > 0 && (
             <div className="mb-7">
-              <p className="mb-2.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-gray-400">
+              <p className="mb-2.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">
                 Recent
               </p>
               <div className="flex flex-wrap gap-2">
@@ -356,7 +272,7 @@ export function IdleMode({
                     key={cmd}
                     type="button"
                     onClick={() => onTileClick(cmd)}
-                    className="max-w-xs truncate rounded-xl border border-gray-200 bg-white px-3 py-2 text-left text-xs font-medium text-gray-600 transition hover:border-slate-950 hover:bg-slate-950 hover:text-white"
+                    className="max-w-xs truncate rounded-full border border-slate-200 bg-white px-3 py-1.5 text-left text-xs font-medium text-slate-600 transition hover:border-[#FF5C18]/40 hover:bg-[#FFF8F5] hover:text-[#FF5C18]"
                     title={cmd}
                   >
                     {cmd.length > 60 ? `${cmd.slice(0, 57)}…` : cmd}
@@ -365,36 +281,6 @@ export function IdleMode({
               </div>
             </div>
           )}
-
-          {/* Action tile grid */}
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {ACTION_TILES.map((tile) => {
-              const Icon = tile.icon
-              return (
-                <button
-                  key={tile.title}
-                  type="button"
-                  onClick={() => onTileClick(tile.query)}
-                  className="group flex items-start gap-3 rounded-2xl border border-gray-200 bg-white p-4 text-left transition hover:border-[#FF5C18]/30 hover:shadow-[0_8px_24px_rgba(255,92,24,0.08)]"
-                >
-                  <span className={cn(
-                    "mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl",
-                    tile.iconBg
-                  )}>
-                    <Icon className="h-4 w-4" style={{ height: 18, width: 18 }} />
-                  </span>
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-gray-900 transition-colors group-hover:text-[#FF5C18]">
-                      {tile.title}
-                    </p>
-                    <p className="mt-0.5 text-[11px] leading-4 text-gray-400">
-                      {tile.description}
-                    </p>
-                  </div>
-                </button>
-              )
-            })}
-          </div>
 
           {/* Trust + safety copy — persistent, subtle */}
           <div className="mt-6">
@@ -405,18 +291,16 @@ export function IdleMode({
 
       {/* ── Conversation thread ── */}
       {(hasConversation || isLoading) && (
-        <div className="space-y-5">
+        <div className="space-y-4">
           {hasConversation && (
-            <div className="flex items-center justify-between">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-gray-400">
-                Conversation
-              </p>
+            <div className="flex items-center gap-3">
+              <div className="h-px flex-1 bg-slate-100" />
               <button
                 type="button"
                 onClick={onClearChat}
-                className="text-xs text-gray-400 transition hover:text-gray-700"
+                className="text-[11px] text-slate-400 transition hover:text-slate-600"
               >
-                Clear
+                Clear chat
               </button>
             </div>
           )}
@@ -425,7 +309,7 @@ export function IdleMode({
             if (msg.role === "user") {
               return (
                 <div key={msg.id} className="flex justify-end">
-                  <div className="max-w-[82%] rounded-2xl rounded-tr-sm bg-[#FF5C18] px-4 py-3 text-sm leading-6 text-white shadow-[0_4px_12px_rgba(255,92,24,0.22)]">
+                  <div className="max-w-[82%] rounded-2xl rounded-tr-sm bg-slate-900 px-4 py-3 text-sm leading-6 text-white shadow-sm">
                     {msg.text}
                   </div>
                 </div>
@@ -433,15 +317,15 @@ export function IdleMode({
             }
             if (msg.role === "scout_streaming") {
               return (
-                <div key={msg.id} className="flex items-start gap-3">
-                  <span className="relative mt-0.5 flex-shrink-0 inline-flex h-9 w-9 items-center justify-center rounded-xl bg-[#FF5C18] shadow-[0_4px_16px_rgba(255,92,24,0.35)]">
-                    <Sparkles className="h-4 w-4 text-white animate-pulse" />
+                <div key={msg.id} className="flex items-start gap-2.5">
+                  <span className="mt-0.5 flex-shrink-0 inline-flex h-6 w-6 items-center justify-center rounded-lg bg-[#FF5C18] shadow-[0_2px_8px_rgba(255,92,24,0.3)]">
+                    <Sparkles className="h-3 w-3 text-white animate-pulse" />
                   </span>
-                  <div className="min-w-0 flex-1 overflow-hidden rounded-2xl rounded-tl-sm border border-slate-100 bg-white px-5 py-4 shadow-[0_4px_20px_rgba(15,23,42,0.07)]">
-                    <div className="h-[3px] w-full bg-[#FF5C18] opacity-80 -mx-5 -mt-4 mb-3 w-[calc(100%+2.5rem)]" />
+                  <div className="min-w-0 flex-1 overflow-hidden rounded-2xl rounded-tl-sm border border-slate-100 bg-white px-5 py-4 shadow-sm">
+                    <div className="h-[2px] w-[calc(100%+2.5rem)] bg-[#FF5C18] -mx-5 -mt-4 mb-3" />
                     {msg.streamText
                       ? <ScoutStreamingText text={msg.streamText} />
-                      : <span className="flex gap-1"><span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#FF5C18]/50" style={{ animationDelay: "0ms" }} /><span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#FF5C18]/50" style={{ animationDelay: "160ms" }} /><span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#FF5C18]/50" style={{ animationDelay: "320ms" }} /></span>
+                      : <TypingIndicator />
                     }
                   </div>
                 </div>

@@ -17,6 +17,7 @@ import type {
 } from "@/types/resume-hub"
 
 export const runtime = "nodejs"
+export const maxDuration = 55
 
 const anthropic = process.env.ANTHROPIC_API_KEY
   ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })

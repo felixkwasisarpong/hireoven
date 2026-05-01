@@ -31,6 +31,7 @@ import type {
 } from "@/lib/scout/types"
 import type { ScoutGraph } from "@/components/scout/renderers/ScoutGraphRenderer"
 import { getScoutDisplayText } from "@/lib/scout/display-text"
+import { runQualityControl, type QCContext } from "@/lib/scout/quality-control"
 
 export type ScoutRenderContext = "dashboard" | "mini" | "extension"
 
@@ -63,27 +64,35 @@ export type NormalizedScoutResponse = {
   rawDebugPayload?: ScoutResponse
 }
 
-const IS_DEV = process.env.NODE_ENV === "development"
+const IS_DEV = false
 
-export function normalizeForDisplay(response: ScoutResponse): NormalizedScoutResponse {
-  const displayText = getScoutDisplayText(response.answer)
+export function normalizeForDisplay(
+  response: ScoutResponse,
+  qcContext?: QCContext,
+): NormalizedScoutResponse {
+  // Run QC pass before display normalisation so every rendering path —
+  // dashboard shell, mini command bar, extension overlay — sees the same
+  // validated and repaired response.
+  const { safeResponse } = runQualityControl(response, qcContext ?? {})
+
+  const displayText = getScoutDisplayText(safeResponse.answer)
 
   return {
     displayText,
-    recommendation:     response.recommendation,
-    intent:             response.intent,
-    confidence:         response.confidence,
-    mode:               response.mode,
-    actions:            response.actions ?? [],
-    explanations:       response.explanations ?? [],
-    workflow:           response.workflow,
-    compare:            response.compare,
-    interviewPrep:      response.interviewPrep,
-    mockInterview:      response.mockInterview,
-    graph:              response.graph,
-    gated:              response.gated,
-    workspace_directive: response.workspace_directive,
-    workflow_directive:  response.workflow_directive,
+    recommendation:     safeResponse.recommendation,
+    intent:             safeResponse.intent,
+    confidence:         safeResponse.confidence,
+    mode:               safeResponse.mode,
+    actions:            safeResponse.actions ?? [],
+    explanations:       safeResponse.explanations ?? [],
+    workflow:           safeResponse.workflow,
+    compare:            safeResponse.compare,
+    interviewPrep:      safeResponse.interviewPrep,
+    mockInterview:      safeResponse.mockInterview,
+    graph:              safeResponse.graph,
+    gated:              safeResponse.gated,
+    workspace_directive: safeResponse.workspace_directive,
+    workflow_directive:  safeResponse.workflow_directive,
     rawDebugPayload:    IS_DEV ? response : undefined,
   }
 }

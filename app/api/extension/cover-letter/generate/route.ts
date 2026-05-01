@@ -31,6 +31,7 @@ import {
 import type { Resume } from "@/types"
 
 export const runtime = "nodejs"
+export const maxDuration = 40
 
 const anthropic = process.env.ANTHROPIC_API_KEY
   ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })

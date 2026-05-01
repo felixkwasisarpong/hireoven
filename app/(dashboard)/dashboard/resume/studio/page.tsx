@@ -970,6 +970,7 @@ export default function ResumeStudioPage() {
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const saveDraftLatestRef = useRef<() => Promise<void>>(() => Promise.resolve())
   const isSavingRef = useRef(false)
+  const lastAutoAnalyzeKeyRef = useRef<string | null>(null)
   const [undoStack, setUndoStack] = useState<EditorSnapshot[]>([])
   const [redoStack, setRedoStack] = useState<EditorSnapshot[]>([])
   const lastSnapshotRef = useRef<EditorSnapshot | null>(null)
@@ -1546,6 +1547,24 @@ export default function ResumeStudioPage() {
       setIsTailorRefining(false)
     }
   }
+
+  useEffect(() => {
+    const shouldAutoAnalyze = searchParams.get("autoAnalyze") === "1"
+    if (!shouldAutoAnalyze) return
+    if (mode !== "tailor") return
+    if (!jobDescription.trim()) return
+
+    const autoAnalyzeKey = `${searchParams.get("jobId") ?? ""}:${searchParams.get("analysisId") ?? ""}:${selectedId ?? ""}`
+    if (lastAutoAnalyzeKeyRef.current === autoAnalyzeKey) return
+    lastAutoAnalyzeKeyRef.current = autoAnalyzeKey
+
+    void handleAnalyzeTailorMatch()
+
+    const next = new URLSearchParams(searchParams.toString())
+    next.delete("autoAnalyze")
+    router.replace(`/dashboard/resume/studio?${next.toString()}`, { scroll: false })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, mode, jobDescription, selectedId])
 
   function handleUndo() {
     const previous = undoStack[undoStack.length - 1]

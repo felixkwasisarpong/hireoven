@@ -24,7 +24,6 @@ import {
   type PersistedJobForNormalization,
 } from "@/lib/jobs/normalization"
 import {
-  extractEducationLabel,
   extractExperienceLabel,
 } from "@/lib/jobs/metadata"
 import { cleanJobTitle } from "@/lib/jobs/title"
@@ -39,6 +38,7 @@ import { getPostgresPool } from "@/lib/postgres/server"
 import {
   extractSkillsFromText,
   getSkillsBucketValues,
+  normalizeSkillKey,
   normalizeSkillList,
   skillMatches,
 } from "@/lib/skills/taxonomy"
@@ -86,6 +86,36 @@ function isLikelyAtomicSkill(value: string) {
   const words = cleaned.split(/\s+/).filter(Boolean)
   if (words.length > 6) return false
   return true
+}
+
+// Scan qualification/requirement bullets for technology-looking tokens that the
+// taxonomy didn't recognise. Signals: internal uppercase (JavaScript, LangChain),
+// tech characters (+, #, ., /), or a digit (v3, ES2022). Rejects plain English
+// sentences, marketing copy, and HR phrases.
+const COMMON_NONTECHNICAL_RE = /^(experience|knowledge|understanding|familiarity|ability|skills?|proficien|proven|strong|excellent|good|great|solid|deep|broad|extensive|working|hands.on|exposure|background|expertise|passion|interest|commitment|focus|emphasis|attention|detail|track record|plus|bonus|nice to have|preferred|required|must|will|can|should|years?|degree|bachelor|master|phd|equivalent|certification|team|cross.functional|stakeholder|communication|collaboration|problem.solving|analytical|leadership|mentoring|writing|verbal|interpersonal|organizational|adaptable|startup|fast.paced|agile|scrum|kanban|sprint|culture|values?|mission|impact|growth|scale|diversity|equity|inclusion|equal|opportunity|accommodation|applicant|candidate|employee|employer|company|organization|position|role|job|work|workplace|office|remote|hybrid|onsite|benefits?|compensation|salary|equity|stock|pto|vacation|insurance|401k|medical|dental|vision|parental|leave|wellness|reimbursement|stipend|learning|development|progress|starts?|believe|join|help|build|make|shape|thrive|succeed|advance)\b/i
+
+function extractTechTokensFromText(items: string[]): string[] {
+  const found: string[] = []
+  for (const item of items) {
+    // Split on common list delimiters and contextual words
+    const segments = item.split(/[,;()\[\]"']|\s+(?:and|or|with|using|including|such as|like|e\.g\.)\s+/i)
+    for (const seg of segments) {
+      const token = seg.trim().replace(/[.:!?]+$/, "").trim()
+      if (!token || token.length < 2 || token.length > 40) continue
+      const words = token.split(/\s+/)
+      if (words.length > 4) continue
+      // Must look like a technology name
+      const hasTechSignal =
+        /[A-Z]/.test(token.slice(1)) ||   // internal uppercase: JavaScript, PyTorch
+        /[+#./]/.test(token) ||            // tech chars: C++, C#, Next.js, CI/CD
+        /\d/.test(token)                    // version/number: ES2022, Python 3
+      if (!hasTechSignal) continue
+      // Reject if it reads like a plain English phrase
+      if (COMMON_NONTECHNICAL_RE.test(words[0])) continue
+      found.push(token)
+    }
+  }
+  return found
 }
 
 function dedupe(values: string[], max = Number.POSITIVE_INFINITY): string[] {
@@ -164,7 +194,6 @@ export default async function DashboardJobDetailPage({ params }: Props) {
     extractExperienceLabel(job.description) ??
     (seniorityLabel ? EXPERIENCE_BY_SENIORITY[(job.seniority_level ?? "") as string] : null) ??
     "Not specified"
-  const educationLabel = extractEducationLabel(job.description) ?? "Not specified"
 
   const aboutRole =
     page.sections.about_role.items.length > 0
@@ -180,8 +209,40 @@ export default async function DashboardJobDetailPage({ params }: Props) {
     ...page.sections.qualifications.items,
   ])
   const preferredItems = dedupe(page.sections.preferred_qualifications.items)
-  const benefitItems = page.sections.benefits.items
-  const compensationItems = page.sections.compensation.items
+  // Display-level guards — correct for already-stored jobs where the normalizer
+  // may have mis-routed or fragmented content before these fixes were deployed.
+  const DISPLAY_NOISE_RE =
+    /\b(travel\s+\d|requires?\s+travel|\d+%\s+of\s+the\s+time|performed\s+in\s+an\s+office|office\s+setting|sit\s+and\s+stand|standard\s+office\s+equipment|incumbent|mental\/physical|physical\s+requirements?|lift(?:ing)?\s+\d|sedentary|varies?\s+(?:upon|depending\s+on)\s+the\s+needs\s+of\s+the\s+department|may\s+vary\s+depending\s+on\s+job[- ]related\s+factors|work\s+hours?)\b/i
+
+  const DISPLAY_EEO_RE =
+    /\b(equal\s+opportunity|eeo\s+employer|without\s+regard\s+to\s+race|protected\s+veteran|affirmative\s+action|criminal\s+histor|eeoc\s+guidelines)\b/i
+
+  const DISPLAY_BENEFITS_RE =
+    /\b(medical|dental|vision|401\s?\(k\)|fsa|hsa|life\s+insurance|paid\s+time\s+off|wellness\s+program|comprehensive\s+benefits?\s+package)\b/i
+
+  function cleanItems(items: string[], opts: { rejectBenefits?: boolean } = {}): string[] {
+    const seen = new Set<string>()
+    return items.filter((item) => {
+      const t = item.trim()
+      if (t.length < 15) return false
+      // Drop sentence fragments (start mid-sentence)
+      if (/^[a-z]/.test(t)) return false
+      // Drop noise
+      if (DISPLAY_NOISE_RE.test(t)) return false
+      // Drop EEO boilerplate in wrong sections
+      if (DISPLAY_EEO_RE.test(t)) return false
+      // Optionally drop benefits content (for visa section)
+      if (opts.rejectBenefits && DISPLAY_BENEFITS_RE.test(t)) return false
+      // Deduplicate by lowercased content
+      const key = t.toLowerCase().replace(/\s+/g, " ")
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+  }
+
+  const benefitItems = cleanItems(page.sections.benefits.items)
+  const compensationItems = cleanItems(page.sections.compensation.items)
   const explicitSkillSignals = normalizeSkillList(
     [...(job.skills ?? []), ...page.skills].filter((value): value is string => typeof value === "string"),
     48
@@ -202,14 +263,14 @@ export default async function DashboardJobDetailPage({ params }: Props) {
     ],
     40
   )
-  const skills = consolidatedJobSkills.slice(0, 8)
-  const skillPillItems = consolidatedJobSkills.slice(0, 24)
 
   const sponsorshipPill = employerSponsorshipPill({ ...job, company })
   const sponsorsConfirmed = employerLikelySponsorsH1b({ ...job, company })
 
+  const visaItems = cleanItems(page.sections.visa.items, { rejectBenefits: true })
+
   const showVisaJdSection =
-    page.sections.visa.items.length > 0 ||
+    visaItems.length > 0 ||
     page.visa_card_label !== null ||
     sponsorsConfirmed
 
@@ -267,11 +328,36 @@ export default async function DashboardJobDetailPage({ params }: Props) {
     ...extractSkillsFromText(resumeSkillResult.rows[0]?.raw_text ?? null),
   ])
 
-  const jobSkillCandidates = consolidatedJobSkills
-  const requirementSkillPills = jobSkillCandidates.map((skill) => ({
-    skill,
-    matched: resumeSkillLabels.some((resumeSkill) => skillMatches(skill, resumeSkill)),
-  }))
+  const taxonomyKeySet = new Set(consolidatedJobSkills.map(normalizeSkillKey))
+  const resumeRawText = (resumeSkillResult.rows[0]?.raw_text ?? "").toLowerCase()
+
+  // Fallback: extract technology-looking tokens from qualification/requirement
+  // bullets that the taxonomy didn't capture (Prisma, tRPC, LangChain, etc.).
+  // Uses the tech-signal heuristic — not raw section items — to avoid marketing
+  // copy ("Progress starts with you.") appearing as skills.
+  const fallbackTokens = normalizeSkillList(
+    extractTechTokensFromText([
+      ...page.sections.qualifications.items,
+      ...page.sections.requirements.items,
+      ...page.sections.preferred_qualifications.items,
+      ...page.sections.skills.items,
+    ]),
+    32
+  )
+  const fallbackSkillPills = fallbackTokens
+    .filter((s) => !taxonomyKeySet.has(normalizeSkillKey(s)))
+    .map((skill) => ({
+      skill,
+      matched: resumeRawText.length > 0 && resumeRawText.includes(skill.toLowerCase()),
+    }))
+
+  const requirementSkillPills = [
+    ...consolidatedJobSkills.map((skill) => ({
+      skill,
+      matched: resumeSkillLabels.some((resumeSkill) => skillMatches(skill, resumeSkill)),
+    })),
+    ...fallbackSkillPills,
+  ]
 
   const similarMap = new Map<string, SimilarJob>()
   for (const entry of similarByTitleResult.rows ?? []) similarMap.set(entry.id, entry)
@@ -280,15 +366,6 @@ export default async function DashboardJobDetailPage({ params }: Props) {
     similarMap.set(entry.id, entry)
   }
   const similarJobs = [...similarMap.values()].slice(0, 4)
-
-  const facts = [
-    { label: "Posted", value: postedLabel },
-    { label: "Experience", value: experienceLabel },
-    { label: "Employment", value: employmentLabel },
-    { label: "Work model", value: workModelLong },
-    { label: "Salary", value: salaryLabel ?? "Not disclosed" },
-    { label: "Visa sponsorship", value: visaSponsorshipValue },
-  ]
 
   return (
     <main className="min-h-full bg-slate-50 pb-20">
@@ -368,20 +445,6 @@ export default async function DashboardJobDetailPage({ params }: Props) {
                     <Banknote className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
                     {salaryLabel}
                   </p>
-                )}
-
-                {/* Skill chips */}
-                {skills.length > 0 && (
-                  <div className="mt-3 flex flex-wrap gap-1.5">
-                    {skills.map((skill) => (
-                      <span
-                        key={skill}
-                        className="rounded-md bg-white/6 px-2.5 py-1 text-[11.5px] font-medium text-slate-300 ring-1 ring-white/10"
-                      >
-                        {skill}
-                      </span>
-                    ))}
-                  </div>
                 )}
 
                 {/* Quick meta strip */}
@@ -515,36 +578,11 @@ export default async function DashboardJobDetailPage({ params }: Props) {
                 </section>
               )}
 
-              {/* Skills */}
-              {skillPillItems.length > 0 && (
+              {/* Benefits & Compensation */}
+              {(benefitItems.length > 0 || compensationItems.length > 0) && (
                 <section className={cn("px-6 py-7", div)}>
-                  <SectionHead>Skills</SectionHead>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {skillPillItems.map((skill) => (
-                      <span
-                        key={skill}
-                        className="rounded-lg bg-slate-50 px-3 py-1 text-[12.5px] font-medium text-slate-600 ring-1 ring-slate-200"
-                      >
-                        {skill}
-                      </span>
-                    ))}
-                  </div>
-                </section>
-              )}
-
-              {/* Benefits */}
-              {benefitItems.length > 0 && (
-                <section className={cn("px-6 py-7", div)}>
-                  <SectionHead>Benefits</SectionHead>
-                  <BulletList items={benefitItems} />
-                </section>
-              )}
-
-              {/* Compensation */}
-              {compensationItems.length > 0 && (
-                <section className={cn("px-6 py-7", div)}>
-                  <SectionHead>Compensation</SectionHead>
-                  <BulletList items={compensationItems} />
+                  <SectionHead>Benefits &amp; compensation</SectionHead>
+                  <BulletList items={[...compensationItems, ...benefitItems]} />
                 </section>
               )}
 
@@ -552,8 +590,8 @@ export default async function DashboardJobDetailPage({ params }: Props) {
               {showVisaJdSection && (
                 <section className={cn("px-6 py-7", div)}>
                   <SectionHead>Sponsorship &amp; visa</SectionHead>
-                  {page.sections.visa.items.length > 0 ? (
-                    <BulletList items={page.sections.visa.items} />
+                  {visaItems.length > 0 ? (
+                    <BulletList items={visaItems} />
                   ) : (
                     <p className="mt-3 text-[14px] leading-[1.7] text-slate-600">
                       {sponsorsConfirmed
@@ -563,27 +601,6 @@ export default async function DashboardJobDetailPage({ params }: Props) {
                   )}
                 </section>
               )}
-
-              {/* Job facts */}
-              <section className={cn("px-6 py-8", div)}>
-                <SectionHead>Job details</SectionHead>
-                <dl className="mt-5 grid grid-cols-2 gap-2.5 sm:grid-cols-3">
-                  {facts.map((f) => (
-                    <div
-                      key={f.label}
-                      className="rounded-xl bg-slate-50 px-4 py-3.5 ring-1 ring-slate-200/50"
-                    >
-                      <dt className="text-[10px] font-bold uppercase tracking-[0.1em] text-slate-400">
-                        {f.label}
-                      </dt>
-                      <dd className="mt-1.5 text-[13.5px] font-semibold text-slate-800 leading-tight">{f.value}</dd>
-                    </div>
-                  ))}
-                </dl>
-                {educationLabel && educationLabel !== "Not specified" && (
-                  <p className="mt-4 text-[12px] text-slate-400">Education preference: {educationLabel}</p>
-                )}
-              </section>
 
               {/* About company */}
               <section id="about-company" className={cn("px-6 py-7", div)}>

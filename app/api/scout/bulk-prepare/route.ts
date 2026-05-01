@@ -6,6 +6,7 @@ import { compareResumeToJob } from "@/lib/resume/hub"
 import { logApiUsage } from "@/lib/admin/usage"
 import type { BulkFailReason } from "@/lib/scout/bulk-application/types"
 import type { Resume, Job, Company } from "@/types"
+import type { TailoredBulletSuggestion } from "@/types/resume-hub"
 
 export const runtime = "nodejs"
 export const maxDuration = 60
@@ -20,6 +21,33 @@ type BulkPrepareBody = {
   sponsorshipSignal?: string | null
 }
 
+type DetectedAts =
+  | "Workday"
+  | "Greenhouse"
+  | "Lever"
+  | "Ashby"
+  | "iCIMS"
+  | "SmartRecruiters"
+  | "BambooHR"
+  | "Generic ATS"
+
+function detectAtsFromApplyUrl(applyUrl: string | null | undefined): DetectedAts {
+  if (!applyUrl) return "Generic ATS"
+  try {
+    const host = new URL(applyUrl).hostname.toLowerCase()
+    if (host.includes("myworkdayjobs.com") || host.includes("workday.com")) return "Workday"
+    if (host.includes("greenhouse.io")) return "Greenhouse"
+    if (host.includes("lever.co")) return "Lever"
+    if (host.includes("ashbyhq.com")) return "Ashby"
+    if (host.includes("icims.com")) return "iCIMS"
+    if (host.includes("smartrecruiters.com")) return "SmartRecruiters"
+    if (host.includes("bamboohr.com")) return "BambooHR"
+  } catch {
+    // Ignore malformed URLs and fall back to Generic ATS.
+  }
+  return "Generic ATS"
+}
+
 export async function POST(request: Request) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -30,6 +58,7 @@ export async function POST(request: Request) {
 
   const { jobId, jobTitle, company, applyUrl, sponsorshipSignal } = body
   const warnings: Warning[] = []
+  const atsProvider = detectAtsFromApplyUrl(applyUrl)
 
   // ── Hard gate 1: apply URL ───────────────────────────────────────────────────
   if (!applyUrl) {
@@ -90,10 +119,24 @@ export async function POST(request: Request) {
   // ── Resume tailor analysis (local, no AI cost) ───────────────────────────────
   let resumeTailorStatus: string = "skipped"
   let resumeTailorJobId: string | undefined
+  let missingKeywords: string[] = []
+  let suggestedSkills: string[] = []
+  let suggestedSummaryRewrite: string | null = null
+  let bulletSuggestionsPreview: Array<Pick<TailoredBulletSuggestion, "original" | "suggested" | "reason">> = []
 
   if (job?.description) {
     try {
       const analysis = compareResumeToJob(resume, job.description, job.title ?? jobTitle, company ?? job.company?.name)
+      missingKeywords = analysis.missingKeywords ?? []
+      suggestedSkills = analysis.suggestedSkillsToAdd ?? []
+      suggestedSummaryRewrite = analysis.suggestedSummaryRewrite ?? null
+      bulletSuggestionsPreview = (analysis.bulletSuggestions ?? [])
+        .slice(0, 3)
+        .map((b) => ({
+          original: b.original,
+          suggested: b.suggested,
+          reason: b.reason,
+        }))
 
       const insertResult = await pool.query<{ id: string }>(
         `INSERT INTO resume_tailoring_analyses
@@ -147,6 +190,11 @@ export async function POST(request: Request) {
   let coverLetterStatus: string = "skipped"
   let coverLetterId: string | undefined
 
+  const resolvedJobTitle = job?.title ?? jobTitle ?? "Job"
+  const resolvedCompany = company ?? job?.company?.name ?? "Unknown Company"
+  const atsSuffix = atsProvider !== "Generic ATS" ? ` · ${atsProvider}` : ""
+  const tailoredResumeName = `Tailored for ${resolvedJobTitle} at ${resolvedCompany}${atsSuffix}`
+
   if (job) {
     try {
       const coverLetter = await generateCoverLetter(
@@ -175,7 +223,17 @@ export async function POST(request: Request) {
     })
   }
 
-  console.log("[bulk-prepare]", { userId: user.id, jobId, resumeTailorStatus, coverLetterStatus, autofillStatus, warnings: warnings.length })
+  console.log("[bulk-prepare]", {
+    userId: user.id,
+    jobId,
+    atsProvider,
+    resumeTailorStatus,
+    coverLetterStatus,
+    autofillStatus,
+    missingKeywords: missingKeywords.length,
+    suggestedSkills: suggestedSkills.length,
+    warnings: warnings.length,
+  })
   if (coverLetterStatus === "ready") {
     await logApiUsage({ service: "anthropic", operation: "bulk-prepare/cover-letter", tokens_used: null, cost_usd: null }).catch(() => {})
   }
@@ -186,6 +244,12 @@ export async function POST(request: Request) {
     coverLetterStatus,
     coverLetterId,
     autofillStatus,
+    atsProvider,
+    tailoredResumeName,
+    missingKeywords,
+    suggestedSkills,
+    suggestedSummaryRewrite,
+    bulletSuggestionsPreview,
     warnings,
   })
 }

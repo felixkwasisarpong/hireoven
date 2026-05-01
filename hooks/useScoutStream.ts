@@ -34,6 +34,25 @@ const INITIAL: ScoutStreamState = {
   error:          null,
 }
 
+function deriveDisplayStreamText(raw: string): string {
+  const trimmed = raw.trimStart()
+  if (!trimmed) return ""
+
+  // Scout model responses are JSON-first in command mode; never render raw JSON
+  // tokens in the live bubble.
+  if (
+    trimmed.startsWith("{") ||
+    trimmed.startsWith("[") ||
+    trimmed.startsWith("```") ||
+    /^"answer"\s*:/.test(trimmed) ||
+    (trimmed.includes('"recommendation"') && trimmed.includes('"actions"'))
+  ) {
+    return ""
+  }
+
+  return raw
+}
+
 export function useScoutStream(): ScoutStreamActions {
   const [state, setState] = useState<ScoutStreamState>(INITIAL)
   const abortRef = useRef<AbortController | null>(null)
@@ -78,11 +97,13 @@ export function useScoutStream(): ScoutStreamActions {
       const reader  = res.body.getReader()
       const decoder = new TextDecoder()
       let buffer    = ""
+      let rawStreamText = ""
 
       const processEvent = (event: ScoutStreamEvent) => {
         switch (event.type) {
           case "text_delta":
-            setState((prev) => ({ ...prev, streamText: prev.streamText + event.text }))
+            rawStreamText += event.text
+            setState((prev) => ({ ...prev, streamText: deriveDisplayStreamText(rawStreamText) }))
             break
 
           case "workspace_directive":

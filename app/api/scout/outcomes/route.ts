@@ -33,13 +33,19 @@ export async function GET(_request: NextRequest) {
     `SELECT
        ja.id, ja.job_title, ja.company_name, ja.status, ja.apply_url,
        ja.match_score, ja.source, ja.applied_at, ja.notes,
-       j.is_remote
+       j.id         AS job_id,
+       j.is_remote,
+       j.company_id,
+       c.sponsors_h1b,
+       c.industry   AS company_industry
      FROM job_applications ja
-     LEFT JOIN jobs j ON j.id = ja.job_id
+     LEFT JOIN jobs      j ON j.id = ja.job_id
+     LEFT JOIN companies c ON c.id = j.company_id
      WHERE ja.user_id = $1
        AND ja.is_archived = false
        AND ja.status != 'saved'
-     ORDER BY ja.applied_at DESC
+       AND COALESCE(ja.applied_at, ja.created_at) >= NOW() - INTERVAL '12 months'
+     ORDER BY ja.applied_at DESC NULLS LAST
      LIMIT 200`,
     [user.id]
   ).catch(() => null)

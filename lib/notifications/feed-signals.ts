@@ -1,3 +1,5 @@
+"use client"
+
 import { getJobIntelligence } from "@/lib/jobs/intelligence"
 import {
   publishLocalNotificationOnce,

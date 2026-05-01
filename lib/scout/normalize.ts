@@ -223,6 +223,11 @@ export function normalizeScoutResponse(raw: unknown): ScoutResponse {
       ? (record.outreach as ScoutResponse["outreach"])
       : undefined
 
+  const apply_agent =
+    typeof record.apply_agent === "object" && record.apply_agent !== null
+      ? (record.apply_agent as ScoutResponse["apply_agent"])
+      : undefined
+
   return {
     answer,
     recommendation,
@@ -240,6 +245,7 @@ export function normalizeScoutResponse(raw: unknown): ScoutResponse {
     graph,
     debug,
     outreach,
+    apply_agent,
   }
 }
 

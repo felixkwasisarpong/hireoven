@@ -13,12 +13,18 @@
 import type {
   ActiveBrowserContext,
   ActiveContextResult,
+  ApplyQueueState,
   BackgroundMessage,
   BackgroundResponse,
   ContentMessage,
   ContentResponse,
   ExtractedJob,
   ExtensionSafeProfile,
+  QueueActionResult,
+  QueueAddResult,
+  QueueItemStatus,
+  QueueJobEntry,
+  QueueStateResult,
   RelayScoutCommandResult,
   SessionResult,
   ResolveJobResult,
@@ -40,6 +46,8 @@ import type {
   ListResumesResult,
   ExtensionResumeSummary,
   WorkflowStateResult,
+  FetchResumeFileResult,
+  InjectResumeFileInTabResult,
 } from "./types"
 
 // ── Config ─────────────────────────────────────────────────────────────────────
@@ -202,6 +210,43 @@ function persistTailorState() {
     approvedResumeVersionId,
     approvedResumeId,
   })
+}
+
+// ── Apply Queue storage ────────────────────────────────────────────────────────
+
+const QUEUE_STORAGE_KEY = "applyQueue"
+
+async function readQueue(): Promise<ApplyQueueState | null> {
+  try {
+    const result = await chrome.storage.local.get(QUEUE_STORAGE_KEY)
+    const raw = result[QUEUE_STORAGE_KEY] as Record<string, unknown> | null | undefined
+    if (raw && typeof raw === "object" && Array.isArray((raw as Record<string, unknown>).jobs)) {
+      return raw as unknown as ApplyQueueState
+    }
+  } catch {
+    // storage unavailable
+  }
+  return null
+}
+
+async function writeQueue(queue: ApplyQueueState | null): Promise<void> {
+  try {
+    if (queue) {
+      await chrome.storage.local.set({ [QUEUE_STORAGE_KEY]: queue })
+    } else {
+      await chrome.storage.local.remove(QUEUE_STORAGE_KEY)
+    }
+  } catch {
+    // storage unavailable
+  }
+}
+
+function makeQueueItemId(): string {
+  return `qi-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
+}
+
+function makeQueueId(): string {
+  return `aq-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -379,8 +424,52 @@ async function handleMessage(
     case "RELAY_SCOUT_COMMAND":
       return handleRelayScoutCommand(message.command, message.payload)
 
+    case "FETCH_RESUME_FILE":
+      return handleFetchResumeFile(message.resumeId as string)
+
+    case "INJECT_RESUME_FILE_IN_TAB":
+      return handleInjectResumeFileInTab(message.resumeId as string, sender)
+
+    case "OPERATOR_OPEN_TAB":
+      void handleOperatorOpenTab(
+        message.url as string,
+        message.jobId as string | undefined,
+        message.jobTitle as string | undefined,
+        message.company as string | undefined,
+        message.coverLetterId as string | undefined,
+        Boolean(message.agentMode),
+      )
+      return { type: "OPERATOR_OPEN_TAB_ACK" }
+
     case "GET_WORKFLOW_STATE":
       return { type: "WORKFLOW_STATE_RESULT", state: null } as WorkflowStateResult
+
+    case "QUEUE_GET_STATE":
+      return handleQueueGetState()
+
+    case "QUEUE_ADD_JOB":
+      return handleQueueAddJob(message.job)
+
+    case "QUEUE_SKIP_JOB":
+      return handleQueueSkipJob(message.queueId)
+
+    case "QUEUE_RETRY_JOB":
+      return handleQueueRetryJob(message.queueId)
+
+    case "QUEUE_MARK_SUBMITTED":
+      return handleQueueMarkSubmitted(message.queueId)
+
+    case "QUEUE_APPROVE_RESUME":
+      return handleQueueApproveResume(message.queueId, message.versionId, message.resumeId)
+
+    case "QUEUE_PAUSE":
+      return handleQueuePauseResume(true)
+
+    case "QUEUE_RESUME":
+      return handleQueuePauseResume(false)
+
+    case "QUEUE_CLEAR":
+      return handleQueueClear()
 
     default:
       return {
@@ -777,6 +866,342 @@ async function handleRelayScoutCommand(
     lastJobTabId = null // tab was closed or unresponsive
     return { type: "RELAY_SCOUT_COMMAND_RESULT", delivered: false }
   }
+}
+
+// ── Resume file fetch (for DataTransfer injection) ────────────────────────────
+
+async function handleFetchResumeFile(resumeId: string): Promise<FetchResumeFileResult> {
+  try {
+    const origin = await resolveOrigin()
+    const token  = await getSessionToken(origin)
+    if (!token) return { type: "FETCH_RESUME_FILE_RESULT", error: "Not authenticated" }
+
+    // Extension-auth endpoint — uses Bearer token, not cookie session
+    const res = await fetch(`${origin}/api/extension/resume/download?resumeId=${encodeURIComponent(resumeId)}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "X-Hireoven-Extension": "1",
+      },
+    })
+    if (!res.ok) return { type: "FETCH_RESUME_FILE_RESULT", error: `HTTP ${res.status}` }
+
+    const contentDisposition = res.headers.get("content-disposition") ?? ""
+    const filenameMatch = contentDisposition.match(/filename[^;=\n]*=(["']?)([^"'\n;]+)\1/)
+    const filename = filenameMatch?.[2]?.trim() ?? "resume.pdf"
+
+    const buffer = await res.arrayBuffer()
+    // Convert ArrayBuffer → base64 so it survives chrome.runtime.sendMessage serialization
+    const bytes = new Uint8Array(buffer)
+    let binary = ""
+    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i])
+    const base64 = btoa(binary)
+
+    return { type: "FETCH_RESUME_FILE_RESULT", base64, filename }
+  } catch (err) {
+    return { type: "FETCH_RESUME_FILE_RESULT", error: String(err) }
+  }
+}
+
+async function handleInjectResumeFileInTab(
+  resumeId: string,
+  sender: chrome.runtime.MessageSender,
+): Promise<InjectResumeFileInTabResult> {
+  const fail = (error: string): InjectResumeFileInTabResult =>
+    ({ type: "INJECT_RESUME_FILE_IN_TAB_RESULT", injected: false, error })
+
+  const tabId = sender.tab?.id
+  if (!tabId) return fail("No sender tab ID")
+
+  const fileResult = await handleFetchResumeFile(resumeId)
+  if (!fileResult.base64 || !fileResult.filename) return fail(fileResult.error ?? "PDF fetch failed")
+
+  try {
+    const response = await queryContentScript(tabId, {
+      type:     "INJECT_RESUME_FILE",
+      base64:   fileResult.base64,
+      filename: fileResult.filename,
+    } as import("./types").ContentMessage)
+
+    if (!response || response.type !== "INJECT_RESUME_FILE_RESULT") return fail("No response from content script")
+    return {
+      type:      "INJECT_RESUME_FILE_IN_TAB_RESULT",
+      injected:  response.injected,
+      selector:  response.selector,
+      error:     response.error,
+    }
+  } catch (err) {
+    return fail(String(err))
+  }
+}
+
+// ── Apply-agent tab opener ────────────────────────────────────────────────────
+
+/** Pending agent contexts keyed by tab ID — sent to content script once the tab finishes loading */
+const pendingAgentTabs = new Map<number, {
+  jobId?:         string
+  jobTitle?:      string
+  company?:       string
+  coverLetterId?: string
+}>()
+
+async function handleOperatorOpenTab(
+  url:            string,
+  jobId?:         string,
+  jobTitle?:      string,
+  company?:       string,
+  coverLetterId?: string,
+  agentMode = false,
+): Promise<void> {
+  if (!url) return
+  const tab = await chrome.tabs.create({ url, active: true })
+  if (!tab.id) return
+
+  if (agentMode) {
+    pendingAgentTabs.set(tab.id, { jobId, jobTitle, company, coverLetterId })
+  }
+}
+
+// When a tab completes loading, check if it has a pending agent context and send autofill command
+chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+  if (changeInfo.status !== "complete") return
+  const ctx = pendingAgentTabs.get(tabId)
+  if (!ctx) return
+  pendingAgentTabs.delete(tabId)
+
+  // Brief delay to let the page's React app hydrate before we send the command
+  setTimeout(() => {
+    chrome.tabs.sendMessage(tabId, {
+      type:          "EXECUTE_SCOUT_COMMAND",
+      command:       "AGENT_AUTOFILL",
+      payload:       ctx,
+    }).catch(() => {
+      // Content script not yet ready on this URL — not a supported ATS page
+    })
+  }, 1800)
+})
+
+// ── Apply Queue handlers ───────────────────────────────────────────────────────
+
+async function handleQueueGetState(): Promise<QueueStateResult> {
+  const queue = await readQueue()
+  return { type: "QUEUE_STATE_RESULT", queue }
+}
+
+async function handleQueueAddJob(
+  jobInput: {
+    jobId?: string | null
+    jobTitle: string
+    company?: string | null
+    applyUrl: string
+    matchScore?: number | null
+    sponsorshipSignal?: string | null
+  },
+): Promise<QueueAddResult> {
+  // ── Hard safety gates ────────────────────────────────────────────────────────
+  if (!jobInput.applyUrl?.trim()) {
+    return { type: "QUEUE_ADD_RESULT", queueId: "", status: "failed", failReason: "No apply URL found" }
+  }
+
+  const sig = (jobInput.sponsorshipSignal ?? "").toLowerCase()
+  if (/\bno\b|\bnone\b|\bnot\b|\bdoes not sponsor\b|\bwithout sponsorship\b/.test(sig)) {
+    return {
+      type: "QUEUE_ADD_RESULT",
+      queueId: "",
+      status: "failed",
+      failReason: "Job explicitly offers no sponsorship",
+    }
+  }
+
+  const queueItemId = makeQueueItemId()
+
+  // ── Ensure queue exists ──────────────────────────────────────────────────────
+  let queue = await readQueue()
+  if (!queue) {
+    queue = { queueId: makeQueueId(), jobs: [], paused: false, createdAt: new Date().toISOString() }
+  }
+
+  // ── Deduplicate by applyUrl ──────────────────────────────────────────────────
+  const exists = queue.jobs.some((j) => j.applyUrl === jobInput.applyUrl)
+  if (exists) {
+    return {
+      type: "QUEUE_ADD_RESULT",
+      queueId: queueItemId,
+      status: "queued",
+      warnings: [{ code: "duplicate", message: "This job is already in the queue.", severity: "info" }],
+    }
+  }
+
+  const newItem: QueueJobEntry = {
+    queueId: queueItemId,
+    jobId: jobInput.jobId ?? null,
+    jobTitle: jobInput.jobTitle,
+    company: jobInput.company ?? null,
+    applyUrl: jobInput.applyUrl,
+    matchScore: jobInput.matchScore ?? null,
+    sponsorshipSignal: jobInput.sponsorshipSignal ?? null,
+    status: "queued",
+    addedAt: new Date().toISOString(),
+  }
+
+  queue.jobs.push(newItem)
+  await writeQueue(queue)
+
+  // ── Kick off bulk-prepare asynchronously ─────────────────────────────────────
+  void prepareBulkJob(queueItemId, jobInput.jobId ?? null, jobInput).catch(() => {})
+
+  return { type: "QUEUE_ADD_RESULT", queueId: queueItemId, status: "queued" }
+}
+
+async function prepareBulkJob(
+  queueItemId: string,
+  jobId: string | null,
+  jobInput: { jobTitle: string; company?: string | null; applyUrl: string; sponsorshipSignal?: string | null },
+): Promise<void> {
+  const queue = await readQueue()
+  if (!queue) return
+
+  const itemIdx = queue.jobs.findIndex((j) => j.queueId === queueItemId)
+  if (itemIdx < 0) return
+
+  const updateStatus = async (status: QueueItemStatus, patch?: Partial<QueueJobEntry>) => {
+    const q = await readQueue()
+    if (!q) return
+    const i = q.jobs.findIndex((j) => j.queueId === queueItemId)
+    if (i < 0) return
+    q.jobs[i] = { ...q.jobs[i], status, preparedAt: new Date().toISOString(), ...patch }
+    await writeQueue(q)
+  }
+
+  await updateStatus("tailoring")
+
+  try {
+    const data = await apiRequest<{
+      resumeTailorStatus?: string
+      coverLetterStatus?: string
+      autofillStatus?: string
+      warnings?: Array<{ code: string; message: string; severity: "info" | "warning" | "error" }>
+      failReason?: string
+    }>("POST", "/api/scout/bulk-prepare", {
+      jobId: jobId ?? undefined,
+      jobTitle: jobInput.jobTitle,
+      company: jobInput.company ?? undefined,
+      applyUrl: jobInput.applyUrl,
+      sponsorshipSignal: jobInput.sponsorshipSignal ?? undefined,
+    })
+
+    if (!data) {
+      await updateStatus("failed", { failReason: "Preparation failed — network error" })
+      return
+    }
+
+    if (data.failReason) {
+      const failLabels: Record<string, string> = {
+        missing_apply_url:           "No apply URL found",
+        unsupported_ats:             "Unsupported ATS",
+        missing_resume:              "No resume found — upload one in Hireoven",
+        no_sponsorship_blocker:      "Job explicitly offers no sponsorship",
+        expired_job:                 "Job listing may be expired",
+        autofill_fields_unsupported: "Autofill not supported for this form",
+        network_error:               "Preparation failed — can retry",
+      }
+      await updateStatus("failed", { failReason: failLabels[data.failReason] ?? data.failReason })
+      return
+    }
+
+    const tailorOk = data.resumeTailorStatus === "ready"
+    const coverOk  = data.coverLetterStatus  === "ready"
+
+    let nextStatus: QueueItemStatus = "autofill_ready"
+    if (tailorOk) nextStatus = "waiting_resume_approval"
+    else if (coverOk) nextStatus = "cover_letter_ready"
+
+    await updateStatus(nextStatus, {
+      warnings: data.warnings as QueueJobEntry["warnings"],
+    })
+  } catch {
+    await updateStatus("failed", { failReason: "Preparation failed — can retry" })
+  }
+}
+
+async function handleQueueSkipJob(queueItemId: string): Promise<QueueActionResult> {
+  const queue = await readQueue()
+  if (!queue) return { type: "QUEUE_ACTION_RESULT", ok: false }
+  const i = queue.jobs.findIndex((j) => j.queueId === queueItemId)
+  if (i < 0) return { type: "QUEUE_ACTION_RESULT", ok: false }
+  queue.jobs[i] = { ...queue.jobs[i], status: "skipped" }
+  await writeQueue(queue)
+  return { type: "QUEUE_ACTION_RESULT", ok: true }
+}
+
+async function handleQueueRetryJob(queueItemId: string): Promise<QueueActionResult> {
+  const queue = await readQueue()
+  if (!queue) return { type: "QUEUE_ACTION_RESULT", ok: false }
+  const i = queue.jobs.findIndex((j) => j.queueId === queueItemId)
+  if (i < 0) return { type: "QUEUE_ACTION_RESULT", ok: false }
+  const job = queue.jobs[i]
+  queue.jobs[i] = { ...job, status: "queued", failReason: null, preparedAt: null }
+  await writeQueue(queue)
+  // Re-kick preparation
+  void prepareBulkJob(queueItemId, job.jobId ?? null, {
+    jobTitle: job.jobTitle,
+    company: job.company,
+    applyUrl: job.applyUrl,
+    sponsorshipSignal: job.sponsorshipSignal,
+  }).catch(() => {})
+  return { type: "QUEUE_ACTION_RESULT", ok: true }
+}
+
+async function handleQueueMarkSubmitted(queueItemId: string): Promise<QueueActionResult> {
+  const queue = await readQueue()
+  if (!queue) return { type: "QUEUE_ACTION_RESULT", ok: false }
+  const i = queue.jobs.findIndex((j) => j.queueId === queueItemId)
+  if (i < 0) return { type: "QUEUE_ACTION_RESULT", ok: false }
+  const job = queue.jobs[i]
+  queue.jobs[i] = { ...job, status: "submitted_manually" }
+  await writeQueue(queue)
+
+  // Fire-and-forget: record in web app
+  void apiRequest("POST", "/api/scout/mark-submitted", {
+    jobId: job.jobId ?? undefined,
+    jobTitle: job.jobTitle,
+    companyName: job.company ?? undefined,
+    applyUrl: job.applyUrl,
+    notes: "Submitted via Apply Queue",
+  }).catch(() => {})
+
+  return { type: "QUEUE_ACTION_RESULT", ok: true }
+}
+
+async function handleQueueApproveResume(
+  queueItemId: string,
+  versionId: string,
+  resumeId: string,
+): Promise<QueueActionResult> {
+  const queue = await readQueue()
+  if (!queue) return { type: "QUEUE_ACTION_RESULT", ok: false }
+  const i = queue.jobs.findIndex((j) => j.queueId === queueItemId)
+  if (i < 0) return { type: "QUEUE_ACTION_RESULT", ok: false }
+  queue.jobs[i] = {
+    ...queue.jobs[i],
+    resumeVersionId: versionId,
+    resumeId,
+    status: "cover_letter_ready",
+  }
+  await writeQueue(queue)
+  return { type: "QUEUE_ACTION_RESULT", ok: true }
+}
+
+async function handleQueuePauseResume(pause: boolean): Promise<QueueActionResult> {
+  const queue = await readQueue()
+  if (!queue) return { type: "QUEUE_ACTION_RESULT", ok: false }
+  queue.paused = pause
+  await writeQueue(queue)
+  return { type: "QUEUE_ACTION_RESULT", ok: true }
+}
+
+async function handleQueueClear(): Promise<QueueActionResult> {
+  await writeQueue(null)
+  return { type: "QUEUE_ACTION_RESULT", ok: true }
 }
 
 // ── Tab monitoring ─────────────────────────────────────────────────────────────

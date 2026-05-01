@@ -620,6 +620,8 @@ export function useScoutActionExecutor() {
             const params = new URLSearchParams(searchParams.toString())
             params.set("focus", "1")
             params.set("sort", "match")
+            // Persist so Scout workspace survives navigation back from /dashboard
+            try { localStorage.setItem("hireoven:scout-focus-mode:v1", "1") } catch {}
             router.push(`/dashboard?${params.toString()}`)
 
             const { previousStateSummary, newStateSummary } = buildStateSummaries(
@@ -685,6 +687,8 @@ export function useScoutActionExecutor() {
             params.delete("focus")
             params.delete("sort")
             const qs = params.toString()
+            // Clear persistence so Scout workspace reflects the off state
+            try { localStorage.removeItem("hireoven:scout-focus-mode:v1") } catch {}
             router.push(`/dashboard${qs ? `?${qs}` : ""}`)
             showFeedback("Focus Mode off")
           }

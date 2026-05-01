@@ -133,6 +133,27 @@ function fillField(elementRef: string, value: string): boolean {
   const type = ((el as HTMLInputElement).type ?? "").toLowerCase()
   if (type === "file" || type === "submit" || type === "hidden") return false
 
+  // Contenteditable rich-text editors (Quill, TipTap, Draft.js)
+  const ce = el.getAttribute("contenteditable")
+  if (ce === "true" || ce === "") {
+    el.focus()
+    // Select all existing content and replace
+    const sel = window.getSelection()
+    if (sel) {
+      const range = document.createRange()
+      range.selectNodeContents(el)
+      sel.removeAllRanges()
+      sel.addRange(range)
+    }
+    // Use execCommand for broad compatibility — falls back to textContent
+    if (!document.execCommand("insertText", false, value)) {
+      el.textContent = value
+    }
+    el.dispatchEvent(new Event("input",  { bubbles: true }))
+    el.dispatchEvent(new Event("change", { bubbles: true }))
+    return true
+  }
+
   if (tag === "select") {
     const select = el as HTMLSelectElement
     const option = findSelectOption(select, value)
@@ -227,12 +248,99 @@ function registerMessageBridge(): void {
           sendResponse({ type: "FORM_FILLED", filledCount, skippedCount })
           break
         }
+        case "INJECT_RESUME_FILE": {
+          const m = message as { base64: string; filename: string }
+          const result = injectResumeFile(m.base64, m.filename)
+          sendResponse(result)
+          break
+        }
         default:
           sendResponse({ type: "ERROR", message: "Unknown message type" })
       }
       return true
     },
   )
+}
+
+// ── Resume file injection via DataTransfer ────────────────────────────────────
+// Content scripts can set input.files using DataTransfer even though regular
+// web pages cannot — Chrome grants this in the extension isolated world.
+
+function isResumeFileInput(input: HTMLInputElement): boolean {
+  // Accept attribute suggests document types
+  const accept = input.accept.toLowerCase()
+  if (/\.pdf|\.doc|application\/pdf|application\/msword/.test(accept)) return true
+
+  // Name / id contains resume-related words
+  const nameId = `${input.name} ${input.id}`.toLowerCase()
+  if (/resume|cv|curriculum|upload.doc|document|attachment/.test(nameId)) return true
+
+  // aria-label
+  const aria = (input.getAttribute("aria-label") ?? "").toLowerCase()
+  if (/resume|cv|curriculum/.test(aria)) return true
+
+  // Associated label text
+  if (input.id) {
+    const label = document.querySelector<HTMLLabelElement>(`label[for="${CSS.escape(input.id)}"]`)
+    const labelText = (label?.textContent ?? "").toLowerCase()
+    if (/resume|cv|curriculum|upload/.test(labelText)) return true
+  }
+
+  // Closest container with resume-related class/text
+  const container = input.closest('[class*="resume"],[class*="upload"],[class*="document"],[class*="attachment"],[data-test*="resume"],[data-automation*="resume"]')
+  if (container) return true
+
+  // Generic: first file input on the page with no accept restriction is likely resume
+  const allFileInputs = document.querySelectorAll<HTMLInputElement>('input[type="file"]')
+  if (allFileInputs.length === 1 && allFileInputs[0] === input) return true
+
+  return false
+}
+
+function injectResumeFile(base64: string, filename: string): { type: "INJECT_RESUME_FILE_RESULT"; injected: boolean; selector?: string; error?: string } {
+  try {
+    // Convert base64 → Uint8Array
+    const binary = atob(base64)
+    const bytes  = new Uint8Array(binary.length)
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+
+    // File may be docx or pdf depending on what the server generated
+    const mimeType = filename.toLowerCase().endsWith(".pdf")
+      ? "application/pdf"
+      : "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    const blob = new Blob([bytes], { type: mimeType })
+    const file = new File([blob], filename, { type: mimeType, lastModified: Date.now() })
+
+    // Find the resume file input
+    const candidates = [...document.querySelectorAll<HTMLInputElement>('input[type="file"]')]
+    const target     = candidates.find(isResumeFileInput) ?? candidates[0]
+    if (!target) return { type: "INJECT_RESUME_FILE_RESULT", injected: false, error: "No file input found" }
+
+    const dt = new DataTransfer()
+    dt.items.add(file)
+    target.files = dt.files
+
+    // Fire React-compatible events
+    target.dispatchEvent(new Event("input",  { bubbles: true }))
+    target.dispatchEvent(new Event("change", { bubbles: true }))
+
+    // Also trigger React's internal synthetic event system if present
+    const nativeSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "files")?.set
+    if (nativeSetter) nativeSetter.call(target, dt.files)
+    target.dispatchEvent(new Event("input",  { bubbles: true }))
+    target.dispatchEvent(new Event("change", { bubbles: true }))
+
+    // Build a stable selector for the result
+    const selector = target.id
+      ? `#${CSS.escape(target.id)}`
+      : target.name
+        ? `input[name="${target.name}"]`
+        : "input[type='file']"
+
+    return { type: "INJECT_RESUME_FILE_RESULT", injected: true, selector }
+  } catch (err) {
+    return { type: "INJECT_RESUME_FILE_RESULT", injected: false, error: String(err) }
+  }
 }
 
 // Module-level ref so EXECUTE_SCOUT_COMMAND can reach the live overlay instance
@@ -263,6 +371,21 @@ chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) =
   if (msg.type !== "EXECUTE_SCOUT_COMMAND" || !overlayRuntime) return false
 
   const cmd = msg.command as string
+
+  // Agent autofill — triggered automatically when apply-agent opens a job tab
+  if (cmd === "AGENT_AUTOFILL") {
+    const payload = (msg.payload ?? {}) as Record<string, unknown>
+    // Store cover letter ID for the overlay to use when filling cover letter fields
+    if (typeof payload.coverLetterId === "string") {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(window as any).__hoPendingCoverLetterId = payload.coverLetterId
+    }
+    // Trigger autofill — overlay will detect the form and fill it
+    overlayRuntime.executeAction("autofill")
+    sendResponse({ ok: true })
+    return true
+  }
+
   overlayRuntime.executeAction(cmd)
   sendResponse({ ok: true })
   return true
@@ -311,6 +434,20 @@ function registerPageBridge(): void {
           { source: EXT_SOURCE, type: "ACTIVE_CONTEXT_CHANGED", context: ctx },
           window.location.origin,
         )
+      })
+      return
+    }
+
+    // Apply agent — open job URL in a new tab, then auto-autofill when it loads
+    if (msg.type === "OPERATOR_OPEN_TAB") {
+      chrome.runtime.sendMessage({
+        type: "OPERATOR_OPEN_TAB",
+        url:           msg.url,
+        jobId:         msg.jobId,
+        jobTitle:      msg.jobTitle,
+        company:       msg.company,
+        coverLetterId: msg.coverLetterId,
+        agentMode:     msg.agentMode ?? false,
       })
       return
     }

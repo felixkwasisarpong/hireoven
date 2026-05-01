@@ -19,7 +19,12 @@
     "https://*.myworkdayjobs.com/*",
     "https://*.icims.com/*",
     "https://*.smartrecruiters.com/*",
-    "https://*.bamboohr.com/*"
+    "https://*.bamboohr.com/*",
+    "https://www.linkedin.com/*",
+    "https://*.glassdoor.com/*",
+    "https://*.indeed.com/*",
+    "https://*.joinhandshake.com/*",
+    "https://www.google.com/*"
   ],
   "background": {
     "service_worker": "dist/background.js",
@@ -37,10 +42,16 @@
   "content_scripts": [
     {
       "matches": [
+        "https://www.linkedin.com/*",
+        "https://*.glassdoor.com/*",
+        "https://*.indeed.com/*",
+        "https://*.joinhandshake.com/*",
+        "https://www.google.com/*",
         "https://*.greenhouse.io/*",
         "https://*.lever.co/*",
         "https://*.ashbyhq.com/*",
         "https://*.myworkdayjobs.com/*",
+        "https://*.workday.com/*",
         "https://*.icims.com/*",
         "https://*.smartrecruiters.com/*",
         "https://*.bamboohr.com/*",
@@ -48,7 +59,8 @@
         "http://*/*"
       ],
       "js": ["dist/content.js"],
-      "run_at": "document_idle"
+      "run_at": "document_idle",
+      "all_frames": true
     }
   ],
   "icons": {

@@ -230,18 +230,66 @@ export function generateProactiveEvents(input: ProactiveGeneratorInput): ScoutPr
       createdAt,
       expiresAt: addHours(createdAt, 72),
     })
-  } else if (input.outcomeLearning?.signals.length) {
-    // Fallback if explicit skill gaps are unavailable.
-    const learning = input.outcomeLearning.signals[0]
-    events.push({
-      id: idFrom("skill_signal", `learning-${learning.id}`, dayKey),
-      type: "skill_signal",
-      title: "Outcome learning signal available",
-      summary: learning.signal,
-      severity: learning.confidence === "high" ? "important" : "info",
-      createdAt,
-      expiresAt: addHours(createdAt, 24),
-    })
+  }
+
+  // 11) V2 outcome learning — traction, sector, sponsorship, workflow signals
+  // Each dimension generates its own targeted event. Capped at 2 to avoid flood.
+  if (input.outcomeLearning?.signals.length) {
+    let outcomeSlotsUsed = 0
+    const MAX_OUTCOME_EVENTS = 2
+
+    for (const sig of input.outcomeLearning.signals) {
+      if (outcomeSlotsUsed >= MAX_OUTCOME_EVENTS) break
+      // Skip general momentum signals — they're already shown in the ApplicationMode panel
+      if (sig.id === "momentum-up" || sig.id === "momentum-down") continue
+
+      if (sig.dimension === "role_type" || sig.dimension === "work_mode") {
+        events.push({
+          id:       idFrom("skill_signal", `outcome-${sig.id}`, dayKey),
+          type:     "skill_signal",
+          title:    "Traction pattern detected",
+          summary:  sig.signal,
+          severity: sig.confidence === "high" ? "important" : "info",
+          createdAt,
+          expiresAt: addHours(createdAt, 48),
+        })
+        outcomeSlotsUsed++
+      } else if (sig.dimension === "company_type") {
+        events.push({
+          id:       idFrom("company_activity", `outcome-${sig.id}`, dayKey),
+          type:     "company_activity",
+          title:    "Sector traction pattern",
+          summary:  sig.signal,
+          severity: sig.confidence === "high" ? "important" : "info",
+          createdAt,
+          expiresAt: addHours(createdAt, 48),
+        })
+        outcomeSlotsUsed++
+      } else if (sig.dimension === "sponsorship") {
+        events.push({
+          id:       idFrom("sponsorship_signal", `outcome-${sig.id}`, dayKey),
+          type:     "sponsorship_signal",
+          title:    "Sponsorship response pattern",
+          summary:  sig.signal,
+          severity: sig.confidence === "high" ? "important" : "info",
+          createdAt,
+          expiresAt: addHours(createdAt, 48),
+        })
+        outcomeSlotsUsed++
+      } else if (sig.dimension === "general" && !snapshot?.skillGaps.length) {
+        // Only use general signals as fallback when no skill gap data
+        events.push({
+          id:       idFrom("skill_signal", `outcome-${sig.id}`, dayKey),
+          type:     "skill_signal",
+          title:    "Application pattern insight",
+          summary:  sig.signal,
+          severity: sig.confidence === "high" ? "important" : "info",
+          createdAt,
+          expiresAt: addHours(createdAt, 24),
+        })
+        outcomeSlotsUsed++
+      }
+    }
   }
 
   // Prioritize high-signal events and cap visible generation payload.

@@ -5,6 +5,8 @@ import {
   formatBehaviorSignalsForClaude,
   type ScoutBehaviorSignals,
 } from "@/lib/scout/behavior"
+import { getMemories } from "@/lib/scout/memory/store"
+import type { ScoutMemory } from "@/lib/scout/memory/types"
 import { formatOpportunitiesForClaude } from "@/lib/scout/opportunity-graph/formatter"
 import type { OpportunityGraphResponse } from "@/lib/scout/opportunity-graph/types"
 import type {
@@ -137,6 +139,8 @@ export type ScoutContext = {
   opportunityGraph: OpportunityGraphResponse | null
   /** Outcome learning signals — populated from application history */
   outcomeLearning: import("@/lib/scout/outcomes/types").OutcomeLearningResult | null
+  /** Persistent user memories — injected into Claude prompt via retriever */
+  memories: import("@/lib/scout/memory/types").ScoutMemory[]
 }
 
 type ScoutContextResume = NonNullable<ScoutContext["resume"]>
@@ -248,13 +252,14 @@ export async function getScoutContext(input: ScoutContextInput): Promise<ScoutCo
     compareLimit = 5,
   } = input
 
-  // Fetch user profile and behavior signals concurrently
-  const [profileResult, behaviorSignals] = await Promise.all([
+  // Fetch user profile, behavior signals, and memories concurrently
+  const [profileResult, behaviorSignals, memories] = await Promise.all([
     pool.query<Profile>(
       "SELECT * FROM profiles WHERE id = $1 LIMIT 1",
       [userId]
     ),
     getScoutBehaviorSignals(userId).catch(() => null),
+    getMemories(userId, pool, { activeOnly: true }).catch((): ScoutMemory[] => []),
   ])
   const profile = profileResult.rows[0] ?? null
 
@@ -460,13 +465,14 @@ export async function getScoutContext(input: ScoutContextInput): Promise<ScoutCo
     compareJobs,
     opportunityGraph: null,
     outcomeLearning:  null,
+    memories,
   }
 }
 
 /**
  * Formats Scout context into a readable string for Claude.
  */
-export function formatScoutContextForClaude(context: ScoutContext): string {
+export async function formatScoutContextForClaude(context: ScoutContext): Promise<string> {
   const sections: string[] = []
 
   sections.push(`Page Context:
@@ -643,6 +649,15 @@ ${job.description.substring(0, 500)}...`)
     sections.push(
       `Compare Jobs Available (use ONLY these jobIds for the compare response — do NOT invent others):\n${lines.join("\n")}`
     )
+  }
+
+  // Scout Memory — injected BEFORE other context sections so Claude treats it as
+  // established fact rather than a late hint. Retrieval + formatting handled in
+  // the chat route using the relevance scorer; here we receive the pre-selected slice.
+  if (context.memories && context.memories.length > 0) {
+    const { formatMemoriesForClaude } = await import("@/lib/scout/memory/retriever")
+    const memorySection = formatMemoriesForClaude(context.memories)
+    if (memorySection) sections.unshift(memorySection)
   }
 
   if (sections.length === 0) {

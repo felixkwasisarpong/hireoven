@@ -364,6 +364,11 @@ export type ScoutResponse = {
    */
   outreach?: import("@/lib/scout/outreach/types").ScoutOutreachDraft
   /**
+   * Apply agent — emitted when Scout selects jobs to apply to and drives
+   * the tailor → confirm → apply loop. Never emitted for single-job flows.
+   */
+  apply_agent?: import("@/lib/scout/apply-agent/types").ApplyAgentDirective
+  /**
    * Development-only diagnostics. Never render directly in user-facing UI.
    * Used for timeline metadata and local debugging of orchestrator behavior.
    */
