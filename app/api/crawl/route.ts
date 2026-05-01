@@ -18,7 +18,7 @@ const MAX_COMPANY_ATTEMPTS = Math.max(
 )
 const COMPANY_RETRY_BASE_DELAY_MS = Math.max(
   250,
-  Number.parseInt(process.env.CRAWLER_COMPANY_RETRY_BASE_DELAY_MS ?? "1200", 10)
+  Number.parseInt(process.env.CRAWLER_COMPANY_RETRY_BASE_DELAY_MS ?? "600", 10)
 )
 const MAX_ERROR_MESSAGE_LENGTH = 800
 const CRAWLER_COMPANY_CONCURRENCY = Math.max(

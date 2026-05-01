@@ -1,8 +1,8 @@
 const USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 
-const DEFAULT_TIMEOUT_MS = Number.parseInt(process.env.CRAWLER_FETCH_TIMEOUT_MS ?? "12000", 10)
-const DEFAULT_MAX_ATTEMPTS = Number.parseInt(process.env.CRAWLER_HTTP_MAX_ATTEMPTS ?? "3", 10)
+const DEFAULT_TIMEOUT_MS = Number.parseInt(process.env.CRAWLER_FETCH_TIMEOUT_MS ?? "9000", 10)
+const DEFAULT_MAX_ATTEMPTS = Number.parseInt(process.env.CRAWLER_HTTP_MAX_ATTEMPTS ?? "2", 10)
 const DEFAULT_DOMAIN_CONCURRENCY = Number.parseInt(
   process.env.CRAWLER_DOMAIN_CONCURRENCY ?? "3",
   10
@@ -12,11 +12,11 @@ const DEFAULT_MIN_DELAY_MS = Number.parseInt(
   10
 )
 const DEFAULT_MAX_DELAY_MS = Number.parseInt(
-  process.env.CRAWLER_REQUEST_MAX_DELAY_MS ?? "900",
+  process.env.CRAWLER_REQUEST_MAX_DELAY_MS ?? "650",
   10
 )
 const DEFAULT_BACKOFF_MS = Number.parseInt(
-  process.env.CRAWLER_HTTP_RETRY_BASE_DELAY_MS ?? "500",
+  process.env.CRAWLER_HTTP_RETRY_BASE_DELAY_MS ?? "350",
   10
 )
 const PROXY_FALLBACK_ENABLED = process.env.CRAWLER_PROXY_FALLBACK_ENABLED === "true"
@@ -381,14 +381,31 @@ export async function crawlerFetch<T = unknown>(
   }
 }
 
-export async function fetchCrawlerText(url: string, init: RequestInit = {}) {
-  return crawlerFetch<string>(url, init, { responseType: "text" })
+export type CrawlerFetchOptions = {
+  maxAttempts?: number
+  timeoutMs?: number
 }
 
-export async function fetchCrawlerJson<T>(url: string, init: RequestInit = {}) {
-  return crawlerFetch<T>(url, init, { responseType: "json" })
+export async function fetchCrawlerText(
+  url: string,
+  init: RequestInit = {},
+  options: CrawlerFetchOptions = {}
+) {
+  return crawlerFetch<string>(url, init, { responseType: "text", ...options })
 }
 
-export async function fetchCrawlerResponse(url: string, init: RequestInit = {}) {
-  return crawlerFetch(url, init, { responseType: "response" })
+export async function fetchCrawlerJson<T>(
+  url: string,
+  init: RequestInit = {},
+  options: CrawlerFetchOptions = {}
+) {
+  return crawlerFetch<T>(url, init, { responseType: "json", ...options })
+}
+
+export async function fetchCrawlerResponse(
+  url: string,
+  init: RequestInit = {},
+  options: CrawlerFetchOptions = {}
+) {
+  return crawlerFetch(url, init, { responseType: "response", ...options })
 }

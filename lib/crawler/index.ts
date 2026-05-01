@@ -9,6 +9,7 @@ import {
 } from "@/lib/companies/greenhouse-url"
 import { normalizeAtsUrl } from "@/lib/companies/ats-url-normalization"
 import {
+  type CrawlerFetchOptions,
   detectBlockedHtml,
   fetchCrawlerJson,
   fetchCrawlerResponse,
@@ -76,10 +77,19 @@ export type CrawlDiagnostic = {
 
 const MAX_DISCOVERED_ATS_CANDIDATES = 12
 const MAX_GENERIC_JOBS = 250
-const WORKDAY_FALLBACK_MAX_ATTEMPTS = 48
-const WORKDAY_HOST_SHARDS = [1, 2, 3, 4, 5]
-const WORKDAY_DESC_CONCURRENCY = 8  // parallel detail fetches
-const WORKDAY_DESC_MAX_JOBS = 60    // cap so crawls don't balloon in time
+const WORKDAY_FALLBACK_MAX_ATTEMPTS = Math.max(
+  8,
+  Number.parseInt(process.env.CRAWLER_WORKDAY_FALLBACK_MAX_ATTEMPTS ?? "18", 10)
+)
+const WORKDAY_HOST_SHARDS = [1, 2, 3]
+const WORKDAY_DESC_CONCURRENCY = Math.max(
+  2,
+  Number.parseInt(process.env.CRAWLER_WORKDAY_DESC_CONCURRENCY ?? "6", 10)
+) // parallel detail fetches
+const WORKDAY_DESC_MAX_JOBS = Math.max(
+  15,
+  Number.parseInt(process.env.CRAWLER_WORKDAY_DESC_MAX_JOBS ?? "40", 10)
+) // cap so crawls don't balloon in time
 const ORACLE_SEARCH_PAGE_SIZE = 24
 const ORACLE_MAX_JOBS = 240
 const PHENOM_DEFAULT_PAGE_SIZE = 10
@@ -88,6 +98,18 @@ const GOOGLE_RESULTS_PAGE_SIZE = 20
 const GOOGLE_MAX_JOBS = 200
 const ICIMS_JIBE_PAGE_SIZE = 100
 const ICIMS_JIBE_MAX_JOBS = 500
+const FAST_SECONDARY_MAX_ATTEMPTS = Math.max(
+  1,
+  Number.parseInt(process.env.CRAWLER_SECONDARY_MAX_ATTEMPTS ?? "1", 10)
+)
+const FAST_SECONDARY_TIMEOUT_MS = Math.max(
+  2000,
+  Number.parseInt(process.env.CRAWLER_SECONDARY_TIMEOUT_MS ?? "6500", 10)
+)
+const ONE_HOP_MAX_PAGES = Math.max(
+  1,
+  Number.parseInt(process.env.CRAWLER_ONE_HOP_MAX_PAGES ?? "2", 10)
+)
 
 type DiscoverAndCrawlResult = {
   jobs: RawJob[]
@@ -351,19 +373,44 @@ type WorkdayPosting = {
 
 async function fetchText(
   url: string,
-  init: RequestInit = {}
+  init: RequestInit = {},
+  options: CrawlerFetchOptions = {}
 ): Promise<string | null> {
-  const result = await fetchCrawlerText(url, init)
+  const result = await fetchCrawlerText(url, init, options)
   return result.ok ? result.data : null
 }
 
 async function checkUrlStatus(url: string, init: RequestInit = {}): Promise<number | null> {
-  const result = await fetchCrawlerResponse(url, {
-    method: "GET",
-    redirect: "follow",
+  const base = {
+    redirect: "follow" as const,
     ...init,
-  })
-  return result.statusCode
+  }
+
+  const head = await fetchCrawlerResponse(
+    url,
+    {
+      ...base,
+      method: "HEAD",
+    },
+    {
+      maxAttempts: FAST_SECONDARY_MAX_ATTEMPTS,
+      timeoutMs: FAST_SECONDARY_TIMEOUT_MS,
+    }
+  )
+  if (head.statusCode !== 405) return head.statusCode
+
+  const get = await fetchCrawlerResponse(
+    url,
+    {
+      ...base,
+      method: "GET",
+    },
+    {
+      maxAttempts: FAST_SECONDARY_MAX_ATTEMPTS,
+      timeoutMs: FAST_SECONDARY_TIMEOUT_MS,
+    }
+  )
+  return get.statusCode
 }
 
 async function resolveStableGreenhouseBoardUrl(
@@ -404,9 +451,10 @@ async function resolveStableGreenhouseBoardUrl(
 
 async function fetchJson<T>(
   url: string,
-  init: RequestInit = {}
+  init: RequestInit = {},
+  options: CrawlerFetchOptions = {}
 ): Promise<T | null> {
-  const result = await fetchCrawlerJson<T>(url, init)
+  const result = await fetchCrawlerJson<T>(url, init, options)
   return result.ok ? result.data : null
 }
 
@@ -2305,16 +2353,29 @@ async function discoverAndCrawlFromHtml(careersUrl: URL): Promise<DiscoverAndCra
       .filter((candidate, index, collection) => {
         return collection.findIndex((entry) => entry.href.toString() === candidate.href.toString()) === index
       })
-      .slice(0, 4)
+      .slice(0, ONE_HOP_MAX_PAGES)
 
     const oneHopJobs: RawJob[] = []
-    for (const candidate of oneHopCandidates) {
-      const nextHtml = await fetchText(candidate.href.toString())
-      if (!nextHtml) continue
+    const oneHopPages = await Promise.all(
+      oneHopCandidates.map(async (candidate) => ({
+        candidate,
+        html: await fetchText(
+          candidate.href.toString(),
+          {},
+          {
+            maxAttempts: FAST_SECONDARY_MAX_ATTEMPTS,
+            timeoutMs: FAST_SECONDARY_TIMEOUT_MS,
+          }
+        ),
+      }))
+    )
+
+    for (const page of oneHopPages) {
+      if (!page.html) continue
       oneHopJobs.push(
-        ...extractGreenhouseEmbeddedJobsFromHtml(nextHtml, candidate.href),
-        ...extractJobsFromJsonLd(nextHtml, candidate.href),
-        ...extractGenericJobsFromHtml(nextHtml, candidate.href)
+        ...extractGreenhouseEmbeddedJobsFromHtml(page.html, page.candidate.href),
+        ...extractJobsFromJsonLd(page.html, page.candidate.href),
+        ...extractGenericJobsFromHtml(page.html, page.candidate.href)
       )
     }
 
