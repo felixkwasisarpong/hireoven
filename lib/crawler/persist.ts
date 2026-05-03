@@ -685,6 +685,20 @@ export async function persistCrawlJobs({
     }
   }
 
+  // Background: lift jobs.sponsorship_score to GREATEST(job_score, company_confidence).
+  // Fire-and-forget — never blocks or delays the crawl.
+  pool.query(
+    `UPDATE jobs j
+     SET sponsorship_score = GREATEST(COALESCE(j.sponsorship_score, 0), COALESCE(c.sponsorship_confidence, 0)),
+         updated_at         = $2
+     FROM companies c
+     WHERE j.company_id  = c.id
+       AND j.company_id  = $1
+       AND j.is_active   = true
+       AND COALESCE(c.sponsorship_confidence, 0) > COALESCE(j.sponsorship_score, 0)`,
+    [companyId, crawledAtIso]
+  ).catch(() => { /* intentional: non-critical background step */ })
+
   const countResult = await pool.query<{ count: string }>(
     `SELECT COUNT(*)::text AS count FROM jobs WHERE company_id = $1 AND is_active = true`,
     [companyId]

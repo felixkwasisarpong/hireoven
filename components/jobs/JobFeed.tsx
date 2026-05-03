@@ -21,6 +21,8 @@ interface JobFeedProps {
   searchQuery: string
   onMetaChange?: (meta: { totalCount: number; lastHourCount: number }) => void
   hasPrimaryResume?: boolean
+  /** Force a specific view — hides the view toggle when set */
+  defaultView?: JobFeedView
 }
 
 function JobRowSkeleton() {
@@ -67,6 +69,7 @@ export default function JobFeed({
   searchQuery,
   onMetaChange,
   hasPrimaryResume = false,
+  defaultView,
 }: JobFeedProps) {
   const personalized = hasPrimaryResume && (filters.sort ?? "freshest") === "match"
   const {
@@ -102,14 +105,16 @@ export default function JobFeed({
     return () => window.clearInterval(id)
   }, [])
 
-  const [view, setView] = useState<JobFeedView>("grid")
+  const [view, setView] = useState<JobFeedView>(defaultView ?? "grid")
   useEffect(() => {
+    if (defaultView) return // honour forced view, ignore localStorage
     try {
       const stored = window.localStorage.getItem(VIEW_STORAGE_KEY)
       if (stored === "grid" || stored === "list") setView(stored)
     } catch {}
-  }, [])
+  }, [defaultView])
   function changeView(next: JobFeedView) {
+    if (defaultView) return // locked
     setView(next)
     try { window.localStorage.setItem(VIEW_STORAGE_KEY, next) } catch {}
   }
@@ -171,7 +176,7 @@ export default function JobFeed({
   return (
     <H1BPredictionProvider enabled={h1bEnabled}>
     <div className="space-y-4 rounded-[28px] bg-slate-50 p-3 sm:p-4">
-      <div className="flex items-center justify-end">
+      {!defaultView && <div className="flex items-center justify-end">
         <div
           role="group"
           aria-label="Job feed view"
@@ -208,7 +213,7 @@ export default function JobFeed({
             List
           </button>
         </div>
-      </div>
+      </div>}
 
       {newJobsCount > 0 && (
         <button

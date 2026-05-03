@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
+import { renderInlineMarkdown } from "@/lib/scout/inline-markdown"
 
 /**
  * Renders streaming text with phrase-chunked updates.
@@ -68,7 +69,7 @@ export function ScoutStreamingText({ text, className }: Props) {
 
   return (
     <p className={className ?? "whitespace-pre-wrap text-sm leading-7 text-slate-800"}>
-      {displayed}
+      {renderInlineMarkdown(displayed)}
       {/* Blinking cursor while streaming */}
       {displayed.length < text.length && (
         <span className="ml-0.5 inline-block h-4 w-[2px] animate-pulse bg-[#FF5C18]/70 align-middle" />

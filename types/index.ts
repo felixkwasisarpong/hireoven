@@ -763,6 +763,51 @@ export type GhostJobRisk = {
   summary: string | null;
 };
 
+// ── Employer Financial Health Score ──────────────────────────────────────────
+
+export type HealthVerdict = 'strong' | 'healthy' | 'caution' | 'critical'
+
+export type HealthSignal = {
+  icon: string           // Material Icons name
+  title: string
+  detail: string
+  weight: number         // positive = adds to score, negative = subtracts
+  severity: 'positive' | 'warning' | 'negative' | 'neutral'
+  expandDetail?: string | null
+}
+
+export type HealthEvent = {
+  icon: string
+  title: string
+  detail: string
+  date: string
+  type: 'layoff' | 'funding' | 'executive_departure' | 'product_launch'
+}
+
+export type CompanyHealthScore = {
+  companyId: string
+  totalScore: number
+  verdict: HealthVerdict
+  fundingScore: number
+  layoffScore: number
+  glassdoorScore: number
+  headcountScore: number
+  fundingStage: string | null
+  fundingAmountUsd: number | null
+  fundingDate: string | null
+  monthsSinceFunding: number | null
+  glassdoorRating: number | null
+  glassdoorRating12moAgo: number | null
+  glassdoorTrend: 'improving' | 'stable' | 'declining'
+  headcountCurrent: number | null
+  headcountChange12moPct: number | null
+  headcountTrend: 'growing' | 'stable' | 'shrinking' | 'contracting'
+  csuiteDepatures12mo: number
+  signals: HealthSignal[]
+  events: HealthEvent[]
+  lastComputedAt: string
+}
+
 export type CompanyHiringHealth = {
   score: number | null;
   status: 'growing' | 'steady' | 'slowing' | 'unknown';
@@ -774,6 +819,13 @@ export type CompanyHiringHealth = {
   lastUpdatedAt: string | null;
   signals: IntelligenceSignal[];
   summary: string | null;
+  /** Layoff intelligence — populated from company_layoff_summary */
+  recentLayoffCount?: number | null;
+  employeesAffected?: number | null;
+  daysSinceLastLayoff?: number | null;
+  hasActiveFreezeFromLayoffs?: boolean | null;
+  freezeConfidence?: 'confirmed' | 'likely' | 'possible' | null;
+  layoffTrend?: 'accelerating' | 'stable' | 'recovering' | null;
 };
 
 export type CompanyImmigrationProfileSummary = {

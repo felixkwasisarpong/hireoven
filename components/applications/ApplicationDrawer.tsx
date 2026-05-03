@@ -20,6 +20,7 @@ import CompanyLogo from "@/components/ui/CompanyLogo"
 import { cn } from "@/lib/utils"
 import type { ApplicationStatus, InterviewFormat, InterviewOutcome, InterviewRound, JobApplication, OfferDetails } from "@/types"
 import { InterviewPrep } from "./InterviewPrep"
+import { TakeHomeEngine } from "@/components/compensation/TakeHomeEngine"
 import FeatureGate from "@/components/gates/FeatureGate"
 import { ScoutFollowUpBlock } from "@/components/scout/ScoutFollowUpBlock"
 
@@ -496,12 +497,12 @@ function OfferTab({ app, onUpdate }: { app: JobApplication; onUpdate: Props["onU
       </div>
 
       {offer.base_salary && (
-        <div className="rounded-[12px] bg-emerald-50 border border-emerald-100 p-4">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-600 mb-2">Total compensation estimate</p>
-          <p className="text-2xl font-bold text-emerald-800">
-            ${((offer.base_salary ?? 0) + (offer.signing_bonus ?? 0) + (offer.annual_bonus_target ?? 0)).toLocaleString()}
-          </p>
-          <p className="text-[11.5px] text-emerald-600 mt-0.5">base + signing + bonus</p>
+        <div className="border-t border-slate-100 pt-4">
+          <TakeHomeEngine
+            initialSalary={offer.base_salary}
+            initialLocation=""
+            initialFilingStatus="single"
+          />
         </div>
       )}
     </div>

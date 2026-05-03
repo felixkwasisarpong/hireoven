@@ -1202,6 +1202,102 @@ export async function POST(request: NextRequest) {
       : formattedContext
     // ── End multi-agent orchestrator ────────────────────────────────────────────
 
+    // ── Application tracker enrichment ──────────────────────────────────────────
+    // Detect queries about applications, priorities, follow-ups, or pipeline status
+    // and inject real-time application data so Claude can answer with actual data.
+    const isApplicationQuery = /\b(applications?|pipeline|follow.?up|priorities|priority|active|tracker|interviewing|interview|offer|actions?|what should i|next steps?|status)\b/i.test(userMessage)
+    let applicationContext = ""
+    if (isApplicationQuery) {
+      try {
+        type AppRow = {
+          id: string
+          status: string
+          job_title: string | null
+          company_name: string | null
+          applied_at: string | null
+          updated_at: string
+          match_score: number | null
+          notes: string | null
+        }
+        const appsResult = await pool.query<AppRow>(
+          `SELECT id, status, job_title, company_name, applied_at, updated_at, match_score, notes
+           FROM job_applications
+           WHERE user_id = $1 AND is_archived = false
+           ORDER BY
+             CASE status
+               WHEN 'offered'      THEN 1
+               WHEN 'interviewing' THEN 2
+               WHEN 'applied'      THEN 3
+               WHEN 'saved'        THEN 4
+               ELSE 5
+             END,
+             COALESCE(applied_at, updated_at) DESC
+           LIMIT 60`,
+          [user.id]
+        )
+        const apps = appsResult.rows
+        if (apps.length > 0) {
+          const now = Date.now()
+          const daysSince = (d: string | null) =>
+            d ? Math.floor((now - new Date(d).getTime()) / 86_400_000) : null
+
+          const offered      = apps.filter(a => a.status === "offered")
+          const interviewing = apps.filter(a => a.status === "interviewing")
+          const applied      = apps.filter(a => a.status === "applied")
+          const saved        = apps.filter(a => a.status === "saved")
+          const rejected     = apps.filter(a => a.status === "rejected")
+
+          const agingApplied  = applied.filter(a => (daysSince(a.applied_at) ?? 0) >= 14)
+          const recentApplied = applied.filter(a => (daysSince(a.applied_at) ?? 0) < 14)
+
+          const fmt = (a: AppRow, dateField: string | null) => {
+            const days = daysSince(dateField)
+            const daysStr = days !== null ? ` (${days}d ago)` : ""
+            const score = a.match_score ? ` | ${a.match_score}% match` : ""
+            const note  = a.notes ? ` | Note: ${a.notes}` : ""
+            return `  • ${a.company_name ?? "Unknown"} — ${a.job_title ?? "Role"}${daysStr}${score}${note}`
+          }
+
+          const lines: string[] = [
+            `Active Application Tracker — LIVE DATA (${apps.length} active):`,
+            `Summary: ${offered.length} offer${offered.length !== 1 ? "s" : ""}, ${interviewing.length} interviewing, ${applied.length} applied (${agingApplied.length} aging ≥14d), ${saved.length} saved, ${rejected.length} rejected`,
+          ]
+
+          if (offered.length > 0) {
+            lines.push("\nOFFERS (decision needed urgently):")
+            offered.forEach(a => lines.push(fmt(a, a.applied_at ?? a.updated_at)))
+          }
+          if (interviewing.length > 0) {
+            lines.push("\nINTERVIEWING (stay sharp, follow through):")
+            interviewing.forEach(a => lines.push(fmt(a, a.updated_at)))
+          }
+          if (agingApplied.length > 0) {
+            lines.push(`\nAGING APPLICATIONS — applied 14+ days ago, no update (follow-up warranted):`)
+            agingApplied.forEach(a => lines.push(fmt(a, a.applied_at)))
+          }
+          if (recentApplied.length > 0) {
+            lines.push("\nRECENT APPLICATIONS (<14 days, let them process):")
+            recentApplied.slice(0, 6).forEach(a => lines.push(fmt(a, a.applied_at)))
+            if (recentApplied.length > 6) lines.push(`  ... and ${recentApplied.length - 6} more`)
+          }
+          if (saved.length > 0) {
+            const topSaved = [...saved].sort((a, b) => (b.match_score ?? 0) - (a.match_score ?? 0)).slice(0, 4)
+            lines.push(`\nSAVED (not yet applied — ${saved.length} total, top by match score):`)
+            topSaved.forEach(a => lines.push(fmt(a, null)))
+            if (saved.length > 4) lines.push(`  ... and ${saved.length - 4} more saved`)
+          }
+          applicationContext = lines.join("\n")
+        }
+      } catch {
+        // silent — never block the response
+      }
+    }
+
+    const enrichedContext = applicationContext
+      ? `${fullContext}\n\n${applicationContext}`
+      : fullContext
+    // ── End application tracker enrichment ──────────────────────────────────────
+
     if (isInterviewPrepIntent && !context.job) {
       return NextResponse.json({
         answer:
@@ -1273,7 +1369,7 @@ Current Feed State (IMPORTANT — do not suggest actions that are already active
 ${feedStateLines.join("\n")}
 ${searchProfileSection}
 Scout Context:
-${fullContext}
+${enrichedContext}
 
 ---
 

@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
      FROM h1b_records h
      LEFT JOIN companies c ON c.id = h.company_id
      ORDER BY h.year DESC, h.total_petitions DESC
-     LIMIT 2000`
+     LIMIT 200`
   )
   return NextResponse.json({ records: result.rows })
 }

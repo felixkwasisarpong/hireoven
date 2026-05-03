@@ -26,6 +26,9 @@ import {
   TrendingDown,
   TrendingUp,
 } from "lucide-react"
+import { GhostJobDetector } from "@/components/jobs/GhostJobDetector"
+import { TakeHomeBadge } from "@/components/compensation/TakeHomeBadge"
+import { RejectionIntelligence } from "@/components/rejections/RejectionIntelligence"
 import { useResumeContext } from "@/components/resume/ResumeProvider"
 import { useResumeAnalysis } from "@/lib/hooks/useResumeAnalysis"
 import { createResumeLcaRoleAlignmentFallback, getJobIntelligence } from "@/lib/jobs/intelligence"
@@ -606,6 +609,17 @@ export default function JobDetailPanel({
           </div>
         )}
 
+        {/* ── Take-home estimate ── */}
+        {job.salary_min && (
+          <div className={sectionCls}>
+            <IntelLabel>Est. take-home</IntelLabel>
+            <TakeHomeBadge
+              annualSalary={job.salary_min}
+              stateCode={job.company?.domain ? undefined : undefined}
+            />
+          </div>
+        )}
+
         {/* ── Salary Intelligence ── */}
         {hasSalaryData && salaryLabelConf && SalaryIcon && (
           <div className={sectionCls}>
@@ -633,7 +647,15 @@ export default function JobDetailPanel({
           </div>
         )}
 
-        {/* ── Ghost Job Risk ── */}
+        {/* ── Ghost Job Detector (full detail view) ── */}
+        <div className="px-5 py-4 border-t border-slate-100">
+          <GhostJobDetector
+            jobId={job.id}
+            onApply={() => window.open(applyUrl, "_blank", "noopener,noreferrer")}
+          />
+        </div>
+
+        {/* ── Ghost Job Risk (legacy inline summary — kept for fallback) ── */}
         {showGhostRisk && ghostRisk && (
           <div className={sectionCls}>
             <IntelLabel>Hiring freshness</IntelLabel>
@@ -713,6 +735,17 @@ export default function JobDetailPanel({
             {intel.applicationVerdict.warnings.length > 0 && (
               <p className="mt-1.5 text-[11px] text-amber-600">{intel.applicationVerdict.warnings.slice(0, 1).join(" ")}</p>
             )}
+          </div>
+        )}
+
+        {/* ── Rejection Intelligence ── */}
+        {job.company?.id && (
+          <div className="border-t border-slate-100 px-5 py-5">
+            <RejectionIntelligence
+              companyId={job.company.id}
+              jobTitle={job.title}
+              jobId={job.id}
+            />
           </div>
         )}
 

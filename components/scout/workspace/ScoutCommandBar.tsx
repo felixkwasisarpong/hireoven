@@ -1,6 +1,7 @@
 "use client"
 
-import { Command, Loader2, Mic, MicOff, Send } from "lucide-react"
+import { Command, Loader2, Send } from "lucide-react"
+import { AnimatedMic } from "@/components/scout/AnimatedMic"
 import { useEffect, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
 
@@ -272,9 +273,9 @@ export function ScoutCommandBar({
             >
               {isProcessing ? (
                 <Loader2 className="h-[18px] w-[18px] animate-spin" />
-              ) : voiceState === "unsupported" || voiceState === "error"
-                ? <MicOff className="h-[18px] w-[18px]" />
-                : <Mic className={cn("h-[18px] w-[18px]", isListening && "animate-pulse")} />}
+              ) : (
+                <AnimatedMic state={voiceState} iconSize={18} />
+              )}
             </button>
           </div>
 

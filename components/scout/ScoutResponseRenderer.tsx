@@ -22,6 +22,7 @@
 import { useState } from "react"
 import { ChevronDown, ChevronUp } from "lucide-react"
 import { normalizeForDisplay, hasStructuredContent, type ScoutRenderContext } from "@/lib/scout/normalize-scout-response"
+import { renderInlineMarkdown } from "@/lib/scout/inline-markdown"
 import { ScoutActionRenderer } from "./ScoutActionRenderer"
 import { ScoutCompareRenderer } from "./ScoutCompareRenderer"
 import { ScoutExplanationRenderer } from "./ScoutExplanationRenderer"
@@ -77,7 +78,7 @@ export function ScoutResponseRenderer({ response, context = "dashboard", onUpgra
       {/* ── Display text — safe prose, never raw JSON ──────────────────── */}
       {n.displayText && (
         <p className={cn("whitespace-pre-wrap text-slate-800", textSizeClass)}>
-          {n.displayText}
+          {renderInlineMarkdown(n.displayText)}
         </p>
       )}
 

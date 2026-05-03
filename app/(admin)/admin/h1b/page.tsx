@@ -20,10 +20,12 @@ import {
 } from "@/components/admin/AdminPrimitives"
 import { useToast } from "@/components/ui/ToastProvider"
 import { formatNumber } from "@/lib/admin/format"
-import type { Company, H1BRecord } from "@/types"
+import type { H1BRecord } from "@/types"
+
+type CompanyOption = { id: string; name: string }
 
 type H1BRow = H1BRecord & {
-  company: Pick<Company, "id" | "name"> | null
+  company: CompanyOption | null
 }
 
 type ImportResult = {
@@ -198,7 +200,7 @@ export default function AdminH1BPage() {
   const [unmatchedTotalAll, setUnmatchedTotalAll] = useState(0)
   const [unmatchedTotalAtThreshold, setUnmatchedTotalAtThreshold] = useState(0)
   const [unmatchedLoading, setUnmatchedLoading] = useState(false)
-  const [companies, setCompanies] = useState<Company[]>([])
+  const [companies, setCompanies] = useState<CompanyOption[]>([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [uploadElapsed, setUploadElapsed] = useState(0)
@@ -235,7 +237,7 @@ export default function AdminH1BPage() {
     }
 
     const { records: recordsData } = (await recordsRes.json()) as { records: H1BRow[] }
-    const { companies: companiesData } = (await companiesRes.json()) as { companies: Company[] }
+    const { companies: companiesData } = (await companiesRes.json()) as { companies: CompanyOption[] }
     setRecords(recordsData ?? [])
     setCompanies(companiesData ?? [])
     setLoading(false)
@@ -1145,8 +1147,8 @@ export default function AdminH1BPage() {
       ) : null}
 
       <AdminPanel
-        title="H1B records (most recent 1,000)"
-        description={`A live sample of the most recent imports (PostgREST default cap). Total rows in h1b_records: ${formatNumber(recordsTotalCount)}. Use search to narrow, or use the unmatched panel above for high-signal manual matching.`}
+        title="H1B records (most recent 200)"
+        description={`A live sample of the most recent imports. Total rows in h1b_records: ${formatNumber(recordsTotalCount)}. Use search to narrow, or use the unmatched panel above for high-signal manual matching.`}
       >
         <div className="mb-4 grid gap-3 lg:grid-cols-[1.3fr_auto]">
           <div className="relative">
@@ -1181,20 +1183,19 @@ export default function AdminH1BPage() {
                 <th className="px-3 py-3">Total petitions</th>
                 <th className="px-3 py-3">Approvals</th>
                 <th className="px-3 py-3">Denial rate</th>
-                <th className="px-3 py-3">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="px-3 py-10 text-center text-gray-500">
+                  <td colSpan={6} className="px-3 py-10 text-center text-gray-500">
                     <Loader2 className="mx-auto mb-3 h-5 w-5 animate-spin" />
                     Loading H1B records
                   </td>
                 </tr>
               ) : visibleRecords.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-3 py-10 text-center text-gray-500">
+                  <td colSpan={6} className="px-3 py-10 text-center text-gray-500">
                     No H1B records match the current filters.
                   </td>
                 </tr>
@@ -1224,40 +1225,6 @@ export default function AdminH1BPage() {
                         <AdminBadge tone={denialRate > 20 ? "danger" : "warning"}>
                           {denialRate}%
                         </AdminBadge>
-                      </td>
-                      <td className="px-3 py-4">
-                        <div className="flex flex-wrap gap-2">
-                          <select
-                            value={matchDrafts[record.id] ?? ""}
-                            onChange={(event) =>
-                              setMatchDrafts((current) => ({
-                                ...current,
-                                [record.id]: event.target.value,
-                              }))
-                            }
-                            className="rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs text-gray-900 outline-none"
-                          >
-                            <option value="">
-                              {record.company ? "Remap company" : "Match to company"}
-                            </option>
-                            {companies.map((company) => (
-                              <option key={company.id} value={company.id}>
-                                {company.name}
-                              </option>
-                            ))}
-                          </select>
-                          <AdminButton
-                            tone="secondary"
-                            className="px-3 py-2 text-xs"
-                            disabled={busyMatchId === record.id}
-                            onClick={() => void manuallyMatch(record)}
-                          >
-                            {busyMatchId === record.id ? (
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            ) : null}
-                            Save match
-                          </AdminButton>
-                        </div>
                       </td>
                     </tr>
                   )

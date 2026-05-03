@@ -3,19 +3,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { usePathname, useSearchParams } from "next/navigation"
 import dynamic from "next/dynamic"
-import { Brain, Clock, Shield, Sparkles, X } from "lucide-react"
+import { Brain, Clock, Layers, Shield, Sparkles, X } from "lucide-react"
+import { ScoutOrb } from "@/components/scout/ScoutOrb"
 import { runQualityControl, buildQCContext } from "@/lib/scout/quality-control"
 import { ScoutCommandBar } from "./ScoutCommandBar"
 import { WorkspaceSurface } from "./WorkspaceSurface"
 import { IdleMode } from "./IdleMode"
-import { ContextRail } from "./ContextRail"
 import { BrowserActionStrip } from "./BrowserActionStrip"
+import { ScoutLeftPanel } from "./ScoutLeftPanel"
+import { ScoutRightPanel } from "./ScoutRightPanel"
+import { ScoutThinkingCanvas } from "./ScoutThinkingCanvas"
+import { ScoutWelcomeScene } from "./scenes/ScoutWelcomeScene"
+import { ScoutStoryScene } from "./scenes/ScoutStoryScene"
+import { ScoutWorkspaceStage } from "./scenes/ScoutWorkspaceStage"
+import { ScoutContextPanel, type ContextPanelTab } from "./scenes/ScoutContextPanel"
 import { ScoutErrorBoundary } from "@/components/scout/ScoutErrorBoundary"
 import { ScoutMemoryChips } from "@/components/scout/ScoutMemoryChips"
 import { ScoutProactiveStrip } from "@/components/scout/proactive/ScoutProactiveStrip"
-import { ScoutProactiveRail } from "@/components/scout/proactive/ScoutProactiveRail"
-import { ScoutMarketRail } from "@/components/scout/ScoutMarketRail"
-import { BrowserContextRail } from "@/components/scout/workspace/BrowserContextRail"
 import { useWorkflowEngine } from "@/lib/scout/workflows/engine"
 import { useBulkApplicationEngine } from "@/lib/scout/bulk-application/engine"
 import { useScoutStream } from "@/hooks/useScoutStream"
@@ -104,8 +108,6 @@ const CareerStrategyMode = dynamic(() => import("./CareerStrategyMode").then(m =
 const ApplyAgentFlow     = dynamic(() => import("@/components/scout/ApplyAgentFlow").then(m => ({ default: m.ApplyAgentFlow })), { ssr: false })
 
 // ── Lazy-loaded panels (opened on demand) ─────────────────────────────────────
-const ScoutTimelinePanel  = dynamic(() => import("@/components/scout/timeline/ScoutTimelinePanel").then(m => ({ default: m.ScoutTimelinePanel })), { ssr: false })
-const CompanyIntelRail    = dynamic(() => import("@/components/scout/CompanyIntelRail").then(m => ({ default: m.CompanyIntelRail })), { ssr: false })
 const ScoutCommandPalette = dynamic(() => import("./ScoutCommandPalette").then(m => ({ default: m.ScoutCommandPalette })), { ssr: false })
 const WorkflowPanel       = dynamic(() => import("@/components/scout/workflows/WorkflowPanel").then(m => ({ default: m.WorkflowPanel })), { ssr: false })
 const ScoutActionGate     = dynamic(() => import("@/components/scout/ScoutActionGate").then(m => ({ default: m.ScoutActionGate })), { ssr: false })
@@ -291,7 +293,14 @@ export function ScoutWorkspaceShell() {
 
   // ── Activity timeline ───────────────────────────────────────────────────────
   const timeline       = useScoutTimeline()
-  const [showTimeline, setShowTimeline] = useState(false)
+  // Unified contextual side panel — replaces the always-on right rail
+  const [contextPanelOpen, setContextPanelOpen] = useState(false)
+  const [contextPanelTab, setContextPanelTab]   = useState<ContextPanelTab>("context")
+  const openContextPanel = useCallback((tab: ContextPanelTab) => {
+    setContextPanelTab(tab)
+    setContextPanelOpen(true)
+  }, [])
+  const closeContextPanel = useCallback(() => setContextPanelOpen(false), [])
   // Restored research task — used by session replay when research mode is re-entered
   const [restoredResearchTask, setRestoredResearchTask] = useState<ScoutResearchTask | null>(null)
 
@@ -1591,6 +1600,15 @@ export function ScoutWorkspaceShell() {
   // ── Render ───────────────────────────────────────────────────────────────────
 
   const showNarrative = narrative && !narrativeDismissed && workspaceMode !== "idle"
+  const narrativePending = isLoading || scoutStream.isStreaming || researchStream.isRunning || careerStrategy.loading
+  // Welcome state: clean centered hero — hide top command bar / chips / proactive strip
+  const isWelcomeState =
+    workspaceMode === "idle" &&
+    messages.length === 0 &&
+    !isLoading &&
+    !scoutStream.isStreaming &&
+    !researchStream.isRunning &&
+    !showFirstRun
   // Derived: has the user accumulated any job/application data yet?
   const hasData = (strategyBoard?.snapshot?.savedJobs ?? 0) > 0
                   || (strategyBoard?.snapshot?.activeApplications ?? 0) > 0
@@ -1598,6 +1616,7 @@ export function ScoutWorkspaceShell() {
   const showProactiveStrip =
     proactive.settings.enabled &&
     workspaceMode === "idle" &&
+    messages.length > 0 &&             // suppress on the clean welcome hero
     !isLoading &&
     !scoutStream.isStreaming &&
     !researchStream.isRunning &&
@@ -1632,21 +1651,20 @@ export function ScoutWorkspaceShell() {
         : workspaceModeLabel
 
   return (
-    <main className="app-page bg-[linear-gradient(180deg,#fff6f1_0%,#fafaf9_24%,#fafaf9_100%)] pb-[max(6rem,calc(env(safe-area-inset-bottom)+5.5rem))]">
+    <main className="app-page flex flex-col bg-[linear-gradient(180deg,#fff6f1_0%,#fafaf9_24%,#fafaf9_100%)]">
 
       {/* ── Command bar — sticky ─────────────────────────────────────────── */}
       <div className="sticky top-0 z-20 border-b border-slate-100 bg-white/95 px-5 backdrop-blur-md sm:px-8">
         <div className="flex items-center justify-between py-3">
           <div className="flex items-center gap-3">
-            <span className={cn(
-              "relative inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl bg-[#FF5C18] shadow-[0_4px_12px_rgba(255,92,24,0.35)]",
-              (scoutStream.isStreaming || researchStream.isRunning) && "ring-2 ring-[#FF5C18]/25 ring-offset-2"
-            )}>
-              {(scoutStream.isStreaming || researchStream.isRunning) && (
-                <span className="absolute inset-0 animate-ping rounded-xl bg-[#FF5C18] opacity-20" />
-              )}
-              <Sparkles className="h-4 w-4 text-white" />
-            </span>
+            <ScoutOrb
+              size="md"
+              state={
+                (scoutStream.isStreaming || researchStream.isRunning)
+                  ? "thinking"
+                  : "idle"
+              }
+            />
             <div>
               <p className="text-sm font-semibold leading-none text-slate-900">Scout</p>
               <p className={cn(
@@ -1677,17 +1695,27 @@ export function ScoutWorkspaceShell() {
                 {workspaceModeLabel}
               </span>
             )}
-            {/* Timeline */}
+            {/* Context (was: Timeline) */}
             <button
               type="button"
-              onClick={() => setShowTimeline((v) => !v)}
-              title="Activity timeline"
+              onClick={() => openContextPanel("context")}
+              title="Open context panel"
               className={cn(
                 "inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-[11px] font-medium transition",
-                showTimeline
+                contextPanelOpen
                   ? "bg-[#FFF3EC] text-[#FF5C18]"
                   : "text-slate-400 hover:bg-slate-100 hover:text-slate-700",
               )}
+            >
+              <Layers className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Context</span>
+            </button>
+            {/* Timeline */}
+            <button
+              type="button"
+              onClick={() => openContextPanel("timeline")}
+              title="Activity timeline"
+              className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-[11px] font-medium text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
             >
               <Clock className="h-3.5 w-3.5" />
               {timeline.events.length > 0 && (
@@ -1699,7 +1727,7 @@ export function ScoutWorkspaceShell() {
             {/* Memory */}
             <button
               type="button"
-              onClick={() => setMemoryPanelOpen(true)}
+              onClick={() => openContextPanel("memory")}
               title="Scout Memory"
               className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-[11px] font-medium text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
             >
@@ -1709,7 +1737,7 @@ export function ScoutWorkspaceShell() {
             {/* Permissions */}
             <button
               type="button"
-              onClick={() => setShowPermissions(true)}
+              onClick={() => openContextPanel("permissions")}
               title="Scout permissions"
               className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-[11px] font-medium text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
             >
@@ -1719,13 +1747,16 @@ export function ScoutWorkspaceShell() {
           </div>
         </div>
 
-        <ScoutCommandBar
-          query={query} onChange={setQuery} onSubmit={handleSubmit}
-          isLoading={isLoading} chips={displayChips} onChipClick={handleChipClick}
-          inputRef={inputRef} variant="light" commandHistory={recentCommands}
-          onOpenPalette={() => setPaletteOpen(true)}
-          placeholder={commandBarPlaceholder}
-        />
+        {/* Command bar hides in welcome state — moved into the centered hero */}
+        {!isWelcomeState && (
+          <ScoutCommandBar
+            query={query} onChange={setQuery} onSubmit={handleSubmit}
+            isLoading={isLoading} chips={displayChips} onChipClick={handleChipClick}
+            inputRef={inputRef} variant="light" commandHistory={recentCommands}
+            onOpenPalette={() => setPaletteOpen(true)}
+            placeholder={commandBarPlaceholder}
+          />
+        )}
         <div className="h-2.5" />
       </div>
 
@@ -1740,10 +1771,18 @@ export function ScoutWorkspaceShell() {
       )}
 
       {/* ── Workspace ─────────────────────────────────────────────────── */}
-      <div className="app-shell flex w-full max-w-[1280px] gap-6 py-5 pb-16">
+      <div className="flex flex-1 overflow-hidden">
 
-        {/* Main surface — no key remounting, CSS fade-through */}
-        <div className="min-w-0 flex-1">
+        {/* Left intelligence panel */}
+        <ScoutLeftPanel
+          isActive={scoutStream.isStreaming || researchStream.isRunning || isLoading}
+          recentEvents={timeline.events}
+          onCommand={(cmd) => { setQuery(cmd); setTimeout(() => inputRef.current?.focus(), 50) }}
+          firstName={firstName}
+        />
+
+        {/* Center — scrollable main content */}
+        <div className="min-w-0 flex-1 overflow-y-auto px-5 py-5 pb-[max(6rem,calc(env(safe-area-inset-bottom)+5.5rem))] sm:px-8">
 
           {/* Proactive companion strip (non-intrusive, idle only) */}
           {showProactiveStrip && (
@@ -1759,13 +1798,53 @@ export function ScoutWorkspaceShell() {
 
           {/* Scout narrative strip */}
           {showNarrative && (
-            <div className="mb-4 flex items-center gap-3 rounded-xl border border-orange-100 bg-orange-50/60 px-4 py-2.5">
-              <Sparkles className="h-3.5 w-3.5 flex-shrink-0 text-[#FF5C18]" />
-              <p className="flex-1 text-sm leading-5 text-slate-700">{narrative}</p>
+            <div
+              className={`group relative mb-4 flex items-center gap-3 overflow-hidden rounded-xl border px-4 py-2.5 transition-colors ${
+                narrativePending
+                  ? "border-[#FFD9C2] bg-gradient-to-r from-[#FFF7F2] via-[#FFF1E8] to-[#FFF7F2]"
+                  : "border-orange-100 bg-orange-50/60"
+              }`}
+            >
+              {narrativePending && (
+                <span
+                  aria-hidden
+                  className="pointer-events-none absolute inset-0 -translate-x-full animate-[scout-shimmer_2.2s_ease-in-out_infinite] bg-gradient-to-r from-transparent via-white/55 to-transparent"
+                />
+              )}
+
+              <span className="relative flex h-5 w-5 flex-shrink-0 items-center justify-center">
+                {narrativePending && (
+                  <span className="absolute inset-0 animate-ping rounded-full bg-[#FF5C18]/25" />
+                )}
+                <Sparkles
+                  className={`relative h-3.5 w-3.5 text-[#FF5C18] ${
+                    narrativePending ? "animate-[scout-pulse_1.8s_ease-in-out_infinite]" : ""
+                  }`}
+                />
+              </span>
+
+              <p className="relative flex-1 text-sm leading-5 text-slate-700">
+                {narrativePending ? (
+                  <span className="bg-gradient-to-r from-slate-700 via-[#FF5C18] to-slate-700 bg-[length:200%_100%] bg-clip-text text-transparent animate-[scout-text-shimmer_2.4s_linear_infinite]">
+                    {narrative.replace(/…+$/, "")}
+                  </span>
+                ) : (
+                  narrative
+                )}
+                {narrativePending && (
+                  <span className="ml-0.5 inline-flex translate-y-[-1px] gap-0.5 align-middle">
+                    <span className="h-1 w-1 animate-[scout-dot_1.2s_ease-in-out_infinite] rounded-full bg-[#FF5C18]" />
+                    <span className="h-1 w-1 animate-[scout-dot_1.2s_ease-in-out_0.18s_infinite] rounded-full bg-[#FF5C18]" />
+                    <span className="h-1 w-1 animate-[scout-dot_1.2s_ease-in-out_0.36s_infinite] rounded-full bg-[#FF5C18]" />
+                  </span>
+                )}
+              </p>
+
               <button
                 type="button"
                 onClick={() => setNarrativeDismissed(true)}
-                className="flex-shrink-0 text-slate-400 transition hover:text-slate-600"
+                className="relative flex-shrink-0 rounded-md p-1 text-slate-400 transition hover:bg-white/60 hover:text-slate-600"
+                aria-label="Dismiss"
               >
                 <X className="h-3.5 w-3.5" />
               </button>
@@ -1796,12 +1875,55 @@ export function ScoutWorkspaceShell() {
             )
           })()}
 
+          {/* Story scene overlay — shown during streaming/loading transition */}
+          {(scoutStream.isStreaming || researchStream.isRunning) && workspaceMode === "idle" && (
+            <ScoutStoryScene
+              command={messages.findLast?.((m) => m.role === "user")?.role === "user"
+                ? (messages.findLast((m) => m.role === "user") as { text: string } | undefined)?.text
+                : undefined}
+              narrative={narrative}
+              mode={workspaceMode}
+              streamText={scoutStream.streamText}
+            />
+          )}
+
           {/* WorkspaceSurface — smooth opacity fade between modes */}
           <ScoutErrorBoundary surface="Workspace" retryLabel="Reload workspace">
           <WorkspaceSurface
             mode={workspaceMode}
             render={(displayedMode) => {
               if (displayedMode === "idle") {
+                // No conversation yet → premium welcome scene (story-mode aesthetic)
+                if (messages.length === 0 && !isLoading && !showFirstRun) {
+                  return (
+                    <ScoutWelcomeScene
+                      greeting={greeting}
+                      firstName={firstName}
+                      hasResume={Boolean(primaryResume?.id)}
+                      hasData={hasData}
+                      isExtensionConnected={isExtensionConnected}
+                      onSuggestionClick={(q) => {
+                        setQuery(q)
+                        window.setTimeout(() => inputRef.current?.focus(), 50)
+                      }}
+                      commandSlot={
+                        <ScoutCommandBar
+                          query={query}
+                          onChange={setQuery}
+                          onSubmit={handleSubmit}
+                          isLoading={isLoading}
+                          chips={[]}
+                          onChipClick={handleChipClick}
+                          inputRef={inputRef}
+                          variant="light"
+                          commandHistory={recentCommands}
+                          onOpenPalette={() => setPaletteOpen(true)}
+                          placeholder={commandBarPlaceholder}
+                        />
+                      }
+                    />
+                  )
+                }
                 return (
                   <IdleMode
                     greeting={greeting} firstName={firstName} messages={messages}
@@ -1832,6 +1954,17 @@ export function ScoutWorkspaceShell() {
                     hasData={hasData}
                     onDismissFirstRun={handleDismissFirstRun}
                     onDismissExtPromo={handleDismissExtPromo}
+                  />
+                )
+              }
+              // Non-idle mode with no response yet → show skeleton instead of blank white
+              if (!activeResponse) {
+                const lastMsg = messages.findLast?.((m) => m.role === "user")
+                return (
+                  <ScoutThinkingCanvas
+                    workspaceMode={displayedMode}
+                    lastUserMessage={lastMsg?.role === "user" ? lastMsg.text : undefined}
+                    narrative={narrative}
                   />
                 )
               }
@@ -1943,74 +2076,85 @@ export function ScoutWorkspaceShell() {
           </ScoutErrorBoundary>
         </div>
 
-        {/* Right intelligence rail — Timeline > Company intel > Scout rail > browser context > market signals */}
-        {workspaceMode !== "bulk_application" && (showTimeline || companyIntelData || companyIntelLoading || rail || (browserContext && browserContext.pageType !== "unknown") || marketSignals.length > 0 || proactiveRailEvents.length > 0) && (
-          <ScoutErrorBoundary surface="Context rail" retryLabel="Reload rail">
-          <div className="hidden lg:flex flex-col gap-4 transition-all duration-200 opacity-100 translate-x-0">
-            {/* Activity timeline panel */}
-            {showTimeline && (
-              <ScoutTimelinePanel
-                events={timeline.events}
-                onClose={() => setShowTimeline(false)}
-                onReplay={handleReplay}
-                onClear={timeline.clear}
-                isDev={IS_DEV}
-              />
-            )}
-            {/* Company intel rail — shown when company context is active */}
-            {(companyIntelData || companyIntelLoading) && activeEntities?.companyId ? (
-              <CompanyIntelRail
-                companyId={activeEntities.companyId}
-                companyName={activeEntities.companyName ?? companyIntelData?.companyName ?? "Company"}
-                intel={companyIntelData?.intel ?? null}
-                summary={companyIntelData?.summary ?? null}
-                loading={companyIntelLoading}
-                onClose={() => setCompanyIntelData(null)}
-              />
-            ) : rail ? (
-              <ContextRail rail={rail} onClose={() => setRail(null)} />
-            ) : browserContext && browserContext.pageType !== "unknown" ? (
-              <BrowserContextRail
-                context={browserContext}
-                activeWorkflow={workflowEngine.activeWorkflow}
-                latestEvents={latestRailEvents}
-                proactiveEvents={proactiveRailEvents}
-                onPreFill={(query) => {
-                  // For autofill queries on application forms, also dispatch operator action
-                  if (/autofill/i.test(query) && browserContext.pageType === "application_form") {
-                    operator.execute("prepare_autofill", {
-                      context: { company: browserContext.company, atsProvider: browserContext.atsProvider },
-                    })
-                  }
-                  handleSendCommand(query)
-                }}
-                onExpandWorkflow={() => workflowEngine.setExpanded(true)}
-                onOpenProactive={handleOpenProactive}
-              />
-            ) : null}
+        {/* Right command-center panel */}
+        <ScoutRightPanel
+          isActive={scoutStream.isStreaming || researchStream.isRunning || isLoading}
+          narrative={narrative}
+          workspaceModeLabel={workspaceModeLabel}
+          searchProfile={searchProfile}
+          strategyBoard={strategyBoard}
+          permissions={shellPermissions}
+          onPermissionsChange={setShellPermissions}
+        />
 
-            {/* Proactive companion rail */}
-            <ScoutProactiveRail
-              events={proactiveRailEvents}
-              enabled={proactive.settings.enabled}
-              mutedCount={proactive.settings.mutedTypes.length}
-              loading={proactive.loading}
-              onOpen={handleOpenProactive}
-              onDismiss={proactive.dismiss}
-              onSnooze={proactive.snooze}
-              onMuteType={proactive.muteType}
-              onClearMutedTypes={proactive.clearMutedTypes}
-              onSetEnabled={proactive.setEnabled}
-            />
-
-            {/* Market signals — show in idle mode when there's space */}
-            {workspaceMode === "idle" && (marketSignals.length > 0 || marketLoading) && (
-              <ScoutMarketRail signals={marketSignals} loading={marketLoading} />
-            )}
-          </div>
-          </ScoutErrorBoundary>
-        )}
       </div>
+
+      {/* ── Unified contextual side panel — replaces the always-on right rail ── */}
+      <ScoutErrorBoundary surface="Context panel" retryLabel="Reload panel">
+        <ScoutContextPanel
+          open={contextPanelOpen}
+          tab={contextPanelTab}
+          onTabChange={setContextPanelTab}
+          onClose={closeContextPanel}
+
+          timelineEvents={timeline.events}
+          onClearTimeline={timeline.clear}
+          onReplay={handleReplay}
+          isDev={IS_DEV}
+
+          companyId={activeEntities?.companyId}
+          companyName={activeEntities?.companyName ?? companyIntelData?.companyName}
+          companyIntel={companyIntelData?.intel ?? null}
+          companySummary={companyIntelData?.summary ?? null}
+          companyLoading={companyIntelLoading}
+          onCloseCompany={() => setCompanyIntelData(null)}
+
+          browserContext={browserContext}
+          activeWorkflow={workflowEngine.activeWorkflow}
+          latestRailEvents={latestRailEvents}
+          proactiveRailEvents={proactiveRailEvents}
+          onPreFill={(query) => {
+            if (/autofill/i.test(query) && browserContext?.pageType === "application_form") {
+              operator.execute("prepare_autofill", {
+                context: { company: browserContext.company, atsProvider: browserContext.atsProvider },
+              })
+            }
+            handleSendCommand(query)
+          }}
+          onExpandWorkflow={() => workflowEngine.setExpanded(true)}
+          onOpenProactive={handleOpenProactive}
+
+          proactiveEvents={proactiveRailEvents}
+          proactiveEnabled={proactive.settings.enabled}
+          proactiveMutedCount={proactive.settings.mutedTypes.length}
+          proactiveLoading={proactive.loading}
+          onDismissProactive={proactive.dismiss}
+          onSnoozeProactive={proactive.snooze}
+          onMuteProactiveType={proactive.muteType}
+          onClearMutedTypes={proactive.clearMutedTypes}
+          onSetProactiveEnabled={proactive.setEnabled}
+
+          marketSignals={marketSignals}
+          marketLoading={marketLoading}
+
+          workflowState={workflowEngine.activeWorkflow}
+          onContinueStep={() => {
+            const stepId = workflowEngine.activeWorkflow?.activeStepId
+            if (stepId) workflowEngine.continueStep(stepId)
+          }}
+          onSkipStep={() => {
+            const stepId = workflowEngine.activeWorkflow?.activeStepId
+            if (stepId) workflowEngine.skipStep(stepId)
+          }}
+          onPauseWorkflow={workflowEngine.pauseWorkflow}
+          onResumeWorkflow={workflowEngine.resumeWorkflow}
+          onCancelWorkflow={workflowEngine.cancelWorkflow}
+
+          onOpenMemory={() => { closeContextPanel(); setMemoryPanelOpen(true) }}
+          onOpenPermissions={() => { closeContextPanel(); setShowPermissions(true) }}
+          permissions={shellPermissions}
+        />
+      </ScoutErrorBoundary>
       {/* ── Command palette ──────────────────────────────────────────── */}
       <ScoutCommandPalette
         isOpen={paletteOpen}

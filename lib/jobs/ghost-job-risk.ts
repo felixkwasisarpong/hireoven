@@ -19,7 +19,41 @@ export type CalculateGhostJobRiskInput = {
   applyUrl?: string | null
   companyDomain?: string | null
   isRemote?: boolean | null
+  /** True when an active hiring freeze signal exists for this employer. */
+  hasHiringFreeze?: boolean | null
+  /** Confidence level of the freeze — drives how much risk weight is applied. */
+  freezeConfidence?: "confirmed" | "likely" | "possible" | null
   now?: Date
+}
+
+/**
+ * Probe the apply URL to determine liveness.
+ * Uses a HEAD request with a 5-second timeout.
+ * Never throws — returns "unknown" on any error.
+ */
+export async function probeApplyUrl(url: string | null | undefined): Promise<ApplyUrlStatus> {
+  if (!url) return "unknown"
+  try {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 5_000)
+    let status: number
+    try {
+      const res = await fetch(url, {
+        method: "HEAD",
+        redirect: "manual",
+        signal: controller.signal,
+      })
+      status = res.status
+    } finally {
+      clearTimeout(timer)
+    }
+    if (status === 200 || status === 204) return "ok"
+    if (status === 301 || status === 302 || status === 303 || status === 307 || status === 308) return "redirect"
+    if (status === 404 || status === 410 || status === 403 || status === 401) return "dead"
+    return "unknown"
+  } catch {
+    return "unknown"
+  }
 }
 
 export type GhostJobRiskResult = {
@@ -239,6 +273,18 @@ export function calculateGhostJobRisk(input: CalculateGhostJobRiskInput): GhostJ
       score += 3
       reasons.push("Custom ATS source has less standardized freshness data.")
     }
+  }
+
+  if (input.hasHiringFreeze) {
+    coverage += 1
+    const freezeWeight =
+      input.freezeConfidence === "confirmed" ? 20 :
+      input.freezeConfidence === "likely" ? 16 : 10
+    score += freezeWeight
+    const confidenceLabel =
+      input.freezeConfidence === "confirmed" ? " (WARN Act verified)" :
+      input.freezeConfidence === "likely" ? " (layoffs.fyi reported)" : ""
+    reasons.push(`Company may have an active hiring freeze${confidenceLabel} — role may not be actively filling.`)
   }
 
   if (coverage === 0 && !input.description && !input.applyUrl) {

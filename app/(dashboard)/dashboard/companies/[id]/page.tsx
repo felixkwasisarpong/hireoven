@@ -16,6 +16,8 @@ import {
 } from "lucide-react"
 import CompanyHeader from "@/components/companies/CompanyHeader"
 import SimilarCompanies from "@/components/companies/SimilarCompanies"
+import { EmployerHealthScore } from "@/components/employers/EmployerHealthScore"
+import { SponsorshipTruthScore } from "@/components/employers/SponsorshipTruthScore"
 import { ScoutMiniPanel } from "@/components/scout/ScoutMiniPanel"
 import {
   JOB_APPLICATION_SAVED_EVENT,
@@ -755,13 +757,9 @@ export default function CompanyProfilePage() {
 
           {/* ── About ── */}
           {tab === "about" && (
-            <div className="max-w-2xl space-y-6">
-              <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50/40 px-5 py-6 text-center">
-                <p className="text-sm text-gray-400">
-                  Company description coming soon — profile enrichment is in progress.
-                </p>
-              </div>
+            <div className="space-y-8">
 
+              {/* Company meta row */}
               {[
                 { label: "Industry",      value: company.industry },
                 { label: "Size",          value: company.size },
@@ -789,6 +787,7 @@ export default function CompanyProfilePage() {
                 </div>
               )}
 
+              {/* Links */}
               <div className="flex flex-wrap gap-3">
                 {company.careers_url && (
                   <a
@@ -808,6 +807,17 @@ export default function CompanyProfilePage() {
                   Suggest a correction
                 </a>
               </div>
+
+              {/* Employer Health Score */}
+              <div className="border-t border-gray-100 pt-8">
+                <EmployerHealthScore companyId={id} companyName={company.name} />
+              </div>
+
+              {/* Sponsorship Truth Score */}
+              <div className="border-t border-gray-100 pt-8">
+                <SponsorshipTruthScore companyId={id} companyName={company.name} />
+              </div>
+
             </div>
           )}
         </div>

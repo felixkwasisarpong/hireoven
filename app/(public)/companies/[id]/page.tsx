@@ -20,6 +20,7 @@ import {
 } from "lucide-react"
 import Navbar from "@/components/layout/Navbar"
 import CompanyLogo from "@/components/ui/CompanyLogo"
+import { EmployerHealthScore } from "@/components/employers/EmployerHealthScore"
 import { buildCompanyImmigrationProfile, formatProfilePercent, getProfileConfidenceLabel } from "@/lib/companies/immigration-profile"
 import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
 import { getPostgresPool, hasPostgresEnv } from "@/lib/postgres/server"
@@ -71,6 +72,15 @@ type SimilarCompanyRow = Pick<
   Company,
   "id" | "name" | "domain" | "logo_url" | "industry" | "job_count" | "sponsors_h1b" | "sponsorship_confidence"
 >
+
+type HealthSnapshotRow = {
+  total_score: number
+  verdict: string
+  glassdoor_rating: number | null
+  glassdoor_trend: string
+  layoff_score: number
+  funding_score: number
+}
 
 type H1bRecordRow = {
   year: number
@@ -298,18 +308,27 @@ async function loadCompany(id: string) {
     },
   })
 
-  const similarCompaniesResult = await pool.query<SimilarCompanyRow>(
-    `SELECT id, name, domain, logo_url, industry, job_count, sponsors_h1b, sponsorship_confidence
-     FROM companies
-     WHERE id <> $1::uuid
-       AND is_active = true
-       AND ($2::text IS NULL OR industry = $2::text)
-     ORDER BY
-       ABS(COALESCE(sponsorship_confidence, 0) - $3::int) ASC,
-       job_count DESC
-     LIMIT 6`,
-    [company.id, company.industry, company.sponsorship_confidence ?? 0]
-  )
+  const [similarCompaniesResult, healthResult] = await Promise.all([
+    pool.query<SimilarCompanyRow>(
+      `SELECT id, name, domain, logo_url, industry, job_count, sponsors_h1b, sponsorship_confidence
+       FROM companies
+       WHERE id <> $1::uuid
+         AND is_active = true
+         AND ($2::text IS NULL OR industry = $2::text)
+       ORDER BY
+         ABS(COALESCE(sponsorship_confidence, 0) - $3::int) ASC,
+         job_count DESC
+       LIMIT 6`,
+      [company.id, company.industry, company.sponsorship_confidence ?? 0]
+    ),
+    pool.query<HealthSnapshotRow>(
+      `SELECT total_score, verdict, glassdoor_rating, glassdoor_trend, layoff_score, funding_score
+       FROM company_health_scores
+       WHERE company_id = $1::uuid
+       LIMIT 1`,
+      [company.id]
+    ),
+  ])
 
   return {
     company,
@@ -317,6 +336,7 @@ async function loadCompany(id: string) {
     h1bRecords,
     lcaStats: effectiveLcaStats,
     salaryStats,
+    healthSnapshot: healthResult.rows[0] ?? null,
     profile: {
       ...profile,
       similarCompanyIds: similarCompaniesResult.rows.map((row) => row.id),
@@ -361,7 +381,7 @@ export default async function PublicCompanyPage({ params }: Props) {
   const data = await loadCompany(id)
   if (!data) notFound()
 
-  const { company, jobs, h1bRecords, profile, similarCompanies } = data
+  const { company, jobs, h1bRecords, profile, similarCompanies, healthSnapshot } = data
   const status = statusCopy(profile.sponsorshipHistory.sponsorsH1b, profile.sponsorshipHistory.sponsorshipConfidence)
   const sponsorConfidence = profile.sponsorshipHistory.sponsorshipConfidence
   const approvalRate = profile.sponsorshipHistory.lcaCertificationRate
@@ -456,6 +476,50 @@ export default async function PublicCompanyPage({ params }: Props) {
                     value={totalLca == null ? "Unknown" : totalLca.toLocaleString()}
                   />
                 </div>
+                {healthSnapshot && (
+                  <div className="flex items-center justify-between gap-3 border border-slate-200/70 bg-white px-4 py-3">
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Employer health</p>
+                      <div className="mt-1 flex items-center gap-2">
+                        <span
+                          className="text-lg font-black tabular-nums"
+                          style={{
+                            color: healthSnapshot.verdict === "strong" ? "#1D9E75"
+                              : healthSnapshot.verdict === "healthy" ? "#5DCAA5"
+                              : healthSnapshot.verdict === "caution" ? "#EF9F27"
+                              : "#E24B4A"
+                          }}
+                        >
+                          {healthSnapshot.total_score}
+                        </span>
+                        <span
+                          className="rounded-full px-2 py-0.5 text-[10px] font-bold capitalize"
+                          style={{
+                            background: healthSnapshot.verdict === "strong" ? "#DCFCE7"
+                              : healthSnapshot.verdict === "healthy" ? "#D1FAE5"
+                              : healthSnapshot.verdict === "caution" ? "#FEF3C7"
+                              : "#FEE2E2",
+                            color: healthSnapshot.verdict === "strong" ? "#166534"
+                              : healthSnapshot.verdict === "healthy" ? "#166534"
+                              : healthSnapshot.verdict === "caution" ? "#92400E"
+                              : "#991B1B",
+                          }}
+                        >
+                          {healthSnapshot.verdict}
+                        </span>
+                      </div>
+                    </div>
+                    {healthSnapshot.glassdoor_rating != null && (
+                      <div className="text-right">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Glassdoor</p>
+                        <p className="mt-1 text-lg font-black tabular-nums text-slate-900">
+                          {Number(healthSnapshot.glassdoor_rating).toFixed(1)}
+                          <span className="ml-1 text-sm text-amber-400">★</span>
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
                 <p className="border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-800">
                   Use this as a job-search signal. Sponsorship, OPT, STEM OPT, and cap-exempt support are never guaranteed by historical data.
                 </p>
@@ -776,6 +840,16 @@ export default async function PublicCompanyPage({ params }: Props) {
                   </div>
                 </div>
               </div>
+            </section>
+
+            <section className={sectionCard}>
+              <SectionHeader
+                icon={TrendingUp}
+                eyebrow="Employer financial health"
+                title={`Is ${company.name} a stable place to work?`}
+                description="Composite score based on funding recency, layoff history, Glassdoor rating, and hiring trajectory."
+              />
+              <EmployerHealthScore companyId={company.id} companyName={company.name} />
             </section>
 
             <section className={sectionCard}>

@@ -2125,7 +2125,204 @@ async function crawlBambooHr(careersUrl: URL): Promise<RawJob[]> {
   return dedupeJobs([...jsonLdJobs, ...genericJobs])
 }
 
+type AmazonJob = {
+  id?: string
+  title?: string
+  url_next_step?: string
+  job_path?: string
+  location?: string
+  posted_date?: string
+  description_short?: string
+  basic_qualifications?: string
+  preferred_qualifications?: string
+  country_code?: string
+}
+
+function isAmazonJobsUrl(url: URL) {
+  return url.hostname.toLowerCase() === "amazon.jobs"
+}
+
+function isAppleJobsUrl(url: URL) {
+  return url.hostname.toLowerCase() === "jobs.apple.com"
+}
+
+type AppleJobResult = {
+  positionId?: string
+  postingTitle?: string
+  transformedPostingTitle?: string
+  postDateInGMT?: string
+  jobSummary?: string
+  locations?: Array<{ name?: string; countryID?: string }>
+}
+
+function extractAppleJobs(html: string): AppleJobResult[] {
+  const m = html.match(/JSON\.parse\("(\{.+)\"\);/)
+  if (!m) return []
+  try {
+    const d = JSON.parse(JSON.parse('"' + m[1] + '"')) as Record<string, unknown>
+    const search = (d as Record<string, Record<string, Record<string, unknown>>>)
+      ?.loaderData?.search
+    return (search?.searchResults as AppleJobResult[]) ?? []
+  } catch {
+    return []
+  }
+}
+
+async function crawlAppleJobs(careersUrl: URL): Promise<RawJob[]> {
+  const baseUrl = "https://jobs.apple.com/en-us/search?sort=newest&location=united-states-USA&limit=20"
+  const collected: AppleJobResult[] = []
+
+  for (let page = 0; page < 25; page++) {
+    const html = await fetchText(`${baseUrl}&page=${page}`, {
+      headers: { "User-Agent": "Mozilla/5.0" },
+    })
+    if (!html) break
+    const batch = extractAppleJobs(html)
+    if (batch.length === 0) break
+    collected.push(...batch)
+    if (batch.length < 20) break
+  }
+
+  return collected
+    .filter((j) => j.positionId && j.postingTitle)
+    .map((j) => {
+      const slug = j.transformedPostingTitle ?? ""
+      const jobUrl = `https://jobs.apple.com/en-us/details/${j.positionId}/${slug}`
+      const location = j.locations?.[0]?.name
+      return {
+        externalId: `apple:${j.positionId}`,
+        title: j.postingTitle!,
+        url: normalizeJobApplyUrl(jobUrl),
+        location,
+        description: j.jobSummary || undefined,
+        postedAt: j.postDateInGMT,
+      }
+    })
+}
+
+function isMetaCareersUrl(url: URL) {
+  return url.hostname.toLowerCase() === "www.metacareers.com"
+}
+
+async function crawlMeta(careersUrl: URL): Promise<RawJob[]> {
+  let chromium: typeof import("playwright").chromium
+  try {
+    ({ chromium } = await import("playwright"))
+  } catch {
+    return []
+  }
+
+  const browser = await chromium.launch()
+  try {
+    const page = await browser.newPage()
+    await page.goto(careersUrl.toString(), { waitUntil: "networkidle", timeout: 30000 })
+    await page.waitForTimeout(4000)
+
+    // Scroll to trigger lazy-loading of more job cards
+    for (let i = 0; i < 20; i++) {
+      const before = await page.evaluate(() =>
+        document.querySelectorAll("a[href*=\"profile/job_details\"]").length
+      )
+      await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight))
+      await page.waitForTimeout(1000)
+      const after = await page.evaluate(() =>
+        document.querySelectorAll("a[href*=\"profile/job_details\"]").length
+      )
+      if (after === before && i > 3) break
+    }
+
+    const jobs = await page.evaluate(() => {
+      const seen = new Set<string>()
+      const results: Array<{ title: string; location: string; url: string }> = []
+
+      document.querySelectorAll<HTMLAnchorElement>("a[href*=\"profile/job_details\"]").forEach((a) => {
+        const href = a.href
+        if (!href || seen.has(href)) return
+        seen.add(href)
+
+        const lines = a.innerText.split("\n").map((l) => l.trim()).filter(Boolean)
+        const title = lines[0] ?? ""
+        // location is the second line, strip "+N locations" suffix
+        const location = (lines[1] ?? "").replace(/\s*\+\d+\s*locations?/i, "").trim()
+
+        if (title && title.length > 3) {
+          results.push({ title, location, url: href })
+        }
+      })
+      return results
+    })
+
+    return jobs.map((j) => ({
+      title: j.title,
+      url: normalizeJobApplyUrl(j.url),
+      location: j.location || undefined,
+      externalId: `meta:${j.url.split("/").pop()}`,
+    }))
+  } finally {
+    await browser.close()
+  }
+}
+
+async function crawlAmazonJobs(careersUrl: URL): Promise<RawJob[]> {
+  const params = new URLSearchParams(careersUrl.search)
+  params.set("result_limit", "100")
+  if (!params.has("sort")) params.set("sort", "recent")
+
+  // Ensure we hit the JSON API endpoint
+  const apiUrl = `https://amazon.jobs/en/search.json?${params.toString()}`
+
+  const collected: AmazonJob[] = []
+  let offset = 0
+
+  while (true) {
+    const paged = new URLSearchParams(params)
+    paged.set("offset", String(offset))
+    const result = await fetchCrawlerJson<{ hits?: number; jobs?: AmazonJob[] }>(
+      `https://amazon.jobs/en/search.json?${paged.toString()}`,
+      { method: "GET", headers: { "User-Agent": "Mozilla/5.0" } }
+    )
+    if (!result.ok) break
+    const jobs = result.data?.jobs ?? []
+    if (jobs.length === 0) break
+    collected.push(...jobs)
+    if (collected.length >= (result.data?.hits ?? 0) || jobs.length < 100) break
+    if (collected.length >= 500) break
+    offset += 100
+  }
+
+  return collected
+    .filter((j) => j.title && j.job_path)
+    .map((j) => {
+      const jobUrl = `https://amazon.jobs${j.job_path}`
+      const descParts = [
+        j.description_short,
+        j.basic_qualifications ? `Basic Qualifications\n${j.basic_qualifications}` : null,
+        j.preferred_qualifications ? `Preferred Qualifications\n${j.preferred_qualifications}` : null,
+      ].filter(Boolean)
+      return {
+        externalId: j.id ? `amazon:${j.id}` : undefined,
+        title: j.title!,
+        url: normalizeJobApplyUrl(jobUrl),
+        location: j.location,
+        description: descParts.join("\n\n") || undefined,
+        postedAt: j.posted_date,
+      }
+    })
+}
+
 async function crawlByKnownAts(careersUrl: URL): Promise<RawJob[]> {
+  if (isAmazonJobsUrl(careersUrl)) {
+    return crawlAmazonJobs(careersUrl)
+  }
+
+  if (isAppleJobsUrl(careersUrl)) {
+    return crawlAppleJobs(careersUrl)
+  }
+
+  if (isMetaCareersUrl(careersUrl)) {
+    return crawlMeta(careersUrl)
+  }
+
   const greenhouseBoard = parseGreenhouseBoard(careersUrl)
   if (greenhouseBoard) {
     return crawlGreenhouse(careersUrl)

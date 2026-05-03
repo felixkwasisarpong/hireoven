@@ -9,7 +9,7 @@ export async function GET() {
   if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status })
 
   const pool = getPostgresPool()
-  const result = await pool.query<Company>(`SELECT * FROM companies ORDER BY name`)
+  const result = await pool.query<Pick<Company, "id" | "name">>(`SELECT id, name FROM companies ORDER BY name`)
   return NextResponse.json({ companies: result.rows })
 }
 

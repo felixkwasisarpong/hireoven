@@ -1,8 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import {
-  ArrowRight,
   Award,
   Building2,
   ExternalLink,
@@ -10,107 +9,169 @@ import {
   MapPin,
   Sparkles,
   AlertTriangle,
+  ArrowRight,
 } from "lucide-react"
-import type { ScoutCompareItem, ScoutCompareResponse, ScoutCompareRecommendation } from "@/lib/scout/types"
+import type {
+  ScoutCompareItem,
+  ScoutCompareResponse,
+  ScoutCompareRecommendation,
+} from "@/lib/scout/types"
 import { useScoutActionExecutor } from "./useScoutActionExecutor"
 
-// ── Recommendation config ────────────────────────────────────────────────────
+// ── Config ───────────────────────────────────────────────────────────────────
 
-const REC_CONFIG: Record<
-  ScoutCompareRecommendation,
-  {
-    label: string
-    border: string
-    bg: string
-    badge: string
-    accent: string
-    header: string
-  }
-> = {
+type RecCfg = {
+  label: string
+  badgeCls: string
+  borderCls: string          // left accent for secondary cards
+  scoreCls: string           // score number colour
+  barCls: string             // bar fill colour
+  ringStroke: string         // SVG arc colour (featured card)
+  ringTrack: string          // SVG track colour
+}
+
+const REC: Record<ScoutCompareRecommendation, RecCfg> = {
   Best: {
     label: "Best match",
-    border: "border-emerald-200",
-    bg: "bg-white",
-    badge: "bg-emerald-100 text-emerald-800 border-emerald-300",
-    accent: "bg-emerald-500",
-    header: "bg-emerald-50",
+    badgeCls: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200",
+    borderCls: "border-l-emerald-400",
+    scoreCls: "text-emerald-600",
+    barCls: "bg-emerald-500",
+    ringStroke: "#10b981",
+    ringTrack: "rgba(16,185,129,0.15)",
   },
   Good: {
     label: "Good fit",
-    border: "border-blue-200",
-    bg: "bg-white",
-    badge: "bg-blue-100 text-blue-800 border-blue-300",
-    accent: "bg-blue-500",
-    header: "bg-blue-50",
+    badgeCls: "bg-blue-50 text-blue-700 ring-1 ring-blue-200",
+    borderCls: "border-l-blue-400",
+    scoreCls: "text-blue-600",
+    barCls: "bg-blue-500",
+    ringStroke: "#3b82f6",
+    ringTrack: "rgba(59,130,246,0.15)",
   },
   Risky: {
     label: "Risky",
-    border: "border-amber-200",
-    bg: "bg-white",
-    badge: "bg-amber-100 text-amber-800 border-amber-300",
-    accent: "bg-amber-400",
-    header: "bg-amber-50",
+    badgeCls: "bg-amber-50 text-amber-700 ring-1 ring-amber-200",
+    borderCls: "border-l-amber-400",
+    scoreCls: "text-amber-600",
+    barCls: "bg-amber-500",
+    ringStroke: "#f59e0b",
+    ringTrack: "rgba(245,158,11,0.15)",
   },
   Skip: {
     label: "Skip",
-    border: "border-rose-200",
-    bg: "bg-white",
-    badge: "bg-rose-100 text-rose-800 border-rose-300",
-    accent: "bg-rose-400",
-    header: "bg-rose-50",
+    badgeCls: "bg-rose-50 text-rose-700 ring-1 ring-rose-200",
+    borderCls: "border-l-rose-400",
+    scoreCls: "text-rose-500",
+    barCls: "bg-rose-400",
+    ringStroke: "#f43f5e",
+    ringTrack: "rgba(244,63,94,0.12)",
   },
 }
 
-const DEFAULT_CONFIG = REC_CONFIG.Good
+const DEFAULT_REC: RecCfg = {
+  label: "Reviewed",
+  badgeCls: "bg-slate-50 text-slate-600 ring-1 ring-slate-200",
+  borderCls: "border-l-slate-300",
+  scoreCls: "text-slate-600",
+  barCls: "bg-slate-400",
+  ringStroke: "#64748b",
+  ringTrack: "rgba(100,116,139,0.15)",
+}
 
-// ── Match score bar ──────────────────────────────────────────────────────────
+function scoreColor(score: number): RecCfg["scoreCls"] {
+  if (score >= 70) return "text-emerald-600"
+  if (score >= 50) return "text-blue-600"
+  if (score >= 35) return "text-amber-600"
+  return "text-rose-500"
+}
+function scoreBarCls(score: number): RecCfg["barCls"] {
+  if (score >= 70) return "bg-emerald-500"
+  if (score >= 50) return "bg-blue-500"
+  if (score >= 35) return "bg-amber-500"
+  return "bg-rose-400"
+}
+function scoreRingStroke(score: number): string {
+  if (score >= 70) return "#10b981"
+  if (score >= 50) return "#3b82f6"
+  if (score >= 35) return "#f59e0b"
+  return "#f43f5e"
+}
 
-function MatchBar({ score }: { score: number }) {
-  const color =
-    score >= 70 ? "bg-emerald-500" : score >= 50 ? "bg-blue-500" : score >= 35 ? "bg-amber-400" : "bg-rose-400"
+// ── SVG score ring (featured card) ──────────────────────────────────────────
+
+function ScoreRing({ score, delay = 0 }: { score: number; delay?: number }) {
+  const r = 30
+  const circ = 2 * Math.PI * r
+  const [offset, setOffset] = useState(circ)
+  useEffect(() => {
+    const id = window.setTimeout(() => setOffset(circ * (1 - score / 100)), 120 + delay)
+    return () => window.clearTimeout(id)
+  }, [score, circ, delay])
+
+  const stroke = scoreRingStroke(score)
+
   return (
-    <div className="flex items-center gap-2">
-      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100">
-        <div
-          className={`h-full rounded-full transition-all ${color}`}
-          style={{ width: `${Math.min(100, score)}%` }}
+    <div className="relative flex items-center justify-center">
+      <svg viewBox="0 0 72 72" className="h-[72px] w-[72px] -rotate-90">
+        {/* track */}
+        <circle cx="36" cy="36" r={r} fill="none" stroke="rgba(255,255,255,0.10)" strokeWidth="6" />
+        {/* fill */}
+        <circle
+          cx="36" cy="36" r={r}
+          fill="none"
+          stroke={stroke}
+          strokeWidth="6"
+          strokeLinecap="round"
+          strokeDasharray={circ}
+          strokeDashoffset={offset}
+          style={{ transition: "stroke-dashoffset 1s cubic-bezier(0.22,1,0.36,1)" }}
         />
-      </div>
-      <span className="w-8 shrink-0 text-right text-[11px] font-semibold tabular-nums text-slate-600">
-        {score}%
+      </svg>
+      <span className="absolute text-[15px] font-bold leading-none text-white">
+        {score}
+        <span className="text-[9px] font-semibold text-white/60">%</span>
       </span>
     </div>
   )
 }
 
-// ── Compare card ─────────────────────────────────────────────────────────────
+// ── Thin animated bar (secondary cards) ────────────────────────────────────
 
-function CompareCard({
-  item,
-  isWinner,
-  resumeId,
-  className,
-}: {
-  item: ScoutCompareItem
-  isWinner: boolean
-  resumeId?: string
-  className?: string
-}) {
-  const cfg = item.recommendation ? REC_CONFIG[item.recommendation] : DEFAULT_CONFIG
+function ScoreBar({ score, delay = 0 }: { score: number; delay?: number }) {
+  const [width, setWidth] = useState(0)
+  useEffect(() => {
+    const id = window.setTimeout(() => setWidth(Math.min(100, score)), 100 + delay)
+    return () => window.clearTimeout(id)
+  }, [score, delay])
+
+  return (
+    <div className="h-[3px] w-full overflow-hidden rounded-full bg-slate-100">
+      <div
+        className={`h-full rounded-full ${scoreBarCls(score)} transition-[width] duration-[900ms] ease-[cubic-bezier(0.22,1,0.36,1)]`}
+        style={{ width: `${width}%` }}
+      />
+    </div>
+  )
+}
+
+// ── Action executor hook shim ────────────────────────────────────────────────
+
+function useCardActions(item: ScoutCompareItem, resumeId?: string) {
   const { executeAction, feedback } = useScoutActionExecutor()
   const [opening, setOpening] = useState<"job" | "company" | "tailor" | null>(null)
 
-  function handleOpen(type: "job" | "company" | "tailor") {
+  function open(type: "job" | "company" | "tailor") {
     if (opening) return
     setOpening(type)
     if (type === "job") {
       executeAction(
-        { type: "OPEN_JOB", payload: { jobId: item.jobId }, label: `View ${item.title}` },
+        { type: "OPEN_JOB", payload: { jobId: item.jobId }, label: item.title },
         { source: "chat", onExecuted: () => setOpening(null) }
       )
     } else if (type === "company" && item.companyId) {
       executeAction(
-        { type: "OPEN_COMPANY", payload: { companyId: item.companyId }, label: `View ${item.company ?? "Company"}` },
+        { type: "OPEN_COMPANY", payload: { companyId: item.companyId }, label: item.company ?? "Company" },
         { source: "chat", onExecuted: () => setOpening(null) }
       )
     } else if (type === "tailor") {
@@ -127,124 +188,235 @@ function CompareCard({
     }
   }
 
+  return { open, opening, feedback }
+}
+
+// ── Featured card (winner — full width, split layout) ───────────────────────
+
+function FeaturedCard({
+  item,
+  resumeId,
+  index,
+}: {
+  item: ScoutCompareItem
+  resumeId?: string
+  index: number
+}) {
+  const cfg = item.recommendation ? REC[item.recommendation] : DEFAULT_REC
+  const { open, opening, feedback } = useCardActions(item, resumeId)
+  const hasScore = item.matchScore !== null && item.matchScore !== undefined
+
   return (
     <article
-      className={`relative flex flex-col overflow-hidden rounded-2xl border shadow-[0_2px_12px_rgba(15,23,42,0.06)] transition ${cfg.border} ${cfg.bg} ${className ?? ""}`}
+      className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_4px_24px_-8px_rgba(15,23,42,0.14)] opacity-0 animate-[scout-card-in_0.5s_cubic-bezier(0.22,1,0.36,1)_forwards] transition-shadow duration-300 hover:shadow-[0_12px_36px_-12px_rgba(15,23,42,0.20)]"
+      style={{ animationDelay: `${index * 60}ms` }}
     >
-      {/* Accent top bar */}
-      <div className={`h-1 w-full ${cfg.accent}`} />
+      <div className="flex min-h-[130px] flex-col sm:flex-row">
 
-      {/* Winner crown */}
-      {isWinner && (
-        <div className="absolute right-3 top-3">
-          <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">
-            <Award className="h-3 w-3" />
-            Top pick
-          </span>
-        </div>
-      )}
-
-      {/* Header */}
-      <div className={`px-4 pt-4 pb-3 ${cfg.header}`}>
-        {item.recommendation && (
-          <span
-            className={`mb-2 inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${cfg.badge}`}
-          >
-            {cfg.label}
-          </span>
-        )}
-        <h3 className="text-sm font-bold leading-5 text-slate-900 pr-16">{item.title}</h3>
-        {item.company && (
-          <p className="mt-0.5 text-xs text-slate-500">{item.company}</p>
-        )}
-      </div>
-
-      {/* Data rows */}
-      <div className="flex-1 space-y-2.5 px-4 py-3">
-        {/* Match score */}
-        {item.matchScore !== null && item.matchScore !== undefined && (
-          <div>
-            <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-              Match
+        {/* Dark score panel */}
+        {hasScore && (
+          <div className="relative flex min-w-[110px] flex-col items-center justify-center gap-1.5 overflow-hidden bg-slate-950 px-5 py-5 sm:px-6">
+            {/* Subtle radial glow behind ring */}
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-0"
+              style={{
+                background: `radial-gradient(circle at center, ${scoreRingStroke(item.matchScore!)}22 0%, transparent 70%)`,
+              }}
+            />
+            <ScoreRing score={item.matchScore!} delay={index * 60} />
+            <p className="relative text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+              match
             </p>
-            <MatchBar score={item.matchScore} />
           </div>
         )}
 
-        {/* Location + salary */}
-        <div className="space-y-1.5 text-xs text-slate-600">
-          {item.location && (
-            <div className="flex items-center gap-1.5">
-              <MapPin className="h-3 w-3 shrink-0 text-slate-400" />
-              <span>{item.location}</span>
+        {/* Content */}
+        <div className="flex flex-1 flex-col justify-between gap-3 px-5 py-4 sm:px-6 sm:py-5">
+          <div>
+            {/* Badges row */}
+            <div className="mb-2.5 flex flex-wrap items-center gap-2">
+              {item.recommendation && (
+                <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${cfg.badgeCls}`}>
+                  {cfg.label}
+                </span>
+              )}
+              <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700 ring-1 ring-amber-200">
+                <Award className="h-3 w-3" />
+                Top pick
+              </span>
+            </div>
+
+            <h3 className="text-[15px] font-bold leading-snug tracking-tight text-slate-900">
+              {item.title}
+            </h3>
+            {item.company && (
+              <p className="mt-0.5 text-[13px] font-medium text-slate-500">{item.company}</p>
+            )}
+
+            {/* Meta */}
+            <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-600">
+              {item.location && (
+                <span className="inline-flex items-center gap-1">
+                  <MapPin className="h-3 w-3 text-slate-400" />
+                  {item.location}
+                </span>
+              )}
               {item.salaryRange && (
-                <>
-                  <span className="text-slate-300">·</span>
-                  <span className="font-medium text-slate-700">{item.salaryRange}</span>
-                </>
+                <span className="font-semibold text-slate-800">{item.salaryRange}</span>
+              )}
+              {item.sponsorshipSignal && (
+                <span className="inline-flex items-center gap-1 text-orange-600">
+                  <Sparkles className="h-3 w-3" />
+                  {item.sponsorshipSignal}
+                </span>
               )}
             </div>
-          )}
-          {!item.location && item.salaryRange && (
-            <p className="font-medium text-slate-700">{item.salaryRange}</p>
+
+            {item.riskSummary && (
+              <div className="mt-2 flex items-start gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5">
+                <AlertTriangle className="mt-[1px] h-3 w-3 shrink-0 text-amber-600" />
+                <span className="text-xs text-amber-800">{item.riskSummary}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Actions */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button
+              type="button" onClick={() => open("job")} disabled={!!opening}
+              className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-[12px] font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 disabled:opacity-50"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              View job
+            </button>
+            {item.companyId && (
+              <button
+                type="button" onClick={() => open("company")} disabled={!!opening}
+                className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-[12px] font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 disabled:opacity-50"
+              >
+                <Building2 className="h-3.5 w-3.5" />
+                Company
+              </button>
+            )}
+            <button
+              type="button" onClick={() => open("tailor")} disabled={!!opening}
+              className="inline-flex items-center gap-1 rounded-md bg-[#FF5C18] px-3 py-1.5 text-[12px] font-semibold text-white shadow-[0_4px_12px_-4px_rgba(255,92,24,0.50)] transition hover:bg-[#E14F0E] disabled:opacity-50"
+            >
+              <FileEdit className="h-3.5 w-3.5" />
+              Tailor resume
+            </button>
+            {feedback && !opening && (
+              <span className="text-[11px] text-slate-400">{feedback}</span>
+            )}
+          </div>
+        </div>
+      </div>
+    </article>
+  )
+}
+
+// ── Secondary card (compact 2-col grid) ─────────────────────────────────────
+
+function SecondaryCard({
+  item,
+  rank,
+  resumeId,
+  index,
+}: {
+  item: ScoutCompareItem
+  rank: number
+  resumeId?: string
+  index: number
+}) {
+  const cfg = item.recommendation ? REC[item.recommendation] : DEFAULT_REC
+  const { open, opening, feedback } = useCardActions(item, resumeId)
+  const hasScore = item.matchScore !== null && item.matchScore !== undefined
+
+  return (
+    <article
+      className={`group relative flex flex-col overflow-hidden rounded-xl border-l-[3px] border border-slate-200/80 bg-white shadow-[0_2px_12px_-6px_rgba(15,23,42,0.10)] ${cfg.borderCls} opacity-0 animate-[scout-card-in_0.5s_cubic-bezier(0.22,1,0.36,1)_forwards] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_10px_28px_-10px_rgba(15,23,42,0.16)]`}
+      style={{ animationDelay: `${index * 60}ms` }}
+    >
+      <div className="flex-1 px-4 pt-4 pb-3">
+        {/* Top: rank + badge + score */}
+        <div className="mb-2.5 flex items-start justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-[10px] font-bold tracking-wide text-slate-400">
+              #{rank}
+            </span>
+            {item.recommendation && (
+              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${cfg.badgeCls}`}>
+                {cfg.label}
+              </span>
+            )}
+          </div>
+          {hasScore && (
+            <span className={`text-[22px] font-black leading-none tabular-nums ${scoreColor(item.matchScore!)}`}>
+              {item.matchScore}
+              <span className="text-[11px] font-bold">%</span>
+            </span>
           )}
         </div>
 
-        {/* Sponsorship signal */}
-        {item.sponsorshipSignal && (
-          <div className="flex items-start gap-1.5">
-            <Sparkles className="mt-[1px] h-3 w-3 shrink-0 text-orange-500" />
-            <span className="text-xs text-slate-600">{item.sponsorshipSignal}</span>
+        {/* Title + company */}
+        <h3 className="text-[14px] font-semibold leading-snug tracking-tight text-slate-900">
+          {item.title}
+        </h3>
+        {item.company && (
+          <p className="mt-0.5 text-[12px] font-medium text-slate-500">{item.company}</p>
+        )}
+
+        {/* Score bar */}
+        {hasScore && (
+          <div className="mt-3">
+            <ScoreBar score={item.matchScore!} delay={index * 60} />
           </div>
         )}
 
-        {/* Risk summary */}
+        {/* Meta */}
+        {(item.location || item.salaryRange) && (
+          <div className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-slate-500">
+            {item.location && (
+              <span className="inline-flex items-center gap-1">
+                <MapPin className="h-3 w-3 text-slate-400" />
+                {item.location}
+              </span>
+            )}
+            {item.location && item.salaryRange && <span className="text-slate-300">·</span>}
+            {item.salaryRange && <span className="font-semibold text-slate-700">{item.salaryRange}</span>}
+          </div>
+        )}
+
+        {/* Risk */}
         {item.riskSummary && (
-          <div className="flex items-start gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5">
+          <div className="mt-2 flex items-start gap-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5">
             <AlertTriangle className="mt-[1px] h-3 w-3 shrink-0 text-amber-600" />
-            <span className="text-xs text-amber-800">{item.riskSummary}</span>
+            <span className="text-[11px] leading-4 text-amber-800">{item.riskSummary}</span>
           </div>
         )}
       </div>
 
-      {/* Action buttons */}
-      <div className="flex flex-wrap gap-1.5 border-t border-slate-100 px-4 py-3">
+      {/* Action row */}
+      <div className="flex flex-wrap items-center gap-1 border-t border-slate-100 px-4 py-2.5">
         <button
-          type="button"
-          onClick={() => handleOpen("job")}
-          disabled={!!opening}
-          className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-600 transition hover:border-slate-300 hover:text-slate-800 disabled:opacity-50"
+          type="button" onClick={() => open("job")} disabled={!!opening}
+          className="inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-[11px] font-semibold text-slate-600 transition hover:bg-slate-100 disabled:opacity-50"
         >
           <ExternalLink className="h-3 w-3" />
           View job
         </button>
-
         {item.companyId && (
           <button
-            type="button"
-            onClick={() => handleOpen("company")}
-            disabled={!!opening}
-            className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-600 transition hover:border-slate-300 hover:text-slate-800 disabled:opacity-50"
+            type="button" onClick={() => open("company")} disabled={!!opening}
+            className="inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-[11px] font-semibold text-slate-600 transition hover:bg-slate-100 disabled:opacity-50"
           >
             <Building2 className="h-3 w-3" />
             Company
           </button>
         )}
-
-        {isWinner && (
-          <button
-            type="button"
-            onClick={() => handleOpen("tailor")}
-            disabled={!!opening}
-            className="inline-flex items-center gap-1 rounded-full border border-orange-200 bg-orange-50 px-2.5 py-1 text-[11px] font-semibold text-orange-700 transition hover:bg-orange-100 disabled:opacity-50"
-          >
-            <FileEdit className="h-3 w-3" />
-            Tailor resume
-          </button>
-        )}
-
-        {feedback && opening === null && (
-          <span className="self-center text-[11px] text-slate-400">{feedback}</span>
+        {feedback && !opening && (
+          <span className="text-[11px] text-slate-400">{feedback}</span>
         )}
       </div>
     </article>
@@ -255,7 +427,6 @@ function CompareCard({
 
 type ScoutCompareRendererProps = {
   compare: ScoutCompareResponse
-  /** Resume ID for the winner's "Tailor resume" shortcut */
   resumeId?: string
 }
 
@@ -263,59 +434,72 @@ export function ScoutCompareRenderer({ compare, resumeId }: ScoutCompareRenderer
   const { items, summary, winnerJobId, tradeoffs } = compare
   if (items.length < 2) return null
 
-  const gridCols =
-    items.length === 2
-      ? "grid-cols-1 sm:grid-cols-2"
-      : items.length === 3
-      ? "grid-cols-1 sm:grid-cols-3"
-      : "grid-cols-1 sm:grid-cols-2"
+  // Sort: winner first, then by matchScore desc
+  const sorted = [...items].sort((a, b) => {
+    if (winnerJobId) {
+      if (a.jobId === winnerJobId) return -1
+      if (b.jobId === winnerJobId) return 1
+    }
+    return (b.matchScore ?? 0) - (a.matchScore ?? 0)
+  })
+
+  const [featured, ...rest] = sorted
 
   return (
-    <div className="mt-4 space-y-3">
-      {/* Section label */}
-      <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">
-        Job comparison
-      </p>
-
+    <div className="space-y-3">
       {/* Summary */}
-      <p className="text-sm leading-6 text-slate-700">{summary}</p>
+      {summary && (
+        <p className="text-sm leading-6 text-slate-600 opacity-0 animate-[scout-card-in_0.4s_cubic-bezier(0.22,1,0.36,1)_forwards]">
+          {summary}
+        </p>
+      )}
 
-      {/* Mobile swipe cards */}
-      <div className="-mx-1 md:hidden">
-        <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto px-1 pb-1">
-          {items.map((item) => (
-            <CompareCard
-              key={item.jobId}
-              item={item}
-              isWinner={!!winnerJobId && item.jobId === winnerJobId}
-              resumeId={resumeId}
-              className="min-w-[84%] snap-start"
-            />
-          ))}
-        </div>
-      </div>
+      {/* Featured winner */}
+      <FeaturedCard item={featured} resumeId={resumeId} index={0} />
 
-      {/* Desktop grid */}
-      <div className={`hidden gap-3 md:grid ${gridCols}`}>
-        {items.map((item) => (
-          <CompareCard
-            key={item.jobId}
-            item={item}
-            isWinner={!!winnerJobId && item.jobId === winnerJobId}
-            resumeId={resumeId}
-          />
-        ))}
-      </div>
+      {/* Secondary grid — mobile swipe */}
+      {rest.length > 0 && (
+        <>
+          <div className="-mx-0.5 md:hidden">
+            <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-1">
+              {rest.map((item, i) => (
+                <SecondaryCard
+                  key={item.jobId}
+                  item={item}
+                  rank={i + 2}
+                  resumeId={resumeId}
+                  index={i + 1}
+                  // @ts-ignore className injection for snap
+                  className="min-w-[84%] snap-start"
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Desktop grid */}
+          <div className={`hidden gap-3 md:grid ${rest.length === 1 ? "grid-cols-1" : "grid-cols-2"}`}>
+            {rest.map((item, i) => (
+              <SecondaryCard
+                key={item.jobId}
+                item={item}
+                rank={i + 2}
+                resumeId={resumeId}
+                index={i + 1}
+              />
+            ))}
+          </div>
+        </>
+      )}
 
       {/* Tradeoffs */}
       {tradeoffs && tradeoffs.length > 0 && (
-        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-          <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+        <div className="rounded-xl border border-slate-200 bg-slate-50/70 px-4 py-3.5 opacity-0 animate-[scout-card-in_0.5s_cubic-bezier(0.22,1,0.36,1)_forwards] [animation-delay:360ms]">
+          <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">
             Key tradeoffs
           </p>
           <ul className="space-y-1.5">
             {tradeoffs.map((t, i) => (
-              <li key={i} className="flex items-start gap-2 text-xs text-slate-600">
+              <li key={i} className="flex items-start gap-2 text-xs leading-5 text-slate-600">
                 <ArrowRight className="mt-0.5 h-3 w-3 shrink-0 text-slate-400" />
                 {t}
               </li>

@@ -431,9 +431,17 @@ function extractDescriptionFromJsonLd(html: string): string | null {
 
     walkJson(parsed, (node) => {
       if (!jsonLdTypeIncludes(node, "JobPosting")) return
-      const candidate = cleanJobDescription(
-        String(node.description ?? node.responsibilities ?? "").trim()
-      )
+      // Meta (and others) use &nbsp; as a bullet separator within fields —
+      // convert to newline before cleaning so bullets aren't run together.
+      const normalize = (v: unknown) =>
+        v ? String(v).replace(/&nbsp;/gi, "\n").trim() : ""
+      const parts = [
+        normalize(node.description),
+        normalize(node.responsibilities),
+        normalize(node.qualifications),
+      ].filter(Boolean)
+      const combined = parts.join("\n\n")
+      const candidate = cleanJobDescription(combined || "")
       if (!candidate) return
       if (!best || candidate.length > best.length) {
         best = candidate

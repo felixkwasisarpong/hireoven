@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/icon?family=Material+Icons');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -790,6 +792,78 @@
   }
 }
 
+/* ── Scout scene animations ─────────────────────────────────────────────── */
+@keyframes scoutFadeUp {
+  0%   { opacity: 0; transform: translateY(8px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+@keyframes scoutShimmer {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(400%); }
+}
+/* Narrative strip — sweep highlight across the row while pending */
+@keyframes scout-shimmer {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+/* Narrative strip — gentle sparkle pulse */
+@keyframes scout-pulse {
+  0%, 100% { transform: scale(1);    opacity: 0.85; }
+  50%      { transform: scale(1.18); opacity: 1;    }
+}
+/* Narrative strip — animated dots */
+@keyframes scout-dot {
+  0%, 80%, 100% { opacity: 0.25; transform: translateY(0);    }
+  40%           { opacity: 1;    transform: translateY(-2px); }
+}
+/* Narrative strip — gradient text shimmer */
+@keyframes scout-text-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+/* Compare cards — staggered entrance */
+@keyframes scout-card-in {
+  0%   { opacity: 0; transform: translateY(10px) scale(0.985); }
+  60%  { opacity: 1; }
+  100% { opacity: 1; transform: translateY(0)    scale(1);     }
+}
+/* Premium Scout orb — breathing aura + slow gradient sweep */
+@keyframes scoutOrbBreath {
+  0%, 100% { transform: scale(1);    opacity: 0.95; }
+  50%      { transform: scale(1.04); opacity: 1;    }
+}
+@keyframes scoutOrbAura {
+  0%   { transform: scale(0.85); opacity: 0.55; }
+  70%  { transform: scale(1.6);  opacity: 0;    }
+  100% { transform: scale(1.6);  opacity: 0;    }
+}
+@keyframes scoutOrbSweep {
+  0%   { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+/* Mic — idle breathing ring */
+@keyframes scoutMicBreath {
+  0%, 100% { transform: scale(1);    opacity: 0.6; }
+  50%      { transform: scale(1.15); opacity: 0;   }
+}
+/* Mic — listening sound bars */
+@keyframes scoutMicBar {
+  0%, 100% { transform: scaleY(0.35); }
+  50%      { transform: scaleY(1);    }
+}
+/* Mic — friendly idle "smile" wiggle (gentle nod + tiny bob) */
+@keyframes scoutMicSmile {
+  0%, 78%, 100% { transform: translateY(0)    rotate(0deg); }
+  82%           { transform: translateY(-1px) rotate(-7deg); }
+  88%           { transform: translateY(-2px) rotate(8deg); }
+  94%           { transform: translateY(-1px) rotate(-3deg); }
+}
+/* Mic — small smile arc fade (drawn under the mic) */
+@keyframes scoutMicArc {
+  0%, 75%, 100% { opacity: 0; transform: scaleX(0.6); }
+  82%, 92%      { opacity: 1; transform: scaleX(1);   }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -799,4 +873,65 @@
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* ── Scout Dark Command Center ─────────────────────────────────────────────── */
+
+.scout-dark-shell {
+  background-color: #0A0A0F;
+  color: #e2e8f0;
+}
+
+/* Subtle animated dot-grid atmosphere layer */
+.scout-dark-shell::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image: radial-gradient(rgba(99, 102, 241, 0.12) 1px, transparent 1px);
+  background-size: 28px 28px;
+  animation: scout-grid-drift 10s ease-in-out infinite;
+}
+
+/* Glass panel — left/right side panels */
+.scout-glass-left {
+  background: rgba(255, 255, 255, 0.024);
+  border-right: 1px solid rgba(255, 255, 255, 0.07);
+  backdrop-filter: blur(16px);
+  position: relative;
+  z-index: 1;
+}
+
+.scout-glass-right {
+  background: rgba(255, 255, 255, 0.024);
+  border-left: 1px solid rgba(255, 255, 255, 0.07);
+  backdrop-filter: blur(16px);
+  position: relative;
+  z-index: 1;
+}
+
+/* Center scrollable pane */
+.scout-center-pane {
+  background: rgba(13, 13, 20, 0.85);
+  position: relative;
+  z-index: 1;
+}
+
+/* Status pulse for watching indicator */
+@keyframes scout-watching {
+  0%, 100% { opacity: 1;   transform: scale(1);   }
+  50%       { opacity: 0.5; transform: scale(1.4); }
+}
+
+/* Dot grid drift — very slow ambient shimmer */
+@keyframes scout-grid-drift {
+  0%, 100% { opacity: 0.45; }
+  50%       { opacity: 0.75; }
+}
+
+/* Violet glow shimmer for active task bar */
+@keyframes scout-violet-sweep {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
 }
