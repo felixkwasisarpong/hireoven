@@ -251,11 +251,26 @@ function makeQueueId(): string {
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-/** Resolve the active hireoven origin. Defaults to localhost:3000. */
+/**
+ * Resolve the active hireoven origin.
+ *
+ * Default is auto-detected by install type:
+ *   - Unpacked / "Load unpacked" (no `update_url` in manifest) → localhost:3000
+ *   - Chrome Web Store install (has `update_url`)              → hireoven.com
+ *
+ * Override via chrome.storage.local:
+ *   chrome.storage.local.set({ devMode: true })   → force localhost:3000
+ *   chrome.storage.local.set({ devMode: false })  → force hireoven.com
+ */
+function isUnpackedInstall(): boolean {
+  return !chrome.runtime.getManifest().update_url
+}
+
 async function resolveOrigin(): Promise<string> {
   const result = await chrome.storage.local.get("devMode")
-  // devMode=false explicitly → production. Otherwise default to localhost.
-  return result.devMode === false ? APP_ORIGINS[1] : APP_ORIGINS[0]
+  if (result.devMode === true) return APP_ORIGINS[0]
+  if (result.devMode === false) return APP_ORIGINS[1]
+  return isUnpackedInstall() ? APP_ORIGINS[0] : APP_ORIGINS[1]
 }
 
 /** Get the session JWT from hireoven cookies (apex + www fallback for production). */
@@ -277,7 +292,7 @@ async function getSessionToken(origin: string): Promise<string | null> {
 
 /** Make an authenticated request to the extension API. */
 async function apiRequest<T>(
-  method: "GET" | "POST",
+  method: "GET" | "POST" | "PATCH",
   path: string,
   body?: unknown
 ): Promise<T | null> {
@@ -370,6 +385,13 @@ chrome.runtime.onMessage.addListener(
     sender,
     sendResponse: (response: BackgroundResponse) => void,
   ) => {
+    // Don't claim Scout MVP messages — they have a dedicated listener below.
+    // Without this guard, the default case here resolves first and overrides
+    // the MVP listener's async response (Chrome's first-sendResponse-wins rule).
+    const t = (message as { type?: unknown })?.type
+    if (typeof t === "string" && t.startsWith("EXT_MVP_")) {
+      return false
+    }
     handleMessage(message, sender).then(sendResponse).catch(() => {
       sendResponse({ type: "ERROR", message: "Unhandled error" })
     })
@@ -1220,10 +1242,228 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   scheduleContextRefresh(tabId, tab.url, 400)
 })
 
+// ── Scout MVP message channel ─────────────────────────────────────────────────
+// Parallel to the typed BackgroundMessage channel above. Receives requests from
+// the Scout Bar via api-client.ts and forwards them to the extension API,
+// reusing the existing apiRequest() helper for auth.
+
+type MvpApiResponse =
+  | { ok: true; data: unknown }
+  | { ok: false; error: string }
+
+// Per-message routing config — different MVP messages map to different
+// HTTP methods and request shapes.
+type MvpRoute = {
+  method: "GET" | "POST" | "PATCH"
+  path: string
+  buildBody?: (msg: Record<string, unknown>) => unknown
+  buildQuery?: (msg: Record<string, unknown>) => string
+}
+
+const MVP_ROUTES: Record<string, MvpRoute> = {
+  EXT_MVP_ANALYZE_JOB: {
+    method: "POST",
+    path: "/api/extension/jobs/analyze",
+    buildBody: (msg) => msg.job,
+  },
+  EXT_MVP_SAVE_JOB: {
+    method: "POST",
+    path: "/api/extension/jobs/save",
+    buildBody: (msg) => msg.job,
+  },
+  EXT_MVP_CHECK_JOB: {
+    method: "GET",
+    path: "/api/extension/jobs/check",
+    buildQuery: (msg) => {
+      const params = new URLSearchParams()
+      if (typeof msg.url === "string")          params.set("url", msg.url)
+      if (typeof msg.canonicalUrl === "string") params.set("canonicalUrl", msg.canonicalUrl)
+      if (typeof msg.applyUrl === "string")     params.set("applyUrl", msg.applyUrl)
+      const qs = params.toString()
+      return qs ? `?${qs}` : ""
+    },
+  },
+  EXT_MVP_GET_AUTOFILL_PROFILE: {
+    method: "GET",
+    path: "/api/extension/autofill-profile",
+  },
+  // Sentinel: handled separately below (binary response, not JSON).
+  EXT_MVP_FETCH_PRIMARY_RESUME: {
+    method: "GET",
+    path: "/api/extension/resume/download",
+  },
+  EXT_MVP_GENERATE_COVER_LETTER: {
+    method: "POST",
+    path: "/api/extension/cover-letter/generate",
+    buildBody: (msg) => ({ jobId: msg.jobId, resumeId: msg.resumeId, ats: msg.ats }),
+  },
+  EXT_MVP_UPDATE_COVER_LETTER: {
+    method: "PATCH",
+    path: "/api/extension/cover-letter",
+    buildBody: (msg) => ({ body: msg.body, was_used: msg.was_used }),
+    buildQuery: (msg) => `/${encodeURIComponent(String(msg.id ?? ""))}`,
+  },
+  // Sentinel: binary response, handled separately.
+  EXT_MVP_FETCH_COVER_LETTER_DOCX: {
+    method: "GET",
+    path: "/api/extension/cover-letter/download",
+  },
+  EXT_MVP_SAVE_APPLICATION_PROOF: {
+    method: "POST",
+    path: "/api/extension/applications/proof",
+    buildBody: (msg) => ({
+      jobId:            msg.jobId,
+      jobUrl:           msg.jobUrl,
+      applyUrl:         msg.applyUrl,
+      ats:              msg.ats,
+      submittedAt:      msg.submittedAt,
+      confirmationText: msg.confirmationText,
+      resumeVersionId:  msg.resumeVersionId,
+      coverLetterId:    msg.coverLetterId,
+    }),
+  },
+}
+
+/**
+ * Fetch a resume's bytes (base64 + filename) for DataTransfer injection.
+ * When `jobId` is provided, the download endpoint prefers a per-job
+ * tailored copy (resumes.tailored_for_job_id = jobId) when one exists,
+ * falling back to the user's primary resume.
+ *
+ * Goes outside apiRequest() because that helper assumes JSON responses;
+ * the download endpoint streams a DOCX.
+ */
+async function fetchPrimaryResumeBytes(opts?: {
+  jobId?: string
+}): Promise<
+  { ok: true; data: { base64: string; filename: string } } | { ok: false; error: string }
+> {
+  const params = new URLSearchParams()
+  if (opts?.jobId) params.set("jobId", opts.jobId)
+  return fetchBinaryDocx({
+    path: "/api/extension/resume/download",
+    query: params.toString(),
+    notFoundMessage: "No resume found — upload one in Hireoven first.",
+    fallbackFilename: "resume.docx",
+  })
+}
+
+async function fetchCoverLetterDocxBytes(opts: {
+  coverLetterId?: string
+  jobId?: string
+}): Promise<
+  { ok: true; data: { base64: string; filename: string } } | { ok: false; error: string }
+> {
+  const params = new URLSearchParams()
+  if (opts.coverLetterId) params.set("coverLetterId", opts.coverLetterId)
+  else if (opts.jobId)    params.set("jobId", opts.jobId)
+  return fetchBinaryDocx({
+    path: "/api/extension/cover-letter/download",
+    query: params.toString(),
+    notFoundMessage: "Cover letter not found — generate one first.",
+    fallbackFilename: "cover-letter.docx",
+  })
+}
+
+/**
+ * Generic helper: fetch an authenticated DOCX endpoint and return its bytes
+ * as base64 + filename so the result survives chrome.runtime.sendMessage
+ * structured cloning.
+ */
+async function fetchBinaryDocx(opts: {
+  path: string
+  query: string
+  notFoundMessage: string
+  fallbackFilename: string
+}): Promise<
+  { ok: true; data: { base64: string; filename: string } } | { ok: false; error: string }
+> {
+  try {
+    const origin = await resolveOrigin()
+    const token = await getSessionToken(origin)
+    if (!token) return { ok: false, error: "Sign in to Hireoven to use Scout." }
+
+    const url = `${origin}${opts.path}${opts.query ? `?${opts.query}` : ""}`
+    const res = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "X-Hireoven-Extension": "1",
+      },
+    })
+    if (!res.ok) {
+      if (res.status === 404) return { ok: false, error: opts.notFoundMessage }
+      return { ok: false, error: `Fetch failed (HTTP ${res.status}).` }
+    }
+
+    const contentDisposition = res.headers.get("content-disposition") ?? ""
+    const filenameMatch = contentDisposition.match(/filename[^;=\n]*=(["']?)([^"'\n;]+)\1/)
+    const filename = filenameMatch?.[2]?.trim() ?? opts.fallbackFilename
+
+    const buffer = await res.arrayBuffer()
+    const bytes = new Uint8Array(buffer)
+    let binary = ""
+    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i])
+    const base64 = btoa(binary)
+    return { ok: true, data: { base64, filename } }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+  }
+}
+
+chrome.runtime.onMessage.addListener(
+  (
+    message: unknown,
+    _sender: chrome.runtime.MessageSender,
+    sendResponse: (r: MvpApiResponse) => void,
+  ): boolean => {
+    if (typeof message !== "object" || message === null) return false
+    const msg = message as Record<string, unknown>
+    const type = typeof msg.type === "string" ? msg.type : null
+    if (!type || !(type in MVP_ROUTES)) return false
+
+    // Binary fetches — bypass apiRequest() (which only parses JSON) and use
+    // the dedicated fetch+base64 helper.
+    if (type === "EXT_MVP_FETCH_PRIMARY_RESUME") {
+      const jobId = typeof msg.jobId === "string" ? msg.jobId : undefined
+      void fetchPrimaryResumeBytes({ jobId }).then(sendResponse).catch((err: unknown) =>
+        sendResponse({ ok: false, error: err instanceof Error ? err.message : String(err) }),
+      )
+      return true
+    }
+    if (type === "EXT_MVP_FETCH_COVER_LETTER_DOCX") {
+      const coverLetterId = typeof msg.coverLetterId === "string" ? msg.coverLetterId : undefined
+      const jobId = typeof msg.jobId === "string" ? msg.jobId : undefined
+      void fetchCoverLetterDocxBytes({ coverLetterId, jobId }).then(sendResponse).catch((err: unknown) =>
+        sendResponse({ ok: false, error: err instanceof Error ? err.message : String(err) }),
+      )
+      return true
+    }
+
+    const route = MVP_ROUTES[type]
+    const path = route.buildQuery ? `${route.path}${route.buildQuery(msg)}` : route.path
+    const body = route.buildBody ? route.buildBody(msg) : undefined
+
+    void apiRequest<unknown>(route.method, path, body)
+      .then((data) => {
+        if (data === null) {
+          sendResponse({ ok: false, error: "Sign in to Hireoven to use Scout." })
+          return
+        }
+        sendResponse({ ok: true, data })
+      })
+      .catch((err: unknown) => {
+        sendResponse({ ok: false, error: err instanceof Error ? err.message : String(err) })
+      })
+    return true // keep channel open for async sendResponse
+  },
+)
+
 // ── Extension install / update lifecycle ──────────────────────────────────────
 
 chrome.runtime.onInstalled.addListener(({ reason }) => {
   if (reason === "install") {
-    chrome.tabs.create({ url: "https://hireoven.com/dashboard" })
+    void resolveOrigin().then((origin) => {
+      chrome.tabs.create({ url: `${origin}/dashboard` })
+    })
   }
 })

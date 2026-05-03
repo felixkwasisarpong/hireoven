@@ -10,7 +10,22 @@
 import { detectFormFields } from "./autofill/form-detector"
 import { detectPage } from "./detectors/ats"
 import { extractJobWithMeta } from "./extractors/job"
-import { PageAwareControlSystem } from "./overlay/page-aware-control-system"
+import { ScoutBar } from "./overlay/scout-bar"
+import { JobCardBadgeEngine } from "./overlay/job-card-badges"
+import {
+  mountScreenerBar,
+  unmountScreenerBar,
+  applyJobBoardFilters,
+} from "./overlay/job-screener"
+import {
+  mountDetailScoutPanel,
+  unmountDetailScoutPanel,
+} from "./overlay/job-detail-scout"
+import {
+  detectExtensionPageMode,
+  isJobBoardSite,
+} from "./detectors/page-mode"
+import { detectSite } from "./detectors/site"
 import type {
   ContentMessage,
   ContentResponse,
@@ -22,10 +37,18 @@ type HireovenContentWindow = Window & {
   __hoContentBootstrapped?: boolean
 }
 
+// Sites where the Scout Bar is allowed to mount.
+//
+// Intentionally EXCLUDED (job-board aggregators):
+//   - linkedin.com   — external apply URLs hidden behind voyager API; extraction unreliable
+//   - glassdoor.com  — same: aggregates jobs from real ATSes, doesn't expose direct apply URL
+//   - indeed.com     — same
+//   - joinhandshake.com — same; never was in this list
+// Users save jobs from the company's real ATS instead, where Apply URL extraction is solid.
+//
+// These hosts still receive the content script (for the hireoven.com bridge),
+// but shouldOverlayThisHost() returns false → bar never mounts there.
 const OVERLAY_HOST_ALLOWLIST: readonly RegExp[] = [
-  /(?:^|\.)linkedin\.com$/i,
-  /(?:^|\.)glassdoor\.com$/i,
-  /(?:^|\.)indeed\.com$/i,
   /(?:^|\.)greenhouse\.io$/i,
   /(?:^|\.)lever\.co$/i,
   /(?:^|\.)ashbyhq\.com$/i,
@@ -45,13 +68,6 @@ const OVERLAY_HOST_ALLOWLIST: readonly RegExp[] = [
 const CAREER_PATH_PATTERN =
   /\/(?:job|jobs|career|careers|opening|openings|position|positions|vacancy|vacancies|opportunity|opportunities|apply|application)(?:\/|$|\?)/i
 
-function resolveAppOrigin(): Promise<string> {
-  return new Promise((resolve) => {
-    chrome.storage.local.get(["devMode"], (r) => {
-      resolve(r.devMode === false ? "https://hireoven.com" : "http://localhost:3000")
-    })
-  })
-}
 
 function isTopFrame(): boolean {
   try {
@@ -61,8 +77,21 @@ function isTopFrame(): boolean {
   }
 }
 
+// Job-board aggregators where Scout intentionally does NOT mount the bar.
+// These sites' /jobs/ paths would otherwise match CAREER_PATH_PATTERN and
+// trigger the overlay even though we've removed them from the allowlist.
+// Save flow on these sites is unreliable (apply URL hidden behind their API)
+// so we'd rather have no bar than a broken Save experience.
+const OVERLAY_HOST_DENYLIST: readonly RegExp[] = [
+  /(?:^|\.)linkedin\.com$/i,
+  /(?:^|\.)glassdoor\.com$/i,
+  /(?:^|\.)indeed\.com$/i,
+  /(?:^|\.)joinhandshake\.com$/i,
+]
+
 function shouldOverlayThisHost(): boolean {
   const host = window.location.hostname.replace(/^www\./i, "").toLowerCase()
+  if (OVERLAY_HOST_DENYLIST.some((re) => re.test(host))) return false
   if (OVERLAY_HOST_ALLOWLIST.some((re) => re.test(host))) return true
   if (CAREER_PATH_PATTERN.test(window.location.pathname)) return true
   return false
@@ -343,10 +372,7 @@ function injectResumeFile(base64: string, filename: string): { type: "INJECT_RES
   }
 }
 
-// Module-level ref so EXECUTE_SCOUT_COMMAND can reach the live overlay instance
-let overlayRuntime: PageAwareControlSystem | null = null
-
-async function mountOverlayWhenReady(): Promise<void> {
+async function mountScoutBarWhenReady(): Promise<void> {
   if (!isTopFrame()) return
   if (!shouldOverlayThisHost()) return
 
@@ -360,36 +386,98 @@ async function mountOverlayWhenReady(): Promise<void> {
     })
   }
 
-  overlayRuntime = new PageAwareControlSystem({ resolveAppOrigin })
-  await overlayRuntime.mount()
+  // ScoutBar manages its own lifecycle (SPA URL observer, mount/teardown).
+  const bar = new ScoutBar()
+  await bar.mount()
 }
 
-// ── Receive Scout commands on job site tabs ───────────────────────────────────
-chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {
-  if (typeof message !== "object" || message === null) return false
-  const msg = message as Record<string, unknown>
-  if (msg.type !== "EXECUTE_SCOUT_COMMAND" || !overlayRuntime) return false
+/**
+ * Mount the job-card badge overlay on supported job-board sites
+ * (LinkedIn / Indeed / Glassdoor / Handshake). This intentionally runs even
+ * on hosts that ScoutBar's denylist excludes — the badges ARE the Hireoven
+ * surface for those sites.
+ *
+ * Re-checks the page mode whenever the URL changes (LinkedIn search → detail
+ * → search) so we only run the engine when there are real cards to badge.
+ */
+async function mountJobCardBadgesWhenReady(): Promise<void> {
+  if (!isTopFrame()) return
 
-  const cmd = msg.command as string
-
-  // Agent autofill — triggered automatically when apply-agent opens a job tab
-  if (cmd === "AGENT_AUTOFILL") {
-    const payload = (msg.payload ?? {}) as Record<string, unknown>
-    // Store cover letter ID for the overlay to use when filling cover letter fields
-    if (typeof payload.coverLetterId === "string") {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ;(window as any).__hoPendingCoverLetterId = payload.coverLetterId
-    }
-    // Trigger autofill — overlay will detect the form and fill it
-    overlayRuntime.executeAction("autofill")
-    sendResponse({ ok: true })
-    return true
+  if (!document.body) {
+    await new Promise<void>((resolve) => {
+      const onReady = () => {
+        document.removeEventListener("DOMContentLoaded", onReady)
+        resolve()
+      }
+      document.addEventListener("DOMContentLoaded", onReady)
+    })
   }
 
-  overlayRuntime.executeAction(cmd)
-  sendResponse({ ok: true })
-  return true
-})
+  let engine: JobCardBadgeEngine | null = null
+  let lastSite: string | null = null
+
+  const refresh = () => {
+    const site = detectSite()
+    if (!isJobBoardSite(site)) {
+      engine?.stop()
+      engine = null
+      lastSite = null
+      unmountScreenerBar()
+      unmountDetailScoutPanel()
+      return
+    }
+    const mode = detectExtensionPageMode(window.location.href, document)
+    if (mode === "unknown") {
+      engine?.stop()
+      engine = null
+      lastSite = null
+      unmountScreenerBar()
+      unmountDetailScoutPanel()
+      return
+    }
+
+    // Screener bar shows only on search/list pages — detail pages get the
+    // Detail Scout panel instead.
+    if (mode === "job_board_search") {
+      void mountScreenerBar(site)
+      unmountDetailScoutPanel()
+    } else if (mode === "job_board_detail") {
+      // LinkedIn renders search + detail in the same shell (?currentJobId=…).
+      // Keep the screener bar mounted there so the user can still tweak
+      // filters on the list while reading a single job in the side pane.
+      if (window.location.pathname.includes("/jobs/search") ||
+          window.location.pathname.includes("/jobs/collections")) {
+        void mountScreenerBar(site)
+      } else {
+        unmountScreenerBar()
+      }
+      void mountDetailScoutPanel(site)
+    } else {
+      unmountScreenerBar()
+      unmountDetailScoutPanel()
+    }
+
+    if (engine && lastSite === site) {
+      // Same site, just re-evaluate filters in case cards changed.
+      applyJobBoardFilters()
+      return
+    }
+    engine?.stop()
+    engine = new JobCardBadgeEngine(site)
+    engine.start()
+    lastSite = site
+  }
+
+  refresh()
+
+  // Cheap URL poll — same approach the Scout Bar uses for SPA navigation.
+  let lastUrl = window.location.href
+  setInterval(() => {
+    if (window.location.href === lastUrl) return
+    lastUrl = window.location.href
+    refresh()
+  }, 600)
+}
 
 // ── Hireoven dashboard ↔ extension bridge ─────────────────────────────────────
 //
@@ -494,7 +582,8 @@ function bootstrap(): void {
 
   registerMessageBridge()
   registerPageBridge()
-  void mountOverlayWhenReady()
+  void mountScoutBarWhenReady()
+  void mountJobCardBadgesWhenReady()
 }
 
 bootstrap()

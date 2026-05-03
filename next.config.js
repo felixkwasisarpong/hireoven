@@ -15,8 +15,6 @@ const nextConfig = {
       { hostname: "icon.horse" },
       { hostname: "www.google.com" },
       { hostname: "**.gstatic.com" },
-      { hostname: "**.supabase.co" },
-      { hostname: "**.supabase.in" },
     ],
   },
   experimental: {
@@ -26,16 +24,18 @@ const nextConfig = {
   async headers() {
     return [
       {
+        // Global CORS for browser-originated API calls.
+        // Excluded when Origin is chrome-extension:// — those routes set their
+        // own per-request CORS via extensionCorsHeaders() to reflect the exact
+        // extension origin. Two conflicting Allow-Origin headers break CORS.
         source: "/api/:path*",
+        missing: [{ type: "header", key: "origin", value: "chrome-extension://.*" }],
         headers: [
           { key: "Access-Control-Allow-Origin", value: process.env.NEXT_PUBLIC_APP_URL ?? "*" },
           { key: "Access-Control-Allow-Methods", value: "GET,POST,PUT,DELETE,OPTIONS" },
-          // Include X-Hireoven-Extension so the Scout Bridge can identify itself.
           { key: "Access-Control-Allow-Headers", value: "Content-Type, Authorization, X-Hireoven-Extension" },
         ],
       },
-      // Extension routes handle their own per-request CORS (reflecting the
-      // chrome-extension:// origin) so no static header override is needed here.
       {
         source: "/:path*",
         headers: [
@@ -52,7 +52,7 @@ const nextConfig = {
     return [
       {
         source: "/",
-        has: [{ type: "cookie", key: "sb-access-token" }],
+        has: [{ type: "cookie", key: "ho_session" }],
         destination: "/dashboard",
         permanent: false,
       },

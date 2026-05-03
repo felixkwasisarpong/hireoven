@@ -16,12 +16,12 @@ export default function DashboardSubpageSidebar() {
           href="/dashboard"
           className="block rounded-lg outline-none transition hover:opacity-90 focus-visible:ring-2 focus-visible:ring-[#2563EB]/30"
         >
-          <HireovenLogo className="h-8 w-auto max-w-[160px]" priority />
+          <HireovenLogo variant="full" className="h-14 w-auto max-w-[260px]" priority />
           <span className="sr-only">Hireoven home</span>
         </Link>
       </div>
 
-      <div className="soft-scrollbar min-h-0 flex-1 overflow-y-auto [-webkit-overflow-scrolling:touch]">
+      <div className="soft-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto [-webkit-overflow-scrolling:touch]">
         <DashboardSidebarNav variant="light" navSkin="feed" />
       </div>
     </aside>

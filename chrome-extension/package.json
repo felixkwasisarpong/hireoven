@@ -6,7 +6,8 @@
   "scripts": {
     "build": "webpack --mode production",
     "dev": "webpack --mode development --watch",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "test:site": "npx tsx src/detectors/__tests__/site.devtest.ts"
   },
   "devDependencies": {
     "@types/chrome": "^0.0.268",

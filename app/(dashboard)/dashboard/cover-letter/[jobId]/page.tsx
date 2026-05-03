@@ -196,7 +196,7 @@ export default function CoverLetterPage() {
 
   return (
     <main className="app-page">
-      <div className="mx-auto max-w-4xl space-y-5">
+      <div className="app-shell w-full space-y-5">
         {/* Back */}
         <div className="flex items-center gap-3">
           <Link
@@ -261,8 +261,10 @@ export default function CoverLetterPage() {
           </div>
         )}
 
+        {/* ── Two-column workspace ── */}
+        <div className="grid grid-cols-1 gap-5 xl:grid-cols-[440px_minmax(0,1fr)]">
         {/* Options panel */}
-        <div className="rounded-[32px] border border-white/80 bg-white/90 p-6 shadow-[0_4px_24px_rgba(15,23,42,0.06)] space-y-6">
+        <div className="space-y-6 self-start rounded-[32px] border border-white/80 bg-white/90 p-6 shadow-[0_4px_24px_rgba(15,23,42,0.06)] xl:sticky xl:top-4 xl:max-h-[calc(100dvh-2rem)] xl:overflow-y-auto">
           <h2 className="text-base font-semibold text-gray-900">Customize your letter</h2>
 
           {/* Tone */}
@@ -276,50 +278,60 @@ export default function CoverLetterPage() {
             />
           </div>
 
-          {/* Length + Style */}
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-            <div>
-              <p className="mb-2 text-sm font-medium text-gray-700">Length</p>
-              <div className="flex gap-2">
-                {LENGTHS.map((l) => (
-                  <button
-                    key={l.value}
-                    type="button"
-                    onClick={() => updateOptions({ length: l.value })}
-                    className={cn(
-                      "flex-1 rounded-xl border py-2.5 text-center text-sm font-medium transition",
-                      options.length === l.value
-                        ? "border-[#0369A1] bg-[#F0F9FF] text-[#0369A1]"
-                        : "border-gray-200 text-gray-600 hover:border-gray-300"
-                    )}
-                  >
-                    <span className="block">{l.label}</span>
-                    <span className="block text-[10px] text-current opacity-60">{l.desc}</span>
-                  </button>
-                ))}
-              </div>
+          {/* Length */}
+          <div>
+            <p className="mb-2 text-sm font-medium text-gray-700">Length</p>
+            <div className="grid grid-cols-3 gap-2">
+              {LENGTHS.map((l) => (
+                <button
+                  key={l.value}
+                  type="button"
+                  onClick={() => updateOptions({ length: l.value })}
+                  className={cn(
+                    "rounded-xl border px-2 py-2.5 text-center transition",
+                    options.length === l.value
+                      ? "border-[#0369A1] bg-[#F0F9FF] text-[#0369A1]"
+                      : "border-gray-200 text-gray-600 hover:border-gray-300"
+                  )}
+                >
+                  <span className="block text-sm font-medium">{l.label}</span>
+                  <span className="mt-0.5 block text-[10px] opacity-60">{l.desc}</span>
+                </button>
+              ))}
             </div>
+          </div>
 
-            <div>
-              <p className="mb-2 text-sm font-medium text-gray-700">Opening style</p>
-              <div className="flex gap-2">
-                {STYLES.map((s) => (
-                  <button
-                    key={s.value}
-                    type="button"
-                    onClick={() => updateOptions({ style: s.value })}
-                    className={cn(
-                      "flex-1 rounded-xl border py-2.5 px-1 text-center text-sm font-medium transition",
-                      options.style === s.value
-                        ? "border-[#0369A1] bg-[#F0F9FF] text-[#0369A1]"
-                        : "border-gray-200 text-gray-600 hover:border-gray-300"
-                    )}
-                  >
-                    <span className="block text-xs">{s.label}</span>
-                    <span className="block text-[10px] text-current opacity-60">{s.desc}</span>
-                  </button>
-                ))}
-              </div>
+          {/* Opening style */}
+          <div>
+            <p className="mb-2 text-sm font-medium text-gray-700">Opening style</p>
+            <div className="space-y-1.5">
+              {STYLES.map((s) => (
+                <button
+                  key={s.value}
+                  type="button"
+                  onClick={() => updateOptions({ style: s.value })}
+                  className={cn(
+                    "flex w-full items-center justify-between gap-3 rounded-xl border px-3.5 py-2.5 text-left transition",
+                    options.style === s.value
+                      ? "border-[#0369A1] bg-[#F0F9FF]"
+                      : "border-gray-200 bg-white hover:border-gray-300"
+                  )}
+                >
+                  <span className="min-w-0">
+                    <span className={cn("block text-sm font-semibold", options.style === s.value ? "text-[#0369A1]" : "text-gray-900")}>
+                      {s.label}
+                    </span>
+                    <span className="block text-[11px] text-gray-500">{s.desc}</span>
+                  </span>
+                  {options.style === s.value && (
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#0369A1]">
+                      <svg className="h-3 w-3 text-white" fill="none" viewBox="0 0 12 12">
+                        <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </span>
+                  )}
+                </button>
+              ))}
             </div>
           </div>
 
@@ -393,6 +405,8 @@ export default function CoverLetterPage() {
           </button>
         </div>
 
+        {/* ── Right column: letter / generating / placeholder ── */}
+        <div className="space-y-5">
         {/* Error */}
         {error && (
           <div className="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">
@@ -404,6 +418,19 @@ export default function CoverLetterPage() {
         {isGenerating && (
           <div className="rounded-[32px] border border-white/80 bg-white/90 shadow-[0_4px_24px_rgba(15,23,42,0.06)]">
             <GeneratingAnimation message={generatingMessage} />
+          </div>
+        )}
+
+        {/* Empty placeholder */}
+        {!isGenerating && !coverLetter && !error && (
+          <div className="flex min-h-[420px] flex-col items-center justify-center rounded-[32px] border border-dashed border-slate-200 bg-white/60 p-10 text-center">
+            <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#E0F2FE]">
+              <Sparkles className="h-6 w-6 text-[#0369A1]" />
+            </div>
+            <p className="text-base font-semibold text-gray-900">Your letter will appear here</p>
+            <p className="mt-1 max-w-sm text-sm text-gray-500">
+              Tweak the options on the left, then hit <span className="font-semibold text-gray-700">Generate cover letter</span> to draft a personalized letter.
+            </p>
           </div>
         )}
 
@@ -531,7 +558,7 @@ export default function CoverLetterPage() {
                   href={job.apply_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="ml-auto flex items-center gap-2 rounded-2xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+                  className="flex items-center gap-2 rounded-2xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
                 >
                   Apply directly
                   <ExternalLink className="h-4 w-4" />
@@ -541,13 +568,17 @@ export default function CoverLetterPage() {
           </div>
         )}
 
+        </div>
+        </div>
+        {/* ── /Two-column workspace ── */}
+
         {/* Variants view */}
         {variants.length > 0 && (
           <div className="rounded-[32px] border border-white/80 bg-white/90 p-6 shadow-[0_4px_24px_rgba(15,23,42,0.06)]">
             <h3 className="mb-4 text-base font-semibold text-gray-900">
               3 variants - pick your favourite
             </h3>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {variants.map((v) => (
                 <VariantCard key={v.id} letter={v} onSelect={() => selectVariant(v)} />
               ))}

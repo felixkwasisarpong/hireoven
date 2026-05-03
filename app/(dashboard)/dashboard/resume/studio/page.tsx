@@ -1603,60 +1603,99 @@ export default function ResumeStudioPage() {
     try {
       const fullName = `${personalInfo.firstName} ${personalInfo.lastName}`.trim() || null
       const location = [personalInfo.city, personalInfo.state, personalInfo.country].filter(Boolean).join(", ") || personalInfo.address || null
-      const res = await fetch(`/api/resume/${selectedResume.id}`, {
-        method: "PATCH",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: documentName !== "Untitled resume" ? documentName : undefined,
-          full_name: fullName,
-          email: personalInfo.email || null,
-          phone: personalInfo.phone || null,
-          location,
-          portfolio_url: personalInfo.website || null,
-          primary_role: headline || null,
-          summary: profileSummary || null,
-          work_experience: experienceDrafts.map((draft) => ({
-            title: draft.role,
-            company: draft.company,
-            start_date: draft.from,
-            end_date: draft.current ? null : draft.to,
-            is_current: draft.current,
-            description: draft.description,
-            achievements: draft.description
-              .split(/\n/)
-              .map((line) => line.replace(/^[-•]\s*/, "").trim())
-              .filter(Boolean),
-          })),
-          education: educationDrafts.map((draft) => ({
-            institution: draft.school,
-            degree: draft.degree,
-            field: draft.field,
-            start_date: draft.from,
-            end_date: draft.current ? null : draft.to,
-            gpa: null,
-          })),
-          skills: skillsTextToSkills(skillsText),
-          projects: projectsDraft
-            .split(/\n{2,}/)
-            .map((block) => block.trim())
-            .filter(Boolean)
-            .map((block, index) => {
-              const [nameLine, ...descLines] = block.split(/\n/)
-              return {
-                name: nameLine?.replace(/^[-•]\s*/, "").trim() || `Project ${index + 1}`,
-                description: descLines.join("\n").replace(/[•]/g, "").trim() || nameLine || "",
-                url: null,
-              }
+
+      // Build the resume payload once — used by both the regular PATCH and
+      // the new tailor-save endpoint.
+      const resumePayload = {
+        name: documentName !== "Untitled resume" ? documentName : undefined,
+        full_name: fullName,
+        email: personalInfo.email || null,
+        phone: personalInfo.phone || null,
+        location,
+        portfolio_url: personalInfo.website || null,
+        primary_role: headline || null,
+        summary: profileSummary || null,
+        work_experience: experienceDrafts.map((draft) => ({
+          title: draft.role,
+          company: draft.company,
+          start_date: draft.from,
+          end_date: draft.current ? null : draft.to,
+          is_current: draft.current,
+          // Inverse of how this draft was loaded (around line 1206): the
+          // editor concatenates `description` + bullet-prefixed achievements
+          // into one textarea. On save, split them back so we don't store
+          // the same content twice (which made downloads render both as a
+          // paragraph mash AND as a bullet list).
+          description: draft.description
+            .split(/\n/)
+            .filter((line) => !/^[-•]\s/.test(line.trim()))
+            .join("\n")
+            .trim(),
+          achievements: draft.description
+            .split(/\n/)
+            .filter((line) => /^[-•]\s/.test(line.trim()))
+            .map((line) => line.replace(/^[-•]\s*/, "").trim())
+            .filter(Boolean),
+        })),
+        education: educationDrafts.map((draft) => ({
+          institution: draft.school,
+          degree: draft.degree,
+          field: draft.field,
+          start_date: draft.from,
+          end_date: draft.current ? null : draft.to,
+          gpa: null,
+        })),
+        skills: skillsTextToSkills(skillsText),
+        projects: projectsDraft
+          .split(/\n{2,}/)
+          .map((block) => block.trim())
+          .filter(Boolean)
+          .map((block, index) => {
+            const [nameLine, ...descLines] = block.split(/\n/)
+            return {
+              name: nameLine?.replace(/^[-•]\s*/, "").trim() || `Project ${index + 1}`,
+              description: descLines.join("\n").replace(/[•]/g, "").trim() || nameLine || "",
+              url: null,
+            }
+          }),
+      }
+
+      // Tailor mode + jobId in URL → save as a new tailored copy (or update
+      // the existing tailored copy for this job). Keeps the user's primary
+      // resume intact while letting Autofill pick the right per-job copy.
+      const tailorJobId = searchParams.get("jobId")
+      const isTailoringIntoCopy = mode === "tailor" && Boolean(tailorJobId)
+
+      const res = isTailoringIntoCopy
+        ? await fetch(`/api/resume/tailor-save`, {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              parentResumeId: selectedResume.id,
+              jobId: tailorJobId,
+              payload: resumePayload,
             }),
-        }),
-      })
+          })
+        : await fetch(`/api/resume/${selectedResume.id}`, {
+            method: "PATCH",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(resumePayload),
+          })
+
       if (!res.ok) {
         const body = (await res.json().catch(() => ({}))) as { error?: string }
         throw new Error(body.error ?? "Save failed")
       }
-      const updated = (await res.json()) as Resume
+      const responseBody = (await res.json()) as Resume | { resume: Resume; created: boolean; updated: boolean }
+      const updated = "resume" in responseBody ? responseBody.resume : responseBody
       upsertResume(updated)
+      // Tailor-save returns a new resumeId — switch the studio's selection
+      // so subsequent saves update the same tailored copy.
+      if (isTailoringIntoCopy && updated.id !== selectedResume.id) {
+        setSelectedId(updated.id)
+      }
       savedOk = true
 
       if (createVersion) {
@@ -2035,7 +2074,7 @@ export default function ResumeStudioPage() {
     }
   }
 
-  async function handleCreateTailoredVersion() {
+  async function handleCreateTailoredResume() {
     if (!selectedResume || !jobDescription.trim()) {
       pushToast({ tone: "info", title: "Add a resume and job description first." })
       return
@@ -2047,7 +2086,7 @@ export default function ResumeStudioPage() {
     if (appliedFixIds.length === 0) {
       if (
         !window.confirm(
-          "You have not applied any recommended fixes. Create a tailored version from the current live resume as shown in the preview?"
+          "You have not applied any recommended fixes. Create a new tailored resume from the current live preview?"
         )
       ) {
         return
@@ -2056,95 +2095,82 @@ export default function ResumeStudioPage() {
 
     setIsTailoring(true)
     try {
-      // Flush editor state to DB first so the base resume is current before we duplicate it.
+      // Flush editor state to DB first so duplication starts from the latest edits.
       await saveDraft(true)
 
-      const jt = jobTitle || selectedTargetJob?.title || "Tailored"
-      const resumeName = `${jt} Resume`
+      const roleTitle = jobTitle.trim() || selectedTargetJob?.title || "Role"
+      const companyName = company.trim() || selectedTargetJob?.company || ""
+      const resumeName = companyName
+        ? `Tailored for ${roleTitle} at ${companyName}`
+        : `Tailored for ${roleTitle}`
 
-      // 1. Save a version snapshot for history.
-      const snapshot = createResumeSnapshot(livePreviewResume)
-      const versionRes = await fetch(`/api/resume/${selectedResume.id}/versions`, {
+      const dupRes = await fetch(`/api/resume/${selectedResume.id}/duplicate`, {
         method: "POST",
+        credentials: "include",
+      })
+      if (!dupRes.ok) {
+        const body = (await dupRes.json().catch(() => ({}))) as { error?: string }
+        throw new Error(body.error ?? "Could not create a new tailored resume.")
+      }
+
+      const dupData = (await dupRes.json().catch(() => ({}))) as { resume?: Resume }
+      const dupId = dupData.resume?.id
+      if (!dupId) {
+        throw new Error("Could not create a new tailored resume.")
+      }
+
+      const fullName = `${personalInfo.firstName} ${personalInfo.lastName}`.trim() || null
+      const location =
+        [personalInfo.city, personalInfo.state, personalInfo.country].filter(Boolean).join(", ") ||
+        personalInfo.address ||
+        null
+
+      const patchRes = await fetch(`/api/resume/${dupId}`, {
+        method: "PATCH",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: resumeName,
-          changes_summary: `Tailored for ${jt}. Match score: ${analysis.matchScore}/100. Applied ${appliedFixIds.length} fix(es).`,
-          snapshot,
+          full_name: fullName,
+          email: personalInfo.email || null,
+          phone: personalInfo.phone || null,
+          location,
+          portfolio_url: personalInfo.website || null,
+          primary_role: livePreviewResume.primary_role ?? null,
+          summary: livePreviewResume.summary ?? null,
+          skills: livePreviewResume.skills ?? null,
+          work_experience: livePreviewResume.work_experience ?? [],
+          education: livePreviewResume.education ?? [],
+          projects: livePreviewResume.projects ?? [],
+          certifications: livePreviewResume.certifications ?? [],
         }),
       })
-      if (!versionRes.ok) {
-        pushToast({ tone: "error", title: "Could not save version history. Try again." })
-        return
+      if (!patchRes.ok) {
+        const body = (await patchRes.json().catch(() => ({}))) as { error?: string }
+        throw new Error(body.error ?? "Could not save tailored resume content.")
       }
 
-      // 2. Duplicate the base resume then patch it with ALL current editor state
-      //    (personal info + tailored content) to create the library copy.
-      let savedResumeId: string | null = null
-      try {
-        const dupRes = await fetch(`/api/resume/${selectedResume.id}/duplicate`, {
-          method: "POST",
-          credentials: "include",
-        })
-        if (!dupRes.ok) throw new Error("duplicate_failed")
-
-        const dupData = (await dupRes.json().catch(() => ({}))) as { resume?: Resume }
-        const dupId = dupData.resume?.id
-        if (!dupId) throw new Error("no_duplicate_id")
-
-        const fullName = `${personalInfo.firstName} ${personalInfo.lastName}`.trim() || null
-        const location = [personalInfo.city, personalInfo.state, personalInfo.country].filter(Boolean).join(", ") || personalInfo.address || null
-
-        const patchRes = await fetch(`/api/resume/${dupId}`, {
-          method: "PATCH",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name: resumeName,
-            full_name: fullName,
-            email: personalInfo.email || null,
-            phone: personalInfo.phone || null,
-            location,
-            portfolio_url: personalInfo.website || null,
-            primary_role: livePreviewResume.primary_role ?? null,
-            summary: livePreviewResume.summary ?? null,
-            skills: livePreviewResume.skills ?? null,
-            work_experience: livePreviewResume.work_experience ?? [],
-            education: livePreviewResume.education ?? [],
-            projects: livePreviewResume.projects ?? [],
-            certifications: livePreviewResume.certifications ?? [],
-          }),
-        })
-        if (!patchRes.ok) throw new Error("patch_failed")
-
-        const patched = (await patchRes.json().catch(() => null)) as Resume | null
-        if (patched?.id) {
-          savedResumeId = patched.id
-          upsertResume(patched)
-          window.dispatchEvent(new Event("hireoven:resumes-changed"))
-        }
-      } catch {
-        // Version history already saved — library copy is a bonus. Log and continue.
+      const patched = (await patchRes.json().catch(() => null)) as Resume | null
+      if (!patched?.id) {
+        throw new Error("Could not save tailored resume content.")
       }
+
+      upsertResume(patched)
+      window.dispatchEvent(new Event("hireoven:resumes-changed"))
 
       await refreshHubData()
-
-      if (savedResumeId) {
-        pushToast({
-          tone: "success",
-          title: `"${resumeName}" saved to your Library`,
-          description: "Tailored content, skills, and personal info saved as a new resume.",
-          action: { label: "Open Library", href: "/dashboard/resume/library" },
-        })
-      } else {
-        pushToast({
-          tone: "success",
-          title: "Version saved to history",
-          description: "Could not create a Library copy — duplicate it from Version History.",
-          action: { label: "View History", href: "/dashboard/resume/versions" },
-        })
-      }
+      pushToast({
+        tone: "success",
+        title: `"${resumeName}" saved as a new resume`,
+        description: "Tailored content, skills, and personal info were saved to your Library.",
+        action: { label: "Open Library", href: "/dashboard/resume/library" },
+      })
+    } catch (error) {
+      pushToast({
+        tone: "error",
+        title: "Could not create tailored resume",
+        description: error instanceof Error ? error.message : "Please try again.",
+      })
     } finally {
       setIsTailoring(false)
     }
@@ -2768,22 +2794,22 @@ export default function ResumeStudioPage() {
                   </li>
                   <li>Switch to the Preview tab anytime to edit sections directly, then re-run match.</li>
                   <li>
-                    <span className="font-semibold text-slate-800">Create Tailored Version</span> saves a snapshot to your version history.
+                    <span className="font-semibold text-slate-800">Create Tailored Resume</span> saves a brand-new tailored resume to your library.
                   </li>
                 </ol>
               </details>
 
-              {/* Single progressive CTA: Analyze → Save Tailored Version */}
+              {/* Single progressive CTA: Analyze → Save Tailored Resume */}
               {appliedFixIds.length > 0 ? (
                 <div className="space-y-2">
                   <button
                     type="button"
-                    onClick={() => void handleCreateTailoredVersion()}
+                    onClick={() => void handleCreateTailoredResume()}
                     disabled={isTailoring || !selectedResume || !jobDescription.trim() || !analysis}
                     className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-[#5B4DFF] text-[12.5px] font-semibold text-white transition hover:bg-[#493EE6] disabled:opacity-60"
                   >
                     {isTailoring ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                    {isTailoring ? "Saving tailored version…" : `Save Tailored Version (${appliedFixIds.length} fix${appliedFixIds.length === 1 ? "" : "es"} applied)`}
+                    {isTailoring ? "Saving tailored resume…" : `Save Tailored Resume (${appliedFixIds.length} fix${appliedFixIds.length === 1 ? "" : "es"} applied)`}
                   </button>
                   <button
                     type="button"
@@ -2833,7 +2859,7 @@ export default function ResumeStudioPage() {
             <div className="hidden xl:contents">
               <StickyResumePreview
                 title="Tailored Resume Preview"
-                badge="Draft tailored version"
+                badge="Draft tailored resume"
                 resume={livePreviewResume}
                 profile={profile}
                 sections={orderedSections}

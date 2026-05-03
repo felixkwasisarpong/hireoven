@@ -180,43 +180,59 @@ function isWeakOrThinBullet(
   return null
 }
 
+/**
+ * Detect bullet suggestion text that's actually a fill-in-the-blank template
+ * (e.g. "[Draft—verify]", "<Strong verb>", "Add a metric here"). Used as a
+ * defensive filter on AI-returned suggestions so the user never sees / accepts
+ * a replacement that's just placeholder text.
+ *
+ * Heuristics — match if any of:
+ *   - "[Draft", "[TODO", "[FIXME", "[verify", "[placeholder" anywhere
+ *   - Two or more `<lowercase|word>` style template tokens
+ *   - "(replace bracketed", "(fill in", "(add ..." parenthetical instructions
+ *   - "Add a metric", "Add measurable", "Add scope", etc. as imperatives
+ */
+function looksLikePlaceholderBullet(text: string | undefined): boolean {
+  if (!text) return false
+  const s = text.trim()
+  if (!s) return false
+  if (/\[(?:draft|todo|fixme|verify|placeholder|tbd)\b/i.test(s)) return true
+  if (/\(\s*replace\s+brack/i.test(s)) return true
+  if (/\(\s*fill\s+in\b/i.test(s)) return true
+  if (/\b(?:add\s+(?:a\s+)?(?:metric|scope|outcome|number|measurable))\b/i.test(s)) return true
+  // Two or more <…> placeholder tokens like "<Strong verb> <scope> <outcome>"
+  const angleTokens = s.match(/<[^<>\n]{1,40}>/g) ?? []
+  if (angleTokens.length >= 2) return true
+  return false
+}
+
+/**
+ * Local fallback suggestion when the AI isn't available or the deterministic
+ * analyzer detects a weak bullet. Returns `null` when we can't produce a real
+ * replacement — we never emit `[Draft—verify]` / `<placeholder>` template text
+ * that the user would have to fill in themselves; the `issue` text on the
+ * surrounding suggestion already tells them what's wrong, and a click on
+ * "Apply" must never replace the bullet with template garbage.
+ */
 function buildDraftReplaceBullet(
   reason: "vague" | "thin" | "no_metric" | "missing_jd_stack",
   trimmedLine: string,
   exp: ExperienceLite,
   jobSkillTerms: string[]
-): { issue: string; suggested: string; confidence: "low" | "medium" } {
+): { issue: string; suggested: string; confidence: "low" | "medium" } | null {
   const expText = [exp.description, exp.role, exp.company].filter(Boolean).join(" ")
   const inRoleNotBullet = jobSkillTerms.filter(
     (t) => keywordInText(t, expText) && !keywordInText(t, trimmedLine)
   )
   const inRole = inRoleNotBullet.slice(0, 2)
 
-  if (inRole.length) {
-    return {
-      issue:
-        reason === "missing_jd_stack"
-          ? "This bullet doesn’t name tools or outcomes the job asks for, while the same role already shows that stack nearby — pull one into this line with a result you can verify."
-          : "This line is easy to miss in a skim; it should name your stack and a measurable result.",
-      suggested: `• [Draft—verify] Led <outcome> with ${inRole.join(" and ")} (already in this role—make this bullet the one that proves that stack). Add one metric: time, %, $, or scale.`,
-      confidence: "medium",
-    }
-  }
-
-  if (reason === "vague" || reason === "thin" || reason === "no_metric") {
-    return {
-      issue: "Generic phrasing: strengthen with a past-tense outcome, scope, and a number if you can support it.",
-      suggested:
-        "• [Draft—verify] <Strong verb> <scope> that <measurable outcome> (replace bracketed parts with facts from this job).",
-      confidence: "low",
-    }
-  }
-  return {
-    issue: "Tie this line to a concrete action and tool from the job description you actually used.",
-    suggested:
-      "• [Draft—verify] <Strong verb> <system/project> to <customer-facing or infra outcome> using <posting tool you truly used> + one metric.",
-    confidence: "low",
-  }
+  // We can identify the bullet is weak and which JD tools are present in this
+  // role but missing from the bullet — but we don't know the user's real
+  // outcome / metrics. Returning null here means the caller skips emitting a
+  // suggestion; we don't surface a fill-in-the-blank template to the user.
+  void inRole
+  void reason
+  return null
 }
 
 const INDIRECT_HINTS: Record<string, string[]> = {
@@ -548,6 +564,10 @@ export function buildLocalTailorAnalysis(input: BuildLocalTailorInput): TailorAn
       }
 
       const draft = buildDraftReplaceBullet(weak.reason, line, exp, jobTerms)
+      // Skip the suggestion entirely when we can't produce a real replacement
+      // — better to surface fewer, real suggestions than fill-in-the-blank
+      // templates with [Draft—verify] / <placeholder> markers.
+      if (!draft) continue
       const b: TailorBulletSuggestion = {
         id: buildFixId("bullet", bulletSuggestions.length),
         experienceId,
@@ -699,39 +719,45 @@ export function normalizeTailorAnalysis(
     })
 
   const rawBullets = Array.isArray(o.bulletSuggestions) ? o.bulletSuggestions : []
-  const bulletSuggestions: TailorBulletSuggestion[] = rawBullets.map((raw, i) => {
-    if (!raw || typeof raw !== "object") {
-      return {
-        id: `b-${i}`,
-        experienceId: "exp-0",
-        original: "—",
-        issue: "—",
-        suggested: "—",
-        reason: "—",
-        confidence: "medium" as const,
-      }
-    }
-    const s = raw as Record<string, unknown>
-    const c = s.confidence
-    const conf = c === "low" || c === "high" || c === "medium" ? c : "medium"
-    return {
-      id: asString(s.id) || `b-${i}`,
-      experienceId: asString(s.experienceId) || "exp-0",
-      original: asString(s.original) || "—",
-      issue: asString(s.issue) || "—",
-      suggested: asString(s.suggested) || "—",
-      reason: asString(s.reason) || "—",
-      confidence: conf,
-      ...(() => {
-        const co = asOptString(s.company)
-        const ro = asOptString(s.role)
+  const bulletSuggestions: TailorBulletSuggestion[] = rawBullets
+    .map((raw, i) => {
+      if (!raw || typeof raw !== "object") {
         return {
-          ...(co != null && co !== "" ? { company: co } : {}),
-          ...(ro != null && ro !== "" ? { role: ro } : {}),
+          id: `b-${i}`,
+          experienceId: "exp-0",
+          original: "—",
+          issue: "—",
+          suggested: "—",
+          reason: "—",
+          confidence: "medium" as const,
         }
-      })(),
-    }
-  })
+      }
+      const s = raw as Record<string, unknown>
+      const c = s.confidence
+      const conf: "low" | "medium" | "high" =
+        c === "low" || c === "high" || c === "medium" ? c : "medium"
+      return {
+        id: asString(s.id) || `b-${i}`,
+        experienceId: asString(s.experienceId) || "exp-0",
+        original: asString(s.original) || "—",
+        issue: asString(s.issue) || "—",
+        suggested: asString(s.suggested) || "—",
+        reason: asString(s.reason) || "—",
+        confidence: conf,
+        ...(() => {
+          const co = asOptString(s.company)
+          const ro = asOptString(s.role)
+          return {
+            ...(co != null && co !== "" ? { company: co } : {}),
+            ...(ro != null && ro !== "" ? { role: ro } : {}),
+          }
+        })(),
+      }
+    })
+    // Filter out any AI-returned suggestion that contains placeholder text
+    // (e.g. "[Draft—verify]", "<Strong verb>", "Add a metric here"). The
+    // analyze prompt forbids these but the model occasionally ignores it.
+    .filter((b) => !looksLikePlaceholderBullet(b.suggested))
 
   const rawSum = o.summarySuggestion
   let summarySuggestion: TailorSummarySuggestion | undefined
@@ -798,6 +824,14 @@ export function normalizeTailorAnalysis(
       return null
     })
     .filter((x): x is TailorFix => Boolean(x))
+    // Same placeholder filter as bulletSuggestions — replace_bullet fixes
+    // are what the user actually clicks "Apply" on, so any placeholder text
+    // here is the most user-visible regression risk.
+    .filter((x) => {
+      if (x.type === "replace_bullet" && looksLikePlaceholderBullet(x.suggested)) return false
+      if (x.type === "replace_summary" && looksLikePlaceholderBullet(x.suggested)) return false
+      return true
+    })
 
   const presentKeywords = Array.isArray(o.presentKeywords) ? o.presentKeywords.map((k) => asString(k)).filter(Boolean) : []
   const missingKeywords = Array.isArray(o.missingKeywords) ? o.missingKeywords.map((k) => asString(k)).filter(Boolean) : []

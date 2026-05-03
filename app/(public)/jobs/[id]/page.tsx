@@ -195,6 +195,8 @@ export default async function PublicJobPage({ params }: Props) {
             {company?.id ? (
               <Link
                 href={`/companies/${company.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
                 className="inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-surface px-5 py-2.5 text-sm font-semibold text-brand-navy transition-colors hover:bg-brand-tint"
               >
                 View {company.name} immigration profile

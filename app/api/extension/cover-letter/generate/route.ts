@@ -28,7 +28,7 @@ import {
   readExtensionJsonBody,
   requireExtensionAuth,
 } from "@/lib/extension/auth"
-import type { Resume } from "@/types"
+import type { CoverLetter, Resume } from "@/types"
 
 export const runtime = "nodejs"
 export const maxDuration = 40
@@ -202,7 +202,24 @@ export async function POST(request: Request) {
       yearsExperience: resume.years_of_experience ?? null,
       missingKeywords,
     })
-    return NextResponse.json({ coverLetter: text, jobTitle, company: companyName, source: "template" }, { headers })
+    const saved = await persistCoverLetter({
+      userId: user.sub,
+      resumeId: resume.id,
+      jobId,
+      jobTitle: jobTitle ?? "",
+      companyName: companyName ?? "",
+      body: text,
+    })
+    return NextResponse.json(
+      {
+        coverLetterId: saved?.id ?? null,
+        coverLetter: text,
+        jobTitle,
+        company: companyName,
+        source: "template",
+      },
+      { headers },
+    )
   }
 
   // Build a structured resume context — rich enough for Claude but not over-long
@@ -284,9 +301,25 @@ Return ONLY the cover letter text. No commentary, no JSON wrapper, no preamble.`
       .join("")
       .trim()
 
+    const saved = await persistCoverLetter({
+      userId: user.sub,
+      resumeId: resume.id,
+      jobId,
+      jobTitle: jobTitle ?? "",
+      companyName: companyName ?? "",
+      body: coverLetter,
+    })
+
     return NextResponse.json(
-      { coverLetter, jobTitle, company: companyName, atsName: atsProfile.name, source: "ai" },
-      { headers }
+      {
+        coverLetterId: saved?.id ?? null,
+        coverLetter,
+        jobTitle,
+        company: companyName,
+        atsName: atsProfile.name,
+        source: "ai",
+      },
+      { headers },
     )
   } catch (err) {
     console.error("[cover-letter/generate] AI generation failed, falling back to template:", err)
@@ -300,6 +333,63 @@ Return ONLY the cover letter text. No commentary, no JSON wrapper, no preamble.`
       yearsExperience: resume.years_of_experience ?? null,
       missingKeywords,
     })
-    return NextResponse.json({ coverLetter: text, jobTitle, company: companyName, atsName: atsProfile.name, source: "template" }, { headers })
+    const saved = await persistCoverLetter({
+      userId: user.sub,
+      resumeId: resume.id,
+      jobId,
+      jobTitle: jobTitle ?? "",
+      companyName: companyName ?? "",
+      body: text,
+    })
+    return NextResponse.json(
+      {
+        coverLetterId: saved?.id ?? null,
+        coverLetter: text,
+        jobTitle,
+        company: companyName,
+        atsName: atsProfile.name,
+        source: "template",
+      },
+      { headers },
+    )
+  }
+}
+
+// ── Persistence helper ─────────────────────────────────────────────────────────
+
+async function persistCoverLetter(args: {
+  userId: string
+  resumeId: string
+  jobId: string
+  jobTitle: string
+  companyName: string
+  body: string
+}): Promise<CoverLetter | null> {
+  try {
+    const pool = getPostgresPool()
+    const countResult = await pool.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count FROM cover_letters WHERE user_id = $1 AND job_id = $2`,
+      [args.userId, args.jobId],
+    )
+    const versionNumber = Number(countResult.rows[0]?.count ?? 0) + 1
+    const wordCount = args.body.split(/\s+/).filter(Boolean).length
+
+    const insert = await pool.query<CoverLetter>(
+      `INSERT INTO cover_letters (
+         user_id, resume_id, job_id, job_title, company_name, hiring_manager,
+         subject_line, body, word_count, tone, length, style,
+         version_number, is_favorite, was_used, mentions_sponsorship, sponsorship_approach
+       ) VALUES (
+         $1, $2, $3, $4, $5, NULL,
+         NULL, $6, $7, 'professional', 'medium', 'achievement_focused',
+         $8, false, false, false, NULL
+       )
+       RETURNING *`,
+      [args.userId, args.resumeId, args.jobId, args.jobTitle, args.companyName, args.body, wordCount, versionNumber],
+    )
+    return insert.rows[0] ?? null
+  } catch (err) {
+    console.error("[cover-letter/generate] persist failed:", err)
+    return null
   }
 }

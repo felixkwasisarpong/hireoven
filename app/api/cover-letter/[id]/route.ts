@@ -43,17 +43,25 @@ export async function PATCH(
   })
   values.push(new Date().toISOString(), params.id, user.id)
 
-  const result = await pool.query(
-    `UPDATE cover_letters
-     SET ${setSql.join(", ")}, updated_at = $${values.length - 2}
-     WHERE id = $${values.length - 1}
-       AND user_id = $${values.length}
-     RETURNING *`,
-    values
-  )
-  const data = result.rows[0]
-  if (!data) return NextResponse.json({ error: "Cover letter not found" }, { status: 404 })
-  return NextResponse.json(data)
+  try {
+    const result = await pool.query(
+      `UPDATE cover_letters
+       SET ${setSql.join(", ")}, updated_at = $${values.length - 2}
+       WHERE id = $${values.length - 1}
+         AND user_id = $${values.length}
+       RETURNING *`,
+      values
+    )
+    const data = result.rows[0]
+    if (!data) return NextResponse.json({ error: "Cover letter not found" }, { status: 404 })
+    return NextResponse.json(data)
+  } catch (err) {
+    console.error("[cover-letter PATCH] failed", { id: params.id, fields: entries.map(([k]) => k), error: err })
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Database error" },
+      { status: 500 }
+    )
+  }
 }
 
 export async function DELETE(

@@ -2,9 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { usePathname, useSearchParams } from "next/navigation"
-import Link from "next/link"
 import dynamic from "next/dynamic"
-import { Brain, Clock, LayoutDashboard, Shield, Sparkles, X } from "lucide-react"
+import { Brain, Clock, Shield, Sparkles, X } from "lucide-react"
 import { runQualityControl, buildQCContext } from "@/lib/scout/quality-control"
 import { ScoutCommandBar } from "./ScoutCommandBar"
 import { WorkspaceSurface } from "./WorkspaceSurface"
@@ -1605,71 +1604,89 @@ export function ScoutWorkspaceShell() {
     query.trim().length === 0 &&
     Boolean(proactive.topEvent)
 
+  const MODE_DISPLAY_LABELS: Partial<Record<WorkspaceMode, string>> = {
+    search:           "Job Search",
+    compare:          "Comparing Jobs",
+    tailor:           "Resume Tailoring",
+    applications:     "Applications",
+    company:          "Company Intel",
+    bulk_application: "Bulk Apply",
+    research:         "Deep Research",
+    outreach:         "Outreach",
+    interview:        "Interview Prep",
+    career_strategy:  "Career Strategy",
+  }
+
   const workspaceModeLabel =
-    workspaceMode === "idle"
-      ? "Idle"
-      : workspaceMode
-          .replace(/_/g, " ")
-          .replace(/\b\w/g, (char) => char.toUpperCase())
+    MODE_DISPLAY_LABELS[workspaceMode] ??
+    (workspaceMode === "idle"
+      ? "Ready"
+      : workspaceMode.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()))
 
   const statusLine = scoutStream.isStreaming
-    ? "Scout is thinking and preparing your next move."
+    ? "Thinking…"
     : researchStream.isRunning
-      ? "Scout is researching and collecting evidence."
+      ? "Researching…"
       : workspaceMode === "idle"
-        ? "Ask Scout to search, compare, tailor, or run an application workflow."
-        : `Agent mode: ${workspaceModeLabel}`
+        ? "Your AI job-search copilot"
+        : workspaceModeLabel
 
   return (
     <main className="app-page bg-[linear-gradient(180deg,#fff6f1_0%,#fafaf9_24%,#fafaf9_100%)] pb-[max(6rem,calc(env(safe-area-inset-bottom)+5.5rem))]">
 
-      {/* ── Command bar — light, sticky ─────────────────────────────────── */}
-      <div className="sticky top-0 z-20 border-b border-[#FFD8C4] bg-[linear-gradient(180deg,rgba(255,248,242,0.98)_0%,rgba(255,255,255,0.94)_100%)] px-5 backdrop-blur-sm sm:px-8">
-        <div className="flex items-center justify-between pt-4 pb-3">
-          <div className="flex items-center gap-2.5">
-            <span className="inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-[#FF5C18] shadow-[0_2px_8px_rgba(255,92,24,0.35)]">
-              <Sparkles className="h-3.5 w-3.5 text-white" />
+      {/* ── Command bar — sticky ─────────────────────────────────────────── */}
+      <div className="sticky top-0 z-20 border-b border-slate-100 bg-white/95 px-5 backdrop-blur-md sm:px-8">
+        <div className="flex items-center justify-between py-3">
+          <div className="flex items-center gap-3">
+            <span className={cn(
+              "relative inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl bg-[#FF5C18] shadow-[0_4px_12px_rgba(255,92,24,0.35)]",
+              (scoutStream.isStreaming || researchStream.isRunning) && "ring-2 ring-[#FF5C18]/25 ring-offset-2"
+            )}>
+              {(scoutStream.isStreaming || researchStream.isRunning) && (
+                <span className="absolute inset-0 animate-ping rounded-xl bg-[#FF5C18] opacity-20" />
+              )}
+              <Sparkles className="h-4 w-4 text-white" />
             </span>
             <div>
-              <p className="text-sm font-semibold leading-none text-slate-900">Scout Agent</p>
-              <p className="mt-0.5 text-[11px] text-slate-600">{statusLine}</p>
+              <p className="text-sm font-semibold leading-none text-slate-900">Scout</p>
+              <p className={cn(
+                "mt-0.5 text-[11px] transition-colors duration-300",
+                (scoutStream.isStreaming || researchStream.isRunning)
+                  ? "font-medium text-[#FF5C18]"
+                  : "text-slate-400"
+              )}>{statusLine}</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5">
-            {/* Streaming activity indicator + cancel button */}
+          <div className="flex items-center gap-1">
+            {/* Streaming stop button */}
             {(scoutStream.isStreaming || researchStream.isRunning) && (
-              <div className="flex items-center gap-2 pr-1.5">
-                <span className="flex items-center gap-1.5 text-[10px] font-medium text-[#FF5C18]">
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#FF5C18]" />
-                  {researchStream.isRunning ? "Researching…" : "Thinking…"}
-                </span>
-                <button
-                  type="button"
-                  onClick={researchStream.isRunning ? researchStream.cancel : scoutStream.cancel}
-                  title="Stop Scout"
-                  className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-slate-500 transition hover:border-red-300 hover:text-red-500"
-                >
-                  Stop
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={researchStream.isRunning ? researchStream.cancel : scoutStream.cancel}
+                title="Stop Scout"
+                className="mr-1 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-[11px] font-semibold text-red-500 transition hover:bg-red-100"
+              >
+                Stop
+              </button>
             )}
+            {/* Mode pill */}
             {workspaceMode !== "idle" && !scoutStream.isStreaming && (
-              <span className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+              <span className="mr-1 inline-flex items-center gap-1.5 rounded-full border border-[#FFD5C2] bg-[#FFF8F5] px-3 py-1 text-[11px] font-semibold text-[#FF5C18]">
                 <span className="h-1.5 w-1.5 rounded-full bg-[#FF5C18]" />
-                {workspaceMode}
+                {workspaceModeLabel}
               </span>
             )}
-            {/* Activity timeline toggle */}
+            {/* Timeline */}
             <button
               type="button"
               onClick={() => setShowTimeline((v) => !v)}
               title="Activity timeline"
               className={cn(
-                "inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition",
+                "inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-[11px] font-medium transition",
                 showTimeline
                   ? "bg-[#FFF3EC] text-[#FF5C18]"
-                  : "text-slate-500 hover:bg-slate-100 hover:text-slate-800",
+                  : "text-slate-400 hover:bg-slate-100 hover:text-slate-700",
               )}
             >
               <Clock className="h-3.5 w-3.5" />
@@ -1679,37 +1696,26 @@ export function ScoutWorkspaceShell() {
                 </span>
               )}
             </button>
-            {/* Memory button */}
+            {/* Memory */}
             <button
               type="button"
               onClick={() => setMemoryPanelOpen(true)}
               title="Scout Memory"
-              className="rounded-md px-2 py-1 text-[11px] font-medium text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
+              className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-[11px] font-medium text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
             >
-              <span className="inline-flex items-center gap-1">
-                <Brain className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Memory</span>
-              </span>
+              <Brain className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Memory</span>
             </button>
-            {/* Permissions button */}
+            {/* Permissions */}
             <button
               type="button"
               onClick={() => setShowPermissions(true)}
               title="Scout permissions"
-              className="rounded-md px-2 py-1 text-[11px] font-medium text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
+              className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-[11px] font-medium text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
             >
-              <span className="inline-flex items-center gap-1">
-                <Shield className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Permissions</span>
-              </span>
+              <Shield className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Permissions</span>
             </button>
-            <Link
-              href="/dashboard/scout/legacy"
-              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
-            >
-              <LayoutDashboard className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Advanced</span>
-            </Link>
           </div>
         </div>
 
@@ -1807,6 +1813,7 @@ export function ScoutWorkspaceShell() {
                     chatEndRef={chatEndRef as React.RefObject<HTMLDivElement>}
                     recentCommands={recentCommands} hasSession={hasSession}
                     onStartFresh={handleStartFresh}
+                    userInitial={firstName ? firstName.charAt(0).toUpperCase() : undefined}
                     missions={missionStore?.disabled ? [] : (missionStore?.missions ?? [])}
                     momentumLine={missionStore?.momentumLine}
                     onMissionLaunch={(q) => {
@@ -1937,7 +1944,7 @@ export function ScoutWorkspaceShell() {
         </div>
 
         {/* Right intelligence rail — Timeline > Company intel > Scout rail > browser context > market signals */}
-        {(showTimeline || companyIntelData || companyIntelLoading || rail || (browserContext && browserContext.pageType !== "unknown") || marketSignals.length > 0 || proactiveRailEvents.length > 0) && (
+        {workspaceMode !== "bulk_application" && (showTimeline || companyIntelData || companyIntelLoading || rail || (browserContext && browserContext.pageType !== "unknown") || marketSignals.length > 0 || proactiveRailEvents.length > 0) && (
           <ScoutErrorBoundary surface="Context rail" retryLabel="Reload rail">
           <div className="hidden lg:flex flex-col gap-4 transition-all duration-200 opacity-100 translate-x-0">
             {/* Activity timeline panel */}

@@ -34,18 +34,56 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url)
   const resumeId = searchParams.get("resumeId")
-  if (!resumeId) {
-    return extensionError(request, 400, "resumeId is required", { headers: cors })
-  }
+  const jobId = searchParams.get("jobId")
 
+  // Resolution priority:
+  //   1. resumeId  → exact match (used when the user explicitly picked a version)
+  //   2. jobId     → tailored copy for that job, if one exists (autofill on a
+  //                  saved job page)
+  //   3. fallback  → user's primary resume (or most recently updated)
   const pool = getPostgresPool()
-  const result = await pool.query<Resume>(
-    `SELECT * FROM resumes WHERE id = $1 AND user_id = $2 LIMIT 1`,
-    [resumeId, user.sub],
-  )
+  let result: { rows: Resume[] }
+  if (resumeId) {
+    result = await pool.query<Resume>(
+      `SELECT * FROM resumes WHERE id = $1 AND user_id = $2 LIMIT 1`,
+      [resumeId, user.sub],
+    )
+  } else if (jobId) {
+    // Try tailored copy first; fall back to primary inside the same query.
+    result = await pool.query<Resume>(
+      `(
+         SELECT * FROM resumes
+         WHERE user_id = $1 AND tailored_for_job_id = $2
+         ORDER BY updated_at DESC
+         LIMIT 1
+       )
+       UNION ALL
+       (
+         SELECT * FROM resumes
+         WHERE user_id = $1
+         ORDER BY is_primary DESC NULLS LAST, updated_at DESC
+         LIMIT 1
+       )
+       LIMIT 1`,
+      [user.sub, jobId],
+    )
+  } else {
+    result = await pool.query<Resume>(
+      `SELECT * FROM resumes
+       WHERE user_id = $1
+       ORDER BY is_primary DESC NULLS LAST, updated_at DESC
+       LIMIT 1`,
+      [user.sub],
+    )
+  }
   const resume = result.rows[0]
   if (!resume) {
-    return extensionError(request, 404, "Resume not found", { headers: cors })
+    return extensionError(
+      request,
+      404,
+      resumeId ? "Resume not found" : "No resume found — upload one in Hireoven first",
+      { headers: cors },
+    )
   }
 
   let docxBuffer: Buffer

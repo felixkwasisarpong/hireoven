@@ -434,7 +434,8 @@ export default function JobCardV2({
       cardView.preview_description ?? "",
       pickRawString(raw, ["sponsorshipSignal", "sponsorship_signal"]) ?? "",
     ].join(" ")
-    return /\b(actively\s+(?:recruiting|hiring|seeking)|urgently?\s+hiring|hiring\s+now|now\s+hiring|immediate(?:ly)?\s+(?:hire|hiring|need|opening)|urgent(?:ly)?\s+(?:hiring|need)|high(?:ly)?\s+priority\s+role)\b/i.test(haystack)
+    // Mirrors chrome-extension/src/extractors/scout-extractor.ts ACTIVELY_HIRING_RE.
+    return /\b(?:actively\s+(?:recruiting|hiring|seeking|reviewing\s+(?:applicants?|applications?|candidates?))|urgently?\s+hiring|hiring\s+now|now\s+hiring|immediate(?:ly)?\s+(?:hire|hiring|need|opening)|urgent(?:ly)?\s+(?:hiring|need)|high(?:ly)?\s+priority\s+role)\b/i.test(haystack)
   }, [raw, job.title, cardView.preview_description])
 
   // LinkedIn indicator: detect from the apply URL
@@ -631,7 +632,7 @@ export default function JobCardV2({
               domain={companyDomain}
               logoUrl={companyLogoUrl}
               priority={priorityLogo}
-              className="h-12 w-12 shrink-0 rounded-xl border border-slate-200 bg-slate-50 p-1"
+              className="h-20 w-20 shrink-0 rounded-xl border border-slate-200 bg-slate-50 sm:h-24 sm:w-24"
             />
 
             {/* Main info */}
