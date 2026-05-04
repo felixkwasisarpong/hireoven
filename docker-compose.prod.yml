@@ -1,0 +1,54 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: hireoven-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-hireoven}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-hireoven}
+    volumes:
+      - hireoven_postgres_data:/var/lib/postgresql/data
+      - ./lib/postgres/auth-bootstrap.sql:/docker-entrypoint-initdb.d/01-auth-bootstrap.sql:ro
+      - ./docker/postgres/02-profiles.sql:/docker-entrypoint-initdb.d/02-profiles.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hireoven} -d ${POSTGRES_DB:-hireoven}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    # Expose on host so you can restore the dump from outside the container.
+    # Remove this port mapping after the initial data load.
+    ports:
+      - "${POSTGRES_HOST_PORT:-5432}:5432"
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: hireoven-app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://${POSTGRES_USER:-hireoven}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-hireoven}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL}
+      NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_APP_URL}
+      AUTH_SESSION_SECRET: ${AUTH_SESSION_SECRET}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      RESEND_API_KEY: ${RESEND_API_KEY}
+      RESEND_FROM_EMAIL: ${RESEND_FROM_EMAIL}
+      LOGO_DEV_TOKEN: ${LOGO_DEV_TOKEN}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY}
+      VAPID_EMAIL: ${VAPID_EMAIL}
+      WAITLIST_ONLY: ${WAITLIST_ONLY:-true}
+      CRAWLER_PLAYWRIGHT_ENABLED: ${CRAWLER_PLAYWRIGHT_ENABLED:-false}
+    ports:
+      - "${APP_PORT:-3000}:3000"
+
+volumes:
+  hireoven_postgres_data:
