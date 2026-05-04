@@ -32,6 +32,13 @@ export default function NavbarAuthCluster() {
     }
   }, [])
 
+  // While the session check is in flight, render a placeholder that matches the
+  // width of the auth buttons so the layout doesn't jump. Never show Login/Signup
+  // until we know the user is definitely not authenticated.
+  if (isAuthed === null) {
+    return <div className="h-9 w-24 animate-pulse rounded-lg bg-surface-alt" aria-hidden />
+  }
+
   if (isAuthed === true) {
     return (
       <Link
