@@ -165,10 +165,11 @@ export function AuthForm({ defaultMode = "login" }: Props) {
           <div className="absolute -bottom-24 left-1/4 h-64 w-64 rounded-full bg-orange-500/10 blur-[80px]" />
         </div>
 
-        {/* Logo — inverted so it reads white on the dark panel */}
+        {/* Logo — icon in native colors + white wordmark text */}
         <div className="relative z-10">
-          <Link href="/">
-            <HireovenLogo variant="full" priority className="h-10 w-auto brightness-0 invert" />
+          <Link href="/" className="inline-flex items-center gap-3">
+            <HireovenLogo variant="mark" priority className="h-10 w-10 shrink-0" />
+            <HireovenLogo variant="wordmark" priority className="h-6 w-auto brightness-0 invert" />
           </Link>
         </div>
 
