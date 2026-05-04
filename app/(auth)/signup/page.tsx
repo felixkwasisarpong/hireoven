@@ -152,22 +152,12 @@ function SignupForm() {
     }
   }
 
-  async function handleGoogleSignup() {
+  function handleGoogleSignup() {
     setOauthLoading(true)
     setError(null)
-
-    const providersRes = await fetch("/api/auth/providers", { cache: "no-store" })
-    const providers = providersRes.ok ? ((await providersRes.json()) as { google?: boolean }) : { google: false }
-    if (!providers.google) {
-      setError("Google sign-in is not configured on this server.")
-      setOauthLoading(false)
-      return
-    }
-
     const next = validPlan
       ? `/dashboard/upgrade?plan=${validPlan}&interval=${intervalParam}&checkout=1`
       : nextParam
-
     window.location.assign(`/api/auth/google?next=${encodeURIComponent(next)}`)
   }
 

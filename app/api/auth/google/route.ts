@@ -1,9 +1,21 @@
 import { NextRequest, NextResponse } from "next/server"
 import { signOAuthStateJwt } from "@/lib/auth/jwt"
 
+export const runtime = "nodejs"
+
 function sanitizeNext(next: string | null): string {
   if (!next || !next.startsWith("/") || next.startsWith("//")) return "/dashboard"
   return next
+}
+
+/** Returns the canonical public origin (no trailing slash).
+ *  NEXT_PUBLIC_APP_URL must be set in production to the exact origin
+ *  registered as an authorised redirect URI in Google Cloud Console.
+ *  Falls back to the request origin in local dev where no proxy is involved. */
+function getAppOrigin(request: NextRequest): string {
+  const fromEnv = process.env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/$/, "")
+  if (fromEnv) return fromEnv
+  return new URL(request.url).origin
 }
 
 export async function GET(request: NextRequest) {
@@ -15,8 +27,7 @@ export async function GET(request: NextRequest) {
 
   const next = sanitizeNext(request.nextUrl.searchParams.get("next"))
   const state = await signOAuthStateJwt({ next })
-  const origin = new URL(request.url).origin
-  const redirectUri = `${origin}/api/auth/google/callback`
+  const redirectUri = `${getAppOrigin(request)}/api/auth/google/callback`
 
   const url = new URL("https://accounts.google.com/o/oauth2/v2/auth")
   url.searchParams.set("client_id", clientId)
@@ -25,6 +36,7 @@ export async function GET(request: NextRequest) {
   url.searchParams.set("scope", "openid email profile")
   url.searchParams.set("state", state)
   url.searchParams.set("access_type", "online")
+  url.searchParams.set("prompt", "select_account")
 
   return NextResponse.redirect(url.toString())
 }

@@ -6,96 +6,91 @@ import { getPostgresPool } from "@/lib/postgres/server"
 
 export const runtime = "nodejs"
 
+/** Must match getAppOrigin() in the initiation route exactly. */
+function getAppOrigin(request: NextRequest): string {
+  const fromEnv = process.env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/$/, "")
+  if (fromEnv) return fromEnv
+  return new URL(request.url).origin
+}
+
+function loginError(origin: string, code: string) {
+  return NextResponse.redirect(new URL(`/login?error=${encodeURIComponent(code)}`, origin))
+}
+
 export async function GET(request: NextRequest) {
   const url = request.nextUrl
+  const origin = getAppOrigin(request)
+
   const err = url.searchParams.get("error")
-  if (err) {
-    return NextResponse.redirect(
-      new URL(`/login?error=${encodeURIComponent(err)}`, url.origin)
-    )
-  }
+  if (err) return loginError(origin, err)
 
   const code = url.searchParams.get("code")
   const state = url.searchParams.get("state")
-  if (!code || !state) {
-    return NextResponse.redirect(new URL("/login?error=missing_code", url.origin))
-  }
+  if (!code || !state) return loginError(origin, "missing_code")
 
   const claims = await verifyOAuthStateJwt(state)
-  if (!claims) {
-    return NextResponse.redirect(new URL("/login?error=invalid_state", url.origin))
-  }
+  if (!claims) return loginError(origin, "invalid_state")
 
   const clientId = process.env.GOOGLE_CLIENT_ID?.trim()
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim()
-  if (!clientId || !clientSecret) {
-    return NextResponse.redirect(new URL("/login?error=oauth_not_configured", url.origin))
-  }
+  if (!clientId || !clientSecret) return loginError(origin, "oauth_not_configured")
 
-  const redirectUri = `${url.origin}/api/auth/google/callback`
+  const redirectUri = `${origin}/api/auth/google/callback`
+
+  // Exchange code for tokens
   const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      code,
-      client_id: clientId,
-      client_secret: clientSecret,
-      redirect_uri: redirectUri,
-      grant_type: "authorization_code",
-    }),
+    body: new URLSearchParams({ code, client_id: clientId, client_secret: clientSecret, redirect_uri: redirectUri, grant_type: "authorization_code" }),
   })
-
-  if (!tokenRes.ok) {
-    return NextResponse.redirect(new URL("/login?error=oauth_token", url.origin))
-  }
+  if (!tokenRes.ok) return loginError(origin, "oauth_token")
 
   const tokens = (await tokenRes.json()) as { access_token?: string }
-  if (!tokens.access_token) {
-    return NextResponse.redirect(new URL("/login?error=oauth_token", url.origin))
-  }
+  if (!tokens.access_token) return loginError(origin, "oauth_token")
 
+  // Fetch Google profile
   const profileRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
     headers: { Authorization: `Bearer ${tokens.access_token}` },
   })
-  if (!profileRes.ok) {
-    return NextResponse.redirect(new URL("/login?error=userinfo", url.origin))
-  }
+  if (!profileRes.ok) return loginError(origin, "userinfo")
 
-  const profile = (await profileRes.json()) as {
+  const googleProfile = (await profileRes.json()) as {
     sub: string
     email?: string
     name?: string
     picture?: string
   }
-  if (!profile.email) {
-    return NextResponse.redirect(new URL("/login?error=no_email", url.origin))
-  }
+  if (!googleProfile.email) return loginError(origin, "no_email")
 
-  const email = profile.email.trim().toLowerCase()
+  const email = googleProfile.email.trim().toLowerCase()
   const pool = getPostgresPool()
 
+  // Resolve or create user
   let userId: string | null = null
-  const existingGoogle = await pool.query<{ id: string }>(
+
+  const byGoogleSub = await pool.query<{ id: string }>(
     `SELECT id FROM auth.users WHERE google_sub = $1 LIMIT 1`,
-    [profile.sub]
+    [googleProfile.sub]
   )
-  if (existingGoogle.rows[0]) {
-    userId = existingGoogle.rows[0].id
+  if (byGoogleSub.rows[0]) {
+    userId = byGoogleSub.rows[0].id
   } else {
     const byEmail = await pool.query<{ id: string; google_sub: string | null }>(
       `SELECT id, google_sub FROM auth.users WHERE lower(trim(email)) = $1 LIMIT 1`,
       [email]
     )
-    const row = byEmail.rows[0]
-    if (row) {
-      userId = row.id
-      if (!row.google_sub) {
-        await pool.query(`UPDATE auth.users SET google_sub = $1, updated_at = now() WHERE id = $2`, [
-          profile.sub,
-          row.id,
-        ])
+    const existing = byEmail.rows[0]
+    if (existing) {
+      userId = existing.id
+      // Link google_sub to an existing email account
+      if (!existing.google_sub) {
+        await pool.query(
+          `UPDATE auth.users SET google_sub = $1, updated_at = now() WHERE id = $2`,
+          [googleProfile.sub, existing.id]
+        )
       }
     } else {
+      // New user — create account + profile in a transaction
       userId = randomUUID()
       const client = await pool.connect()
       try {
@@ -103,48 +98,51 @@ export async function GET(request: NextRequest) {
         await client.query(
           `INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, google_sub, created_at, updated_at)
            VALUES ($1, $2, NULL, now(), $3, now(), now())`,
-          [userId, email, profile.sub]
+          [userId, email, googleProfile.sub]
         )
         await client.query(
           `INSERT INTO profiles (id, email, full_name, avatar_url)
            VALUES ($1, $2, $3, $4)
            ON CONFLICT (id) DO UPDATE
-             SET email = COALESCE(EXCLUDED.email, profiles.email),
-                 full_name = COALESCE(EXCLUDED.full_name, profiles.full_name),
+             SET email      = COALESCE(EXCLUDED.email, profiles.email),
+                 full_name  = COALESCE(EXCLUDED.full_name, profiles.full_name),
                  avatar_url = COALESCE(EXCLUDED.avatar_url, profiles.avatar_url),
                  updated_at = now()`,
-          [userId, email, profile.name ?? null, profile.picture ?? null]
+          [userId, email, googleProfile.name ?? null, googleProfile.picture ?? null]
         )
         await client.query("COMMIT")
-      } catch {
+      } catch (e) {
         await client.query("ROLLBACK").catch(() => {})
-        return NextResponse.redirect(new URL("/login?error=signup_failed", url.origin))
+        console.error("[google/callback] user creation failed", e)
+        return loginError(origin, "signup_failed")
       } finally {
         client.release()
       }
     }
   }
 
-  const profileFlags = await pool.query<{ suspended_at: string | null; is_admin: boolean | null }>(
+  // Check suspension
+  const flags = await pool.query<{ suspended_at: string | null; is_admin: boolean | null }>(
     `SELECT suspended_at, is_admin FROM profiles WHERE id = $1 LIMIT 1`,
-    [userId]
+    [userId!]
   )
-  if (profileFlags.rows[0]?.suspended_at) {
-    return NextResponse.redirect(new URL("/login?reason=suspended", url.origin))
+  if (flags.rows[0]?.suspended_at) {
+    return NextResponse.redirect(new URL("/login?reason=suspended", origin))
   }
 
   await pool.query(
     `UPDATE auth.users SET last_sign_in_at = now(), updated_at = now() WHERE id = $1`,
-    [userId]
+    [userId!]
   )
 
   const sessionToken = await signSessionJwt({
     sub: userId!,
     email,
-    isAdmin: Boolean(profileFlags.rows[0]?.is_admin),
+    isAdmin: Boolean(flags.rows[0]?.is_admin),
     suspended: false,
   })
-  const res = NextResponse.redirect(new URL(claims.next, url.origin))
+
+  const res = NextResponse.redirect(new URL(claims.next, origin))
   res.headers.append("Set-Cookie", buildSessionSetCookie(sessionToken, 60 * 60 * 24 * 14))
   return res
 }

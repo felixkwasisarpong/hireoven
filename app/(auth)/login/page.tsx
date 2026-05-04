@@ -19,9 +19,21 @@ export default function LoginPage() {
 
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
-  const [error, setError] = useState<string | null>(
-    searchParams.get("error") ?? null
-  )
+  const [error, setError] = useState<string | null>(() => {
+    const raw = searchParams.get("error")
+    if (!raw) return null
+    const MAP: Record<string, string> = {
+      oauth_token:        "Google sign-in failed. Please try again.",
+      userinfo:           "Couldn't retrieve your Google profile. Please try again.",
+      no_email:           "Your Google account has no email address associated.",
+      signup_failed:      "Account creation failed. Please try again.",
+      oauth_not_configured: "Google sign-in is not available right now.",
+      invalid_state:      "Sign-in session expired. Please try again.",
+      missing_code:       "Google did not return an authorisation code. Please try again.",
+      access_denied:      "You declined Google sign-in. You can use email/password below.",
+    }
+    return MAP[raw] ?? "Something went wrong. Please try again."
+  })
   const [loading, setLoading] = useState(false)
   const [oauthLoading, setOauthLoading] = useState(false)
 
@@ -79,32 +91,11 @@ export default function LoginPage() {
     window.location.assign("/dashboard")
   }
 
-  async function handleGoogleLogin() {
+  function handleGoogleLogin() {
     setOauthLoading(true)
     setError(null)
-
-    const providersRes = await fetch("/api/auth/providers", { cache: "no-store" })
-    const providers = providersRes.ok ? ((await providersRes.json()) as { google?: boolean }) : { google: false }
-    if (!providers.google) {
-      setError("Google sign-in is not configured on this server.")
-      setOauthLoading(false)
-      return
-    }
-
-    const next =
-      explicitNext ??
-      (await (async () => {
-        const res = await fetch("/api/profile", { credentials: "include", cache: "no-store" })
-        if (res.ok) {
-          const { profile } = (await res.json()) as { profile: { is_admin?: boolean } | null }
-          return profile?.is_admin ? "/admin" : "/dashboard"
-        }
-        return "/dashboard"
-      })())
-
-    window.location.assign(
-      `/api/auth/google?next=${encodeURIComponent(next)}`
-    )
+    const next = explicitNext ?? "/dashboard"
+    window.location.assign(`/api/auth/google?next=${encodeURIComponent(next)}`)
   }
 
   return (
