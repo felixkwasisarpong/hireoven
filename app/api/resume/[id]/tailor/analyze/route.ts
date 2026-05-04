@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import Anthropic from "@anthropic-ai/sdk"
 import { getSessionUser } from "@/lib/auth/session-user"
+import { requireFeature } from "@/lib/gates/server-gate"
 import { SONNET_MODEL } from "@/lib/ai/anthropic-models"
 import {
   buildLocalTailorAnalysis,
@@ -46,8 +47,9 @@ export async function POST(request: Request, { params }: { params: { id: string 
   if (!isUuid(resumeId)) {
     return NextResponse.json({ error: "Invalid resume id" }, { status: 400 })
   }
-  const user = await getSessionUser()
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const gate = await requireFeature("deep_analysis")
+  if (gate instanceof NextResponse) return gate
+  const { userId } = gate
 
   const body = (await request.json().catch(() => ({}))) as Body
   const jobDescription = typeof body.jobDescription === "string" ? body.jobDescription.trim() : ""
@@ -58,7 +60,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
   const pool = getPostgresPool()
   const own = await pool.query<Resume>(`SELECT * FROM resumes WHERE id = $1 AND user_id = $2 LIMIT 1`, [
     resumeId,
-    user.sub,
+    userId,
   ])
   const row = own.rows[0] ?? null
   if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 })
