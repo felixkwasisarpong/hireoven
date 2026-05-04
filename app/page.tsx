@@ -1,267 +1,287 @@
 import type { Metadata } from "next"
 import Link from "next/link"
-import { ArrowRight, Bell, CheckCircle2, MousePointerClick } from "lucide-react"
+import { ArrowRight, Check, CheckCircle2, Sparkles, Zap } from "lucide-react"
 import Navbar from "@/components/layout/Navbar"
-import ComingSoonSection from "@/components/marketing/ComingSoonSection"
-import {
-  CoreFeaturesTable,
-  InternationalFeaturesTable,
-} from "@/components/marketing/MarketingFeatureBlocks"
 import LogoWall from "@/components/marketing/LogoWall"
-import { CORE_FEATURES, INTERNATIONAL_HIGHLIGHTS, LANDING_INTL_CTA } from "@/lib/marketing/product-features"
 import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
 import { getPostgresPool, hasPostgresEnv } from "@/lib/postgres/server"
 import { createClient } from "@/lib/supabase/server"
+import HireovenLogo from "@/components/ui/HireovenLogo"
 
 export const metadata: Metadata = {
-  title: "Hireoven - Jobs served fresh. Apply before the crowd.",
+  title: "Hireoven — Jobs served fresh. Apply before the crowd.",
   description:
-    "Real-time job alerts, H-1B approval intelligence, one-click apply, and AI match scores. Built for fast, confident job hunting.",
+    "Real-time job alerts, AI match scores, one-click apply, and Scout AI for your entire job search. Built for people who want interviews, not just applications.",
 }
 
 export const dynamic = "force-dynamic"
 
-const HOW_IT_WORKS = [
-  {
-    step: "01",
-    title: "Build your profile in 2 minutes",
-    body: "Upload your resume, pick your target roles, and set your location and visa status. That's it.",
-  },
-  {
-    step: "02",
-    title: "Your feed goes live instantly",
-    body: "Matching roles start streaming in - ranked by fit, freshness, and (for international candidates) sponsorship odds.",
-  },
-  {
-    step: "03",
-    title: "Apply with one click",
-    body: "Autofill pre-fills the form. Tailored cover letter ready. You hit send while the role is still fresh.",
-  },
-] as const
+// ── Data ─────────────────────────────────────────────────────────────────────
 
-// ─── Data ────────────────────────────────────────────────────────────────────
-
-type PlatformStats = {
-  jobs: number
-  companies: number
-}
-
-async function getPlatformStats(): Promise<PlatformStats> {
+async function getPlatformStats() {
   if (!hasPostgresEnv()) return { jobs: 0, companies: 0 }
   try {
     const pool = getPostgresPool()
     const [jobs, companies] = await Promise.all([
-      pool.query<{ c: string }>(
-        `SELECT COUNT(*)::text AS c FROM jobs WHERE is_active = true AND ${sqlJobLocatedInUsa("jobs")}`
-      ),
-      pool.query<{ c: string }>(
-        `SELECT COUNT(*)::text AS c FROM companies WHERE is_active = true`
-      ),
+      pool.query<{ c: string }>(`SELECT COUNT(*)::text AS c FROM jobs WHERE is_active = true AND ${sqlJobLocatedInUsa("jobs")}`),
+      pool.query<{ c: string }>(`SELECT COUNT(*)::text AS c FROM companies WHERE is_active = true`),
     ])
-    return {
-      jobs: Number(jobs.rows[0]?.c ?? 0),
-      companies: Number(companies.rows[0]?.c ?? 0),
-    }
-  } catch {
-    return { jobs: 0, companies: 0 }
-  }
+    return { jobs: Number(jobs.rows[0]?.c ?? 0), companies: Number(companies.rows[0]?.c ?? 0) }
+  } catch { return { jobs: 0, companies: 0 } }
 }
 
 async function getFeaturedCompanies() {
   if (!hasPostgresEnv()) return []
   try {
     const pool = getPostgresPool()
-    // We specifically want companies with a recognizable logo, so we require
-    // a domain and order by job_count so the wall leans toward brands users
-    // will actually know. 24 fills a 6-col grid with a comfortable 4 rows.
-    const { rows } = await pool.query<{
-      id: string
-      name: string
-      domain: string
-      logo_url: string | null
-    }>(
-      `SELECT id, name, domain, logo_url
-       FROM companies
-       WHERE is_active = true
-         AND job_count > 0
-         AND domain IS NOT NULL
-         AND domain NOT ILIKE '%.uscis-employer'
-         AND domain NOT ILIKE '%.lca-employer'
-       ORDER BY
-         CASE WHEN logo_url IS NULL OR logo_url = '' THEN 1 ELSE 0 END ASC,
-         job_count DESC
+    const { rows } = await pool.query<{ id: string; name: string; domain: string; logo_url: string | null }>(
+      `SELECT id, name, domain, logo_url FROM companies
+       WHERE is_active = true AND job_count > 0 AND domain IS NOT NULL
+         AND domain NOT ILIKE '%.uscis-employer' AND domain NOT ILIKE '%.lca-employer'
+       ORDER BY CASE WHEN logo_url IS NULL OR logo_url = '' THEN 1 ELSE 0 END ASC, job_count DESC
        LIMIT 24`
     )
     return rows
-  } catch {
-    return []
-  }
+  } catch { return [] }
 }
 
-// ─── Page ────────────────────────────────────────────────────────────────────
+// ── Sub-components ────────────────────────────────────────────────────────────
+
+function StatPill({ value, label }: { value: string; label: string }) {
+  return (
+    <div className="text-center">
+      <p className="text-3xl font-black tracking-tight text-white sm:text-4xl">{value}</p>
+      <p className="mt-1 text-[13px] text-white/50">{label}</p>
+    </div>
+  )
+}
+
+function FeatureCard({ icon, title, body, accent }: { icon: string; title: string; body: string; accent?: string }) {
+  return (
+    <div className="group rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_2px_12px_rgba(15,23,42,0.05)] transition hover:border-[#FF5C18]/30 hover:shadow-[0_8px_28px_rgba(255,92,24,0.08)]">
+      <span className="text-2xl" aria-hidden>{icon}</span>
+      <p className="mt-3 text-[14px] font-bold text-slate-900">{title}</p>
+      <p className="mt-1.5 text-[13px] leading-relaxed text-slate-500">{body}</p>
+      {accent && (
+        <span className="mt-3 inline-block rounded-full bg-[#FF5C18]/8 px-2.5 py-0.5 text-[10.5px] font-semibold text-[#FF5C18]">
+          {accent}
+        </span>
+      )}
+    </div>
+  )
+}
+
+function PlanCard({
+  name, price, note, features, highlight, badge,
+}: {
+  name: string; price: string; note: string; features: string[]; highlight?: boolean; badge?: string
+}) {
+  return (
+    <div className={[
+      "relative flex flex-col overflow-hidden rounded-2xl border p-6",
+      highlight
+        ? "border-[#FF5C18]/40 bg-white shadow-[0_8px_40px_rgba(255,92,24,0.14)]"
+        : "border-slate-200 bg-white shadow-[0_2px_12px_rgba(15,23,42,0.06)]",
+    ].join(" ")}>
+      <div className="absolute inset-x-0 top-0 h-0.5" style={{
+        background: highlight
+          ? "linear-gradient(90deg,#FF5C18,#FF9A3C)"
+          : "linear-gradient(90deg,#7C3AED,#C026D3)",
+      }} />
+      {badge && (
+        <span className="absolute right-4 top-3 rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white"
+          style={{ background: "linear-gradient(135deg,#FF5C18,#FF9A3C)" }}>
+          {badge}
+        </span>
+      )}
+      <p className="text-[10.5px] font-bold uppercase tracking-[0.18em] text-slate-400">{name}</p>
+      <div className="mt-2 flex items-end gap-1">
+        <span className="text-[30px] font-black tabular-nums text-slate-900">{price}</span>
+        {price !== "Free" && <span className="mb-1.5 text-[13px] text-slate-400">/mo</span>}
+      </div>
+      <p className="mt-0.5 text-[11px] text-slate-400">{note}</p>
+      <ul className="mt-5 flex-1 space-y-2.5">
+        {features.map((f) => (
+          <li key={f} className="flex items-start gap-2 text-[12.5px] text-slate-600">
+            <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#FF5C18]" strokeWidth={3} />
+            {f}
+          </li>
+        ))}
+      </ul>
+      <Link
+        href={price === "Free" ? "/signup" : "/signup?plan=pro"}
+        className="mt-6 flex w-full items-center justify-center gap-1.5 rounded-xl py-2.5 text-[13px] font-bold text-white transition"
+        style={{
+          background: highlight
+            ? "linear-gradient(135deg,#FF5C18,#FF7A35)"
+            : "linear-gradient(135deg,#7C3AED,#C026D3)",
+        }}
+      >
+        {price === "Free" ? "Get started free" : `Get ${name}`}
+        <ArrowRight className="h-3.5 w-3.5" />
+      </Link>
+    </div>
+  )
+}
+
+function FooterColumn({ title, links }: { title: string; links: { href: string; label: string }[] }) {
+  return (
+    <div>
+      <p className="mb-3 text-[11px] font-bold uppercase tracking-widest text-slate-400">{title}</p>
+      <ul className="space-y-2">
+        {links.map(({ href, label }) => (
+          <li key={href}>
+            <Link href={href} className="text-[13px] text-slate-500 transition hover:text-slate-900">{label}</Link>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+// ── Page ─────────────────────────────────────────────────────────────────────
 
 export default async function HomePage() {
-  const [stats, featured] = await Promise.all([
-    getPlatformStats(),
-    getFeaturedCompanies(),
-  ])
+  const [stats, featured] = await Promise.all([getPlatformStats(), getFeaturedCompanies()])
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { user } } = await supabase.auth.getUser()
 
   return (
     <div className="min-h-screen bg-white">
       <Navbar />
 
-      {!user ? (
-        <div className="border-b border-teal-200 bg-teal-50 px-4 py-3 text-center text-sm">
-          <Link
-            href="/launch"
-            className="font-semibold text-teal-800 transition hover:text-teal-950 hover:underline"
-          >
-            We&apos;re in early access - join the waitlist for founding member pricing
-          </Link>
-        </div>
-      ) : null}
+      {/* ── Hero ────────────────────────────────────────────────────────── */}
+      <section className="relative overflow-hidden"
+        style={{ background: "linear-gradient(150deg, #0f0a1e 0%, #1a0800 40%, #0d1220 75%, #080614 100%)" }}>
 
-      {/* Hero ─────────────────────────────────────────────────────────────── */}
-      <section className="relative overflow-hidden px-6 pb-20 pt-16 md:pb-28 md:pt-20">
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top,_rgba(3,105,161,0.10),_transparent_55%)]"
-        />
-        <div className="mx-auto grid max-w-6xl items-center gap-12 md:grid-cols-[1.1fr,1fr]">
-          <div>
-            <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-[#BAE6FD] bg-[#F0F9FF] px-4 py-1.5 text-xs font-semibold text-[#0369A1]">
-              <span className="h-2 w-2 rounded-full bg-[#0369A1] animate-pulse" />
-              Live monitoring active · {stats.jobs.toLocaleString()} jobs tracked
+        {/* Ambient glows */}
+        <div className="pointer-events-none absolute inset-0">
+          <div className="absolute -left-32 -top-32 h-[500px] w-[500px] rounded-full bg-[#FF5C18]/12 blur-[120px]" />
+          <div className="absolute right-0 top-1/4 h-[400px] w-[400px] rounded-full bg-violet-600/10 blur-[100px]" />
+          <div className="absolute bottom-0 left-1/3 h-64 w-64 rounded-full bg-[#FF9A3C]/8 blur-[80px]" />
+        </div>
+
+        <div className="relative mx-auto max-w-6xl px-6 pb-24 pt-20 md:pb-32 md:pt-28">
+          <div className="mx-auto max-w-3xl text-center">
+
+            {/* Live badge */}
+            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-xs font-semibold text-white/70 backdrop-blur-sm">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              Live · {stats.jobs > 0 ? stats.jobs.toLocaleString() : "10,000+"} jobs tracked right now
             </div>
-            <h1 className="text-[2.75rem] font-extrabold leading-[1.05] tracking-tight text-gray-900 sm:text-5xl md:text-[3.5rem]">
-              Jobs served fresh.{" "}
-              <span className="bg-gradient-to-r from-[#0369A1] to-[#0EA5E9] bg-clip-text text-transparent">
-                Apply before the crowd.
+
+            <h1 className="text-[2.8rem] font-black leading-[1.04] tracking-tight text-white sm:text-5xl md:text-[3.75rem]">
+              Your next job,{" "}
+              <span style={{ background: "linear-gradient(90deg,#FF5C18,#FF9A3C,#FFD280)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+                found first.
               </span>
             </h1>
-            <p className="mt-5 max-w-xl text-lg text-gray-600 md:text-xl">
-              Real-time job alerts, AI match scores, one-click apply, and
-              international job-search signals—visa context, company history, and
-              offer checklists when you need them. Built for people who want
-              interviews, not just applications.
+
+            <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-white/60 md:text-xl">
+              Real-time alerts the moment a role posts. AI match scores on every listing. One-click autofill.
+              Scout AI that researches, tailors, and prepares — while you stay in control.
             </p>
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-              <Link
-                href="/signup"
-                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#0369A1] px-7 py-3.5 text-base font-semibold text-white shadow-lg shadow-[#0369A1]/25 transition hover:bg-[#075985]"
-              >
+
+            <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
+              <Link href="/signup"
+                className="inline-flex items-center gap-2 rounded-2xl px-8 py-4 text-base font-bold text-white shadow-[0_8px_30px_rgba(255,92,24,0.4)] transition hover:brightness-110"
+                style={{ background: "linear-gradient(135deg,#FF5C18,#FF7A35)" }}>
                 Get started free
                 <ArrowRight className="h-4 w-4" />
               </Link>
-              <Link
-                href="/companies"
-                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-gray-200 bg-white px-7 py-3.5 text-base font-semibold text-gray-700 transition hover:border-gray-300 hover:bg-gray-50"
-              >
-                Browse companies
+              <Link href="/pricing"
+                className="inline-flex items-center gap-2 rounded-2xl border border-white/15 bg-white/5 px-8 py-4 text-base font-semibold text-white/80 backdrop-blur-sm transition hover:bg-white/10">
+                See pricing
               </Link>
             </div>
-            <ul className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-gray-500">
-              <li className="inline-flex items-center gap-1.5">
-                <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                Free forever plan
-              </li>
-              <li className="inline-flex items-center gap-1.5">
-                <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                No credit card
-              </li>
-              <li className="inline-flex items-center gap-1.5">
-                <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                2-minute setup
-              </li>
+
+            <ul className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
+              {["Free forever plan", "No credit card", "2-minute setup"].map((t) => (
+                <li key={t} className="inline-flex items-center gap-1.5 text-sm text-white/45">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                  {t}
+                </li>
+              ))}
             </ul>
           </div>
 
-          {/* Product preview card - a mock, not a screenshot. Conveys value
-              (match score + sponsorship + H-1B approval) without requiring
-              asset maintenance. */}
-          <div className="relative">
-            <div
-              aria-hidden
-              className="absolute -inset-4 -z-10 rounded-[2rem] bg-gradient-to-tr from-[#0369A1]/15 via-sky-200/30 to-fuchsia-200/40 blur-2xl"
-            />
-            <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-2xl shadow-slate-900/5">
-              <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-                <div className="flex items-center gap-2">
-                  <span className="h-2.5 w-2.5 rounded-full bg-red-300" />
-                  <span className="h-2.5 w-2.5 rounded-full bg-amber-300" />
-                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-300" />
+          {/* Mock product preview */}
+          <div className="mx-auto mt-16 max-w-2xl">
+            <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md">
+              {/* Toolbar */}
+              <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+                <div className="flex gap-1.5">
+                  <span className="h-2.5 w-2.5 rounded-full bg-red-400/60" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-amber-400/60" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-400/60" />
                 </div>
-                <p className="text-xs font-medium text-gray-400">Your feed</p>
+                <p className="text-[11px] font-medium text-white/30">hireoven.com/dashboard</p>
+                <div className="w-16" />
               </div>
-
-              {/* Fake job card */}
-              <div className="mt-4 rounded-2xl border border-gray-200 p-4">
-                <div className="flex items-start gap-3">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-[#0369A1] to-[#0EA5E9] text-sm font-bold text-white">
-                    S
+              {/* Job cards */}
+              <div className="space-y-2 p-4">
+                {[
+                  { co: "Stripe", role: "Senior Frontend Engineer", loc: "Remote · SF", match: 94, sponsor: 89, fresh: "2m" },
+                  { co: "Anthropic", role: "ML Platform Engineer", loc: "San Francisco, CA", match: 88, sponsor: 95, fresh: "8m" },
+                  { co: "Figma", role: "Staff Software Engineer", loc: "Remote · NYC", match: 81, sponsor: 72, fresh: "14m" },
+                ].map((job, i) => (
+                  <div key={i} className={["rounded-xl border p-3.5 transition", i === 0 ? "border-[#FF5C18]/40 bg-white/8" : "border-white/8 bg-white/4"].join(" ")}>
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm font-black text-white"
+                        style={{ background: i === 0 ? "linear-gradient(135deg,#FF5C18,#FF9A3C)" : "rgba(255,255,255,0.1)" }}>
+                        {job.co[0]}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[13px] font-semibold text-white">{job.role}</p>
+                        <p className="text-[11px] text-white/45">{job.co} · {job.loc}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="rounded-full bg-emerald-400/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-400">
+                          {job.fresh} ago
+                        </span>
+                        {i === 0 && (
+                          <span className="rounded-lg px-2.5 py-1 text-[11px] font-bold text-white"
+                            style={{ background: "linear-gradient(135deg,#FF5C18,#FF9A3C)" }}>
+                            Apply
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    {i === 0 && (
+                      <div className="mt-2.5 grid grid-cols-3 gap-2">
+                        {[["Match", job.match, "#FF5C18"], ["Sponsor", job.sponsor, "#7C3AED"], ["Approval", 81, "#10B981"]].map(([l, v, c]) => (
+                          <div key={String(l)} className="rounded-lg bg-white/5 px-2 py-1.5 text-center">
+                            <p className="text-[18px] font-black tabular-nums" style={{ color: String(c) }}>{v}</p>
+                            <p className="text-[9px] font-semibold uppercase tracking-wide text-white/35">{l}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-gray-900">
-                      Senior Frontend Engineer
-                    </p>
-                    <p className="truncate text-xs text-gray-500">
-                      Stripe · San Francisco · Remote OK
-                    </p>
-                  </div>
-                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                    Fresh · 4m ago
-                  </span>
-                </div>
-                <div className="mt-3 grid grid-cols-3 gap-2">
-                  <MiniStat label="Match" value="92" tone="violet" />
-                  <MiniStat label="Sponsor" value="87" tone="blue" />
-                  <MiniStat label="Approval" value="81" tone="emerald" />
-                </div>
-                <div className="mt-3 flex items-center justify-between">
-                  <span className="inline-flex items-center gap-1 text-[11px] font-medium text-gray-500">
-                    <MousePointerClick className="h-3 w-3" />
-                    One-click apply ready
-                  </span>
-                  <span className="rounded-full bg-[#0369A1] px-3 py-1 text-[11px] font-semibold text-white">
-                    Apply
-                  </span>
-                </div>
+                ))}
               </div>
-
-              {/* Ghost second card */}
-              <div className="mt-3 rounded-2xl border border-dashed border-gray-200 p-4 opacity-60">
-                <div className="flex items-start gap-3">
-                  <div className="h-11 w-11 rounded-xl bg-gray-100" />
-                  <div className="flex-1 space-y-2">
-                    <div className="h-3 w-40 rounded bg-gray-100" />
-                    <div className="h-2.5 w-24 rounded bg-gray-100" />
-                  </div>
-                </div>
-              </div>
-
-              <p className="mt-4 text-center text-[11px] text-gray-400">
-                Your real feed updates in real time.
-              </p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Social proof / logo wall ─────────────────────────────────────────── */}
-      <section className="border-y border-gray-100 bg-gray-50/70 py-14 px-6">
+      {/* ── Stats + Logo wall ────────────────────────────────────────────── */}
+      <section className="border-b border-slate-100 bg-slate-50/60 px-6 py-16">
         <div className="mx-auto max-w-6xl">
-          <div className="mb-10 grid grid-cols-2 gap-6 sm:grid-cols-4">
-            <Stat value={stats.jobs.toLocaleString()} label="active jobs" />
-            <Stat value={stats.companies.toLocaleString()} label="companies tracked" />
-            <Stat value="<30m" label="avg. time to detection" />
-            <Stat value="Realtime" label="feed updates" />
+          <div className="mb-12 grid grid-cols-2 gap-6 sm:grid-cols-4">
+            {[
+              { value: stats.jobs > 0 ? stats.jobs.toLocaleString() : "10K+", label: "active jobs" },
+              { value: stats.companies > 0 ? stats.companies.toLocaleString() : "3K+", label: "companies tracked" },
+              { value: "<30min", label: "avg. detection time" },
+              { value: "Real-time", label: "feed updates" },
+            ].map(({ value, label }) => (
+              <div key={label} className="text-center">
+                <p className="text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">{value}</p>
+                <p className="mt-1 text-[12px] text-slate-400">{label}</p>
+              </div>
+            ))}
           </div>
-          <p className="mb-8 text-center text-xs font-semibold uppercase tracking-widest text-gray-400">
+          <p className="mb-8 text-center text-[10.5px] font-bold uppercase tracking-widest text-slate-400">
             Tracking jobs at
           </p>
           {featured.length > 0 ? (
@@ -269,283 +289,222 @@ export default async function HomePage() {
           ) : (
             <div className="flex flex-wrap justify-center gap-x-8 gap-y-2">
               {["Stripe", "Meta", "Google", "Anthropic", "OpenAI", "Figma", "Databricks"].map((n) => (
-                <span key={n} className="text-sm font-medium text-gray-400">{n}</span>
+                <span key={n} className="text-sm font-medium text-slate-400">{n}</span>
               ))}
             </div>
           )}
-          <p className="mt-8 text-center text-xs text-gray-400">
+          <p className="mt-6 text-center text-xs text-slate-400">
             …and thousands more across Greenhouse, Lever, Ashby, and Workday.
           </p>
         </div>
       </section>
 
-      {/* Core features grid ───────────────────────────────────────────────── */}
-      <section id="features" className="px-6 py-24">
+      {/* ── Core features ───────────────────────────────────────────────── */}
+      <section className="px-6 py-24">
         <div className="mx-auto max-w-6xl">
           <div className="mx-auto mb-14 max-w-2xl text-center">
-            <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-[#0369A1]">
+            <p className="mb-3 text-[10.5px] font-bold uppercase tracking-[0.2em] text-[#FF5C18]">
               Everything in one place
             </p>
-            <h2 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
-              From job posted to apply sent - in the time it takes to pour a coffee
+            <h2 className="text-3xl font-black tracking-tight text-slate-900 sm:text-4xl">
+              From posted to applied — in the time it takes to pour a coffee.
             </h2>
-            <p className="mt-4 text-lg text-gray-600">
-              No more spreadsheets, browser tabs, or copy-pasting. Hireoven replaces
-              the awkward stack you&apos;ve been duct-taping together.
-            </p>
-            <p className="mt-4">
-              <Link
-                href="/features"
-                className="text-sm font-semibold text-[#0369A1] transition hover:underline"
-              >
-                Full feature list →
-              </Link>
+            <p className="mt-4 text-lg text-slate-500">
+              No spreadsheets, no 12 browser tabs. Hireoven replaces the duct-taped stack.
             </p>
           </div>
 
-          <CoreFeaturesTable features={CORE_FEATURES} />
-        </div>
-      </section>
-
-      {/* International candidates ─────────────────────────────────────────── */}
-      <section className="border-y border-[#E0F2FE] bg-[#F0F9FF] px-6 py-24">
-        <div className="mx-auto grid max-w-6xl gap-12 lg:grid-cols-[1fr,1.15fr] lg:items-start">
-          <div>
-            <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-[#0369A1]">
-              For international candidates
-            </p>
-            <h2 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
-              {LANDING_INTL_CTA.title}
-            </h2>
-            <p className="mt-4 text-lg text-gray-600">{LANDING_INTL_CTA.body}</p>
-            <div className="mt-6 flex flex-wrap items-center gap-4">
-              <Link
-                href="/signup"
-                className="inline-flex items-center gap-2 rounded-2xl bg-[#0369A1] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#075985]"
-              >
-                Get started
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-              <Link
-                href="/features"
-                className="text-sm font-semibold text-[#0369A1] transition hover:underline"
-              >
-                All intelligence features →
-              </Link>
-            </div>
-          </div>
-          <InternationalFeaturesTable items={INTERNATIONAL_HIGHLIGHTS} />
-        </div>
-      </section>
-
-      {/* How it works ─────────────────────────────────────────────────────── */}
-      <section className="px-6 py-24">
-        <div className="mx-auto max-w-5xl">
-          <div className="mx-auto mb-14 max-w-2xl text-center">
-            <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-[#0369A1]">
-              How it works
-            </p>
-            <h2 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
-              Set it up once. Land interviews on autopilot.
-            </h2>
-          </div>
-          <div className="grid gap-8 md:grid-cols-3">
-            {HOW_IT_WORKS.map(({ step, title, body }) => (
-              <div key={step} className="relative rounded-3xl border border-gray-200 bg-white p-6">
-                <span className="absolute -top-3 left-6 rounded-full bg-[#0369A1] px-3 py-0.5 text-[11px] font-bold text-white">
-                  {step}
-                </span>
-                <h3 className="mb-2 mt-2 text-lg font-semibold text-gray-900">{title}</h3>
-                <p className="text-sm leading-relaxed text-gray-600">{body}</p>
-              </div>
-            ))}
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <FeatureCard icon="⚡" title="Real-time job feed" body="New roles appear within minutes of posting — before most job boards index them." accent="No sponsored listings" />
+            <FeatureCard icon="🎯" title="AI match scores" body="Every job gets a match score against your profile, skills, and target role. Algorithmic, no tokens spent." />
+            <FeatureCard icon="🤖" title="One-click autofill" body="The extension detects form fields and pre-fills them from your profile. You review before it goes in." accent="Chrome extension" />
+            <FeatureCard icon="✍️" title="Resume tailoring" body="Scout adapts your CV to the job description. Keyword gaps flagged. Every edit needs your approval." />
+            <FeatureCard icon="📄" title="Cover letter AI" body="Generates a tailored, ATS-aware letter in seconds. Role-specific, honest, and ready to personalise." />
+            <FeatureCard icon="🛡️" title="Ghost job detector" body="Signals whether a role is actively hiring or just collecting CVs — before you spend time on it." />
           </div>
         </div>
       </section>
 
-      <ComingSoonSection />
-
-      {/* Scout section ────────────────────────────────────────────────────── */}
-      <section className="border-t border-gray-100 px-6 py-20">
-        <div className="mx-auto max-w-5xl">
+      {/* ── Scout AI ────────────────────────────────────────────────────── */}
+      <section className="overflow-hidden px-6 py-24"
+        style={{ background: "linear-gradient(150deg,#0f0a1e 0%,#1c0e00 50%,#080614 100%)" }}>
+        <div className="mx-auto max-w-6xl">
           <div className="mb-3 flex items-center justify-center gap-2">
-            <span className="inline-flex h-6 w-6 items-center justify-center rounded-lg bg-[#FF5C18]">
-              <MousePointerClick className="h-3.5 w-3.5 text-white" />
+            <span className="inline-flex h-6 w-6 items-center justify-center rounded-lg"
+              style={{ background: "linear-gradient(135deg,#FF5C18,#FF9A3C)" }}>
+              <Sparkles className="h-3.5 w-3.5 text-white" />
             </span>
-            <span className="text-xs font-bold uppercase tracking-[0.25em] text-[#FF5C18]">
-              Scout AI
-            </span>
+            <span className="text-xs font-bold uppercase tracking-[0.25em] text-[#FF9A3C]">Scout AI</span>
           </div>
-          <h2 className="text-center text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
-            Your AI job search operating system
+          <h2 className="text-center text-3xl font-black tracking-tight text-white sm:text-4xl">
+            Your AI job search operating system.
           </h2>
-          <p className="mx-auto mt-4 max-w-xl text-center text-lg text-gray-500">
-            Scout lives inside your dashboard. Ask it anything. It handles the research, preparation, and workflows — you make the decisions.
+          <p className="mx-auto mt-4 max-w-xl text-center text-lg text-white/55">
+            Ask Scout anything. It handles the research, tailoring, and workflows — you make the calls.
           </p>
 
-          <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {[
-              { emoji: "🔍", title: "Finds stronger opportunities", body: "Filters jobs by sponsorship, match score, remote, and more. No manual searching." },
-              { emoji: "✍️", title: "Tailors your resume", body: "Adapts your CV to each role. Keyword gaps flagged. Changes need your approval." },
-              { emoji: "🏢", title: "Researches companies", body: "H-1B sponsorship history, hiring velocity, and market signals — evidence-backed." },
-              { emoji: "🤖", title: "Autofills application forms", body: "Detects fields, suggests values, and waits for you to review before filling." },
-              { emoji: "📋", title: "Runs application workflows", body: "Tailor → cover letter → autofill — step by step with your approval at each stage." },
-              { emoji: "🛡️", title: "Keeps you in control", body: "Scout never submits applications. Every sensitive action requires your explicit OK." },
+              { emoji: "🔍", title: "Finds stronger opportunities", body: "Filters by sponsorship, match score, remote, and more. No manual digging." },
+              { emoji: "🏢", title: "Researches companies", body: "H-1B history, hiring velocity, and market signals — evidence-backed answers." },
+              { emoji: "📋", title: "Application workflows", body: "Tailor → cover letter → autofill — step by step, with your sign-off at each stage." },
+              { emoji: "🤖", title: "Autofills with context", body: "Detects fields, suggests values from your profile, waits for your review." },
+              { emoji: "🎤", title: "Interview prep", body: "Role-specific questions with AI feedback on your answers before the real thing." },
+              { emoji: "🛡️", title: "Always in control", body: "Scout never submits. Every sensitive action requires your explicit OK." },
             ].map(({ emoji, title, body }) => (
-              <div
-                key={title}
-                className="rounded-2xl border border-gray-200 bg-white p-5 transition hover:border-[#FF5C18]/25 hover:shadow-[0_8px_24px_rgba(255,92,24,0.06)]"
-              >
-                <span className="text-2xl" role="img" aria-label={title}>{emoji}</span>
-                <p className="mt-3 text-sm font-semibold text-gray-900">{title}</p>
-                <p className="mt-1 text-[13px] leading-5 text-gray-500">{body}</p>
+              <div key={title}
+                className="rounded-2xl border border-white/8 bg-white/5 p-5 backdrop-blur-sm transition hover:border-[#FF5C18]/30 hover:bg-white/8">
+                <span className="text-2xl" aria-hidden>{emoji}</span>
+                <p className="mt-3 text-[14px] font-bold text-white">{title}</p>
+                <p className="mt-1.5 text-[13px] leading-relaxed text-white/50">{body}</p>
               </div>
             ))}
           </div>
 
-          <div className="mt-10 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
-            <Link
-              href="/signup"
-              className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-7 py-3.5 text-sm font-semibold text-white transition hover:bg-slate-800"
-            >
+          <div className="mt-12 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
+            <Link href="/signup"
+              className="inline-flex items-center gap-2 rounded-2xl px-7 py-3.5 text-sm font-bold text-white transition hover:brightness-110"
+              style={{ background: "linear-gradient(135deg,#FF5C18,#FF7A35)" }}>
               Try Scout free
               <ArrowRight className="h-4 w-4" />
             </Link>
-            <p className="text-xs text-gray-400">No credit card · Works with your existing profile</p>
+            <p className="text-xs text-white/30">Pro feature · 7-day free trial included</p>
           </div>
         </div>
       </section>
 
-      {/* Final CTA ────────────────────────────────────────────────────────── */}
-      <section className="px-6 pb-24">
-        <div className="mx-auto max-w-4xl overflow-hidden rounded-3xl border border-[#BAE6FD] bg-gradient-to-br from-[#F0F9FF] via-white to-sky-50 p-10 text-center md:p-14">
-          <Bell className="mx-auto mb-5 h-8 w-8 text-[#0369A1]" />
-          <h2 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
-            Stop finding out about jobs days late
-          </h2>
-          <p className="mx-auto mt-4 max-w-xl text-lg text-gray-600">
-            The first 10 applicants get the most attention. We make sure you&apos;re one of them.
+      {/* ── How it works ────────────────────────────────────────────────── */}
+      <section className="px-6 py-24">
+        <div className="mx-auto max-w-5xl">
+          <div className="mx-auto mb-14 max-w-2xl text-center">
+            <p className="mb-3 text-[10.5px] font-bold uppercase tracking-[0.2em] text-[#FF5C18]">How it works</p>
+            <h2 className="text-3xl font-black tracking-tight text-slate-900 sm:text-4xl">
+              Set it up once. Land interviews on autopilot.
+            </h2>
+          </div>
+          <div className="relative grid gap-6 md:grid-cols-3">
+            {/* Connector line */}
+            <div className="absolute left-0 right-0 top-9 hidden h-px bg-gradient-to-r from-transparent via-[#FF5C18]/30 to-transparent md:block" />
+            {[
+              { n: "01", title: "Build your profile in 2 minutes", body: "Upload your resume, pick target roles, set your location and visa status. Done." },
+              { n: "02", title: "Your feed goes live instantly", body: "Matching roles stream in — ranked by fit, freshness, and sponsorship odds." },
+              { n: "03", title: "Apply with one click", body: "Autofill pre-fills the form. Tailored cover letter ready. You hit send while the role is still hot." },
+            ].map(({ n, title, body }) => (
+              <div key={n} className="relative rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-[0_2px_12px_rgba(15,23,42,0.05)]">
+                <div className="mx-auto mb-4 flex h-10 w-10 items-center justify-center rounded-full text-[13px] font-black text-white"
+                  style={{ background: "linear-gradient(135deg,#FF5C18,#FF9A3C)" }}>
+                  {n}
+                </div>
+                <h3 className="mb-2 text-[15px] font-bold text-slate-900">{title}</h3>
+                <p className="text-[13px] leading-relaxed text-slate-500">{body}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── Pricing preview ─────────────────────────────────────────────── */}
+      <section className="border-y border-slate-100 bg-slate-50/50 px-6 py-24">
+        <div className="mx-auto max-w-5xl">
+          <div className="mx-auto mb-14 max-w-2xl text-center">
+            <p className="mb-3 text-[10.5px] font-bold uppercase tracking-[0.2em] text-[#FF5C18]">Simple pricing</p>
+            <h2 className="text-3xl font-black tracking-tight text-slate-900 sm:text-4xl">
+              Start free. Upgrade when you&apos;re ready.
+            </h2>
+            <p className="mt-4 text-lg text-slate-500">
+              All plans include the real-time job feed. No bait-and-switch.
+            </p>
+          </div>
+          <div className="grid gap-5 md:grid-cols-3">
+            <PlanCard
+              name="Free"
+              price="Free"
+              note="Forever"
+              features={["Real-time job feed", "AI match scores", "Watchlist & alerts", "Application tracker", "Basic autofill"]}
+            />
+            <PlanCard
+              name="Pro"
+              price="$19"
+              note="per month · $149/yr"
+              badge="Most popular"
+              highlight
+              features={["Scout AI — 50 msg/day", "Resume tailoring", "Cover letter generator", "Deep analysis", "Interview prep", "Unlimited watchlist"]}
+            />
+            <PlanCard
+              name="Max"
+              price="$39"
+              note="per month · $299/yr"
+              features={["Scout AI — unlimited", "Everything unlimited", "Bulk apply agent", "Mock interviews", "Career strategy AI"]}
+            />
+          </div>
+          <p className="mt-8 text-center text-sm text-slate-400">
+            All paid plans include a 7-day free trial. Cancel anytime.{" "}
+            <Link href="/pricing" className="font-semibold text-[#FF5C18] hover:underline">Full comparison →</Link>
           </p>
-          <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <Link
-              href="/signup"
-              className="inline-flex items-center gap-2 rounded-2xl bg-[#0369A1] px-8 py-4 text-base font-semibold text-white shadow-lg shadow-[#0369A1]/25 transition hover:bg-[#075985]"
-            >
-              Sign up free
+        </div>
+      </section>
+
+      {/* ── Final CTA ───────────────────────────────────────────────────── */}
+      <section className="px-6 py-24"
+        style={{ background: "linear-gradient(150deg,#0f0a1e 0%,#1a0800 50%,#080614 100%)" }}>
+        <div className="pointer-events-none absolute left-1/4 h-80 w-80 -translate-y-1/2 rounded-full bg-[#FF5C18]/8 blur-[100px]" />
+        <div className="relative mx-auto max-w-3xl text-center">
+          <div className="mx-auto mb-6 inline-flex h-14 w-14 items-center justify-center rounded-2xl"
+            style={{ background: "linear-gradient(135deg,#FF5C18,#FF9A3C)", boxShadow: "0 8px 30px rgba(255,92,24,0.4)" }}>
+            <Zap className="h-7 w-7 text-white" strokeWidth={2.5} />
+          </div>
+          <h2 className="text-3xl font-black tracking-tight text-white sm:text-5xl">
+            Stop finding out about jobs days late.
+          </h2>
+          <p className="mx-auto mt-5 max-w-xl text-lg text-white/55">
+            The first 10 applicants get the most attention. Hireoven makes sure you&apos;re one of them.
+          </p>
+          <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
+            <Link href="/signup"
+              className="inline-flex items-center gap-2 rounded-2xl px-9 py-4 text-base font-bold text-white shadow-[0_8px_30px_rgba(255,92,24,0.4)] transition hover:brightness-110"
+              style={{ background: "linear-gradient(135deg,#FF5C18,#FF7A35)" }}>
+              Get started free
               <ArrowRight className="h-4 w-4" />
             </Link>
-            <Link
-              href="/pricing"
-              className="inline-flex items-center gap-2 rounded-2xl border border-gray-200 bg-white px-8 py-4 text-base font-semibold text-gray-700 transition hover:border-gray-300 hover:bg-gray-50"
-            >
+            <Link href="/pricing"
+              className="inline-flex items-center gap-2 rounded-2xl border border-white/15 bg-white/5 px-9 py-4 text-base font-semibold text-white/80 transition hover:bg-white/10">
               See pricing
             </Link>
           </div>
-          <p className="mt-4 text-xs text-gray-400">No credit card · Cancel anytime</p>
+          <p className="mt-5 text-xs text-white/30">No credit card · Free forever plan · Cancel anytime</p>
         </div>
       </section>
 
-      {/* Footer ───────────────────────────────────────────────────────────── */}
-      <footer className="border-t border-gray-100 bg-white px-6 py-12">
+      {/* ── Footer ──────────────────────────────────────────────────────── */}
+      <footer className="border-t border-slate-100 bg-white px-6 py-14">
         <div className="mx-auto max-w-6xl">
-          <div className="grid gap-8 md:grid-cols-[1.2fr,1fr,1fr,1fr]">
+          <div className="grid gap-10 md:grid-cols-[1.4fr,1fr,1fr,1fr]">
             <div>
-              <p className="text-lg font-bold text-gray-900">Hireoven</p>
-              <p className="mt-2 max-w-xs text-sm text-gray-500">
-                Jobs served fresh. Built for job seekers, not recruiters.
+              <HireovenLogo variant="header" className="h-8 w-auto" />
+              <p className="mt-3 max-w-xs text-[13px] text-slate-500 leading-relaxed">
+                Jobs served fresh. Built for job seekers who want interviews, not just applications.
               </p>
             </div>
-            <FooterColumn
-              title="Product"
-              links={[
-                { href: "/features", label: "Features" },
-                { href: "/companies", label: "Companies" },
-                { href: "/pricing", label: "Pricing" },
-              ]}
-            />
-            <FooterColumn
-              title="Account"
-              links={[
-                { href: "/login", label: "Login" },
-                { href: "/signup", label: "Sign up" },
-                { href: "/launch", label: "Waitlist" },
-              ]}
-            />
-            <FooterColumn
-              title="Company"
-              links={[
-                { href: "/privacy", label: "Privacy" },
-                { href: "/terms", label: "Terms" },
-              ]}
-            />
+            <FooterColumn title="Product" links={[
+              { href: "/features", label: "Features" },
+              { href: "/pricing", label: "Pricing" },
+              { href: "/companies", label: "Companies" },
+            ]} />
+            <FooterColumn title="Account" links={[
+              { href: "/login", label: "Sign in" },
+              { href: "/signup", label: "Sign up free" },
+            ]} />
+            <FooterColumn title="Legal" links={[
+              { href: "/privacy", label: "Privacy" },
+              { href: "/terms", label: "Terms" },
+            ]} />
           </div>
-          <div className="mt-10 flex flex-col items-start justify-between gap-3 border-t border-gray-100 pt-6 text-xs text-gray-400 sm:flex-row sm:items-center">
-            <p>&copy; {new Date().getFullYear()} Hireoven. All rights reserved.</p>
-            <p>Made for job seekers who move fast.</p>
+          <div className="mt-10 border-t border-slate-100 pt-6 flex items-center justify-between">
+            <p className="text-[12px] text-slate-400">© {new Date().getFullYear()} Hireoven. All rights reserved.</p>
+            <p className="text-[12px] text-slate-300">Built for people who move fast.</p>
           </div>
         </div>
       </footer>
-    </div>
-  )
-}
-
-// ─── Local components ───────────────────────────────────────────────────────
-
-function Stat({ value, label }: { value: string; label: string }) {
-  return (
-    <div className="text-center">
-      <p className="text-3xl font-bold text-[#0369A1] sm:text-4xl">{value}</p>
-      <p className="mt-1 text-sm text-gray-500">{label}</p>
-    </div>
-  )
-}
-
-function MiniStat({
-  label,
-  value,
-  tone,
-}: {
-  label: string
-  value: string
-  tone: "violet" | "blue" | "emerald"
-}) {
-  const tones = {
-    violet: "bg-orange-50 text-orange-700 border-orange-100",
-    blue: "bg-sky-50 text-sky-700 border-sky-100",
-    emerald: "bg-emerald-50 text-emerald-700 border-emerald-100",
-  } as const
-  return (
-    <div className={`rounded-xl border px-2.5 py-2 text-center ${tones[tone]}`}>
-      <p className="text-lg font-bold leading-none">{value}</p>
-      <p className="mt-1 text-[10px] font-medium uppercase tracking-wide opacity-80">{label}</p>
-    </div>
-  )
-}
-
-function FooterColumn({
-  title,
-  links,
-}: {
-  title: string
-  links: Array<{ href: string; label: string }>
-}) {
-  return (
-    <div>
-      <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-gray-500">
-        {title}
-      </p>
-      <ul className="space-y-2">
-        {links.map((l) => (
-          <li key={l.href}>
-            <Link
-              href={l.href}
-              className="text-sm text-gray-500 transition hover:text-gray-900"
-            >
-              {l.label}
-            </Link>
-          </li>
-        ))}
-      </ul>
     </div>
   )
 }
