@@ -70,142 +70,181 @@ function getLocationLabel(job: JobWithCompanyContext) {
   return job.location ?? "Location not listed"
 }
 
-// ── LinkedIn-style job card ───────────────────────────────────────────────────
+// ── Job row (LinkedIn-style — no per-card apply button) ──────────────────────
 
-function renderJobCard(job: JobWithCompanyContext, index: number) {
+function renderJobRow(job: JobWithCompanyContext, index: number) {
   const co = job.company
   const companyName = co?.name ?? "Tracked company"
   const logoUrl = co?.logo_url ?? null
-  const domain = co?.domain ?? null
 
-  // Company avatar — use logo if available, else styled initial
   const logoHtml = logoUrl
-    ? `<img src="${esc(logoUrl)}" alt="${esc(companyName)}" width="48" height="48"
-          style="width:48px;height:48px;border-radius:8px;object-fit:contain;border:1px solid #e2e8f0;background:#fff;" />`
-    : `<div style="width:48px;height:48px;border-radius:8px;background:linear-gradient(135deg,#FF5C18,#FF9A3C);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:800;color:#fff;text-align:center;line-height:48px;">
+    ? `<img src="${esc(logoUrl)}" alt="${esc(companyName)}" width="56" height="56"
+          style="width:56px;height:56px;border-radius:10px;object-fit:contain;border:1px solid #e2e8f0;background:#fff;display:block;" />`
+    : `<div style="width:56px;height:56px;border-radius:10px;background:linear-gradient(135deg,#FF5C18,#FF9A3C);font-size:22px;font-weight:800;color:#fff;text-align:center;line-height:56px;">
          ${esc(companyName.charAt(0).toUpperCase())}
        </div>`
 
-  // Sponsorship pill
-  let sponsorPill = ""
-  if (job.sponsors_h1b) {
-    sponsorPill = `<span style="display:inline-block;background:#f0fdf4;border:1px solid #bbf7d0;color:#15803d;border-radius:999px;padding:3px 10px;font-size:11px;font-weight:600;">✓ Sponsors H1B</span>`
-  } else if (job.requires_authorization) {
-    sponsorPill = `<span style="display:inline-block;background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;border-radius:999px;padding:3px 10px;font-size:11px;font-weight:600;">No sponsorship</span>`
-  } else if ((job.sponsorship_score ?? 0) > 60) {
-    sponsorPill = `<span style="display:inline-block;background:#faf5ff;border:1px solid #e9d5ff;color:#7c3aed;border-radius:999px;padding:3px 10px;font-size:11px;font-weight:600;">Likely sponsors</span>`
-  }
+  // Sponsorship score used as a proxy match signal when no AI score is available
+  const rawScore = job.sponsorship_score ?? null
+  const matchBadge = rawScore !== null && rawScore >= 70
+    ? (() => {
+        const s = Math.round(rawScore)
+        const color = s >= 85 ? "#15803d" : "#1d4ed8"
+        const bg   = s >= 85 ? "#f0fdf4" : "#eff6ff"
+        const bd   = s >= 85 ? "#bbf7d0" : "#bfdbfe"
+        return `<span style="display:inline-block;background:${bg};border:1px solid ${bd};color:${color};border-radius:4px;padding:2px 7px;font-size:11px;font-weight:700;">${s}% signal</span>`
+      })()
+    : ""
 
-  // Remote/hybrid pill
-  const workPill = job.is_remote
-    ? `<span style="display:inline-block;background:#eff6ff;border:1px solid #bfdbfe;color:#1d4ed8;border-radius:999px;padding:3px 10px;font-size:11px;font-weight:600;">Remote</span>`
-    : job.is_hybrid
-      ? `<span style="display:inline-block;background:#f0f9ff;border:1px solid #bae6fd;color:#0369a1;border-radius:999px;padding:3px 10px;font-size:11px;font-weight:600;">Hybrid</span>`
-      : ""
+  // Sponsorship signal
+  let sponsorBadge = ""
+  if (job.sponsors_h1b)
+    sponsorBadge = `<span style="display:inline-block;background:#f0fdf4;border:1px solid #bbf7d0;color:#15803d;border-radius:4px;padding:2px 7px;font-size:11px;font-weight:600;">✓ H1B sponsor</span>`
+  else if (job.requires_authorization)
+    sponsorBadge = `<span style="display:inline-block;background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;border-radius:4px;padding:2px 7px;font-size:11px;font-weight:600;">No sponsorship</span>`
+  else if ((job.sponsorship_score ?? 0) > 60)
+    sponsorBadge = `<span style="display:inline-block;background:#faf5ff;border:1px solid #e9d5ff;color:#7c3aed;border-radius:4px;padding:2px 7px;font-size:11px;font-weight:600;">Likely sponsors</span>`
 
-  const pills = [sponsorPill, workPill].filter(Boolean).join("&nbsp;&nbsp;")
+  const badges = [matchBadge, sponsorBadge].filter(Boolean).join("&nbsp;")
 
   const jobUrl = `${getBaseUrl()}/dashboard?jobId=${esc(job.id)}`
-  const applyUrl = esc(job.apply_url)
-
-  // Divider above cards 2+
-  const divider = index > 0
-    ? `<div style="height:1px;background:#f1f5f9;margin:0 0 20px;"></div>`
-    : ""
+  const divider = index > 0 ? `<tr><td colspan="2" style="padding:0 0 18px;"><div style="height:1px;background:#f1f5f9;"></div></td></tr>` : ""
 
   return `
     ${divider}
-    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px;">
-      <tr>
-        <td style="vertical-align:top;padding-right:14px;width:62px;">${logoHtml}</td>
-        <td style="vertical-align:top;">
-          <div style="font-size:16px;font-weight:700;color:#0f172a;line-height:1.3;margin-bottom:3px;">
-            <a href="${jobUrl}" style="color:#0f172a;text-decoration:none;">${esc(job.title)}</a>
-          </div>
-          <div style="font-size:13px;color:#475569;font-weight:500;margin-bottom:2px;">${esc(companyName)}</div>
-          <div style="font-size:12px;color:#94a3b8;margin-bottom:10px;">${esc(getLocationLabel(job))} &nbsp;·&nbsp; ${formatFreshness(job.first_detected_at)}</div>
-          ${pills ? `<div style="margin-bottom:14px;">${pills}</div>` : ""}
-          <a href="${applyUrl}" target="_blank"
-             style="display:inline-block;background:linear-gradient(135deg,#FF5C18,#FF7A35);color:#ffffff;text-decoration:none;padding:9px 20px;border-radius:999px;font-size:13px;font-weight:700;letter-spacing:0.01em;">
-            Apply now
-          </a>
-        </td>
-      </tr>
+    <tr>
+      <td style="vertical-align:top;padding-right:16px;width:72px;padding-bottom:20px;">${logoHtml}</td>
+      <td style="vertical-align:top;padding-bottom:20px;">
+        <div style="font-size:16px;font-weight:700;color:#0f172a;line-height:1.3;margin-bottom:4px;">
+          <a href="${jobUrl}" style="color:#0f172a;text-decoration:none;">${esc(job.title)}</a>
+        </div>
+        <div style="font-size:13px;color:#475569;margin-bottom:2px;">${esc(companyName)}</div>
+        <div style="font-size:12px;color:#94a3b8;margin-bottom:8px;">${esc(getLocationLabel(job))} &nbsp;·&nbsp; ${formatFreshness(job.first_detected_at)}</div>
+        ${badges ? `<div>${badges}</div>` : ""}
+      </td>
+    </tr>
+  `
+}
+
+// ── Extension promo block (like LinkedIn's app download section) ──────────────
+
+function renderExtensionPromo(base: string) {
+  return `
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;border-top:1px solid #e2e8f0;">
+      <tr><td style="padding:28px;text-align:center;">
+        <div style="font-size:16px;font-weight:700;color:#0f172a;margin-bottom:6px;">Apply faster with the Hireoven extension</div>
+        <div style="font-size:13px;color:#64748b;margin-bottom:20px;line-height:1.5;">
+          One-click autofill on Greenhouse, Lever, Ashby and Workday.<br>Your profile, pre-filled. You review before it goes in.
+        </div>
+        <a href="${esc(base)}/dashboard/autofill"
+           style="display:inline-block;background:linear-gradient(135deg,#FF5C18,#FF7A35);color:#fff;text-decoration:none;padding:11px 28px;border-radius:999px;font-size:14px;font-weight:700;letter-spacing:0.01em;">
+          Get the Chrome extension
+        </a>
+      </td></tr>
     </table>
   `
 }
 
-// ── Email shell ───────────────────────────────────────────────────────────────
+// ── Full email shell ──────────────────────────────────────────────────────────
 
 function renderEmailShell({
   preheader,
   headerTitle,
   headerSub,
-  body,
-  footerHtml,
+  jobRowsHtml,
+  viewAllUrl,
+  viewAllLabel,
+  recipientName,
+  recipientEmail,
+  alertNote,
+  manageUrl,
 }: {
   preheader: string
   headerTitle: string
   headerSub: string
-  body: string
-  footerHtml: string
+  jobRowsHtml: string
+  viewAllUrl: string
+  viewAllLabel: string
+  recipientName: string | null
+  recipientEmail: string
+  alertNote: string
+  manageUrl: string
 }) {
+  const base = getBaseUrl()
+  const year = new Date().getFullYear()
+
   return `<!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width,initial-scale=1" /></head>
-<body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/></head>
+<body style="margin:0;padding:0;background:#f3f2ef;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
 
-  <!-- Preheader -->
-  <div style="display:none;max-height:0;overflow:hidden;font-size:1px;color:#f8fafc;">${esc(preheader)}</div>
+  <div style="display:none;max-height:0;overflow:hidden;font-size:1px;color:#f3f2ef;">${esc(preheader)}</div>
 
-  <!-- Wrapper -->
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;padding:32px 16px;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f2ef;padding:24px 16px 0;">
     <tr><td align="center">
-      <table width="100%" style="max-width:560px;" cellpadding="0" cellspacing="0">
+      <table width="100%" style="max-width:584px;" cellpadding="0" cellspacing="0">
 
-        <!-- Logo bar -->
-        <tr><td style="padding-bottom:20px;text-align:left;">
-          <span style="font-size:18px;font-weight:900;letter-spacing:-0.5px;">
+        <!-- Wordmark header -->
+        <tr><td style="padding:0 0 16px;">
+          <span style="font-size:20px;font-weight:900;letter-spacing:-0.5px;line-height:1;">
             <span style="color:#FF5C18;">Hire</span><span style="color:#0f172a;">oven</span>
           </span>
         </td></tr>
 
-        <!-- Main card -->
-        <tr><td style="background:#ffffff;border-radius:16px;border:1px solid #e2e8f0;overflow:hidden;box-shadow:0 1px 8px rgba(15,23,42,0.06);">
+        <!-- White card -->
+        <tr><td style="background:#ffffff;border-radius:8px;overflow:hidden;border:1px solid #e2e8f0;">
 
-          <!-- Header strip -->
+          <!-- Card header -->
           <table width="100%" cellpadding="0" cellspacing="0">
-            <tr>
-              <td style="padding:24px 28px 20px;border-bottom:1px solid #f1f5f9;">
-                <div style="font-size:20px;font-weight:800;color:#0f172a;line-height:1.25;margin-bottom:6px;">
-                  ${esc(headerTitle)}
-                </div>
-                <div style="font-size:14px;color:#64748b;line-height:1.5;">
-                  ${esc(headerSub)}
-                </div>
-              </td>
-            </tr>
-          </table>
-
-          <!-- Body -->
-          <table width="100%" cellpadding="0" cellspacing="0">
-            <tr><td style="padding:24px 28px;">
-              ${body}
+            <tr><td style="padding:20px 24px 16px;border-bottom:1px solid #f1f5f9;">
+              <div style="font-size:22px;font-weight:800;color:#0f172a;line-height:1.2;margin-bottom:4px;">${esc(headerTitle)}</div>
+              <div style="font-size:14px;color:#64748b;line-height:1.5;">${esc(headerSub)}</div>
             </td></tr>
           </table>
 
-          <!-- Footer inside card -->
+          <!-- Job list -->
           <table width="100%" cellpadding="0" cellspacing="0">
-            <tr><td style="padding:16px 28px 24px;border-top:1px solid #f1f5f9;font-size:12px;color:#94a3b8;line-height:1.6;">
-              ${footerHtml}
+            <tr><td style="padding:20px 24px 4px;">
+              <table width="100%" cellpadding="0" cellspacing="0">
+                ${jobRowsHtml}
+              </table>
             </td></tr>
           </table>
+
+          <!-- View all button -->
+          <table width="100%" cellpadding="0" cellspacing="0">
+            <tr><td style="padding:4px 24px 24px;">
+              <a href="${esc(viewAllUrl)}"
+                 style="display:inline-block;border:1.5px solid #FF5C18;color:#FF5C18;text-decoration:none;padding:10px 24px;border-radius:999px;font-size:14px;font-weight:700;">
+                ${esc(viewAllLabel)}
+              </a>
+            </td></tr>
+          </table>
+
+          <!-- Extension promo -->
+          ${renderExtensionPromo(base)}
 
         </td></tr>
 
-        <!-- Bottom note -->
-        <tr><td style="padding-top:20px;text-align:center;font-size:11px;color:#cbd5e1;">
-          Hireoven · Jobs served fresh · <a href="${esc(getBaseUrl())}/dashboard/alerts" style="color:#94a3b8;text-decoration:underline;">Manage alerts</a>
+        <!-- LinkedIn-style footer -->
+        <tr><td style="padding:24px 4px 32px;">
+          <div style="font-size:12px;color:#64748b;line-height:1.7;">
+            This email was sent to <strong>${recipientName ? esc(recipientName) + " (" + esc(recipientEmail) + ")" : esc(recipientEmail)}</strong>.<br>
+            ${esc(alertNote)}<br>
+            <a href="${esc(manageUrl)}" style="color:#64748b;text-decoration:underline;">Manage alerts</a>
+            &nbsp;&middot;&nbsp;
+            <a href="${esc(manageUrl)}" style="color:#64748b;text-decoration:underline;">Unsubscribe</a>
+            &nbsp;&middot;&nbsp;
+            <a href="${esc(base)}" style="color:#64748b;text-decoration:underline;">Help</a>
+          </div>
+          <div style="margin-top:12px;">
+            <span style="font-size:14px;font-weight:900;letter-spacing:-0.3px;">
+              <span style="color:#FF5C18;">Hire</span><span style="color:#0f172a;">oven</span>
+            </span>
+          </div>
+          <div style="font-size:11px;color:#94a3b8;margin-top:6px;">
+            &copy; ${year} Hireoven. Jobs served fresh.
+          </div>
         </td></tr>
 
       </table>
@@ -250,28 +289,22 @@ export async function sendEmailAlert(userId: string, jobs: Job[], alertName: str
   ])
   if (!profile.email) throw new Error(`User ${userId} has no email address`)
 
-  const firstName = profile.full_name?.split(" ")[0] ?? null
-  const greeting = firstName ? `Hi ${firstName},` : "Hi there,"
-  const visible = hydratedJobs.slice(0, 5)
   const total = hydratedJobs.length
-  const cardsHtml = visible.map((j, i) => renderJobCard(j, i)).join("")
-
-  const viewAllHtml = total > 5
-    ? `<div style="text-align:center;margin-top:8px;">
-         <a href="${esc(buildAlertDashboardUrl(alertName))}"
-            style="display:inline-block;border:1.5px solid #FF5C18;color:#FF5C18;text-decoration:none;padding:9px 22px;border-radius:999px;font-size:13px;font-weight:700;">
-           View all ${total} jobs →
-         </a>
-       </div>`
-    : ""
+  const visible = hydratedJobs.slice(0, 5)
+  const jobRowsHtml = visible.map((j, i) => renderJobRow(j, i)).join("")
+  const viewAllLabel = total > 5 ? `View all ${total} matching jobs` : "View all matching jobs"
 
   const html = renderEmailShell({
     preheader: `${total} new job${total === 1 ? "" : "s"} match your alert "${alertName}"`,
     headerTitle: `${total} new job${total === 1 ? "" : "s"} for you`,
-    headerSub: `${greeting} Your alert "${alertName}" matched ${total} fresh role${total === 1 ? "" : "s"}.`,
-    body: `${cardsHtml}${viewAllHtml}`,
-    footerHtml: `You're receiving this because of your job alert <strong>"${esc(alertName)}"</strong>.
-      &nbsp;<a href="${esc(buildManageAlertsUrl())}" style="color:#64748b;text-decoration:underline;">Manage alerts</a>`,
+    headerSub: `Based on your alert "${alertName}"`,
+    jobRowsHtml,
+    viewAllUrl: buildAlertDashboardUrl(alertName),
+    viewAllLabel,
+    recipientName: profile.full_name ?? null,
+    recipientEmail: profile.email,
+    alertNote: `You're receiving this because of your job alert "${alertName}".`,
+    manageUrl: buildManageAlertsUrl(),
   })
 
   const { error } = await resend.emails.send({
@@ -294,19 +327,21 @@ export async function sendWatchlistAlert(userId: string, jobs: Job[], companyNam
   ])
   if (!profile.email) throw new Error(`User ${userId} has no email address`)
 
-  const firstName = profile.full_name?.split(" ")[0] ?? null
-  const greeting = firstName ? `Hi ${firstName},` : "Hi there,"
-  const visible = hydratedJobs.slice(0, 5)
   const total = jobs.length
-  const cardsHtml = visible.map((j, i) => renderJobCard(j, i)).join("")
+  const visible = hydratedJobs.slice(0, 5)
+  const jobRowsHtml = visible.map((j, i) => renderJobRow(j, i)).join("")
 
   const html = renderEmailShell({
     preheader: `${companyName} just posted ${total} new job${total === 1 ? "" : "s"}`,
     headerTitle: `${companyName} is hiring`,
-    headerSub: `${greeting} ${total} new role${total === 1 ? "" : "s"} just landed from a company on your watchlist.`,
-    body: cardsHtml,
-    footerHtml: `This was triggered by your watchlist.
-      &nbsp;<a href="${esc(new URL("/dashboard/watchlist", getBaseUrl()).toString())}" style="color:#64748b;text-decoration:underline;">Manage watchlist</a>`,
+    headerSub: `${total} new role${total === 1 ? "" : "s"} just landed from a company on your watchlist.`,
+    jobRowsHtml,
+    viewAllUrl: new URL("/dashboard/watchlist", getBaseUrl()).toString(),
+    viewAllLabel: "View all jobs",
+    recipientName: profile.full_name ?? null,
+    recipientEmail: profile.email,
+    alertNote: `You're receiving this because ${companyName} is on your watchlist.`,
+    manageUrl: new URL("/dashboard/watchlist", getBaseUrl()).toString(),
   })
 
   const { error } = await resend.emails.send({
