@@ -500,9 +500,8 @@ export default async function HomePage() {
         <div className="mx-auto max-w-6xl">
           <div className="grid gap-10 md:grid-cols-[1.4fr,1fr,1fr,1fr]">
             <div>
-              <Link href="/" className="inline-flex items-center gap-2.5">
-                <HireovenLogo variant="mark" className="h-9 w-9 shrink-0" />
-                <HireovenLogo variant="wordmark" className="h-5 w-auto" />
+              <Link href="/">
+                <HireovenLogo variant="full" className="h-10 w-auto max-w-[180px]" />
               </Link>
               <p className="mt-3 max-w-xs text-[13px] text-slate-500 leading-relaxed">
                 Jobs served fresh. Built for job seekers who want interviews, not just applications.
