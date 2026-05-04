@@ -415,11 +415,15 @@ function RichTextEditor({
             <button
               type="button"
               onClick={onAiWriteLocked}
-              className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-4 text-[12px] font-bold text-slate-400"
               title="Upgrade to Pro to use Scout Writer"
+              className="relative inline-flex h-9 items-center gap-2 overflow-hidden rounded-lg px-4 text-[12px] font-bold text-white/80 opacity-70 ring-1 ring-inset ring-white/20 transition hover:opacity-90"
+              style={{ background: "linear-gradient(135deg, #5B4DFF, #FF7A35)" }}
             >
               <Lock className="h-3.5 w-3.5" />
               Scout Writer
+              <span className="ml-0.5 rounded-full bg-white/20 px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wide">
+                Pro
+              </span>
             </button>
           ) : (
             <button

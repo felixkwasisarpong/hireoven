@@ -96,12 +96,11 @@ export default function DashboardSidebarNav({
         <span className="flex-1 truncate">{item.label}</span>
 
         {locked ? (
-          // Lock badge — replaces the regular badge
-          <span className={cn(
-            "flex h-5 w-5 shrink-0 items-center justify-center rounded-full",
-            feedSkin ? "bg-slate-100" : "bg-white/10"
-          )}>
-            <Lock className={cn("h-3 w-3", feedSkin ? "text-slate-400" : "text-muted-foreground/70")} />
+          // Coloured "Pro" chip so it's unmistakably locked
+          <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wide text-white"
+            style={{ background: "linear-gradient(135deg, #FF5C18, #FF9A3C)" }}>
+            <Lock className="h-2.5 w-2.5" />
+            Pro
           </span>
         ) : badge && !active ? (
           <span className={cn(
