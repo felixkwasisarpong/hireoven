@@ -7,7 +7,6 @@ import {
   Briefcase,
   Building2,
   CheckCircle2,
-  Clock3,
   ExternalLink,
   FileQuestion,
   GraduationCap,
@@ -106,25 +105,6 @@ function formatMoney(value: number | null | undefined) {
   }).format(Number(value))
 }
 
-function formatSalary(min: number | null, max: number | null, currency = "USD") {
-  if (min == null && max == null) return null
-  const fmt = new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency,
-    maximumFractionDigits: 0,
-  })
-  if (min != null && max != null) return `${fmt.format(min)} - ${fmt.format(max)}`
-  if (min != null) return `From ${fmt.format(min)}`
-  return `Up to ${fmt.format(max ?? 0)}`
-}
-
-function hoursAgo(ts: string) {
-  const mins = Math.max(1, Math.floor((Date.now() - new Date(ts).getTime()) / 60000))
-  if (mins < 60) return `${mins}m ago`
-  const hrs = Math.floor(mins / 60)
-  if (hrs < 24) return `${hrs}h ago`
-  return `${Math.floor(hrs / 24)}d ago`
-}
 
 function statusCopy(sponsorsH1b: boolean | null, confidence: number | null) {
   if (sponsorsH1b === true || (confidence ?? 0) >= 70) {
@@ -530,74 +510,64 @@ export default async function PublicCompanyPage({ params }: Props) {
 
         <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
           <div className="min-w-0 space-y-6">
+            {/* Open jobs — teaser for logged-out visitors */}
             <section id="open-jobs" className={sectionCard}>
               <SectionHeader
                 icon={Briefcase}
                 eyebrow="Current open jobs"
                 title={`${jobs.length} open role${jobs.length === 1 ? "" : "s"} at ${company.name}`}
-                description="Fresh openings tracked by Hireoven. Review each job description for current sponsorship language."
+                description="Hireoven tracks these in real time — new roles appear within minutes of posting."
               />
-              {jobs.length === 0 ? (
-                <EmptyState>No open roles are currently tracked for {company.name}.</EmptyState>
-              ) : (
-                <div className="divide-y divide-slate-200/80 border border-slate-200/75 bg-white">
-                  {jobs.map((job) => {
-                    const salary = formatSalary(job.salary_min, job.salary_max, job.salary_currency)
-                    return (
-                      <article
-                        key={job.id}
-                        className="p-4 transition hover:bg-sky-50/35"
+
+              {/* Blurred ghost rows */}
+              <div className="relative overflow-hidden rounded-xl border border-slate-200">
+                {(jobs.length > 0 ? jobs.slice(0, 3) : Array.from({ length: 3 })).map((_, i) => (
+                  <div key={i} className="flex items-center justify-between border-b border-slate-100 px-4 py-3.5 last:border-0 select-none">
+                    <div className="space-y-1.5">
+                      <div className={cn("h-3.5 rounded-full bg-slate-200", i === 0 ? "w-52" : i === 1 ? "w-40" : "w-48")} />
+                      <div className="flex gap-3">
+                        <div className="h-2.5 w-20 rounded-full bg-slate-100" />
+                        <div className="h-2.5 w-16 rounded-full bg-slate-100" />
+                      </div>
+                    </div>
+                    <div className="h-7 w-16 rounded-lg bg-slate-200" />
+                  </div>
+                ))}
+
+                {/* Lock overlay */}
+                <div className="absolute inset-0 flex flex-col items-center justify-center rounded-xl bg-white/80 backdrop-blur-[3px]">
+                  <div className="mx-4 w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-[0_8px_32px_rgba(15,23,42,0.1)]">
+                    <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl"
+                      style={{ background: "linear-gradient(135deg,#FF5C18,#FF9A3C)" }}>
+                      <Sparkles className="h-6 w-6 text-white" />
+                    </div>
+                    <p className="text-[15px] font-bold text-slate-900">
+                      {jobs.length > 0
+                        ? `See all ${jobs.length} open role${jobs.length === 1 ? "" : "s"}`
+                        : `Get alerts when ${company.name} hires`}
+                    </p>
+                    <p className="mt-1.5 text-[12.5px] leading-relaxed text-slate-500">
+                      Sign up free to see live job listings, AI match scores, and apply in one click.
+                    </p>
+                    <div className="mt-4 flex flex-col gap-2">
+                      <Link
+                        href={`/signup?next=/dashboard`}
+                        className="flex w-full items-center justify-center gap-1.5 rounded-xl py-2.5 text-[13px] font-bold text-white transition hover:brightness-110"
+                        style={{ background: "linear-gradient(135deg,#FF5C18,#FF7A35)" }}
                       >
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                          <div className="min-w-0">
-                            <Link
-                              href={`/jobs/${job.id}`}
-                              className="text-base font-bold text-slate-950 transition hover:text-[#2563EB]"
-                            >
-                              {job.title}
-                            </Link>
-                            <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-slate-500">
-                              {job.location ? (
-                                <span className="inline-flex items-center gap-1">
-                                  <MapPin className="h-3.5 w-3.5" aria-hidden />
-                                  {job.is_remote ? "Remote" : job.is_hybrid ? `Hybrid · ${job.location}` : job.location}
-                                </span>
-                              ) : null}
-                              {salary ? (
-                                <span className="inline-flex items-center gap-1 font-semibold text-emerald-700">
-                                  <Banknote className="h-3.5 w-3.5" aria-hidden />
-                                  {salary}
-                                </span>
-                              ) : null}
-                              {job.sponsors_h1b ? (
-                                <span className="inline-flex items-center gap-1 font-semibold text-sky-700">
-                                  <Plane className="h-3.5 w-3.5" aria-hidden />
-                                  Historical sponsorship signal
-                                </span>
-                              ) : null}
-                            </div>
-                          </div>
-                          <div className="flex shrink-0 items-center gap-3 text-sm">
-                            <span className="inline-flex items-center gap-1 text-xs font-medium text-slate-400">
-                              <Clock3 className="h-3.5 w-3.5" aria-hidden />
-                              {hoursAgo(job.first_detected_at)}
-                            </span>
-                            <a
-                              href={job.apply_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 rounded-sm bg-[#2563EB] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#1D4ED8]"
-                            >
-                              Apply
-                              <ExternalLink className="h-3 w-3" aria-hidden />
-                            </a>
-                          </div>
-                        </div>
-                      </article>
-                    )
-                  })}
+                        Sign up free — see all jobs
+                        <ArrowRight className="h-3.5 w-3.5" />
+                      </Link>
+                      <Link
+                        href="/login"
+                        className="flex w-full items-center justify-center rounded-xl border border-slate-200 py-2.5 text-[13px] font-semibold text-slate-600 transition hover:bg-slate-50"
+                      >
+                        Already have an account? Sign in
+                      </Link>
+                    </div>
+                  </div>
                 </div>
-              )}
+              </div>
             </section>
 
             <section className={sectionCard}>
