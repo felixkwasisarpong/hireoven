@@ -7,6 +7,7 @@ import { buildResumeScoreBreakdown, createGeneratedResume } from "@/lib/resume/h
 import { buildResumeRawText } from "@/lib/resume/state"
 import { createClient } from "@/lib/supabase/server"
 import { normalizeSkillsBuckets } from "@/lib/skills/taxonomy"
+import { requireFeature } from "@/lib/gates/server-gate"
 import type { Education, Profile, Project, Resume, Skills, WorkExperience } from "@/types"
 import type {
   ResumeExperienceLevel,
@@ -278,9 +279,11 @@ async function ensureResumeGenerateColumns() {
 }
 
 export async function POST(request: Request) {
+  const gate = await requireFeature("deep_analysis", request as Parameters<typeof requireFeature>[1])
+  if (gate instanceof NextResponse) return gate
+  const { userId } = gate
+
   const supabase = await createClient()
-  const user = (await supabase.auth.getUser()).data.user
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
   const input = parseInput(body)
@@ -299,7 +302,7 @@ export async function POST(request: Request) {
        WHERE id = $1
          AND user_id = $2
        LIMIT 1`,
-      [input.sourceResumeId, user.id]
+      [input.sourceResumeId, userId]
     )
     const sourceResume = sourceResult.rows[0]
     if (sourceResume) {
@@ -324,7 +327,7 @@ export async function POST(request: Request) {
        FROM profiles
        WHERE id = $1
        LIMIT 1`,
-      [user.id]
+      [userId]
     )
     const profile = profileResult.rows[0]
     if (profile) {
@@ -348,19 +351,19 @@ export async function POST(request: Request) {
     `SELECT EXISTS(
        SELECT 1 FROM resumes WHERE user_id = $1 AND is_primary = true
      ) AS has_primary`,
-    [user.id]
+    [userId]
   )
   const shouldBePrimary = !existing.rows[0]?.has_primary
   if (shouldBePrimary) {
-    await pool.query(`UPDATE resumes SET is_primary = false WHERE user_id = $1`, [user.id])
+    await pool.query(`UPDATE resumes SET is_primary = false WHERE user_id = $1`, [userId])
   }
 
   let draft: Omit<Resume, "id" | "created_at" | "updated_at">
   try {
-    draft = (await generateResumeWithClaude(generationInput, user.id)) ?? createGeneratedResume(generationInput, user.id)
+    draft = (await generateResumeWithClaude(generationInput, userId)) ?? createGeneratedResume(generationInput, userId)
   } catch (error) {
     console.error("Claude resume generation failed; falling back to local generator", error)
-    draft = createGeneratedResume(generationInput, user.id)
+    draft = createGeneratedResume(generationInput, userId)
   }
   const result = await pool.query<Resume>(
     `INSERT INTO resumes (

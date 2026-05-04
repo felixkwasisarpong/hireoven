@@ -1,8 +1,10 @@
 /**
- * GET /api/scout/apply-agent?minMatchScore=80&count=5&sponsorship=true&workMode=remote
+ * GET /api/scout/apply-agent?minMatchScore=80&count=5&sponsorship=true&workMode=remote&q=java+backend
  *
  * Selects jobs from the live feed pool (recently added, active jobs) that match
- * the user's criteria and match score. Excludes jobs already applied to.
+ * the user's criteria. `q` is a free-text query matched against title + description
+ * so arbitrary natural language conditions ("healthcare", "fintech NYC", "Python AWS")
+ * all work without any special parsing.
  *
  * Safety: read-only. Never modifies application state.
  */
@@ -25,6 +27,24 @@ type JobRow = {
   match_score:  number | null
 }
 
+// Strip the bulk-apply framing and return the meaningful condition remainder.
+// "apply to 3 jobs with java skill in it" → "java skill"
+// "apply to 5 remote healthcare jobs" → "healthcare"
+// "apply for 2 frontend roles at fintech companies" → "frontend fintech companies"
+function extractSearchTerms(raw: string): string {
+  return raw
+    .replace(/\b(apply\s+(to|for)|queue|batch|bulk|prepare)\b/gi, "")
+    .replace(/\b(top|best|strongest|highest|matching|scored?)\b/gi, "")
+    .replace(/\b\d+\b/g, "")
+    .replace(/\b(jobs?|roles?|positions?|openings?|applications?|applying)\b/gi, "")
+    .replace(/\b(remote|onsite|hybrid)\b/gi, "")
+    .replace(/\b(h-?1b|visa|sponsor(ship)?)\b/gi, "")
+    .replace(/\b(with|in|at|for|and|the|that|has|have|a|an|it)\b/gi, "")
+    .replace(/[^\w\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+}
+
 export async function GET(request: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -35,15 +55,16 @@ export async function GET(request: NextRequest) {
   const count              = Math.min(Number(searchParams.get("count") ?? 5), 20)
   const requireSponsorship = searchParams.get("sponsorship") === "true"
   const workMode           = searchParams.get("workMode") ?? null
+  const rawQuery           = (searchParams.get("q") ?? "").trim()
 
   const pool = getPostgresPool()
 
   const conditions: string[] = [
     "j.is_active = true",
     "j.apply_url IS NOT NULL",
-    // Only recently added jobs (last 30 days)
+    // Only recently posted jobs (last 30 days)
     "j.first_detected_at >= NOW() - INTERVAL '30 days'",
-    // Exclude jobs user has already applied to or rejected
+    // Exclude jobs user has already applied to, is interviewing for, or rejected
     `NOT EXISTS (
        SELECT 1 FROM job_applications ja
        WHERE ja.job_id = j.id
@@ -54,9 +75,23 @@ export async function GET(request: NextRequest) {
   ]
   const params: unknown[] = [user.id]
 
-  if (minMatchScore > 0) {
-    params.push(minMatchScore)
-    conditions.push(`jms.overall_score >= $${params.length}`)
+  // minMatchScore filters by score when a score exists — jobs with no score
+  // computed yet are still included, sorted to the bottom by recency.
+  const scoreFilter = minMatchScore > 0 ? `COALESCE(jms.overall_score, 0) >= ${minMatchScore} OR jms.overall_score IS NULL` : null
+  if (scoreFilter) conditions.push(`(${scoreFilter})`)
+
+  // Free-text search: match any meaningful word from the user's query against
+  // title and description so arbitrary conditions ("java", "healthcare NYC",
+  // "Python AWS", "entry level fintech") all work without special parsing.
+  const searchTerms = rawQuery ? extractSearchTerms(rawQuery) : ""
+  const searchWords = searchTerms.split(/\s+/).filter((w) => w.length >= 3)
+  if (searchWords.length > 0) {
+    const wordConditions = searchWords.map((word) => {
+      params.push(`%${word}%`)
+      const p = `$${params.length}`
+      return `(j.title ILIKE ${p} OR j.description ILIKE ${p})`
+    })
+    conditions.push(`(${wordConditions.join(" OR ")})`)
   }
 
   if (requireSponsorship) {

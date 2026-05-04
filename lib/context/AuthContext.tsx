@@ -1,7 +1,7 @@
 "use client"
 
-import { createContext, useCallback, useContext, useEffect, useState } from "react"
-import { createClient } from "@/lib/supabase/client"
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react"
+import { fetchSessionUser } from "@/lib/supabase/client"
 import type { Profile } from "@/types"
 
 type SessionUserLite = {
@@ -26,6 +26,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     profile: null,
     isLoading: true,
   })
+
+  // Track the last known user id so visibility re-checks only re-fetch the profile
+  // when the session identity actually changes (avoids redundant profile fetches).
+  const lastUserIdRef = useRef<string | null>(null)
 
   const fetchProfile = useCallback(async (user: SessionUserLite) => {
     try {
@@ -59,36 +63,75 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
-  useEffect(() => {
-    const supabase = createClient()
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
-        void fetchProfile({
-          id: session.user.id,
-          email: session.user.email ?? null,
-          user_metadata: (session.user as { user_metadata?: { full_name?: string | null } }).user_metadata,
-        })
+  // Check the session and update state. Called on mount and on tab focus return.
+  const checkSession = useCallback(async () => {
+    try {
+      const sessionUser = await fetchSessionUser()
+      if (sessionUser) {
+        const userId = sessionUser.id
+        // Only refetch profile when the user identity changes.
+        if (userId !== lastUserIdRef.current) {
+          lastUserIdRef.current = userId
+          await fetchProfile({
+            id: userId,
+            email: sessionUser.email ?? null,
+          })
+        } else {
+          // Same user still active — just make sure isLoading is cleared.
+          setState((prev) => prev.isLoading ? { ...prev, isLoading: false } : prev)
+        }
       } else {
+        lastUserIdRef.current = null
         setState({ user: null, profile: null, isLoading: false })
       }
-    })
-    return () => subscription.unsubscribe()
+    } catch {
+      lastUserIdRef.current = null
+      setState({ user: null, profile: null, isLoading: false })
+    }
   }, [fetchProfile])
 
+  // Initial session check on mount.
+  useEffect(() => {
+    void checkSession()
+  }, [checkSession])
+
+  // Re-check session whenever the user returns to the tab (visibility change)
+  // or the window regains focus. This ensures a user who logged in on another
+  // tab — or whose cookie was refreshed — sees the correct auth state immediately.
+  useEffect(() => {
+    function onVisible() {
+      if (document.visibilityState === "visible") void checkSession()
+    }
+    function onFocus() {
+      void checkSession()
+    }
+    document.addEventListener("visibilitychange", onVisible)
+    window.addEventListener("focus", onFocus)
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible)
+      window.removeEventListener("focus", onFocus)
+    }
+  }, [checkSession])
+
+  // Slide the session: ask the server to renew the cookie if it's within 7 days
+  // of expiry. Called once per mount — the server only issues a new cookie when
+  // renewal is actually needed, so this is a cheap no-op most of the time.
+  useEffect(() => {
+    void fetch("/api/auth/refresh", { method: "POST", credentials: "include" }).catch(() => {})
+  }, [])
+
   const refetchProfile = useCallback(async () => {
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    const sessionUser = await fetchSessionUser()
+    if (!sessionUser) return
     await fetchProfile({
-      id: user.id,
-      email: user.email ?? null,
-      user_metadata: (user as { user_metadata?: { full_name?: string | null } }).user_metadata,
+      id: sessionUser.id,
+      email: sessionUser.email ?? null,
     })
   }, [fetchProfile])
 
   async function signOut() {
-    const supabase = createClient()
-    await supabase.auth.signOut()
+    await fetch("/api/auth/logout", { method: "POST", credentials: "include" })
+    lastUserIdRef.current = null
     window.location.assign("/")
   }
 

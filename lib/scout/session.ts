@@ -60,10 +60,14 @@ export function readScoutSession(): ScoutWorkspaceSession | null {
   }
 }
 
+// Modes that are transient UI flows — restoring them on refresh makes no sense
+const NON_PERSISTENT_MODES = new Set(["bulk_application"])
+
 export function writeScoutSession(
   session: Omit<ScoutWorkspaceSession, "v" | "savedAt">
 ): void {
   if (typeof window === "undefined") return
+  if (NON_PERSISTENT_MODES.has(session.mode)) return
   try {
     const full: ScoutWorkspaceSession = { v: 1, savedAt: Date.now(), ...session }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(full))

@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { Loader2, Mail, Shield, UserRound, UserX } from "lucide-react"
+import { ChevronDown, Loader2, Mail, Shield, UserRound, UserX } from "lucide-react"
 import {
   AdminBadge,
   AdminButton,
@@ -25,6 +25,100 @@ type UserRow = {
   watchlistCount: number
   alertCount: number
   pushEnabled: boolean
+  plan: string
+  planStatus: string
+}
+
+const PLAN_LABELS: Record<string, string> = {
+  free: "Free",
+  pro: "Pro",
+  pro_international: "Max",
+}
+
+const PLAN_STYLES: Record<string, string> = {
+  free:              "bg-slate-100 text-slate-600",
+  pro:               "bg-orange-100 text-orange-700",
+  pro_international: "bg-violet-100 text-violet-700",
+}
+
+function PlanBadge({ plan }: { plan: string }) {
+  return (
+    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-bold ${PLAN_STYLES[plan] ?? PLAN_STYLES.free}`}>
+      {PLAN_LABELS[plan] ?? plan}
+    </span>
+  )
+}
+
+function PlanSelector({
+  userId,
+  currentPlan,
+  onChanged,
+}: {
+  userId: string
+  currentPlan: string
+  onChanged: (userId: string, plan: string) => void
+}) {
+  const { pushToast } = useToast()
+  const [open, setOpen] = useState(false)
+  const [busy, setBusy] = useState(false)
+
+  const plans = [
+    { value: "free",              label: "Free",    style: "text-slate-700 hover:bg-slate-50" },
+    { value: "pro",               label: "Pro",     style: "text-orange-700 hover:bg-orange-50" },
+    { value: "pro_international", label: "Max",     style: "text-violet-700 hover:bg-violet-50" },
+  ]
+
+  async function setPlan(plan: string) {
+    if (plan === currentPlan) { setOpen(false); return }
+    setBusy(true)
+    setOpen(false)
+    const res = await fetch("/api/admin/users", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "set-plan", userId, plan }),
+    })
+    setBusy(false)
+    if (res.ok) {
+      pushToast({ tone: "success", title: `Plan set to ${PLAN_LABELS[plan] ?? plan}` })
+      onChanged(userId, plan)
+    } else {
+      const data = await res.json().catch(() => ({})) as { error?: string }
+      pushToast({ tone: "error", title: "Plan update failed", description: data.error })
+    }
+  }
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        disabled={busy}
+        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-50"
+      >
+        {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <PlanBadge plan={currentPlan} />}
+        <ChevronDown className="h-3 w-3 text-slate-400" />
+      </button>
+
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute left-0 top-full z-20 mt-1 w-32 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.12)]">
+            {plans.map((p) => (
+              <button
+                key={p.value}
+                type="button"
+                onClick={() => void setPlan(p.value)}
+                className={`flex w-full items-center gap-2 px-3 py-2 text-[12px] font-semibold transition ${p.style} ${currentPlan === p.value ? "opacity-50 cursor-default" : ""}`}
+              >
+                {p.label}
+                {currentPlan === p.value && <span className="ml-auto text-[9px] text-slate-400">current</span>}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
 }
 
 export default function AdminUsersPage() {
@@ -38,74 +132,52 @@ export default function AdminUsersPage() {
 
   async function loadUsers() {
     setLoading(true)
-    const response = await fetch("/api/admin/users", { cache: "no-store" })
-    const body = (await response.json()) as { error?: string; users?: UserRow[] }
-
-    if (!response.ok) {
-      pushToast({
-        tone: "error",
-        title: "Unable to load users",
-        description: body.error ?? "Unknown error",
-      })
+    const res = await fetch("/api/admin/users", { cache: "no-store" })
+    const body = (await res.json()) as { error?: string; users?: UserRow[] }
+    if (!res.ok) {
+      pushToast({ tone: "error", title: "Unable to load users", description: body.error })
       setLoading(false)
       return
     }
-
     setUsers(body.users ?? [])
     setLoading(false)
   }
 
+  useEffect(() => { void loadUsers() }, [])
   useEffect(() => {
-    void loadUsers()
-  }, [])
-
-  useEffect(() => {
-    const interval = window.setInterval(() => setNow(Date.now()), 60_000)
-    return () => window.clearInterval(interval)
+    const id = window.setInterval(() => setNow(Date.now()), 60_000)
+    return () => window.clearInterval(id)
   }, [])
 
   const visibleUsers = useMemo(() => {
-    const query = search.trim().toLowerCase()
-    return users.filter((user) => {
-      if (!query) return true
-      return (
-        user.email?.toLowerCase().includes(query) ||
-        user.name?.toLowerCase().includes(query) ||
-        user.visaStatus?.toLowerCase().includes(query)
-      )
-    })
+    const q = search.trim().toLowerCase()
+    if (!q) return users
+    return users.filter((u) =>
+      u.email?.toLowerCase().includes(q) ||
+      u.name?.toLowerCase().includes(q) ||
+      u.visaStatus?.toLowerCase().includes(q) ||
+      u.plan?.toLowerCase().includes(q)
+    )
   }, [search, users])
 
-  const selectedUser = visibleUsers.find((user) => user.id === selectedId) ?? null
-  const totalUsers = users.length
-  const internationalUsers = users.filter((user) => user.isInternational).length
-  const pushEnabledUsers = users.filter((user) => user.pushEnabled).length
-  const activeSevenDays = users.filter((user) => {
-    if (!user.lastActiveAt) return false
-    return Date.now() - new Date(user.lastActiveAt).getTime() <= 7 * 86_400_000
-  }).length
+  const selectedUser = visibleUsers.find((u) => u.id === selectedId) ?? null
 
-  async function updateUser(body: Record<string, unknown>, successMessage: string) {
-    const response = await fetch("/api/admin/users", {
+  const stats = useMemo(() => ({
+    total: users.length,
+    intl: users.filter((u) => u.isInternational).length,
+    pro: users.filter((u) => u.plan === "pro" || u.plan === "pro_international").length,
+    active7d: users.filter((u) => u.lastActiveAt && Date.now() - new Date(u.lastActiveAt).getTime() <= 7 * 86_400_000).length,
+  }), [users])
+
+  async function updateUser(body: Record<string, unknown>, msg: string) {
+    const res = await fetch("/api/admin/users", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     })
-    const payload = (await response.json()) as { error?: string }
-
-    if (!response.ok) {
-      pushToast({
-        tone: "error",
-        title: "User update failed",
-        description: payload.error ?? "Unknown error",
-      })
-      return false
-    }
-
-    pushToast({
-      tone: "success",
-      title: successMessage,
-    })
+    const data = (await res.json()) as { error?: string }
+    if (!res.ok) { pushToast({ tone: "error", title: "Update failed", description: data.error }); return false }
+    pushToast({ tone: "success", title: msg })
     return true
   }
 
@@ -116,63 +188,54 @@ export default function AdminUsersPage() {
       !user.isAdmin ? "Admin access granted" : "Admin access removed"
     )
     setBusyId(null)
-    if (!ok) return
-    setUsers((current) =>
-      current.map((entry) =>
-        entry.id === user.id ? { ...entry, isAdmin: !entry.isAdmin } : entry
-      )
-    )
+    if (ok) setUsers((prev) => prev.map((u) => u.id === user.id ? { ...u, isAdmin: !u.isAdmin } : u))
   }
 
   async function suspendUser(user: UserRow) {
     if (!window.confirm(`Suspend ${user.email ?? user.name ?? "this user"}?`)) return
     setBusyId(user.id)
-    const ok = await updateUser(
-      { action: "suspend", userId: user.id },
-      "User suspended"
-    )
+    await updateUser({ action: "suspend", userId: user.id }, "User suspended")
     setBusyId(null)
-    if (!ok) return
+  }
+
+  function onPlanChanged(userId: string, plan: string) {
+    setUsers((prev) => prev.map((u) => u.id === userId ? { ...u, plan } : u))
   }
 
   return (
     <div className="space-y-6">
       <AdminPageHeader
         eyebrow="Users"
-        title="User operations"
-        description="See who is using Hireoven, who depends on sponsorship data, and which accounts have enough privileges to operate the system."
+        title="User management"
+        description="Upgrade, downgrade, toggle admin, and suspend accounts directly — no Stripe required."
       />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <AdminStatCard label="Total users" value={formatNumber(totalUsers)} />
+        <AdminStatCard label="Total users" value={formatNumber(stats.total)} />
         <AdminStatCard
-          label="International users"
-          value={formatNumber(internationalUsers)}
-          hint={`${totalUsers ? Math.round((internationalUsers / totalUsers) * 100) : 0}% of all users`}
-          tone="info"
-        />
-        <AdminStatCard
-          label="Push enabled"
-          value={formatNumber(pushEnabledUsers)}
-          hint="Subscribed for instant browser notifications"
+          label="Paid (Pro + Max)"
+          value={formatNumber(stats.pro)}
+          hint={`${stats.total ? Math.round((stats.pro / stats.total) * 100) : 0}% of users`}
           tone="success"
         />
         <AdminStatCard
-          label="Active in last 7 days"
-          value={formatNumber(activeSevenDays)}
-          tone="default"
+          label="International"
+          value={formatNumber(stats.intl)}
+          hint={`${stats.total ? Math.round((stats.intl / stats.total) * 100) : 0}% of users`}
+          tone="info"
         />
+        <AdminStatCard label="Active last 7 days" value={formatNumber(stats.active7d)} />
       </div>
 
       <AdminPanel
-        title="User table"
-        description="Toggle admin access, inspect account health, and reach out to high-value users without leaving the control room."
+        title="Users"
+        description="Click the plan badge dropdown to upgrade or downgrade any account instantly."
       >
         <div className="mb-4">
           <AdminInput
             value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search email, name, visa status"
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by email, name, visa status, or plan"
           />
         </div>
 
@@ -183,145 +246,125 @@ export default function AdminUsersPage() {
                 <th className="px-3 py-3">Email</th>
                 <th className="px-3 py-3">Name</th>
                 <th className="px-3 py-3">Joined</th>
-                <th className="px-3 py-3">Visa status</th>
-                <th className="px-3 py-3">Watchlist</th>
-                <th className="px-3 py-3">Alerts</th>
+                <th className="px-3 py-3">Plan</th>
+                <th className="px-3 py-3">Visa</th>
+                <th className="px-3 py-3">Watch</th>
                 <th className="px-3 py-3">Last active</th>
-                <th className="px-3 py-3">Is admin</th>
+                <th className="px-3 py-3">Admin</th>
                 <th className="px-3 py-3">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {loading ? (
                 <tr>
-                  <td colSpan={9} className="px-3 py-10 text-center text-gray-500">
-                    <Loader2 className="mx-auto mb-3 h-5 w-5 animate-spin" />
-                    Loading users
+                  <td colSpan={9} className="px-3 py-10 text-center text-gray-400">
+                    <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />
+                    Loading users…
                   </td>
                 </tr>
               ) : visibleUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-3 py-10 text-center text-gray-500">
-                    No users match the current filters.
+                  <td colSpan={9} className="px-3 py-10 text-center text-gray-400">
+                    No users match your search.
                   </td>
                 </tr>
-              ) : (
-                visibleUsers.map((user) => (
-                  <tr key={user.id}>
-                    <td className="px-3 py-4 font-medium text-gray-900">
-                      {user.email ?? "Unknown"}
-                    </td>
-                    <td className="px-3 py-4 text-gray-600">{user.name ?? "No name"}</td>
-                    <td className="px-3 py-4 text-gray-600">{formatDateTime(user.joinedAt)}</td>
-                    <td className="px-3 py-4">
-                      {user.visaStatus ? (
-                        <AdminBadge tone={user.isInternational ? "info" : "neutral"}>
-                          {user.visaStatus}
-                        </AdminBadge>
-                      ) : (
-                        <span className="text-gray-400">Not set</span>
-                      )}
-                    </td>
-                    <td className="px-3 py-4 text-gray-600">{formatNumber(user.watchlistCount)}</td>
-                    <td className="px-3 py-4 text-gray-600">{formatNumber(user.alertCount)}</td>
-                    <td className="px-3 py-4">
-                      <p className="text-gray-900">{formatDateTime(user.lastActiveAt)}</p>
-                      <p className="mt-1 text-xs text-gray-500">
-                        {formatRelativeTime(user.lastActiveAt, now)}
-                      </p>
-                    </td>
-                    <td className="px-3 py-4">
-                      <button
-                        type="button"
-                        onClick={() => void toggleAdmin(user)}
-                        disabled={busyId === user.id}
-                        className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold transition ${
-                          user.isAdmin
-                            ? "bg-sky-50 text-sky-700"
-                            : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                        }`}
+              ) : visibleUsers.map((user) => (
+                <tr key={user.id} className="hover:bg-gray-50/60">
+                  <td className="px-3 py-3 font-medium text-gray-900">{user.email ?? "—"}</td>
+                  <td className="px-3 py-3 text-gray-600">{user.name ?? "—"}</td>
+                  <td className="px-3 py-3 text-xs text-gray-500">{formatDateTime(user.joinedAt)}</td>
+
+                  {/* Plan dropdown */}
+                  <td className="px-3 py-3">
+                    <PlanSelector
+                      userId={user.id}
+                      currentPlan={user.plan}
+                      onChanged={onPlanChanged}
+                    />
+                  </td>
+
+                  <td className="px-3 py-3">
+                    {user.visaStatus ? (
+                      <AdminBadge tone={user.isInternational ? "info" : "neutral"}>
+                        {user.visaStatus}
+                      </AdminBadge>
+                    ) : (
+                      <span className="text-xs text-gray-400">—</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-3 text-xs text-gray-600">{formatNumber(user.watchlistCount)}</td>
+                  <td className="px-3 py-3">
+                    <p className="text-xs text-gray-600">{formatDateTime(user.lastActiveAt)}</p>
+                    <p className="mt-0.5 text-[10px] text-gray-400">{formatRelativeTime(user.lastActiveAt, now)}</p>
+                  </td>
+
+                  {/* Admin toggle */}
+                  <td className="px-3 py-3">
+                    <button
+                      type="button"
+                      onClick={() => void toggleAdmin(user)}
+                      disabled={busyId === user.id}
+                      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold transition ${
+                        user.isAdmin ? "bg-sky-100 text-sky-700" : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                      }`}
+                    >
+                      {busyId === user.id
+                        ? <Loader2 className="h-3 w-3 animate-spin" />
+                        : <Shield className="h-3 w-3" />
+                      }
+                      {user.isAdmin ? "Admin" : "User"}
+                    </button>
+                  </td>
+
+                  {/* Actions */}
+                  <td className="px-3 py-3">
+                    <div className="flex flex-wrap gap-1.5">
+                      <AdminButton tone="ghost" className="px-2.5 py-1.5 text-xs" onClick={() => setSelectedId(user.id)}>
+                        <UserRound className="mr-1 h-3.5 w-3.5" /> Profile
+                      </AdminButton>
+                      <AdminButton
+                        tone="secondary"
+                        className="px-2.5 py-1.5 text-xs"
+                        onClick={() => { if (user.email) window.location.href = `mailto:${user.email}` }}
                       >
-                        {busyId === user.id ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <Shield className="h-3.5 w-3.5" />
-                        )}
-                        {user.isAdmin ? "Admin" : "Standard"}
-                      </button>
-                    </td>
-                    <td className="px-3 py-4">
-                      <div className="flex flex-wrap gap-2">
-                        <AdminButton
-                          tone="ghost"
-                          className="px-3 py-2 text-xs"
-                          onClick={() => setSelectedId(user.id)}
-                        >
-                          <UserRound className="mr-2 h-4 w-4" />
-                          View profile
-                        </AdminButton>
-                        <AdminButton
-                          tone="secondary"
-                          className="px-3 py-2 text-xs"
-                          onClick={() => {
-                            if (user.email) {
-                              window.location.href = `mailto:${user.email}`
-                            }
-                          }}
-                        >
-                          <Mail className="mr-2 h-4 w-4" />
-                          Send email
-                        </AdminButton>
-                        <AdminButton
-                          tone="danger"
-                          className="px-3 py-2 text-xs"
-                          onClick={() => void suspendUser(user)}
-                        >
-                          <UserX className="mr-2 h-4 w-4" />
-                          Suspend
-                        </AdminButton>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
+                        <Mail className="mr-1 h-3.5 w-3.5" /> Email
+                      </AdminButton>
+                      <AdminButton tone="danger" className="px-2.5 py-1.5 text-xs" onClick={() => void suspendUser(user)}>
+                        <UserX className="mr-1 h-3.5 w-3.5" /> Suspend
+                      </AdminButton>
+                    </div>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
       </AdminPanel>
 
-      {selectedUser ? (
+      {selectedUser && (
         <AdminPanel
-          title={`User profile: ${selectedUser.email ?? selectedUser.name ?? "Unknown"}`}
-          description="Quick profile view for account health, international status, and engagement depth."
+          title={`Profile: ${selectedUser.email ?? selectedUser.name ?? "Unknown"}`}
+          description="Account snapshot."
         >
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-400">Name</p>
-              <p className="mt-3 text-base font-semibold text-gray-900">
-                {selectedUser.name ?? "No name saved"}
-              </p>
-            </div>
-            <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-400">Joined</p>
-              <p className="mt-3 text-base font-semibold text-gray-900">
-                {formatDateTime(selectedUser.joinedAt)}
-              </p>
-            </div>
-            <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-400">International</p>
-              <p className="mt-3 text-base font-semibold text-gray-900">
-                {selectedUser.isInternational ? "Yes" : "No"}
-              </p>
-            </div>
-            <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-400">Push alerts</p>
-              <p className="mt-3 text-base font-semibold text-gray-900">
-                {selectedUser.pushEnabled ? "Enabled" : "Disabled"}
-              </p>
-            </div>
+            {[
+              { label: "Name",        value: selectedUser.name ?? "Not set" },
+              { label: "Plan",        value: PLAN_LABELS[selectedUser.plan] ?? selectedUser.plan },
+              { label: "Joined",      value: formatDateTime(selectedUser.joinedAt) },
+              { label: "International", value: selectedUser.isInternational ? "Yes" : "No" },
+              { label: "Watchlist",   value: String(selectedUser.watchlistCount) },
+              { label: "Alerts",      value: String(selectedUser.alertCount) },
+              { label: "Push",        value: selectedUser.pushEnabled ? "Enabled" : "Disabled" },
+              { label: "Visa status", value: selectedUser.visaStatus ?? "Not set" },
+            ].map(({ label, value }) => (
+              <div key={label} className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">{label}</p>
+                <p className="mt-2 text-sm font-semibold text-gray-900">{value}</p>
+              </div>
+            ))}
           </div>
         </AdminPanel>
-      ) : null}
+      )}
     </div>
   )
 }

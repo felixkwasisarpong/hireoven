@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { usePathname, useSearchParams } from "next/navigation"
 import dynamic from "next/dynamic"
-import { Brain, Clock, Layers, Shield, Sparkles, X } from "lucide-react"
+import { MoreHorizontal, Sparkles, Target, X } from "lucide-react"
 import { ScoutOrb } from "@/components/scout/ScoutOrb"
 import { runQualityControl, buildQCContext } from "@/lib/scout/quality-control"
 import { ScoutCommandBar } from "./ScoutCommandBar"
@@ -186,6 +186,15 @@ function buildNarrative(mode: WorkspaceMode, response: ScoutResponse): string {
   return sentence.length <= 140 ? sentence : `${sentence.slice(0, 137)}…`
 }
 
+/** Render **bold** markdown inline as <strong> elements. */
+function renderBold(text: string): React.ReactNode {
+  const parts = text.split(/\*\*(.+?)\*\*/)
+  if (parts.length === 1) return text
+  return parts.map((part, i) =>
+    i % 2 === 1 ? <strong key={i} className="font-semibold">{part}</strong> : part
+  )
+}
+
 type TimelineSignalDetail = Partial<Omit<ScoutTimelineEvent, "id" | "timestamp">> & {
   timestamp?: string
 }
@@ -273,6 +282,7 @@ export function ScoutWorkspaceShell() {
   // ── Scout streaming ─────────────────────────────────────────────────────────
   const scoutStream    = useScoutStream()
   const streamMsgId    = useRef<string | null>(null)
+  const isSubmittingRef = useRef(false)   // sync guard — prevents double-submit within same tick
 
   // Refs for timeline change detection (avoid duplicate event emission)
   const prevModeRef          = useRef<WorkspaceMode>("idle")
@@ -372,6 +382,19 @@ export function ScoutWorkspaceShell() {
   const [error,     setError]     = useState<string | null>(null)
   const [resumeRefreshedNotice, setResumeRefreshedNotice] = useState(false)
 
+  // ── Orb "done" flash — briefly fires after stream ends ──────────────────────
+  const [orbDone, setOrbDone] = useState(false)
+  const wasStreamingRef = useRef(false)
+  useEffect(() => {
+    const isStreaming = scoutStream.isStreaming || researchStream.isRunning
+    if (wasStreamingRef.current && !isStreaming) {
+      setOrbDone(true)
+      const t = setTimeout(() => setOrbDone(false), 400)
+      return () => clearTimeout(t)
+    }
+    wasStreamingRef.current = isStreaming
+  }, [scoutStream.isStreaming, researchStream.isRunning])
+
   // ── Workspace state ─────────────────────────────────────────────────────────
   const [workspaceMode,   setWorkspaceMode]   = useState<WorkspaceMode>("idle")
   const [activeResponse,  setActiveResponse]  = useState<ScoutResponse | null>(null)
@@ -418,6 +441,26 @@ export function ScoutWorkspaceShell() {
       setLocalFocusMode(true)
     }
   }, [searchParams])
+
+  // Sync focus mode state when the executor turns it off (same-tab event)
+  // or when another tab clears localStorage (storage event)
+  useEffect(() => {
+    function onFocusChanged(e: Event) {
+      const detail = (e as CustomEvent<{ enabled: boolean }>).detail
+      setLocalFocusMode(detail.enabled)
+    }
+    function onStorage(e: StorageEvent) {
+      if (e.key === "hireoven:scout-focus-mode:v1") {
+        setLocalFocusMode(e.newValue === "1")
+      }
+    }
+    window.addEventListener("scout:focus-mode-changed", onFocusChanged)
+    window.addEventListener("storage", onStorage)
+    return () => {
+      window.removeEventListener("scout:focus-mode-changed", onFocusChanged)
+      window.removeEventListener("storage", onStorage)
+    }
+  }, [])
 
   const nudges: ScoutNudge[] = useMemo(() => {
     if (!strategyBoard || !behaviorSignals) return []
@@ -931,7 +974,7 @@ export function ScoutWorkspaceShell() {
         m.id === id ? { id, role: "scout" as const, response: safeResponse } : m
       )
     )
-    setIsLoading(false)
+    isSubmittingRef.current = false; setIsLoading(false)
     setActiveResponse(safeResponse)
 
     const directive = safeResponse.workspace_directive
@@ -981,7 +1024,7 @@ export function ScoutWorkspaceShell() {
     commandStartedAtRef.current = null
     lastDebugRef.current = null
     setError(scoutStream.error)
-    setIsLoading(false)
+    isSubmittingRef.current = false; setIsLoading(false)
     // Replace the streaming bubble with an error notice (remove it)
     const id = streamMsgId.current
     if (id) setMessages((prev) => prev.filter((m) => m.id !== id))
@@ -992,7 +1035,7 @@ export function ScoutWorkspaceShell() {
   useEffect(() => {
     const task = researchStream.task
     if (!task || researchStream.isRunning) return
-    setIsLoading(false)
+    isSubmittingRef.current = false; setIsLoading(false)
     if (task.status === "completed") {
       writeResearchTask(task)
       const followUps = task.followUpCommands ?? []
@@ -1014,13 +1057,13 @@ export function ScoutWorkspaceShell() {
   useEffect(() => {
     if (!researchStream.error) return
     setError(researchStream.error)
-    setIsLoading(false)
+    isSubmittingRef.current = false; setIsLoading(false)
   }, [researchStream.error])
 
   // Career strategy — data loaded
   useEffect(() => {
     if (careerStrategy.loading) return
-    setIsLoading(false)
+    isSubmittingRef.current = false; setIsLoading(false)
     if (careerStrategy.data) {
       const dirCount = careerStrategy.data.directions.length
       if (dirCount > 0) {
@@ -1419,7 +1462,8 @@ export function ScoutWorkspaceShell() {
     async (event: React.FormEvent, overrideMessage?: string) => {
       event.preventDefault()
       const message = (overrideMessage ?? query).trim()
-      if (!message || isLoading || scoutStream.isStreaming || researchStream.isRunning) return
+      if (!message || isSubmittingRef.current || isLoading || scoutStream.isStreaming || researchStream.isRunning) return
+      isSubmittingRef.current = true
 
       const msgId = `s-${Date.now()}`
       streamMsgId.current = msgId
@@ -1667,7 +1711,7 @@ export function ScoutWorkspaceShell() {
         : workspaceModeLabel
 
   return (
-    <main className="app-page flex flex-col bg-[linear-gradient(180deg,#fff6f1_0%,#fafaf9_24%,#fafaf9_100%)]">
+    <main className="app-page flex flex-col" style={{ background: "linear-gradient(135deg, #FFF4EE 0%, #F9F8FF 40%, #F3F4FF 100%)" }}>
 
       {/* ── Command bar — sticky ─────────────────────────────────────────── */}
       <div className="sticky top-0 z-20 border-b border-slate-100 bg-white/95 px-5 backdrop-blur-md sm:px-8">
@@ -1676,19 +1720,25 @@ export function ScoutWorkspaceShell() {
             <ScoutOrb
               size="md"
               state={
-                (scoutStream.isStreaming || researchStream.isRunning)
-                  ? "thinking"
-                  : "idle"
+                orbDone ? "done"
+                : (scoutStream.isStreaming || researchStream.isRunning) ? "thinking"
+                : "idle"
               }
             />
             <div>
               <p className="text-sm font-semibold leading-none text-slate-900">Scout</p>
-              <p className={cn(
-                "mt-0.5 text-[11px] transition-colors duration-300",
-                (scoutStream.isStreaming || researchStream.isRunning)
-                  ? "font-medium text-[#FF5C18]"
-                  : "text-slate-400"
-              )}>{statusLine}</p>
+              {/* #6 Subtitle fades in on key change when mode transitions */}
+              <p
+                key={statusLine}
+                className={cn(
+                  "mt-0.5 text-[11px] font-medium motion-safe:animate-[scoutSubtitleIn_0.3s_ease-out_both]",
+                  (scoutStream.isStreaming || researchStream.isRunning)
+                    ? "text-[#FF5C18]"
+                    : workspaceMode === "idle"
+                      ? "font-normal text-slate-400"
+                      : "text-orange-500"
+                )}
+              >{statusLine}</p>
             </div>
           </div>
 
@@ -1704,6 +1754,25 @@ export function ScoutWorkspaceShell() {
                 Stop
               </button>
             )}
+            {/* Focus mode badge — visible whenever focus mode is active */}
+            {isFocusMode && (
+              <button
+                type="button"
+                title="Focus Mode is on — click to turn off"
+                onClick={() => {
+                  try { localStorage.removeItem("hireoven:scout-focus-mode:v1") } catch {}
+                  setLocalFocusMode(false)
+                  if (typeof window !== "undefined") {
+                    window.dispatchEvent(new CustomEvent("scout:focus-mode-changed", { detail: { enabled: false } }))
+                  }
+                }}
+                className="mr-1 inline-flex items-center gap-1.5 rounded-full border border-orange-300 bg-orange-50 px-2.5 py-1 text-[11px] font-semibold text-orange-600 transition hover:bg-orange-100"
+              >
+                <Target className="h-3 w-3" />
+                Focus
+                <X className="h-2.5 w-2.5 opacity-60" />
+              </button>
+            )}
             {/* Mode pill */}
             {workspaceMode !== "idle" && !scoutStream.isStreaming && (
               <span className="mr-1 inline-flex items-center gap-1.5 rounded-full border border-[#FFD5C2] bg-[#FFF8F5] px-3 py-1 text-[11px] font-semibold text-[#FF5C18]">
@@ -1711,11 +1780,11 @@ export function ScoutWorkspaceShell() {
                 {workspaceModeLabel}
               </span>
             )}
-            {/* Context (was: Timeline) */}
+            {/* Single menu button — opens context panel (contains Timeline, Context, Memory, Permissions tabs) */}
             <button
               type="button"
               onClick={() => openContextPanel("context")}
-              title="Open context panel"
+              title="Scout menu"
               className={cn(
                 "inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-[11px] font-medium transition",
                 contextPanelOpen
@@ -1723,42 +1792,7 @@ export function ScoutWorkspaceShell() {
                   : "text-slate-400 hover:bg-slate-100 hover:text-slate-700",
               )}
             >
-              <Layers className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Context</span>
-            </button>
-            {/* Timeline */}
-            <button
-              type="button"
-              onClick={() => openContextPanel("timeline")}
-              title="Activity timeline"
-              className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-[11px] font-medium text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
-            >
-              <Clock className="h-3.5 w-3.5" />
-              {timeline.events.length > 0 && (
-                <span className="rounded-full bg-slate-100 px-1 py-0.5 text-[9px] tabular-nums text-slate-500">
-                  {timeline.events.length}
-                </span>
-              )}
-            </button>
-            {/* Memory */}
-            <button
-              type="button"
-              onClick={() => openContextPanel("memory")}
-              title="Scout Memory"
-              className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-[11px] font-medium text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
-            >
-              <Brain className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Memory</span>
-            </button>
-            {/* Permissions */}
-            <button
-              type="button"
-              onClick={() => openContextPanel("permissions")}
-              title="Scout permissions"
-              className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-[11px] font-medium text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
-            >
-              <Shield className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Permissions</span>
+              <MoreHorizontal className="h-4 w-4" />
             </button>
           </div>
         </div>
@@ -1842,10 +1876,10 @@ export function ScoutWorkspaceShell() {
               <p className="relative flex-1 text-sm leading-5 text-slate-700">
                 {narrativePending ? (
                   <span className="bg-gradient-to-r from-slate-700 via-[#FF5C18] to-slate-700 bg-[length:200%_100%] bg-clip-text text-transparent animate-[scout-text-shimmer_2.4s_linear_infinite]">
-                    {narrative.replace(/…+$/, "")}
+                    {renderBold(narrative.replace(/…+$/, ""))}
                   </span>
                 ) : (
-                  narrative
+                  renderBold(narrative)
                 )}
                 {narrativePending && (
                   <span className="ml-0.5 inline-flex translate-y-[-1px] gap-0.5 align-middle">
@@ -2040,6 +2074,29 @@ export function ScoutWorkspaceShell() {
                     />
                   )
                 }
+                // Searched but found nothing — tell the user explicitly
+                if (applyAgent && applyAgent.jobs.length === 0) {
+                  return (
+                    <div className="mx-auto max-w-lg rounded-2xl border border-amber-200 bg-amber-50 px-6 py-8 text-center">
+                      <p className="text-[15px] font-semibold text-amber-900">No matching jobs found in the feed</p>
+                      <p className="mt-2 text-[13px] text-amber-800 leading-relaxed">
+                        No active jobs from the last 30 days matched your criteria. Try broadening the search — for example, drop the company filter or use a more general skill.
+                      </p>
+                      <div className="mt-4 flex flex-wrap justify-center gap-2">
+                        {["Apply to my top 5 matches", "Apply to 3 remote jobs", "Apply to 5 software engineer roles"].map((suggestion) => (
+                          <button
+                            key={suggestion}
+                            type="button"
+                            onClick={() => { setQuery(suggestion); setTimeout(() => handleSubmit({ preventDefault: () => {} } as React.FormEvent), 50) }}
+                            className="rounded-full border border-amber-300 bg-white px-3 py-1.5 text-[12px] font-medium text-amber-900 transition hover:bg-amber-100"
+                          >
+                            {suggestion}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                }
                 return (
                   <BulkApplicationMode
                     engine={bulkEngine}
@@ -2092,16 +2149,18 @@ export function ScoutWorkspaceShell() {
           </ScoutErrorBoundary>
         </div>
 
-        {/* Right command-center panel */}
-        <ScoutRightPanel
-          isActive={scoutStream.isStreaming || researchStream.isRunning || isLoading}
-          narrative={narrative}
-          workspaceModeLabel={workspaceModeLabel}
-          searchProfile={searchProfile}
-          strategyBoard={strategyBoard}
-          permissions={shellPermissions}
-          onPermissionsChange={setShellPermissions}
-        />
+        {/* Right command-center panel — hidden during bulk apply to give the resume room */}
+        {workspaceMode !== "bulk_application" && (
+          <ScoutRightPanel
+            isActive={scoutStream.isStreaming || researchStream.isRunning || isLoading}
+            narrative={narrative}
+            workspaceModeLabel={workspaceModeLabel}
+            searchProfile={searchProfile}
+            strategyBoard={strategyBoard}
+            permissions={shellPermissions}
+            onPermissionsChange={setShellPermissions}
+          />
+        )}
 
       </div>
 

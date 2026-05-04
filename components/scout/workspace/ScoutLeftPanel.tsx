@@ -1,7 +1,8 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Activity, Eye, Search, Layers, Zap, FileText, CheckCircle2, AlertCircle, Clock } from "lucide-react"
+import { Activity, Eye, Search, Layers, Zap, FileText, CheckCircle2, AlertCircle, Clock, Send, Bookmark } from "lucide-react"
+import type { LucideIcon } from "lucide-react"
 import type { ScoutTimelineEvent } from "@/lib/scout/timeline/types"
 import { ScoutOrb } from "@/components/scout/ScoutOrb"
 
@@ -39,59 +40,93 @@ function daysSince(iso: string | null): number | null {
   return Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000)
 }
 
-// Color-coded dot: green = <1d, amber = <7d, gray = quiet
-function StatusDot({ lastPostedAt, count }: { lastPostedAt: string | null; count: number }) {
-  const days = daysSince(lastPostedAt)
-  const isGreen = count > 0 && days !== null && days < 1
-  const isAmber = count > 0 && (!isGreen)
-  const tooltip = count > 0
-    ? `${count} new role${count !== 1 ? "s" : ""} — ${days === 0 ? "today" : days === 1 ? "yesterday" : `${days}d ago`}`
-    : "No recent activity"
+type ActivityLevel = "green" | "amber" | "gray"
 
+function activityLevel(lastPostedAt: string | null, count: number): ActivityLevel {
+  const days = daysSince(lastPostedAt)
+  if (count > 0 && days !== null && days < 1) return "green"
+  if (count > 0 && days !== null && days < 7) return "amber"
+  return "gray"
+}
+
+function statusTooltip(lastPostedAt: string | null, count: number): string {
+  const days = daysSince(lastPostedAt)
+  if (count === 0 || days === null) return "Quiet for 7+ days"
+  if (days === 0) return `${count} new role${count !== 1 ? "s" : ""} · posted today`
+  if (days === 1) return `${count} new role${count !== 1 ? "s" : ""} · posted yesterday`
+  if (days < 7)  return `${count} new role${count !== 1 ? "s" : ""} · posted ${days}d ago`
+  return `Quiet for ${days} days`
+}
+
+// #1 Color-coded 7px dot — green=<24h, amber=<7d, gray=quiet
+function StatusDot({ lastPostedAt, count }: { lastPostedAt: string | null; count: number }) {
+  const level = activityLevel(lastPostedAt, count)
   return (
     <span
-      title={tooltip}
-      className={`h-2 w-2 flex-shrink-0 rounded-full transition-colors ${
-        isGreen ? "bg-emerald-400 shadow-[0_0_5px_rgba(52,211,153,0.7)]" :
-        isAmber ? "bg-amber-400 shadow-[0_0_5px_rgba(251,191,36,0.6)]" :
-        "bg-slate-200"
-      }`}
+      title={statusTooltip(lastPostedAt, count)}
+      className="flex-shrink-0 rounded-full"
+      style={{
+        width: 7, height: 7,
+        backgroundColor: level === "green" ? "#22C55E" : level === "amber" ? "#F59E0B" : "#94A3B8",
+        boxShadow: level === "green"
+          ? "0 0 5px rgba(34,197,94,0.6)"
+          : level === "amber"
+            ? "0 0 4px rgba(245,158,11,0.5)"
+            : "none",
+      }}
     />
   )
 }
 
-// Colored letter avatar for companies without logos
-function CompanyAvatar({ name }: { name: string }) {
+// #1 Letter avatar — background subtly tints to match activity level
+function CompanyAvatar({ name, level }: { name: string; level: ActivityLevel }) {
   const letter = name.trim()[0]?.toUpperCase() ?? "?"
-  const colors = [
-    "bg-violet-100 text-violet-700",
-    "bg-blue-100 text-blue-700",
-    "bg-emerald-100 text-emerald-700",
-    "bg-orange-100 text-orange-700",
-    "bg-pink-100 text-pink-700",
-    "bg-cyan-100 text-cyan-700",
-    "bg-indigo-100 text-indigo-700",
-  ]
-  const color = colors[letter.charCodeAt(0) % colors.length]
+  const tintClass =
+    level === "green" ? "bg-green-50 text-green-700 ring-1 ring-green-200" :
+    level === "amber" ? "bg-amber-50 text-amber-700 ring-1 ring-amber-200" :
+    (() => {
+      const colors = [
+        "bg-violet-100 text-violet-700",
+        "bg-blue-100 text-blue-700",
+        "bg-emerald-100 text-emerald-700",
+        "bg-orange-100 text-orange-700",
+        "bg-pink-100 text-pink-700",
+        "bg-cyan-100 text-cyan-700",
+        "bg-indigo-100 text-indigo-700",
+      ]
+      return colors[letter.charCodeAt(0) % colors.length]
+    })()
   return (
-    <span className={`inline-flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-md text-[10px] font-bold ${color}`}>
+    <span className={`inline-flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-md text-[10px] font-bold ${tintClass}`}>
       {letter}
     </span>
   )
 }
 
-// Icon per event type
-const EVENT_ICON: Partial<Record<ScoutTimelineEvent["type"], typeof Search>> = {
-  command:           Search,
+// #4 Content-based icon — matches on action title text
+function actionIconFor(title: string): { Icon: LucideIcon; color: string } {
+  const t = title.toLowerCase()
+  if (t.includes("bulk application") || t.includes("opened application"))
+    return { Icon: Send,         color: "text-orange-400" }
+  if (t.includes("apply") || t.includes("applied") || t.includes("submitted"))
+    return { Icon: CheckCircle2, color: "text-green-500" }
+  if (t.includes("search") || t.includes("filter") || t.includes("found"))
+    return { Icon: Search,       color: "text-blue-400" }
+  if (t.includes("resume") || t.includes("tailor"))
+    return { Icon: FileText,     color: "text-purple-400" }
+  if (t.includes("saved") || t.includes("watchlist"))
+    return { Icon: Bookmark,     color: "text-amber-400" }
+  return { Icon: Zap,            color: "text-slate-400" }
+}
+
+// Keep type-based fallback for non-title events
+const _EVENT_ICON_FALLBACK: Partial<Record<ScoutTimelineEvent["type"], LucideIcon>> = {
   workspace_change:  Layers,
   workflow_started:  Zap,
   workflow_step:     Zap,
-  research_started:  Search,
-  manual_submit:     CheckCircle2,
   error:             AlertCircle,
 }
-
-const DEFAULT_EVENT_ICON = Clock
+void _EVENT_ICON_FALLBACK // suppress unused-variable lint
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -131,7 +166,12 @@ export function ScoutLeftPanel({ isActive, recentEvents, onCommand, firstName }:
               Scout{firstName ? <span className="font-normal text-slate-400"> · {firstName}</span> : null}
             </p>
             <div className="mt-1 flex items-center gap-1.5">
-              <span className={`h-1.5 w-1.5 rounded-full transition-colors ${isActive ? "bg-[#FF5C18] animate-pulse" : "bg-emerald-400"}`} />
+              {/* #2B Watching dot — blinks/pulses when idle */}
+              <span className={`h-1.5 w-1.5 rounded-full transition-colors ${
+                isActive
+                  ? "bg-[#FF5C18] animate-pulse"
+                  : "bg-emerald-400 animate-[pulse-dot_2s_ease-in-out_infinite]"
+              }`} />
               <p className="text-[11px] text-slate-400">
                 {isActive ? "Working…" : "Watching"}
               </p>
@@ -157,18 +197,25 @@ export function ScoutLeftPanel({ isActive, recentEvents, onCommand, firstName }:
           ) : watchlist.length === 0 ? (
             <p className="text-[11px] italic text-slate-400">Add companies to your watchlist</p>
           ) : (
-            watchlist.map((c) => (
-              <div key={c.id} className="group flex items-center gap-2">
-                <StatusDot lastPostedAt={c.lastJobPostedAt} count={c.recentJobsCount} />
-                <CompanyAvatar name={c.name} />
-                <span className="flex-1 truncate text-[12px] text-slate-600">{c.name}</span>
-                {c.recentJobsCount > 0 && (
-                  <span className="rounded bg-emerald-50 px-1 py-0.5 text-[9px] font-bold text-emerald-600">
-                    {c.recentJobsCount}
-                  </span>
-                )}
-              </div>
-            ))
+            watchlist.map((c) => {
+              const level = activityLevel(c.lastJobPostedAt, c.recentJobsCount)
+              return (
+                <div key={c.id} className="group flex items-center gap-2">
+                  <StatusDot lastPostedAt={c.lastJobPostedAt} count={c.recentJobsCount} />
+                  <CompanyAvatar name={c.name} level={level} />
+                  <span className="flex-1 truncate text-[12px] text-slate-600">{c.name}</span>
+                  {c.recentJobsCount > 0 && (
+                    <span className={`rounded px-1 py-0.5 text-[9px] font-bold ${
+                      level === "green" ? "bg-green-50 text-green-600" :
+                      level === "amber" ? "bg-amber-50 text-amber-600" :
+                      "bg-slate-50 text-slate-500"
+                    }`}>
+                      {c.recentJobsCount}
+                    </span>
+                  )}
+                </div>
+              )
+            })
           )}
         </div>
       </div>
@@ -183,11 +230,16 @@ export function ScoutLeftPanel({ isActive, recentEvents, onCommand, firstName }:
           {displayEvents.length === 0 ? (
             <p className="text-[11px] italic text-slate-400">No actions this session</p>
           ) : (
-            displayEvents.map((ev) => {
-              const Icon = EVENT_ICON[ev.type] ?? DEFAULT_EVENT_ICON
+            displayEvents.map((ev, idx) => {
+              const { Icon, color } = actionIconFor(ev.title)
               return (
-                <div key={ev.id} className="flex items-start gap-2.5">
-                  <Icon className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-[#FF5C18]/60" />
+                /* #2D slide-in only for the newest item (idx 0) */
+                <div
+                  key={ev.id}
+                  className={`flex items-start gap-2 ${idx === 0 ? "animate-[scout-slide-in_0.3s_ease-out_both]" : ""}`}
+                >
+                  <span className={`mt-0.5 h-1.5 w-1.5 flex-shrink-0 rounded-full ${idx === 0 ? "bg-[#FF5C18]" : "bg-slate-200"}`} />
+                  <Icon className={`mt-0.5 h-3 w-3 flex-shrink-0 ${color}`} />
                   <div className="min-w-0">
                     <p className="truncate text-[11.5px] leading-4 text-slate-600">
                       {ev.title}
@@ -209,19 +261,20 @@ export function ScoutLeftPanel({ isActive, recentEvents, onCommand, firstName }:
       {/* ── Quick commands ── */}
       <div className="border-t border-slate-100 px-4 py-3">
         <div className="space-y-1">
+          {/* #3 Quick commands — 16px icons, slate-100 hover, text-[12px] */}
           {[
-            { label: "Find matching jobs",  cmd: "Find me matching jobs",        Icon: Search },
-            { label: "Compare saved jobs",  cmd: "Compare my saved jobs",        Icon: Layers },
-            { label: "Resume strategy",     cmd: "What should I improve on my resume?", Icon: FileText },
+            { label: "Find matching jobs",  cmd: "Find me matching jobs",              Icon: Search   },
+            { label: "Compare saved jobs",  cmd: "Compare my saved jobs",              Icon: Layers   },
+            { label: "Resume strategy",     cmd: "What should I improve on my resume?",Icon: FileText },
           ].map(({ label, cmd, Icon }) => (
             <button
               key={label}
               type="button"
               onClick={() => onCommand(cmd)}
-              className="group flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-slate-50"
+              className="group flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-all duration-150 hover:bg-slate-100"
             >
-              <Icon className="h-3.5 w-3.5 flex-shrink-0 text-slate-400 transition-colors group-hover:text-[#FF5C18]" />
-              <span className="truncate text-[11.5px] text-slate-500 transition-colors group-hover:text-slate-800">
+              <Icon className="h-4 w-4 flex-shrink-0 text-slate-400 transition-colors duration-150 group-hover:text-slate-900" />
+              <span className="truncate text-[12px] text-slate-600 transition-colors duration-150 group-hover:text-slate-900">
                 {label}
               </span>
             </button>

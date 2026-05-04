@@ -40,30 +40,11 @@ export function AnimatedMic({ state, className, iconSize = 18 }: Props) {
       className={cn("relative inline-flex items-center justify-center", className)}
       style={{ width: iconSize + 4, height: iconSize + 4 }}
     >
-      {/* Idle breathing ring — only when not listening */}
+      {/* Idle breathing ring */}
       {!isListening && state !== "processing" && (
         <span
-          className="pointer-events-none absolute inset-0 rounded-full bg-current opacity-30 motion-safe:animate-[scoutMicBreath_2.6s_ease-out_infinite]"
+          className="pointer-events-none absolute inset-0 rounded-full bg-current opacity-20 motion-safe:animate-[scoutMicBreath_2.6s_ease-out_infinite]"
         />
-      )}
-
-      {/* Idle — tiny smile arc that draws under the mic every few seconds */}
-      {!isListening && state !== "processing" && (
-        <svg
-          aria-hidden
-          viewBox="0 0 12 6"
-          className="pointer-events-none absolute -bottom-[3px] left-1/2 -translate-x-1/2 motion-safe:animate-[scoutMicArc_5s_ease-in-out_infinite]"
-          style={{ width: iconSize * 0.6, height: iconSize * 0.3 }}
-        >
-          <path
-            d="M1 1 Q 6 6 11 1"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.4"
-            strokeLinecap="round"
-            opacity="0.7"
-          />
-        </svg>
       )}
 
       {/* Listening — sound bars on the right edge */}
@@ -90,10 +71,7 @@ export function AnimatedMic({ state, className, iconSize = 18 }: Props) {
       <Mic
         className={cn(
           "relative",
-          isListening
-            ? "motion-safe:animate-pulse"
-            // Friendly nod every 5s while idle
-            : state !== "processing" && "motion-safe:animate-[scoutMicSmile_5s_ease-in-out_infinite] origin-bottom"
+          isListening ? "motion-safe:animate-pulse" : ""
         )}
         style={{ width: iconSize, height: iconSize }}
         strokeWidth={2}

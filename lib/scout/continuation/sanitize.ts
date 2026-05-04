@@ -93,8 +93,10 @@ function sanitizeResumableContexts(value: unknown, fallbackIso: string): ScoutRe
 export function sanitizeContinuationState(input: unknown, nowIso = new Date().toISOString()): ScoutContinuationState {
   const src = input && typeof input === "object" ? (input as Record<string, unknown>) : {}
 
+  const rawMode = safeString(src.activeMode, MAX_MODE_LENGTH)
   const state: ScoutContinuationState = {
-    activeMode: safeString(src.activeMode, MAX_MODE_LENGTH),
+    // bulk_application is transient — never restore it on refresh
+    activeMode: rawMode === "bulk_application" ? undefined : rawMode,
     activeWorkflowId: safeString(src.activeWorkflowId, MAX_ID_LENGTH),
     activeJobId: safeString(src.activeJobId, MAX_ID_LENGTH),
     activeCompanyId: safeString(src.activeCompanyId, MAX_ID_LENGTH),

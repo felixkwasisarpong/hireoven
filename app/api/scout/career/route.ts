@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
+import { requireFeature } from "@/lib/gates/server-gate"
 import { runCareerEngine } from "@/lib/scout/career/engine"
 import { logApiUsage } from "@/lib/admin/usage"
 
@@ -7,10 +8,9 @@ export const runtime    = "nodejs"
 export const maxDuration = 35
 
 export async function POST(request: NextRequest) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const gate = await requireFeature("scout_strategy", request)
+  if (gate instanceof NextResponse) return gate
+  const { userId } = gate
   if (!process.env.ANTHROPIC_API_KEY) return NextResponse.json({ error: "AI service not configured" }, { status: 503 })
 
   const body = await request.json().catch(() => ({})) as { message?: string }
@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
     const { getPostgresPool } = await import("@/lib/postgres/server")
     const pool = getPostgresPool()
 
-    const result = await runCareerEngine(objective, user.id, pool)
+    const result = await runCareerEngine(objective, userId, pool)
 
     await logApiUsage({
       service:     "claude",

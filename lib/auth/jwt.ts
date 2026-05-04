@@ -48,6 +48,17 @@ export async function verifySessionJwt(token: string): Promise<AppSessionClaims 
   }
 }
 
+/** Returns the number of seconds remaining on the session token, or 0 if expired/invalid. */
+export async function getSessionTokenSecondsLeft(token: string): Promise<number> {
+  try {
+    const { payload } = await jwtVerify(token, getSecretKey(), { algorithms: [ALG] })
+    const exp = typeof payload.exp === "number" ? payload.exp : 0
+    return Math.max(0, exp - Math.floor(Date.now() / 1000))
+  } catch {
+    return 0
+  }
+}
+
 export type OAuthStateClaims = {
   next: string
 }

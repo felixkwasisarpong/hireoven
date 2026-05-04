@@ -249,7 +249,7 @@ function detectInterviewType(message: string): string | undefined {
 //   "apply for 3 roles"
 //   "start applying to 10 positions"
 const BULK_PREP_RE =
-  /(?:\b(?:prepare|queue|batch|bulk)\b.{0,80}\b(?:jobs?|roles?|positions?|openings?|application[s]?|apply|applying)\b)|(?:\bapply\s+(?:to|for)\s+(?:(?:top|best|strongest|highest)\s+)?\d+\s+(?:(?:top|best|strongest|highest|matching|scored?)\s+){0,2}(?:jobs?|roles?|positions?|openings?|applications?))|(?:\bstart\s+applying\b)/i
+  /(?:\b(?:prepare|queue|batch|bulk)\b.{0,80}\b(?:jobs?|roles?|positions?|openings?|application[s]?|apply|applying)\b)|(?:\bapply\s+(?:to|for)\s+(?:(?:my|the|some|a\s+few|several)\s+)?(?:(?:top|best|strongest|highest)\s+)?\d+\s+(?:\S+\s+){0,4}(?:jobs?|roles?|positions?|openings?|applications?))|(?:\bapply\s+(?:to|for)\s+(?:my\s+)?(?:saved|top|best|watchlist)\s+(?:jobs?|roles?|positions?|openings?))|(?:\bstart\s+applying\b)/i
 
 // Intents that require a resolved job context (tailor, workflow, "best job" open)
 const NEEDS_JOB_RESOLVE_RE = /\b(tailor|tailor.?my|prepare.?application|prepare.?my.?resume|workflow.*job|open.?strong|strongest.?match|best.?saved|my.?best.*job|best.*matching)\b/i
@@ -780,6 +780,25 @@ export async function POST(request: NextRequest) {
     return scoutError(401, "Unauthorized")
   }
 
+  // Gate Scout entirely — free users cannot send messages
+  const { plan: userPlan } = await getUserPlan(request)
+  if (!canAccess(userPlan, "scout_actions")) {
+    return NextResponse.json(
+      {
+        answer: "Scout is a Pro feature. Upgrade to unlock AI-powered job search.",
+        recommendation: "Wait",
+        actions: [],
+        explanations: [],
+        gated: {
+          feature: "scout_actions",
+          reason: "Scout requires a Pro plan.",
+          upgradeMessage: "Upgrade to Pro to use Scout AI.",
+        },
+      } satisfies ScoutResponse,
+      { status: 403 }
+    )
+  }
+
   if (!anthropic) {
     return NextResponse.json(
       {
@@ -858,6 +877,8 @@ export async function POST(request: NextRequest) {
       if (bp.count)                  params.set("count", String(bp.count))
       if (bp.requireSponsorshipSignal) params.set("sponsorship", "true")
       if (bp.workMode)               params.set("workMode", String(bp.workMode))
+      // Pass the full message so apply-agent can free-text search any condition
+      params.set("q", userMessage)
       const origin = request.nextUrl.origin || process.env.NEXT_PUBLIC_APP_URL || "http://127.0.0.1:3000"
       const res    = await fetch(`${origin}/api/scout/apply-agent?${params.toString()}`, {
         headers: { cookie: request.headers.get("cookie") ?? "" },
@@ -2120,44 +2141,50 @@ User Input: ${userMessage}`
     }
 
     // Inject bulk workspace directive + query matching jobs when bulk-prep intent fires.
+    // Also handles the case where Claude's response independently sets bulk_application
+    // mode (e.g. for commands the regex didn't catch) — we still fetch jobs for it.
+    const needsBulkJobs =
+      !scoutResponse.apply_agent &&
+      (scoutResponse.workspace_directive?.mode === "bulk_application" ||
+        inferBulkWorkspaceDirective(userMessage) !== undefined)
+
     if (!scoutResponse.workspace_directive) {
       const bulkDirective = inferBulkWorkspaceDirective(userMessage)
-      if (bulkDirective) {
-        scoutResponse.workspace_directive = bulkDirective
+      if (bulkDirective) scoutResponse.workspace_directive = bulkDirective
+    }
 
-        // Fire-and-forget job query — attach results as apply_agent directive
-        const bp = bulkDirective.payload ?? {}
-        try {
-          const params = new URLSearchParams()
-          if (bp.minMatchScore) params.set("minMatchScore", String(bp.minMatchScore))
-          if (bp.count)         params.set("count", String(bp.count))
-          if (bp.requireSponsorshipSignal) params.set("sponsorship", "true")
-          if (bp.workMode)      params.set("workMode", String(bp.workMode))
+    if (needsBulkJobs && scoutResponse.workspace_directive?.mode === "bulk_application") {
+      const bp = scoutResponse.workspace_directive.payload ?? {}
+      try {
+        const params = new URLSearchParams()
+        if (bp.minMatchScore) params.set("minMatchScore", String(bp.minMatchScore))
+        if (bp.count)         params.set("count", String(bp.count))
+        if (bp.requireSponsorshipSignal) params.set("sponsorship", "true")
+        if (bp.workMode)      params.set("workMode", String(bp.workMode))
+        params.set("q", userMessage)
 
-          // Self-call with forwarded auth cookie
-          const origin = request.nextUrl.origin || process.env.NEXT_PUBLIC_APP_URL || "http://127.0.0.1:3000"
-          const res = await fetch(`${origin}/api/scout/apply-agent?${params.toString()}`, {
-            headers: { cookie: request.headers.get("cookie") ?? "" },
-          })
-          if (res.ok) {
-            const data = await res.json() as { jobs: import("@/lib/scout/apply-agent/types").ApplyAgentJob[] }
-            if (data.jobs.length > 0) {
-              scoutResponse.apply_agent = {
-                jobs:        data.jobs,
-                criteria: {
-                  minMatchScore:          bp.minMatchScore as number | undefined,
-                  requireSponsorshipSignal: Boolean(bp.requireSponsorshipSignal),
-                  workMode:               bp.workMode as string | undefined,
-                  count:                  (bp.count as number | undefined) ?? 5,
-                },
-                currentIndex: 0,
-                phase:        "select",
-              }
+        const origin = request.nextUrl.origin || process.env.NEXT_PUBLIC_APP_URL || "http://127.0.0.1:3000"
+        const res = await fetch(`${origin}/api/scout/apply-agent?${params.toString()}`, {
+          headers: { cookie: request.headers.get("cookie") ?? "" },
+        })
+        if (res.ok) {
+          const data = await res.json() as { jobs: import("@/lib/scout/apply-agent/types").ApplyAgentJob[] }
+          if (data.jobs.length > 0) {
+            scoutResponse.apply_agent = {
+              jobs:     data.jobs,
+              criteria: {
+                minMatchScore:           bp.minMatchScore as number | undefined,
+                requireSponsorshipSignal: Boolean(bp.requireSponsorshipSignal),
+                workMode:                bp.workMode as string | undefined,
+                count:                   (bp.count as number | undefined) ?? 5,
+              },
+              currentIndex: 0,
+              phase:        "select",
             }
           }
-        } catch {
-          // Non-critical — UI falls back to the existing bulk_application workspace mode
         }
+      } catch {
+        // Non-critical — UI falls back to BulkApplicationMode
       }
     }
 

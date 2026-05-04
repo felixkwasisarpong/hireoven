@@ -3,6 +3,7 @@ import Anthropic from "@anthropic-ai/sdk"
 import { ANTHROPIC_TIER_PRICING, SONNET_MODEL } from "@/lib/ai/anthropic-models"
 import { logApiUsage } from "@/lib/admin/usage"
 import { createClient } from "@/lib/supabase/server"
+import { requireFeature } from "@/lib/gates/server-gate"
 
 export const runtime = "nodejs"
 
@@ -48,9 +49,10 @@ function fallbackText(sectionType: string, currentText: string, targetRole: stri
 }
 
 export async function POST(request: Request) {
+  const gate = await requireFeature("deep_analysis", request as Parameters<typeof requireFeature>[1])
+  if (gate instanceof NextResponse) return gate
+
   const supabase = await createClient()
-  const user = (await supabase.auth.getUser()).data.user
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
   const sectionType = asString(body.sectionType) || "custom"

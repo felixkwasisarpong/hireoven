@@ -172,7 +172,20 @@ export function ScoutContextPanel(props: Props) {
               <button
                 key={value}
                 type="button"
-                onClick={() => onTabChange(value)}
+                onClick={() => {
+                  // Memory and permissions open their own dedicated panels directly
+                  if (value === "memory") {
+                    onClose()
+                    onOpenMemory?.()
+                    return
+                  }
+                  if (value === "permissions") {
+                    onClose()
+                    onOpenPermissions?.()
+                    return
+                  }
+                  onTabChange(value)
+                }}
                 aria-pressed={active}
                 className={cn(
                   "inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-[11.5px] font-semibold transition",
@@ -260,25 +273,7 @@ export function ScoutContextPanel(props: Props) {
             />
           )}
 
-          {tab === "memory" && (
-            <PanelLink
-              icon={Brain}
-              title="Scout memory"
-              body="Manage your search profile, learned signals, and personalisation chips."
-              ctaLabel="Open memory panel"
-              onClick={onOpenMemory ?? (() => {})}
-            />
-          )}
-
-          {tab === "permissions" && (
-            <PanelLink
-              icon={Shield}
-              title="Scout permissions"
-              body={`${permissions.length} permission${permissions.length === 1 ? "" : "s"} on record. Decide what Scout can do automatically.`}
-              ctaLabel="Open permissions panel"
-              onClick={onOpenPermissions ?? (() => {})}
-            />
-          )}
+          {/* memory and permissions tabs jump directly to their full panels via the tab click handler — no body content needed here */}
         </div>
       </aside>
     </>
@@ -301,32 +296,6 @@ function ContextEmpty() {
   )
 }
 
-function PanelLink({
-  icon: Icon, title, body, ctaLabel, onClick,
-}: {
-  icon: typeof Brain
-  title: string
-  body: string
-  ctaLabel: string
-  onClick: () => void
-}) {
-  return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_1px_0_rgba(15,23,42,0.04)]">
-      <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-xl bg-slate-50 ring-1 ring-slate-200">
-        <Icon className="h-4 w-4 text-slate-600" aria-hidden />
-      </div>
-      <p className="text-[14px] font-semibold text-slate-900">{title}</p>
-      <p className="mt-1 text-[12.5px] leading-relaxed text-slate-500">{body}</p>
-      <button
-        type="button"
-        onClick={onClick}
-        className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1.5 text-[12px] font-semibold text-white shadow-[0_2px_8px_rgba(15,23,42,0.18)] transition hover:bg-slate-800"
-      >
-        {ctaLabel}
-      </button>
-    </div>
-  )
-}
 
 function WorkflowSummary({
   state, onContinue, onSkip, onPause, onResume, onCancel,

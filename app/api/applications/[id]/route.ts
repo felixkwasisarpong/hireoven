@@ -97,6 +97,21 @@ export async function PATCH(
         console.error("[applications/PATCH] offer detection failed:", err instanceof Error ? err.message : err)
       )
     }
+
+    // Record timing outcome whenever application moves out of 'applied' ghost state
+    const ghostStatuses = new Set(["applied"])
+    const responseStatuses = new Set(["interviewing", "offer", "rejected", "withdrawn"])
+    if (
+      typeof body.status === "string" &&
+      responseStatuses.has(body.status) &&
+      ghostStatuses.has(current.status)
+    ) {
+      const gotResponse = body.status !== "withdrawn"
+      const { recordApplicationOutcome } = await import("@/lib/scout/timing/signal-learner")
+      recordApplicationOutcome(id, gotResponse).catch((err) =>
+        console.error("[applications/PATCH] timing signal failed:", err instanceof Error ? err.message : err)
+      )
+    }
   }
 
   const allowed = new Set([

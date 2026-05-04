@@ -689,6 +689,10 @@ export function useScoutActionExecutor() {
             const qs = params.toString()
             // Clear persistence so Scout workspace reflects the off state
             try { localStorage.removeItem("hireoven:scout-focus-mode:v1") } catch {}
+            // Notify ScoutWorkspaceShell to update localFocusMode state
+            if (typeof window !== "undefined") {
+              window.dispatchEvent(new CustomEvent("scout:focus-mode-changed", { detail: { enabled: false } }))
+            }
             router.push(`/dashboard${qs ? `?${qs}` : ""}`)
             showFeedback("Focus Mode off")
           }

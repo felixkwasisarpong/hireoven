@@ -61,6 +61,8 @@ export interface CrawlResult {
   outcomeStatus?: "success" | "empty" | "blocked" | "bad_url" | "fetch_error"
   outcomeReason?: string
   diagnostics?: CrawlDiagnostic[]
+  /** Set when the Workday heuristic resolved a stable URL — persist back to companies.careers_url */
+  resolvedCareersUrl?: string
 }
 
 export type CrawlDiagnostic = {
@@ -429,8 +431,16 @@ async function resolveStableGreenhouseBoardUrl(
     return { url: new URL(rawUrl), diagnostics, boardToken: null }
   }
 
-  for (const candidate of normalized.candidates) {
-    const statusCode = await checkUrlStatus(candidate)
+  // Probe all candidates in parallel — both URLs respond fast, no need to serialize
+  const probeResults = await Promise.all(
+    normalized.candidates.map(async (candidate) => ({
+      candidate,
+      statusCode: await checkUrlStatus(candidate),
+    }))
+  )
+
+  let resolved: URL | null = null
+  for (const { candidate, statusCode } of probeResults) {
     const ok = statusCode !== null && statusCode >= 200 && statusCode < 400
     diagnostics.push({
       originalUrl: normalized.originalUrl,
@@ -440,12 +450,10 @@ async function resolveStableGreenhouseBoardUrl(
         ? `${normalized.reason}:stable_board_resolved`
         : `${normalized.reason}:stable_board_failed`,
     })
-    console.log(
-      `[crawler:greenhouse] original=${normalized.originalUrl} normalized=${candidate} status=${statusCode ?? "fetch_error"} reason=${diagnostics[diagnostics.length - 1].reason}`
-    )
-    if (ok) return { url: new URL(candidate), diagnostics, boardToken: normalized.boardToken }
+    if (ok && !resolved) resolved = new URL(candidate)
   }
 
+  if (resolved) return { url: resolved, diagnostics, boardToken: normalized.boardToken }
   return { url: new URL(rawUrl), diagnostics, boardToken: normalized.boardToken }
 }
 
@@ -658,12 +666,17 @@ function workdaySiteCandidates(slug: string): string[] {
   return [...new Set(candidates.filter(Boolean))]
 }
 
+type WorkdayHeuristicResult = {
+  jobs: RawJob[]
+  resolvedCareersUrl: string | null
+}
+
 async function crawlWorkdayByHeuristic(
   careersUrl: URL,
   companyName: string
-): Promise<RawJob[]> {
+): Promise<WorkdayHeuristicResult> {
   const slugs = workdaySlugCandidates(careersUrl, companyName)
-  if (slugs.length === 0) return []
+  if (slugs.length === 0) return { jobs: [], resolvedCareersUrl: null }
 
   let attempts = 0
   for (const slug of slugs) {
@@ -684,20 +697,24 @@ async function crawlWorkdayByHeuristic(
 
           for (const site of siteCandidates) {
             attempts += 1
-            if (attempts > WORKDAY_FALLBACK_MAX_ATTEMPTS) return []
+            if (attempts > WORKDAY_FALLBACK_MAX_ATTEMPTS) return { jobs: [], resolvedCareersUrl: null }
             const postings = await fetchWorkdayPostings(context, site)
             if (postings.length === 0) continue
 
             await fetchWorkdayDescriptions(context, site, postings)
             const jobs = mapWorkdayPostings(context, site, postings)
-            if (jobs.length > 0) return jobs
+            if (jobs.length > 0) {
+              // Stable resolved URL — parseable by parseWorkdayContext on future runs
+              const resolvedCareersUrl = `https://${tenantHost}/${encodeURIComponent(tenant)}/${encodeURIComponent(site)}`
+              return { jobs, resolvedCareersUrl }
+            }
           }
         }
       }
     }
   }
 
-  return []
+  return { jobs: [], resolvedCareersUrl: null }
 }
 
 async function crawlGreenhouse(careersUrl: URL): Promise<RawJob[]> {
@@ -2205,6 +2222,7 @@ function isMetaCareersUrl(url: URL) {
 }
 
 async function crawlMeta(careersUrl: URL): Promise<RawJob[]> {
+  if (process.env.CRAWLER_PLAYWRIGHT_ENABLED !== "true") return []
   let chromium: typeof import("playwright").chromium
   try {
     ({ chromium } = await import("playwright"))
@@ -2751,11 +2769,14 @@ export async function crawlCareersPage(
     }
   }
 
+  let resolvedCareersUrl: string | undefined
   if (
     jobs.length === 0 &&
     (target.atsType?.toLowerCase() ?? "") === "workday"
   ) {
-    jobs = await crawlWorkdayByHeuristic(careersUrl, target.companyName)
+    const heuristic = await crawlWorkdayByHeuristic(careersUrl, target.companyName)
+    jobs = heuristic.jobs
+    if (heuristic.resolvedCareersUrl) resolvedCareersUrl = heuristic.resolvedCareersUrl
   }
 
   const dedupedJobs = dedupeJobs(jobs)
@@ -2802,6 +2823,7 @@ export async function crawlCareersPage(
     crawledAt: new Date(),
     outcomeStatus,
     outcomeReason,
+    resolvedCareersUrl,
     diagnostics: [
       ...diagnostics,
       {

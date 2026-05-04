@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
+import { requireFeature } from "@/lib/gates/server-gate"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { generateCoverLetter } from "@/lib/resume/cover-letter-generator"
 import { compareResumeToJob } from "@/lib/resume/hub"
@@ -49,9 +50,10 @@ function detectAtsFromApplyUrl(applyUrl: string | null | undefined): DetectedAts
 }
 
 export async function POST(request: Request) {
+  const gate = await requireFeature("scout_actions", request as Parameters<typeof requireFeature>[1])
+  if (gate instanceof NextResponse) return gate
+  const { userId } = gate
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const body = (await request.json().catch(() => null)) as BulkPrepareBody | null
   if (!body) return NextResponse.json({ error: "Invalid body" }, { status: 400 })
@@ -80,7 +82,7 @@ export async function POST(request: Request) {
     `SELECT * FROM resumes
      WHERE user_id = $1 AND is_primary = true AND parse_status = 'complete'
      ORDER BY updated_at DESC LIMIT 1`,
-    [user.id]
+    [userId]
   ).catch(() => null)
 
   const resume = resumeResult?.rows?.[0] ?? null
@@ -91,7 +93,7 @@ export async function POST(request: Request) {
   // ── Check autofill profile ───────────────────────────────────────────────────
   const autofillResult = await pool.query<{ id: string }>(
     `SELECT id FROM autofill_profiles WHERE user_id = $1 LIMIT 1`,
-    [user.id]
+    [userId]
   ).catch(() => null)
 
   const autofillStatus = (autofillResult?.rows?.length ?? 0) > 0 ? "ready" : "failed"
@@ -145,7 +147,7 @@ export async function POST(request: Request) {
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
          RETURNING id`,
         [
-          user.id,
+          userId,
           resume.id,
           jobId ?? null,
           job.title ?? jobTitle ?? null,
@@ -201,7 +203,7 @@ export async function POST(request: Request) {
         resume,
         job,
         { tone: "professional", style: "achievement_focused", length: "medium" },
-        user.id
+        userId
       )
       if (coverLetter?.id) {
         coverLetterStatus = "ready"
@@ -224,7 +226,7 @@ export async function POST(request: Request) {
   }
 
   console.log("[bulk-prepare]", {
-    userId: user.id,
+    userId: userId,
     jobId,
     atsProvider,
     resumeTailorStatus,

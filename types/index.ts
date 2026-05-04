@@ -1020,6 +1020,10 @@ export type Waitlist = {
   confirmed: boolean;
   confirmation_token: string | null;
   joined_at: string;
+  approved: boolean;
+  invite_token: string | null;
+  invited_at: string | null;
+  invite_used_at: string | null;
 };
 
 export type WaitlistInsert = {

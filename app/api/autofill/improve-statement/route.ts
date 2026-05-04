@@ -3,6 +3,7 @@ import { NextResponse } from "next/server"
 import { logApiUsage } from "@/lib/admin/usage"
 import { ANTHROPIC_TIER_PRICING, SONNET_MODEL } from "@/lib/ai/anthropic-models"
 import { createClient } from "@/lib/supabase/server"
+import { requireFeature } from "@/lib/gates/server-gate"
 
 export const runtime = "nodejs"
 export const maxDuration = 30
@@ -12,9 +13,8 @@ const anthropic = process.env.ANTHROPIC_API_KEY
   : null
 
 export async function POST(request: Request) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const gate = await requireFeature("autofill", request as Parameters<typeof requireFeature>[1])
+  if (gate instanceof NextResponse) return gate
 
   if (!anthropic) return NextResponse.json({ error: "AI not configured" }, { status: 503 })
 

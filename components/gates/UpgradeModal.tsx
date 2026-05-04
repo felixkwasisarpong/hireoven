@@ -1,80 +1,148 @@
 "use client"
 
-import { useState } from "react"
-import { Check, Loader2, X, Zap } from "lucide-react"
+import { useEffect, useState } from "react"
+import { createPortal } from "react-dom"
+import { Check, Loader2, Sparkles, X, Zap } from "lucide-react"
 import { useUpgradeModal } from "@/lib/context/UpgradeModalContext"
 import { FEATURE_DESCRIPTIONS, type FeatureKey } from "@/lib/gates"
-import { PLAN_DATA, type BillingInterval, type PlanKey } from "@/lib/pricing"
+import type { BillingInterval, PlanKey } from "@/lib/pricing"
 
-const PRO_FEATURES = [
-  "Upload & AI-analyze your resume",
-  "AI-generated cover letters",
-  "One-click autofill (Greenhouse, Lever, Ashby)",
-  "Deep match scoring for every job",
-  "AI interview prep questions",
-  "Unlimited watchlist companies",
-  "Unlimited job alerts",
-]
+// ── Plan definitions ──────────────────────────────────────────────────────────
 
-const INTL_FEATURES = [
-  "Everything in Pro",
-  "International job listings",
-  "H-1B / visa sponsorship data",
-  "Global salary benchmarks",
-]
+const PLANS = [
+  {
+    key: "pro" as PlanKey,
+    name: "Pro",
+    monthly: 19,
+    yearly: 12,
+    yearlyBilled: 149,
+    badge: null,
+    highlighted: true,
+    color: { from: "#FF5C18", to: "#FF9A3C" },
+    features: [
+      "Scout AI — 50 messages/day",
+      "Resume tailoring — 10/month",
+      "Cover letter generator — 15/month",
+      "Deep resume analysis — 20/month",
+      "AI interview prep",
+      "Application autofill",
+      "Unlimited watchlist & alerts",
+      "Full application tracker",
+    ],
+  },
+  {
+    key: "pro_international" as PlanKey,
+    name: "Max",
+    monthly: 39,
+    yearly: 25,
+    yearlyBilled: 299,
+    badge: "Best value",
+    highlighted: false,
+    color: { from: "#7C3AED", to: "#C026D3" },
+    features: [
+      "Scout AI — unlimited",
+      "Resume tailoring — unlimited",
+      "Cover letters — unlimited",
+      "Deep analysis — unlimited",
+      "Mock interviews — unlimited",
+      "Bulk apply agent",
+      "Everything in Pro",
+    ],
+  },
+] as const
+
+// ── Subcomponents ─────────────────────────────────────────────────────────────
 
 function PlanCard({
-  name,
-  price,
-  features,
-  cta,
-  highlighted,
+  plan,
+  annual,
+  loading,
   onSelect,
 }: {
-  name: string
-  price: number
-  features: string[]
-  cta: string
-  highlighted?: boolean
+  plan: typeof PLANS[number]
+  annual: boolean
+  loading: boolean
   onSelect: () => void
 }) {
+  const price = annual ? plan.yearly : plan.monthly
+
   return (
-    <div
-      className={`flex flex-col rounded-[18px] border p-6 ${
-        highlighted
-          ? "border-[#FF5C18] bg-[#FFF7F2] shadow-[0_4px_24px_rgba(255,92,24,0.14)]"
-          : "border-slate-200 bg-white"
-      }`}
-    >
-      <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">{name}</p>
-      <div className="mt-2 flex items-end gap-1">
-        <span className="text-3xl font-bold text-slate-900">${price}</span>
-        <span className="mb-1 text-sm text-slate-400">/mo</span>
+    <div className={[
+      "relative flex flex-col overflow-hidden rounded-2xl border transition",
+      plan.highlighted
+        ? "border-[#FF5C18]/40 bg-white shadow-[0_8px_32px_rgba(255,92,24,0.12)]"
+        : "border-slate-200 bg-white shadow-[0_2px_12px_rgba(15,23,42,0.06)]",
+    ].join(" ")}>
+      {/* Top accent bar */}
+      <div
+        className="h-1 w-full"
+        style={{ background: `linear-gradient(90deg, ${plan.color.from}, ${plan.color.to})` }}
+      />
+
+      {/* Badge */}
+      {plan.badge && (
+        <div className="absolute right-4 top-3">
+          <span
+            className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white"
+            style={{ background: `linear-gradient(135deg, ${plan.color.from}, ${plan.color.to})` }}
+          >
+            <Sparkles className="h-2.5 w-2.5" />
+            {plan.badge}
+          </span>
+        </div>
+      )}
+
+      <div className="flex flex-1 flex-col p-5">
+        {/* Name + price */}
+        <p className="text-[10.5px] font-bold uppercase tracking-[0.18em] text-slate-400">{plan.name}</p>
+        <div className="mt-2 flex items-end gap-1">
+          <span className="text-[32px] font-black leading-none tabular-nums text-slate-900">${price}</span>
+          <span className="mb-1.5 text-[13px] text-slate-400">/mo</span>
+        </div>
+        {annual && (
+          <p className="mt-0.5 text-[11px] text-slate-400">
+            Billed <span className="font-semibold text-slate-600">${plan.yearlyBilled}/yr</span>
+          </p>
+        )}
+
+        {/* Features */}
+        <ul className="mt-5 flex-1 space-y-2">
+          {plan.features.map((f) => (
+            <li key={f} className="flex items-start gap-2">
+              <span
+                className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full"
+                style={{ background: `${plan.color.from}18` }}
+              >
+                <Check className="h-2.5 w-2.5" style={{ color: plan.color.from }} strokeWidth={3} />
+              </span>
+              <span className="text-[12.5px] text-slate-600">{f}</span>
+            </li>
+          ))}
+        </ul>
+
+        {/* CTA */}
+        <button
+          type="button"
+          onClick={onSelect}
+          disabled={loading}
+          className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-[13px] font-bold text-white shadow-sm transition disabled:opacity-70"
+          style={{
+            background: `linear-gradient(135deg, ${plan.color.from}, ${plan.color.to})`,
+            boxShadow: `0 4px 14px ${plan.color.from}40`,
+          }}
+        >
+          {loading ? (
+            <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Opening checkout…</>
+          ) : (
+            <>Get {plan.name} <span className="opacity-80">→</span></>
+          )}
+        </button>
       </div>
-
-      <ul className="mt-5 flex-1 space-y-2.5">
-        {features.map((f) => (
-          <li key={f} className="flex items-start gap-2 text-sm text-slate-600">
-            <Check className="mt-0.5 h-4 w-4 flex-shrink-0 text-emerald-500" />
-            {f}
-          </li>
-        ))}
-      </ul>
-
-      <button
-        type="button"
-        onClick={onSelect}
-        className={`mt-6 rounded-xl px-4 py-2.5 text-sm font-semibold transition ${
-          highlighted
-            ? "bg-[#FF5C18] text-white hover:bg-[#E14F0E] shadow-[0_4px_14px_rgba(255,92,24,0.3)]"
-            : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-        }`}
-      >
-        {cta}
-      </button>
     </div>
   )
 }
+
+// ── Main modal ────────────────────────────────────────────────────────────────
 
 export default function UpgradeModal() {
   const { state, hideUpgrade } = useUpgradeModal()
@@ -82,117 +150,133 @@ export default function UpgradeModal() {
   const [loadingPlan, setLoadingPlan] = useState<PlanKey | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  if (!state.open) return null
+  // SSR safety — portal requires document
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
+
+  if (!state.open || !mounted) return null
 
   const feature = state.feature as FeatureKey | null
   const featureDesc = feature ? FEATURE_DESCRIPTIONS[feature] : null
   const interval: BillingInterval = annual ? "yearly" : "monthly"
-  const proPrice = annual ? PLAN_DATA.pro.yearly : PLAN_DATA.pro.monthly
-  const intlPrice = annual ? PLAN_DATA.pro_international.yearly : PLAN_DATA.pro_international.monthly
 
   async function handleSelectPlan(plan: PlanKey) {
     setLoadingPlan(plan)
     setError(null)
-
-    const response = await fetch("/api/stripe/checkout", {
+    const res = await fetch("/api/stripe/checkout", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ plan, interval }),
     })
-    const data = await response.json().catch(() => ({}))
-    if (data.url) {
-      window.location.href = data.url
-      return
-    }
-
+    const data = await res.json().catch(() => ({}))
+    if (data.url) { window.location.href = data.url; return }
     setError(data.error ?? "Could not start checkout. Please try again.")
     setLoadingPlan(null)
   }
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={hideUpgrade} />
+  return createPortal(
+    <div className="fixed inset-0 flex items-center justify-center p-4" style={{ zIndex: 2147483647 }}>
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-slate-900/50 backdrop-blur-[3px]"
+        onClick={hideUpgrade}
+      />
 
-      <div className="relative w-full max-w-2xl animate-scale-in rounded-[24px] border border-slate-200 bg-white shadow-[0_24px_60px_rgba(15,23,42,0.18)]">
-        <div className="flex items-start justify-between border-b border-slate-100 px-7 py-5">
-          <div>
-            <div className="flex items-center gap-2">
-              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#FFF1E8]">
-                <Zap className="h-4 w-4 text-[#FF5C18]" />
+      {/* Modal */}
+      <div className="relative w-full max-w-xl overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_32px_80px_rgba(15,23,42,0.22)]">
+
+        {/* Header */}
+        <div className="relative overflow-hidden border-b border-slate-100 px-6 py-5"
+          style={{ background: "linear-gradient(135deg, #FFF4EE 0%, #F9F8FF 60%, #F3F4FF 100%)" }}>
+          <div className="pointer-events-none absolute -right-8 -top-8 h-28 w-28 rounded-full bg-[#FF5C18]/8 blur-2xl" />
+          <div className="pointer-events-none absolute -bottom-4 left-1/3 h-20 w-20 rounded-full bg-violet-500/8 blur-xl" />
+
+          <div className="relative flex items-start justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-gradient-to-br from-[#FF5C18] to-[#FF9A3C] shadow-[0_4px_10px_rgba(255,92,24,0.3)]">
+                  <Zap className="h-3.5 w-3.5 text-white" strokeWidth={2.5} />
+                </div>
+                <h2 className="text-[16px] font-bold text-slate-900">Unlock premium features</h2>
               </div>
-              <h2 className="text-lg font-semibold text-slate-900">Upgrade your plan</h2>
+              {featureDesc ? (
+                <p className="mt-1.5 text-[12.5px] text-slate-500">
+                  <span className="font-semibold text-[#FF5C18]">{featureDesc}</span>{" "}
+                  is a paid feature — pick a plan to continue.
+                </p>
+              ) : (
+                <p className="mt-1.5 text-[12.5px] text-slate-500">
+                  Upgrade to unlock AI-powered tools, unlimited usage, and more.
+                </p>
+              )}
             </div>
-            {featureDesc && (
-              <p className="mt-1 text-sm text-slate-500">
-                <span className="font-medium text-[#FF5C18]">{featureDesc}</span> requires a paid plan.
-              </p>
-            )}
+            <button
+              type="button"
+              onClick={hideUpgrade}
+              className="shrink-0 rounded-xl p-1.5 text-slate-400 transition hover:bg-white/80 hover:text-slate-700"
+            >
+              <X className="h-5 w-5" />
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={hideUpgrade}
-            className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
 
-        <div className="px-7 py-5">
-          <div className="mb-5 flex items-center justify-center">
-            <div className="flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 p-1">
+          {/* Billing toggle */}
+          <div className="relative mt-4 flex items-center justify-center">
+            <div className="flex items-center gap-1 rounded-full border border-slate-200 bg-white/80 p-1 shadow-sm">
               <button
                 type="button"
                 onClick={() => setAnnual(false)}
-                className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${
-                  !annual ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
-                }`}
+                className={[
+                  "rounded-full px-4 py-1.5 text-[12.5px] font-semibold transition",
+                  !annual ? "bg-slate-900 text-white shadow-sm" : "text-slate-500 hover:text-slate-700",
+                ].join(" ")}
               >
                 Monthly
               </button>
               <button
                 type="button"
                 onClick={() => setAnnual(true)}
-                className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${
-                  annual ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
-                }`}
+                className={[
+                  "rounded-full px-4 py-1.5 text-[12.5px] font-semibold transition",
+                  annual ? "bg-slate-900 text-white shadow-sm" : "text-slate-500 hover:text-slate-700",
+                ].join(" ")}
               >
-                Annual <span className="ml-1 text-xs text-emerald-600 font-semibold">Save 35%</span>
+                Annual
+                <span className="ml-1.5 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">
+                  −35%
+                </span>
               </button>
             </div>
           </div>
+        </div>
 
-          {error && (
-            <div className="mb-4 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
-              {error}
-            </div>
-          )}
+        {/* Plan cards */}
+        <div className="grid grid-cols-2 gap-3 p-5">
+          {PLANS.map((plan) => (
+            <PlanCard
+              key={plan.key}
+              plan={plan}
+              annual={annual}
+              loading={loadingPlan === plan.key}
+              onSelect={() => handleSelectPlan(plan.key)}
+            />
+          ))}
+        </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <PlanCard
-              name="Pro"
-              price={proPrice}
-              features={PRO_FEATURES}
-              cta={loadingPlan === "pro" ? "Opening checkout…" : "Get Pro"}
-              highlighted
-              onSelect={() => handleSelectPlan("pro")}
-            />
-            <PlanCard
-              name="Pro + International"
-              price={intlPrice}
-              features={INTL_FEATURES}
-              cta={loadingPlan === "pro_international" ? "Opening checkout…" : "Get Pro + International"}
-              onSelect={() => handleSelectPlan("pro_international")}
-            />
+        {/* Error */}
+        {error && (
+          <div className="mx-5 mb-4 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-[12.5px] text-red-700">
+            {error}
           </div>
+        )}
 
-          {loadingPlan && (
-            <div className="mt-4 flex items-center justify-center gap-2 text-xs font-medium text-slate-500">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              Redirecting to secure Stripe checkout
-            </div>
-          )}
+        {/* Footer */}
+        <div className="border-t border-slate-100 px-5 py-3 text-center">
+          <p className="text-[11px] text-slate-400">
+            7-day free trial · Cancel anytime · Secure checkout via Stripe
+          </p>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

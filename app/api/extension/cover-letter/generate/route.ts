@@ -28,6 +28,8 @@ import {
   readExtensionJsonBody,
   requireExtensionAuth,
 } from "@/lib/extension/auth"
+import { getUserPlan, gateResponse } from "@/lib/gates/server-gate"
+import { canAccess } from "@/lib/gates"
 import type { CoverLetter, Resume } from "@/types"
 
 export const runtime = "nodejs"
@@ -83,6 +85,9 @@ export async function POST(request: Request) {
 
   const [user, errResponse] = await requireExtensionAuth(request)
   if (errResponse) return errResponse
+
+  const { plan } = await getUserPlan()
+  if (!canAccess(plan, "cover_letter")) return gateResponse(403, "Cover letter generation requires Pro", "pro")
 
   const [body, bodyError] = await readExtensionJsonBody<{
     jobId?: string
