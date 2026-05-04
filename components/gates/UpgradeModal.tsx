@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
+import { createPortal } from "react-dom"
 import { Check, Loader2, Sparkles, X, Zap } from "lucide-react"
 import { useUpgradeModal } from "@/lib/context/UpgradeModalContext"
 import { FEATURE_DESCRIPTIONS, type FeatureKey } from "@/lib/gates"
@@ -149,7 +150,11 @@ export default function UpgradeModal() {
   const [loadingPlan, setLoadingPlan] = useState<PlanKey | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  if (!state.open) return null
+  // SSR safety — portal requires document
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
+
+  if (!state.open || !mounted) return null
 
   const feature = state.feature as FeatureKey | null
   const featureDesc = feature ? FEATURE_DESCRIPTIONS[feature] : null
@@ -169,8 +174,8 @@ export default function UpgradeModal() {
     setLoadingPlan(null)
   }
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+  return createPortal(
+    <div className="fixed inset-0 flex items-center justify-center p-4" style={{ zIndex: 2147483647 }}>
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-slate-900/50 backdrop-blur-[3px]"
@@ -271,6 +276,7 @@ export default function UpgradeModal() {
           </p>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
