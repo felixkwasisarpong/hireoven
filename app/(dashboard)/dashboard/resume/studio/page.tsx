@@ -36,6 +36,7 @@ import {
   Languages,
   List,
   Loader2,
+  Lock,
   Medal,
   Palette,
   Plus,
@@ -58,6 +59,7 @@ import ResumeDocumentPreview, {
 } from "@/components/resume/ResumeDocumentPreview"
 import { useResumeContext } from "@/components/resume/ResumeProvider"
 import { useToast } from "@/components/ui/ToastProvider"
+import { useFeatureAccess } from "@/lib/hooks/useFeatureAccess"
 import { buildStudioSectionChecks } from "@/lib/resume/studio-section-analysis"
 import { useResumeHubData } from "@/lib/resume/use-resume-hub-data"
 import { cn } from "@/lib/utils"
@@ -315,7 +317,9 @@ function RichTextEditor({
   sectionId,
   sectionType,
   aiLoading,
+  aiWriteLocked,
   onAiWrite,
+  onAiWriteLocked,
 }: {
   label?: string
   value: string
@@ -324,7 +328,9 @@ function RichTextEditor({
   sectionId?: string
   sectionType?: ResumeSectionType
   aiLoading?: boolean
+  aiWriteLocked?: boolean
   onAiWrite?: (value: string, sectionId: string, sectionType: ResumeSectionType) => void
+  onAiWriteLocked?: () => void
 }) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
 
@@ -405,17 +411,29 @@ function RichTextEditor({
           placeholder="Add section details..."
         />
         <div className="flex items-center justify-between border-t border-slate-100 px-3 py-3">
-          <button
-            type="button"
-            onClick={() => {
-              if (sectionId && sectionType) onAiWrite?.(value, sectionId, sectionType)
-            }}
-            disabled={!sectionId || !sectionType || aiLoading}
-            className="inline-flex h-9 items-center gap-2 rounded-lg bg-gradient-to-r from-[#5B4DFF] to-orange-500 px-4 text-[12px] font-bold text-white"
-          >
-            {aiLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-            {aiLoading ? "Writing..." : "Scout Writer"}
-          </button>
+          {aiWriteLocked ? (
+            <button
+              type="button"
+              onClick={onAiWriteLocked}
+              className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-4 text-[12px] font-bold text-slate-400"
+              title="Upgrade to Pro to use Scout Writer"
+            >
+              <Lock className="h-3.5 w-3.5" />
+              Scout Writer
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                if (sectionId && sectionType) onAiWrite?.(value, sectionId, sectionType)
+              }}
+              disabled={!sectionId || !sectionType || aiLoading}
+              className="inline-flex h-9 items-center gap-2 rounded-lg bg-gradient-to-r from-[#5B4DFF] to-orange-500 px-4 text-[12px] font-bold text-white"
+            >
+              {aiLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+              {aiLoading ? "Writing..." : "Scout Writer"}
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -946,6 +964,7 @@ export default function ResumeStudioPage() {
   const { resumes, primaryResume, upsertResume } = useResumeContext()
   const { data: hubData, refresh: refreshHubData } = useResumeHubData()
   const { pushToast } = useToast()
+  const { hasAccess: canUseAiWrite, showUpgradePrompt: showAiWriteUpgrade } = useFeatureAccess("deep_analysis")
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
   const [mode, setMode] = useState<StudioMode>("preview")
   const [profile, setProfile] = useState<Profile | null>(null)
@@ -2238,6 +2257,8 @@ export default function ResumeStudioPage() {
             sectionId={section.id}
             sectionType={section.type}
             aiLoading={aiLoadingSectionId === section.id}
+            aiWriteLocked={!canUseAiWrite}
+            onAiWriteLocked={showAiWriteUpgrade}
             onAiWrite={(text, sectionId, sectionType) => void handleAiWriteSection(sectionId, sectionType, text)}
           />
           <button type="button" onClick={() => toggleSectionCollapsed(section.id)} className="mx-auto mt-5 block text-[13px] font-bold text-red-500 hover:text-red-600">
@@ -2257,6 +2278,8 @@ export default function ResumeStudioPage() {
             sectionId={section.id}
             sectionType={section.type}
             aiLoading={aiLoadingSectionId === section.id}
+            aiWriteLocked={!canUseAiWrite}
+            onAiWriteLocked={showAiWriteUpgrade}
             onAiWrite={(text, sectionId, sectionType) => void handleAiWriteSection(sectionId, sectionType, text)}
           />
         </EditableResumeSection>
@@ -2300,7 +2323,9 @@ export default function ResumeStudioPage() {
                         sectionId={entryId}
                         sectionType={section.type}
                         aiLoading={aiLoadingSectionId === entryId}
-                        onAiWrite={(text, sectionId, sectionType) => void handleAiWriteSection(sectionId, sectionType, text)}
+                        aiWriteLocked={!canUseAiWrite}
+            onAiWriteLocked={showAiWriteUpgrade}
+            onAiWrite={(text, sectionId, sectionType) => void handleAiWriteSection(sectionId, sectionType, text)}
                       />
                     </div>
                   </div>
@@ -2356,7 +2381,9 @@ export default function ResumeStudioPage() {
                         sectionId={entryId}
                         sectionType={section.type}
                         aiLoading={aiLoadingSectionId === entryId}
-                        onAiWrite={(text, sectionId, sectionType) => void handleAiWriteSection(sectionId, sectionType, text)}
+                        aiWriteLocked={!canUseAiWrite}
+            onAiWriteLocked={showAiWriteUpgrade}
+            onAiWrite={(text, sectionId, sectionType) => void handleAiWriteSection(sectionId, sectionType, text)}
                       />
                     </div>
                   </div>
@@ -2386,7 +2413,9 @@ export default function ResumeStudioPage() {
               sectionId={section.id}
               sectionType={section.type}
               aiLoading={aiLoadingSectionId === section.id}
-              onAiWrite={(text, sectionId, sectionType) => void handleAiWriteSection(sectionId, sectionType, text)}
+              aiWriteLocked={!canUseAiWrite}
+            onAiWriteLocked={showAiWriteUpgrade}
+            onAiWrite={(text, sectionId, sectionType) => void handleAiWriteSection(sectionId, sectionType, text)}
             />
           </div>
         </EditableResumeSection>
@@ -2433,7 +2462,9 @@ export default function ResumeStudioPage() {
                         sectionId={entryId}
                         sectionType={section.type}
                         aiLoading={aiLoadingSectionId === entryId}
-                        onAiWrite={(text, sectionId, sectionType) => void handleAiWriteSection(sectionId, sectionType, text)}
+                        aiWriteLocked={!canUseAiWrite}
+            onAiWriteLocked={showAiWriteUpgrade}
+            onAiWrite={(text, sectionId, sectionType) => void handleAiWriteSection(sectionId, sectionType, text)}
                       />
                     </div>
                   </div>
@@ -2534,6 +2565,8 @@ export default function ResumeStudioPage() {
             sectionId={section.id}
             sectionType={section.type}
             aiLoading={aiLoadingSectionId === section.id}
+            aiWriteLocked={!canUseAiWrite}
+            onAiWriteLocked={showAiWriteUpgrade}
             onAiWrite={(text, sectionId, sectionType) => void handleAiWriteSection(sectionId, sectionType, text)}
           />
         </div>
