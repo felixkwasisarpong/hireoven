@@ -74,6 +74,16 @@ type SidePreviewState =
   | { kind: "resume"; title: string; resume: Resume | null }
   | { kind: "url"; title: string; url: string }
 
+type TimingApiResponse = {
+  timingRecommendation: "apply_now" | "schedule_today" | "schedule_tomorrow" | "low_priority"
+  timingReason: string
+  optimalApplyAt: string | null
+  screenRateMultiplier: number
+  hoursSincePosted: number
+}
+
+type ExtensionStatus = "checking" | "connected" | "disconnected"
+
 type Props = {
   initialJobs: ApplyAgentJob[]
   resumeId?:   string
@@ -114,82 +124,182 @@ function joinParts(parts: Array<string | null | undefined>, sep = " · "): strin
   return parts.map((v) => (v ?? "").trim()).filter(Boolean).join(sep)
 }
 
+function SkillBadges({ skills }: { skills: string[] }) {
+  if (skills.length === 0) return null
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {skills.map((s) => (
+        <span key={s} className="rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700">
+          {s}
+        </span>
+      ))}
+    </div>
+  )
+}
+
+function SectionHeading({ children }: { children: React.ReactNode }) {
+  return (
+    <h3 className="mb-3 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">{children}</h3>
+  )
+}
+
 function ResumeQaSidePreview({ resume }: { resume: Resume | null }) {
   if (!resume) {
     return (
-      <div className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-600">
-        Resume preview unavailable for this job.
+      <div className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-500">
+        Resume preview unavailable.
       </div>
     )
   }
 
   const experiences = Array.isArray(resume.work_experience) ? resume.work_experience : []
-  const technical = Array.isArray(resume.skills?.technical) ? resume.skills.technical : []
-  const soft = Array.isArray(resume.skills?.soft) ? resume.skills.soft : []
-  const languages = Array.isArray(resume.skills?.languages) ? resume.skills.languages : []
-  const certs = Array.isArray(resume.skills?.certifications) ? resume.skills.certifications : []
-  const topSkills = Array.isArray(resume.top_skills) ? resume.top_skills : []
-  const summary = (resume.summary ?? "").trim()
-  const contactLine = joinParts([resume.email, resume.phone, resume.location, resume.linkedin_url], " · ")
-  const roleLine = joinParts([resume.primary_role, resume.years_of_experience ? `${resume.years_of_experience}+ years` : null], " · ")
+  const education   = Array.isArray(resume.education)        ? resume.education        : []
+  const projects    = Array.isArray(resume.projects)         ? resume.projects         : []
+  const technical   = Array.isArray(resume.skills?.technical)        ? resume.skills!.technical        : []
+  const soft        = Array.isArray(resume.skills?.soft)             ? resume.skills!.soft             : []
+  const languages   = Array.isArray(resume.skills?.languages)        ? resume.skills!.languages        : []
+  const certs       = Array.isArray(resume.skills?.certifications)   ? resume.skills!.certifications   : []
+  const topSkills   = Array.isArray(resume.top_skills)               ? resume.top_skills               : []
+  const allSkills   = technical.length > 0 ? technical : topSkills
+  const summary     = (resume.summary ?? "").trim()
+  const contactParts = [resume.email, resume.location, resume.linkedin_url, resume.portfolio_url].filter(Boolean)
 
   return (
-    <article className="mx-auto max-w-4xl rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-      <header className="border-b border-slate-100 pb-4">
-        <h2 className="text-xl font-bold text-slate-900">{resume.full_name || resume.name || "Resume"}</h2>
-        {roleLine && <p className="mt-1 text-sm text-slate-700">{roleLine}</p>}
-        {contactLine && <p className="mt-1 text-sm text-slate-500">{contactLine}</p>}
+    <article className="w-full bg-white">
+
+      {/* Header */}
+      <header className="border-b border-slate-100 pb-5 mb-5">
+        <h2 className="text-[18px] font-bold leading-tight text-slate-900">
+          {resume.full_name || resume.name || "Resume"}
+        </h2>
+        {resume.primary_role && (
+          <p className="mt-1 text-[13px] font-medium text-slate-600">
+            {resume.primary_role}
+            {resume.years_of_experience ? ` · ${resume.years_of_experience}+ years` : ""}
+          </p>
+        )}
+        {contactParts.length > 0 && (
+          <p className="mt-2 text-[11px] text-slate-400 leading-relaxed">
+            {contactParts.join("  ·  ")}
+          </p>
+        )}
       </header>
 
+      {/* Summary */}
       {summary && (
-        <section className="mt-5">
-          <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Summary</h3>
-          <p className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-800">{summary}</p>
+        <section className="mb-5">
+          <SectionHeading>Summary</SectionHeading>
+          <p className="text-[12.5px] leading-relaxed text-slate-700">{summary}</p>
         </section>
       )}
 
-      <section className="mt-5">
-        <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Skills</h3>
-        <div className="mt-2 space-y-2 text-sm text-slate-800">
-          {technical.length > 0 && <p><span className="font-semibold">Technical:</span> {technical.join(", ")}</p>}
-          {soft.length > 0 && <p><span className="font-semibold">Soft:</span> {soft.join(", ")}</p>}
-          {languages.length > 0 && <p><span className="font-semibold">Languages:</span> {languages.join(", ")}</p>}
-          {certs.length > 0 && <p><span className="font-semibold">Certifications:</span> {certs.join(", ")}</p>}
-          {technical.length === 0 && soft.length === 0 && languages.length === 0 && certs.length === 0 && topSkills.length > 0 && (
-            <p><span className="font-semibold">Core:</span> {topSkills.join(", ")}</p>
+      {/* Skills */}
+      {allSkills.length > 0 && (
+        <section className="mb-5">
+          <SectionHeading>Technical Skills</SectionHeading>
+          <SkillBadges skills={allSkills} />
+          {soft.length > 0 && (
+            <div className="mt-2">
+              <p className="mb-1.5 text-[10px] font-semibold text-slate-400">Soft</p>
+              <SkillBadges skills={soft} />
+            </div>
           )}
-        </div>
-      </section>
+          {languages.length > 0 && (
+            <div className="mt-2">
+              <p className="mb-1.5 text-[10px] font-semibold text-slate-400">Languages</p>
+              <SkillBadges skills={languages} />
+            </div>
+          )}
+          {certs.length > 0 && (
+            <div className="mt-2">
+              <p className="mb-1.5 text-[10px] font-semibold text-slate-400">Certifications</p>
+              <SkillBadges skills={certs} />
+            </div>
+          )}
+        </section>
+      )}
 
-      <section className="mt-5">
-        <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Experience</h3>
-        <div className="mt-3 space-y-4">
-          {experiences.map((item, idx) => {
-            const title = joinParts([item.title, item.company], " · ")
-            const dateLine = joinParts([item.start_date, item.is_current ? "Present" : item.end_date], " - ")
-            const bullets = Array.isArray(item.achievements) ? item.achievements.filter((b) => b.trim().length > 0) : []
-            return (
-              <div key={`${item.company}-${item.title}-${idx}`} className="rounded-lg border border-slate-100 bg-slate-50/60 p-3">
-                <p className="text-sm font-semibold text-slate-900">{title || "Role"}</p>
-                {dateLine && <p className="text-xs text-slate-500">{dateLine}</p>}
-                {item.description && (
-                  <p className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-800">{item.description}</p>
+      {/* Experience */}
+      {experiences.length > 0 && (
+        <section className="mb-5">
+          <SectionHeading>Experience</SectionHeading>
+          <div className="space-y-5">
+            {experiences.map((item, idx) => {
+              const dateLine = joinParts([item.start_date, item.is_current ? "Present" : item.end_date], " – ")
+              const bullets  = Array.isArray(item.achievements) ? item.achievements.filter((b) => b.trim().length > 0) : []
+              return (
+                <div key={`exp-${idx}`} className="pl-3 border-l-2 border-slate-200">
+                  <p className="text-[13px] font-semibold text-slate-900">{item.title || "Role"}</p>
+                  <p className="text-[12px] text-slate-600">{item.company}</p>
+                  {dateLine && <p className="mt-0.5 text-[11px] text-slate-400">{dateLine}</p>}
+                  {item.description && !bullets.length && (
+                    <p className="mt-2 text-[12px] leading-relaxed text-slate-700 whitespace-pre-line">
+                      {item.description}
+                    </p>
+                  )}
+                  {bullets.length > 0 && (
+                    <ul className="mt-2 space-y-1.5 pl-3 list-disc marker:text-slate-300">
+                      {bullets.map((b, i) => (
+                        <li key={i} className="text-[12px] leading-relaxed text-slate-700">{b}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* Education */}
+      {education.length > 0 && (
+        <section className="mb-5">
+          <SectionHeading>Education</SectionHeading>
+          <div className="space-y-3">
+            {education.map((item, idx) => (
+              <div key={`edu-${idx}`} className="pl-3 border-l-2 border-slate-200">
+                <p className="text-[13px] font-semibold text-slate-900">
+                  {[item.degree, item.field].filter(Boolean).join(" in ")}
+                </p>
+                <p className="text-[12px] text-slate-600">{item.institution}</p>
+                <p className="text-[11px] text-slate-400">
+                  {joinParts([item.start_date, item.end_date ?? "Present"], " – ")}
+                  {item.gpa ? ` · GPA ${item.gpa}` : ""}
+                </p>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Projects */}
+      {projects.length > 0 && (
+        <section className="mb-2">
+          <SectionHeading>Projects</SectionHeading>
+          <div className="space-y-3">
+            {projects.map((p, idx) => (
+              <div key={`proj-${idx}`} className="pl-3 border-l-2 border-slate-200">
+                <div className="flex items-center gap-2">
+                  <p className="text-[13px] font-semibold text-slate-900">{p.name}</p>
+                  {p.url && (
+                    <a href={p.url} target="_blank" rel="noopener noreferrer"
+                      className="text-[10px] text-[#FF5C18] hover:underline">↗</a>
+                  )}
+                </div>
+                {p.description && (
+                  <p className="mt-1 text-[12px] leading-relaxed text-slate-700">{p.description}</p>
                 )}
-                {bullets.length > 0 && (
-                  <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-6 text-slate-800">
-                    {bullets.map((bullet, i) => (
-                      <li key={`${idx}-b-${i}`}>{bullet}</li>
-                    ))}
-                  </ul>
+                {p.technologies?.length > 0 && (
+                  <div className="mt-1.5">
+                    <SkillBadges skills={p.technologies} />
+                  </div>
                 )}
               </div>
-            )
-          })}
-          {experiences.length === 0 && (
-            <p className="text-sm text-slate-500">No experience blocks found in this resume.</p>
-          )}
-        </div>
-      </section>
+            ))}
+          </div>
+        </section>
+      )}
+
     </article>
   )
 }
@@ -348,6 +458,22 @@ export function ApplyAgentFlow({ initialJobs, extensionConnected = false, onFoll
   const primaryResumeDataRef = useRef<Resume | null>(null)
   const [primaryResumeSnapshot, setPrimaryResumeSnapshot] = useState<Resume | null>(null)
 
+  // ── Timing state ───────────────────────────────────────────────────────────
+  const [timingData, setTimingData] = useState<TimingApiResponse | null>(null)
+  const [timingDismissed, setTimingDismissed] = useState(false)
+
+  // ── Extension status — driven by prop (useActiveBrowserContext handshake) ──
+  // extensionStatus is driven entirely by the extensionConnected prop (useActiveBrowserContext handshake).
+  const [extensionStatus, setExtensionStatus] = useState<ExtensionStatus>(
+    () => extensionConnected ? "connected" : "disconnected"
+  )
+  const [extMidFlowDisconnected, setExtMidFlowDisconnected] = useState(false)
+
+  // Sync whenever the prop changes (e.g. extension connects after mount)
+  useEffect(() => {
+    setExtensionStatus(extensionConnected ? "connected" : "disconnected")
+  }, [extensionConnected])
+
   const updateJob = useCallback((idx: number, patch: Partial<JobState>) => {
     setJobs(prev => prev.map((j, i) => i === idx ? { ...j, ...patch } : j))
   }, [])
@@ -495,7 +621,14 @@ export function ApplyAgentFlow({ initialJobs, extensionConnected = false, onFoll
     updateJob(idx, { status: "tailoring" })
 
     try {
-      const res  = await fetch("/api/scout/bulk-prepare", {
+      // Fetch timing in parallel with bulk-prepare (never adds sequential latency)
+      const timingFetch = job.jobId
+        ? fetch(`/api/jobs/${encodeURIComponent(job.jobId)}/timing`)
+            .then((r) => r.ok ? r.json() as Promise<TimingApiResponse> : null)
+            .catch(() => null)
+        : Promise.resolve(null)
+
+      const prepFetch = fetch("/api/scout/bulk-prepare", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({
@@ -506,6 +639,14 @@ export function ApplyAgentFlow({ initialJobs, extensionConnected = false, onFoll
           sponsorshipSignal: job.sponsorshipSignal,
         }),
       })
+
+      const [timingResult, res] = await Promise.all([timingFetch, prepFetch])
+
+      if (timingResult && idx === 0) {
+        setTimingData(timingResult)
+        setTimingDismissed(false)
+      }
+
       if (!res.ok) {
         throw new Error("bulk-prepare request failed")
       }
@@ -530,7 +671,30 @@ export function ApplyAgentFlow({ initialJobs, extensionConnected = false, onFoll
       const allSkills = [
         ...(prep.missingKeywords ?? []).slice(0, 8),
         ...(prep.suggestedSkills  ?? []).slice(0, 4),
-      ].filter((s, i, arr) => arr.indexOf(s) === i)
+      ]
+        .filter((s, i, arr) => arr.indexOf(s) === i)
+        // #5 Filter out non-skills: blocklist words, short words
+        .filter((s) => {
+          const lower = s.trim().toLowerCase()
+          if (lower.length < 3) return false
+          const BLOCKLIST = new Set([
+            // generic verbs / gerunds
+            "working","collaborating","collaboration","communicating","communication",
+            "managing","leading","driving","supporting","delivering","building",
+            "developing","creating","designing","implementing","ensuring","helping",
+            "writing","reading","learning","growing","improving","solving","thinking",
+            // generic nouns / adjectives that aren't tech skills
+            "not","hiring","contract","owl","experience","skills","required","preferred",
+            "ability","knowledge","strong","excellent","good","great","help","solutions",
+            "opportunities","requirements","responsibilities","qualifications","duties",
+            "team","teams","cross","functional","environment","culture","mission",
+            "values","vision","strategy","goals","objectives","initiatives","projects",
+            "services","products","customers","clients","stakeholders","partners",
+            "processes","procedures","policies","standards","practices","frameworks",
+            "results","outcomes","impact","value","growth","success","excellence",
+          ])
+          return !BLOCKLIST.has(lower)
+        })
 
       if (allSkills.length > 0) {
         updateJob(idx, {
@@ -539,7 +703,18 @@ export function ApplyAgentFlow({ initialJobs, extensionConnected = false, onFoll
           status: "confirming",
         })
         setPendingSkills(allSkills)
-        setSelectedPendingSkills(allSkills)
+        // #5 Only pre-select chips that look like genuine hard skills:
+        // - starts with uppercase AND is not a common noun (uses separate check, no /i)
+        // - contains digits or version numbers (React 18, Python 3)
+        // - contains known tech punctuation (+, #, ., /)
+        // Everything else starts unchecked — user decides
+        setSelectedPendingSkills(allSkills.filter((s) => {
+          const startsUppercase = /^[A-Z]/.test(s)    // no /i — deliberate uppercase check
+          const hasDigit        = /[0-9]/.test(s)
+          const hasTechPunct    = /[#+.]/.test(s)
+          const hasTechKeyword  = /\b(aws|gcp|azure|sql|api|sdk|cli|ci|cd|ml|ai|ux|ui|ios|android|devops|saas|paas|iaas|oauth|rest|grpc|graphql|docker|kubernetes|terraform|kafka|redis|postgres|mongodb|elasticsearch)\b/i.test(s)
+          return startsUppercase || hasDigit || hasTechPunct || hasTechKeyword
+        }))
         setPendingSkillJobIdx(idx)
         setPhase("confirming")
         processingRef.current = false
@@ -880,7 +1055,7 @@ export function ApplyAgentFlow({ initialJobs, extensionConnected = false, onFoll
   const showInlineResume = phase === "reviewing" && !!reviewResumePreview
 
   return (
-    <div className={`rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden${showInlineResume ? " flex items-start" : ""}`}>
+    <div className={`rounded-2xl border border-slate-200 bg-white shadow-[0_2px_16px_rgba(15,23,42,0.07)] overflow-hidden${showInlineResume ? " flex items-start" : ""}`}>
 
       {/* Salary intercept warning */}
       {salaryIntercept && (
@@ -913,68 +1088,155 @@ export function ApplyAgentFlow({ initialJobs, extensionConnected = false, onFoll
       )}
 
       {/* Left column (or full-width outside reviewing) */}
-      <div className={showInlineResume ? "w-[420px] flex-shrink-0 overflow-y-auto max-h-[85vh] border-r border-slate-100" : ""}>
+      <div className={showInlineResume ? "w-[480px] flex-shrink-0 overflow-y-auto max-h-[85vh] border-r border-slate-100" : ""}>
+
+      {/* Extension status bar — subtle when connected, loud when not */}
+      {extensionStatus === "disconnected" && (
+        <div className="border-b border-red-100 bg-red-50 px-5 py-2 flex items-center gap-2 text-[11px] font-medium text-red-700">
+          <span className="h-1.5 w-1.5 rounded-full bg-red-400 flex-shrink-0" />
+          Chrome extension not connected — autofill unavailable.
+          <span className="ml-auto text-[10px] text-red-500">Reconnect the extension to restore autofill</span>
+        </div>
+      )}
+
+      {/* Mid-flow disconnection — only shown if extensionConnected prop goes false during applying */}
+      {!extensionConnected && extMidFlowDisconnected && phase === "applying" && (
+        <div className="border-b border-amber-200 bg-amber-50 px-5 py-3 flex items-center gap-2.5 text-[12px]">
+          <AlertTriangle className="h-3.5 w-3.5 text-amber-500 flex-shrink-0" />
+          <span className="text-amber-800">Extension disconnected — fill the form manually then click <strong>Submitted</strong> to continue.</span>
+          <button type="button" onClick={() => setExtMidFlowDisconnected(false)}
+            className="ml-auto text-[11px] font-semibold text-amber-700 underline">
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {/* Timing recommendation banner */}
+      {timingData && !timingDismissed && phase !== "done" && (
+        <div className={`border-b px-4 py-2.5 flex items-start gap-2.5 ${
+          timingData.timingRecommendation === "apply_now"
+            ? "bg-emerald-50 border-emerald-100"
+            : timingData.timingRecommendation === "low_priority"
+            ? "bg-amber-50 border-amber-100"
+            : "bg-blue-50 border-blue-100"
+        }`}>
+          <div className="flex-1 min-w-0">
+            {timingData.timingRecommendation === "apply_now" && (
+              <p className="text-[12px] font-semibold text-emerald-800">
+                Good timing — you are in the optimal window for this posting
+              </p>
+            )}
+            {(timingData.timingRecommendation === "schedule_today" || timingData.timingRecommendation === "schedule_tomorrow") && (
+              <>
+                <p className="text-[12px] font-semibold text-blue-800">
+                  {timingData.timingRecommendation === "schedule_today" ? "Better timing available today" : "Better timing available tomorrow"}
+                </p>
+                <p className="text-[11px] text-blue-700 mt-0.5">{timingData.timingReason}</p>
+              </>
+            )}
+            {timingData.timingRecommendation === "low_priority" && (
+              <p className="text-[11px] text-amber-800">{timingData.timingReason}</p>
+            )}
+            {timingData.screenRateMultiplier > 1 && (
+              <p className="text-[10px] text-slate-500 mt-0.5">
+                {timingData.screenRateMultiplier}× screen rate boost · Posted {timingData.hoursSincePosted}h ago
+              </p>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => setTimingDismissed(true)}
+            className="flex-shrink-0 text-slate-400 hover:text-slate-600 transition p-0.5"
+            aria-label="Dismiss timing"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* Header */}
-      <div className="border-b border-slate-100 px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
-          <div className="h-7 w-7 rounded-lg bg-[#FF5C18]/10 flex items-center justify-center">
+      <div className="border-b border-slate-100 px-5 py-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="h-8 w-8 rounded-xl bg-[#FF5C18]/10 flex items-center justify-center flex-shrink-0">
             {busy
               ? <Loader2 className="h-4 w-4 text-[#FF5C18] animate-spin" />
               : <CheckCircle2 className="h-4 w-4 text-[#FF5C18]" />
             }
           </div>
           <div>
-            <p className="text-sm font-semibold text-slate-800">
-              {phase === "done"     ? "All done"            :
-               phase === "confirming" ? "Confirm missing skills" :
-               phase === "reviewing" ? "Resume QA checkpoint" :
-               phase === "applying" ? "Apply one-by-one" :
+            <p className="text-[15px] font-bold leading-tight text-slate-900">
+              {phase === "done"        ? "All done"              :
+               phase === "confirming"  ? "Confirm missing skills" :
+               phase === "reviewing"   ? "Resume QA"             :
+               phase === "applying"    ? "Apply one-by-one"      :
                "Tailoring resumes"}
             </p>
-            <p className="text-[11px] text-slate-400">
+            <p className="mt-0.5 text-[11px] text-slate-400">
               {phase === "done"
                 ? `${appliedN} submitted · ${skippedN} skipped`
                 : phase === "applying"
-                ? `${Math.min(applyPointer + 1, Math.max(applyOrder.length, 1))} of ${Math.max(applyOrder.length, 1)} in apply queue`
-                : `${reviewedN} reviewed · ${tailoredN} tailored of ${total}`}
+                ? `${Math.min(applyPointer + 1, Math.max(applyOrder.length, 1))} of ${Math.max(applyOrder.length, 1)} in queue`
+                : `${reviewedN} of ${total} reviewed`}
             </p>
           </div>
         </div>
-        {phase === "done" && onFollowUp && (
-          <button
-            type="button"
-            onClick={() => onFollowUp("Track my applications")}
-            className="text-xs font-semibold text-[#FF5C18] hover:underline flex items-center gap-1"
-          >
-            Track <ChevronRight className="h-3 w-3" />
-          </button>
-        )}
+        {/* Progress pills */}
+        <div className="flex items-center gap-1.5">
+          {jobs.map((job, i) => (
+            <span
+              key={job.jobId}
+              className={`h-1.5 rounded-full transition-all ${
+                job.applied  ? "w-4 bg-emerald-400" :
+                job.skipped  ? "w-1.5 bg-slate-200" :
+                i === currentIndex ? "w-4 bg-[#FF5C18]" :
+                job.tailored ? "w-1.5 bg-[#FF5C18]/40" :
+                "w-1.5 bg-slate-200"
+              }`}
+            />
+          ))}
+          {phase === "done" && onFollowUp && (
+            <button
+              type="button"
+              onClick={() => onFollowUp("Track my applications")}
+              className="ml-2 text-xs font-semibold text-[#FF5C18] hover:underline flex items-center gap-1"
+            >
+              Track <ChevronRight className="h-3 w-3" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Job list */}
-      <div className="px-4 pt-3 space-y-2">
+      <div className="px-5 pt-4 space-y-2">
         {jobs.map((job, i) => (
           <div
             key={job.jobId}
-            className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 transition-all ${
+            className={`flex items-center gap-3 rounded-xl border px-4 py-3.5 transition-all ${
               i === currentIndex && phase !== "done"
-                ? "border-[#FF5C18]/25 bg-orange-50/30"
+                ? "border-[#FF5C18]/30 bg-[#FF5C18]/[0.03] shadow-[0_0_0_1px_rgba(255,92,24,0.12)]"
                 : "border-slate-100 bg-white"
             }`}
           >
             <StatusDot job={job} />
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold text-slate-800">{job.jobTitle}</p>
-              <p className="text-[11px] text-slate-400">{job.company}</p>
+              <p className="truncate text-[13.5px] font-semibold leading-tight text-slate-900">{job.jobTitle}</p>
+              <p className="mt-0.5 text-[12px] text-slate-500">{job.company}</p>
             </div>
             {job.matchScore !== null && (
-              <div className="flex items-center gap-1 flex-shrink-0 text-[11px] text-slate-400">
+              <div className="flex items-center gap-1 flex-shrink-0 text-[11px] font-semibold text-slate-500">
                 <Star className="h-3 w-3 text-amber-400" />
                 {job.matchScore}%
               </div>
             )}
-            <span className="flex-shrink-0 text-[10px] font-semibold text-slate-400">
+            <span
+              key={jobStatusLabel(job)}
+              className={`flex-shrink-0 text-[11px] font-semibold motion-safe:animate-[badge-pulse_250ms_ease-out_both] ${
+                job.applied  ? "text-emerald-600" :
+                job.skipped  ? "text-slate-400"   :
+                job.status === "confirming" ? "text-amber-600" :
+                "text-slate-400"
+              }`}
+            >
               {jobStatusLabel(job)}
             </span>
             {i === currentIndex && phase === "tailoring" && !job.tailored && !job.skipped && (
@@ -993,71 +1255,66 @@ export function ApplyAgentFlow({ initialJobs, extensionConnected = false, onFoll
 
       {/* Tailoring progress pulse */}
       {phase === "tailoring" && busy && (
-        <div className="mx-4 mt-3 mb-1 rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 flex items-center gap-2">
+        <div className="mx-5 mt-4 mb-1 rounded-xl border border-slate-100 bg-slate-50/80 px-5 py-4 flex items-center gap-3">
           <Loader2 className="h-4 w-4 text-[#FF5C18] animate-spin flex-shrink-0" />
-          <p className="text-sm text-slate-600">
-            Analysing <span className="font-semibold">{currentJob?.jobTitle}</span> against your resume…
+          <p className="text-[13px] text-slate-600">
+            Analysing <span className="font-semibold text-slate-800">{currentJob?.jobTitle}</span> against your resume…
           </p>
         </div>
       )}
 
       {/* Skill confirmation */}
       {phase === "confirming" && pendingSkillJobIdx !== null && (
-        <div className="mx-4 mt-3 mb-1 rounded-xl border border-amber-200 bg-amber-50/40 px-4 py-3">
-          <p className="text-sm font-semibold text-slate-800">
-            Missing skills found for <span className="text-[#FF5C18]">{jobs[pendingSkillJobIdx]?.jobTitle}</span>
+        <div className="border-t border-slate-100 px-5 pt-5 pb-6">
+          <p className="text-[10.5px] font-bold uppercase tracking-[0.2em] text-amber-600">Missing skills</p>
+          <p className="mt-1 text-[15px] font-bold text-slate-900">
+            {jobs[pendingSkillJobIdx]?.jobTitle}
           </p>
-          <p className="mt-1 text-[11px] text-slate-600">
-            Select only skills that truthfully match your background.
+          <p className="mt-1 text-[12px] text-slate-500">
+            Only check skills that genuinely match your background.
           </p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setSelectedPendingSkills(pendingSkills)}
-              className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-slate-600 transition hover:bg-slate-50"
-            >
+          <div className="mt-3 flex items-center gap-2">
+            <button type="button" onClick={() => setSelectedPendingSkills(pendingSkills)}
+              className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-600 transition hover:bg-slate-50">
               Select all
             </button>
-            <button
-              type="button"
-              onClick={() => setSelectedPendingSkills([])}
-              className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-slate-600 transition hover:bg-slate-50"
-            >
-              Clear all
+            <button type="button" onClick={() => setSelectedPendingSkills([])}
+              className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-600 transition hover:bg-slate-50">
+              Clear
             </button>
           </div>
-          <div className="mt-2 flex flex-wrap gap-1.5">
+          <div className="mt-3 flex flex-wrap gap-2">
             {pendingSkills.map((skill) => (
               <button
                 type="button"
                 key={`${jobs[pendingSkillJobIdx]?.jobId}-${skill}`}
                 onClick={() => togglePendingSkill(skill)}
-                className={`rounded-md border px-2 py-1 text-[11px] font-medium transition ${
+                className={`rounded-lg border px-3 py-1.5 text-[12px] font-medium transition ${
                   selectedPendingSkills.includes(skill)
-                    ? "border-amber-300 bg-white text-amber-800"
-                    : "border-slate-200 bg-slate-50 text-slate-500"
+                    ? "border-amber-300 bg-amber-50 text-amber-800"
+                    : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
                 }`}
               >
-                {selectedPendingSkills.includes(skill) ? "✓ " : ""}{skill}
+                {selectedPendingSkills.includes(skill) && <span className="mr-1 text-amber-600">✓</span>}{skill}
               </button>
             ))}
           </div>
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="mt-5 flex gap-3">
             <button
               type="button"
               onClick={() => void resolveSkillConfirmation(true)}
               disabled={busy || selectedPendingSkills.length === 0}
-              className="rounded-lg bg-[#FF5C18] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#e25115] disabled:opacity-50"
+              className="flex-1 rounded-xl bg-[#FF5C18] px-4 py-2.5 text-[13px] font-semibold text-white transition hover:bg-[#e25115] disabled:opacity-40"
             >
-              Add selected ({selectedPendingSkills.length}) & continue
+              Add {selectedPendingSkills.length} skill{selectedPendingSkills.length !== 1 ? "s" : ""} & continue
             </button>
             <button
               type="button"
               onClick={() => void resolveSkillConfirmation(false)}
               disabled={busy}
-              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
+              className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-[13px] font-semibold text-slate-600 transition hover:bg-slate-50 disabled:opacity-40"
             >
-              Continue without adding
+              Skip
             </button>
           </div>
         </div>
@@ -1065,90 +1322,90 @@ export function ApplyAgentFlow({ initialJobs, extensionConnected = false, onFoll
 
       {/* Resume QA checkpoint */}
       {phase === "reviewing" && reviewJobIdx !== null && (
-        <div className="mx-4 mt-3 mb-1 rounded-xl border border-orange-200 bg-orange-50/30 px-4 py-3">
-          <p className="text-sm font-semibold text-slate-800">
-            Resume QA for <span className="text-[#FF5C18]">{jobs[reviewJobIdx]?.jobTitle}</span>
-          </p>
-          <p className="mt-1 text-[11px] text-slate-600">
-            Confirm each item before moving to the next role.
-          </p>
-          <div className="mt-2 rounded-lg border border-slate-200 bg-white px-3 py-2">
-            <p className="text-[11px] font-semibold text-slate-700">
-              {jobs[reviewJobIdx]?.prepResult?.tailoredResumeName ?? "Tailored resume"}
+        <div className="border-t border-slate-100 px-5 pt-5 pb-6">
+          {/* Section heading */}
+          <div className="mb-4">
+            <p className="text-[10.5px] font-bold uppercase tracking-[0.2em] text-[#FF5C18]">Resume QA</p>
+            <p className="mt-1 text-[15px] font-bold text-slate-900">
+              {jobs[reviewJobIdx]?.jobTitle}
             </p>
-            <p className="text-[10px] text-slate-500">
-              ATS target: {jobs[reviewJobIdx]?.prepResult?.atsProvider ?? "Generic ATS"}
-            </p>
+            <p className="text-[12px] text-slate-500">{jobs[reviewJobIdx]?.company}</p>
           </div>
-          {(reviewResumePreview || reviewCoverLetterUrl) && (
-            <div className="mt-2 space-y-1.5">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-500">Review materials</p>
+
+          {/* Tailored resume card */}
+          <div className="mb-4 flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50/60 px-4 py-3">
+            <div>
+              <p className="text-[12px] font-semibold text-slate-800">
+                {jobs[reviewJobIdx]?.prepResult?.tailoredResumeName ?? "Tailored resume"}
+              </p>
+              <p className="text-[11px] text-slate-400">
+                ATS: {jobs[reviewJobIdx]?.prepResult?.atsProvider ?? "Generic"}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
               {reviewResumePreview && (
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => openResumeSidePreview(reviewResumePreview, `Tailored resume · ${reviewJob?.jobTitle ?? "Job"}`)}
-                    className="flex flex-1 items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] font-semibold text-slate-700 transition hover:bg-slate-50"
-                  >
-                    View full screen
-                    <ExternalLink className="h-3.5 w-3.5 text-slate-400" />
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => openResumeSidePreview(reviewResumePreview, `Tailored resume · ${reviewJob?.jobTitle ?? "Job"}`)}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-slate-700 transition hover:bg-slate-100"
+                >
+                  Preview <ExternalLink className="h-3 w-3 text-slate-400" />
+                </button>
               )}
               {reviewCoverLetterUrl && (
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => openUrlSidePreview(reviewCoverLetterUrl, `Cover letter · ${reviewJob?.jobTitle ?? "Job"}`)}
-                    className="flex flex-1 items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] font-semibold text-slate-700 transition hover:bg-slate-50"
-                  >
-                    Open cover letter on side
-                    <ExternalLink className="h-3.5 w-3.5 text-slate-400" />
-                  </button>
-                  <a
-                    href={reviewCoverLetterUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-[10px] font-semibold text-slate-600 transition hover:bg-slate-50"
-                  >
-                    New tab
-                  </a>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => openUrlSidePreview(reviewCoverLetterUrl, `Cover letter · ${reviewJob?.jobTitle ?? "Job"}`)}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-slate-700 transition hover:bg-slate-100"
+                >
+                  Cover letter <ExternalLink className="h-3 w-3 text-slate-400" />
+                </button>
               )}
             </div>
-          )}
-          <div className="mt-2 space-y-1.5">
+          </div>
+
+          {/* QA checklist — spacious items */}
+          <div className="space-y-2">
             {RESUME_QA_CHECKLIST.map((question, idx) => (
               <button
                 key={`${jobs[reviewJobIdx]?.jobId}-qa-${idx}`}
                 type="button"
                 onClick={() => handleResumeQaToggle(idx)}
-                className={`w-full rounded-lg border px-2.5 py-2 text-left text-[11px] transition ${
+                className={`group w-full flex items-start gap-3 rounded-xl border px-4 py-3.5 text-left transition-all ${
                   qaChecks[idx]
-                    ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                    : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                    ? "border-emerald-200 bg-emerald-50/60 text-emerald-800"
+                    : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
                 }`}
               >
-                {qaChecks[idx] ? "✓ " : "○ "}{question}
+                <span className={`mt-[1px] flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border text-[9px] font-bold transition-colors ${
+                  qaChecks[idx]
+                    ? "border-emerald-400 bg-emerald-400 text-white"
+                    : "border-slate-300 text-slate-300 group-hover:border-slate-400"
+                }`}>
+                  {qaChecks[idx] ? "✓" : ""}
+                </span>
+                <span className="text-[12.5px] leading-relaxed">{question}</span>
               </button>
             ))}
           </div>
-          <div className="mt-3 flex flex-wrap gap-2">
+
+          {/* CTAs */}
+          <div className="mt-5 flex gap-3">
             <button
               type="button"
               onClick={approveResumeQa}
               disabled={!allQaChecked || busy}
-              className="rounded-lg bg-[#FF5C18] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#e25115] disabled:opacity-50"
+              className="flex-1 rounded-xl bg-[#FF5C18] px-4 py-2.5 text-[13px] font-semibold text-white transition hover:bg-[#e25115] disabled:opacity-40"
             >
-              Approve resume & continue
+              {allQaChecked ? "Approve & continue →" : `${qaChecks.filter(Boolean).length} / ${RESUME_QA_CHECKLIST.length} confirmed`}
             </button>
             <button
               type="button"
               onClick={skipDuringResumeQa}
               disabled={busy}
-              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
+              className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-[13px] font-semibold text-slate-600 transition hover:bg-slate-50 disabled:opacity-40"
             >
-              Skip this job
+              Skip
             </button>
           </div>
         </div>
@@ -1195,7 +1452,33 @@ export function ApplyAgentFlow({ initialJobs, extensionConnected = false, onFoll
               )}
             </div>
           )}
-          {!extensionConnected && (
+          {extensionStatus === "disconnected" && (
+            <div className="mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2">
+              <p className="text-[11px] font-semibold text-red-800">Chrome extension not connected</p>
+              <p className="text-[10px] text-red-700 mt-0.5">
+                The extension fills ATS forms automatically. Without it you will need to fill forms manually.
+              </p>
+              <div className="mt-1.5 flex gap-2">
+                <a
+                  href="https://chrome.google.com/webstore"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[10px] font-semibold text-red-800 underline"
+                >
+                  Install extension
+                </a>
+                <span className="text-[10px] text-red-400">or</span>
+                <button
+                  type="button"
+                  className="text-[10px] font-semibold text-slate-700 underline"
+                  onClick={() => setExtMidFlowDisconnected(false)}
+                >
+                  Continue manually
+                </button>
+              </div>
+            </div>
+          )}
+          {extensionStatus !== "disconnected" && !extensionConnected && (
             <p className="mt-2 text-[11px] text-amber-700">
               Extension offline: Scout can open the tab, but form-fill is manual.
             </p>
@@ -1252,21 +1535,23 @@ export function ApplyAgentFlow({ initialJobs, extensionConnected = false, onFoll
 
       {/* Right column: inline resume preview during QA */}
       {showInlineResume && (
-        <div className="flex-1 overflow-y-auto max-h-[85vh] bg-slate-50/60 p-4">
-          <div className="mb-3 flex items-center justify-between">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-[0.14em]">
+        <div className="flex-1 overflow-y-auto max-h-[85vh] bg-white">
+          <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 bg-white px-6 py-3">
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">
               Tailored resume · {reviewJob?.jobTitle ?? "Job"}
             </p>
             <button
               type="button"
               onClick={() => openResumeSidePreview(reviewResumePreview, `Tailored resume · ${reviewJob?.jobTitle ?? "Job"}`)}
-              className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-400 hover:text-slate-600 transition"
-              title="View full screen"
+              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+              title="Expand"
             >
               <ExternalLink className="h-3.5 w-3.5" />
             </button>
           </div>
-          <ResumeQaSidePreview resume={reviewResumePreview} />
+          <div className="px-6 py-5">
+            <ResumeQaSidePreview resume={reviewResumePreview} />
+          </div>
         </div>
       )}
 

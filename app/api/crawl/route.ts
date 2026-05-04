@@ -16,6 +16,10 @@ const MAX_COMPANY_ATTEMPTS = Math.max(
   1,
   Number.parseInt(process.env.CRAWLER_COMPANY_MAX_ATTEMPTS ?? "2", 10)
 )
+const MAX_COMPANIES_PER_RUN = Math.max(
+  10,
+  Number.parseInt(process.env.CRAWLER_MAX_COMPANIES_PER_RUN ?? "150", 10)
+)
 const COMPANY_RETRY_BASE_DELAY_MS = Math.max(
   250,
   Number.parseInt(process.env.CRAWLER_COMPANY_RETRY_BASE_DELAY_MS ?? "600", 10)
@@ -197,6 +201,8 @@ export async function GET(request: NextRequest) {
       ats_type: string | null
       ats_identifier: string | null
       job_count: number | null
+      domain: string | null
+      raw_ats_config: Record<string, unknown> | null
     }> = []
     try {
       const companyResult = await pool.query<{
@@ -207,8 +213,11 @@ export async function GET(request: NextRequest) {
         ats_type: string | null
         ats_identifier: string | null
         job_count: number | null
+        domain: string | null
+        raw_ats_config: Record<string, unknown> | null
       }>(
-        `SELECT id, name, careers_url, last_crawled_at, ats_type, ats_identifier, job_count
+        `SELECT id, name, careers_url, last_crawled_at, ats_type, ats_identifier, job_count,
+                domain, raw_ats_config
          FROM companies
          WHERE is_active = true
          ORDER BY last_crawled_at ASC NULLS FIRST`
@@ -230,9 +239,9 @@ export async function GET(request: NextRequest) {
       signalMap,
       defaultCrawlPolicyOptions()
     )
-    const companies = policy.selected
+    const companies = policy.selected.slice(0, MAX_COMPANIES_PER_RUN)
     companiesCount = companies.length
-    companiesSkipped = policy.skipped.length
+    companiesSkipped = policy.skipped.length + (policy.selected.length - companies.length)
     queuePolicySummary = {
       selectedLaneCounts: policy.selectedLaneCounts,
       skippedLaneCounts: policy.skippedLaneCounts,
@@ -269,10 +278,18 @@ export async function GET(request: NextRequest) {
               crawlResult = await crawlCareersPage(target)
               persistResult = await persistCrawlJobs({
                 companyId: company.id,
+                companyMeta: {
+                  name: company.name,
+                  domain: company.domain,
+                  careers_url: company.careers_url,
+                  ats_type: company.ats_type,
+                  raw_ats_config: company.raw_ats_config,
+                },
                 crawledAt: crawlResult.crawledAt,
                 jobs: crawlResult.jobs,
                 sourceUrl: crawlResult.url,
                 normalizedUrl: crawlResult.normalizedUrl,
+                resolvedCareersUrl: crawlResult.resolvedCareersUrl,
                 diagnostics: crawlResult.diagnostics,
               })
               break
@@ -296,7 +313,7 @@ export async function GET(request: NextRequest) {
             status === "success" || status === "unchanged"
               ? null
               : crawlResult.outcomeReason ?? status
-          await insertCrawlLogSafe("[crawl]", {
+          void insertCrawlLogSafe("[crawl]", {
             companyId: company.id,
             status,
             jobsFound: crawlResult.jobs.length,
@@ -320,7 +337,7 @@ export async function GET(request: NextRequest) {
         } catch (crawlError) {
           const durationMs = Date.now() - companyStartedAt
           const errorMessage = sanitizeErrorMessage(toErrorMessage(crawlError))
-          await insertCrawlLogSafe("[crawl]", {
+          void insertCrawlLogSafe("[crawl]", {
             companyId: company.id,
             status: "failed",
             jobsFound: 0,

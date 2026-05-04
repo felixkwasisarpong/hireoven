@@ -76,6 +76,45 @@ export function dispatchBrowserAction(
   }
 }
 
+/**
+ * Ping the extension and return true if it responds within 2 s.
+ * Sends EXTENSION_PING via the same postMessage bridge; the extension
+ * content script must reply with { type: "EXTENSION_PONG" }.
+ */
+export async function pingExtension(): Promise<boolean> {
+  if (typeof window === "undefined") return false
+
+  return new Promise<boolean>((resolve) => {
+    const timeout = setTimeout(() => {
+      window.removeEventListener("message", handler)
+      resolve(false)
+    }, 2000)
+
+    function handler(event: MessageEvent) {
+      if (
+        event.data?.type === "EXTENSION_PONG" ||
+        event.data?.source === "hireoven-extension"
+      ) {
+        clearTimeout(timeout)
+        window.removeEventListener("message", handler)
+        resolve(true)
+      }
+    }
+
+    window.addEventListener("message", handler)
+    try {
+      window.postMessage(
+        { source: FROM_SCOUT, type: "EXTENSION_PING" },
+        window.location.origin,
+      )
+    } catch {
+      clearTimeout(timeout)
+      window.removeEventListener("message", handler)
+      resolve(false)
+    }
+  })
+}
+
 /** Generate a readable summary sentence for a browser action event. */
 export function buildActionSummary(
   action:  ScoutBrowserAction,

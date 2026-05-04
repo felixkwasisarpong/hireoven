@@ -54,9 +54,11 @@ function useVoiceRecognition(onTranscript: (text: string, isFinal: boolean) => v
   // Keep ref in sync so callbacks can read the latest state
   useEffect(() => { voiceStateRef.current = voiceState }, [voiceState])
 
-  // Detect support once, client-side only
-  const supported = typeof window !== "undefined"
-    && ("SpeechRecognition" in window || "webkitSpeechRecognition" in window)
+  // Detect support after hydration — never inline (causes SSR mismatch)
+  const [supported, setSupported] = useState(false)
+  useEffect(() => {
+    setSupported("SpeechRecognition" in window || "webkitSpeechRecognition" in window)
+  }, [])
 
   function stop() {
     recognitionRef.current?.stop()

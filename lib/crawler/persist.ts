@@ -110,16 +110,54 @@ async function insertJobsChunk(pool: ReturnType<typeof getPostgresPool>, chunk: 
   )
 }
 
-async function updateJobRow(
+// Batch UPDATE — one round-trip per chunk instead of one per row.
+// skills is text[] in the DB; raw_data is jsonb.
+async function updateJobsBatch(
   pool: ReturnType<typeof getPostgresPool>,
-  id: string,
-  payload: Record<string, unknown>
-) {
-  const entries = Object.entries(payload).filter(([k]) => JOB_UPDATE_WHITELIST.has(k))
-  if (entries.length === 0) return
-  const values = entries.map(([, v]) => v)
-  const setClause = entries.map(([k], i) => `${k} = $${i + 1}`).join(", ")
-  await pool.query(`UPDATE jobs SET ${setClause} WHERE id = $${values.length + 1}`, [...values, id])
+  rows: Array<{ id: string; payload: Record<string, unknown> }>,
+  chunkSize: number,
+): Promise<void> {
+  if (rows.length === 0) return
+
+  for (const chunk of chunkValues(rows, chunkSize)) {
+    const batch = chunk.map(({ id, payload }) => {
+      const out: Record<string, unknown> = { id }
+      for (const [k, v] of Object.entries(payload)) {
+        if (JOB_UPDATE_WHITELIST.has(k)) out[k] = v
+      }
+      return out
+    })
+
+    await pool.query(
+      `UPDATE jobs AS j SET
+         company_id             = (v->>'company_id')::uuid,
+         title                  = v->>'title',
+         normalized_title       = v->>'normalized_title',
+         apply_url              = v->>'apply_url',
+         location               = v->>'location',
+         employment_type        = v->>'employment_type',
+         seniority_level        = v->>'seniority_level',
+         is_remote              = (v->>'is_remote')::boolean,
+         is_hybrid              = (v->>'is_hybrid')::boolean,
+         requires_authorization = (v->>'requires_authorization')::boolean,
+         salary_min             = (v->>'salary_min')::integer,
+         salary_max             = (v->>'salary_max')::integer,
+         salary_currency        = v->>'salary_currency',
+         description            = v->>'description',
+         external_id            = v->>'external_id',
+         sponsors_h1b           = (v->>'sponsors_h1b')::boolean,
+         sponsorship_score      = (v->>'sponsorship_score')::integer,
+         visa_language_detected = v->>'visa_language_detected',
+         skills                 = (SELECT array_agg(x) FROM jsonb_array_elements_text(v->'skills') x),
+         is_active              = (v->>'is_active')::boolean,
+         last_seen_at           = (v->>'last_seen_at')::timestamptz,
+         raw_data               = v->'raw_data',
+         updated_at             = (v->>'updated_at')::timestamptz
+       FROM jsonb_array_elements($1::jsonb) AS v
+       WHERE j.id = (v->>'id')::uuid`,
+      [JSON.stringify(batch)],
+    )
+  }
 }
 
 const BLOCKED_TITLE_PATTERNS = [
@@ -290,19 +328,33 @@ function chunkValues<T>(values: T[], chunkSize: number): T[][] {
   return chunks
 }
 
+type PersistedCompanyMeta = {
+  name: string | null
+  domain: string | null
+  careers_url: string | null
+  ats_type: string | null
+  raw_ats_config: Record<string, unknown> | null
+}
+
 export async function persistCrawlJobs({
   companyId,
+  companyMeta,
   crawledAt,
   jobs,
   sourceUrl,
   normalizedUrl,
+  resolvedCareersUrl,
   diagnostics,
 }: {
   companyId: string
+  /** Pre-fetched company row — skips an extra SELECT per company when provided. */
+  companyMeta?: PersistedCompanyMeta
   crawledAt: Date
   jobs: RawJob[]
   sourceUrl?: string
   normalizedUrl?: string
+  /** Stable Workday URL resolved by heuristic — written back so future crawls skip heuristics. */
+  resolvedCareersUrl?: string
   diagnostics?: Array<{
     provider?: string | null
     originalUrl: string
@@ -317,17 +369,14 @@ export async function persistCrawlJobs({
 }) {
   const pool = getPostgresPool()
   const crawledAtIso = crawledAt.toISOString()
-  const companyResult = await pool.query<{
-    name: string | null
-    domain: string | null
-    careers_url: string | null
-    ats_type: string | null
-    raw_ats_config: Record<string, unknown> | null
-  }>(
-    `SELECT name, domain, careers_url, ats_type, raw_ats_config FROM companies WHERE id = $1`,
-    [companyId]
-  )
-  const company = companyResult.rows[0] ?? null
+  let company: PersistedCompanyMeta | null = companyMeta ?? null
+  if (!company) {
+    const companyResult = await pool.query<PersistedCompanyMeta>(
+      `SELECT name, domain, careers_url, ats_type, raw_ats_config FROM companies WHERE id = $1`,
+      [companyId],
+    )
+    company = companyResult.rows[0] ?? null
+  }
   const normalized = jobs
     .map((job) => ({
       ...job,
@@ -643,9 +692,7 @@ export async function persistCrawlJobs({
     }
   }
 
-  for (const row of toUpdate) {
-    await updateJobRow(pool, row.id, row.payload)
-  }
+  await updateJobsBatch(pool, toUpdate, JOB_WRITE_BATCH_SIZE)
 
   const activeResult = await pool.query<{
     id: string
@@ -753,8 +800,11 @@ export async function persistCrawlJobs({
   await pool.query(
     `UPDATE companies
      SET last_crawled_at = $1, job_count = $2, updated_at = $3, raw_ats_config = $5::jsonb
+         ${resolvedCareersUrl ? ", careers_url = $6" : ""}
      WHERE id = $4`,
-    [crawledAtIso, activeCount, crawledAtIso, companyId, JSON.stringify(nextRawAtsConfig)]
+    resolvedCareersUrl
+      ? [crawledAtIso, activeCount, crawledAtIso, companyId, JSON.stringify(nextRawAtsConfig), resolvedCareersUrl]
+      : [crawledAtIso, activeCount, crawledAtIso, companyId, JSON.stringify(nextRawAtsConfig)]
   )
 
   // Auto-detect and backfill ATS type from the apply URLs we just crawled.

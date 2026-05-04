@@ -107,9 +107,11 @@
     background-color: hsl(var(--surface) / 0.84) !important;
   }
 
-  /* Escape hatch: drawers/modals must stay fully opaque even on chroma pages. */
+  /* Escape hatch: drawers/modals/popover panels must stay fully opaque even on chroma pages. */
   body.site-chroma .app-drawer,
-  body.site-chroma .app-drawer .bg-white {
+  body.site-chroma .app-drawer .bg-white,
+  body.site-chroma .notification-panel,
+  body.site-chroma .notification-panel .bg-white {
     background-color: #ffffff !important;
   }
   body.site-chroma .app-drawer .bg-slate-50,
@@ -841,6 +843,33 @@
   0%   { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
 }
+/* Watching dot — soft opacity blink 1→0.3→1 */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.3; }
+}
+/* Recent action new-item slide-in from left */
+@keyframes scout-slide-in {
+  0%   { opacity: 0; transform: translateX(-12px); }
+  100% { opacity: 1; transform: translateX(0); }
+}
+/* Status badge scale-pulse on change */
+@keyframes badge-pulse {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+/* Header subtitle fade-in on mode change */
+@keyframes scoutSubtitleIn {
+  0%   { opacity: 0; transform: translateY(3px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+/* Orb done state — pop then settle */
+@keyframes scoutOrbDone {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.12); }
+  100% { transform: scale(1); }
+}
 /* Mic — idle breathing ring */
 @keyframes scoutMicBreath {
   0%, 100% { transform: scale(1);    opacity: 0.6; }
@@ -852,17 +881,6 @@
   50%      { transform: scaleY(1);    }
 }
 /* Mic — friendly idle "smile" wiggle (gentle nod + tiny bob) */
-@keyframes scoutMicSmile {
-  0%, 78%, 100% { transform: translateY(0)    rotate(0deg); }
-  82%           { transform: translateY(-1px) rotate(-7deg); }
-  88%           { transform: translateY(-2px) rotate(8deg); }
-  94%           { transform: translateY(-1px) rotate(-3deg); }
-}
-/* Mic — small smile arc fade (drawn under the mic) */
-@keyframes scoutMicArc {
-  0%, 75%, 100% { opacity: 0; transform: scaleX(0.6); }
-  82%, 92%      { opacity: 1; transform: scaleX(1);   }
-}
 
 @media (prefers-reduced-motion: reduce) {
   *,

@@ -1,6 +1,6 @@
 "use client"
 
-import { Ban, Check, ChevronRight, RotateCcw, ShieldCheck, X } from "lucide-react"
+import { Ban, ChevronRight, RotateCcw, Shield, ShieldCheck, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { ScoutPermission, ScoutPermissionState } from "@/lib/scout/permissions"
 import {
@@ -11,6 +11,7 @@ import {
   readAuditLog,
   clearAuditLog,
 } from "@/lib/scout/permissions"
+import { Check } from "lucide-react"
 
 // Permissions that start unlocked (no confirmation required by default)
 const READ_ONLY_PERMS = new Set<ScoutPermission>(["read_jobs", "read_resume"])
@@ -118,31 +119,54 @@ export function ScoutPermissionsPanel({ permissions, onPermissionsChange, onClos
     onPermissionsChange(getDefaultPermissions())
   }
 
+  const allowedCount = permissions.filter((p) => p.allowed).length
+
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-end p-6 pointer-events-none">
+    <>
+      {/* Backdrop */}
       <div
-        className="pointer-events-auto w-[min(400px,calc(100vw-32px))] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_16px_48px_rgba(15,23,42,0.18)]"
-        role="dialog"
-        aria-label="Scout permissions"
-      >
+        className="fixed inset-0 z-40 bg-slate-900/20 backdrop-blur-[2px]"
+        onClick={onClose}
+        aria-hidden="true"
+      />
+
+      {/* Panel */}
+      <div className="fixed right-0 top-0 bottom-0 z-50 w-full max-w-sm bg-white shadow-2xl border-l border-slate-200 flex flex-col">
+
         {/* Header */}
-        <div className="flex items-center gap-2.5 border-b border-slate-100 px-5 py-4">
-          <ShieldCheck className="h-4 w-4 text-[#FF5C18]" />
-          <div className="flex-1">
-            <p className="text-[13px] font-bold text-slate-900">Scout Permissions</p>
-            <p className="text-[11px] text-slate-400">Control what Scout is allowed to do</p>
+        <div className="flex items-center justify-between px-4 py-4 border-b border-slate-100 flex-shrink-0">
+          <div className="flex items-center gap-2.5">
+            <div className="h-7 w-7 rounded-lg bg-[#FF5C18]/10 flex items-center justify-center flex-shrink-0">
+              <Shield className="h-4 w-4 text-[#FF5C18]" />
+            </div>
+            <div>
+              <div className="text-sm font-bold text-slate-900">Scout Permissions</div>
+              <div className="text-[10px] text-slate-400">
+                {allowedCount} of {permissions.length} actions allowed
+              </div>
+            </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
+            aria-label="Close permissions panel"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
 
-        {/* Permission list */}
-        <div className="max-h-[50vh] overflow-y-auto px-5">
+        {/* Privacy notice */}
+        <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-100 flex-shrink-0">
+          <p className="text-[10.5px] text-slate-500 leading-relaxed">
+            Control exactly what Scout can do on your behalf.{" "}
+            <strong className="text-slate-600">You approve every sensitive action.</strong>{" "}
+            Toggle off anything you&apos;d prefer to handle manually.
+          </p>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto px-4 py-1">
           <div className="divide-y divide-slate-50">
             {permissions.map((state) => (
               <PermRow
@@ -168,28 +192,36 @@ export function ScoutPermissionsPanel({ permissions, onPermissionsChange, onClos
               </div>
             ))}
           </div>
+
+          {/* Audit log */}
+          {auditLog.length > 0 && (
+            <div className="border-t border-slate-100 py-3">
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-[11px] font-semibold text-slate-500">
+                  {auditLog.length} action{auditLog.length !== 1 ? "s" : ""} this session
+                </p>
+                <button
+                  type="button"
+                  onClick={clearAuditLog}
+                  className="text-[10.5px] text-slate-400 transition hover:text-slate-600"
+                >
+                  Clear
+                </button>
+              </div>
+              <div className="space-y-1">
+                {auditLog.slice(0, 8).map((entry, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <ShieldCheck className="h-3 w-3 text-slate-300 flex-shrink-0" />
+                    <span className="text-[10.5px] text-slate-500 truncate">{entry.label ?? entry.actionType}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Audit log summary */}
-        {auditLog.length > 0 && (
-          <div className="border-t border-slate-100 bg-slate-50 px-5 py-3">
-            <div className="flex items-center justify-between">
-              <p className="text-[11px] text-slate-500">
-                {auditLog.length} action{auditLog.length !== 1 ? "s" : ""} logged this session
-              </p>
-              <button
-                type="button"
-                onClick={clearAuditLog}
-                className="text-[10.5px] text-slate-400 transition hover:text-slate-600"
-              >
-                Clear log
-              </button>
-            </div>
-          </div>
-        )}
-
         {/* Footer */}
-        <div className="flex items-center justify-between border-t border-slate-100 px-5 py-3">
+        <div className="border-t border-slate-100 px-4 py-3 flex items-center justify-between flex-shrink-0">
           <button
             type="button"
             onClick={handleReset}
@@ -207,6 +239,6 @@ export function ScoutPermissionsPanel({ permissions, onPermissionsChange, onClos
           </button>
         </div>
       </div>
-    </div>
+    </>
   )
 }
