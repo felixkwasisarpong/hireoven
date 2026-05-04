@@ -16,10 +16,46 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
-    # Expose on host so you can restore the dump from outside the container.
-    # Remove this port mapping after the initial data load.
+    # Remove this port mapping after the initial data restore
     ports:
       - "${POSTGRES_HOST_PORT:-5432}:5432"
+
+  minio:
+    image: minio/minio:latest
+    container_name: hireoven-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY}
+    volumes:
+      - hireoven_minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    # 9001 = MinIO console (web UI) — remove after setup if you don't need it
+    ports:
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+
+  minio-init:
+    image: minio/mc:latest
+    container_name: hireoven-minio-init
+    restart: "no"
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
+      MINIO_BUCKET: ${MINIO_BUCKET:-hireoven-resumes}
+    entrypoint: >
+      /bin/sh -c "
+      /usr/bin/mc alias set local http://minio:9000 $$MINIO_ACCESS_KEY $$MINIO_SECRET_KEY &&
+      /usr/bin/mc mb -p local/$$MINIO_BUCKET || true &&
+      /usr/bin/mc anonymous set none local/$$MINIO_BUCKET || true
+      "
 
   app:
     build:
@@ -30,9 +66,15 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
     environment:
       NODE_ENV: production
       DATABASE_URL: postgres://${POSTGRES_USER:-hireoven}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-hireoven}
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_BUCKET: ${MINIO_BUCKET:-hireoven-resumes}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL}
       NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_APP_URL}
       AUTH_SESSION_SECRET: ${AUTH_SESSION_SECRET}
@@ -47,8 +89,10 @@ services:
       VAPID_EMAIL: ${VAPID_EMAIL}
       WAITLIST_ONLY: ${WAITLIST_ONLY:-true}
       CRAWLER_PLAYWRIGHT_ENABLED: ${CRAWLER_PLAYWRIGHT_ENABLED:-false}
+      CRON_SECRET: ${CRON_SECRET}
     ports:
       - "${APP_PORT:-3000}:3000"
 
 volumes:
   hireoven_postgres_data:
+  hireoven_minio_data:
