@@ -56,14 +56,26 @@ function StatPill({ value, label }: { value: string; label: string }) {
   )
 }
 
-function FeatureCard({ icon, title, body, accent }: { icon: string; title: string; body: string; accent?: string }) {
+function FeatureCard({
+  icon, title, body, accent, color,
+}: {
+  icon: string; title: string; body: string; accent?: string; color?: string
+}) {
+  const bg = color ?? "#FF5C18"
   return (
-    <div className="group rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_2px_12px_rgba(15,23,42,0.05)] transition hover:border-[#FF5C18]/30 hover:shadow-[0_8px_28px_rgba(255,92,24,0.08)]">
-      <span className="text-2xl" aria-hidden>{icon}</span>
-      <p className="mt-3 text-[14px] font-bold text-slate-900">{title}</p>
-      <p className="mt-1.5 text-[13px] leading-relaxed text-slate-500">{body}</p>
+    <div className="group flex flex-col gap-3 rounded-2xl border border-slate-100 bg-white/80 p-5 backdrop-blur-sm shadow-[0_2px_16px_rgba(99,102,241,0.06)] transition hover:shadow-[0_8px_32px_rgba(99,102,241,0.12)] hover:-translate-y-0.5">
+      {/* Coloured icon square */}
+      <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl text-xl"
+        style={{ background: `${bg}18`, border: `1px solid ${bg}25` }}>
+        {icon}
+      </div>
+      <div>
+        <p className="text-[14px] font-bold text-slate-700">{title}</p>
+        <p className="mt-1 text-[13px] leading-relaxed text-slate-500">{body}</p>
+      </div>
       {accent && (
-        <span className="mt-3 inline-block rounded-full bg-[#FF5C18]/8 px-2.5 py-0.5 text-[10.5px] font-semibold text-[#FF5C18]">
+        <span className="self-start rounded-full px-2.5 py-0.5 text-[10.5px] font-bold"
+          style={{ background: `${bg}12`, color: bg }}>
           {accent}
         </span>
       )}
@@ -300,14 +312,22 @@ export default async function HomePage() {
       </section>
 
       {/* ── Core features ───────────────────────────────────────────────── */}
-      <section className="px-6 py-24">
-        <div className="mx-auto max-w-6xl">
+      <section className="relative overflow-hidden px-6 py-24"
+        style={{ background: "linear-gradient(160deg,#FFF8F4 0%,#F9F8FF 45%,#F4F8FF 100%)" }}>
+        {/* Subtle background accents */}
+        <div className="pointer-events-none absolute -right-32 -top-32 h-80 w-80 rounded-full bg-[#FF5C18]/5 blur-[80px]" />
+        <div className="pointer-events-none absolute -left-20 bottom-0 h-64 w-64 rounded-full bg-violet-500/5 blur-[60px]" />
+
+        <div className="relative mx-auto max-w-6xl">
           <div className="mx-auto mb-14 max-w-2xl text-center">
             <p className="mb-3 text-[10.5px] font-bold uppercase tracking-[0.2em] text-[#FF5C18]">
               Everything in one place
             </p>
-            <h2 className="text-3xl font-black tracking-tight text-slate-900 sm:text-4xl">
-              From posted to applied — in the time it takes to pour a coffee.
+            <h2 className="text-3xl font-black tracking-tight text-slate-700 sm:text-4xl">
+              From posted to applied —
+              <span className="block" style={{ background: "linear-gradient(90deg,#FF5C18,#FF9A3C)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+                in the time it takes to pour a coffee.
+              </span>
             </h2>
             <p className="mt-4 text-lg text-slate-500">
               No spreadsheets, no 12 browser tabs. Hireoven replaces the duct-taped stack.
@@ -315,12 +335,12 @@ export default async function HomePage() {
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <FeatureCard icon="⚡" title="Real-time job feed" body="New roles appear within minutes of posting — before most job boards index them." accent="No sponsored listings" />
-            <FeatureCard icon="🎯" title="AI match scores" body="Every job gets a match score against your profile, skills, and target role. Algorithmic, no tokens spent." />
-            <FeatureCard icon="🤖" title="One-click autofill" body="The extension detects form fields and pre-fills them from your profile. You review before it goes in." accent="Chrome extension" />
-            <FeatureCard icon="✍️" title="Resume tailoring" body="Scout adapts your CV to the job description. Keyword gaps flagged. Every edit needs your approval." />
-            <FeatureCard icon="📄" title="Cover letter AI" body="Generates a tailored, ATS-aware letter in seconds. Role-specific, honest, and ready to personalise." />
-            <FeatureCard icon="🛡️" title="Ghost job detector" body="Signals whether a role is actively hiring or just collecting CVs — before you spend time on it." />
+            <FeatureCard icon="⚡" title="Real-time job feed" body="New roles appear within minutes of posting — before most job boards index them." accent="No sponsored listings" color="#FF5C18" />
+            <FeatureCard icon="🎯" title="AI match scores" body="Every job gets a match score against your profile, skills, and target role. Algorithmic, instant." color="#7C3AED" />
+            <FeatureCard icon="🤖" title="One-click autofill" body="The extension detects fields and pre-fills them from your profile. You review before it goes in." accent="Chrome extension" color="#0EA5E9" />
+            <FeatureCard icon="✍️" title="Resume tailoring" body="Scout adapts your CV to the job description. Keyword gaps flagged. Every edit needs your approval." color="#10B981" />
+            <FeatureCard icon="📄" title="Cover letter AI" body="Generates a tailored, ATS-aware letter in seconds. Role-specific, honest, ready to personalise." color="#F59E0B" />
+            <FeatureCard icon="🛡️" title="Ghost job detector" body="Signals whether a role is actively hiring or just collecting CVs — before you spend time on it." color="#EF4444" />
           </div>
         </div>
       </section>
