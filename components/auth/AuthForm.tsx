@@ -4,6 +4,7 @@ import { type FormEvent, useState } from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
+import HireovenLogo from "@/components/ui/HireovenLogo"
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -164,16 +165,10 @@ export function AuthForm({ defaultMode = "login" }: Props) {
           <div className="absolute -bottom-24 left-1/4 h-64 w-64 rounded-full bg-orange-500/10 blur-[80px]" />
         </div>
 
-        {/* Logo */}
+        {/* Logo — inverted so it reads white on the dark panel */}
         <div className="relative z-10">
-          <Link href="/" className="inline-flex items-center gap-2">
-            <div className="h-8 w-8 rounded-lg flex items-center justify-center"
-              style={{ background: "linear-gradient(135deg, #FF5C18, #FF9A3C)" }}>
-              <svg className="h-4 w-4 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-            </div>
-            <span className="text-lg font-bold text-white tracking-tight">Hireoven</span>
+          <Link href="/">
+            <HireovenLogo variant="full" priority className="h-10 w-auto brightness-0 invert" />
           </Link>
         </div>
 
@@ -221,14 +216,8 @@ export function AuthForm({ defaultMode = "login" }: Props) {
       <div className="flex flex-1 flex-col items-center justify-center px-4 py-12 sm:px-8">
 
         {/* Mobile logo */}
-        <Link href="/" className="mb-8 inline-flex items-center gap-2 lg:hidden">
-          <div className="h-7 w-7 rounded-lg flex items-center justify-center"
-            style={{ background: "linear-gradient(135deg, #FF5C18, #FF9A3C)" }}>
-            <svg className="h-3.5 w-3.5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-          </div>
-          <span className="text-base font-bold text-foreground">Hireoven</span>
+        <Link href="/" className="mb-8 lg:hidden">
+          <HireovenLogo variant="header" priority className="h-9 w-auto" />
         </Link>
 
         <div className="w-full max-w-[400px]">
