@@ -1,8 +1,9 @@
 import type { Metadata } from "next"
 import Link from "next/link"
-import { ArrowRight, Check, CheckCircle2, Sparkles, Zap } from "lucide-react"
+import { ArrowRight, Check, CheckCircle2, Sparkles, Users, Zap } from "lucide-react"
 import Navbar from "@/components/layout/Navbar"
 import LogoWall from "@/components/marketing/LogoWall"
+import { WaitlistInlineForm } from "@/components/marketing/WaitlistInlineForm"
 import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
 import { getPostgresPool, hasPostgresEnv } from "@/lib/postgres/server"
 import { createClient } from "@/lib/supabase/server"
@@ -121,7 +122,7 @@ function PlanCard({
         ))}
       </ul>
       <Link
-        href={price === "Free" ? "/signup" : "/signup?plan=pro"}
+        href="/launch"
         className="mt-6 flex w-full items-center justify-center gap-1.5 rounded-xl py-2.5 text-[13px] font-bold text-white transition"
         style={{
           background: highlight
@@ -129,7 +130,7 @@ function PlanCard({
             : "linear-gradient(135deg,#7C3AED,#C026D3)",
         }}
       >
-        {price === "Free" ? "Get started free" : `Get ${name}`}
+        Join the waitlist
         <ArrowRight className="h-3.5 w-3.5" />
       </Link>
     </div>
@@ -195,10 +196,10 @@ export default async function HomePage() {
             </p>
 
             <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
-              <Link href="/signup"
+              <Link href="/launch"
                 className="inline-flex items-center gap-2 rounded-2xl px-8 py-4 text-base font-bold text-white shadow-[0_8px_30px_rgba(255,92,24,0.4)] transition hover:brightness-110"
                 style={{ background: "linear-gradient(135deg,#FF5C18,#FF7A35)" }}>
-                Get started free
+                Join the waitlist
                 <ArrowRight className="h-4 w-4" />
               </Link>
               <Link href="/pricing"
@@ -208,7 +209,7 @@ export default async function HomePage() {
             </div>
 
             <ul className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
-              {["Free forever plan", "No credit card", "2-minute setup"].map((t) => (
+              {["Early access", "No credit card", "Invite sent when approved"].map((t) => (
                 <li key={t} className="inline-flex items-center gap-1.5 text-sm text-white/45">
                   <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
                   {t}
@@ -382,10 +383,10 @@ export default async function HomePage() {
           </div>
 
           <div className="mt-12 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
-            <Link href="/signup"
+            <Link href="/launch"
               className="inline-flex items-center gap-2 rounded-2xl px-7 py-3.5 text-sm font-bold text-white transition hover:brightness-110"
               style={{ background: "linear-gradient(135deg,#FF5C18,#FF7A35)" }}>
-              Try Scout free
+              Join the waitlist
               <ArrowRight className="h-4 w-4" />
             </Link>
             <p className="text-xs text-white/30">Pro feature · 7-day free trial included</p>
@@ -464,6 +465,29 @@ export default async function HomePage() {
         </div>
       </section>
 
+      {/* ── Waitlist section ────────────────────────────────────────────── */}
+      <section className="border-y border-slate-100 px-6 py-20">
+        <div className="mx-auto max-w-2xl text-center">
+          <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-[#FF5C18]/25 bg-[#FF5C18]/8 px-4 py-1.5 text-[12px] font-bold uppercase tracking-widest text-[#FF5C18]">
+            <Users className="h-3.5 w-3.5" />
+            Early access · Waitlist open
+          </div>
+          <h2 className="text-3xl font-black tracking-tight text-slate-900 sm:text-4xl">
+            Get in before the doors open.
+          </h2>
+          <p className="mx-auto mt-4 max-w-lg text-lg text-slate-500">
+            Hireoven is currently invite-only. Join the waitlist and we&apos;ll send you an invite link as soon as your spot is ready — no spam, no waiting in the dark.
+          </p>
+
+          {/* Inline email form */}
+          <WaitlistInlineForm />
+
+          <p className="mt-4 text-xs text-slate-400">
+            We review every application. You&apos;ll hear back within 24–48 hours.
+          </p>
+        </div>
+      </section>
+
       {/* ── Final CTA ───────────────────────────────────────────────────── */}
       <section className="px-6 py-24"
         style={{ background: "linear-gradient(150deg,#0f0a1e 0%,#1a0800 50%,#080614 100%)" }}>
@@ -480,10 +504,10 @@ export default async function HomePage() {
             The first 10 applicants get the most attention. Hireoven makes sure you&apos;re one of them.
           </p>
           <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <Link href="/signup"
+            <Link href="/launch"
               className="inline-flex items-center gap-2 rounded-2xl px-9 py-4 text-base font-bold text-white shadow-[0_8px_30px_rgba(255,92,24,0.4)] transition hover:brightness-110"
               style={{ background: "linear-gradient(135deg,#FF5C18,#FF7A35)" }}>
-              Get started free
+              Join the waitlist
               <ArrowRight className="h-4 w-4" />
             </Link>
             <Link href="/pricing"
@@ -491,7 +515,7 @@ export default async function HomePage() {
               See pricing
             </Link>
           </div>
-          <p className="mt-5 text-xs text-white/30">No credit card · Free forever plan · Cancel anytime</p>
+          <p className="mt-5 text-xs text-white/30">No credit card · Invite sent when approved · Early access</p>
         </div>
       </section>
 
@@ -514,7 +538,7 @@ export default async function HomePage() {
             ]} />
             <FooterColumn title="Account" links={[
               { href: "/login", label: "Sign in" },
-              { href: "/signup", label: "Sign up free" },
+              { href: "/launch", label: "Join waitlist" },
             ]} />
             <FooterColumn title="Legal" links={[
               { href: "/privacy", label: "Privacy" },
