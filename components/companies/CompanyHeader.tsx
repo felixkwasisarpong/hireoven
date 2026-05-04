@@ -5,6 +5,7 @@ import CompanyLogo from '@/components/ui/CompanyLogo'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { useWatchlist } from '@/lib/hooks/useWatchlist'
 import { cn } from '@/lib/utils'
+import { FairChanceBadge } from '@/components/background-check/FairChanceBadge'
 import type { Company } from '@/types'
 
 interface CompanyHeaderProps {
@@ -44,6 +45,7 @@ export default function CompanyHeader({
               </p>
             )}
             <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+              <FairChanceBadge companyId={company.id} size="md" />
               {company.sponsors_h1b && (
                 <span className="rounded-full border border-[#FFD2B8] bg-[#FFF7F2] px-2.5 py-0.5 text-[11px] font-semibold text-[#9A3412]">
                   Sponsors H-1B

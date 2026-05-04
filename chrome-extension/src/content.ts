@@ -8,6 +8,8 @@
  */
 
 import { detectFormFields } from "./autofill/form-detector"
+import { extractLinkedInProfile, isOwnLinkedInProfile } from "./extractors/linkedin-profile"
+import { syncLinkedInBrandProfile } from "./api-client"
 import { detectPage } from "./detectors/ats"
 import { extractJobWithMeta } from "./extractors/job"
 import { ScoutBar } from "./overlay/scout-bar"
@@ -575,6 +577,47 @@ function registerPageBridge(): void {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ── LinkedIn own-profile sync ─────────────────────────────────────────────────
+// Silently reads the user's OWN LinkedIn profile and syncs brand signals to
+// Hireoven. Only fires on linkedin.com/in/[slug] pages where the user is the
+// profile owner. Never touches other people's profiles.
+
+// Match any linkedin.com/in/[slug] path — ignore query params and hash
+const LINKEDIN_PROFILE_PATH_RE = /linkedin\.com\/in\/([^/?#]+)/
+
+let linkedInSyncedSlug = ""
+
+function maybeRunLinkedInProfileSync(): void {
+  const href = window.location.href
+  const slugMatch = href.match(LINKEDIN_PROFILE_PATH_RE)
+  if (!slugMatch) return
+
+  const currentSlug = slugMatch[1].toLowerCase()
+  if (currentSlug === linkedInSyncedSlug) return  // already synced this slug
+
+  // Wait for LinkedIn React hydration (it's a heavy SPA)
+  setTimeout(() => {
+    if (!chrome.runtime?.id) return
+
+    chrome.runtime.sendMessage(
+      { type: "GET_STORED_LINKEDIN_URL" },
+      (response: unknown) => {
+        if (chrome.runtime.lastError) return
+
+        const storedUrl = (response as { linkedinUrl?: string | null } | null)?.linkedinUrl ?? null
+
+        // Primary check: slug match against stored URL
+        // Fallback: DOM edit-button detection (only if no URL stored yet)
+        if (!isOwnLinkedInProfile(storedUrl)) return
+
+        const profileData = extractLinkedInProfile()
+        syncLinkedInBrandProfile(profileData)
+        linkedInSyncedSlug = currentSlug
+      }
+    )
+  }, 3000)  // 3s — give LinkedIn more time to fully render
+}
+
 function bootstrap(): void {
   const w = window as HireovenContentWindow
   if (w.__hoContentBootstrapped) return
@@ -584,6 +627,17 @@ function bootstrap(): void {
   registerPageBridge()
   void mountScoutBarWhenReady()
   void mountJobCardBadgesWhenReady()
+  maybeRunLinkedInProfileSync()
 }
+
+// LinkedIn uses history.pushState for SPA navigation.
+// Poll the URL every second — lightweight and reliable across all LinkedIn builds.
+let lastHref = window.location.href
+setInterval(() => {
+  if (window.location.href !== lastHref) {
+    lastHref = window.location.href
+    maybeRunLinkedInProfileSync()
+  }
+}, 1000)
 
 bootstrap()

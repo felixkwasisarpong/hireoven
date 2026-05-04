@@ -11,7 +11,11 @@
 
 import type { WorkspaceMode } from "@/lib/scout/workspace"
 
-const COMPARE_RE    = /\b(compare|rank.*job|which.*apply.*first|side.?by.?side|shortlist)\b/i
+const COMPARE_RE       = /\b(compare|rank.*job|which.*apply.*first|side.?by.?side|shortlist)\b/i
+const OFFER_NEGOT_RE   = /\b(got\s+an?\s+offer|received\s+an?\s+offer|they\s+offered\s+me|should\s+i\s+negotiate|how\s+(?:do\s+i|to)\s+(?:negotiate|counter)|is\s+this\s+(?:salary|offer)\s+(?:fair|good|competitive)|negotiate\s+(?:my\s+)?(?:offer|salary|comp)|counter.?offer|salary\s+negotiation|evaluate\s+(?:this\s+)?offer)\b/i
+const SALARY_COACH_RE  = /\b(am\s+i\s+(?:underpaid|paid\s+fairly|underselling)|what\s+should\s+i\s+(?:be\s+making|say\s+(?:when|about\s+salary))|is\s+(?:this\s+)?(?:salary|my\s+pay)\s+(?:fair|good|market\s+rate)|salary\s+(?:coaching|expectations?|floor|target|advice)|what\s+(?:is\s+market\s+rate|do\s+i\s+say\s+when\s+(?:they\s+ask|recruiter))|how\s+much\s+should\s+i\s+(?:make|ask)|am\s+i\s+targeting\s+(?:too\s+low|right)|underselling|underpaid)\b/i
+const BURNOUT_RE       = /\b(feel\s+(?:stuck|lost|overwhelmed|exhausted|defeated)|this\s+is\s+(?:exhausting|too\s+much|draining)|want\s+to\s+give\s+up|nothing\s+is\s+working|haven'?t\s+applied|stopped\s+applying|losing\s+(?:hope|motivation|momentum)|should\s+i\s+take\s+a\s+break|not\s+getting\s+(?:any\s+)?responses?|been\s+searching\s+for\s+(?:months|weeks))\b/i
+const BRAND_RE         = /\b(personal\s+brand|linkedin\s+(?:profile|post|content|presence|visibility|headline|about)|content\s+idea|post\s+(?:on\s+linkedin|content|something)|improve\s+my\s+(?:brand|visibility|profile|linkedin)|build\s+(?:my\s+brand|presence|audience)|writing\s+a\s+(?:linkedin|post)|how\s+do\s+i\s+(?:get\s+noticed|stand\s+out|grow\s+my\s+network|improve\s+my\s+linkedin)|visibility\s+score|brand\s+(?:score|audit|strategy))\b/i
 const TAILOR_RE     = /\b(tailor|tailor.?my.?resume|tailor.*resume|open.*resume.?studio)\b/i
 const BULK_PREP_RE  =
   /(?:\b(prepare|queue|batch|bulk)\b.{0,80}\b(application[s]?|apply)\b)|(?:\bapply\s+(?:to|for)\s+(?:(?:top|best|strongest|highest)\s+)?\d+\s+(?:(?:top|best|strongest|highest|matching|scored?)\s+){0,2}(?:jobs?|roles?|positions?|openings?|applications?))/i
@@ -46,23 +50,35 @@ export function detectPreflightMode(message: string): WorkspaceMode | null {
   if (COMPANY_RE.test(m))   return "company"
   if (INTERVIEW_PREP_RE.test(m)) return "interview"
   if (APPS_RE.test(m) || WORKFLOW_RE.test(m)) return "applications"
+  if (OFFER_NEGOT_RE.test(m)) return "offer_negotiation"
+  if (SALARY_COACH_RE.test(m)) return "salary_coaching"
+  if (BURNOUT_RE.test(m)) return "burnout_checkin"
+  if (BRAND_RE.test(m)) return "personal_brand"
 
   return null
 }
+
+// Exported for external use
+export { BURNOUT_RE }
 
 /**
  * Narrative strip shown while Claude is generating for each workspace mode.
  * Displayed immediately — replaced by actual Scout answer when stream completes.
  */
 export const PREFLIGHT_NARRATIVE: Partial<Record<WorkspaceMode, string>> = {
-  career_strategy:  "Analysing your career profile and market signals…",
-  interview:        "Generating your interview prep plan…",
-  outreach:         "Preparing your outreach draft…",
-  research:         "Initialising research — gathering evidence…",
-  compare:          "Comparing your strongest saved jobs…",
-  tailor:           "Preparing resume tailoring for this role…",
-  search:           "Filtering the job feed for you…",
-  company:          "Pulling company intelligence…",
-  applications:     "Reviewing your application pipeline…",
-  bulk_application: "Selecting your top matches for bulk preparation…",
+  career_strategy:   "Analysing your career profile and market signals…",
+  interview:         "Generating your interview prep plan…",
+  outreach:          "Preparing your outreach draft…",
+  research:          "Initialising research — gathering evidence…",
+  compare:           "Comparing your strongest saved jobs…",
+  tailor:            "Preparing resume tailoring for this role…",
+  search:            "Filtering the job feed for you…",
+  company:           "Pulling company intelligence…",
+  applications:      "Reviewing your application pipeline…",
+  bulk_application:  "Selecting your top matches for bulk preparation…",
+  offer_negotiation: "Benchmarking your offer against market data…",
+  salary_coaching:   "Analysing your salary targeting against market rates…",
+  burnout_checkin:    "Checking in on your search…",
+  post_hire_checkin:  "Opening your check-in…",
+  personal_brand:     "Analysing your brand visibility…",
 }

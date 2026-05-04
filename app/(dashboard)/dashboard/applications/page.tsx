@@ -26,6 +26,7 @@ import { ApplicationCard } from "@/components/applications/ApplicationCard"
 import { ApplicationDrawer } from "@/components/applications/ApplicationDrawer"
 import { AddApplicationModal } from "@/components/applications/AddApplicationModal"
 import { ScoutMiniPanel } from "@/components/scout/ScoutMiniPanel"
+import { SalaryHealthSignal } from "@/components/applications/PipelineStats"
 import type { ApplicationStatus, JobApplication } from "@/types"
 
 // ─── Column config ────────────────────────────────────────────────────────────
@@ -224,6 +225,9 @@ export default function ApplicationsPage() {
   return (
     <main className="app-page !bg-white">
       <div className="app-shell w-full space-y-5 bg-white px-4 pb-10 pt-1 sm:px-6 lg:space-y-6 lg:px-8">
+
+        {/* ── Salary health signal ── */}
+        <SalaryHealthSignal />
 
         {/* ── Header ── */}
         <section className="bg-white py-2">

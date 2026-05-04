@@ -325,6 +325,95 @@ async function fetchFundingEvents(companyId: string): Promise<HealthEvent[]> {
   }))
 }
 
+// ── Post-hire experience score adjustment ────────────────────────────────────
+
+type PostHireAdjustment = {
+  scoreAdjustment: number
+  signals: HealthSignal[]
+  checkinCount: number
+}
+
+async function computePostHireAdjustment(companyId: string): Promise<PostHireAdjustment> {
+  const pool = getPostgresPool()
+
+  const countResult = await pool.query<{ cnt: string }>(
+    `SELECT COUNT(DISTINCT checkin_id)::text AS cnt
+     FROM public.employer_experience_signals WHERE company_id = $1`,
+    [companyId]
+  ).catch(() => ({ rows: [{ cnt: "0" }] }))
+
+  const checkinCount = parseInt(countResult.rows[0]?.cnt ?? "0", 10)
+  if (checkinCount < 5) return { scoreAdjustment: 0, signals: [], checkinCount }
+
+  const statsResult = await pool.query<{ signal_type: string; weighted_avg: string }>(
+    `SELECT signal_type, SUM(signal_value * weight) / NULLIF(SUM(weight), 0) AS weighted_avg
+     FROM public.employer_experience_signals WHERE company_id = $1
+     GROUP BY signal_type`,
+    [companyId]
+  ).catch(() => ({ rows: [] as { signal_type: string; weighted_avg: string }[] }))
+
+  const byType: Record<string, number> = {}
+  for (const r of statsResult.rows) {
+    byType[r.signal_type] = parseFloat(r.weighted_avg ?? "0")
+  }
+
+  let adjustment = 0
+  const signals: HealthSignal[] = []
+
+  const avgSat = byType["satisfaction"] !== undefined ? byType["satisfaction"] * 5 : null
+  const redFlagRate = byType["red_flag"] !== undefined ? 1 - byType["red_flag"] : null
+  const compAccuracy = byType["compensation_accuracy"] ?? null
+  const retention = byType["retention"] ?? null
+
+  if (avgSat !== null) {
+    if (avgSat >= 4.0) { adjustment += 8 }
+    else if (avgSat < 3.0) { adjustment -= 10 }
+    signals.push({
+      icon: "verified_user",
+      title: `Platform verified · ${checkinCount} employee${checkinCount !== 1 ? "s" : ""} checked in`,
+      detail: `Avg satisfaction: ${avgSat.toFixed(1)}/5 · ${Math.round((byType["satisfaction"] ?? 0) * 100)}% would recommend${redFlagRate !== null ? ` · ${Math.round(redFlagRate * 100)}% reported red flags` : ""}`,
+      weight: adjustment,
+      severity: avgSat >= 4.0 ? "positive" : avgSat >= 3.0 ? "neutral" : "warning",
+      expandDetail: `Based on ${checkinCount} post-hire check-ins from people who found this job through Hireoven. This is first-hand experience data — more reliable than third-party reviews.`,
+    })
+  }
+
+  if (redFlagRate !== null && redFlagRate > 0.3) {
+    adjustment -= 12
+    signals.push({
+      icon: "flag",
+      title: `${Math.round(redFlagRate * 100)}% of check-ins reported red flags`,
+      detail: "Multiple employees reported red flags including culture, leadership, financial, or product concerns.",
+      weight: -12,
+      severity: "negative",
+    })
+  }
+
+  if (compAccuracy !== null && compAccuracy < 0.7) {
+    adjustment -= 8
+    signals.push({
+      icon: "payments",
+      title: "Compensation accuracy concerns",
+      detail: `${Math.round(compAccuracy * 100)}% of check-ins said compensation matched the offer. Some discrepancies reported.`,
+      weight: -8,
+      severity: "warning",
+    })
+  }
+
+  if (retention !== null && retention < 0.4) {
+    adjustment -= 8
+    signals.push({
+      icon: "person_off",
+      title: "Low retention signal",
+      detail: "A significant portion of employees reported planning to leave within 12 months.",
+      weight: -8,
+      severity: "warning",
+    })
+  }
+
+  return { scoreAdjustment: adjustment, signals, checkinCount }
+}
+
 // ── Main export ───────────────────────────────────────────────────────────────
 
 export async function computeHealthScore(companyId: string): Promise<CompanyHealthScore> {
@@ -337,15 +426,17 @@ export async function computeHealthScore(companyId: string): Promise<CompanyHeal
   const companyName = companyRes.rows[0]?.name ?? "Unknown"
 
   // Run all sub-scores in parallel
-  const [funding, layoff, glassdoor, headcount] = await Promise.all([
+  const [funding, layoff, glassdoor, headcount, postHire] = await Promise.all([
     computeFundingScore(companyId, companyName),
     computeLayoffScore(companyId),
     computeGlassdoorScore(companyId, companyName),
     computeHeadcountScore(companyId),
+    computePostHireAdjustment(companyId),
   ])
 
   const fundingEvents = await fetchFundingEvents(companyId)
-  const total = funding.score + layoff.score + glassdoor.score + headcount.score
+  const baseTotal = funding.score + layoff.score + glassdoor.score + headcount.score
+  const total = Math.min(100, Math.max(0, Math.round(baseTotal + postHire.scoreAdjustment)))
   const verdict = computeVerdict(total)
 
   // Build signals sorted by absolute weight descending
@@ -354,6 +445,7 @@ export async function computeHealthScore(companyId: string): Promise<CompanyHeal
     ...layoff.signals,
     glassdoor.signal,
     headcount.signal,
+    ...postHire.signals,
   ].sort((a, b) => Math.abs(b.weight) - Math.abs(a.weight))
 
   // Build events merged + sorted

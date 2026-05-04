@@ -12,6 +12,7 @@
  */
 
 import type { ExtractedJob } from "./extractors/scout-extractor"
+import type { LinkedInProfileData } from "./extractors/linkedin-profile"
 import type {
   ExtensionJobAnalysis,
   ExtensionJobCheckResult,
@@ -218,3 +219,29 @@ export function saveApplicationProof(args: {
     coverLetterId: args.coverLetterId,
   })
 }
+
+/**
+ * Silently sync scraped LinkedIn profile data to Hireoven.
+ * Fire-and-forget — no response handling needed.
+ * Only called when isOwnLinkedInProfile() returns true.
+ */
+export function syncLinkedInBrandProfile(profile: LinkedInProfileData): void {
+  if (!chrome.runtime?.id) return
+  chrome.runtime.sendMessage({
+    type: "SYNC_LINKEDIN_BRAND_PROFILE",
+    profile: {
+      linkedinUrl:             profile.linkedinUrl,
+      headline:                profile.headline,
+      hasAboutSection:         profile.hasAboutSection,
+      skillsCount:             profile.skillsCount,
+      recommendationsCount:    profile.recommendationsCount,
+      connectionsEstimate:     profile.connectionsEstimate,
+      lastPostDetectedAt:      profile.lastPostDetectedAt,
+      daysSinceLastActivity:   profile.daysSinceLastActivity,
+    },
+  }, () => {
+    // Intentionally ignore response — fire and forget
+    void chrome.runtime.lastError
+  })
+}
+

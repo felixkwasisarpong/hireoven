@@ -45,6 +45,7 @@ import {
 import { useToast } from "@/components/ui/ToastProvider"
 import { cn } from "@/lib/utils"
 import { normalizeSkillList } from "@/lib/skills/taxonomy"
+import { EmployerInsiderView } from "@/components/checkins/EmployerInsiderView"
 import type {
   Company,
   Job,
@@ -556,58 +557,6 @@ export default function JobDetailPanel({
           </VisaIntelTrigger>
         </div>
 
-        {/* ── Resume Alignment ── */}
-        {resumeAlignment.alignmentScore != null && (
-          <div className={sectionCls}>
-            <IntelLabel>Resume alignment</IntelLabel>
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-[22px] font-bold leading-none text-slate-900">
-                  {resumeAlignment.alignmentScore}%
-                </p>
-                <p className="mt-1 text-[11px] text-slate-400">
-                  {resumeAlignment.roleFamily ?? "Role alignment"} · {resumeAlignment.confidence} confidence
-                </p>
-              </div>
-              <span className={cn(
-                "rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1",
-                resumeAlignment.alignmentScore >= 75
-                  ? "bg-emerald-50 text-emerald-800 ring-emerald-200"
-                  : resumeAlignment.alignmentScore >= 50
-                    ? "bg-orange-50 text-orange-800 ring-orange-200"
-                    : "bg-amber-50 text-amber-800 ring-amber-200"
-              )}>
-                {resumeAlignment.alignmentScore >= 75 ? "Strong fit" : resumeAlignment.alignmentScore >= 50 ? "Can tailor" : "Needs work"}
-              </span>
-            </div>
-
-            {resumeAlignment.strongMatches.length > 0 && (
-              <div className="mt-3">
-                <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.1em] text-slate-400">Strong matches</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {resumeAlignment.strongMatches.slice(0, 5).map((keyword) => (
-                    <span key={keyword} className="rounded-lg bg-emerald-50 px-2.5 py-0.5 text-[11px] font-medium text-emerald-700 ring-1 ring-emerald-100">
-                      {keyword}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {resumeAlignment.missingKeywords.length > 0 && (
-              <p className="mt-2 text-[11px] leading-relaxed text-slate-400">
-                Missing: {resumeAlignment.missingKeywords.slice(0, 4).join(", ")}.
-              </p>
-            )}
-
-            <Link
-              href={`/dashboard/resume/studio?mode=tailor&jobId=${job.id}`}
-              className="mt-3 inline-flex items-center gap-1 text-[12px] font-semibold text-orange-600 hover:underline"
-            >
-              Tailor resume <ArrowRight className="h-3 w-3" />
-            </Link>
-          </div>
-        )}
 
         {/* ── Take-home estimate ── */}
         {job.salary_min && (
@@ -655,88 +604,7 @@ export default function JobDetailPanel({
           />
         </div>
 
-        {/* ── Ghost Job Risk (legacy inline summary — kept for fallback) ── */}
-        {showGhostRisk && ghostRisk && (
-          <div className={sectionCls}>
-            <IntelLabel>Hiring freshness</IntelLabel>
-            <div className="flex flex-wrap items-center gap-2">
-              <span className={cn("inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ring-1", ghostTone)}>
-                <Ghost className="h-3 w-3" aria-hidden />
-                {ghostLabel}
-                {ghostRisk.score != null && ` · ${ghostRisk.score}/100`}
-              </span>
-              {ghostRisk.freshnessDays != null && (
-                <span className="text-[11px] text-slate-400">
-                  {ghostRisk.freshnessDays === 0 ? "Posted today" : `${ghostRisk.freshnessDays}d old`}
-                </span>
-              )}
-            </div>
-            {ghostRisk.recommendedAction && (
-              <p className="mt-2 text-[12px] leading-relaxed text-slate-600">{ghostRisk.recommendedAction}</p>
-            )}
-            {ghostRisk.reasons.length > 0 && (
-              <p className="mt-1.5 text-[11px] leading-relaxed text-slate-400">
-                {ghostRisk.reasons.slice(0, 2).join(" · ")}
-              </p>
-            )}
-          </div>
-        )}
 
-        {/* ── Company Hiring Health ── */}
-        {showHiringHealth && (
-          <div className={sectionCls}>
-            <IntelLabel>Company hiring</IntelLabel>
-            {hiringHealth?.status && hiringHealth.status !== "unknown" ? (
-              <div>
-                <span className={cn(
-                  "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ring-1",
-                  hiringHealth.status === "growing" ? "bg-emerald-50 text-emerald-800 ring-emerald-200"
-                  : hiringHealth.status === "slowing" ? "bg-amber-50 text-amber-800 ring-amber-200"
-                  : "bg-slate-50 text-slate-700 ring-slate-200"
-                )}>
-                  <Building2 className="h-3 w-3" aria-hidden />
-                  {hiringHealth.status === "growing" ? "Growing" : hiringHealth.status === "slowing" ? "Slowing" : "Steady"}
-                </span>
-                {hiringHealth.activeJobCount != null && (
-                  <p className="mt-2 text-[11px] text-slate-400">{hiringHealth.activeJobCount} active openings</p>
-                )}
-              </div>
-            ) : (
-              <p className="text-[12px] text-slate-600">
-                <span className="font-semibold">{hiringHealth?.activeJobCount}</span> active openings
-              </p>
-            )}
-          </div>
-        )}
-
-        {/* ── Application Verdict ── */}
-        {intel.applicationVerdict && intel.applicationVerdict.recommendation !== "unknown" && (
-          <div className={sectionCls}>
-            <IntelLabel>Application verdict</IntelLabel>
-            <p className={cn(
-              "text-[13px] font-bold",
-              intel.applicationVerdict.recommendation === "apply_now"   ? "text-emerald-700"
-              : intel.applicationVerdict.recommendation === "avoid"
-                || intel.applicationVerdict.recommendation === "skip"  ? "text-red-600"
-              : "text-slate-700"
-            )}>
-              {intel.applicationVerdict.verdict !== "Unknown"
-                ? intel.applicationVerdict.verdict
-                : intel.applicationVerdict.recommendation === "apply_now"       ? "Apply Today"
-                : intel.applicationVerdict.recommendation === "apply_with_tweaks" ? "Apply — Customize Resume"
-                : intel.applicationVerdict.recommendation === "avoid"           ? "High Risk"
-                : intel.applicationVerdict.recommendation === "skip"            ? "Skip"
-                : intel.applicationVerdict.recommendation === "watch"           ? "Watch"
-                : "Review carefully"}
-            </p>
-            {intel.applicationVerdict.recommendedNextAction && (
-              <p className="mt-1 text-[11.5px] text-slate-500">{intel.applicationVerdict.recommendedNextAction}</p>
-            )}
-            {intel.applicationVerdict.warnings.length > 0 && (
-              <p className="mt-1.5 text-[11px] text-amber-600">{intel.applicationVerdict.warnings.slice(0, 1).join(" ")}</p>
-            )}
-          </div>
-        )}
 
         {/* ── Rejection Intelligence ── */}
         {job.company?.id && (
@@ -746,6 +614,13 @@ export default function JobDetailPanel({
               jobTitle={job.title}
               jobId={job.id}
             />
+          </div>
+        )}
+
+        {/* ── Employer insider view (post-hire check-in data) ── */}
+        {job.company?.id && (
+          <div className="border-t border-slate-100 px-5 py-5">
+            <EmployerInsiderView companyId={job.company.id} />
           </div>
         )}
 

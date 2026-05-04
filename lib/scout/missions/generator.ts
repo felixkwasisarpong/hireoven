@@ -31,7 +31,7 @@ export type MissionContext = {
 
 type MissionCandidate = Omit<ScoutMission, "generatedAt" | "status">
 
-const MAX_MISSIONS = 3
+const DEFAULT_MAX_MISSIONS = 3
 
 function makeId(type: ScoutMissionType, suffix: string): string {
   return `mission-${type}-${suffix}`
@@ -202,8 +202,12 @@ function outcomeFeedbackMission(ctx: MissionContext): MissionCandidate | null {
 
 // ── Main generator ─────────────────────────────────────────────────────────────
 
-export function generateDailyMissions(ctx: MissionContext): ScoutMission[] {
+export function generateDailyMissions(
+  ctx: MissionContext,
+  maxMissions: number = DEFAULT_MAX_MISSIONS
+): ScoutMission[] {
   const now = new Date().toISOString()
+  const limit = Math.max(1, Math.min(maxMissions, DEFAULT_MAX_MISSIONS))
 
   const candidates: MissionCandidate[] = []
 
@@ -220,7 +224,7 @@ export function generateDailyMissions(ctx: MissionContext): ScoutMission[] {
   ]
 
   for (const rule of rules) {
-    if (candidates.length >= MAX_MISSIONS) break
+    if (candidates.length >= limit) break
     const candidate = rule(ctx)
     if (!candidate) continue
     // Deduplicate by type — one mission per type
@@ -232,7 +236,7 @@ export function generateDailyMissions(ctx: MissionContext): ScoutMission[] {
   const ORDER: Record<string, number> = { high: 0, medium: 1, low: 2 }
   candidates.sort((a, b) => (ORDER[a.priority] ?? 1) - (ORDER[b.priority] ?? 1))
 
-  return candidates.slice(0, MAX_MISSIONS).map((c) => ({
+  return candidates.slice(0, limit).map((c) => ({
     ...c,
     status:      "pending" as const,
     generatedAt: now,

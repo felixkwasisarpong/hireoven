@@ -332,6 +332,17 @@ export function ApplyAgentFlow({ initialJobs, extensionConnected = false, onFoll
   const [applyOrder, setApplyOrder] = useState<number[]>([])
   const [applyPointer, setApplyPointer] = useState(0)
   const [sidePreview, setSidePreview] = useState<SidePreviewState | null>(null)
+  const [salaryIntercept, setSalaryIntercept] = useState<{
+    message: string
+    recommendation: string
+    alternativeSuggestion: string
+    jobSalaryMax: number
+    userMarketP50: number
+    shortfallPercent: number
+    jobId: string
+    jobTitle: string
+    company: string | null
+  } | null>(null)
   const processingRef  = useRef(false)
   const primaryResumeRef = useRef<{ id: string; skills: ResumeSkillSets } | null>(null)
   const primaryResumeDataRef = useRef<Resume | null>(null)
@@ -623,7 +634,7 @@ export function ApplyAgentFlow({ initialJobs, extensionConnected = false, onFoll
     setCurrentIndex(applyOrder[nextPointer] ?? 0)
   }, [applyOrder, extensionConnected, finishFlow])
 
-  const openCurrentApplication = useCallback(() => {
+  const openCurrentApplication = useCallback(async () => {
     const idx = applyOrder[applyPointer]
     if (idx === undefined) return
 
@@ -638,6 +649,38 @@ export function ApplyAgentFlow({ initialJobs, extensionConnected = false, onFoll
       goToNextApplyJob(applyPointer + 1)
       return
     }
+
+    // ── Salary intercept check ──────────────────────────────────────────────
+    if (job.jobId) {
+      try {
+        const interceptRes = await fetch(`/api/scout/salary-intercept?jobId=${encodeURIComponent(job.jobId)}`)
+        if (interceptRes.ok) {
+          const data = await interceptRes.json() as {
+            intercept: {
+              shouldIntercept: boolean
+              message: string
+              recommendation: string
+              alternativeSuggestion: string
+              jobSalaryMax: number
+              userMarketP50: number
+              shortfallPercent: number
+            } | null
+          }
+          if (data.intercept?.shouldIntercept) {
+            setSalaryIntercept({
+              ...data.intercept,
+              jobId: job.jobId,
+              jobTitle: job.jobTitle,
+              company: job.company,
+            })
+            return // pause — let user choose
+          }
+        }
+      } catch {
+        // Non-blocking — never prevent applying
+      }
+    }
+    // ── End salary intercept ────────────────────────────────────────────────
 
     setBusy(true)
     updateJob(idx, { status: "opening", error: undefined })
@@ -790,12 +833,84 @@ export function ApplyAgentFlow({ initialJobs, extensionConnected = false, onFoll
     void ensurePrimaryResume()
   }, [ensurePrimaryResume, phase])
 
+  // ── Salary intercept handlers ─────────────────────────────────────────────
+
+  const dismissInterceptAndApply = useCallback(async () => {
+    if (!salaryIntercept) return
+    // Log the override
+    void fetch("/api/scout/salary-intercept", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        jobId: salaryIntercept.jobId,
+        jobTitle: salaryIntercept.jobTitle,
+        companyName: salaryIntercept.company,
+        jobSalaryMax: salaryIntercept.jobSalaryMax,
+        userMarketP50: salaryIntercept.userMarketP50,
+        shortfallPct: salaryIntercept.shortfallPercent,
+        actionTaken: "apply_anyway",
+      }),
+    })
+    setSalaryIntercept(null)
+    // Re-trigger the apply open
+    openCurrentApplication()
+  }, [salaryIntercept, openCurrentApplication])
+
+  const dismissInterceptFindBetter = useCallback(() => {
+    if (!salaryIntercept) return
+    void fetch("/api/scout/salary-intercept", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        jobId: salaryIntercept.jobId,
+        jobTitle: salaryIntercept.jobTitle,
+        companyName: salaryIntercept.company,
+        jobSalaryMax: salaryIntercept.jobSalaryMax,
+        userMarketP50: salaryIntercept.userMarketP50,
+        shortfallPct: salaryIntercept.shortfallPercent,
+        actionTaken: "find_better",
+      }),
+    })
+    setSalaryIntercept(null)
+    onFollowUp?.(`Show me ${salaryIntercept.jobTitle} roles paying $${Math.round(salaryIntercept.userMarketP50 / 5000) * 5000}+`)
+  }, [salaryIntercept, onFollowUp])
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   const showInlineResume = phase === "reviewing" && !!reviewResumePreview
 
   return (
     <div className={`rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden${showInlineResume ? " flex items-start" : ""}`}>
+
+      {/* Salary intercept warning */}
+      {salaryIntercept && (
+        <div className="border-b border-amber-200 bg-amber-50 px-4 py-3">
+          <div className="flex items-start gap-2.5">
+            <span className="mt-0.5 text-amber-600 text-[18px] leading-none select-none">⚠</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-[13px] font-semibold text-amber-800 mb-0.5">Salary below your market rate</p>
+              <p className="text-[12px] text-amber-700 leading-relaxed">{salaryIntercept.message}</p>
+              <p className="mt-1 text-[11px] text-amber-600">{salaryIntercept.alternativeSuggestion}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => void dismissInterceptAndApply()}
+                  className="rounded-full border border-amber-300 bg-white px-3 py-1.5 text-[12px] font-semibold text-amber-800 hover:bg-amber-100 transition-colors"
+                >
+                  Apply anyway
+                </button>
+                <button
+                  type="button"
+                  onClick={dismissInterceptFindBetter}
+                  className="rounded-full bg-amber-600 px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-amber-700 transition-colors"
+                >
+                  Show me better-paying roles →
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Left column (or full-width outside reviewing) */}
       <div className={showInlineResume ? "w-[420px] flex-shrink-0 overflow-y-auto max-h-[85vh] border-r border-slate-100" : ""}>

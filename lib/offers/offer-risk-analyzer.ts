@@ -1,5 +1,6 @@
 import { calculateLcaSalaryIntelligence } from "@/lib/jobs/lca-salary-intelligence"
 import { calculateVisaFitScore } from "@/lib/jobs/visa-fit-score"
+import { benchmarkSalary } from "./salary-benchmarker"
 import type {
   IntelligenceConfidence,
   IntelligenceRiskLevel,
@@ -9,6 +10,12 @@ import type {
   OfferRiskLabel,
   SponsorshipBlocker,
 } from "@/types"
+import type {
+  NegotiationAnalysis,
+  ComponentAnalysisItem,
+  OfferDetails as NegotiationOfferDetails,
+  NegotiationUserProfile,
+} from "./types"
 
 export const OFFER_RISK_DISCLAIMER =
   "This is job-search risk guidance, not legal advice. Verify immigration and employment decisions with the employer, your DSO, or an immigration attorney."
@@ -447,5 +454,196 @@ export function calculateOfferRisk(input: OfferRiskInput): OfferRiskAnalysis {
     roleFamilyEvidence: roleEvidence,
     locationEvidence: locationLca,
     disclaimer: OFFER_RISK_DISCLAIMER,
+  }
+}
+
+// ── Negotiation analysis ──────────────────────────────────────────────────────
+
+const VISA_STATUSES_NEEDING_SPONSORSHIP = new Set([
+  "F1_OPT", "F1_STEM_OPT", "H1B", "needs_future_sponsorship", "OPT", "STEM_OPT",
+])
+
+function isOnVisa(visaStatus: string | null | undefined): boolean {
+  return visaStatus ? VISA_STATUSES_NEEDING_SPONSORSHIP.has(visaStatus) : false
+}
+
+function formatCurrency(n: number | null | undefined): string {
+  if (!n) return "Not provided"
+  return `$${n.toLocaleString("en-US")}`
+}
+
+function computeNegotiationPotential(
+  offered: number | null | undefined,
+  p50: number,
+  p75: number
+): ComponentAnalysisItem["negotiationPotential"] {
+  if (!offered) return "medium"
+  if (offered < p50 * 0.9) return "high"
+  if (offered < p50) return "medium"
+  if (offered < p75) return "low"
+  return "none"
+}
+
+export async function analyzeOfferForNegotiation(
+  offerDetails: NegotiationOfferDetails,
+  companyId: string,
+  roleTitle: string,
+  userProfile: NegotiationUserProfile
+): Promise<NegotiationAnalysis> {
+  const baseSalary = offerDetails.base_salary ?? null
+  const yearsExp = userProfile.yearsExperience ?? 5
+  const location = userProfile.location ?? null
+  const visaStatus = userProfile.visaStatus
+
+  // Get salary benchmark
+  const benchmark = await benchmarkSalary(roleTitle, location, yearsExp, companyId, baseSalary)
+
+  // Component analysis
+  const componentAnalysis: ComponentAnalysisItem[] = []
+
+  // Base salary
+  componentAnalysis.push({
+    component: "base",
+    offeredValue: formatCurrency(baseSalary),
+    marketBenchmark: `P50: ${formatCurrency(benchmark.marketP50)} · P75: ${formatCurrency(benchmark.marketP75)}`,
+    isNegotiable: true,
+    negotiationPotential: computeNegotiationPotential(baseSalary, benchmark.marketP50, benchmark.marketP75),
+    talkingPoint:
+      baseSalary && baseSalary < benchmark.marketP50
+        ? `Based on market data, the P50 for ${roleTitle} in ${location ?? "this market"} is ${formatCurrency(benchmark.marketP50)}. I'd like to discuss aligning closer to market rate.`
+        : `The offer is competitive. Pushing toward P75 (${formatCurrency(benchmark.marketP75)}) is reasonable given my experience level.`,
+  })
+
+  // Signing bonus
+  const signingBonus = offerDetails.signing_bonus ?? null
+  componentAnalysis.push({
+    component: "signing",
+    offeredValue: signingBonus ? formatCurrency(signingBonus) : "Not offered",
+    marketBenchmark:
+      benchmark.marketP50 >= 200000
+        ? "Signing bonuses of $30K–$100K are common at this level"
+        : "Signing bonuses of $5K–$30K are common at this level",
+    isNegotiable: true,
+    negotiationPotential: signingBonus ? "low" : "high",
+    talkingPoint:
+      !signingBonus
+        ? "If base flexibility is limited, I'd appreciate discussing a signing bonus to bridge the gap."
+        : `The signing bonus of ${formatCurrency(signingBonus)} is helpful. I may request an increase if base salary is not adjustable.`,
+  })
+
+  // Annual bonus
+  const annualBonus = offerDetails.annual_bonus_target ?? null
+  componentAnalysis.push({
+    component: "bonus",
+    offeredValue: annualBonus ? `${annualBonus}% target` : "Not offered",
+    marketBenchmark: "10–20% annual target is typical for IC roles; 20–30% for management",
+    isNegotiable: annualBonus === null || annualBonus < 15,
+    negotiationPotential: !annualBonus ? "medium" : annualBonus < 15 ? "medium" : "low",
+    talkingPoint:
+      !annualBonus
+        ? "A performance bonus structure would help me feel aligned with company outcomes."
+        : `A ${annualBonus}% bonus target is included. If the base is non-negotiable, requesting a higher target percentage is reasonable.`,
+  })
+
+  // Equity
+  const equity = offerDetails.equity ?? null
+  componentAnalysis.push({
+    component: "equity",
+    offeredValue: equity ?? "Not offered",
+    marketBenchmark: "RSU grants of $50K–$500K over 4yr vest are standard at tech companies",
+    isNegotiable: true,
+    negotiationPotential: equity ? "medium" : "high",
+    talkingPoint:
+      !equity
+        ? "Equity participation is important to me. I'd like to understand what RSU or option grant is available."
+        : `Equity is offered (${equity}). Requesting a refresh schedule or accelerated vesting is reasonable.`,
+  })
+
+  // Overall negotiation strategy
+  const gapFromMedian = baseSalary && benchmark.marketP50 > 0
+    ? benchmark.marketP50 - baseSalary
+    : 0
+  const estimatedUpside = Math.max(gapFromMedian, 0) + (signingBonus ? 0 : Math.round(benchmark.marketP50 * 0.07))
+  const isBelowMarket = benchmark.isBelowMarket
+
+  const negotiationStrategy = {
+    recommendedApproach:
+      isBelowMarket
+        ? "This offer is below the market median. Lead with salary data from public LCA and compensation surveys. Ask for a specific number — be concrete."
+        : "This offer is at or above median. Focus on maximizing signing bonus and equity rather than base. Use competing-offer leverage if available.",
+    priorityComponents: isBelowMarket
+      ? ["base", "signing", "equity"]
+      : ["signing", "equity", "bonus"],
+    estimatedUpside,
+    riskLevel: (isBelowMarket ? "low" : "low") as "low" | "medium" | "high",
+  }
+
+  // Counter-offer script
+  const askSalary = Math.min(
+    benchmark.negotiableUpTo,
+    Math.round((benchmark.marketP75) / 5000) * 5000
+  )
+  const fallbackSalary = Math.round((benchmark.marketP50 * 1.05) / 1000) * 1000
+
+  const counterOfferScript = {
+    openingLine:
+      "Thank you so much for the offer — I'm genuinely excited about the role and the team. I wanted to have a quick conversation about the compensation package before signing.",
+    salaryAsk: askSalary,
+    justification: `Based on current market data for ${roleTitle} in ${location ?? "this market"}, including LCA prevailing wage data, the P75 range is around ${formatCurrency(benchmark.marketP75)}. Given my ${yearsExp} years of experience, I was hoping we could get to ${formatCurrency(askSalary)}.`,
+    fallbackPosition: fallbackSalary,
+    fullScript: [
+      `"Thank you again for the offer — I'm very excited about joining the team."`,
+      `"I've done some market research on compensation for ${roleTitle} roles, and based on LCA prevailing wage data and public benchmarks, the median range in ${location ?? "this market"} is around ${formatCurrency(benchmark.marketP50)}–${formatCurrency(benchmark.marketP75)}."`,
+      baseSalary && baseSalary < benchmark.marketP75
+        ? `"The current offer of ${formatCurrency(baseSalary)} is a bit below that range. I'd love to discuss getting to ${formatCurrency(askSalary)} — is there flexibility there?"`
+        : `"I was hoping we could discuss getting the total comp to ${formatCurrency(askSalary)} by adjusting the base or adding a signing bonus."`,
+      `"If base salary is firm, I'd be open to exploring a signing bonus or additional equity grant to bridge the difference."`,
+    ].join("\n\n"),
+  }
+
+  // Red flags
+  const redFlags: string[] = []
+  if (baseSalary && benchmark.lcaPrevailingWage && baseSalary < benchmark.lcaPrevailingWage * 0.95) {
+    redFlags.push(`Offered salary (${formatCurrency(baseSalary)}) is below the LCA prevailing wage (${formatCurrency(benchmark.lcaPrevailingWage)}). This may create issues if the company ever files an H-1B petition for this role.`)
+  }
+  if (!offerDetails.offer_deadline) {
+    redFlags.push("No offer deadline was provided — always ask for a written deadline to manage your timeline.")
+  }
+  if (!equity && benchmark.marketP50 > 150000) {
+    redFlags.push("No equity was mentioned. For senior roles at this salary level, RSU grants are standard — confirm whether equity is part of the package.")
+  }
+
+  // Immigration considerations
+  const immigrationConsiderations: string[] = []
+  if (isOnVisa(visaStatus)) {
+    immigrationConsiderations.push(
+      "Because you are on a visa, avoid making the offer contingent on sponsorship confirmation in writing — this is legally sensitive. Instead, confirm sponsorship support verbally first."
+    )
+    immigrationConsiderations.push(
+      "Do not use language like 'I will only accept if you guarantee my H-1B' — this can be misinterpreted as a conditional acceptance and may complicate the process."
+    )
+    if (benchmark.lcaPrevailingWage && baseSalary && baseSalary < benchmark.lcaPrevailingWage) {
+      immigrationConsiderations.push(
+        `The offered salary (${formatCurrency(baseSalary)}) is below the LCA prevailing wage (${formatCurrency(benchmark.lcaPrevailingWage)}). Employers must pay at least the LCA prevailing wage for sponsored roles — confirm with HR.`
+      )
+    }
+    immigrationConsiderations.push(
+      "Ask the employer to clarify whether the offer letter salary matches what they intend to file on the LCA petition. Discrepancies can delay or jeopardize sponsorship."
+    )
+  }
+
+  return {
+    overallScore: baseSalary
+      ? Math.round(
+          ((baseSalary - benchmark.marketP25) /
+            Math.max(benchmark.marketP75 - benchmark.marketP25, 1)) * 100
+        )
+      : 50,
+    salaryAnalysis: benchmark,
+    componentAnalysis,
+    negotiationStrategy,
+    counterOfferScript,
+    redFlags,
+    immigrationConsiderations,
   }
 }

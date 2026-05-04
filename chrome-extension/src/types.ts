@@ -241,6 +241,8 @@ export type BackgroundMessageType =
   | "OPERATOR_OPEN_TAB"
   | "FETCH_RESUME_FILE"
   | "INJECT_RESUME_FILE_IN_TAB"
+  | "SYNC_LINKEDIN_BRAND_PROFILE"
+  | "GET_STORED_LINKEDIN_URL"
 
 export interface ExtensionResumeSummary {
   id: string
@@ -455,6 +457,26 @@ export type BackgroundMessage =
   | OperatorOpenTabMessage
   | FetchResumeFileMessage
   | InjectResumeFileInTabMessage
+  | SyncLinkedInBrandProfileMessage
+  | GetStoredLinkedInUrlMessage
+
+export interface GetStoredLinkedInUrlMessage {
+  type: "GET_STORED_LINKEDIN_URL"
+}
+
+export interface SyncLinkedInBrandProfileMessage {
+  type: "SYNC_LINKEDIN_BRAND_PROFILE"
+  profile: {
+    linkedinUrl: string
+    headline: string | null
+    hasAboutSection: boolean
+    skillsCount: number
+    recommendationsCount: number
+    connectionsEstimate: number | null
+    lastPostDetectedAt: string | null
+    daysSinceLastActivity: number | null
+  }
+}
 
 export interface OperatorOpenTabMessage {
   type:           "OPERATOR_OPEN_TAB"
@@ -640,7 +662,12 @@ export type BackgroundResponse =
   | OperatorOpenTabAck
   | FetchResumeFileResult
   | InjectResumeFileInTabResult
+  | StoredLinkedInUrlResult
   | BackgroundError
+
+export interface StoredLinkedInUrlResult {
+  linkedinUrl: string | null
+}
 
 // ── Active browser context ────────────────────────────────────────────────────
 //

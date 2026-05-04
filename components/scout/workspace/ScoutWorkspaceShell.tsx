@@ -171,9 +171,14 @@ function buildNarrative(mode: WorkspaceMode, response: ScoutResponse): string {
       company:           "Scout surfaced company intelligence.",
       research:          "Scout is running your research task.",
       outreach:          "Scout prepared your outreach draft.",
-      interview:         "Scout generated your interview prep plan.",
-      career_strategy:   "Scout analysed your career profile and directions.",
-      idle:              "",
+      interview:          "Scout generated your interview prep plan.",
+      career_strategy:    "Scout analysed your career profile and directions.",
+      offer_negotiation:  "Scout benchmarked your offer and prepared negotiation guidance.",
+      salary_coaching:    "Scout analysed your salary targeting against market rates.",
+      burnout_checkin:    "Scout checked in on your search.",
+      post_hire_checkin:  "Scout opened your employer check-in.",
+      personal_brand:     "Scout analysed your brand visibility.",
+      idle:               "",
     }
     return labels[mode] ?? ""
   }
@@ -860,7 +865,18 @@ export function ScoutWorkspaceShell() {
       hasResume:       !!primaryResume,
       outcomeLearning,
     }
-    const missions      = generateDailyMissions(ctx)
+
+    // Reduce mission count for users with a slowed/stalled search pace
+    let missionLimit = 3
+    fetch("/api/scout/burnout")
+      .then((r) => r.ok ? r.json() : null)
+      .then((d: { state?: { state?: string; intervention_type?: string } } | null) => {
+        const pace = d?.state?.state
+        if (pace === "stalled" || pace === "burnt_out") missionLimit = 2
+      })
+      .catch(() => {})
+
+    const missions      = generateDailyMissions(ctx, missionLimit)
     const momentumLine  = buildMomentumLine(ctx)
     const store: ScoutMissionStore = {
       date:         "",   // store.ts fills this in

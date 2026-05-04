@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
-import { calculateOfferRisk } from "@/lib/offers/offer-risk-analyzer"
+import { calculateOfferRisk, analyzeOfferForNegotiation } from "@/lib/offers/offer-risk-analyzer"
+import { createClient } from "@/lib/supabase/server"
 import { getPostgresPool } from "@/lib/postgres/server"
 import type {
   Company,
@@ -119,27 +120,100 @@ async function enrichInput(input: OfferRiskInput): Promise<OfferRiskInput> {
 }
 
 export async function POST(request: NextRequest) {
-  let input: OfferRiskInput
+  const { searchParams } = new URL(request.url)
+  const includeNegotiation = searchParams.get("includeNegotiation") === "true"
+
+  let body: OfferRiskInput & {
+    offerDetails?: {
+      base_salary?: number
+      equity?: string
+      signing_bonus?: number
+      annual_bonus_target?: number
+      benefits_notes?: string
+      offer_deadline?: string
+    }
+    companyIdForNegotiation?: string
+  }
   try {
-    input = (await request.json()) as OfferRiskInput
+    body = await request.json()
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 })
   }
 
+  const input: OfferRiskInput = body
+
   try {
     const enriched = await enrichInput(input)
+    const analysis = calculateOfferRisk(enriched)
+
+    if (!includeNegotiation) {
+      return NextResponse.json({
+        analysis,
+        enrichedInput: {
+          companySnapshot: enriched.companySnapshot ?? null,
+          lcaRecordCount: enriched.lcaRecords?.length ?? 0,
+        },
+      })
+    }
+
+    // Negotiation analysis — requires offer details
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    const pool = getPostgresPool()
+    let userProfile: { visa_status: string | null; top_skills: string[] | null; desired_locations: string[] | null } | null = null
+    if (user) {
+      const profileResult = await pool.query<{
+        visa_status: string | null
+        top_skills: string[] | null
+        desired_locations: string[] | null
+      }>(
+        `SELECT visa_status, top_skills, desired_locations FROM profiles WHERE id = $1`,
+        [user.id]
+      )
+      userProfile = profileResult.rows[0] ?? null
+    }
+
+    const offerDetails = body.offerDetails ?? {
+      base_salary: input.salary ?? input.salaryMin ?? undefined,
+    }
+
+    const companyId = body.companyIdForNegotiation ??
+      enriched.companySnapshot?.companyName
+        ? (await pool.query<{ id: string }>(
+            `SELECT id FROM companies WHERE name ILIKE $1 LIMIT 1`,
+            [enriched.companySnapshot?.companyName ?? input.company]
+          )).rows[0]?.id
+        : undefined
+
+    const negotiationAnalysis = await analyzeOfferForNegotiation(
+      offerDetails,
+      companyId ?? "",
+      input.jobTitle,
+      {
+        visaStatus: userProfile?.visa_status,
+        needsSponsorship: AUTH_NEEDS_SUPPORT.has(input.workAuthorizationStatus),
+        location: input.location ?? userProfile?.desired_locations?.[0],
+        topSkills: userProfile?.top_skills ?? [],
+      }
+    )
+
     return NextResponse.json({
-      analysis: calculateOfferRisk(enriched),
+      analysis,
+      negotiationAnalysis,
       enrichedInput: {
         companySnapshot: enriched.companySnapshot ?? null,
         lcaRecordCount: enriched.lcaRecords?.length ?? 0,
       },
     })
   } catch (error) {
-    // If enrichment fails, still return the deterministic user-input analysis.
     return NextResponse.json({
       analysis: calculateOfferRisk(input),
       enrichmentWarning: error instanceof Error ? error.message : "Could not enrich offer risk analysis.",
     })
   }
 }
+
+const AUTH_NEEDS_SUPPORT = new Set([
+  "F1_OPT", "F1_STEM_OPT", "H1B", "needs_future_sponsorship", "unknown",
+])

@@ -296,10 +296,10 @@ export function RejectionIntelligence({ companyId, jobTitle, jobId }: Props) {
     <button
       type="button"
       onClick={() => setShowModal(true)}
-      className="mt-4 flex w-full items-center justify-center gap-2 rounded-full border border-[var(--color-border,#E2E8F0)] py-3 text-[13px] font-semibold text-[var(--color-text,#334155)] transition hover:border-slate-400 hover:bg-slate-50"
+      className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-slate-500 hover:text-slate-900 transition-colors"
     >
-      <MI name="add_circle_outline" className="text-[18px]" />
-      Report your outcome — help others see the full picture
+      <MI name="add_circle_outline" className="text-[15px]" />
+      Report your outcome
     </button>
   )
 

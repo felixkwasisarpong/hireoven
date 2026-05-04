@@ -89,6 +89,14 @@ export async function PATCH(
     if (body.status === "applied" && !current.applied_at) {
       updates.applied_at = new Date().toISOString()
     }
+
+    // Trigger post-hire flow when status reaches 'offer'
+    if (body.status === "offer" && current.status !== "offer") {
+      const { detectOfferAcceptance } = await import("@/lib/checkins/offer-detector")
+      detectOfferAcceptance(user.id, id).catch((err) =>
+        console.error("[applications/PATCH] offer detection failed:", err instanceof Error ? err.message : err)
+      )
+    }
   }
 
   const allowed = new Set([

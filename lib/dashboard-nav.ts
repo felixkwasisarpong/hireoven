@@ -11,7 +11,10 @@ import {
   Plane,
   Settings,
   ShieldAlert,
+  ShieldCheck,
   Sparkles,
+  TrendingUp,
+  Users,
   Wand2,
 } from "lucide-react"
 
@@ -38,6 +41,9 @@ export const DASHBOARD_NAV_ITEMS: DashboardNavItem[] = [
   { label: "Companies", href: "/dashboard/companies", icon: Building2 },
   { label: "International", href: "/dashboard/international", icon: Plane },
   { label: "Offer Risk", href: "/dashboard/international/offer-risk", icon: ShieldAlert },
+  { label: "Cohorts", href: "/dashboard/cohorts", icon: Users },
+  { label: "Brand", href: "/dashboard/brand", icon: TrendingUp },
+  { label: "Fair Chance", href: "/dashboard/background-check", icon: ShieldCheck },
   { label: "Settings", href: "/dashboard/billing", icon: Settings, footer: true },
   {
     label: "Help & support",

@@ -452,6 +452,30 @@ async function handleMessage(
     case "INJECT_RESUME_FILE_IN_TAB":
       return handleInjectResumeFileInTab(message.resumeId as string, sender)
 
+    case "GET_STORED_LINKEDIN_URL": {
+      // Fetch the user's stored LinkedIn URL from the brand profile.
+      // Used by content script to verify it's on the user's own profile before syncing.
+      const brandProfile = await apiRequest<{ profile?: { linkedin_url?: string | null } | null }>(
+        "GET", "/api/brand/profile"
+      )
+      return { linkedinUrl: brandProfile?.profile?.linkedin_url ?? null }
+    }
+
+    case "SYNC_LINKEDIN_BRAND_PROFILE": {
+      const p = (message as import("./types").SyncLinkedInBrandProfileMessage).profile
+      void apiRequest("PATCH", "/api/brand/profile", {
+        linkedin_url:             p.linkedinUrl,
+        headline:                 p.headline,
+        has_about_section:        p.hasAboutSection,
+        skills_count:             p.skillsCount || null,
+        recommendations_count:    p.recommendationsCount || null,
+        estimated_connections:    p.connectionsEstimate,
+        last_post_detected_at:    p.lastPostDetectedAt,
+        days_since_last_activity: p.daysSinceLastActivity,
+      })
+      return { type: "OPERATOR_OPEN_TAB_ACK" } as const
+    }
+
     case "OPERATOR_OPEN_TAB":
       void handleOperatorOpenTab(
         message.url as string,

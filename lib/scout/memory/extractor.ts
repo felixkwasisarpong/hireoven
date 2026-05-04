@@ -54,6 +54,9 @@ const ROLE_PREF_RE = /\b(?:i\s+prefer|prefer(?:ring)?\s+(?:to\s+work|roles?|posi
 // Salary — explicit numbers
 const SALARY_EXPLICIT_RE = /\b(?:target(?:ing)?\s+\$[\d,k]+|expect(?:ing)?\s+\$[\d,k]+|minimum\s+\$[\d,k]+|salary\s+(?:range|target|expectation)[^.]{0,60}\$[\d,k]+|\$[\d,k]+[\s\-–]+\$[\d,k]+\s*(?:per\s+year|\/yr|annually)?)\b/i
 
+// Salary floor — hard minimums explicitly stated
+const SALARY_FLOOR_RE = /\b(?:won'?t\s+go\s+below|my\s+(?:hard\s+)?minimum\s+(?:is|salary)|i\s+need\s+(?:at\s+least|minimum)|anything\s+under|not\s+worth\s+(?:it|my\s+time)\s+(?:under|below)|floor\s+(?:is|of))\s+\$?([\d,]+)k?\b/i
+
 // Work mode — explicit
 const REMOTE_EXPLICIT_RE = /\b(?:i\s+(?:want|need|prefer)\s+(?:fully\s+)?remote|remote[- ]only|must\s+be\s+remote|only\s+(?:want|looking\s+at)\s+remote)\b/i
 const HYBRID_EXPLICIT_RE = /\b(?:prefer\s+hybrid|open\s+to\s+hybrid|hybrid\s+(?:is\s+)?(?:ok|fine|preferred))\b/i
@@ -135,6 +138,22 @@ export function extractFromChatTurn(
   if (salaryMatch) {
     const raw = salaryMatch[0].trim()
     add(candidate("salary_preference", `Salary target: ${raw}`, 0.9, "explicit_user"))
+  }
+
+  // ── Salary floor (hard minimum) ───────────────────────────────────────────
+  const floorMatch = msg.match(SALARY_FLOOR_RE)
+  if (floorMatch) {
+    const rawNum = floorMatch[1].replace(/,/g, "")
+    const val = parseInt(rawNum, 10)
+    const floorAmount = val < 1000 ? val * 1000 : val
+    if (floorAmount > 20000 && floorAmount < 2000000) {
+      add(candidate(
+        "salary_preference",
+        `Salary floor: will not accept below $${floorAmount.toLocaleString("en-US")}`,
+        0.95,
+        "explicit_user"
+      ))
+    }
   }
 
   // ── Company preferences ───────────────────────────────────────────────────

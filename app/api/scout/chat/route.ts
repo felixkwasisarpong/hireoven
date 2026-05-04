@@ -1298,6 +1298,327 @@ export async function POST(request: NextRequest) {
       : fullContext
     // ── End application tracker enrichment ──────────────────────────────────────
 
+    // ── Offer negotiation enrichment ─────────────────────────────────────────────
+    const { isOfferNegotiationIntent } = await import("@/lib/scout/offer-negotiation-intent")
+    const isOfferNegotIntent = isOfferNegotiationIntent(userMessage)
+    let offerNegotiationContext = ""
+
+    if (isOfferNegotIntent) {
+      try {
+        // Fetch the most recent offer-stage application with offer details
+        const offerAppResult = await pool.query<{
+          id: string
+          company_name: string
+          job_title: string
+          offer_details: {
+            base_salary?: number
+            equity?: string
+            signing_bonus?: number
+            annual_bonus_target?: number
+            offer_deadline?: string
+          } | null
+        }>(
+          `SELECT id, company_name, job_title, offer_details
+           FROM job_applications
+           WHERE user_id = $1
+             AND status = 'offer'
+             AND offer_details IS NOT NULL
+             AND offer_details::text != '{}'
+           ORDER BY updated_at DESC
+           LIMIT 1`,
+          [user.id]
+        )
+
+        const offerApp = offerAppResult.rows[0]
+
+        if (offerApp?.offer_details?.base_salary) {
+          const { analyzeOfferForNegotiation } = await import("@/lib/offers/offer-risk-analyzer")
+          const userProfileResult = await pool.query<{
+            visa_status: string | null
+            top_skills: string[] | null
+            desired_locations: string[] | null
+          }>(
+            `SELECT visa_status, top_skills, desired_locations FROM profiles WHERE id = $1`,
+            [user.id]
+          )
+          const userProf = userProfileResult.rows[0]
+
+          // Find company_id for this application
+          const companyResult = await pool.query<{ id: string }>(
+            `SELECT id FROM companies WHERE name ILIKE $1 LIMIT 1`,
+            [`%${offerApp.company_name}%`]
+          )
+          const companyId = companyResult.rows[0]?.id ?? ""
+
+          const negotiationAnalysis = await analyzeOfferForNegotiation(
+            offerApp.offer_details,
+            companyId,
+            offerApp.job_title,
+            {
+              visaStatus: userProf?.visa_status,
+              location: userProf?.desired_locations?.[0],
+              topSkills: userProf?.top_skills ?? [],
+            }
+          )
+
+          const { getNegotiationTimeline } = await import("@/lib/offers/negotiation-coach")
+          const deadline = offerApp.offer_details.offer_deadline
+            ? new Date(offerApp.offer_details.offer_deadline)
+            : null
+          const timeline = getNegotiationTimeline(deadline, true)
+
+          const na = negotiationAnalysis
+          const sa = na.salaryAnalysis
+          offerNegotiationContext = [
+            `Offer Negotiation Context — LIVE DATA:`,
+            `Company: ${offerApp.company_name} | Role: ${offerApp.job_title}`,
+            `Offered base salary: ${sa.offered ? `$${sa.offered.toLocaleString()}` : "Not provided"}`,
+            `Market P50: $${sa.marketP50.toLocaleString()} | P75: $${sa.marketP75.toLocaleString()} | P90: $${sa.marketP90.toLocaleString()}`,
+            `Percentile position: ${sa.percentilePosition}`,
+            `Below market: ${sa.isBelowMarket ? "YES" : "No"}`,
+            sa.lcaPrevailingWage ? `LCA prevailing wage: $${sa.lcaPrevailingWage.toLocaleString()}` : "",
+            `Data source: ${sa.source}`,
+            `Recommended counter ask: $${na.counterOfferScript.salaryAsk.toLocaleString()}`,
+            `Fallback position: $${na.counterOfferScript.fallbackPosition.toLocaleString()}`,
+            `Recommended approach: ${na.negotiationStrategy.recommendedApproach}`,
+            na.redFlags.length > 0 ? `Red flags: ${na.redFlags.join(" | ")}` : "",
+            na.immigrationConsiderations.length > 0
+              ? `Immigration notes: ${na.immigrationConsiderations[0]}`
+              : "",
+            timeline.daysRemaining !== null
+              ? `Offer deadline: ${timeline.deadline} (${timeline.daysRemaining} days remaining — urgency: ${timeline.urgencyLevel})`
+              : "",
+            `Next step: ${timeline.steps[0]?.action ?? "Review offer details"}`,
+          ].filter(Boolean).join("\n")
+        } else {
+          offerNegotiationContext = [
+            `Offer Negotiation Context:`,
+            `No offer with salary details found in the user's saved applications.`,
+            `To benchmark this offer, ask the user for: base salary offered, role title, company, and location.`,
+          ].join("\n")
+        }
+      } catch {
+        // silent — never block the response
+      }
+    }
+
+    const afterOfferContext = offerNegotiationContext
+      ? `${enrichedContext}\n\n${offerNegotiationContext}`
+      : enrichedContext
+
+    // ── Salary coaching enrichment ────────────────────────────────────────────────
+    const { isSalaryCoachingIntent } = await import("@/lib/scout/salary-coaching-intent")
+    const isSalaryCoachIntent = isSalaryCoachingIntent(userMessage)
+    let salaryCoachingContext = ""
+
+    if (isSalaryCoachIntent) {
+      try {
+        const { detectSalaryFloor } = await import("@/lib/scout/salary/floor-detector")
+        const floorProfile = await detectSalaryFloor(user.id)
+
+        if (floorProfile.detectedFloor > 0) {
+          const lines = [
+            `Salary Floor Analysis — LIVE DATA:`,
+            `Role context: ${floorProfile.roleContext} | Location: ${floorProfile.locationContext}`,
+            `Detected floor (median salary targeted): $${floorProfile.detectedFloor.toLocaleString()}`,
+            `Market P50 for this role/location: $${floorProfile.marketFloor.toLocaleString()}`,
+            `Gap: $${floorProfile.gap.toLocaleString()} (${floorProfile.gapPercent}%)`,
+            `Underselling: ${floorProfile.isUnderselling ? "YES" : "No"}`,
+            `Confidence: ${floorProfile.confidence} (based on ${floorProfile.applicationsBelowFloor + floorProfile.applicationsAboveFloor} applications with salary data)`,
+            `Applications below market rate: ${floorProfile.applicationsBelowFloor}`,
+            `Applications at or above market rate: ${floorProfile.applicationsAboveFloor}`,
+            floorProfile.avgOfferedSalary ? `Avg offered salary: $${floorProfile.avgOfferedSalary.toLocaleString()}` : "",
+            `Summary: ${floorProfile.evidenceSummary}`,
+          ].filter(Boolean).join("\n")
+          salaryCoachingContext = lines
+
+          // If the user asked what to say about salary, also generate expectation script
+          if (/what\s+(?:should\s+i\s+say|do\s+i\s+say|to\s+say)\s+(?:when|if|about)/i.test(userMessage)) {
+            try {
+              const userProfileResult = await pool.query<{ visa_status: string | null; desired_locations: string[] | null }>(
+                `SELECT visa_status, desired_locations FROM profiles WHERE id = $1`,
+                [user.id]
+              )
+              const up = userProfileResult.rows[0]
+              const { generateSalaryExpectationScript } = await import("@/lib/scout/salary/expectation-coach")
+              const script = await generateSalaryExpectationScript(
+                user.id,
+                floorProfile.roleContext,
+                up?.desired_locations?.[0] ?? floorProfile.locationContext,
+                up?.visa_status ?? "unknown"
+              )
+              salaryCoachingContext += `\n\nSalary Expectation Script:\n` +
+                `Screening answer: ${script.screeningAnswer}\n` +
+                `Email answer: ${script.emailAnswer}\n` +
+                `Do not say: ${script.doNotSay.slice(0, 3).join(" | ")}\n` +
+                `Negotiation room: ${script.negotiationRoom}`
+            } catch {
+              // Non-blocking
+            }
+          }
+        } else {
+          salaryCoachingContext = `Salary Floor Analysis: Not enough application data to compute a salary floor. Ask the user for their role title and location to give market benchmarks.`
+        }
+      } catch {
+        // Silent — never block the response
+      }
+    }
+
+    const afterSalaryContext = salaryCoachingContext
+      ? `${afterOfferContext}\n\n${salaryCoachingContext}`
+      : afterOfferContext
+
+    // ── Burnout / pace check-in enrichment ────────────────────────────────────────
+    const { isBurnoutCheckinIntent } = await import("@/lib/scout/burnout-checkin-intent")
+    const isBurnoutIntent = isBurnoutCheckinIntent(userMessage)
+
+    // Also check: returning user (7+ days absent) — detect from application activity
+    let daysSinceLastActivity = 0
+    try {
+      const actResult = await pool.query<{ last_at: string | null }>(
+        `SELECT MAX(COALESCE(applied_at, updated_at))::text AS last_at
+         FROM job_applications WHERE user_id = $1`,
+        [user.id]
+      )
+      daysSinceLastActivity = actResult.rows[0]?.last_at
+        ? Math.floor((Date.now() - new Date(actResult.rows[0].last_at).getTime()) / 86_400_000)
+        : 0
+    } catch { /* silent */ }
+
+    const isReturningUser = daysSinceLastActivity >= 7
+
+    let burnoutContext = ""
+
+    if (isBurnoutIntent || isReturningUser) {
+      try {
+        if (isReturningUser && !isBurnoutIntent) {
+          // Return experience — no classification needed
+          const { buildReturnExperience } = await import("@/lib/scout/burnout/return-experience")
+          const returnExp = await buildReturnExperience(user.id, daysSinceLastActivity)
+
+          burnoutContext = [
+            `Search Return Context — user returning after a break:`,
+            `Welcome message: ${returnExp.welcomeMessage}`,
+            `New matches since last visit: ${returnExp.newMatchesSinceLastVisit.length}`,
+            returnExp.newMatchesSinceLastVisit.length > 0
+              ? `Top new match: ${returnExp.newMatchesSinceLastVisit[0]?.jobTitle} at ${returnExp.newMatchesSinceLastVisit[0]?.companyName}`
+              : "",
+            returnExp.cohortUpdatesSinceLastVisit ? `Cohort update: ${returnExp.cohortUpdatesSinceLastVisit}` : "",
+            returnExp.applicationStatusUpdates.length > 0
+              ? `Application updates: ${returnExp.applicationStatusUpdates.map((u) => `${u.companyName} → ${u.newStatus}`).join(", ")}`
+              : "",
+            `Suggested first action: ${returnExp.suggestedFirstAction}`,
+          ].filter(Boolean).join("\n")
+        } else {
+          // Active check-in or explicit distress signal — classify and intervene
+          const { classifyBurnoutState } = await import("@/lib/scout/burnout/classifier")
+          const { executeIntervention } = await import("@/lib/scout/burnout/interventions")
+
+          const burnoutState = await classifyBurnoutState(user.id)
+          const intervention = burnoutState.interventionType !== "none"
+            ? await executeIntervention(user.id, burnoutState)
+            : null
+
+          burnoutContext = [
+            `Search Pace Context:`,
+            `Current state: ${burnoutState.state} (confidence: ${burnoutState.confidence})`,
+            `Days since last application: ${burnoutState.daysSinceLastApplication}`,
+            `Velocity trend: ${burnoutState.applicationVelocityTrend}`,
+            `Session quality: ${burnoutState.sessionQualityTrend}`,
+            intervention
+              ? `Recommended message: ${intervention.message}`
+              : `Recommendation: ${burnoutState.recommendation}`,
+            intervention?.subtext ? `Context: ${intervention.subtext}` : "",
+            intervention ? `Suggested action: ${intervention.ctaQuery}` : "",
+            intervention?.suppressBulkApply ? `Note: Do not suggest bulk applying right now.` : "",
+            burnoutState.interventionType === "rest_suggestion"
+              ? `IMPORTANT: This is a rest suggestion — do NOT push jobs or set tasks. Acknowledge and offer to help when they are ready.`
+              : "",
+          ].filter(Boolean).join("\n")
+        }
+      } catch {
+        // Silent — never block the response
+      }
+    }
+
+    const afterBurnoutContext = burnoutContext
+      ? `${afterSalaryContext}\n\n${burnoutContext}`
+      : afterSalaryContext
+
+    // ── Post-hire check-in enrichment ─────────────────────────────────────────────
+    let postHireCheckinContext = ""
+    try {
+      const { getPendingCheckinForUser, buildCheckinOpeningMessage } = await import("@/lib/checkins/delivery-engine")
+      const { getCheckinSet } = await import("@/lib/checkins/question-sets")
+
+      const pendingCheckin = await getPendingCheckinForUser(user.id)
+      if (pendingCheckin) {
+        const set = getCheckinSet(pendingCheckin.checkin_type)
+        const firstQuestion = set?.questions[0]
+
+        postHireCheckinContext = [
+          `Post-Hire Check-in Context — pending for this user:`,
+          `Check-in ID: ${pendingCheckin.id}`,
+          `Type: ${pendingCheckin.checkin_type}`,
+          `Company: ${pendingCheckin.company_name ?? "their employer"}`,
+          `Role: ${pendingCheckin.role_title ?? "their role"}`,
+          `Opening message: ${buildCheckinOpeningMessage(pendingCheckin)}`,
+          firstQuestion ? `First question to ask: ${firstQuestion.prompt}` : "",
+          `Total questions: ${set?.questions.length ?? 0}`,
+          `INSTRUCTION: Surface this check-in as the opening message if the user has not explicitly asked about something else. Ask one question at a time. The user can say "skip" or "not now" to dismiss.`,
+          `SAVE ENDPOINT: POST /api/scout/checkin with { checkinId, action: "complete", responses: {...} }`,
+          `SKIP ENDPOINT: POST /api/scout/checkin with { checkinId, action: "skip" }`,
+        ].filter(Boolean).join("\n")
+      }
+    } catch {
+      // Silent — never block the response
+    }
+
+    const afterCheckinContext = postHireCheckinContext
+      ? `${afterBurnoutContext}\n\n${postHireCheckinContext}`
+      : afterBurnoutContext
+
+    // ── Personal brand enrichment ──────────────────────────────────────────────────
+    const isBrandIntent = /\b(personal\s+brand|linkedin\s+(?:profile|post|content|visibility|headline|about)|content\s+idea|improve\s+my\s+(?:brand|visibility|profile|linkedin)|build\s+(?:my\s+brand|presence)|visibility\s+score|brand\s+(?:score|audit))\b/i.test(userMessage)
+
+    let brandContext = ""
+    if (isBrandIntent) {
+      try {
+        const { computeVisibilityScore } = await import("@/lib/brand/visibility-scorer")
+        const visScore = await computeVisibilityScore(user.id)
+
+        // Pull top audit items
+        const brandAuditResult = await pool.query<{ title: string; severity: string; fix_action: string }>(
+          `SELECT title, severity, fix_action FROM public.brand_audit_items
+           WHERE user_id = $1 AND resolved = false
+           ORDER BY CASE severity WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END
+           LIMIT 3`,
+          [user.id]
+        )
+
+        brandContext = [
+          `Brand Visibility Context:`,
+          `Score: ${visScore.score}/100 — ${visScore.verdict}`,
+          `Activity: ${visScore.breakdown.activity.score}/30 — ${visScore.breakdown.activity.note}`,
+          `Profile completeness: ${visScore.breakdown.profileCompleteness.score}/25 — ${visScore.breakdown.profileCompleteness.note}`,
+          `Social proof: ${visScore.breakdown.socialProof.score}/25 — ${visScore.breakdown.socialProof.note}`,
+          `Community presence: ${visScore.breakdown.communityPresence.score}/20 — ${visScore.breakdown.communityPresence.note}`,
+          visScore.isEstimated ? `Note: Score is estimated — no LinkedIn data connected.` : "",
+          brandAuditResult.rows.length > 0
+            ? `Top fix items: ${brandAuditResult.rows.map((r) => `[${r.severity}] ${r.title} → ${r.fix_action}`).join(" | ")}`
+            : "",
+          `Direct the user to /dashboard/brand for the full brand hub with content ideas and drafts.`,
+        ].filter(Boolean).join("\n")
+      } catch {
+        // Silent — never block the response
+      }
+    }
+
+    const finalContext = brandContext
+      ? `${afterCheckinContext}\n\n${brandContext}`
+      : afterCheckinContext
+    // ── End personal brand enrichment ─────────────────────────────────────────────
+
     if (isInterviewPrepIntent && !context.job) {
       return NextResponse.json({
         answer:
@@ -1369,7 +1690,7 @@ Current Feed State (IMPORTANT — do not suggest actions that are already active
 ${feedStateLines.join("\n")}
 ${searchProfileSection}
 Scout Context:
-${enrichedContext}
+${finalContext}
 
 ---
 

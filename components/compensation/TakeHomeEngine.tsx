@@ -372,14 +372,14 @@ export function TakeHomeEngine({
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label="Base salary">
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-[var(--color-text-muted,#94A3B8)]">$</span>
+            <div className="flex items-center rounded-lg border border-[var(--color-border,#E2E8F0)] bg-white focus-within:border-emerald-400 focus-within:ring-2 focus-within:ring-emerald-400/20">
+              <span className="pl-3 text-sm text-[var(--color-text-muted,#94A3B8)] select-none">$</span>
               <input
                 type="number"
                 placeholder="120000"
                 value={salary}
                 onChange={(e) => setSalary(e.target.value)}
-                className={cn(inputCls, "pl-7")}
+                className="min-w-0 flex-1 bg-transparent py-2 pl-1.5 pr-3 text-sm text-[var(--color-text-strong,#0F172A)] placeholder-[var(--color-text-muted,#94A3B8)] focus:outline-none"
               />
             </div>
           </Field>
@@ -410,14 +410,14 @@ export function TakeHomeEngine({
           </Field>
 
           <Field label="Monthly 401(k)">
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-[var(--color-text-muted,#94A3B8)]">$</span>
+            <div className={cn("flex items-center rounded-lg border border-[var(--color-border,#E2E8F0)] bg-white focus-within:border-emerald-400 focus-within:ring-2 focus-within:ring-emerald-400/20", !activeToggles.has("retirement") && "opacity-50")}>
+              <span className="pl-3 text-sm text-[var(--color-text-muted,#94A3B8)] select-none">$</span>
               <input
                 type="number"
                 placeholder="0"
                 value={retirement}
                 onChange={(e) => { setRetirement(e.target.value); if (!activeToggles.has("retirement") && e.target.value) toggle("retirement") }}
-                className={cn(inputCls, "pl-7")}
+                className="min-w-0 flex-1 bg-transparent py-2 pl-1.5 pr-3 text-sm text-[var(--color-text-strong,#0F172A)] placeholder-[var(--color-text-muted,#94A3B8)] focus:outline-none"
                 disabled={!activeToggles.has("retirement")}
               />
             </div>
@@ -447,25 +447,25 @@ export function TakeHomeEngine({
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {activeToggles.has("healthcare") && (
               <Field label="Healthcare premium / mo">
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">$</span>
-                  <input type="number" placeholder="250" value={healthcare} onChange={(e) => setHealthcare(e.target.value)} className={cn(inputCls, "pl-7")} />
+                <div className="flex items-center rounded-lg border border-[var(--color-border,#E2E8F0)] bg-white focus-within:border-emerald-400 focus-within:ring-2 focus-within:ring-emerald-400/20">
+                  <span className="pl-3 text-sm text-slate-400 select-none">$</span>
+                  <input type="number" placeholder="250" value={healthcare} onChange={(e) => setHealthcare(e.target.value)} className="min-w-0 flex-1 bg-transparent py-2 pl-1.5 pr-3 text-sm text-[var(--color-text-strong,#0F172A)] placeholder-[var(--color-text-muted,#94A3B8)] focus:outline-none" />
                 </div>
               </Field>
             )}
             {activeToggles.has("studentloan") && (
               <Field label="Student loan / mo">
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">$</span>
-                  <input type="number" placeholder="400" value={studentLoan} onChange={(e) => setStudentLoan(e.target.value)} className={cn(inputCls, "pl-7")} />
+                <div className="flex items-center rounded-lg border border-[var(--color-border,#E2E8F0)] bg-white focus-within:border-emerald-400 focus-within:ring-2 focus-within:ring-emerald-400/20">
+                  <span className="pl-3 text-sm text-slate-400 select-none">$</span>
+                  <input type="number" placeholder="400" value={studentLoan} onChange={(e) => setStudentLoan(e.target.value)} className="min-w-0 flex-1 bg-transparent py-2 pl-1.5 pr-3 text-sm text-[var(--color-text-strong,#0F172A)] placeholder-[var(--color-text-muted,#94A3B8)] focus:outline-none" />
                 </div>
               </Field>
             )}
             {activeToggles.has("commute") && (
               <Field label="Commute cost / mo">
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">$</span>
-                  <input type="number" placeholder="150" value={commute} onChange={(e) => setCommute(e.target.value)} className={cn(inputCls, "pl-7")} />
+                <div className="flex items-center rounded-lg border border-[var(--color-border,#E2E8F0)] bg-white focus-within:border-emerald-400 focus-within:ring-2 focus-within:ring-emerald-400/20">
+                  <span className="pl-3 text-sm text-slate-400 select-none">$</span>
+                  <input type="number" placeholder="150" value={commute} onChange={(e) => setCommute(e.target.value)} className="min-w-0 flex-1 bg-transparent py-2 pl-1.5 pr-3 text-sm text-[var(--color-text-strong,#0F172A)] placeholder-[var(--color-text-muted,#94A3B8)] focus:outline-none" />
                 </div>
               </Field>
             )}
@@ -483,9 +483,9 @@ export function TakeHomeEngine({
             <Field label="Job title"><input type="text" placeholder="Senior Engineer" value={newOffer.jobTitle} onChange={(e) => setNewOffer((p) => ({ ...p, jobTitle: e.target.value }))} className={inputCls} /></Field>
             <Field label="Company"><input type="text" placeholder="Acme Corp" value={newOffer.company} onChange={(e) => setNewOffer((p) => ({ ...p, company: e.target.value }))} className={inputCls} /></Field>
             <Field label="Annual salary">
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">$</span>
-                <input type="number" placeholder="130000" value={newOffer.annualSalary} onChange={(e) => setNewOffer((p) => ({ ...p, annualSalary: e.target.value }))} className={cn(inputCls, "pl-7")} />
+              <div className="flex items-center rounded-lg border border-[var(--color-border,#E2E8F0)] bg-white focus-within:border-emerald-400 focus-within:ring-2 focus-within:ring-emerald-400/20">
+                <span className="pl-3 text-sm text-slate-400 select-none">$</span>
+                <input type="number" placeholder="130000" value={newOffer.annualSalary} onChange={(e) => setNewOffer((p) => ({ ...p, annualSalary: e.target.value }))} className="min-w-0 flex-1 bg-transparent py-2 pl-1.5 pr-3 text-sm text-[var(--color-text-strong,#0F172A)] placeholder-[var(--color-text-muted,#94A3B8)] focus:outline-none" />
               </div>
             </Field>
             <Field label="Location"><input type="text" placeholder="Austin, TX" value={newOffer.location} onChange={(e) => setNewOffer((p) => ({ ...p, location: e.target.value }))} className={inputCls} /></Field>
