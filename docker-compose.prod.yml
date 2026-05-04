@@ -70,6 +70,7 @@ services:
     environment:
       NODE_ENV: production
       DATABASE_URL: postgres://${POSTGRES_USER:-hireoven}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-hireoven}
+      PGSSLMODE: disable
       MINIO_ENDPOINT: http://minio:9000
       MINIO_BUCKET: ${MINIO_BUCKET:-hireoven-resumes}
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
