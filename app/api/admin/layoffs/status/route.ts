@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { getPostgresPool } from "@/lib/postgres/server"
 
 export const runtime = "nodejs"
+export const dynamic = "force-dynamic"
 
 export async function GET() {
   const pool = getPostgresPool()
