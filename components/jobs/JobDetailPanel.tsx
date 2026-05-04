@@ -7,16 +7,12 @@ import RecruiterMessageDrawer from "@/components/jobs/RecruiterMessageDrawer"
 import {
   AlertTriangle,
   ArrowRight,
-  Banknote,
   Bookmark,
   BookmarkCheck,
-  Briefcase,
-  Building2,
   Check,
   CheckCircle2,
   ChevronRight,
   ExternalLink,
-  Ghost,
   Loader2,
   MessageSquare,
   Plane,
@@ -600,7 +596,7 @@ export default function JobDetailPanel({
         <div className="px-5 py-4 border-t border-slate-100">
           <GhostJobDetector
             jobId={job.id}
-            onApply={() => window.open(applyUrl, "_blank", "noopener,noreferrer")}
+            onSkip={() => window.open(applyUrl, "_blank", "noopener,noreferrer")}
           />
         </div>
 

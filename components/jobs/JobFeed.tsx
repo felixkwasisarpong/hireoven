@@ -19,7 +19,7 @@ import type { JobFilters } from "@/types"
 interface JobFeedProps {
   filters: JobFilters
   searchQuery: string
-  onMetaChange?: (meta: { totalCount: number; lastHourCount: number }) => void
+  onMetaChange?: (meta: { totalCount: number }) => void
   hasPrimaryResume?: boolean
   /** Force a specific view — hides the view toggle when set */
   defaultView?: JobFeedView
@@ -120,17 +120,12 @@ export default function JobFeed({
   }
   const signalFingerprintRef = useRef("")
 
-  const lastMetaRef = useRef({ totalCount: -1, lastHourCount: -1 })
+  const lastTotalRef = useRef(-1)
   useEffect(() => {
-    if (
-      lastMetaRef.current.totalCount === totalCount &&
-      lastMetaRef.current.lastHourCount === lastHourCount
-    ) {
-      return
-    }
-    lastMetaRef.current = { totalCount, lastHourCount }
-    onMetaChange?.({ totalCount, lastHourCount })
-  }, [lastHourCount, onMetaChange, totalCount])
+    if (lastTotalRef.current === totalCount) return
+    lastTotalRef.current = totalCount
+    onMetaChange?.({ totalCount })
+  }, [onMetaChange, totalCount])
 
   useEffect(() => {
     if (!sentinelRef.current || !hasMore) return

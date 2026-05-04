@@ -68,7 +68,7 @@ export default function DashboardHomeClient({
   }, [searchParams, primaryResumeReady, focusMode])
   const searchQuery = useMemo(() => getSearchQuery(searchParams), [searchParams])
 
-  const [feedMeta, setFeedMeta] = useState({ totalCount: 0, lastHourCount: 0 })
+  const [feedMeta, setFeedMeta] = useState({ totalCount: 0 })
 
   // Notify Scout components (e.g. confirmation banner) whenever the feed count
   // updates — no new AI call required, purely client-side piggyback
