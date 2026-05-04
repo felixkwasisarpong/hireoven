@@ -1,7 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk"
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
-import { logApiUsage } from "@/lib/admin/usage"
 import { getUserPlan } from "@/lib/gates/server-gate"
 import { canAccess } from "@/lib/gates"
 import { getScoutContext } from "@/lib/scout/context"
@@ -11,7 +10,9 @@ import {
   formatMockInterviewContext,
   parseMockInterviewResponse,
 } from "@/lib/scout/mock-interview-prompt"
-import { ANTHROPIC_TIER_PRICING, SONNET_MODEL } from "@/lib/ai/anthropic-models"
+import { SONNET_MODEL } from "@/lib/ai/anthropic-models"
+import { withAICall } from "@/lib/scout/budget/ai-call"
+import { AI_TIMEOUTS } from "@/lib/scout/budget/router"
 import type { ScoutMockInterviewTurn } from "@/lib/scout/types"
 
 export const runtime = "nodejs"
@@ -23,7 +24,6 @@ const anthropic = process.env.ANTHROPIC_API_KEY
 
 // Mock interviews require coherent coaching feedback and stable multi-turn behavior.
 const MODEL = SONNET_MODEL
-const MODEL_PRICING = ANTHROPIC_TIER_PRICING.sonnet
 
 function scoutError(status: number, message: string) {
   return NextResponse.json({ ok: false, status, message, error: message }, { status })
@@ -99,41 +99,22 @@ export async function POST(request: NextRequest) {
 
   // ── Call Claude ───────────────────────────────────────────────────────────
   try {
-    const message = await anthropic.messages.create({
-      model: MODEL,
-      max_tokens: 1200,
-      system: MOCK_INTERVIEW_SYSTEM_PROMPT,
-      messages: [{ role: "user", content: userMessage }],
+    const { value: parsed, timedOut } = await withAICall({
+      anthropic,
+      feature:   "scout_mock_interview",
+      timeoutMs: AI_TIMEOUTS.scout_mock_interview,
+      params: {
+        model:      MODEL,
+        max_tokens: 1200,
+        system:     MOCK_INTERVIEW_SYSTEM_PROMPT,
+        messages:   [{ role: "user", content: userMessage }],
+      },
+      parse:    (text) => parseMockInterviewResponse(text),
+      fallback: () => null,
+      userId:   user.id,
     })
 
-    const inputTokens = message.usage?.input_tokens ?? 0
-    const outputTokens = message.usage?.output_tokens ?? 0
-    const costUsd =
-      (inputTokens / 1_000_000) * MODEL_PRICING.inputPerMillion +
-      (outputTokens / 1_000_000) * MODEL_PRICING.outputPerMillion
-
-    await logApiUsage({
-      service: "claude",
-      operation: "scout_mock_interview",
-      tokens_used: inputTokens + outputTokens,
-      cost_usd: Number(costUsd.toFixed(6)),
-    })
-
-    const responseText = message.content
-      .filter((b) => b.type === "text")
-      .map((b) => b.text)
-      .join("\n")
-      .trim()
-
-    const parsed = parseMockInterviewResponse(responseText)
-
-    if (!parsed) {
-      console.error(
-        "[mock-interview] parseMockInterviewResponse returned null.",
-        `stop_reason=${message.stop_reason}`,
-        "\nRaw:\n",
-        responseText.slice(0, 1000)
-      )
+    if (timedOut || !parsed) {
       return scoutError(500, "Scout couldn't generate an interview question right now. Please try again.")
     }
 

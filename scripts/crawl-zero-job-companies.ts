@@ -10,6 +10,11 @@
 import { loadEnvConfig } from "@next/env"
 import { Pool } from "pg"
 import { crawlCareersPage } from "@/lib/crawler"
+import {
+  applyCrawlQueuePolicy,
+  defaultCrawlPolicyOptions,
+  loadRecentCrawlSignals,
+} from "@/lib/crawler/scheduling"
 import { persistCrawlJobs } from "@/lib/crawler/persist"
 
 loadEnvConfig(process.cwd())
@@ -39,9 +44,10 @@ async function main() {
 
   const result = await pool.query<{
     id: string; name: string; careers_url: string
-    ats_type: string | null; last_crawled_at: string | null
+    ats_type: string | null; ats_identifier: string | null
+    last_crawled_at: string | null; job_count: number | null
   }>(
-    `SELECT id, name, careers_url, ats_type, last_crawled_at
+    `SELECT id, name, careers_url, ats_type, ats_identifier, last_crawled_at, job_count
      FROM companies
      WHERE is_active = true
        AND job_count = 0
@@ -49,15 +55,32 @@ async function main() {
        AND careers_url != ''
        AND careers_url NOT ILIKE '%linkedin.com%'
        AND careers_url NOT ILIKE '%indeed.com%'
-       AND careers_url NOT ILIKE '%ziprecruiter.com%'
-       AND (ats_type IS NULL OR ats_type IN ('custom', 'workday', 'greenhouse', 'lever', 'ashby', 'bamboohr'))
+      AND careers_url NOT ILIKE '%ziprecruiter.com%'
+      AND (ats_type IS NULL OR ats_type IN ('custom', 'workday', 'greenhouse', 'lever', 'ashby', 'bamboohr'))
      ORDER BY last_crawled_at ASC NULLS FIRST
      LIMIT $1`,
     [limit]
   )
 
-  const targets = result.rows.filter((co) => !isSkippableUrl(co.careers_url))
+  const signalMap = await loadRecentCrawlSignals(
+    pool,
+    result.rows.map((co) => co.id),
+    6
+  )
+  const policy = applyCrawlQueuePolicy(
+    result.rows,
+    signalMap,
+    defaultCrawlPolicyOptions({
+      includeBlocked: false,
+      includeDomainBroken: false,
+      includeLikelyInactive: true,
+    })
+  )
+  const targets = policy.selected.filter((co) => !isSkippableUrl(co.careers_url))
   console.log(`\nTargets: ${targets.length} companies\n`)
+  console.log(
+    `Lane selection: ${JSON.stringify(policy.selectedLaneCounts)} | skipped=${policy.skipped.length}`
+  )
 
   let successCount = 0; let zeroCount = 0; let errorCount = 0
 
@@ -77,6 +100,7 @@ async function main() {
         careersUrl: co.careers_url,
         lastCrawledAt: co.last_crawled_at ? new Date(co.last_crawled_at) : null,
         atsType: co.ats_type,
+        atsIdentifier: co.ats_identifier,
       })
 
       const persisted = await persistCrawlJobs({

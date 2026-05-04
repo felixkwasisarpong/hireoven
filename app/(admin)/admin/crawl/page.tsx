@@ -15,6 +15,10 @@ import { useToast } from "@/components/ui/ToastProvider"
 import { formatDateTime, formatNumber, formatRelativeTime } from "@/lib/admin/format"
 import type { Company, CrawlLog, SystemSetting } from "@/types"
 
+function isFailureLikeStatus(status: string) {
+  return status === "failed" || status === "blocked" || status === "bad_url" || status === "fetch_error"
+}
+
 export default function AdminCrawlMonitorPage() {
   const { pushToast } = useToast()
   const [companies, setCompanies] = useState<Company[]>([])
@@ -82,7 +86,7 @@ export default function AdminCrawlMonitorPage() {
 
   const failedLast24Hours = filteredLogs.filter(
     (log) =>
-      log.status === "failed" &&
+      isFailureLikeStatus(log.status) &&
       Date.now() - new Date(log.crawled_at).getTime() <= 86_400_000
   )
 
@@ -91,7 +95,7 @@ export default function AdminCrawlMonitorPage() {
   )
   const successRate = totalToday.length
     ? Math.round(
-        (totalToday.filter((log) => log.status !== "failed").length / totalToday.length) * 100
+        (totalToday.filter((log) => !isFailureLikeStatus(log.status)).length / totalToday.length) * 100
       )
     : 0
   const avgDuration = totalToday.length
@@ -117,7 +121,7 @@ export default function AdminCrawlMonitorPage() {
         duration: 0,
       }
       current.total += 1
-      if (log.status !== "failed") current.success += 1
+      if (!isFailureLikeStatus(log.status)) current.success += 1
       current.jobsFound += log.jobs_found
       current.duration += log.duration_ms ?? 0
       grouped.set(ats, current)
@@ -342,6 +346,9 @@ export default function AdminCrawlMonitorPage() {
               <option value="success">Success</option>
               <option value="unchanged">Unchanged</option>
               <option value="failed">Failed</option>
+              <option value="blocked">Blocked</option>
+              <option value="fetch_error">Fetch error</option>
+              <option value="bad_url">Bad URL</option>
             </AdminSelect>
             <AdminSelect
               value={companyFilter}
@@ -385,6 +392,10 @@ export default function AdminCrawlMonitorPage() {
                             tone={
                               log.status === "failed"
                                 ? "danger"
+                                : log.status === "blocked" || log.status === "fetch_error"
+                                  ? "danger"
+                                  : log.status === "bad_url"
+                                    ? "warning"
                                 : log.status === "success"
                                   ? "success"
                                   : "neutral"

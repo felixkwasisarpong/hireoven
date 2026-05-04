@@ -48,7 +48,7 @@ const TONES: Array<{
 
 export default function ToneSelector({ value, onChange, companyName = "the company", jobTitle = "this role" }: Props) {
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+    <div className="grid grid-cols-2 gap-2">
       {TONES.map((tone) => {
         const selected = value === tone.value
         return (
@@ -56,25 +56,26 @@ export default function ToneSelector({ value, onChange, companyName = "the compa
             key={tone.value}
             type="button"
             onClick={() => onChange(tone.value)}
+            title={tone.example(companyName, jobTitle)}
             className={cn(
-              "rounded-2xl border p-4 text-left transition",
+              "rounded-xl border p-3 text-left transition",
               selected
                 ? "border-[#0369A1] bg-[#F0F9FF] ring-1 ring-[#0369A1]"
                 : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50"
             )}
           >
-            <div className="flex items-center justify-between">
+            <div className="flex items-start justify-between gap-2">
               <span
                 className={cn(
-                  "text-sm font-semibold",
+                  "text-[13px] font-semibold leading-tight",
                   selected ? "text-[#0369A1]" : "text-gray-900"
                 )}
               >
                 {tone.label}
               </span>
               {selected && (
-                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#0369A1]">
-                  <svg className="h-3 w-3 text-white" fill="none" viewBox="0 0 12 12">
+                <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[#0369A1]">
+                  <svg className="h-2.5 w-2.5 text-white" fill="none" viewBox="0 0 12 12">
                     <path
                       d="M2 6l3 3 5-5"
                       stroke="currentColor"
@@ -86,9 +87,8 @@ export default function ToneSelector({ value, onChange, companyName = "the compa
                 </span>
               )}
             </div>
-            <p className="mt-1 text-xs text-gray-500">{tone.description}</p>
-            <p className="mt-2.5 rounded-xl bg-gray-50 px-3 py-2 text-xs italic leading-5 text-gray-600 border border-gray-100">
-              &ldquo;{tone.example(companyName, jobTitle)}&rdquo;
+            <p className="mt-1 line-clamp-2 text-[11.5px] leading-snug text-gray-500">
+              {tone.description}
             </p>
           </button>
         )

@@ -286,6 +286,48 @@ export type ScoutMockInterviewTurn = {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ── Workflow Directive ─────────────────────────────────────────────────────────
+
+/**
+ * When present in a ScoutResponse, the frontend should mount the workflow panel
+ * and start tracking the named workflow type.
+ * The backend infers this from intent + message keywords — Claude does not emit it directly.
+ */
+export type ScoutWorkflowDirective = {
+  /** One of the known workflow types: tailor_and_prepare | compare_and_prioritize | interview_prep */
+  workflowType: string
+  /** Optional: a pre-assigned workflow ID for deduplication */
+  workflowId?: string
+  /** Context passed from the response (job ID, resume ID, etc.) */
+  payload?: Record<string, unknown>
+}
+
+// ── Workspace Directive ────────────────────────────────────────────────────────
+
+export type ScoutWorkspaceMode = "idle" | "search" | "compare" | "tailor" | "applications" | "bulk_application" | "company" | "research" | "outreach" | "interview" | "career_strategy" | "offer_negotiation" | "salary_coaching" | "burnout_checkin" | "post_hire_checkin" | "personal_brand"
+
+export type ScoutWorkspaceDirective = {
+  /** Which workspace panel to activate. */
+  mode: ScoutWorkspaceMode
+  /** How the workspace should transition. Defaults to "replace". */
+  transition?: "replace" | "push" | "slide-right" | "none"
+  /** Arbitrary mode-specific payload for the workspace component. */
+  payload?: Record<string, unknown>
+  /**
+   * Optional context rail to slide in alongside the workspace.
+   * Null explicitly closes any open rail.
+   */
+  rail?: {
+    title: string
+    summary?: string
+    actions?: ScoutAction[]
+  } | null
+  /** Follow-up suggestion chips relevant to the active mode. */
+  chips?: string[]
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export type ScoutResponse = {
   answer: string
   recommendation: ScoutRecommendation
@@ -295,6 +337,8 @@ export type ScoutResponse = {
   intent?: ScoutIntent
   confidence?: number
   mode?: ScoutMode
+  /** Optional structured graph payload — rendered by ScoutGraphRenderer, never shown as text */
+  graph?: import("@/components/scout/renderers/ScoutGraphRenderer").ScoutGraph
   compare?: ScoutCompareResponse
   interviewPrep?: ScoutInterviewPrep
   mockInterview?: ScoutMockInterview
@@ -302,6 +346,47 @@ export type ScoutResponse = {
     feature: import("@/lib/gates").FeatureKey
     reason: string
     upgradeMessage: string
+  }
+  /**
+   * When present, the workspace shell uses this directive to switch modes
+   * instead of inferring from the response shape. Frontend inference
+   * remains as a fallback when this field is absent.
+   */
+  workspace_directive?: ScoutWorkspaceDirective
+  /**
+   * When present, the frontend mounts the workflow panel and starts tracking
+   * the named multi-step workflow. Only emitted when intent === "workflow".
+   */
+  workflow_directive?: ScoutWorkflowDirective
+  /**
+   * Recruiter copilot — generated outreach draft.
+   * User reviews and edits before sending. Scout never sends automatically.
+   */
+  outreach?: import("@/lib/scout/outreach/types").ScoutOutreachDraft
+  /**
+   * Apply agent — emitted when Scout selects jobs to apply to and drives
+   * the tailor → confirm → apply loop. Never emitted for single-job flows.
+   */
+  apply_agent?: import("@/lib/scout/apply-agent/types").ApplyAgentDirective
+  /**
+   * Development-only diagnostics. Never render directly in user-facing UI.
+   * Used for timeline metadata and local debugging of orchestrator behavior.
+   */
+  debug?: {
+    orchestrator?: {
+      intent?: string
+      totalDurationMs?: number
+      traces?: Array<{
+        agentId: string
+        durationMs: number
+        success: boolean
+        summary?: string
+        error?: string
+      }>
+    }
+    timing?: {
+      responseMs?: number
+    }
   }
 }
 

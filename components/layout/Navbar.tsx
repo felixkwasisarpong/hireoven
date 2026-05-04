@@ -1,14 +1,15 @@
 import Link from "next/link"
-import { BadgePercent, Building2, LogIn, Sparkles, UserPlus } from "lucide-react"
+import { BadgePercent, Building2, Sparkles } from "lucide-react"
 import HireovenLogo from "@/components/ui/HireovenLogo"
+import NavbarAuthCluster from "./NavbarAuthCluster"
 
 export default function Navbar() {
   return (
-    <nav className="glass-nav sticky top-0 z-40 px-4 py-3 lg:px-8">
+    <nav className="glass-nav sticky top-0 z-40 px-4 py-2 lg:px-8">
       <div className="mx-auto flex w-full max-w-[88rem] items-center justify-between gap-4">
         <div className="flex min-w-0 items-center gap-6 sm:gap-8">
           <Link href="/" className="flex shrink-0 items-center">
-            <HireovenLogo className="h-10 w-auto" priority />
+            <HireovenLogo variant="wordmark" className="-my-2 h-24 w-auto sm:h-28" priority />
           </Link>
           <div className="hidden items-center gap-6 md:flex">
             <Link
@@ -35,20 +36,7 @@ export default function Navbar() {
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-1 rounded-xl border border-border bg-surface p-1 shadow-[0_1px_0_rgba(15,23,42,0.04)]">
-          <Link
-            href="/login"
-            className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors hover:bg-surface-alt hover:text-strong"
-          >
-            <LogIn className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
-            <span className="hidden sm:inline">Login</span>
-          </Link>
-          <Link
-            href="/signup"
-            className="inline-flex items-center gap-2 rounded-lg bg-primary px-3.5 py-2 text-sm font-semibold text-primary-foreground shadow-[0_1px_0_rgba(0,0,0,0.06)] transition-colors hover:bg-primary-hover"
-          >
-            <UserPlus className="h-4 w-4 shrink-0" aria-hidden />
-            Sign up
-          </Link>
+          <NavbarAuthCluster />
         </div>
       </div>
     </nav>

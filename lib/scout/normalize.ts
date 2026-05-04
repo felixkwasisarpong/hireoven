@@ -15,7 +15,37 @@ import {
   type ScoutInterviewPrep,
   type ScoutResponse,
   type ScoutWorkflow,
+  type ScoutWorkflowDirective,
+  type ScoutWorkspaceDirective,
+  type ScoutWorkspaceMode,
 } from "@/lib/scout/types"
+
+const VALID_WORKSPACE_MODES = new Set<ScoutWorkspaceMode>([
+  "idle", "search", "compare", "tailor", "applications", "bulk_application", "company", "research", "outreach", "interview", "career_strategy",
+])
+
+function isWorkspaceMode(v: unknown): v is ScoutWorkspaceMode {
+  return typeof v === "string" && VALID_WORKSPACE_MODES.has(v as ScoutWorkspaceMode)
+}
+
+function normalizeWorkspaceDirective(raw: unknown): ScoutWorkspaceDirective | undefined {
+  if (typeof raw !== "object" || raw === null) return undefined
+  const r = raw as Record<string, unknown>
+  if (!isWorkspaceMode(r.mode)) return undefined
+
+  const rail =
+    typeof r.rail === "object" && r.rail !== null
+      ? (r.rail as ScoutWorkspaceDirective["rail"])
+      : r.rail === null
+        ? null
+        : undefined
+
+  const chips = Array.isArray(r.chips) ? (r.chips as string[]).filter((c) => typeof c === "string") : undefined
+  const transition = typeof r.transition === "string" ? (r.transition as ScoutWorkspaceDirective["transition"]) : undefined
+  const payload = typeof r.payload === "object" && r.payload !== null ? (r.payload as Record<string, unknown>) : undefined
+
+  return { mode: r.mode, transition, payload, rail, chips }
+}
 
 const VALID_RECOMMENDATIONS = new Set(["Apply", "Skip", "Improve", "Wait", "Explore"])
 
@@ -173,6 +203,31 @@ export function normalizeScoutResponse(raw: unknown): ScoutResponse {
       ? (record.interviewPrep as ScoutInterviewPrep)
       : undefined
 
+  const workspace_directive = normalizeWorkspaceDirective(record.workspace_directive)
+  const workflow_directive = normalizeWorkflowDirective(record.workflow_directive)
+
+  // Pass graph through as-is — it's server-validated structural data
+  const graph =
+    typeof record.graph === "object" && record.graph !== null
+      ? (record.graph as ScoutResponse["graph"])
+      : undefined
+
+  const debug =
+    typeof record.debug === "object" && record.debug !== null
+      ? (record.debug as ScoutResponse["debug"])
+      : undefined
+
+  // Pass outreach through as-is — server-validated before writing to ScoutResponse
+  const outreach =
+    typeof record.outreach === "object" && record.outreach !== null
+      ? (record.outreach as ScoutResponse["outreach"])
+      : undefined
+
+  const apply_agent =
+    typeof record.apply_agent === "object" && record.apply_agent !== null
+      ? (record.apply_agent as ScoutResponse["apply_agent"])
+      : undefined
+
   return {
     answer,
     recommendation,
@@ -185,5 +240,24 @@ export function normalizeScoutResponse(raw: unknown): ScoutResponse {
     gated,
     compare,
     interviewPrep,
+    workspace_directive,
+    workflow_directive,
+    graph,
+    debug,
+    outreach,
+    apply_agent,
+  }
+}
+
+function normalizeWorkflowDirective(raw: unknown): ScoutWorkflowDirective | undefined {
+  if (typeof raw !== "object" || raw === null) return undefined
+  const r = raw as Record<string, unknown>
+  if (typeof r.workflowType !== "string" || !r.workflowType.trim()) return undefined
+  return {
+    workflowType: r.workflowType.trim(),
+    workflowId: typeof r.workflowId === "string" ? r.workflowId : undefined,
+    payload: typeof r.payload === "object" && r.payload !== null
+      ? (r.payload as Record<string, unknown>)
+      : undefined,
   }
 }

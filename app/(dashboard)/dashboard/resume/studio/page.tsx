@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ElementType, type ReactNode } from "react"
+import { flushSync } from "react-dom"
 import { useRouter, useSearchParams } from "next/navigation"
 import {
   closestCenter,
@@ -110,6 +111,7 @@ type EducationDraft = {
 
 type PublicationDraft = {
   title: string
+  authors: string
   publisher: string
   url: string
   date: string
@@ -120,6 +122,15 @@ type PersonalCustomField = {
   id: string
   label: string
   value: string
+}
+
+type StructuredEntry = {
+  id: string
+  title: string
+  org: string
+  date: string
+  credId: string
+  description: string
 }
 
 type EditorSnapshot = {
@@ -182,16 +193,13 @@ const SECTION_ICONS: Record<ResumeSectionType, ElementType> = {
 }
 
 const ADD_SECTIONS = [
-  { type: "achievements" as const, label: "Achievements", premium: false, icon: Trophy },
-  { type: "awards" as const, label: "Awards", premium: false, icon: Award },
-  { type: "certificates" as const, label: "Certificates", premium: false, icon: Medal },
-  { type: "education" as const, label: "Education", premium: false, icon: GraduationCap },
-  { type: "custom" as const, label: "Goal", premium: false, icon: Flag },
-  { type: "custom" as const, label: "Graphs", premium: true, icon: BarChart3 },
-  { type: "hobbies" as const, label: "Hobbies", premium: false, icon: Palette },
-  { type: "languages" as const, label: "Languages", premium: false, icon: Languages },
-  { type: "projects" as const, label: "Projects", premium: true, icon: Star },
-  { type: "publications" as const, label: "Publications", premium: true, icon: BookOpen },
+  { type: "achievements" as const, label: "Achievements", icon: Trophy,       desc: "Notable accomplishments with measurable impact" },
+  { type: "awards" as const,       label: "Awards",       icon: Award,        desc: "Prizes, honors, and recognitions received" },
+  { type: "certificates" as const, label: "Certificates", icon: Medal,        desc: "Professional certifications and credentials" },
+  { type: "education" as const,    label: "Education",    icon: GraduationCap, desc: "Degrees, diplomas, and academic history" },
+  { type: "languages" as const,    label: "Languages",    icon: Languages,    desc: "Languages spoken and proficiency levels" },
+  { type: "projects" as const,     label: "Projects",     icon: Star,         desc: "Side projects, open-source, and portfolio work" },
+  { type: "publications" as const, label: "Publications", icon: BookOpen,     desc: "Research papers, articles, and books" },
 ]
 
 function validMode(value: string | null): StudioMode {
@@ -406,12 +414,8 @@ function RichTextEditor({
             className="inline-flex h-9 items-center gap-2 rounded-lg bg-gradient-to-r from-[#5B4DFF] to-orange-500 px-4 text-[12px] font-bold text-white"
           >
             {aiLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-            {aiLoading ? "Writing..." : "AI Writer"}
+            {aiLoading ? "Writing..." : "Scout Writer"}
           </button>
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700">
-            OK
-            <span className="text-slate-400">en-US</span>
-          </span>
         </div>
       </div>
     </div>
@@ -489,7 +493,6 @@ function EditableResumeSection({
               className="min-w-0 max-w-[320px] rounded-lg border border-transparent bg-transparent px-2 py-1 text-[18px] font-bold uppercase tracking-wide text-slate-800 outline-none transition focus:border-[#5B4DFF]/30 focus:bg-white focus:ring-2 focus:ring-[#5B4DFF]/10"
               aria-label={`Rename ${section.title} section`}
             />
-            {section.premium && <PremiumBadge />}
             {section.collapsed && <span className="text-[11px] font-semibold text-slate-400">Collapsed</span>}
           </div>
         </div>
@@ -932,20 +935,6 @@ function StickyResumePreview({
           onSectionNavigate={onPreviewSectionNavigate}
           className="max-h-[calc(100vh-11rem)]"
         />
-        <div className="mx-auto mt-3 flex max-w-[360px] items-center justify-center gap-4 rounded-xl border border-slate-200 bg-white px-4 py-2 text-[13px] font-semibold text-slate-600 shadow-sm">
-          <span>😭</span>
-          {[1, 2, 3, 4, 5].map((rating) => (
-            <button
-              key={rating}
-              type="button"
-              className="rounded-md px-1.5 py-0.5 transition hover:bg-indigo-50 hover:text-[#5B4DFF]"
-              // TODO: Wire rating feedback to POST /api/resume/:id/feedback.
-            >
-              {rating}
-            </button>
-          ))}
-          <span>😍</span>
-        </div>
       </div>
     </aside>
   )
@@ -972,13 +961,16 @@ export default function ResumeStudioPage() {
   const [applyingFixId, setApplyingFixId] = useState<string | null>(null)
   const [appliedFixIds, setAppliedFixIds] = useState<string[]>([])
   const [analysis, setAnalysis] = useState<TailorAnalysisResult | null>(null)
-  const [selectedAddSection, setSelectedAddSection] = useState("Achievements")
   const [sections, setSections] = useState<ResumeSectionState[]>(INITIAL_SECTIONS)
   const [customSections, setCustomSections] = useState<Record<string, ResumePreviewCustomSection>>({})
   const [aiLoadingSectionId, setAiLoadingSectionId] = useState<string | null>(null)
   const [isDirty, setIsDirty] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isDownloading, setIsDownloading] = useState(false)
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const saveDraftLatestRef = useRef<() => Promise<void>>(() => Promise.resolve())
+  const isSavingRef = useRef(false)
+  const lastAutoAnalyzeKeyRef = useRef<string | null>(null)
   const [undoStack, setUndoStack] = useState<EditorSnapshot[]>([])
   const [redoStack, setRedoStack] = useState<EditorSnapshot[]>([])
   const lastSnapshotRef = useRef<EditorSnapshot | null>(null)
@@ -1006,6 +998,7 @@ export default function ResumeStudioPage() {
   const [educationDrafts, setEducationDrafts] = useState<EducationDraft[]>([])
   const [projectsDraft, setProjectsDraft] = useState("")
   const [publicationDrafts, setPublicationDrafts] = useState<PublicationDraft[]>([])
+  const [sectionEntries, setSectionEntries] = useState<Record<string, StructuredEntry[]>>({})
   const [profileSummary, setProfileSummary] = useState("")
 
   useEffect(() => {
@@ -1173,7 +1166,7 @@ export default function ResumeStudioPage() {
     const locationParts = (selectedResume.location ?? "").split(/,\s*/)
 
     setPersonalInfo({
-      title: selectedResume.primary_role || "",
+      title: "",
       firstName: nameParts.firstName,
       lastName: nameParts.lastName,
       phone: selectedResume.phone || "",
@@ -1316,6 +1309,35 @@ export default function ResumeStudioPage() {
 
   function markDirty() {
     setIsDirty(true)
+    if (isSavingRef.current) return  // don't race with an active save
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current)
+    autoSaveTimerRef.current = setTimeout(() => void saveDraftLatestRef.current(), 3000)
+  }
+
+  function getEntries(sectionId: string): StructuredEntry[] {
+    return sectionEntries[sectionId] ?? []
+  }
+
+  function addEntry(sectionId: string) {
+    const entry: StructuredEntry = { id: `${sectionId}-${Date.now()}`, title: "", org: "", date: "", credId: "", description: "" }
+    setSectionEntries((prev) => ({ ...prev, [sectionId]: [...(prev[sectionId] ?? []), entry] }))
+    markDirty()
+  }
+
+  function updateEntry(sectionId: string, entryId: string, patch: Partial<StructuredEntry>) {
+    setSectionEntries((prev) => ({
+      ...prev,
+      [sectionId]: (prev[sectionId] ?? []).map((e) => e.id === entryId ? { ...e, ...patch } : e),
+    }))
+    markDirty()
+  }
+
+  function removeEntry(sectionId: string, entryId: string) {
+    setSectionEntries((prev) => ({
+      ...prev,
+      [sectionId]: (prev[sectionId] ?? []).filter((e) => e.id !== entryId),
+    }))
+    markDirty()
   }
 
   function experienceIndexFromId(experienceId: string) {
@@ -1526,6 +1548,24 @@ export default function ResumeStudioPage() {
     }
   }
 
+  useEffect(() => {
+    const shouldAutoAnalyze = searchParams.get("autoAnalyze") === "1"
+    if (!shouldAutoAnalyze) return
+    if (mode !== "tailor") return
+    if (!jobDescription.trim()) return
+
+    const autoAnalyzeKey = `${searchParams.get("jobId") ?? ""}:${searchParams.get("analysisId") ?? ""}:${selectedId ?? ""}`
+    if (lastAutoAnalyzeKeyRef.current === autoAnalyzeKey) return
+    lastAutoAnalyzeKeyRef.current = autoAnalyzeKey
+
+    void handleAnalyzeTailorMatch()
+
+    const next = new URLSearchParams(searchParams.toString())
+    next.delete("autoAnalyze")
+    router.replace(`/dashboard/resume/studio?${next.toString()}`, { scroll: false })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, mode, jobDescription, selectedId])
+
   function handleUndo() {
     const previous = undoStack[undoStack.length - 1]
     if (!previous) return
@@ -1546,71 +1586,148 @@ export default function ResumeStudioPage() {
     applyEditorSnapshot(next)
   }
 
-  async function saveDraft(silent = false) {
+  async function saveDraft(silent = false, createVersion = false) {
+    if (isSavingRef.current) return  // prevent concurrent saves
     if (!selectedResume?.id) {
       if (!silent) pushToast({ tone: "info", title: "Select a resume to save." })
       return
     }
+    isSavingRef.current = true
     setIsSaving(true)
+    // cancel any pending auto-save so it doesn't race with this call
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current)
+      autoSaveTimerRef.current = null
+    }
+    let savedOk = false
     try {
       const fullName = `${personalInfo.firstName} ${personalInfo.lastName}`.trim() || null
       const location = [personalInfo.city, personalInfo.state, personalInfo.country].filter(Boolean).join(", ") || personalInfo.address || null
-      const res = await fetch(`/api/resume/${selectedResume.id}`, {
-        method: "PATCH",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: documentName !== "Untitled resume" ? documentName : undefined,
-          full_name: fullName,
-          email: personalInfo.email || null,
-          phone: personalInfo.phone || null,
-          location,
-          portfolio_url: personalInfo.website || null,
-          primary_role: headline || null,
-          summary: profileSummary || null,
-          work_experience: experienceDrafts.map((draft) => ({
-            title: draft.role,
-            company: draft.company,
-            start_date: draft.from,
-            end_date: draft.current ? null : draft.to,
-            is_current: draft.current,
-            description: draft.description,
-            achievements: draft.description
-              .split(/\n/)
-              .map((line) => line.replace(/^[-•]\s*/, "").trim())
-              .filter(Boolean),
-          })),
-          education: educationDrafts.map((draft) => ({
-            institution: draft.school,
-            degree: draft.degree,
-            field: draft.field,
-            start_date: draft.from,
-            end_date: draft.current ? null : draft.to,
-            gpa: null,
-          })),
-          skills: skillsTextToSkills(skillsText),
-          projects: projectsDraft
-            .split(/\n{2,}/)
-            .map((block) => block.trim())
-            .filter(Boolean)
-            .map((block, index) => {
-              const [nameLine, ...descLines] = block.split(/\n/)
-              return {
-                name: nameLine?.replace(/^[-•]\s*/, "").trim() || `Project ${index + 1}`,
-                description: descLines.join("\n").replace(/[•]/g, "").trim() || nameLine || "",
-                url: null,
-              }
+
+      // Build the resume payload once — used by both the regular PATCH and
+      // the new tailor-save endpoint.
+      const resumePayload = {
+        name: documentName !== "Untitled resume" ? documentName : undefined,
+        full_name: fullName,
+        email: personalInfo.email || null,
+        phone: personalInfo.phone || null,
+        location,
+        portfolio_url: personalInfo.website || null,
+        primary_role: headline || null,
+        summary: profileSummary || null,
+        work_experience: experienceDrafts.map((draft) => ({
+          title: draft.role,
+          company: draft.company,
+          start_date: draft.from,
+          end_date: draft.current ? null : draft.to,
+          is_current: draft.current,
+          // Inverse of how this draft was loaded (around line 1206): the
+          // editor concatenates `description` + bullet-prefixed achievements
+          // into one textarea. On save, split them back so we don't store
+          // the same content twice (which made downloads render both as a
+          // paragraph mash AND as a bullet list).
+          description: draft.description
+            .split(/\n/)
+            .filter((line) => !/^[-•]\s/.test(line.trim()))
+            .join("\n")
+            .trim(),
+          achievements: draft.description
+            .split(/\n/)
+            .filter((line) => /^[-•]\s/.test(line.trim()))
+            .map((line) => line.replace(/^[-•]\s*/, "").trim())
+            .filter(Boolean),
+        })),
+        education: educationDrafts.map((draft) => ({
+          institution: draft.school,
+          degree: draft.degree,
+          field: draft.field,
+          start_date: draft.from,
+          end_date: draft.current ? null : draft.to,
+          gpa: null,
+        })),
+        skills: skillsTextToSkills(skillsText),
+        projects: projectsDraft
+          .split(/\n{2,}/)
+          .map((block) => block.trim())
+          .filter(Boolean)
+          .map((block, index) => {
+            const [nameLine, ...descLines] = block.split(/\n/)
+            return {
+              name: nameLine?.replace(/^[-•]\s*/, "").trim() || `Project ${index + 1}`,
+              description: descLines.join("\n").replace(/[•]/g, "").trim() || nameLine || "",
+              url: null,
+            }
+          }),
+      }
+
+      // Tailor mode + jobId in URL → save as a new tailored copy (or update
+      // the existing tailored copy for this job). Keeps the user's primary
+      // resume intact while letting Autofill pick the right per-job copy.
+      const tailorJobId = searchParams.get("jobId")
+      const isTailoringIntoCopy = mode === "tailor" && Boolean(tailorJobId)
+
+      const res = isTailoringIntoCopy
+        ? await fetch(`/api/resume/tailor-save`, {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              parentResumeId: selectedResume.id,
+              jobId: tailorJobId,
+              payload: resumePayload,
             }),
-        }),
-      })
+          })
+        : await fetch(`/api/resume/${selectedResume.id}`, {
+            method: "PATCH",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(resumePayload),
+          })
+
       if (!res.ok) {
         const body = (await res.json().catch(() => ({}))) as { error?: string }
         throw new Error(body.error ?? "Save failed")
       }
-      const updated = (await res.json()) as Resume
+      const responseBody = (await res.json()) as Resume | { resume: Resume; created: boolean; updated: boolean }
+      const updated = "resume" in responseBody ? responseBody.resume : responseBody
       upsertResume(updated)
-      setIsDirty(false)
-      if (!silent) {
+      // Tailor-save returns a new resumeId — switch the studio's selection
+      // so subsequent saves update the same tailored copy.
+      if (isTailoringIntoCopy && updated.id !== selectedResume.id) {
+        setSelectedId(updated.id)
+      }
+      savedOk = true
+
+      if (createVersion) {
+        const snapshot = createResumeSnapshot(livePreviewResume)
+        let versionOk = false
+        try {
+          const vRes = await fetch(`/api/resume/${selectedResume.id}/versions`, {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              name: `${documentName} — ${new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`,
+              changes_summary: "Saved from studio",
+              snapshot,
+            }),
+          })
+          versionOk = vRes.ok
+        } catch {
+          versionOk = false
+        }
+        if (versionOk) {
+          window.dispatchEvent(new Event("hireoven:resumes-changed"))
+          void refreshHubData()
+        }
+        if (!silent) {
+          if (versionOk) {
+            pushToast({ tone: "success", title: "Version saved", description: "Resume and version snapshot saved." })
+          } else {
+            pushToast({ tone: "success", title: "Resume saved", description: "Changes saved — version snapshot could not be created." })
+          }
+        }
+      } else if (!silent) {
         pushToast({ tone: "success", title: "Resume saved", description: "Your changes have been saved." })
       }
     } catch (error) {
@@ -1622,6 +1739,8 @@ export default function ResumeStudioPage() {
         })
       }
     } finally {
+      if (savedOk) setIsDirty(false)   // batched with isSaving=false → single render
+      isSavingRef.current = false
       setIsSaving(false)
     }
   }
@@ -1709,14 +1828,13 @@ export default function ResumeStudioPage() {
   function addPublicationDraft() {
     setPublicationDrafts((current) => [
       ...current,
-      {
-        title: "",
-        publisher: "",
-        url: "",
-        date: "",
-        description: "",
-      },
+      { title: "", authors: "", publisher: "", url: "", date: "", description: "" },
     ])
+    markDirty()
+  }
+
+  function removePublicationDraft(index: number) {
+    setPublicationDrafts((current) => current.filter((_, i) => i !== index))
     markDirty()
   }
 
@@ -1878,8 +1996,8 @@ export default function ResumeStudioPage() {
     setAiLoadingSectionId(sectionId)
     try {
       const text = await requestAiSectionText(sectionType, currentText, instruction)
-      if (sectionType === "profile") setProfileSummary(text)
-      else if (sectionType === "skills") setSkillsText(text)
+      if (sectionType === "profile") flushSync(() => setProfileSummary(text))
+      else if (sectionType === "skills") flushSync(() => setSkillsText(text))
       else if (sectionType === "experience") {
         const index = Number(sectionId.split("-")[1] ?? 0)
         setExperienceDrafts((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, description: text } : item))
@@ -1897,7 +2015,7 @@ export default function ResumeStudioPage() {
       markDirty()
       pushToast({ tone: "success", title: "AI updated this section." })
     } catch {
-      pushToast({ tone: "error", title: "AI Writer failed." })
+      pushToast({ tone: "error", title: "Scout Writer failed." })
     } finally {
       setAiLoadingSectionId(null)
     }
@@ -1956,7 +2074,7 @@ export default function ResumeStudioPage() {
     }
   }
 
-  async function handleCreateTailoredVersion() {
+  async function handleCreateTailoredResume() {
     if (!selectedResume || !jobDescription.trim()) {
       pushToast({ tone: "info", title: "Add a resume and job description first." })
       return
@@ -1968,7 +2086,7 @@ export default function ResumeStudioPage() {
     if (appliedFixIds.length === 0) {
       if (
         !window.confirm(
-          "You have not applied any recommended fixes. Create a tailored version from the current live resume as shown in the preview?"
+          "You have not applied any recommended fixes. Create a new tailored resume from the current live preview?"
         )
       ) {
         return
@@ -1977,95 +2095,82 @@ export default function ResumeStudioPage() {
 
     setIsTailoring(true)
     try {
-      // Flush editor state to DB first so the base resume is current before we duplicate it.
+      // Flush editor state to DB first so duplication starts from the latest edits.
       await saveDraft(true)
 
-      const jt = jobTitle || selectedTargetJob?.title || "Tailored"
-      const resumeName = `${jt} Resume`
+      const roleTitle = jobTitle.trim() || selectedTargetJob?.title || "Role"
+      const companyName = company.trim() || selectedTargetJob?.company || ""
+      const resumeName = companyName
+        ? `Tailored for ${roleTitle} at ${companyName}`
+        : `Tailored for ${roleTitle}`
 
-      // 1. Save a version snapshot for history.
-      const snapshot = createResumeSnapshot(livePreviewResume)
-      const versionRes = await fetch(`/api/resume/${selectedResume.id}/versions`, {
+      const dupRes = await fetch(`/api/resume/${selectedResume.id}/duplicate`, {
         method: "POST",
+        credentials: "include",
+      })
+      if (!dupRes.ok) {
+        const body = (await dupRes.json().catch(() => ({}))) as { error?: string }
+        throw new Error(body.error ?? "Could not create a new tailored resume.")
+      }
+
+      const dupData = (await dupRes.json().catch(() => ({}))) as { resume?: Resume }
+      const dupId = dupData.resume?.id
+      if (!dupId) {
+        throw new Error("Could not create a new tailored resume.")
+      }
+
+      const fullName = `${personalInfo.firstName} ${personalInfo.lastName}`.trim() || null
+      const location =
+        [personalInfo.city, personalInfo.state, personalInfo.country].filter(Boolean).join(", ") ||
+        personalInfo.address ||
+        null
+
+      const patchRes = await fetch(`/api/resume/${dupId}`, {
+        method: "PATCH",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: resumeName,
-          changes_summary: `Tailored for ${jt}. Match score: ${analysis.matchScore}/100. Applied ${appliedFixIds.length} fix(es).`,
-          snapshot,
+          full_name: fullName,
+          email: personalInfo.email || null,
+          phone: personalInfo.phone || null,
+          location,
+          portfolio_url: personalInfo.website || null,
+          primary_role: livePreviewResume.primary_role ?? null,
+          summary: livePreviewResume.summary ?? null,
+          skills: livePreviewResume.skills ?? null,
+          work_experience: livePreviewResume.work_experience ?? [],
+          education: livePreviewResume.education ?? [],
+          projects: livePreviewResume.projects ?? [],
+          certifications: livePreviewResume.certifications ?? [],
         }),
       })
-      if (!versionRes.ok) {
-        pushToast({ tone: "error", title: "Could not save version history. Try again." })
-        return
+      if (!patchRes.ok) {
+        const body = (await patchRes.json().catch(() => ({}))) as { error?: string }
+        throw new Error(body.error ?? "Could not save tailored resume content.")
       }
 
-      // 2. Duplicate the base resume then patch it with ALL current editor state
-      //    (personal info + tailored content) to create the library copy.
-      let savedResumeId: string | null = null
-      try {
-        const dupRes = await fetch(`/api/resume/${selectedResume.id}/duplicate`, {
-          method: "POST",
-          credentials: "include",
-        })
-        if (!dupRes.ok) throw new Error("duplicate_failed")
-
-        const dupData = (await dupRes.json().catch(() => ({}))) as { resume?: Resume }
-        const dupId = dupData.resume?.id
-        if (!dupId) throw new Error("no_duplicate_id")
-
-        const fullName = `${personalInfo.firstName} ${personalInfo.lastName}`.trim() || null
-        const location = [personalInfo.city, personalInfo.state, personalInfo.country].filter(Boolean).join(", ") || personalInfo.address || null
-
-        const patchRes = await fetch(`/api/resume/${dupId}`, {
-          method: "PATCH",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name: resumeName,
-            full_name: fullName,
-            email: personalInfo.email || null,
-            phone: personalInfo.phone || null,
-            location,
-            portfolio_url: personalInfo.website || null,
-            primary_role: livePreviewResume.primary_role ?? null,
-            summary: livePreviewResume.summary ?? null,
-            skills: livePreviewResume.skills ?? null,
-            work_experience: livePreviewResume.work_experience ?? [],
-            education: livePreviewResume.education ?? [],
-            projects: livePreviewResume.projects ?? [],
-            certifications: livePreviewResume.certifications ?? [],
-          }),
-        })
-        if (!patchRes.ok) throw new Error("patch_failed")
-
-        const patched = (await patchRes.json().catch(() => null)) as Resume | null
-        if (patched?.id) {
-          savedResumeId = patched.id
-          upsertResume(patched)
-          window.dispatchEvent(new Event("hireoven:resumes-changed"))
-        }
-      } catch {
-        // Version history already saved — library copy is a bonus. Log and continue.
+      const patched = (await patchRes.json().catch(() => null)) as Resume | null
+      if (!patched?.id) {
+        throw new Error("Could not save tailored resume content.")
       }
+
+      upsertResume(patched)
+      window.dispatchEvent(new Event("hireoven:resumes-changed"))
 
       await refreshHubData()
-
-      if (savedResumeId) {
-        pushToast({
-          tone: "success",
-          title: `"${resumeName}" saved to your Library`,
-          description: "Tailored content, skills, and personal info saved as a new resume.",
-          action: { label: "Open Library", href: "/dashboard/resume/library" },
-        })
-      } else {
-        pushToast({
-          tone: "success",
-          title: "Version saved to history",
-          description: "Could not create a Library copy — duplicate it from Version History.",
-          action: { label: "View History", href: "/dashboard/resume/versions" },
-        })
-      }
+      pushToast({
+        tone: "success",
+        title: `"${resumeName}" saved as a new resume`,
+        description: "Tailored content, skills, and personal info were saved to your Library.",
+        action: { label: "Open Library", href: "/dashboard/resume/library" },
+      })
+    } catch (error) {
+      pushToast({
+        tone: "error",
+        title: "Could not create tailored resume",
+        description: error instanceof Error ? error.message : "Please try again.",
+      })
     } finally {
       setIsTailoring(false)
     }
@@ -2085,7 +2190,7 @@ export default function ResumeStudioPage() {
           <div className="grid gap-3 sm:grid-cols-2">
             {/* TODO: Wire section updates to PATCH /api/resume/:id. */}
             <div className="sm:col-span-2">
-              <TextInput label="Title" value={personalInfo.title} placeholder="Mr., Ms., Dr., Prof., etc." onChange={(value) => updatePersonalInfo("title", value)} />
+              <TextInput label="Salutation" value={personalInfo.title} placeholder="Mr., Ms., Dr., Prof., etc." onChange={(value) => updatePersonalInfo("title", value)} />
             </div>
             <div className="sm:col-span-2">
               <TextInput label="Headline" value={headline} placeholder="Software Engineer | AI & Cloud Applications | Generative AI" onChange={(value) => { setHeadline(value); markDirty() }} />
@@ -2296,20 +2401,34 @@ export default function ResumeStudioPage() {
               const entryId = `publications-${index}`
               return (
                 <div key={entryId} className="rounded-xl border border-slate-200 bg-slate-50">
-                  <div className="flex items-center justify-between border-b border-slate-200 px-3 py-3">
+                  <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2.5">
                     <p className="text-[13px] font-semibold text-slate-700">{publicationDraft.title || `Publication ${index + 1}`}</p>
-                    <ChevronDown className="h-4 w-4 rotate-180 text-slate-600" />
+                    <button
+                      type="button"
+                      onClick={() => removePublicationDraft(index)}
+                      className="text-red-400 transition hover:text-red-600"
+                      aria-label="Remove publication"
+                    >
+                      <TrashIcon />
+                    </button>
                   </div>
                   <div className="grid gap-3 p-3 sm:grid-cols-2">
-                    <TextInput label="Publication title" value={publicationDraft.title} onChange={(value) => updatePublication(index, "title", value)} />
-                    <TextInput label="Publisher" value={publicationDraft.publisher} onChange={(value) => updatePublication(index, "publisher", value)} />
-                    <TextInput label="URL of publication / ISBN" value={publicationDraft.url} onChange={(value) => updatePublication(index, "url", value)} />
-                    <TextInput label="Publication date" value={publicationDraft.date} onChange={(value) => updatePublication(index, "date", value)} />
+                    <div className="sm:col-span-2">
+                      <TextInput label="Publication title" value={publicationDraft.title} onChange={(value) => updatePublication(index, "title", value)} />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <TextInput label="Authors" value={publicationDraft.authors} placeholder="e.g. Smith J, Doe A, Johnson B" onChange={(value) => updatePublication(index, "authors", value)} />
+                    </div>
+                    <TextInput label="Publisher / Journal" value={publicationDraft.publisher} onChange={(value) => updatePublication(index, "publisher", value)} />
+                    <TextInput label="Publication date" value={publicationDraft.date} placeholder="e.g. Mar 2024" onChange={(value) => updatePublication(index, "date", value)} />
+                    <div className="sm:col-span-2">
+                      <TextInput label="URL / DOI / ISBN" value={publicationDraft.url} placeholder="https:// or 10.xxxx/..." onChange={(value) => updatePublication(index, "url", value)} />
+                    </div>
                     <div className="sm:col-span-2">
                       <RichTextEditor
-                        label="Description"
+                        label="Abstract / Description"
                         value={publicationDraft.description}
-                        rows={6}
+                        rows={5}
                         onChange={(value) => updatePublication(index, "description", value)}
                         sectionId={entryId}
                         sectionType={section.type}
@@ -2327,6 +2446,76 @@ export default function ResumeStudioPage() {
                 Add your first publication
               </button>
             )}
+          </div>
+        </EditableResumeSection>
+      )
+    }
+
+    // ── Structured sections: awards, certificates, achievements ──────────────
+    if (section.type === "awards" || section.type === "certificates" || section.type === "achievements") {
+      const entries = getEntries(section.id)
+      const isCert = section.type === "certificates"
+      const isAward = section.type === "awards"
+      const entryLabel = isCert ? "Certificate" : isAward ? "Award" : "Achievement"
+      return (
+        <EditableResumeSection key={section.id} {...commonProps} addLabel={`Add ${entryLabel}`} onAdd={() => addEntry(section.id)}>
+          <div className="space-y-3">
+            {entries.length === 0 && (
+              <button
+                type="button"
+                onClick={() => addEntry(section.id)}
+                className="flex h-12 w-full items-center justify-center rounded-xl border border-dashed border-slate-300 text-[13px] font-bold text-slate-500 hover:bg-slate-50"
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Add your first {entryLabel.toLowerCase()}
+              </button>
+            )}
+            {entries.map((entry, idx) => (
+              <div key={entry.id} className="rounded-xl border border-slate-200 bg-slate-50">
+                <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2.5">
+                  <p className="text-[13px] font-semibold text-slate-700">{entry.title || `${entryLabel} ${idx + 1}`}</p>
+                  <button
+                    type="button"
+                    onClick={() => removeEntry(section.id, entry.id)}
+                    className="text-red-400 transition hover:text-red-600"
+                    aria-label={`Remove ${entryLabel.toLowerCase()}`}
+                  >
+                    <TrashIcon />
+                  </button>
+                </div>
+                <div className="grid gap-3 p-3 sm:grid-cols-2">
+                  <TextInput
+                    label={isCert ? "Certificate name" : isAward ? "Award name" : "Achievement title"}
+                    value={entry.title}
+                    onChange={(v) => updateEntry(section.id, entry.id, { title: v })}
+                  />
+                  <TextInput
+                    label={isCert ? "Issuing organization" : isAward ? "Awarding body" : "Organization / Context"}
+                    value={entry.org}
+                    onChange={(v) => updateEntry(section.id, entry.id, { org: v })}
+                  />
+                  <TextInput
+                    label={isCert ? "Issue date" : "Year / Date"}
+                    value={entry.date}
+                    onChange={(v) => updateEntry(section.id, entry.id, { date: v })}
+                  />
+                  {isCert && (
+                    <TextInput
+                      label="Credential ID (optional)"
+                      value={entry.credId}
+                      onChange={(v) => updateEntry(section.id, entry.id, { credId: v })}
+                    />
+                  )}
+                  <div className={isCert ? "sm:col-span-2" : undefined}>
+                    <TextInput
+                      label="Description (optional)"
+                      value={entry.description}
+                      onChange={(v) => updateEntry(section.id, entry.id, { description: v })}
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         </EditableResumeSection>
       )
@@ -2352,33 +2541,41 @@ export default function ResumeStudioPage() {
     )
   }
 
+  // Always keep ref current so the auto-save timer calls the latest saveDraft
+  saveDraftLatestRef.current = () => saveDraft(true)
+
   return (
     <main className="min-h-[calc(100vh-8.5rem)] bg-[#FAFBFF]">
       <div className="w-full max-w-none space-y-4 px-4 py-3 sm:px-6 lg:px-8 xl:px-10 2xl:px-12">
         <header className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <h1 className="text-[24px] font-bold tracking-tight text-slate-950">AI Resume Studio</h1>
-            <p className="mt-1 text-[13px] text-slate-500">Preview, edit, and tailor your resume in one workspace.</p>
+            <h1 className="text-[24px] font-bold tracking-tight text-slate-950">Resume Studio</h1>
+            <p className="mt-1 text-[13px] text-slate-500">Edit, preview, and tailor your resume.</p>
           </div>
           <div className="flex flex-wrap gap-2">
+            {/* Download — always visible */}
             <button
               type="button"
               onClick={() => void handleDownloadResume()}
               disabled={!selectedResume?.id || isDownloading || isSaving}
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-[12.5px] font-semibold text-[#5B4DFF] transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-[12.5px] font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isDownloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-              {isDownloading ? "Downloading..." : "Download Resume"}
+              {isDownloading ? "Downloading…" : "Download"}
             </button>
-            <button
-              type="button"
-              onClick={() => void saveDraft()}
-              disabled={!selectedResume?.id || isSaving}
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#5B4DFF] px-4 text-[12.5px] font-semibold text-white transition hover:bg-[#493EE6] disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              {isSaving ? "Saving..." : "Save Draft"}
-            </button>
+
+            {/* Preview mode: Save + Version — tailor mode has its own save in the workflow */}
+            {mode === "preview" && (
+              <button
+                type="button"
+                onClick={() => void saveDraft(false, true)}
+                disabled={!selectedResume?.id || isSaving}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-orange-500 px-4 text-[12.5px] font-semibold text-white shadow-sm transition hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                {isSaving ? "Saving…" : "Save Version"}
+              </button>
+            )}
           </div>
         </header>
 
@@ -2434,7 +2631,6 @@ export default function ResumeStudioPage() {
               <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                 <div className="mb-3 flex items-center justify-between">
                   <p className="text-[14px] font-bold text-slate-950">Section Analysis</p>
-                  <Eye className="h-4 w-4 text-slate-400" />
                 </div>
                 <div className="grid gap-2 sm:grid-cols-3">
                   {sectionChecks.map((item) => (
@@ -2465,58 +2661,25 @@ export default function ResumeStudioPage() {
                 </SortableContext>
               </DndContext>
 
-              <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                <div className="mb-4 flex items-center justify-between">
-                  <p className="text-[18px] font-bold text-slate-900">+ Add New Section</p>
-                  <button type="button" className="text-[12px] font-semibold text-slate-500 hover:text-[#5B4DFF]">
-                    Preview All Sections
-                  </button>
-                </div>
-                <div className="grid gap-4 lg:grid-cols-[220px_1fr]">
-                  <div className="divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white">
-                    {ADD_SECTIONS.map(({ label, premium, icon: Icon }) => (
-                      <button
-                        key={label}
-                        type="button"
-                        onClick={() => setSelectedAddSection(label)}
-                        className={cn(
-                          "flex w-full items-center justify-between gap-3 px-3 py-3 text-left text-[13px] font-semibold transition hover:bg-slate-50",
-                          selectedAddSection === label ? "text-[#5B4DFF]" : "text-slate-600"
-                        )}
-                      >
-                        <span className="flex items-center gap-2">
-                          <Icon className="h-4 w-4" />
-                          {label}
-                        </span>
-                        {premium && <PremiumBadge />}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-                      <div className="flex items-center gap-2">
-                        <p className="text-[14px] font-bold text-slate-950">{selectedAddSection}</p>
-                        {["Projects", "Publications", "Graphs"].includes(selectedAddSection) && <PremiumBadge />}
+              <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <p className="mb-4 text-[13px] font-bold uppercase tracking-[0.08em] text-slate-400">Add a section</p>
+                <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
+                  {ADD_SECTIONS.map(({ type, label, icon: Icon, desc }) => (
+                    <button
+                      key={label}
+                      type="button"
+                      onClick={() => addSection(type, label)}
+                      className="group flex flex-col items-start gap-2.5 rounded-xl border border-slate-200 bg-slate-50/50 p-3.5 text-left transition hover:border-orange-300/70 hover:bg-orange-50/20"
+                    >
+                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white ring-1 ring-slate-200 transition group-hover:ring-orange-300">
+                        <Icon className="h-4 w-4 text-slate-400 transition group-hover:text-orange-500" />
                       </div>
-                      <p className="mt-3 text-[13px] leading-relaxed text-slate-600">
-                        {selectedAddSection === "Achievements"
-                          ? "Use action verbs to highlight your notable accomplishments. By doing this, you show your track record and erase doubts about your ability."
-                          : "Add this section to provide more context while keeping the resume concise and relevant."}
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const section = ADD_SECTIONS.find((item) => item.label === selectedAddSection) ?? ADD_SECTIONS[0]
-                          // TODO: Wire Add Section to POST /api/resume/:id/sections.
-                          addSection(section.type, section.label, section.premium)
-                        }}
-                        className="mt-4 inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#5B4DFF] px-4 text-[12.5px] font-bold text-white transition hover:bg-[#493EE6]"
-                      >
-                        <Plus className="h-4 w-4" />
-                        Add Section
-                      </button>
-                    </div>
-                  </div>
+                      <div>
+                        <p className="text-[13px] font-semibold text-slate-800">{label}</p>
+                        <p className="mt-0.5 text-[11px] leading-relaxed text-slate-400">{desc}</p>
+                      </div>
+                    </button>
+                  ))}
                 </div>
               </section>
             </section>
@@ -2631,22 +2794,22 @@ export default function ResumeStudioPage() {
                   </li>
                   <li>Switch to the Preview tab anytime to edit sections directly, then re-run match.</li>
                   <li>
-                    <span className="font-semibold text-slate-800">Create Tailored Version</span> saves a snapshot to your version history.
+                    <span className="font-semibold text-slate-800">Create Tailored Resume</span> saves a brand-new tailored resume to your library.
                   </li>
                 </ol>
               </details>
 
-              {/* Single progressive CTA: Analyze → Save Tailored Version */}
+              {/* Single progressive CTA: Analyze → Save Tailored Resume */}
               {appliedFixIds.length > 0 ? (
                 <div className="space-y-2">
                   <button
                     type="button"
-                    onClick={() => void handleCreateTailoredVersion()}
+                    onClick={() => void handleCreateTailoredResume()}
                     disabled={isTailoring || !selectedResume || !jobDescription.trim() || !analysis}
                     className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-[#5B4DFF] text-[12.5px] font-semibold text-white transition hover:bg-[#493EE6] disabled:opacity-60"
                   >
                     {isTailoring ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                    {isTailoring ? "Saving tailored version…" : `Save Tailored Version (${appliedFixIds.length} fix${appliedFixIds.length === 1 ? "" : "es"} applied)`}
+                    {isTailoring ? "Saving tailored resume…" : `Save Tailored Resume (${appliedFixIds.length} fix${appliedFixIds.length === 1 ? "" : "es"} applied)`}
                   </button>
                   <button
                     type="button"
@@ -2696,7 +2859,7 @@ export default function ResumeStudioPage() {
             <div className="hidden xl:contents">
               <StickyResumePreview
                 title="Tailored Resume Preview"
-                badge="Draft tailored version"
+                badge="Draft tailored resume"
                 resume={livePreviewResume}
                 profile={profile}
                 sections={orderedSections}

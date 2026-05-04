@@ -30,13 +30,18 @@ const RESPONSIBILITY_LIKE_RE =
   /\b(build|design|develop|deliver|collaborate|partner|lead|own|create|drive|maintain|implement|optimize|support)\b/i
 
 const BENEFITS_LIKE_RE =
-  /\b(benefits|perks|health|dental|vision|401\s?\(k\)|retirement|paid time off|pto|parental leave|wellness|stipend|bonus)\b/i
+  /\b(benefits?|perks?|health(?:care|[ -]?insurance)?|dental|vision|medical|401\s?\(k\)|retirement|pension|paid time off|pto|unlimited pto|parental(?: leave)?|maternity|paternity|family leave|wellness|wellbeing|stipend|bonus|equity|stock(?: options?| grants?|[ -]?units?)?|rsu|vesting|profit[ -]?sharing|commuter|gym|fitness|education(?:al)?|tuition|learning|home[ -]?office|life insurance|disability|fsa|hsa|flexible|reimbursement|vacation|holiday|time off|leave|coverage)\b/i
 
 const COMPANY_LIKE_RE =
   /\b(we are|we(?:'|’)re looking|our mission|our values|our culture|founded|part of|customers|global team|across [a-z]+ countries|we offer|about us)\b/i
 
 const APPLICATION_LIKE_RE =
   /\b(apply for this role|apply now|application process|how to apply|interview process|encouraged to apply)\b/i
+
+// Items about travel frequency, physical/office environment, or boilerplate
+// legal pay-transparency qualifiers — not useful benefit or compensation facts.
+const NOISE_DISCARD_RE =
+  /\b(travel\s+\d|requires?\s+travel|travel\s+(?:up to|approximately|about)|\d+%\s+(?:of\s+the\s+)?time|performed\s+in\s+an\s+office|office\s+setting|sit\s+and\s+stand|standard\s+office\s+equipment|incumbent|physical(?:\s+requirements?)?|mental\/physical|motor\s+skills|lift(?:ing)?\s+\d|sedentary|noise\s+level|varies?\s+(?:upon|depending\s+on)\s+the\s+needs\s+of\s+the\s+department|may\s+vary\s+depending\s+on\s+job[- ]related\s+factors)\b/i
 
 const EQUAL_OPPORTUNITY_LIKE_RE =
   /\b(equal opportunity|eeo|reasonable accommodation|accommodation|protected veteran|affirmative action|diverse workforce|diversity and inclusion)\b/i
@@ -152,11 +157,30 @@ const INLINE_SECTION_ALIASES: InlineHeadingAlias[] = [
   { key: "benefits", alias: "Our benefits" },
   { key: "benefits", alias: "The perks" },
   { key: "benefits", alias: "Life at" },
+  { key: "benefits", alias: "Total rewards" },
+  { key: "benefits", alias: "What you'll get" },
+  { key: "benefits", alias: "What you get" },
+  { key: "benefits", alias: "What we provide" },
+  { key: "benefits", alias: "What's in it for you" },
+  { key: "benefits", alias: "Your benefits" },
+  { key: "benefits", alias: "Perks & benefits" },
+  { key: "benefits", alias: "Benefits & perks" },
+  { key: "benefits", alias: "Employee benefits" },
+  { key: "benefits", alias: "Benefits package" },
+  { key: "benefits", alias: "We offer" },
+  { key: "benefits", alias: "What you'll receive" },
   { key: "compensation", alias: "Salary" },
   { key: "compensation", alias: "Pay range" },
+  { key: "compensation", alias: "Pay" },
   { key: "compensation", alias: "Salary range" },
   { key: "compensation", alias: "Total compensation" },
+  { key: "compensation", alias: "Compensation range" },
+  { key: "compensation", alias: "Compensation & benefits" },
+  { key: "compensation", alias: "Base salary" },
+  { key: "compensation", alias: "Base pay" },
+  { key: "compensation", alias: "Annual salary" },
   { key: "compensation", alias: "On-target earnings" },
+  { key: "compensation", alias: "Compensation details" },
   { key: "company_info", alias: "About the company" },
   { key: "company_info", alias: "About the team" },
   { key: "company_info", alias: "Our mission" },
@@ -169,10 +193,36 @@ const INLINE_SECTION_ALIASES: InlineHeadingAlias[] = [
   { key: "application_info", alias: "Next steps" },
   { key: "application_info", alias: "The process" },
   { key: "application_info", alias: "Recruitment process" },
+  // Regional salary-disclosure blocks (e.g. Visa Inc., California law)
+  { key: "compensation", alias: "U.S. Applicants Only" },
+  { key: "compensation", alias: "US Applicants Only" },
+  { key: "compensation", alias: "For U.S. Applicants" },
+  { key: "compensation", alias: "For US Based Applicants" },
+  { key: "compensation", alias: "Salary Information" },
+  { key: "compensation", alias: "Pay transparency" },
+  { key: "compensation", alias: "Pay Transparency" },
+  // Physical/travel sections → route to other so they don't pollute comp/benefits
+  { key: "other", alias: "Travel Requirements" },
+  { key: "other", alias: "Travel" },
+  { key: "other", alias: "Physical Requirements" },
+  { key: "other", alias: "Mental/Physical Requirements" },
+  { key: "other", alias: "Work Environment" },
+  { key: "other", alias: "Work Conditions" },
+  { key: "other", alias: "Physical Demands" },
+  { key: "other", alias: "Working Conditions" },
+  { key: "other", alias: "Additional Information" },
   { key: "visa", alias: "Work authorization" },
+  { key: "visa", alias: "Work eligibility" },
+  { key: "visa", alias: "Employment eligibility" },
+  { key: "visa", alias: "Authorization" },
+  { key: "visa", alias: "Work permit" },
   { key: "visa", alias: "Visa sponsorship" },
+  { key: "visa", alias: "Visa requirements" },
+  { key: "visa", alias: "H-1B sponsorship" },
+  { key: "visa", alias: "H1B" },
   { key: "visa", alias: "Immigration" },
   { key: "visa", alias: "Sponsorship" },
+  { key: "visa", alias: "Legally authorized" },
 ]
 
 function createEmptyBuckets(): Record<CanonicalSectionKey, SectionBucket> {
@@ -268,7 +318,7 @@ function flattenSectionContent(section: { bullets: string[]; paragraphs: string[
 }
 
 const EXPLICIT_HEADING_PATTERN =
-  /(about the role|about the team|role overview|job summary|what you(?:'|’)ll do|what you will do|responsibilities|preferred qualifications|minimum qualifications|minimum requirements|required qualifications|basic qualifications|qualifications|requirements|nice to have|technical skills|key skills|skills|technologies|benefits|compensation|about us|about the company|who we are|company|equal opportunity|eeo|application process|how to apply|work authorization|visa|sponsorship)\s*:/gi
+  /(about the role|about the team|role overview|job summary|what you(?:’|’)ll do|what you will do|responsibilities|preferred qualifications|minimum qualifications|minimum requirements|required qualifications|basic qualifications|qualifications|requirements|nice to have|technical skills|key skills|skills|technologies|benefits|perks|total rewards|what you(?:’|’)ll get|what we provide|employee benefits|benefits? package|compensation|compensation range|compensation details|compensation & benefits|base salary|base pay|pay range|salary range|on-target earnings|u\.?s\.? applicants? only|for u\.?s\.? (?:based )?applicants?|salary information|pay transparency|travel requirements?|physical requirements?|mental\/physical requirements?|work environment|work conditions?|physical demands?|working conditions?|additional information|about us|about the company|who we are|company|equal opportunity|eeo|application process|how to apply|work authorization|work eligibility|employment eligibility|visa sponsorship|visa requirements|h-?1b(?: sponsorship)?|immigration|sponsorship|legally authorized)\s*:/gi
 
 function extractExplicitHeadingSegments(description: string): Array<{ heading: string; body: string }> {
   const matches = [...description.matchAll(EXPLICIT_HEADING_PATTERN)]
@@ -1041,6 +1091,9 @@ function sanitizeBenefitsBucket(
         .trim()
       if (normalizedCandidate.length < 12) continue
 
+      // Drop travel/physical/office noise before any other routing
+      if (NOISE_DISCARD_RE.test(normalizedCandidate)) continue
+
       if (EQUAL_OPPORTUNITY_LIKE_RE.test(normalizedCandidate)) {
         addItems(
           buckets.equal_opportunity,
@@ -1133,6 +1186,56 @@ function sanitizeBenefitsBucket(
   }
 
   buckets.benefits.items = uniqNearDuplicate(kept, 12)
+}
+
+function sanitizeCompensationBucket(
+  buckets: Record<CanonicalSectionKey, SectionBucket>,
+  adapter: SourceAdapterKind
+) {
+  if (buckets.compensation.items.length === 0) return
+
+  const kept: string[] = []
+
+  for (const item of buckets.compensation.items) {
+    const candidates = item.length > 260
+      ? splitIntoSentences(item).map((s) => s.trim())
+      : [item]
+
+    for (const candidate of candidates) {
+      if (candidate.length < 14 || candidate.length > 360) continue
+
+      // Drop travel/physical/boilerplate qualifiers
+      if (NOISE_DISCARD_RE.test(candidate)) continue
+
+      // Sentences that are purely about benefits (no salary signal) belong in benefits
+      const hasSalarySignal = /\b(\$[\d,]+|\d{2,3}[,k]\d{3}|salary|pay(?: range)?|compensation|wages?|hourly|annual(?:\s+base)?|per\s+(?:year|hour|annum)|incentive|ote|on-target)\b/i.test(candidate)
+      if (!hasSalarySignal && BENEFITS_LIKE_RE.test(candidate)) {
+        addItems(
+          buckets.benefits,
+          [candidate],
+          0.62,
+          { adapter, method: "heuristic", source_path: "compensation.rerouted" },
+          12
+        )
+        continue
+      }
+
+      if (EQUAL_OPPORTUNITY_LIKE_RE.test(candidate)) {
+        addItems(
+          buckets.equal_opportunity,
+          [candidate],
+          0.7,
+          { adapter, method: "heuristic", source_path: "compensation.rerouted" },
+          10
+        )
+        continue
+      }
+
+      kept.push(candidate)
+    }
+  }
+
+  buckets.compensation.items = uniqNearDuplicate(kept, 6)
 }
 
 function sanitizeApplicationInfoBucket(
@@ -1401,6 +1504,7 @@ export function extractCanonicalSections(input: {
     rebalanceQualificationBuckets(buckets, input.adapter)
     sanitizeResponsibilitiesBucket(buckets, input.adapter)
     sanitizeQualificationBuckets(buckets, input.adapter)
+    sanitizeCompensationBucket(buckets, input.adapter)
     sanitizeBenefitsBucket(buckets, input.adapter)
     sanitizeApplicationInfoBucket(buckets, input.adapter)
     refineAboutRole(buckets, input.adapter)

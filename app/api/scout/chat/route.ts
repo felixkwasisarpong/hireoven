@@ -3,6 +3,9 @@ import { NextRequest, NextResponse } from "next/server"
 import { logApiUsage } from "@/lib/admin/usage"
 import { createClient } from "@/lib/supabase/server"
 import { getScoutContext, formatScoutContextForClaude } from "@/lib/scout/context"
+import { resolveJobContext, listTopSavedJobs } from "@/lib/scout/resolve-job-context"
+import { encodeSSE } from "@/lib/scout/streaming/types"
+import { runOrchestrator, detectAgentIntent } from "@/lib/scout/agents/orchestrator"
 import { isAllowedScoutAction, normalizeScoutActions } from "@/lib/scout/actions"
 import { detectScoutMode } from "@/lib/scout/mode"
 import { getScoutSystemPrompt } from "@/lib/scout/prompts"
@@ -15,6 +18,10 @@ import {
 import { canAccess } from "@/lib/gates"
 import { getUserPlan } from "@/lib/gates/server-gate"
 import { ANTHROPIC_TIER_PRICING, SONNET_MODEL } from "@/lib/ai/anthropic-models"
+import { budgetTracker, calcCost, inferTier } from "@/lib/scout/budget/tracker"
+import { streamWithTimeout } from "@/lib/scout/budget/ai-call"
+import { routeScoutMessage, AI_TIMEOUTS } from "@/lib/scout/budget/router"
+import { scoutCache, CACHE_TTL, cacheKey, stableHash } from "@/lib/scout/budget/cache"
 import {
   isScoutIntent,
   isScoutMode,
@@ -32,6 +39,7 @@ import {
   type ScoutMode,
   type ScoutResponse,
   type ScoutWorkflow,
+  type ScoutWorkflowDirective,
 } from "@/lib/scout/types"
 
 export const runtime = "nodejs"
@@ -75,6 +83,7 @@ const anthropic = process.env.ANTHROPIC_API_KEY
 // Grounded Scout Q&A/compare workflows need better instruction following and reasoning depth.
 const MODEL = SONNET_MODEL
 const MODEL_PRICING = ANTHROPIC_TIER_PRICING.sonnet
+const IS_DEV = process.env.NODE_ENV === "development"
 const COMMAND_VERB_RE = /^(show|filter|find|open|compare|improve|prepare|focus|hide|narrow|sort)\b/i
 const WORKFLOW_HINT_RE = /\b(workflow|plan|steps|step-by-step|checklist|roadmap)\b/i
 const ANALYSIS_HINT_RE = /\b(analyz|analysis|score|fit|verdict|breakdown|evaluate|assess)\b/i
@@ -215,6 +224,71 @@ function buildInterviewPrepPreview(input: {
     },
   }
 }
+// ── Workflow directive inference ──────────────────────────────────────────────
+
+const TAILOR_INTENT_RE = /\b(tailor|cover.?letter|autofill|prepare.?application|prepare.?my.?resume|full.?application|apply.?to.?this)\b/i
+const COMPARE_INTENT_RE = /\b(compare|prioritize|rank.*(jobs|saved|my)|which.*apply.*first|shortlist)\b/i
+const INTERVIEW_INTENT_RE = /\b(interview.?prep|prepare.*(for.*(this|the)|interview)|mock.?interview|practice.?questions)\b/i
+
+function detectInterviewType(message: string): string | undefined {
+  const m = message.toLowerCase()
+  if (/\b(recruiter|phone\s+screen|hr\s+screen)\b/.test(m)) return "recruiter_screen"
+  if (/\b(system.?design|architecture\s+round)\b/.test(m))  return "system_design"
+  if (/\b(technical|coding|algorithm|code\s+interview)\b/.test(m)) return "technical"
+  if (/\b(behavioral|behaviour|star\s+format|tell\s+me\s+about)\b/.test(m)) return "behavioral"
+  if (/\b(hiring\s+manager|manager\s+round)\b/.test(m)) return "manager"
+  if (/\b(onsite|on.?site|interview\s+loop|full\s+loop)\b/.test(m)) return "onsite"
+  return undefined
+}
+
+// Bulk application prep — matches explicit batch language OR "apply to/for N jobs/roles"
+// Examples that must match:
+//   "Prepare 5 applications for..."
+//   "Queue visa-friendly roles over 80 match"
+//   "apply to 2 jobs with match score greater than 80"
+//   "apply for 3 roles"
+//   "start applying to 10 positions"
+const BULK_PREP_RE =
+  /(?:\b(?:prepare|queue|batch|bulk)\b.{0,80}\b(?:jobs?|roles?|positions?|openings?|application[s]?|apply|applying)\b)|(?:\bapply\s+(?:to|for)\s+(?:(?:top|best|strongest|highest)\s+)?\d+\s+(?:(?:top|best|strongest|highest|matching|scored?)\s+){0,2}(?:jobs?|roles?|positions?|openings?|applications?))|(?:\bstart\s+applying\b)/i
+
+// Intents that require a resolved job context (tailor, workflow, "best job" open)
+const NEEDS_JOB_RESOLVE_RE = /\b(tailor|tailor.?my|prepare.?application|prepare.?my.?resume|workflow.*job|open.?strong|strongest.?match|best.?saved|my.?best.*job|best.*matching)\b/i
+
+function inferBulkWorkspaceDirective(message: string): import("@/lib/scout/types").ScoutWorkspaceDirective | undefined {
+  if (!BULK_PREP_RE.test(message)) return undefined
+  const countMatch = message.match(/\b(\d+)\b/)
+  const count = countMatch ? parseInt(countMatch[1], 10) : 10
+  const requireSponsorshipSignal = /\b(visa|h-?1b|sponsor)/i.test(message)
+  const workMode = /\bremote\b/i.test(message) ? "remote" : undefined
+  // Matches: "over 80", "above 80", "greater than 80", "more than 80", "> 80", ">= 80", "80 match", "80%"
+  const scoreMatch = message.match(
+    /\b(?:over|above|greater\s+than|more\s+than|higher\s+than|at\s+least|>=?)\s*(\d+)|(\d+)\s*(?:match|%)\b/i,
+  )
+  const minMatchScore = scoreMatch ? parseInt(scoreMatch[1] ?? scoreMatch[2], 10) : undefined
+
+  return {
+    mode: "bulk_application",
+    payload: { count, requireSponsorshipSignal, workMode, minMatchScore },
+    chips: [
+      "What's my queue status?",
+      "Skip jobs with no sponsorship",
+      "How do I improve my match scores?",
+    ],
+  }
+}
+
+function inferWorkflowDirective(message: string, intent: ScoutIntent): ScoutWorkflowDirective | undefined {
+  if (intent !== "workflow") return undefined
+  // Bulk prep is handled by workspace_directive — don't start a single-job workflow
+  if (BULK_PREP_RE.test(message)) return undefined
+  if (TAILOR_INTENT_RE.test(message)) return { workflowType: "tailor_and_prepare" }
+  if (COMPARE_INTENT_RE.test(message)) return { workflowType: "compare_and_prioritize" }
+  if (INTERVIEW_INTENT_RE.test(message)) return { workflowType: "interview_prep" }
+  return undefined
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 const DESTRUCTIVE_COMMAND_RE =
   /\b(delete|remove|erase|clear|wipe)\b[\s\S]{0,40}\b(saved jobs|watchlist|applications|profile|resume|data|everything|all)\b/i
 const MAX_EXPLANATION_BLOCKS = 4
@@ -249,6 +323,12 @@ function normalizeConfidence(raw: unknown): number | undefined {
 
 function inferIntentFromMessage(message: string): ScoutIntent {
   const normalized = message.trim()
+  // BULK_PREP_RE check must come before ANALYSIS_HINT_RE — phrases like
+  // "apply to 2 jobs with match score > 80" contain "score" which would
+  // otherwise match ANALYSIS_HINT_RE and produce a non-workflow intent,
+  // causing Claude to respond with an analysis answer instead of the
+  // bulk-queue confirmation and leaving workspace_directive unset.
+  if (BULK_PREP_RE.test(normalized)) return "workflow"
   if (WORKFLOW_HINT_RE.test(normalized)) return "workflow"
   if (COMMAND_VERB_RE.test(normalized)) return "command"
   if (ANALYSIS_HINT_RE.test(normalized)) return "analysis"
@@ -404,6 +484,43 @@ function buildResponseFromParsed(
     confidence,
     mode: isScoutMode(p.mode) ? p.mode : fallbackMode,
     interviewPrep: parseInterviewPrep(p.interviewPrep),
+    outreach: "outreach" in p ? parseScoutOutreach(p.outreach) : undefined,
+  }
+}
+
+// ── Outreach draft parser ────────────────────────────────────────────────────
+
+function parseScoutOutreach(raw: unknown): import("@/lib/scout/outreach/types").ScoutOutreachDraft | undefined {
+  if (!raw || typeof raw !== "object") return undefined
+  const p = raw as Record<string, unknown>
+  if (typeof p.draft !== "string" || !p.draft.trim()) return undefined
+
+  const VALID_TYPES  = new Set(["linkedin_message", "email", "follow_up", "referral_request"])
+  const VALID_TONES  = new Set(["professional", "warm", "direct"])
+
+  type OutreachType = import("@/lib/scout/outreach/types").ScoutOutreachType
+  type OutreachTone = import("@/lib/scout/outreach/types").ScoutOutreachTone
+
+  const parseStrList = (v: unknown, max: number): string[] | undefined => {
+    if (!Array.isArray(v)) return undefined
+    const strs = v.filter((s): s is string => typeof s === "string" && s.trim().length > 0).slice(0, max)
+    return strs.length > 0 ? strs : undefined
+  }
+
+  const generatedFrom = typeof p.generatedFrom === "object" && p.generatedFrom !== null
+    ? { job: Boolean((p.generatedFrom as Record<string, unknown>).job), resume: Boolean((p.generatedFrom as Record<string, unknown>).resume), companyIntel: Boolean((p.generatedFrom as Record<string, unknown>).companyIntel) }
+    : undefined
+
+  return {
+    id:            `outreach-${Date.now()}`,
+    type:          VALID_TYPES.has(p.type as string) ? p.type as OutreachType : "linkedin_message",
+    tone:          VALID_TONES.has(p.tone as string) ? p.tone as OutreachTone : "professional",
+    draft:         p.draft.trim().slice(0, 2500),
+    talkingPoints: parseStrList(p.talkingPoints, 5),
+    warnings:      parseStrList(p.warnings, 2),
+    recipientName: typeof p.recipientName === "string" ? p.recipientName.slice(0, 80) : undefined,
+    recipientRole: typeof p.recipientRole === "string" ? p.recipientRole.slice(0, 80) : undefined,
+    generatedFrom,
   }
 }
 
@@ -655,6 +772,7 @@ function isActionUsingKnownIds(action: ScoutResponse["actions"][number], knownId
 }
 
 export async function POST(request: NextRequest) {
+  const requestStartedAt = Date.now()
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   
@@ -691,6 +809,16 @@ export async function POST(request: NextRequest) {
       sponsorship?: string
       workMode?: string
     }
+    /** Lightweight client-side search profile for soft personalization hints */
+    searchProfile?: {
+      preferredRoles?: string[]
+      preferredLocations?: string[]
+      preferredWorkModes?: string[]
+      sponsorshipPreference?: string
+      companyPreferences?: { liked?: string[] }
+    }
+    /** When true, return SSE stream instead of JSON */
+    stream?: boolean
   }
 
   const userMessage = body.message?.trim()
@@ -704,6 +832,175 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       answer:
         "I can’t run destructive commands. I can help you review or filter saved jobs, but I won’t delete data from Scout commands.",
+      recommendation: "Explore",
+      actions: [],
+      explanations: [],
+      intent: "command",
+      confidence: 0.99,
+      mode,
+    } satisfies ScoutResponse)
+  }
+
+  // Bulk-prep intent — skip Claude entirely, build response deterministically.
+  // Claude would return JSON (per system prompt) which shows as raw text during streaming.
+  if (BULK_PREP_RE.test(userMessage)) {
+    const bulkDirective = inferBulkWorkspaceDirective(userMessage)
+    const bp = bulkDirective?.payload ?? {}
+    const countHint  = typeof bp.count === "number" ? bp.count : 10
+    const scoreHint  = typeof bp.minMatchScore === "number" ? ` with match score ${bp.minMatchScore}%+` : ""
+    const sponsorHint = bp.requireSponsorshipSignal ? " that sponsor H-1B" : ""
+
+    // Query matching jobs server-side
+    let applyAgentDirective: import("@/lib/scout/apply-agent/types").ApplyAgentDirective | undefined
+    try {
+      const params = new URLSearchParams()
+      if (bp.minMatchScore)          params.set("minMatchScore", String(bp.minMatchScore))
+      if (bp.count)                  params.set("count", String(bp.count))
+      if (bp.requireSponsorshipSignal) params.set("sponsorship", "true")
+      if (bp.workMode)               params.set("workMode", String(bp.workMode))
+      const origin = request.nextUrl.origin || process.env.NEXT_PUBLIC_APP_URL || "http://127.0.0.1:3000"
+      const res    = await fetch(`${origin}/api/scout/apply-agent?${params.toString()}`, {
+        headers: { cookie: request.headers.get("cookie") ?? "" },
+      })
+      if (res.ok) {
+        const data = await res.json() as { jobs: import("@/lib/scout/apply-agent/types").ApplyAgentJob[] }
+        if (data.jobs.length > 0) {
+          applyAgentDirective = {
+            jobs:     data.jobs,
+            criteria: {
+              minMatchScore:           bp.minMatchScore as number | undefined,
+              requireSponsorshipSignal: Boolean(bp.requireSponsorshipSignal),
+              workMode:                bp.workMode as string | undefined,
+              count:                   countHint,
+            },
+            currentIndex: 0,
+            phase:        "select",
+          }
+        }
+      }
+
+      // Fallback: derive queue from saved applications so "apply to N top jobs"
+      // still progresses when apply-agent pool selection is too strict.
+      if (!applyAgentDirective) {
+        const savedRes = await fetch(`${origin}/api/applications?status=saved&limit=200&sort=match_score`, {
+          headers: { cookie: request.headers.get("cookie") ?? "" },
+        })
+        if (savedRes.ok) {
+          const savedData = await savedRes.json() as {
+            applications?: Array<{
+              job_id?: string | null
+              job_title?: string | null
+              company_name?: string | null
+              apply_url?: string | null
+              match_score?: number | null
+              sponsorship_signal?: string | null
+              location?: string | null
+              is_remote?: boolean | null
+            }>
+          }
+          const rows = savedData.applications ?? []
+
+          const jobs = rows
+            .filter((r) => typeof r.job_id === "string" && r.job_id.length > 0)
+            .filter((r) => typeof r.apply_url === "string" && r.apply_url.length > 0)
+            .filter((r) => {
+              if (typeof bp.minMatchScore === "number" && typeof r.match_score === "number") {
+                return r.match_score >= bp.minMatchScore
+              }
+              return true
+            })
+            .filter((r) => {
+              if (!bp.requireSponsorshipSignal) return true
+              const sig = (r.sponsorship_signal ?? "").toLowerCase()
+              // Keep unknown/likely; drop explicit no-sponsorship signals.
+              return !(/\bno\b|\bnone\b|\bnot\b|\bdoes not sponsor\b|\bwithout sponsorship\b/.test(sig))
+            })
+            .sort((a, b) => (b.match_score ?? -1) - (a.match_score ?? -1))
+            .slice(0, countHint)
+            .map((r) => ({
+              jobId:             r.job_id!,
+              jobTitle:          r.job_title ?? "Saved job",
+              company:           r.company_name ?? null,
+              matchScore:        r.match_score ?? null,
+              applyUrl:          r.apply_url ?? null,
+              sponsorshipSignal: r.sponsorship_signal ?? null,
+              location:          r.location ?? null,
+              isRemote:          Boolean(r.is_remote),
+              status:            "pending" as const,
+            }))
+
+          if (jobs.length > 0) {
+            applyAgentDirective = {
+              jobs,
+              criteria: {
+                minMatchScore:            bp.minMatchScore as number | undefined,
+                requireSponsorshipSignal: Boolean(bp.requireSponsorshipSignal),
+                workMode:                 bp.workMode as string | undefined,
+                count:                    countHint,
+              },
+              currentIndex: 0,
+              phase:        "select",
+            }
+          }
+        }
+      }
+    } catch { /* non-critical */ }
+
+    const jobCount = applyAgentDirective?.jobs.length ?? 0
+    const answer   = jobCount > 0
+      ? `I found **${jobCount} job${jobCount !== 1 ? "s" : ""}**${scoreHint}${sponsorHint} in your list. I'll walk you through tailoring and applying to each one — starting with the best match.`
+      : `I didn't find any saved jobs${scoreHint}${sponsorHint}. Save some jobs from the feed first, then come back and I'll queue them up for you.`
+
+    const bulkResponse: ScoutResponse = {
+      answer,
+      recommendation: "Explore",
+      actions:        [],
+      explanations:   [],
+      intent:         "workflow",
+      confidence:     0.99,
+      mode,
+      workspace_directive: bulkDirective,
+      apply_agent:    applyAgentDirective,
+    }
+
+    // Client always uses stream:true — return SSE so the stream handler can process it
+    if (body.stream === true) {
+      const enc = new TextEncoder()
+      let ctrl!: ReadableStreamDefaultController<Uint8Array>
+      const sseStream = new ReadableStream<Uint8Array>({ start: (c) => { ctrl = c } })
+      void (async () => {
+        try {
+          if (bulkDirective) ctrl.enqueue(enc.encode(encodeSSE({ type: "workspace_directive", payload: bulkDirective })))
+          ctrl.enqueue(enc.encode(encodeSSE({ type: "response", payload: bulkResponse })))
+          ctrl.enqueue(enc.encode(encodeSSE({ type: "done" })))
+        } finally {
+          try { ctrl.close() } catch {}
+        }
+      })()
+      return new Response(sseStream, {
+        headers: {
+          "Content-Type":      "text/event-stream",
+          "Cache-Control":     "no-cache, no-transform",
+          "Connection":        "keep-alive",
+          "X-Accel-Buffering": "no",
+        },
+      })
+    }
+
+    return NextResponse.json(bulkResponse)
+  }
+
+  // Deterministic routing gate — no LLM needed for pure UI/filter commands
+  const routing = routeScoutMessage(userMessage)
+  if (!routing.useLLM) {
+    budgetTracker.record({
+      feature: "scout_chat", model: MODEL, tier: inferTier(MODEL),
+      inputTokens: 0, outputTokens: 0, latencyMs: 0, costUsd: 0,
+      success: true, cached: true, timedOut: false,
+      userId: undefined, timestamp: Date.now(),
+    })
+    return NextResponse.json({
+      answer: "Got it — applying that filter now.",
       recommendation: "Explore",
       actions: [],
       explanations: [],
@@ -771,13 +1068,73 @@ export async function POST(request: NextRequest) {
   // Cap auto-compare to 2 jobs for free users, 5 for paid
   const compareLimit = canAccess(effectivePlan, "scout_deep_analysis") ? 5 : 2
 
+  // ── Job context resolver ────────────────────────────────────────────────────
+  // Detect commands that need a concrete job (tailor, workflow, "best saved job",
+  // "open strongest match") and resolve one server-side before calling getScoutContext.
+  // This ensures Claude's answer, action payloads, and workspace_directive all
+  // reference the same job — never a hallucinated or mismatched ID.
+  const needsJobResolve =
+    !body.jobId &&                        // no explicit jobId from client
+    !BULK_PREP_RE.test(userMessage) &&    // not a bulk-prep command
+    NEEDS_JOB_RESOLVE_RE.test(userMessage)
+
+  let resolvedJob: import("@/lib/scout/resolve-job-context").ResolvedJobContext | null = null
+  const pool = (await import("@/lib/postgres/server")).getPostgresPool()
+
+  if (needsJobResolve) {
+    resolvedJob = await resolveJobContext(user.id, pool, {}).catch(() => null)
+
+    if (process.env.NODE_ENV === "development") {
+      console.log("[scout:resolve]", {
+        message:      userMessage.slice(0, 60),
+        resolvedJobId: resolvedJob?.jobId ?? null,
+        source:        resolvedJob?.source ?? null,
+        confidence:    resolvedJob?.confidence ?? null,
+        detailUrl:     resolvedJob?.detailUrl ?? null,
+      })
+    }
+
+    // No saved jobs found → return early with a helpful "save a job first" response
+    if (!resolvedJob) {
+      const topSaved = await listTopSavedJobs(user.id, pool, 5).catch(() => [])
+      if (topSaved.length === 0) {
+        return NextResponse.json({
+          answer:
+            "I don't see any saved jobs in your list. To tailor your resume or prepare an application, save a job from the feed first — then come back and I can prepare everything for that specific role.",
+          recommendation: "Explore",
+          actions: [{ type: "APPLY_FILTERS", payload: { sponsorship: "high" }, label: "Find sponsorship-friendly roles" }],
+          explanations: [],
+          intent: "command",
+          confidence: 0.95,
+          mode,
+        } satisfies ScoutResponse)
+      }
+      // There are saved jobs but none with a resolved job_id — prompt selection
+      const jobList = topSaved
+        .map((j, i) => `${i + 1}. **${j.title}** at ${j.company}${j.score ? ` (${j.score}% match)` : ""}`)
+        .join("\n")
+      return NextResponse.json({
+        answer: `I found ${topSaved.length} saved job${topSaved.length !== 1 ? "s" : ""}. Which one should I tailor for?\n\n${jobList}\n\nNavigate to the job and open Scout from that page, or tell me which role to target.`,
+        recommendation: "Explore",
+        actions: [],
+        explanations: [],
+        intent: "command",
+        confidence: 0.9,
+        mode,
+      } satisfies ScoutResponse)
+    }
+  }
+
+  // Effective job ID: resolved > explicit body value
+  const effectiveJobId = resolvedJob?.jobId ?? body.jobId
+
   try {
-    // Retrieve grounded context
+    // Retrieve grounded context (includes active memories via getScoutContext)
     const context = await getScoutContext({
       userId: user.id,
       pagePath: body.pagePath,
       mode,
-      jobId: body.jobId,
+      jobId: effectiveJobId,
       companyId: body.companyId,
       resumeId: body.resumeId,
       applicationId: body.applicationId,
@@ -786,7 +1143,481 @@ export async function POST(request: NextRequest) {
       compareLimit,
     })
 
-    const formattedContext = formatScoutContextForClaude(context)
+    // ── Memory relevance filtering ──────────────────────────────────────────────
+    // Replace the full memory list with the top-N most relevant to this request
+    // so we never bloat the prompt with low-relevance memories.
+    if (context.memories.length > 0) {
+      const { selectRelevantMemories } = await import("@/lib/scout/memory/retriever")
+      context.memories = selectRelevantMemories(context.memories, { mode, message: userMessage })
+    }
+
+    const formattedContext = await formatScoutContextForClaude(context)
+
+    // ── Multi-agent orchestrator ────────────────────────────────────────────────
+    // Runs specialist agents in parallel after context is loaded.
+    // Each agent contributes a context section injected into Claude's prompt.
+    // Failures are silent — agents degrade gracefully, never block the response.
+    const agentIntent = detectAgentIntent(userMessage)
+    const orchestratorResult = await runOrchestrator({
+      userId:          user.id,
+      message:         userMessage,
+      detectedIntent:  agentIntent,
+      pool,
+      jobId:           effectiveJobId,
+      companyId:       body.companyId,
+      resumeId:        body.resumeId,
+      resume:          context.resume
+        ? { id: context.resume.id, topSkills: context.resume.top_skills, skills: context.resume.skills as Record<string, string[]> | null, seniorityLevel: context.resume.seniority_level, summary: context.resume.summary }
+        : undefined,
+      company:         context.company
+        ? { id: context.company.id, name: context.company.name, industry: context.company.industry, size: context.company.size, sponsorsH1b: context.company.sponsors_h1b, sponsorshipConf: context.company.sponsorship_confidence, immigrationProfile: context.company.immigration_profile, hiringHealth: context.company.hiring_health }
+        : undefined,
+      job:             context.job
+        ? { id: context.job.id, title: context.job.title, companyName: context.job.company_name, skills: null, description: context.job.description, sponsorsH1b: context.job.sponsors_h1b }
+        : undefined,
+      compareJobs:     context.compareJobs ?? undefined,
+      preferredRoles:  context.behaviorSignals?.preferredRoles,
+      userSkills:      context.behaviorSignals?.commonSkills,
+      sponsorshipRequired: context.behaviorSignals?.sponsorshipSensitivity === "high",
+    }).catch(() => ({ contextSections: [], enrichments: {}, totalDurationMs: 0, traces: undefined }))
+
+    function attachDebug(response: ScoutResponse): void {
+      if (!IS_DEV) return
+      response.debug = {
+        orchestrator: {
+          intent: agentIntent,
+          totalDurationMs: orchestratorResult.totalDurationMs,
+          traces: orchestratorResult.traces,
+        },
+        timing: {
+          responseMs: Date.now() - requestStartedAt,
+        },
+      }
+    }
+
+    // Append agent context sections to the formatted context (before Claude sees it)
+    const agentContextBlock = orchestratorResult.contextSections.join("\n")
+    const fullContext = agentContextBlock
+      ? `${formattedContext}\n\n${agentContextBlock}`
+      : formattedContext
+    // ── End multi-agent orchestrator ────────────────────────────────────────────
+
+    // ── Application tracker enrichment ──────────────────────────────────────────
+    // Detect queries about applications, priorities, follow-ups, or pipeline status
+    // and inject real-time application data so Claude can answer with actual data.
+    const isApplicationQuery = /\b(applications?|pipeline|follow.?up|priorities|priority|active|tracker|interviewing|interview|offer|actions?|what should i|next steps?|status)\b/i.test(userMessage)
+    let applicationContext = ""
+    if (isApplicationQuery) {
+      try {
+        type AppRow = {
+          id: string
+          status: string
+          job_title: string | null
+          company_name: string | null
+          applied_at: string | null
+          updated_at: string
+          match_score: number | null
+          notes: string | null
+        }
+        const appsResult = await pool.query<AppRow>(
+          `SELECT id, status, job_title, company_name, applied_at, updated_at, match_score, notes
+           FROM job_applications
+           WHERE user_id = $1 AND is_archived = false
+           ORDER BY
+             CASE status
+               WHEN 'offered'      THEN 1
+               WHEN 'interviewing' THEN 2
+               WHEN 'applied'      THEN 3
+               WHEN 'saved'        THEN 4
+               ELSE 5
+             END,
+             COALESCE(applied_at, updated_at) DESC
+           LIMIT 60`,
+          [user.id]
+        )
+        const apps = appsResult.rows
+        if (apps.length > 0) {
+          const now = Date.now()
+          const daysSince = (d: string | null) =>
+            d ? Math.floor((now - new Date(d).getTime()) / 86_400_000) : null
+
+          const offered      = apps.filter(a => a.status === "offered")
+          const interviewing = apps.filter(a => a.status === "interviewing")
+          const applied      = apps.filter(a => a.status === "applied")
+          const saved        = apps.filter(a => a.status === "saved")
+          const rejected     = apps.filter(a => a.status === "rejected")
+
+          const agingApplied  = applied.filter(a => (daysSince(a.applied_at) ?? 0) >= 14)
+          const recentApplied = applied.filter(a => (daysSince(a.applied_at) ?? 0) < 14)
+
+          const fmt = (a: AppRow, dateField: string | null) => {
+            const days = daysSince(dateField)
+            const daysStr = days !== null ? ` (${days}d ago)` : ""
+            const score = a.match_score ? ` | ${a.match_score}% match` : ""
+            const note  = a.notes ? ` | Note: ${a.notes}` : ""
+            return `  • ${a.company_name ?? "Unknown"} — ${a.job_title ?? "Role"}${daysStr}${score}${note}`
+          }
+
+          const lines: string[] = [
+            `Active Application Tracker — LIVE DATA (${apps.length} active):`,
+            `Summary: ${offered.length} offer${offered.length !== 1 ? "s" : ""}, ${interviewing.length} interviewing, ${applied.length} applied (${agingApplied.length} aging ≥14d), ${saved.length} saved, ${rejected.length} rejected`,
+          ]
+
+          if (offered.length > 0) {
+            lines.push("\nOFFERS (decision needed urgently):")
+            offered.forEach(a => lines.push(fmt(a, a.applied_at ?? a.updated_at)))
+          }
+          if (interviewing.length > 0) {
+            lines.push("\nINTERVIEWING (stay sharp, follow through):")
+            interviewing.forEach(a => lines.push(fmt(a, a.updated_at)))
+          }
+          if (agingApplied.length > 0) {
+            lines.push(`\nAGING APPLICATIONS — applied 14+ days ago, no update (follow-up warranted):`)
+            agingApplied.forEach(a => lines.push(fmt(a, a.applied_at)))
+          }
+          if (recentApplied.length > 0) {
+            lines.push("\nRECENT APPLICATIONS (<14 days, let them process):")
+            recentApplied.slice(0, 6).forEach(a => lines.push(fmt(a, a.applied_at)))
+            if (recentApplied.length > 6) lines.push(`  ... and ${recentApplied.length - 6} more`)
+          }
+          if (saved.length > 0) {
+            const topSaved = [...saved].sort((a, b) => (b.match_score ?? 0) - (a.match_score ?? 0)).slice(0, 4)
+            lines.push(`\nSAVED (not yet applied — ${saved.length} total, top by match score):`)
+            topSaved.forEach(a => lines.push(fmt(a, null)))
+            if (saved.length > 4) lines.push(`  ... and ${saved.length - 4} more saved`)
+          }
+          applicationContext = lines.join("\n")
+        }
+      } catch {
+        // silent — never block the response
+      }
+    }
+
+    const enrichedContext = applicationContext
+      ? `${fullContext}\n\n${applicationContext}`
+      : fullContext
+    // ── End application tracker enrichment ──────────────────────────────────────
+
+    // ── Offer negotiation enrichment ─────────────────────────────────────────────
+    const { isOfferNegotiationIntent } = await import("@/lib/scout/offer-negotiation-intent")
+    const isOfferNegotIntent = isOfferNegotiationIntent(userMessage)
+    let offerNegotiationContext = ""
+
+    if (isOfferNegotIntent) {
+      try {
+        // Fetch the most recent offer-stage application with offer details
+        const offerAppResult = await pool.query<{
+          id: string
+          company_name: string
+          job_title: string
+          offer_details: {
+            base_salary?: number
+            equity?: string
+            signing_bonus?: number
+            annual_bonus_target?: number
+            offer_deadline?: string
+          } | null
+        }>(
+          `SELECT id, company_name, job_title, offer_details
+           FROM job_applications
+           WHERE user_id = $1
+             AND status = 'offer'
+             AND offer_details IS NOT NULL
+             AND offer_details::text != '{}'
+           ORDER BY updated_at DESC
+           LIMIT 1`,
+          [user.id]
+        )
+
+        const offerApp = offerAppResult.rows[0]
+
+        if (offerApp?.offer_details?.base_salary) {
+          const { analyzeOfferForNegotiation } = await import("@/lib/offers/offer-risk-analyzer")
+          const userProfileResult = await pool.query<{
+            visa_status: string | null
+            top_skills: string[] | null
+            desired_locations: string[] | null
+          }>(
+            `SELECT visa_status, top_skills, desired_locations FROM profiles WHERE id = $1`,
+            [user.id]
+          )
+          const userProf = userProfileResult.rows[0]
+
+          // Find company_id for this application
+          const companyResult = await pool.query<{ id: string }>(
+            `SELECT id FROM companies WHERE name ILIKE $1 LIMIT 1`,
+            [`%${offerApp.company_name}%`]
+          )
+          const companyId = companyResult.rows[0]?.id ?? ""
+
+          const negotiationAnalysis = await analyzeOfferForNegotiation(
+            offerApp.offer_details,
+            companyId,
+            offerApp.job_title,
+            {
+              visaStatus: userProf?.visa_status,
+              location: userProf?.desired_locations?.[0],
+              topSkills: userProf?.top_skills ?? [],
+            }
+          )
+
+          const { getNegotiationTimeline } = await import("@/lib/offers/negotiation-coach")
+          const deadline = offerApp.offer_details.offer_deadline
+            ? new Date(offerApp.offer_details.offer_deadline)
+            : null
+          const timeline = getNegotiationTimeline(deadline, true)
+
+          const na = negotiationAnalysis
+          const sa = na.salaryAnalysis
+          offerNegotiationContext = [
+            `Offer Negotiation Context — LIVE DATA:`,
+            `Company: ${offerApp.company_name} | Role: ${offerApp.job_title}`,
+            `Offered base salary: ${sa.offered ? `$${sa.offered.toLocaleString()}` : "Not provided"}`,
+            `Market P50: $${sa.marketP50.toLocaleString()} | P75: $${sa.marketP75.toLocaleString()} | P90: $${sa.marketP90.toLocaleString()}`,
+            `Percentile position: ${sa.percentilePosition}`,
+            `Below market: ${sa.isBelowMarket ? "YES" : "No"}`,
+            sa.lcaPrevailingWage ? `LCA prevailing wage: $${sa.lcaPrevailingWage.toLocaleString()}` : "",
+            `Data source: ${sa.source}`,
+            `Recommended counter ask: $${na.counterOfferScript.salaryAsk.toLocaleString()}`,
+            `Fallback position: $${na.counterOfferScript.fallbackPosition.toLocaleString()}`,
+            `Recommended approach: ${na.negotiationStrategy.recommendedApproach}`,
+            na.redFlags.length > 0 ? `Red flags: ${na.redFlags.join(" | ")}` : "",
+            na.immigrationConsiderations.length > 0
+              ? `Immigration notes: ${na.immigrationConsiderations[0]}`
+              : "",
+            timeline.daysRemaining !== null
+              ? `Offer deadline: ${timeline.deadline} (${timeline.daysRemaining} days remaining — urgency: ${timeline.urgencyLevel})`
+              : "",
+            `Next step: ${timeline.steps[0]?.action ?? "Review offer details"}`,
+          ].filter(Boolean).join("\n")
+        } else {
+          offerNegotiationContext = [
+            `Offer Negotiation Context:`,
+            `No offer with salary details found in the user's saved applications.`,
+            `To benchmark this offer, ask the user for: base salary offered, role title, company, and location.`,
+          ].join("\n")
+        }
+      } catch {
+        // silent — never block the response
+      }
+    }
+
+    const afterOfferContext = offerNegotiationContext
+      ? `${enrichedContext}\n\n${offerNegotiationContext}`
+      : enrichedContext
+
+    // ── Salary coaching enrichment ────────────────────────────────────────────────
+    const { isSalaryCoachingIntent } = await import("@/lib/scout/salary-coaching-intent")
+    const isSalaryCoachIntent = isSalaryCoachingIntent(userMessage)
+    let salaryCoachingContext = ""
+
+    if (isSalaryCoachIntent) {
+      try {
+        const { detectSalaryFloor } = await import("@/lib/scout/salary/floor-detector")
+        const floorProfile = await detectSalaryFloor(user.id)
+
+        if (floorProfile.detectedFloor > 0) {
+          const lines = [
+            `Salary Floor Analysis — LIVE DATA:`,
+            `Role context: ${floorProfile.roleContext} | Location: ${floorProfile.locationContext}`,
+            `Detected floor (median salary targeted): $${floorProfile.detectedFloor.toLocaleString()}`,
+            `Market P50 for this role/location: $${floorProfile.marketFloor.toLocaleString()}`,
+            `Gap: $${floorProfile.gap.toLocaleString()} (${floorProfile.gapPercent}%)`,
+            `Underselling: ${floorProfile.isUnderselling ? "YES" : "No"}`,
+            `Confidence: ${floorProfile.confidence} (based on ${floorProfile.applicationsBelowFloor + floorProfile.applicationsAboveFloor} applications with salary data)`,
+            `Applications below market rate: ${floorProfile.applicationsBelowFloor}`,
+            `Applications at or above market rate: ${floorProfile.applicationsAboveFloor}`,
+            floorProfile.avgOfferedSalary ? `Avg offered salary: $${floorProfile.avgOfferedSalary.toLocaleString()}` : "",
+            `Summary: ${floorProfile.evidenceSummary}`,
+          ].filter(Boolean).join("\n")
+          salaryCoachingContext = lines
+
+          // If the user asked what to say about salary, also generate expectation script
+          if (/what\s+(?:should\s+i\s+say|do\s+i\s+say|to\s+say)\s+(?:when|if|about)/i.test(userMessage)) {
+            try {
+              const userProfileResult = await pool.query<{ visa_status: string | null; desired_locations: string[] | null }>(
+                `SELECT visa_status, desired_locations FROM profiles WHERE id = $1`,
+                [user.id]
+              )
+              const up = userProfileResult.rows[0]
+              const { generateSalaryExpectationScript } = await import("@/lib/scout/salary/expectation-coach")
+              const script = await generateSalaryExpectationScript(
+                user.id,
+                floorProfile.roleContext,
+                up?.desired_locations?.[0] ?? floorProfile.locationContext,
+                up?.visa_status ?? "unknown"
+              )
+              salaryCoachingContext += `\n\nSalary Expectation Script:\n` +
+                `Screening answer: ${script.screeningAnswer}\n` +
+                `Email answer: ${script.emailAnswer}\n` +
+                `Do not say: ${script.doNotSay.slice(0, 3).join(" | ")}\n` +
+                `Negotiation room: ${script.negotiationRoom}`
+            } catch {
+              // Non-blocking
+            }
+          }
+        } else {
+          salaryCoachingContext = `Salary Floor Analysis: Not enough application data to compute a salary floor. Ask the user for their role title and location to give market benchmarks.`
+        }
+      } catch {
+        // Silent — never block the response
+      }
+    }
+
+    const afterSalaryContext = salaryCoachingContext
+      ? `${afterOfferContext}\n\n${salaryCoachingContext}`
+      : afterOfferContext
+
+    // ── Burnout / pace check-in enrichment ────────────────────────────────────────
+    const { isBurnoutCheckinIntent } = await import("@/lib/scout/burnout-checkin-intent")
+    const isBurnoutIntent = isBurnoutCheckinIntent(userMessage)
+
+    // Also check: returning user (7+ days absent) — detect from application activity
+    let daysSinceLastActivity = 0
+    try {
+      const actResult = await pool.query<{ last_at: string | null }>(
+        `SELECT MAX(COALESCE(applied_at, updated_at))::text AS last_at
+         FROM job_applications WHERE user_id = $1`,
+        [user.id]
+      )
+      daysSinceLastActivity = actResult.rows[0]?.last_at
+        ? Math.floor((Date.now() - new Date(actResult.rows[0].last_at).getTime()) / 86_400_000)
+        : 0
+    } catch { /* silent */ }
+
+    const isReturningUser = daysSinceLastActivity >= 7
+
+    let burnoutContext = ""
+
+    if (isBurnoutIntent || isReturningUser) {
+      try {
+        if (isReturningUser && !isBurnoutIntent) {
+          // Return experience — no classification needed
+          const { buildReturnExperience } = await import("@/lib/scout/burnout/return-experience")
+          const returnExp = await buildReturnExperience(user.id, daysSinceLastActivity)
+
+          burnoutContext = [
+            `Search Return Context — user returning after a break:`,
+            `Welcome message: ${returnExp.welcomeMessage}`,
+            `New matches since last visit: ${returnExp.newMatchesSinceLastVisit.length}`,
+            returnExp.newMatchesSinceLastVisit.length > 0
+              ? `Top new match: ${returnExp.newMatchesSinceLastVisit[0]?.jobTitle} at ${returnExp.newMatchesSinceLastVisit[0]?.companyName}`
+              : "",
+            returnExp.cohortUpdatesSinceLastVisit ? `Cohort update: ${returnExp.cohortUpdatesSinceLastVisit}` : "",
+            returnExp.applicationStatusUpdates.length > 0
+              ? `Application updates: ${returnExp.applicationStatusUpdates.map((u) => `${u.companyName} → ${u.newStatus}`).join(", ")}`
+              : "",
+            `Suggested first action: ${returnExp.suggestedFirstAction}`,
+          ].filter(Boolean).join("\n")
+        } else {
+          // Active check-in or explicit distress signal — classify and intervene
+          const { classifyBurnoutState } = await import("@/lib/scout/burnout/classifier")
+          const { executeIntervention } = await import("@/lib/scout/burnout/interventions")
+
+          const burnoutState = await classifyBurnoutState(user.id)
+          const intervention = burnoutState.interventionType !== "none"
+            ? await executeIntervention(user.id, burnoutState)
+            : null
+
+          burnoutContext = [
+            `Search Pace Context:`,
+            `Current state: ${burnoutState.state} (confidence: ${burnoutState.confidence})`,
+            `Days since last application: ${burnoutState.daysSinceLastApplication}`,
+            `Velocity trend: ${burnoutState.applicationVelocityTrend}`,
+            `Session quality: ${burnoutState.sessionQualityTrend}`,
+            intervention
+              ? `Recommended message: ${intervention.message}`
+              : `Recommendation: ${burnoutState.recommendation}`,
+            intervention?.subtext ? `Context: ${intervention.subtext}` : "",
+            intervention ? `Suggested action: ${intervention.ctaQuery}` : "",
+            intervention?.suppressBulkApply ? `Note: Do not suggest bulk applying right now.` : "",
+            burnoutState.interventionType === "rest_suggestion"
+              ? `IMPORTANT: This is a rest suggestion — do NOT push jobs or set tasks. Acknowledge and offer to help when they are ready.`
+              : "",
+          ].filter(Boolean).join("\n")
+        }
+      } catch {
+        // Silent — never block the response
+      }
+    }
+
+    const afterBurnoutContext = burnoutContext
+      ? `${afterSalaryContext}\n\n${burnoutContext}`
+      : afterSalaryContext
+
+    // ── Post-hire check-in enrichment ─────────────────────────────────────────────
+    let postHireCheckinContext = ""
+    try {
+      const { getPendingCheckinForUser, buildCheckinOpeningMessage } = await import("@/lib/checkins/delivery-engine")
+      const { getCheckinSet } = await import("@/lib/checkins/question-sets")
+
+      const pendingCheckin = await getPendingCheckinForUser(user.id)
+      if (pendingCheckin) {
+        const set = getCheckinSet(pendingCheckin.checkin_type)
+        const firstQuestion = set?.questions[0]
+
+        postHireCheckinContext = [
+          `Post-Hire Check-in Context — pending for this user:`,
+          `Check-in ID: ${pendingCheckin.id}`,
+          `Type: ${pendingCheckin.checkin_type}`,
+          `Company: ${pendingCheckin.company_name ?? "their employer"}`,
+          `Role: ${pendingCheckin.role_title ?? "their role"}`,
+          `Opening message: ${buildCheckinOpeningMessage(pendingCheckin)}`,
+          firstQuestion ? `First question to ask: ${firstQuestion.prompt}` : "",
+          `Total questions: ${set?.questions.length ?? 0}`,
+          `INSTRUCTION: Surface this check-in as the opening message if the user has not explicitly asked about something else. Ask one question at a time. The user can say "skip" or "not now" to dismiss.`,
+          `SAVE ENDPOINT: POST /api/scout/checkin with { checkinId, action: "complete", responses: {...} }`,
+          `SKIP ENDPOINT: POST /api/scout/checkin with { checkinId, action: "skip" }`,
+        ].filter(Boolean).join("\n")
+      }
+    } catch {
+      // Silent — never block the response
+    }
+
+    const afterCheckinContext = postHireCheckinContext
+      ? `${afterBurnoutContext}\n\n${postHireCheckinContext}`
+      : afterBurnoutContext
+
+    // ── Personal brand enrichment ──────────────────────────────────────────────────
+    const isBrandIntent = /\b(personal\s+brand|linkedin\s+(?:profile|post|content|visibility|headline|about)|content\s+idea|improve\s+my\s+(?:brand|visibility|profile|linkedin)|build\s+(?:my\s+brand|presence)|visibility\s+score|brand\s+(?:score|audit))\b/i.test(userMessage)
+
+    let brandContext = ""
+    if (isBrandIntent) {
+      try {
+        const { computeVisibilityScore } = await import("@/lib/brand/visibility-scorer")
+        const visScore = await computeVisibilityScore(user.id)
+
+        // Pull top audit items
+        const brandAuditResult = await pool.query<{ title: string; severity: string; fix_action: string }>(
+          `SELECT title, severity, fix_action FROM public.brand_audit_items
+           WHERE user_id = $1 AND resolved = false
+           ORDER BY CASE severity WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END
+           LIMIT 3`,
+          [user.id]
+        )
+
+        brandContext = [
+          `Brand Visibility Context:`,
+          `Score: ${visScore.score}/100 — ${visScore.verdict}`,
+          `Activity: ${visScore.breakdown.activity.score}/30 — ${visScore.breakdown.activity.note}`,
+          `Profile completeness: ${visScore.breakdown.profileCompleteness.score}/25 — ${visScore.breakdown.profileCompleteness.note}`,
+          `Social proof: ${visScore.breakdown.socialProof.score}/25 — ${visScore.breakdown.socialProof.note}`,
+          `Community presence: ${visScore.breakdown.communityPresence.score}/20 — ${visScore.breakdown.communityPresence.note}`,
+          visScore.isEstimated ? `Note: Score is estimated — no LinkedIn data connected.` : "",
+          brandAuditResult.rows.length > 0
+            ? `Top fix items: ${brandAuditResult.rows.map((r) => `[${r.severity}] ${r.title} → ${r.fix_action}`).join(" | ")}`
+            : "",
+          `Direct the user to /dashboard/brand for the full brand hub with content ideas and drafts.`,
+        ].filter(Boolean).join("\n")
+      } catch {
+        // Silent — never block the response
+      }
+    }
+
+    const finalContext = brandContext
+      ? `${afterCheckinContext}\n\n${brandContext}`
+      : afterCheckinContext
+    // ── End personal brand enrichment ─────────────────────────────────────────────
 
     if (isInterviewPrepIntent && !context.job) {
       return NextResponse.json({
@@ -829,15 +1660,37 @@ export async function POST(request: NextRequest) {
       feedStateLines.push("- Active filters: none")
     }
 
+    // Build lightweight search profile hint for Claude (client-provided, soft hints only)
+    const sp = body.searchProfile
+    const searchProfileLines: string[] = []
+    if (sp?.sponsorshipPreference && sp.sponsorshipPreference !== "unknown") {
+      searchProfileLines.push(`- Sponsorship signal: ${sp.sponsorshipPreference}`)
+    }
+    if (sp?.preferredWorkModes?.length) {
+      searchProfileLines.push(`- Preferred work modes: ${sp.preferredWorkModes.join(", ")}`)
+    }
+    if (sp?.preferredRoles?.length) {
+      searchProfileLines.push(`- Role interests: ${sp.preferredRoles.slice(0, 4).join(", ")}`)
+    }
+    if (sp?.preferredLocations?.length) {
+      searchProfileLines.push(`- Location preference: ${sp.preferredLocations.slice(0, 3).join(", ")}`)
+    }
+    if (sp?.companyPreferences?.liked?.length) {
+      searchProfileLines.push(`- Liked companies/types: ${sp.companyPreferences.liked.slice(0, 3).join(", ")}`)
+    }
+    const searchProfileSection = searchProfileLines.length > 0
+      ? `\nSearch Profile (soft hints — do not over-weight, user message always takes priority):\n${searchProfileLines.join("\n")}\n`
+      : ""
+
     const contextualPrompt = `Active Scout Mode: ${mode}
 Current Page Path: ${body.pagePath ?? "Unknown"}
 Intent hint from UI/server: ${inferredIntent}
 
 Current Feed State (IMPORTANT — do not suggest actions that are already active):
 ${feedStateLines.join("\n")}
-
+${searchProfileSection}
 Scout Context:
-${formattedContext}
+${finalContext}
 
 ---
 
@@ -849,25 +1702,177 @@ User Input: ${userMessage}`
         ? 1536
         : 1024
 
-    const message = await anthropic.messages.create({
-      model: MODEL,
-      max_tokens: maxTokens,
-      system: getScoutSystemPrompt(mode, {
+    // ── Streaming branch ────────────────────────────────────────────────────────
+    // When body.stream === true, run the Anthropic call + post-processing inside
+    // a background IIFE, emit SSE events, and return the ReadableStream immediately.
+    // The non-streaming path below is completely unchanged.
+    if (body.stream === true) {
+      const enc = new TextEncoder()
+      let ctrl!: ReadableStreamDefaultController<Uint8Array>
+      const sseStream = new ReadableStream<Uint8Array>({
+        start: (c) => { ctrl = c },
+      })
+      const emit = (event: import("@/lib/scout/streaming/types").ScoutStreamEvent) => {
+        try { ctrl.enqueue(enc.encode(encodeSSE(event))) } catch {}
+      }
+
+      const systemPrompt = getScoutSystemPrompt(mode, {
         premiumEnabled: canUsePremiumScoutFeatures(effectivePlan) && !premiumGate,
-      }),
-      messages: [
-        {
-          role: "user",
-          content: contextualPrompt,
+      })
+      const msgParams = { model: MODEL, max_tokens: maxTokens, system: systemPrompt, messages: [{ role: "user" as const, content: contextualPrompt }] }
+
+      void (async () => {
+        const streamStart = Date.now()
+        try {
+          const rawStream = anthropic.messages.stream(msgParams)
+          const { stream, abort: abortStream } = streamWithTimeout(rawStream, AI_TIMEOUTS.scout_chat_stream)
+          stream.on("text", (text) => emit({ type: "text_delta", text }))
+          let msg: Awaited<ReturnType<typeof stream.finalMessage>>
+          try {
+            msg = await stream.finalMessage()
+          } catch {
+            abortStream()
+            emit({ type: "error", message: "Scout is taking too long — please try again." })
+            budgetTracker.record({ feature: "scout_chat_stream", model: MODEL, tier: inferTier(MODEL), inputTokens: 0, outputTokens: 0, latencyMs: Date.now() - streamStart, costUsd: 0, success: false, cached: false, timedOut: true, timestamp: Date.now() })
+            return
+          }
+
+          const inputTokens  = msg.usage?.input_tokens  ?? 0
+          const outputTokens = msg.usage?.output_tokens ?? 0
+          const costUsd = calcCost(inferTier(MODEL), inputTokens, outputTokens)
+          budgetTracker.record({ feature: "scout_chat_stream", model: MODEL, tier: inferTier(MODEL), inputTokens, outputTokens, latencyMs: Date.now() - streamStart, costUsd, success: true, cached: false, timedOut: false, timestamp: Date.now() })
+          await logApiUsage({ service: "claude", operation: "scout_chat_stream", tokens_used: inputTokens + outputTokens, cost_usd: Number(costUsd.toFixed(6)) })
+
+          const responseText = msg.content.filter((b) => b.type === "text").map((b) => b.text).join("\n").trim()
+          const { response: scoutResponse, safetyNotes } = parseScoutResponse(responseText, mode, inferredIntent)
+          if (!isInterviewPrepIntent || !canAccess(effectivePlan, "interview_prep")) scoutResponse.interviewPrep = undefined
+
+          const knownIds = getKnownScoutIds({ bodyJobId: body.jobId, bodyCompanyId: body.companyId, bodyResumeId: body.resumeId, contextJobId: context.job?.id, contextCompanyId: context.company?.id, contextResumeId: context.resume?.id })
+          if (resolvedJob) { knownIds.jobIds.add(resolvedJob.jobId); if (resolvedJob.companyId) knownIds.companyIds.add(resolvedJob.companyId) }
+          if (context.compareJobs) { for (const cj of context.compareJobs) { knownIds.jobIds.add(cj.id); if (cj.company_id) knownIds.companyIds.add(cj.company_id) } }
+          scoutResponse.actions = scoutResponse.actions.filter((action) => isActionUsingKnownIds(action, knownIds))
+          if (scoutResponse.workflow?.steps) { scoutResponse.workflow.steps = scoutResponse.workflow.steps.map((step) => ({ ...step, action: step.action && isActionUsingKnownIds(step.action, knownIds) ? step.action : undefined })) }
+          if (safetyNotes.length > 0) scoutResponse.answer = `${scoutResponse.answer}\n\nNote: ${safetyNotes.join(" ")}`
+
+          const wfDir = inferWorkflowDirective(userMessage, inferredIntent)
+          if (wfDir) {
+            const cp: Record<string, unknown> = {}
+            const wfJobId = resolvedJob?.jobId ?? body.jobId ?? context.job?.id
+            const wfResumeId = body.resumeId ?? context.resume?.id
+            if (wfJobId) cp.jobId = wfJobId; if (wfResumeId) cp.resumeId = wfResumeId
+            if (resolvedJob) { cp.title = resolvedJob.title; cp.company = resolvedJob.company; cp.detailUrl = resolvedJob.detailUrl; cp.source = resolvedJob.source }
+            if (Object.keys(cp).length > 0) wfDir.payload = cp
+            scoutResponse.workflow_directive = wfDir
+          }
+          if (!scoutResponse.workspace_directive) {
+            const bulkDir = inferBulkWorkspaceDirective(userMessage)
+            if (bulkDir) scoutResponse.workspace_directive = bulkDir
+          }
+          if (TAILOR_INTENT_RE.test(userMessage) && !BULK_PREP_RE.test(userMessage) && !scoutResponse.workspace_directive) {
+            const tjId = resolvedJob?.jobId ?? effectiveJobId ?? context.job?.id
+            if (tjId) scoutResponse.workspace_directive = { mode: "tailor", payload: { jobId: tjId, resumeId: body.resumeId ?? context.resume?.id, title: resolvedJob?.title ?? context.job?.title, company: resolvedJob?.company ?? context.job?.company_name, detailUrl: resolvedJob?.detailUrl ?? `/dashboard/jobs/${tjId}`, source: resolvedJob?.source ?? "explicit" } }
+          }
+
+          // Compare guard (streaming path) — mirrors the non-streaming guard below
+          if (isCompareIntent && context.compareJobs && context.compareJobs.length >= 2) {
+            if (!scoutResponse.workspace_directive) scoutResponse.workspace_directive = { mode: "compare" }
+            if (!scoutResponse.compare) {
+              scoutResponse.compare = {
+                summary: scoutResponse.answer?.trim()
+                  ? scoutResponse.answer.split(/[.!?]/)[0]?.trim() + "."
+                  : `Comparing your ${context.compareJobs.length} saved jobs.`,
+                items: context.compareJobs.map((cj) => ({
+                  jobId:             cj.id,
+                  title:             cj.title,
+                  company:           cj.company_name,
+                  companyId:         cj.company_id ?? null,
+                  matchScore:        cj.match_score ?? null,
+                  sponsorshipSignal: cj.sponsors_h1b === true ? "Sponsors H-1B" : cj.sponsors_h1b === false ? "Does not sponsor" : null,
+                  salaryRange:       cj.salary_min && cj.salary_max ? `$${Math.round(cj.salary_min / 1000)}k–$${Math.round(cj.salary_max / 1000)}k` : null,
+                  location:          cj.is_remote ? "Remote" : (cj.location ?? null),
+                  recommendation:    ((cj.match_score ?? 0) >= 50 ? "Good" : "Skip") as "Best" | "Good" | "Risky" | "Skip",
+                })),
+              }
+              for (const cj of context.compareJobs) { if (cj.company_id) knownIds.companyIds.add(cj.company_id) }
+            }
+          }
+
+          // Interview guard (streaming path) — inject interview workspace_directive
+          if (scoutResponse.interviewPrep && !scoutResponse.workspace_directive) {
+            scoutResponse.workspace_directive = {
+              mode: "interview",
+              payload: {
+                interviewType: detectInterviewType(userMessage),
+                companyName:   context.job?.company_name ?? context.company?.name,
+                jobTitle:      context.job?.title,
+                jobId:         effectiveJobId,
+                companyId:     body.companyId ?? context.company?.id,
+              },
+              chips: ["Give me a tougher question", "How do I answer compensation?", "Draft a post-interview follow-up"],
+            }
+          }
+
+          // Outreach guard (streaming path) — mirror of non-streaming guard below
+          if (scoutResponse.outreach && !scoutResponse.workspace_directive) {
+            const ctxName = context.job?.company_name ?? context.company?.name
+            scoutResponse.workspace_directive = {
+              mode: "outreach",
+              payload: { companyName: ctxName, jobTitle: context.job?.title },
+              chips:   ["Make it more concise", "Use a warmer tone", "Prepare a follow-up version"],
+            }
+          }
+
+          attachDebug(scoutResponse)
+
+          // Emit workspace/workflow directives early so client can morph immediately
+          if (scoutResponse.workspace_directive) emit({ type: "workspace_directive", payload: scoutResponse.workspace_directive })
+          if (scoutResponse.workflow_directive)  emit({ type: "workflow_directive",  payload: scoutResponse.workflow_directive  })
+
+          emit({ type: "response", payload: scoutResponse })
+          emit({ type: "done" })
+        } catch (err) {
+          emit({ type: "error", message: err instanceof Error ? err.message : "Scout encountered an error." })
+        } finally {
+          try { ctrl.close() } catch {}
+        }
+      })()
+
+      return new Response(sseStream, {
+        headers: {
+          "Content-Type":  "text/event-stream",
+          "Cache-Control": "no-cache, no-transform",
+          "Connection":    "keep-alive",
+          "X-Accel-Buffering": "no",
         },
-      ],
-    })
+      })
+    }
+    // ── End streaming branch ────────────────────────────────────────────────────
+
+    const chatStart = Date.now()
+    const chatAbort = new AbortController()
+    const chatTimer = setTimeout(() => chatAbort.abort(), AI_TIMEOUTS.scout_chat)
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    const anthropicClient = anthropic!
+    let message: Anthropic.Message
+    try {
+      const createParams = {
+        model: MODEL,
+        max_tokens: maxTokens,
+        system: getScoutSystemPrompt(mode, { premiumEnabled: canUsePremiumScoutFeatures(effectivePlan) && !premiumGate }),
+        messages: [{ role: "user" as const, content: contextualPrompt }],
+      }
+      message = await anthropicClient.messages.create(createParams, { signal: chatAbort.signal })
+    } catch {
+      clearTimeout(chatTimer)
+      budgetTracker.record({ feature: "scout_chat", model: MODEL, tier: inferTier(MODEL), inputTokens: 0, outputTokens: 0, latencyMs: Date.now() - chatStart, costUsd: 0, success: false, cached: false, timedOut: true, timestamp: Date.now() })
+      return scoutError(503, "Scout is taking too long right now. Please try again in a moment.")
+    }
+    clearTimeout(chatTimer)
 
     const inputTokens = message.usage?.input_tokens ?? 0
     const outputTokens = message.usage?.output_tokens ?? 0
-    const costUsd =
-      (inputTokens / 1_000_000) * MODEL_PRICING.inputPerMillion +
-      (outputTokens / 1_000_000) * MODEL_PRICING.outputPerMillion
+    const costUsd = calcCost(inferTier(MODEL), inputTokens, outputTokens)
+    budgetTracker.record({ feature: "scout_chat", model: MODEL, tier: inferTier(MODEL), inputTokens, outputTokens, latencyMs: Date.now() - chatStart, costUsd, success: true, cached: false, timedOut: false, timestamp: Date.now() })
 
     await logApiUsage({
       service: "claude",
@@ -894,6 +1899,12 @@ User Input: ${userMessage}`
       contextCompanyId: context.company?.id,
       contextResumeId: context.resume?.id,
     })
+
+    // Resolved job is now trusted — add to knownIds so its action survives filtering
+    if (resolvedJob) {
+      knownIds.jobIds.add(resolvedJob.jobId)
+      if (resolvedJob.companyId) knownIds.companyIds.add(resolvedJob.companyId)
+    }
 
     // Add compare job IDs + their company IDs to knownIds
     if (context.compareJobs) {
@@ -999,6 +2010,203 @@ User Input: ${userMessage}`
     if (safetyNotes.length > 0) {
       scoutResponse.answer = `${scoutResponse.answer}\n\nNote: ${safetyNotes.join(" ")}`
     }
+
+    // Inject workflow_directive when the intent is workflow and keywords match a known type.
+    // This is server-side inference — Claude does not emit this field directly.
+    const workflowDirective = inferWorkflowDirective(userMessage, inferredIntent)
+    if (workflowDirective) {
+      // Always seed workflow payload with the resolved (or explicit) job context.
+      // This ensures the tailor step in tailor_and_prepare has a real jobId — never blank.
+      const ctxPayload: Record<string, unknown> = {}
+      const wfJobId  = resolvedJob?.jobId ?? body.jobId ?? context.job?.id
+      const wfResumeId = body.resumeId ?? context.resume?.id
+      if (wfJobId)    ctxPayload.jobId    = wfJobId
+      if (wfResumeId) ctxPayload.resumeId = wfResumeId
+      if (resolvedJob) {
+        ctxPayload.title    = resolvedJob.title
+        ctxPayload.company  = resolvedJob.company
+        ctxPayload.detailUrl = resolvedJob.detailUrl
+        ctxPayload.source   = resolvedJob.source
+      }
+      if (Object.keys(ctxPayload).length > 0) workflowDirective.payload = ctxPayload
+      scoutResponse.workflow_directive = workflowDirective
+    }
+
+    // Ensure every OPEN_RESUME_TAILOR action carries the resolved job ID.
+    // Claude may return no jobId or a hallucinated one — override with the resolved one.
+    if (resolvedJob || effectiveJobId) {
+      const resolvedJobId = resolvedJob?.jobId ?? effectiveJobId
+      scoutResponse.actions = scoutResponse.actions.map((action) => {
+        if (action.type !== "OPEN_RESUME_TAILOR") return action
+        return {
+          ...action,
+          payload: {
+            ...action.payload,
+            jobId: action.payload.jobId ?? resolvedJobId,
+          },
+        }
+      })
+      // Also patch workflow steps that have OPEN_RESUME_TAILOR
+      if (scoutResponse.workflow?.steps) {
+        scoutResponse.workflow.steps = scoutResponse.workflow.steps.map((step) => {
+          if (step.action?.type !== "OPEN_RESUME_TAILOR") return step
+          return {
+            ...step,
+            action: {
+              ...step.action,
+              payload: {
+                ...step.action.payload,
+                jobId: step.action.payload.jobId ?? resolvedJobId,
+              },
+            },
+          }
+        })
+      }
+    }
+
+    // Compare guard: when compare context was loaded and compare intent fired, always
+    // activate compare mode — even if Claude returned APPLY_FILTERS instead of compare.
+    // Claude sometimes decides "your jobs are poor fits, let me redirect to search" and
+    // omits the compare field; we still need to show the comparison the user asked for.
+    if (isCompareIntent && context.compareJobs && context.compareJobs.length >= 2) {
+      if (!scoutResponse.workspace_directive) {
+        scoutResponse.workspace_directive = { mode: "compare" }
+      }
+      // If Claude omitted the compare field entirely, build a minimal fallback comparison
+      // from the context jobs so CompareMode has something to render.
+      if (!scoutResponse.compare) {
+        scoutResponse.compare = {
+          summary: scoutResponse.answer?.trim()
+            ? scoutResponse.answer.split(/[.!?]/)[0]?.trim() + "."
+            : `Here is a comparison of your ${context.compareJobs.length} saved jobs.`,
+          items: context.compareJobs.map((cj) => ({
+            jobId:              cj.id,
+            title:              cj.title,
+            company:            cj.company_name,
+            companyId:          cj.company_id ?? null,
+            matchScore:         cj.match_score ?? null,
+            sponsorshipSignal:  cj.sponsors_h1b === true ? "Sponsors H-1B" : cj.sponsors_h1b === false ? "Does not sponsor" : null,
+            salaryRange:        cj.salary_min && cj.salary_max
+              ? `$${Math.round(cj.salary_min / 1000)}k–$${Math.round(cj.salary_max / 1000)}k`
+              : null,
+            location:           cj.is_remote ? "Remote" : (cj.location ?? null),
+            recommendation:     (cj.match_score ?? 0) >= 75 ? "Good" : (cj.match_score ?? 0) >= 50 ? "Good" : "Skip" as "Best" | "Good" | "Risky" | "Skip",
+          })),
+        }
+        // Add injected company IDs so they survive the knownIds filter
+        for (const cj of context.compareJobs) {
+          if (cj.company_id) knownIds.companyIds.add(cj.company_id)
+        }
+      }
+    }
+
+    // Inject tailor workspace_directive with full resolved job payload.
+    // This ensures TailorMode shows the correct title/company/detailUrl.
+    if (!scoutResponse.workspace_directive && TAILOR_INTENT_RE.test(userMessage) && !BULK_PREP_RE.test(userMessage)) {
+      const tailorJobId = resolvedJob?.jobId ?? effectiveJobId ?? context.job?.id
+      if (tailorJobId) {
+        scoutResponse.workspace_directive = {
+          mode: "tailor",
+          payload: {
+            jobId:    tailorJobId,
+            resumeId: body.resumeId ?? context.resume?.id,
+            title:    resolvedJob?.title ?? context.job?.title,
+            company:  resolvedJob?.company ?? context.job?.company_name,
+            detailUrl: resolvedJob?.detailUrl ?? (tailorJobId ? `/dashboard/jobs/${tailorJobId}` : undefined),
+            source:   resolvedJob?.source ?? "explicit",
+          },
+        }
+      }
+    }
+
+    // Inject bulk workspace directive + query matching jobs when bulk-prep intent fires.
+    if (!scoutResponse.workspace_directive) {
+      const bulkDirective = inferBulkWorkspaceDirective(userMessage)
+      if (bulkDirective) {
+        scoutResponse.workspace_directive = bulkDirective
+
+        // Fire-and-forget job query — attach results as apply_agent directive
+        const bp = bulkDirective.payload ?? {}
+        try {
+          const params = new URLSearchParams()
+          if (bp.minMatchScore) params.set("minMatchScore", String(bp.minMatchScore))
+          if (bp.count)         params.set("count", String(bp.count))
+          if (bp.requireSponsorshipSignal) params.set("sponsorship", "true")
+          if (bp.workMode)      params.set("workMode", String(bp.workMode))
+
+          // Self-call with forwarded auth cookie
+          const origin = request.nextUrl.origin || process.env.NEXT_PUBLIC_APP_URL || "http://127.0.0.1:3000"
+          const res = await fetch(`${origin}/api/scout/apply-agent?${params.toString()}`, {
+            headers: { cookie: request.headers.get("cookie") ?? "" },
+          })
+          if (res.ok) {
+            const data = await res.json() as { jobs: import("@/lib/scout/apply-agent/types").ApplyAgentJob[] }
+            if (data.jobs.length > 0) {
+              scoutResponse.apply_agent = {
+                jobs:        data.jobs,
+                criteria: {
+                  minMatchScore:          bp.minMatchScore as number | undefined,
+                  requireSponsorshipSignal: Boolean(bp.requireSponsorshipSignal),
+                  workMode:               bp.workMode as string | undefined,
+                  count:                  (bp.count as number | undefined) ?? 5,
+                },
+                currentIndex: 0,
+                phase:        "select",
+              }
+            }
+          }
+        } catch {
+          // Non-critical — UI falls back to the existing bulk_application workspace mode
+        }
+      }
+    }
+
+    // Ensure interview mode is set whenever interviewPrep was generated.
+    if (scoutResponse.interviewPrep && !scoutResponse.workspace_directive) {
+      scoutResponse.workspace_directive = {
+        mode: "interview",
+        payload: {
+          interviewType: detectInterviewType(userMessage),
+          companyName:   context.job?.company_name ?? context.company?.name,
+          jobTitle:      context.job?.title,
+          jobId:         effectiveJobId,
+          companyId:     body.companyId ?? context.company?.id,
+        },
+        chips: ["Give me a tougher question", "How do I answer compensation?", "Draft a post-interview follow-up"],
+      }
+    }
+
+    // Ensure outreach mode is set whenever an outreach draft was generated.
+    // Claude may forget the workspace_directive even when it produces the outreach field.
+    if (scoutResponse.outreach && !scoutResponse.workspace_directive) {
+      const contextName = context.job?.company_name ?? context.company?.name
+      scoutResponse.workspace_directive = {
+        mode: "outreach",
+        payload: {
+          companyName: contextName,
+          jobTitle:    context.job?.title,
+        },
+        chips: ["Make it more concise", "Use a warmer tone", "Prepare a follow-up version"],
+      }
+    }
+
+    attachDebug(scoutResponse)
+
+    // ── Async memory extraction (fire-and-forget) ────────────────────────────
+    // Extract new memory candidates from this chat turn and persist those that
+    // clear the confidence threshold. Never blocks the response.
+    void (async () => {
+      try {
+        const { extractFromChatTurn } = await import("@/lib/scout/memory/extractor")
+        const { persistCandidates }   = await import("@/lib/scout/memory/store")
+        const candidates = extractFromChatTurn(userMessage, scoutResponse)
+        if (candidates.length > 0) {
+          await persistCandidates(user.id, pool, candidates)
+        }
+      } catch {
+        // Memory extraction is non-critical — never let it surface as an error
+      }
+    })()
 
     return NextResponse.json(scoutResponse)
   } catch (error) {

@@ -286,7 +286,7 @@ export const EXPANSION_SEED_ROWS: ReadonlyArray<
 
   // ── Cat 16: Logistics / Shipping ──────────────────────────────────────────
   ["UPS", "ups.com", "https://jobs.ups.com", "Logistics", "enterprise", { sponsors_h1b: true, sponsorship_confidence: 62 }],
-  ["FedEx", "fedex.com", "https://careers.fedex.com", "Logistics", "enterprise", { sponsors_h1b: true, sponsorship_confidence: 62 }],
+  ["FedEx", "fedex.com", "https://fedex.wd1.myworkdayjobs.com/FXE-US_External_Career_Site", "Logistics", "enterprise", { sponsors_h1b: true, sponsorship_confidence: 62 }],
   ["XPO", "xpo.com", "https://jobs.xpo.com", "Logistics", "enterprise", { sponsors_h1b: true, sponsorship_confidence: 58 }],
   ["J.B. Hunt", "jbhunt.com", "https://jobs.jbhunt.com", "Logistics", "enterprise", { sponsors_h1b: true, sponsorship_confidence: 55 }],
   ["C.H. Robinson", "chrobinson.com", "https://careers.chrobinson.com", "Logistics", "enterprise", { sponsors_h1b: true, sponsorship_confidence: 60 }],

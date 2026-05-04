@@ -26,6 +26,9 @@ type JobFeedItem = AdminOverviewPayload["realtime"]["recentJobs"][number]
 function StatusTone({ status }: { status: string | null }) {
   if (status === "success") return <AdminBadge tone="success">Success</AdminBadge>
   if (status === "failed") return <AdminBadge tone="danger">Failed</AdminBadge>
+  if (status === "blocked") return <AdminBadge tone="danger">Blocked</AdminBadge>
+  if (status === "fetch_error") return <AdminBadge tone="danger">Fetch error</AdminBadge>
+  if (status === "bad_url") return <AdminBadge tone="warning">Bad URL</AdminBadge>
   if (status === "unchanged") return <AdminBadge>Unchanged</AdminBadge>
   return <AdminBadge>Unknown</AdminBadge>
 }

@@ -8,9 +8,26 @@
  */
 
 import { detectFormFields } from "./autofill/form-detector"
+import { extractLinkedInProfile, isOwnLinkedInProfile } from "./extractors/linkedin-profile"
+import { syncLinkedInBrandProfile } from "./api-client"
 import { detectPage } from "./detectors/ats"
 import { extractJobWithMeta } from "./extractors/job"
-import { PageAwareControlSystem } from "./overlay/page-aware-control-system"
+import { ScoutBar } from "./overlay/scout-bar"
+import { JobCardBadgeEngine } from "./overlay/job-card-badges"
+import {
+  mountScreenerBar,
+  unmountScreenerBar,
+  applyJobBoardFilters,
+} from "./overlay/job-screener"
+import {
+  mountDetailScoutPanel,
+  unmountDetailScoutPanel,
+} from "./overlay/job-detail-scout"
+import {
+  detectExtensionPageMode,
+  isJobBoardSite,
+} from "./detectors/page-mode"
+import { detectSite } from "./detectors/site"
 import type {
   ContentMessage,
   ContentResponse,
@@ -22,10 +39,18 @@ type HireovenContentWindow = Window & {
   __hoContentBootstrapped?: boolean
 }
 
+// Sites where the Scout Bar is allowed to mount.
+//
+// Intentionally EXCLUDED (job-board aggregators):
+//   - linkedin.com   — external apply URLs hidden behind voyager API; extraction unreliable
+//   - glassdoor.com  — same: aggregates jobs from real ATSes, doesn't expose direct apply URL
+//   - indeed.com     — same
+//   - joinhandshake.com — same; never was in this list
+// Users save jobs from the company's real ATS instead, where Apply URL extraction is solid.
+//
+// These hosts still receive the content script (for the hireoven.com bridge),
+// but shouldOverlayThisHost() returns false → bar never mounts there.
 const OVERLAY_HOST_ALLOWLIST: readonly RegExp[] = [
-  /(?:^|\.)linkedin\.com$/i,
-  /(?:^|\.)glassdoor\.com$/i,
-  /(?:^|\.)indeed\.com$/i,
   /(?:^|\.)greenhouse\.io$/i,
   /(?:^|\.)lever\.co$/i,
   /(?:^|\.)ashbyhq\.com$/i,
@@ -45,13 +70,6 @@ const OVERLAY_HOST_ALLOWLIST: readonly RegExp[] = [
 const CAREER_PATH_PATTERN =
   /\/(?:job|jobs|career|careers|opening|openings|position|positions|vacancy|vacancies|opportunity|opportunities|apply|application)(?:\/|$|\?)/i
 
-function resolveAppOrigin(): Promise<string> {
-  return new Promise((resolve) => {
-    chrome.storage.local.get(["devMode"], (r) => {
-      resolve(r.devMode === false ? "https://hireoven.com" : "http://localhost:3000")
-    })
-  })
-}
 
 function isTopFrame(): boolean {
   try {
@@ -61,8 +79,21 @@ function isTopFrame(): boolean {
   }
 }
 
+// Job-board aggregators where Scout intentionally does NOT mount the bar.
+// These sites' /jobs/ paths would otherwise match CAREER_PATH_PATTERN and
+// trigger the overlay even though we've removed them from the allowlist.
+// Save flow on these sites is unreliable (apply URL hidden behind their API)
+// so we'd rather have no bar than a broken Save experience.
+const OVERLAY_HOST_DENYLIST: readonly RegExp[] = [
+  /(?:^|\.)linkedin\.com$/i,
+  /(?:^|\.)glassdoor\.com$/i,
+  /(?:^|\.)indeed\.com$/i,
+  /(?:^|\.)joinhandshake\.com$/i,
+]
+
 function shouldOverlayThisHost(): boolean {
   const host = window.location.hostname.replace(/^www\./i, "").toLowerCase()
+  if (OVERLAY_HOST_DENYLIST.some((re) => re.test(host))) return false
   if (OVERLAY_HOST_ALLOWLIST.some((re) => re.test(host))) return true
   if (CAREER_PATH_PATTERN.test(window.location.pathname)) return true
   return false
@@ -132,6 +163,27 @@ function fillField(elementRef: string, value: string): boolean {
   const tag = el.tagName.toLowerCase()
   const type = ((el as HTMLInputElement).type ?? "").toLowerCase()
   if (type === "file" || type === "submit" || type === "hidden") return false
+
+  // Contenteditable rich-text editors (Quill, TipTap, Draft.js)
+  const ce = el.getAttribute("contenteditable")
+  if (ce === "true" || ce === "") {
+    el.focus()
+    // Select all existing content and replace
+    const sel = window.getSelection()
+    if (sel) {
+      const range = document.createRange()
+      range.selectNodeContents(el)
+      sel.removeAllRanges()
+      sel.addRange(range)
+    }
+    // Use execCommand for broad compatibility — falls back to textContent
+    if (!document.execCommand("insertText", false, value)) {
+      el.textContent = value
+    }
+    el.dispatchEvent(new Event("input",  { bubbles: true }))
+    el.dispatchEvent(new Event("change", { bubbles: true }))
+    return true
+  }
 
   if (tag === "select") {
     const select = el as HTMLSelectElement
@@ -227,6 +279,12 @@ function registerMessageBridge(): void {
           sendResponse({ type: "FORM_FILLED", filledCount, skippedCount })
           break
         }
+        case "INJECT_RESUME_FILE": {
+          const m = message as { base64: string; filename: string }
+          const result = injectResumeFile(m.base64, m.filename)
+          sendResponse(result)
+          break
+        }
         default:
           sendResponse({ type: "ERROR", message: "Unknown message type" })
       }
@@ -235,7 +293,88 @@ function registerMessageBridge(): void {
   )
 }
 
-async function mountOverlayWhenReady(): Promise<void> {
+// ── Resume file injection via DataTransfer ────────────────────────────────────
+// Content scripts can set input.files using DataTransfer even though regular
+// web pages cannot — Chrome grants this in the extension isolated world.
+
+function isResumeFileInput(input: HTMLInputElement): boolean {
+  // Accept attribute suggests document types
+  const accept = input.accept.toLowerCase()
+  if (/\.pdf|\.doc|application\/pdf|application\/msword/.test(accept)) return true
+
+  // Name / id contains resume-related words
+  const nameId = `${input.name} ${input.id}`.toLowerCase()
+  if (/resume|cv|curriculum|upload.doc|document|attachment/.test(nameId)) return true
+
+  // aria-label
+  const aria = (input.getAttribute("aria-label") ?? "").toLowerCase()
+  if (/resume|cv|curriculum/.test(aria)) return true
+
+  // Associated label text
+  if (input.id) {
+    const label = document.querySelector<HTMLLabelElement>(`label[for="${CSS.escape(input.id)}"]`)
+    const labelText = (label?.textContent ?? "").toLowerCase()
+    if (/resume|cv|curriculum|upload/.test(labelText)) return true
+  }
+
+  // Closest container with resume-related class/text
+  const container = input.closest('[class*="resume"],[class*="upload"],[class*="document"],[class*="attachment"],[data-test*="resume"],[data-automation*="resume"]')
+  if (container) return true
+
+  // Generic: first file input on the page with no accept restriction is likely resume
+  const allFileInputs = document.querySelectorAll<HTMLInputElement>('input[type="file"]')
+  if (allFileInputs.length === 1 && allFileInputs[0] === input) return true
+
+  return false
+}
+
+function injectResumeFile(base64: string, filename: string): { type: "INJECT_RESUME_FILE_RESULT"; injected: boolean; selector?: string; error?: string } {
+  try {
+    // Convert base64 → Uint8Array
+    const binary = atob(base64)
+    const bytes  = new Uint8Array(binary.length)
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+
+    // File may be docx or pdf depending on what the server generated
+    const mimeType = filename.toLowerCase().endsWith(".pdf")
+      ? "application/pdf"
+      : "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    const blob = new Blob([bytes], { type: mimeType })
+    const file = new File([blob], filename, { type: mimeType, lastModified: Date.now() })
+
+    // Find the resume file input
+    const candidates = [...document.querySelectorAll<HTMLInputElement>('input[type="file"]')]
+    const target     = candidates.find(isResumeFileInput) ?? candidates[0]
+    if (!target) return { type: "INJECT_RESUME_FILE_RESULT", injected: false, error: "No file input found" }
+
+    const dt = new DataTransfer()
+    dt.items.add(file)
+    target.files = dt.files
+
+    // Fire React-compatible events
+    target.dispatchEvent(new Event("input",  { bubbles: true }))
+    target.dispatchEvent(new Event("change", { bubbles: true }))
+
+    // Also trigger React's internal synthetic event system if present
+    const nativeSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "files")?.set
+    if (nativeSetter) nativeSetter.call(target, dt.files)
+    target.dispatchEvent(new Event("input",  { bubbles: true }))
+    target.dispatchEvent(new Event("change", { bubbles: true }))
+
+    // Build a stable selector for the result
+    const selector = target.id
+      ? `#${CSS.escape(target.id)}`
+      : target.name
+        ? `input[name="${target.name}"]`
+        : "input[type='file']"
+
+    return { type: "INJECT_RESUME_FILE_RESULT", injected: true, selector }
+  } catch (err) {
+    return { type: "INJECT_RESUME_FILE_RESULT", injected: false, error: String(err) }
+  }
+}
+
+async function mountScoutBarWhenReady(): Promise<void> {
   if (!isTopFrame()) return
   if (!shouldOverlayThisHost()) return
 
@@ -249,8 +388,234 @@ async function mountOverlayWhenReady(): Promise<void> {
     })
   }
 
-  const runtime = new PageAwareControlSystem({ resolveAppOrigin })
-  await runtime.mount()
+  // ScoutBar manages its own lifecycle (SPA URL observer, mount/teardown).
+  const bar = new ScoutBar()
+  await bar.mount()
+}
+
+/**
+ * Mount the job-card badge overlay on supported job-board sites
+ * (LinkedIn / Indeed / Glassdoor / Handshake). This intentionally runs even
+ * on hosts that ScoutBar's denylist excludes — the badges ARE the Hireoven
+ * surface for those sites.
+ *
+ * Re-checks the page mode whenever the URL changes (LinkedIn search → detail
+ * → search) so we only run the engine when there are real cards to badge.
+ */
+async function mountJobCardBadgesWhenReady(): Promise<void> {
+  if (!isTopFrame()) return
+
+  if (!document.body) {
+    await new Promise<void>((resolve) => {
+      const onReady = () => {
+        document.removeEventListener("DOMContentLoaded", onReady)
+        resolve()
+      }
+      document.addEventListener("DOMContentLoaded", onReady)
+    })
+  }
+
+  let engine: JobCardBadgeEngine | null = null
+  let lastSite: string | null = null
+
+  const refresh = () => {
+    const site = detectSite()
+    if (!isJobBoardSite(site)) {
+      engine?.stop()
+      engine = null
+      lastSite = null
+      unmountScreenerBar()
+      unmountDetailScoutPanel()
+      return
+    }
+    const mode = detectExtensionPageMode(window.location.href, document)
+    if (mode === "unknown") {
+      engine?.stop()
+      engine = null
+      lastSite = null
+      unmountScreenerBar()
+      unmountDetailScoutPanel()
+      return
+    }
+
+    // Screener bar shows only on search/list pages — detail pages get the
+    // Detail Scout panel instead.
+    if (mode === "job_board_search") {
+      void mountScreenerBar(site)
+      unmountDetailScoutPanel()
+    } else if (mode === "job_board_detail") {
+      // LinkedIn renders search + detail in the same shell (?currentJobId=…).
+      // Keep the screener bar mounted there so the user can still tweak
+      // filters on the list while reading a single job in the side pane.
+      if (window.location.pathname.includes("/jobs/search") ||
+          window.location.pathname.includes("/jobs/collections")) {
+        void mountScreenerBar(site)
+      } else {
+        unmountScreenerBar()
+      }
+      void mountDetailScoutPanel(site)
+    } else {
+      unmountScreenerBar()
+      unmountDetailScoutPanel()
+    }
+
+    if (engine && lastSite === site) {
+      // Same site, just re-evaluate filters in case cards changed.
+      applyJobBoardFilters()
+      return
+    }
+    engine?.stop()
+    engine = new JobCardBadgeEngine(site)
+    engine.start()
+    lastSite = site
+  }
+
+  refresh()
+
+  // Cheap URL poll — same approach the Scout Bar uses for SPA navigation.
+  let lastUrl = window.location.href
+  setInterval(() => {
+    if (window.location.href === lastUrl) return
+    lastUrl = window.location.href
+    refresh()
+  }, 600)
+}
+
+// ── Hireoven dashboard ↔ extension bridge ─────────────────────────────────────
+//
+// This bridge runs ONLY on hireoven.com / localhost:3000 (the app itself).
+// It relays lightweight context between the Scout dashboard page and the
+// background service worker using window.postMessage as the page-facing
+// protocol and chrome.runtime.sendMessage as the extension-facing protocol.
+//
+// Protocol (page → extension):
+//   window.postMessage({ source: "hireoven-scout", type: "GET_ACTIVE_CONTEXT" })
+//
+// Protocol (extension → page):
+//   window.postMessage({ source: "hireoven-ext", type: "ACTIVE_CONTEXT_RESULT" | "ACTIVE_CONTEXT_PUSH", context })
+
+const SCOUT_SOURCE = "hireoven-scout"
+const EXT_SOURCE = "hireoven-ext"
+
+function isHireovenPage(): boolean {
+  const host = window.location.hostname.toLowerCase().replace(/^www\./, "")
+  return host === "hireoven.com" || host === "localhost"
+}
+
+function registerPageBridge(): void {
+  if (!isHireovenPage()) return
+
+  // Page → extension: Scout dashboard requests current context
+  // ── Page → Extension: Scout dashboard sends requests and commands ────────────
+  const SCOUT_RELAY_COMMANDS = new Set(["OPEN_AUTOFILL", "START_TAILOR", "START_COMPARE", "START_WORKFLOW"])
+
+  window.addEventListener("message", (event) => {
+    if (event.source !== window) return
+    if (typeof event.data !== "object" || event.data === null) return
+    const msg = event.data as Record<string, unknown>
+    if (msg.source !== SCOUT_SOURCE) return
+
+    if (msg.type === "GET_ACTIVE_CONTEXT") {
+      // Pull: request stored context from background and echo back as ACTIVE_CONTEXT_CHANGED
+      chrome.runtime.sendMessage({ type: "GET_ACTIVE_CONTEXT" }, (response) => {
+        if (chrome.runtime.lastError) return
+        const ctx = (response as { context?: unknown })?.context ?? null
+        window.postMessage(
+          { source: EXT_SOURCE, type: "ACTIVE_CONTEXT_CHANGED", context: ctx },
+          window.location.origin,
+        )
+      })
+      return
+    }
+
+    // Apply agent — open job URL in a new tab, then auto-autofill when it loads
+    if (msg.type === "OPERATOR_OPEN_TAB") {
+      chrome.runtime.sendMessage({
+        type: "OPERATOR_OPEN_TAB",
+        url:           msg.url,
+        jobId:         msg.jobId,
+        jobTitle:      msg.jobTitle,
+        company:       msg.company,
+        coverLetterId: msg.coverLetterId,
+        agentMode:     msg.agentMode ?? false,
+      })
+      return
+    }
+
+    // Scout UI commands — relay to background which forwards to active job tab
+    if (SCOUT_RELAY_COMMANDS.has(msg.type as string)) {
+      chrome.runtime.sendMessage({
+        type: "RELAY_SCOUT_COMMAND",
+        command: msg.type,
+        payload: typeof msg.payload === "object" ? msg.payload : {},
+      })
+    }
+  })
+
+  // ── Extension → Page: background pushes context with spec-named events ────────
+  // The existing registerMessageBridge() listener catches BROADCAST_CONTEXT in its
+  // default case and sends an ERROR response — harmless; the window.postMessage still fires.
+  chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {
+    if (typeof message !== "object" || message === null) return false
+    const msg = message as Record<string, unknown>
+    if (msg.type !== "BROADCAST_CONTEXT") return false
+
+    const context = msg.context ?? null
+    const events = Array.isArray(msg.events) ? (msg.events as string[]) : ["ACTIVE_CONTEXT_CHANGED"]
+
+    for (const eventType of events) {
+      window.postMessage(
+        { source: EXT_SOURCE, type: eventType, context },
+        window.location.origin,
+      )
+    }
+
+    sendResponse({ ok: true })
+    return true
+  })
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── LinkedIn own-profile sync ─────────────────────────────────────────────────
+// Silently reads the user's OWN LinkedIn profile and syncs brand signals to
+// Hireoven. Only fires on linkedin.com/in/[slug] pages where the user is the
+// profile owner. Never touches other people's profiles.
+
+// Match any linkedin.com/in/[slug] path — ignore query params and hash
+const LINKEDIN_PROFILE_PATH_RE = /linkedin\.com\/in\/([^/?#]+)/
+
+let linkedInSyncedSlug = ""
+
+function maybeRunLinkedInProfileSync(): void {
+  const href = window.location.href
+  const slugMatch = href.match(LINKEDIN_PROFILE_PATH_RE)
+  if (!slugMatch) return
+
+  const currentSlug = slugMatch[1].toLowerCase()
+  if (currentSlug === linkedInSyncedSlug) return  // already synced this slug
+
+  // Wait for LinkedIn React hydration (it's a heavy SPA)
+  setTimeout(() => {
+    if (!chrome.runtime?.id) return
+
+    chrome.runtime.sendMessage(
+      { type: "GET_STORED_LINKEDIN_URL" },
+      (response: unknown) => {
+        if (chrome.runtime.lastError) return
+
+        const storedUrl = (response as { linkedinUrl?: string | null } | null)?.linkedinUrl ?? null
+
+        // Primary check: slug match against stored URL
+        // Fallback: DOM edit-button detection (only if no URL stored yet)
+        if (!isOwnLinkedInProfile(storedUrl)) return
+
+        const profileData = extractLinkedInProfile()
+        syncLinkedInBrandProfile(profileData)
+        linkedInSyncedSlug = currentSlug
+      }
+    )
+  }, 3000)  // 3s — give LinkedIn more time to fully render
 }
 
 function bootstrap(): void {
@@ -259,7 +624,20 @@ function bootstrap(): void {
   w.__hoContentBootstrapped = true
 
   registerMessageBridge()
-  void mountOverlayWhenReady()
+  registerPageBridge()
+  void mountScoutBarWhenReady()
+  void mountJobCardBadgesWhenReady()
+  maybeRunLinkedInProfileSync()
 }
+
+// LinkedIn uses history.pushState for SPA navigation.
+// Poll the URL every second — lightweight and reliable across all LinkedIn builds.
+let lastHref = window.location.href
+setInterval(() => {
+  if (window.location.href !== lastHref) {
+    lastHref = window.location.href
+    maybeRunLinkedInProfileSync()
+  }
+}, 1000)
 
 bootstrap()

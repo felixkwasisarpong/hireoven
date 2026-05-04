@@ -1,13 +1,19 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { ArrowUp, Sparkles } from "lucide-react"
+import { ArrowUp, LayoutGrid, List, Sparkles } from "lucide-react"
 import JobCardV2 from "@/components/jobs/JobCardV2"
+import JobListRow from "@/components/jobs/JobListRow"
+import { cn } from "@/lib/utils"
+
+type JobFeedView = "grid" | "list"
+const VIEW_STORAGE_KEY = "hireoven.jobFeed.view"
 import { H1BPredictionProvider } from "@/lib/context/H1BPredictionContext"
 import { useAuth } from "@/lib/hooks/useAuth"
 import { useSubscription } from "@/lib/hooks/useSubscription"
 import { useMatchScores } from "@/lib/hooks/useMatchScores"
 import { useJobs } from "@/lib/hooks/useJobs"
+import { publishFeedSignalNotifications } from "@/lib/notifications/feed-signals"
 import type { JobFilters } from "@/types"
 
 interface JobFeedProps {
@@ -15,6 +21,8 @@ interface JobFeedProps {
   searchQuery: string
   onMetaChange?: (meta: { totalCount: number; lastHourCount: number }) => void
   hasPrimaryResume?: boolean
+  /** Force a specific view — hides the view toggle when set */
+  defaultView?: JobFeedView
 }
 
 function JobRowSkeleton() {
@@ -61,6 +69,7 @@ export default function JobFeed({
   searchQuery,
   onMetaChange,
   hasPrimaryResume = false,
+  defaultView,
 }: JobFeedProps) {
   const personalized = hasPrimaryResume && (filters.sort ?? "freshest") === "match"
   const {
@@ -83,9 +92,8 @@ export default function JobFeed({
   const missingScoreIds = hasPrimaryResume
     ? jobs.filter((job) => !job.match_score).map((job) => job.id)
     : []
-  const { getScore, isLoading: scoresLoading } = useMatchScores(missingScoreIds)
-
-  const { profile } = useAuth()
+  const { user, profile } = useAuth()
+  const { getScore, isLoading: scoresLoading } = useMatchScores(missingScoreIds, user?.id)
   const { isProInternational } = useSubscription()
   const h1bEnabled = Boolean(
     profile?.needs_sponsorship || profile?.is_international || isProInternational
@@ -96,6 +104,21 @@ export default function JobFeed({
     const id = window.setInterval(() => setNow(Date.now()), 60_000)
     return () => window.clearInterval(id)
   }, [])
+
+  const [view, setView] = useState<JobFeedView>(defaultView ?? "grid")
+  useEffect(() => {
+    if (defaultView) return // honour forced view, ignore localStorage
+    try {
+      const stored = window.localStorage.getItem(VIEW_STORAGE_KEY)
+      if (stored === "grid" || stored === "list") setView(stored)
+    } catch {}
+  }, [defaultView])
+  function changeView(next: JobFeedView) {
+    if (defaultView) return // locked
+    setView(next)
+    try { window.localStorage.setItem(VIEW_STORAGE_KEY, next) } catch {}
+  }
+  const signalFingerprintRef = useRef("")
 
   const lastMetaRef = useRef({ totalCount: -1, lastHourCount: -1 })
   useEffect(() => {
@@ -123,6 +146,18 @@ export default function JobFeed({
     return () => observer.disconnect()
   }, [hasMore, loadMore])
 
+  useEffect(() => {
+    if (isLoading || jobs.length === 0) return
+    const fingerprint = jobs
+      .slice(0, 18)
+      .map((job) => `${job.id}:${job.match_score?.overall_score ?? "na"}:${job.sponsorship_score}:${job.first_detected_at}`)
+      .join("|")
+    if (!fingerprint || signalFingerprintRef.current === fingerprint) return
+    signalFingerprintRef.current = fingerprint
+
+    publishFeedSignalNotifications(jobs, { source: "hireoven", maxPerRun: 2 })
+  }, [isLoading, jobs])
+
   /** “Best match” must follow the same % as the card, not feed position #1 (rank blends freshness). */
   let bestMatchJobId: string | null = null
   if (filters.sort === "match") {
@@ -141,6 +176,45 @@ export default function JobFeed({
   return (
     <H1BPredictionProvider enabled={h1bEnabled}>
     <div className="space-y-4 rounded-[28px] bg-slate-50 p-3 sm:p-4">
+      {!defaultView && <div className="flex items-center justify-end">
+        <div
+          role="group"
+          aria-label="Job feed view"
+          className="inline-flex items-center gap-0.5 rounded-lg border border-slate-200 bg-white p-0.5 shadow-[0_1px_0_rgba(15,23,42,0.04)]"
+        >
+          <button
+            type="button"
+            onClick={() => changeView("grid")}
+            aria-pressed={view === "grid"}
+            aria-label="Grid view"
+            className={cn(
+              "inline-flex h-7 items-center gap-1 rounded-md px-2 text-[12px] font-semibold transition",
+              view === "grid"
+                ? "bg-slate-900 text-white"
+                : "text-slate-500 hover:text-slate-700"
+            )}
+          >
+            <LayoutGrid className="h-3.5 w-3.5" />
+            Grid
+          </button>
+          <button
+            type="button"
+            onClick={() => changeView("list")}
+            aria-pressed={view === "list"}
+            aria-label="List view"
+            className={cn(
+              "inline-flex h-7 items-center gap-1 rounded-md px-2 text-[12px] font-semibold transition",
+              view === "list"
+                ? "bg-slate-900 text-white"
+                : "text-slate-500 hover:text-slate-700"
+            )}
+          >
+            <List className="h-3.5 w-3.5" />
+            List
+          </button>
+        </div>
+      </div>}
+
       {newJobsCount > 0 && (
         <button
           type="button"
@@ -168,26 +242,37 @@ export default function JobFeed({
       )}
 
       {jobs.length > 0 && (
-        <div className="space-y-3 animate-fade-in">
-          {jobs.map((job, i) => (
-            <JobCardV2
-              key={job.id}
-              job={job}
-              hasPrimaryResume={hasPrimaryResume}
-              analysisIndex={i}
-              isBestMatch={Boolean(bestMatchJobId && job.id === bestMatchJobId)}
-              now={now}
-              priorityLogo={i < 6}
-              matchScore={job.match_score ?? getScore(job.id)}
-              isMatchScoreLoading={
-                hasPrimaryResume &&
-                !job.match_score &&
-                scoresLoading &&
-                !getScore(job.id)
-              }
-
-            />
-          ))}
+        <div className={cn(view === "list" ? "space-y-1.5" : "space-y-3", "animate-fade-in")}>
+          {jobs.map((job, i) => {
+            const matchScore = job.match_score ?? getScore(job.id)
+            const isMatchScoreLoading =
+              hasPrimaryResume && !job.match_score && scoresLoading && !getScore(job.id)
+            if (view === "list") {
+              return (
+                <JobListRow
+                  key={job.id}
+                  job={job}
+                  now={now}
+                  priorityLogo={i < 6}
+                  matchScore={matchScore}
+                  isMatchScoreLoading={isMatchScoreLoading}
+                />
+              )
+            }
+            return (
+              <JobCardV2
+                key={job.id}
+                job={job}
+                hasPrimaryResume={hasPrimaryResume}
+                analysisIndex={i}
+                isBestMatch={Boolean(bestMatchJobId && job.id === bestMatchJobId)}
+                now={now}
+                priorityLogo={i < 6}
+                matchScore={matchScore}
+                isMatchScoreLoading={isMatchScoreLoading}
+              />
+            )
+          })}
         </div>
       )}
 

@@ -46,7 +46,7 @@ const PANEL_STYLE = `
     width: 22px;
     height: 22px;
     border-radius: 999px;
-    background: #10b981;
+    background: #FF5C18;
     color: #052e1f;
     font-size: 11px;
     font-weight: 800;
@@ -83,7 +83,7 @@ const PANEL_STYLE = `
 
   .gauge svg { width: 100%; height: 100%; transform: rotate(-90deg); }
   .gauge .track { fill: none; stroke: #e2e8f0; stroke-width: 8; }
-  .gauge .fill { fill: none; stroke: #10b981; stroke-width: 8; stroke-linecap: round; transition: stroke-dasharray 240ms ease; }
+  .gauge .fill { fill: none; stroke: #FF5C18; stroke-width: 8; stroke-linecap: round; transition: stroke-dasharray 240ms ease; }
 
   .gauge-num {
     position: absolute;
@@ -188,7 +188,7 @@ const PANEL_STYLE = `
   }
 
   .actions-row button.primary {
-    background: #10b981;
+    background: #FF5C18;
     color: #052e1f;
   }
 
@@ -227,6 +227,15 @@ const ANCHOR_SELECTORS: Record<OverlaySite, string[]> = {
     ".jobsearch-ViewJobLayout-content",
     "#jobsearch-ViewJobButtons-container",
   ],
+  handshake: [
+    "[data-hook='job-detail']",
+    "[class*='job-detail']",
+    "main",
+  ],
+  google_jobs: [
+    "div[class*='sY2dNd']",
+    "div[class*='vac20e']",
+  ],
   generic: [],
 }
 
@@ -244,6 +253,11 @@ const TOP_INSERT_TARGETS: Record<OverlaySite, string[]> = {
     ".jobsearch-JobInfoHeader-title-container",
     ".jobsearch-DesktopStickyContainer",
   ],
+  handshake: [
+    "[data-hook='job-title']",
+    "[class*='job-header']",
+  ],
+  google_jobs: [],
   generic: [],
 }
 

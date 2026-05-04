@@ -14,6 +14,14 @@ export async function GET() {
     })
   }
 
+  if (typeof session.isAdmin === "boolean" && typeof session.suspended === "boolean") {
+    return NextResponse.json({
+      authenticated: true,
+      isAdmin: session.isAdmin,
+      suspended: session.suspended,
+    })
+  }
+
   try {
     const pool = getPostgresPool()
     const { rows } = await pool.query<{ is_admin: boolean; suspended_at: string | null }>(

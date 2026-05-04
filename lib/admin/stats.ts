@@ -144,7 +144,7 @@ export async function getDashboardStats(): Promise<AdminStats> {
     ),
     pool.query<{ total: string; failed: string }>(
       `SELECT COUNT(*)::text AS total,
-              COUNT(*) FILTER (WHERE status = 'failed')::text AS failed
+              COUNT(*) FILTER (WHERE status IN ('failed', 'blocked', 'bad_url', 'fetch_error'))::text AS failed
        FROM crawl_logs
        WHERE crawled_at >= $1::timestamptz`,
       [dayStart]
@@ -189,7 +189,7 @@ export async function getCrawlHealth(): Promise<CrawlHealth> {
        LIMIT 1`
     ),
     pool.query<{ failed: string }>(
-      `SELECT COUNT(*) FILTER (WHERE status = 'failed')::text AS failed
+      `SELECT COUNT(*) FILTER (WHERE status IN ('failed', 'blocked', 'bad_url', 'fetch_error'))::text AS failed
        FROM crawl_logs
        WHERE crawled_at >= $1::timestamptz`,
       [failedWindow]

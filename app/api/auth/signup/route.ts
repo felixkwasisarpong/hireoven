@@ -61,7 +61,7 @@ export async function POST(request: Request) {
       client.release()
     }
 
-    const token = await signSessionJwt({ sub: id, email })
+    const token = await signSessionJwt({ sub: id, email, isAdmin: false, suspended: false })
     const res = NextResponse.json({ ok: true, user: { id, email } })
     res.headers.append("Set-Cookie", buildSessionSetCookie(token, 60 * 60 * 24 * 14))
     return res

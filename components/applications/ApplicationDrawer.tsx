@@ -20,6 +20,7 @@ import CompanyLogo from "@/components/ui/CompanyLogo"
 import { cn } from "@/lib/utils"
 import type { ApplicationStatus, InterviewFormat, InterviewOutcome, InterviewRound, JobApplication, OfferDetails } from "@/types"
 import { InterviewPrep } from "./InterviewPrep"
+import { TakeHomeEngine } from "@/components/compensation/TakeHomeEngine"
 import FeatureGate from "@/components/gates/FeatureGate"
 import { ScoutFollowUpBlock } from "@/components/scout/ScoutFollowUpBlock"
 
@@ -417,11 +418,389 @@ function InterviewsTab({ app, onUpdate }: { app: JobApplication; onUpdate: Props
   )
 }
 
+// ─── Negotiate Panel ──────────────────────────────────────────────────────────
+
+type NegotiationResult = {
+  negotiationAnalysis: {
+    salaryAnalysis: {
+      offered: number | null
+      marketP50: number
+      marketP75: number
+      marketP90: number
+      lcaPrevailingWage: number | null
+      percentilePosition: string
+      isBelowMarket: boolean
+      negotiableUpTo: number
+      source: string
+    }
+    componentAnalysis: Array<{
+      component: string
+      offeredValue: string
+      marketBenchmark: string
+      negotiationPotential: string
+      talkingPoint: string
+    }>
+    negotiationStrategy: {
+      recommendedApproach: string
+      priorityComponents: string[]
+      estimatedUpside: number
+      riskLevel: string
+    }
+    counterOfferScript: {
+      salaryAsk: number
+      fallbackPosition: number
+    }
+    redFlags: string[]
+    immigrationConsiderations: string[]
+  }
+  counterOffer: {
+    emailScript: string
+    verbalScript: string
+    fallbackPositions: Array<{ ask: number; justification: string }>
+    doNotSayList: string[]
+    bestTimeToNegotiate: string
+    estimatedSuccessRate: string
+  }
+}
+
+function NegotiatePanel({
+  app,
+}: {
+  app: JobApplication
+}) {
+  const [loading, setLoading] = useState(false)
+  const [result, setResult] = useState<NegotiationResult | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [tone, setTone] = useState<"formal" | "warm" | "direct">("warm")
+  const [generatingScript, setGeneratingScript] = useState(false)
+  const [scriptResult, setScriptResult] = useState<NegotiationResult["counterOffer"] | null>(null)
+  const [showVerbal, setShowVerbal] = useState(false)
+  const [emailCopied, setEmailCopied] = useState(false)
+
+  async function runAnalysis() {
+    if (!app.offer_details?.base_salary) return
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await fetch("/api/offers/counter-script", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          offerDetails: app.offer_details,
+          tone,
+          roleTitle: app.job_title,
+          companyName: app.company_name,
+        }),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data = (await res.json()) as NegotiationResult
+      setResult(data)
+      setScriptResult(data.counterOffer)
+    } catch {
+      setError("Failed to run negotiation analysis. Please try again.")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function generateScript() {
+    if (!result) return
+    setGeneratingScript(true)
+    try {
+      const res = await fetch("/api/offers/counter-script", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          offerDetails: app.offer_details,
+          tone,
+          roleTitle: app.job_title,
+          companyName: app.company_name,
+        }),
+      })
+      if (!res.ok) throw new Error()
+      const data = (await res.json()) as NegotiationResult
+      setScriptResult(data.counterOffer)
+    } catch { /* silent */ }
+    finally { setGeneratingScript(false) }
+  }
+
+  async function copyEmail() {
+    if (!scriptResult?.emailScript) return
+    await navigator.clipboard.writeText(scriptResult.emailScript)
+    setEmailCopied(true)
+    setTimeout(() => setEmailCopied(false), 2000)
+  }
+
+  const sa = result?.negotiationAnalysis.salaryAnalysis
+  const fmt = (n: number) => `$${n.toLocaleString("en-US")}`
+
+  const POTENTIAL_COLORS: Record<string, string> = {
+    high: "text-emerald-600",
+    medium: "text-amber-600",
+    low: "text-slate-500",
+    none: "text-slate-400",
+  }
+
+  if (!app.offer_details?.base_salary) {
+    return (
+      <div className="rounded-xl border border-slate-100 bg-slate-50/60 px-4 py-3 text-[13px] text-slate-500">
+        Enter a base salary above to unlock negotiation analysis.
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      {!result ? (
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <p className="mb-1 text-[13px] font-semibold text-slate-800">Negotiate this offer</p>
+          <p className="mb-3 text-[12px] text-slate-500">
+            We&apos;ll benchmark {fmt(app.offer_details.base_salary)} against LCA prevailing wages
+            and market data for {app.job_title} roles, then generate a ready-to-send counter-offer script.
+          </p>
+          <div className="mb-3 flex gap-2">
+            {(["warm", "formal", "direct"] as const).map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setTone(t)}
+                className={cn(
+                  "rounded-full border px-3 py-1 text-[12px] font-medium capitalize transition-colors",
+                  tone === t
+                    ? "border-emerald-400 bg-emerald-50 text-emerald-700"
+                    : "border-slate-200 text-slate-500 hover:border-slate-300"
+                )}
+              >
+                {t}
+              </button>
+            ))}
+            <span className="self-center text-[11px] text-slate-400">tone</span>
+          </div>
+          {error && <p className="mb-2 text-[12px] text-red-500">{error}</p>}
+          <button
+            type="button"
+            disabled={loading}
+            onClick={runAnalysis}
+            className={cn(
+              "inline-flex items-center gap-2 rounded-lg px-4 py-2 text-[13px] font-semibold text-white transition-colors",
+              loading ? "bg-slate-300 cursor-not-allowed" : "bg-emerald-600 hover:bg-emerald-700"
+            )}
+          >
+            {loading ? (
+              <><Loader2 className="h-3.5 w-3.5 animate-spin" />Analysing…</>
+            ) : (
+              <>Analyse &amp; generate script</>
+            )}
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {/* Verdict header */}
+          <div className="flex items-start justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 mb-0.5">
+                Negotiation verdict
+              </p>
+              <p className={cn("text-[15px] font-bold", sa?.isBelowMarket ? "text-amber-600" : "text-emerald-600")}>
+                {sa?.isBelowMarket
+                  ? `Below market by ~${Math.round(((sa.marketP50 - (sa.offered ?? 0)) / sa.marketP50) * 100)}%`
+                  : "At or above market median"}
+              </p>
+              <p className="text-[12px] text-slate-500 mt-0.5">{sa?.percentilePosition}</p>
+            </div>
+            <div className="text-right shrink-0">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 mb-0.5">Counter ask</p>
+              <p className="text-[16px] font-bold text-slate-900">
+                {fmt(result.negotiationAnalysis.counterOfferScript.salaryAsk)}
+              </p>
+              <p className="text-[11px] text-slate-400">
+                Fallback: {fmt(result.negotiationAnalysis.counterOfferScript.fallbackPosition)}
+              </p>
+            </div>
+          </div>
+
+          {/* Market data */}
+          <div className="rounded-xl border border-slate-100 bg-slate-50/60 px-4 py-3">
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+              Market benchmarks · {sa?.source?.replace(/_/g, " ")}
+            </p>
+            <div className="flex gap-4">
+              {[
+                { label: "P50", value: sa?.marketP50 },
+                { label: "P75", value: sa?.marketP75 },
+                { label: "P90", value: sa?.marketP90 },
+                sa?.lcaPrevailingWage ? { label: "LCA prevailing", value: sa.lcaPrevailingWage } : null,
+              ].filter((x): x is { label: string; value: number } => x !== null && typeof x.value === "number" && x.value > 0).map((item) => (
+                <div key={item.label} className="text-center">
+                  <p className="text-[14px] font-bold text-slate-800">{fmt(item.value)}</p>
+                  <p className="text-[11px] text-slate-400">{item.label}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Component breakdown */}
+          <div>
+            <p className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-slate-400">
+              Component breakdown
+            </p>
+            <div className="space-y-2">
+              {result.negotiationAnalysis.componentAnalysis.map((c) => (
+                <div key={c.component} className="flex items-start gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[13px] font-semibold capitalize text-slate-800">{c.component}</span>
+                      <span className={cn("text-[11px] font-semibold capitalize", POTENTIAL_COLORS[c.negotiationPotential] ?? "text-slate-400")}>
+                        {c.negotiationPotential} potential
+                      </span>
+                    </div>
+                    <p className="text-[12px] text-slate-500">{c.offeredValue} · {c.marketBenchmark}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Red flags */}
+          {result.negotiationAnalysis.redFlags.length > 0 && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3">
+              <p className="mb-1 text-[12px] font-semibold text-amber-700">Watch out</p>
+              <ul className="space-y-1">
+                {result.negotiationAnalysis.redFlags.map((f, i) => (
+                  <li key={i} className="text-[12px] text-amber-800">· {f}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Immigration notes */}
+          {result.negotiationAnalysis.immigrationConsiderations.length > 0 && (
+            <div className="rounded-xl border border-sky-200 bg-sky-50/60 px-4 py-3">
+              <p className="mb-1 text-[12px] font-semibold text-sky-700">Visa / immigration notes</p>
+              {result.negotiationAnalysis.immigrationConsiderations.map((c, i) => (
+                <p key={i} className="text-[12px] text-sky-800">· {c}</p>
+              ))}
+            </div>
+          )}
+
+          {/* Counter-offer script */}
+          <div className="border-t border-slate-100 pt-4">
+            <div className="mb-3 flex items-center justify-between">
+              <p className="text-[13px] font-semibold text-slate-700">Counter-offer script</p>
+              <div className="flex gap-2">
+                {(["warm", "formal", "direct"] as const).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => { setTone(t); setScriptResult(null) }}
+                    className={cn(
+                      "rounded-full border px-2.5 py-0.5 text-[11px] font-medium capitalize",
+                      tone === t
+                        ? "border-emerald-400 bg-emerald-50 text-emerald-700"
+                        : "border-slate-200 text-slate-400 hover:border-slate-300"
+                    )}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {scriptResult ? (
+              <div className="space-y-3">
+                {/* Email script */}
+                <div>
+                  <div className="mb-1.5 flex items-center justify-between">
+                    <p className="text-[12px] font-semibold uppercase tracking-wide text-slate-400">Email script</p>
+                    <button
+                      type="button"
+                      onClick={copyEmail}
+                      className="inline-flex items-center gap-1 text-[12px] font-medium text-emerald-600 hover:underline"
+                    >
+                      {emailCopied ? "Copied!" : "Copy"}
+                    </button>
+                  </div>
+                  <textarea
+                    readOnly
+                    rows={8}
+                    value={scriptResult.emailScript}
+                    className="w-full resize-none rounded-[10px] border border-slate-200 bg-slate-50/60 px-3 py-2.5 text-[12px] text-slate-700 focus:outline-none"
+                  />
+                </div>
+
+                {/* Verbal script collapsible */}
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => setShowVerbal((v) => !v)}
+                    className="flex items-center gap-1 text-[12px] font-medium text-slate-500 hover:text-slate-800"
+                  >
+                    <span>{showVerbal ? "▾" : "▸"}</span>
+                    Verbal script (phone call)
+                  </button>
+                  {showVerbal && (
+                    <textarea
+                      readOnly
+                      rows={7}
+                      value={scriptResult.verbalScript}
+                      className="mt-2 w-full resize-none rounded-[10px] border border-slate-200 bg-slate-50/60 px-3 py-2.5 text-[12px] text-slate-700 focus:outline-none"
+                    />
+                  )}
+                </div>
+
+                {/* Fallback positions */}
+                <div className="rounded-xl border border-slate-100 bg-slate-50/60 px-4 py-3">
+                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Fallback positions</p>
+                  <div className="space-y-1">
+                    {scriptResult.fallbackPositions.map((fp, i) => (
+                      <div key={i} className="flex items-baseline gap-2">
+                        <span className="shrink-0 text-[13px] font-bold text-slate-800">{fmt(fp.ask)}</span>
+                        <span className="text-[12px] text-slate-500">{fp.justification}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Timing + success rate */}
+                <p className="text-[12px] text-slate-500">
+                  <span className="font-semibold text-slate-700">Best time to ask:</span> {scriptResult.bestTimeToNegotiate}
+                </p>
+                <p className="text-[12px] text-slate-500">
+                  <span className="font-semibold text-slate-700">Estimated success rate:</span> {scriptResult.estimatedSuccessRate}
+                </p>
+              </div>
+            ) : (
+              <button
+                type="button"
+                disabled={generatingScript}
+                onClick={generateScript}
+                className={cn(
+                  "inline-flex items-center gap-2 rounded-lg px-4 py-2 text-[13px] font-semibold transition-colors",
+                  generatingScript
+                    ? "bg-slate-100 text-slate-400 cursor-not-allowed"
+                    : "bg-slate-900 text-white hover:bg-slate-800"
+                )}
+              >
+                {generatingScript ? (
+                  <><Loader2 className="h-3.5 w-3.5 animate-spin" />Generating…</>
+                ) : (
+                  "Generate counter-offer script"
+                )}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Offer Tab ────────────────────────────────────────────────────────────────
 
 function OfferTab({ app, onUpdate }: { app: JobApplication; onUpdate: Props["onUpdate"] }) {
   const [offer, setOffer] = useState<OfferDetails>(app.offer_details ?? {})
   const [saving, setSaving] = useState(false)
+  const [showNegotiate, setShowNegotiate] = useState(false)
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   function handleChange(key: keyof OfferDetails, value: string | number | undefined) {
@@ -444,19 +823,19 @@ function OfferTab({ app, onUpdate }: { app: JobApplication; onUpdate: Props["onU
 
       <div className="grid gap-3 sm:grid-cols-2">
         {[
-          { key: "base_salary", label: "Base salary", type: "number", prefix: "$" },
-          { key: "signing_bonus", label: "Signing bonus", type: "number", prefix: "$" },
-          { key: "annual_bonus_target", label: "Bonus target", type: "number", prefix: "$" },
-        ].map(({ key, label, type, prefix }) => (
+          { key: "base_salary", label: "Base salary", type: "number" },
+          { key: "signing_bonus", label: "Signing bonus", type: "number" },
+          { key: "annual_bonus_target", label: "Bonus target", type: "number" },
+        ].map(({ key, label, type }) => (
           <div key={key}>
             <label className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">{label}</label>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">{prefix}</span>
+            <div className="flex items-center rounded-[10px] border border-slate-200 bg-slate-50/60 focus-within:border-emerald-400">
+              <span className="pl-3 text-sm text-slate-400 select-none">$</span>
               <input
                 type={type}
-                value={(offer as any)[key] ?? ""}
+                value={(offer as Record<string, unknown>)[key] as string ?? ""}
                 onChange={(e) => handleChange(key as keyof OfferDetails, e.target.value ? Number(e.target.value) : undefined)}
-                className="w-full rounded-[10px] border border-slate-200 bg-slate-50/60 py-2.5 pl-7 pr-3 text-sm text-slate-800 focus:outline-none"
+                className="min-w-0 flex-1 bg-transparent py-2.5 pl-1.5 pr-3 text-sm text-slate-800 focus:outline-none"
               />
             </div>
           </div>
@@ -496,14 +875,34 @@ function OfferTab({ app, onUpdate }: { app: JobApplication; onUpdate: Props["onU
       </div>
 
       {offer.base_salary && (
-        <div className="rounded-[12px] bg-emerald-50 border border-emerald-100 p-4">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-600 mb-2">Total compensation estimate</p>
-          <p className="text-2xl font-bold text-emerald-800">
-            ${((offer.base_salary ?? 0) + (offer.signing_bonus ?? 0) + (offer.annual_bonus_target ?? 0)).toLocaleString()}
-          </p>
-          <p className="text-[11.5px] text-emerald-600 mt-0.5">base + signing + bonus</p>
+        <div className="border-t border-slate-100 pt-4">
+          <TakeHomeEngine
+            initialSalary={offer.base_salary}
+            initialLocation=""
+            initialFilingStatus="single"
+          />
         </div>
       )}
+
+      {/* Negotiate section */}
+      <div className="border-t border-slate-100 pt-4">
+        <button
+          type="button"
+          onClick={() => setShowNegotiate((v) => !v)}
+          className="flex w-full items-center justify-between text-left"
+        >
+          <div>
+            <p className="text-sm font-semibold text-slate-800">Negotiate this offer</p>
+            <p className="text-[12px] text-slate-400">Benchmark against market data · Generate counter-offer script</p>
+          </div>
+          <span className="text-slate-400 text-lg">{showNegotiate ? "▾" : "▸"}</span>
+        </button>
+        {showNegotiate && (
+          <div className="mt-3">
+            <NegotiatePanel app={{ ...app, offer_details: offer }} />
+          </div>
+        )}
+      </div>
     </div>
   )
 }

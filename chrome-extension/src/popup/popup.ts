@@ -875,7 +875,14 @@ function handleProfileLink(e: Event) {
 
 async function boot() {
   const stored = await chrome.storage.local.get(["devMode", "lastJobId"])
-  appOrigin = stored.devMode === false ? "https://hireoven.com" : "http://localhost:3000"
+  const isUnpacked = !chrome.runtime.getManifest().update_url
+  if (stored.devMode === true) {
+    appOrigin = "http://localhost:3000"
+  } else if (stored.devMode === false) {
+    appOrigin = "https://hireoven.com"
+  } else {
+    appOrigin = isUnpacked ? "http://localhost:3000" : "https://hireoven.com"
+  }
 
   // Restore jobId from extension storage if available (handles cross-session)
   if (stored.lastJobId) tailorJobId = stored.lastJobId as string

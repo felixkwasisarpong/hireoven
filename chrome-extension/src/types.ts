@@ -102,6 +102,7 @@ export type ContentMessageType =
   | "EXTRACT_JOB"
   | "DETECT_FORM_FIELDS"
   | "FILL_FORM_FIELDS"
+  | "INJECT_RESUME_FILE"
 
 export interface DetectPageMessage { type: "DETECT_PAGE" }
 export interface ExtractJobMessage { type: "EXTRACT_JOB" }
@@ -115,11 +116,18 @@ export interface FillFormFieldsMessage {
   fields: Array<{ elementRef: string; value: string }>
 }
 
+export interface InjectResumeFileContentMessage {
+  type:     "INJECT_RESUME_FILE"
+  base64:   string
+  filename: string
+}
+
 export type ContentMessage =
   | DetectPageMessage
   | ExtractJobMessage
   | DetectFormFieldsMessage
   | FillFormFieldsMessage
+  | InjectResumeFileContentMessage
 
 // Safe profile subset the extension receives
 export interface ExtensionSafeProfile {
@@ -165,6 +173,7 @@ export type ContentResponseType =
   | "JOB_EXTRACTED"
   | "FORM_FIELDS_DETECTED"
   | "FORM_FILLED"
+  | "INJECT_RESUME_FILE_RESULT"
   | "ERROR"
 
 export interface PageDetectedResponse {
@@ -199,6 +208,7 @@ export type ContentResponse =
   | JobExtractedResponse
   | FormFieldsDetectedResponse
   | FormFilledResponse
+  | InjectResumeFileResult
   | ErrorResponse
 
 // ── Background ↔ popup messages ───────────────────────────────────────────────
@@ -216,6 +226,23 @@ export type BackgroundMessageType =
   | "FILL_COVER_LETTER"
   | "GET_SCOUT_OVERLAY"
   | "LIST_RESUMES"
+  | "GET_WORKFLOW_STATE"
+  | "GET_ACTIVE_CONTEXT"
+  | "RELAY_SCOUT_COMMAND"
+  | "QUEUE_GET_STATE"
+  | "QUEUE_ADD_JOB"
+  | "QUEUE_SKIP_JOB"
+  | "QUEUE_RETRY_JOB"
+  | "QUEUE_MARK_SUBMITTED"
+  | "QUEUE_APPROVE_RESUME"
+  | "QUEUE_PAUSE"
+  | "QUEUE_RESUME"
+  | "QUEUE_CLEAR"
+  | "OPERATOR_OPEN_TAB"
+  | "FETCH_RESUME_FILE"
+  | "INJECT_RESUME_FILE_IN_TAB"
+  | "SYNC_LINKEDIN_BRAND_PROFILE"
+  | "GET_STORED_LINKEDIN_URL"
 
 export interface ExtensionResumeSummary {
   id: string
@@ -310,6 +337,98 @@ export type ScoutOverlayResult =
   | ({ type: "SCOUT_OVERLAY_RESULT" } & ScoutOverlayInsightsPayload)
   | { type: "SCOUT_OVERLAY_RESULT"; ok: false; error?: string; message?: string }
 
+// ── Apply Queue ────────────────────────────────────────────────────────────────
+
+export type QueueItemStatus =
+  | "queued"
+  | "tailoring"
+  | "waiting_resume_approval"
+  | "cover_letter_ready"
+  | "autofill_ready"
+  | "waiting_user_review"
+  | "submitted_manually"
+  | "failed"
+  | "skipped"
+
+export interface QueueJobWarning {
+  code: string
+  message: string
+  severity: "info" | "warning" | "error"
+}
+
+export interface QueueJobEntry {
+  queueId: string
+  jobId?: string | null
+  jobTitle: string
+  company?: string | null
+  applyUrl: string
+  matchScore?: number | null
+  sponsorshipSignal?: string | null
+  status: QueueItemStatus
+  resumeVersionId?: string | null
+  resumeId?: string | null
+  coverLetter?: string | null
+  failReason?: string | null
+  warnings?: QueueJobWarning[]
+  addedAt: string
+  preparedAt?: string | null
+}
+
+export interface ApplyQueueState {
+  queueId: string
+  jobs: QueueJobEntry[]
+  paused: boolean
+  createdAt: string
+}
+
+export interface QueueGetStateMessage { type: "QUEUE_GET_STATE" }
+
+export interface QueueAddJobMessage {
+  type: "QUEUE_ADD_JOB"
+  job: {
+    jobId?: string | null
+    jobTitle: string
+    company?: string | null
+    applyUrl: string
+    matchScore?: number | null
+    sponsorshipSignal?: string | null
+  }
+}
+
+export interface QueueSkipJobMessage   { type: "QUEUE_SKIP_JOB";   queueId: string }
+export interface QueueRetryJobMessage  { type: "QUEUE_RETRY_JOB";  queueId: string }
+
+export interface QueueMarkSubmittedMessage {
+  type: "QUEUE_MARK_SUBMITTED"
+  queueId: string
+}
+
+export interface QueueApproveResumeMessage {
+  type: "QUEUE_APPROVE_RESUME"
+  queueId: string
+  versionId: string
+  resumeId: string
+}
+
+export interface QueuePauseMessage  { type: "QUEUE_PAUSE" }
+export interface QueueResumeMessage { type: "QUEUE_RESUME" }
+export interface QueueClearMessage  { type: "QUEUE_CLEAR" }
+
+export interface QueueStateResult {
+  type: "QUEUE_STATE_RESULT"
+  queue: ApplyQueueState | null
+}
+
+export interface QueueAddResult {
+  type: "QUEUE_ADD_RESULT"
+  queueId: string
+  status: QueueItemStatus
+  warnings?: QueueJobWarning[]
+  failReason?: string | null
+}
+
+export interface QueueActionResult { type: "QUEUE_ACTION_RESULT"; ok: boolean }
+
 export type BackgroundMessage =
   | GetSessionMessage
   | ResolveJobMessage
@@ -323,6 +442,94 @@ export type BackgroundMessage =
   | FillCoverLetterMessage
   | GetScoutOverlayMessage
   | ListResumesMessage
+  | GetWorkflowStateMessage
+  | GetActiveContextMessage
+  | RelayScoutCommandMessage
+  | QueueGetStateMessage
+  | QueueAddJobMessage
+  | QueueSkipJobMessage
+  | QueueRetryJobMessage
+  | QueueMarkSubmittedMessage
+  | QueueApproveResumeMessage
+  | QueuePauseMessage
+  | QueueResumeMessage
+  | QueueClearMessage
+  | OperatorOpenTabMessage
+  | FetchResumeFileMessage
+  | InjectResumeFileInTabMessage
+  | SyncLinkedInBrandProfileMessage
+  | GetStoredLinkedInUrlMessage
+
+export interface GetStoredLinkedInUrlMessage {
+  type: "GET_STORED_LINKEDIN_URL"
+}
+
+export interface SyncLinkedInBrandProfileMessage {
+  type: "SYNC_LINKEDIN_BRAND_PROFILE"
+  profile: {
+    linkedinUrl: string
+    headline: string | null
+    hasAboutSection: boolean
+    skillsCount: number
+    recommendationsCount: number
+    connectionsEstimate: number | null
+    lastPostDetectedAt: string | null
+    daysSinceLastActivity: number | null
+  }
+}
+
+export interface OperatorOpenTabMessage {
+  type:           "OPERATOR_OPEN_TAB"
+  url:            string
+  jobId?:         string
+  jobTitle?:      string
+  company?:       string
+  coverLetterId?: string
+  agentMode?:     boolean
+}
+
+export interface OperatorOpenTabAck {
+  type: "OPERATOR_OPEN_TAB_ACK"
+}
+
+export interface FetchResumeFileMessage {
+  type:     "FETCH_RESUME_FILE"
+  resumeId: string
+}
+
+/** One-shot: background fetches the PDF and injects it into the sender's tab */
+export interface InjectResumeFileInTabMessage {
+  type:     "INJECT_RESUME_FILE_IN_TAB"
+  resumeId: string
+}
+
+export interface InjectResumeFileInTabResult {
+  type:      "INJECT_RESUME_FILE_IN_TAB_RESULT"
+  injected:  boolean
+  selector?: string
+  error?:    string
+}
+
+export interface FetchResumeFileResult {
+  type:       "FETCH_RESUME_FILE_RESULT"
+  base64?:    string        // base64-encoded PDF
+  filename?:  string
+  error?:     string
+}
+
+// Sent from background → content script to inject a resume file into the page
+export interface InjectResumeFileMessage {
+  type:     "INJECT_RESUME_FILE"
+  base64:   string
+  filename: string
+}
+
+export interface InjectResumeFileResult {
+  type:      "INJECT_RESUME_FILE_RESULT"
+  injected:  boolean
+  selector?: string    // which input was found
+  error?:    string
+}
 
 export interface ExtensionSessionUser {
   id: string
@@ -446,7 +653,137 @@ export type BackgroundResponse =
   | FillCoverLetterResult
   | ScoutOverlayResult
   | ListResumesResult
+  | WorkflowStateResult
+  | ActiveContextResult
+  | RelayScoutCommandResult
+  | QueueStateResult
+  | QueueAddResult
+  | QueueActionResult
+  | OperatorOpenTabAck
+  | FetchResumeFileResult
+  | InjectResumeFileInTabResult
+  | StoredLinkedInUrlResult
   | BackgroundError
+
+export interface StoredLinkedInUrlResult {
+  linkedinUrl: string | null
+}
+
+// ── Active browser context ────────────────────────────────────────────────────
+//
+// Built from live page detection in the background service worker and pushed
+// to hireoven.com tabs so Scout can adapt its UI to the user's active tab.
+
+export type ActiveBrowserPageType =
+  | "search_results"
+  | "job_detail"
+  | "application_form"
+  | "company_page"
+  | "unknown"
+
+export interface ActiveBrowserContext {
+  pageType: ActiveBrowserPageType
+  atsProvider?: ATSProvider
+  url: string
+  title?: string
+  company?: string
+  location?: string
+  detectedJobId?: string
+  autofillAvailable?: boolean
+  detectedFieldsCount?: number
+  timestamp: number
+}
+
+/** Background → hireoven content script: push context with named events to broadcast */
+export interface BroadcastContextMessage {
+  type: "BROADCAST_CONTEXT"
+  context: ActiveBrowserContext | null
+  /**
+   * Spec-named events to broadcast as separate window.postMessage calls:
+   *   ACTIVE_CONTEXT_CHANGED — always sent
+   *   AUTOFILL_AVAILABLE     — when pageType changes to application_form
+   *   JOB_RESOLVED           — when detectedJobId first appears
+   *   PAGE_MODE_CHANGED      — when pageType changes from a previous value
+   */
+  events: string[]
+}
+
+/** Popup / hireoven page bridge → background: request stored context */
+export interface GetActiveContextMessage {
+  type: "GET_ACTIVE_CONTEXT"
+}
+
+/** Background → requester: current stored active browser context */
+export interface ActiveContextResult {
+  type: "ACTIVE_CONTEXT_RESULT"
+  context: ActiveBrowserContext | null
+}
+
+// ── Review submitted notification ─────────────────────────────────────────────
+
+/** Posted by the extension to hireoven.com via window.postMessage when the user
+ *  clicks "Mark submitted" in the Final Review panel on the job site. */
+export interface ReviewSubmittedMessage {
+  type:         "hireoven:review-submitted"
+  jobId?:       string
+  queueItemId?: string
+}
+
+/** Scout commands that hireoven.com page can send to the extension */
+export type ScoutExtensionCommandType =
+  | "OPEN_AUTOFILL"
+  | "START_TAILOR"
+  | "START_COMPARE"
+  | "START_WORKFLOW"
+
+/** Content script on hireoven.com → background: relay a Scout UI command to the active job tab */
+export interface RelayScoutCommandMessage {
+  type: "RELAY_SCOUT_COMMAND"
+  command: ScoutExtensionCommandType
+  payload?: Record<string, unknown>
+}
+
+/** Background → content script on job site: execute a Scout command */
+export interface ExecuteScoutCommandMessage {
+  type: "EXECUTE_SCOUT_COMMAND"
+  command: ScoutExtensionCommandType
+  payload?: Record<string, unknown>
+}
+
+export interface RelayScoutCommandResult {
+  type: "RELAY_SCOUT_COMMAND_RESULT"
+  delivered: boolean
+}
+
+// ── Workflow extension state ──────────────────────────────────────────────────
+//
+// The extension content script can POST this state to the Scout dashboard
+// via window.postMessage when it detects a relevant page change.
+// The dashboard listens for "hireoven:extension-page-state" messages and
+// can update the active workflow step status accordingly.
+
+export interface WorkflowExtensionPageState {
+  pageMode: ExtensionPageMode
+  autofillReady: boolean
+  fieldsDetected: boolean
+  ats: ATSProvider
+  jobContext?: {
+    jobId?: string
+    title?: string | null
+    company?: string | null
+    url: string
+  }
+  timestamp: number
+}
+
+export interface GetWorkflowStateMessage {
+  type: "GET_WORKFLOW_STATE"
+}
+
+export interface WorkflowStateResult {
+  type: "WORKFLOW_STATE_RESULT"
+  state: WorkflowExtensionPageState | null
+}
 
 // ── API shapes (matching web app routes) ─────────────────────────────────────
 

@@ -111,7 +111,7 @@ export function ScoutActivityTimeline({ compact = false }: ScoutActivityTimeline
 
   if (compact) {
     return (
-      <div className="border-t border-slate-100 px-3 py-2.5">
+      <div className="border-t border-slate-100 bg-white px-3 py-2.5">
         <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
           Recent activity
         </p>

@@ -47,9 +47,9 @@ function writeSessionCache(userId: string, scores: Record<string, JobMatchScore>
   window.sessionStorage.setItem(getSessionKey(userId), JSON.stringify(envelope))
 }
 
-export function useMatchScores(jobIds: string[]) {
+export function useMatchScores(jobIds: string[], externalUserId?: string | null) {
   const scoresRef = useRef<Map<string, JobMatchScore>>(new Map())
-  const [userId, setUserId] = useState<string | null>(null)
+  const [userId, setUserId] = useState<string | null>(externalUserId ?? null)
   const [isLoading, setIsLoading] = useState(false)
   const [, forceRender] = useState(0)
 
@@ -60,23 +60,18 @@ export function useMatchScores(jobIds: string[]) {
     [jobIdsFingerprint]
   )
 
+  // Only fall back to fetching the session if the caller didn't provide a userId
   useEffect(() => {
-    let cancelled = false
-
-    fetchSessionUser()
-      .then((u) => {
-        if (cancelled) return
-        setUserId(u?.id ?? null)
-      })
-      .catch((error) => {
-        devWarn("Failed to load match score user", error)
-        if (!cancelled) setUserId(null)
-      })
-
-    return () => {
-      cancelled = true
+    if (externalUserId !== undefined) {
+      setUserId(externalUserId ?? null)
+      return
     }
-  }, [])
+    let cancelled = false
+    fetchSessionUser()
+      .then((u) => { if (!cancelled) setUserId(u?.id ?? null) })
+      .catch((error) => { devWarn("Failed to load match score user", error); if (!cancelled) setUserId(null) })
+    return () => { cancelled = true }
+  }, [externalUserId])
 
   useEffect(() => {
     if (!userId) return

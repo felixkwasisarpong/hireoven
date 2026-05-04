@@ -5,6 +5,7 @@
  * Usage:
  *   npx tsx scripts/apply-high-confidence-careers-url-repairs.ts             # dry-run
  *   npx tsx scripts/apply-high-confidence-careers-url-repairs.ts --execute   # write
+ *   npx tsx scripts/apply-high-confidence-careers-url-repairs.ts --zero-jobs-only --execute
  *   npx tsx scripts/apply-high-confidence-careers-url-repairs.ts --probe --execute
  *
  * Strict-rule posture:
@@ -25,6 +26,7 @@ loadEnvConfig(process.cwd())
 
 const execute = process.argv.includes("--execute")
 const probeEnabled = process.argv.includes("--probe")
+const zeroJobsOnly = process.argv.includes("--zero-jobs-only")
 const limitArg = process.argv.find((arg) => arg.startsWith("--limit="))
 const limit = limitArg ? Math.max(1, Number(limitArg.split("=")[1])) : null
 const probeTimeoutMs = Math.max(
@@ -93,7 +95,7 @@ async function loadApplyUrlsByCompany(pool: Pool): Promise<Map<string, string[]>
 async function main() {
   const pool = getPool()
   console.log(
-    `\n[careers-url-repair] mode=${execute ? "EXECUTE" : "DRY-RUN"}, probe=${probeEnabled}`
+    `\n[careers-url-repair] mode=${execute ? "EXECUTE" : "DRY-RUN"}, probe=${probeEnabled}, zeroJobsOnly=${zeroJobsOnly}`
   )
 
   try {
@@ -108,6 +110,7 @@ async function main() {
       `SELECT id, name, domain, careers_url, ats_type, ats_identifier
        FROM companies
        WHERE is_active = true
+         ${zeroJobsOnly ? "AND COALESCE(job_count, 0) = 0" : ""}
        ORDER BY name${limit ? ` LIMIT ${limit}` : ""}`
     )
 

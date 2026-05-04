@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
-import { ArrowLeft, Building2, ChevronDown, Search, SlidersHorizontal } from "lucide-react"
-import CompanyCard from "@/components/companies/CompanyCard"
+import { ArrowLeft, Bookmark, Building2, ChevronDown, Search, X } from "lucide-react"
+import CompanyLogo from "@/components/ui/CompanyLogo"
 import { useAuth } from "@/lib/hooks/useAuth"
 import { useWatchlist } from "@/lib/hooks/useWatchlist"
 import { cn } from "@/lib/utils"
@@ -21,27 +21,144 @@ const SIZE_OPTIONS: { value: CompanySize; label: string }[] = [
 ]
 const SORT_OPTIONS = [
   { value: "job_count",              label: "Most jobs"         },
-  { value: "sponsorship_confidence", label: "Highest sponsor score" },
-  { value: "created_at",             label: "Recently added"   },
-  { value: "name",                   label: "Alphabetical"     },
+  { value: "sponsorship_confidence", label: "Top sponsor score" },
+  { value: "created_at",             label: "Recently added"    },
+  { value: "name",                   label: "Alphabetical"      },
 ]
 
+function ConfidenceBar({ score }: { score: number }) {
+  const pct = Math.max(0, Math.min(100, score))
+  const color =
+    pct >= 80 ? "bg-emerald-500" :
+    pct >= 60 ? "bg-[#FF5C18]" :
+    pct >= 40 ? "bg-amber-400" :
+    "bg-gray-200"
+  return (
+    <div className="flex items-center gap-2.5">
+      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-gray-100">
+        <div className={cn("h-full rounded-full transition-all duration-500", color)} style={{ width: `${pct}%` }} />
+      </div>
+      <span className="w-7 flex-shrink-0 text-right text-xs font-semibold tabular-nums text-gray-600">
+        {pct}%
+      </span>
+    </div>
+  )
+}
+
+function CompanyRow({
+  company,
+  newJobsToday,
+  isWatching,
+  onWatch,
+  onUnwatch,
+}: {
+  company: Company
+  newJobsToday?: number
+  isWatching: boolean
+  onWatch: (id: string) => void
+  onUnwatch: (id: string) => void
+}) {
+  return (
+    <Link
+      href={`/dashboard/companies/${company.id}`}
+      className="group flex items-center gap-4 px-5 py-3.5 transition-colors hover:bg-orange-50/40"
+    >
+      {/* Logo */}
+      <CompanyLogo
+        companyName={company.name}
+        domain={company.domain}
+        logoUrl={company.logo_url}
+        className="h-9 w-9 flex-shrink-0 rounded-xl border border-slate-100 bg-white object-contain p-1 shadow-[0_3px_10px_rgba(15,23,42,0.04)]"
+      />
+
+      {/* Name + meta */}
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-semibold text-gray-900 transition-colors group-hover:text-[#FF5C18]">
+          {company.name}
+        </p>
+        <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0">
+          {company.industry && (
+            <span className="text-[11px] text-gray-400">{company.industry}</span>
+          )}
+          {company.industry && company.size && (
+            <span className="text-gray-300">·</span>
+          )}
+          {company.size && (
+            <span className="text-[11px] capitalize text-gray-400">{company.size}</span>
+          )}
+          {company.sponsors_h1b && (
+            <>
+              <span className="text-gray-300">·</span>
+              <span className="text-[11px] font-semibold text-[#FF5C18]">H-1B</span>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Sponsor score */}
+      <div className="hidden w-36 flex-shrink-0 sm:block">
+        <p className="mb-1 text-[9px] font-semibold uppercase tracking-[0.2em] text-gray-400">
+          Sponsor score
+        </p>
+        <ConfidenceBar score={company.sponsorship_confidence} />
+      </div>
+
+      {/* Job count */}
+      <div className="hidden w-24 flex-shrink-0 text-right sm:block">
+        {company.job_count > 0 ? (
+          <>
+            <p className="text-sm font-semibold tabular-nums text-[#FF5C18]">
+              {company.job_count.toLocaleString()}
+            </p>
+            <p className="text-[10px] text-gray-400">
+              {(newJobsToday ?? 0) > 0 ? (
+                <span className="font-semibold text-emerald-600">+{newJobsToday} today</span>
+              ) : (
+                "open roles"
+              )}
+            </p>
+          </>
+        ) : (
+          <p className="text-sm text-gray-300">—</p>
+        )}
+      </div>
+
+      {/* Watch button */}
+      <button
+        type="button"
+        onClick={(e) => {
+          e.preventDefault()
+          e.stopPropagation()
+          isWatching ? onUnwatch(company.id) : onWatch(company.id)
+        }}
+        aria-label={isWatching ? "Unwatch company" : "Watch company"}
+        className={cn(
+          "flex-shrink-0 rounded-xl border p-2 transition",
+          isWatching
+            ? "border-[#FF5C18]/25 bg-[#FFF1E8] text-[#FF5C18] shadow-[0_3px_10px_rgba(255,92,24,0.08)]"
+            : "border-transparent bg-transparent text-gray-400 opacity-0 group-hover:opacity-100 hover:border-[#FF5C18]/30 hover:bg-[#FFF1E8] hover:text-[#FF5C18]"
+        )}
+      >
+        <Bookmark className="h-3.5 w-3.5" fill={isWatching ? "currentColor" : "none"} />
+      </button>
+    </Link>
+  )
+}
+
 export default function CompaniesPage() {
-  const router      = useRouter()
+  const router       = useRouter()
   const searchParams = useSearchParams()
-  const { user }    = useAuth()
+  const { user }     = useAuth()
   const { addCompany, removeCompany, isWatching } = useWatchlist(user?.id)
 
-  const [all,        setAll]        = useState<Company[]>([])
-  const [industries, setIndustries] = useState<string[]>([])
-  const [newToday,   setNewToday]   = useState<Record<string, number>>({})
-  const [total,      setTotal]      = useState(0)
-  const [isLoading,  setIsLoading]  = useState(true)
-  const [offset,     setOffset]     = useState(0)
-  const [showFilters, setShowFilters] = useState(false)
+  const [all,          setAll]          = useState<Company[]>([])
+  const [industries,   setIndustries]   = useState<string[]>([])
+  const [newToday,     setNewToday]     = useState<Record<string, number>>({})
+  const [total,        setTotal]        = useState(0)
+  const [isLoading,    setIsLoading]    = useState(true)
+  const [offset,       setOffset]       = useState(0)
   const [industryOpen, setIndustryOpen] = useState(false)
 
-  // Filter state derived from URL
   const selectedIndustries = useMemo(
     () => searchParams.get("industry")?.split(",").filter(Boolean) ?? [],
     [searchParams]
@@ -50,16 +167,14 @@ export default function CompaniesPage() {
     () => (searchParams.get("size")?.split(",").filter(Boolean) ?? []) as CompanySize[],
     [searchParams]
   )
-  const selectedAts    = searchParams.get("ats") ?? ""
-  const sponsorsH1b    = searchParams.get("sponsors_h1b") === "1"
-  const hasJobs        = searchParams.get("has_jobs") === "1"
-  const sort           = searchParams.get("sort") ?? "job_count"
-  const qParam         = searchParams.get("q") ?? ""
+  const selectedAts = searchParams.get("ats") ?? ""
+  const sponsorsH1b = searchParams.get("sponsors_h1b") === "1"
+  const hasJobs     = searchParams.get("has_jobs") === "1"
+  const sort        = searchParams.get("sort") ?? "job_count"
+  const qParam      = searchParams.get("q") ?? ""
   const [searchDraft, setSearchDraft] = useState(qParam)
 
-  useEffect(() => {
-    setSearchDraft(qParam)
-  }, [qParam])
+  useEffect(() => { setSearchDraft(qParam) }, [qParam])
 
   useEffect(() => {
     const trimmed = searchDraft.trim()
@@ -83,14 +198,20 @@ export default function CompaniesPage() {
   }
 
   function toggleList(key: string, current: string[], value: string) {
-    const next = current.includes(value) ? current.filter((v) => v !== value) : [...current, value]
+    const next = current.includes(value)
+      ? current.filter((v) => v !== value)
+      : [...current, value]
     update(key, next.join(",") || null)
   }
 
   useEffect(() => {
     async function load() {
       setIsLoading(true)
-      const params = new URLSearchParams({ sort, limit: String(PAGE_SIZE), offset: String(offset) })
+      const params = new URLSearchParams({
+        sort,
+        limit: String(PAGE_SIZE),
+        offset: String(offset),
+      })
       if (selectedIndustries.length) params.set("industry", selectedIndustries.join(","))
       if (selectedSizes.length) params.set("size", selectedSizes.join(","))
       if (selectedAts) params.set("ats_type", selectedAts)
@@ -100,34 +221,37 @@ export default function CompaniesPage() {
 
       const res = await fetch(`/api/companies?${params}`)
       if (res.ok) {
-        const { companies: data, total: count } = (await res.json()) as { companies: Company[]; total: number }
+        const { companies: data, total: count } = (await res.json()) as {
+          companies: Company[]
+          total: number
+        }
         if (offset === 0) setAll(data ?? [])
         else setAll((prev) => [...prev, ...(data ?? [])])
         setTotal(count ?? 0)
       }
       setIsLoading(false)
     }
-
     void load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedIndustries.join(","), selectedSizes.join(","), selectedAts, sponsorsH1b, hasJobs, sort, qParam, offset])
 
-  // Fetch distinct industries for the filter dropdown
   useEffect(() => {
     async function loadIndustries() {
       const res = await fetch("/api/companies?limit=500&sort=name")
       if (!res.ok) return
-      const { companies } = (await res.json()) as { companies: Array<{ industry: string | null }> }
-      const unique = Array.from(new Set(companies.map((c) => c.industry).filter(Boolean))).sort() as string[]
+      const { companies } = (await res.json()) as {
+        companies: Array<{ industry: string | null }>
+      }
+      const unique = Array.from(
+        new Set(companies.map((c) => c.industry).filter(Boolean))
+      ).sort() as string[]
       setIndustries(unique)
     }
     void loadIndustries()
   }, [])
 
-  // Fetch new-today counts per company
   useEffect(() => {
     async function loadNewToday() {
-      const start = new Date(); start.setHours(0, 0, 0, 0)
       const res = await fetch(`/api/jobs?within=24h&limit=500&offset=0`)
       if (!res.ok) return
       const { jobs } = (await res.json()) as { jobs: Array<{ company_id: string }> }
@@ -149,272 +273,275 @@ export default function CompaniesPage() {
     (qParam.trim() ? 1 : 0)
 
   return (
-    <main className="app-page pb-[max(6rem,calc(env(safe-area-inset-bottom)+5.5rem))]">
-      <div className="app-shell w-full space-y-5 pb-[max(2rem,calc(env(safe-area-inset-bottom)+1rem))]">
-        {/* Toolbar: back, search, sort, filters — single card */}
-        <section className="surface-card rounded-lg px-5 py-5 md:px-6 md:py-6">
-          <div className="mb-4">
-            <Link
-              href="/dashboard"
-              className="inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 transition hover:bg-blue-100"
-            >
-              <ArrowLeft className="h-3.5 w-3.5 shrink-0" aria-hidden />
-              Back to dashboard
-            </Link>
-          </div>
+    <main
+      className="app-page pb-[max(6rem,calc(env(safe-area-inset-bottom)+5.5rem))]"
+      onClick={() => industryOpen && setIndustryOpen(false)}
+    >
+      <div className="app-shell w-full space-y-4 pb-[max(2rem,calc(env(safe-area-inset-bottom)+1rem))]">
 
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div className="min-w-0 flex-1">
-              <div className="mb-2 flex items-center gap-2">
-                <div className="flex h-9 w-9 items-center justify-center rounded-[16px] bg-[#FFF1E8]">
-                  <Building2 className="h-5 w-5 text-[#FF5C18]" />
-                </div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#FF5C18]">
+        {/* ── Page header ───────────────────────────────────── */}
+        <div>
+          <Link
+            href="/dashboard"
+            className="inline-flex items-center gap-1.5 text-sm text-gray-400 transition hover:text-gray-700"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Dashboard
+          </Link>
+
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl bg-[#FFF1E8]">
+                <Building2 className="h-5 w-5 text-[#FF5C18]" />
+              </div>
+              <div>
+                <h1 className="text-xl font-semibold tracking-tight text-gray-900">
                   Company Explorer
+                </h1>
+                <p className="text-xs text-gray-400">
+                  {total.toLocaleString()} companies
+                  {activeFilterCount > 0 &&
+                    ` · ${activeFilterCount} filter${activeFilterCount !== 1 ? "s" : ""} active`}
                 </p>
               </div>
-              <h1 className="text-xl font-semibold tracking-tight text-gray-900">Companies we track</h1>
-              <p className="mt-1 text-sm text-gray-500">
-                {total.toLocaleString()} companies
-                {activeFilterCount > 0
-                  ? ` · ${activeFilterCount} active filter${activeFilterCount !== 1 ? "s" : ""}`
-                  : ""}
-                . Search by name, then sort or filter.
-              </p>
             </div>
 
-            <div className="flex w-full flex-col gap-3 lg:max-w-md">
-              <label className="sr-only" htmlFor="companies-search">
-                Search companies by name
-              </label>
+            <div className="flex items-center gap-2">
+              {/* Search */}
               <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" aria-hidden />
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
                 <input
-                  id="companies-search"
                   type="search"
                   value={searchDraft}
                   onChange={(e) => setSearchDraft(e.target.value)}
-                  placeholder="Search companies by name…"
+                  placeholder="Search companies…"
                   autoComplete="off"
-                  className="w-full rounded-2xl border border-gray-200 bg-white py-2.5 pl-10 pr-4 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15"
+                  className="h-9 w-52 rounded-xl border border-gray-200 bg-white pl-8 pr-3 text-sm text-gray-900 outline-none placeholder:text-gray-400 transition focus:border-[#FF5C18] focus:ring-2 focus:ring-[#FF5C18]/12 md:w-64"
                 />
               </div>
 
-              <div className="flex flex-wrap gap-3">
-                {/* Sort */}
-                <div className="relative min-w-[10rem] flex-1 sm:flex-initial">
-                  <select
-                    value={sort}
-                    onChange={(e) => update("sort", e.target.value)}
-                    className="w-full appearance-none rounded-2xl border border-gray-200 bg-white pl-4 pr-9 py-2.5 text-sm font-medium text-gray-700 outline-none transition focus:border-[#FF5C18] focus:ring-2 focus:ring-[#FF5C18]/15"
-                  >
-                    {SORT_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                </div>
-
-                {/* Filters toggle */}
-                <button
-                  type="button"
-                  onClick={() => setShowFilters((v) => !v)}
-                  className={cn(
-                    "inline-flex flex-1 items-center justify-center gap-2 rounded-2xl border px-4 py-2.5 text-sm font-medium transition sm:flex-initial",
-                    showFilters || activeFilterCount > 0
-                      ? "border-[#FF5C18] bg-[#FFF1E8] text-[#FF5C18]"
-                      : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
-                  )}
+              {/* Sort */}
+              <div className="relative">
+                <select
+                  value={sort}
+                  onChange={(e) => update("sort", e.target.value)}
+                  className="h-9 appearance-none rounded-xl border border-gray-200 bg-white pl-3 pr-8 text-sm font-medium text-gray-600 outline-none transition hover:border-gray-300 focus:border-[#FF5C18]"
                 >
-                  <SlidersHorizontal className="h-4 w-4" />
-                  Filters
-                  {activeFilterCount > 0 && (
-                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#FF5C18] text-[10px] font-bold text-white">
-                      {activeFilterCount}
-                    </span>
-                  )}
-                </button>
+                  {SORT_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
               </div>
             </div>
           </div>
+        </div>
 
-          {/* Filter panel */}
-          {showFilters && (
-            <div className="surface-inset mt-5 space-y-4 p-4">
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                {/* Industry dropdown */}
-                <div>
-                  <p className="mb-2 text-xs font-semibold text-gray-500">Industry</p>
-                  <div className="relative">
-                    <button
-                      type="button"
-                      onClick={() => setIndustryOpen((v) => !v)}
-                      className="flex w-full items-center justify-between rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-700 transition hover:border-gray-300"
-                    >
-                      <span className="truncate">
-                        {selectedIndustries.length > 0
-                          ? `${selectedIndustries.length} selected`
-                          : "All industries"}
-                      </span>
-                      <ChevronDown className="h-4 w-4 flex-shrink-0 text-gray-400" />
-                    </button>
-                    {industryOpen && (
-                      <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-48 overflow-y-auto rounded-2xl border border-gray-200 bg-white py-1 shadow-[0_18px_40px_rgba(15,23,42,0.12)]">
-                        {industries.map((ind) => (
-                          <button
-                            key={ind}
-                            type="button"
-                            onClick={() => toggleList("industry", selectedIndustries, ind)}
-                            className={cn(
-                              "flex w-full items-center gap-2 px-3 py-2 text-sm transition hover:bg-gray-50",
-                              selectedIndustries.includes(ind) ? "text-[#FF5C18] font-medium" : "text-gray-700"
-                            )}
-                          >
-                            <span className={cn(
-                              "h-4 w-4 flex-shrink-0 rounded border transition",
-                              selectedIndustries.includes(ind)
-                                ? "border-[#FF5C18] bg-[#FF5C18]"
-                                : "border-gray-300"
-                            )} />
-                            {ind}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* ATS type */}
-                <div>
-                  <p className="mb-2 text-xs font-semibold text-gray-500">ATS type</p>
-                  <div className="relative">
-                    <select
-                      value={selectedAts}
-                      onChange={(e) => update("ats", e.target.value || null)}
-                      className="w-full appearance-none rounded-xl border border-gray-200 bg-white pl-3 pr-9 py-2.5 text-sm text-gray-700 outline-none transition focus:border-[#FF5C18]"
-                    >
-                      <option value="">Any ATS</option>
-                      {ATS_OPTIONS.map((ats) => (
-                        <option key={ats} value={ats}>
-                          {ats.charAt(0).toUpperCase() + ats.slice(1)}
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  </div>
-                </div>
-
-                {/* Toggles */}
-                <div className="flex flex-col gap-2 sm:col-span-2 lg:col-span-2">
-                  <p className="text-xs font-semibold text-gray-500">Quick filters</p>
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => update("sponsors_h1b", sponsorsH1b ? null : "1")}
-                      className={cn(
-                        "rounded-xl border px-4 py-2 text-sm font-medium transition",
-                        sponsorsH1b
-                          ? "border-[#FF5C18] bg-[#FFF1E8] text-[#FF5C18]"
-                          : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
-                      )}
-                    >
-                      Sponsors H-1B
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => update("has_jobs", hasJobs ? null : "1")}
-                      className={cn(
-                        "rounded-xl border px-4 py-2 text-sm font-medium transition",
-                        hasJobs
-                          ? "border-[#FF5C18] bg-[#FFF1E8] text-[#FF5C18]"
-                          : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
-                      )}
-                    >
-                      Currently hiring
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Size filter pills */}
-              <div>
-                <p className="mb-2 text-xs font-semibold text-gray-500">Company size</p>
-                <div className="flex flex-wrap gap-2">
-                  {SIZE_OPTIONS.map((o) => (
-                    <button
-                      key={o.value}
-                      type="button"
-                      onClick={() => toggleList("size", selectedSizes, o.value)}
-                      className={cn(
-                        "rounded-xl border px-3 py-1.5 text-sm font-medium transition",
-                        selectedSizes.includes(o.value)
-                          ? "border-[#FF5C18] bg-[#FFF1E8] text-[#FF5C18]"
-                          : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
-                      )}
-                    >
-                      {o.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {activeFilterCount > 0 && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    router.replace("/dashboard/companies", { scroll: false })
-                    setOffset(0)
-                  }}
-                  className="text-sm text-red-500 hover:text-red-700 transition"
-                >
-                  Clear all filters
-                </button>
+        {/* ── Filter strip ──────────────────────────────────── */}
+        <div className="flex flex-wrap items-center gap-2" onClick={(e) => e.stopPropagation()}>
+          {/* Industry dropdown */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setIndustryOpen((v) => !v)}
+              className={cn(
+                "inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition",
+                selectedIndustries.length > 0
+                  ? "border-[#FF5C18]/40 bg-[#FFF1E8] text-[#FF5C18]"
+                  : "border-gray-200 bg-white text-gray-600 hover:border-gray-300"
               )}
-            </div>
-          )}
-        </section>
+            >
+              Industry
+              {selectedIndustries.length > 0 && (
+                <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[#FF5C18] text-[9px] font-bold text-white">
+                  {selectedIndustries.length}
+                </span>
+              )}
+              <ChevronDown className="h-3 w-3 opacity-50" />
+            </button>
+            {industryOpen && (
+              <div className="absolute left-0 top-full z-30 mt-1.5 max-h-56 w-60 overflow-y-auto rounded-2xl border border-gray-200 bg-white py-1.5 shadow-[0_16px_48px_rgba(15,23,42,0.14)]">
+                {industries.map((ind) => (
+                  <button
+                    key={ind}
+                    type="button"
+                    onClick={() => toggleList("industry", selectedIndustries, ind)}
+                    className={cn(
+                      "flex w-full items-center gap-2.5 px-3.5 py-2 text-sm transition hover:bg-gray-50",
+                      selectedIndustries.includes(ind) ? "font-medium text-[#FF5C18]" : "text-gray-700"
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "h-3.5 w-3.5 flex-shrink-0 rounded border transition",
+                        selectedIndustries.includes(ind)
+                          ? "border-[#FF5C18] bg-[#FF5C18]"
+                          : "border-gray-300"
+                      )}
+                    />
+                    {ind}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
 
-        {/* Grid */}
+          {/* ATS select */}
+          <div className="relative">
+            <select
+              value={selectedAts}
+              onChange={(e) => update("ats", e.target.value || null)}
+              className={cn(
+                "h-8 appearance-none rounded-full border pl-3 pr-7 text-xs font-medium outline-none transition",
+                selectedAts
+                  ? "border-[#FF5C18]/40 bg-[#FFF1E8] text-[#FF5C18]"
+                  : "border-gray-200 bg-white text-gray-600 hover:border-gray-300"
+              )}
+            >
+              <option value="">Any ATS</option>
+              {ATS_OPTIONS.map((ats) => (
+                <option key={ats} value={ats}>
+                  {ats.charAt(0).toUpperCase() + ats.slice(1)}
+                </option>
+              ))}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2 text-gray-400" />
+          </div>
+
+          <div className="h-5 w-px bg-gray-200" />
+
+          {/* Size chips */}
+          {SIZE_OPTIONS.map((o) => (
+            <button
+              key={o.value}
+              type="button"
+              onClick={() => toggleList("size", selectedSizes, o.value)}
+              className={cn(
+                "inline-flex h-8 items-center rounded-full border px-3 text-xs font-medium transition",
+                selectedSizes.includes(o.value)
+                  ? "border-[#FF5C18]/40 bg-[#FFF1E8] text-[#FF5C18]"
+                  : "border-gray-200 bg-white text-gray-600 hover:border-gray-300"
+              )}
+            >
+              {o.label}
+            </button>
+          ))}
+
+          <div className="h-5 w-px bg-gray-200" />
+
+          {/* Quick filters */}
+          <button
+            type="button"
+            onClick={() => update("sponsors_h1b", sponsorsH1b ? null : "1")}
+            className={cn(
+              "inline-flex h-8 items-center rounded-full border px-3 text-xs font-medium transition",
+              sponsorsH1b
+                ? "border-[#FF5C18]/40 bg-[#FFF1E8] text-[#FF5C18]"
+                : "border-gray-200 bg-white text-gray-600 hover:border-gray-300"
+            )}
+          >
+            Sponsors H-1B
+          </button>
+          <button
+            type="button"
+            onClick={() => update("has_jobs", hasJobs ? null : "1")}
+            className={cn(
+              "inline-flex h-8 items-center rounded-full border px-3 text-xs font-medium transition",
+              hasJobs
+                ? "border-[#FF5C18]/40 bg-[#FFF1E8] text-[#FF5C18]"
+                : "border-gray-200 bg-white text-gray-600 hover:border-gray-300"
+            )}
+          >
+            Currently hiring
+          </button>
+
+          {/* Clear all */}
+          {activeFilterCount > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                router.replace("/dashboard/companies", { scroll: false })
+                setOffset(0)
+              }}
+              className="inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-xs font-medium text-gray-400 transition hover:text-gray-700"
+            >
+              <X className="h-3 w-3" />
+              Clear
+            </button>
+          )}
+        </div>
+
+        {/* ── Company list ──────────────────────────────────── */}
         {isLoading && all.length === 0 ? (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {Array.from({ length: 9 }).map((_, i) => (
-              <div key={i} className="surface-card h-52 animate-pulse" />
+          <div className="surface-card overflow-hidden divide-y divide-gray-50">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-4 px-5 py-4">
+                <div className="h-9 w-9 flex-shrink-0 animate-pulse rounded-xl bg-gray-100" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-3.5 w-40 animate-pulse rounded-full bg-gray-100" />
+                  <div className="h-2.5 w-24 animate-pulse rounded-full bg-gray-100" />
+                </div>
+                <div className="hidden h-3 w-32 animate-pulse rounded-full bg-gray-100 sm:block" />
+                <div className="hidden h-3 w-14 animate-pulse rounded-full bg-gray-100 sm:block" />
+              </div>
             ))}
           </div>
         ) : all.length === 0 ? (
-          <div className="empty-state py-12">
-            <p className="text-lg font-semibold text-gray-900">No companies match your filters</p>
-            <p className="mt-2 text-sm text-gray-500">Try removing some filters to see more results.</p>
+          <div className="flex flex-col items-center justify-center gap-3 py-20 text-center">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-100">
+              <Building2 className="h-6 w-6 text-gray-400" />
+            </div>
+            <p className="font-semibold text-gray-700">No companies match your filters</p>
+            <p className="text-sm text-gray-400">Try removing some filters above.</p>
           </div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {all.map((company) => (
-              <CompanyCard
-                key={company.id}
-                company={company}
-                newJobsToday={newToday[company.id]}
-                isWatching={isWatching(company.id)}
-                onWatch={(id) => void addCompany(id)}
-                onUnwatch={(id) => void removeCompany(id)}
-              />
-            ))}
+          <div className="surface-card overflow-hidden">
+            {/* Column headers */}
+            <div className="hidden items-center gap-4 border-b border-gray-100 px-5 py-2.5 sm:flex">
+              <div className="w-9 flex-shrink-0" />
+              <div className="flex-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-gray-400">
+                Company
+              </div>
+              <div className="w-36 flex-shrink-0 text-[10px] font-semibold uppercase tracking-[0.2em] text-gray-400">
+                Sponsor score
+              </div>
+              <div className="w-24 flex-shrink-0 text-right text-[10px] font-semibold uppercase tracking-[0.2em] text-gray-400">
+                Open roles
+              </div>
+              <div className="w-8 flex-shrink-0" />
+            </div>
+
+            <div className="divide-y divide-gray-50">
+              {all.map((company) => (
+                <CompanyRow
+                  key={company.id}
+                  company={company}
+                  newJobsToday={newToday[company.id]}
+                  isWatching={isWatching(company.id)}
+                  onWatch={(id) => void addCompany(id)}
+                  onUnwatch={(id) => void removeCompany(id)}
+                />
+              ))}
+            </div>
           </div>
         )}
 
         {/* Load more */}
         {!isLoading && all.length < total && (
-          <div className="flex justify-center pt-2">
+          <div className="flex justify-center">
             <button
               type="button"
               onClick={() => setOffset((o) => o + PAGE_SIZE)}
-              className="rounded-2xl border border-gray-200 bg-white px-6 py-3 text-sm font-medium text-gray-700 shadow-sm transition hover:border-gray-300 hover:bg-gray-50"
+              className="rounded-2xl border border-gray-200 bg-white px-6 py-2.5 text-sm font-medium text-gray-600 shadow-sm transition hover:border-gray-300 hover:bg-gray-50"
             >
-              Load more companies
+              Load {Math.min(PAGE_SIZE, total - all.length)} more
             </button>
           </div>
         )}
+
+        <div aria-hidden className="h-[clamp(2rem,5vh,4rem)] shrink-0" />
       </div>
     </main>
   )

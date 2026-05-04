@@ -12,8 +12,9 @@ import DashboardSidebarNav from "@/components/dashboard/DashboardSidebarNav"
 import DashboardSpotlightColumn from "@/components/dashboard/DashboardSpotlightColumn"
 import JobFeed from "@/components/jobs/JobFeed"
 import PushNotificationSetup from "@/components/notifications/PushNotificationSetup"
-import { ScoutMiniPanel } from "@/components/scout/ScoutMiniPanel"
-import { ScoutFocusBanner } from "@/components/scout/ScoutFocusBanner"
+import dynamic from "next/dynamic"
+const ScoutMiniPanel  = dynamic(() => import("@/components/scout/ScoutMiniPanel").then(m => ({ default: m.ScoutMiniPanel })), { ssr: false })
+const ScoutFocusBanner = dynamic(() => import("@/components/scout/ScoutFocusBanner").then(m => ({ default: m.ScoutFocusBanner })), { ssr: false })
 import { useResumeContext } from "@/components/resume/ResumeProvider"
 import { parseJobFilters } from "@/components/jobs/JobFilters"
 import { getSearchQuery } from "@/components/jobs/JobSearch"
@@ -155,12 +156,12 @@ export default function DashboardHomeClient({
             href="/dashboard"
             className="block rounded-lg outline-none transition hover:opacity-90 focus-visible:ring-2 focus-visible:ring-[#2563EB]/30"
           >
-            <HireovenLogo className="h-8 w-auto max-w-[160px]" priority />
+            <HireovenLogo variant="full" className="h-14 w-auto max-w-[260px]" priority />
             <span className="sr-only">Hireoven home</span>
           </Link>
         </div>
 
-        <div className="soft-scrollbar min-h-0 flex-1 overflow-y-auto [-webkit-overflow-scrolling:touch]">
+        <div className="soft-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto [-webkit-overflow-scrolling:touch]">
           <DashboardSidebarNav variant="light" navSkin="feed" />
         </div>
       </aside>

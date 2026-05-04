@@ -24,32 +24,46 @@ function isProtectedApi(pathname: string): boolean {
   return PROTECTED_API_PREFIXES.some((prefix) => pathname.startsWith(prefix))
 }
 
-type SessionSummary = {
-  authenticated: boolean
-  isAdmin: boolean
-  suspended: boolean
-}
-
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  if (pathname === "/api/auth/session-summary" || pathname.startsWith("/api/auth/session-summary/")) {
-    return NextResponse.next({ request: { headers: request.headers } })
-  }
-
   const token = request.cookies.get(SESSION_COOKIE_NAME)?.value ?? null
-  const sessionUser = token ? await verifySessionJwt(token) : null
-  const user = sessionUser ? { id: sessionUser.sub } : null
+  const session = token ? await verifySessionJwt(token) : null
+  const user = session ? { id: session.sub } : null
+  let flagsPromise: Promise<{ isAdmin: boolean; suspended: boolean }> | null = null
 
-  async function fetchSessionSummary(): Promise<SessionSummary | null> {
-    if (!user) return null
-    const cookie = request.headers.get("cookie") ?? ""
-    const res = await fetch(new URL("/api/auth/session-summary", request.nextUrl.origin), {
-      headers: { cookie },
-      cache: "no-store",
-    })
-    if (!res.ok) return null
-    return (await res.json()) as SessionSummary
+  async function getSessionFlags() {
+    if (flagsPromise) return flagsPromise
+
+    flagsPromise = (async () => {
+      if (typeof session?.isAdmin === "boolean" && typeof session?.suspended === "boolean") {
+        return {
+          isAdmin: session.isAdmin,
+          suspended: session.suspended,
+        }
+      }
+
+      if (!user) {
+        return { isAdmin: false, suspended: false }
+      }
+
+      // Backward-compat fallback for older session cookies that don't yet carry flags.
+      const cookie = request.headers.get("cookie") ?? ""
+      const res = await fetch(new URL("/api/auth/session-summary", request.nextUrl.origin), {
+        headers: { cookie },
+        cache: "no-store",
+      })
+      if (!res.ok) return { isAdmin: false, suspended: false }
+      const body = (await res.json().catch(() => null)) as
+        | { isAdmin?: boolean; suspended?: boolean }
+        | null
+      return {
+        isAdmin: Boolean(body?.isAdmin),
+        suspended: Boolean(body?.suspended),
+      }
+    })()
+
+    return flagsPromise
   }
 
   if (isProtected(pathname) && !user) {
@@ -65,21 +79,17 @@ export async function middleware(request: NextRequest) {
     )
   }
 
-  // Keep protected API requests fast: route handlers already verify the session
-  // with getSessionUser(), and this avoids an extra internal HTTP + DB round-trip
-  // for every dashboard API call.
   if (user && isProtected(pathname)) {
-    const summary = await fetchSessionSummary()
-    if (summary?.suspended) {
-      const loginUrl = new URL("/login", request.url)
-      loginUrl.searchParams.set("reason", "suspended")
-      return NextResponse.redirect(loginUrl)
-    }
+    const flags = await getSessionFlags()
+    if (!flags.suspended) return NextResponse.next({ request: { headers: request.headers } })
+    const loginUrl = new URL("/login", request.url)
+    loginUrl.searchParams.set("reason", "suspended")
+    return NextResponse.redirect(loginUrl)
   }
 
   if (user && (pathname === "/login" || pathname === "/signup")) {
-    const summary = await fetchSessionSummary()
-    const destination = summary?.isAdmin ? "/admin" : "/dashboard"
+    const flags = await getSessionFlags()
+    const destination = flags.isAdmin ? "/admin" : "/dashboard"
     return NextResponse.redirect(new URL(destination, request.url))
   }
 
@@ -88,6 +98,18 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/dashboard/:path*",
+    "/admin/:path*",
+    "/login",
+    "/signup",
+    "/api/resume/:path*",
+    "/api/cover-letter/:path*",
+    "/api/autofill/:path*",
+    "/api/match/:path*",
+    "/api/alerts/:path*",
+    "/api/watchlist/:path*",
+    "/api/applications/:path*",
+    "/api/subscription/:path*",
+    "/api/billing/:path*",
   ],
 }

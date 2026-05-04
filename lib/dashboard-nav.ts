@@ -11,7 +11,10 @@ import {
   Plane,
   Settings,
   ShieldAlert,
+  ShieldCheck,
   Sparkles,
+  TrendingUp,
+  Users,
   Wand2,
 } from "lucide-react"
 
@@ -21,6 +24,8 @@ export type DashboardNavItem = {
   icon: LucideIcon
   /** Render a subtle `hr` above this nav item (used on the feed skin to split primary vs. utility rows). */
   dividerAbove?: boolean
+  /** Pin to the bottom of the sidebar (Settings, Help & Support). */
+  footer?: boolean
 }
 
 /** Single source of truth for dashboard sidebar links (feed + all subpages). Profile lives in the header. */
@@ -36,11 +41,15 @@ export const DASHBOARD_NAV_ITEMS: DashboardNavItem[] = [
   { label: "Companies", href: "/dashboard/companies", icon: Building2 },
   { label: "International", href: "/dashboard/international", icon: Plane },
   { label: "Offer Risk", href: "/dashboard/international/offer-risk", icon: ShieldAlert },
-  { label: "Settings", href: "/dashboard/billing", icon: Settings, dividerAbove: true },
+  { label: "Cohorts", href: "/dashboard/cohorts", icon: Users },
+  { label: "Brand", href: "/dashboard/brand", icon: TrendingUp },
+  { label: "Fair Chance", href: "/dashboard/background-check", icon: ShieldCheck },
+  { label: "Settings", href: "/dashboard/billing", icon: Settings, footer: true },
   {
     label: "Help & support",
     href: "mailto:support@hireoven.com",
     icon: LifeBuoy,
+    footer: true,
   },
 ]
 

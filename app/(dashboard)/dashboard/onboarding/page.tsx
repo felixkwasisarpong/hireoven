@@ -3,7 +3,7 @@
 import { KeyboardEvent, useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeft, Briefcase, Globe2, Sparkles, Check, Search } from "lucide-react"
 import HireovenLogo from "@/components/ui/HireovenLogo"
 import CompanyLogo from "@/components/ui/CompanyLogo"
 import type { Company, SeniorityLevel, VisaStatus } from "@/types"
@@ -53,7 +53,13 @@ const VISA_OPTIONS: { value: VisaStatus; label: string }[] = [
   { value: "other", label: "Other / Not sure" },
 ]
 
-const TOTAL_STEPS = 3
+const STEP_META: { title: string; icon: typeof Briefcase }[] = [
+  { title: "Preferences", icon: Briefcase },
+  { title: "Eligibility", icon: Globe2 },
+  { title: "Watchlist", icon: Sparkles },
+]
+
+const TOTAL_STEPS = STEP_META.length
 const MAX_COMPANIES = 20
 
 // ---------------------------------------------------------------------------
@@ -128,7 +134,17 @@ export default function OnboardingPage() {
   }
 
   return (
-    <main className="app-page flex flex-col">
+    <main className="app-page relative flex flex-col overflow-hidden">
+      {/* Ambient brand glow */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[460px]"
+        style={{
+          background:
+            "radial-gradient(60% 80% at 50% 0%, rgba(255,92,24,0.10) 0%, rgba(255,92,24,0.04) 40%, transparent 75%)",
+        }}
+      />
+
       {/* Header */}
       <div className="glass-nav px-6 py-4">
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-4">
@@ -148,43 +164,108 @@ export default function OnboardingPage() {
         </div>
       </div>
 
-      {/* Progress bar */}
-      <div className="border-b border-white/60 bg-white/70">
-        <div className="mx-auto max-w-3xl px-6 py-4">
-          <div className="flex items-center gap-2">
-            {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
-              <div
-                key={i}
-                className="h-1.5 flex-1 rounded-full transition-colors duration-300"
-                style={{ backgroundColor: i < step ? "#FF5C18" : "#E5E7EB" }}
-              />
-            ))}
-          </div>
-          <p className="mt-2 text-xs text-gray-400">Step {step} of {TOTAL_STEPS}</p>
-        </div>
-      </div>
-
-      {/* Step content */}
-      <div className="flex-1 flex flex-col items-center px-6 py-10">
+      {/* Content */}
+      <div className="flex-1 flex flex-col items-center px-6 pb-16 pt-10 sm:pt-14">
         <div className="w-full max-w-3xl">
-          {step === 1 && (
-            <StepOne data={stepOne} onChange={setStepOne} onNext={next} />
-          )}
-          {step === 2 && (
-            <StepTwo data={stepTwo} onChange={setStepTwo} onNext={next} onBack={back} />
-          )}
-          {step === 3 && (
-            <StepThree
-              data={stepThree}
-              onChange={setStepThree}
-              onFinish={handleFinish}
-              onBack={back}
-              saving={saving}
-            />
-          )}
+          {/* Hero kicker */}
+          <div className="mb-8 text-center">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-[#FFD9C2] bg-[#FFF5EE] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#FF5C18]">
+              <Sparkles className="h-3 w-3" />
+              Setup
+            </span>
+            <h1 className="mt-3 text-[1.75rem] font-bold leading-tight tracking-tight text-gray-900 sm:text-[2rem]">
+              Let&apos;s get you ahead of the inbox.
+            </h1>
+            <p className="mt-2 text-sm text-gray-500 sm:text-[15px]">
+              A quick three-step setup so we can surface the right roles the moment they post.
+            </p>
+          </div>
+
+          {/* Stepper */}
+          <Stepper current={step} />
+
+          {/* Card */}
+          <div className="surface-card-raised mt-7 rounded-2xl border border-gray-200/80 bg-white p-6 shadow-[0_1px_0_rgba(15,23,42,0.04),0_30px_60px_-30px_rgba(15,23,42,0.20)] sm:p-9">
+            {step === 1 && (
+              <StepOne data={stepOne} onChange={setStepOne} onNext={next} />
+            )}
+            {step === 2 && (
+              <StepTwo data={stepTwo} onChange={setStepTwo} onNext={next} onBack={back} />
+            )}
+            {step === 3 && (
+              <StepThree
+                data={stepThree}
+                onChange={setStepThree}
+                onFinish={handleFinish}
+                onBack={back}
+                saving={saving}
+              />
+            )}
+          </div>
+
+          <p className="mt-6 text-center text-xs text-gray-400">
+            You can change any of this later in settings.
+          </p>
         </div>
       </div>
     </main>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Stepper
+// ---------------------------------------------------------------------------
+
+function Stepper({ current }: { current: number }) {
+  return (
+    <div className="flex items-center justify-center gap-2 sm:gap-3">
+      {STEP_META.map((meta, i) => {
+        const stepNum = i + 1
+        const isComplete = stepNum < current
+        const isActive = stepNum === current
+        const Icon = meta.icon
+        return (
+          <div key={meta.title} className="flex items-center gap-2 sm:gap-3">
+            <div className="flex flex-col items-center">
+              <div
+                className={`flex h-9 w-9 items-center justify-center rounded-full border-2 text-sm font-semibold transition-all duration-300 ${
+                  isComplete
+                    ? "border-[#FF5C18] bg-[#FF5C18] text-white shadow-[0_4px_14px_-4px_rgba(255,92,24,0.55)]"
+                    : isActive
+                    ? "border-[#FF5C18] bg-white text-[#FF5C18] shadow-[0_4px_14px_-4px_rgba(255,92,24,0.4)]"
+                    : "border-gray-200 bg-white text-gray-400"
+                }`}
+              >
+                {isComplete ? (
+                  <Check className="h-4 w-4" strokeWidth={3} />
+                ) : (
+                  <Icon className="h-4 w-4" />
+                )}
+              </div>
+              <span
+                className={`mt-1.5 hidden text-[11px] font-semibold tracking-wide transition-colors sm:block ${
+                  isActive
+                    ? "text-gray-900"
+                    : isComplete
+                    ? "text-[#FF5C18]"
+                    : "text-gray-400"
+                }`}
+              >
+                {meta.title}
+              </span>
+            </div>
+            {i < STEP_META.length - 1 && (
+              <div className="relative -mt-5 h-[2px] w-12 overflow-hidden rounded-full bg-gray-200 sm:w-20">
+                <div
+                  className="absolute inset-y-0 left-0 bg-[#FF5C18] transition-all duration-500 ease-out"
+                  style={{ width: stepNum < current ? "100%" : "0%" }}
+                />
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </div>
   )
 }
 
@@ -245,47 +326,46 @@ function StepOne({
   const canContinue = data.roles.length > 0
 
   return (
-    <div>
-      <h2 className="text-2xl font-bold text-gray-900 mb-1">
-        Tell us about your job search
-      </h2>
-      <p className="text-sm text-gray-500 mb-8">
-        We&apos;ll use this to surface the right roles the moment they post.
-      </p>
+    <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+      <SectionHeader
+        title="Tell us about your job search"
+        description="We'll use this to surface the right roles the moment they post."
+      />
 
-      <div className="space-y-6">
+      <div className="space-y-7">
         {/* Roles */}
-        <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-2">
-            What roles are you looking for?
-            <span className="ml-1 text-[#FF5C18]">*</span>
-          </label>
-          <div className="flex flex-wrap gap-2 mb-2">
-            {data.roles.map((r) => (
-              <Tag key={r} label={r} onRemove={() => removeTag("roles", r)} />
-            ))}
-          </div>
+        <Field
+          label="What roles are you looking for?"
+          required
+          hint="Add a few — be specific. Press Enter or comma to add."
+        >
+          {data.roles.length > 0 && (
+            <div className="mb-2.5 flex flex-wrap gap-2">
+              {data.roles.map((r) => (
+                <Tag key={r} label={r} onRemove={() => removeTag("roles", r)} />
+              ))}
+            </div>
+          )}
           <input
             ref={roleInputRef}
             value={roleInput}
             onChange={(e) => setRoleInput(e.target.value)}
             onKeyDown={(e) => handleKeyDown(e, "roles", roleInput, setRoleInput)}
             onBlur={() => addTag("roles", roleInput, setRoleInput)}
-            placeholder='e.g. "Software Engineer" - press Enter to add'
-            className="w-full rounded-lg border border-gray-200 px-4 py-3 text-sm text-gray-900 placeholder-gray-400 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#FF5C18]"
+            placeholder='e.g. "Software Engineer"'
+            className={inputClass}
           />
-        </div>
+        </Field>
 
         {/* Locations */}
-        <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-2">
-            Preferred locations
-          </label>
-          <div className="flex flex-wrap gap-2 mb-2">
-            {data.locations.map((l) => (
-              <Tag key={l} label={l} onRemove={() => removeTag("locations", l)} />
-            ))}
-          </div>
+        <Field label="Preferred locations" hint="Add cities, regions, or leave blank for anywhere.">
+          {data.locations.length > 0 && (
+            <div className="mb-2.5 flex flex-wrap gap-2">
+              {data.locations.map((l) => (
+                <Tag key={l} label={l} onRemove={() => removeTag("locations", l)} />
+              ))}
+            </div>
+          )}
           <input
             ref={locationInputRef}
             value={locationInput}
@@ -293,23 +373,20 @@ function StepOne({
             onKeyDown={(e) => handleKeyDown(e, "locations", locationInput, setLocationInput)}
             onBlur={() => addTag("locations", locationInput, setLocationInput)}
             disabled={data.remoteOnly}
-            placeholder={data.remoteOnly ? "Remote selected" : 'e.g. "New York" - press Enter to add'}
-            className="w-full rounded-lg border border-gray-200 px-4 py-3 text-sm text-gray-900 placeholder-gray-400 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#FF5C18] disabled:bg-gray-50 disabled:text-gray-400"
+            placeholder={data.remoteOnly ? "Remote selected" : 'e.g. "New York"'}
+            className={`${inputClass} disabled:bg-gray-50 disabled:text-gray-400`}
           />
-          <label className="flex items-center gap-2 mt-2 cursor-pointer">
+          <label className="mt-3 inline-flex cursor-pointer items-center gap-2">
             <Checkbox
               checked={data.remoteOnly}
               onChange={(v) => onChange({ ...data, remoteOnly: v, locations: v ? [] : data.locations })}
             />
             <span className="text-sm text-gray-600">Remote only</span>
           </label>
-        </div>
+        </Field>
 
         {/* Seniority */}
-        <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-3">
-            Seniority level
-          </label>
+        <Field label="Seniority level" hint="Pick one or more.">
           <div className="flex flex-wrap gap-2">
             {SENIORITY_OPTIONS.map((opt) => {
               const selected = data.seniority.includes(opt.value)
@@ -318,10 +395,10 @@ function StepOne({
                   key={opt.value}
                   type="button"
                   onClick={() => toggleSeniority(opt.value)}
-                  className={`px-4 py-2 rounded-full text-sm font-medium border transition-colors ${
+                  className={`rounded-full border px-4 py-2 text-sm font-medium transition-all ${
                     selected
-                      ? "border-[#FF5C18] bg-[#FF5C18] text-white"
-                      : "border-gray-200 bg-white text-gray-600 hover:border-[#FF5C18] hover:text-[#FF5C18]"
+                      ? "border-[#FF5C18] bg-[#FF5C18] text-white shadow-[0_4px_12px_-4px_rgba(255,92,24,0.55)]"
+                      : "border-gray-200 bg-white text-gray-600 hover:border-[#FFB78A] hover:bg-[#FFF7F2] hover:text-[#FF5C18]"
                   }`}
                 >
                   {opt.label}
@@ -329,17 +406,14 @@ function StepOne({
               )
             })}
           </div>
-        </div>
+        </Field>
       </div>
 
-      <button
-        type="button"
-        onClick={onNext}
-        disabled={!canContinue}
-        className="mt-10 w-full rounded-lg bg-[#FF5C18] py-3.5 text-sm font-semibold text-white transition-colors hover:bg-[#E14F0E] disabled:opacity-40"
-      >
-        Continue
-      </button>
+      <div className="mt-10 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+        <PrimaryButton onClick={onNext} disabled={!canContinue} className="sm:min-w-[180px]">
+          Continue
+        </PrimaryButton>
+      </div>
     </div>
   )
 }
@@ -364,16 +438,14 @@ function StepTwo({
     (data.visaStatus === "opt" || data.visaStatus === "stem_opt")
 
   return (
-    <div>
-      <h2 className="text-2xl font-bold text-gray-900 mb-1">
-        Are you an international candidate?
-      </h2>
-      <p className="text-sm text-gray-500 mb-8">
-        We&apos;ll filter jobs by sponsorship availability so you only see roles you can actually apply for.
-      </p>
+    <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+      <SectionHeader
+        title="Are you an international candidate?"
+        description="We'll filter jobs by sponsorship availability so you only see roles you can actually apply for."
+      />
 
-      {/* Yes / No toggle - prominent */}
-      <div className="grid grid-cols-2 gap-3 mb-8">
+      {/* Yes / No toggle */}
+      <div className="mb-7 grid grid-cols-1 gap-3 sm:grid-cols-2">
         {[
           {
             value: true,
@@ -387,44 +459,49 @@ function StepTwo({
             sub: "Citizen, green card, or other",
             emoji: "🇺🇸",
           },
-        ].map((opt) => (
-          <button
-            key={String(opt.value)}
-            type="button"
-            onClick={() =>
-              onChange({
-                ...data,
-                isInternational: opt.value,
-                visaStatus: opt.value ? data.visaStatus : "",
-                needsSponsorship: opt.value ? data.needsSponsorship : false,
-              })
-            }
-            className={`flex flex-col items-start gap-1.5 p-5 rounded-xl border-2 text-left transition-all ${
-              data.isInternational === opt.value
-                ? "border-[#FF5C18] bg-[#FFF7F2]"
-                : "border-gray-200 bg-white hover:border-gray-300"
-            }`}
-          >
-            <span className="text-2xl">{opt.emoji}</span>
-            <span className="text-sm font-semibold text-gray-900">{opt.label}</span>
-            <span className="text-xs text-gray-500">{opt.sub}</span>
-          </button>
-        ))}
+        ].map((opt) => {
+          const active = data.isInternational === opt.value
+          return (
+            <button
+              key={String(opt.value)}
+              type="button"
+              onClick={() =>
+                onChange({
+                  ...data,
+                  isInternational: opt.value,
+                  visaStatus: opt.value ? data.visaStatus : "",
+                  needsSponsorship: opt.value ? data.needsSponsorship : false,
+                })
+              }
+              className={`group relative flex flex-col items-start gap-2 overflow-hidden rounded-xl border-2 p-5 text-left transition-all ${
+                active
+                  ? "border-[#FF5C18] bg-[#FFF7F2] shadow-[0_8px_24px_-12px_rgba(255,92,24,0.35)]"
+                  : "border-gray-200 bg-white hover:-translate-y-0.5 hover:border-gray-300 hover:shadow-[0_8px_24px_-16px_rgba(15,23,42,0.18)]"
+              }`}
+            >
+              {active && (
+                <span className="absolute right-3 top-3 flex h-5 w-5 items-center justify-center rounded-full bg-[#FF5C18] text-white">
+                  <Check className="h-3 w-3" strokeWidth={3} />
+                </span>
+              )}
+              <span className="text-2xl">{opt.emoji}</span>
+              <span className="text-sm font-semibold text-gray-900">{opt.label}</span>
+              <span className="text-xs text-gray-500">{opt.sub}</span>
+            </button>
+          )
+        })}
       </div>
 
       {/* International sub-fields */}
       {data.isInternational && (
-        <div className="space-y-5 bg-white border border-gray-100 rounded-xl p-5">
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Current visa status
-            </label>
+        <div className="animate-in fade-in slide-in-from-top-1 space-y-5 rounded-xl border border-[#FFE4D2] bg-gradient-to-b from-[#FFFBF8] to-white p-5 duration-300">
+          <Field label="Current visa status">
             <select
               value={data.visaStatus}
               onChange={(e) =>
                 onChange({ ...data, visaStatus: e.target.value as VisaStatus })
               }
-              className="w-full rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#FF5C18]"
+              className={inputClass}
             >
               <option value="">Select visa status…</option>
               {VISA_OPTIONS.map((opt) => (
@@ -433,35 +510,32 @@ function StepTwo({
                 </option>
               ))}
             </select>
-          </div>
+          </Field>
 
           {showOptDate && (
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                OPT end date
-              </label>
+            <Field
+              label="OPT end date"
+              hint="We'll surface sponsorship-ready roles before your OPT expires."
+            >
               <input
                 type="date"
                 value={data.optEndDate}
                 onChange={(e) => onChange({ ...data, optEndDate: e.target.value })}
-                className="w-full rounded-lg border border-gray-200 px-4 py-3 text-sm text-gray-900 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#FF5C18]"
+                className={inputClass}
               />
-              <p className="text-xs text-gray-400 mt-1.5">
-                We&apos;ll surface sponsorship-ready roles before your OPT expires.
-              </p>
-            </div>
+            </Field>
           )}
 
-          <label className="flex items-start gap-3 cursor-pointer">
+          <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-transparent p-2 -mx-2 transition-colors hover:border-[#FFE4D2] hover:bg-white">
             <Checkbox
               checked={data.needsSponsorship}
               onChange={(v) => onChange({ ...data, needsSponsorship: v })}
             />
             <div>
-              <span className="text-sm font-medium text-gray-700">
+              <span className="text-sm font-medium text-gray-800">
                 I need H-1B sponsorship
               </span>
-              <p className="text-xs text-gray-400 mt-0.5">
+              <p className="mt-0.5 text-xs text-gray-500">
                 We&apos;ll only show roles at companies that have sponsored in the past.
               </p>
             </div>
@@ -469,21 +543,11 @@ function StepTwo({
         </div>
       )}
 
-      <div className="flex gap-3 mt-10">
-        <button
-          type="button"
-          onClick={onBack}
-          className="flex-1 py-3.5 border border-gray-200 text-gray-700 text-sm font-semibold rounded-lg hover:bg-gray-50 transition-colors"
-        >
-          Back
-        </button>
-        <button
-          type="button"
-          onClick={onNext}
-          className="flex-[2] rounded-lg bg-[#FF5C18] py-3.5 text-sm font-semibold text-white transition-colors hover:bg-[#E14F0E]"
-        >
+      <div className="mt-10 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+        <SecondaryButton onClick={onBack}>Back</SecondaryButton>
+        <PrimaryButton onClick={onNext} className="sm:min-w-[180px]">
           Continue
-        </button>
+        </PrimaryButton>
       </div>
     </div>
   )
@@ -539,50 +603,53 @@ function StepThree({
   }
 
   const selectedCount = data.selectedCompanyIds.length
+  const pct = Math.min(100, (selectedCount / MAX_COMPANIES) * 100)
 
   return (
-    <div>
-      <h2 className="text-2xl font-bold text-gray-900 mb-1">
-        Pick your dream companies
-      </h2>
-      <p className="text-sm text-gray-500 mb-1">
-        We&apos;ll notify you the moment they post a matching role.
-      </p>
-      <p className="text-xs text-gray-400 mb-6">
-        Select up to {MAX_COMPANIES}
-        {selectedCount > 0 && (
-          <span className="font-medium text-[#FF5C18]"> - {selectedCount} selected</span>
-        )}
-      </p>
+    <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+      <SectionHeader
+        title="Pick your dream companies"
+        description="We'll notify you the moment they post a matching role."
+      />
+
+      {/* Selection meter */}
+      <div className="mb-5 flex items-center justify-between gap-4">
+        <p className="text-xs font-medium text-gray-500">
+          <span className="text-gray-900">{selectedCount}</span>
+          <span className="text-gray-400"> / {MAX_COMPANIES} selected</span>
+        </p>
+        <div className="h-1.5 w-32 overflow-hidden rounded-full bg-gray-100">
+          <div
+            className="h-full rounded-full bg-[#FF5C18] transition-all duration-300"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+      </div>
 
       {/* Search */}
       <div className="relative mb-5">
-        <svg
-          className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M16.65 10A6.65 6.65 0 111 10a6.65 6.65 0 0115.3 0z" />
-        </svg>
+        <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
         <input
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search companies…"
-          className="w-full rounded-lg border border-gray-200 py-3 pl-10 pr-4 text-sm text-gray-900 placeholder-gray-400 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#FF5C18]"
+          placeholder="Search companies by name or industry…"
+          className={`${inputClass} pl-10`}
         />
       </div>
 
       {/* Company grid */}
       {loadingCompanies ? (
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="h-20 bg-gray-100 rounded-xl animate-pulse" />
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div
+              key={i}
+              className="h-[68px] animate-pulse rounded-xl border border-gray-100 bg-gray-50"
+            />
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 max-h-[420px] overflow-y-auto pr-1">
+        <div className="grid max-h-[440px] grid-cols-1 gap-2 overflow-y-auto pr-1 sm:grid-cols-2">
           {filtered.map((company) => {
             const selected = data.selectedCompanyIds.includes(company.id)
             const atLimit = selectedCount >= MAX_COMPANIES && !selected
@@ -592,24 +659,23 @@ function StepThree({
                 type="button"
                 onClick={() => toggle(company.id)}
                 disabled={atLimit}
-                className={`flex items-center gap-3 p-4 rounded-xl border-2 text-left transition-all ${
+                className={`group flex items-center gap-3 rounded-xl border-2 p-3.5 text-left transition-all ${
                   selected
-                    ? "border-[#FF5C18] bg-[#FFF7F2]"
+                    ? "border-[#FF5C18] bg-[#FFF7F2] shadow-[0_6px_18px_-10px_rgba(255,92,24,0.35)]"
                     : atLimit
-                    ? "border-gray-100 bg-gray-50 opacity-40 cursor-not-allowed"
-                    : "border-gray-200 bg-white hover:border-gray-300"
+                    ? "cursor-not-allowed border-gray-100 bg-gray-50 opacity-40"
+                    : "border-gray-200 bg-white hover:-translate-y-0.5 hover:border-[#FFB78A] hover:shadow-[0_6px_18px_-12px_rgba(15,23,42,0.18)]"
                 }`}
               >
-                {/* Logo / fallback */}
                 <CompanyLogo
                   companyName={company.name}
                   domain={company.domain}
                   logoUrl={company.logo_url}
-                  className="h-9 w-9 bg-gray-50"
+                  className="h-9 w-9 shrink-0 bg-white ring-1 ring-gray-100"
                 />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">
-                    <p className="text-sm font-semibold text-gray-900 truncate">
+                    <p className="truncate text-sm font-semibold text-gray-900">
                       {company.name}
                     </p>
                     {company.sponsors_h1b && (
@@ -618,41 +684,35 @@ function StepThree({
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-gray-400 truncate mt-0.5">
+                  <p className="mt-0.5 truncate text-xs text-gray-400">
                     {company.industry ?? "Technology"}
                   </p>
                 </div>
-                {selected && (
-                  <svg className="h-4 w-4 shrink-0 text-[#FF5C18]" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                  </svg>
-                )}
+                <span
+                  className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full transition-all ${
+                    selected
+                      ? "bg-[#FF5C18] text-white"
+                      : "border border-gray-200 bg-white text-transparent group-hover:border-[#FFB78A]"
+                  }`}
+                >
+                  <Check className="h-3 w-3" strokeWidth={3} />
+                </span>
               </button>
             )
           })}
           {filtered.length === 0 && (
-            <div className="col-span-2 py-10 text-center text-sm text-gray-400">
+            <div className="col-span-full rounded-xl border border-dashed border-gray-200 bg-gray-50/50 py-12 text-center text-sm text-gray-400">
               No companies match &ldquo;{query}&rdquo;
             </div>
           )}
         </div>
       )}
 
-      <div className="flex gap-3 mt-8">
-        <button
-          type="button"
-          onClick={onBack}
-          disabled={saving}
-          className="flex-1 py-3.5 border border-gray-200 text-gray-700 text-sm font-semibold rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
-        >
+      <div className="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+        <SecondaryButton onClick={onBack} disabled={saving}>
           Back
-        </button>
-        <button
-          type="button"
-          onClick={onFinish}
-          disabled={saving}
-          className="flex-[2] flex items-center justify-center gap-2 rounded-lg bg-[#FF5C18] py-3.5 text-sm font-semibold text-white transition-colors hover:bg-[#E14F0E] disabled:opacity-60"
-        >
+        </SecondaryButton>
+        <PrimaryButton onClick={onFinish} disabled={saving} className="sm:min-w-[260px]">
           {saving ? (
             <><Spinner /> Saving…</>
           ) : selectedCount > 0 ? (
@@ -660,7 +720,7 @@ function StepThree({
           ) : (
             "Go to dashboard"
           )}
-        </button>
+        </PrimaryButton>
       </div>
     </div>
   )
@@ -670,14 +730,95 @@ function StepThree({
 // Shared micro-components
 // ---------------------------------------------------------------------------
 
+const inputClass =
+  "w-full rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 placeholder-gray-400 transition-colors focus:border-[#FF5C18] focus:outline-none focus:ring-4 focus:ring-[#FF5C18]/15"
+
+function SectionHeader({ title, description }: { title: string; description: string }) {
+  return (
+    <div className="mb-7">
+      <h2 className="text-[1.4rem] font-bold tracking-tight text-gray-900 sm:text-[1.55rem]">
+        {title}
+      </h2>
+      <p className="mt-1.5 text-sm text-gray-500">{description}</p>
+    </div>
+  )
+}
+
+function Field({
+  label,
+  required,
+  hint,
+  children,
+}: {
+  label: string
+  required?: boolean
+  hint?: string
+  children: React.ReactNode
+}) {
+  return (
+    <div>
+      <label className="mb-2 block text-sm font-semibold text-gray-800">
+        {label}
+        {required && <span className="ml-1 text-[#FF5C18]">*</span>}
+      </label>
+      {children}
+      {hint && <p className="mt-1.5 text-xs text-gray-400">{hint}</p>}
+    </div>
+  )
+}
+
+function PrimaryButton({
+  children,
+  onClick,
+  disabled,
+  className = "",
+}: {
+  children: React.ReactNode
+  onClick: () => void
+  disabled?: boolean
+  className?: string
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={`inline-flex items-center justify-center gap-2 rounded-lg bg-[#FF5C18] px-6 py-3.5 text-sm font-semibold text-white shadow-[0_8px_20px_-8px_rgba(255,92,24,0.55)] transition-all hover:-translate-y-0.5 hover:bg-[#E14F0E] hover:shadow-[0_12px_24px_-10px_rgba(255,92,24,0.65)] disabled:translate-y-0 disabled:opacity-40 disabled:shadow-none ${className}`}
+    >
+      {children}
+    </button>
+  )
+}
+
+function SecondaryButton({
+  children,
+  onClick,
+  disabled,
+}: {
+  children: React.ReactNode
+  onClick: () => void
+  disabled?: boolean
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white px-6 py-3.5 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50"
+    >
+      {children}
+    </button>
+  )
+}
+
 function Tag({ label, onRemove }: { label: string; onRemove: () => void }) {
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full bg-[#FFF1E8] px-3 py-1.5 text-xs font-medium text-[#FF5C18]">
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-[#FFD9C2] bg-[#FFF1E8] px-3 py-1.5 text-xs font-medium text-[#FF5C18]">
       {label}
       <button
         type="button"
         onClick={onRemove}
-        className="hover:text-[#075985] transition-colors"
+        className="rounded-full p-0.5 transition-colors hover:bg-[#FF5C18]/15"
         aria-label={`Remove ${label}`}
       >
         <svg className="h-3 w-3" viewBox="0 0 12 12" fill="none" stroke="currentColor">
@@ -699,8 +840,10 @@ function Checkbox({
     <button
       type="button"
       onClick={() => onChange(!checked)}
-      className={`flex-shrink-0 mt-0.5 w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors ${
-        checked ? "border-[#FF5C18] bg-[#FF5C18]" : "border-gray-300 bg-white"
+      className={`mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-md border-2 transition-all ${
+        checked
+          ? "border-[#FF5C18] bg-[#FF5C18] shadow-[0_2px_8px_-2px_rgba(255,92,24,0.55)]"
+          : "border-gray-300 bg-white hover:border-[#FFB78A]"
       }`}
       role="checkbox"
       aria-checked={checked}
@@ -716,7 +859,7 @@ function Checkbox({
 
 function Spinner() {
   return (
-    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+    <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
     </svg>

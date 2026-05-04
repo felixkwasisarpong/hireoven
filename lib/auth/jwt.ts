@@ -14,6 +14,8 @@ function getSecretKey(): Uint8Array {
 export type AppSessionClaims = {
   sub: string
   email: string | null
+  isAdmin?: boolean
+  suspended?: boolean
 }
 
 export async function signSessionJwt(
@@ -22,6 +24,8 @@ export async function signSessionJwt(
 ): Promise<string> {
   return new SignJWT({
     email: claims.email,
+    is_admin: claims.isAdmin ?? false,
+    suspended: claims.suspended ?? false,
   })
     .setProtectedHeader({ alg: ALG })
     .setSubject(claims.sub)
@@ -36,7 +40,9 @@ export async function verifySessionJwt(token: string): Promise<AppSessionClaims 
     const sub = payload.sub
     if (!sub || typeof sub !== "string") return null
     const email = typeof payload.email === "string" ? payload.email : null
-    return { sub, email }
+    const isAdmin = typeof payload.is_admin === "boolean" ? payload.is_admin : undefined
+    const suspended = typeof payload.suspended === "boolean" ? payload.suspended : undefined
+    return { sub, email, isAdmin, suspended }
   } catch {
     return null
   }

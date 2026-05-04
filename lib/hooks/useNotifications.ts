@@ -4,7 +4,27 @@ import { useCallback, useEffect, useState } from "react"
 import type { AlertNotificationWithDetails } from "@/types"
 
 export type NotificationFilter = "all" | "unread" | "alerts" | "watchlist"
-export type LocalNotificationType = "resume" | "system"
+export type LocalNotificationType =
+  | "resume"
+  | "system"
+  | "job_match"
+  | "visa"
+  | "risk"
+  | "autofill"
+  | "application"
+export type LocalNotificationTagTone = "neutral" | "info" | "success" | "warning" | "danger"
+export type LocalNotificationTag = {
+  label: string
+  tone?: LocalNotificationTagTone
+}
+export type LocalNotificationContext = {
+  source?: "hireoven" | "linkedin" | "glassdoor" | "system"
+  jobId?: string
+  company?: string
+  matchScore?: number | null
+  sponsorshipScore?: number | null
+  ghostRisk?: "low" | "medium" | "high" | "unknown" | null
+}
 export type LocalAppNotification = {
   id: string
   source: "local"
@@ -13,6 +33,8 @@ export type LocalAppNotification = {
   message: string
   href: string | null
   tone: "info" | "success" | "error"
+  tags?: LocalNotificationTag[]
+  context?: LocalNotificationContext
   sent_at: string
   opened_at: string | null
   clicked_at: string | null
@@ -21,16 +43,74 @@ export type AppNotification = AlertNotificationWithDetails | LocalAppNotificatio
 
 const LOCAL_NOTIFICATION_EVENT = "hireoven:local-notification"
 const LOCAL_NOTIFICATION_STORAGE_KEY = "hireoven:local-notifications"
+const LOCAL_NOTIFICATION_SEEN_KEY = "hireoven:local-notifications-seen"
+const LOCAL_NOTIFICATION_TYPES: LocalNotificationType[] = [
+  "resume",
+  "system",
+  "job_match",
+  "visa",
+  "risk",
+  "autofill",
+  "application",
+]
 
-function isLocalNotification(notification: AppNotification): notification is LocalAppNotification {
+export function isLocalNotification(notification: AppNotification): notification is LocalAppNotification {
   return "source" in notification && notification.source === "local"
+}
+
+function normalizeLocalNotificationType(value: unknown): LocalNotificationType {
+  if (typeof value === "string" && LOCAL_NOTIFICATION_TYPES.includes(value as LocalNotificationType)) {
+    return value as LocalNotificationType
+  }
+  return "system"
+}
+
+function normalizeLocalNotification(row: unknown): LocalAppNotification | null {
+  if (!row || typeof row !== "object") return null
+  const n = row as Partial<LocalAppNotification>
+  if (!n.id || !n.title || !n.message || !n.sent_at) return null
+
+  const tone: LocalAppNotification["tone"] =
+    n.tone === "success" || n.tone === "error" ? n.tone : "info"
+
+  const notification: LocalAppNotification = {
+    id: String(n.id),
+    source: "local",
+    notification_type: normalizeLocalNotificationType(n.notification_type),
+    title: String(n.title),
+    message: String(n.message),
+    href: typeof n.href === "string" ? n.href : null,
+    tone,
+    sent_at: String(n.sent_at),
+    opened_at: typeof n.opened_at === "string" ? n.opened_at : null,
+    clicked_at: typeof n.clicked_at === "string" ? n.clicked_at : null,
+  }
+
+  if (Array.isArray(n.tags)) {
+    const tags = n.tags
+      .filter((tag): tag is LocalNotificationTag => (
+        Boolean(tag) &&
+        typeof tag === "object" &&
+        typeof (tag as LocalNotificationTag).label === "string" &&
+        (tag as LocalNotificationTag).label.trim().length > 0
+      ))
+      .slice(0, 4)
+    if (tags.length > 0) notification.tags = tags
+  }
+
+  if (n.context && typeof n.context === "object") {
+    notification.context = n.context as LocalNotificationContext
+  }
+
+  return notification
 }
 
 function readLocalNotifications() {
   if (typeof window === "undefined") return []
   try {
     const parsed = JSON.parse(window.localStorage.getItem(LOCAL_NOTIFICATION_STORAGE_KEY) ?? "[]")
-    return Array.isArray(parsed) ? parsed.slice(0, 50) as LocalAppNotification[] : []
+    if (!Array.isArray(parsed)) return []
+    return parsed.slice(0, 50).map(normalizeLocalNotification).filter((row): row is LocalAppNotification => row !== null)
   } catch {
     return []
   }
@@ -47,6 +127,8 @@ export function publishLocalNotification(input: {
   message: string
   href?: string | null
   tone?: LocalAppNotification["tone"]
+  tags?: LocalNotificationTag[]
+  context?: LocalNotificationContext
 }) {
   if (typeof window === "undefined") return
 
@@ -58,6 +140,8 @@ export function publishLocalNotification(input: {
     message: input.message,
     href: input.href ?? null,
     tone: input.tone ?? "info",
+    tags: input.tags?.slice(0, 4),
+    context: input.context,
     sent_at: new Date().toISOString(),
     opened_at: null,
     clicked_at: null,
@@ -66,6 +150,70 @@ export function publishLocalNotification(input: {
   const next = [notification, ...readLocalNotifications()]
   writeLocalNotifications(next)
   window.dispatchEvent(new CustomEvent(LOCAL_NOTIFICATION_EVENT, { detail: notification }))
+}
+
+function readLocalNotificationSeen(): Record<string, number> {
+  if (typeof window === "undefined") return {}
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(LOCAL_NOTIFICATION_SEEN_KEY) ?? "{}")
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {}
+    return Object.fromEntries(
+      Object.entries(parsed).filter((entry): entry is [string, number] => (
+        typeof entry[0] === "string" &&
+        typeof entry[1] === "number" &&
+        Number.isFinite(entry[1])
+      ))
+    )
+  } catch {
+    return {}
+  }
+}
+
+function writeLocalNotificationSeen(seen: Record<string, number>) {
+  if (typeof window === "undefined") return
+  const cutoff = Date.now() - 1000 * 60 * 60 * 24 * 21
+  const compact = Object.fromEntries(
+    Object.entries(seen)
+      .filter(([, ts]) => ts >= cutoff)
+      .slice(-400)
+  )
+  window.localStorage.setItem(LOCAL_NOTIFICATION_SEEN_KEY, JSON.stringify(compact))
+}
+
+export function publishLocalNotificationOnce(input: {
+  dedupeKey: string
+  cooldownMinutes?: number
+  type?: LocalNotificationType
+  title: string
+  message: string
+  href?: string | null
+  tone?: LocalAppNotification["tone"]
+  tags?: LocalNotificationTag[]
+  context?: LocalNotificationContext
+}) {
+  if (typeof window === "undefined") return false
+  const dedupeKey = input.dedupeKey.trim()
+  if (!dedupeKey) return false
+
+  const seen = readLocalNotificationSeen()
+  const now = Date.now()
+  const cooldownMs = Math.max(1, input.cooldownMinutes ?? 60) * 60_000
+  const lastSeen = seen[dedupeKey]
+  if (typeof lastSeen === "number" && now - lastSeen < cooldownMs) return false
+
+  publishLocalNotification({
+    type: input.type,
+    title: input.title,
+    message: input.message,
+    href: input.href,
+    tone: input.tone,
+    tags: input.tags,
+    context: input.context,
+  })
+
+  seen[dedupeKey] = now
+  writeLocalNotificationSeen(seen)
+  return true
 }
 
 export function useNotifications(

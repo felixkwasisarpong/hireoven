@@ -26,9 +26,17 @@ import {
   TrendingDown,
   TrendingUp,
 } from "lucide-react"
+import { GhostJobDetector } from "@/components/jobs/GhostJobDetector"
+import { TakeHomeBadge } from "@/components/compensation/TakeHomeBadge"
+import { RejectionIntelligence } from "@/components/rejections/RejectionIntelligence"
 import { useResumeContext } from "@/components/resume/ResumeProvider"
 import { useResumeAnalysis } from "@/lib/hooks/useResumeAnalysis"
 import { createResumeLcaRoleAlignmentFallback, getJobIntelligence } from "@/lib/jobs/intelligence"
+import {
+  getMatchVerdict,
+  resolveOverallMatchScore,
+} from "@/lib/jobs/match-score-display"
+import { resolveH1BSponsorshipDisplay } from "@/lib/jobs/sponsorship-employer-signal"
 import {
   JOB_APPLICATION_SAVED_EVENT,
   fetchJobSavedState,
@@ -37,6 +45,7 @@ import {
 import { useToast } from "@/components/ui/ToastProvider"
 import { cn } from "@/lib/utils"
 import { normalizeSkillList } from "@/lib/skills/taxonomy"
+import { EmployerInsiderView } from "@/components/checkins/EmployerInsiderView"
 import type {
   Company,
   Job,
@@ -59,14 +68,6 @@ type JobDetailPanelProps = {
 function clamp(value: number | null | undefined): number {
   if (value == null || !Number.isFinite(value)) return 0
   return Math.max(0, Math.min(100, Math.round(value)))
-}
-
-function verdictText(score: number | null) {
-  if (score == null) return { label: "No score yet", color: "text-slate-400" }
-  if (score >= 85) return { label: "Excellent match", color: "text-emerald-600" }
-  if (score >= 70) return { label: "Good match", color: "text-emerald-500" }
-  if (score >= 50) return { label: "Partial match", color: "text-orange-500" }
-  return { label: "Low match", color: "text-slate-400" }
 }
 
 function CircleScore({ value }: { value: number | null }) {
@@ -251,8 +252,13 @@ export default function JobDetailPanel({
 
   // ─── Derived ──────────────────────────────────────────────────────────────
 
-  const overall = analysis?.overall_score ?? fastScore?.overall_score ?? null
-  const verdict = verdictText(overall)
+  const overall = resolveOverallMatchScore({
+    analysisOverallScore: analysis?.overall_score,
+    preferredScore: fastScore,
+    fallbackScore: initialMatchScore ?? null,
+    rawData: job.raw_data,
+  })
+  const verdict = getMatchVerdict(overall)
 
   const allFactors = [
     { label: "Skills",     value: analysis?.skills_score     ?? fastScore?.skills_score     ?? null },
@@ -306,6 +312,11 @@ export default function JobDetailPanel({
   const showHiringHealth =
     (hiringHealth?.status && hiringHealth.status !== "unknown") ||
     (hiringHealth?.activeJobCount != null && hiringHealth.activeJobCount > 0)
+
+  const resolvedSponsorshipDisplay = useMemo(
+    () => resolveH1BSponsorshipDisplay({ ...job, company: job.company ?? undefined }),
+    [job]
+  )
 
   // ─── Render ───────────────────────────────────────────────────────────────
 
@@ -364,7 +375,30 @@ export default function JobDetailPanel({
             <ArrowRight className="h-3.5 w-3.5" aria-hidden />
           </Link>
 
-          {(sponsorsConfirmed || sponsorshipPill.label !== "Sponsorship not specified") && (
+          {resolvedSponsorshipDisplay ? (
+            <div
+              className={cn(
+                "flex items-start gap-2 rounded-xl px-3.5 py-2.5 ring-1 ring-inset",
+                resolvedSponsorshipDisplay.tone === "emerald"
+                  ? "bg-emerald-50 text-emerald-800 ring-emerald-200/60"
+                  : resolvedSponsorshipDisplay.tone === "sky"
+                    ? "bg-sky-50 text-sky-800 ring-sky-200/60"
+                    : resolvedSponsorshipDisplay.tone === "amber"
+                      ? "bg-amber-50 text-amber-800 ring-amber-200/60"
+                      : "bg-rose-50 text-rose-800 ring-rose-200/60"
+              )}
+            >
+              {resolvedSponsorshipDisplay.tone === "rose" ? (
+                <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+              ) : (
+                <Plane className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+              )}
+              <div className="min-w-0">
+                <p className="text-[12px] font-semibold">{resolvedSponsorshipDisplay.label}</p>
+                <p className="text-[10.5px] leading-relaxed opacity-80">{resolvedSponsorshipDisplay.sublabel}</p>
+              </div>
+            </div>
+          ) : (sponsorsConfirmed || sponsorshipPill.label !== "Sponsorship not specified") ? (
             sponsorsConfirmed ? (
               <div className="flex items-center gap-1.5 rounded-xl bg-emerald-50 px-3.5 py-2.5 ring-1 ring-emerald-200/60">
                 <Plane className="h-3.5 w-3.5 shrink-0 text-emerald-600" aria-hidden />
@@ -376,7 +410,7 @@ export default function JobDetailPanel({
                 <span className="text-[12px] font-semibold">{sponsorshipPill.label}</span>
               </div>
             )
-          )}
+          ) : null}
         </div>
 
         {/* ── Match Score ── */}
@@ -404,7 +438,7 @@ export default function JobDetailPanel({
               <div className="flex items-center gap-4">
                 <CircleScore value={overall} />
                 <div className="min-w-0">
-                  <p className={cn("text-[16px] font-bold leading-tight", verdict.color)}>
+                  <p className={cn("text-[16px] font-bold leading-tight", verdict.colorClass)}>
                     {verdict.label}
                   </p>
                   {activeFactors.length > 0 && (
@@ -523,56 +557,15 @@ export default function JobDetailPanel({
           </VisaIntelTrigger>
         </div>
 
-        {/* ── Resume Alignment ── */}
-        {resumeAlignment.alignmentScore != null && (
+
+        {/* ── Take-home estimate ── */}
+        {job.salary_min && (
           <div className={sectionCls}>
-            <IntelLabel>Resume alignment</IntelLabel>
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-[22px] font-bold leading-none text-slate-900">
-                  {resumeAlignment.alignmentScore}%
-                </p>
-                <p className="mt-1 text-[11px] text-slate-400">
-                  {resumeAlignment.roleFamily ?? "Role alignment"} · {resumeAlignment.confidence} confidence
-                </p>
-              </div>
-              <span className={cn(
-                "rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1",
-                resumeAlignment.alignmentScore >= 75
-                  ? "bg-emerald-50 text-emerald-800 ring-emerald-200"
-                  : resumeAlignment.alignmentScore >= 50
-                    ? "bg-orange-50 text-orange-800 ring-orange-200"
-                    : "bg-amber-50 text-amber-800 ring-amber-200"
-              )}>
-                {resumeAlignment.alignmentScore >= 75 ? "Strong fit" : resumeAlignment.alignmentScore >= 50 ? "Can tailor" : "Needs work"}
-              </span>
-            </div>
-
-            {resumeAlignment.strongMatches.length > 0 && (
-              <div className="mt-3">
-                <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.1em] text-slate-400">Strong matches</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {resumeAlignment.strongMatches.slice(0, 5).map((keyword) => (
-                    <span key={keyword} className="rounded-lg bg-emerald-50 px-2.5 py-0.5 text-[11px] font-medium text-emerald-700 ring-1 ring-emerald-100">
-                      {keyword}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {resumeAlignment.missingKeywords.length > 0 && (
-              <p className="mt-2 text-[11px] leading-relaxed text-slate-400">
-                Missing: {resumeAlignment.missingKeywords.slice(0, 4).join(", ")}.
-              </p>
-            )}
-
-            <Link
-              href={`/dashboard/resume/studio?mode=tailor&jobId=${job.id}`}
-              className="mt-3 inline-flex items-center gap-1 text-[12px] font-semibold text-orange-600 hover:underline"
-            >
-              Tailor resume <ArrowRight className="h-3 w-3" />
-            </Link>
+            <IntelLabel>Est. take-home</IntelLabel>
+            <TakeHomeBadge
+              annualSalary={job.salary_min}
+              stateCode={job.company?.domain ? undefined : undefined}
+            />
           </div>
         )}
 
@@ -603,86 +596,31 @@ export default function JobDetailPanel({
           </div>
         )}
 
-        {/* ── Ghost Job Risk ── */}
-        {showGhostRisk && ghostRisk && (
-          <div className={sectionCls}>
-            <IntelLabel>Hiring freshness</IntelLabel>
-            <div className="flex flex-wrap items-center gap-2">
-              <span className={cn("inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ring-1", ghostTone)}>
-                <Ghost className="h-3 w-3" aria-hidden />
-                {ghostLabel}
-                {ghostRisk.score != null && ` · ${ghostRisk.score}/100`}
-              </span>
-              {ghostRisk.freshnessDays != null && (
-                <span className="text-[11px] text-slate-400">
-                  {ghostRisk.freshnessDays === 0 ? "Posted today" : `${ghostRisk.freshnessDays}d old`}
-                </span>
-              )}
-            </div>
-            {ghostRisk.recommendedAction && (
-              <p className="mt-2 text-[12px] leading-relaxed text-slate-600">{ghostRisk.recommendedAction}</p>
-            )}
-            {ghostRisk.reasons.length > 0 && (
-              <p className="mt-1.5 text-[11px] leading-relaxed text-slate-400">
-                {ghostRisk.reasons.slice(0, 2).join(" · ")}
-              </p>
-            )}
+        {/* ── Ghost Job Detector (full detail view) ── */}
+        <div className="px-5 py-4 border-t border-slate-100">
+          <GhostJobDetector
+            jobId={job.id}
+            onApply={() => window.open(applyUrl, "_blank", "noopener,noreferrer")}
+          />
+        </div>
+
+
+
+        {/* ── Rejection Intelligence ── */}
+        {job.company?.id && (
+          <div className="border-t border-slate-100 px-5 py-5">
+            <RejectionIntelligence
+              companyId={job.company.id}
+              jobTitle={job.title}
+              jobId={job.id}
+            />
           </div>
         )}
 
-        {/* ── Company Hiring Health ── */}
-        {showHiringHealth && (
-          <div className={sectionCls}>
-            <IntelLabel>Company hiring</IntelLabel>
-            {hiringHealth?.status && hiringHealth.status !== "unknown" ? (
-              <div>
-                <span className={cn(
-                  "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ring-1",
-                  hiringHealth.status === "growing" ? "bg-emerald-50 text-emerald-800 ring-emerald-200"
-                  : hiringHealth.status === "slowing" ? "bg-amber-50 text-amber-800 ring-amber-200"
-                  : "bg-slate-50 text-slate-700 ring-slate-200"
-                )}>
-                  <Building2 className="h-3 w-3" aria-hidden />
-                  {hiringHealth.status === "growing" ? "Growing" : hiringHealth.status === "slowing" ? "Slowing" : "Steady"}
-                </span>
-                {hiringHealth.activeJobCount != null && (
-                  <p className="mt-2 text-[11px] text-slate-400">{hiringHealth.activeJobCount} active openings</p>
-                )}
-              </div>
-            ) : (
-              <p className="text-[12px] text-slate-600">
-                <span className="font-semibold">{hiringHealth?.activeJobCount}</span> active openings
-              </p>
-            )}
-          </div>
-        )}
-
-        {/* ── Application Verdict ── */}
-        {intel.applicationVerdict && intel.applicationVerdict.recommendation !== "unknown" && (
-          <div className={sectionCls}>
-            <IntelLabel>Application verdict</IntelLabel>
-            <p className={cn(
-              "text-[13px] font-bold",
-              intel.applicationVerdict.recommendation === "apply_now"   ? "text-emerald-700"
-              : intel.applicationVerdict.recommendation === "avoid"
-                || intel.applicationVerdict.recommendation === "skip"  ? "text-red-600"
-              : "text-slate-700"
-            )}>
-              {intel.applicationVerdict.verdict !== "Unknown"
-                ? intel.applicationVerdict.verdict
-                : intel.applicationVerdict.recommendation === "apply_now"       ? "Apply Today"
-                : intel.applicationVerdict.recommendation === "apply_with_tweaks" ? "Apply — Customize Resume"
-                : intel.applicationVerdict.recommendation === "avoid"           ? "High Risk"
-                : intel.applicationVerdict.recommendation === "skip"            ? "Skip"
-                : intel.applicationVerdict.recommendation === "watch"           ? "Watch"
-                : "Review carefully"}
-            </p>
-            {intel.applicationVerdict.recommendedNextAction && (
-              <p className="mt-1 text-[11.5px] text-slate-500">{intel.applicationVerdict.recommendedNextAction}</p>
-            )}
-            {intel.applicationVerdict.warnings.length > 0 && (
-              <p className="mt-1.5 text-[11px] text-amber-600">{intel.applicationVerdict.warnings.slice(0, 1).join(" ")}</p>
-            )}
+        {/* ── Employer insider view (post-hire check-in data) ── */}
+        {job.company?.id && (
+          <div className="border-t border-slate-100 px-5 py-5">
+            <EmployerInsiderView companyId={job.company.id} />
           </div>
         )}
 

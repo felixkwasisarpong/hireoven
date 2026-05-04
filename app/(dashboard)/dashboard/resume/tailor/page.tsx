@@ -3,10 +3,18 @@ import { redirect } from "next/navigation"
 export default function ResumeTailorRedirect({
   searchParams,
 }: {
-  searchParams?: { resumeId?: string }
+  searchParams?: Record<string, string | string[] | undefined>
 }) {
-  const suffix = searchParams?.resumeId
-    ? `&resumeId=${encodeURIComponent(searchParams.resumeId)}`
-    : ""
-  redirect(`/dashboard/resume/studio?mode=tailor${suffix}`)
+  const next = new URLSearchParams()
+  next.set("mode", "tailor")
+
+  const carry = ["resumeId", "jobId", "analysisId", "autoAnalyze"]
+  for (const key of carry) {
+    const value = searchParams?.[key]
+    if (typeof value === "string" && value.trim().length > 0) {
+      next.set(key, value)
+    }
+  }
+
+  redirect(`/dashboard/resume/studio?${next.toString()}`)
 }

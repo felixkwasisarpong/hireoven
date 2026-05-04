@@ -522,6 +522,41 @@ export function applyAiEditPatch(resume: Resume, patch: ResumeAiEditPatch) {
   return next
 }
 
+function cleanBulletText(line: string | null | undefined): string {
+  return (line ?? "")
+    .replace(/^[-•*]\s*/, "")
+    .replace(/\s+/g, " ")
+    .trim()
+}
+
+function buildTailoredReplacementBullet(original: string, keyword: string | null): string {
+  const cleaned = cleanBulletText(original)
+  const fallback = keyword
+    ? `Delivered ${keyword}-focused improvements that strengthened delivery reliability and business outcomes across core workflows.`
+    : "Delivered measurable improvements in delivery reliability and business outcomes across core workflows."
+  if (!cleaned || /^add a truthful,?\s*role-relevant achievement\.?$/i.test(cleaned)) {
+    return fallback
+  }
+
+  const stem = cleaned.replace(/[.?!]+$/, "")
+  const startsWithStrongVerb = /^(architected|automated|built|created|delivered|designed|developed|drove|enabled|implemented|improved|launched|led|migrated|optimized|owned|reduced|refactored|scaled|streamlined)\b/i.test(
+    stem
+  )
+  const baseClause = startsWithStrongVerb
+    ? stem
+    : `Delivered ${stem.charAt(0).toLowerCase()}${stem.slice(1)}`
+
+  if (!keyword) {
+    return `${baseClause} with clear ownership, technical context, and measurable business impact.`
+  }
+
+  const hasKeyword = normalizeKeyword(stem).includes(normalizeKeyword(keyword))
+  if (hasKeyword) {
+    return `${baseClause} to improve delivery quality, operational reliability, and business outcomes.`
+  }
+  return `${baseClause} using ${keyword} to improve delivery quality, operational reliability, and business outcomes.`
+}
+
 export function compareResumeToJob(resume: Resume, jobDescription: string, jobTitle?: string | null, company?: string | null): ResumeTailoringAnalysis {
   const jobKeywords = extractKeywords(jobDescription, 24)
   const resumeText = getResumeSearchText(resume).toLowerCase()
@@ -531,22 +566,38 @@ export function compareResumeToJob(resume: Resume, jobDescription: string, jobTi
   )
   const missingKeywords = jobKeywords.filter((keyword) => !presentKeywords.includes(keyword)).slice(0, 12)
   const matchScore = clampScore(jobKeywords.length ? (presentKeywords.length / jobKeywords.length) * 100 : 35)
-  const firstExperience = resume.work_experience?.[0]
-  const bulletSuggestions: TailoredBulletSuggestion[] = missingKeywords.length > 0 ? missingKeywords.slice(0, 3).map((keyword) => ({
-    section: "Work Experience",
-    original: firstExperience?.achievements?.[0] ?? firstExperience?.description ?? "Add a truthful, role-relevant achievement.",
-    suggested: `If accurate, mention ${keyword} in a measurable achievement tied to your real work.`,
-    reason: "Keyword appears in the job description but was not clearly present in the resume.",
-    keywords: [keyword],
-  })) : [
-    {
-      section: "Work Experience",
-      original: firstExperience?.achievements?.[0] ?? firstExperience?.description ?? "Add a truthful, role-relevant achievement.",
-      suggested: "Your resume already covers several important keywords. Tighten one bullet with a verified metric or concrete outcome for the target role.",
-      reason: "The job description did not reveal a clear keyword gap, so the safest next step is measurable impact.",
-      keywords: ["impact"],
-    },
-  ]
+  const experienceSources = (resume.work_experience ?? []).flatMap((experience) => {
+    const achievements = Array.isArray(experience.achievements) ? experience.achievements : []
+    if (achievements.length > 0) return achievements
+    return (experience.description ?? "")
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+  })
+  const originalBullets = experienceSources
+    .map((line) => cleanBulletText(line))
+    .filter(Boolean)
+  const fallbackOriginal = originalBullets[0] ?? "Improved a core workflow with measurable operational impact."
+  const bulletSuggestions: TailoredBulletSuggestion[] = missingKeywords.length > 0
+    ? missingKeywords.slice(0, 3).map((keyword, idx) => {
+      const original = originalBullets[idx] ?? fallbackOriginal
+      return {
+        section: "Work Experience",
+        original,
+        suggested: buildTailoredReplacementBullet(original, keyword),
+        reason: "Keyword appears in the job description but was not clearly present in the resume.",
+        keywords: [keyword],
+      }
+    })
+    : [
+      {
+        section: "Work Experience",
+        original: fallbackOriginal,
+        suggested: buildTailoredReplacementBullet(fallbackOriginal, null),
+        reason: "No major keyword gaps detected; this rewrite strengthens clarity and impact for ATS screening.",
+        keywords: ["impact"],
+      },
+    ]
 
   return {
     jobTitle: jobTitle?.trim() || inferRole(jobDescription) || "Target role",

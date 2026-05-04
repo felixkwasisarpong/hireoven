@@ -25,6 +25,98 @@ export function employerLikelySponsorsH1b(job: EmployerSponsorshipJobInput): boo
   return Boolean(job.sponsors_h1b) || Boolean(job.company?.sponsors_h1b)
 }
 
+export type SponsorshipVisaCardLabel =
+  | "Sponsors"
+  | "No sponsorship"
+  | "Historical sponsorship signal"
+  | null
+
+export type H1BSponsorshipStrength = "strong" | "moderate" | "limited"
+export type H1BSponsorshipTone = "emerald" | "sky" | "amber" | "rose"
+
+export type H1BSponsorshipDisplay = {
+  label: string
+  sublabel: string
+  tone: H1BSponsorshipTone
+  strength: H1BSponsorshipStrength | null
+  blockedByPosting: boolean
+}
+
+function formatH1bPetitionCount(count: number): string {
+  return `${count.toLocaleString()} petition${count === 1 ? "" : "s"} last yr`
+}
+
+function sponsorshipStrengthLabel(strength: H1BSponsorshipStrength): string {
+  if (strength === "strong") return "strong signal"
+  if (strength === "moderate") return "moderate signal"
+  return "limited signal"
+}
+
+function sponsorshipTone(strength: H1BSponsorshipStrength): H1BSponsorshipTone {
+  if (strength === "strong") return "emerald"
+  if (strength === "moderate") return "sky"
+  return "amber"
+}
+
+/**
+ * UI-friendly sponsorship badge:
+ * - Uses one positive label (`H-1B sponsor`) everywhere.
+ * - Varies strength by historical signal quality.
+ * - Keeps explicit "No sponsorship" when posting language blocks sponsorship.
+ */
+export function resolveH1BSponsorshipDisplay(
+  job: EmployerSponsorshipJobInput,
+  options?: { visaCardLabel?: SponsorshipVisaCardLabel }
+): H1BSponsorshipDisplay | null {
+  const resolvedVisaLabel = options?.visaCardLabel ?? resolveJobCardView(job).visa_card_label
+  const blockedByPosting = resolvedVisaLabel === "No sponsorship" || job.requires_authorization === true
+  if (blockedByPosting) {
+    return {
+      label: "No sponsorship",
+      sublabel: "from posting",
+      tone: "rose",
+      strength: null,
+      blockedByPosting: true,
+    }
+  }
+
+  const count1yr = Math.max(0, Number(job.company?.h1b_sponsor_count_1yr ?? 0))
+  const count3yr = Math.max(0, Number(job.company?.h1b_sponsor_count_3yr ?? 0))
+  const score = effectiveEmployerSponsorshipScore(job)
+  const hasJobTextSignal = resolvedVisaLabel === "Sponsors" || resolvedVisaLabel === "Historical sponsorship signal"
+  const hasSponsorSignal = employerLikelySponsorsH1b(job) || hasJobTextSignal || count1yr > 0 || count3yr > 0 || score >= 50
+  if (!hasSponsorSignal) return null
+
+  const strongByCount = count1yr >= 25 || count3yr >= 80
+  const moderateByCount = count1yr >= 5 || count3yr >= 20
+  const strongByScore = score >= 78
+  const moderateByScore = score >= 58
+
+  const strength: H1BSponsorshipStrength =
+    strongByCount || strongByScore
+      ? "strong"
+      : moderateByCount || moderateByScore || employerLikelySponsorsH1b(job) || hasJobTextSignal
+        ? "moderate"
+        : "limited"
+
+  const sourceLabel =
+    count1yr > 0
+      ? formatH1bPetitionCount(count1yr)
+      : score > 0
+        ? `${score}% confidence`
+        : hasJobTextSignal
+          ? "from job description"
+          : "historical signal"
+
+  return {
+    label: "H-1B sponsor",
+    sublabel: `${sourceLabel} · ${sponsorshipStrengthLabel(strength)}`,
+    tone: sponsorshipTone(strength),
+    strength,
+    blockedByPosting: false,
+  }
+}
+
 export type EmployerSponsorshipPill = {
   label: string
   className: string

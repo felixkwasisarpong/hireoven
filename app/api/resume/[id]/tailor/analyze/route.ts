@@ -116,6 +116,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
         "(3) Never use placeholders like <outcome>, <metric>, <result>, <tool>, or similar. " +
         "(4) Never include meta-instructions, parenthetical tips, draft notes, or verification prompts (e.g. do NOT write '[Draft—verify]', 'Add a metric here', 'make this bullet the one that...'). " +
         "(5) If you cannot write a complete bullet with real facts, set requiresConfirmation: true and write the BEST approximate bullet you can — still no placeholders. " +
+        "(6) The suggested bullet must fully replace the original bullet text; do not append extra clauses to the old line. " +
         "You must only suggest additions that are supported by the resume or clearly mark them as requiring confirmation. " +
         "Never invent employers, dates, certifications, tools, metrics, or responsibilities. Return JSON only, no markdown wrapper.",
       messages: [

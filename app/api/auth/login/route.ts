@@ -23,10 +23,17 @@ export async function POST(request: Request) {
       id: string
       encrypted_password: string | null
       email: string | null
+      is_admin: boolean | null
+      suspended_at: string | null
     }>(
-      `SELECT id, encrypted_password, email
-       FROM auth.users
-       WHERE lower(trim(email)) = $1
+      `SELECT u.id,
+              u.encrypted_password,
+              u.email,
+              p.is_admin,
+              p.suspended_at
+       FROM auth.users u
+       LEFT JOIN profiles p ON p.id = u.id
+       WHERE lower(trim(u.email)) = $1
        LIMIT 1`,
       [email]
     )
@@ -40,11 +47,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Incorrect email or password." }, { status: 401 })
     }
 
-    const suspended = await pool.query<{ suspended_at: string | null }>(
-      `SELECT suspended_at FROM profiles WHERE id = $1 LIMIT 1`,
-      [row.id]
-    )
-    if (suspended.rows[0]?.suspended_at) {
+    if (row.suspended_at) {
       return NextResponse.json({ error: "Account suspended" }, { status: 403 })
     }
 
@@ -54,7 +57,12 @@ export async function POST(request: Request) {
     )
 
     const sessionEmail = row.email?.trim().toLowerCase() ?? email
-    const token = await signSessionJwt({ sub: row.id, email: sessionEmail })
+    const token = await signSessionJwt({
+      sub: row.id,
+      email: sessionEmail,
+      isAdmin: Boolean(row.is_admin),
+      suspended: false,
+    })
     const res = NextResponse.json({ ok: true, user: { id: row.id, email: sessionEmail } })
     res.headers.append("Set-Cookie", buildSessionSetCookie(token, 60 * 60 * 24 * 14))
     return res

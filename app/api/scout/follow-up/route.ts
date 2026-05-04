@@ -1,12 +1,13 @@
 import Anthropic from "@anthropic-ai/sdk"
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
-import { logApiUsage } from "@/lib/admin/usage"
 import { getUserPlan } from "@/lib/gates/server-gate"
 import { canAccess } from "@/lib/gates"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { analyzeFollowUp } from "@/lib/scout/follow-up"
-import { ANTHROPIC_TIER_PRICING, HAIKU_MODEL } from "@/lib/ai/anthropic-models"
+import { HAIKU_MODEL } from "@/lib/ai/anthropic-models"
+import { withAICall } from "@/lib/scout/budget/ai-call"
+import { AI_TIMEOUTS } from "@/lib/scout/budget/router"
 import type { JobApplication } from "@/types"
 
 export const runtime = "nodejs"
@@ -18,7 +19,6 @@ const anthropic = process.env.ANTHROPIC_API_KEY
 
 // Follow-up drafts are short and latency-sensitive; Haiku is sufficient here.
 const MODEL = HAIKU_MODEL
-const MODEL_PRICING = ANTHROPIC_TIER_PRICING.haiku
 
 function scoutError(status: number, message: string) {
   return NextResponse.json({ ok: false, status, message, error: message }, { status })
@@ -35,7 +35,7 @@ Rules:
 - Do not add placeholder tokens like "[Your Name]" — write just the message body.
 - Return only the message body, nothing else. No preamble, no sign-off.`
 
-async function generateDraft(app: JobApplication): Promise<string | null> {
+async function generateDraft(app: JobApplication, userId: string): Promise<string | null> {
   if (!anthropic) return null
 
   const appliedAt = app.applied_at
@@ -57,31 +57,21 @@ async function generateDraft(app: JobApplication): Promise<string | null> {
 2–3 sentences max.`
 
   try {
-    const message = await anthropic.messages.create({
-      model: MODEL,
-      max_tokens: 280,
-      system: DRAFT_SYSTEM,
-      messages: [{ role: "user", content: userMessage }],
+    const { value } = await withAICall({
+      anthropic,
+      feature:   "scout_follow_up",
+      timeoutMs: AI_TIMEOUTS.scout_follow_up,
+      params: {
+        model:      MODEL,
+        max_tokens: 280,
+        system:     DRAFT_SYSTEM,
+        messages:   [{ role: "user", content: userMessage }],
+      },
+      parse:    (text) => text || null,
+      fallback: () => null,
+      userId,
     })
-
-    const inputTokens = message.usage?.input_tokens ?? 0
-    const outputTokens = message.usage?.output_tokens ?? 0
-    const costUsd =
-      (inputTokens / 1_000_000) * MODEL_PRICING.inputPerMillion +
-      (outputTokens / 1_000_000) * MODEL_PRICING.outputPerMillion
-
-    await logApiUsage({
-      service: "claude",
-      operation: "scout_follow_up_draft",
-      tokens_used: inputTokens + outputTokens,
-      cost_usd: Number(costUsd.toFixed(6)),
-    })
-
-    return message.content
-      .filter((b) => b.type === "text")
-      .map((b) => b.text)
-      .join("")
-      .trim()
+    return value
   } catch (err) {
     console.error("[follow-up] draft generation error:", err)
     return null
@@ -156,7 +146,7 @@ export async function POST(request: NextRequest) {
 
   if (analysis.status === "ready") {
     if (isPro) {
-      draft = await generateDraft(app)
+      draft = await generateDraft(app, user.id)
     } else {
       gated = true
     }

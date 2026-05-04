@@ -5,6 +5,10 @@ import {
   formatBehaviorSignalsForClaude,
   type ScoutBehaviorSignals,
 } from "@/lib/scout/behavior"
+import { getMemories } from "@/lib/scout/memory/store"
+import type { ScoutMemory } from "@/lib/scout/memory/types"
+import { formatOpportunitiesForClaude } from "@/lib/scout/opportunity-graph/formatter"
+import type { OpportunityGraphResponse } from "@/lib/scout/opportunity-graph/types"
 import type {
   Job,
   Company,
@@ -14,6 +18,7 @@ import type {
   JobMatchScore,
   JobIntelligence,
   CompanyImmigrationProfileSummary,
+  CompanyHiringHealth,
 } from "@/types"
 
 export type CompareJobContext = {
@@ -79,6 +84,7 @@ export type ScoutContext = {
     sponsorship_confidence: number
     h1b_sponsor_count_1yr: number
     immigration_profile: CompanyImmigrationProfileSummary | null
+    hiring_health: CompanyHiringHealth | null
   } | null
   resume: {
     id: string
@@ -129,6 +135,12 @@ export type ScoutContext = {
   behaviorSignals: ScoutBehaviorSignals | null
   /** Jobs to compare — populated when compareJobIds or autoCompare is set */
   compareJobs: CompareJobContext[] | null
+  /** Opportunity graph — populated when jobId or companyId is in context */
+  opportunityGraph: OpportunityGraphResponse | null
+  /** Outcome learning signals — populated from application history */
+  outcomeLearning: import("@/lib/scout/outcomes/types").OutcomeLearningResult | null
+  /** Persistent user memories — injected into Claude prompt via retriever */
+  memories: import("@/lib/scout/memory/types").ScoutMemory[]
 }
 
 type ScoutContextResume = NonNullable<ScoutContext["resume"]>
@@ -188,6 +200,43 @@ const COMPARE_WATCHLIST_SELECT = `
   LIMIT $2
 `
 
+/**
+ * Fallback: resolve compare jobs from job_applications WHERE status = 'saved'.
+ * Used when the watchlist query returns fewer than 2 jobs — covers users who
+ * save jobs via the application tracker but don't use the company watchlist.
+ */
+const COMPARE_SAVED_APPS_SELECT = `
+  SELECT
+    j.id,
+    j.title,
+    COALESCE(c.name, ja.company_name)  AS company_name,
+    j.company_id                        AS company_id,
+    j.location,
+    j.is_remote,
+    j.salary_min,
+    j.salary_max,
+    j.sponsors_h1b,
+    j.requires_authorization,
+    j.visa_language_detected,
+    COALESCE(jms.overall_score, ja.match_score) AS match_score
+  FROM job_applications ja
+  INNER JOIN jobs j ON j.id = ja.job_id AND j.is_active = true
+  LEFT JOIN companies c ON c.id = j.company_id
+  LEFT JOIN LATERAL (
+    SELECT overall_score
+    FROM job_match_scores
+    WHERE user_id = $1 AND job_id = ja.job_id
+    ORDER BY computed_at DESC
+    LIMIT 1
+  ) AS jms ON TRUE
+  WHERE ja.user_id = $1
+    AND ja.status = 'saved'
+    AND ja.is_archived = false
+    AND ja.job_id IS NOT NULL
+  ORDER BY COALESCE(jms.overall_score, ja.match_score, 0) DESC, ja.created_at DESC
+  LIMIT $2
+`
+
 export async function getScoutContext(input: ScoutContextInput): Promise<ScoutContext> {
   const pool = getPostgresPool()
   const {
@@ -203,13 +252,14 @@ export async function getScoutContext(input: ScoutContextInput): Promise<ScoutCo
     compareLimit = 5,
   } = input
 
-  // Fetch user profile and behavior signals concurrently
-  const [profileResult, behaviorSignals] = await Promise.all([
+  // Fetch user profile, behavior signals, and memories concurrently
+  const [profileResult, behaviorSignals, memories] = await Promise.all([
     pool.query<Profile>(
       "SELECT * FROM profiles WHERE id = $1 LIMIT 1",
       [userId]
     ),
     getScoutBehaviorSignals(userId).catch(() => null),
+    getMemories(userId, pool, { activeOnly: true }).catch((): ScoutMemory[] => []),
   ])
   const profile = profileResult.rows[0] ?? null
 
@@ -308,10 +358,29 @@ export async function getScoutContext(input: ScoutContextInput): Promise<ScoutCo
   } else if (autoCompare) {
     try {
       const limit = Math.min(compareLimit, 5)
-      const result = await pool.query<CompareJobContext>(COMPARE_WATCHLIST_SELECT, [userId, limit])
-      compareJobs = result.rows.length >= 2 ? result.rows : null
+
+      // Try watchlist (company-level) first
+      const watchlistResult = await pool.query<CompareJobContext>(COMPARE_WATCHLIST_SELECT, [userId, limit])
+      if (watchlistResult.rows.length >= 2) {
+        compareJobs = watchlistResult.rows
+      } else {
+        // Fallback: saved job applications — covers users who save jobs via
+        // the application tracker but don't use the company watchlist
+        const savedAppsResult = await pool.query<CompareJobContext>(COMPARE_SAVED_APPS_SELECT, [userId, limit])
+        if (savedAppsResult.rows.length >= 2) {
+          compareJobs = savedAppsResult.rows
+        } else if (watchlistResult.rows.length + savedAppsResult.rows.length >= 2) {
+          // Merge both sources (deduplicate by job ID)
+          const seen = new Set<string>()
+          const merged: CompareJobContext[] = []
+          for (const row of [...watchlistResult.rows, ...savedAppsResult.rows]) {
+            if (!seen.has(row.id)) { seen.add(row.id); merged.push(row) }
+          }
+          compareJobs = merged.length >= 2 ? merged.slice(0, limit) : null
+        }
+      }
     } catch (err) {
-      console.error("[Scout] COMPARE_WATCHLIST_SELECT failed:", err)
+      console.error("[Scout] compare context resolution failed:", err)
       compareJobs = null
     }
   }
@@ -352,6 +421,7 @@ export async function getScoutContext(input: ScoutContextInput): Promise<ScoutCo
           sponsorship_confidence: company.sponsorship_confidence,
           h1b_sponsor_count_1yr: company.h1b_sponsor_count_1yr,
           immigration_profile: company.immigration_profile_summary ?? null,
+          hiring_health: company.hiring_health ?? null,
         }
       : null,
     resume: resume
@@ -393,13 +463,16 @@ export async function getScoutContext(input: ScoutContextInput): Promise<ScoutCo
     pagePath: pagePath ?? null,
     behaviorSignals,
     compareJobs,
+    opportunityGraph: null,
+    outcomeLearning:  null,
+    memories,
   }
 }
 
 /**
  * Formats Scout context into a readable string for Claude.
  */
-export function formatScoutContextForClaude(context: ScoutContext): string {
+export async function formatScoutContextForClaude(context: ScoutContext): Promise<string> {
   const sections: string[] = []
 
   sections.push(`Page Context:
@@ -487,6 +560,16 @@ ${job.description.substring(0, 500)}...`)
 - Total LCA Applications: ${profile.totalLcaApplications ?? 0}
 - LCA Certification Rate: ${profile.lcaCertificationRate ? `${(profile.lcaCertificationRate * 100).toFixed(1)}%` : "Unknown"}`)
     }
+    if (company.hiring_health) {
+      const h = company.hiring_health
+      const lines: string[] = [`Hiring Health: ${h.status ?? "unknown"}`]
+      if (h.activeJobCount != null) lines.push(`Active openings: ${h.activeJobCount}`)
+      if (h.recentJobCount != null) lines.push(`Posted last 30 days: ${h.recentJobCount}`)
+      if (h.sponsorshipTrend && h.sponsorshipTrend !== "unknown") lines.push(`Sponsorship trend: ${h.sponsorshipTrend}`)
+      if (h.summary) lines.push(`Summary: ${h.summary}`)
+      lines.push("Note: Surface this cautiously — use 'appears', 'may indicate', 'based on posting patterns'")
+      sections.push(lines.join("\n"))
+    }
   }
 
   // Match Score
@@ -517,6 +600,27 @@ ${job.description.substring(0, 500)}...`)
     }
   }
 
+  // Opportunity graph — appended when job context is present
+  if (context.opportunityGraph) {
+    const graphSection = formatOpportunitiesForClaude(context.opportunityGraph)
+    if (graphSection) sections.push(graphSection)
+  }
+
+  // Outcome learning — appended when learning signals exist
+  if (context.outcomeLearning?.signals?.length) {
+    const ol = context.outcomeLearning
+    const lines = [
+      `Outcome Learning (based on recorded application history, phrase cautiously):`,
+      `Stats: ${ol.stats.totalApplications} applications, ${ol.stats.responseRate}% response rate, ${ol.stats.interviewRate}% reached interview stage`,
+    ]
+    for (const sig of ol.signals.slice(0, 3)) {
+      lines.push(`  - ${sig.signal}`)
+      if (sig.suggestedAction) lines.push(`    → ${sig.suggestedAction}`)
+    }
+    lines.push("Note: Use 'appears', 'based on recorded outcomes', 'seems to work better' — never guarantee outcomes")
+    sections.push(lines.join("\n"))
+  }
+
   // Compare jobs — included when user asks for a comparison
   if (context.compareJobs && context.compareJobs.length >= 2) {
     const lines = context.compareJobs.map((cj, i) => {
@@ -545,6 +649,15 @@ ${job.description.substring(0, 500)}...`)
     sections.push(
       `Compare Jobs Available (use ONLY these jobIds for the compare response — do NOT invent others):\n${lines.join("\n")}`
     )
+  }
+
+  // Scout Memory — injected BEFORE other context sections so Claude treats it as
+  // established fact rather than a late hint. Retrieval + formatting handled in
+  // the chat route using the relevance scorer; here we receive the pre-selected slice.
+  if (context.memories && context.memories.length > 0) {
+    const { formatMemoriesForClaude } = await import("@/lib/scout/memory/retriever")
+    const memorySection = formatMemoriesForClaude(context.memories)
+    if (memorySection) sections.unshift(memorySection)
   }
 
   if (sections.length === 0) {

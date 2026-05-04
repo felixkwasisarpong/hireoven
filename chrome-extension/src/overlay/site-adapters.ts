@@ -1,7 +1,7 @@
 import type { ATSProvider, ExtractedJob } from "../types"
 import { detectATS } from "../detectors/ats"
 
-export type OverlaySite = "linkedin" | "glassdoor" | "indeed" | "generic"
+export type OverlaySite = "linkedin" | "glassdoor" | "indeed" | "handshake" | "google_jobs" | "generic"
 export type OverlayCardRole = "result" | "detail"
 
 export interface JobCardSnapshot {
@@ -119,6 +119,11 @@ function hostnameSite(): OverlaySite {
   if (h.includes("linkedin.com")) return "linkedin"
   if (h.includes("glassdoor.com")) return "glassdoor"
   if (h.includes("indeed.com")) return "indeed"
+  if (h.includes("joinhandshake.com") || h.includes("app.joinhandshake.com")) return "handshake"
+  if (h === "google.com" || h === "www.google.com") {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get("ibp")?.includes("htl;jobs") || params.get("udm") === "8" || /\/jobs\b/.test(window.location.pathname)) return "google_jobs"
+  }
   return "generic"
 }
 
@@ -655,12 +660,203 @@ function genericDetailFallback(): JobCardSnapshot[] {
   ]
 }
 
+// ── Handshake ─────────────────────────────────────────────────────────────────
+
+function findHandshakeCards(): HTMLElement[] {
+  const buckets = [
+    ...Array.from(document.querySelectorAll<HTMLElement>("li[data-hook='jobs-card']")),
+    ...Array.from(document.querySelectorAll<HTMLElement>("[data-automation-id='job-card']")),
+    ...Array.from(document.querySelectorAll<HTMLElement>("article[class*='job-card']")),
+    ...Array.from(document.querySelectorAll<HTMLElement>("li[class*='JobCard']")),
+  ]
+  const seen = new Set<HTMLElement>()
+  const cards: HTMLElement[] = []
+  for (const item of buckets) {
+    if (seen.has(item)) continue
+    seen.add(item)
+    if (!visible(item)) continue
+    cards.push(item)
+    if (cards.length >= MAX_CARDS) break
+  }
+  return cards
+}
+
+function mapHandshakeCards(hosts: HTMLElement[]): JobCardSnapshot[] {
+  return hosts.map((host, idx) => {
+    const link = firstLink(host, ["a[href*='/jobs/']", "a[href*='/postings/']", "a"])
+    const title = text(host, [
+      "[data-hook='job-title']",
+      "[class*='job-title']",
+      "h2",
+      "h3",
+    ]) ?? link?.textContent?.trim() ?? null
+
+    const company = text(host, ["[class*='employer-name']", "[data-hook='employer-name']", "h4"])
+    const location = text(host, ["[class*='location']", "[data-hook='location']"])
+    const description = text(host, ["[class*='description']", "[data-hook='description']"])
+    const hostText = nodeText(host)
+    const url = asAbsUrl(link?.href ?? null)
+
+    return {
+      key: makeKey("handshake", url, title, company, location, "result", idx),
+      host,
+      title,
+      company,
+      location,
+      workMode: detectWorkMode(location, hostText),
+      employmentType: detectEmploymentType(hostText),
+      postedAt: detectPostedAt(hostText),
+      description,
+      salary: detectSalary(hostText),
+      url,
+      ats: "generic",
+      site: "handshake",
+      role: "result",
+    }
+  })
+}
+
+function handshakeDetailFallback(): JobCardSnapshot[] {
+  const root = document.querySelector<HTMLElement>("main,[data-hook='job-details'],article") ?? document.body
+  if (!visible(root)) return []
+
+  const title = text(document, ["[data-hook='job-title']", "[class*='job-title']", "h1"])
+  const company = text(document, ["[data-hook='employer-name']", "[class*='employer-name']", "[class*='company-name']"])
+  const location = text(document, ["[data-hook='location']", "[class*='location']"])
+  const description = text(document, ["[data-hook='job-description']", "[class*='job-description']", "[class*='description']"])
+  const detailText = nodeText(root)
+  const url = window.location.href
+
+  return [{
+    key: makeKey("handshake", url, title, company, location, "detail", 0),
+    host: root,
+    title,
+    company,
+    location,
+    workMode: detectWorkMode(location, detailText),
+    employmentType: detectEmploymentType(detailText),
+    description,
+    salary: detectSalary(detailText),
+    sponsorshipSignal: (() => {
+      const s = detailText.toLowerCase()
+      if (/(?:no|not)\s+(?:visa|sponsorship)|without sponsorship|cannot sponsor/.test(s)) return "No sponsorship"
+      if (/(visa|sponsorship|h-1b|h1b|opt|cpt)/.test(s)) return "Visa details mentioned"
+      return null
+    })(),
+    url,
+    ats: "generic",
+    site: "handshake",
+    role: "detail",
+  }]
+}
+
+// ── Google Jobs ───────────────────────────────────────────────────────────────
+
+function findGoogleJobsCards(): HTMLElement[] {
+  const buckets = [
+    ...Array.from(document.querySelectorAll<HTMLElement>("[data-ved][jsname] li[data-ved]")),
+    ...Array.from(document.querySelectorAll<HTMLElement>("[data-jid]")),
+    ...Array.from(document.querySelectorAll<HTMLElement>("li.iFjolb")),
+    ...Array.from(document.querySelectorAll<HTMLElement>("div.gws-plugins-horizon-jobs__li-ed")),
+  ]
+  const seen = new Set<HTMLElement>()
+  const cards: HTMLElement[] = []
+  for (const item of buckets) {
+    if (seen.has(item)) continue
+    seen.add(item)
+    if (!visible(item)) continue
+    if (!item.querySelector("div[data-company-name], [class*='company'], [class*='job-title'], h3")) continue
+    cards.push(item)
+    if (cards.length >= MAX_CARDS) break
+  }
+  return cards
+}
+
+function mapGoogleJobsCards(hosts: HTMLElement[]): JobCardSnapshot[] {
+  return hosts.map((host, idx) => {
+    const title = text(host, [
+      "div[class*='BjJfJf']",
+      "h3.zHH0Gc",
+      "[class*='job-title']",
+      "h3",
+      "h2",
+    ])
+    const company = text(host, [
+      "[data-company-name]",
+      "div[class*='vNEEBe']",
+      "[class*='company']",
+    ])
+    const location = text(host, [
+      "div[class*='Qk80Jf']",
+      "[class*='location']",
+    ])
+    const hostText = nodeText(host)
+    const salary = detectSalary(hostText)
+
+    // Google Jobs URLs are complex; attempt to extract the jid
+    const jid = host.getAttribute("data-jid") ?? host.closest("[data-jid]")?.getAttribute("data-jid")
+    const url = jid
+      ? `https://www.google.com/search?q=jobs&ibp=htl;jobs#fpstate=tldetail&htidocid=${encodeURIComponent(jid)}`
+      : null
+
+    return {
+      key: makeKey("google_jobs", url, title, company, location, "result", idx),
+      host,
+      title,
+      company,
+      location,
+      workMode: detectWorkMode(location, hostText),
+      employmentType: detectEmploymentType(hostText),
+      postedAt: detectPostedAt(hostText),
+      salary,
+      description: null,
+      url,
+      ats: "generic",
+      site: "google_jobs",
+      role: "result",
+    }
+  })
+}
+
+function googleJobsDetailFallback(): JobCardSnapshot[] {
+  const root = document.querySelector<HTMLElement>(
+    "[data-ved][jsname] [class*='job-details'], div[class*='sY2dNd'], div[class*='vac20e']",
+  ) ?? document.querySelector<HTMLElement>("[data-jid]")
+  if (!visible(root)) return []
+
+  const title = text(document, ["h2.KLsYvd", "div[class*='BjJfJf']", "h2", "h3"])
+  const company = text(document, ["[data-company-name]", "div[class*='vNEEBe']"])
+  const location = text(document, ["div[class*='Qk80Jf']"])
+  const description = text(document, ["div[class*='HBvzbc']", "span[class*='HBvzbc']"]) ??
+    root?.textContent?.trim()?.slice(0, 1600) ?? null
+  const detailText = nodeText(root ?? document)
+  const url = window.location.href
+
+  return [{
+    key: makeKey("google_jobs", url, title, company, location, "detail", 0),
+    host: root ?? document.body,
+    title,
+    company,
+    location,
+    description,
+    workMode: detectWorkMode(location, detailText),
+    employmentType: detectEmploymentType(detailText),
+    salary: detectSalary(detailText),
+    url,
+    ats: "generic",
+    site: "google_jobs",
+    role: "detail",
+  }]
+}
+
 function inferSearchPage(site: OverlaySite, cardsLen: number): boolean {
   if (cardsLen >= 2) return true
   const path = `${window.location.pathname}${window.location.search}`.toLowerCase()
   if (site === "linkedin" && /\/jobs\/search/.test(path)) return true
   if (site === "glassdoor" && /\/job\//.test(path) && /(?:jobs\.htm|srch_|findjobs|keyword)/.test(path)) return true
   if (site === "indeed" && /\/jobs(?:\?|$)/.test(path)) return true
+  if (site === "handshake" && /\/jobs(?:\/|$|\?)/.test(path)) return true
+  if (site === "google_jobs") return true
   return false
 }
 
@@ -714,6 +910,32 @@ export function extractSiteContext(): SiteContext {
       resolved = [...resolved, detailCard]
     }
 
+    return {
+      site,
+      isSearchPage: inferSearchPage(site, resultCards.length),
+      cards: resolved,
+    }
+  }
+
+  if (site === "handshake") {
+    const resultCards = mapHandshakeCards(findHandshakeCards())
+    const detailCard = handshakeDetailFallback()[0] ?? null
+    let resolved = resultCards
+    if (resolved.length === 0 && detailCard) resolved = [detailCard]
+    else if (resolved.length > 0 && detailCard) resolved = [...resolved, detailCard]
+    return {
+      site,
+      isSearchPage: inferSearchPage(site, resultCards.length),
+      cards: resolved,
+    }
+  }
+
+  if (site === "google_jobs") {
+    const resultCards = mapGoogleJobsCards(findGoogleJobsCards())
+    const detailCard = googleJobsDetailFallback()[0] ?? null
+    let resolved = resultCards
+    if (resolved.length === 0 && detailCard) resolved = [detailCard]
+    else if (resolved.length > 0 && detailCard) resolved = [...resolved, detailCard]
     return {
       site,
       isSearchPage: inferSearchPage(site, resultCards.length),

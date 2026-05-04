@@ -1,7 +1,62 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { cn } from "@/lib/utils"
 import type { PipelineStats } from "@/types"
+import type { SalaryFloorProfile } from "@/lib/scout/salary/floor-detector"
+
+// ── Salary health signal ──────────────────────────────────────────────────────
+
+export function SalaryHealthSignal() {
+  const [profile, setProfile] = useState<SalaryFloorProfile | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetch("/api/scout/salary-floor")
+      .then((r) => (r.ok ? (r.json() as Promise<{ profile: SalaryFloorProfile }>) : Promise.reject()))
+      .then((d) => setProfile(d.profile))
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
+
+  if (loading) return null
+  if (!profile || profile.detectedFloor === 0) return null
+
+  const isUnderselling = profile.isUnderselling
+  const gap = profile.gap
+  const floor = profile.marketFloor
+
+  return (
+    <a
+      href="/dashboard/scout?q=Am+I+underselling+myself%3F"
+      className={cn(
+        "flex items-center gap-3 rounded-[14px] border px-4 py-3 text-[13px] transition-colors hover:opacity-90",
+        isUnderselling
+          ? "border-amber-200 bg-amber-50 text-amber-800"
+          : "border-emerald-200 bg-emerald-50 text-emerald-800"
+      )}
+    >
+      <span className="text-[20px] leading-none select-none">
+        {isUnderselling ? "⚠️" : "✓"}
+      </span>
+      <div className="flex-1 min-w-0">
+        {isUnderselling ? (
+          <>
+            <span className="font-semibold">
+              You&apos;re targeting roles ${gap.toLocaleString()} below your market rate
+            </span>
+            <span className="ml-1.5 text-amber-600">
+              · Market rate for {profile.roleContext}: ${floor.toLocaleString()}
+            </span>
+          </>
+        ) : (
+          <span className="font-semibold">Your salary targeting is on track</span>
+        )}
+      </div>
+      <span className="shrink-0 text-[12px] font-semibold opacity-60">Open Scout →</span>
+    </a>
+  )
+}
 
 const FUNNEL = [
   { key: "applied", label: "Applied", bar: "bg-blue-400", chip: "bg-blue-50 text-blue-700" },

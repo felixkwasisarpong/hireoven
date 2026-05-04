@@ -4,6 +4,16 @@ import { useEffect, useRef, useState } from "react"
 import { usePathname, useSearchParams } from "next/navigation"
 import { useRouter } from "next/navigation"
 import type { ScoutAction } from "@/lib/scout/types"
+import {
+  checkPermission,
+  logAuditEntry,
+  ACTION_PERMISSION,
+  buildConfirmationCopy,
+  readPermissions,
+  updatePermission,
+  type ScoutPermissionState,
+} from "@/lib/scout/permissions"
+import type { GateRequest } from "@/components/scout/ScoutActionGate"
 
 export type ScoutActionSource = "chat" | "nudge" | "strategy" | "workflow"
 
@@ -60,6 +70,11 @@ export type ScoutActionRecordedDetail = {
   reason?: string
   previousStateSummary?: string
   newStateSummary?: string
+}
+
+function emitTimelineSignal(detail: Record<string, unknown>) {
+  if (typeof window === "undefined") return
+  window.dispatchEvent(new CustomEvent("scout:timeline-signal", { detail }))
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -129,6 +144,14 @@ export function useScoutActionExecutor() {
   const [feedback, setFeedback] = useState<string | null>(null)
   const [confirmation, setConfirmation] = useState<ScoutActionConfirmation | null>(null)
   const [lastChange, setLastChange] = useState<ScoutLastChange | null>(null)
+
+  // ── Permission system ────────────────────────────────────────────────────────
+  // Gate requests are dispatched to the shell via window events so they work
+  // regardless of which component instance called executeAction.
+  const [permissions, setPermissions] = useState<ScoutPermissionState[]>(() => readPermissions())
+  const pendingActionRef  = useRef<(() => void) | null>(null)
+  const pendingCancelRef  = useRef<(() => void) | null>(null)
+  const gateInFlightRef   = useRef(false)
 
   // Ref mirror of confirmation — lets the feed-updated listener read current state
   // without needing to be re-registered on every confirmation change
@@ -216,7 +239,124 @@ export function useScoutActionExecutor() {
     }
   }
 
+  // ── Core executor with permission gate ──────────────────────────────────────
+
   function executeAction(action: ScoutAction, options?: ExecutorOptions) {
+    const { source } = options ?? {}
+    const perm = ACTION_PERMISSION[action.type]
+
+    // 1. Check permission
+    const permCheck = checkPermission(action.type, permissions)
+
+    if (!permCheck.allowed) {
+      showFeedback(permCheck.reason ?? `"${action.type}" is blocked in Scout permissions.`)
+      if (perm) {
+        logAuditEntry({
+          id: `audit-${Date.now()}`,
+          actionType: action.type,
+          permission: perm,
+          timestamp: Date.now(),
+          approved: false,
+          approvalMode: "blocked",
+          source,
+          pageContext: pathname ?? undefined,
+        })
+      }
+      return
+    }
+
+    // 2. No confirmation needed — execute immediately
+    if (!permCheck.requiresConfirmation) {
+      if (perm) {
+        logAuditEntry({
+          id: `audit-${Date.now()}`,
+          actionType: action.type,
+          permission: perm,
+          timestamp: Date.now(),
+          approved: true,
+          approvalMode: "always_allowed",
+          source,
+          pageContext: pathname ?? undefined,
+        })
+      }
+      runAction(action, options)
+      return
+    }
+
+    // 3. Gate required — only one gate at a time
+    if (gateInFlightRef.current) {
+      showFeedback("Please respond to the pending permission request first.")
+      return
+    }
+    gateInFlightRef.current = true
+
+    const copy = buildConfirmationCopy(action.type)
+
+    // Store callbacks
+    pendingActionRef.current = () => {
+      logAuditEntry({
+        id: `audit-${Date.now()}`,
+        actionType: action.type,
+        permission: perm ?? "hard_blocked",
+        timestamp: Date.now(),
+        approved: true,
+        approvalMode: "confirmed_once",
+        source,
+        pageContext: pathname ?? undefined,
+      })
+      runAction(action, options)
+    }
+    pendingCancelRef.current = () => {
+      logAuditEntry({
+        id: `audit-${Date.now()}`,
+        actionType: action.type,
+        permission: perm ?? "hard_blocked",
+        timestamp: Date.now(),
+        approved: false,
+        approvalMode: "cancelled",
+        source,
+        pageContext: pathname ?? undefined,
+      })
+      showFeedback("Action cancelled.")
+    }
+
+    // Listen for the shell's gate response (once only)
+    function onGateResponse(e: Event) {
+      gateInFlightRef.current = false
+      const detail = (e as CustomEvent<{ approved: boolean; alwaysAllow: boolean }>).detail
+
+      if (!detail.approved) {
+        pendingCancelRef.current?.()
+        pendingCancelRef.current = null
+        pendingActionRef.current = null
+        return
+      }
+
+      if (detail.alwaysAllow && perm) {
+        const updated = updatePermission(permissions, perm, { requiresConfirmation: false })
+        setPermissions(updated)
+      }
+
+      const act = pendingActionRef.current
+      pendingActionRef.current = null
+      pendingCancelRef.current = null
+      act?.()
+    }
+
+    window.addEventListener("scout:gate-response", onGateResponse, { once: true })
+
+    // Dispatch the gate open event — shell listens and renders ScoutActionGate
+    window.dispatchEvent(new CustomEvent("scout:gate-open", {
+      detail: {
+        actionType: action.type,
+        permission: perm,
+        title: copy.title,
+        description: copy.description,
+      } satisfies GateRequest,
+    }))
+  }
+
+  function runAction(action: ScoutAction, options?: ExecutorOptions) {
     try {
       const { source, reason } = options ?? {}
 
@@ -400,6 +540,12 @@ export function useScoutActionExecutor() {
             action.payload.hint ??
               "Open the Hireoven Scout extension on a job page to capture it."
           )
+          emitTimelineSignal({
+            type: "extension_detected_page",
+            title: "Scout requested extension bridge action",
+            summary: "Open the Hireoven extension on your active job tab.",
+            severity: "info",
+          })
           break
         }
 
@@ -414,6 +560,12 @@ export function useScoutActionExecutor() {
             ? `Navigate to the application form, then click the Hireoven extension icon and choose "Preview Autofill": ${url}`
             : "Open the Hireoven Scout extension on the application form page and click \"Preview Autofill\" to fill your details."
           showFeedback(message)
+          emitTimelineSignal({
+            type: "autofill_reviewed",
+            title: "Scout prompted autofill review",
+            summary: "Autofill remains user-controlled and review-first.",
+            severity: "info",
+          })
           break
         }
 
@@ -451,6 +603,12 @@ export function useScoutActionExecutor() {
             undefined,
             12000
           )
+          emitTimelineSignal({
+            type: "workflow_started",
+            title: "Workflow started: Tailor + Prepare Application",
+            summary: "Scout prepared a review-first tailor/autofill workflow.",
+            severity: "info",
+          })
           break
         }
 
@@ -462,6 +620,8 @@ export function useScoutActionExecutor() {
             const params = new URLSearchParams(searchParams.toString())
             params.set("focus", "1")
             params.set("sort", "match")
+            // Persist so Scout workspace survives navigation back from /dashboard
+            try { localStorage.setItem("hireoven:scout-focus-mode:v1", "1") } catch {}
             router.push(`/dashboard?${params.toString()}`)
 
             const { previousStateSummary, newStateSummary } = buildStateSummaries(
@@ -527,6 +687,8 @@ export function useScoutActionExecutor() {
             params.delete("focus")
             params.delete("sort")
             const qs = params.toString()
+            // Clear persistence so Scout workspace reflects the off state
+            try { localStorage.removeItem("hireoven:scout-focus-mode:v1") } catch {}
             router.push(`/dashboard${qs ? `?${qs}` : ""}`)
             showFeedback("Focus Mode off")
           }
@@ -549,5 +711,8 @@ export function useScoutActionExecutor() {
     lastChange,
     dismissConfirmation,
     executeUndo,
+    // Permission state (for the permissions panel to read/update)
+    permissions,
+    setPermissions,
   }
 }

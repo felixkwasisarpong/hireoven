@@ -3,6 +3,7 @@ import { Suspense } from "react"
 import { Plus_Jakarta_Sans } from "next/font/google"
 import ServiceWorkerRegistration from "@/components/pwa/ServiceWorkerRegistration"
 import { RouteToastBridge, ToastProvider } from "@/components/ui/ToastProvider"
+import { AuthProvider } from "@/lib/context/AuthContext"
 import { SubscriptionProvider } from "@/lib/context/SubscriptionContext"
 import { UpgradeModalProvider } from "@/lib/context/UpgradeModalContext"
 import UpgradeModal from "@/components/gates/UpgradeModal"
@@ -53,6 +54,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${jakarta.variable} site-chroma`}>
+        <AuthProvider>
         <UpgradeModalProvider>
           <SubscriptionProvider>
             <ToastProvider>
@@ -65,6 +67,7 @@ export default function RootLayout({
             </ToastProvider>
           </SubscriptionProvider>
         </UpgradeModalProvider>
+        </AuthProvider>
       </body>
     </html>
   )

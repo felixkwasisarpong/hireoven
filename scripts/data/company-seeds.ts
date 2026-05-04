@@ -22,7 +22,7 @@ export const COMPANY_SEED_ROWS: ReadonlyArray<
   ["Google", "google.com", "https://careers.google.com", "Technology", "enterprise", { sponsors_h1b: true, sponsorship_confidence: 95 }],
   ["Apple", "apple.com", "https://jobs.apple.com", "Technology", "enterprise", { sponsors_h1b: true, sponsorship_confidence: 92 }],
   ["Microsoft", "microsoft.com", "https://jobs.careers.microsoft.com", "Technology", "enterprise", { sponsors_h1b: true, sponsorship_confidence: 95 }],
-  ["Amazon", "amazon.com", "https://www.amazon.jobs", "Technology", "enterprise", { sponsors_h1b: true, sponsorship_confidence: 95 }],
+  ["Amazon", "amazon.com", "https://amazon.jobs/en/search?business_category[]=amazon-artificial-general-intelligence", "Technology", "enterprise", { sponsors_h1b: true, sponsorship_confidence: 95 }],
   ["Meta", "meta.com", "https://www.metacareers.com", "Technology", "enterprise", { sponsors_h1b: true, sponsorship_confidence: 94 }],
   ["Nvidia", "nvidia.com", "https://www.nvidia.com/en-us/about-nvidia/careers", "Technology", "enterprise", { sponsors_h1b: true, sponsorship_confidence: 90 }],
   ["Netflix", "netflix.com", "https://jobs.netflix.com", "Technology", "enterprise", { sponsors_h1b: true, sponsorship_confidence: 88 }],

@@ -24,8 +24,8 @@ const PANEL_STYLE = `
     margin: 0 0 12px;
     padding: 12px 14px;
     border-radius: 12px;
-    border: 1px solid #d1fae5;
-    background: linear-gradient(180deg, #ecfdf5 0%, #ffffff 100%);
+    border: 1px solid rgba(255, 92, 24, 0.22);
+    background: linear-gradient(180deg, #fff4f0 0%, #ffffff 100%);
     color: #0f172a;
     font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     box-shadow: 0 6px 16px rgba(2, 6, 23, 0.04);
@@ -45,7 +45,7 @@ const PANEL_STYLE = `
     width: 24px;
     height: 24px;
     border-radius: 999px;
-    background: #10b981;
+    background: #FF5C18;
     color: #052e1f;
     font-size: 12px;
     font-weight: 800;
@@ -88,7 +88,7 @@ const PANEL_STYLE = `
     transition: transform 140ms ease;
   }
 
-  .toggle:checked { background: #10b981; }
+  .toggle:checked { background: #FF5C18; }
   .toggle:checked::after { transform: translateX(14px); }
 
   .filters {
@@ -120,8 +120,8 @@ const PANEL_STYLE = `
   }
 
   .check input:checked {
-    background: #10b981;
-    border-color: #10b981;
+    background: #FF5C18;
+    border-color: #FF5C18;
   }
 
   .check input:checked::after {
@@ -160,6 +160,12 @@ const ANCHOR_SELECTORS: Record<OverlaySite, string[]> = {
     "#mosaic-provider-jobcards",
     ".jobsearch-LeftPane",
   ],
+  handshake: [
+    "[data-hook='job-list']",
+    "ul[class*='JobsList']",
+    "section[class*='jobs-list']",
+  ],
+  google_jobs: [],
   generic: [],
 }
 
@@ -191,7 +197,7 @@ export class JobScreenerPanel {
     const f = this.filters
     this.root.innerHTML = `
       <div class="head">
-        <span class="frog" title="Hireoven">H</span>
+        <span class="frog" title="Hireoven"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="14" height="14" aria-hidden="true"><rect x="90" y="155" width="332" height="190" rx="40" fill="#062246"/><rect x="130" y="205" width="180" height="97" rx="12" fill="#b4260c" stroke="#ff7716" stroke-width="10"/><rect x="160" y="176" width="132" height="18" rx="8" fill="#ffd24a"/><circle cx="366" cy="221" r="16" fill="#ebf3ff"/><circle cx="366" cy="271" r="16" fill="#ebf3ff"/><path d="M220 293 L185 262 L206 220 L218 252 L242 198 L271 242 L261 279 Z" fill="#ff9a2d"/><path d="M228 291 L207 265 L224 237 L233 262 L249 228 L263 263 L253 289 Z" fill="#fff4cd"/></svg></span>
         <div class="title">Job Screener<small>Filter visible cards</small></div>
         <input type="checkbox" class="toggle" data-key="enabled" ${f.enabled ? "checked" : ""} aria-label="Enable screener" />
       </div>

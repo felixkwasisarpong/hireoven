@@ -274,13 +274,25 @@ export function useCoverLetter(jobId: string) {
   const toggleFavorite = useCallback(async () => {
     const id = coverLetterIdRef.current
     if (!id || !coverLetter) return
-    const newValue = !coverLetter.is_favorite
+    const previous = coverLetter.is_favorite
+    const newValue = !previous
     setCoverLetter((prev) => (prev ? { ...prev, is_favorite: newValue } : prev))
-    await fetch(`/api/cover-letter/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ is_favorite: newValue }),
-    })
+    try {
+      const res = await fetch(`/api/cover-letter/${id}`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_favorite: newValue }),
+      })
+      if (!res.ok) {
+        const detail = await res.text().catch(() => "")
+        throw new Error(`Favorite save failed (${res.status}) ${detail}`)
+      }
+    } catch (err) {
+      // Roll back optimistic update so the UI reflects reality.
+      setCoverLetter((prev) => (prev ? { ...prev, is_favorite: previous } : prev))
+      setError(err instanceof Error ? err.message : "Could not save favorite")
+    }
   }, [coverLetter])
 
   return {

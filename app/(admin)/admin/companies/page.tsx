@@ -3,44 +3,57 @@
 import Link from "next/link"
 import { useEffect, useMemo, useState } from "react"
 import {
+  Building2,
   Download,
+  ExternalLink,
   Loader2,
+  Pencil,
   Plus,
   RefreshCw,
   Search,
   Trash2,
+  X,
 } from "lucide-react"
 import AddCompanyModal from "@/components/admin/AddCompanyModal"
-import {
-  AdminBadge,
-  AdminButton,
-  AdminInput,
-  AdminPageHeader,
-  AdminPanel,
-  AdminSelect,
-} from "@/components/admin/AdminPrimitives"
 import { useToast } from "@/components/ui/ToastProvider"
 import { formatDateTime, formatNumber, formatRelativeTime, downloadCsv } from "@/lib/admin/format"
+import { cn } from "@/lib/utils"
 import type { AtsType, Company, CrawlLog } from "@/types"
 
-type SortKey =
-  | "name"
-  | "domain"
-  | "ats"
-  | "status"
-  | "last_crawled"
-  | "job_count"
-  | "h1b"
+type SortKey = "name" | "domain" | "ats" | "status" | "last_crawled" | "job_count" | "h1b"
 
 function getHealth(company: Company, crawl: CrawlLog | null) {
   if (!company.last_crawled_at) return { label: "Never", tone: "neutral" as const }
-  if (crawl?.status === "failed") return { label: "Red", tone: "danger" as const }
-
+  if (
+    crawl?.status === "failed" ||
+    crawl?.status === "blocked" ||
+    crawl?.status === "fetch_error"
+  )
+    return { label: "Failed", tone: "danger" as const }
+  if (crawl?.status === "bad_url") return { label: "Bad URL", tone: "warning" as const }
   const hours = (Date.now() - new Date(company.last_crawled_at).getTime()) / 3_600_000
-  if (hours <= 2) return { label: "Green", tone: "success" as const }
-  if (hours <= 12) return { label: "Amber", tone: "warning" as const }
-  return { label: "Red", tone: "danger" as const }
+  if (hours <= 2) return { label: "Healthy", tone: "success" as const }
+  if (hours <= 12) return { label: "Stale", tone: "warning" as const }
+  return { label: "Overdue", tone: "danger" as const }
 }
+
+const DOT: Record<string, string> = {
+  success: "bg-emerald-500",
+  warning: "bg-amber-400",
+  danger: "bg-red-500",
+  neutral: "bg-slate-300",
+}
+
+const ATS_OPTIONS = [
+  "greenhouse",
+  "lever",
+  "ashby",
+  "workday",
+  "bamboohr",
+  "icims",
+  "jobvite",
+  "custom",
+]
 
 export default function AdminCompaniesPage() {
   const { pushToast } = useToast()
@@ -69,7 +82,9 @@ export default function AdminCompaniesPage() {
       return
     }
 
-    const { companies: companiesData } = (await companiesRes.json()) as { companies: Company[] }
+    const { companies: companiesData } = (await companiesRes.json()) as {
+      companies: Company[]
+    }
     const crawlData: CrawlLog[] = crawlRes.ok
       ? ((await crawlRes.json()) as { crawlLogs: CrawlLog[] }).crawlLogs
       : []
@@ -90,10 +105,11 @@ export default function AdminCompaniesPage() {
 
   const visibleCompanies = useMemo(() => {
     const filtered = companies.filter((company) => {
+      const q = search.trim().toLowerCase()
       const matchesSearch =
-        !search.trim() ||
-        company.name.toLowerCase().includes(search.trim().toLowerCase()) ||
-        company.domain.toLowerCase().includes(search.trim().toLowerCase())
+        !q ||
+        company.name.toLowerCase().includes(q) ||
+        company.domain.toLowerCase().includes(q)
       const matchesAts = !atsFilter || company.ats_type === atsFilter
       const matchesStatus =
         statusFilter === "all" ||
@@ -101,23 +117,22 @@ export default function AdminCompaniesPage() {
         (statusFilter === "inactive" && !company.is_active)
       const crawl = latestCrawls.get(company.id) ?? null
       const health = getHealth(company, crawl)
-      const matchesHealth = healthFilter === "all" || health.label.toLowerCase() === healthFilter
+      const matchesHealth = healthFilter === "all" || health.tone === healthFilter
       return matchesSearch && matchesAts && matchesStatus && matchesHealth
     })
 
-    return filtered.sort((left, right) => {
-      if (sort === "domain") return left.domain.localeCompare(right.domain)
-      if (sort === "ats") return (left.ats_type ?? "").localeCompare(right.ats_type ?? "")
-      if (sort === "status") return Number(right.is_active) - Number(left.is_active)
-      if (sort === "last_crawled") {
+    return filtered.sort((a, b) => {
+      if (sort === "domain") return a.domain.localeCompare(b.domain)
+      if (sort === "ats") return (a.ats_type ?? "").localeCompare(b.ats_type ?? "")
+      if (sort === "status") return Number(b.is_active) - Number(a.is_active)
+      if (sort === "last_crawled")
         return (
-          new Date(right.last_crawled_at ?? 0).getTime() -
-          new Date(left.last_crawled_at ?? 0).getTime()
+          new Date(b.last_crawled_at ?? 0).getTime() -
+          new Date(a.last_crawled_at ?? 0).getTime()
         )
-      }
-      if (sort === "job_count") return right.job_count - left.job_count
-      if (sort === "h1b") return right.sponsorship_confidence - left.sponsorship_confidence
-      return left.name.localeCompare(right.name)
+      if (sort === "job_count") return b.job_count - a.job_count
+      if (sort === "h1b") return b.sponsorship_confidence - a.sponsorship_confidence
+      return a.name.localeCompare(b.name)
     })
   }, [atsFilter, companies, healthFilter, latestCrawls, search, sort, statusFilter])
 
@@ -129,20 +144,12 @@ export default function AdminCompaniesPage() {
       body: JSON.stringify({ is_active: nextValue }),
     })
     setBusyId(null)
-
     if (!res.ok) {
-      pushToast({
-        tone: "error",
-        title: "Unable to update company",
-        description: "Request failed",
-      })
+      pushToast({ tone: "error", title: "Unable to update company", description: "Request failed" })
       return
     }
-
-    setCompanies((current) =>
-      current.map((entry) =>
-        entry.id === company.id ? { ...entry, is_active: nextValue } : entry
-      )
+    setCompanies((curr) =>
+      curr.map((c) => (c.id === company.id ? { ...c, is_active: nextValue } : c))
     )
     pushToast({
       tone: "success",
@@ -152,28 +159,21 @@ export default function AdminCompaniesPage() {
   }
 
   async function crawlCompanies(type: "all" | "selected" | "company", ids?: string[]) {
-    if (
-      type !== "company" &&
-      !window.confirm("Start crawl jobs for the selected companies now?")
-    ) {
+    if (type !== "company" && !window.confirm("Start crawl jobs for the selected companies now?"))
       return
-    }
-
-    setBusyId(type === "company" ? ids?.[0] ?? null : "__bulk__")
-
+    setBusyId(type === "company" ? (ids?.[0] ?? null) : "__bulk__")
     const requests =
       type === "company"
         ? [{ type: "company", id: ids?.[0] }]
         : type === "selected"
-          ? ids?.map((id) => ({ type: "company" as const, id })) ?? []
+          ? (ids?.map((id) => ({ type: "company" as const, id })) ?? [])
           : [{ type: "all" as const }]
-
     try {
-      for (const request of requests) {
+      for (const req of requests) {
         await fetch("/api/admin/crawl", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(request),
+          body: JSON.stringify(req),
         })
       }
       pushToast({
@@ -199,7 +199,6 @@ export default function AdminCompaniesPage() {
   async function bulkUpdate(nextValue: boolean) {
     if (!selected.length) return
     if (!window.confirm("Apply this bulk status change to the selected companies?")) return
-
     const results = await Promise.all(
       selected.map((id) =>
         fetch(`/api/admin/companies/${id}`, {
@@ -213,11 +212,8 @@ export default function AdminCompaniesPage() {
       pushToast({ tone: "error", title: "Bulk update failed" })
       return
     }
-
-    setCompanies((current) =>
-      current.map((company) =>
-        selected.includes(company.id) ? { ...company, is_active: nextValue } : company
-      )
+    setCompanies((curr) =>
+      curr.map((c) => (selected.includes(c.id) ? { ...c, is_active: nextValue } : c))
     )
     pushToast({
       tone: "success",
@@ -228,294 +224,444 @@ export default function AdminCompaniesPage() {
 
   async function deleteCompany(company: Company) {
     if (!window.confirm(`Delete ${company.name} and all associated jobs?`)) return
-
     const res = await fetch(`/api/admin/companies/${company.id}`, { method: "DELETE" })
     if (!res.ok) {
       pushToast({ tone: "error", title: "Delete failed" })
       return
     }
-
-    setCompanies((current) => current.filter((entry) => entry.id !== company.id))
-    pushToast({
-      tone: "success",
-      title: "Company deleted",
-      description: company.name,
-    })
+    setCompanies((curr) => curr.filter((c) => c.id !== company.id))
+    pushToast({ tone: "success", title: "Company deleted", description: company.name })
   }
 
   function exportCompanies() {
-    downloadCsv(
-      "hireoven-companies.csv",
-      [
-        [
-          "Name",
-          "Domain",
-          "ATS",
-          "Active",
-          "Last crawled",
-          "Job count",
-          "H1B score",
-        ],
-        ...visibleCompanies.map((company) => [
-          company.name,
-          company.domain,
-          company.ats_type ?? "",
-          String(company.is_active),
-          company.last_crawled_at ?? "",
-          String(company.job_count),
-          String(company.sponsorship_confidence),
-        ]),
-      ]
-    )
+    downloadCsv("hireoven-companies.csv", [
+      ["Name", "Domain", "ATS", "Active", "Last crawled", "Job count", "H1B score"],
+      ...visibleCompanies.map((c) => [
+        c.name,
+        c.domain,
+        c.ats_type ?? "",
+        String(c.is_active),
+        c.last_crawled_at ?? "",
+        String(c.job_count),
+        String(c.sponsorship_confidence),
+      ]),
+    ])
   }
 
-  return (
-    <div className="space-y-6">
-      <AdminPageHeader
-        eyebrow="Companies"
-        title="Company management"
-        description="Track crawl health, change ATS config, and push new companies into the crawl pipeline fast."
-        actions={
-          <>
-            <AdminButton tone="secondary" onClick={exportCompanies}>
-              <Download className="mr-2 h-4 w-4" />
-              Export CSV
-            </AdminButton>
-            <AdminButton tone="secondary" onClick={() => void crawlCompanies("all")}>
-              <RefreshCw className="mr-2 h-4 w-4" />
-              Crawl all now
-            </AdminButton>
-            <AdminButton onClick={() => setShowAddModal(true)}>
-              <Plus className="mr-2 h-4 w-4" />
-              Add company
-            </AdminButton>
-          </>
-        }
-      />
+  const allChecked =
+    visibleCompanies.length > 0 && selected.length === visibleCompanies.length
 
-      <AdminPanel
-        title="Filters and bulk actions"
-        description="Search by name or domain, narrow by ATS and crawl health, then act on groups of companies at once."
-      >
-        <div className="grid gap-3 lg:grid-cols-[1.2fr_repeat(4,minmax(0,1fr))]">
+  return (
+    <>
+      {/* ── Page header ─────────────────────────────────────── */}
+      <div className="border-b border-gray-100 bg-white px-8 py-5">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-sky-600">
+              Admin
+            </p>
+            <h1 className="mt-0.5 text-[22px] font-semibold tracking-tight text-gray-950">
+              Companies
+            </h1>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={exportCompanies}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-500 transition hover:border-gray-300 hover:bg-gray-50"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Export
+            </button>
+            <button
+              onClick={() => void crawlCompanies("all")}
+              disabled={busyId === "__bulk__"}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-500 transition hover:border-gray-300 hover:bg-gray-50 disabled:opacity-50"
+            >
+              {busyId === "__bulk__" ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <RefreshCw className="h-3.5 w-3.5" />
+              )}
+              Crawl all
+            </button>
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-sky-700 px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-sky-800"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Add company
+            </button>
+          </div>
+        </div>
+
+        {/* ── Toolbar ─────────────────────────────────────────── */}
+        <div className="mt-4 flex flex-wrap items-center gap-2.5">
+          {/* Search */}
           <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-gray-400" />
-            <AdminInput
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+            <input
               value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search name or domain"
-              className="pl-9"
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search companies…"
+              className="h-8 w-60 rounded-lg border border-gray-200 bg-white pl-8 pr-3 text-xs text-gray-900 outline-none placeholder:text-gray-400 transition focus:border-sky-400 focus:ring-2 focus:ring-sky-400/15"
             />
           </div>
-          <AdminSelect value={atsFilter} onChange={(event) => setAtsFilter(event.target.value)}>
-            <option value="">All ATS types</option>
-            {["greenhouse", "lever", "ashby", "workday", "bamboohr", "icims", "jobvite", "custom"].map(
-              (value) => (
-                <option key={value} value={value}>
-                  {value}
-                </option>
-              )
+
+          {/* ATS select */}
+          <select
+            value={atsFilter}
+            onChange={(e) => setAtsFilter(e.target.value)}
+            className={cn(
+              "h-8 rounded-lg border px-3 text-xs font-medium outline-none transition",
+              atsFilter
+                ? "border-sky-300 bg-sky-50 text-sky-700"
+                : "border-gray-200 bg-white text-gray-500 hover:border-gray-300"
             )}
-          </AdminSelect>
-          <AdminSelect
-            value={statusFilter}
-            onChange={(event) => setStatusFilter(event.target.value)}
           >
-            <option value="all">All statuses</option>
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-          </AdminSelect>
-          <AdminSelect
-            value={healthFilter}
-            onChange={(event) => setHealthFilter(event.target.value)}
-          >
-            <option value="all">All crawl health</option>
-            <option value="green">Green</option>
-            <option value="amber">Amber</option>
-            <option value="red">Red</option>
-            <option value="never">Never</option>
-          </AdminSelect>
-          <AdminSelect value={sort} onChange={(event) => setSort(event.target.value as SortKey)}>
-            <option value="name">Sort by name</option>
-            <option value="domain">Sort by domain</option>
-            <option value="ats">Sort by ATS</option>
-            <option value="status">Sort by status</option>
-            <option value="last_crawled">Sort by last crawled</option>
-            <option value="job_count">Sort by job count</option>
-            <option value="h1b">Sort by H1B score</option>
-          </AdminSelect>
-        </div>
+            <option value="">All ATS</option>
+            {ATS_OPTIONS.map((v) => (
+              <option key={v} value={v}>
+                {v}
+              </option>
+            ))}
+          </select>
 
-        <div className="mt-4 flex flex-wrap items-center gap-3">
-          <AdminButton tone="secondary" onClick={() => void bulkUpdate(true)}>
-            Activate selected
-          </AdminButton>
-          <AdminButton tone="secondary" onClick={() => void bulkUpdate(false)}>
-            Deactivate selected
-          </AdminButton>
-          <AdminButton
-            tone="secondary"
-            onClick={() => void crawlCompanies("selected", selected)}
-          >
-            Crawl selected
-          </AdminButton>
-          <span className="text-sm text-gray-500">
-            {formatNumber(selected.length)} selected
-          </span>
-        </div>
-      </AdminPanel>
+          {/* Status chips */}
+          <div className="flex items-center gap-px rounded-lg border border-gray-200 bg-white p-0.5">
+            {(
+              [
+                ["all", "All"],
+                ["active", "Active"],
+                ["inactive", "Inactive"],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                onClick={() => setStatusFilter(value)}
+                className={cn(
+                  "rounded-md px-2.5 py-1 text-[11px] font-semibold transition",
+                  statusFilter === value
+                    ? "bg-gray-900 text-white shadow-sm"
+                    : "text-gray-400 hover:text-gray-700"
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
 
-      <AdminPanel
-        title="Tracked companies"
-        description={`${formatNumber(visibleCompanies.length)} companies in the current view.`}
-      >
+          {/* Health chips */}
+          <div className="flex items-center gap-px rounded-lg border border-gray-200 bg-white p-0.5">
+            {(
+              [
+                ["all", "All health"],
+                ["success", "Healthy"],
+                ["warning", "Stale"],
+                ["danger", "Failed"],
+                ["neutral", "Never"],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                onClick={() => setHealthFilter(value)}
+                className={cn(
+                  "rounded-md px-2.5 py-1 text-[11px] font-semibold transition",
+                  healthFilter === value
+                    ? "bg-gray-900 text-white shadow-sm"
+                    : "text-gray-400 hover:text-gray-700"
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {/* Right-side: count + sort */}
+          <div className="ml-auto flex items-center gap-3">
+            <span className="text-xs text-gray-400">
+              {formatNumber(visibleCompanies.length)} companies
+            </span>
+            <select
+              value={sort}
+              onChange={(e) => setSort(e.target.value as SortKey)}
+              className="h-8 rounded-lg border border-gray-200 bg-white px-2.5 text-xs font-medium text-gray-500 outline-none transition hover:border-gray-300"
+            >
+              <option value="name">Sort: Name</option>
+              <option value="domain">Sort: Domain</option>
+              <option value="ats">Sort: ATS</option>
+              <option value="status">Sort: Status</option>
+              <option value="last_crawled">Sort: Last crawled</option>
+              <option value="job_count">Sort: Jobs</option>
+              <option value="h1b">Sort: H1B score</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Table ───────────────────────────────────────────── */}
+      <div className="overflow-x-auto">
         {loading ? (
-          <div className="flex items-center gap-3 py-12 text-gray-500">
+          <div className="flex items-center justify-center gap-3 py-28 text-gray-400">
             <Loader2 className="h-5 w-5 animate-spin" />
-            Loading companies
+            <span className="text-sm">Loading companies…</span>
+          </div>
+        ) : visibleCompanies.length === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-3 py-28 text-center">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-100">
+              <Building2 className="h-6 w-6 text-gray-400" />
+            </div>
+            <p className="text-sm font-medium text-gray-600">No companies match your filters</p>
+            <p className="text-xs text-gray-400">Try adjusting the search or filter chips above</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
-              <thead>
-                <tr className="border-b border-gray-200 text-xs uppercase tracking-[0.24em] text-gray-500">
-                  <th className="pb-3 pr-4">
-                    <input
-                      type="checkbox"
-                      checked={
-                        visibleCompanies.length > 0 &&
-                        selected.length === visibleCompanies.length
-                      }
-                      onChange={(event) =>
-                        setSelected(event.target.checked ? visibleCompanies.map((company) => company.id) : [])
-                      }
-                    />
+          <table className="min-w-full">
+            <thead>
+              <tr className="border-b border-gray-100">
+                <th className="w-12 py-3 pl-8 pr-3">
+                  <input
+                    type="checkbox"
+                    checked={allChecked}
+                    onChange={(e) =>
+                      setSelected(e.target.checked ? visibleCompanies.map((c) => c.id) : [])
+                    }
+                    className="rounded border-gray-300 accent-sky-600"
+                  />
+                </th>
+                {[
+                  "Company",
+                  "ATS",
+                  "Status",
+                  "Jobs",
+                  "H1B",
+                  "Health",
+                  "Last crawled",
+                  "",
+                ].map((col) => (
+                  <th
+                    key={col}
+                    className="py-3 pr-6 text-left text-[10px] font-semibold uppercase tracking-[0.2em] text-gray-400"
+                  >
+                    {col}
                   </th>
-                  <th className="pb-3 pr-4">Name</th>
-                  <th className="pb-3 pr-4">Domain</th>
-                  <th className="pb-3 pr-4">ATS</th>
-                  <th className="pb-3 pr-4">Status</th>
-                  <th className="pb-3 pr-4">Last crawled</th>
-                  <th className="pb-3 pr-4">Job count</th>
-                  <th className="pb-3 pr-4">Crawl health</th>
-                  <th className="pb-3 pr-4">H1B score</th>
-                  <th className="pb-3">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {visibleCompanies.map((company) => {
-                  const crawl = latestCrawls.get(company.id) ?? null
-                  const health = getHealth(company, crawl)
-                  return (
-                    <tr key={company.id} className="border-b border-gray-100 align-top">
-                      <td className="py-4 pr-4">
-                        <input
-                          type="checkbox"
-                          checked={selected.includes(company.id)}
-                          onChange={(event) =>
-                            setSelected((current) =>
-                              event.target.checked
-                                ? [...current, company.id]
-                                : current.filter((id) => id !== company.id)
-                            )
-                          }
-                        />
-                      </td>
-                      <td className="py-4 pr-4">
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-sky-100 text-sm font-semibold text-sky-700">
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {visibleCompanies.map((company) => {
+                const crawl = latestCrawls.get(company.id) ?? null
+                const health = getHealth(company, crawl)
+                const isSelected = selected.includes(company.id)
+
+                return (
+                  <tr
+                    key={company.id}
+                    className={cn(
+                      "group transition-colors",
+                      isSelected ? "bg-sky-50/50" : "hover:bg-gray-50/70"
+                    )}
+                  >
+                    {/* Checkbox */}
+                    <td className="py-4 pl-8 pr-3">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={(e) =>
+                          setSelected((curr) =>
+                            e.target.checked
+                              ? [...curr, company.id]
+                              : curr.filter((id) => id !== company.id)
+                          )
+                        }
+                        className="rounded border-gray-300 accent-sky-600"
+                      />
+                    </td>
+
+                    {/* Company */}
+                    <td className="py-3.5 pr-6">
+                      <div className="flex items-center gap-3">
+                        {company.logo_url ? (
+                          <img
+                            src={company.logo_url}
+                            alt=""
+                            className="h-8 w-8 flex-shrink-0 rounded-xl border border-gray-100 bg-gray-50 object-contain"
+                          />
+                        ) : (
+                          <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-sky-100 to-sky-200 text-xs font-bold text-sky-700">
                             {company.name.charAt(0).toUpperCase()}
                           </div>
-                          <div>
-                            <p className="font-semibold text-gray-900">{company.name}</p>
-                            <p className="text-xs text-gray-500">
-                              {company.industry ?? "No industry"}
-                            </p>
-                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <p className="max-w-[180px] truncate text-sm font-semibold text-gray-900">
+                            {company.name}
+                          </p>
+                          <p className="max-w-[180px] truncate text-[11px] text-gray-400">
+                            {company.domain}
+                          </p>
                         </div>
-                      </td>
-                      <td className="py-4 pr-4 text-gray-600">{company.domain}</td>
-                      <td className="py-4 pr-4">
-                        <AdminBadge tone="dark">{company.ats_type ?? "custom"}</AdminBadge>
-                      </td>
-                      <td className="py-4 pr-4">
-                        <button
-                          type="button"
-                          onClick={() => void toggleCompany(company, !company.is_active)}
-                          className="text-left"
-                          disabled={busyId === company.id}
-                        >
-                          <AdminBadge tone={company.is_active ? "success" : "neutral"}>
-                            {company.is_active ? "Active" : "Inactive"}
-                          </AdminBadge>
-                        </button>
-                      </td>
-                      <td className="py-4 pr-4">
-                        <p className="font-medium text-gray-900">
-                          {formatRelativeTime(company.last_crawled_at)}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          {formatDateTime(company.last_crawled_at)}
-                        </p>
-                      </td>
-                      <td className="py-4 pr-4 font-semibold text-gray-900">
+                      </div>
+                    </td>
+
+                    {/* ATS */}
+                    <td className="py-3.5 pr-6">
+                      {company.ats_type ? (
+                        <span className="inline-flex items-center rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                          {company.ats_type}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-gray-300">—</span>
+                      )}
+                    </td>
+
+                    {/* Status toggle */}
+                    <td className="py-3.5 pr-6">
+                      <button
+                        onClick={() => void toggleCompany(company, !company.is_active)}
+                        disabled={busyId === company.id}
+                        className={cn(
+                          "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold transition",
+                          company.is_active
+                            ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                            : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            "h-1.5 w-1.5 rounded-full",
+                            company.is_active ? "bg-emerald-500" : "bg-gray-400"
+                          )}
+                        />
+                        {company.is_active ? "Active" : "Inactive"}
+                      </button>
+                    </td>
+
+                    {/* Jobs */}
+                    <td className="py-3.5 pr-6">
+                      <span className="text-sm font-semibold tabular-nums text-gray-800">
                         {formatNumber(company.job_count)}
-                      </td>
-                      <td className="py-4 pr-4">
-                        <div className="space-y-2">
-                          <AdminBadge tone={health.tone}>{health.label}</AdminBadge>
-                          <p className="text-xs text-gray-500">{crawl?.status ?? "never"}</p>
-                        </div>
-                      </td>
-                      <td className="py-4 pr-4 font-semibold text-gray-900">
+                      </span>
+                    </td>
+
+                    {/* H1B */}
+                    <td className="py-3.5 pr-6">
+                      <span className="text-sm tabular-nums text-gray-500">
                         {formatNumber(company.sponsorship_confidence)}
-                      </td>
-                      <td className="py-4">
-                        <div className="flex flex-wrap gap-2">
-                          <AdminButton
-                            tone="secondary"
-                            className="px-3 py-2 text-xs"
-                            onClick={() => void crawlCompanies("company", [company.id])}
-                            disabled={busyId === company.id}
-                          >
-                            Crawl now
-                          </AdminButton>
-                          <Link
-                            href={`/admin/companies/${company.id}/edit`}
-                            className="inline-flex items-center rounded-2xl border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 transition hover:border-gray-300 hover:bg-gray-50"
-                          >
-                            Edit
-                          </Link>
-                          <Link
-                            href={`/admin/jobs?company=${company.id}`}
-                            className="inline-flex items-center rounded-2xl border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 transition hover:border-gray-300 hover:bg-gray-50"
-                          >
-                            View jobs
-                          </Link>
-                          <button
-                            type="button"
-                            onClick={() => void deleteCompany(company)}
-                            className="inline-flex items-center rounded-2xl border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-50"
-                          >
-                            <Trash2 className="mr-1 h-3.5 w-3.5" />
-                            Delete
-                          </button>
+                      </span>
+                    </td>
+
+                    {/* Health */}
+                    <td className="py-3.5 pr-6">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={cn(
+                            "h-2 w-2 flex-shrink-0 rounded-full",
+                            DOT[health.tone]
+                          )}
+                        />
+                        <div>
+                          <p className="text-xs font-medium text-gray-700">{health.label}</p>
+                          <p className="text-[10px] text-gray-400">{crawl?.status ?? "never"}</p>
                         </div>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
+                      </div>
+                    </td>
+
+                    {/* Last crawled */}
+                    <td className="py-3.5 pr-6">
+                      <p className="text-xs font-medium text-gray-700">
+                        {formatRelativeTime(company.last_crawled_at)}
+                      </p>
+                      <p className="text-[10px] text-gray-400">
+                        {formatDateTime(company.last_crawled_at)}
+                      </p>
+                    </td>
+
+                    {/* Actions (hover-reveal) */}
+                    <td className="py-3.5 pr-8">
+                      <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                        <button
+                          onClick={() => void crawlCompanies("company", [company.id])}
+                          disabled={busyId === company.id}
+                          title="Crawl now"
+                          className="rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 disabled:opacity-40"
+                        >
+                          {busyId === company.id ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <RefreshCw className="h-3.5 w-3.5" />
+                          )}
+                        </button>
+                        <Link
+                          href={`/admin/companies/${company.id}/edit`}
+                          title="Edit"
+                          className="rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-700"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Link>
+                        <Link
+                          href={`/admin/jobs?company=${company.id}`}
+                          title="View jobs"
+                          className="rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-700"
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </Link>
+                        <button
+                          onClick={() => void deleteCompany(company)}
+                          title="Delete"
+                          className="rounded-lg p-1.5 text-gray-400 transition hover:bg-red-50 hover:text-red-500"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
         )}
-      </AdminPanel>
+      </div>
+
+      {/* ── Floating bulk bar ───────────────────────────────── */}
+      {selected.length > 0 && (
+        <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 animate-in fade-in slide-in-from-bottom-2 duration-200">
+          <div className="flex items-center gap-3 rounded-2xl border border-gray-200/80 bg-white px-5 py-2.5 shadow-[0_20px_60px_rgba(15,23,42,0.14)] ring-1 ring-black/[0.04]">
+            <span className="text-sm font-semibold text-gray-900 tabular-nums">
+              {selected.length} selected
+            </span>
+            <div className="h-4 w-px bg-gray-200" />
+            <button
+              onClick={() => void bulkUpdate(true)}
+              className="rounded-lg px-2.5 py-1.5 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-50"
+            >
+              Activate
+            </button>
+            <button
+              onClick={() => void bulkUpdate(false)}
+              className="rounded-lg px-2.5 py-1.5 text-xs font-semibold text-gray-600 transition hover:bg-gray-100"
+            >
+              Deactivate
+            </button>
+            <button
+              onClick={() => void crawlCompanies("selected", selected)}
+              className="rounded-lg px-2.5 py-1.5 text-xs font-semibold text-sky-700 transition hover:bg-sky-50"
+            >
+              Crawl now
+            </button>
+            <div className="h-4 w-px bg-gray-200" />
+            <button
+              onClick={() => setSelected([])}
+              className="rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
 
       <AddCompanyModal
         open={showAddModal}
         onClose={() => setShowAddModal(false)}
-        onCreated={(company) => setCompanies((current) => [company, ...current])}
+        onCreated={(company) => setCompanies((curr) => [company, ...curr])}
       />
-    </div>
+    </>
   )
 }
