@@ -58,9 +58,8 @@ services:
       "
 
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    # Pre-built by GitHub Actions — Coolify just pulls, no build on server
+    image: ghcr.io/felixkwasisarpong/hireoven:latest
     container_name: hireoven-app
     restart: unless-stopped
     depends_on:
