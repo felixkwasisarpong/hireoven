@@ -2,7 +2,7 @@
 
 import { type FormEvent, useState } from "react"
 import Link from "next/link"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useSearchParams } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -67,7 +67,6 @@ function ErrorBanner({ message }: { message: string }) {
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function AuthForm({ defaultMode = "login" }: Props) {
-  const router = useRouter()
   const searchParams = useSearchParams()
   const next = sanitizeNext(searchParams.get("next"))
 
@@ -87,7 +86,7 @@ export function AuthForm({ defaultMode = "login" }: Props) {
     setMode(m)
     setError(null)
     setPassword("")
-    router.replace(m === "login" ? "/login" : "/signup", { scroll: false })
+    window.history.replaceState(null, "", m === "login" ? "/login" : "/signup")
   }
 
   function handleGoogle() {
