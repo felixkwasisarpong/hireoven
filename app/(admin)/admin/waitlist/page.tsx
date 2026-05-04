@@ -14,6 +14,9 @@ type WaitlistAdminRow = Pick<
   | "source"
   | "referrer"
   | "confirmed"
+  | "approved"
+  | "invited_at"
+  | "invite_used_at"
 >
 
 export default async function AdminWaitlistPage() {
@@ -23,7 +26,8 @@ export default async function AdminWaitlistPage() {
   try {
     const pool = getPostgresPool()
     const result = await pool.query<WaitlistAdminRow>(
-      `SELECT id, email, joined_at, is_international, visa_status, university, source, referrer, confirmed
+      `SELECT id, email, joined_at, is_international, visa_status, university, source, referrer,
+              confirmed, approved, invited_at, invite_used_at
        FROM waitlist
        ORDER BY joined_at DESC`
     )
@@ -42,8 +46,8 @@ export default async function AdminWaitlistPage() {
       <div>
         <h1 className="text-2xl font-bold text-gray-950">Waitlist</h1>
         <p className="mt-1 text-sm text-gray-600">
-          Pre-launch signups from <code className="rounded bg-gray-100 px-1">/launch</code> and
-          tracked channels.
+          Approve users to send them an invite link.{" "}
+          Set <code className="rounded bg-gray-100 px-1">WAITLIST_ONLY=true</code> to enforce invite-only signup.
         </p>
       </div>
       <WaitlistAdminPanel initialRows={rows ?? []} />

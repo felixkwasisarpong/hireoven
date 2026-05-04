@@ -7,16 +7,21 @@ import { getPostgresPool } from "@/lib/postgres/server"
 
 export const runtime = "nodejs"
 
+const WAITLIST_ONLY = process.env.WAITLIST_ONLY === "true"
+
 export async function POST(request: Request) {
   try {
     const body = (await request.json().catch(() => ({}))) as {
       email?: string
       password?: string
       full_name?: string
+      inviteToken?: string
     }
     const email = body.email?.trim().toLowerCase()
     const password = body.password
     const fullName = body.full_name?.trim() || null
+    const inviteToken = body.inviteToken?.trim() || null
+
     if (!email || !password) {
       return NextResponse.json({ error: "Email and password required" }, { status: 400 })
     }
@@ -25,6 +30,47 @@ export async function POST(request: Request) {
     }
 
     const pool = getPostgresPool()
+
+    // ── Waitlist-only gate ───────────────────────────────────────────────────
+    if (WAITLIST_ONLY) {
+      if (!inviteToken) {
+        return NextResponse.json(
+          { error: "An invite is required to create an account. Join the waitlist to get access.", code: "INVITE_REQUIRED" },
+          { status: 403 }
+        )
+      }
+
+      const invite = await pool.query<{ id: string; email: string; invite_used_at: string | null }>(
+        `SELECT id, email, invite_used_at
+         FROM waitlist
+         WHERE invite_token = $1 AND approved = true
+         LIMIT 1`,
+        [inviteToken]
+      ).then((r) => r.rows[0])
+
+      if (!invite) {
+        return NextResponse.json(
+          { error: "This invite link is invalid or has expired.", code: "INVALID_INVITE" },
+          { status: 403 }
+        )
+      }
+
+      if (invite.invite_used_at) {
+        return NextResponse.json(
+          { error: "This invite has already been used. Sign in instead.", code: "INVITE_USED" },
+          { status: 409 }
+        )
+      }
+
+      // The invite email must match the signup email
+      if (invite.email.toLowerCase() !== email) {
+        return NextResponse.json(
+          { error: "This invite is for a different email address.", code: "INVITE_EMAIL_MISMATCH" },
+          { status: 403 }
+        )
+      }
+    }
+
     const dup = await pool.query(`SELECT 1 FROM auth.users WHERE lower(trim(email)) = $1 LIMIT 1`, [email])
     if (dup.rowCount) {
       return NextResponse.json({ error: "An account with this email already exists." }, { status: 409 })
@@ -50,6 +96,13 @@ export async function POST(request: Request) {
                updated_at = now()`,
         [id, email, fullName]
       )
+      // Mark invite as consumed
+      if (WAITLIST_ONLY && inviteToken) {
+        await client.query(
+          `UPDATE waitlist SET invite_used_at = now() WHERE invite_token = $1`,
+          [inviteToken]
+        )
+      }
       await client.query("COMMIT")
     } catch (e) {
       await client.query("ROLLBACK").catch(() => {})
@@ -61,9 +114,9 @@ export async function POST(request: Request) {
       client.release()
     }
 
-    const token = await signSessionJwt({ sub: id, email, isAdmin: false, suspended: false })
+    const sessionToken = await signSessionJwt({ sub: id, email, isAdmin: false, suspended: false })
     const res = NextResponse.json({ ok: true, user: { id, email } })
-    res.headers.append("Set-Cookie", buildSessionSetCookie(token, 60 * 60 * 24 * 14))
+    res.headers.append("Set-Cookie", buildSessionSetCookie(sessionToken, 60 * 60 * 24 * 14))
     return res
   } catch (error) {
     console.error("Signup failed", error)

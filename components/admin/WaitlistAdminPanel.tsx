@@ -15,6 +15,9 @@ type Row = Pick<
   | "source"
   | "referrer"
   | "confirmed"
+  | "approved"
+  | "invited_at"
+  | "invite_used_at"
 >
 
 type Stats = {
@@ -226,7 +229,7 @@ export default function WaitlistAdminPanel({ initialRows }: { initialRows: Row[]
       ) : null}
 
       <div className="overflow-x-auto rounded-2xl border border-gray-200 bg-white shadow-sm">
-        <table className="w-full min-w-[800px] text-left text-sm">
+        <table className="w-full min-w-[900px] text-left text-sm">
           <thead className="border-b border-gray-200 bg-gray-50 text-xs font-semibold uppercase tracking-wide text-gray-500">
             <tr>
               <th className="px-4 py-3">Email</th>
@@ -235,36 +238,103 @@ export default function WaitlistAdminPanel({ initialRows }: { initialRows: Row[]
               <th className="px-4 py-3">Visa</th>
               <th className="px-4 py-3">University</th>
               <th className="px-4 py-3">Source</th>
-              <th className="px-4 py-3">Referrer / UTM</th>
               <th className="px-4 py-3">Confirmed</th>
+              <th className="px-4 py-3">Status</th>
+              <th className="px-4 py-3">Action</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {initialRows.map((r) => (
-              <tr key={r.id} className="text-gray-700">
-                <td className="px-4 py-2.5 font-mono text-xs">{r.email}</td>
-                <td className="px-4 py-2.5 text-xs text-gray-600">
-                  {new Date(r.joined_at).toLocaleString()}
-                </td>
-                <td className="px-4 py-2.5">
-                  {r.is_international === true ? "Y" : r.is_international === false ? "N" : "-"}
-                </td>
-                <td className="max-w-[120px] truncate px-4 py-2.5 text-xs">
-                  {r.visa_status ?? "-"}
-                </td>
-                <td className="max-w-[140px] truncate px-4 py-2.5 text-xs">
-                  {r.university ?? "-"}
-                </td>
-                <td className="px-4 py-2.5 text-xs">{r.source ?? "-"}</td>
-                <td className="max-w-[180px] truncate px-4 py-2.5 text-xs text-gray-500">
-                  {r.referrer ?? "-"}
-                </td>
-                <td className="px-4 py-2.5">{r.confirmed ? "Y" : "N"}</td>
-              </tr>
+              <WaitlistRow key={r.id} row={r} />
             ))}
           </tbody>
         </table>
       </div>
     </div>
+  )
+}
+
+function WaitlistRow({ row: r }: { row: Row }) {
+  const [busy, setBusy] = useState(false)
+  const [state, setState] = useState<"idle" | "sent" | "error">("idle")
+  const [errMsg, setErrMsg] = useState("")
+
+  const alreadyUsed = Boolean(r.invite_used_at)
+  const alreadyInvited = Boolean(r.invited_at) && !alreadyUsed
+
+  async function handleApprove() {
+    setBusy(true)
+    setState("idle")
+    try {
+      const res = await fetch("/api/admin/waitlist/approve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: r.id }),
+      })
+      const data = await res.json().catch(() => ({})) as { error?: string }
+      if (!res.ok) {
+        setErrMsg(data.error ?? "Failed")
+        setState("error")
+      } else {
+        setState("sent")
+      }
+    } catch {
+      setErrMsg("Network error")
+      setState("error")
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <tr className="text-gray-700 hover:bg-gray-50/60">
+      <td className="px-4 py-2.5 font-mono text-xs">{r.email}</td>
+      <td className="px-4 py-2.5 text-xs text-gray-500">
+        {new Date(r.joined_at).toLocaleDateString()}
+      </td>
+      <td className="px-4 py-2.5 text-xs">
+        {r.is_international === true ? "Y" : r.is_international === false ? "N" : "-"}
+      </td>
+      <td className="max-w-[100px] truncate px-4 py-2.5 text-xs">{r.visa_status ?? "-"}</td>
+      <td className="max-w-[130px] truncate px-4 py-2.5 text-xs">{r.university ?? "-"}</td>
+      <td className="px-4 py-2.5 text-xs">{r.source ?? "-"}</td>
+      <td className="px-4 py-2.5">
+        <span className={r.confirmed ? "text-emerald-600 font-semibold" : "text-gray-400"}>
+          {r.confirmed ? "✓" : "–"}
+        </span>
+      </td>
+      <td className="px-4 py-2.5 text-xs">
+        {alreadyUsed ? (
+          <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
+            Account created
+          </span>
+        ) : state === "sent" || alreadyInvited ? (
+          <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-700">
+            Invite sent
+          </span>
+        ) : r.approved ? (
+          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">
+            Approved
+          </span>
+        ) : (
+          <span className="text-gray-400 text-[10px]">Pending</span>
+        )}
+      </td>
+      <td className="px-4 py-2.5">
+        {alreadyUsed ? null : (
+          <button
+            type="button"
+            onClick={handleApprove}
+            disabled={busy}
+            className="rounded-lg bg-[#FF5C18] px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-[#e14f0e] disabled:opacity-50"
+          >
+            {busy ? "Sending…" : state === "sent" || alreadyInvited ? "Re-invite" : "Approve & invite"}
+          </button>
+        )}
+        {state === "error" && (
+          <p className="mt-1 text-[10px] text-red-600">{errMsg}</p>
+        )}
+      </td>
+    </tr>
   )
 }

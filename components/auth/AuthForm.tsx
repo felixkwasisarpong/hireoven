@@ -70,20 +70,36 @@ function ErrorBanner({ message }: { message: string }) {
 export function AuthForm({ defaultMode = "login" }: Props) {
   const searchParams = useSearchParams()
   const next = sanitizeNext(searchParams.get("next"))
+  const inviteToken = searchParams.get("invite")?.trim() || null
 
-  const [mode, setMode] = useState<AuthMode>(defaultMode)
+  // If arriving via invite link, lock to signup mode
+  const [mode, setMode] = useState<AuthMode>(inviteToken ? "signup" : defaultMode)
   const [fullName, setFullName] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
+  const [inviteResolved, setInviteResolved] = useState(false)
   const [error, setError] = useState<string | null>(() => {
     const raw = searchParams.get("error")
     if (!raw) return null
     return OAUTH_ERRORS[raw] ?? "Something went wrong. Please try again."
   })
 
+  // Resolve invite token → pre-fill email
+  useState(() => {
+    if (!inviteToken) return
+    fetch(`/api/auth/invite-info?token=${encodeURIComponent(inviteToken)}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((d: { email?: string } | null) => {
+        if (d?.email) setEmail(d.email)
+        setInviteResolved(true)
+      })
+      .catch(() => setInviteResolved(true))
+  })
+
   function switchMode(m: AuthMode) {
+    if (inviteToken) return // locked to signup when arriving via invite link
     setMode(m)
     setError(null)
     setPassword("")
@@ -113,7 +129,6 @@ export function AuthForm({ defaultMode = "login" }: Props) {
         return
       }
       if (data.user) {
-        // Ensure profile row exists
         await fetch("/api/profile", {
           method: "POST", credentials: "include",
           headers: { "Content-Type": "application/json" },
@@ -127,22 +142,32 @@ export function AuthForm({ defaultMode = "login" }: Props) {
         setLoading(false)
         return
       }
-      const { data, error: err } = await supabase.auth.signUp({
-        email, password,
-        options: { data: { full_name: fullName } },
+      // Call signup directly so we can pass inviteToken
+      const res = await fetch("/api/auth/signup", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password, full_name: fullName, inviteToken }),
       })
-      if (err) {
-        setError(err.message)
+      const body = await res.json().catch(() => ({})) as { error?: string; code?: string }
+      if (!res.ok) {
+        if (body.code === "INVITE_REQUIRED" || body.code === "INVALID_INVITE") {
+          setError("A valid invite is required to sign up. Join the waitlist to get access.")
+        } else if (body.code === "INVITE_USED") {
+          setError("This invite has already been used. Try signing in instead.")
+        } else if (body.code === "INVITE_EMAIL_MISMATCH") {
+          setError("This invite is for a different email address.")
+        } else {
+          setError(body.error ?? "Signup failed. Please try again.")
+        }
         setLoading(false)
         return
       }
-      if (data.user) {
-        await fetch("/api/profile", {
-          method: "POST", credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, full_name: fullName }),
-        })
-      }
+      await fetch("/api/profile", {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, full_name: fullName }),
+      })
       window.location.assign(next ?? "/dashboard/onboarding")
     }
   }
@@ -223,32 +248,47 @@ export function AuthForm({ defaultMode = "login" }: Props) {
 
         <div className="w-full max-w-[400px]">
 
-          {/* Tab switcher */}
-          <div className="mb-7 flex rounded-xl bg-slate-100/80 p-1 gap-1">
-            {(["login", "signup"] as const).map((m) => (
-              <button
-                key={m}
-                type="button"
-                onClick={() => switchMode(m)}
-                className={[
-                  "flex-1 rounded-lg py-2 text-sm font-semibold transition-all duration-150",
-                  mode === m
-                    ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-200/80"
-                    : "text-slate-500 hover:text-slate-700",
-                ].join(" ")}
-              >
-                {m === "login" ? "Sign in" : "Sign up"}
-              </button>
-            ))}
-          </div>
+          {/* Invite banner — shown when arriving via invite link */}
+          {inviteToken && (
+            <div className="mb-5 flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+              <span className="mt-0.5 text-lg">🎉</span>
+              <div>
+                <p className="text-[13px] font-bold text-emerald-800">You're invited!</p>
+                <p className="text-[12px] text-emerald-700 leading-relaxed">
+                  Your spot has been approved. Create your account below to get started.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Tab switcher — hidden when locked to invite signup */}
+          {!inviteToken && (
+            <div className="mb-7 flex rounded-xl bg-slate-100/80 p-1 gap-1">
+              {(["login", "signup"] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => switchMode(m)}
+                  className={[
+                    "flex-1 rounded-lg py-2 text-sm font-semibold transition-all duration-150",
+                    mode === m
+                      ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-200/80"
+                      : "text-slate-500 hover:text-slate-700",
+                  ].join(" ")}
+                >
+                  {m === "login" ? "Sign in" : "Sign up"}
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* Heading */}
           <div className="mb-6">
             <h1 className="text-xl font-bold text-slate-900">
-              {isLogin ? "Welcome back" : "Create your account"}
+              {inviteToken ? "Create your account" : isLogin ? "Welcome back" : "Create your account"}
             </h1>
             <p className="mt-1 text-sm text-slate-500">
-              {isLogin ? "Sign in to continue to your dashboard." : "Start finding great jobs in minutes."}
+              {inviteToken ? "You're on the list — fill in your details to get in." : isLogin ? "Sign in to continue to your dashboard." : "Start finding great jobs in minutes."}
             </p>
           </div>
 
