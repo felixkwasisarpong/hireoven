@@ -780,6 +780,25 @@ export async function POST(request: NextRequest) {
     return scoutError(401, "Unauthorized")
   }
 
+  // Gate Scout entirely — free users cannot send messages
+  const { plan: userPlan } = await getUserPlan(request)
+  if (!canAccess(userPlan, "scout_actions")) {
+    return NextResponse.json(
+      {
+        answer: "Scout is a Pro feature. Upgrade to unlock AI-powered job search.",
+        recommendation: "Wait",
+        actions: [],
+        explanations: [],
+        gated: {
+          feature: "scout_actions",
+          reason: "Scout requires a Pro plan.",
+          upgradeMessage: "Upgrade to Pro to use Scout AI.",
+        },
+      } satisfies ScoutResponse,
+      { status: 403 }
+    )
+  }
+
   if (!anthropic) {
     return NextResponse.json(
       {
