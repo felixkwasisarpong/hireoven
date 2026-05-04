@@ -131,17 +131,6 @@ function buildSignals(args: {
       : "No confirmed hiring freeze signal for this employer.",
   })
 
-  // Salary
-  out.push({
-    name: "Salary listed",
-    value: args.hasSalary ? "Yes" : "No",
-    weight: args.hasSalary ? 0 : 3,
-    status: args.hasSalary ? "green" : "amber",
-    detail: args.hasSalary
-      ? "Salary range is disclosed — a minor positive signal."
-      : "No salary listed. Alone this is a weak signal, but it adds to overall opacity.",
-  })
-
   // Description quality
   const dv = args.descriptionVaguenessScore
   out.push({

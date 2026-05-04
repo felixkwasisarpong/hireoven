@@ -244,11 +244,6 @@ export function calculateGhostJobRisk(input: CalculateGhostJobRiskInput): GhostJ
   if (quality.reason) reasons.push(quality.reason)
   score += quality.penalty
 
-  if (input.salaryMin == null && input.salaryMax == null) {
-    score += 3
-    reasons.push("Salary is not listed. This is a weak signal by itself.")
-  }
-
   if (directCompanyLink) {
     coverage += 1
     score -= 10

@@ -3,6 +3,14 @@
 import { useEffect, useState } from "react"
 import { ChevronRight } from "lucide-react"
 import { cn } from "@/lib/utils"
+
+function MI({ name, className, style }: { name: string; className?: string; style?: React.CSSProperties }) {
+  return (
+    <span className={cn("material-icons select-none leading-none", className)} style={style} aria-hidden>
+      {name}
+    </span>
+  )
+}
 import type { GhostRiskApiResponse, GhostRiskSignal } from "@/app/api/jobs/[id]/ghost-risk/route"
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -10,7 +18,6 @@ import type { GhostRiskApiResponse, GhostRiskSignal } from "@/app/api/jobs/[id]/
 type Props = {
   jobId: string
   onSkip?: () => void
-  onApply?: () => void
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -22,11 +29,11 @@ function scoreColor(score: number | null): string {
   return "#16A34A"
 }
 
-function verdict(score: number | null): { emoji: string; title: string; bg: string } {
-  if (score == null) return { emoji: "❓", title: "No data yet", bg: "#F8FAFC" }
-  if (score >= 70) return { emoji: "👻", title: "Likely a ghost job", bg: "#FEF2F2" }
-  if (score >= 40) return { emoji: "⚠️", title: "Proceed with caution", bg: "#FFFBEB" }
-  return { emoji: "✅", title: "Looks legitimate", bg: "#F0FDF4" }
+function verdict(score: number | null): { icon: string; iconColor: string; title: string; bg: string } {
+  if (score == null) return { icon: "help_outline", iconColor: "#94A3B8", title: "No data yet", bg: "#F8FAFC" }
+  if (score >= 70) return { icon: "dangerous", iconColor: "#DC2626", title: "Likely a ghost job", bg: "#FEF2F2" }
+  if (score >= 40) return { icon: "warning", iconColor: "#D97706", title: "Proceed with caution", bg: "#FFFBEB" }
+  return { icon: "check_circle", iconColor: "#16A34A", title: "Looks legitimate", bg: "#F0FDF4" }
 }
 
 function dotColor(status: GhostRiskSignal["status"]): string {
@@ -178,7 +185,7 @@ function SignalRow({
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export function GhostJobDetector({ jobId, onSkip, onApply }: Props) {
+export function GhostJobDetector({ jobId, onSkip }: Props) {
   const [data, setData] = useState<GhostRiskApiResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
@@ -205,17 +212,17 @@ export function GhostJobDetector({ jobId, onSkip, onApply }: Props) {
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-start gap-3.5">
           <div
-            className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full text-2xl"
+            className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full"
             style={{ background: v.bg }}
             aria-hidden
           >
-            {v.emoji}
+            <MI name={v.icon} className="text-[24px]" style={{ color: v.iconColor }} />
           </div>
           <div className="min-w-0">
             <p className="text-[17px] font-semibold leading-snug text-[var(--color-text-strong,#0F172A)]">
               {v.title}
             </p>
-            <p className="mt-0.5 truncate text-[13px] text-[var(--color-text-muted,#64748B)]">
+            <p className="mt-0.5 text-[13px] leading-snug break-words text-[var(--color-text-muted,#64748B)]">
               {data.jobTitle}{data.companyName ? ` · ${data.companyName}` : ""}
             </p>
           </div>
@@ -277,15 +284,6 @@ export function GhostJobDetector({ jobId, onSkip, onApply }: Props) {
               className="inline-flex items-center rounded-full bg-red-50 px-3.5 py-1.5 text-[12px] font-semibold text-red-700 transition hover:bg-red-100"
             >
               Skip this job
-            </button>
-          )}
-          {onApply && (
-            <button
-              type="button"
-              onClick={onApply}
-              className="inline-flex items-center rounded-full border border-[var(--color-border,#E2E8F0)] bg-transparent px-3.5 py-1.5 text-[12px] font-semibold text-[var(--color-text,#334155)] transition hover:bg-slate-50"
-            >
-              Apply anyway
             </button>
           )}
         </div>
