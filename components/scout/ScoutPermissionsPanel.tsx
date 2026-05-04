@@ -212,7 +212,7 @@ export function ScoutPermissionsPanel({ permissions, onPermissionsChange, onClos
                 {auditLog.slice(0, 8).map((entry, i) => (
                   <div key={i} className="flex items-center gap-2">
                     <ShieldCheck className="h-3 w-3 text-slate-300 flex-shrink-0" />
-                    <span className="text-[10.5px] text-slate-500 truncate">{entry.label ?? entry.actionType}</span>
+                    <span className="text-[10.5px] text-slate-500 truncate">{entry.actionType}</span>
                   </div>
                 ))}
               </div>
