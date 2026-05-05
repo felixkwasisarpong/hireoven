@@ -251,17 +251,37 @@ export function normalizeJobApplyUrl(input: string): string {
   }
 }
 
-function decodeHtmlEntities(value: string): string {
+export function decodeHtmlEntities(value: string): string {
   return value
-    .replace(/&nbsp;/gi, " ")
-    .replace(/&amp;/gi, "&")
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;|&apos;/gi, "'")
-    .replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">")
-    .replace(/&mdash;/gi, "-")
-    .replace(/&ndash;/gi, "–")
-    .replace(/&bull;/gi, "•")
+    .replace(/&nbsp;?/gi, " ")
+    .replace(/&amp;?/gi, "&")
+    .replace(/&quot;?/gi, '"')
+    .replace(/&#39;?|&apos;?/gi, "'")
+    .replace(/&lt;?/gi, "<")
+    .replace(/&gt;?/gi, ">")
+    .replace(/&mdash;?/gi, "-")
+    .replace(/&ndash;?/gi, "–")
+    .replace(/&bull;?/gi, "•")
+    // Numeric entities (e.g. &#43; → "+", &#x2B; → "+"). Source HTML often
+    // omits the trailing semicolon, so make it optional.
+    .replace(/&#x([0-9a-f]+);?/gi, (_, hex: string) => {
+      const code = Number.parseInt(hex, 16)
+      if (!Number.isFinite(code) || code < 32 || code > 0x10ffff) return ""
+      try {
+        return String.fromCodePoint(code)
+      } catch {
+        return ""
+      }
+    })
+    .replace(/&#(\d+);?/g, (_, dec: string) => {
+      const code = Number.parseInt(dec, 10)
+      if (!Number.isFinite(code) || code < 32 || code > 0x10ffff) return ""
+      try {
+        return String.fromCodePoint(code)
+      } catch {
+        return ""
+      }
+    })
 }
 
 function collapseWhitespace(value: string): string {

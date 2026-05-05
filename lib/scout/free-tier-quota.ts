@@ -1,36 +1,18 @@
-import { getPostgresPool } from "@/lib/postgres/server"
+import type { Plan } from "@/lib/gates"
+import { FEATURE_QUOTAS, type QuotaState } from "@/lib/usage/quotas"
+import { bumpUsage } from "@/lib/usage/quotas-server"
 
-export const FREE_DAILY_SCOUT_QUOTA = 5
+/** Kept for backwards compatibility; canonical limits live in FEATURE_QUOTAS. */
+export const FREE_DAILY_SCOUT_QUOTA = FEATURE_QUOTAS.scout_message.limits.free
 
-export type QuotaState = {
-  used: number
-  limit: number
-  remaining: number
-  exceeded: boolean
-}
+export type { QuotaState }
 
 /**
- * Atomically increments the user's daily Scout message counter and returns the
- * post-increment state. The caller decides whether to fulfill or 429 based on
- * `exceeded`. We always increment so a user that hits the limit can't bypass it
- * by retrying — we count attempts, not successes.
+ * Bumps the user's daily Scout message counter via the generic feature_usage
+ * table and returns the post-increment state. Always increments — caller decides
+ * whether to fulfil or 429 based on `exceeded`. Pro users still consume credits
+ * but against their (much higher) plan limit.
  */
-export async function bumpScoutUsage(userId: string): Promise<QuotaState> {
-  const pool = getPostgresPool()
-  const { rows } = await pool.query<{ count: number }>(
-    `INSERT INTO scout_usage_daily (user_id, day, count, updated_at)
-     VALUES ($1, CURRENT_DATE, 1, now())
-     ON CONFLICT (user_id, day)
-     DO UPDATE SET count = scout_usage_daily.count + 1, updated_at = now()
-     RETURNING count`,
-    [userId]
-  )
-  const used = rows[0]?.count ?? 1
-  const limit = FREE_DAILY_SCOUT_QUOTA
-  return {
-    used,
-    limit,
-    remaining: Math.max(0, limit - used),
-    exceeded: used > limit,
-  }
+export async function bumpScoutUsage(userId: string, plan: Plan | null = "free"): Promise<QuotaState> {
+  return bumpUsage(userId, "scout_message", plan)
 }

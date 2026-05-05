@@ -1,6 +1,8 @@
 import {
   CANONICAL_SECTION_ORDER,
+  sectionLabel,
 } from "@/lib/jobs/normalization/section-taxonomy"
+import { decodeHtmlEntities } from "@/lib/jobs/description"
 import type {
   CanonicalJob,
   CanonicalSectionKey,
@@ -127,18 +129,82 @@ function deriveHighlights(job: CanonicalJob, salaryLabel: string | null): string
   return deduped
 }
 
+// Mirrors the extraction-time cleanup so cached canonical (which was extracted
+// before bullet-stripping / numeric-entity decoding shipped) renders cleanly
+// without requiring a re-normalize pass.
+const VIEW_LEADING_BULLET_RE =
+  /^(?:[•●◦▪▫‣⁃∙·⁌⁍‧․\-*]|\s| )+/
+
+const VIEW_HEADING_MARKER_RE =
+  /^[A-Z][A-Z\s,&/()'-]{2,}:?$/
+
+function cleanCachedItem(item: string): string {
+  return decodeHtmlEntities(item)
+    .replace(VIEW_LEADING_BULLET_RE, "")
+    .replace(/\s+/g, " ")
+    .trim()
+}
+
+function cleanCachedItems(items: string[]): string[] {
+  const out: string[] = []
+  const seen = new Set<string>()
+  for (const raw of items) {
+    const cleaned = cleanCachedItem(raw)
+    if (cleaned.length < 3) continue
+    if (VIEW_HEADING_MARKER_RE.test(cleaned)) continue
+    const key = cleaned.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(cleaned)
+  }
+  return out
+}
+
 function toPageSection(
   job: CanonicalJob,
   key: CanonicalSectionKey
 ): JobPageSectionView {
   const section = job.sections[key]
+  // Always recompute the label from the current taxonomy so renames (e.g.
+  // "Preferred qualifications" → "Nice to have") apply to cached canonical
+  // payloads without requiring a re-normalize pass.
   return {
     key,
-    label: section.label,
-    items: section.items,
+    label: sectionLabel(key),
+    items: cleanCachedItems(section.items),
     confidence: section.confidence,
     is_fallback: section.is_fallback,
   }
+}
+
+const ABOUT_FALLBACK_HEADING_RE =
+  /^(responsibilit|requirements?|minimum (qualifications?|requirements?)|basic qualifications?|required qualifications?|preferred qualifications?|qualifications?|nice to have|benefits?|perks?|compensation|salary|what we offer|how to apply|application process|equal opportunity|eeo|skills?|technical skills?|technologies)\b[\s:.-]*$/i
+
+const ABOUT_FALLBACK_NOISE_RE =
+  /\b(equal opportunity|eeo employer|reasonable accommodation|protected veteran|affirmative action|cookie|privacy notice|terms of (service|use))\b/i
+
+/**
+ * Page-level fallback for the "About the role" section. When the extractor's
+ * about_role bucket is empty (cached canonical, low-signal description, etc.),
+ * pull the first 1–2 prose paragraphs from the cleaned description so the
+ * detail page never renders a placeholder.
+ */
+export function deriveAboutRoleParagraphs(
+  extracted: string[],
+  cleanDescription: string | null
+): string[] {
+  if (extracted.length > 0) return extracted
+
+  if (!cleanDescription) return []
+
+  const paragraphs = cleanDescription
+    .split(/\n{2,}/)
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .filter((line) => line.length >= 60 && line.length <= 700)
+    .filter((line) => !ABOUT_FALLBACK_HEADING_RE.test(line))
+    .filter((line) => !ABOUT_FALLBACK_NOISE_RE.test(line))
+
+  return paragraphs.slice(0, 2)
 }
 
 export function mapCanonicalToJobPageView(job: CanonicalJob): JobPageViewModel {
@@ -153,11 +219,32 @@ export function mapCanonicalToJobPageView(job: CanonicalJob): JobPageViewModel {
     sections[key] = toPageSection(job, key)
   }
 
+  // The canonical schema retains a `qualifications` bucket for back-compat with
+  // jobs cached before the requirements/qualifications merge. At the view-model
+  // boundary we fold it into `requirements` so renderers only deal with one
+  // bucket. Order is preserved (requirements first, then any qualifications-only
+  // items the extractor missed). De-dup is case-insensitive on whitespace-normalized text.
+  const seen = new Set<string>()
+  const mergedRequirements: string[] = []
+  for (const item of [...sections.requirements.items, ...sections.qualifications.items]) {
+    const key = item.toLowerCase().replace(/\s+/g, " ").trim()
+    if (!key || seen.has(key)) continue
+    seen.add(key)
+    mergedRequirements.push(item)
+  }
+  sections.requirements = {
+    ...sections.requirements,
+    items: mergedRequirements,
+  }
+  sections.qualifications = {
+    ...sections.qualifications,
+    items: [],
+  }
+
   const ordered_sections = [
     sections.about_role,
     sections.responsibilities,
     sections.requirements,
-    sections.qualifications,
     sections.preferred_qualifications,
     sections.skills,
     sections.benefits,
@@ -181,6 +268,7 @@ export function mapCanonicalToJobPageView(job: CanonicalJob): JobPageViewModel {
     salary_label: salaryLabel,
     sponsorship_label: sponsorshipLabel(job),
     posted_at_label: formatDetectedTime(job.header.posted_at.value),
+    clean_description: job.descriptions?.clean ?? null,
     sections,
     ordered_sections,
     highlights: deriveHighlights(job, salaryLabel),

@@ -19,6 +19,7 @@ import JobShareRow from "@/components/jobs/JobShareRow"
 import { ScoutMiniPanel } from "@/components/scout/ScoutMiniPanel"
 import CompanyLogo from "@/components/ui/CompanyLogo"
 import {
+  deriveAboutRoleParagraphs,
   formatSalaryLabel,
   resolveJobNormalization,
   type PersistedJobForNormalization,
@@ -88,30 +89,61 @@ function isLikelyAtomicSkill(value: string) {
   return true
 }
 
-// Scan qualification/requirement bullets for technology-looking tokens that the
-// taxonomy didn't recognise. Signals: internal uppercase (JavaScript, LangChain),
-// tech characters (+, #, ., /), or a digit (v3, ES2022). Rejects plain English
-// sentences, marketing copy, and HR phrases.
-const COMMON_NONTECHNICAL_RE = /^(experience|knowledge|understanding|familiarity|ability|skills?|proficien|proven|strong|excellent|good|great|solid|deep|broad|extensive|working|hands.on|exposure|background|expertise|passion|interest|commitment|focus|emphasis|attention|detail|track record|plus|bonus|nice to have|preferred|required|must|will|can|should|years?|degree|bachelor|master|phd|equivalent|certification|team|cross.functional|stakeholder|communication|collaboration|problem.solving|analytical|leadership|mentoring|writing|verbal|interpersonal|organizational|adaptable|startup|fast.paced|agile|scrum|kanban|sprint|culture|values?|mission|impact|growth|scale|diversity|equity|inclusion|equal|opportunity|accommodation|applicant|candidate|employee|employer|company|organization|position|role|job|work|workplace|office|remote|hybrid|onsite|benefits?|compensation|salary|equity|stock|pto|vacation|insurance|401k|medical|dental|vision|parental|leave|wellness|reimbursement|stipend|learning|development|progress|starts?|believe|join|help|build|make|shape|thrive|succeed|advance)\b/i
+// Scan qualification/requirement bullets for technology-looking tokens the
+// taxonomy didn't recognise. Optimized for precision over recall — the
+// taxonomy already covers the common case, this is just for niche tools
+// (LangChain, Prisma, tRPC, etc.). Better to drop a real skill than to surface
+// "ABILITIES" or "Excellent personal".
+
+// Words that, on their own, are abstract nouns or prose connectives. Catches
+// the leading word of items lifted from sentences like "Proficiency with X"
+// or "Excellent personal communication". `^…$` is intentional — these match
+// only when the *whole* token is the rejected word.
+const NON_TECHNICAL_WORD_RE =
+  /^(experience|expertise|knowledge|understanding|familiarity|proficiency|proficient|ability|abilities|skill|skills|capability|capabilities|aptitude|attitude|mindset|background|exposure|interest|passion|commitment|focus|attention|excellence|excellent|good|great|solid|strong|deep|broad|extensive|effective|efficient|outstanding|exceptional|proven|demonstrated|hands-on|working|writing|verbal|written|communication|collaboration|teamwork|leadership|mentoring|stakeholder|cross-functional|interpersonal|analytical|organizational|adaptability|adaptable|willingness|willing|ability|able|personal|professional|technical|professional|engineering|application|applications|protocol|protocols|requirement|requirements|qualification|qualifications|degree|bachelor|bachelors|master|masters|phd|years?|year|months?|month|day|days|culture|values?|mission|opportunity|equity|equal|accommodation|insurance|medical|dental|vision|salary|compensation|benefits?|perks?|preferred|required|must|will|can|should|the|a|an|or|and|with|in|on|of|for|to|by|as)$/i
+
+// Tokens that look like tech names. We accept:
+//   • CamelCase single words: JavaScript, PyTorch, LangChain
+//   • Tokens with tech punctuation: C++, Next.js, CI/CD
+//   • All-caps acronyms 2–8 chars: AWS, REST, K8S
+//   • Mixed-case-with-digit: ES2022, Python3, S3
+function looksLikeTechToken(token: string): boolean {
+  // Multi-word tokens are almost always prose lifted from a sentence.
+  // Allow them ONLY if every word individually looks tech-y.
+  const words = token.split(/\s+/)
+  if (words.length > 1) {
+    return words.every(looksLikeTechToken)
+  }
+
+  if (NON_TECHNICAL_WORD_RE.test(token)) return false
+
+  // CamelCase: starts uppercase, has internal lowercase, has internal uppercase.
+  if (/^[A-Z][a-z]+[A-Z]/.test(token)) return true
+
+  // Tech punctuation
+  if (/[+#./]/.test(token)) return true
+
+  // All-caps acronym (2–8 chars, letters only)
+  if (/^[A-Z]{2,8}$/.test(token)) return true
+
+  // Letter+digit mix (S3, K8s, ES2022, Python3)
+  if (/^[A-Za-z]+\d/.test(token) || /\d[A-Za-z]/.test(token)) return true
+
+  return false
+}
 
 function extractTechTokensFromText(items: string[]): string[] {
   const found: string[] = []
   for (const item of items) {
-    // Split on common list delimiters and contextual words
-    const segments = item.split(/[,;()\[\]"']|\s+(?:and|or|with|using|including|such as|like|e\.g\.)\s+/i)
+    const segments = item.split(
+      /[,;()\[\]"']|\s+(?:and|or|with|using|including|such as|like|e\.g\.)\s+/i
+    )
     for (const seg of segments) {
       const token = seg.trim().replace(/[.:!?]+$/, "").trim()
       if (!token || token.length < 2 || token.length > 40) continue
       const words = token.split(/\s+/)
       if (words.length > 4) continue
-      // Must look like a technology name
-      const hasTechSignal =
-        /[A-Z]/.test(token.slice(1)) ||   // internal uppercase: JavaScript, PyTorch
-        /[+#./]/.test(token) ||            // tech chars: C++, C#, Next.js, CI/CD
-        /\d/.test(token)                    // version/number: ES2022, Python 3
-      if (!hasTechSignal) continue
-      // Reject if it reads like a plain English phrase
-      if (COMMON_NONTECHNICAL_RE.test(words[0])) continue
+      if (!looksLikeTechToken(token)) continue
       found.push(token)
     }
   }
@@ -157,7 +189,7 @@ function BulletList({ items }: { items: string[] }) {
   )
 }
 
-const div = "border-t border-slate-100"
+const div = "border-t border-slate-100 first:border-t-0"
 
 // ─── Page ───────────────────────────────────────────────────────────────────
 
@@ -195,24 +227,15 @@ export default async function DashboardJobDetailPage({ params }: Props) {
     (seniorityLabel ? EXPERIENCE_BY_SENIORITY[(job.seniority_level ?? "") as string] : null) ??
     "Not specified"
 
-  const aboutRole =
-    page.sections.about_role.items.length > 0
-      ? page.sections.about_role.items
-      : ["We are still extracting this role summary from the source posting."]
+  const aboutRole = deriveAboutRoleParagraphs(
+    page.sections.about_role.items,
+    page.clean_description
+  )
 
-  const responsibilities = page.sections.responsibilities.items.length > 0
-    ? page.sections.responsibilities.items
-    : []
-
-  const requiredItems = dedupe([
-    ...page.sections.requirements.items,
-    ...page.sections.qualifications.items,
-  ])
-  const preferredItems = dedupe(page.sections.preferred_qualifications.items)
   // Display-level guards — correct for already-stored jobs where the normalizer
   // may have mis-routed or fragmented content before these fixes were deployed.
   const DISPLAY_NOISE_RE =
-    /\b(travel\s+\d|requires?\s+travel|\d+%\s+of\s+the\s+time|performed\s+in\s+an\s+office|office\s+setting|sit\s+and\s+stand|standard\s+office\s+equipment|incumbent|mental\/physical|physical\s+requirements?|lift(?:ing)?\s+\d|sedentary|varies?\s+(?:upon|depending\s+on)\s+the\s+needs\s+of\s+the\s+department|may\s+vary\s+depending\s+on\s+job[- ]related\s+factors|work\s+hours?)\b/i
+    /\b(travel\s+\d|requires?\s+travel|\d+%\s+of\s+the\s+time|performed\s+in\s+an\s+office|office\s+setting|sit\s+and\s+stand|standard\s+office\s+equipment|incumbent|mental\/physical|physical\s+requirements?|lift(?:ing)?\s+\d|sedentary|varies?\s+(?:upon|depending\s+on)\s+the\s+needs\s+of\s+the\s+department|may\s+vary\s+depending\s+on\s+job[- ]related\s+factors|work\s+hours?|the\s+employee\s+is\s+required|while\s+performing\s+the\s+duties|essential\s+functions\s+of\s+this\s+job|reasonable\s+accommodations\s+may\s+be\s+made)\b/i
 
   const DISPLAY_EEO_RE =
     /\b(equal\s+opportunity|eeo\s+employer|without\s+regard\s+to\s+race|protected\s+veteran|affirmative\s+action|criminal\s+histor|eeoc\s+guidelines)\b/i
@@ -227,6 +250,8 @@ export default async function DashboardJobDetailPage({ params }: Props) {
       if (t.length < 15) return false
       // Drop sentence fragments (start mid-sentence)
       if (/^[a-z]/.test(t)) return false
+      // Drop sentences that are pure heading lead-ins (end with colon, no payload)
+      if (/^[^.!?]{0,140}:\s*$/.test(t)) return false
       // Drop noise
       if (DISPLAY_NOISE_RE.test(t)) return false
       // Drop EEO boilerplate in wrong sections
@@ -241,6 +266,11 @@ export default async function DashboardJobDetailPage({ params }: Props) {
     })
   }
 
+  // The same display guards apply to every prose section — fragments and
+  // boilerplate are not specific to benefits/comp/visa.
+  const responsibilities = cleanItems(page.sections.responsibilities.items)
+  const requiredItems = cleanItems(dedupe(page.sections.requirements.items))
+  const preferredItems = cleanItems(dedupe(page.sections.preferred_qualifications.items))
   const benefitItems = cleanItems(page.sections.benefits.items)
   const compensationItems = cleanItems(page.sections.compensation.items)
   const explicitSkillSignals = normalizeSkillList(
@@ -252,7 +282,6 @@ export default async function DashboardJobDetailPage({ params }: Props) {
     job.title,
     ...page.sections.skills.items,
     ...page.sections.requirements.items,
-    ...page.sections.qualifications.items,
     ...page.sections.preferred_qualifications.items,
     ...page.sections.responsibilities.items
   )
@@ -337,7 +366,6 @@ export default async function DashboardJobDetailPage({ params }: Props) {
   // copy ("Progress starts with you.") appearing as skills.
   const fallbackTokens = normalizeSkillList(
     extractTechTokensFromText([
-      ...page.sections.qualifications.items,
       ...page.sections.requirements.items,
       ...page.sections.preferred_qualifications.items,
       ...page.sections.skills.items,
@@ -512,17 +540,19 @@ export default async function DashboardJobDetailPage({ params }: Props) {
 
           {/* ──────────── Main column ──────────── */}
           <div className="min-w-0">
-            <div className="overflow-hidden rounded-2xl bg-white shadow-[0_1px_4px_rgba(15,23,42,0.06)] ring-1 ring-slate-200/60">
+            <div id="job-details" className="overflow-hidden rounded-2xl bg-white shadow-[0_1px_4px_rgba(15,23,42,0.06)] ring-1 ring-slate-200/60 scroll-mt-4">
 
               {/* About the role */}
-              <section id="job-details" className="px-6 py-7">
-                <SectionHead>About the role</SectionHead>
-                <div className="mt-3 space-y-3 text-[14px] leading-[1.7] text-slate-600">
-                  {aboutRole.map((p) => (
-                    <p key={p}>{p}</p>
-                  ))}
-                </div>
-              </section>
+              {aboutRole.length > 0 && (
+                <section className="px-6 py-7">
+                  <SectionHead>About the role</SectionHead>
+                  <div className="mt-3 space-y-3 text-[14px] leading-[1.7] text-slate-600">
+                    {aboutRole.map((p) => (
+                      <p key={p}>{p}</p>
+                    ))}
+                  </div>
+                </section>
+              )}
 
               {/* What you'll do */}
               {responsibilities.length > 0 && (
@@ -532,10 +562,10 @@ export default async function DashboardJobDetailPage({ params }: Props) {
                 </section>
               )}
 
-              {/* Required qualifications */}
+              {/* Requirements */}
               {(requiredItems.length > 0 || requirementSkillPills.length > 0) && (
                 <section className={cn("px-6 py-7", div)}>
-                  <SectionHead>Required qualifications</SectionHead>
+                  <SectionHead>Requirements</SectionHead>
 
                   {requirementSkillPills.length > 0 && (
                     <div className="mt-5 rounded-xl bg-slate-50 p-4 ring-1 ring-slate-200/60">
@@ -570,19 +600,27 @@ export default async function DashboardJobDetailPage({ params }: Props) {
                 </section>
               )}
 
-              {/* Preferred qualifications */}
+              {/* Nice to have */}
               {preferredItems.length > 0 && (
                 <section className={cn("px-6 py-7", div)}>
-                  <SectionHead>Preferred qualifications</SectionHead>
+                  <SectionHead>Nice to have</SectionHead>
                   <BulletList items={preferredItems} />
                 </section>
               )}
 
-              {/* Benefits & Compensation */}
-              {(benefitItems.length > 0 || compensationItems.length > 0) && (
+              {/* Compensation */}
+              {compensationItems.length > 0 && (
                 <section className={cn("px-6 py-7", div)}>
-                  <SectionHead>Benefits &amp; compensation</SectionHead>
-                  <BulletList items={[...compensationItems, ...benefitItems]} />
+                  <SectionHead>Compensation</SectionHead>
+                  <BulletList items={compensationItems} />
+                </section>
+              )}
+
+              {/* Benefits & perks */}
+              {benefitItems.length > 0 && (
+                <section className={cn("px-6 py-7", div)}>
+                  <SectionHead>Benefits &amp; perks</SectionHead>
+                  <BulletList items={benefitItems} />
                 </section>
               )}
 
@@ -613,18 +651,17 @@ export default async function DashboardJobDetailPage({ params }: Props) {
                     className="h-12 w-12 shrink-0 rounded-xl border-0 bg-transparent"
                   />
                   <div className="min-w-0 flex-1">
-                    {page.sections.company_info.items.length > 0 ? (
+                    {page.sections.company_info.items.length > 0 && (
                       <div className="space-y-3 text-[14px] leading-[1.7] text-slate-600">
                         {page.sections.company_info.items.map((p) => (
                           <p key={p}>{p}</p>
                         ))}
                       </div>
-                    ) : (
-                      <p className="text-[14px] leading-[1.7] text-slate-600">
-                        {company?.name ?? "This company"} is actively hiring and regularly updates openings.
-                      </p>
                     )}
-                    <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2">
+                    <div className={cn(
+                      "flex flex-wrap gap-x-4 gap-y-2",
+                      page.sections.company_info.items.length > 0 ? "mt-3" : ""
+                    )}>
                       {company?.careers_url && (
                         <a
                           href={company.careers_url}

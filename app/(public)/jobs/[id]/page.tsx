@@ -6,6 +6,7 @@ import { AutofillButton } from "@/components/autofill/AutofillButton"
 import CompanyLogo from "@/components/ui/CompanyLogo"
 import Navbar from "@/components/layout/Navbar"
 import {
+  deriveAboutRoleParagraphs,
   resolveJobNormalization,
   type PersistedJobForNormalization,
 } from "@/lib/jobs/normalization"
@@ -75,19 +76,33 @@ export default async function PublicJobPage({ params }: Props) {
   )
   const page = normalized.pageView
 
+  const aboutItems = deriveAboutRoleParagraphs(
+    page.sections.about_role.items,
+    page.clean_description
+  )
+
+  const aboutSection =
+    aboutItems.length > 0
+      ? { ...page.sections.about_role, items: aboutItems }
+      : null
+
+  // The view-model folds `qualifications` into `requirements`, so we don't
+  // render it separately. Compensation comes before benefits — salary is the
+  // highest-signal section after the role summary.
   const topSections = [
-    page.sections.about_role,
+    aboutSection,
     page.sections.responsibilities,
     page.sections.requirements,
-    page.sections.qualifications,
     page.sections.preferred_qualifications,
     page.sections.skills,
-    page.sections.benefits,
     page.sections.compensation,
+    page.sections.benefits,
     page.sections.company_info,
     page.sections.equal_opportunity,
     page.sections.visa,
-  ].filter((section) => section.items.length > 0)
+  ].filter((section): section is NonNullable<typeof section> =>
+    Boolean(section && section.items.length > 0)
+  )
 
   return (
     <div className="min-h-screen bg-background">

@@ -3,6 +3,7 @@ import { generateCoverLetter } from "@/lib/resume/cover-letter-generator"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { createClient } from "@/lib/supabase/server"
 import { requireFeature } from "@/lib/gates/server-gate"
+import { requireQuota } from "@/lib/usage/server-quota"
 import type { CoverLetter, CoverLetterOptions, Company, Job, Resume } from "@/types"
 
 export const runtime = "nodejs"
@@ -47,6 +48,9 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const gate = await requireFeature("cover_letter")
   if (gate instanceof NextResponse) return gate
+
+  const quota = await requireQuota(gate.userId, "cover_letter", gate.plan)
+  if (quota instanceof NextResponse) return quota
 
   const supabase = await createClient()
   const user = (await supabase.auth.getUser()).data.user!

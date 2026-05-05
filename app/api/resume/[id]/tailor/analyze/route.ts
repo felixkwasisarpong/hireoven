@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import Anthropic from "@anthropic-ai/sdk"
 import { getSessionUser } from "@/lib/auth/session-user"
 import { requireFeature } from "@/lib/gates/server-gate"
+import { requireQuota } from "@/lib/usage/server-quota"
 import { SONNET_MODEL } from "@/lib/ai/anthropic-models"
 import {
   buildLocalTailorAnalysis,
@@ -50,6 +51,9 @@ export async function POST(request: Request, { params }: { params: { id: string 
   const gate = await requireFeature("deep_analysis")
   if (gate instanceof NextResponse) return gate
   const { userId } = gate
+
+  const quota = await requireQuota(userId, "resume_tailor", gate.plan)
+  if (quota instanceof NextResponse) return quota
 
   const body = (await request.json().catch(() => ({}))) as Body
   const jobDescription = typeof body.jobDescription === "string" ? body.jobDescription.trim() : ""

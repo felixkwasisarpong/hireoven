@@ -37,4 +37,5 @@ export {
   formatSeniorityLabel,
   formatSalaryLabel,
   formatDetectedTime,
+  deriveAboutRoleParagraphs,
 } from "@/lib/jobs/normalization/view-model"

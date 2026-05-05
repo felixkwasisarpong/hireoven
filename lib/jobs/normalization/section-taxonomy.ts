@@ -25,7 +25,7 @@ export function sectionLabel(key: CanonicalSectionKey): string {
   if (key === "responsibilities") return "Responsibilities"
   if (key === "requirements") return "Requirements"
   if (key === "qualifications") return "Qualifications"
-  if (key === "preferred_qualifications") return "Preferred qualifications"
+  if (key === "preferred_qualifications") return "Nice to have"
   if (key === "skills") return "Skills"
   if (key === "benefits") return "Benefits"
   if (key === "company_info") return "Company info"
@@ -61,7 +61,9 @@ const HEADING_RULES: Rule[] = [
       /\b(preferred qualifications|nice to have|nice-to-have|bonus points|ideal candidate|good to have|would be a plus|additional qualifications|bonus qualifications|it(?:'|')s a plus|extra credit|great if you have|advantageous)\b/i,
   },
   {
-    key: "qualifications",
+    // "Qualifications" / "Candidate profile" / etc. are alternate spellings of
+    // "Requirements" — fold them so the page has one canonical bucket.
+    key: "requirements",
     pattern:
       /\b(qualifications|candidate profile|what you need|what makes you qualified|your qualifications|to be successful|to qualify)\b/i,
   },

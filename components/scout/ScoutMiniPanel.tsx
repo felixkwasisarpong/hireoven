@@ -2,16 +2,64 @@
 
 import { useMemo, useEffect, useRef, useState } from "react"
 import { usePathname, useSearchParams } from "next/navigation"
-import { Loader2, RefreshCw, Send, Sparkles, X } from "lucide-react"
+import { Loader2, RefreshCw, Send, Sparkles, X, Search, GitCompareArrows, Wand2, MessageSquare, Lock } from "lucide-react"
 import { ScoutMessageBubble } from "@/components/scout/ScoutMessageBubble"
 import { ScoutActivityTimeline } from "@/components/scout/ScoutActivityTimeline"
 import { ScoutContextChip } from "@/components/scout/ScoutContextChip"
 import { ScoutChatbotAnimation } from "@/components/scout/ScoutChatbotAnimation"
 import { useUpgradeModal } from "@/lib/context/UpgradeModalContext"
+import { useSubscription } from "@/lib/hooks/useSubscription"
 import { useResumeContext } from "@/components/resume/ResumeProvider"
+import { canAccess } from "@/lib/gates"
 import { normalizeScoutResponse } from "@/lib/scout/normalize"
 import { cn } from "@/lib/utils"
 import type { ScoutResponse } from "@/lib/scout/types"
+
+type Capability = {
+  group: string
+  icon: typeof Sparkles
+  isPro: boolean
+  examples: string[]
+}
+
+const SCOUT_CAPABILITIES: Capability[] = [
+  {
+    group: "Find",
+    icon: Search,
+    isPro: false,
+    examples: [
+      "Show jobs worth my time",
+      "Filter for sponsorship-friendly companies",
+    ],
+  },
+  {
+    group: "Compare",
+    icon: GitCompareArrows,
+    isPro: true,
+    examples: [
+      "Compare my saved jobs",
+      "Which job has the best fit?",
+    ],
+  },
+  {
+    group: "Improve",
+    icon: Wand2,
+    isPro: true,
+    examples: [
+      "Tailor my resume to this job",
+      "What's weak about my resume?",
+    ],
+  },
+  {
+    group: "Prepare",
+    icon: MessageSquare,
+    isPro: true,
+    examples: [
+      "Prep me for this interview",
+      "Likely interview questions for this role",
+    ],
+  },
+]
 
 type ChatMessage =
   | { id: string; role: "user"; text: string }
@@ -56,6 +104,8 @@ export function ScoutMiniPanel({
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const { showUpgrade } = useUpgradeModal()
+  const { plan } = useSubscription()
+  const isPro = canAccess(plan, "scout_actions")
   const { primaryResume } = useResumeContext()
 
   const [isOpen, setIsOpen] = useState(false)
@@ -116,12 +166,11 @@ export function ScoutMiniPanel({
     return () => window.removeEventListener("scout:open-with-job", onOpenWithJob as EventListener)
   }, [])
 
-  async function handleSubmit(event: React.FormEvent) {
-    event.preventDefault()
-    const message = query.trim()
-    if (!message || isLoading) return
+  async function sendMessage(message: string) {
+    const trimmed = message.trim()
+    if (!trimmed || isLoading) return
 
-    setMessages((prev) => [...prev, { id: `u-${Date.now()}`, role: "user", text: message }])
+    setMessages((prev) => [...prev, { id: `u-${Date.now()}`, role: "user", text: trimmed }])
     setQuery("")
     setIsLoading(true)
     setError(null)
@@ -131,7 +180,7 @@ export function ScoutMiniPanel({
         method: "POST",
         headers: { Accept: "application/json", "Content-Type": "application/json" },
         body: JSON.stringify({
-          message,
+          message: trimmed,
           pagePath: resolvedPagePath,
           focusMode: searchParams.get("focus") === "1",
           activeFilters: {
@@ -170,9 +219,15 @@ export function ScoutMiniPanel({
     }
   }
 
-  function fillChip(chip: string) {
-    setQuery(chip)
-    inputRef.current?.focus()
+  async function handleSubmit(event: React.FormEvent) {
+    event.preventDefault()
+    await sendMessage(query)
+  }
+
+  // Capability and suggestion chips fire the message immediately — users expect a
+  // tap to submit, not a two-step fill-then-press-Send.
+  function runChip(chip: string) {
+    void sendMessage(chip)
   }
 
   const hasConversation = messages.length > 0
@@ -247,9 +302,9 @@ export function ScoutMiniPanel({
                   </div>
                 </div>
 
-                <p className="text-base font-bold text-gray-900">What should I run?</p>
+                <p className="text-base font-bold text-gray-900">What can Scout do?</p>
                 <p className="mt-1 text-[11px] text-gray-400 leading-5">
-                  Ask Scout to search, compare, tailor, or prepare applications.
+                  Tap any prompt to start, or type your own.
                 </p>
 
                 {/* Context chip */}
@@ -257,22 +312,90 @@ export function ScoutMiniPanel({
                   <ScoutContextChip onReset={() => setMessages([])} />
                 </div>
 
-                {/* Suggestion cards */}
+                {/* Suggested for this page (existing per-page chips) */}
                 {suggestionChips.length > 0 && (
-                  <div className="mt-4 w-full space-y-2">
-                    {suggestionChips.map((chip) => (
-                      <button
-                        key={chip}
-                        type="button"
-                        onClick={() => fillChip(chip)}
-                        className="group flex w-full items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3 text-left text-sm font-medium text-gray-700 shadow-sm transition hover:border-[#FF5C18]/30 hover:bg-[#FFF8F5] hover:text-[#FF5C18]"
-                      >
-                        <span>{chip}</span>
-                        <span className="text-gray-300 transition group-hover:text-[#FF5C18]/60">→</span>
-                      </button>
-                    ))}
+                  <div className="mt-4 w-full">
+                    <p className="mb-2 text-left text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                      Suggested here
+                    </p>
+                    <div className="space-y-2">
+                      {suggestionChips.map((chip) => (
+                        <button
+                          key={chip}
+                          type="button"
+                          onClick={() => runChip(chip)}
+                          className="group flex w-full items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3 text-left text-sm font-medium text-gray-700 shadow-sm transition hover:border-[#FF5C18]/30 hover:bg-[#FFF8F5] hover:text-[#FF5C18]"
+                        >
+                          <span>{chip}</span>
+                          <span className="text-gray-300 transition group-hover:text-[#FF5C18]/60">→</span>
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 )}
+
+                {/* Categorized capability menu */}
+                <div className="mt-5 w-full">
+                  <p className="mb-2 text-left text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                    Things Scout can do
+                  </p>
+                  <div className="space-y-3">
+                    {SCOUT_CAPABILITIES.map((cap) => {
+                      const Icon = cap.icon
+                      const locked = cap.isPro && !isPro
+                      return (
+                        <div
+                          key={cap.group}
+                          className="rounded-xl border border-gray-200 bg-white p-3 text-left shadow-sm"
+                        >
+                          <div className="mb-2 flex items-center gap-2">
+                            <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-[#FF5C18]/10 text-[#FF5C18]">
+                              <Icon className="h-3.5 w-3.5" />
+                            </span>
+                            <p className="text-[12px] font-bold text-gray-900">{cap.group}</p>
+                            {cap.isPro && (
+                              <span
+                                className={cn(
+                                  "ml-auto inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wide",
+                                  locked
+                                    ? "bg-gradient-to-br from-[#FF5C18] to-[#FF9A3C] text-white"
+                                    : "bg-gray-100 text-gray-500"
+                                )}
+                              >
+                                {locked && <Lock className="h-2.5 w-2.5" />}
+                                Pro
+                              </span>
+                            )}
+                          </div>
+                          <div className="space-y-1.5">
+                            {cap.examples.map((example) => (
+                              <button
+                                key={example}
+                                type="button"
+                                onClick={() => {
+                                  if (locked) {
+                                    showUpgrade("scout_actions")
+                                  } else {
+                                    runChip(example)
+                                  }
+                                }}
+                                className={cn(
+                                  "group flex w-full items-center justify-between rounded-lg px-3 py-2 text-[12.5px] transition",
+                                  locked
+                                    ? "cursor-pointer text-gray-500 hover:bg-gray-50"
+                                    : "text-gray-700 hover:bg-[#FFF8F5] hover:text-[#FF5C18]"
+                                )}
+                              >
+                                <span className="text-left">{example}</span>
+                                <span className="text-gray-300 transition group-hover:text-[#FF5C18]/60">→</span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
               </div>
             )}
 
@@ -323,7 +446,7 @@ export function ScoutMiniPanel({
                   <button
                     key={chip}
                     type="button"
-                    onClick={() => fillChip(chip)}
+                    onClick={() => runChip(chip)}
                     className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-slate-500 transition hover:border-[#FF5C18]/30 hover:bg-[#FFF8F5] hover:text-[#FF5C18]"
                   >
                     {chip}

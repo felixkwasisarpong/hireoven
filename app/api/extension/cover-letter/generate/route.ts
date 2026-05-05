@@ -28,6 +28,7 @@ import {
   readExtensionJsonBody,
   requireExtensionAuth,
 } from "@/lib/extension/auth"
+import { requireQuota } from "@/lib/usage/server-quota"
 import { getUserPlan, gateResponse } from "@/lib/gates/server-gate"
 import { canAccess } from "@/lib/gates"
 import type { CoverLetter, Resume } from "@/types"
@@ -87,7 +88,10 @@ export async function POST(request: Request) {
   if (errResponse) return errResponse
 
   const { plan } = await getUserPlan()
-  if (!canAccess(plan, "cover_letter")) return gateResponse(403, "Cover letter generation requires Pro", "pro")
+  if (!canAccess(plan, "cover_letter")) return gateResponse(403, "Cover letter generation requires sign-in", "auth")
+
+  const quotaResult = await requireQuota(user.sub, "cover_letter", plan)
+  if (quotaResult instanceof NextResponse) return quotaResult
 
   const [body, bodyError] = await readExtensionJsonBody<{
     jobId?: string

@@ -19,6 +19,7 @@ import {
   shouldAttemptAiEnrichment,
 } from "@/lib/crawler/enrichment-mode"
 import { normalizeGreenhouseBoardUrl } from "@/lib/companies/greenhouse-url"
+import { isAllowedLocation } from "@/lib/jobs/location-filter"
 import type { EmploymentType, SeniorityLevel } from "@/types"
 
 const DESCRIPTION_FETCH_CONCURRENCY = Math.max(
@@ -199,6 +200,7 @@ function isBlockedApplyUrl(url: string) {
     return false
   }
 }
+
 
 function externalIdForJob(job: RawJob) {
   if (job.externalId?.trim()) return job.externalId.trim()
@@ -387,6 +389,7 @@ export async function persistCrawlJobs({
     }))
     .filter((job) => !isBlockedCrawlTitle(job.title))
     .filter((job) => !isBlockedApplyUrl(job.url))
+    .filter((job) => isAllowedLocation(job))
 
   const missingDescriptionCandidates = normalized
     .map((job, index) => ({ index, hasDescription: Boolean(job.description), url: job.url }))
