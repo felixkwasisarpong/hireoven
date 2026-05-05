@@ -8,6 +8,7 @@ import { buildResumeRawText } from "@/lib/resume/state"
 import { createClient } from "@/lib/supabase/server"
 import { normalizeSkillsBuckets } from "@/lib/skills/taxonomy"
 import { requireFeature } from "@/lib/gates/server-gate"
+import { requireQuota } from "@/lib/usage/server-quota"
 import type { Education, Profile, Project, Resume, Skills, WorkExperience } from "@/types"
 import type {
   ResumeExperienceLevel,
@@ -282,6 +283,9 @@ export async function POST(request: Request) {
   const gate = await requireFeature("deep_analysis", request as Parameters<typeof requireFeature>[1])
   if (gate instanceof NextResponse) return gate
   const { userId } = gate
+
+  const quota = await requireQuota(userId, "deep_analysis", gate.plan)
+  if (quota instanceof NextResponse) return quota
 
   const supabase = await createClient()
 

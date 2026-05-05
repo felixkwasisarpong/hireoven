@@ -6,6 +6,7 @@ import { getPostgresPool } from "@/lib/postgres/server"
 import { analyzeResumeForJob, getCachedAnalysis } from "@/lib/resume/analyzer"
 import { createClient } from "@/lib/supabase/server"
 import { requireFeature } from "@/lib/gates/server-gate"
+import { requireQuota } from "@/lib/usage/server-quota"
 import type { Company, Job, Profile, Resume } from "@/types"
 
 export const runtime = "nodejs"
@@ -32,6 +33,9 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const gate = await requireFeature("deep_analysis")
   if (gate instanceof NextResponse) return gate
+
+  const quota = await requireQuota(gate.userId, "deep_analysis", gate.plan)
+  if (quota instanceof NextResponse) return quota
 
   const supabase = await createClient()
   const user = (await supabase.auth.getUser()).data.user

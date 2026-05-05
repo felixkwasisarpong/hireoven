@@ -102,8 +102,8 @@ const INLINE_SECTION_ALIASES: InlineHeadingAlias[] = [
   { key: "requirements", alias: "Basic qualifications" },
   { key: "requirements", alias: "Required qualifications" },
   { key: "requirements", alias: "Who you are" },
-  { key: "qualifications", alias: "Qualifications" },
-  { key: "qualifications", alias: "What you bring" },
+  { key: "requirements", alias: "Qualifications" },
+  { key: "requirements", alias: "What you bring" },
   { key: "preferred_qualifications", alias: "Preferred qualifications" },
   { key: "preferred_qualifications", alias: "Additional qualifications" },
   { key: "preferred_qualifications", alias: "Nice to have" },
@@ -143,7 +143,7 @@ const INLINE_SECTION_ALIASES: InlineHeadingAlias[] = [
   { key: "requirements", alias: "Required skills" },
   { key: "requirements", alias: "Must have" },
   { key: "requirements", alias: "Must-have" },
-  { key: "qualifications", alias: "Your qualifications" },
+  { key: "requirements", alias: "Your qualifications" },
   { key: "preferred_qualifications", alias: "Nice-to-have" },
   { key: "preferred_qualifications", alias: "Bonus qualifications" },
   { key: "preferred_qualifications", alias: "Good to have" },
@@ -249,6 +249,21 @@ function createEmptyBuckets(): Record<CanonicalSectionKey, SectionBucket> {
   }
 }
 
+// Leading list-marker glyphs that often survive HTML→text extraction. Includes
+// U+2022 BULLET, U+25CF BLACK CIRCLE (most common), U+25E6, U+25AA, U+25AB,
+// U+2023, U+2043, U+2219, U+00B7 MIDDLE DOT, plus the ASCII -, *, NBSP.
+const LEADING_BULLET_RE =
+  /^(?:[•●◦▪▫‣⁃∙·⁌⁍‧․\-*]|\s| )+/
+
+const HEADING_MARKER_ITEM_RE =
+  /^[A-Z][A-Z\s,&/()'-]{2,}:?$/
+
+function stripBulletPrefix(value: string): string {
+  // Only strip leading run if it ends with whitespace-or-bullet — guards
+  // against accidentally eating a real "-3 years experience" lead-in.
+  return value.replace(LEADING_BULLET_RE, "").trim()
+}
+
 function addItems(
   bucket: SectionBucket,
   items: string[],
@@ -260,16 +275,20 @@ function addItems(
 
   const trimmed = items
     .map((item) =>
-      item
-        .replace(/[–—]/g, "-")
-        .replace(/\s+/g, " ")
-        .trim()
+      stripBulletPrefix(
+        item
+          .replace(/[–—]/g, "-")
+          .replace(/\s+/g, " ")
+          .trim()
+      )
     )
     .filter(
       (item) =>
         item.length >= 3 &&
         !UI_CHROME_RE.test(item) &&
-        !CHROME_SUBSTRING_RE.test(item)
+        !CHROME_SUBSTRING_RE.test(item) &&
+        // Drop residual heading markers like "PREFERRED KNOWLEDGE, SKILLS, AND ABILITIES:"
+        !HEADING_MARKER_ITEM_RE.test(item)
     )
 
   const unique = uniqCaseInsensitive([...bucket.items, ...trimmed], maxItems)
@@ -1313,6 +1332,11 @@ function refineAboutRole(
 ) {
   if (buckets.about_role.items.length === 0) return
 
+  // Filters keep the about_role section honest by stripping content that
+  // belongs in other sections (responsibilities, requirements, preferred) or
+  // is pure marketing fluff. We deliberately do NOT filter on COMPANY_LIKE_RE
+  // or COMPANY_POSITIONING_RE: real "About the role" copy almost always
+  // references the team, product, mission, or customer base.
   const candidates = buckets.about_role.items
     .flatMap((item) => splitIntoSentences(item))
     .map((item) => item.trim())
@@ -1321,8 +1345,6 @@ function refineAboutRole(
     .filter((item) => !RESPONSIBILITY_LIKE_RE.test(item))
     .filter((item) => !REQUIREMENT_LIKE_RE.test(item))
     .filter((item) => !PREFERRED_LIKE_RE.test(item))
-    .filter((item) => !COMPANY_LIKE_RE.test(item))
-    .filter((item) => !COMPANY_POSITIONING_RE.test(item))
     .filter((item) => !PROMOTIONAL_LIKE_RE.test(item))
 
   const refined = uniqCaseInsensitive(candidates, 3)
@@ -1338,8 +1360,6 @@ function refineAboutRole(
     .filter((item) => !RESPONSIBILITY_LIKE_RE.test(item))
     .filter((item) => !REQUIREMENT_LIKE_RE.test(item))
     .filter((item) => !PREFERRED_LIKE_RE.test(item))
-    .filter((item) => !COMPANY_LIKE_RE.test(item))
-    .filter((item) => !COMPANY_POSITIONING_RE.test(item))
     .filter((item) => !PROMOTIONAL_LIKE_RE.test(item))
     .slice(0, 2)
 

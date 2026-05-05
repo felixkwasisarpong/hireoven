@@ -4,6 +4,7 @@ import { ANTHROPIC_TIER_PRICING, SONNET_MODEL } from "@/lib/ai/anthropic-models"
 import { logApiUsage } from "@/lib/admin/usage"
 import { createClient } from "@/lib/supabase/server"
 import { requireFeature } from "@/lib/gates/server-gate"
+import { requireQuota } from "@/lib/usage/server-quota"
 
 export const runtime = "nodejs"
 
@@ -51,6 +52,9 @@ function fallbackText(sectionType: string, currentText: string, targetRole: stri
 export async function POST(request: Request) {
   const gate = await requireFeature("deep_analysis", request as Parameters<typeof requireFeature>[1])
   if (gate instanceof NextResponse) return gate
+
+  const quota = await requireQuota(gate.userId, "deep_analysis", gate.plan)
+  if (quota instanceof NextResponse) return quota
 
   const supabase = await createClient()
 

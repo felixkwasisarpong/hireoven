@@ -1,11 +1,17 @@
 import { NextResponse } from "next/server"
 import { regenerateParagraph } from "@/lib/resume/cover-letter-generator"
 import { createClient } from "@/lib/supabase/server"
+import { requireFeature } from "@/lib/gates/server-gate"
 
 export const runtime = "nodejs"
 export const maxDuration = 60
 
 export async function POST(request: Request) {
+  // Gate-only — refining a paragraph in an already-generated letter does not
+  // burn a fresh cover_letter credit. The credit was spent on generation.
+  const gate = await requireFeature("cover_letter")
+  if (gate instanceof NextResponse) return gate
+
   const supabase = await createClient()
   const {
     data: { user },

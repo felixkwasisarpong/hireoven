@@ -98,7 +98,11 @@ export default function DashboardSidebarNav({
         {locked ? (
           // Coloured "Pro" chip so it's unmistakably locked
           <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wide text-white"
-            style={{ background: "linear-gradient(135deg, #FF5C18, #FF9A3C)" }}>
+            style={{
+              background: "linear-gradient(135deg, #FFB020 0%, #FF7A1A 55%, #FF4D00 100%)",
+              boxShadow: "0 0 0 1px rgba(255,255,255,0.25) inset, 0 0 14px rgba(255,154,60,0.65), 0 1px 3px rgba(255,92,24,0.45)",
+              textShadow: "0 1px 1px rgba(120,40,0,0.35)",
+            }}>
             <Lock className="h-2.5 w-2.5" />
             Pro
           </span>

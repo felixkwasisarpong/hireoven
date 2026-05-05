@@ -169,6 +169,8 @@ export type JobPageViewModel = {
   salary_label: string | null
   sponsorship_label: string
   posted_at_label: string | null
+  /** Cleaned description text — page renderers use this to fall back when about_role is empty. */
+  clean_description: string | null
   sections: Record<CanonicalSectionKey, JobPageSectionView>
   ordered_sections: JobPageSectionView[]
   highlights: string[]

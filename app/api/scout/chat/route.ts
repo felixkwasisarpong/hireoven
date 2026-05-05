@@ -806,31 +806,33 @@ export async function POST(request: NextRequest) {
     return scoutError(401, "Unauthorized")
   }
 
-  // Free users get basic Scout chat (answer + recommendation + explanations) up to a
-  // daily quota. Pro users get unlimited messages plus actions, workflows, and
-  // deep analysis. The quota counter is bumped before we call Claude so retries
-  // can't bypass the cap.
+  // Every user — free and Pro — counts against a daily Scout message quota
+  // (free=5, Pro=100, see lib/usage/quotas.ts). Pro additionally unlocks
+  // actions, workflows, and deep analysis via separate gates below. The quota
+  // counter is bumped before we call Claude so retries can't bypass the cap.
   const { plan: userPlan } = await getUserPlan(request)
   const isPro = canAccess(userPlan, "scout_actions")
 
-  if (!isPro) {
-    const quota = await bumpScoutUsage(user.id)
-    if (quota.exceeded) {
-      return NextResponse.json(
-        {
-          answer: `You've used your ${quota.limit} free Scout messages today. Upgrade to Pro for unlimited Scout — plus actions, workflows, and deep analysis.`,
-          recommendation: "Wait",
-          actions: [],
-          explanations: [],
-          gated: {
-            feature: "scout_actions",
-            reason: `Free tier daily limit (${quota.limit} messages) reached.`,
-            upgradeMessage: "Upgrade to Pro for unlimited Scout messages.",
-          },
-        } satisfies ScoutResponse,
-        { status: 429 }
-      )
-    }
+  const quota = await bumpScoutUsage(user.id, userPlan)
+  if (quota.exceeded) {
+    return NextResponse.json(
+      {
+        answer: isPro
+          ? `You've used your ${quota.limit} Scout messages today. Your quota resets at midnight.`
+          : `You've used your ${quota.limit} free Scout messages today. Upgrade to Pro for ${userPlan === "pro" ? 100 : 100} messages a day — plus actions, workflows, and deep analysis.`,
+        recommendation: "Wait",
+        actions: [],
+        explanations: [],
+        gated: {
+          feature: "scout_actions",
+          reason: `Daily Scout message limit (${quota.limit}) reached.`,
+          upgradeMessage: isPro
+            ? "Quota resets at midnight."
+            : "Upgrade to Pro for 100 Scout messages a day.",
+        },
+      } satisfies ScoutResponse,
+      { status: 429 }
+    )
   }
 
   if (!anthropic) {

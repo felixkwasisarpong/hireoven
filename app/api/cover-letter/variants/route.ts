@@ -2,12 +2,22 @@ import { NextResponse } from "next/server"
 import { generateVariants } from "@/lib/resume/cover-letter-generator"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { createClient } from "@/lib/supabase/server"
+import { requireFeature } from "@/lib/gates/server-gate"
+import { requireQuota } from "@/lib/usage/server-quota"
 import type { CoverLetterOptions, Company, Job, Resume } from "@/types"
 
 export const runtime = "nodejs"
 export const maxDuration = 120
 
 export async function POST(request: Request) {
+  const gate = await requireFeature("cover_letter")
+  if (gate instanceof NextResponse) return gate
+
+  // Variants is one user action that produces N letters — count as one cover
+  // letter credit, not N. Cheaper to forgive than to nickel-and-dime.
+  const quota = await requireQuota(gate.userId, "cover_letter", gate.plan)
+  if (quota instanceof NextResponse) return quota
+
   const supabase = await createClient()
   const {
     data: { user },
