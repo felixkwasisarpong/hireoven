@@ -753,7 +753,7 @@ function CleanOverviewPanel({ onTabChange }: { onTabChange: (tab: TabId) => void
 
         <section className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm">
           <SectionHeading>Resume at a Glance</SectionHeading>
-          <div className="mt-3 grid grid-cols-4 divide-x divide-slate-100 rounded-xl border border-slate-100 px-2 py-3">
+          <div className="mt-3 grid grid-cols-2 divide-x divide-y divide-slate-100 rounded-xl border border-slate-100 px-2 py-3 sm:grid-cols-4 sm:divide-y-0">
             {[
               { icon: CheckCircle2, bg: "bg-emerald-50", ic: "text-emerald-600", value: completion != null ? `${completion}%` : "–", label: "Completion", sub: completion != null ? "Based on parsed resume data." : "Waiting for parsed resume data." },
               { icon: FileText, bg: "bg-blue-50", ic: "text-blue-600", value: atsScore != null ? `${atsScore}` : "–", suffix: atsScore != null ? "/100" : "", label: "ATS Readiness", sub: atsScore != null ? "Loaded from resume scoring." : "Run scoring to load this." },
@@ -820,7 +820,7 @@ function CleanOverviewPanel({ onTabChange }: { onTabChange: (tab: TabId) => void
       <aside className="space-y-3">
         <section className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm">
           <SectionHeading>Quick Actions</SectionHeading>
-          <div className="mt-4 grid grid-cols-3 gap-3">
+          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
             {[
               { id: "qa-preview", tab: "generate" as TabId, icon: Sparkles, bg: "bg-cyan-50", ic: "text-cyan-600", label: "Preview" },
               { id: "qa-tailor", tab: "tailor" as TabId, icon: Target, bg: "bg-red-50", ic: "text-red-500", label: "Tailor resume" },
@@ -1230,7 +1230,7 @@ function OverviewPanel({ onTabChange }: { onTabChange: (tab: TabId) => void }) {
           <div className="border-b border-slate-100 px-5 py-4">
             <SectionHeading>Quick Actions</SectionHeading>
           </div>
-          <div className="grid grid-cols-3 divide-x divide-y divide-slate-100">
+          <div className="grid grid-cols-2 divide-x divide-y divide-slate-100 sm:grid-cols-3">
             {[
               { id: "ov-qa-preview", tab: "generate" as TabId, icon: Sparkles,  bg: "bg-orange-50", ic: "text-orange-600", label: "Preview" },
               { id: "ov-qa-tailor", tab: "tailor"   as TabId, icon: Target,    bg: "bg-emerald-50",ic: "text-emerald-600",label: "Tailor resume"   },

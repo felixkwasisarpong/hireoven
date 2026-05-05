@@ -52,8 +52,12 @@ export async function POST(request: Request) {
   )
 
   // Send invite email
-  if (resend) {
-    await resend.emails.send({
+  let emailWarning: string | null = null
+  if (!resend) {
+    emailWarning = "RESEND_API_KEY is not configured — invite email was not sent."
+    console.error("[waitlist/approve]", emailWarning)
+  } else {
+    const result = await resend.emails.send({
       from,
       to: row.email,
       subject: "You're in — create your Hireoven account",
@@ -86,8 +90,16 @@ export async function POST(request: Request) {
 </td></tr>
 </table>
 </body></html>`,
-    }).catch((e) => console.error("[waitlist/approve] email send failed", e))
+    }).catch((e: unknown) => {
+      const message = e instanceof Error ? e.message : String(e)
+      console.error("[waitlist/approve] email send threw", e)
+      return { error: { message } } as { error: { message: string } }
+    })
+    if (result && "error" in result && result.error) {
+      emailWarning = `Resend error: ${result.error.message ?? "unknown"}`
+      console.error("[waitlist/approve] resend rejected", result.error)
+    }
   }
 
-  return NextResponse.json({ ok: true, email: row.email, inviteUrl })
+  return NextResponse.json({ ok: true, email: row.email, inviteUrl, emailWarning })
 }

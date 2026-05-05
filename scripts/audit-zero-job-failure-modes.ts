@@ -14,6 +14,17 @@ import { crawlCareersPage } from "@/lib/crawler"
 
 loadEnvConfig(process.cwd())
 
+// Node 20.11 undici has a bug where the abort controller fires after a fetch's response
+// stream has already been consumed, throwing "Controller is already closed" as an
+// unhandled rejection. The error is internal to undici and unreachable from user code,
+// but it crashes the process. Suppress only that specific rejection.
+process.on("unhandledRejection", (reason) => {
+  const msg = reason instanceof Error ? reason.message : String(reason)
+  if (msg.includes("Controller is already closed")) return
+  console.error("unhandledRejection:", reason)
+  process.exit(1)
+})
+
 const csvOnly = process.argv.includes("--csv")
 const onlyFetch = process.argv.includes("--only-fetch")
 const limitArg = process.argv.find((arg) => arg.startsWith("--limit="))

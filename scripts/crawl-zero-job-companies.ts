@@ -19,6 +19,16 @@ import { persistCrawlJobs } from "@/lib/crawler/persist"
 
 loadEnvConfig(process.cwd())
 
+// Node 20.11 undici occasionally throws "Controller is already closed" as an unhandled
+// rejection from inside its own internals after a fetch completes. The error is unreachable
+// from user code; suppress only that specific case so a long crawl run isn't aborted.
+process.on("unhandledRejection", (reason) => {
+  const msg = reason instanceof Error ? reason.message : String(reason)
+  if (msg.includes("Controller is already closed")) return
+  console.error("unhandledRejection:", reason)
+  process.exit(1)
+})
+
 const execute = process.argv.includes("--execute")
 const limitArg = process.argv.find((a) => a.startsWith("--limit="))
 const limit = limitArg ? Number(limitArg.split("=")[1]) : 30

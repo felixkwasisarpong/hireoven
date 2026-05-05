@@ -197,7 +197,7 @@ export function ScoutMiniPanel({
 
                 <div>
                   <div className="flex items-center gap-2">
-                    <p className="text-sm font-bold text-white">Scout Agent</p>
+                    <p className="text-sm font-bold text-white">Scout</p>
                     {hasConversation && (
                       <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-[#FF5C18] text-[9px] font-bold text-white">
                         {userTurns}
@@ -379,7 +379,7 @@ export function ScoutMiniPanel({
         >
           <ScoutChatbotAnimation className={cn(isOpen ? "animate-none" : "animate-extension-breathe")} />
         </span>
-        <span>{isOpen ? "Close" : "Scout Agent"}</span>
+        <span>{isOpen ? "Close" : "Scout"}</span>
 
         {/* Unread badge */}
         {hasConversation && !isOpen && (

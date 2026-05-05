@@ -84,10 +84,9 @@ export default function InternationalPage() {
 
   return (
     <main className="app-page pb-[max(6rem,calc(env(safe-area-inset-bottom)+5.5rem))]">
-      <div className="app-shell max-w-[88rem] space-y-5 pb-[max(2rem,calc(env(safe-area-inset-bottom)+1rem))]">
 
-        {/* ── Hero header ───────────────────────────────────── */}
-        <div className="relative overflow-hidden rounded-2xl bg-slate-950 px-6 py-7 sm:px-8 sm:py-8">
+      {/* ── Hero header (full-bleed, edge-to-edge of dashboard column) ── */}
+      <div className="relative overflow-hidden bg-slate-950 px-6 py-7 sm:px-8 sm:py-8">
           {/* Subtle glow blobs */}
           <div className="pointer-events-none absolute right-[-60px] top-[-60px] h-72 w-72 rounded-full bg-indigo-600/20 blur-3xl" />
           <div className="pointer-events-none absolute bottom-[-80px] left-[30%] h-56 w-56 rounded-full bg-orange-500/15 blur-3xl" />
@@ -180,6 +179,8 @@ export default function InternationalPage() {
             </div>
           </div>
         </div>
+
+      <div className="app-shell max-w-[88rem] space-y-5 pb-[max(2rem,calc(env(safe-area-inset-bottom)+1rem))] mt-5">
 
         {/* ── H-1B Sponsor Leaderboard ───────────────────────── */}
         <div className="surface-card overflow-hidden">

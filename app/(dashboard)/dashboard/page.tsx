@@ -1,4 +1,5 @@
 import { Suspense } from "react"
+import { redirect } from "next/navigation"
 import { getSessionUser } from "@/lib/auth/session-user"
 import { getPostgresPool } from "@/lib/postgres/server"
 import type { WatchlistWithCompany } from "@/types"
@@ -107,7 +108,32 @@ async function getDashboardInitialData(): Promise<DashboardInitialData> {
   }
 }
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}) {
+  const params = await searchParams
+  const hasParams = Object.keys(params).length > 0
+
+  if (!hasParams) {
+    const session = await getSessionUser()
+    let saved: string | null = null
+    if (session?.sub) {
+      try {
+        const pool = getPostgresPool()
+        const result = await pool.query<{ default_feed_filters: string | null }>(
+          `SELECT default_feed_filters FROM profiles WHERE id = $1 LIMIT 1`,
+          [session.sub]
+        )
+        saved = result.rows[0]?.default_feed_filters?.trim() || null
+      } catch {
+        saved = null
+      }
+    }
+    if (saved) redirect(`/dashboard?${saved}`)
+  }
+
   const {
     initialPrimaryResumeReady,
     initialWatchlist,

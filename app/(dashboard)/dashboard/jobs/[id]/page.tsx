@@ -481,7 +481,7 @@ export default async function DashboardJobDetailPage({ params }: Props) {
 
           {/* Tab strip */}
           <nav className="border-t border-white/8">
-            <div className="flex gap-0.5">
+            <div className="flex gap-0.5 overflow-x-auto">
               {TABS.map((tab, index) => {
                 const Icon = tab.icon
                 return (

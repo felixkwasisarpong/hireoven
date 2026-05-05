@@ -258,6 +258,7 @@ function WaitlistRow({ row: r }: { row: Row }) {
   const [busy, setBusy] = useState(false)
   const [state, setState] = useState<"idle" | "sent" | "error">("idle")
   const [errMsg, setErrMsg] = useState("")
+  const [warnMsg, setWarnMsg] = useState("")
 
   const alreadyUsed = Boolean(r.invite_used_at)
   const alreadyInvited = Boolean(r.invited_at) && !alreadyUsed
@@ -265,18 +266,20 @@ function WaitlistRow({ row: r }: { row: Row }) {
   async function handleApprove() {
     setBusy(true)
     setState("idle")
+    setWarnMsg("")
     try {
       const res = await fetch("/api/admin/waitlist/approve", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: r.id }),
       })
-      const data = await res.json().catch(() => ({})) as { error?: string }
+      const data = await res.json().catch(() => ({})) as { error?: string; emailWarning?: string | null }
       if (!res.ok) {
         setErrMsg(data.error ?? "Failed")
         setState("error")
       } else {
         setState("sent")
+        if (data.emailWarning) setWarnMsg(data.emailWarning)
       }
     } catch {
       setErrMsg("Network error")
@@ -333,6 +336,9 @@ function WaitlistRow({ row: r }: { row: Row }) {
         )}
         {state === "error" && (
           <p className="mt-1 text-[10px] text-red-600">{errMsg}</p>
+        )}
+        {state === "sent" && warnMsg && (
+          <p className="mt-1 text-[10px] text-amber-600">{warnMsg}</p>
         )}
       </td>
     </tr>

@@ -104,7 +104,7 @@ export function SponsorshipTruthScore({ companyId, companyName }: Props) {
         </div>
         <div className="h-px bg-slate-100" />
         <div className="h-4 w-72 rounded bg-slate-100" />
-        <div className="grid grid-cols-4 gap-6">
+        <div className="grid grid-cols-2 gap-6 sm:grid-cols-4">
           {[1, 2, 3, 4].map((i) => (
             <div key={i} className="space-y-1">
               <div className="h-7 w-12 rounded bg-slate-100" />

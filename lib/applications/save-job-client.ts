@@ -15,13 +15,17 @@ export type SaveJobToPipelineInput = {
 }
 
 export async function fetchJobSavedState(jobId: string): Promise<boolean> {
-  const res = await fetch(`/api/applications?jobId=${encodeURIComponent(jobId)}`, {
-    cache: "no-store",
-    credentials: "same-origin",
-  })
-  if (!res.ok) return false
-  const data = (await res.json()) as { hasApplied?: boolean; application?: { id: string } | null }
-  return Boolean(data?.hasApplied && data?.application)
+  try {
+    const res = await fetch(`/api/applications?jobId=${encodeURIComponent(jobId)}`, {
+      cache: "no-store",
+      credentials: "same-origin",
+    })
+    if (!res.ok) return false
+    const data = (await res.json()) as { hasApplied?: boolean; application?: { id: string } | null }
+    return Boolean(data?.hasApplied && data?.application)
+  } catch {
+    return false
+  }
 }
 
 export type SaveJobResult =

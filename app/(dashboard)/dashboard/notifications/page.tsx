@@ -81,8 +81,8 @@ export default function NotificationsPage() {
 
   return (
     <main className="app-page">
-      <div className="app-shell max-w-6xl space-y-6 px-4 pb-10 pt-1 sm:px-6 lg:px-8">
-        <section className="surface-hero rounded-xl p-5 sm:p-6 md:p-8">
+      <div className="app-shell w-full max-w-none space-y-6 px-4 pb-10 pt-1 sm:px-6 lg:px-8">
+        <section className="pt-2">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
             <div className="min-w-0">
               <p className="section-kicker">Notifications</p>
@@ -113,7 +113,7 @@ export default function NotificationsPage() {
           </div>
         </section>
 
-        <section className="surface-card rounded-xl p-5 sm:p-6 md:p-8">
+        <section className="surface-card p-5 sm:p-6 md:p-8">
           <div className="flex flex-wrap items-center gap-2">
             {FILTERS.map((item) => (
               <button

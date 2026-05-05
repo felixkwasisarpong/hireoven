@@ -161,7 +161,7 @@ export function TimingPanel({ data, queue, queueLoading, onApplyNow, onSchedule 
       </div>
 
       {/* ── STATS ROW ──────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-4 divide-x divide-slate-100 border-b border-slate-100">
+      <div className="grid grid-cols-2 divide-x divide-y divide-slate-100 border-b border-slate-100 sm:grid-cols-4 sm:divide-y-0">
         {[
           { label: "Post age",        value: formatHoursPosted(data.hoursSincePosted) },
           { label: "Screen rate boost", value: `${data.screenRateMultiplier}×` },
@@ -184,7 +184,8 @@ export function TimingPanel({ data, queue, queueLoading, onApplyNow, onSchedule 
         </p>
 
         {/* Column headers */}
-        <div className="grid gap-1" style={{ gridTemplateColumns: `80px repeat(${dayLabels.length}, 1fr)` }}>
+        <div className="-mx-2 overflow-x-auto px-2">
+        <div className="grid gap-1 min-w-[420px]" style={{ gridTemplateColumns: `80px repeat(${dayLabels.length}, 1fr)` }}>
           <div />
           {dayLabels.map((d) => (
             <div key={d} className="text-center text-[10px] font-semibold text-slate-500 pb-1">
@@ -222,6 +223,7 @@ export function TimingPanel({ data, queue, queueLoading, onApplyNow, onSchedule 
               })}
             </>
           ))}
+        </div>
         </div>
 
         {/* Legend */}
