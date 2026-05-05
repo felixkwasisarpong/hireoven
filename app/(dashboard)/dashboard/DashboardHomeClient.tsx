@@ -150,7 +150,7 @@ export default function DashboardHomeClient({
         </div>
       )}
 
-      <aside className="flex w-full flex-col gap-4 border-b border-slate-200 bg-white p-4 xl:sticky xl:top-0 xl:h-[100dvh] xl:w-[260px] xl:flex-shrink-0 xl:border-b-0 xl:border-r xl:p-5">
+      <aside className="hidden w-full flex-col gap-4 border-b border-slate-200 bg-white p-4 xl:sticky xl:top-0 xl:flex xl:h-[100dvh] xl:w-[260px] xl:flex-shrink-0 xl:border-b-0 xl:border-r xl:p-5">
         <div className="pl-0.5">
           <Link
             href="/dashboard"

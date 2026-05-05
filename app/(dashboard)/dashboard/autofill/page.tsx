@@ -540,7 +540,7 @@ export default function AutofillPage() {
 
             {/* 01 — Personal information */}
             <Section id="personal" icon={<User className="h-4 w-4" />} title="Personal information" index={1}>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <Field label="First name">
                   <Input value={str(form.first_name)} onChange={(v) => set("first_name", v || null)} placeholder="Jane" />
                 </Field>
@@ -548,7 +548,7 @@ export default function AutofillPage() {
                   <Input value={str(form.last_name)} onChange={(v) => set("last_name", v || null)} placeholder="Smith" />
                 </Field>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <Field label="Email">
                   <Input type="email" value={str(form.email)} onChange={(v) => set("email", v || null)} placeholder="jane@example.com" />
                 </Field>
@@ -573,7 +573,7 @@ export default function AutofillPage() {
                   <Field label="Address line 2">
                     <Input value={str(form.address_line2)} onChange={(v) => set("address_line2", v || null)} placeholder="Apt 4B" />
                   </Field>
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                     <Field label="City">
                       <Input value={str(form.city)} onChange={(v) => set("city", v || null)} placeholder="San Francisco" />
                     </Field>
@@ -693,7 +693,7 @@ export default function AutofillPage() {
               title="Experience & preferences"
               index={4}
             >
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <Field label="Years of experience">
                   <Input
                     type="number"
@@ -750,7 +750,7 @@ export default function AutofillPage() {
 
             {/* 05 — Education */}
             <Section id="education" icon={<BookOpen className="h-4 w-4" />} title="Education" index={5}>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <Field label="Highest degree">
                   <select
                     value={str(form.highest_degree)}
@@ -765,7 +765,7 @@ export default function AutofillPage() {
                   <Input value={str(form.field_of_study)} onChange={(v) => set("field_of_study", v || null)} placeholder="Computer Science" />
                 </Field>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <Field label="University / College">
                   <Input value={str(form.university)} onChange={(v) => set("university", v || null)} placeholder="MIT" />
                 </Field>

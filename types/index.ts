@@ -990,6 +990,8 @@ export type Profile = {
   email_alerts: boolean;
   push_alerts: boolean;
   is_admin: boolean;
+  /** URL search-param string applied when /dashboard is opened with no query params. */
+  default_feed_filters?: string | null;
   /** When set, account is suspended (Postgres-backed; enforced in middleware). */
   suspended_at?: string | null;
   created_at: string;

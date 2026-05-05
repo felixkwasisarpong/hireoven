@@ -3,6 +3,8 @@
 import type { Dispatch, RefObject, SetStateAction } from "react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import {
+  Bookmark,
+  BookmarkCheck,
   Briefcase,
   Building2,
   ChevronDown,
@@ -18,6 +20,7 @@ import {
   Tag,
   X,
 } from "lucide-react"
+import { useToast } from "@/components/ui/ToastProvider"
 import {
   EMPLOYMENT_OPTIONS,
   SENIORITY_OPTIONS,
@@ -94,7 +97,63 @@ export default function DashboardFeedToolbar({
   const pathname = usePathname()
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { pushToast } = useToast()
   const pills = useMemo(() => buildFilterPills(filters), [filters])
+
+  const [savedDefault, setSavedDefault] = useState<string | null>(null)
+  const [savingDefault, setSavingDefault] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    fetch("/api/me/feed-filters", { cache: "no-store" })
+      .then(async (r) => (r.ok ? ((await r.json()) as { default: string | null }).default : null))
+      .then((value) => { if (!cancelled) setSavedDefault(value) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [])
+
+  const currentFilterParams = useMemo(() => {
+    const next = filtersToSearchParams(new URLSearchParams(), filters)
+    return searchQueryToParams(next, searchQuery).toString()
+  }, [filters, searchQuery])
+
+  const hasActiveFilters = currentFilterParams.length > 0
+  const matchesSavedDefault = savedDefault != null && savedDefault === currentFilterParams
+
+  async function saveAsDefault() {
+    if (savingDefault || !hasActiveFilters) return
+    setSavingDefault(true)
+    try {
+      const res = await fetch("/api/me/feed-filters", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ params: currentFilterParams }),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data = (await res.json()) as { default: string }
+      setSavedDefault(data.default)
+      pushToast({ tone: "success", title: "Saved as default", description: "Your feed will open with these filters." })
+    } catch {
+      pushToast({ tone: "error", title: "Save failed", description: "Try again." })
+    } finally {
+      setSavingDefault(false)
+    }
+  }
+
+  async function clearDefault() {
+    if (savingDefault) return
+    setSavingDefault(true)
+    try {
+      const res = await fetch("/api/me/feed-filters", { method: "DELETE" })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      setSavedDefault(null)
+      pushToast({ tone: "info", title: "Default cleared", description: "Your feed will open unfiltered." })
+    } catch {
+      pushToast({ tone: "error", title: "Couldn't clear", description: "Try again." })
+    } finally {
+      setSavingDefault(false)
+    }
+  }
 
   const [locationDraft, setLocationDraft] = useState(filters.locationQuery ?? "")
   const [skillsDraft, setSkillsDraft] = useState(filters.skills?.join(", ") ?? "")
@@ -156,7 +215,11 @@ export default function DashboardFeedToolbar({
   const clearAll = () => {
     const nextFilters = { ...clearedJobFilters(), sort: filters.sort }
     const next = searchQueryToParams(filtersToSearchParams(searchParams, nextFilters), "")
-    const value = next.toString()
+    let value = next.toString()
+    // If a default is saved, append a sentinel so the server doesn't redirect us back into it.
+    if (savedDefault && !value.includes("nodefault=1")) {
+      value = value ? `${value}&nodefault=1` : "nodefault=1"
+    }
     router.replace(value ? `${pathname}?${value}` : pathname, { scroll: false })
   }
 
@@ -793,6 +856,38 @@ export default function DashboardFeedToolbar({
           >
             <RotateCcw className="h-3 w-3" />
             Clear all
+          </button>
+        )}
+
+        {hasActiveFilters && !matchesSavedDefault && (
+          <button
+            type="button"
+            onClick={saveAsDefault}
+            disabled={savingDefault}
+            className="inline-flex items-center gap-1 rounded-full border border-orange-200 bg-orange-50 px-2.5 py-1 text-[12px] font-medium text-orange-700 transition hover:bg-orange-100 disabled:opacity-60"
+            title={savedDefault ? "Update your saved default" : "Apply these filters whenever you open the feed"}
+          >
+            <Bookmark className="h-3 w-3" />
+            {savedDefault ? "Update default" : "Save as default"}
+          </button>
+        )}
+
+        {matchesSavedDefault && (
+          <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[12px] font-medium text-emerald-700">
+            <BookmarkCheck className="h-3 w-3" />
+            Saved as default
+          </span>
+        )}
+
+        {savedDefault && (
+          <button
+            type="button"
+            onClick={clearDefault}
+            disabled={savingDefault}
+            className="inline-flex items-center gap-1 text-[12px] font-medium text-slate-400 transition hover:text-slate-700 disabled:opacity-60"
+          >
+            <X className="h-3 w-3" />
+            Clear default
           </button>
         )}
       </div>

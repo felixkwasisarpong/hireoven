@@ -623,7 +623,7 @@ function LogStep({
         <p className="text-xs text-gray-500">{companyName}</p>
       </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="space-y-1.5">
           <label className="text-sm text-gray-700">Fields filled</label>
           <input

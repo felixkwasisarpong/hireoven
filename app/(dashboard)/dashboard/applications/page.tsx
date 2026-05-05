@@ -64,11 +64,10 @@ function KanbanColumn({ col, apps, onOpen, isOver }: {
     <div
       ref={setNodeRef}
       className={cn(
-        "flex flex-col overflow-hidden rounded-2xl border border-t-[3px] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-colors",
+        "flex flex-col overflow-hidden rounded-2xl border border-t-[3px] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-colors xl:min-h-[460px] xl:min-w-[188px]",
         col.accent,
         isOver ? "border-slate-300 bg-orange-50/30" : "border-slate-200"
       )}
-      style={{ minWidth: 188, minHeight: 460 }}
     >
       {/* Column header */}
       <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/60 px-3.5 py-3">
@@ -313,11 +312,8 @@ export default function ApplicationsPage() {
             onDragOver={handleDragOver}
             onDragEnd={handleDragEnd}
           >
-            <div className="overflow-x-auto pb-2">
-              <div
-                className="grid gap-3"
-                style={{ gridTemplateColumns: "repeat(7, minmax(188px, 1fr))", minWidth: 1350 }}
-              >
+            <div className="pb-2 xl:overflow-x-auto">
+              <div className="flex flex-col gap-3 xl:grid xl:[grid-template-columns:repeat(7,minmax(188px,1fr))] xl:min-w-[1350px]">
                 {COLUMNS.map((col) => (
                   <KanbanColumn
                     key={col.id}

@@ -196,8 +196,15 @@ export default function VisaIntelDrawer({ open, onClose, job, displayTitle }: Pr
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-slate-900/30 backdrop-blur-[2px] transition-opacity duration-200"
-        style={{ zIndex: Z_TOP - 1 }}
+        className="bg-slate-900/30 backdrop-blur-[2px] transition-opacity duration-200"
+        style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          zIndex: Z_TOP - 1,
+        }}
         onClick={onClose}
         aria-hidden
       />
@@ -209,9 +216,18 @@ export default function VisaIntelDrawer({ open, onClose, job, displayTitle }: Pr
         role="dialog"
         aria-modal="true"
         aria-label="Visa Intelligence"
-        className="fixed inset-y-0 right-0 flex h-full w-full max-w-[440px] flex-col shadow-[0_0_60px_-12px_rgba(15,23,42,0.5)] outline-none"
-        style={{ zIndex: Z_TOP, backgroundColor: "#F8FAFC",
-          animation: "visaDrawerIn 0.22s cubic-bezier(0.25,0.46,0.45,0.94) both" }}
+        className="flex flex-col shadow-[0_0_60px_-12px_rgba(15,23,42,0.5)] outline-none"
+        style={{
+          position: "fixed",
+          top: 0,
+          bottom: 0,
+          right: 0,
+          width: "100%",
+          maxWidth: 440,
+          zIndex: Z_TOP,
+          backgroundColor: "#F8FAFC",
+          animation: "visaDrawerIn 0.22s cubic-bezier(0.25,0.46,0.45,0.94) both",
+        }}
       >
 
         {/* ── Hero header ─────────────────────────────────────────────────── */}

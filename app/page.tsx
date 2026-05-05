@@ -10,7 +10,7 @@ import { createClient } from "@/lib/supabase/server"
 import HireovenLogo from "@/components/ui/HireovenLogo"
 
 export const metadata: Metadata = {
-  title: "Hireoven — Jobs served fresh. Apply before the crowd.",
+  title: "Hireoven — Jobs served fresh. Be an early bird applicant.",
   description:
     "Real-time job alerts, AI match scores, one-click apply, and Scout AI for your entire job search. Built for people who want interviews, not just applications.",
 }

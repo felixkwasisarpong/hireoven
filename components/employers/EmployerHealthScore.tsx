@@ -85,7 +85,7 @@ function Skeleton() {
         </div>
       </div>
       <div className="h-2 w-full rounded bg-slate-100" />
-      <div className="grid grid-cols-4 gap-6">
+      <div className="grid grid-cols-2 gap-6 sm:grid-cols-4">
         {[1,2,3,4].map(i => <div key={i} className="h-12 rounded bg-slate-100" />)}
       </div>
     </div>
