@@ -60,7 +60,7 @@ export async function POST(request: Request) {
     const result = await resend.emails.send({
       from,
       to: row.email,
-      subject: "You're in! Create your Hireoven account",
+      subject: "You're in — create your Hireoven account",
       html: `
 <!DOCTYPE html><html><body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;padding:40px 16px">
@@ -73,7 +73,7 @@ export async function POST(request: Request) {
   <tr><td style="padding:32px">
     <p style="margin:0 0 16px;font-size:22px;font-weight:800;color:#0f172a">You're in. 🎉</p>
     <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#475569">
-      Your spot on the Hireoven waitlist has been approved. Click the button below to create your account. This link is unique to you.
+      Your spot on the Hireoven waitlist has been approved. Click the button below to create your account — this link is unique to you.
     </p>
     <div style="text-align:center;margin:28px 0">
       <a href="${inviteUrl}"

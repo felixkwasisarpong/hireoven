@@ -11,7 +11,6 @@ export type FeatureKey =
   | "autofill"
   | "match_scores"
   | "interview_prep"
-  | "scout_basic"
   | "scout_deep_analysis"
   | "scout_actions"
   | "scout_strategy"
@@ -24,13 +23,9 @@ export const FEATURE_GATES: Record<FeatureKey, AccessLevel> = {
   match_scores: "public",
   resume_upload: "public",
   job_applications: "auth",
-  scout_basic: "auth",
-  // Metered for free users — quota lives in lib/usage/quotas.ts. The gate only
-  // checks "are you allowed in"; the per-feature counter decides "do you have
-  // credits left this period."
-  deep_analysis: "auth",
-  cover_letter: "auth",
-  // Pro-only (no free quota — gate is the only check)
+  // Pro-gated
+  deep_analysis: "pro",
+  cover_letter: "pro",
   autofill: "pro",
   interview_prep: "pro",
   scout_deep_analysis: "pro",
@@ -50,7 +45,6 @@ export const FEATURE_DESCRIPTIONS: Record<FeatureKey, string> = {
   autofill: "One-click job application autofill",
   match_scores: "See your match score for each job",
   interview_prep: "AI interview prep questions",
-  scout_basic: "Basic Scout chat (free users get a daily quota)",
   scout_deep_analysis: "Scout deep analysis and sponsorship intelligence",
   scout_actions: "Scout advanced actions like resume tailoring",
   scout_strategy: "Scout strategy plans and application performance insights",

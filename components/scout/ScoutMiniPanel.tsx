@@ -27,37 +27,25 @@ const SCOUT_CAPABILITIES: Capability[] = [
     group: "Find",
     icon: Search,
     isPro: false,
-    examples: [
-      "Show jobs worth my time",
-      "Filter for sponsorship-friendly companies",
-    ],
+    examples: ["Show jobs worth my time", "Filter for sponsorship-friendly companies"],
   },
   {
     group: "Compare",
     icon: GitCompareArrows,
     isPro: true,
-    examples: [
-      "Compare my saved jobs",
-      "Which job has the best fit?",
-    ],
+    examples: ["Compare my saved jobs", "Which job has the best fit?"],
   },
   {
     group: "Improve",
     icon: Wand2,
     isPro: true,
-    examples: [
-      "Tailor my resume to this job",
-      "What's weak about my resume?",
-    ],
+    examples: ["Tailor my resume to this job", "What's weak about my resume?"],
   },
   {
     group: "Prepare",
     icon: MessageSquare,
     isPro: true,
-    examples: [
-      "Prep me for this interview",
-      "Likely interview questions for this role",
-    ],
+    examples: ["Prep me for this interview", "Likely interview questions for this role"],
   },
 ]
 
@@ -166,11 +154,12 @@ export function ScoutMiniPanel({
     return () => window.removeEventListener("scout:open-with-job", onOpenWithJob as EventListener)
   }, [])
 
-  async function sendMessage(message: string) {
-    const trimmed = message.trim()
-    if (!trimmed || isLoading) return
+  async function handleSubmit(event: React.FormEvent) {
+    event.preventDefault()
+    const message = query.trim()
+    if (!message || isLoading) return
 
-    setMessages((prev) => [...prev, { id: `u-${Date.now()}`, role: "user", text: trimmed }])
+    setMessages((prev) => [...prev, { id: `u-${Date.now()}`, role: "user", text: message }])
     setQuery("")
     setIsLoading(true)
     setError(null)
@@ -180,7 +169,7 @@ export function ScoutMiniPanel({
         method: "POST",
         headers: { Accept: "application/json", "Content-Type": "application/json" },
         body: JSON.stringify({
-          message: trimmed,
+          message,
           pagePath: resolvedPagePath,
           focusMode: searchParams.get("focus") === "1",
           activeFilters: {
@@ -194,18 +183,11 @@ export function ScoutMiniPanel({
       })
 
       const raw = (await res.json().catch(() => null)) as unknown
-      const rawObj = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : null
-
-      // The server returns 403 (gated) / 503 (anthropic unavailable) with a fully-formed
-      // ScoutResponse body so users see the actual upgrade/availability message instead of
-      // a generic "could not respond". Render those as normal Scout messages.
-      const looksLikeScoutResponse =
-        rawObj !== null && typeof rawObj.answer === "string" && rawObj.answer.length > 0
-
-      if (!res.ok && !looksLikeScoutResponse) {
-        const errMsg = rawObj && "error" in rawObj
-          ? String(rawObj.error)
-          : "Scout could not respond right now."
+      if (!res.ok) {
+        const errMsg =
+          typeof raw === "object" && raw !== null && "error" in (raw as Record<string, unknown>)
+            ? String((raw as Record<string, unknown>).error)
+            : "Scout could not respond right now."
         setError(errMsg)
         return
       }
@@ -219,15 +201,9 @@ export function ScoutMiniPanel({
     }
   }
 
-  async function handleSubmit(event: React.FormEvent) {
-    event.preventDefault()
-    await sendMessage(query)
-  }
-
-  // Capability and suggestion chips fire the message immediately — users expect a
-  // tap to submit, not a two-step fill-then-press-Send.
-  function runChip(chip: string) {
-    void sendMessage(chip)
+  function fillChip(chip: string) {
+    setQuery(chip)
+    inputRef.current?.focus()
   }
 
   const hasConversation = messages.length > 0
@@ -302,9 +278,9 @@ export function ScoutMiniPanel({
                   </div>
                 </div>
 
-                <p className="text-base font-bold text-gray-900">What can Scout do?</p>
+                <p className="text-base font-bold text-gray-900">What should I run?</p>
                 <p className="mt-1 text-[11px] text-gray-400 leading-5">
-                  Tap any prompt to start, or type your own.
+                  Ask Scout to search, compare, tailor, or prepare applications.
                 </p>
 
                 {/* Context chip */}
@@ -312,25 +288,20 @@ export function ScoutMiniPanel({
                   <ScoutContextChip onReset={() => setMessages([])} />
                 </div>
 
-                {/* Suggested for this page (existing per-page chips) */}
+                {/* Suggestion cards */}
                 {suggestionChips.length > 0 && (
-                  <div className="mt-4 w-full">
-                    <p className="mb-2 text-left text-[10px] font-bold uppercase tracking-wider text-gray-400">
-                      Suggested here
-                    </p>
-                    <div className="space-y-2">
-                      {suggestionChips.map((chip) => (
-                        <button
-                          key={chip}
-                          type="button"
-                          onClick={() => runChip(chip)}
-                          className="group flex w-full items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3 text-left text-sm font-medium text-gray-700 shadow-sm transition hover:border-[#FF5C18]/30 hover:bg-[#FFF8F5] hover:text-[#FF5C18]"
-                        >
-                          <span>{chip}</span>
-                          <span className="text-gray-300 transition group-hover:text-[#FF5C18]/60">→</span>
-                        </button>
-                      ))}
-                    </div>
+                  <div className="mt-4 w-full space-y-2">
+                    {suggestionChips.map((chip) => (
+                      <button
+                        key={chip}
+                        type="button"
+                        onClick={() => fillChip(chip)}
+                        className="group flex w-full items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3 text-left text-sm font-medium text-gray-700 shadow-sm transition hover:border-[#FF5C18]/30 hover:bg-[#FFF8F5] hover:text-[#FF5C18]"
+                      >
+                        <span>{chip}</span>
+                        <span className="text-gray-300 transition group-hover:text-[#FF5C18]/60">→</span>
+                      </button>
+                    ))}
                   </div>
                 )}
 
@@ -344,24 +315,17 @@ export function ScoutMiniPanel({
                       const Icon = cap.icon
                       const locked = cap.isPro && !isPro
                       return (
-                        <div
-                          key={cap.group}
-                          className="rounded-xl border border-gray-200 bg-white p-3 text-left shadow-sm"
-                        >
+                        <div key={cap.group} className="rounded-xl border border-gray-200 bg-white p-3 text-left shadow-sm">
                           <div className="mb-2 flex items-center gap-2">
                             <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-[#FF5C18]/10 text-[#FF5C18]">
                               <Icon className="h-3.5 w-3.5" />
                             </span>
                             <p className="text-[12px] font-bold text-gray-900">{cap.group}</p>
                             {cap.isPro && (
-                              <span
-                                className={cn(
-                                  "ml-auto inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wide",
-                                  locked
-                                    ? "bg-gradient-to-br from-[#FF5C18] to-[#FF9A3C] text-white"
-                                    : "bg-gray-100 text-gray-500"
-                                )}
-                              >
+                              <span className={cn(
+                                "ml-auto inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wide",
+                                locked ? "bg-gradient-to-br from-[#FF5C18] to-[#FF9A3C] text-white" : "bg-gray-100 text-gray-500"
+                              )}>
                                 {locked && <Lock className="h-2.5 w-2.5" />}
                                 Pro
                               </span>
@@ -373,17 +337,11 @@ export function ScoutMiniPanel({
                                 key={example}
                                 type="button"
                                 onClick={() => {
-                                  if (locked) {
-                                    showUpgrade("scout_actions")
-                                  } else {
-                                    runChip(example)
-                                  }
+                                  if (locked) { showUpgrade("scout_actions") } else { fillChip(example) }
                                 }}
                                 className={cn(
                                   "group flex w-full items-center justify-between rounded-lg px-3 py-2 text-[12.5px] transition",
-                                  locked
-                                    ? "cursor-pointer text-gray-500 hover:bg-gray-50"
-                                    : "text-gray-700 hover:bg-[#FFF8F5] hover:text-[#FF5C18]"
+                                  locked ? "cursor-pointer text-gray-500 hover:bg-gray-50" : "text-gray-700 hover:bg-[#FFF8F5] hover:text-[#FF5C18]"
                                 )}
                               >
                                 <span className="text-left">{example}</span>
@@ -446,7 +404,7 @@ export function ScoutMiniPanel({
                   <button
                     key={chip}
                     type="button"
-                    onClick={() => runChip(chip)}
+                    onClick={() => fillChip(chip)}
                     className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-slate-500 transition hover:border-[#FF5C18]/30 hover:bg-[#FFF8F5] hover:text-[#FF5C18]"
                   >
                     {chip}

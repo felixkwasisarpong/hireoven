@@ -17,7 +17,6 @@ import {
 } from "@/lib/scout/gating"
 import { canAccess } from "@/lib/gates"
 import { getUserPlan } from "@/lib/gates/server-gate"
-import { bumpScoutUsage } from "@/lib/scout/free-tier-quota"
 import { ANTHROPIC_TIER_PRICING, SONNET_MODEL } from "@/lib/ai/anthropic-models"
 import { budgetTracker, calcCost, inferTier } from "@/lib/scout/budget/tracker"
 import { streamWithTimeout } from "@/lib/scout/budget/ai-call"
@@ -98,31 +97,6 @@ const COMPARE_RECOMMENDATIONS = new Set<ScoutCompareRecommendation>(["Best", "Go
 
 function scoutError(status: number, message: string) {
   return NextResponse.json({ ok: false, status, message, error: message }, { status })
-}
-
-/**
- * Free-tier users get the conversational shape of Scout (answer, recommendation,
- * explanations) but not the agentic payloads. We strip these here so a Pro-only
- * upgrade surface can render in the UI without the user being able to execute
- * actions they shouldn't have.
- */
-function stripProOnlyFieldsForFreeUsers(
-  response: ScoutResponse,
-  isPro: boolean
-): ScoutResponse {
-  if (isPro) return response
-  return {
-    ...response,
-    actions: [],
-    workspace_directive: undefined,
-    workflow_directive: undefined,
-    interviewPrep: undefined,
-    gated: response.gated ?? {
-      feature: "scout_actions",
-      reason: "Actions, workflows, and deep analysis are Pro features.",
-      upgradeMessage: "Upgrade to Pro to act on Scout's recommendations.",
-    },
-  }
 }
 
 function parseCompareResponse(
@@ -806,32 +780,22 @@ export async function POST(request: NextRequest) {
     return scoutError(401, "Unauthorized")
   }
 
-  // Every user — free and Pro — counts against a daily Scout message quota
-  // (free=5, Pro=100, see lib/usage/quotas.ts). Pro additionally unlocks
-  // actions, workflows, and deep analysis via separate gates below. The quota
-  // counter is bumped before we call Claude so retries can't bypass the cap.
+  // Gate Scout entirely — free users cannot send messages
   const { plan: userPlan } = await getUserPlan(request)
-  const isPro = canAccess(userPlan, "scout_actions")
-
-  const quota = await bumpScoutUsage(user.id, userPlan)
-  if (quota.exceeded) {
+  if (!canAccess(userPlan, "scout_actions")) {
     return NextResponse.json(
       {
-        answer: isPro
-          ? `You've used your ${quota.limit} Scout messages today. Your quota resets at midnight.`
-          : `You've used your ${quota.limit} free Scout messages today. Upgrade to Pro for ${userPlan === "pro" ? 100 : 100} messages a day — plus actions, workflows, and deep analysis.`,
+        answer: "Scout is a Pro feature. Upgrade to unlock AI-powered job search.",
         recommendation: "Wait",
         actions: [],
         explanations: [],
         gated: {
           feature: "scout_actions",
-          reason: `Daily Scout message limit (${quota.limit}) reached.`,
-          upgradeMessage: isPro
-            ? "Quota resets at midnight."
-            : "Upgrade to Pro for 100 Scout messages a day.",
+          reason: "Scout requires a Pro plan.",
+          upgradeMessage: "Upgrade to Pro to use Scout AI.",
         },
       } satisfies ScoutResponse,
-      { status: 429 }
+      { status: 403 }
     )
   }
 
@@ -1881,13 +1845,11 @@ User Input: ${userMessage}`
 
           attachDebug(scoutResponse)
 
-          const finalScoutResponse = stripProOnlyFieldsForFreeUsers(scoutResponse, isPro)
-
           // Emit workspace/workflow directives early so client can morph immediately
-          if (finalScoutResponse.workspace_directive) emit({ type: "workspace_directive", payload: finalScoutResponse.workspace_directive })
-          if (finalScoutResponse.workflow_directive)  emit({ type: "workflow_directive",  payload: finalScoutResponse.workflow_directive  })
+          if (scoutResponse.workspace_directive) emit({ type: "workspace_directive", payload: scoutResponse.workspace_directive })
+          if (scoutResponse.workflow_directive)  emit({ type: "workflow_directive",  payload: scoutResponse.workflow_directive  })
 
-          emit({ type: "response", payload: finalScoutResponse })
+          emit({ type: "response", payload: scoutResponse })
           emit({ type: "done" })
         } catch (err) {
           emit({ type: "error", message: err instanceof Error ? err.message : "Scout encountered an error." })
@@ -2273,7 +2235,7 @@ User Input: ${userMessage}`
       }
     })()
 
-    return NextResponse.json(stripProOnlyFieldsForFreeUsers(scoutResponse, isPro))
+    return NextResponse.json(scoutResponse)
   } catch (error) {
     console.error("Scout chat error:", error)
 

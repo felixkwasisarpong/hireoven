@@ -293,7 +293,7 @@ function WaitlistRow({ row: r }: { row: Row }) {
     <tr className="text-gray-700 hover:bg-gray-50/60">
       <td className="px-4 py-2.5 font-mono text-xs">{r.email}</td>
       <td className="px-4 py-2.5 text-xs text-gray-500">
-        {new Date(r.joined_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+        {new Date(r.joined_at).toLocaleDateString()}
       </td>
       <td className="px-4 py-2.5 text-xs">
         {r.is_international === true ? "Y" : r.is_international === false ? "N" : "-"}
