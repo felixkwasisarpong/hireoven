@@ -145,11 +145,18 @@ export function ScoutMiniPanel({
       })
 
       const raw = (await res.json().catch(() => null)) as unknown
-      if (!res.ok) {
-        const errMsg =
-          typeof raw === "object" && raw !== null && "error" in (raw as Record<string, unknown>)
-            ? String((raw as Record<string, unknown>).error)
-            : "Scout could not respond right now."
+      const rawObj = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : null
+
+      // The server returns 403 (gated) / 503 (anthropic unavailable) with a fully-formed
+      // ScoutResponse body so users see the actual upgrade/availability message instead of
+      // a generic "could not respond". Render those as normal Scout messages.
+      const looksLikeScoutResponse =
+        rawObj !== null && typeof rawObj.answer === "string" && rawObj.answer.length > 0
+
+      if (!res.ok && !looksLikeScoutResponse) {
+        const errMsg = rawObj && "error" in rawObj
+          ? String(rawObj.error)
+          : "Scout could not respond right now."
         setError(errMsg)
         return
       }
