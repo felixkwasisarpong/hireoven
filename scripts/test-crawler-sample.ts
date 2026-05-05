@@ -14,10 +14,11 @@ async function main() {
     const started = Date.now()
     try {
       const result = await crawlCareersPage({
-        companyId: "test",
+        id: "test",
         companyName: s.name,
         atsType: s.atsType,
         careersUrl: s.url,
+        lastCrawledAt: null,
       })
       const elapsed = ((Date.now() - started) / 1000).toFixed(1)
       console.log(`[${s.atsType.padEnd(15)}] ${s.name}`)

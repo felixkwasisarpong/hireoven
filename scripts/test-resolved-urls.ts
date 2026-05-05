@@ -63,10 +63,11 @@ async function main() {
     let result
     try {
       result = await crawlCareersPage({
-        companyId: r.name,
+        id: r.name,
         companyName: r.name,
         atsType: r.resolved_provider,
         careersUrl: r.direct_url,
+        lastCrawledAt: null,
       })
     } catch (e) {
       result = null
