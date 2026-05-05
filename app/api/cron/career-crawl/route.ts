@@ -109,9 +109,15 @@ export async function GET(request: NextRequest) {
 
     // Crawl: pull jobs from cached direct URLs
     const { rows: crawlRows } = await pool.query<{
-      id: string; name: string; direct_ats_url: string; direct_ats_provider: string
+      id: string
+      name: string
+      direct_ats_url: string
+      direct_ats_provider: string
+      direct_ats_identifier: string | null
+      domain: string | null
+      last_crawled_at: Date | null
     }>(
-      `SELECT id, name, direct_ats_url, direct_ats_provider
+      `SELECT id, name, direct_ats_url, direct_ats_provider, direct_ats_identifier, domain, last_crawled_at
        FROM companies
        WHERE direct_ats_url IS NOT NULL
          AND direct_ats_provider = ANY($1)
@@ -124,10 +130,13 @@ export async function GET(request: NextRequest) {
     for (const c of crawlRows) {
       try {
         const result = await crawlCareersPage({
-          companyId: c.id,
+          id: c.id,
           companyName: c.name,
           atsType: c.direct_ats_provider,
+          atsIdentifier: c.direct_ats_identifier,
           careersUrl: c.direct_ats_url,
+          domain: c.domain,
+          lastCrawledAt: c.last_crawled_at,
         })
         if (result.jobs.length > 0) {
           stats.companies++
