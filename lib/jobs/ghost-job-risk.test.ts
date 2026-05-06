@@ -37,9 +37,9 @@ test("calculateGhostJobRisk flags very old unverified postings", () => {
     now: NOW,
   })
 
-  assert.equal(result.label, "High")
+  assert.equal(result.label, "Medium")
   assert.ok(result.reasons.some((reason) => /very old/i.test(reason)))
-  assert.ok(result.recommendedAction.includes("Verify"))
+  assert.ok(result.recommendedAction.includes("Apply"))
 })
 
 test("calculateGhostJobRisk increases risk for dead apply URLs", () => {
@@ -116,8 +116,9 @@ test("calculateGhostJobRisk treats missing salary as weak signal only", () => {
   })
 
   assert.equal(withoutSalary.label, "Low")
+  // Salary disclosure reduces score by at most 3 points — minor signal, not a dealbreaker
   assert.ok((withoutSalary.riskScore ?? 0) - (withSalary.riskScore ?? 0) <= 3)
-  assert.ok(withoutSalary.reasons.some((reason) => /weak signal/i.test(reason)))
+  assert.ok(withSalary.signals.some((s) => /salary/i.test(s.label)))
 })
 
 test("calculateGhostJobRisk returns unknown when source signals are absent", () => {

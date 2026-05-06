@@ -1,66 +1,65 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getPostgresPool } from "@/lib/postgres/server"
-import { scoreJobsForUser, getScoringContextForUser } from "@/lib/matching/batch-scorer"
+import { computeFastScore, getResumeVersion } from "@/lib/matching/fast-scorer"
+import { getScoringContextForUser, upsertMatchScores } from "@/lib/matching/batch-scorer"
 import { createClient } from "@/lib/supabase/server"
-import type { JobMatchScore } from "@/types"
+import type { Job, JobMatchScore } from "@/types"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-const FAST_SCORE_ALGORITHM_UPDATED_AT = new Date("2026-05-05T00:00:00.000Z").getTime()
+// Bump when the scoring algorithm changes so stale cached rows get recomputed.
+const SCORE_ALGORITHM_VERSION = new Date("2026-05-06T20:00:00.000Z").getTime()
 
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     const jobId = request.nextUrl.searchParams.get("jobId")
-
-    if (!jobId) {
-      return NextResponse.json({ error: "jobId is required" }, { status: 400 })
-    }
+    if (!jobId) return NextResponse.json({ error: "jobId is required" }, { status: 400 })
 
     const context = await getScoringContextForUser(user.id)
-    if (!context) {
-      return NextResponse.json({ score: null })
-    }
+    if (!context) return NextResponse.json({ score: null })
 
     const pool = getPostgresPool()
-    const existingResult = await pool.query<JobMatchScore>(
-      `SELECT *
-       FROM job_match_scores
-       WHERE user_id = $1
-         AND resume_id = $2
-         AND job_id = $3
-       LIMIT 1`,
-      [user.id, context.resume.id, jobId]
-    )
-    const existing = existingResult.rows[0]
+    const currentVersion = getResumeVersion(context.resume)
 
-    const existingComputedAt = existing ? new Date(existing.computed_at).getTime() : 0
-    const resumeUpdatedAt = new Date(context.resume.updated_at).getTime()
+    // Fetch job and existing cached score in parallel
+    const [jobResult, existingResult] = await Promise.all([
+      pool.query<Job>("SELECT * FROM jobs WHERE id = $1 LIMIT 1", [jobId]),
+      pool.query<JobMatchScore>(
+        `SELECT * FROM job_match_scores
+         WHERE user_id = $1 AND resume_id = $2 AND job_id = $3
+         LIMIT 1`,
+        [user.id, context.resume.id, jobId]
+      ),
+    ])
+
+    const job = jobResult.rows[0]
+    if (!job) return NextResponse.json({ score: null })
+
+    const existing = existingResult.rows[0]
+    const existingMs = existing ? new Date(existing.computed_at).getTime() : 0
+
+    // Return cached score if it's still fresh (same resume version + after algorithm bump)
     if (
       existing &&
-      Number.isFinite(existingComputedAt) &&
-      existingComputedAt >= resumeUpdatedAt &&
-      existingComputedAt >= FAST_SCORE_ALGORITHM_UPDATED_AT
+      existing.resume_version === currentVersion &&
+      existingMs >= SCORE_ALGORITHM_VERSION
     ) {
-      return NextResponse.json({ score: existing as JobMatchScore })
+      return NextResponse.json({ score: existing })
     }
 
-    const scores = await scoreJobsForUser(user.id, [jobId])
-    return NextResponse.json({ score: scores.get(jobId) ?? null })
+    // Compute fresh, upsert, return
+    const scoreInsert = computeFastScore({ resume: context.resume, job, profile: context.profile })
+    const [saved] = await upsertMatchScores([scoreInsert])
+
+    // Attach score_breakdown (not in DB schema) so callers get skill pills
+    return NextResponse.json({ score: { ...saved, score_breakdown: scoreInsert.score_breakdown } })
   } catch (error) {
-    console.error("Failed to score job", error)
-    return NextResponse.json(
-      { error: "Match scoring is not available. Check the job_match_scores migration." },
-      { status: 503 }
-    )
+    console.error("[match/score] failed:", error)
+    return NextResponse.json({ error: "Match scoring unavailable." }, { status: 503 })
   }
 }

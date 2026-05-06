@@ -2,7 +2,6 @@
 
 import Link from "next/link"
 import { ChevronRight, Crown } from "lucide-react"
-import DashboardCreditsCard from "@/components/dashboard/DashboardCreditsCard"
 import { useSubscription } from "@/lib/hooks/useSubscription"
 import { cn } from "@/lib/utils"
 
@@ -26,8 +25,6 @@ export default function DashboardSidebarPremiumCard({
         variant === "dark" ? "border-t border-white/10" : "border-t border-border/80"
       )}
     >
-      <DashboardCreditsCard variant={variant} />
-
       {!hideUpgrade && (
         <div className="rounded-xl border border-[#FED7AA]/70 bg-gradient-to-br from-[#FFF7ED] to-[#FFEDD5] p-3 shadow-sm">
           <div className="flex items-start gap-2.5">

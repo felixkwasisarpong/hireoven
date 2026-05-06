@@ -182,15 +182,20 @@ export function calculateGhostJobRisk(input: CalculateGhostJobRiskInput): GhostJ
     }
   }
 
-  if (verifiedDays !== null) {
+  // Only apply the re-verification bonus when the crawler confirmed the job AFTER its
+  // initial detection (proves it's still live on a subsequent pass). When verifiedDate ≈
+  // postedDate the job was just found — that's already captured by freshnessDays above.
+  const isReverified =
+    postedDate !== null &&
+    verifiedDate !== null &&
+    verifiedDate.getTime() > postedDate.getTime() + 24 * 60 * 60 * 1_000
+  if (verifiedDays !== null && isReverified) {
     coverage += 1
     if (verifiedDays <= 7) {
-      score -= 12
-      positiveSignals.push("Posting was recently verified.")
-    } else if (verifiedDays > 30) {
-      score += 10
-      reasons.push(`Posting has not been verified in ${verifiedDays} days.`)
+      score -= 8
+      positiveSignals.push("Posting was recently verified as still active on a subsequent crawl.")
     }
+    // Removed: "not verified in 30 days" penalty — reflects crawl scheduling, not job freshness.
   }
 
   if (applyStatus !== "unknown") {
@@ -215,6 +220,10 @@ export function calculateGhostJobRisk(input: CalculateGhostJobRiskInput): GhostJ
     } else if (repostCount >= 3) {
       score += 10
       reasons.push(`Role has appeared multiple times (${repostCount}).`)
+    } else if (repostCount === 0) {
+      // No duplicate postings — mild positive signal
+      score -= 4
+      positiveSignals.push("No duplicate postings detected for this role.")
     }
   }
 
@@ -238,6 +247,12 @@ export function calculateGhostJobRisk(input: CalculateGhostJobRiskInput): GhostJ
       score += 8
       reasons.push("Similar duplicate records were detected.")
     }
+  }
+
+  // Salary disclosure is a mild legitimacy signal — ghost postings rarely include real comp data.
+  if (input.salaryMin != null || input.salaryMax != null) {
+    score -= 3
+    positiveSignals.push("Role lists salary or compensation range.")
   }
 
   const quality = descriptionQualityPenalty(input.description)
