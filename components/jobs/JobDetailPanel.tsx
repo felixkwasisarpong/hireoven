@@ -257,12 +257,11 @@ export default function JobDetailPanel({
   const verdict = getMatchVerdict(overall)
 
   const allFactors = [
-    { label: "Skills",     value: analysis?.skills_score     ?? fastScore?.skills_score     ?? null },
-    { label: "Experience", value: analysis?.experience_score ?? fastScore?.seniority_score  ?? null },
-    { label: "Education",  value: analysis?.education_score                                 ?? null },
-    { label: "Location",   value: fastScore?.location_score                                 ?? null },
-    { label: analysis?.keywords_score != null ? "Role fit" : "Auth fit",
-      value: analysis?.keywords_score  ?? fastScore?.sponsorship_score                      ?? null },
+    { label: "Skills",     value: fastScore?.skills_score     ?? null },
+    { label: "Experience", value: fastScore?.seniority_score  ?? null },
+    { label: "Education",  value: fastScore?.education_score  ?? null },
+    { label: "Location",   value: fastScore?.location_score   ?? null },
+    { label: "Role fit",   value: fastScore?.role_fit_score   ?? null },
   ]
   const activeFactors = allFactors.filter((f): f is { label: string; value: number } => f.value != null)
 

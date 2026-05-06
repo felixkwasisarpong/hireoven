@@ -1268,10 +1268,14 @@ export type JobMatchScore = {
   overall_score: number;
   skills_score: number | null;
   seniority_score: number | null;
+  education_score: number | null;
+  role_fit_score: number | null;
   location_score: number | null;
   employment_type_score: number | null;
   sponsorship_score: number | null;
   is_seniority_match: boolean | null;
+  is_education_match: boolean | null;
+  is_role_fit_match: boolean | null;
   is_location_match: boolean | null;
   is_employment_type_match: boolean | null;
   is_sponsorship_compatible: boolean | null;

@@ -12,7 +12,7 @@ import type {
 const BACKGROUND_USER_LIMIT = 10_000
 const UPSERT_CHUNK_SIZE = 250
 const BACKGROUND_CONCURRENCY = 50
-const FAST_SCORE_ALGORITHM_UPDATED_AT = new Date("2026-04-24T23:45:00.000Z").getTime()
+const FAST_SCORE_ALGORITHM_UPDATED_AT = new Date("2026-05-05T00:00:00.000Z").getTime()
 
 function chunkArray<T>(items: T[], size: number) {
   const chunks: T[][] = []
@@ -110,10 +110,14 @@ export async function upsertMatchScores(scores: JobMatchScoreInsert[]) {
           score.overall_score,
           score.skills_score,
           score.seniority_score,
+          score.education_score,
+          score.role_fit_score,
           score.location_score,
           score.employment_type_score,
           score.sponsorship_score,
           score.is_seniority_match,
+          score.is_education_match,
+          score.is_role_fit_match,
           score.is_location_match,
           score.is_employment_type_match,
           score.is_sponsorship_compatible,
@@ -140,10 +144,14 @@ export async function upsertMatchScores(scores: JobMatchScoreInsert[]) {
         overall_score,
         skills_score,
         seniority_score,
+        education_score,
+        role_fit_score,
         location_score,
         employment_type_score,
         sponsorship_score,
         is_seniority_match,
+        is_education_match,
+        is_role_fit_match,
         is_location_match,
         is_employment_type_match,
         is_sponsorship_compatible,
@@ -159,10 +167,14 @@ export async function upsertMatchScores(scores: JobMatchScoreInsert[]) {
         overall_score = EXCLUDED.overall_score,
         skills_score = EXCLUDED.skills_score,
         seniority_score = EXCLUDED.seniority_score,
+        education_score = EXCLUDED.education_score,
+        role_fit_score = EXCLUDED.role_fit_score,
         location_score = EXCLUDED.location_score,
         employment_type_score = EXCLUDED.employment_type_score,
         sponsorship_score = EXCLUDED.sponsorship_score,
         is_seniority_match = EXCLUDED.is_seniority_match,
+        is_education_match = EXCLUDED.is_education_match,
+        is_role_fit_match = EXCLUDED.is_role_fit_match,
         is_location_match = EXCLUDED.is_location_match,
         is_employment_type_match = EXCLUDED.is_employment_type_match,
         is_sponsorship_compatible = EXCLUDED.is_sponsorship_compatible,
