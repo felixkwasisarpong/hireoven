@@ -1,15 +1,17 @@
 import { NextRequest, NextResponse } from "next/server"
+import pLimit from "p-limit"
 import { requireCronAuth } from "@/lib/env"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { resolveDirectAtsUrl, type RenderHtml } from "@/lib/companies/ats-url-resolver"
-import { crawlCareersPage } from "@/lib/crawler"
+import { crawlCareersPage, type CrawlTarget } from "@/lib/crawler"
+import { persistCrawlJobs } from "@/lib/crawler/persist"
 
 export const runtime = "nodejs"
-// Running on Coolify (long-lived Node process), no platform timeout to declare.
 
 const SUPPORTED_FOR_CRAWL = new Set(["greenhouse", "lever", "ashby", "smartrecruiters", "workday"])
+const FULL_CRAWL_CONCURRENCY = Math.max(1, Number.parseInt(process.env.CRAWLER_COMPANY_CONCURRENCY ?? "4", 10))
 
-type Mode = "crawl" | "resolve" | "deep"
+type Mode = "crawl" | "resolve" | "deep" | "full"
 
 async function loadPlaywrightRenderer(): Promise<{ render: RenderHtml; close: () => Promise<void> } | null> {
   try {
@@ -150,11 +152,76 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  // ── Full crawl: all active companies, deactivate persistent failures ──────
+  const deactivated: { id: string; name: string; reason: string }[] = []
+
+  if (mode === "full") {
+    const { rows: allCompanies } = await pool.query<{
+      id: string
+      name: string
+      careers_url: string
+      ats_type: string | null
+      ats_identifier: string | null
+      domain: string | null
+      last_crawled_at: Date | null
+    }>(
+      `SELECT id, name, careers_url, ats_type, ats_identifier, domain, last_crawled_at
+       FROM companies
+       WHERE is_active = true
+       ORDER BY last_crawled_at NULLS FIRST`
+    )
+
+    const limit = pLimit(FULL_CRAWL_CONCURRENCY)
+
+    await Promise.all(
+      allCompanies.map((company) =>
+        limit(async () => {
+          const target: CrawlTarget = {
+            id: company.id,
+            companyName: company.name,
+            careersUrl: company.careers_url,
+            lastCrawledAt: company.last_crawled_at ? new Date(company.last_crawled_at) : null,
+            atsType: company.ats_type ?? null,
+            atsIdentifier: company.ats_identifier ?? null,
+          }
+
+          try {
+            const result = await crawlCareersPage(target)
+            await persistCrawlJobs({
+              companyId: company.id,
+              crawledAt: result.crawledAt,
+              jobs: result.jobs,
+              sourceUrl: result.url,
+              normalizedUrl: result.normalizedUrl,
+              diagnostics: result.diagnostics,
+            })
+            await pool.query(`UPDATE companies SET last_crawled_at = NOW() WHERE id = $1`, [company.id])
+            stats.companies++
+            stats.jobs += result.jobs.length
+          } catch (err) {
+            stats.errors++
+            const reason = err instanceof Error ? err.message : String(err)
+            // Mark the company inactive — it will stay dark until manually re-enabled
+            // or until a future crawl pipeline resolves the bad URL.
+            await pool.query(
+              `UPDATE companies SET is_active = false, last_crawled_at = NOW() WHERE id = $1`,
+              [company.id]
+            )
+            deactivated.push({ id: company.id, name: company.name, reason: reason.slice(0, 200) })
+          }
+        })
+      )
+    )
+  }
+
   return NextResponse.json({
     ok: true,
     mode,
     durationMs: Date.now() - started,
     ...stats,
-    message: `[${mode}] resolved ${stats.resolved}, crawled ${stats.companies} companies → ${stats.jobs} jobs`,
+    deactivated: deactivated.length > 0 ? deactivated : undefined,
+    message: mode === "full"
+      ? `[full] crawled ${stats.companies} companies → ${stats.jobs} jobs, deactivated ${deactivated.length}`
+      : `[${mode}] resolved ${stats.resolved}, crawled ${stats.companies} companies → ${stats.jobs} jobs`,
   })
 }
