@@ -3,7 +3,7 @@ import { requireCronAuth } from "@/lib/env"
 import { scanStaleGhostJobs } from "@/lib/jobs/ghost-scan-worker"
 
 export const runtime = "nodejs"
-export const maxDuration = 300 // 5 minutes — worker processes up to 50 jobs
+export const maxDuration = 300 // batch size controlled by GHOST_SCAN_BATCH_SIZE env var (default 500)
 
 export async function GET(request: NextRequest) {
   if (!requireCronAuth(request.headers.get("authorization"))) {

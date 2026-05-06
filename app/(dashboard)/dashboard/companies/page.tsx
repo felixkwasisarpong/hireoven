@@ -11,6 +11,50 @@ import { cn } from "@/lib/utils"
 import type { Company, CompanySize } from "@/types"
 
 const PAGE_SIZE = 24
+
+const HEALTH_COLOR: Record<string, string> = {
+  strong:  "#1D9E75",
+  healthy: "#5DCAA5",
+  caution: "#EF9F27",
+  critical:"#E24B4A",
+}
+
+function HealthBadge({ score, verdict, glassdoorRating }: {
+  score: number | null | undefined
+  verdict: string | null | undefined
+  glassdoorRating: number | null | undefined
+}) {
+  if (score == null && glassdoorRating == null) {
+    return <span className="text-[11px] text-gray-300">—</span>
+  }
+  const color = verdict ? (HEALTH_COLOR[verdict] ?? "#EF9F27") : "#94A3B8"
+  return (
+    <div className="flex flex-col gap-0.5">
+      {score != null && (
+        <div className="flex items-center gap-1">
+          <span
+            className="inline-flex h-5 min-w-[2rem] items-center justify-center rounded-full px-1.5 text-[11px] font-bold tabular-nums text-white"
+            style={{ background: color }}
+          >
+            {score}
+          </span>
+          {verdict && (
+            <span className="text-[10px] font-medium capitalize" style={{ color }}>
+              {verdict}
+            </span>
+          )}
+        </div>
+      )}
+      {glassdoorRating != null && (
+        <div className="flex items-center gap-0.5 text-[10px] text-gray-400">
+          <span className="text-amber-400">★</span>
+          <span>{Number(glassdoorRating).toFixed(1)}</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
 const ATS_OPTIONS = ["greenhouse", "lever", "workday", "icims", "bamboohr", "ashby", "jobvite", "custom"]
 const SIZE_OPTIONS: { value: CompanySize; label: string }[] = [
   { value: "startup",    label: "Startup"    },
@@ -22,6 +66,7 @@ const SIZE_OPTIONS: { value: CompanySize; label: string }[] = [
 const SORT_OPTIONS = [
   { value: "job_count",              label: "Most jobs"         },
   { value: "sponsorship_confidence", label: "Top sponsor score" },
+  { value: "health_score",           label: "Best health"       },
   { value: "created_at",             label: "Recently added"    },
   { value: "name",                   label: "Alphabetical"      },
 ]
@@ -101,6 +146,15 @@ function CompanyRow({
           Sponsor score
         </p>
         <ConfidenceBar score={company.sponsorship_confidence} />
+      </div>
+
+      {/* Health badge */}
+      <div className="hidden w-28 flex-shrink-0 sm:block">
+        <HealthBadge
+          score={company.health_score}
+          verdict={company.health_verdict}
+          glassdoorRating={company.glassdoor_rating}
+        />
       </div>
 
       {/* Job count */}
@@ -506,6 +560,9 @@ export default function CompaniesPage() {
               </div>
               <div className="w-36 flex-shrink-0 text-[10px] font-semibold uppercase tracking-[0.2em] text-gray-400">
                 Sponsor score
+              </div>
+              <div className="w-28 flex-shrink-0 text-[10px] font-semibold uppercase tracking-[0.2em] text-gray-400">
+                Health
               </div>
               <div className="w-24 flex-shrink-0 text-right text-[10px] font-semibold uppercase tracking-[0.2em] text-gray-400">
                 Open roles

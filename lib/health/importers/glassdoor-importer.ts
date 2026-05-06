@@ -1,13 +1,19 @@
 /**
- * Glassdoor rating ingestion — multi-source, gracefully null-safe.
+ * Glassdoor rating ingestion — reads extension-scraped data first.
  *
- * Approach order:
- * 1. DuckDuckGo Instant Answer API (free, no key, returns structured ratings)
- * 2. DuckDuckGo HTML search — parse the Glassdoor snippet from results
- * 3. Direct Glassdoor page — blocked by most servers, last resort
+ * Priority order:
+ * 1. scout_enrichment JSONB on companies (populated by Chrome extension browsing Glassdoor)
+ * 2. DuckDuckGo Instant Answer API (free, no key)
+ * 3. DuckDuckGo HTML search
+ * 4. Direct Glassdoor page (usually blocked server-side)
+ *
+ * Extension data is considered fresh for 7 days. Server-side scraping is a
+ * last resort — Glassdoor aggressively blocks server requests.
  *
  * Never throws. Returns null values on any failure.
  */
+
+import { getPostgresPool } from "@/lib/postgres/server"
 
 export type GlassdoorResult = {
   rating: number | null
@@ -23,20 +29,48 @@ const NULL_RESULT: GlassdoorResult = {
   recommendPct: null, ceoApprovalPct: null, blocked: false,
 }
 
+const STALE_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
+
 const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36"
+
+// ── Source 0: Extension scout_enrichment (most reliable) ─────────────────────
+
+async function tryScoutEnrichment(companyId: string): Promise<GlassdoorResult | null> {
+  try {
+    const pool = getPostgresPool()
+    const { rows } = await pool.query<{ gd: Record<string, unknown> | null }>(
+      `SELECT scout_enrichment->'glassdoor' AS gd FROM companies WHERE id = $1 LIMIT 1`,
+      [companyId]
+    )
+    const gd = rows[0]?.gd
+    if (!gd || typeof gd !== "object") return null
+
+    const rating = typeof gd.rating === "number" ? gd.rating : null
+    if (!rating || rating < 1 || rating > 5) return null
+
+    const enrichedAt = typeof gd.lastEnrichedAt === "string" ? gd.lastEnrichedAt : null
+    const stale = !enrichedAt || Date.now() - new Date(enrichedAt).getTime() > STALE_MS
+    if (stale) return null
+
+    return {
+      rating,
+      rating12moAgo: null,
+      totalReviews: typeof gd.reviewCount === "number" ? gd.reviewCount : null,
+      recommendPct: typeof gd.recommendToFriend === "number" ? gd.recommendToFriend : null,
+      ceoApprovalPct: typeof gd.ceoApproval === "number" ? gd.ceoApproval : null,
+      blocked: false,
+    }
+  } catch { return null }
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function extractRating(text: string): number | null {
   const patterns = [
-    // Structured patterns: "4.1 out of 5", "Rated 4.1", "4.1/5"
     /(?:rated?\s+)([\d.]+)\s*(?:out\s+of\s+5|\/\s*5|stars?)/i,
-    // JSON schema: "ratingValue":"4.1" or "ratingValue":4.1
     /"ratingValue"\s*:\s*"?([\d.]+)"?/,
     /"overallRating"\s*:\s*"?([\d.]+)"?/,
-    // Plain pattern: "4.1 ★" or "★ 4.1"
     /[★]\s*([\d.]+)|([\d.]+)\s*[★]/,
-    // Generic: number between 1–5 near "rating" or "glassdoor"
     /(?:glassdoor|rating|score)[^\d]*([\d]\.[0-9])/i,
   ]
   for (const re of patterns) {
@@ -67,12 +101,11 @@ async function tryDdgInstant(companyName: string): Promise<GlassdoorResult | nul
     if (!res.ok) return null
     const data = await res.json() as {
       AbstractText?: string
-      RelatedTopics?: Array<{ Text?: string; Result?: string }>
+      RelatedTopics?: Array<{ Text?: string }>
       Infobox?: { content?: Array<{ label: string; value: string }> }
       Answer?: string
     }
 
-    // Try Infobox first (most structured)
     const infoboxRating = data.Infobox?.content?.find(
       c => /rating|score|glassdoor/i.test(c.label)
     )
@@ -81,7 +114,6 @@ async function tryDdgInstant(companyName: string): Promise<GlassdoorResult | nul
       if (n) return { ...NULL_RESULT, rating: n }
     }
 
-    // Try AbstractText
     const combined = [
       data.AbstractText,
       data.Answer,
@@ -91,11 +123,7 @@ async function tryDdgInstant(companyName: string): Promise<GlassdoorResult | nul
     if (combined.toLowerCase().includes("glassdoor")) {
       const rating = extractRating(combined)
       if (rating) {
-        return {
-          ...NULL_RESULT,
-          rating,
-          totalReviews: extractReviewCount(combined),
-        }
+        return { ...NULL_RESULT, rating, totalReviews: extractReviewCount(combined) }
       }
     }
     return null
@@ -108,26 +136,17 @@ async function tryDdgHtml(companyName: string): Promise<GlassdoorResult | null> 
   try {
     const q = encodeURIComponent(`${companyName} glassdoor reviews rating`)
     const res = await fetch(`https://html.duckduckgo.com/html/?q=${q}`, {
-      headers: {
-        "User-Agent": UA,
-        "Accept": "text/html",
-        "Accept-Language": "en-US,en;q=0.9",
-      },
+      headers: { "User-Agent": UA, "Accept": "text/html", "Accept-Language": "en-US,en;q=0.9" },
       signal: AbortSignal.timeout(8_000),
     })
     if (!res.ok) return null
     const html = await res.text()
 
-    // Find Glassdoor-related snippets in search results
     const snippets: string[] = []
-    const snippetRe = /glassdoor\.com[^"]*"[^>]*>[^<]*<\/a>\s*<[^>]+class="[^"]*result[^"]*"[^>]*>([\s\S]{0,500})/gi
+    const re = /glassdoor\.com[^"]*"[^>]*>[^<]*<\/a>\s*<[^>]+class="[^"]*result[^"]*"[^>]*>([\s\S]{0,500})/gi
     let m: RegExpExecArray | null
-    const re = new RegExp(snippetRe.source, snippetRe.flags)
     while ((m = re.exec(html)) !== null) snippets.push(m[1])
-
-    // Also search the whole page for Glassdoor rating patterns
-    const glassdoorSection = html.match(/glassdoor[\s\S]{0,1000}/i)?.[0] ?? ""
-    snippets.push(glassdoorSection)
+    snippets.push(html.match(/glassdoor[\s\S]{0,1000}/i)?.[0] ?? "")
 
     for (const snippet of snippets) {
       const rating = extractRating(snippet)
@@ -147,7 +166,7 @@ async function tryDdgHtml(companyName: string): Promise<GlassdoorResult | null> 
   } catch { return null }
 }
 
-// ── Source 3: Direct Glassdoor (blocked on most servers) ─────────────────────
+// ── Source 3: Direct Glassdoor (usually blocked server-side) ──────────────────
 
 async function tryGlassdoorDirect(companyName: string): Promise<GlassdoorResult | null> {
   try {
@@ -179,15 +198,14 @@ async function tryGlassdoorDirect(companyName: string): Promise<GlassdoorResult 
 // ── Main export ───────────────────────────────────────────────────────────────
 
 export async function importGlassdoorData(
-  _companyId: string,
+  companyId: string,
   companyName: string
 ): Promise<GlassdoorResult> {
-  // Try each source in priority order — return first hit
-  const result =
+  return (
+    await tryScoutEnrichment(companyId) ??
     await tryDdgInstant(companyName) ??
     await tryDdgHtml(companyName) ??
     await tryGlassdoorDirect(companyName) ??
     NULL_RESULT
-
-  return result
+  )
 }
