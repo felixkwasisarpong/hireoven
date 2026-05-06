@@ -2,7 +2,7 @@ import { getPostgresPool } from "@/lib/postgres/server"
 import { calculateGhostJobRisk, probeApplyUrl } from "@/lib/jobs/ghost-job-risk"
 import { detectHiringFreeze } from "@/lib/jobs/signals/hiring-freeze-detector"
 
-const BATCH_SIZE = 50
+const BATCH_SIZE = Number.parseInt(process.env.GHOST_SCAN_BATCH_SIZE ?? "500", 10)
 const STALE_HOURS = 24
 
 type JobRow = {
