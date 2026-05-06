@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic"
+
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import {
@@ -34,7 +36,8 @@ import {
 } from "@/lib/jobs/sponsorship-employer-signal"
 import { getSessionUser } from "@/lib/auth/session-user"
 import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
-import { scoreJobsForUser } from "@/lib/matching/batch-scorer"
+import { computeFastScore } from "@/lib/matching/fast-scorer"
+import { getScoringContextForUser, upsertMatchScores } from "@/lib/matching/batch-scorer"
 import { getPostgresPool } from "@/lib/postgres/server"
 import {
   extractSkillsFromText,
@@ -63,9 +66,39 @@ type SimilarJob = {
 }
 
 type ResumeSkillRow = {
+  id: string
+  updated_at: string
   skills: Skills | null
   top_skills: string[] | null
   raw_text: string | null
+}
+
+type CachedScoreRow = {
+  overall_score: number
+  skills_score: number | null
+  seniority_score: number | null
+  education_score: number | null
+  role_fit_score: number | null
+  location_score: number | null
+  employment_type_score: number | null
+  sponsorship_score: number | null
+  matching_skills_count: number
+  total_required_skills: number
+  skills_match_rate: number | null
+  is_seniority_match: boolean | null
+  is_education_match: boolean | null
+  is_role_fit_match: boolean | null
+  is_location_match: boolean | null
+  is_employment_type_match: boolean | null
+  is_sponsorship_compatible: boolean | null
+  score_method: string
+  computed_at: string
+  resume_version: number
+  resume_id: string
+  resume_updated_at: string
+  user_id: string
+  job_id: string
+  id: string
 }
 
 const EXPERIENCE_BY_SENIORITY: Record<string, string> = {
@@ -318,16 +351,27 @@ export default async function DashboardJobDetailPage({ params }: Props) {
      LEFT JOIN companies c ON c.id = j.company_id
      WHERE j.is_active = true AND ${sqlJobLocatedInUsa("j")}`
 
-  const [matchScoreMap, resumeSkillResult, similarByTitleResult, similarByCompanyResult] = await Promise.all([
+  // Score algorithm version stamp — bump when scoring logic changes to bust the cache.
+  const SCORE_ALGORITHM_VERSION = new Date("2026-05-06T20:00:00.000Z").getTime()
+
+  const [cachedScoreResult, resumeSkillResult, similarByTitleResult, similarByCompanyResult] = await Promise.all([
+    // Lightweight cache check — joins match score with resume updated_at in one query.
+    // Avoids loading the full resume/profile on cache hits.
     session?.sub
-      ? scoreJobsForUser(session.sub, [id]).catch((err) => {
-          console.warn("Job page: match score preload failed", err)
-          return new Map<string, JobMatchScore>()
-        })
-      : Promise.resolve(new Map<string, JobMatchScore>()),
+      ? pool.query<CachedScoreRow>(
+          `SELECT jms.*, r.updated_at AS resume_updated_at
+           FROM job_match_scores jms
+           JOIN resumes r ON r.id = jms.resume_id
+             AND r.is_primary = true AND r.parse_status = 'complete'
+           WHERE jms.user_id = $1 AND jms.job_id = $2
+           ORDER BY jms.computed_at DESC
+           LIMIT 1`,
+          [session.sub, id]
+        )
+      : Promise.resolve({ rows: [] as CachedScoreRow[] }),
     session?.sub
       ? pool.query<ResumeSkillRow>(
-          `SELECT skills, top_skills, raw_text
+          `SELECT id, updated_at, skills, top_skills, raw_text
            FROM resumes
            WHERE user_id = $1 AND parse_status = 'complete'
            ORDER BY is_primary DESC, updated_at DESC
@@ -349,7 +393,69 @@ export default async function DashboardJobDetailPage({ params }: Props) {
       : Promise.resolve({ rows: [] as SimilarJob[] }),
   ])
 
-  const initialMatchScore = matchScoreMap.get(id) ?? null
+  // Resolve match score: cache hit (fast path) or fresh compute (slow path).
+  let initialMatchScore: JobMatchScore | null = null
+
+  if (session?.sub) {
+    const cached = cachedScoreResult.rows[0] ?? null
+    const resumeRow = resumeSkillResult.rows[0] ?? null
+
+    const isCacheFresh = cached && resumeRow && (() => {
+      const resumeVersion = Math.floor(new Date(resumeRow.updated_at).getTime() / 1000)
+      const computedAt = new Date(cached.computed_at).getTime()
+      return cached.resume_version === resumeVersion && computedAt >= SCORE_ALGORITHM_VERSION
+    })()
+
+    if (isCacheFresh && cached) {
+      // Fast path: cache hit — reconstruct skill pills from already-fetched resume skills
+      const jobSkills = job.skills ?? []
+      const resumeLabels = normalizeSkillList([
+        ...(resumeRow?.top_skills ?? []),
+        ...getSkillsBucketValues(resumeRow?.skills ?? null),
+      ])
+      const resumeLabelKeys = new Set(resumeLabels.map(s => normalizeSkillKey(s)))
+      const matchedSkills = jobSkills.filter(s => resumeLabelKeys.has(normalizeSkillKey(s)) || resumeLabels.some(r => skillMatches(s, r)))
+      const missingSkills = jobSkills.filter(s => !matchedSkills.includes(s))
+
+      initialMatchScore = {
+        ...cached,
+        score_breakdown: {
+          overallScore: cached.overall_score,
+          skillsScore: cached.skills_score,
+          experienceScore: cached.seniority_score,
+          seniorityScore: null,
+          locationScore: null,
+          employmentTypeScore: null,
+          sponsorshipScore: cached.sponsorship_score,
+          visaFitScore: null,
+          freshnessScore: null,
+          matchedSkills,
+          missingSkills,
+          totalRequiredSkills: cached.total_required_skills,
+          scoreMethod: cached.score_method as "fast" | "deep",
+          confidence: "medium",
+          concerns: [],
+          computedAt: cached.computed_at,
+        },
+      } as unknown as JobMatchScore
+    } else {
+      // Slow path: cache miss — fetch full context and compute fresh
+      try {
+        const context = await getScoringContextForUser(session.sub)
+        if (context) {
+          const score = computeFastScore({
+            resume: context.resume,
+            job: rawJob as unknown as Job,
+            profile: context.profile,
+          })
+          void upsertMatchScores([score]).catch(() => {})
+          initialMatchScore = score as unknown as JobMatchScore
+        }
+      } catch (err) {
+        console.warn("[job page] score compute failed:", err)
+      }
+    }
+  }
 
   const resumeSkillLabels = normalizeSkillList([
     ...(resumeSkillResult.rows[0]?.top_skills ?? []),

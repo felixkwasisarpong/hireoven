@@ -4,7 +4,7 @@ import { getPostgresPool } from "@/lib/postgres/server"
 import { createClient } from "@/lib/supabase/server"
 import type { JobMatchScore } from "@/types"
 
-const FAST_SCORE_ALGORITHM_UPDATED_AT = "2026-04-24T23:45:00.000Z"
+const FAST_SCORE_ALGORITHM_UPDATED_AT = "2026-05-06T20:00:00.000Z"
 
 const WITHIN_MS: Record<string, number> = {
   "1h": 3_600_000,
