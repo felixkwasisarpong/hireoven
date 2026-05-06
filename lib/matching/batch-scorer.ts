@@ -12,7 +12,9 @@ import type {
 const BACKGROUND_USER_LIMIT = 10_000
 const UPSERT_CHUNK_SIZE = 250
 const BACKGROUND_CONCURRENCY = 50
-const FAST_SCORE_ALGORITHM_UPDATED_AT = new Date("2026-05-05T00:00:00.000Z").getTime()
+// Bump this when the scoring algorithm changes to invalidate stale cached rows.
+const FAST_SCORE_ALGORITHM_UPDATED_AT = new Date("2026-05-06T20:00:00.000Z").getTime()
+const FAST_SCORE_ALGORITHM_UPDATED_AT_ISO = new Date(FAST_SCORE_ALGORITHM_UPDATED_AT).toISOString()
 
 function chunkArray<T>(items: T[], size: number) {
   const chunks: T[][] = []
@@ -197,52 +199,52 @@ export async function scoreJobsForUser(userId: string, jobIds: string[]) {
   const uniqueJobIds = Array.from(new Set(jobIds.filter(Boolean)))
   if (uniqueJobIds.length === 0) return new Map<string, JobMatchScore>()
 
+  const pool = getPostgresPool()
+
+  // Single query: fetch cached scores joined with resume updated_at for freshness.
+  // This avoids loading the full resume/profile until we know there are cache misses.
+  const existingResult = await pool.query<JobMatchScore & { resume_updated_at: string }>(
+    `SELECT jms.*, r.updated_at AS resume_updated_at
+     FROM job_match_scores jms
+     JOIN resumes r
+       ON r.id = jms.resume_id
+      AND r.user_id = jms.user_id
+      AND r.is_primary = true
+      AND r.parse_status = 'complete'
+     WHERE jms.user_id = $1
+       AND jms.job_id = ANY($2::uuid[])
+       AND jms.computed_at >= $3::timestamptz`,
+    [userId, uniqueJobIds, FAST_SCORE_ALGORITHM_UPDATED_AT_ISO]
+  )
+
+  const existingFreshScores = existingResult.rows.filter((row) => {
+    const computedAtMs = new Date(row.computed_at).getTime()
+    const resumeUpdatedAtMs = new Date(row.resume_updated_at).getTime()
+    return Number.isFinite(computedAtMs) && computedAtMs >= resumeUpdatedAtMs
+  })
+
+  const existingMap = new Map<string, JobMatchScore>(existingFreshScores.map((row) => [row.job_id, row]))
+  const missingJobIds = uniqueJobIds.filter((jobId) => !existingMap.has(jobId))
+
+  // All cached — return without loading resume/profile at all.
+  if (missingJobIds.length === 0) return existingMap
+
+  // Cache misses: now load the full context and compute.
   const context = await getScoringContextForUser(userId)
   if (!context) {
     console.warn("[scorer] no context for user", userId, "— resume missing or not complete")
-    return new Map<string, JobMatchScore>()
+    return existingMap
   }
-
-  const pool = getPostgresPool()
-  const existingScoresResult = await pool.query<JobMatchScore>(
-    `SELECT *
-     FROM job_match_scores
-     WHERE user_id = $1
-       AND resume_id = $2
-       AND job_id = ANY($3::uuid[])`,
-    [userId, context.resume.id, uniqueJobIds]
-  )
-
-  const resumeUpdatedAtMs = new Date(context.resume.updated_at).getTime()
-  const existingFreshScores = existingScoresResult.rows.filter((row) => {
-    const computedAtMs = new Date(row.computed_at).getTime()
-    return (
-      Number.isFinite(computedAtMs) &&
-      computedAtMs >= resumeUpdatedAtMs &&
-      computedAtMs >= FAST_SCORE_ALGORITHM_UPDATED_AT
-    )
-  })
-
-  const existingMap = new Map(existingFreshScores.map((row) => [row.job_id, row]))
-  const missingJobIds = uniqueJobIds.filter((jobId) => !existingMap.has(jobId))
-  console.log(`[scorer] user=${userId} total=${uniqueJobIds.length} cached=${existingMap.size} missing=${missingJobIds.length}`)
-  if (missingJobIds.length === 0) return existingMap
 
   const jobs = await getJobsByIds(missingJobIds)
   if (jobs.length === 0) return existingMap
 
   const scores = jobs.map((job) =>
-    computeFastScore({
-      resume: context.resume,
-      job,
-      profile: context.profile,
-    })
+    computeFastScore({ resume: context.resume, job, profile: context.profile })
   )
 
   const rows = await upsertMatchScores(scores)
-  for (const row of rows) {
-    existingMap.set(row.job_id, row)
-  }
+  for (const row of rows) existingMap.set(row.job_id, row)
 
   return existingMap
 }
