@@ -490,6 +490,9 @@ export type Company = {
   sponsorship_confidence: number;
   immigration_profile_summary?: CompanyImmigrationProfileSummary | null;
   hiring_health?: CompanyHiringHealth | null;
+  health_score?: number | null;
+  health_verdict?: HealthVerdict | null;
+  glassdoor_rating?: number | null;
   created_at: string;
   updated_at: string;
 };

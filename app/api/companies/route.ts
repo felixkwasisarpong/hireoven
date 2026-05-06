@@ -45,13 +45,19 @@ export async function GET(request: NextRequest) {
   if (hasJobs === "true") where.push("job_count > 0")
 
   const sortMap: Record<string, { col: string; asc: boolean }> = {
-    job_count: { col: "job_count", asc: false },
-    sponsorship_confidence: { col: "sponsorship_confidence", asc: false },
-    created_at: { col: "created_at", asc: false },
-    name: { col: "name", asc: true },
-    h1b_sponsor_count_1yr: { col: "h1b_sponsor_count_1yr", asc: false },
+    job_count: { col: "companies.job_count", asc: false },
+    sponsorship_confidence: { col: "companies.sponsorship_confidence", asc: false },
+    created_at: { col: "companies.created_at", asc: false },
+    name: { col: "companies.name", asc: true },
+    h1b_sponsor_count_1yr: { col: "companies.h1b_sponsor_count_1yr", asc: false },
+    health_score: { col: "chs.total_score", asc: false },
   }
   const { col, asc } = sortMap[sort] ?? sortMap.job_count
+
+  // qualify bare WHERE column references so they don't clash with the JOIN
+  const qualifiedWhere = where.map((clause) =>
+    clause === "is_active = true" ? "companies.is_active = true" : clause
+  )
 
   const pool = getPostgresPool()
 
@@ -60,10 +66,16 @@ export async function GET(request: NextRequest) {
     const offsetParam = addParam(offset)
 
     const result = await pool.query<Record<string, unknown> & { total_count: string }>(
-      `SELECT companies.*, COUNT(*) OVER()::text AS total_count
+      `SELECT
+         companies.*,
+         chs.total_score   AS health_score,
+         chs.verdict       AS health_verdict,
+         chs.glassdoor_rating,
+         COUNT(*) OVER()::text AS total_count
        FROM companies
-       WHERE ${where.join(" AND ")}
-       ORDER BY ${col} ${asc ? "ASC" : "DESC"}
+       LEFT JOIN company_health_scores chs ON chs.company_id = companies.id
+       WHERE ${qualifiedWhere.join(" AND ")}
+       ORDER BY ${col} ${asc ? "ASC" : "DESC"} NULLS LAST
        LIMIT ${limitParam}
        OFFSET ${offsetParam}`,
       values
