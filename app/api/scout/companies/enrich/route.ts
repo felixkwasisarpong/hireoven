@@ -96,6 +96,56 @@ export async function POST(request: Request) {
     )
     .catch(() => null)
 
+  // When a Glassdoor rating arrives, update company_health_scores in-place
+  // so the health badge reflects fresh data without waiting for a full recompute.
+  if (body.source === "glassdoor") {
+    const rating = body.signals?.rating
+    if (typeof rating === "number" && rating >= 1 && rating <= 5) {
+      pool.query(
+        `WITH gs AS (
+           SELECT
+             CASE
+               WHEN $2::numeric >= 4.5 THEN 25
+               WHEN $2::numeric >= 4.0 THEN 20
+               WHEN $2::numeric >= 3.5 THEN 14
+               WHEN $2::numeric >= 3.0 THEN 8
+               ELSE 2
+             END AS score
+         ),
+         upd AS (
+           UPDATE company_health_scores chs
+           SET
+             glassdoor_rating = $2::numeric,
+             glassdoor_score  = gs.score,
+             updated_at       = NOW()
+           FROM gs
+           WHERE chs.company_id = $1
+           RETURNING chs.company_id, chs.funding_score, chs.layoff_score,
+                     chs.headcount_score, gs.score AS glassdoor_score
+         )
+         UPDATE company_health_scores chs
+         SET
+           total_score = LEAST(100, GREATEST(0,
+             u.funding_score + u.layoff_score + u.headcount_score + u.glassdoor_score)),
+           verdict = CASE
+             WHEN LEAST(100, GREATEST(0,
+               u.funding_score + u.layoff_score + u.headcount_score + u.glassdoor_score)) >= 75
+               THEN 'strong'
+             WHEN LEAST(100, GREATEST(0,
+               u.funding_score + u.layoff_score + u.headcount_score + u.glassdoor_score)) >= 55
+               THEN 'healthy'
+             WHEN LEAST(100, GREATEST(0,
+               u.funding_score + u.layoff_score + u.headcount_score + u.glassdoor_score)) >= 35
+               THEN 'caution'
+             ELSE 'critical'
+           END
+         FROM upd u
+         WHERE chs.company_id = u.company_id`,
+        [companyId, rating],
+      ).catch(() => null)
+    }
+  }
+
   return NextResponse.json(
     { companyId, source: body.source, explicit: !!body.explicit },
     { headers: corsHeaders },

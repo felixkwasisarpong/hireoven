@@ -1,7 +1,5 @@
 import { getPostgresPool } from "@/lib/postgres/server"
 
-const CRUNCHBASE_KEY = process.env.CRUNCHBASE_API_KEY ?? ""
-
 export type FundingResult = {
   roundType: string | null
   amountUsd: number | null
@@ -13,39 +11,6 @@ export type FundingResult = {
 function monthsBetween(dateStr: string): number {
   const ms = Date.now() - new Date(dateStr).getTime()
   return Math.floor(ms / (1000 * 60 * 60 * 24 * 30.44))
-}
-
-// ── Crunchbase API ────────────────────────────────────────────────────────────
-
-async function trycrunchbase(companyName: string): Promise<FundingResult | null> {
-  if (!CRUNCHBASE_KEY) return null
-  try {
-    const permalink = companyName.toLowerCase().replace(/[^a-z0-9]+/g, "-")
-    const res = await fetch(
-      `https://api.crunchbase.com/api/v4/entities/organizations/${permalink}` +
-        `?field_ids=last_funding_type,last_funding_total,last_funding_at,num_funding_rounds` +
-        `&user_key=${CRUNCHBASE_KEY}`,
-      { headers: { "User-Agent": "HireOven/1.0" } }
-    )
-    if (!res.ok) return null
-    const data = await res.json() as {
-      properties?: {
-        last_funding_type?: string
-        last_funding_total?: { value: number; currency: string } | null
-        last_funding_at?: string | null
-      }
-    }
-    const props = data.properties
-    if (!props?.last_funding_at) return null
-    const date = props.last_funding_at
-    return {
-      roundType: props.last_funding_type ?? null,
-      amountUsd: props.last_funding_total?.value ?? null,
-      announcedDate: date,
-      leadInvestor: null,
-      monthsSince: monthsBetween(date),
-    }
-  } catch { return null }
 }
 
 // ── Public fallback — parse press release or news page ────────────────────────
@@ -99,8 +64,7 @@ export async function importFundingData(companyId: string, companyName: string):
   ).catch(() => ({ rows: [] as { domain: string | null }[] }))
   const domain = domainRes.rows[0]?.domain ?? null
 
-  // Try Crunchbase first, then public fallback
-  const result = await trycrunchbase(companyName) ?? await tryPublicFallback(companyName, domain)
+  const result = await tryPublicFallback(companyName, domain)
   if (!result?.announcedDate) return null
 
   // Persist to company_funding_data

@@ -62,7 +62,7 @@ async function computeFundingScore(companyId: string, companyName: string): Prom
     }
   }
 
-  let score = 3 // no data default
+  let score = 10 // neutral default when no public funding data
   if (monthsSince !== null) {
     if (monthsSince <= 12) score = 25
     else if (monthsSince <= 18) score = 20
@@ -95,7 +95,7 @@ async function computeFundingScore(companyId: string, companyName: string): Prom
       weight: score - 12,
       severity: score >= 20 ? "positive" : score >= 12 ? "neutral" : "warning",
       expandDetail: noData
-        ? "We couldn't find public funding data for this company. Check Crunchbase or LinkedIn for the latest."
+        ? "No public funding announcements found. This is neutral — many profitable or public companies don't publish round data."
         : `Score: ${score}/25. ${score >= 20 ? "Recent funding is a strong stability signal." : score >= 12 ? "Funding is ageing — watch for signs of the next round or profitability." : "This company hasn't raised in over 2 years. Runway may be a concern."}`,
     },
   }
