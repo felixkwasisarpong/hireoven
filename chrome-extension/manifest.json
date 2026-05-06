@@ -21,9 +21,11 @@
     "https://*.smartrecruiters.com/*",
     "https://*.bamboohr.com/*",
     "https://www.linkedin.com/*",
+    "https://*.linkedin.com/*",
+    "https://www.glassdoor.com/*",
     "https://*.glassdoor.com/*",
     "https://*.indeed.com/*",
-    "https://*.joinhandshake.com/*",
+    "https://app.joinhandshake.com/*",
     "https://www.google.com/*"
   ],
   "background": {
@@ -61,6 +63,26 @@
       "js": ["dist/content.js"],
       "run_at": "document_idle",
       "all_frames": true
+    },
+    {
+      "matches": ["https://www.linkedin.com/*", "https://*.linkedin.com/*"],
+      "js": ["dist/content/aggregators/linkedin/handler.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://www.glassdoor.com/*", "https://*.glassdoor.com/*"],
+      "js": ["dist/content/aggregators/glassdoor/handler.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://*.indeed.com/*"],
+      "js": ["dist/content/aggregators/indeed/handler.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://app.joinhandshake.com/*"],
+      "js": ["dist/content/aggregators/handshake/handler.js"],
+      "run_at": "document_idle"
     }
   ],
   "icons": {
