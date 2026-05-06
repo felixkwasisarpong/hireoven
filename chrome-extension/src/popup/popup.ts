@@ -14,6 +14,7 @@
  *   - Mark low-confidence fields as "Review"
  */
 
+import "./cta-prefs-panel"
 import type {
   AutofillExecuteResult,
   AutofillPreviewResult,
