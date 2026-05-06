@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
 
   const url = new URL(request.url)
   const mode = (url.searchParams.get("mode") ?? "crawl") as Mode
-  const limit = Math.min(200, Math.max(10, Number(url.searchParams.get("limit") ?? "100")))
+  const limit = Math.max(10, Number(url.searchParams.get("limit") ?? "500"))
 
   const pool = getPostgresPool()
   const started = Date.now()
