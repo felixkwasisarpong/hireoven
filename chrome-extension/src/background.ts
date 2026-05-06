@@ -379,6 +379,15 @@ async function queryContentScript(
 
 // ── Message handler ────────────────────────────────────────────────────────────
 
+import { dispatchScoutMessage } from "./scout-dispatcher"
+
+// Aggregator handler messages (linkedin/glassdoor/indeed/handshake) flow
+// through a dedicated dispatcher; register before the main listener so its
+// `return true` keeps the channel open for async responses.
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  return dispatchScoutMessage(message, sender, sendResponse)
+})
+
 chrome.runtime.onMessage.addListener(
   (
     message: BackgroundMessage,
@@ -390,6 +399,11 @@ chrome.runtime.onMessage.addListener(
     // the MVP listener's async response (Chrome's first-sendResponse-wins rule).
     const t = (message as { type?: unknown })?.type
     if (typeof t === "string" && t.startsWith("EXT_MVP_")) {
+      return false
+    }
+    // Same exclusion for the aggregator dispatcher — its messages start with SCOUT_
+    // and are handled by the listener above.
+    if (typeof t === "string" && t.startsWith("SCOUT_")) {
       return false
     }
     handleMessage(message, sender).then(sendResponse).catch(() => {
