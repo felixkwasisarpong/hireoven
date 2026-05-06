@@ -154,9 +154,15 @@ async function getTargetCompanies(action: CrawlAction): Promise<Company[]> {
 }
 
 export async function POST(request: NextRequest) {
-  const access = await assertAdminAccess()
-  if (!access.ok) {
-    return NextResponse.json({ error: access.error }, { status: access.status })
+  const cronSecret = process.env.CRON_SECRET
+  const authHeader = request.headers.get("authorization")
+  const isCron = cronSecret && authHeader === `Bearer ${cronSecret}`
+
+  if (!isCron) {
+    const access = await assertAdminAccess()
+    if (!access.ok) {
+      return NextResponse.json({ error: access.error }, { status: access.status })
+    }
   }
 
   const runId = crypto.randomUUID()
