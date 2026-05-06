@@ -175,7 +175,7 @@ export default function UpgradeModal() {
   }
 
   return createPortal(
-    <div className="fixed inset-0 flex items-center justify-center p-4" style={{ zIndex: 2147483647 }}>
+    <div className="fixed inset-0 flex items-end sm:items-center justify-center p-4 sm:p-6" style={{ zIndex: 2147483647 }}>
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-slate-900/50 backdrop-blur-[3px]"
@@ -183,7 +183,7 @@ export default function UpgradeModal() {
       />
 
       {/* Modal */}
-      <div className="relative w-full max-w-xl overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_32px_80px_rgba(15,23,42,0.22)]">
+      <div className="relative w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-3xl border border-slate-200 bg-white shadow-[0_32px_80px_rgba(15,23,42,0.22)]">
 
         {/* Header */}
         <div className="relative overflow-hidden border-b border-slate-100 px-6 py-5"
