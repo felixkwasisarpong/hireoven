@@ -538,6 +538,8 @@ export type Job = {
   h1b_prediction: H1BPrediction | null;
   h1b_prediction_at: string | null;
   job_intelligence?: JobIntelligence | null;
+  ghost_risk_score?: number | null;
+  ghost_risk_level?: string | null;
   created_at: string;
   updated_at: string;
 };
