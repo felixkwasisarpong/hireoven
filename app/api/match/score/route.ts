@@ -7,7 +7,7 @@ import type { JobMatchScore } from "@/types"
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-const FAST_SCORE_ALGORITHM_UPDATED_AT = new Date("2026-04-24T23:45:00.000Z").getTime()
+const FAST_SCORE_ALGORITHM_UPDATED_AT = new Date("2026-05-05T00:00:00.000Z").getTime()
 
 export async function GET(request: NextRequest) {
   try {

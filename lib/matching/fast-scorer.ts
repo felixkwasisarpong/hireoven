@@ -1,4 +1,5 @@
 import type {
+  Education,
   EmploymentType,
   Job,
   JobMatchScoreInsert,
@@ -178,6 +179,142 @@ function calculateEmploymentTypeScore(profile: Profile, job: Job) {
   return { employmentTypeScore: 30, isEmploymentTypeMatch: false }
 }
 
+// Higher rank means a higher degree. `none` covers candidates with no parsed education entries.
+const EDUCATION_LEVEL_RANK: Record<string, number> = {
+  none: 0,
+  high_school: 1,
+  associate: 2,
+  bachelor: 3,
+  master: 4,
+  doctorate: 5,
+}
+
+function classifyDegree(degree: string | null | undefined): number {
+  if (!degree) return 0
+  const text = degree.toLowerCase()
+  if (/(ph\.?d|doctor(ate)?|d\.phil|sc\.d|ed\.d)/.test(text)) return EDUCATION_LEVEL_RANK.doctorate
+  if (/(master|m\.?s\.?|m\.?eng|m\.?b\.?a|m\.?a\.?|mfa|mph)/.test(text)) return EDUCATION_LEVEL_RANK.master
+  if (/(bachelor|b\.?s\.?|b\.?a\.?|b\.?eng|undergrad)/.test(text)) return EDUCATION_LEVEL_RANK.bachelor
+  if (/(associate|a\.?s\.?|a\.?a\.?|diploma)/.test(text)) return EDUCATION_LEVEL_RANK.associate
+  if (/(high school|ged|secondary)/.test(text)) return EDUCATION_LEVEL_RANK.high_school
+  return 0
+}
+
+function highestCandidateEducation(education: Education[] | null | undefined): number {
+  if (!education?.length) return 0
+  let max = 0
+  for (const entry of education) {
+    const rank = classifyDegree(entry?.degree)
+    if (rank > max) max = rank
+  }
+  return max
+}
+
+function detectRequiredEducation(job: Job): {
+  required: number
+  isHardRequirement: boolean
+} {
+  const haystack = `${job.description ?? ""}\n${job.title ?? ""}`.toLowerCase()
+  if (!haystack.trim()) return { required: 0, isHardRequirement: false }
+
+  let required = 0
+  if (/(ph\.?d|doctor(ate|al)|d\.phil)/.test(haystack)) required = EDUCATION_LEVEL_RANK.doctorate
+  else if (/(master(?:'?s)?|m\.?s\.?\b|m\.?eng\b|m\.?b\.?a\b|graduate degree)/.test(haystack)) required = EDUCATION_LEVEL_RANK.master
+  else if (/(bachelor(?:'?s)?|b\.?s\.?\b|b\.?a\.?\b|undergraduate degree|four[- ]year degree)/.test(haystack)) required = EDUCATION_LEVEL_RANK.bachelor
+  else if (/(associate(?:'?s)?|a\.?a\.?\b|a\.?s\.?\b)/.test(haystack)) required = EDUCATION_LEVEL_RANK.associate
+  else if (/(high school|ged|secondary)/.test(haystack)) required = EDUCATION_LEVEL_RANK.high_school
+
+  const isHardRequirement =
+    required > 0 && /(required|must have|minimum|at least)/.test(haystack) && !/or equivalent|or relevant experience/.test(haystack)
+
+  return { required, isHardRequirement }
+}
+
+function calculateEducationScore(resume: Resume, job: Job) {
+  const candidate = highestCandidateEducation(resume.education)
+  const { required, isHardRequirement } = detectRequiredEducation(job)
+
+  if (required === 0) {
+    return { educationScore: 70, isEducationMatch: true }
+  }
+
+  if (candidate >= required) {
+    return { educationScore: 100, isEducationMatch: true }
+  }
+
+  const gap = required - candidate
+  if (gap === 1) {
+    return {
+      educationScore: isHardRequirement ? 45 : 65,
+      isEducationMatch: !isHardRequirement,
+    }
+  }
+
+  return {
+    educationScore: isHardRequirement ? 20 : 40,
+    isEducationMatch: false,
+  }
+}
+
+const STOP_WORDS = new Set([
+  "and", "or", "the", "a", "an", "of", "in", "for", "to", "with", "on", "at", "by", "as",
+  "senior", "sr", "junior", "jr", "lead", "principal", "staff", "director", "vp",
+  "engineer", "developer", "manager", "specialist", "analyst", "associate", "intern",
+  "i", "ii", "iii", "iv",
+])
+
+function tokenize(value: string | null | undefined): string[] {
+  if (!value) return []
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9+#./ -]/g, " ")
+    .split(/\s+/)
+    .filter((token) => token.length > 1 && !STOP_WORDS.has(token))
+}
+
+function jaccard(a: Set<string>, b: Set<string>): number {
+  if (a.size === 0 || b.size === 0) return 0
+  let intersection = 0
+  for (const token of a) {
+    if (b.has(token)) intersection += 1
+  }
+  const union = a.size + b.size - intersection
+  return union === 0 ? 0 : intersection / union
+}
+
+function calculateRoleFitScore(resume: Resume, job: Job) {
+  const jobTitleTokens = new Set(tokenize(job.normalized_title ?? job.title))
+  const resumeRoleTokens = new Set(tokenize(resume.primary_role))
+
+  if (jobTitleTokens.size === 0) {
+    return { roleFitScore: 60, isRoleFitMatch: true }
+  }
+
+  const titleSimilarity = jaccard(jobTitleTokens, resumeRoleTokens)
+
+  const description = (job.description ?? "").toLowerCase()
+  const industries = (resume.industries ?? []).filter(Boolean).map((value) => value.toLowerCase())
+  const topSkills = (resume.top_skills ?? []).filter(Boolean).map((value) => value.toLowerCase())
+
+  let descriptionMentionRate = 0
+  if (description) {
+    const targets = [...industries, ...topSkills, ...(resume.primary_role ? [resume.primary_role.toLowerCase()] : [])]
+    if (targets.length > 0) {
+      let hits = 0
+      for (const target of targets) {
+        if (target && description.includes(target)) hits += 1
+      }
+      descriptionMentionRate = hits / targets.length
+    }
+  }
+
+  const combined = titleSimilarity * 0.7 + descriptionMentionRate * 0.3
+  const roleFitScore = Math.round(Math.min(100, combined * 100 + (titleSimilarity > 0 ? 20 : 0)))
+  const clamped = Math.max(0, Math.min(100, roleFitScore))
+
+  return { roleFitScore: clamped, isRoleFitMatch: clamped >= 55 }
+}
+
 function calculateSponsorshipScore(profile: Profile, job: Job) {
   if (!profile.needs_sponsorship) {
     return { sponsorshipScore: 100, isSponsorshipCompatible: true }
@@ -225,6 +362,8 @@ export function computeFastScore({
     resume.seniority_level,
     job.seniority_level
   )
+  const { educationScore, isEducationMatch } = calculateEducationScore(resume, job)
+  const { roleFitScore, isRoleFitMatch } = calculateRoleFitScore(resume, job)
   const { locationScore, isLocationMatch } = calculateLocationScore(profile, job)
   const { employmentTypeScore, isEmploymentTypeMatch } =
     calculateEmploymentTypeScore(profile, job)
@@ -235,15 +374,17 @@ export function computeFastScore({
   const effectiveSkillsScore = skillsScore ?? 35
 
   let overallScore = Math.round(
-    effectiveSkillsScore * 0.4 +
-      seniorityScore * 0.25 +
-      locationScore * 0.15 +
-      employmentTypeScore * 0.1 +
+    effectiveSkillsScore * 0.3 +
+      roleFitScore * 0.2 +
+      seniorityScore * 0.15 +
+      educationScore * 0.1 +
+      locationScore * 0.1 +
+      employmentTypeScore * 0.05 +
       sponsorshipScore * 0.1
   )
 
   // Do not present a strong match when the posting did not expose usable skills.
-  // Location/seniority/sponsorship can suggest relevance, but not a confident role match.
+  // Title/seniority/sponsorship can suggest relevance, but not a confident role match.
   if (!hasVisibleSkillData) {
     overallScore = Math.min(overallScore, 62)
   }
@@ -264,10 +405,14 @@ export function computeFastScore({
     overall_score: overallScore,
     skills_score: skillsScore,
     seniority_score: seniorityScore,
+    education_score: educationScore,
+    role_fit_score: roleFitScore,
     location_score: locationScore,
     employment_type_score: employmentTypeScore,
     sponsorship_score: sponsorshipScore,
     is_seniority_match: isSeniorityMatch,
+    is_education_match: isEducationMatch,
+    is_role_fit_match: isRoleFitMatch,
     is_location_match: isLocationMatch,
     is_employment_type_match: isEmploymentTypeMatch,
     is_sponsorship_compatible: isSponsorshipCompatible,
