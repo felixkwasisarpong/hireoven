@@ -1,0 +1,44 @@
+name: Hourly crawl
+
+on:
+  schedule:
+    # Resolve unresolved companies at :00, crawl at :05 so resolver runs first
+    - cron: "0 * * * *"   # resolve — top of every hour
+    - cron: "5 * * * *"   # crawl  — 5 min later
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Crawl mode"
+        required: false
+        default: "crawl"
+        type: choice
+        options: [crawl, resolve, deep]
+      limit:
+        description: "Company limit"
+        required: false
+        default: "200"
+
+jobs:
+  resolve:
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '0 * * * *'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve ATS URLs
+        run: |
+          MODE=${{ github.event.inputs.mode || 'resolve' }}
+          LIMIT=${{ github.event.inputs.limit || '200' }}
+          curl -fsS \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "https://hireoven.com/api/cron/career-crawl?mode=${MODE}&limit=${LIMIT}" \
+            | jq .
+
+  crawl:
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '5 * * * *'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Crawl careers pages
+        run: |
+          curl -fsS \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "https://hireoven.com/api/cron/career-crawl?mode=crawl&limit=200" \
+            | jq .
