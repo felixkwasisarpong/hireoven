@@ -19,6 +19,10 @@ module.exports = {
     background: "./src/background.ts",
     content: "./src/content.ts",
     popup: "./src/popup/popup.ts",
+    "content/aggregators/linkedin/handler": "./src/content/aggregators/linkedin/handler.ts",
+    "content/aggregators/glassdoor/handler": "./src/content/aggregators/glassdoor/handler.ts",
+    "content/aggregators/indeed/handler": "./src/content/aggregators/indeed/handler.ts",
+    "content/aggregators/handshake/handler": "./src/content/aggregators/handshake/handler.ts",
   },
   output: {
     path: path.resolve(__dirname, "dist"),

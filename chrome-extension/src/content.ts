@@ -14,11 +14,7 @@ import { detectPage } from "./detectors/ats"
 import { extractJobWithMeta } from "./extractors/job"
 import { ScoutBar } from "./overlay/scout-bar"
 import { JobCardBadgeEngine } from "./overlay/job-card-badges"
-import {
-  mountScreenerBar,
-  unmountScreenerBar,
-  applyJobBoardFilters,
-} from "./overlay/job-screener"
+import { unmountScreenerBar } from "./overlay/job-screener"
 import {
   mountDetailScoutPanel,
   unmountDetailScoutPanel,
@@ -438,30 +434,17 @@ async function mountJobCardBadgesWhenReady(): Promise<void> {
       return
     }
 
-    // Screener bar shows only on search/list pages — detail pages get the
-    // Detail Scout panel instead.
-    if (mode === "job_board_search") {
-      void mountScreenerBar(site)
-      unmountDetailScoutPanel()
-    } else if (mode === "job_board_detail") {
-      // LinkedIn renders search + detail in the same shell (?currentJobId=…).
-      // Keep the screener bar mounted there so the user can still tweak
-      // filters on the list while reading a single job in the side pane.
-      if (window.location.pathname.includes("/jobs/search") ||
-          window.location.pathname.includes("/jobs/collections")) {
-        void mountScreenerBar(site)
-      } else {
-        unmountScreenerBar()
-      }
+    // Screener bar disabled — replaced by per-handler aggregator pills.
+    // The Detail Scout panel still renders on job-detail pages.
+    unmountScreenerBar()
+    if (mode === "job_board_detail") {
       void mountDetailScoutPanel(site)
     } else {
-      unmountScreenerBar()
       unmountDetailScoutPanel()
     }
 
     if (engine && lastSite === site) {
-      // Same site, just re-evaluate filters in case cards changed.
-      applyJobBoardFilters()
+      // Engine already running on this site; nothing else to do.
       return
     }
     engine?.stop()
