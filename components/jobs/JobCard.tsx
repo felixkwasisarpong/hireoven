@@ -24,6 +24,7 @@ import {
 import { JobCardEvidenceFactChips } from "@/components/jobs/card/JobCardEvidenceFactChips"
 import { RejectionBadge } from "@/components/rejections/RejectionBadge"
 import { EmployerHealthBadge } from "@/components/employers/EmployerHealthBadge"
+import { GhostRiskBadge } from "@/components/jobs/GhostRiskBadge"
 import { FairChanceBadge } from "@/components/background-check/FairChanceBadge"
 import { CohortBadge } from "@/components/cohorts/CohortBadge"
 import { useToast } from "@/components/ui/ToastProvider"
@@ -316,6 +317,7 @@ export default function JobCard({
                 <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1" onClick={(e) => e.stopPropagation()}>
                   <RejectionBadge companyId={job.company.id} jobTitle={job.title} />
                   <EmployerHealthBadge companyId={job.company.id} />
+                  <GhostRiskBadge riskScore={job.ghost_risk_score} riskLevel={job.ghost_risk_level} />
                   <FairChanceBadge companyId={job.company.id} />
                   <CohortBadge companyId={job.company.id} />
                 </div>

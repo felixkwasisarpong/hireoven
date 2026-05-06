@@ -61,9 +61,14 @@ export async function GET(request: NextRequest) {
 
     const [jobsResult, newInLastHourResult] = await Promise.all([
       pool.query<Record<string, unknown> & { company: unknown; total_count: string }>(
-        `SELECT jobs.*, to_jsonb(companies.*) AS company, COUNT(*) OVER()::text AS total_count
+        `SELECT jobs.*,
+                to_jsonb(companies.*) AS company,
+                gjs.risk_score AS ghost_risk_score,
+                gjs.risk_level AS ghost_risk_level,
+                COUNT(*) OVER()::text AS total_count
          FROM jobs
          LEFT JOIN companies ON companies.id = jobs.company_id
+         LEFT JOIN ghost_job_scores gjs ON gjs.job_id = jobs.id
          WHERE ${where.join(" AND ")}
          ORDER BY ${orderBy}
          LIMIT ${limitParam}
