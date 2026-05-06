@@ -175,7 +175,7 @@ export default function UpgradeModal() {
   }
 
   return createPortal(
-    <div className="fixed inset-0 flex items-end sm:items-center justify-center p-4 sm:p-6" style={{ zIndex: 2147483647 }}>
+    <div className="!fixed inset-0 flex items-center justify-center p-4 sm:p-6" style={{ zIndex: 2147483647 }}>
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-slate-900/50 backdrop-blur-[3px]"
