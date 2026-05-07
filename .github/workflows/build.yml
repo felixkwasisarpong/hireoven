@@ -69,13 +69,3 @@ jobs:
           build-args: |
             NEXT_PUBLIC_APP_URL=${{ vars.NEXT_PUBLIC_APP_URL }}
 
-      - name: Trigger Coolify redeploy
-        if: success()
-        env:
-          COOLIFY_WEBHOOK: ${{ secrets.COOLIFY_DEPLOY_WEBHOOK }}
-        run: |
-          if [ -z "$COOLIFY_WEBHOOK" ]; then
-            echo "COOLIFY_DEPLOY_WEBHOOK not set — skipping"
-            exit 0
-          fi
-          curl -fsSL -X GET "$COOLIFY_WEBHOOK"
