@@ -26,6 +26,7 @@ const CRAWLER_COMPANY_CONCURRENCY = Math.max(
   Number.parseInt(process.env.CRAWLER_COMPANY_CONCURRENCY ?? "4", 10)
 )
 const MAX_ERROR_MESSAGE_LENGTH = 800
+const CRAWL_ALLOWED_SQL = "COALESCE((raw_ats_config->>'crawl_allowed')::boolean, true) = true"
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -124,16 +125,19 @@ async function getTargetCompanies(action: CrawlAction): Promise<Company[]> {
   const pool = getPostgresPool()
 
   if (action.type === "company") {
-    const { rows } = await pool.query<Company>(`SELECT * FROM companies WHERE id = $1`, [
+    const { rows } = await pool.query<Company>(
+      `SELECT * FROM companies WHERE id = $1 AND ${CRAWL_ALLOWED_SQL}`,
+      [
       action.id,
-    ])
+      ]
+    )
     if (rows.length !== 1) throw new Error("Company not found")
     return rows
   }
 
   if (action.type === "all") {
     const { rows } = await pool.query<Company>(
-      `SELECT * FROM companies WHERE is_active = true`
+      `SELECT * FROM companies WHERE is_active = true AND ${CRAWL_ALLOWED_SQL}`
     )
     return rows
   }
@@ -148,7 +152,9 @@ async function getTargetCompanies(action: CrawlAction): Promise<Company[]> {
      SELECT c.*
      FROM companies c
      INNER JOIN latest l ON l.company_id = c.id
-     WHERE c.is_active = true AND l.status IN ('failed', 'blocked', 'bad_url', 'fetch_error')`
+     WHERE c.is_active = true
+       AND ${CRAWL_ALLOWED_SQL.replace("raw_ats_config", "c.raw_ats_config")}
+       AND l.status IN ('failed', 'blocked', 'bad_url', 'fetch_error')`
   )
   return rows
 }

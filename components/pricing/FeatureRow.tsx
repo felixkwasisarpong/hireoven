@@ -7,7 +7,7 @@ interface FeatureRowProps {
   feature: string
   free: boolean | string | number
   pro: boolean | string | number
-  proIntl: boolean | string | number
+  proMax: boolean | string | number
   tooltip?: string
   isGroupHeader?: boolean
 }
@@ -32,7 +32,7 @@ export default function FeatureRow({
   feature,
   free,
   pro,
-  proIntl,
+  proMax,
   tooltip,
   isGroupHeader = false,
 }: FeatureRowProps) {
@@ -80,7 +80,7 @@ export default function FeatureRow({
         <Cell value={pro} />
       </td>
       <td className="px-4 py-3">
-        <Cell value={proIntl} />
+        <Cell value={proMax} />
       </td>
     </tr>
   )

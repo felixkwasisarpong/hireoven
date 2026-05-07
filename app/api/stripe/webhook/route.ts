@@ -37,9 +37,27 @@ export async function POST(request: NextRequest) {
     case "checkout.session.completed": {
       const session = event.data.object as any
       const userId = session.metadata?.userId
+      if (!userId) break
+
+      // ── Live interview credit purchase ──────────────────────────────────
+      if (session.metadata?.type === "live_interview_credits") {
+        const credits = parseInt(session.metadata?.credits ?? "0", 10)
+        if (credits > 0) {
+          const { grantCredits } = await import("@/lib/scout/interview/credits")
+          await grantCredits(
+            userId,
+            credits,
+            "purchase",
+            session.payment_intent as string | undefined
+          )
+        }
+        break
+      }
+
+      // ── Subscription checkout ───────────────────────────────────────────
       const plan = session.metadata?.plan
       const interval = session.metadata?.interval ?? "monthly"
-      if (!userId || (plan !== "pro" && plan !== "pro_international")) break
+      if (!plan || (plan !== 'pro' && plan !== 'pro_max' && plan !== 'pro_international')) break
       if (interval !== "monthly" && interval !== "yearly") break
 
       const sub = await stripe.subscriptions.retrieve(session.subscription as string)

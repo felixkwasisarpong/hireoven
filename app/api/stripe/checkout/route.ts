@@ -10,9 +10,9 @@ const PRICE_IDS: Record<string, Record<string, string | undefined>> = {
     monthly: process.env.STRIPE_PRICE_PRO_MONTHLY,
     yearly: process.env.STRIPE_PRICE_PRO_YEARLY,
   },
-  pro_international: {
-    monthly: process.env.STRIPE_PRICE_INTL_MONTHLY,
-    yearly: process.env.STRIPE_PRICE_INTL_YEARLY,
+  pro_max: {
+    monthly: process.env.STRIPE_PRICE_PRO_MAX_MONTHLY,
+    yearly: process.env.STRIPE_PRICE_PRO_MAX_YEARLY,
   },
 }
 
@@ -26,7 +26,7 @@ export async function POST(request: Request) {
   const { plan = "pro", interval = "monthly" } = body
 
   if (
-    (plan !== "pro" && plan !== "pro_international") ||
+    (plan !== 'pro' && plan !== 'pro_max') ||
     (interval !== "monthly" && interval !== "yearly")
   ) {
     return NextResponse.json({ error: "Invalid plan or interval" }, { status: 400 })

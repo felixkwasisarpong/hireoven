@@ -55,8 +55,8 @@ async function main() {
 
     for (const row of res.rows) {
       scanned += 1
-      // Remote jobs are always in scope regardless of location string.
-      if (row.is_remote) continue
+      // Exclude only explicit foreign locations. Generic remote jobs with no
+      // country signal remain active and can still be US/CA eligible.
       if (isExplicitlyForeign({ location: row.location })) {
         toDeactivate.push(row)
       }

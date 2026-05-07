@@ -28,8 +28,8 @@ const FAQ_ITEMS = [
     a: "Yes, anytime from your billing settings. If you switch to yearly mid-month we'll prorate the difference.",
   },
   {
-    q: "I'm on OPT - which plan do I need?",
-    a: "Pro International is built for you. It includes the OPT countdown, sponsorship scoring, and urgency routing that prioritizes companies with fast H1B processes when your deadline is close.",
+    q: "I'm on OPT or H1B. Do I need to pay for international tools?",
+    a: "International tools are free for OPT, STEM OPT, and H1B candidates. Just set your visa status during signup. OPT countdown, offer risk analysis, urgency routing, and all sponsorship intelligence unlock automatically. Pro Max adds live interview sessions and unlimited AI tools on top.",
   },
   {
     q: "Does Hireoven help with the H1B application itself?",
@@ -55,40 +55,47 @@ const COMPARISON_ROWS: Array<{
   feature: string
   free: boolean | string | number
   pro: boolean | string | number
-  proIntl: boolean | string | number
+  proMax: boolean | string | number
   tooltip?: string
   isGroupHeader?: boolean
 }> = [
-  { feature: "Job discovery", free: "", pro: "", proIntl: "", isGroupHeader: true },
-  { feature: "Real-time job feed", free: true, pro: true, proIntl: true },
-  { feature: "Freshness scores", free: true, pro: true, proIntl: true },
-  { feature: "Company watchlist", free: "5 max", pro: "Unlimited", proIntl: "Unlimited" },
-  { feature: "Job alerts", free: "3 max", pro: "Unlimited", proIntl: "Unlimited" },
-  { feature: "Match scores on feed", free: false, pro: true, proIntl: true, tooltip: "AI-powered match score based on your resume and preferences" },
-  { feature: "Priority sponsor alerts", free: false, pro: false, proIntl: true, tooltip: "Get notified first when a high-sponsorship company posts a role" },
+  { feature: "Job discovery", free: "", pro: "", proMax: "", isGroupHeader: true },
+  { feature: "Real-time feed + freshness scores", free: true, pro: true, proMax: true },
+  { feature: "H1B badge on every listing", free: true, pro: true, proMax: true },
+  { feature: "Match scores", free: "Requires resume", pro: true, proMax: true, tooltip: "AI-powered match score based on your resume and preferences" },
+  { feature: "Company watchlist", free: "5 max", pro: "Unlimited", proMax: "Unlimited" },
+  { feature: "Job alerts", free: "3 max", pro: "Unlimited", proMax: "Unlimited" },
 
-  { feature: "Resume tools", free: "", pro: "", proIntl: "", isGroupHeader: true },
-  { feature: "Resume upload", free: false, pro: true, proIntl: true },
-  { feature: "AI parsing", free: false, pro: true, proIntl: true },
-  { feature: "Gap analysis", free: false, pro: "20/mo", proIntl: "Unlimited" },
-  { feature: "Resume editor", free: false, pro: true, proIntl: true },
-  { feature: "Cover letters", free: false, pro: "10/mo", proIntl: "Unlimited" },
-  { feature: "Autofill", free: false, pro: true, proIntl: true, tooltip: "Fill Greenhouse, Lever, and Ashby forms with one click" },
+  { feature: "Resume tools", free: "", pro: "", proMax: "", isGroupHeader: true },
+  { feature: "Resume upload", free: "3 resumes", pro: "Unlimited", proMax: "Unlimited" },
+  { feature: "Gap analysis", free: false, pro: "20/mo", proMax: "Unlimited" },
+  { feature: "AI resume editor", free: false, pro: true, proMax: true },
+  { feature: "Cover letters", free: false, pro: "25/mo", proMax: "Unlimited" },
+  { feature: "Application autofill", free: "10/mo", pro: "50/mo", proMax: "Unlimited", tooltip: "Fill Greenhouse, Lever, and Ashby forms with one click" },
 
-  { feature: "International", free: "", pro: "", proIntl: "", isGroupHeader: true },
-  { feature: "H1B score badges", free: true, pro: true, proIntl: true },
-  { feature: "Company sponsorship profiles", free: false, pro: true, proIntl: true },
-  { feature: "H1B petition history (3yr)", free: false, pro: false, proIntl: true },
-  { feature: "Sponsorship likelihood score", free: false, pro: false, proIntl: true },
-  { feature: "OPT countdown", free: false, pro: true, proIntl: true },
-  { feature: "OPT urgency routing", free: false, pro: false, proIntl: true, tooltip: "Jobs sorted by sponsorship speed when your OPT deadline is close" },
-  { feature: "Visa language detection", free: false, pro: false, proIntl: true },
+  { feature: "International (profile-gated on Free)", free: "", pro: "", proMax: "", isGroupHeader: true },
+  { feature: "Sponsorship profiles + H1B badges", free: true, pro: true, proMax: true },
+  { feature: "Sponsorship likelihood score", free: true, pro: true, proMax: true },
+  { feature: "Visa language detection on every JD", free: true, pro: true, proMax: true },
+  { feature: "H1B petition history (3yr)", free: true, pro: true, proMax: true },
+  { feature: "OPT countdown + offer risk analyzer", free: "Intl. profile", pro: true, proMax: true },
+  { feature: "OPT urgency routing", free: "Intl. profile", pro: true, proMax: true, tooltip: "Jobs sorted by sponsorship speed when your OPT deadline is close" },
+  { feature: "Priority alerts from sponsoring companies", free: "Intl. profile", pro: true, proMax: true },
 
-  { feature: "Applications", free: "", pro: "", proIntl: "", isGroupHeader: true },
-  { feature: "Basic tracker", free: true, pro: true, proIntl: true },
-  { feature: "Full kanban pipeline", free: true, pro: true, proIntl: true },
-  { feature: "AI interview prep", free: false, pro: true, proIntl: true },
-  { feature: "Offer comparison", free: false, pro: true, proIntl: true },
+  { feature: "Scout AI", free: "", pro: "", proMax: "", isGroupHeader: true },
+  { feature: "Scout chat", free: "5/day", pro: "30/day", proMax: "60/day" },
+  { feature: "Resume tailoring & actions", free: false, pro: true, proMax: true },
+  { feature: "Deep resume analysis", free: false, pro: "20/mo", proMax: "Unlimited" },
+  { feature: "Scout strategy & cohort insights", free: false, pro: false, proMax: true },
+
+  { feature: "Interviews", free: "", pro: "", proMax: "", isGroupHeader: true },
+  { feature: "Text + coding interviews", free: false, pro: true, proMax: true },
+  { feature: "Interview debrief with AI feedback", free: false, pro: true, proMax: true },
+  { feature: "Live voice + webcam interview", free: false, pro: false, proMax: "2 sessions/mo", tooltip: "$12 / 30-min · $20 / 60-min. Buy extra session packs anytime." },
+
+  { feature: "Applications", free: "", pro: "", proMax: "", isGroupHeader: true },
+  { feature: "Application tracker + kanban", free: true, pro: true, proMax: true },
+  { feature: "AI interview prep", free: false, pro: true, proMax: true },
 ]
 
 // ─── FAQ accordion item ───────────────────────────────────────────────────────
@@ -190,7 +197,7 @@ export default function PricingPage() {
       {/* ── Pricing cards ─────────────────────────────────────── */}
       <section className="px-6 pb-20">
         <div className="mx-auto max-w-5xl grid gap-6 md:grid-cols-3">
-          {(["free", "pro", "pro_international"] as PlanKey[]).map((plan) => (
+          {(["free", "pro", "pro_max"] as PlanKey[]).map((plan) => (
             <PricingCard
               key={plan}
               plan={plan}
@@ -262,7 +269,7 @@ export default function PricingPage() {
                   <th className="px-4 py-4 text-left text-sm font-semibold text-slate-700 w-1/2">Feature</th>
                   <th className="px-4 py-4 text-center text-sm font-semibold text-slate-700">Free</th>
                   <th className="px-4 py-4 text-center text-sm font-semibold text-[#0369A1] bg-[#F0FDFA]/60">Pro</th>
-                  <th className="px-4 py-4 text-center text-sm font-semibold text-[#1D4ED8]">Pro Intl.</th>
+                  <th className="px-4 py-4 text-center text-sm font-semibold text-[#ea580c]">Pro Max</th>
                 </tr>
               </thead>
               <tbody>

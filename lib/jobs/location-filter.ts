@@ -12,6 +12,11 @@ const REMOTE_RE = /\bremote\b/i
 const US_NAME_RE =
   /\b(united states(?:\s+of\s+america)?|u\.?\s*s\.?\s*a?\.?|usa)\b/i
 const CANADA_NAME_RE = /\bcanada\b/i
+// Many ATS feeds provide city-only locations (e.g. "San Francisco")
+// without country/state metadata. Accept a conservative set of major US/CA
+// tech hubs so we don't drop clearly in-scope jobs.
+const MAJOR_US_CA_CITY_RE =
+  /\b(san francisco(?!\s+de\b)(?:\s+bay\s+area)?|new york(?:\s+city)?|los angeles|san diego|san jose|santa clara|mountain view|palo alto|menlo park|redwood city|sunnyvale|seattle|bellevue|redmond|austin|boston|cambridge(?:,\s*ma)?|chicago|atlanta|dallas|houston|denver|raleigh|durham|phoenix|tempe|irvine|santa monica|sacramento|portland|miami|tampa|orlando|philadelphia|pittsburgh|minneapolis|madison|ann arbor|toronto|vancouver|montreal|waterloo|ottawa|calgary|edmonton|mississauga|kitchener)\b/i
 
 const US_STATES = new Set([
   "alabama","alaska","arizona","arkansas","california","colorado","connecticut","delaware",
@@ -111,9 +116,7 @@ export function isExplicitlyForeign(input: {
   location?: string | null
   workMode?: string | null
 }): boolean {
-  const haystack = [input.location, input.workMode]
-    .filter((s): s is string => typeof s === "string" && s.trim().length > 0)
-    .join(" | ")
+  const haystack = buildHaystack(input)
   if (!haystack) return false
   if (FOREIGN_COUNTRY_RE.test(haystack)) return true
   if (FOREIGN_CITY_RE.test(haystack)) return true
@@ -124,28 +127,80 @@ export function isAllowedLocation(input: {
   location?: string | null
   workMode?: string | null
 }): boolean {
-  const haystack = [input.location, input.workMode]
-    .filter((s): s is string => typeof s === "string" && s.trim().length > 0)
-    .join(" | ")
+  const haystack = buildHaystack(input)
 
   if (!haystack) return true
-
-  if (REMOTE_RE.test(haystack)) return true
-  if (US_NAME_RE.test(haystack)) return true
-  if (CANADA_NAME_RE.test(haystack)) return true
-
   const lower = haystack.toLowerCase()
+
+  let hasUsCaSignal = false
+  if (US_NAME_RE.test(haystack) || CANADA_NAME_RE.test(haystack)) {
+    hasUsCaSignal = true
+  }
   for (const name of US_STATES) {
-    if (lower.includes(name)) return true
+    if (lower.includes(name)) {
+      hasUsCaSignal = true
+      break
+    }
   }
-  for (const name of CA_PROVINCES) {
-    if (lower.includes(name)) return true
+  if (!hasUsCaSignal) {
+    for (const name of CA_PROVINCES) {
+      if (lower.includes(name)) {
+        hasUsCaSignal = true
+        break
+      }
+    }
+  }
+  if (!hasUsCaSignal && MAJOR_US_CA_CITY_RE.test(haystack)) {
+    hasUsCaSignal = true
   }
 
-  const tokens = haystack.match(/\b[A-Z]{2}\b/g) ?? []
-  for (const token of tokens) {
-    if (US_STATE_ABBR.has(token) || CA_PROVINCE_ABBR.has(token)) return true
+  if (!hasUsCaSignal) {
+    const tokens = extractRegionCodeTokens(haystack)
+    for (const token of tokens) {
+      if (US_STATE_ABBR.has(token) || CA_PROVINCE_ABBR.has(token)) {
+        hasUsCaSignal = true
+        break
+      }
+    }
   }
 
-  return false
+  // Strictly exclude explicit foreign locations unless they also include
+  // a US/Canada signal.
+  if (isExplicitlyForeign(input) && !hasUsCaSignal) {
+    return false
+  }
+
+  // Remote is allowed, including generic remote listings with no region hint.
+  if (REMOTE_RE.test(haystack)) return true
+
+  return hasUsCaSignal
+}
+
+function buildHaystack(input: {
+  location?: string | null
+  workMode?: string | null
+}): string {
+  return [input.location, input.workMode]
+    .filter((s): s is string => typeof s === "string" && s.trim().length > 0)
+    .join(" | ")
+}
+
+function extractRegionCodeTokens(raw: string): string[] {
+  const tokens = new Set<string>()
+
+  // 1) Keep existing all-caps detection (safe; low false-positive risk).
+  for (const match of raw.match(/\b[A-Z]{2}\b/g) ?? []) {
+    tokens.add(match)
+  }
+
+  // 2) Accept mixed/lowercase 2-letter region codes when they appear as
+  // delimited segments, e.g. "San Francisco, ca" or "Toronto / on".
+  for (const segment of raw.split(/[|,/;()\u2013\u2014-]+/)) {
+    const cleaned = segment.trim().replace(/\./g, "")
+    if (/^[A-Za-z]{2}$/.test(cleaned)) {
+      tokens.add(cleaned.toUpperCase())
+    }
+  }
+
+  return [...tokens]
 }

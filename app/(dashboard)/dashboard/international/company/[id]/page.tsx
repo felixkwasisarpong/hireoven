@@ -72,8 +72,11 @@ export default function CompanyProfilePage() {
 
   const meta = [company.industry, company.size].filter(Boolean).join(" · ")
 
-  // Only use logo_url when it's an absolute URL — local paths like /company-logos/*.svg are broken
-  const resolvedLogoUrl = company.logo_url?.startsWith("http") ? company.logo_url : null
+  // Allow absolute URLs and local proxy/assets (e.g. /api/logo?... or /company-logos/*.svg).
+  const resolvedLogoUrl = company.logo_url &&
+    (company.logo_url.startsWith("http") || company.logo_url.startsWith("/"))
+    ? company.logo_url
+    : null
 
   return (
     <main className="app-page bg-white">

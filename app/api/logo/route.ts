@@ -6,13 +6,25 @@ export const runtime = "nodejs"
 // from email clients where each image is a cold fetch.
 const CACHE_SECONDS = 60 * 60 * 24 * 7
 
+function getLogoDevPublishableToken(): string {
+  const candidates = [
+    process.env.NEXT_PUBLIC_LOGO_DEV_TOKEN,
+    process.env.LOGO_DEV_TOKEN,
+  ]
+  for (const raw of candidates) {
+    const token = (raw ?? "").trim()
+    if (token.startsWith("pk_")) return token
+  }
+  return ""
+}
+
 export async function GET(request: NextRequest) {
   const domain = request.nextUrl.searchParams.get("domain")?.trim().toLowerCase()
   if (!domain || !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(domain)) {
     return new NextResponse(null, { status: 400 })
   }
 
-  const token = process.env.LOGO_DEV_TOKEN?.trim()
+  const token = getLogoDevPublishableToken()
   const logoUrl = token
     ? `https://img.logo.dev/${encodeURIComponent(domain)}?token=${token}&size=64&format=png`
     : `https://logo.clearbit.com/${encodeURIComponent(domain)}`

@@ -13,7 +13,8 @@ interface SubscriptionState {
   trialDaysRemaining: number | null
   isLoading: boolean
   isPro: boolean
-  isProInternational: boolean
+  isProMax: boolean
+  isProInternational: boolean // backwards-compat alias
 }
 
 const SubscriptionContext = createContext<SubscriptionState | null>(null)
@@ -33,7 +34,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (!data) return
-        if (data.plan) setPlan(data.plan as Plan)
+        if (data.plan) { const p = data.plan === 'pro_international' ? 'pro_max' : data.plan; setPlan(p as Plan) }
         setStatus(data.status ?? null)
         setCurrentPeriodEnd(data.currentPeriodEnd ?? null)
         setBillingInterval(data.billingInterval ?? null)
@@ -55,8 +56,9 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
       cancelAtPeriodEnd,
       trialDaysRemaining,
       isLoading,
-      isPro: plan === "pro" || plan === "pro_international",
-      isProInternational: plan === "pro_international",
+      isPro: plan === "pro" || plan === "pro_max",
+      isProInternational: plan === "pro_max",
+      isProMax: plan === "pro_max",
     }),
     [
       plan,

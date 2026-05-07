@@ -11,6 +11,7 @@ import {
   LayoutGrid,
   LifeBuoy,
   Mails,
+  Mic,
   Plane,
   Search,
   Settings,
@@ -51,6 +52,7 @@ export const DASHBOARD_NAV_ITEMS: DashboardNavItem[] = [
   // ── Top level ───────────────────────────────────────────────────────────────
   { label: "Feed",           href: "/dashboard",                          icon: LayoutGrid },
   { label: "Scout",          href: "/dashboard/scout",                    icon: Sparkles,   gate: "scout_actions" },
+  { label: "Interview",      href: "/dashboard/interview",                icon: Mic },
 
   // ── My Career ───────────────────────────────────────────────────────────────
   { label: "Applications",   href: "/dashboard/applications",             icon: ClipboardList,  group: "My Career" },
@@ -64,13 +66,16 @@ export const DASHBOARD_NAV_ITEMS: DashboardNavItem[] = [
   { label: "Companies",      href: "/dashboard/companies",                icon: Building2,       group: "Research" },
 
   // ── International ────────────────────────────────────────────────────────────
+  // No gate — pages enforce the profile check (is_international / visa_status)
   { label: "International",  href: "/dashboard/international",            icon: Plane,           group: "International" },
-  { label: "Offer Risk",     href: "/dashboard/international/offer-risk", icon: ShieldAlert,     group: "International", gate: "international" },
+  { label: "Offer Risk",     href: "/dashboard/international/offer-risk", icon: ShieldAlert,     group: "International" },
 
   // ── Insights ─────────────────────────────────────────────────────────────────
   { label: "Cohorts",        href: "/dashboard/cohorts",                  icon: Users,           group: "Insights", gate: "scout_strategy" },
   { label: "Brand",          href: "/dashboard/brand",                    icon: TrendingUp,      group: "Insights", gate: "scout_strategy" },
   { label: "Fair Chance",    href: "/dashboard/background-check",         icon: ShieldCheck,     group: "Insights", gate: "scout_strategy" },
+  // interview_live gate for Pro Max — nav entry for live mode only (text/coding live in Interview hub)
+  // Note: Interview hub itself is gated at "pro" via the main Interview nav item
 
   // ── Footer ───────────────────────────────────────────────────────────────────
   { label: "Settings",       href: "/dashboard/billing",                  icon: Settings,   footer: true },

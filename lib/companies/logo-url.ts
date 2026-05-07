@@ -77,6 +77,19 @@ export type LogoProvider =
   | "duckduckgo"
   | "google-favicon"
 
+function getLogoDevPublishableToken(): string {
+  const candidates = [
+    process.env.NEXT_PUBLIC_LOGO_DEV_TOKEN,
+    process.env.LOGO_DEV_TOKEN,
+  ]
+  for (const raw of candidates) {
+    const token = (raw ?? "").trim()
+    // logo.dev board/logo URLs require publishable keys.
+    if (token.startsWith("pk_")) return token
+  }
+  return ""
+}
+
 export function normalizeCompanyDomain(domain: string) {
   return domain
     .trim()
@@ -178,10 +191,7 @@ export function companyLogoUrlFromDomain(
 
   switch (provider) {
     case "logo-dev": {
-      const token =
-        process.env.NEXT_PUBLIC_LOGO_DEV_TOKEN ??
-        process.env.LOGO_DEV_TOKEN ??
-        ""
+      const token = getLogoDevPublishableToken()
       if (token) {
         return `https://img.logo.dev/${encodeURIComponent(d)}?token=${encodeURIComponent(token)}`
       }
