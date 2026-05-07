@@ -100,6 +100,13 @@ function DashboardSubpageChrome({ children }: { children: React.ReactNode }) {
 function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const isMainFeed = pathname === "/dashboard"
+  const isImmersiveInterviewRoom =
+    pathname.startsWith("/dashboard/interview/live/") ||
+    pathname.startsWith("/dashboard/interview/coding/")
+
+  if (isImmersiveInterviewRoom) {
+    return children
+  }
 
   if (isMainFeed) {
     return (
