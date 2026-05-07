@@ -71,5 +71,11 @@ jobs:
 
       - name: Trigger Coolify redeploy
         if: success()
+        env:
+          COOLIFY_WEBHOOK: ${{ secrets.COOLIFY_DEPLOY_WEBHOOK }}
         run: |
-          curl -fsSL -X GET "${{ secrets.COOLIFY_DEPLOY_WEBHOOK }}"
+          if [ -z "$COOLIFY_WEBHOOK" ]; then
+            echo "COOLIFY_DEPLOY_WEBHOOK not set — skipping"
+            exit 0
+          fi
+          curl -fsSL -X GET "$COOLIFY_WEBHOOK"
