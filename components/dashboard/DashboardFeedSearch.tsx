@@ -16,11 +16,17 @@ export default function DashboardFeedSearch({ className }: { className?: string 
   const router = useRouter()
   const searchParams = useSearchParams()
   const searchQuery = getSearchQuery(searchParams)
-  const [draft, setDraft] = useState(searchQuery)
+  const [mounted, setMounted] = useState(false)
+  const [draft, setDraft] = useState("")
 
   const isFeed = pathname === "/dashboard"
 
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
   const commitToUrl = useCallback(() => {
+    if (!mounted) return
     if (isFeed) {
       if (draft === searchQuery) return
       const filters = parseJobFilters(searchParams)
@@ -34,14 +40,14 @@ export default function DashboardFeedSearch({ className }: { className?: string 
     }
     const trimmed = draft.trim()
     router.push(trimmed ? `/dashboard?q=${encodeURIComponent(trimmed)}` : "/dashboard")
-  }, [draft, isFeed, pathname, router, searchParams, searchQuery])
+  }, [draft, isFeed, mounted, pathname, router, searchParams, searchQuery])
 
   useEffect(() => {
     if (isFeed) setDraft(searchQuery)
-  }, [searchQuery, isFeed])
+  }, [searchQuery, isFeed, mounted])
 
   useEffect(() => {
-    if (!isFeed) return
+    if (!mounted || !isFeed) return
     const t = setTimeout(() => {
       if (draft === searchQuery) return
       const filters = parseJobFilters(searchParams)
@@ -53,7 +59,7 @@ export default function DashboardFeedSearch({ className }: { className?: string 
       router.replace(value ? `${pathname}?${value}` : pathname, { scroll: false })
     }, 300)
     return () => clearTimeout(t)
-  }, [draft, isFeed]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [draft, isFeed, mounted]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <label
@@ -67,6 +73,7 @@ export default function DashboardFeedSearch({ className }: { className?: string 
         id="dashboard-feed-q"
         type="search"
         value={draft}
+        suppressHydrationWarning
         onChange={(e) => setDraft(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === "Enter") {
@@ -78,16 +85,21 @@ export default function DashboardFeedSearch({ className }: { className?: string 
         className="h-full w-full min-w-0 flex-1 rounded-full border-0 bg-transparent pl-11 pr-10 text-[14px] text-slate-800 outline-none placeholder:text-slate-400"
         autoComplete="off"
       />
-      {draft ? (
-        <button
-          type="button"
-          onClick={() => setDraft("")}
-          className="absolute right-2 flex h-7 w-7 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
-          aria-label="Clear search"
-        >
-          <X className="h-4 w-4" />
-        </button>
-      ) : null}
+      <button
+        type="button"
+        onClick={() => setDraft("")}
+        disabled={!draft}
+        className={cn(
+          "absolute right-2 flex h-7 w-7 items-center justify-center rounded-full transition",
+          draft
+            ? "text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+            : "pointer-events-none text-transparent"
+        )}
+        aria-label="Clear search"
+        tabIndex={draft ? 0 : -1}
+      >
+        <X className="h-4 w-4" />
+      </button>
     </label>
   )
 }

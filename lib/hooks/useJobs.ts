@@ -255,6 +255,17 @@ function passRemoteToJobsApi(filters: JobFilters) {
   return Boolean(filters.remote) && !filters.hybrid && !filters.onsite
 }
 
+function hasClientOnlyPersonalizedFilters(filters: JobFilters) {
+  return Boolean(
+    filters.visa_fit?.length ||
+    filters.stem_opt_ready ||
+    filters.e_verify_signal ||
+    filters.cap_exempt_possible ||
+    filters.lca_salary_aligned ||
+    filters.ghost_risk_max
+  )
+}
+
 type UseJobsOptions = {
   personalized?: boolean
   withScores?: boolean
@@ -294,11 +305,14 @@ export function useJobs(
   const fetchChunk = useCallback(
     async (offset: number) => {
       const chunkSize = searchQuery.trim() ? SEARCH_CHUNK_SIZE : PAGE_SIZE
+      const requiresClientOnlyFiltering = hasClientOnlyPersonalizedFilters(filters)
 
       if (personalized) {
         const params = new URLSearchParams()
         if (searchQuery.trim()) params.set("q", searchQuery.trim())
         if (passRemoteToJobsApi(filters)) params.set("remote", "true")
+        if (filters.hybrid) params.set("hybrid", "true")
+        if (filters.onsite) params.set("onsite", "true")
         if (filters.sponsorship) params.set("sponsorship", "true")
         if (filters.seniority?.length) params.set("seniority", filters.seniority.join(","))
         if (filters.employment_type?.length) {
@@ -309,6 +323,14 @@ export function useJobs(
         if (filters.locationQuery?.trim()) {
           params.set("location", filters.locationQuery.trim())
         }
+        if (filters.min_salary != null && filters.min_salary > 0) {
+          params.set("minSalary", String(filters.min_salary))
+        }
+        if (filters.skills?.length) params.set("skills", filters.skills.join(","))
+        if (filters.industryQuery?.trim()) params.set("industry", filters.industryQuery.trim())
+        if (filters.hide_blockers) params.set("hideBlockers", "true")
+        if (filters.has_salary) params.set("hasSalary", "true")
+        if (filters.direct_ats_only) params.set("directAtsOnly", "true")
         params.set("limit", String(chunkSize))
         params.set("offset", String(offset))
 
@@ -327,9 +349,9 @@ export function useJobs(
         }
 
         const all = payload.jobs ?? []
-        const list = all.filter((job) =>
-          matchesClientFilters(job, filters, searchQuery)
-        )
+        const list = requiresClientOnlyFiltering
+          ? all.filter((job) => matchesClientFilters(job, filters, searchQuery))
+          : all
         return {
           rows: list,
           /** Keep offset in sync with server batch size, not after client-side filtering */
@@ -412,6 +434,14 @@ export function useJobs(
             )
 
             nextRows = personalized ? merged : sortJobs(merged, filters, searchQuery)
+
+            // Fast first paint: after a filter/reset, render the first chunk immediately
+            // instead of waiting for additional chunk fetches to complete.
+            if (reset && chunksFetched === 1) {
+              setAllJobs(nextRows)
+              setVisibleCount(Math.min(targetVisible, nextRows.length))
+              setHasMore(!exhausted || nextRows.length > targetVisible)
+            }
 
             if (exactCount !== null) {
               setTotalCount(exactCount)

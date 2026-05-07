@@ -82,6 +82,14 @@ export async function GET(request: NextRequest) {
   const remote = sp.get("remote") === "true"
   const sponsorship = sp.get("sponsorship") === "true"
   const location = sp.get("location")?.trim() ?? ""
+  const hybrid = sp.get("hybrid") === "true"
+  const onsite = sp.get("onsite") === "true"
+  const minSalary = Math.max(0, parseInt(sp.get("minSalary") ?? "0", 10) || 0)
+  const skills = parseList<string>(sp.get("skills"))?.map((value) => value.toLowerCase()) ?? []
+  const industryQuery = sp.get("industry")?.trim().toLowerCase() ?? ""
+  const hideBlockers = sp.get("hideBlockers") === "true"
+  const hasSalary = sp.get("hasSalary") === "true"
+  const directAtsOnly = sp.get("directAtsOnly") === "true"
   const within = sp.get("within") ?? "all"
   const limit = Math.min(100, parseInt(sp.get("limit") ?? "24", 10))
   const offset = Math.max(0, parseInt(sp.get("offset") ?? "0", 10))
@@ -130,6 +138,13 @@ export async function GET(request: NextRequest) {
   }
 
   const jobs = data.filter((job) => {
+    if (remote || hybrid || onsite) {
+      const matchesWorkMode =
+        (remote && job.is_remote) ||
+        (hybrid && job.is_hybrid) ||
+        (onsite && !job.is_remote && !job.is_hybrid)
+      if (!matchesWorkMode) return false
+    }
     if (!matchesSearch(job, q)) return false
     if (
       !matchesLocationFilter(job.location, location, {
@@ -137,6 +152,34 @@ export async function GET(request: NextRequest) {
       })
     ) {
       return false
+    }
+    if (minSalary > 0) {
+      if (job.salary_max != null && job.salary_max < minSalary) return false
+    }
+    if (skills.length > 0) {
+      const haystack = [
+        ...(job.skills ?? []),
+        job.title,
+        job.normalized_title ?? "",
+        job.description ?? "",
+      ]
+        .join(" ")
+        .toLowerCase()
+      for (const token of skills) {
+        const t = token.trim()
+        if (!t) continue
+        if (!haystack.includes(t)) return false
+      }
+    }
+    if (industryQuery) {
+      const industry = job.company?.industry?.toLowerCase() ?? ""
+      if (!industry.includes(industryQuery)) return false
+    }
+    if (hideBlockers && job.requires_authorization) return false
+    if (hasSalary && job.salary_min == null && job.salary_max == null) return false
+    if (directAtsOnly) {
+      const ats = job.company?.ats_type
+      if (!ats || ats === "custom") return false
     }
     return true
   })

@@ -17,18 +17,43 @@ import type {
   JobMatchScoreInsert,
   Profile,
   Resume,
+  WorkExperience,
   SeniorityLevel,
 } from "@/types"
 import {
+  canonicalizeSkill,
   getAllResumeSkillLabels,
   normalizeSkillKey,
-  skillMatches,
 } from "@/lib/skills/taxonomy"
 
 export interface FastScoreInput {
   resume: Resume
   job: Job
   profile: Profile
+  resumeContext?: FastScoreResumeContext
+}
+
+type ResumeExperienceSnapshot = {
+  title: string
+  titleTokens: Set<string>
+  seniorityTier: number
+  descriptionLower: string
+  is_current: boolean
+  endYear: number | null
+}
+
+export interface FastScoreResumeContext {
+  candidateSkillKeys: string[]
+  candidateSkillKeySet: Set<string>
+  experienceByRecency: ResumeExperienceSnapshot[]
+  experienceForTitles: ResumeExperienceSnapshot[]
+  hasProgressiveSeniority: boolean
+  topSeniorityTier: number
+  years: number
+  resumeIndustries: string[]
+  resumeIndustrySet: Set<string>
+  resumeCertificationsLower: string[]
+  semanticTokens: Set<string>
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -71,48 +96,72 @@ function clamp(v: number, lo = 0, hi = 1) {
   return Math.max(lo, Math.min(hi, v))
 }
 
+function rankExperienceByRecency(a: ResumeExperienceSnapshot, b: ResumeExperienceSnapshot) {
+  if (a.is_current !== b.is_current) return a.is_current ? -1 : 1
+  return (b.endYear ?? 0) - (a.endYear ?? 0)
+}
+
+function hasNormalizedSkillOverlap(requiredKey: string, candidateKey: string) {
+  if (!requiredKey || !candidateKey) return false
+  return (
+    requiredKey === candidateKey ||
+    (requiredKey.length >= 3 && candidateKey.includes(requiredKey)) ||
+    (candidateKey.length >= 3 && requiredKey.includes(candidateKey))
+  )
+}
+
 // ─── 1. Skills (weight 0.35) ──────────────────────────────────────────────────
 
-function inferLastUsedYear(skillName: string, resume: Resume): number | null {
+function inferLastUsedYear(
+  skillName: string,
+  experienceByRecency: ResumeExperienceSnapshot[]
+): number | null {
   const lower = skillName.toLowerCase()
-  const exps = [...(resume.work_experience ?? [])].sort((a, b) => {
-    if (a.is_current !== b.is_current) return a.is_current ? -1 : 1
-    return (extractYear(b.end_date) ?? 0) - (extractYear(a.end_date) ?? 0)
-  })
-  for (const exp of exps) {
-    if (exp.description.toLowerCase().includes(lower)) {
-      return exp.is_current ? CURRENT_YEAR : (extractYear(exp.end_date) ?? null)
+  for (const exp of experienceByRecency) {
+    if (exp.descriptionLower.includes(lower)) {
+      return exp.is_current ? CURRENT_YEAR : exp.endYear
     }
   }
   return null
 }
 
-function recency(skillName: string, resume: Resume): number {
-  const y = inferLastUsedYear(skillName, resume)
+function recency(skillName: string, resumeContext: FastScoreResumeContext): number {
+  const y = inferLastUsedYear(skillName, resumeContext.experienceByRecency)
   return y !== null && CURRENT_YEAR - y > 5 ? 0.5 : 1.0
 }
 
-function scoreSkills(resume: Resume, job: Job) {
+function scoreSkills(resumeContext: FastScoreResumeContext, job: Job) {
   const jobSkills = job.skills ?? []
   if (jobSkills.length === 0) {
     return { score: 1.0, matched: [] as string[], missing: [] as string[], evidence: "No skills listed for this role.", certGate: false }
   }
 
-  const candidate = getAllResumeSkillLabels(resume)
-  // Pre-normalise candidate keys once — avoids O(candidates) normalizations per job skill
-  const candidateNormKeys = new Set(candidate.map(c => normalizeSkillKey(c)))
   const missing: string[] = []
+  const missingSet = new Set<string>()
   let sum = 0
 
   for (const req of jobSkills) {
-    const reqKey = normalizeSkillKey(req)
+    const reqKey = normalizeSkillKey(canonicalizeSkill(req))
     // Fast-path: exact key match (Set lookup O(1))
-    // Slow-path: substring / canonicalization via skillMatches (only when key misses)
-    const found = candidateNormKeys.has(reqKey) || candidate.some(c => skillMatches(req, c))
-    found ? (sum += recency(req, resume)) : missing.push(req)
+    // Slow-path: normalized overlap check (only when key misses)
+    let found = resumeContext.candidateSkillKeySet.has(reqKey)
+    if (!found) {
+      for (const candidateKey of resumeContext.candidateSkillKeys) {
+        if (hasNormalizedSkillOverlap(reqKey, candidateKey)) {
+          found = true
+          break
+        }
+      }
+    }
+    if (found) {
+      sum += recency(req, resumeContext)
+      continue
+    }
+    missing.push(req)
+    missingSet.add(req)
   }
 
-  const matched = jobSkills.filter(s => !missing.includes(s))
+  const matched = jobSkills.filter((skill) => !missingSet.has(skill))
   let score = sum / jobSkills.length
   if (missing.length > 0) score = Math.min(score, 0.7)
 
@@ -128,19 +177,20 @@ function scoreSkills(resume: Resume, job: Job) {
 
 // ─── 2. Experience (weight 0.20) ──────────────────────────────────────────────
 
+const MIN_YEARS_PATTERNS = [
+  // Range "X-Y years" or "X to Y years" — always take the lower bound
+  /(\d+)\s*[-–to]\s*\d+\s*years?\s+of\s+(?:professional\s+|relevant\s+|work\s+)?(?:software\s+)?experience/i,
+  /(\d+)\+?\s*years?\s+of\s+(?:professional\s+|relevant\s+|work\s+)?(?:software\s+)?experience/i,
+  /(?:minimum|at least|minimum of)\s*(\d+)\s*\+?\s*years?\s+(?:of\s+)?(?:professional\s+|relevant\s+)?experience/i,
+  /(\d+)\+?\s*years?\s+(?:of\s+)?(?:relevant\s+|professional\s+|hands[- ]on\s+)?experience\b/i,
+  /experience\s*[:\-]?\s*(\d+)\+?\s*years?/i,
+]
+
 function extractMinYears(desc: string | null | undefined): number {
   if (!desc) return 0
   // Most specific patterns first; last resort excluded to avoid matching
   // company history ("15+ years in business") or unrelated numbers.
-  const patterns = [
-    // Range "X-Y years" or "X to Y years" — always take the lower bound
-    /(\d+)\s*[-–to]\s*\d+\s*years?\s+of\s+(?:professional\s+|relevant\s+|work\s+)?(?:software\s+)?experience/i,
-    /(\d+)\+?\s*years?\s+of\s+(?:professional\s+|relevant\s+|work\s+)?(?:software\s+)?experience/i,
-    /(?:minimum|at least|minimum of)\s*(\d+)\s*\+?\s*years?\s+(?:of\s+)?(?:professional\s+|relevant\s+)?experience/i,
-    /(\d+)\+?\s*years?\s+(?:of\s+)?(?:relevant\s+|professional\s+|hands[- ]on\s+)?experience\b/i,
-    /experience\s*[:\-]?\s*(\d+)\+?\s*years?/i,
-  ]
-  for (const re of patterns) {
+  for (const re of MIN_YEARS_PATTERNS) {
     const m = re.exec(desc)
     if (m) {
       const n = parseInt(m[1], 10)
@@ -177,12 +227,12 @@ const SENIORITY_YEAR_FLOOR: Partial<Record<SeniorityLevel, number>> = {
   junior: 1, mid: 3, senior: 5, staff: 7, principal: 8, director: 10, vp: 12, exec: 15,
 }
 
-function scoreExperience(resume: Resume, job: Job) {
+function scoreExperience(resumeContext: FastScoreResumeContext, job: Job) {
   const extracted = extractMinYears(job.description)
   const seniorityFloor = (job.seniority_level ? SENIORITY_YEAR_FLOOR[job.seniority_level] : 0) ?? 0
   // Use the higher of: what the JD explicitly says vs what the seniority implies
   const required = Math.max(extracted, seniorityFloor)
-  const years = candidateYears(resume)
+  const years = resumeContext.years
 
   if (required <= 0) {
     return {
@@ -236,26 +286,26 @@ function titleTokens(t: string): Set<string> {
   )
 }
 
-function scoreTitle(resume: Resume, job: Job) {
-  const exps = resume.work_experience ?? []
-  if (exps.length === 0) {
+function scoreTitle(resumeContext: FastScoreResumeContext, job: Job) {
+  if (resumeContext.experienceForTitles.length === 0) {
     return { score: 0.35, evidence: "No past titles on resume." }
   }
 
   const jdTok = titleTokens(job.title)
   let maxSim = 0
   let bestTitle = ""
-  for (const exp of exps) {
-    const sim = jaccard(jdTok, titleTokens(exp.title))
+  for (const exp of resumeContext.experienceForTitles) {
+    const sim = jaccard(jdTok, exp.titleTokens)
     if (sim > maxSim) { maxSim = sim; bestTitle = exp.title }
   }
 
   // Seniority progression bonus: ascending levels ending near target
-  const tiers = exps.map(e => seniorityTier(e.title))
-  const isProgressive = tiers.every((t, i) => i === 0 || tiers[i - 1] <= t)
-  const topTier = Math.max(...tiers)
   const targetTier = seniorityTier(job.title)
-  const bonus = isProgressive && tiers.length > 1 && topTier >= targetTier - 1 ? 0.1 : 0
+  const bonus = resumeContext.hasProgressiveSeniority &&
+    resumeContext.experienceForTitles.length > 1 &&
+    resumeContext.topSeniorityTier >= targetTier - 1
+    ? 0.1
+    : 0
 
   // Jaccard on title tokens is low (0.05–0.4); scale into useful range
   const score = clamp(maxSim * 1.8 + 0.25 + bonus)
@@ -421,31 +471,27 @@ function inferJobIndustry(job: Job): string | null {
   return null
 }
 
-function scoreDomain(resume: Resume, job: Job) {
-  const resumeIndustries = (resume.industries ?? []).map(i => i.toLowerCase().trim()).filter(Boolean)
-  if (resumeIndustries.length === 0) return { score: 0.5, evidence: "No industry history on resume." }
+function scoreDomain(resumeContext: FastScoreResumeContext, job: Job) {
+  if (resumeContext.resumeIndustries.length === 0) return { score: 0.5, evidence: "No industry history on resume." }
 
   const jobIndustry = inferJobIndustry(job)
   if (!jobIndustry) return { score: 0.65, evidence: "Job industry not determinable from description." }
 
-  // O(1) Set lookup instead of O(n) includes()
-  const resumeSet = new Set(resumeIndustries)
-
-  if (resumeSet.has(jobIndustry)) {
+  if (resumeContext.resumeIndustrySet.has(jobIndustry)) {
     return { score: 1.0, evidence: `Direct ${jobIndustry} industry experience.` }
   }
 
   // O(1) adjacency lookup via pre-built Map
   const adjacent = ADJACENT_MAP.get(jobIndustry)
   if (adjacent) {
-    for (const ind of resumeIndustries) {
+    for (const ind of resumeContext.resumeIndustries) {
       if (adjacent.has(ind)) {
         return { score: 0.7, evidence: `Adjacent industry experience (${ind} → ${jobIndustry}).` }
       }
     }
   }
 
-  return { score: 0.35, evidence: `No industry overlap (resume: ${resumeIndustries.slice(0, 2).join(", ")}; job: ${jobIndustry}).` }
+  return { score: 0.35, evidence: `No industry overlap (resume: ${resumeContext.resumeIndustries.slice(0, 2).join(", ")}; job: ${jobIndustry}).` }
 }
 
 // ─── 6. Certs (weight 0.05) ───────────────────────────────────────────────────
@@ -461,12 +507,13 @@ function extractRequiredCerts(desc: string | null | undefined): string[] {
   return [...found]
 }
 
-function scoreCerts(resume: Resume, job: Job) {
+function scoreCerts(resumeContext: FastScoreResumeContext, job: Job) {
   const required = extractRequiredCerts(job.description)
   if (required.length === 0) return { score: 1.0, evidence: "No certification requirements detected.", certGate: false }
 
-  const haveCerts = (resume.skills?.certifications ?? []).map(c => c.toLowerCase())
-  const missing = required.filter(req => !haveCerts.some(hc => hc.includes(req) || req.includes(hc)))
+  const missing = required.filter(
+    (req) => !resumeContext.resumeCertificationsLower.some((hc) => hc.includes(req) || req.includes(hc))
+  )
 
   if (missing.length > 0) {
     return { score: 0.0, evidence: `Missing required cert(s): ${missing.join(", ")}.`, certGate: true }
@@ -529,22 +576,14 @@ function extractRequirementsText(description: string | null | undefined): string
   return result.length > 80 ? result : description
 }
 
-function scoreSemanticOverlap(resume: Resume, job: Job) {
+function scoreSemanticOverlap(resumeContext: FastScoreResumeContext, job: Job) {
   // Only score against the requirements / responsibilities text, not boilerplate.
   const jdRequirements = extractRequirementsText(job.description)
   const jobTok = new Set(tokenize(`${job.title} ${jdRequirements}`))
 
-  const resumeText = [
-    ...(resume.skills?.technical ?? []),
-    ...(resume.skills?.soft ?? []),
-    ...(resume.top_skills ?? []),
-    ...(resume.work_experience ?? []).map(e => `${e.title} ${e.description}`),
-  ].join(" ")
-  const resumeTok = new Set(tokenize(resumeText))
-
   // Jaccard on requirements text is still low (0.05–0.35); ×2 maps a solid
   // match (jaccard≈0.30) to ~0.60 rather than instantly hitting 1.0.
-  const score = clamp(jaccard(resumeTok, jobTok) * 2)
+  const score = clamp(jaccard(resumeContext.semanticTokens, jobTok) * 2)
   return { score, evidence: `Requirements text overlap: ${(score * 100).toFixed(0)}%.` }
 }
 
@@ -574,16 +613,70 @@ export function getResumeVersion(resume: Resume): number {
   return Number.isFinite(t) && t > 0 ? Math.floor(t / 1000) : 1
 }
 
+function toResumeExperienceSnapshot(exp: WorkExperience): ResumeExperienceSnapshot {
+  return {
+    title: exp.title,
+    titleTokens: titleTokens(exp.title),
+    seniorityTier: seniorityTier(exp.title),
+    descriptionLower: exp.description.toLowerCase(),
+    is_current: exp.is_current,
+    endYear: extractYear(exp.end_date),
+  }
+}
+
+export function buildFastScoreResumeContext(resume: Resume): FastScoreResumeContext {
+  const candidateSkillKeys = getAllResumeSkillLabels(resume).map((candidateSkill) =>
+    normalizeSkillKey(canonicalizeSkill(candidateSkill))
+  )
+
+  const experienceForTitles = (resume.work_experience ?? []).map(toResumeExperienceSnapshot)
+  const experienceByRecency = [...experienceForTitles].sort(rankExperienceByRecency)
+  const tiers = experienceForTitles.map((exp) => exp.seniorityTier)
+  const hasProgressiveSeniority = tiers.every((tier, index) => index === 0 || tiers[index - 1] <= tier)
+  const topSeniorityTier = tiers.length > 0 ? Math.max(...tiers) : 2
+
+  const resumeIndustries = (resume.industries ?? [])
+    .map((industry) => industry.toLowerCase().trim())
+    .filter(Boolean)
+
+  const semanticText = [
+    ...(resume.skills?.technical ?? []),
+    ...(resume.skills?.soft ?? []),
+    ...(resume.top_skills ?? []),
+    ...(resume.work_experience ?? []).map((exp) => `${exp.title} ${exp.description}`),
+  ].join(" ")
+
+  return {
+    candidateSkillKeys,
+    candidateSkillKeySet: new Set(candidateSkillKeys),
+    experienceByRecency,
+    experienceForTitles,
+    hasProgressiveSeniority,
+    topSeniorityTier,
+    years: candidateYears(resume),
+    resumeIndustries,
+    resumeIndustrySet: new Set(resumeIndustries),
+    resumeCertificationsLower: (resume.skills?.certifications ?? []).map((cert) => cert.toLowerCase()),
+    semanticTokens: new Set(tokenize(semanticText)),
+  }
+}
+
 // ─── Main entry point ─────────────────────────────────────────────────────────
 
-export function computeFastScore({ resume, job, profile }: FastScoreInput): JobMatchScoreInsert {
-  const skills     = scoreSkills(resume, job)
-  const experience = scoreExperience(resume, job)
-  const title      = scoreTitle(resume, job)
+export function computeFastScore({
+  resume,
+  job,
+  profile,
+  resumeContext,
+}: FastScoreInput): JobMatchScoreInsert {
+  const context = resumeContext ?? buildFastScoreResumeContext(resume)
+  const skills     = scoreSkills(context, job)
+  const experience = scoreExperience(context, job)
+  const title      = scoreTitle(context, job)
   const education  = scoreEducation(resume, job)
-  const domain     = scoreDomain(resume, job)
-  const certs      = scoreCerts(resume, job)
-  const semantic   = scoreSemanticOverlap(resume, job)
+  const domain     = scoreDomain(context, job)
+  const certs      = scoreCerts(context, job)
+  const semantic   = scoreSemanticOverlap(context, job)
   const sponsorship = getSponsorshipScore(profile, job)
   const seniorityGap = getSeniorityGap(resume.seniority_level, job.seniority_level)
 

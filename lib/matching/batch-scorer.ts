@@ -1,5 +1,8 @@
 import pLimit from "p-limit"
-import { computeFastScore } from "@/lib/matching/fast-scorer"
+import {
+  buildFastScoreResumeContext,
+  computeFastScore,
+} from "@/lib/matching/fast-scorer"
 import { getPostgresPool } from "@/lib/postgres/server"
 import type {
   Job,
@@ -239,8 +242,14 @@ export async function scoreJobsForUser(userId: string, jobIds: string[]) {
   const jobs = await getJobsByIds(missingJobIds)
   if (jobs.length === 0) return existingMap
 
+  const resumeContext = buildFastScoreResumeContext(context.resume)
   const scores = jobs.map((job) =>
-    computeFastScore({ resume: context.resume, job, profile: context.profile })
+    computeFastScore({
+      resume: context.resume,
+      job,
+      profile: context.profile,
+      resumeContext,
+    })
   )
 
   const rows = await upsertMatchScores(scores)
