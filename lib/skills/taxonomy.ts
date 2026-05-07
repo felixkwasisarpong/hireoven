@@ -65,7 +65,7 @@ export const SKILL_DEFINITIONS: SkillDefinition[] = [
 
   // ─── Frontend ─────────────────────────────────────────────────────────────
   { label: "React",         aliases: ["react", "react.js", "reactjs"] },
-  { label: "Next.js",       aliases: ["next.js", "nextjs", "next"] },
+  { label: "Next.js",       aliases: ["next.js", "nextjs"] },
   { label: "Vue.js",        aliases: ["vue", "vue.js", "vuejs"] },
   { label: "Angular",       aliases: ["angular", "angularjs"] },
   { label: "Svelte",        aliases: ["svelte", "sveltekit"] },
