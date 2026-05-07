@@ -1,5 +1,5 @@
-export type AccessLevel = "public" | "auth" | "pro" | "pro_international"
-export type Plan = "free" | "pro" | "pro_international"
+export type AccessLevel = "public" | "auth" | "pro" | "pro_max"
+export type Plan = "free" | "pro" | "pro_max"
 
 export type FeatureKey =
   | "watchlist"
@@ -16,69 +16,74 @@ export type FeatureKey =
   | "scout_actions"
   | "scout_strategy"
   | "international"
+  | "international_advanced"
+  | "interview_live"
 
 export const FEATURE_GATES: Record<FeatureKey, AccessLevel> = {
-  // Free forever (still requires login where the product surfaces them)
-  watchlist: "public",
-  basic_alerts: "public",
-  match_scores: "public",
-  resume_upload: "public",
-  job_applications: "auth",
-  scout_basic: "auth",
-  // Metered for free users — quota lives in lib/usage/quotas.ts. The gate only
-  // checks "are you allowed in"; the per-feature counter decides "do you have
-  // credits left this period."
-  deep_analysis: "auth",
-  cover_letter: "auth",
-  // Pro-only (no free quota — gate is the only check)
-  autofill: "pro",
-  interview_prep: "pro",
-  scout_deep_analysis: "pro",
-  scout_actions: "pro",
-  scout_strategy: "pro",
-  // Pro + International add-on
-  international: "pro_international",
+  // Free forever
+  watchlist:              "public",
+  basic_alerts:           "public",
+  match_scores:           "public",   // data-gated (requires resume) — not plan-gated
+  resume_upload:          "public",
+  job_applications:       "auth",
+  scout_basic:            "auth",
+  autofill:               "auth",     // quota-gated: free=10/mo, pro=50/mo, pro_max=unlimited
+  // All international features free — pages enforce the profile check themselves
+  international:          "auth",
+  // Metered features (quota lives in lib/usage/quotas.ts)
+  deep_analysis:          "auth",
+  cover_letter:           "auth",
+  // Pro-only
+  interview_prep:         "pro",
+  scout_deep_analysis:    "pro",
+  scout_actions:          "pro",
+  // Pro Max only
+  international_advanced: "pro_max",
+  scout_strategy:         "pro_max",
+  interview_live:         "pro_max",
 }
 
 export const FEATURE_DESCRIPTIONS: Record<FeatureKey, string> = {
-  watchlist: "Save companies to your watchlist",
-  basic_alerts: "Create job alerts",
-  job_applications: "Track job applications",
-  resume_upload: "Upload your resume (1 on Free, more on Pro)",
-  deep_analysis: "AI-powered deep resume analysis",
-  cover_letter: "AI cover letter generation",
-  autofill: "One-click job application autofill",
-  match_scores: "See your match score for each job",
-  interview_prep: "AI interview prep questions",
-  scout_basic: "Basic Scout chat (free users get a daily quota)",
-  scout_deep_analysis: "Scout deep analysis and sponsorship intelligence",
-  scout_actions: "Scout advanced actions like resume tailoring",
-  scout_strategy: "Scout strategy plans and application performance insights",
-  international: "International job listings and visa data",
+  watchlist:              "Save companies to your watchlist",
+  basic_alerts:           "Create job alerts",
+  job_applications:       "Track job applications",
+  resume_upload:          "Upload your resume",
+  deep_analysis:          "AI-powered deep resume analysis",
+  cover_letter:           "AI cover letter generation",
+  autofill:               "One-click job application autofill",
+  match_scores:           "See your match score for each job",
+  interview_prep:         "AI interview prep questions",
+  scout_basic:            "Basic Scout chat",
+  scout_deep_analysis:    "Scout deep analysis and sponsorship intelligence",
+  scout_actions:          "Scout advanced actions like resume tailoring",
+  scout_strategy:         "Scout strategy plans and application performance insights",
+  international:          "International tools — OPT, offer risk, LCA explorer, sponsorship data",
+  international_advanced: "Advanced H1B intelligence — petition history, likelihood scores",
+  interview_live:         "Live voice + webcam mock interviews",
 }
 
 export const PLAN_NAMES: Record<Plan, string> = {
-  free: "Free",
-  pro: "Pro",
-  pro_international: "Pro + International",
+  free:    "Free",
+  pro:     "Pro",
+  pro_max: "Pro Max",
 }
 
 export const PLAN_PRICES = {
-  pro: { monthly: 19, annual: 14 },
-  pro_international: { monthly: 29, annual: 22 },
+  pro:     { monthly: 19, annual: 12 },
+  pro_max: { monthly: 29, annual: 19 },
 }
 
 const ACCESS_LEVEL_RANK: Record<AccessLevel, number> = {
-  public: 0,
-  auth: 1,
-  pro: 2,
-  pro_international: 3,
+  public:  0,
+  auth:    1,
+  pro:     2,
+  pro_max: 3,
 }
 
 const PLAN_ACCESS_LEVEL: Record<Plan, AccessLevel> = {
-  free: "auth",
-  pro: "pro",
-  pro_international: "pro_international",
+  free:    "auth",
+  pro:     "pro",
+  pro_max: "pro_max",
 }
 
 export function meetsAccessLevel(plan: Plan | null, required: AccessLevel): boolean {
@@ -96,10 +101,10 @@ export function requiredPlanFor(feature: FeatureKey): Plan | null {
   const level = FEATURE_GATES[feature]
   if (level === "public" || level === "auth") return null
   if (level === "pro") return "pro"
-  return "pro_international"
+  return "pro_max"
 }
 
 export const SOFT_LIMITS: Partial<Record<FeatureKey, number>> = {
-  watchlist: 5,
+  watchlist:    5,
   basic_alerts: 3,
 }

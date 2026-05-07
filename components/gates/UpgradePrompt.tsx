@@ -13,7 +13,7 @@ interface UpgradePromptProps {
 
 const PLAN_LABEL: Record<string, string> = {
   pro: "Pro",
-  pro_international: "Max",
+  pro_max: "Pro Max",
 }
 
 // ── Inline ────────────────────────────────────────────────────────────────────

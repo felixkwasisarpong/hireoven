@@ -5,7 +5,7 @@ import {
   PLAN_DATA,
   FREE_FEATURES,
   PRO_FEATURES,
-  PRO_INTL_FEATURES,
+  PRO_MAX_FEATURES,
   getSignupUrl,
   type BillingInterval,
   type PlanKey,
@@ -21,9 +21,9 @@ interface PricingCardProps {
 }
 
 const FEATURES: Record<PlanKey, string[]> = {
-  free: FREE_FEATURES,
-  pro: PRO_FEATURES,
-  pro_international: PRO_INTL_FEATURES,
+  free:    FREE_FEATURES,
+  pro:     PRO_FEATURES,
+  pro_max: PRO_MAX_FEATURES,
 }
 
 const CARD_STYLES: Record<PlanKey, { border: string; bg: string; badgeBg: string; badgeText: string; ctaClass: string; featureAccent: string }> = {
@@ -43,7 +43,7 @@ const CARD_STYLES: Record<PlanKey, { border: string; bg: string; badgeBg: string
     ctaClass: "bg-[#0369A1] text-white hover:bg-[#075985] shadow-[0_4px_16px_rgba(3,105,161,0.28)]",
     featureAccent: "text-[#0369A1]",
   },
-  pro_international: {
+  pro_max: {
     border: "border-[#ea580c]/20",
     bg: "bg-white",
     badgeBg: "bg-[#ea580c]",
@@ -71,7 +71,7 @@ export default function PricingCard({
   function getCtaLabel() {
     if (isCurrentPlan) return "Current plan"
     if (plan === "free" && isLoggedIn) return "Current plan"
-    if (plan === "pro" && userPlan === "pro_international") return "Downgrade"
+    if (plan === "pro" && userPlan === "pro_max") return "Downgrade"
     return data.cta
   }
 

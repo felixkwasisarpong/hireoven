@@ -22,15 +22,15 @@ import { cn } from "@/lib/utils"
 import type { BillingInterval, PlanKey } from "@/lib/pricing"
 
 const COMPARISON_ROWS: Array<{
-  feature: string; free: boolean | string | number; pro: boolean | string | number; proIntl: boolean | string | number; isGroupHeader?: boolean
+  feature: string; free: boolean | string | number; pro: boolean | string | number; proMax: boolean | string | number; isGroupHeader?: boolean
 }> = [
-  { feature: "Job discovery", free: "", pro: "", proIntl: "", isGroupHeader: true },
-  { feature: "Match scores", free: false, pro: true, proIntl: true },
-  { feature: "Watchlist", free: "5 max", pro: "Unlimited", proIntl: "Unlimited" },
-  { feature: "Job alerts", free: "3 max", pro: "Unlimited", proIntl: "Unlimited" },
-  { feature: "Resume tools", free: "", pro: "", proIntl: "", isGroupHeader: true },
-  { feature: "Cover letters", free: false, pro: "10/mo", proIntl: "Unlimited" },
-  { feature: "Deep analyses", free: false, pro: "20/mo", proIntl: "Unlimited" },
+  { feature: "Job discovery", free: "", pro: "", proMax: "", isGroupHeader: true },
+  { feature: "Match scores", free: false, pro: true, proMax: true },
+  { feature: "Watchlist", free: "5 max", pro: "Unlimited", proMax: "Unlimited" },
+  { feature: "Job alerts", free: "3 max", pro: "Unlimited", proMax: "Unlimited" },
+  { feature: "Resume tools", free: "", pro: "", proMax: "", isGroupHeader: true },
+  { feature: "Cover letters", free: false, pro: "10/mo", proMax: "Unlimited" },
+  { feature: "Deep analyses", free: false, pro: "20/mo", proMax: "Unlimited" },
 ]
 
 interface UsageData {
@@ -68,7 +68,7 @@ const STATUS_LABELS: Record<string, { label: string; color: string; dot: string 
 }
 
 function planAccent(plan: string) {
-  if (plan === "pro_international") {
+  if (plan === "pro_max") {
     return {
       gradient: "from-orange-500 via-rose-500 to-pink-500",
       ring: "ring-orange-200",
@@ -169,7 +169,7 @@ export default function BillingPage() {
   const resolvedInterval = billing?.billingInterval ?? billingInterval ?? "monthly"
   const resolvedAmountCents = billing?.amountCents ?? amountCents
   const resolvedCancelAtPeriodEnd = billing?.cancelAtPeriodEnd ?? cancelAtPeriodEnd
-  const isPro = currentPlan === "pro" || currentPlan === "pro_international"
+  const isPro = currentPlan === "pro" || currentPlan === "pro_max"
   const periodEndSource = billing?.currentPeriodEnd ?? currentPeriodEnd
   const periodEnd = periodEndSource
     ? new Date(periodEndSource).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })
@@ -280,12 +280,12 @@ export default function BillingPage() {
               <UsageMeter
                 label="Cover letters"
                 used={usage.cover_letters_used}
-                limit={currentPlan === "pro_international" ? null : 10}
+                limit={currentPlan === "pro_max" ? null : 10}
               />
               <UsageMeter
                 label="Deep analyses"
                 used={usage.analyses_used}
-                limit={currentPlan === "pro_international" ? null : 20}
+                limit={currentPlan === "pro_max" ? null : 20}
               />
             </div>
           </section>
@@ -312,7 +312,7 @@ export default function BillingPage() {
                 type="button"
                 onClick={() =>
                   startCheckout(
-                    currentPlan === "pro_international" ? "pro_international" : "pro",
+                    currentPlan === "pro_max" ? "pro_max" : "pro",
                     resolvedInterval === "yearly" ? "monthly" : "yearly"
                   )
                 }
@@ -404,7 +404,7 @@ export default function BillingPage() {
             title="Upgrade to Pro International"
             description="Unlimited cover letters, H1B sponsorship intel, and OPT urgency routing."
             ctaLabel="Upgrade"
-            onClick={() => startCheckout("pro_international", resolvedInterval)}
+            onClick={() => startCheckout("pro_max", resolvedInterval)}
           />
         )}
 
@@ -430,7 +430,7 @@ export default function BillingPage() {
                     <th className="w-1/2 px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">Feature</th>
                     <th className="px-4 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-slate-500">Free</th>
                     <th className="bg-sky-50/40 px-4 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-sky-700">Pro</th>
-                    <th className="px-4 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-orange-600">Pro Intl.</th>
+                    <th className="px-4 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-orange-600">Pro Max</th>
                   </tr>
                 </thead>
                 <tbody>

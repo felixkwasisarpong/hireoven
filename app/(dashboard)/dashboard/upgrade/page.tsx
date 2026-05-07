@@ -12,23 +12,40 @@ import { useSubscription } from "@/lib/hooks/useSubscription"
 import { type BillingInterval, type PlanKey } from "@/lib/pricing"
 
 const COMPARISON_ROWS: Array<{
-  feature: string; free: boolean | string | number; pro: boolean | string | number; proIntl: boolean | string | number; tooltip?: string; isGroupHeader?: boolean
+  feature: string; free: boolean | string | number; pro: boolean | string | number; proMax: boolean | string | number; tooltip?: string; isGroupHeader?: boolean
 }> = [
-  { feature: "Job discovery", free: "", pro: "", proIntl: "", isGroupHeader: true },
-  { feature: "Match scores", free: false, pro: true, proIntl: true },
-  { feature: "Company watchlist", free: "5 max", pro: "Unlimited", proIntl: "Unlimited" },
-  { feature: "Job alerts", free: "3 max", pro: "Unlimited", proIntl: "Unlimited" },
-  { feature: "Priority sponsor alerts", free: false, pro: false, proIntl: true },
-  { feature: "Resume tools", free: "", pro: "", proIntl: "", isGroupHeader: true },
-  { feature: "Resume upload + AI parsing", free: false, pro: true, proIntl: true },
-  { feature: "Gap analysis", free: false, pro: "20/mo", proIntl: "Unlimited" },
-  { feature: "Cover letters", free: false, pro: "10/mo", proIntl: "Unlimited" },
-  { feature: "Autofill", free: false, pro: true, proIntl: true },
-  { feature: "International", free: "", pro: "", proIntl: "", isGroupHeader: true },
-  { feature: "OPT countdown", free: false, pro: true, proIntl: true },
-  { feature: "H1B petition history", free: false, pro: false, proIntl: true },
-  { feature: "OPT urgency routing", free: false, pro: false, proIntl: true },
-  { feature: "Visa language detection", free: false, pro: false, proIntl: true },
+  { feature: "Job discovery", free: "", pro: "", proMax: "", isGroupHeader: true },
+  { feature: "Real-time feed + freshness scores", free: true, pro: true, proMax: true },
+  { feature: "H1B badge on every listing", free: true, pro: true, proMax: true },
+  { feature: "Match scores", free: "Requires resume", pro: true, proMax: true },
+  { feature: "Company watchlist", free: "5 max", pro: "Unlimited", proMax: "Unlimited" },
+  { feature: "Job alerts", free: "3 max", pro: "Unlimited", proMax: "Unlimited" },
+
+  { feature: "Resume tools", free: "", pro: "", proMax: "", isGroupHeader: true },
+  { feature: "Resume upload", free: "3 resumes", pro: "Unlimited", proMax: "Unlimited" },
+  { feature: "Gap analysis", free: false, pro: "20/mo", proMax: "Unlimited" },
+  { feature: "AI resume editor", free: false, pro: true, proMax: true },
+  { feature: "Cover letters", free: false, pro: "25/mo", proMax: "Unlimited" },
+  { feature: "Application autofill", free: "10/mo", pro: "50/mo", proMax: "Unlimited", tooltip: "Fill Greenhouse, Lever, and Ashby forms with one click" },
+
+  { feature: "International (profile-gated on Free)", free: "", pro: "", proMax: "", isGroupHeader: true },
+  { feature: "Sponsorship profiles + H1B badges", free: true, pro: true, proMax: true },
+  { feature: "Sponsorship likelihood score", free: true, pro: true, proMax: true },
+  { feature: "Visa language detection", free: true, pro: true, proMax: true },
+  { feature: "H1B petition history (3yr)", free: true, pro: true, proMax: true },
+  { feature: "OPT countdown, offer risk & urgency routing", free: "Intl. profile", pro: true, proMax: true },
+  { feature: "Priority alerts from sponsoring companies", free: "Intl. profile", pro: true, proMax: true },
+
+  { feature: "Scout AI", free: "", pro: "", proMax: "", isGroupHeader: true },
+  { feature: "Scout chat", free: "5/day", pro: "30/day", proMax: "60/day" },
+  { feature: "Resume tailoring & actions", free: false, pro: true, proMax: true },
+  { feature: "Deep analysis", free: false, pro: "20/mo", proMax: "Unlimited" },
+  { feature: "Strategy & cohort insights", free: false, pro: false, proMax: true },
+
+  { feature: "Interviews", free: "", pro: "", proMax: "", isGroupHeader: true },
+  { feature: "Text + coding interviews", free: false, pro: true, proMax: true },
+  { feature: "Interview debrief", free: false, pro: true, proMax: true },
+  { feature: "Live voice + webcam interview", free: false, pro: false, proMax: "2 sessions/mo" },
 ]
 
 type UsageData = {
@@ -47,7 +64,7 @@ export default function UpgradePage() {
   const { user, profile } = useAuth()
   const { plan: currentPlan, isLoading } = useSubscription()
 
-  const isIntlUser = profile?.visa_status || profile?.opt_end_date
+  const isIntlUser = profile?.is_international || profile?.visa_status || profile?.needs_sponsorship
 
   useEffect(() => {
     if (!user) return
@@ -65,7 +82,7 @@ export default function UpgradePage() {
     if (searchParams.get("checkout") !== "1") return
 
     const requestedPlan = searchParams.get("plan") as PlanKey | null
-    if (requestedPlan !== "pro" && requestedPlan !== "pro_international") return
+    if (requestedPlan !== "pro" && requestedPlan !== "pro_max") return
 
     autoCheckoutStarted.current = true
     void handleUpgrade(requestedPlan, initialInterval)
@@ -109,7 +126,10 @@ export default function UpgradePage() {
           </h1>
           {currentPlan && currentPlan !== "free" && (
             <p className="mt-2 text-sm text-slate-500">
-              You&apos;re on <span className="font-semibold capitalize">{currentPlan.replace("_", " ")}</span>. Upgrade for more.
+              You&apos;re on{" "}
+              <span className="font-semibold">
+                {currentPlan === "pro_max" ? "Pro Max" : currentPlan === "pro" ? "Pro" : currentPlan}
+              </span>. Upgrade for more.
             </p>
           )}
         </div>
@@ -136,8 +156,8 @@ export default function UpgradePage() {
             <div className="rounded-[16px] border border-slate-200 bg-white px-4 py-3">
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Usage this month</p>
               <p className="mt-1 text-sm text-slate-600">
-                You&apos;ve used <span className="font-semibold text-slate-900">{usage.cover_letters_used}</span> of 10 cover letters.
-                <span className="font-medium text-[#FF5C18]"> Upgrade for unlimited.</span>
+                You&apos;ve used <span className="font-semibold text-slate-900">{usage.cover_letters_used}</span> of 25 cover letters this month.
+                <span className="font-medium text-[#FF5C18]"> Upgrade to Pro Max for unlimited.</span>
               </p>
             </div>
             <div className="rounded-[16px] border border-slate-200 bg-white px-4 py-3">
@@ -153,7 +173,7 @@ export default function UpgradePage() {
         {/* Cards */}
         {!isLoading && (
           <div className="grid gap-6 md:grid-cols-3 mb-16">
-            {(["free", "pro", "pro_international"] as PlanKey[]).map((plan) => (
+            {(["free", "pro", "pro_max"] as PlanKey[]).map((plan) => (
               <PricingCard
                 key={plan}
                 plan={plan}
@@ -178,7 +198,7 @@ export default function UpgradePage() {
                 <th className="px-4 py-3.5 text-left text-sm font-semibold text-slate-700 w-1/2">Feature</th>
                 <th className="px-4 py-3.5 text-center text-sm font-semibold text-slate-700">Free</th>
                 <th className="px-4 py-3.5 text-center text-sm font-semibold text-[#0369A1] bg-[#F0FDFA]/60">Pro</th>
-                <th className="px-4 py-3.5 text-center text-sm font-semibold text-[#1D4ED8]">Pro Intl.</th>
+                <th className="px-4 py-3.5 text-center text-sm font-semibold text-[#ea580c]">Pro Max</th>
               </tr>
             </thead>
             <tbody>

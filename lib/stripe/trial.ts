@@ -3,7 +3,7 @@ import { getPlanAmountCents } from "@/lib/pricing"
 
 export async function startTrial(
   userId: string,
-  plan: "pro" | "pro_international",
+  plan: "pro" | "pro_max",
   interval: "monthly" | "yearly",
   trialEnd: Date,
   stripeSubscriptionId: string,

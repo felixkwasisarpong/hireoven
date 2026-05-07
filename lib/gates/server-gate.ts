@@ -3,14 +3,28 @@ import { getSessionUser, getSessionUserFromRequest } from "@/lib/auth/session-us
 import { getPostgresPool } from "@/lib/postgres/server"
 import { type FeatureKey, type Plan, canAccess, requiredPlanFor } from "./index"
 
-export async function getUserPlan(request?: NextRequest): Promise<{ userId: string | null; plan: Plan | null }> {
+const INTERNATIONAL_VISA_STATUSES = new Set(["opt", "stem_opt", "h1b", "green_card", "other"])
+
+/** Normalise the raw plan string from the DB.
+ *  Existing subscribers stored as "pro_international" are treated as pro_max.
+ */
+function normalisePlan(raw: string | null | undefined): Plan {
+  if (!raw) return "free"
+  if (raw === "pro_international") return "pro_max"
+  if (raw === "pro" || raw === "pro_max") return raw
+  return "free"
+}
+
+export async function getUserPlan(
+  request?: NextRequest
+): Promise<{ userId: string | null; plan: Plan | null }> {
   const session = request ? await getSessionUserFromRequest(request) : await getSessionUser()
   if (!session) return { userId: null, plan: null }
 
   const pool = getPostgresPool()
   try {
-    const result = await pool.query<{ plan: string | null; status: string | null }>(
-      `SELECT plan, status
+    const result = await pool.query<{ plan: string | null }>(
+      `SELECT plan
        FROM subscriptions
        WHERE user_id = $1
          AND status IN ('active', 'trialing')
@@ -18,23 +32,52 @@ export async function getUserPlan(request?: NextRequest): Promise<{ userId: stri
        LIMIT 1`,
       [session.sub]
     )
-    const sub = result.rows[0] ?? null
-
-    const plan: Plan = (sub?.plan as Plan) ?? "free"
+    const plan = normalisePlan(result.rows[0]?.plan)
     return { userId: session.sub, plan }
   } catch (error) {
-    const code = typeof error === "object" && error !== null && "code" in error ? (error as { code?: string }).code : null
-    // Local/test restores may not include billing tables; default to free instead of hard-failing APIs.
-    if (code === "42P01") {
-      return { userId: session.sub, plan: "free" }
-    }
+    const code =
+      typeof error === "object" && error !== null && "code" in error
+        ? (error as { code?: string }).code
+        : null
+    if (code === "42P01") return { userId: session.sub, plan: "free" }
     throw error
   }
 }
 
-export function gateResponse(status: 401 | 403, message: string, requiredPlan?: string): NextResponse {
+/** True when the user's profile indicates they are an international candidate.
+ *  Used to gate international tools — these are free, not plan-gated. */
+export async function isInternationalUser(userId: string): Promise<boolean> {
+  const pool = getPostgresPool()
+  const result = await pool.query<{
+    is_international: boolean
+    visa_status: string | null
+    needs_sponsorship: boolean
+  }>(
+    `SELECT is_international, visa_status, needs_sponsorship
+     FROM profiles
+     WHERE id = $1`,
+    [userId]
+  )
+  const p = result.rows[0]
+  if (!p) return false
+  return (
+    Boolean(p.is_international) ||
+    Boolean(p.needs_sponsorship) ||
+    INTERNATIONAL_VISA_STATUSES.has(p.visa_status ?? "")
+  )
+}
+
+export function gateResponse(
+  status: 401 | 403,
+  message: string,
+  requiredPlan?: string
+): NextResponse {
   return NextResponse.json(
-    { error: message, requiredPlan: requiredPlan ?? null, code: status === 401 ? "UNAUTHENTICATED" : "FORBIDDEN" },
+    {
+      error: message,
+      requiredPlan: requiredPlan ?? null,
+      code: status === 401 ? "UNAUTHENTICATED" : "FORBIDDEN",
+    },
     { status }
   )
 }
@@ -49,7 +92,33 @@ export async function requireFeature(
 
   if (!canAccess(plan, feature)) {
     const needed = requiredPlanFor(feature)
-    return gateResponse(403, `This feature requires the ${needed} plan`, needed ?? undefined)
+    return gateResponse(
+      403,
+      `This feature requires the ${needed} plan`,
+      needed ?? undefined
+    )
+  }
+
+  return { userId, plan: plan! }
+}
+
+/** Require auth + international profile. Returns 403 with a profile-prompt
+ *  error code if the user hasn't set their visa status. */
+export async function requireInternational(
+  request?: NextRequest
+): Promise<{ userId: string; plan: Plan } | NextResponse> {
+  const { userId, plan } = await getUserPlan(request)
+  if (!userId) return gateResponse(401, "Authentication required")
+
+  const intl = await isInternationalUser(userId)
+  if (!intl) {
+    return NextResponse.json(
+      {
+        error: "Set your visa status to access international tools.",
+        code: "INTERNATIONAL_PROFILE_REQUIRED",
+      },
+      { status: 403 }
+    )
   }
 
   return { userId, plan: plan! }
