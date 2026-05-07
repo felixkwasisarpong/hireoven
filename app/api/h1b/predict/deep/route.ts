@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getPostgresPool } from '@/lib/postgres/server'
 import { deepH1BAnalysis, predictH1BApproval } from '@/lib/h1b/predictor'
-import { canAccess, type Plan } from '@/lib/gates'
+import { canAccess, meetsAccessLevel, type Plan } from "@/lib/gates"
+import { isInternationalUser } from '@/lib/gates/server-gate'
 import type {
   Company,
   H1BPrediction,
@@ -35,13 +36,16 @@ export async function POST(request: NextRequest) {
     [user.id]
   )
   const sub = subResult.rows[0] ?? null
-  const plan: Plan = ((sub?.plan as Plan | null) ?? 'free') as Plan
+  const rawPlan = sub?.plan as string | null
+  const plan: Plan = rawPlan === 'pro_international' ? 'pro_max' : ((rawPlan as Plan | null) ?? 'free')
 
-  if (!canAccess(plan, 'international')) {
+  // Deep H1B analysis requires Pro or above + an international profile.
+  // Basic international data (sponsorship profiles, H1B history, etc.) is free.
+  if (!meetsAccessLevel(plan, 'pro') || !(await isInternationalUser(user.id))) {
     return NextResponse.json(
       {
-        error: 'Deep H1B analysis requires Pro International.',
-        upgrade: 'pro_international',
+        error: 'Deep H1B analysis requires a Pro plan and an international profile.',
+        upgrade: 'pro',
       },
       { status: 402 }
     )

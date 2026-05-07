@@ -307,7 +307,6 @@ export async function resolveDirectAtsUrl(
   // If already a direct ATS URL, just return it.
   if (
     normalized.provider !== "custom" &&
-    normalized.provider !== "icims" &&
     normalized.shouldPersist
   ) {
     return {

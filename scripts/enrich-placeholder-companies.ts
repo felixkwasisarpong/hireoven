@@ -34,7 +34,7 @@
  */
 
 import { loadEnvConfig } from '@next/env'
-import { createClient } from '@supabase/supabase-js'
+import { Pool } from 'pg'
 import { detectAtsFromHtml } from '../lib/companies/ats-signatures'
 import { detectAtsFromUrl } from '../lib/companies/detect-ats'
 import { companyLogoUrlFromDomain } from '../lib/companies/logo-url'
@@ -57,25 +57,20 @@ function flag(name: string): string | undefined {
 
 const execute = process.argv.includes('--execute')
 const retryFailed = process.argv.includes('--retry-failed')
+const allowHeuristicWrites = process.argv.includes('--allow-heuristic-writes')
 const limit = Number(flag('limit')) || undefined
 const concurrency = Math.max(1, Math.min(20, Number(flag('concurrency')) || 8))
 const fetchTimeoutMs = Math.max(1000, Number(flag('timeout-ms')) || 6000)
 
-// ---------------------------------------------------------------------------
-// Supabase admin client
-// ---------------------------------------------------------------------------
-
-const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-if (!url || !serviceKey) {
-  console.error(
-    'Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in env'
-  )
+const connectionString = process.env.DATABASE_URL ?? process.env.TARGET_POSTGRES_URL
+if (!connectionString) {
+  console.error('Missing DATABASE_URL or TARGET_POSTGRES_URL in env')
   process.exit(1)
 }
 
-const admin = createClient(url, serviceKey, {
-  auth: { persistSession: false, autoRefreshToken: false },
+const pool = new Pool({
+  connectionString,
+  ssl: process.env.PGSSLMODE === 'require' ? { rejectUnauthorized: false } : undefined,
 })
 
 const PLACEHOLDER_SOURCES = [
@@ -100,6 +95,17 @@ type PlaceholderRow = {
   } | null
 }
 
+type ActiveCareersRow = {
+  id: string
+  name: string
+  domain: string | null
+  careers_url: string
+  ats_type: string | null
+  logo_url: string | null
+}
+
+const activeCareersByNorm = new Map<string, ActiveCareersRow>()
+
 // ---------------------------------------------------------------------------
 // Fetch pending placeholders (all of them, paged - PostgREST caps at 1,000
 // per request by default, so we page in 1k chunks until exhausted).
@@ -107,34 +113,52 @@ type PlaceholderRow = {
 
 async function loadPending(): Promise<PlaceholderRow[]> {
   const statuses = retryFailed ? ['pending', 'failed'] : ['pending']
-  const pageSize = 1000
-  const all: PlaceholderRow[] = []
-  let offset = 0
+  const { rows } = await pool.query<PlaceholderRow>(
+    `SELECT id, name, domain, careers_url, ats_type, logo_url, is_active, raw_ats_config
+       FROM companies
+      WHERE is_active = false
+        AND ats_type IS NULL
+        AND (
+              domain ILIKE '%.lca-employer'
+           OR domain ILIKE '%.uscis-employer'
+           OR COALESCE(raw_ats_config->>'source', '') = ANY($1::text[])
+        )
+        AND COALESCE(raw_ats_config->>'ats_discovery_status', 'pending') = ANY($2::text[])
+      ORDER BY created_at ASC`,
+    [PLACEHOLDER_SOURCES, statuses]
+  )
 
-  for (;;) {
-    const q = (admin
-      .from('companies')
-      .select('id, name, domain, careers_url, ats_type, logo_url, is_active, raw_ats_config')
-      .in('raw_ats_config->>source', PLACEHOLDER_SOURCES)
-      .in('raw_ats_config->>ats_discovery_status', statuses)
-      .is('ats_type', null)
-      .order('created_at', { ascending: true })
-      .range(offset, offset + pageSize - 1) as unknown) as Promise<{
-      data: PlaceholderRow[] | null
-      error: { message: string } | null
-    }>
+  return limit ? rows.slice(0, limit) : rows
+}
 
-    const { data, error } = await q
-    if (error) throw new Error(`load placeholders: ${error.message}`)
-    const rows = data ?? []
-    all.push(...rows)
+function normalizeNameKey(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, '')
+}
 
-    if (limit && all.length >= limit) return all.slice(0, limit)
-    if (rows.length < pageSize) break
-    offset += pageSize
+async function loadActiveCareersMatches(): Promise<void> {
+  const { rows } = await pool.query<ActiveCareersRow>(
+    `SELECT id, name, domain, careers_url, ats_type, logo_url
+       FROM companies
+      WHERE is_active = true
+        AND careers_url IS NOT NULL
+        AND btrim(careers_url) <> ''
+        AND careers_url NOT ILIKE '%linkedin.com%'
+        AND (domain IS NULL OR (domain NOT ILIKE '%.lca-employer' AND domain NOT ILIKE '%.uscis-employer'))`
+  )
+
+  const byKey = new Map<string, ActiveCareersRow[]>()
+  for (const row of rows) {
+    const key = normalizeNameKey(row.name)
+    if (!key) continue
+    const arr = byKey.get(key) ?? []
+    arr.push(row)
+    byKey.set(key, arr)
   }
 
-  return all
+  activeCareersByNorm.clear()
+  for (const [key, arr] of byKey) {
+    if (arr.length === 1) activeCareersByNorm.set(key, arr[0]!)
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -143,6 +167,51 @@ async function loadPending(): Promise<PlaceholderRow[]> {
 
 const LEGAL_SUFFIXES =
   /\b(incorporated|inc|l\.?l\.?c\.?|llp|llp\.|corp|corporation|ltd|limited|co|company|plc|holdings|group|technologies|technology|solutions|services|systems|consulting|consultants|partners|us|usa|america|americas|north\s+america|na)\b\.?,?/gi
+
+const GENERIC_COMPANY_TOKENS = new Set([
+  'university',
+  'universities',
+  'college',
+  'colleges',
+  'institute',
+  'institutes',
+  'medical',
+  'medicine',
+  'health',
+  'healthcare',
+  'hospital',
+  'hospitals',
+  'center',
+  'centre',
+  'school',
+  'academy',
+  'polytechnic',
+  'faculty',
+  'research',
+  'system',
+  'systems',
+])
+
+const NAME_STOPWORDS = new Set([
+  'the',
+  'of',
+  'for',
+  'and',
+  'at',
+  'in',
+  'on',
+  'to',
+  'jr',
+  'sr',
+])
+
+function likelyHigherEdName(name: string): boolean {
+  return /\b(university|college|institute|school|academy|polytechnic|seminary|conservatory)\b/i.test(name)
+}
+
+function isTrustedHigherEdDomain(domain: string): boolean {
+  return /\.(edu|org|gov)$/i.test(domain)
+}
 
 /**
  * Generate multiple plausible public domains for a raw employer name.
@@ -163,11 +232,16 @@ const LEGAL_SUFFIXES =
 function guessCandidateDomains(name: string): string[] {
   const raw = name.trim().toLowerCase()
   if (!raw) return []
+  const likelyHigherEd =
+    /\b(university|college|institute|school|academy|polytechnic|seminary|conservatory)\b/.test(raw)
 
   const stripped = raw.replace(LEGAL_SUFFIXES, ' ').replace(/\s+/g, ' ').trim()
   const words = stripped
     .split(/[^a-z0-9]+/)
     .filter((w) => w.length > 0)
+  const informativeWords = words.filter(
+    (w) => w.length >= 4 && !GENERIC_COMPANY_TOKENS.has(w) && !NAME_STOPWORDS.has(w)
+  )
 
   // Insertion-ordered list - order matters! Earlier candidates are
   // preferred because the first successful ATS detection wins. We put
@@ -175,7 +249,7 @@ function guessCandidateDomains(name: string): string[] {
   // to avoid domain-squatter hits like "cf.com" winning over "chime.com".
   const out: string[] = []
   const seen = new Set<string>()
-  const add = (label: string | null, tlds: string[] = ['com']) => {
+  const add = (label: string | null, tlds: string[] = likelyHigherEd ? ['edu', 'com'] : ['com']) => {
     if (!label || label.length < 2) return
     for (const tld of tlds) {
       const d = `${label}.${tld}`
@@ -188,9 +262,22 @@ function guessCandidateDomains(name: string): string[] {
 
   // 1) Full stripped name joined - most specific form. "infosys".
   add(words.join(''))
+  if (likelyHigherEd && informativeWords.length > 0) {
+    // Higher-ed names often map to a short brand token: "stanford.edu",
+    // "northwestern.edu", "brown.edu", etc.
+    add(informativeWords[0], ['edu', 'org'])
+    add(informativeWords[informativeWords.length - 1], ['edu', 'org'])
+  }
 
   // 2) Hyphenated stripped name - "tata-consultancy-services.com".
   if (words.length > 1) add(words.join('-'))
+  if (likelyHigherEd && informativeWords.length >= 2) {
+    add(`${informativeWords[0]}${informativeWords[1]}`, ['edu', 'org'])
+    add(
+      `${informativeWords[informativeWords.length - 2]}${informativeWords[informativeWords.length - 1]}`,
+      ['edu', 'org']
+    )
+  }
 
   // 3) Raw slug including legal suffix - catches literal domains like
   //    "somecompanyllc.com" that some small firms actually own.
@@ -205,14 +292,14 @@ function guessCandidateDomains(name: string): string[] {
 
   // 6) First word alone - only if it's ≥ 4 chars (avoids picking up
   //    `tata.com` or `adp.com` when those are owned by other orgs).
-  if (words.length > 1 && words[0].length >= 4) add(words[0])
+  if (!likelyHigherEd && words.length > 1 && words[0].length >= 4) add(words[0])
 
   // 7) Acronym - ONLY when ≥ 4 letters. Short 2–3 letter acronyms
   //    (`cf.com`, `sri.com`, `rm.com`, `ml.com`, `dbs.com`) are almost
   //    always owned by a different company and cause catastrophic
   //    false positives. Requiring length ≥ 4 cuts the false-positive
   //    rate without losing many real hits.
-  if (words.length >= 2) {
+  if (!likelyHigherEd && words.length >= 2) {
     const acronym = words.map((w) => w[0]).join('')
     if (acronym.length >= 4 && acronym.length <= 6) add(acronym)
   }
@@ -249,19 +336,24 @@ function isDomainPlausible(companyName: string, verifiedDomain: string | null): 
   const rootLabel = host.split('.')[0] ?? ''
   if (!rootLabel) return false
 
+  if (/^(university|college|institute|medical|health|hospital|school|center|centre)$/.test(rootLabel)) {
+    return false
+  }
+
   const nameTokens = companyName
     .toLowerCase()
     .replace(LEGAL_SUFFIXES, ' ')
     .split(/[^a-z0-9]+/)
-    .filter((w) => w.length >= 3) // tokens shorter than 3 chars are noise
+    .filter((w) => w.length >= 3 && !GENERIC_COMPANY_TOKENS.has(w))
+  if (nameTokens.length === 0) return false
 
   // Substring match: any token ≥ 4 chars appearing inside the root label,
   // OR the root label appearing inside the collapsed name.
   const collapsedName = nameTokens.join('')
   for (const tok of nameTokens) {
-    if (tok.length >= 4 && rootLabel.includes(tok)) return true
+    if (tok.length >= 5 && rootLabel.includes(tok)) return true
   }
-  if (rootLabel.length >= 4 && collapsedName.includes(rootLabel)) return true
+  if (rootLabel.length >= 5 && collapsedName.includes(rootLabel)) return true
 
   // Acronym path: only accept if the root label is itself a 4+ letter
   // acronym formed from the name's word initials.
@@ -416,9 +508,11 @@ function looksLikeCareersPage(html: string): boolean {
 }
 
 type EnrichOutcome =
+  | { kind: 'active-match'; linkedCompanyId: string; domain: string | null; careersUrl: string }
   | { kind: 'ats-detected'; atsType: string; confidence: string; domain: string; careersUrl: string }
   | { kind: 'custom-careers'; domain: string; careersUrl: string }
   | { kind: 'domain-only'; domain: string }
+  | { kind: 'heuristic-skip'; guessed: string | null }
   | { kind: 'no-match'; guessed: string | null }
   | { kind: 'fetch-failed'; guessed: string | null }
 
@@ -428,53 +522,109 @@ async function updateCompanyWithDomainHandling(
   verifiedDomain?: string
 ): Promise<void> {
   const payload = verifiedDomain ? { ...update, domain: verifiedDomain } : update
-  const { error } = await admin.from('companies').update(payload as never).eq('id', rowId)
-  if (!error) return
+  const fields = Object.entries(payload)
+  const setClauses: string[] = []
+  const values: unknown[] = []
 
-  const isDomainConflict =
-    Boolean(verifiedDomain) &&
-    (error.message.includes('23505') ||
-      /duplicate|unique/i.test(error.message))
+  for (const [key, value] of fields) {
+    values.push(key === 'raw_ats_config' ? JSON.stringify(value ?? {}) : value)
+    setClauses.push(
+      key === 'raw_ats_config'
+        ? `${key} = $${values.length}::jsonb`
+        : `${key} = $${values.length}`
+    )
+  }
+  values.push(rowId)
 
-  if (!isDomainConflict) {
-    throw new Error(`company update failed: ${error.message}`)
+  try {
+    await pool.query(
+      `UPDATE companies SET ${setClauses.join(', ')} WHERE id = $${values.length}`,
+      values
+    )
+    return
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error)
+    const isDomainConflict =
+      Boolean(verifiedDomain) &&
+      (message.includes('23505') || /duplicate|unique/i.test(message))
+
+    if (!isDomainConflict) {
+      throw new Error(`company update failed: ${message}`)
+    }
   }
 
-  const { data: conflictRow } = await admin
-    .from('companies')
-    .select('id')
-    .eq('domain', verifiedDomain!)
-    .maybeSingle()
+  const conflict = await pool.query<{ id: string }>(
+    `SELECT id FROM companies WHERE domain = $1 LIMIT 1`,
+    [verifiedDomain]
+  )
 
   const existingRaw = (update.raw_ats_config as Record<string, unknown> | undefined) ?? {}
-  const fallback = {
+  const fallbackRaw = {
+    ...existingRaw,
+    domain_conflict: {
+      domain: verifiedDomain,
+      conflict_company_id: conflict.rows[0]?.id ?? null,
+      noted_at: new Date().toISOString(),
+    },
+  }
+
+  const fallbackEntries = Object.entries({
     ...update,
-    raw_ats_config: {
-      ...existingRaw,
-      domain_conflict: {
-        domain: verifiedDomain,
-        conflict_company_id:
-          (conflictRow as { id?: string } | null)?.id ?? null,
-        noted_at: new Date().toISOString(),
-      },
-    } as never,
+    raw_ats_config: fallbackRaw,
     updated_at: new Date().toISOString(),
-  }
+  }).filter(([key]) => key !== 'domain')
 
-  const { error: fallbackError } = await admin
-    .from('companies')
-    .update(fallback as never)
-    .eq('id', rowId)
-
-  if (fallbackError) {
-    throw new Error(`company update fallback failed: ${fallbackError.message}`)
+  const fallbackSet: string[] = []
+  const fallbackValues: unknown[] = []
+  for (const [key, value] of fallbackEntries) {
+    fallbackValues.push(key === 'raw_ats_config' ? JSON.stringify(value ?? {}) : value)
+    fallbackSet.push(
+      key === 'raw_ats_config'
+        ? `${key} = $${fallbackValues.length}::jsonb`
+        : `${key} = $${fallbackValues.length}`
+    )
   }
+  fallbackValues.push(rowId)
+
+  await pool.query(
+    `UPDATE companies SET ${fallbackSet.join(', ')} WHERE id = $${fallbackValues.length}`,
+    fallbackValues
+  )
 }
 
 async function enrichOne(row: PlaceholderRow): Promise<EnrichOutcome> {
+  const activeMatch = activeCareersByNorm.get(normalizeNameKey(row.name))
+  if (activeMatch) {
+    if (execute) {
+      await updateCompanyWithDomainHandling(row.id, {
+        careers_url: activeMatch.careers_url,
+        ats_type: activeMatch.ats_type ?? row.ats_type,
+        logo_url:
+          activeMatch.logo_url ??
+          (activeMatch.domain ? companyLogoUrlFromDomain(activeMatch.domain) : row.logo_url),
+        raw_ats_config: {
+          ...(row.raw_ats_config ?? {}),
+          ats_discovery_status: 'checked',
+          discovery_source: 'active_name_match',
+          matched_active_company_id: activeMatch.id,
+          matched_active_domain: activeMatch.domain,
+          last_checked_at: new Date().toISOString(),
+        } as never,
+        updated_at: new Date().toISOString(),
+      })
+    }
+    return {
+      kind: 'active-match',
+      linkedCompanyId: activeMatch.id,
+      domain: activeMatch.domain,
+      careersUrl: activeMatch.careers_url,
+    }
+  }
+
   const { urls, domains } = buildCandidateUrls(row)
   const primaryGuess = domains[0] ?? null
   if (urls.length === 0) return { kind: 'no-match', guessed: primaryGuess }
+  const higherEdLike = likelyHigherEdName(row.name)
 
   // As we walk candidate URLs, we track:
   //   - the first plausible verified domain that responded with HTML
@@ -524,6 +674,11 @@ async function enrichOne(row: PlaceholderRow): Promise<EnrichOutcome> {
       continue
     }
 
+    if (higherEdLike && !isTrustedHigherEdDomain(candidateDomain)) {
+      deadDomains.add(candidateDomain)
+      continue
+    }
+
     // A candidate responded. Only trust it if the host is plausibly the
     // right company - otherwise skip entirely (don't even consider it for
     // custom-careers fallback, to avoid activating a squatter domain).
@@ -564,6 +719,13 @@ async function enrichOne(row: PlaceholderRow): Promise<EnrichOutcome> {
     const verifiedDomain = origin?.host ?? primaryGuess ?? ''
     const companyDomain = isAtsDomain(verifiedDomain) ? primaryGuess ?? '' : verifiedDomain
     if (!companyDomain || !isDomainPlausible(row.name, companyDomain)) {
+      return { kind: 'fetch-failed', guessed: primaryGuess }
+    }
+    if (
+      higherEdLike &&
+      !isAtsDomain(companyDomain) &&
+      !isTrustedHigherEdDomain(companyDomain)
+    ) {
       return { kind: 'fetch-failed', guessed: primaryGuess }
     }
     const careersUrl =
@@ -630,6 +792,9 @@ async function enrichOne(row: PlaceholderRow): Promise<EnrichOutcome> {
         careersUrl: verifiedCareersUrl,
       }
     }
+    if (!allowHeuristicWrites) {
+      return { kind: 'heuristic-skip', guessed: primaryGuess }
+    }
 
     await updateCompanyWithDomainHandling(
       row.id,
@@ -673,6 +838,9 @@ async function enrichOne(row: PlaceholderRow): Promise<EnrichOutcome> {
     if (!execute) {
       return { kind: 'domain-only', domain: verifiedDomain }
     }
+    if (!allowHeuristicWrites) {
+      return { kind: 'heuristic-skip', guessed: primaryGuess }
+    }
 
     await updateCompanyWithDomainHandling(
       row.id,
@@ -705,16 +873,20 @@ async function enrichOne(row: PlaceholderRow): Promise<EnrichOutcome> {
 
 async function markFailed(row: PlaceholderRow): Promise<void> {
   if (!execute) return
-  await admin
-    .from('companies')
-    .update({
-      raw_ats_config: {
+  await pool.query(
+    `UPDATE companies
+        SET raw_ats_config = $1::jsonb,
+            updated_at = NOW()
+      WHERE id = $2`,
+    [
+      JSON.stringify({
         ...(row.raw_ats_config ?? {}),
         ats_discovery_status: 'failed',
         last_checked_at: new Date().toISOString(),
-      } as never,
-    } as never)
-    .eq('id', row.id)
+      }),
+      row.id,
+    ]
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -722,81 +894,98 @@ async function markFailed(row: PlaceholderRow): Promise<void> {
 // ---------------------------------------------------------------------------
 
 async function main() {
-  console.log(
-    `[enrich] mode=${execute ? 'EXECUTE' : 'dry-run'}  concurrency=${concurrency}  timeout=${fetchTimeoutMs}ms  retryFailed=${retryFailed}${limit ? `  limit=${limit}` : ''}`
-  )
-  const pending = await loadPending()
-  console.log(`[enrich] ${pending.length.toLocaleString()} placeholder(s) to process.\n`)
+  try {
+    console.log(
+      `[enrich] mode=${execute ? 'EXECUTE' : 'dry-run'}  concurrency=${concurrency}  timeout=${fetchTimeoutMs}ms  retryFailed=${retryFailed}  heuristicWrites=${allowHeuristicWrites}${limit ? `  limit=${limit}` : ''}`
+    )
+    await loadActiveCareersMatches()
+    console.log(`[enrich] active-careers exact-name map: ${activeCareersByNorm.size}`)
+    const pending = await loadPending()
+    console.log(`[enrich] ${pending.length.toLocaleString()} placeholder(s) to process.\n`)
 
-  if (pending.length === 0) {
-    console.log('[enrich] nothing to do. Done.')
-    return
-  }
+    if (pending.length === 0) {
+      console.log('[enrich] nothing to do. Done.')
+      return
+    }
 
-  const counters = {
-    checked: 0,
-    atsDetected: 0,
-    customCareers: 0,
-    domainOnly: 0,
-    noMatch: 0,
-    fetchFailed: 0,
-    activated: 0,
-  }
-  const startedAt = Date.now()
+    const counters = {
+      checked: 0,
+      atsDetected: 0,
+      linkedToActive: 0,
+      customCareers: 0,
+      domainOnly: 0,
+      heuristicSkip: 0,
+      noMatch: 0,
+      fetchFailed: 0,
+      activated: 0,
+    }
+    const startedAt = Date.now()
 
-  const tasks = pending.map((row) => async () => {
-    const outcome = await enrichOne(row)
-    counters.checked++
+    const tasks = pending.map((row) => async () => {
+      const outcome = await enrichOne(row)
+      counters.checked++
 
-    if (outcome.kind === 'ats-detected') {
-      counters.atsDetected++
-      if (outcome.confidence === 'high' || outcome.confidence === 'medium') {
-        counters.activated++
+      if (outcome.kind === 'ats-detected') {
+        counters.atsDetected++
+        if (outcome.confidence === 'high' || outcome.confidence === 'medium') {
+          counters.activated++
+        }
+        console.log(
+          `  ✓ ${row.name.slice(0, 44).padEnd(44)}  ats=${outcome.atsType.padEnd(10)} conf=${outcome.confidence.padEnd(6)} ${outcome.domain}`
+        )
+      } else if (outcome.kind === 'active-match') {
+        counters.linkedToActive++
+        console.log(
+          `  ≈ ${row.name.slice(0, 44).padEnd(44)}  linked-active           ${outcome.domain ?? '(no-domain)'}`
+        )
+      } else if (outcome.kind === 'custom-careers') {
+        counters.customCareers++
+        counters.activated++ // custom-careers always activates
+        console.log(
+          `  ✓ ${row.name.slice(0, 44).padEnd(44)}  ats=custom     conf=low    ${outcome.domain}`
+        )
+      } else if (outcome.kind === 'domain-only') {
+        counters.domainOnly++
+        console.log(
+          `  · ${row.name.slice(0, 44).padEnd(44)}  domain-only             ${outcome.domain}`
+        )
+      } else if (outcome.kind === 'heuristic-skip') {
+        counters.heuristicSkip++
+      } else if (outcome.kind === 'no-match') {
+        counters.noMatch++
+        await markFailed(row)
+      } else {
+        counters.fetchFailed++
+        await markFailed(row)
       }
-      console.log(
-        `  ✓ ${row.name.slice(0, 44).padEnd(44)}  ats=${outcome.atsType.padEnd(10)} conf=${outcome.confidence.padEnd(6)} ${outcome.domain}`
-      )
-    } else if (outcome.kind === 'custom-careers') {
-      counters.customCareers++
-      counters.activated++ // custom-careers always activates
-      console.log(
-        `  ✓ ${row.name.slice(0, 44).padEnd(44)}  ats=custom     conf=low    ${outcome.domain}`
-      )
-    } else if (outcome.kind === 'domain-only') {
-      counters.domainOnly++
-      console.log(
-        `  · ${row.name.slice(0, 44).padEnd(44)}  domain-only             ${outcome.domain}`
-      )
-    } else if (outcome.kind === 'no-match') {
-      counters.noMatch++
-      await markFailed(row)
-    } else {
-      counters.fetchFailed++
-      await markFailed(row)
+
+      if (counters.checked % 25 === 0) {
+        const rate = counters.checked / ((Date.now() - startedAt) / 1000)
+        console.log(
+          `\n[enrich] ${counters.checked}/${pending.length}  ats=${counters.atsDetected}  linked=${counters.linkedToActive}  custom=${counters.customCareers}  domain=${counters.domainOnly}  skip=${counters.heuristicSkip}  activated=${counters.activated}  failed=${counters.fetchFailed}  (~${rate.toFixed(1)} rows/s)\n`
+        )
+      }
+    })
+
+    await runWithConcurrency(tasks, concurrency)
+
+    const elapsedMin = ((Date.now() - startedAt) / 60000).toFixed(1)
+    console.log('\n[enrich] done.')
+    console.log(`[enrich]   processed       = ${counters.checked}`)
+    console.log(`[enrich]   ATS detected    = ${counters.atsDetected}`)
+    console.log(`[enrich]   linked active   = ${counters.linkedToActive}`)
+    console.log(`[enrich]   custom careers  = ${counters.customCareers}`)
+    console.log(`[enrich]   domain only     = ${counters.domainOnly}  (verified but no careers page)`)
+    console.log(`[enrich]   heuristic skip  = ${counters.heuristicSkip}`)
+    console.log(`[enrich]   activated total = ${counters.activated}`)
+    console.log(`[enrich]   no-match        = ${counters.noMatch}`)
+    console.log(`[enrich]   fetch-failed    = ${counters.fetchFailed}`)
+    console.log(`[enrich]   elapsed         = ${elapsedMin} min`)
+    if (!execute) {
+      console.log('\n[enrich] dry-run - nothing written. Re-run with --execute to commit.')
     }
-
-    if (counters.checked % 25 === 0) {
-      const rate = counters.checked / ((Date.now() - startedAt) / 1000)
-      console.log(
-        `\n[enrich] ${counters.checked}/${pending.length}  ats=${counters.atsDetected}  custom=${counters.customCareers}  domain=${counters.domainOnly}  activated=${counters.activated}  failed=${counters.fetchFailed}  (~${rate.toFixed(1)} rows/s)\n`
-      )
-    }
-  })
-
-  await runWithConcurrency(tasks, concurrency)
-
-  const elapsedMin = ((Date.now() - startedAt) / 60000).toFixed(1)
-  console.log('\n[enrich] done.')
-  console.log(`[enrich]   processed       = ${counters.checked}`)
-  console.log(`[enrich]   ATS detected    = ${counters.atsDetected}`)
-  console.log(`[enrich]   custom careers  = ${counters.customCareers}`)
-  console.log(`[enrich]   domain only     = ${counters.domainOnly}  (verified but no careers page)`)
-  console.log(`[enrich]   activated total = ${counters.activated}`)
-  console.log(`[enrich]   no-match        = ${counters.noMatch}`)
-  console.log(`[enrich]   fetch-failed    = ${counters.fetchFailed}`)
-  console.log(`[enrich]   elapsed         = ${elapsedMin} min`)
-  if (!execute) {
-    console.log('\n[enrich] dry-run - nothing written. Re-run with --execute to commit.')
+  } finally {
+    await pool.end()
   }
 }
 

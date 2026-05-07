@@ -705,7 +705,7 @@ async function crawlWorkdayByHeuristic(
             const jobs = mapWorkdayPostings(context, site, postings)
             if (jobs.length > 0) {
               // Stable resolved URL — parseable by parseWorkdayContext on future runs
-              const resolvedCareersUrl = `https://${tenantHost}/${encodeURIComponent(tenant)}/${encodeURIComponent(site)}`
+              const resolvedCareersUrl = `https://${tenantHost}/${encodeURIComponent(site)}`
               return { jobs, resolvedCareersUrl }
             }
           }

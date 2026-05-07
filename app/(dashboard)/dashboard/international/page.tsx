@@ -57,6 +57,15 @@ export default function InternationalPage() {
     profile?.is_international &&
     (profile.visa_status === "opt" || profile.visa_status === "stem_opt")
 
+  // International tools are free for users who identify as international.
+  // Profile must have is_international=true, needs_sponsorship=true, or a
+  // relevant visa_status. No plan check needed here.
+  const INTL_VISA_STATUSES = ["opt", "stem_opt", "h1b", "green_card", "other"]
+  const isInternationalUser =
+    Boolean(profile?.is_international) ||
+    Boolean((profile as Record<string, unknown>)?.needs_sponsorship) ||
+    INTL_VISA_STATUSES.includes(profile?.visa_status ?? "")
+
   useEffect(() => {
     async function fetchCompanies() {
       const params = new URLSearchParams({
@@ -81,6 +90,39 @@ export default function InternationalPage() {
         (c.industry ?? "").toLowerCase().includes(q)
     )
   }, [companies, companyQuery])
+
+  // Profile gate — show prompt if visa status not set
+  if (profile !== undefined && !isInternationalUser) {
+    return (
+      <main className="app-page flex min-h-[60vh] items-center justify-center px-6">
+        <div className="max-w-sm text-center">
+          <Plane className="mx-auto mb-4 h-10 w-10 text-indigo-400" />
+          <h2 className="text-[17px] font-bold text-slate-900">International tools</h2>
+          <p className="mt-2 text-[14px] leading-relaxed text-slate-500">
+            These tools are free for international candidates. Tell us about your
+            visa status to unlock OPT countdown, offer risk analysis, the LCA
+            explorer, and sponsorship intelligence.
+          </p>
+          <Link
+            href="/dashboard/onboarding?step=2"
+            className="mt-5 inline-flex rounded-lg bg-indigo-600 px-5 py-2.5 text-[14px] font-semibold text-white transition hover:bg-indigo-700"
+          >
+            Set my visa status — 30 seconds
+          </Link>
+          <p className="mt-3 text-[12px] text-slate-400">
+            Already set it?{" "}
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="underline hover:text-slate-600"
+            >
+              Refresh
+            </button>
+          </p>
+        </div>
+      </main>
+    )
+  }
 
   return (
     <main className="app-page pb-[max(6rem,calc(env(safe-area-inset-bottom)+5.5rem))]">
