@@ -43,7 +43,11 @@ function dotColor(status: GhostRiskSignal["status"]): string {
   return "#94A3B8"
 }
 
-function tldrSummary(signals: GhostRiskSignal[]): string {
+function tldrSummary(signals: GhostRiskSignal[], riskScore: number | null): string {
+  // When overall risk is low, positive framing overrides individual concerns
+  if (riskScore !== null && riskScore < 30) {
+    return "All major legitimacy signals check out — this looks like a real, active posting."
+  }
   const bad = signals
     .filter((s) => s.status === "red" || s.status === "amber")
     .sort((a, b) => b.weight - a.weight)
@@ -203,7 +207,7 @@ export function GhostJobDetector({ jobId, onSkip }: Props) {
 
   const v = verdict(data.riskScore)
   const color = scoreColor(data.riskScore)
-  const summary = tldrSummary(data.signals)
+  const summary = tldrSummary(data.signals, data.riskScore)
 
   return (
     <div className="space-y-5">

@@ -194,13 +194,15 @@ export default function JobDetailPanel({
   }, [job.id, initialMatchScore])
 
   useEffect(() => {
+    // Server pre-renders a fresh score via force-dynamic — use it directly.
+    // Only fetch from the API when the server couldn't compute one (no resume).
     if (initialMatchScore !== undefined) return
     if (!resumeId) { setFastScore(null); return }
     let cancelled = false
     fetch(`/api/match/score?jobId=${job.id}`, { cache: "no-store" })
       .then(async (r) => (r.ok ? ((await r.json()) as { score?: JobMatchScore | null }).score ?? null : null))
-      .then((s) => { if (!cancelled) setFastScore(s) })
-      .catch(() => { if (!cancelled) setFastScore(null) })
+      .then((s) => { if (!cancelled && s !== null) setFastScore(s) })
+      .catch(() => {})
     return () => { cancelled = true }
   }, [job.id, resumeId, initialMatchScore])
 
@@ -441,12 +443,6 @@ export default function JobDetailPanel({
                       {activeFactors.length} factor{activeFactors.length !== 1 ? "s" : ""} analyzed
                     </p>
                   )}
-                  <Link
-                    href={`/dashboard/resume/analyze/${job.id}`}
-                    className="mt-1.5 inline-flex items-center gap-0.5 text-[11.5px] font-semibold text-orange-600 hover:underline"
-                  >
-                    Full breakdown <ArrowRight className="h-3 w-3" />
-                  </Link>
                 </div>
               </div>
 

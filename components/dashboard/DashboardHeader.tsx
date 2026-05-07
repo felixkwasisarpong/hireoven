@@ -4,6 +4,7 @@ import Link from "next/link"
 import { Menu, MessageSquare } from "lucide-react"
 import DashboardFeedSearch from "@/components/dashboard/DashboardFeedSearch"
 import DashboardUserMenu from "@/components/dashboard/DashboardUserMenu"
+import CreditsDropdown from "@/components/dashboard/CreditsDropdown"
 import { useDashboardMobileNav } from "@/components/dashboard/DashboardMobileNav"
 import NotificationBell from "@/components/notifications/NotificationBell"
 import { useAuth } from "@/lib/hooks/useAuth"
@@ -32,6 +33,7 @@ export default function DashboardHeader() {
         </div>
 
         <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+          <CreditsDropdown />
           <NotificationBell
             userId={user?.id}
             badgeVariant="product"
