@@ -38,6 +38,9 @@ export interface RawJob {
   workMode?: string
   employmentType?: string
   salaryRange?: string
+  salaryMin?: number
+  salaryMax?: number
+  salaryCurrency?: string
   matchScore?: number
   matchLabel?: string
   matchedSkills?: string[]
@@ -90,16 +93,29 @@ const WORKDAY_DESC_CONCURRENCY = Math.max(
 ) // parallel detail fetches
 const WORKDAY_DESC_MAX_JOBS = Math.max(
   15,
-  Number.parseInt(process.env.CRAWLER_WORKDAY_DESC_MAX_JOBS ?? "40", 10)
-) // cap so crawls don't balloon in time
+  Number.parseInt(process.env.CRAWLER_WORKDAY_DESC_MAX_JOBS ?? "100", 10)
+) // covers all jobs from one listing page-set (max 100); raises to include location resolution
 const ORACLE_SEARCH_PAGE_SIZE = 24
-const ORACLE_MAX_JOBS = 240
+const ORACLE_MAX_JOBS = Math.max(
+  ORACLE_SEARCH_PAGE_SIZE,
+  Number.parseInt(process.env.CRAWLER_ORACLE_MAX_JOBS ?? "10000", 10)
+)
 const PHENOM_DEFAULT_PAGE_SIZE = 10
 const PHENOM_MAX_JOBS = 240
 const GOOGLE_RESULTS_PAGE_SIZE = 20
 const GOOGLE_MAX_JOBS = 200
 const ICIMS_JIBE_PAGE_SIZE = 100
 const ICIMS_JIBE_MAX_JOBS = 500
+const TCS_SEARCH_PAGE_SIZE = 10
+const TCS_MAX_JOBS = Math.max(
+  TCS_SEARCH_PAGE_SIZE,
+  Number.parseInt(process.env.CRAWLER_TCS_MAX_JOBS ?? "3000", 10)
+)
+const MICROSOFT_PCSX_PAGE_SIZE = 10
+const MICROSOFT_PCSX_MAX_JOBS = Math.max(
+  MICROSOFT_PCSX_PAGE_SIZE,
+  Number.parseInt(process.env.CRAWLER_MICROSOFT_PCSX_MAX_JOBS ?? "3000", 10)
+)
 const FAST_SECONDARY_MAX_ATTEMPTS = Math.max(
   1,
   Number.parseInt(process.env.CRAWLER_SECONDARY_MAX_ATTEMPTS ?? "1", 10)
@@ -284,12 +300,27 @@ function parseBambooPortal(url: URL) {
   return host === "bamboohr.com" || host.endsWith(".bamboohr.com")
 }
 
+function isTcsCandidateJobsUrl(url: URL) {
+  const host = url.hostname.toLowerCase()
+  const path = url.pathname.toLowerCase()
+  if (!host.endsWith(".tcsapps.com")) return false
+  return path === "/candidate/jobs/search" || path.startsWith("/candidate/jobs/")
+}
+
 function isOracleCandidateExperienceUrl(url: URL) {
   const host = url.hostname.toLowerCase()
   const path = url.pathname.toLowerCase()
+  const isOracleHost =
+    host.includes("oracle.com") ||
+    host === "oraclecloud.com" ||
+    host.endsWith(".oraclecloud.com")
   return (
-    host.includes("oracle.com") &&
-    (path.includes("/sites/jobsearch") || path.includes("/hcmui/candexpstatic"))
+    isOracleHost &&
+    (
+      path.includes("/sites/jobsearch") ||
+      path.includes("/hcmui/candexpstatic") ||
+      path.includes("/hcmui/candidateexperience")
+    )
   )
 }
 
@@ -302,6 +333,13 @@ function isGoogleCareersPortal(url: URL) {
   const host = url.hostname.toLowerCase()
   if (host === "careers.google.com") return true
   return host.endsWith(".google.com") && url.pathname.toLowerCase().includes("/about/careers")
+}
+
+function isMicrosoftCareersUrl(url: URL) {
+  const host = url.hostname.toLowerCase()
+  const path = url.pathname.toLowerCase()
+  if (host !== "apply.careers.microsoft.com") return false
+  return path === "/careers" || path.startsWith("/careers/")
 }
 
 function isLocaleSegment(part: string) {
@@ -367,10 +405,12 @@ type WorkdayPosting = {
   title?: string
   location?: string
   locationsText?: string
+  locations?: Array<{ descriptor?: string }>
   postedOn?: string
   bulletFields?: string[]
   // populated by fetchWorkdayDescriptions — not present in list API response
   jobDescription?: string
+  resolvedLocation?: string
 }
 
 async function fetchText(
@@ -522,10 +562,11 @@ async function fetchWorkdayDescriptions(
   site: string,
   postings: WorkdayPosting[]
 ): Promise<void> {
-  // The list API only returns bulletFields (brief bullets). Full jobDescription
-  // lives at GET /wday/cxs/{tenant}/{site}{externalPath}.
+  // The list API only returns bulletFields (brief bullets). Full jobDescription lives at
+  // GET /wday/cxs/{tenant}/{site}{externalPath}. We also use the detail page to resolve
+  // a country-qualified location string (e.g. "New York, USA") so the USA filter works.
   const targets = postings
-    .filter((p) => p.externalPath && !p.jobDescription)
+    .filter((p) => p.externalPath && (!p.jobDescription || !p.resolvedLocation))
     .slice(0, WORKDAY_DESC_MAX_JOBS)
 
   const queue = [...targets]
@@ -537,16 +578,51 @@ async function fetchWorkdayDescriptions(
         context.tenant
       )}/${encodeURIComponent(site)}${posting.externalPath}`
       const payload = await fetchJson<{
-        jobPostingInfo?: { jobDescription?: string; briefDescription?: string }
+        jobPostingInfo?: {
+          jobDescription?: string
+          briefDescription?: string
+          location?: string
+          jobRequisitionLocation?: {
+            descriptor?: string
+            country?: { descriptor?: string; alpha2Code?: string }
+          }
+        }
       }>(url)
-      const raw =
-        payload?.jobPostingInfo?.jobDescription ??
-        payload?.jobPostingInfo?.briefDescription ??
-        null
+      const info = payload?.jobPostingInfo
+      const raw = info?.jobDescription ?? info?.briefDescription ?? null
       if (raw) posting.jobDescription = raw
+      // Build a location string with country suffix so the USA filter can match it.
+      // e.g. "New York" + alpha2Code "US" → "New York, USA"
+      const city = info?.location?.trim()
+      const countryCode = info?.jobRequisitionLocation?.country?.alpha2Code?.toUpperCase()
+      if (city && countryCode) {
+        posting.resolvedLocation = countryCode === "US" ? `${city}, USA` : `${city}, ${countryCode}`
+      } else if (city) {
+        posting.resolvedLocation = city
+      }
     }
   })
   await Promise.all(workers)
+}
+
+function resolveWorkdayLocation(posting: WorkdayPosting): string | undefined {
+  // resolvedLocation is set by fetchWorkdayDescriptions from the job detail page and
+  // includes the country suffix (e.g. "New York, USA") so the USA filter can match it.
+  if (posting.resolvedLocation) return posting.resolvedLocation
+
+  // Some Workday tenants return a locations[] array with full descriptors in the listing.
+  const descriptors = (posting.locations ?? [])
+    .map((l) => l.descriptor?.trim())
+    .filter(Boolean) as string[]
+
+  if (descriptors.length > 0) {
+    const usFirst = descriptors.find(
+      (d) => d.toUpperCase().endsWith(", USA") || d.toUpperCase().includes("UNITED STATES")
+    )
+    return usFirst ?? descriptors[0]
+  }
+
+  return posting.location ?? posting.locationsText ?? posting.bulletFields?.[0]
 }
 
 function mapWorkdayPostings(
@@ -574,10 +650,7 @@ function mapWorkdayPostings(
       description:
         cleanJobDescription(posting.jobDescription ?? posting.bulletFields?.join("\n") ?? null) ??
         undefined,
-      location:
-        posting.location ??
-        posting.locationsText ??
-        posting.bulletFields?.[0],
+      location: resolveWorkdayLocation(posting),
       postedAt: posting.postedOn,
     }))
 }
@@ -745,6 +818,16 @@ async function crawlGreenhouse(careersUrl: URL): Promise<RawJob[]> {
     }))
 }
 
+function isAnnualLeverSalary(
+  r: { min?: number; max?: number; currency?: string; interval?: string } | null | undefined
+): boolean {
+  if (!r?.min || !r?.max) return false
+  const interval = r.interval?.toLowerCase() ?? ""
+  if (interval && !interval.includes("year") && !interval.includes("annual") && !interval.includes("salary")) return false
+  // Both values must be in a plausible annual range
+  return r.min >= 10_000 && r.max >= 10_000 && r.max <= 2_000_000
+}
+
 async function crawlLever(careersUrl: URL): Promise<RawJob[]> {
   const company = parseLeverCompany(careersUrl)
   if (!company) return []
@@ -756,26 +839,46 @@ async function crawlLever(careersUrl: URL): Promise<RawJob[]> {
       hostedUrl: string
       description?: string
       descriptionPlain?: string
-      categories?: { location?: string }
+      additional?: string
+      additionalPlain?: string
+      lists?: Array<{ text?: string; content?: string }>
+      categories?: { location?: string; commitment?: string }
       createdAt?: number
+      workplaceType?: string
+      salaryRange?: { min?: number; max?: number; currency?: string; interval?: string }
     }>
   >(`https://api.lever.co/v0/postings/${encodeURIComponent(company)}?mode=json`)
 
   const jobs = payload ?? []
   return jobs
     .filter((job) => job?.id && job?.text && job?.hostedUrl)
-    .map((job) => ({
-      externalId: `lever:${job.id}`,
-      title: job.text,
-      url: normalizeJobApplyUrl(job.hostedUrl),
-      description:
-        cleanJobDescription(
-          job.descriptionPlain ??
-            (job.description ? cleanText(job.description) : null)
-        ) ?? undefined,
-      location: job.categories?.location,
-      postedAt: job.createdAt ? new Date(job.createdAt).toISOString() : undefined,
-    }))
+    .map((job) => {
+      const bodyParts = [
+        job.descriptionPlain ?? (job.description ? cleanText(job.description) : null),
+        ...(job.lists ?? []).map((l) =>
+          [l.text, l.content ? cleanText(l.content) : null].filter(Boolean).join("\n")
+        ),
+        job.additionalPlain ?? (job.additional ? cleanText(job.additional) : null),
+      ].filter(Boolean)
+
+      return {
+        externalId: `lever:${job.id}`,
+        title: job.text,
+        url: normalizeJobApplyUrl(job.hostedUrl),
+        description: cleanJobDescription(bodyParts.join("\n\n")) ?? undefined,
+        location: job.categories?.location,
+        postedAt: job.createdAt ? new Date(job.createdAt).toISOString() : undefined,
+        workMode: job.workplaceType ?? undefined,
+        employmentType: job.categories?.commitment ?? undefined,
+        // Only use annual salary ranges; skip hourly/weekly to avoid DB integer failures
+        salaryMin: isAnnualLeverSalary(job.salaryRange)
+          ? Math.round(job.salaryRange!.min!) : undefined,
+        salaryMax: isAnnualLeverSalary(job.salaryRange)
+          ? Math.round(job.salaryRange!.max!) : undefined,
+        salaryCurrency: isAnnualLeverSalary(job.salaryRange)
+          ? job.salaryRange!.currency ?? undefined : undefined,
+      }
+    })
 }
 
 type AshbyJobPosting = {
@@ -978,7 +1081,7 @@ function toUrl(value: string, base?: URL): URL | null {
   }
 }
 
-type AnchorLink = { href: URL; text: string }
+type AnchorLink = { href: URL; text: string; innerHtml: string }
 
 function extractAnchorLinks(html: string, baseUrl: URL): AnchorLink[] {
   const links: AnchorLink[] = []
@@ -999,11 +1102,25 @@ function extractAnchorLinks(html: string, baseUrl: URL): AnchorLink[] {
     const href = toUrl(rawHref, baseUrl)
     if (!href) continue
 
-    const text = cleanText(match[3] ?? "")
-    links.push({ href, text })
+    const innerHtml = match[3] ?? ""
+    const text = cleanText(innerHtml)
+    links.push({ href, text, innerHtml })
   }
 
   return links
+}
+
+function extractJobTitleFromAnchorHtml(innerHtml: string): string | null {
+  if (!innerHtml) return null
+  const dataTitle = innerHtml.match(/\bdata-title\s*=\s*(["'])(.*?)\1/i)?.[2]
+  const byDataTitle = dataTitle ? cleanText(dataTitle) : ""
+  if (byDataTitle) return byDataTitle
+
+  const byClass = innerHtml.match(
+    /<div\b[^>]*class\s*=\s*(["'])[^"']*\bjob-title\b[^"']*\1[^>]*>([\s\S]*?)<\/div>/i
+  )?.[2]
+  const cleaned = byClass ? cleanText(byClass) : ""
+  return cleaned || null
 }
 
 function extractAbsoluteUrlsFromHtml(html: string, baseUrl: URL): URL[] {
@@ -1203,6 +1320,8 @@ function isLikelyJobLink(url: URL, text: string, baseUrl: URL): boolean {
   const hasRoleOnlySignal = hasRoleText && (hasCareersContentPath || segmentCount >= 3)
   const hasStrongJobPathSignal =
     /\/jobs?\/listing\/[^/]+\/\d{3,}/i.test(path) ||
+    /\/company-job\/description\/reqid\/[a-z0-9-]{4,}/i.test(path) ||
+    /\/reqid\/[a-z0-9-]{4,}/i.test(path) ||
     /\/(job|jobs|position|positions|opening|openings|requisition|requisitions)\/[^?#]*\d{3,}/i.test(
       path
     )
@@ -1217,7 +1336,15 @@ function isLikelyJobLink(url: URL, text: string, baseUrl: URL): boolean {
   if (hasNonJobAnchorText) return false
   if (isListingPath && !hasRoleText && !hasQueryJobHint) return false
   if (hasNonJobTerminalSlug && !hasRoleText && !hasQueryJobHint) return false
-  if (!hasJobHint && !hasQueryJobHint && !hasRoleOnlySignal && !hasPathRoleSignal) return false
+  if (
+    !hasJobHint &&
+    !hasQueryJobHint &&
+    !hasRoleOnlySignal &&
+    !hasPathRoleSignal &&
+    !hasStrongJobPathSignal
+  ) {
+    return false
+  }
   if (!hasConcreteJobSignal) return false
   return true
 }
@@ -1231,10 +1358,12 @@ function extractGenericJobsFromHtml(html: string, baseUrl: URL): RawJob[] {
     if (seen.has(url)) continue
     seen.add(url)
 
+    const embeddedJobTitle = extractJobTitleFromAnchorHtml(link.innerHtml)
     const title =
-      link.text && !GENERIC_ANCHOR_TEXT.test(link.text)
+      embeddedJobTitle ??
+      (link.text && !GENERIC_ANCHOR_TEXT.test(link.text)
         ? link.text
-        : inferTitleFromUrl(link.href)
+        : inferTitleFromUrl(link.href))
 
     out.push({
       title: title || "Open role",
@@ -2142,6 +2271,293 @@ async function crawlBambooHr(careersUrl: URL): Promise<RawJob[]> {
   return dedupeJobs([...jsonLdJobs, ...genericJobs])
 }
 
+type TcsSearchApiJob = {
+  id?: string
+  jobTitle?: string
+  location?: string
+  functionName?: string
+  experience?: string
+  applyByDate?: string
+  skills?: string
+}
+
+type TcsSearchApiResponse = {
+  result?: string
+  message?: string
+  data?: {
+    totalJobs?: number | string
+    jobs?: TcsSearchApiJob[]
+  }
+}
+
+function tcsCandidateBasePath(url: URL): string {
+  const path = url.pathname.toLowerCase()
+  if (path.startsWith("/candidate/") || path === "/candidate") return "/candidate"
+  return "/candidate"
+}
+
+function parseFiniteInteger(value: unknown): number | null {
+  const direct = typeof value === "number" ? value : Number.parseInt(String(value ?? ""), 10)
+  if (!Number.isFinite(direct)) return null
+  return Math.floor(direct)
+}
+
+async function crawlTcsCandidatePortal(careersUrl: URL): Promise<RawJob[]> {
+  if (!isTcsCandidateJobsUrl(careersUrl)) return []
+
+  const basePath = tcsCandidateBasePath(careersUrl)
+  const apiUrl = new URL(`${basePath}/api/v1/jobs/searchJ`, careersUrl.origin).toString()
+
+  const jobs: RawJob[] = []
+  const seen = new Set<string>()
+  let totalJobs = Number.POSITIVE_INFINITY
+  const maxPages = Math.max(1, Math.ceil(TCS_MAX_JOBS / TCS_SEARCH_PAGE_SIZE) + 2)
+
+  for (let page = 1; page <= maxPages && jobs.length < TCS_MAX_JOBS; page++) {
+    const payload = {
+      jobTitle: null,
+      jobCity: null,
+      jobFunction: null,
+      jobExperience: null,
+      jobSkill: null,
+      pageNumber: String(page),
+      userText: "",
+      jobTitleOrder: null,
+      jobCityOrder: null,
+      jobFunctionOrder: null,
+      jobExperienceOrder: null,
+      applyByOrder: null,
+      regular: true,
+      walkin: true,
+    }
+
+    const result = await fetchCrawlerJson<TcsSearchApiResponse>(
+      apiUrl,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-requested-with": "XMLHttpRequest",
+          origin: careersUrl.origin,
+          referer: careersUrl.toString(),
+        },
+        body: JSON.stringify(payload),
+      }
+    )
+
+    if (!result.ok) break
+
+    const status = String(result.data?.result ?? "").trim().toUpperCase()
+    if (status && status !== "Y") break
+
+    const parsedTotal = parseFiniteInteger(result.data?.data?.totalJobs)
+    if (parsedTotal !== null) totalJobs = parsedTotal
+
+    const pageJobs = result.data?.data?.jobs ?? []
+    if (pageJobs.length === 0) break
+
+    let addedOnPage = 0
+    for (const item of pageJobs) {
+      const id = String(item.id ?? "").trim()
+      const title = String(item.jobTitle ?? "").trim()
+      if (!id || !title) continue
+
+      const externalId = `tcs:${id}`
+      if (seen.has(externalId)) continue
+      seen.add(externalId)
+
+      const location = String(item.location ?? "").trim() || undefined
+      const detailUrl = new URL(
+        `${basePath}/jobs/${encodeURIComponent(id)}`,
+        careersUrl.origin
+      ).toString()
+
+      const descriptionParts = [
+        String(item.functionName ?? "").trim()
+          ? `Function: ${String(item.functionName ?? "").trim()}`
+          : null,
+        String(item.experience ?? "").trim()
+          ? `Experience: ${String(item.experience ?? "").trim()} years`
+          : null,
+        String(item.skills ?? "").trim()
+          ? `Skills: ${String(item.skills ?? "").trim()}`
+          : null,
+      ].filter(Boolean)
+
+      jobs.push({
+        externalId,
+        title,
+        url: normalizeJobApplyUrl(detailUrl),
+        location,
+        description: descriptionParts.join("\n") || undefined,
+      })
+      addedOnPage += 1
+
+      if (jobs.length >= TCS_MAX_JOBS) break
+    }
+
+    if (addedOnPage === 0) break
+    if (pageJobs.length < TCS_SEARCH_PAGE_SIZE) break
+    if (Number.isFinite(totalJobs) && page * TCS_SEARCH_PAGE_SIZE >= totalJobs) break
+  }
+
+  return jobs
+}
+
+type MicrosoftPcsxSearchPosition = {
+  id?: string | number
+  displayJobId?: string | number
+  atsJobId?: string | number
+  name?: string
+  positionUrl?: string
+  locations?: string[]
+  standardizedLocations?: string[]
+  postedTs?: string | number
+  department?: string
+  workLocationOption?: string
+}
+
+type MicrosoftPcsxSearchResponse = {
+  data?: {
+    count?: string | number
+    positions?: MicrosoftPcsxSearchPosition[]
+  }
+}
+
+function microsoftPcsxDomain(careersUrl: URL): string {
+  const fromQuery = careersUrl.searchParams.get("domain")
+  if (fromQuery && fromQuery.trim().length > 0) return fromQuery.trim()
+  return "microsoft.com"
+}
+
+async function crawlMicrosoftCareers(careersUrl: URL): Promise<RawJob[]> {
+  if (!isMicrosoftCareersUrl(careersUrl)) return []
+
+  const domain = microsoftPcsxDomain(careersUrl)
+  const query = careersUrl.searchParams.get("query") ?? ""
+  const location = careersUrl.searchParams.get("location") ?? ""
+  const sortBy = careersUrl.searchParams.get("sort_by") ?? "timestamp"
+  const locale = careersUrl.searchParams.get("hl")
+  const passthroughFilters = [...careersUrl.searchParams.entries()].filter(([k]) =>
+    k.toLowerCase().startsWith("filter_")
+  )
+
+  const jobs: RawJob[] = []
+  const seen = new Set<string>()
+  let start = 0
+  let totalJobs = Number.POSITIVE_INFINITY
+  const maxPages = Math.max(
+    1,
+    Math.ceil(MICROSOFT_PCSX_MAX_JOBS / MICROSOFT_PCSX_PAGE_SIZE) + 2
+  )
+  let page = 0
+  let rateLimitRetries = 0
+
+  while (page < maxPages && jobs.length < MICROSOFT_PCSX_MAX_JOBS) {
+    const apiUrl = new URL("/api/pcsx/search", careersUrl.origin)
+    apiUrl.searchParams.set("domain", domain)
+    apiUrl.searchParams.set("query", query)
+    apiUrl.searchParams.set("location", location)
+    apiUrl.searchParams.set("start", String(start))
+    apiUrl.searchParams.set("sort_by", sortBy)
+    if (locale) apiUrl.searchParams.set("hl", locale)
+    for (const [key, value] of passthroughFilters) {
+      apiUrl.searchParams.append(key, value)
+    }
+
+    const response = await fetchCrawlerJson<MicrosoftPcsxSearchResponse>(
+      apiUrl.toString(),
+      {
+        method: "GET",
+        headers: {
+          accept: "application/json, text/plain, */*",
+          "x-requested-with": "XMLHttpRequest",
+          origin: careersUrl.origin,
+          referer: careersUrl.toString(),
+        },
+      }
+    )
+    if (!response.ok) {
+      const isRateLimited =
+        response.statusCode === 429 || response.errorReason === "rate_limited_429"
+      if (isRateLimited && rateLimitRetries < 5) {
+        rateLimitRetries += 1
+        await new Promise((resolve) => setTimeout(resolve, 1200 * rateLimitRetries))
+        continue
+      }
+      break
+    }
+    rateLimitRetries = 0
+
+    const payload = response.data?.data
+    const pageJobs = payload?.positions ?? []
+    if (pageJobs.length === 0) break
+
+    const parsedTotal = parseFiniteInteger(payload?.count)
+    if (parsedTotal !== null) totalJobs = parsedTotal
+
+    let addedOnPage = 0
+    for (const item of pageJobs) {
+      const title = String(item.name ?? "").trim()
+      const id = String(item.id ?? item.atsJobId ?? item.displayJobId ?? "").trim()
+      const detailUrl = toUrl(String(item.positionUrl ?? "").trim(), careersUrl)
+      const fallbackUrl =
+        id.length > 0
+          ? new URL(`/careers?pid=${encodeURIComponent(id)}`, careersUrl.origin).toString()
+          : null
+      const applyUrl = detailUrl?.toString() ?? fallbackUrl
+
+      if (!title || !applyUrl) continue
+
+      const externalId = `microsoft:${id || applyUrl}`
+      if (seen.has(externalId)) continue
+      seen.add(externalId)
+
+      const locationText =
+        item.standardizedLocations?.map((value) => String(value ?? "").trim()).find(Boolean) ??
+        item.locations?.map((value) => String(value ?? "").trim()).find(Boolean) ??
+        undefined
+
+      const postedUnix = parseFiniteInteger(item.postedTs)
+      const postedAt =
+        postedUnix !== null && postedUnix > 0
+          ? new Date(postedUnix * 1000).toISOString()
+          : undefined
+
+      const description = [
+        String(item.department ?? "").trim()
+          ? `Department: ${String(item.department ?? "").trim()}`
+          : null,
+        String(item.workLocationOption ?? "").trim()
+          ? `Work Mode: ${String(item.workLocationOption ?? "").trim()}`
+          : null,
+      ]
+        .filter(Boolean)
+        .join("\n")
+
+      jobs.push({
+        externalId,
+        title,
+        url: normalizeJobApplyUrl(applyUrl),
+        location: locationText,
+        postedAt,
+        description: description || undefined,
+      })
+      addedOnPage += 1
+
+      if (jobs.length >= MICROSOFT_PCSX_MAX_JOBS) break
+    }
+
+    if (addedOnPage === 0) break
+
+    start += pageJobs.length
+    if (Number.isFinite(totalJobs) && start >= totalJobs) break
+    page += 1
+  }
+
+  return jobs
+}
+
 type AmazonJob = {
   id?: string
   title?: string
@@ -2341,6 +2757,10 @@ async function crawlByKnownAts(careersUrl: URL): Promise<RawJob[]> {
     return crawlMeta(careersUrl)
   }
 
+  if (isMicrosoftCareersUrl(careersUrl)) {
+    return crawlMicrosoftCareers(careersUrl)
+  }
+
   const greenhouseBoard = parseGreenhouseBoard(careersUrl)
   if (greenhouseBoard) {
     return crawlGreenhouse(careersUrl)
@@ -2372,6 +2792,10 @@ async function crawlByKnownAts(careersUrl: URL): Promise<RawJob[]> {
 
   if (parseBambooPortal(careersUrl)) {
     return crawlBambooHr(careersUrl)
+  }
+
+  if (isTcsCandidateJobsUrl(careersUrl)) {
+    return crawlTcsCandidatePortal(careersUrl)
   }
 
   if (isOracleCandidateExperienceUrl(careersUrl)) {
@@ -2491,8 +2915,10 @@ async function discoverAndCrawlFromHtml(careersUrl: URL): Promise<DiscoverAndCra
         Boolean(parseWorkdayContext(candidate)) ||
         parseIcimsPortal(candidate) ||
         parseBambooPortal(candidate) ||
+        isTcsCandidateJobsUrl(candidate) ||
         isOracleCandidateExperienceUrl(candidate) ||
         isCiscoPhenomPortal(candidate) ||
+        isMicrosoftCareersUrl(candidate) ||
         isGoogleCareersPortal(candidate)
 
       if (!known) continue

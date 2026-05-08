@@ -49,6 +49,30 @@ const JOB_DEACTIVATE_BATCH_SIZE = Math.max(
   Number.parseInt(process.env.CRAWLER_JOB_DEACTIVATE_BATCH_SIZE ?? "250", 10)
 )
 
+function isRobotsBlockReason(reason: string | null | undefined) {
+  if (!reason) return false
+  const normalized = reason.toLowerCase().trim()
+  if (!normalized) return false
+
+  if (normalized === "blocked_403") return true
+  if (normalized.startsWith("blocked_html_")) return true
+
+  return (
+    normalized.includes("access denied") ||
+    normalized.includes("you don't have permission") ||
+    normalized.includes("you dont have permission") ||
+    normalized.includes("request blocked") ||
+    normalized.includes("attention required") ||
+    normalized.includes("forbidden") ||
+    normalized.includes("akamai") ||
+    normalized.includes("cloudflare") ||
+    normalized.includes("incapsula") ||
+    normalized.includes("perimeterx") ||
+    normalized.includes("bot detection") ||
+    normalized.includes("robots")
+  )
+}
+
 function shouldMarkGreenhouseManualReview(args: {
   atsType: string | null
   careersUrl: string | null
@@ -516,6 +540,9 @@ export async function persistCrawlJobs({
         workMode: job.workMode ?? null,
         employmentType: job.employmentType ?? null,
         salaryRange: job.salaryRange ?? null,
+        salaryMin: job.salaryMin ?? null,
+        salaryMax: job.salaryMax ?? null,
+        salaryCurrency: job.salaryCurrency ?? null,
         matchScore: job.matchScore ?? null,
         matchLabel: job.matchLabel ?? null,
         matchedSkills: job.matchedSkills ?? null,
@@ -800,14 +827,31 @@ export async function persistCrawlJobs({
       : (currentRawAtsConfig as Record<string, unknown>).manual_review_reason ?? null,
   }
 
+  const robotsBlockedReason = diagnostics
+    ?.map((entry) => entry.errorReason ?? entry.reason)
+    .find((reason) => isRobotsBlockReason(reason))
+    ?? null
+  const shouldDeactivateCompanyForRobotsBlock =
+    dedupedJobs.length === 0 && Boolean(robotsBlockedReason)
+
+  const finalRawAtsConfig = shouldDeactivateCompanyForRobotsBlock
+    ? {
+        ...nextRawAtsConfig,
+        crawl_allowed: false,
+        crawl_blocked_at: crawledAtIso,
+        crawl_blocked_reason: robotsBlockedReason,
+      }
+    : nextRawAtsConfig
+
   await pool.query(
     `UPDATE companies
      SET last_crawled_at = $1, job_count = $2, updated_at = $3, raw_ats_config = $5::jsonb
+         ${shouldDeactivateCompanyForRobotsBlock ? ", is_active = false" : ""}
          ${resolvedCareersUrl ? ", careers_url = $6" : ""}
      WHERE id = $4`,
     resolvedCareersUrl
-      ? [crawledAtIso, activeCount, crawledAtIso, companyId, JSON.stringify(nextRawAtsConfig), resolvedCareersUrl]
-      : [crawledAtIso, activeCount, crawledAtIso, companyId, JSON.stringify(nextRawAtsConfig)]
+      ? [crawledAtIso, activeCount, crawledAtIso, companyId, JSON.stringify(finalRawAtsConfig), resolvedCareersUrl]
+      : [crawledAtIso, activeCount, crawledAtIso, companyId, JSON.stringify(finalRawAtsConfig)]
   )
 
   // Auto-detect and backfill ATS type from the apply URLs we just crawled.
@@ -835,5 +879,7 @@ export async function persistCrawlJobs({
     deactivated: staleIds.length,
     activeCount,
     aiQueued,
+    companyDeactivated: shouldDeactivateCompanyForRobotsBlock,
+    companyDeactivatedReason: robotsBlockedReason,
   }
 }
