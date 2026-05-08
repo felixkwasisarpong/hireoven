@@ -260,14 +260,21 @@ export default function DashboardFeedToolbar({
       : `${filters.seniority.length} levels`
     : "Experience"
 
-  const postedLabel =
-    WITHIN_OPTIONS.find((o) => o.value === (filters.within ?? "all"))?.label ?? "Posted"
-
   const sortValue = filters.sort ?? "freshest"
+  const withinLockedBySort = sortValue === "match" || sortValue === "relevant"
+  const effectiveWithin = withinLockedBySort ? "24h" : (filters.within ?? "all")
+  const postedLabel =
+    WITHIN_OPTIONS.find((o) => o.value === effectiveWithin)?.label ?? "Posted"
 
   useEffect(() => {
     if (filterDropdown === "keywords") setKeywordsDraft(searchQuery)
   }, [filterDropdown, searchQuery])
+
+  useEffect(() => {
+    if (withinLockedBySort && filterDropdown === "posted") {
+      setFilterDropdown(null)
+    }
+  }, [filterDropdown, setFilterDropdown, withinLockedBySort])
 
   function openDropdown(next: Exclude<FeedToolbarDropdown, null>) {
     setFilterDropdown((d) => (d === next ? null : next))
@@ -665,19 +672,28 @@ export default function DashboardFeedToolbar({
         <div className="relative">
           <button
             type="button"
-            onClick={() => openDropdown("posted")}
+            onClick={() => {
+              if (withinLockedBySort) return
+              openDropdown("posted")
+            }}
+            title={withinLockedBySort ? "Posted window is fixed to Last 24 hours for this sort mode." : undefined}
             className={filterBtn(
-              Boolean(filters.within && filters.within !== "all"),
+              Boolean(effectiveWithin && effectiveWithin !== "all"),
               "rose"
             )}
           >
             <Clock
               className={iconCls(
-                Boolean(filters.within && filters.within !== "all"),
+                Boolean(effectiveWithin && effectiveWithin !== "all"),
                 "rose"
               )}
             />
             {postedLabel}
+            {withinLockedBySort ? (
+              <span className="rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-rose-700">
+                locked
+              </span>
+            ) : null}
             <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-400" />
           </button>
           {filterDropdown === "posted" && (
@@ -692,10 +708,10 @@ export default function DashboardFeedToolbar({
                   }}
                   className={cn(
                     "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition hover:bg-slate-50",
-                    (filters.within ?? "all") === opt.value ? "font-semibold text-[#0052CC]" : "text-slate-800"
+                    effectiveWithin === opt.value ? "font-semibold text-[#0052CC]" : "text-slate-800"
                   )}
                 >
-                  {(filters.within ?? "all") === opt.value && (
+                  {effectiveWithin === opt.value && (
                     <span className="h-1.5 w-1.5 rounded-full bg-[#0052CC]" />
                   )}
                   {opt.label}

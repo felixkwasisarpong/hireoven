@@ -352,7 +352,7 @@ export default async function DashboardJobDetailPage({ params }: Props) {
      WHERE j.is_active = true AND ${sqlJobLocatedInUsa("j")}`
 
   // Score algorithm version stamp — bump when scoring logic changes to bust the cache.
-  const SCORE_ALGORITHM_VERSION = new Date("2026-05-06T20:00:00.000Z").getTime()
+  const SCORE_ALGORITHM_VERSION = new Date("2026-05-08T04:00:00.000Z").getTime()
 
   const [cachedScoreResult, resumeSkillResult, similarByTitleResult, similarByCompanyResult] = await Promise.all([
     // Lightweight cache check — joins match score with resume updated_at in one query.
@@ -408,7 +408,9 @@ export default async function DashboardJobDetailPage({ params }: Props) {
 
     if (isCacheFresh && cached) {
       // Fast path: cache hit — reconstruct skill pills from already-fetched resume skills
-      const jobSkills = job.skills ?? []
+      const jobSkills = normalizeSkillList(
+        (job.skills?.length ? job.skills : consolidatedJobSkills) ?? []
+      )
       const resumeLabels = normalizeSkillList([
         ...(resumeRow?.top_skills ?? []),
         ...getSkillsBucketValues(resumeRow?.skills ?? null),
