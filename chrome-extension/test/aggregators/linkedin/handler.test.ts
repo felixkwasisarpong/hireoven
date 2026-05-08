@@ -47,15 +47,13 @@ describe("LinkedInHandler", () => {
       expect((mode as { driver?: string }).driver).toBe("linkedin")
     })
 
-    it("injectPill places the pill immediately after .jobs-apply-button", async () => {
+    it("injectPill does not render any LinkedIn pill overlay", async () => {
       const h = new LinkedInHandler()
       const job = h.scrapeJob()!
       h.injectPill(document.querySelector(".jobs-apply-button")!, job)
-      // injectPill is fire-and-forget (async suppression check); flush microtasks
+      // injectPill is intentionally a no-op on LinkedIn.
       await new Promise((r) => setTimeout(r, 0))
-      const applyBtn = document.querySelector(".jobs-apply-button")!
-      const next = applyBtn.nextElementSibling
-      expect(next?.getAttribute("data-scout-pill")).toBe("1")
+      expect(document.querySelector("[data-scout-pill]")).toBeNull()
     })
   })
 
@@ -88,7 +86,7 @@ describe("LinkedInHandler", () => {
       expect(h.detectApplyMode().kind).toBe("closed")
     })
 
-    it("injectPill suppresses the pill when closed", async () => {
+    it("injectPill keeps LinkedIn pill overlay disabled when closed", async () => {
       const h = new LinkedInHandler()
       const job = h.scrapeJob()!
       h.injectPill(document.querySelector(".jobs-apply-button")!, job)
