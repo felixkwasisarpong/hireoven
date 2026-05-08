@@ -21,6 +21,12 @@ export type SkillCategory =
   | "aiMl"
   | "data"
   | "security"
+  | "engineering"
+  | "testing"
+  | "networking"
+  | "media"
+  | "healthcare"
+  | "science"
   | "softSkills"
 
 export type CategorizedSkills = Record<SkillCategory, string[]>
@@ -268,6 +274,143 @@ export const SKILL_DEFINITIONS: SkillDefinition[] = [
   { label: "Zendesk",             aliases: ["zendesk"] },
   { label: "Intercom",            aliases: ["intercom"] },
 
+  // ─── Hardware & Mechanical Engineering ──────────────────────────────────
+  { label: "SolidWorks",        aliases: ["solidworks", "solid works"] },
+  { label: "CATIA",             aliases: ["catia"] },
+  { label: "Siemens NX",        aliases: ["siemens nx", "nx cad", "unigraphics", "ugsnx"] },
+  { label: "Creo",              aliases: ["creo", "pro/engineer", "proengineer", "pro-e"] },
+  { label: "AutoCAD",           aliases: ["autocad", "auto cad"] },
+  { label: "Fusion 360",        aliases: ["fusion 360", "autodesk fusion"] },
+  { label: "ANSYS",             aliases: ["ansys"] },
+  { label: "FEA",               aliases: ["fea", "finite element analysis", "finite element method", "fem"] },
+  { label: "CFD",               aliases: ["cfd", "computational fluid dynamics"] },
+  { label: "Thermal Analysis",  aliases: ["thermal analysis", "thermal management", "thermal simulation", "thermal modeling"] },
+  { label: "Structural Analysis", aliases: ["structural analysis", "structural simulation", "stress analysis", "fatigue analysis"] },
+  { label: "GD&T",              aliases: ["gd&t", "geometric dimensioning", "geometric tolerancing"] },
+  { label: "PCB Design",        aliases: ["pcb design", "pcb layout", "printed circuit board", "pcb"] },
+  { label: "Altium",            aliases: ["altium", "altium designer"] },
+  { label: "Cadence",           aliases: ["cadence", "cadence allegro", "cadence virtuoso"] },
+  { label: "Allegro",           aliases: ["allegro pcb"] },
+  { label: "KiCad",             aliases: ["kicad"] },
+  { label: "Eagle",             aliases: ["eagle cad", "autodesk eagle"] },
+  { label: "Zuken",             aliases: ["zuken", "zuken e3", "zuken cr-8000"] },
+  { label: "Capital",           aliases: ["capital logic", "capital electra", "mentor capital"] },
+  { label: "FPGA",              aliases: ["fpga", "field programmable gate array"] },
+  { label: "VHDL",              aliases: ["vhdl"] },
+  { label: "Verilog",           aliases: ["verilog", "systemverilog", "system verilog"] },
+  { label: "Embedded Systems",  aliases: ["embedded systems", "embedded software", "embedded engineering", "bare metal", "rtos", "embedded firmware"] },
+  { label: "Avionics",          aliases: ["avionics", "avionics systems", "avionics packaging"] },
+  { label: "EMI/EMC",           aliases: ["emi/emc", "emi", "emc", "electromagnetic interference", "electromagnetic compatibility"] },
+  { label: "MIL-STD",          aliases: ["mil-std", "mil std", "milspec", "mil-spec", "mil-std-810", "mil-std-461", "mil-std-1553"] },
+  { label: "DO-160",            aliases: ["do-160", "do160"] },
+  { label: "DO-178",            aliases: ["do-178", "do-178c", "do178"] },
+  { label: "DO-254",            aliases: ["do-254", "do254"] },
+  { label: "Systems Engineering", aliases: ["systems engineering", "model-based systems engineering", "mbse"] },
+  { label: "Robotics",          aliases: ["robotics", "robot operating system", "ros", "ros2"] },
+  { label: "PLC",               aliases: ["plc", "programmable logic controller", "ladder logic"] },
+  { label: "CAM",               aliases: ["cam", "computer-aided manufacturing"] },
+  { label: "Mechanical Design", aliases: ["mechanical design", "mechanical engineering", "mechanism design"] },
+  { label: "Aerospace Engineering", aliases: ["aerospace engineering", "aeronautics", "aerostructures"] },
+  { label: "Electrical Engineering", aliases: ["electrical engineering", "electrical design", "circuit design"] },
+  { label: "Hardware Design",   aliases: ["hardware design", "hardware development", "hardware engineering"] },
+  { label: "Signal Processing", aliases: ["signal processing", "dsp", "digital signal processing"] },
+  { label: "Power Electronics", aliases: ["power electronics", "power systems", "power supply design", "dc-dc converter"] },
+  { label: "RF Engineering",    aliases: ["rf engineering", "rf design", "radio frequency", "antenna design", "microwave"] },
+  { label: "Sensors",           aliases: ["sensor fusion", "sensor integration", "imu", "lidar", "radar"] },
+  { label: "Controls",          aliases: ["control systems", "control theory", "pid controller", "pid control", "flight control"] },
+  { label: "LabVIEW",          aliases: ["labview", "lab view"] },
+  { label: "COMSOL",           aliases: ["comsol", "comsol multiphysics"] },
+  { label: "Simulink",         aliases: ["simulink", "matlab simulink"] },
+
+  // ─── QA & Testing ─────────────────────────────────────────────────────────
+  { label: "Selenium",          aliases: ["selenium", "selenium webdriver"] },
+  { label: "Cypress",           aliases: ["cypress", "cypress.io"] },
+  { label: "Playwright",        aliases: ["playwright"] },
+  { label: "Jest",              aliases: ["jest", "jest testing"] },
+  { label: "pytest",            aliases: ["pytest"] },
+  { label: "JUnit",             aliases: ["junit", "junit5"] },
+  { label: "Mocha",             aliases: ["mocha", "mocha.js"] },
+  { label: "Postman",           aliases: ["postman"] },
+  { label: "JMeter",            aliases: ["jmeter", "apache jmeter"] },
+  { label: "Appium",            aliases: ["appium"] },
+  { label: "TestNG",            aliases: ["testng"] },
+  { label: "Load Testing",      aliases: ["load testing", "performance testing", "stress testing"] },
+  { label: "Test Automation",   aliases: ["test automation", "automated testing", "qa automation"] },
+  { label: "Manual Testing",    aliases: ["manual testing", "functional testing", "regression testing"] },
+  { label: "BDD",               aliases: ["bdd", "behavior driven development", "cucumber", "gherkin"] },
+  { label: "API Testing",       aliases: ["api testing", "api test", "rest assured"] },
+  { label: "Accessibility Testing", aliases: ["accessibility testing", "a11y testing"] },
+
+  // ─── Networking & Infrastructure ─────────────────────────────────────────
+  { label: "TCP/IP",            aliases: ["tcp/ip", "tcp ip", "networking protocols", "network protocols"] },
+  { label: "DNS",               aliases: ["dns", "domain name system"] },
+  { label: "Firewall",          aliases: ["firewall", "network firewall", "palo alto", "fortinet", "checkpoint"] },
+  { label: "VPN",               aliases: ["vpn", "virtual private network", "ipsec", "ssl vpn"] },
+  { label: "Cisco",             aliases: ["cisco", "cisco networking", "ccna", "ccnp", "ccie"] },
+  { label: "BGP/OSPF",          aliases: ["bgp", "ospf", "eigrp", "routing protocols"] },
+  { label: "SD-WAN",            aliases: ["sd-wan", "sdwan"] },
+  { label: "Load Balancing",    aliases: ["load balancing", "load balancer", "f5", "nginx load balancer", "haproxy"] },
+  { label: "Wireshark",         aliases: ["wireshark", "packet analysis", "packet capture"] },
+  { label: "Network Monitoring", aliases: ["network monitoring", "snmp", "nagios", "zabbix"] },
+  { label: "5G/LTE",            aliases: ["5g", "lte", "4g lte", "cellular networks", "ran"] },
+  { label: "VoIP",              aliases: ["voip", "sip", "asterisk", "webrtc", "unified communications"] },
+  { label: "Zero Trust",        aliases: ["zero trust", "zero-trust", "ztna"] },
+
+  // ─── Media & Creative Tools ───────────────────────────────────────────────
+  { label: "Premiere Pro",      aliases: ["premiere pro", "adobe premiere", "premiere"] },
+  { label: "Final Cut Pro",     aliases: ["final cut pro", "final cut", "fcp"] },
+  { label: "DaVinci Resolve",   aliases: ["davinci resolve", "resolve"] },
+  { label: "Avid",              aliases: ["avid", "avid media composer", "media composer"] },
+  { label: "Logic Pro",         aliases: ["logic pro", "logic x", "logic audio"] },
+  { label: "Pro Tools",         aliases: ["pro tools", "avid pro tools"] },
+  { label: "Audacity",          aliases: ["audacity"] },
+  { label: "Blender",           aliases: ["blender", "blender 3d"] },
+  { label: "Cinema 4D",         aliases: ["cinema 4d", "c4d"] },
+  { label: "Maya",              aliases: ["maya", "autodesk maya"] },
+  { label: "3ds Max",           aliases: ["3ds max", "3d studio max"] },
+  { label: "Unity",             aliases: ["unity", "unity3d", "unity engine"] },
+  { label: "Unreal Engine",     aliases: ["unreal engine", "unreal", "ue4", "ue5"] },
+  { label: "WordPress",         aliases: ["wordpress", "wp"] },
+  { label: "Webflow",           aliases: ["webflow"] },
+  { label: "Shopify",           aliases: ["shopify"] },
+  { label: "Video Production",  aliases: ["video production", "video editing", "video post-production"] },
+  { label: "Photography",       aliases: ["photography", "photo editing", "lightroom"] },
+  { label: "AR/VR",             aliases: ["ar", "vr", "augmented reality", "virtual reality", "mixed reality", "xr"] },
+
+  // ─── Healthcare & Life Sciences ───────────────────────────────────────────
+  { label: "HIPAA",             aliases: ["hipaa", "hipaa compliance", "phi"] },
+  { label: "Epic",              aliases: ["epic", "epic systems", "epic ehr"] },
+  { label: "Cerner",            aliases: ["cerner", "cerner millennium", "oracle health"] },
+  { label: "HL7/FHIR",         aliases: ["hl7", "fhir", "hl7 fhir", "hl7 v2"] },
+  { label: "EHR/EMR",          aliases: ["ehr", "emr", "electronic health records", "electronic medical records"] },
+  { label: "ICD-10",           aliases: ["icd-10", "icd10", "medical coding", "cpt coding"] },
+  { label: "Clinical Trials",  aliases: ["clinical trials", "clinical research", "clinical studies"] },
+  { label: "GMP",              aliases: ["gmp", "good manufacturing practice", "cgmp"] },
+  { label: "FDA Regulatory",   aliases: ["fda", "fda regulatory", "510k", "pma", "fda approval", "regulatory affairs"] },
+  { label: "Bioinformatics",   aliases: ["bioinformatics", "computational biology", "genomics"] },
+  { label: "PCR",              aliases: ["pcr", "qpcr", "rt-pcr", "polymerase chain reaction"] },
+  { label: "CRISPR",           aliases: ["crispr", "gene editing", "gene therapy"] },
+  { label: "Flow Cytometry",   aliases: ["flow cytometry", "facs", "cell sorting"] },
+  { label: "Microscopy",       aliases: ["microscopy", "confocal microscopy", "electron microscopy"] },
+  { label: "NGS",              aliases: ["ngs", "next generation sequencing", "dna sequencing", "rna sequencing", "rnaseq"] },
+  { label: "Cell Culture",     aliases: ["cell culture", "tissue culture", "mammalian cell culture"] },
+  { label: "Pharmacovigilance", aliases: ["pharmacovigilance", "drug safety", "adverse event reporting"] },
+  { label: "Medical Devices",  aliases: ["medical devices", "medical device", "iso 13485", "510(k)"] },
+  { label: "Radiology",        aliases: ["radiology", "dicom", "pacs", "medical imaging"] },
+
+  // ─── Science & Research ───────────────────────────────────────────────────
+  { label: "SAS",              aliases: ["sas", "sas programming"] },
+  { label: "SPSS",             aliases: ["spss", "ibm spss"] },
+  { label: "STATA",            aliases: ["stata"] },
+  { label: "LaTeX",            aliases: ["latex"] },
+  { label: "Scientific Writing", aliases: ["scientific writing", "research writing", "grant writing"] },
+  { label: "Lab Research",     aliases: ["laboratory research", "lab research", "wet lab", "dry lab"] },
+  { label: "Experimental Design", aliases: ["experimental design", "study design", "research methodology"] },
+  { label: "Mass Spectrometry", aliases: ["mass spectrometry", "hplc", "gc-ms", "lc-ms"] },
+  { label: "Protein Analysis", aliases: ["western blot", "elisa", "protein purification", "sds-page"] },
+  { label: "Animal Studies",   aliases: ["animal studies", "in vivo", "mouse model", "preclinical"] },
+  { label: "GIS",              aliases: ["gis", "arcgis", "qgis", "geographic information systems"] },
+
   // ─── Soft Skills ─────────────────────────────────────────────────────────
   { label: "Leadership",           aliases: ["leadership", "team leadership", "people management"] },
   { label: "Communication",        aliases: ["communication", "communications"] },
@@ -407,6 +550,46 @@ const SECURITY_SKILLS = new Set([
   "OAuth",
 ])
 
+const ENGINEERING_SKILLS = new Set([
+  "SolidWorks", "CATIA", "Siemens NX", "Creo", "AutoCAD", "Fusion 360",
+  "ANSYS", "FEA", "CFD", "Thermal Analysis", "Structural Analysis", "GD&T",
+  "PCB Design", "Altium", "Cadence", "Allegro", "KiCad", "Eagle", "Zuken", "Capital",
+  "FPGA", "VHDL", "Verilog", "Embedded Systems", "Avionics", "EMI/EMC",
+  "MIL-STD", "DO-160", "DO-178", "DO-254",
+  "Systems Engineering", "Robotics", "PLC", "CAM",
+  "Mechanical Design", "Aerospace Engineering", "Electrical Engineering", "Hardware Design",
+  "Signal Processing", "Power Electronics", "RF Engineering", "Sensors", "Controls",
+  "LabVIEW", "COMSOL", "Simulink",
+])
+
+const TESTING_SKILLS = new Set([
+  "Selenium", "Cypress", "Playwright", "Jest", "pytest", "JUnit", "Mocha",
+  "Postman", "JMeter", "Appium", "TestNG", "Load Testing", "Test Automation",
+  "Manual Testing", "BDD", "API Testing", "Accessibility Testing",
+])
+
+const NETWORKING_SKILLS = new Set([
+  "TCP/IP", "DNS", "Firewall", "VPN", "Cisco", "BGP/OSPF", "SD-WAN",
+  "Load Balancing", "Wireshark", "Network Monitoring", "5G/LTE", "VoIP", "Zero Trust",
+])
+
+const MEDIA_SKILLS = new Set([
+  "Premiere Pro", "Final Cut Pro", "DaVinci Resolve", "Avid", "Logic Pro", "Pro Tools",
+  "Audacity", "Blender", "Cinema 4D", "Maya", "3ds Max", "Unity", "Unreal Engine",
+  "WordPress", "Webflow", "Shopify", "Video Production", "Photography", "AR/VR",
+])
+
+const HEALTHCARE_SKILLS = new Set([
+  "HIPAA", "Epic", "Cerner", "HL7/FHIR", "EHR/EMR", "ICD-10", "Clinical Trials",
+  "GMP", "FDA Regulatory", "Bioinformatics", "PCR", "CRISPR", "Flow Cytometry",
+  "Microscopy", "NGS", "Cell Culture", "Pharmacovigilance", "Medical Devices", "Radiology",
+])
+
+const SCIENCE_SKILLS = new Set([
+  "SAS", "SPSS", "STATA", "LaTeX", "Scientific Writing", "Lab Research",
+  "Experimental Design", "Mass Spectrometry", "Protein Analysis", "Animal Studies", "GIS",
+])
+
 const SOFT_SKILLS = new Set([
   "Leadership",
   "Communication",
@@ -504,6 +687,12 @@ export function emptyCategorizedSkills(): CategorizedSkills {
     aiMl: [],
     data: [],
     security: [],
+    engineering: [],
+    testing: [],
+    networking: [],
+    media: [],
+    healthcare: [],
+    science: [],
     softSkills: [],
   }
 }
@@ -529,6 +718,18 @@ export function categorizeSkills(values: Array<string | null | undefined>): Cate
       buckets.data.push(skill)
     } else if (SECURITY_SKILLS.has(skill)) {
       buckets.security.push(skill)
+    } else if (ENGINEERING_SKILLS.has(skill)) {
+      buckets.engineering.push(skill)
+    } else if (TESTING_SKILLS.has(skill)) {
+      buckets.testing.push(skill)
+    } else if (NETWORKING_SKILLS.has(skill)) {
+      buckets.networking.push(skill)
+    } else if (MEDIA_SKILLS.has(skill)) {
+      buckets.media.push(skill)
+    } else if (HEALTHCARE_SKILLS.has(skill)) {
+      buckets.healthcare.push(skill)
+    } else if (SCIENCE_SKILLS.has(skill)) {
+      buckets.science.push(skill)
     } else if (SOFT_SKILLS.has(skill)) {
       buckets.softSkills.push(skill)
     }

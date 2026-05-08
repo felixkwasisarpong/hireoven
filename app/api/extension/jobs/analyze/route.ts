@@ -1,21 +1,21 @@
 /**
  * POST /api/extension/jobs/analyze
  *
- * Scout MVP analyze endpoint. Deterministic only — no AI calls, no scoring.
+ * Scout analyze endpoint. Deterministic only — no AI calls.
  *
  * Returns:
  *   - existsInHireoven (lookup-only, never writes)
  *   - autofillSupported (mapping by ATS source)
  *   - sponsorship (regex on description text)
  *   - signals (cheap deterministic facts: salary, location, work_mode, requirement)
+ *   - matchScore (shared fast scorer used by the main app)
  *   - actions (UI gates)
- *
- * matchScore is intentionally omitted — there is no extension-side match
- * scorer wired yet. ghostRisk is "unknown" until ghost detection lands.
  */
 
 import { NextResponse } from "next/server"
 import { getPostgresPool } from "@/lib/postgres/server"
+import { buildFastScoreResumeContext, computeFastScore } from "@/lib/matching/fast-scorer"
+import { getScoringContextForUser } from "@/lib/matching/batch-scorer"
 import {
   extensionCorsHeaders,
   extensionError,
@@ -24,6 +24,7 @@ import {
   requireExtensionAuth,
 } from "@/lib/extension/auth"
 import { extractSkillsFromText, skillMatches } from "@/lib/skills/taxonomy"
+import type { EmploymentType, Job, Resume, SeniorityLevel } from "@/types"
 
 export const runtime = "nodejs"
 
@@ -171,6 +172,7 @@ const YEARS_EXPERIENCE_RE = /\b(\d{1,2})\+?\s*years?\s+(?:of\s+)?experience\b/i
 const REMOTE_RE = /\b(?:remote|work\s+from\s+anywhere|fully\s+remote)\b/i
 const HYBRID_RE = /\bhybrid\b/i
 const ONSITE_RE = /\b(?:on[-\s]?site|in[-\s]?office)\b/i
+const ZERO_UUID = "00000000-0000-0000-0000-000000000000"
 
 // Mirrors chrome-extension/src/extractors/scout-extractor.ts and JobCardV2.
 const ACTIVELY_HIRING_RE =
@@ -291,6 +293,106 @@ function buildSignals(body: AnalyzeJobBody): AnalysisSignal[] {
   return signals
 }
 
+function inferEmploymentType(raw: string | undefined): EmploymentType | null {
+  const value = raw?.toLowerCase() ?? ""
+  if (/\bintern(ship)?\b/.test(value)) return "internship"
+  if (/\bpart[-\s]?time\b/.test(value)) return "parttime"
+  if (/\bcontract\b|\btemporary\b|\btemp\b|\bfreelance\b/.test(value)) return "contract"
+  if (/\bfull[-\s]?time\b/.test(value)) return "fulltime"
+  return null
+}
+
+function inferSeniorityLevel(title: string, description: string | null): SeniorityLevel | null {
+  const text = `${title} ${description ?? ""}`.toLowerCase()
+  if (/\bintern(ship)?\b|\bco[-\s]?op\b|\bapprentice\b/.test(text)) return "intern"
+  if (/\bvice president\b|\bvp\b/.test(text)) return "vp"
+  if (/\bchief\b|\bcto\b|\bceo\b|\bcio\b|\bcso\b|\bcoo\b|\bcfo\b|\bexecutive\b/.test(text)) return "exec"
+  if (/\bdirector\b/.test(text)) return "director"
+  if (/\bprincipal\b/.test(text)) return "principal"
+  if (/\bstaff\b/.test(text)) return "staff"
+  if (/\bsenior\b|\bsr\.?\b|\blead\b/.test(text)) return "senior"
+  if (/\bjunior\b|\bjr\.?\b|\bentry[-\s]?level\b|\bassociate\b/.test(text)) return "junior"
+  if (/\bmid[-\s]?level\b|\bintermediate\b/.test(text)) return "mid"
+  return null
+}
+
+function inferWorkModeFlags(body: AnalyzeJobBody, description: string): {
+  isRemote: boolean
+  isHybrid: boolean
+} {
+  const employmentType = body.employmentType?.toLowerCase() ?? ""
+  const location = body.location ?? ""
+  const isRemote =
+    REMOTE_RE.test(description) || REMOTE_RE.test(employmentType) || REMOTE_RE.test(location)
+  const isHybrid =
+    !isRemote &&
+    (HYBRID_RE.test(description) || HYBRID_RE.test(employmentType) || HYBRID_RE.test(location))
+  return { isRemote, isHybrid }
+}
+
+function scoreFromSponsorshipStatus(status: "likely" | "no_sponsorship" | "unclear" | "unknown"): number {
+  if (status === "likely") return 85
+  if (status === "no_sponsorship") return 0
+  if (status === "unclear") return 60
+  return 65
+}
+
+function buildSyntheticJobForScoring(body: AnalyzeJobBody): Job {
+  const now = new Date().toISOString()
+  const title = body.title?.trim() || "Unknown Role"
+  const description = body.descriptionText?.trim() || null
+  const textForSkills = `${title} ${description ?? ""}`.trim()
+  const extractedSkills =
+    textForSkills.length >= 40 ? extractSkillsFromText(textForSkills).slice(0, 40) : []
+  const sponsorship = detectSponsorship(description ?? undefined)
+  const { isRemote, isHybrid } = inferWorkModeFlags(body, description ?? "")
+
+  const applyUrl =
+    normalizeUrl(body.applyUrl) ??
+    normalizeUrl(body.canonicalUrl) ??
+    normalizeUrl(body.url) ??
+    body.url
+
+  return {
+    id: ZERO_UUID,
+    company_id: ZERO_UUID,
+    title,
+    department: null,
+    location: body.location?.trim() || null,
+    is_remote: isRemote,
+    is_hybrid: isHybrid,
+    employment_type: inferEmploymentType(body.employmentType),
+    seniority_level: inferSeniorityLevel(title, description),
+    salary_min: null,
+    salary_max: null,
+    salary_currency: "USD",
+    description,
+    apply_url: applyUrl,
+    external_id: null,
+    first_detected_at: now,
+    last_seen_at: now,
+    is_active: true,
+    sponsors_h1b: sponsorship.status === "likely" ? true : sponsorship.status === "no_sponsorship" ? false : null,
+    sponsorship_score: scoreFromSponsorshipStatus(sponsorship.status),
+    visa_language_detected: sponsorship.evidence[0] ?? null,
+    requires_authorization: sponsorship.status === "no_sponsorship",
+    skills: extractedSkills.length > 0 ? extractedSkills : null,
+    normalized_title: null,
+    raw_data: {
+      source: body.source,
+      detectedAts: body.detectedAts ?? null,
+      extensionSyntheticJob: true,
+      url: body.url,
+      canonicalUrl: body.canonicalUrl ?? null,
+      applyUrl: body.applyUrl ?? null,
+    },
+    h1b_prediction: null,
+    h1b_prediction_at: null,
+    created_at: now,
+    updated_at: now,
+  }
+}
+
 // ── Route ─────────────────────────────────────────────────────────────────────
 
 export function OPTIONS(request: Request) {
@@ -316,16 +418,20 @@ export async function POST(request: Request) {
   // tracking params, etc. would cause false negatives otherwise).
   const pool = getPostgresPool()
   let jobId: string | undefined
+  let existingJob: Job | undefined
   const candidates = [body.applyUrl, body.url, body.canonicalUrl]
     .map((u) => normalizeUrl(u))
     .filter((u): u is string => Boolean(u))
   if (candidates.length > 0) {
     try {
-      const existing = await pool.query<{ id: string }>(
-        `SELECT id FROM jobs WHERE apply_url = ANY($1::text[]) LIMIT 1`,
+      const existing = await pool.query<Job>(
+        `SELECT * FROM jobs WHERE apply_url = ANY($1::text[]) LIMIT 1`,
         [candidates],
       )
-      if (existing.rows[0]) jobId = existing.rows[0].id
+      if (existing.rows[0]) {
+        existingJob = existing.rows[0]
+        jobId = existingJob.id
+      }
     } catch {
       // DB lookup is non-blocking — analyze still works without it.
     }
@@ -352,22 +458,20 @@ export async function POST(request: Request) {
   const sponsorship = detectSponsorship(body.descriptionText)
   const signals = buildSignals(body)
 
-  // ── Skill matching against the user's primary resume ─────────────────────
-  // Only fires when (a) the JD has enough text to extract skills from, AND
-  // (b) the user actually has a resume on file with top_skills populated.
-  // Otherwise no skill signals or matchScore are emitted (per spec: omit
-  // rather than invent).
+  // ── Match scoring against the user's primary resume ──────────────────────
+  // Uses the same fast scorer as the main app so extension + dashboard stay
+  // aligned. Signals are derived from the same score breakdown.
   let matchScore: number | undefined
   try {
     const skillSignals = await computeSkillMatch({
       userId: user.sub,
-      descriptionText: body.descriptionText ?? "",
-      title: body.title ?? "",
+      body,
+      existingJob,
     })
     signals.push(...skillSignals.signals)
     matchScore = skillSignals.matchScore
   } catch (err) {
-    console.warn("[extension/jobs/analyze] skill match failed:", err)
+    console.warn("[extension/jobs/analyze] match scoring failed:", err)
     // Leave matchScore undefined — caller renders nothing.
   }
 
@@ -400,70 +504,89 @@ export async function POST(request: Request) {
 // ── Skill matching ──────────────────────────────────────────────────────────
 
 /**
- * Compute matched / missing skill signals + a coarse skill-driven match score
- * by comparing skills extracted from the JD against the user's primary
- * resume's `top_skills`.
- *
- * Hard rules:
- *   - No resume → no signals, no score (we don't invent).
- *   - JD too thin to extract any skills → no missing-skill signals (we don't
- *     manufacture "missing X" when we can't see X being required), and no
- *     score.
- *   - Score is the percentage of detected JD skills that are also on the
- *     resume, capped at 95 so a perfect overlap on a thin JD doesn't read
- *     as a 100% match.
+ * Compute match score + matched/missing skill signals using the shared fast
+ * scorer from the main app. Falls back to a lightweight skill overlap signal
+ * only when the scorer has no surfaced skill breakdown.
  */
 async function computeSkillMatch(args: {
   userId: string
-  descriptionText: string
-  title: string
+  body: AnalyzeJobBody
+  existingJob?: Job
 }): Promise<{
   signals: AnalysisSignal[]
   matchScore?: number
 }> {
-  const text = `${args.title} ${args.descriptionText}`.trim()
-  if (text.length < 80) return { signals: [] }
+  const context = await getScoringContextForUser(args.userId)
+  if (!context) return { signals: [] }
 
-  const jdSkills = extractSkillsFromText(text)
-  if (jdSkills.length === 0) return { signals: [] }
+  const scoreJob = args.existingJob ?? buildSyntheticJobForScoring(args.body)
+  const resumeContext = buildFastScoreResumeContext(context.resume)
+  const fastScore = computeFastScore({
+    resume: context.resume,
+    job: scoreJob,
+    profile: context.profile,
+    resumeContext,
+  })
 
-  const pool = getPostgresPool()
-  const r = await pool.query<{ top_skills: string[] | null }>(
-    `SELECT top_skills FROM resumes
-       WHERE user_id = $1 AND parse_status = 'complete'
-       ORDER BY is_primary DESC NULLS LAST, updated_at DESC
-       LIMIT 1`,
-    [args.userId],
+  const breakdown = fastScore.score_breakdown
+  const signalText = `${scoreJob.title} ${scoreJob.description ?? ""}`.trim()
+  const matchedFromScorer = Array.from(
+    new Set(
+      (breakdown?.matchedSkills ?? [])
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0),
+    ),
   )
-  const resumeSkills = (r.rows[0]?.top_skills ?? []).filter((s): s is string => typeof s === "string" && s.length > 0)
-  if (resumeSkills.length === 0) {
-    // No resume on file (or empty top_skills) → can't make a real comparison.
-    return { signals: [] }
+  const missingFromScorer = Array.from(
+    new Set(
+      (breakdown?.missingSkills ?? [])
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0),
+    ),
+  )
+
+  const out: AnalysisSignal[] = []
+  matchedFromScorer.sort((a, b) => b.length - a.length).slice(0, 6).forEach((s) => {
+    out.push({ label: s, type: "matched_skill", evidence: snippetAroundSkill(signalText, s), confidence: "high" })
+  })
+  missingFromScorer.sort((a, b) => b.length - a.length).slice(0, 6).forEach((s) => {
+    out.push({ label: s, type: "missing_skill", evidence: snippetAroundSkill(signalText, s), confidence: "high" })
+  })
+
+  // Fallback signal path for sparse jobs where the scorer had no skill list.
+  if (out.length === 0) {
+    out.push(...computeFallbackSkillSignals(signalText, context.resume))
   }
+
+  return { signals: out, matchScore: fastScore.overall_score }
+}
+
+function computeFallbackSkillSignals(text: string, resume: Resume): AnalysisSignal[] {
+  if (text.length < 80) return []
+  const jdSkills = extractSkillsFromText(text)
+  if (jdSkills.length === 0) return []
+
+  const resumeSkills = (resume.top_skills ?? []).filter(
+    (s): s is string => typeof s === "string" && s.length > 0,
+  )
+  if (resumeSkills.length === 0) return []
 
   const matched: string[] = []
   const missing: string[] = []
   for (const required of jdSkills) {
     const hit = resumeSkills.find((cand) => skillMatches(required, cand))
     if (hit) matched.push(required)
-    else     missing.push(required)
+    else missing.push(required)
   }
 
   const out: AnalysisSignal[] = []
-  // Top 6 of each, longest first — feels more meaningful than "Git, Excel, …"
   matched.sort((a, b) => b.length - a.length).slice(0, 6).forEach((s) => {
     out.push({ label: s, type: "matched_skill", evidence: snippetAroundSkill(text, s), confidence: "high" })
   })
   missing.sort((a, b) => b.length - a.length).slice(0, 6).forEach((s) => {
     out.push({ label: s, type: "missing_skill", evidence: snippetAroundSkill(text, s), confidence: "high" })
   })
-
-  const total = matched.length + missing.length
-  const matchScore = total > 0
-    ? Math.min(95, Math.round((matched.length / total) * 100))
-    : undefined
-
-  return { signals: out, matchScore }
+  return out
 }
 
 function snippetAroundSkill(text: string, skill: string, padding = 60): string | undefined {

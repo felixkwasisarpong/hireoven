@@ -16,7 +16,7 @@ const BACKGROUND_USER_LIMIT = 10_000
 const UPSERT_CHUNK_SIZE = 250
 const BACKGROUND_CONCURRENCY = 50
 // Bump this when the scoring algorithm changes to invalidate stale cached rows.
-const FAST_SCORE_ALGORITHM_UPDATED_AT = new Date("2026-05-06T20:00:00.000Z").getTime()
+const FAST_SCORE_ALGORITHM_UPDATED_AT = new Date("2026-05-07T14:00:00.000Z").getTime()
 const FAST_SCORE_ALGORITHM_UPDATED_AT_ISO = new Date(FAST_SCORE_ALGORITHM_UPDATED_AT).toISOString()
 
 function chunkArray<T>(items: T[], size: number) {
