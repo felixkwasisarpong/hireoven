@@ -6,8 +6,6 @@ import {
   type ScrapedJob,
   type WorkMode,
 } from "../base"
-import { isSuppressed, recordDismiss } from "../cta-suppression"
-import { createPill, injectPillAfter } from "../pill"
 import { driveLinkedInEasyApply, type LinkedInEasyApplyPrefs } from "./easyapply-driver"
 
 const JOB_PAGE_RE = /\/jobs\/(view|collections|search)\//
@@ -87,33 +85,10 @@ export class LinkedInHandler extends AggregatorHandler {
   }
 
   injectPill(_target: Element, job: ScrapedJob): void {
-    const applyBtn = document.querySelector<HTMLElement>(".jobs-apply-button")
-    if (!applyBtn) return
-    if (job.applyMode.kind === "closed") return
-
-    void isSuppressed(this.site).then((suppressed) => {
-      if (suppressed) return
-      const fresh = isPostedWithin24h(job.postedAt, job.postedAtPrecision)
-      const pill = createPill({
-        variant: fresh ? "green" : "neutral",
-        copy: fresh ? "Apply with Scout" : "Save to Scout queue",
-        subText: fresh ? "3.1× boost" : undefined,
-        testId: "scout-pill-linkedin",
-        dismissible: true,
-        onDismiss: () => void recordDismiss(this.site),
-        onClick: (event) => {
-          event.preventDefault()
-          event.stopPropagation()
-          chrome.runtime.sendMessage(
-            { type: "SCOUT_OPEN_APPLY_FLOW", site: this.site, jobId: job.sourceId, scrapedJob: job },
-            () => {
-              void chrome.runtime.lastError
-            },
-          )
-        },
-      })
-      injectPillAfter(applyBtn, pill)
-    })
+    void job
+    // Product requirement: never render extension overlay UI on LinkedIn.
+    // Keep scraping + driver plumbing, but block visual pill injection.
+    return
   }
 
   protected findPillTarget(): Element | null {
@@ -214,13 +189,6 @@ function parseRelative(rel: string): { postedAt: string; postedAtPrecision: Post
     return { postedAt: new Date(now - ms).toISOString(), postedAtPrecision: "exact" }
   }
   return { postedAt: new Date(now - ms).toISOString(), postedAtPrecision: "day" }
-}
-
-function isPostedWithin24h(postedAt: string, precision: PostedAtPrecision): boolean {
-  if (precision !== "exact") return false
-  const t = new Date(postedAt).getTime()
-  if (Number.isNaN(t)) return false
-  return Date.now() - t < 24 * 60 * 60 * 1000
 }
 
 // ── Bootstrap ────────────────────────────────────────────────────────────────

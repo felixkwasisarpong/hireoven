@@ -424,6 +424,16 @@ async function mountJobCardBadgesWhenReady(): Promise<void> {
       unmountDetailScoutPanel()
       return
     }
+    if (site === "linkedin") {
+      // Product requirement: no extension overlay UI on LinkedIn.
+      // Explicitly disable job-card badges + detail panel there.
+      engine?.stop()
+      engine = null
+      lastSite = null
+      unmountScreenerBar()
+      unmountDetailScoutPanel()
+      return
+    }
     const mode = detectExtensionPageMode(window.location.href, document)
     if (mode === "unknown") {
       engine?.stop()

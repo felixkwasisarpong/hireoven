@@ -644,6 +644,7 @@ function normalizeFromCoreInput(input: {
   structuredSections?: ReturnType<typeof adaptRawCrawlerJob>["structuredSections"]
   structuredCompensationText?: string | null
   structuredVisaText?: string | null
+  structuredSalary?: { min?: number | null; max?: number | null; currency?: string | null } | null
   existing: ExistingJobState
   nowIso: string
 }): NormalizationResult {
@@ -657,16 +658,19 @@ function normalizeFromCoreInput(input: {
 
   const extractedSalary = extractSalaryRange(input.description)
   const salaryMin =
+    (input.structuredSalary?.min ?? null) ??
     extractedSalary?.min ??
     metadata.salaryMin ??
     input.existing.salary_min ??
     null
   const salaryMax =
+    (input.structuredSalary?.max ?? null) ??
     extractedSalary?.max ??
     metadata.salaryMax ??
     input.existing.salary_max ??
     null
   const salaryCurrency =
+    (input.structuredSalary?.currency ?? null) ??
     extractedSalary?.currency ??
     metadata.salaryCurrency ??
     input.existing.salary_currency ??
@@ -949,6 +953,9 @@ export function normalizeCrawlerJobForPersistence(input: {
     structuredSections: adapted.structuredSections,
     structuredCompensationText: adapted.structuredCompensationText,
     structuredVisaText: adapted.structuredVisaText,
+    structuredSalary: (input.rawJob.salaryMin != null || input.rawJob.salaryMax != null)
+      ? { min: input.rawJob.salaryMin ?? null, max: input.rawJob.salaryMax ?? null, currency: input.rawJob.salaryCurrency ?? null }
+      : null,
     existing: input.existing ?? {
       description: null,
       employment_type: null,

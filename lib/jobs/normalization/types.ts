@@ -245,6 +245,9 @@ export type SourceRawJobInput = {
   workMode?: string | null
   employmentType?: string | null
   salaryRange?: string | null
+  salaryMin?: number | null
+  salaryMax?: number | null
+  salaryCurrency?: string | null
   matchScore?: number | null
   matchLabel?: string | null
   matchedSkills?: string[] | null

@@ -16,6 +16,11 @@ const SEARCH_CHUNK_SIZE = 80
 /** Avoid unbounded Supabase round-trips when client-side filters discard most rows. */
 const MAX_FETCH_CHUNKS = 14
 
+function effectiveWithinForSort(filters: JobFilters): JobFilters["within"] {
+  if (filters.sort === "match" || filters.sort === "relevant") return "24h"
+  return filters.within
+}
+
 function hoursFromWithin(within: JobFilters["within"]) {
   if (within === "1h") return 1
   if (within === "6h") return 6
@@ -101,7 +106,7 @@ function matchesClientFilters(job: JobWithCompany, filters: JobFilters, query: s
     if (job.salary_max != null && job.salary_max < min) return false
   }
 
-  const hours = hoursFromWithin(filters.within)
+  const hours = hoursFromWithin(effectiveWithinForSort(filters))
   if (hours) {
     const ageMs = Date.now() - new Date(job.first_detected_at).getTime()
     if (ageMs > hours * 3_600_000) return false
@@ -306,6 +311,7 @@ export function useJobs(
     async (offset: number) => {
       const chunkSize = searchQuery.trim() ? SEARCH_CHUNK_SIZE : PAGE_SIZE
       const requiresClientOnlyFiltering = hasClientOnlyPersonalizedFilters(filters)
+      const effectiveWithin = effectiveWithinForSort(filters)
 
       if (personalized) {
         const params = new URLSearchParams()
@@ -319,7 +325,7 @@ export function useJobs(
           params.set("employment", filters.employment_type.join(","))
         }
         if (filters.company_ids?.length) params.set("companies", filters.company_ids.join(","))
-        if (filters.within && filters.within !== "all") params.set("within", filters.within)
+        if (effectiveWithin && effectiveWithin !== "all") params.set("within", effectiveWithin)
         if (filters.locationQuery?.trim()) {
           params.set("location", filters.locationQuery.trim())
         }
@@ -368,7 +374,7 @@ export function useJobs(
       if (filters.seniority?.length) params.set("seniority", filters.seniority.join(","))
       if (filters.employment_type?.length) params.set("employment_type", filters.employment_type.join(","))
       if (filters.company_ids?.length) params.set("company_id", filters.company_ids[0])
-      if (filters.within && filters.within !== "all") params.set("within", filters.within)
+      if (effectiveWithin && effectiveWithin !== "all") params.set("within", effectiveWithin)
       if (withScores) params.set("withScores", "1")
       params.set("limit", String(chunkSize))
       params.set("offset", String(offset))

@@ -909,6 +909,65 @@ export function extractJobDescriptionFromHtml(
   return null
 }
 
+/** https://jobs.lever.co/{company}/{jobId} → parsed context */
+function parseLeverJobUrl(url: URL): { company: string; jobId: string } | null {
+  if (url.hostname.toLowerCase() !== "jobs.lever.co") return null
+  const [, company, jobId] = url.pathname.split("/")
+  if (!company || !jobId) return null
+  return { company, jobId }
+}
+
+/** https://boards.greenhouse.io/{company}/jobs/{jobId} → parsed context */
+function parseGreenhouseJobUrl(url: URL): { company: string; jobId: string } | null {
+  const host = url.hostname.toLowerCase()
+  if (!host.includes("greenhouse.io")) return null
+  const m = url.pathname.match(/^\/([^/]+)\/jobs\/(\d+)/)
+  if (!m) return null
+  return { company: m[1], jobId: m[2] }
+}
+
+async function fetchLeverDescriptionFromUrl(url: URL): Promise<string | null> {
+  const ctx = parseLeverJobUrl(url)
+  if (!ctx) return null
+  try {
+    const res = await fetch(
+      `https://api.lever.co/v0/postings/${encodeURIComponent(ctx.company)}/${encodeURIComponent(ctx.jobId)}`,
+      { headers: { accept: "application/json" } }
+    )
+    if (!res.ok) return null
+    const payload = (await res.json()) as {
+      descriptionPlain?: string
+      description?: string
+      lists?: Array<{ text?: string; content?: string }>
+    }
+    const base = payload.descriptionPlain ?? payload.description ?? null
+    const sections = (payload.lists ?? [])
+      .map((l) => [l.text, l.content].filter(Boolean).join("\n"))
+      .filter(Boolean)
+      .join("\n\n")
+    const full = [base, sections].filter(Boolean).join("\n\n")
+    return cleanJobDescription(full)
+  } catch {
+    return null
+  }
+}
+
+async function fetchGreenhouseDescriptionFromUrl(url: URL): Promise<string | null> {
+  const ctx = parseGreenhouseJobUrl(url)
+  if (!ctx) return null
+  try {
+    const res = await fetch(
+      `https://boards-api.greenhouse.io/v1/boards/${encodeURIComponent(ctx.company)}/jobs/${encodeURIComponent(ctx.jobId)}`,
+      { headers: { accept: "application/json" } }
+    )
+    if (!res.ok) return null
+    const payload = (await res.json()) as { content?: string }
+    return cleanJobDescription(payload.content ?? null)
+  } catch {
+    return null
+  }
+}
+
 /**
  * Infer a provider hint from the apply URL so that `extractJobDescriptionFromHtml`
  * can use ATS-specific content anchors. Returns undefined for unknown providers.
@@ -943,6 +1002,16 @@ export async function fetchJobDescription(
   if (parsedUrl && isWorkdayJobUrl(parsedUrl)) {
     const workdayDescription = await fetchWorkdayDescriptionFromUrl(parsedUrl)
     if (workdayDescription) return workdayDescription
+  }
+
+  if (parsedUrl && parseLeverJobUrl(parsedUrl)) {
+    const leverDescription = await fetchLeverDescriptionFromUrl(parsedUrl)
+    if (leverDescription) return leverDescription
+  }
+
+  if (parsedUrl && parseGreenhouseJobUrl(parsedUrl)) {
+    const ghDescription = await fetchGreenhouseDescriptionFromUrl(parsedUrl)
+    if (ghDescription) return ghDescription
   }
 
   const resolvedProvider = providerHint ?? (parsedUrl ? detectProviderFromUrl(parsedUrl) : undefined)

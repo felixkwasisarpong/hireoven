@@ -22,8 +22,10 @@ import type {
 } from "@/types"
 import {
   canonicalizeSkill,
+  extractSkillsFromText,
   getAllResumeSkillLabels,
   normalizeSkillKey,
+  normalizeSkillList,
 } from "@/lib/skills/taxonomy"
 
 export interface FastScoreInput {
@@ -61,12 +63,12 @@ export interface FastScoreResumeContext {
 const CURRENT_YEAR = new Date().getFullYear()
 
 const W = {
-  skills:     0.35,
-  experience: 0.20,
+  skills:     0.40,
+  experience: 0.22,
   title:      0.10,
   education:  0.10,
-  domain:     0.10,
-  certs:      0.05,
+  domain:     0.05,
+  certs:      0.03,
   semantic:   0.10,
 } as const
 
@@ -112,6 +114,15 @@ function hasNormalizedSkillOverlap(requiredKey: string, candidateKey: string) {
 
 // ─── 1. Skills (weight 0.35) ──────────────────────────────────────────────────
 
+type SkillsScoreResult = {
+  score: number
+  matched: string[]
+  missing: string[]
+  evidence: string
+  certGate: boolean
+  requiredCount: number
+}
+
 function inferLastUsedYear(
   skillName: string,
   experienceByRecency: ResumeExperienceSnapshot[]
@@ -130,10 +141,34 @@ function recency(skillName: string, resumeContext: FastScoreResumeContext): numb
   return y !== null && CURRENT_YEAR - y > 5 ? 0.5 : 1.0
 }
 
-function scoreSkills(resumeContext: FastScoreResumeContext, job: Job) {
-  const jobSkills = job.skills ?? []
+function deriveSkillsFromJobText(job: Job): string[] {
+  const description = job.description ?? ""
+  const requirementsText = extractRequirementsText(description)
+  const derivedFromRequirements = normalizeSkillList(
+    extractSkillsFromText(job.title, requirementsText),
+    24
+  )
+
+  if (derivedFromRequirements.length > 0) return derivedFromRequirements
+
+  return normalizeSkillList(extractSkillsFromText(job.title, description), 24)
+}
+
+function scoreSkills(resumeContext: FastScoreResumeContext, job: Job): SkillsScoreResult {
+  const storedJobSkills = normalizeSkillList(job.skills ?? [], 24)
+  const usedDerivedSkills = storedJobSkills.length === 0
+  const jobSkills = usedDerivedSkills ? deriveSkillsFromJobText(job) : storedJobSkills
+
   if (jobSkills.length === 0) {
-    return { score: 1.0, matched: [] as string[], missing: [] as string[], evidence: "No skills listed for this role.", certGate: false }
+    return {
+      score: 0.55,
+      matched: [],
+      missing: [],
+      evidence:
+        "No reliable skills detected in this posting; applied a neutral skills score.",
+      certGate: false,
+      requiredCount: 0,
+    }
   }
 
   const missing: string[] = []
@@ -162,17 +197,26 @@ function scoreSkills(resumeContext: FastScoreResumeContext, job: Job) {
   }
 
   const matched = jobSkills.filter((skill) => !missingSet.has(skill))
-  let score = sum / jobSkills.length
-  if (missing.length > 0) score = Math.min(score, 0.7)
+  const score = sum / jobSkills.length
 
+  const sourcePrefix = usedDerivedSkills
+    ? `Structured skills were missing; derived ${jobSkills.length} skill${jobSkills.length === 1 ? "" : "s"} from posting text. `
+    : ""
   const label = missing.length > 3
     ? `${missing.slice(0, 3).join(", ")} +${missing.length - 3} more`
     : missing.join(", ")
   const evidence = missing.length === 0
-    ? `Matched all ${jobSkills.length} required skills.`
-    : `Matched ${matched.length}/${jobSkills.length}; missing: ${label}.`
+    ? `${sourcePrefix}Matched all ${jobSkills.length} required skills.`
+    : `${sourcePrefix}Matched ${matched.length}/${jobSkills.length}; missing: ${label}.`
 
-  return { score, matched, missing, evidence, certGate: false }
+  return {
+    score,
+    matched,
+    missing,
+    evidence,
+    certGate: false,
+    requiredCount: jobSkills.length,
+  }
 }
 
 // ─── 2. Experience (weight 0.20) ──────────────────────────────────────────────
@@ -352,18 +396,18 @@ function fieldRelevance(field: string, job: Job): number {
     if (TECH_FIELDS.has(f)) return 1.0
     // Partial: any engineering/science/computing word in the field name
     if (/\b(engineer|science|computing|technology|technical|math|physics|stat|data|information|system)\b/.test(f)) return 0.9
-    if (BUSINESS_FIELDS.has(f)) return 0.55
-    return 0.45
+    if (BUSINESS_FIELDS.has(f)) return 0.6
+    return 0.55
   }
 
   if (isBusinessJob) {
     if (BUSINESS_FIELDS.has(f)) return 1.0
-    if (TECH_FIELDS.has(f)) return 0.65
-    return 0.5
+    if (TECH_FIELDS.has(f)) return 0.7
+    return 0.55
   }
 
   // Unclassified job type — be generous; field mismatch is rarely catastrophic
-  return 0.75
+  return 0.8
 }
 
 function degreeRank(d: string | null | undefined): number {
@@ -475,7 +519,7 @@ function scoreDomain(resumeContext: FastScoreResumeContext, job: Job) {
   if (resumeContext.resumeIndustries.length === 0) return { score: 0.5, evidence: "No industry history on resume." }
 
   const jobIndustry = inferJobIndustry(job)
-  if (!jobIndustry) return { score: 0.65, evidence: "Job industry not determinable from description." }
+  if (!jobIndustry) return { score: 0.75, evidence: "Job industry not determinable from description." }
 
   if (resumeContext.resumeIndustrySet.has(jobIndustry)) {
     return { score: 1.0, evidence: `Direct ${jobIndustry} industry experience.` }
@@ -486,12 +530,12 @@ function scoreDomain(resumeContext: FastScoreResumeContext, job: Job) {
   if (adjacent) {
     for (const ind of resumeContext.resumeIndustries) {
       if (adjacent.has(ind)) {
-        return { score: 0.7, evidence: `Adjacent industry experience (${ind} → ${jobIndustry}).` }
+        return { score: 0.75, evidence: `Adjacent industry experience (${ind} → ${jobIndustry}).` }
       }
     }
   }
 
-  return { score: 0.35, evidence: `No industry overlap (resume: ${resumeContext.resumeIndustries.slice(0, 2).join(", ")}; job: ${jobIndustry}).` }
+  return { score: 0.45, evidence: `No industry overlap (resume: ${resumeContext.resumeIndustries.slice(0, 2).join(", ")}; job: ${jobIndustry}).` }
 }
 
 // ─── 6. Certs (weight 0.05) ───────────────────────────────────────────────────
@@ -581,9 +625,9 @@ function scoreSemanticOverlap(resumeContext: FastScoreResumeContext, job: Job) {
   const jdRequirements = extractRequirementsText(job.description)
   const jobTok = new Set(tokenize(`${job.title} ${jdRequirements}`))
 
-  // Jaccard on requirements text is still low (0.05–0.35); ×2 maps a solid
-  // match (jaccard≈0.30) to ~0.60 rather than instantly hitting 1.0.
-  const score = clamp(jaccard(resumeContext.semanticTokens, jobTok) * 2)
+  // Jaccard on requirements text is inherently low (0.05–0.35); ×3.5 maps a
+  // solid match (jaccard≈0.20) to ~0.70 and a strong match (≈0.28) to ~1.0.
+  const score = clamp(jaccard(resumeContext.semanticTokens, jobTok) * 3.5)
   return { score, evidence: `Requirements text overlap: ${(score * 100).toFixed(0)}%.` }
 }
 
@@ -693,37 +737,22 @@ export function computeFastScore({
 
   // Hard gates (applied after weighted sum, in order of severity)
   const gatesTriggered: string[] = []
-  const totalRequired = job.skills?.length ?? 0
+  const totalRequired = skills.requiredCount
 
   if (certs.certGate) {
     overall = Math.min(overall, 60)
     gatesTriggered.push("missing_required_cert")
   }
 
-  if (totalRequired > 0 && skills.missing.length / totalRequired > 0.5) {
-    overall = Math.min(overall, 50)
-    gatesTriggered.push("missing_required_skills_gt50pct")
+  if (totalRequired > 0 && skills.missing.length / totalRequired > 0.6) {
+    overall = Math.min(overall, 55)
+    gatesTriggered.push("missing_required_skills_gt60pct")
   }
 
   const minYears = extractMinYears(job.description)
-  if (minYears > 0 && experience.score < 0.5) {
+  if (minYears > 0 && experience.score < 0.4) {
     overall = Math.min(overall, 55)
     gatesTriggered.push("insufficient_experience")
-  }
-
-  // Sponsorship: use the sponsorship scorer's own compatible determination.
-  // Do NOT check requires_authorization directly — it conflicts with the scorer
-  // which already factors in sponsorship_score (72% signal → compatible:true even
-  // if requires_authorization is set as boilerplate).
-  if (profile.needs_sponsorship && !sponsorship.compatible) {
-    overall = Math.min(overall, 45)
-    gatesTriggered.push("sponsorship_incompatible")
-  }
-
-  // Hybrid is partial remote — only gate fully on-site jobs for remote-only candidates
-  if (!job.is_remote && !job.is_hybrid && profile.remote_only) {
-    overall = Math.min(overall, 40)
-    gatesTriggered.push("remote_only_mismatch")
   }
 
   // Seniority gap > 3 levels is a true extreme mismatch (e.g. exec applying for intern)
@@ -734,9 +763,17 @@ export function computeFastScore({
 
   overall = clamp(overall, 0, 100)
 
+  // Curve: stretch scores above 55 upward so strong matches reach 90–98.
+  // Mirrors how competitors calibrate — a genuinely good match should feel like one.
+  if (overall > 55) {
+    overall = Math.min(99, Math.round(overall + (overall - 55) * 0.25))
+  }
+
   const now = new Date().toISOString()
   const confidence = skills.missing.length === 0 && experience.score >= 0.8
     ? "high" as const
+    : totalRequired === 0
+      ? "low" as const
     : skills.missing.length / Math.max(1, totalRequired) > 0.5
       ? "low" as const
       : "medium" as const
@@ -785,6 +822,9 @@ export function computeFastScore({
       scoreMethod:         "fast",
       confidence,
       concerns: [
+        ...(totalRequired === 0
+          ? ["Job posting skills were not reliably structured; confidence is reduced."]
+          : []),
         ...(skills.missing.length > 0
           ? [`Missing ${skills.missing.length} required skill${skills.missing.length !== 1 ? "s" : ""}`]
           : []),

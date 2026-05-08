@@ -54,7 +54,9 @@ const EXPERIENCE_RANGE_RE =
 const EXPERIENCE_MIN_RE = /\bminimum of\s+(\d{1,2})\s+years?\b/i
 
 const SALARY_RANGE_RE =
-  /(?:(USD|US\$|\$|EUR|€|GBP|£)\s*)?([0-9]{2,3}(?:[,\d]{0,6})(?:\.\d+)?)\s*(k|m)?\s*(?:-|–|\u2014|to)\s*(?:(USD|US\$|\$|EUR|€|GBP|£)\s*)?([0-9]{2,3}(?:[,\d]{0,6})(?:\.\d+)?)\s*(k|m)?(?:\s*\/\s*(yr|year|annum))?/i
+  /(?:(USD|US\$|\$|EUR|€|GBP|£)\s*)?([0-9]{2,3}(?:[,\d]{0,6})(?:\.\d+)?)\s*(k|m)?\s*(?:--|–|\u2014|to|-)\s*(?:(USD|US\$|\$|EUR|€|GBP|£)\s*)?([0-9]{2,3}(?:[,\d]{0,6})(?:\.\d+)?)\s*(k|m)?(?:\s*\/\s*(yr|year|annum))?/i
+// Phone numbers (e.g. +1 408-536-3015) false-positive as salary ranges — strip before matching.
+const PHONE_RE = /(?:\+?1[-. ]?)?\(?\d{3}\)?[-. ]\d{3}[-. ]\d{4}\b/g
 
 export type InferredEmploymentType =
   | "fulltime"
@@ -184,8 +186,9 @@ export function inferRequiresAuthorization(
 export function extractSalaryRange(
   text: string | null | undefined
 ): { min: number; max: number; currency: string } | null {
-  const blob = toTextBlob(text)
-  if (!blob) return null
+  const raw = toTextBlob(text)
+  if (!raw) return null
+  const blob = raw.replace(PHONE_RE, "")
 
   const match = blob.match(SALARY_RANGE_RE)
   if (!match) return null
