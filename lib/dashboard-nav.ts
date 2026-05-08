@@ -4,7 +4,6 @@ import {
   Bell,
   BookmarkCheck,
   Briefcase,
-  Building2,
   ClipboardList,
   FileText,
   Globe,
@@ -13,7 +12,6 @@ import {
   Mails,
   Mic,
   Plane,
-  Search,
   Settings,
   ShieldAlert,
   ShieldCheck,
@@ -42,7 +40,6 @@ export type DashboardNavGroup = {
 
 export const NAV_GROUPS: Record<string, DashboardNavGroup> = {
   "My Career":     { label: "My Career",     icon: Briefcase },
-  "Research":      { label: "Research",      icon: Search    },
   "International": { label: "International", icon: Globe     },
   "Insights":      { label: "Insights",      icon: BarChart2 },
 }
@@ -53,17 +50,14 @@ export const DASHBOARD_NAV_ITEMS: DashboardNavItem[] = [
   { label: "Feed",           href: "/dashboard",                          icon: LayoutGrid },
   { label: "Scout",          href: "/dashboard/scout",                    icon: Sparkles,   gate: "scout_actions" },
   { label: "Interview",      href: "/dashboard/interview",                icon: Mic },
+  { label: "Watchlist",      href: "/dashboard/watchlist",                icon: BookmarkCheck },
+  { label: "Alerts",         href: "/dashboard/alerts",                   icon: Bell },
 
   // ── My Career ───────────────────────────────────────────────────────────────
   { label: "Applications",   href: "/dashboard/applications",             icon: ClipboardList,  group: "My Career" },
   { label: "Resume",         href: "/dashboard/resume",                   icon: FileText,        group: "My Career", gate: "resume_upload" },
   { label: "Cover letters",  href: "/dashboard/cover-letters",            icon: Mails,           group: "My Career", gate: "cover_letter" },
   { label: "Autofill",       href: "/dashboard/autofill",                 icon: Wand2,           group: "My Career", gate: "autofill" },
-
-  // ── Research ─────────────────────────────────────────────────────────────────
-  { label: "Watchlist",      href: "/dashboard/watchlist",                icon: BookmarkCheck,   group: "Research" },
-  { label: "Alerts",         href: "/dashboard/alerts",                   icon: Bell,            group: "Research" },
-  { label: "Companies",      href: "/dashboard/companies",                icon: Building2,       group: "Research" },
 
   // ── International ────────────────────────────────────────────────────────────
   // No gate — pages enforce the profile check (is_international / visa_status)
