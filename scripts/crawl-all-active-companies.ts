@@ -306,7 +306,13 @@ async function main() {
 
     const playwrightBlockedResults: CrawlResultRow[] = []
     if (enablePlaywrightBlockedPass && blockedCandidates.length > 0) {
-      const blockedHosts = [...new Set(blockedCandidates.map((row) => parseHost(row.careers_url)).filter(Boolean))]
+      const blockedHosts = [
+        ...new Set(
+          blockedCandidates
+            .map((row) => parseHost(row.careers_url))
+            .filter((host): host is string => Boolean(host))
+        ),
+      ]
       const oldPlaywrightEnabled = process.env.CRAWLER_PLAYWRIGHT_ENABLED
       const oldPlaywrightBlockedOnly = process.env.CRAWLER_PLAYWRIGHT_BLOCKED_ONLY
       const oldPlaywrightAllowlist = process.env.CRAWLER_PLAYWRIGHT_HOST_ALLOWLIST
