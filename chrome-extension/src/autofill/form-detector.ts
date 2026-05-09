@@ -87,6 +87,11 @@ export interface ExtensionSafeProfile {
   ethnicity: string | null
   veteran_status: string | null
   disability_status: string | null
+  // Resume-derived fields
+  current_title: string | null
+  current_company: string | null
+  resume_summary: string | null
+  skills: string | null
 }
 
 // ── Field matching patterns ────────────────────────────────────────────────────
@@ -414,6 +419,64 @@ const FIELD_PATTERNS: FieldPattern[] = [
     ],
     alwaysReview: true,
     getValue: (p) => (p.auto_fill_diversity ? (p.disability_status ?? "") : ""),
+  },
+
+  // ── Resume-derived fields ─────────────────────────────────────────────────
+  {
+    profileKey: "current_title",
+    patterns: [
+      /current[_\s-]?(?:job[_\s-]?)?title/i,
+      /job[_\s-]?title/i,
+      /position[_\s-]?(?:title|applied)?/i,
+      /\btitle\b/i,
+      /current[_\s-]?role/i,
+      /professional[_\s-]?title/i,
+      /role[_\s-]?title/i,
+    ],
+    getValue: (p) => p.current_title ?? "",
+  },
+  {
+    profileKey: "current_company",
+    patterns: [
+      /current[_\s-]?(?:employer|company|organization|employer[_\s-]?name)/i,
+      /employer[_\s-]?name/i,
+      /company[_\s-]?name/i,
+      /\bemployer\b/i,
+      /most[_\s-]?recent[_\s-]?employer/i,
+      /current[_\s-]?workplace/i,
+    ],
+    getValue: (p) => p.current_company ?? "",
+  },
+  {
+    profileKey: "resume_summary",
+    patterns: [
+      /professional[_\s-]?summary/i,
+      /personal[_\s-]?summary/i,
+      /about[_\s-]?(?:you|yourself|me)/i,
+      /tell[_\s-]?us[_\s-]?about[_\s-]?yourself/i,
+      /brief[_\s-]?(?:bio|introduction|summary)/i,
+      /career[_\s-]?(?:summary|objective)/i,
+      /background[_\s-]?summary/i,
+      /executive[_\s-]?summary/i,
+    ],
+    inputTypes: ["textarea", "text"],
+    getValue: (p) => p.resume_summary ?? "",
+  },
+  {
+    profileKey: "skills",
+    patterns: [
+      /\bskills?\b/i,
+      /technical[_\s-]?skills?/i,
+      /key[_\s-]?skills?/i,
+      /core[_\s-]?(?:competencies|skills?)/i,
+      /areas?[_\s-]?of[_\s-]?expertise/i,
+      /relevant[_\s-]?skills?/i,
+      /primary[_\s-]?skills?/i,
+      /programming[_\s-]?skills?/i,
+      /languages?[_\s-]?(?:and[_\s-]?(?:tools?|frameworks?))?/i,
+    ],
+    inputTypes: ["textarea", "text"],
+    getValue: (p) => p.skills ?? "",
   },
 ]
 

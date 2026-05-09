@@ -1360,6 +1360,15 @@ const MVP_ROUTES: Record<string, MvpRoute> = {
       coverLetterId:    msg.coverLetterId,
     }),
   },
+  EXT_MVP_ANSWER_QUESTION: {
+    method: "POST",
+    path: "/api/autofill/answer-question",
+    buildBody: (msg) => ({
+      question: msg.question,
+      jobTitle: msg.jobTitle,
+      company:  msg.company,
+    }),
+  },
 }
 
 /**

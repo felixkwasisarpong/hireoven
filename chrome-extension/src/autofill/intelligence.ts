@@ -21,6 +21,7 @@ export type AutofillFieldStatus =
 
 export type AutofillFieldSource =
   | "profile"        // came from autofill profile directly
+  | "resume"         // derived from parsed resume data
   | "cover_letter"   // AI-generated or manual cover letter
   | "manual"         // requires user action (file upload)
   | "derived"        // computed from multiple profile fields (e.g. full name)
@@ -129,6 +130,11 @@ const KEY_META: Record<string, FieldMeta> = {
   cover_letter_text:     { category: "cover_letter", riskLevel: "medium", source: "cover_letter" },
   cover_letter:          { category: "resume_upload", riskLevel: "medium", source: "manual" },
   resume:                { category: "resume_upload", riskLevel: "low",    source: "manual" },
+
+  current_title:         { category: "work",         riskLevel: "low",    source: "resume" },
+  current_company:       { category: "work",         riskLevel: "low",    source: "resume" },
+  resume_summary:        { category: "work",         riskLevel: "medium", source: "resume" },
+  skills:                { category: "work",         riskLevel: "low",    source: "resume" },
 }
 
 // ── Status resolution ─────────────────────────────────────────────────────────

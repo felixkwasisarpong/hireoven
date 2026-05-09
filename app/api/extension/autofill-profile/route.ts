@@ -32,11 +32,27 @@ export async function GET(request: Request) {
   if (errResponse) return errResponse
 
   const pool = getPostgresPool()
-  const result = await pool.query<AutofillProfile>(
-    `SELECT *
-     FROM autofill_profiles
-     WHERE user_id = $1
-     ORDER BY updated_at DESC
+  const result = await pool.query<AutofillProfile & {
+    resume_current_title: string | null
+    resume_current_company: string | null
+    resume_summary: string | null
+    resume_top_skills: string[] | null
+  }>(
+    `SELECT ap.*,
+            r.primary_role   AS resume_current_title,
+            r.work_experience->0->>'company' AS resume_current_company,
+            r.summary        AS resume_summary,
+            r.top_skills     AS resume_top_skills
+     FROM autofill_profiles ap
+     LEFT JOIN LATERAL (
+       SELECT primary_role, summary, top_skills, work_experience
+       FROM resumes
+       WHERE user_id = $1
+       ORDER BY is_primary DESC, updated_at DESC
+       LIMIT 1
+     ) r ON true
+     WHERE ap.user_id = $1
+     ORDER BY ap.updated_at DESC
      LIMIT 1`,
     [user.sub]
   ).catch((err) => {
@@ -96,6 +112,13 @@ export async function GET(request: Request) {
     ethnicity: profile.auto_fill_diversity ? (profile.ethnicity ?? null) : null,
     veteran_status: profile.auto_fill_diversity ? (profile.veteran_status ?? null) : null,
     disability_status: profile.auto_fill_diversity ? (profile.disability_status ?? null) : null,
+    // Resume-derived fields
+    current_title: profile.resume_current_title ?? null,
+    current_company: profile.resume_current_company ?? null,
+    resume_summary: profile.resume_summary ?? null,
+    skills: profile.resume_top_skills?.length
+      ? profile.resume_top_skills.join(", ")
+      : null,
   }
 
   return NextResponse.json(

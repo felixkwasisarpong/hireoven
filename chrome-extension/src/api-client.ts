@@ -32,6 +32,12 @@ type ResumeRequest  = { type: "EXT_MVP_FETCH_PRIMARY_RESUME"; jobId?: string }
 type CoverGenRequest    = { type: "EXT_MVP_GENERATE_COVER_LETTER"; jobId: string; resumeId?: string; ats?: string }
 type CoverUpdateRequest = { type: "EXT_MVP_UPDATE_COVER_LETTER"; id: string; body?: string; was_used?: boolean }
 type CoverDocxRequest   = { type: "EXT_MVP_FETCH_COVER_LETTER_DOCX"; coverLetterId?: string; jobId?: string }
+type AnswerQuestionRequest = {
+  type: "EXT_MVP_ANSWER_QUESTION"
+  question: string
+  jobTitle?: string
+  company?: string
+}
 type ProofRequest       = {
   type: "EXT_MVP_SAVE_APPLICATION_PROOF"
   jobId?: string
@@ -57,7 +63,8 @@ function send<T>(
     | CoverGenRequest
     | CoverUpdateRequest
     | CoverDocxRequest
-    | ProofRequest,
+    | ProofRequest
+    | AnswerQuestionRequest,
 ): Promise<T> {
   return new Promise((resolve, reject) => {
     if (!chrome.runtime?.id) {
@@ -217,6 +224,23 @@ export function saveApplicationProof(args: {
     confirmationText: args.confirmationText,
     resumeVersionId: args.resumeVersionId,
     coverLetterId: args.coverLetterId,
+  })
+}
+
+/**
+ * Use the user's resume to generate an answer to an open-ended application
+ * question. Returns the generated answer string, or throws on failure.
+ */
+export function answerQuestion(args: {
+  question: string
+  jobTitle?: string
+  company?: string
+}): Promise<{ answer: string }> {
+  return send<{ answer: string }>({
+    type: "EXT_MVP_ANSWER_QUESTION",
+    question: args.question,
+    jobTitle: args.jobTitle,
+    company: args.company,
   })
 }
 
