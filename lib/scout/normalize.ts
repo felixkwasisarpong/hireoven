@@ -19,6 +19,7 @@ import {
   type ScoutWorkspaceDirective,
   type ScoutWorkspaceMode,
 } from "@/lib/scout/types"
+import { sanitizeGeneratedText } from "@/lib/text/sanitize-generated-text"
 
 const VALID_WORKSPACE_MODES = new Set<ScoutWorkspaceMode>([
   "idle", "search", "compare", "tailor", "applications", "bulk_application", "company", "research", "outreach", "interview", "career_strategy",
@@ -139,14 +140,14 @@ export function normalizeScoutResponse(raw: unknown): ScoutResponse {
 
   // Hard fallback for completely unexpected shapes
   if (typeof raw !== "object" || raw === null) {
-    return {
+    return sanitizeGeneratedText({
       answer:
         typeof raw === "string" && raw.trim()
           ? raw.trim()
           : "Scout returned an unexpected response.",
       recommendation: "Explore",
       actions: [],
-    }
+    })
   }
 
   let record = raw as Record<string, unknown>
@@ -228,7 +229,7 @@ export function normalizeScoutResponse(raw: unknown): ScoutResponse {
       ? (record.apply_agent as ScoutResponse["apply_agent"])
       : undefined
 
-  return {
+  return sanitizeGeneratedText({
     answer,
     recommendation,
     actions,
@@ -246,7 +247,7 @@ export function normalizeScoutResponse(raw: unknown): ScoutResponse {
     debug,
     outreach,
     apply_agent,
-  }
+  })
 }
 
 function normalizeWorkflowDirective(raw: unknown): ScoutWorkflowDirective | undefined {

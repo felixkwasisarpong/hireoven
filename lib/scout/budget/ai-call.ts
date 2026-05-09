@@ -13,6 +13,7 @@ import type { MessageParam, MessageCreateParamsNonStreaming } from "@anthropic-a
 import type { ScoutFeature, ModelTier } from "./types"
 import { budgetTracker, calcCost, inferTier } from "./tracker"
 import { logApiUsage } from "@/lib/admin/usage"
+import { sanitizeGeneratedText } from "@/lib/text/sanitize-generated-text"
 
 export type AICallOptions<T> = {
   anthropic:  Anthropic
@@ -80,13 +81,13 @@ export async function withAICall<T>({
       .join("\n")
       .trim()
 
-    value = parse(text)
+    value = sanitizeGeneratedText(parse(text))
   } catch (err) {
     success = false
     if (timedOut || (err instanceof Error && err.name === "AbortError")) {
       timedOut = true
     }
-    value = fallback()
+    value = sanitizeGeneratedText(fallback())
   } finally {
     clearTimeout(timer)
   }

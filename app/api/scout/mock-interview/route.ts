@@ -13,6 +13,7 @@ import {
 import { SONNET_MODEL } from "@/lib/ai/anthropic-models"
 import { withAICall } from "@/lib/scout/budget/ai-call"
 import { AI_TIMEOUTS } from "@/lib/scout/budget/router"
+import { sanitizeGeneratedText } from "@/lib/text/sanitize-generated-text"
 import type { ScoutMockInterviewTurn } from "@/lib/scout/types"
 
 export const runtime = "nodejs"
@@ -121,14 +122,14 @@ export async function POST(request: NextRequest) {
     // Cap totalQuestions for free users to 1 (they can only preview Q1)
     const effectiveTotalQuestions = isPro ? TOTAL_QUESTIONS : 1
 
-    return NextResponse.json({
+    return NextResponse.json(sanitizeGeneratedText({
       question: parsed.question,
       feedback: parsed.feedback ?? null,
       questionIndex: parsed.questionIndex,
       totalQuestions: effectiveTotalQuestions,
       isComplete: parsed.isComplete || (!isPro && parsed.questionIndex >= 1),
       gated: false,
-    })
+    }))
   } catch (error) {
     console.error("[mock-interview] Claude error:", error)
     return scoutError(500, "Scout couldn't generate an interview question right now. Please try again.")

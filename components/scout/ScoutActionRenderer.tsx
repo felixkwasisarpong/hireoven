@@ -203,6 +203,13 @@ export function ScoutActionRenderer({ actions, source, reason }: ScoutActionRend
         })
         setExecutedActions((prev) => new Set(prev).add(index))
       },
+      onNotExecuted: () => {
+        setProcessingActions((prev) => {
+          const next = new Set(prev)
+          next.delete(index)
+          return next
+        })
+      },
     })
   }
 

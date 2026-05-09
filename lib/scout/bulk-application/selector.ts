@@ -20,6 +20,7 @@ export type BulkSelectionOptions = {
   excludeHighGhostRisk?:   boolean
   workMode?:               string
   minMatchScore?:          number
+  strictScoreOnly?:        boolean
 }
 
 function scoreCandidate(job: BulkJobCandidate): number {
@@ -67,6 +68,7 @@ export function selectJobsForBulk(
     excludeHighGhostRisk = true,
     workMode,
     minMatchScore,
+    strictScoreOnly = false,
   } = options
 
   const filtered = candidates.filter((j) => {
@@ -82,7 +84,10 @@ export function selectJobsForBulk(
 
     if (workMode && j.workMode && j.workMode.toLowerCase() !== workMode.toLowerCase()) return false
 
-    if (typeof minMatchScore === "number" && typeof j.matchScore === "number" && j.matchScore < minMatchScore) return false
+    if (typeof minMatchScore === "number") {
+      if (strictScoreOnly && typeof j.matchScore !== "number") return false
+      if (typeof j.matchScore === "number" && j.matchScore < minMatchScore) return false
+    }
 
     return true
   })

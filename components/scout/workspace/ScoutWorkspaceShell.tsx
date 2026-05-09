@@ -32,10 +32,6 @@ import { useCareerStrategy } from "@/hooks/useCareerStrategy"
 import { useScoutBrowserOperator } from "@/hooks/useScoutBrowserOperator"
 import { SCOUT_FLAGS } from "@/lib/scout/flags"
 import {
-  isFirstRun as detectFirstRun,
-  markOnboarded,
-  isFirstRunBannerDismissed,
-  dismissFirstRunBanner,
   isExtPromosDismissed,
   dismissExtPromo,
 } from "@/lib/scout/first-run"
@@ -335,24 +331,13 @@ export function ScoutWorkspaceShell() {
   const [memoryPanelOpen,   setMemoryPanelOpen]   = useState(false)
   const [shellPermissions,  setShellPermissions]  = useState<ScoutPermissionState[]>(() => readPermissions())
 
-  // ── First-run + extension promo state — loaded after mount to avoid hydration mismatch ──
-  const [isFirstRun, setIsFirstRun] = useState(false)
-  const [bannerDismissed, setBannerDismissed] = useState(false)
+  // ── Extension promo state — loaded after mount to avoid hydration mismatch ──
   const [extPromoDismissed, setExtPromoDismissed] = useState(false)
   useEffect(() => {
-    setIsFirstRun(detectFirstRun() && !isFirstRunBannerDismissed())
-    setBannerDismissed(isFirstRunBannerDismissed())
     setExtPromoDismissed(isExtPromosDismissed())
   }, [])
 
-  const showFirstRun = isFirstRun && !bannerDismissed
   const showExtPromo = !isExtensionConnected && !extPromoDismissed && SCOUT_FLAGS.extensionBridgeEnabled
-
-  const handleDismissFirstRun = useCallback(() => {
-    dismissFirstRunBanner()
-    setBannerDismissed(true)
-    setIsFirstRun(false)
-  }, [])
 
   const handleDismissExtPromo = useCallback(() => {
     dismissExtPromo()
@@ -1000,7 +985,13 @@ export function ScoutWorkspaceShell() {
       } else {
         setApplyAgent(null)
         const bp = directive?.payload ?? {}
-        void bulkEngine.initQueue({ count: typeof bp.count === "number" ? bp.count : 10, requireSponsorshipSignal: Boolean(bp.requireSponsorshipSignal), workMode: typeof bp.workMode === "string" ? bp.workMode : undefined, minMatchScore: typeof bp.minMatchScore === "number" ? bp.minMatchScore : undefined })
+        void bulkEngine.initQueue({
+          count: typeof bp.count === "number" ? bp.count : 10,
+          requireSponsorshipSignal: Boolean(bp.requireSponsorshipSignal),
+          workMode: typeof bp.workMode === "string" ? bp.workMode : undefined,
+          minMatchScore: typeof bp.minMatchScore === "number" ? bp.minMatchScore : undefined,
+          strictScoreOnly: Boolean(bp.strictScoreOnly),
+        })
       }
     } else {
       setApplyAgent(null)
@@ -1480,13 +1471,6 @@ export function ScoutWorkspaceShell() {
       setNarrativeDismissed(false)
       commandStartedAtRef.current = Date.now()
 
-      // Mark user as onboarded on first command (clears first-run banner on next mount)
-      if (isFirstRun) {
-        markOnboarded()
-        setIsFirstRun(false)
-        setBannerDismissed(true)
-      }
-
       // Record every user command in the timeline
       timeline.append({
         type:      "command",
@@ -1667,8 +1651,7 @@ export function ScoutWorkspaceShell() {
     messages.length === 0 &&
     !isLoading &&
     !scoutStream.isStreaming &&
-    !researchStream.isRunning &&
-    !showFirstRun
+    !researchStream.isRunning
   // Derived: has the user accumulated any job/application data yet?
   const hasData = (strategyBoard?.snapshot?.savedJobs ?? 0) > 0
                   || (strategyBoard?.snapshot?.activeApplications ?? 0) > 0
@@ -1944,7 +1927,7 @@ export function ScoutWorkspaceShell() {
             render={(displayedMode) => {
               if (displayedMode === "idle") {
                 // No conversation yet → premium welcome scene (story-mode aesthetic)
-                if (messages.length === 0 && !isLoading && !showFirstRun) {
+                if (messages.length === 0 && !isLoading) {
                   return (
                     <ScoutWelcomeScene
                       greeting={greeting}
@@ -1999,10 +1982,8 @@ export function ScoutWorkspaceShell() {
                       setMissionsDisabled(true)
                       setMissionStore((prev) => prev ? { ...prev, disabled: true } : prev)
                     }}
-                    isFirstRun={showFirstRun}
                     showExtensionPromo={showExtPromo}
                     hasData={hasData}
-                    onDismissFirstRun={handleDismissFirstRun}
                     onDismissExtPromo={handleDismissExtPromo}
                   />
                 )

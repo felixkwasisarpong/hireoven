@@ -1,5 +1,5 @@
 /**
- * GET /api/scout/apply-agent?minMatchScore=80&count=5&sponsorship=true&workMode=remote&q=java+backend
+ * GET /api/scout/apply-agent?minMatchScore=80&count=5&sponsorship=true&workMode=remote&q=java+backend&strictQuery=true&strictScoreOnly=true
  *
  * Selects jobs from the live feed pool (recently added, active jobs) that match
  * the user's criteria. `q` is a free-text query matched against title + description
@@ -27,6 +27,18 @@ type JobRow = {
   match_score:  number | null
 }
 
+function parseClampedInt(
+  raw: string | null,
+  options: { min: number; max: number; fallback: number }
+): number {
+  const parsed = Number(raw)
+  if (!Number.isFinite(parsed)) return options.fallback
+  const rounded = Math.trunc(parsed)
+  if (rounded < options.min) return options.min
+  if (rounded > options.max) return options.max
+  return rounded
+}
+
 // Strip the bulk-apply framing and return the meaningful condition remainder.
 // "apply to 3 jobs with java skill in it" → "java skill"
 // "apply to 5 remote healthcare jobs" → "healthcare"
@@ -51,11 +63,13 @@ export async function GET(request: NextRequest) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const { searchParams } = request.nextUrl
-  const minMatchScore      = Number(searchParams.get("minMatchScore") ?? 0)
-  const count              = Math.min(Number(searchParams.get("count") ?? 5), 20)
+  const minMatchScore      = parseClampedInt(searchParams.get("minMatchScore"), { min: 0, max: 100, fallback: 0 })
+  const count              = parseClampedInt(searchParams.get("count"), { min: 1, max: 20, fallback: 5 })
   const requireSponsorship = searchParams.get("sponsorship") === "true"
   const workMode           = searchParams.get("workMode") ?? null
   const rawQuery           = (searchParams.get("q") ?? "").trim()
+  const strictQuery        = searchParams.get("strictQuery") === "true"
+  const strictScoreOnly    = searchParams.get("strictScoreOnly") === "true"
 
   const pool = getPostgresPool()
 
@@ -75,23 +89,32 @@ export async function GET(request: NextRequest) {
   ]
   const params: unknown[] = [user.id]
 
-  // minMatchScore filters by score when a score exists — jobs with no score
-  // computed yet are still included, sorted to the bottom by recency.
-  const scoreFilter = minMatchScore > 0 ? `COALESCE(jms.overall_score, 0) >= ${minMatchScore} OR jms.overall_score IS NULL` : null
-  if (scoreFilter) conditions.push(`(${scoreFilter})`)
+  // minMatchScore normally keeps null-score jobs in the pool so the queue still
+  // progresses while match scoring catches up. strictScoreOnly excludes nulls.
+  if (minMatchScore > 0) {
+    params.push(minMatchScore)
+    const scoreParam = `$${params.length}`
+    if (strictScoreOnly) {
+      conditions.push(`(jms.overall_score IS NOT NULL AND jms.overall_score >= ${scoreParam})`)
+    } else {
+      conditions.push(`(jms.overall_score >= ${scoreParam} OR jms.overall_score IS NULL)`)
+    }
+  }
 
   // Free-text search: match any meaningful word from the user's query against
   // title and description so arbitrary conditions ("java", "healthcare NYC",
   // "Python AWS", "entry level fintech") all work without special parsing.
   const searchTerms = rawQuery ? extractSearchTerms(rawQuery) : ""
-  const searchWords = searchTerms.split(/\s+/).filter((w) => w.length >= 3)
+  const searchWords = Array.from(
+    new Set(searchTerms.split(/\s+/).filter((w) => w.length >= 3))
+  ).slice(0, 8)
   if (searchWords.length > 0) {
     const wordConditions = searchWords.map((word) => {
       params.push(`%${word}%`)
       const p = `$${params.length}`
       return `(j.title ILIKE ${p} OR j.description ILIKE ${p})`
     })
-    conditions.push(`(${wordConditions.join(" OR ")})`)
+    conditions.push(`(${wordConditions.join(strictQuery ? " AND " : " OR ")})`)
   }
 
   if (requireSponsorship) {
