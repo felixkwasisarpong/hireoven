@@ -46,6 +46,9 @@ const NLP_SIGNAL_RE =
 const COMPUTER_VISION_SIGNAL_RE =
   /\b(?:computer vision|cv\s+(?:model|engineer|pipeline|experience|techniques?)|image\s+(?:classification|detection|segmentation|recognition)|object detection|opencv|yolo)\b/i
 
+const AGILE_SIGNAL_RE =
+  /\b(?:scrum|kanban|sprint planning|agile\s+(?:methodolog(?:y|ies)|frameworks?|project management|software development|delivery|ceremon(?:y|ies)|practices?))\b/i
+
 
 export const SKILL_DEFINITIONS: SkillDefinition[] = [
   // ─── Languages ────────────────────────────────────────────────────────────
@@ -187,7 +190,12 @@ export const SKILL_DEFINITIONS: SkillDefinition[] = [
   { label: "Product Management",  aliases: ["product management"] },
   { label: "Product Strategy",    aliases: ["product strategy", "product vision", "product roadmap"] },
   { label: "Project Management",  aliases: ["project management"] },
-  { label: "Agile",               aliases: ["agile", "scrum", "kanban", "sprint planning"] },
+  {
+    label: "Agile",
+    aliases: ["agile", "scrum", "kanban", "sprint planning"],
+    patterns: [AGILE_SIGNAL_RE],
+    requiresPattern: true,
+  },
   { label: "Jira",                aliases: ["jira"] },
   { label: "Confluence",          aliases: ["confluence"] },
   { label: "Roadmapping",         aliases: ["roadmapping", "roadmap planning"] },
@@ -675,6 +683,24 @@ export function extractSkillsFromText(...parts: Array<string | null | undefined>
   }
 
   return normalizeSkillList(found)
+}
+
+export function filterSkillsByTextEvidence(
+  values: Array<string | null | undefined>,
+  ...parts: Array<string | null | undefined>
+) {
+  const normalized = normalizeSkillList(values)
+  const blob = parts.filter(Boolean).join(" ")
+  if (!blob.trim()) return normalized
+
+  return normalized.filter((skill) => {
+    // "Agile" is frequently a prose adjective ("agile environment") in JDs.
+    // Keep it only when stronger framework/methodology context is present.
+    if (canonicalizeSkill(skill) === "Agile") {
+      return AGILE_SIGNAL_RE.test(blob)
+    }
+    return true
+  })
 }
 
 export function emptyCategorizedSkills(): CategorizedSkills {

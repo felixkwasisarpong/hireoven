@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { BadgePercent, Building2, Sparkles } from "lucide-react"
+import { BadgePercent, BookOpen, Building2, Sparkles } from "lucide-react"
 import HireovenLogo from "@/components/ui/HireovenLogo"
 import NavbarAuthCluster from "./NavbarAuthCluster"
 
@@ -32,6 +32,13 @@ export default function Navbar() {
             >
               <BadgePercent className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
               Pricing
+            </Link>
+            <Link
+              href="/blog"
+              className="inline-flex items-center gap-2 text-sm font-semibold text-muted-foreground transition-colors hover:text-strong"
+            >
+              <BookOpen className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
+              Blog
             </Link>
           </div>
         </div>

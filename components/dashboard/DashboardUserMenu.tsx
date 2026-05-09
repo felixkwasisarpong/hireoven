@@ -75,7 +75,7 @@ export default function DashboardUserMenu() {
 
       {open && (
         <div
-          className="absolute right-0 top-[calc(100%+8px)] z-[60] w-[min(100vw-2rem,18rem)] rounded-2xl border border-[#D7DCEA] bg-white py-2 shadow-[0_24px_58px_-34px_rgba(20,30,70,0.55)]"
+          className="opaque-dropdown absolute right-0 top-[calc(100%+8px)] z-[60] w-[min(100vw-2rem,18rem)] rounded-2xl border border-[#D7DCEA] bg-white py-2 shadow-[0_24px_58px_-34px_rgba(20,30,70,0.55)]"
           role="menu"
         >
           <div className="border-b border-border px-3 pb-3 pt-1">

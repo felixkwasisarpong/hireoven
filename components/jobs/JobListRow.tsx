@@ -35,6 +35,7 @@ import {
   fetchJobSavedState,
   saveJobToPipeline,
 } from "@/lib/applications/save-job-client"
+import { getApplyCtaLabel, isKnownAtsApplyUrl } from "@/lib/jobs/apply-cta"
 import { cn } from "@/lib/utils"
 import type { JobMatchScore, JobWithCompany, JobWithMatchScore } from "@/types"
 
@@ -113,6 +114,8 @@ export default function JobListRow({
 
   const postedSource = (raw["posted_at_normalized"] as string | undefined) ?? job.first_detected_at
   const postedAt = formatPostedLabel(postedSource, now)
+  const isAtsApplyLink = isKnownAtsApplyUrl(job.apply_url)
+  const applyCtaLabel = getApplyCtaLabel(job.apply_url)
 
   const visaCardLabel: SponsorshipVisaCardLabel = cardView.visa_card_label
   const sponsorshipDisplay = useMemo(
@@ -299,10 +302,16 @@ export default function JobListRow({
           target="_blank"
           rel="noopener noreferrer"
           onClick={(e) => e.stopPropagation()}
-          aria-label="Quick apply"
-          className="hidden h-8 w-8 items-center justify-center rounded-lg border border-amber-200 bg-amber-50 text-amber-600 transition hover:bg-amber-100 sm:inline-flex"
+          aria-label={applyCtaLabel}
+          title={applyCtaLabel}
+          className={cn(
+            "hidden h-8 w-8 items-center justify-center rounded-lg border transition sm:inline-flex",
+            isAtsApplyLink
+              ? "border-amber-200 bg-amber-50 text-amber-600 hover:bg-amber-100"
+              : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700"
+          )}
         >
-          <Zap className="h-3.5 w-3.5" />
+          {isAtsApplyLink ? <Zap className="h-3.5 w-3.5" /> : <ArrowUpRight className="h-3.5 w-3.5" />}
         </a>
         <button
           type="button"

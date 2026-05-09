@@ -39,6 +39,8 @@ export type ApplyAgentDirective = {
     minMatchScore?:          number
     requireSponsorshipSignal: boolean
     workMode?:               string
+    strictQuery?:            boolean
+    strictScoreOnly?:        boolean
     count:                   number
   }
   /** Zero-indexed job the agent is currently working on */

@@ -7,7 +7,8 @@ import {
   buildTextInterviewerSystemPrompt,
   buildCodingInterviewerSystemPrompt,
 } from "@/lib/scout/interview/agentPrompts"
-import { getUserPlan } from "@/lib/gates/server-gate"
+import { canAccess, requiredPlanFor } from "@/lib/gates"
+import { gateResponse, getPlanForUserId } from "@/lib/gates/server-gate"
 import { getBalance, deductCredits } from "@/lib/scout/interview/credits"
 import type { InterviewPersona } from "@/lib/scout/interview/queries"
 
@@ -52,10 +53,15 @@ export async function POST(
   if (session.status === "completed" || session.status === "abandoned") {
     return NextResponse.json({ error: "Session is already ended" }, { status: 400 })
   }
+  const plan = await getPlanForUserId(user.id)
+  const feature = session.type === "live" ? "interview_live" : "interview_prep"
+  if (!canAccess(plan, feature)) {
+    const needed = requiredPlanFor(feature)
+    return gateResponse(403, `This feature requires the ${needed} plan`, needed ?? undefined)
+  }
 
   // ── Credit check — live sessions only (coding is covered by Pro subscription) ──
   if (session.type === "live") {
-    const { plan } = await getUserPlan()
     const bal = await getBalance(user.id, plan)
     if (bal.balance < (session.durationTargetMin <= 30 ? 4 : 7)) {
       return NextResponse.json(

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getPostgresPool } from "@/lib/postgres/server"
+import { canAccess, requiredPlanFor } from "@/lib/gates"
+import { gateResponse, getPlanForUserId } from "@/lib/gates/server-gate"
 import {
   createInterviewSession,
   listRecentSessions,
@@ -88,6 +90,12 @@ export async function POST(request: Request) {
   const type = body.type as typeof VALID_TYPES[number]
   // coding type always uses coding question set
   const questionSet = type === "coding" ? "coding" : (body.questionSet as InterviewQuestionSet)
+  const feature = type === "live" ? "interview_live" : "interview_prep"
+  const plan = await getPlanForUserId(user.id)
+  if (!canAccess(plan, feature)) {
+    const needed = requiredPlanFor(feature)
+    return gateResponse(403, `This feature requires the ${needed} plan`, needed ?? undefined)
+  }
 
   // If jobId provided, verify the user owns an application for that job
   if (body.jobId) {

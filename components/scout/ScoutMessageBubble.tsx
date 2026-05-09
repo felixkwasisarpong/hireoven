@@ -30,7 +30,7 @@ type Props = {
   /** Pass "mini" for compact Scout surfaces — ScoutResponseRenderer adapts automatically */
   context?:  ScoutRenderContext
   compact?:  boolean
-  onUpgrade: (feature: FeatureKey) => void
+  onUpgrade?: (feature: FeatureKey) => void
 }
 
 export function ScoutMessageBubble({ response, context = "dashboard", compact = false, onUpgrade }: Props) {
@@ -40,6 +40,7 @@ export function ScoutMessageBubble({ response, context = "dashboard", compact = 
   const showRecommendation =
     response.recommendation !== "Explore" ||
     Boolean((response.actions?.length ?? 0) > 0 || response.workflow || response.compare)
+  const showGatedUpgradeCard = Boolean(response.gated) && !isCompact && typeof onUpgrade === "function"
 
   return (
     <div className={`group flex items-start ${isCompact ? "gap-2.5" : "gap-3"}`}>
@@ -81,7 +82,7 @@ export function ScoutMessageBubble({ response, context = "dashboard", compact = 
           </div>
 
           {/* Gated upgrade card */}
-          {response.gated && (
+          {showGatedUpgradeCard && response.gated && (
             <div
               className={`rounded-xl border border-orange-100 bg-orange-50/60 ${
                 isCompact ? "mt-3 p-3" : "mt-4 p-4"
@@ -100,7 +101,7 @@ export function ScoutMessageBubble({ response, context = "dashboard", compact = 
                   </p>
                   <button
                     type="button"
-                    onClick={() => onUpgrade(response.gated!.feature)}
+                    onClick={() => onUpgrade?.(response.gated!.feature)}
                     className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-[#FF5C18] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#E14F0E]"
                   >
                     <Zap className="h-3 w-3" />

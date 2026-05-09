@@ -4,6 +4,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
   BellRing,
+  BookOpen,
   Briefcase,
   Building2,
   Database,
@@ -27,6 +28,7 @@ const LINKS = [
   { href: "/admin/h1b", label: "H1B data", icon: Database },
   { href: "/admin/alerts", label: "Alerts log", icon: BellRing },
   { href: "/admin/marketing", label: "Marketing", icon: Megaphone },
+  { href: "/admin/blog", label: "Blog", icon: BookOpen },
   { href: "/admin/settings", label: "Settings", icon: Settings },
 ]
 

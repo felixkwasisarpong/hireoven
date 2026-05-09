@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { SONNET_MODEL } from "@/lib/ai/anthropic-models"
+import { canAccess, requiredPlanFor } from "@/lib/gates"
+import { gateResponse, getPlanForUserId } from "@/lib/gates/server-gate"
 import {
   getInterviewSession,
   appendTurn,
@@ -10,6 +12,7 @@ import {
 } from "@/lib/scout/interview/queries"
 import { buildInterviewContext } from "@/lib/scout/interview/context"
 import { buildCodingInterviewerSystemPrompt } from "@/lib/scout/interview/agentPrompts"
+import { replaceEmDash, sanitizeGeneratedText } from "@/lib/text/sanitize-generated-text"
 
 export const runtime = "nodejs"
 export const maxDuration = 60
@@ -37,6 +40,11 @@ export async function POST(
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const plan = await getPlanForUserId(user.id)
+  if (!canAccess(plan, "interview_prep")) {
+    const needed = requiredPlanFor("interview_prep")
+    return gateResponse(403, `This feature requires the ${needed} plan`, needed ?? undefined)
+  }
 
   const pool = getPostgresPool()
   const session = await getInterviewSession(id, user.id)
@@ -74,7 +82,7 @@ export async function POST(
     if (hintsUsed >= hints.length) {
       message = "You've used all the hints I have. Talk through what's blocking you?"
     } else {
-      message = hints[hintsUsed]
+      message = replaceEmDash(hints[hintsUsed])
       await pool.query(
         `UPDATE coding_attempts SET hints_used = hints_used + 1 WHERE id = $1`,
         [attempt.id as string]
@@ -90,11 +98,11 @@ export async function POST(
       metadata: { type: "hint", hint_index: hintsUsed },
     })
 
-    return NextResponse.json({
+    return NextResponse.json(sanitizeGeneratedText({
       message,
       hintsUsedSoFar: Math.min(hintsUsed + 1, hints.length),
       hintsRemaining: Math.max(0, hints.length - hintsUsed - 1),
-    })
+    }))
   }
 
   // Build LLM context
@@ -163,7 +171,7 @@ export async function POST(
   })
 
   const rawContent = (llmResult.content[0] as { type: string; text: string }).text
-  const visibleContent = stripMetadata(rawContent)
+  const visibleContent = replaceEmDash(stripMetadata(rawContent))
 
   // Save candidate turn if applicable
   let nextTurnIndex = existingTurns.length
@@ -186,9 +194,9 @@ export async function POST(
 
   const currentHintsUsed = (attempt.hints_used as number) ?? 0
 
-  return NextResponse.json({
+  return NextResponse.json(sanitizeGeneratedText({
     message: visibleContent,
     hintsUsedSoFar: currentHintsUsed,
     hintsRemaining: Math.max(0, hints.length - currentHintsUsed),
-  })
+  }))
 }

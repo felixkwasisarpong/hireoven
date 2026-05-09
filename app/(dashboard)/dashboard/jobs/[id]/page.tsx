@@ -41,6 +41,7 @@ import { getScoringContextForUser, upsertMatchScores } from "@/lib/matching/batc
 import { getPostgresPool } from "@/lib/postgres/server"
 import {
   extractSkillsFromText,
+  filterSkillsByTextEvidence,
   getSkillsBucketValues,
   normalizeSkillKey,
   normalizeSkillList,
@@ -325,6 +326,15 @@ export default async function DashboardJobDetailPage({ params }: Props) {
     ],
     40
   )
+  const displayJobSkills = filterSkillsByTextEvidence(
+    consolidatedJobSkills,
+    displayTitle,
+    job.title,
+    page.clean_description,
+    ...page.sections.skills.items,
+    ...page.sections.requirements.items,
+    ...page.sections.preferred_qualifications.items
+  )
 
   const sponsorshipPill = employerSponsorshipPill({ ...job, company })
   const sponsorsConfirmed = employerLikelySponsorsH1b({ ...job, company })
@@ -352,7 +362,7 @@ export default async function DashboardJobDetailPage({ params }: Props) {
      WHERE j.is_active = true AND ${sqlJobLocatedInUsa("j")}`
 
   // Score algorithm version stamp — bump when scoring logic changes to bust the cache.
-  const SCORE_ALGORITHM_VERSION = new Date("2026-05-08T04:00:00.000Z").getTime()
+  const SCORE_ALGORITHM_VERSION = new Date("2026-05-09T05:00:00.000Z").getTime()
 
   const [cachedScoreResult, resumeSkillResult, similarByTitleResult, similarByCompanyResult] = await Promise.all([
     // Lightweight cache check — joins match score with resume updated_at in one query.
@@ -408,8 +418,15 @@ export default async function DashboardJobDetailPage({ params }: Props) {
 
     if (isCacheFresh && cached) {
       // Fast path: cache hit — reconstruct skill pills from already-fetched resume skills
-      const jobSkills = normalizeSkillList(
-        (job.skills?.length ? job.skills : consolidatedJobSkills) ?? []
+      const jobSkills = filterSkillsByTextEvidence(
+        normalizeSkillList(
+          (job.skills?.length ? job.skills : displayJobSkills) ?? []
+        ),
+        job.title,
+        job.description ?? "",
+        ...page.sections.skills.items,
+        ...page.sections.requirements.items,
+        ...page.sections.preferred_qualifications.items
       )
       const resumeLabels = normalizeSkillList([
         ...(resumeRow?.top_skills ?? []),
@@ -465,7 +482,7 @@ export default async function DashboardJobDetailPage({ params }: Props) {
     ...extractSkillsFromText(resumeSkillResult.rows[0]?.raw_text ?? null),
   ])
 
-  const taxonomyKeySet = new Set(consolidatedJobSkills.map(normalizeSkillKey))
+  const taxonomyKeySet = new Set(displayJobSkills.map(normalizeSkillKey))
   const resumeRawText = (resumeSkillResult.rows[0]?.raw_text ?? "").toLowerCase()
 
   // Fallback: extract technology-looking tokens from qualification/requirement
@@ -488,7 +505,7 @@ export default async function DashboardJobDetailPage({ params }: Props) {
     }))
 
   const requirementSkillPills = [
-    ...consolidatedJobSkills.map((skill) => ({
+    ...displayJobSkills.map((skill) => ({
       skill,
       matched: resumeSkillLabels.some((resumeSkill) => skillMatches(skill, resumeSkill)),
     })),

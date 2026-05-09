@@ -5,6 +5,7 @@ import { logApiUsage } from "@/lib/admin/usage"
 import { createClient } from "@/lib/supabase/server"
 import { requireFeature } from "@/lib/gates/server-gate"
 import { requireQuota } from "@/lib/usage/server-quota"
+import { sanitizeGeneratedText } from "@/lib/text/sanitize-generated-text"
 
 export const runtime = "nodejs"
 
@@ -66,7 +67,9 @@ export async function POST(request: Request) {
   const jobDescription = asString(body.jobDescription)
 
   if (!anthropic) {
-    return NextResponse.json({ text: fallbackText(sectionType, currentText, targetRole), source: "fallback" })
+    return NextResponse.json(
+      sanitizeGeneratedText({ text: fallbackText(sectionType, currentText, targetRole), source: "fallback" })
+    )
   }
 
   const message = await anthropic.messages.create({
@@ -109,5 +112,7 @@ Return only the rewritten section text.`,
     .join("\n")
     .trim()
 
-  return NextResponse.json({ text: text || fallbackText(sectionType, currentText, targetRole), source: "claude" })
+  return NextResponse.json(
+    sanitizeGeneratedText({ text: text || fallbackText(sectionType, currentText, targetRole), source: "claude" })
+  )
 }

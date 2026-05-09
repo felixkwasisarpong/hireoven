@@ -124,6 +124,11 @@
     background-color: hsl(var(--surface)) !important;
   }
 
+  /* Keep key nav/dropdown overlays fully opaque on chroma pages. */
+  body.site-chroma .opaque-dropdown {
+    background-color: #ffffff !important;
+  }
+
   ::selection {
     background: rgba(234, 88, 12, 0.12);
   }

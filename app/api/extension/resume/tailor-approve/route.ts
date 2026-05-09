@@ -18,6 +18,9 @@ import { randomUUID } from "crypto"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { createResumeSnapshot } from "@/lib/resume/hub"
 import { tailorResumeForAts } from "@/lib/resume/ats-tailor"
+import { canAccess, requiredPlanFor } from "@/lib/gates"
+import { getPlanForUserId } from "@/lib/gates/server-gate"
+import { requireQuota } from "@/lib/usage/server-quota"
 import {
   extensionError,
   extensionCorsHeaders,
@@ -61,6 +64,16 @@ export async function POST(request: Request) {
 
   const [user, errResponse] = await requireExtensionAuth(request)
   if (errResponse) return errResponse
+  const plan = await getPlanForUserId(user.sub)
+  if (!canAccess(plan, "scout_actions")) {
+    const needed = requiredPlanFor("scout_actions")
+    return extensionError(request, 403, `This feature requires the ${needed} plan`, { headers })
+  }
+  const quotaResult = await requireQuota(user.sub, "resume_tailor", plan)
+  if (quotaResult instanceof NextResponse) {
+    const body = await quotaResult.json().catch(() => null) as { error?: string } | null
+    return extensionError(request, 429, body?.error ?? "Quota exceeded", { headers })
+  }
 
   const [body, bodyError] = await readExtensionJsonBody<{
     jobId?: string

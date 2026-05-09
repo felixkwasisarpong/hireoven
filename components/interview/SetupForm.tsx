@@ -184,7 +184,7 @@ export default function SetupForm({ initialType, initialJobId }: Props) {
               Upgrade to Pro to unlock AI interviews with real debriefs.
             </p>
             <Link
-              href="/dashboard/upgrade"
+              href="/dashboard/upgrade?plan=pro"
               className="mt-5 inline-flex rounded-lg bg-orange-500 px-6 py-2.5 text-[14px] font-semibold text-white hover:bg-orange-600"
             >
               Upgrade to Pro — $19/mo
@@ -205,10 +205,10 @@ export default function SetupForm({ initialType, initialJobId }: Props) {
             <Lock className="mx-auto mb-3 h-8 w-8 text-slate-400" />
             <h2 className="text-[16px] font-bold text-slate-900">Live Interview requires Pro Max</h2>
             <p className="mt-2 text-[13px] text-slate-500">
-              Upgrade to Pro Max for live voice + webcam interviews with 5 monthly credits included.
+              Upgrade to Pro Max for live voice + webcam interviews and included monthly session credits.
             </p>
             <Link
-              href="/dashboard/upgrade"
+              href="/dashboard/upgrade?plan=pro_max"
               className="mt-5 inline-flex rounded-lg bg-orange-500 px-6 py-2.5 text-[14px] font-semibold text-white hover:bg-orange-600"
             >
               Upgrade to Pro Max — $29/mo
@@ -237,10 +237,10 @@ export default function SetupForm({ initialType, initialJobId }: Props) {
               </p>
               <div className="mt-5 grid grid-cols-2 gap-3 max-w-xs mx-auto">
                 {[
-                  { pack: "pack_4",  label: "4 credits",  price: "$4"  },
-                  { pack: "pack_10", label: "10 credits", price: "$10" },
-                  { pack: "pack_7",  label: "7 credits",  price: "$7"  },
-                  { pack: "pack_20", label: "20 credits", price: "$18" },
+                  { pack: "session_short_1", label: "1 session", price: "30 min — $12" },
+                  { pack: "session_long_1",  label: "1 session", price: "60 min — $20" },
+                  { pack: "session_short_3", label: "3 sessions", price: "3x30 min — $30" },
+                  { pack: "session_short_5", label: "5 sessions", price: "5x30 min — $45" },
                 ].map(({ pack, label, price }) => (
                   <button
                     key={pack}

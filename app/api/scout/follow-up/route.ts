@@ -8,6 +8,7 @@ import { analyzeFollowUp } from "@/lib/scout/follow-up"
 import { HAIKU_MODEL } from "@/lib/ai/anthropic-models"
 import { withAICall } from "@/lib/scout/budget/ai-call"
 import { AI_TIMEOUTS } from "@/lib/scout/budget/router"
+import { sanitizeGeneratedText } from "@/lib/text/sanitize-generated-text"
 import type { JobApplication } from "@/types"
 
 export const runtime = "nodejs"
@@ -152,7 +153,7 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  return NextResponse.json({
+  return NextResponse.json(sanitizeGeneratedText({
     status: analysis.status,
     recommendation: analysis.recommendation,
     reasons: analysis.reasons,
@@ -160,5 +161,5 @@ export async function POST(request: NextRequest) {
     urgency: analysis.urgency,
     draft,
     gated,
-  })
+  }))
 }

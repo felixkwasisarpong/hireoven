@@ -4,6 +4,9 @@ import { createClient } from "@/lib/supabase/server"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { HAIKU_MODEL } from "@/lib/ai/anthropic-models"
 import { getDebrief, getInterviewSession } from "@/lib/scout/interview/queries"
+import { canAccess, requiredPlanFor } from "@/lib/gates"
+import { gateResponse, getPlanForUserId } from "@/lib/gates/server-gate"
+import { replaceEmDash, sanitizeGeneratedText } from "@/lib/text/sanitize-generated-text"
 
 export const runtime = "nodejs"
 
@@ -21,6 +24,12 @@ export async function POST(request: NextRequest) {
 
   if (!body.fromSessionId || body.gapIndex == null || !body.practiceType) {
     return NextResponse.json({ error: "fromSessionId, gapIndex, and practiceType are required" }, { status: 400 })
+  }
+  const feature = body.practiceType === "live" ? "interview_live" : "interview_prep"
+  const plan = await getPlanForUserId(user.id)
+  if (!canAccess(plan, feature)) {
+    const needed = requiredPlanFor(feature)
+    return gateResponse(403, `This feature requires the ${needed} plan`, needed ?? undefined)
   }
 
   const durationMin = [10, 15].includes(body.durationMin ?? 0) ? body.durationMin! : 10
@@ -55,7 +64,7 @@ Output a JSON array of 3 strings. No other text.`,
     })
     const text = (res.content[0] as { type: string; text: string }).text.trim()
     const parsed = JSON.parse(text.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, ""))
-    if (Array.isArray(parsed)) practiceTags = parsed.slice(0, 3).map(String)
+    if (Array.isArray(parsed)) practiceTags = parsed.slice(0, 3).map((item) => replaceEmDash(String(item)))
   } catch {
     practiceTags = ["impact metrics", "ownership clarity", "tradeoff articulation"]
   }
@@ -89,5 +98,5 @@ Output a JSON array of 3 strings. No other text.`,
   const sessionId = result.rows[0].id
   const redirectTo = `/dashboard/interview/${body.practiceType}/${sessionId}`
 
-  return NextResponse.json({ sessionId, redirectTo }, { status: 201 })
+  return NextResponse.json(sanitizeGeneratedText({ sessionId, redirectTo }), { status: 201 })
 }

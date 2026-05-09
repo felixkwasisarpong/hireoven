@@ -16,6 +16,7 @@ import type { Resume } from "@/types"
 import type { TailorAnalysisResult } from "@/types/tailor-analysis"
 import { buildLocalTailorAnalysis } from "@/lib/resume/tailor-analysis"
 import { normalizeKeyword } from "@/lib/resume/hub"
+import { replaceEmDash, sanitizeGeneratedText } from "@/lib/text/sanitize-generated-text"
 
 export type KnownATS =
   | "workday"
@@ -342,7 +343,7 @@ Return ONLY the rewritten summary text. No commentary, no labels, no quotes.`
       .replace(/^["']|["']$/g, "")
       .replace(/^(Summary:|Profile:|Rewritten summary:)\s*/i, "")
 
-    return text || null
+    return text ? replaceEmDash(text) : null
   } catch (err) {
     console.warn("[ats-tailor] Claude summary rewrite failed:", err)
     return null
@@ -414,11 +415,11 @@ export async function tailorResumeForAts(
     resume
   )
 
-  return {
+  return sanitizeGeneratedText({
     analysis,
     atsProfile: profile,
     atsSummaryRewrite,
     criticalKeywords,
     strategyTip,
-  }
+  })
 }

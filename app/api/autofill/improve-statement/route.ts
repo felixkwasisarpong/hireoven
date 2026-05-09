@@ -4,6 +4,7 @@ import { logApiUsage } from "@/lib/admin/usage"
 import { ANTHROPIC_TIER_PRICING, SONNET_MODEL } from "@/lib/ai/anthropic-models"
 import { createClient } from "@/lib/supabase/server"
 import { requireFeature } from "@/lib/gates/server-gate"
+import { replaceEmDash, sanitizeGeneratedText } from "@/lib/text/sanitize-generated-text"
 
 export const runtime = "nodejs"
 export const maxDuration = 30
@@ -69,6 +70,7 @@ Return only the improved statement.`,
     .join("")
     .trim()
     .replace(/^["']|["']$/g, "")
+  const sanitizedImproved = replaceEmDash(improved)
 
-  return NextResponse.json({ statement: improved })
+  return NextResponse.json(sanitizeGeneratedText({ statement: sanitizedImproved }))
 }

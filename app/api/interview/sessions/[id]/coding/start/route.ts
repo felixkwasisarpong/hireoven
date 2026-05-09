@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { SONNET_MODEL } from "@/lib/ai/anthropic-models"
+import { canAccess, requiredPlanFor } from "@/lib/gates"
+import { gateResponse, getPlanForUserId } from "@/lib/gates/server-gate"
 import {
   getInterviewSession,
   appendTurn,
@@ -13,6 +15,7 @@ import {
 import { selectProblemForSession } from "@/lib/scout/interview/codingSelector"
 import { buildInterviewContext } from "@/lib/scout/interview/context"
 import { buildCodingInterviewerSystemPrompt } from "@/lib/scout/interview/agentPrompts"
+import { replaceEmDash, sanitizeGeneratedText } from "@/lib/text/sanitize-generated-text"
 
 export const runtime = "nodejs"
 export const maxDuration = 60
@@ -43,6 +46,11 @@ export async function POST(
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const plan = await getPlanForUserId(user.id)
+  if (!canAccess(plan, "interview_prep")) {
+    const needed = requiredPlanFor("interview_prep")
+    return gateResponse(403, `This feature requires the ${needed} plan`, needed ?? undefined)
+  }
 
   const pool = getPostgresPool()
   const session = await getInterviewSession(id, user.id)
@@ -167,7 +175,7 @@ export async function POST(
   })
 
   const rawOpening = (llmResult.content[0] as { type: string; text: string }).text
-  const openingMessage = stripMetadata(rawOpening)
+  const openingMessage = replaceEmDash(stripMetadata(rawOpening))
 
   const updatedTurns = await getTurns(id)
   await appendTurn({
@@ -177,10 +185,10 @@ export async function POST(
     content: openingMessage,
   })
 
-  return NextResponse.json({
+  return NextResponse.json(sanitizeGeneratedText({
     attempt,
     problem: safePublicProblem(problem),
     openingMessage,
     timeRemainingSec: problem.targetMinutes * 60,
-  })
+  }))
 }

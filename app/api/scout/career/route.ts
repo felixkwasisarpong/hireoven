@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server"
 import { requireFeature } from "@/lib/gates/server-gate"
 import { runCareerEngine } from "@/lib/scout/career/engine"
 import { logApiUsage } from "@/lib/admin/usage"
+import { sanitizeGeneratedText } from "@/lib/text/sanitize-generated-text"
 
 export const runtime    = "nodejs"
 export const maxDuration = 35
@@ -31,7 +32,7 @@ export async function POST(request: NextRequest) {
       cost_usd:    0,
     }).catch(() => {})
 
-    return NextResponse.json(result)
+    return NextResponse.json(sanitizeGeneratedText(result))
   } catch (err) {
     console.error("[scout:career] engine error:", err)
     return NextResponse.json({ error: "Career analysis failed. Please try again." }, { status: 500 })

@@ -12,6 +12,7 @@ import {
 } from "@/lib/resume/tailor-analysis"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { isUuid } from "@/lib/resume/hub"
+import { sanitizeGeneratedText } from "@/lib/text/sanitize-generated-text"
 import type { Resume } from "@/types"
 
 export const runtime = "nodejs"
@@ -90,7 +91,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
   })
 
   if (!anthropic) {
-    return NextResponse.json({ analysis: pruneSkillNoiseFromAnalysis(local) })
+    return NextResponse.json(sanitizeGeneratedText({ analysis: pruneSkillNoiseFromAnalysis(local) }))
   }
 
   try {
@@ -179,8 +180,8 @@ Return JSON only.`,
     const parsed = extractJsonObject(text)
     const fromModel = normalizeTailorAnalysis(parsed)
     const analysis = pruneSkillNoiseFromAnalysis(mergeTailorResults(local, fromModel))
-    return NextResponse.json({ analysis })
+    return NextResponse.json(sanitizeGeneratedText({ analysis }))
   } catch {
-    return NextResponse.json({ analysis: pruneSkillNoiseFromAnalysis(local) })
+    return NextResponse.json(sanitizeGeneratedText({ analysis: pruneSkillNoiseFromAnalysis(local) }))
   }
 }

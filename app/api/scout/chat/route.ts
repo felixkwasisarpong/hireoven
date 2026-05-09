@@ -15,7 +15,7 @@ import {
   canUsePremiumScoutFeatures,
   findScoutPremiumGate,
 } from "@/lib/scout/gating"
-import { canAccess } from "@/lib/gates"
+import { canAccess, type Plan } from "@/lib/gates"
 import { getUserPlan } from "@/lib/gates/server-gate"
 import { bumpScoutUsage } from "@/lib/scout/free-tier-quota"
 import { ANTHROPIC_TIER_PRICING, SONNET_MODEL } from "@/lib/ai/anthropic-models"
@@ -23,6 +23,7 @@ import { budgetTracker, calcCost, inferTier } from "@/lib/scout/budget/tracker"
 import { streamWithTimeout } from "@/lib/scout/budget/ai-call"
 import { routeScoutMessage, AI_TIMEOUTS } from "@/lib/scout/budget/router"
 import { scoutCache, CACHE_TTL, cacheKey, stableHash } from "@/lib/scout/budget/cache"
+import { sanitizeGeneratedText } from "@/lib/text/sanitize-generated-text"
 import {
   isScoutIntent,
   isScoutMode,
@@ -100,28 +101,59 @@ function scoutError(status: number, message: string) {
   return NextResponse.json({ ok: false, status, message, error: message }, { status })
 }
 
+function sanitizeScoutResponse(response: ScoutResponse): ScoutResponse {
+  return sanitizeGeneratedText(response)
+}
+
 /**
- * Free-tier users get the conversational shape of Scout (answer, recommendation,
- * explanations) but not the agentic payloads. We strip these here so a Pro-only
- * upgrade surface can render in the UI without the user being able to execute
- * actions they shouldn't have.
+ * Free-tier users can still execute safe "basic" Scout controls (filtering,
+ * focus mode, navigation). This pass strips only premium actions/features.
  */
 function stripProOnlyFieldsForFreeUsers(
   response: ScoutResponse,
-  isPro: boolean
+  plan: Plan | null
 ): ScoutResponse {
-  if (isPro) return response
+  if (canAccess(plan, "scout_actions")) return response
+
+  const filteredActions = (response.actions ?? []).filter((action) => !isPremiumScoutAction(action))
+  const removedPremiumActions = filteredActions.length !== (response.actions ?? []).length
+
+  const filteredWorkflow = response.workflow
+    ? {
+        ...response.workflow,
+        steps: response.workflow.steps.map((step) => ({
+          ...step,
+          action:
+            step.action && isPremiumWorkflowAction(step.action)
+              ? undefined
+              : step.action,
+        })),
+      }
+    : undefined
+
+  const removedPremiumWorkflowStep =
+    Boolean(response.workflow) &&
+    response.workflow!.steps.some((step, idx) => step.action && !filteredWorkflow!.steps[idx]?.action)
+
+  const interviewPrepAllowed = canAccess(plan, "interview_prep")
+  const removedInterviewPrep = Boolean(response.interviewPrep) && !interviewPrepAllowed
+
+  const gated =
+    response.gated ??
+    (removedPremiumActions || removedPremiumWorkflowStep || removedInterviewPrep
+      ? {
+          feature: "scout_actions" as const,
+          reason: "Some advanced Scout actions are part of paid plans.",
+          upgradeMessage: "Upgrade to unlock resume tailoring and advanced Scout workflows.",
+        }
+      : undefined)
+
   return {
     ...response,
-    actions: [],
-    workspace_directive: undefined,
-    workflow_directive: undefined,
-    interviewPrep: undefined,
-    gated: response.gated ?? {
-      feature: "scout_actions",
-      reason: "Actions, workflows, and deep analysis are Pro features.",
-      upgradeMessage: "Upgrade to Pro to act on Scout's recommendations.",
-    },
+    actions: filteredActions,
+    workflow: filteredWorkflow,
+    interviewPrep: interviewPrepAllowed ? response.interviewPrep : undefined,
+    gated,
   }
 }
 
@@ -286,6 +318,8 @@ function inferBulkWorkspaceDirective(message: string): import("@/lib/scout/types
   const count = countMatch ? parseInt(countMatch[1], 10) : 10
   const requireSponsorshipSignal = /\b(visa|h-?1b|sponsor)/i.test(message)
   const workMode = /\bremote\b/i.test(message) ? "remote" : undefined
+  const strictQuery = /\b(strict\s+query|exact\s+keywords?|all\s+keywords?|must\s+include\s+all)\b/i.test(message)
+  const strictScoreOnly = /\b(only\s+scored|scored\s+only|exclude\s+unscored|with\s+scores?\s+only|no\s+null\s+scores?)\b/i.test(message)
   // Matches: "over 80", "above 80", "greater than 80", "more than 80", "> 80", ">= 80", "80 match", "80%"
   const scoreMatch = message.match(
     /\b(?:over|above|greater\s+than|more\s+than|higher\s+than|at\s+least|>=?)\s*(\d+)|(\d+)\s*(?:match|%)\b/i,
@@ -294,7 +328,7 @@ function inferBulkWorkspaceDirective(message: string): import("@/lib/scout/types
 
   return {
     mode: "bulk_application",
-    payload: { count, requireSponsorshipSignal, workMode, minMatchScore },
+    payload: { count, requireSponsorshipSignal, workMode, minMatchScore, strictQuery, strictScoreOnly },
     chips: [
       "What's my queue status?",
       "Skip jobs with no sponsorship",
@@ -311,6 +345,90 @@ function inferWorkflowDirective(message: string, intent: ScoutIntent): ScoutWork
   if (COMPARE_INTENT_RE.test(message)) return { workflowType: "compare_and_prioritize" }
   if (INTERVIEW_INTENT_RE.test(message)) return { workflowType: "interview_prep" }
   return undefined
+}
+
+function buildDeterministicScoutResponse(message: string, mode: ScoutMode): ScoutResponse {
+  const m = message.toLowerCase()
+  const actions: ScoutResponse["actions"] = []
+
+  const worthTimeIntent =
+    /\b(worth my time|top match(?:es)?|best match(?:es)?|strong opportunities|prioritize top)\b/i.test(message)
+  const sponsorshipIntent =
+    /\b(sponsorship|sponsor|h-?1b|visa)\b/i.test(message)
+  const filterIntent =
+    /\b(filter|show|only|find|prioritize|narrow|focus)\b/i.test(message)
+
+  if (worthTimeIntent) {
+    actions.push({
+      type: "SET_FOCUS_MODE",
+      payload: { enabled: true, reason: "Prioritize strongest matches first" },
+      label: "Turn on Focus Mode",
+    })
+  }
+
+  if (sponsorshipIntent && filterIntent) {
+    actions.push({
+      type: "APPLY_FILTERS",
+      payload: { sponsorship: "high" },
+      label: "Filter high sponsorship roles",
+    })
+  }
+
+  if (/\bremote\b/.test(m) && filterIntent) {
+    actions.push({
+      type: "APPLY_FILTERS",
+      payload: { workMode: "remote" },
+      label: "Filter remote jobs",
+    })
+  } else if (/\bhybrid\b/.test(m) && filterIntent) {
+    actions.push({
+      type: "APPLY_FILTERS",
+      payload: { workMode: "hybrid" },
+      label: "Filter hybrid jobs",
+    })
+  } else if (/\b(on.?site|onsite)\b/.test(m) && filterIntent) {
+    actions.push({
+      type: "APPLY_FILTERS",
+      payload: { workMode: "on-site" },
+      label: "Filter on-site jobs",
+    })
+  }
+
+  if (actions.length > 0) {
+    const includesSponsorship = actions.some(
+      (a) => a.type === "APPLY_FILTERS" && a.payload.sponsorship === "high",
+    )
+    const includesFocus = actions.some(
+      (a) => a.type === "SET_FOCUS_MODE" && a.payload.enabled,
+    )
+
+    const acknowledgements: string[] = []
+    if (includesFocus) acknowledgements.push("turned on Focus Mode")
+    if (includesSponsorship) acknowledgements.push("filtered to high sponsorship roles")
+
+    return {
+      answer:
+        acknowledgements.length > 0
+          ? `Done — I ${acknowledgements.join(" and ")}.`
+          : "Done — applying your feed filters now.",
+      recommendation: "Explore",
+      actions,
+      explanations: [],
+      intent: "command",
+      confidence: 0.99,
+      mode,
+    }
+  }
+
+  return {
+    answer: "Got it — applying that filter now.",
+    recommendation: "Explore",
+    actions: [],
+    explanations: [],
+    intent: "command",
+    confidence: 0.99,
+    mode,
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -806,50 +924,10 @@ export async function POST(request: NextRequest) {
     return scoutError(401, "Unauthorized")
   }
 
-  // Every user — free and Pro — counts against a daily Scout message quota
-  // (free=5, Pro=100, see lib/usage/quotas.ts). Pro additionally unlocks
-  // actions, workflows, and deep analysis via separate gates below. The quota
-  // counter is bumped before we call Claude so retries can't bypass the cap.
-  const { plan: userPlan } = await getUserPlan(request)
-  const isPro = canAccess(userPlan, "scout_actions")
-
-  const quota = await bumpScoutUsage(user.id, userPlan)
-  if (quota.exceeded) {
-    return NextResponse.json(
-      {
-        answer: isPro
-          ? `You've used your ${quota.limit} Scout messages today. Your quota resets at midnight.`
-          : `You've used your ${quota.limit} free Scout messages today. Upgrade to Pro for ${userPlan === "pro" ? 100 : 100} messages a day — plus actions, workflows, and deep analysis.`,
-        recommendation: "Wait",
-        actions: [],
-        explanations: [],
-        gated: {
-          feature: "scout_actions",
-          reason: `Daily Scout message limit (${quota.limit}) reached.`,
-          upgradeMessage: isPro
-            ? "Quota resets at midnight."
-            : "Upgrade to Pro for 100 Scout messages a day.",
-        },
-      } satisfies ScoutResponse,
-      { status: 429 }
-    )
-  }
-
-  if (!anthropic) {
-    return NextResponse.json(
-      {
-        answer: "Scout is temporarily unavailable. The AI service is not configured.",
-        recommendation: "Wait",
-        actions: [],
-        explanations: [],
-      } satisfies ScoutResponse,
-      { status: 503 }
-    )
-  }
-
   const body = await request.json().catch(() => ({})) as {
     message?: string
     pagePath?: string
+    source?: "mini" | "workspace"
     jobId?: string
     companyId?: string
     resumeId?: string
@@ -878,22 +956,92 @@ export async function POST(request: NextRequest) {
 
   const userMessage = body.message?.trim()
   const mode = detectScoutMode(body.pagePath ?? "")
+  const requestSource = body.source === "mini" ? "mini" : "workspace"
 
   if (!userMessage) {
     return scoutError(400, "message is required")
   }
 
   if (DESTRUCTIVE_COMMAND_RE.test(userMessage)) {
-    return NextResponse.json({
-      answer:
-        "I can’t run destructive commands. I can help you review or filter saved jobs, but I won’t delete data from Scout commands.",
-      recommendation: "Explore",
-      actions: [],
-      explanations: [],
-      intent: "command",
-      confidence: 0.99,
-      mode,
-    } satisfies ScoutResponse)
+    return NextResponse.json(
+      sanitizeScoutResponse({
+        answer:
+          "I can’t run destructive commands. I can help you review or filter saved jobs, but I won’t delete data from Scout commands.",
+        recommendation: "Explore",
+        actions: [],
+        explanations: [],
+        intent: "command",
+        confidence: 0.99,
+        mode,
+      } satisfies ScoutResponse)
+    )
+  }
+
+  // MiniScout is deterministic-only and does not consume paid Scout credits.
+  const routing = routeScoutMessage(userMessage)
+  if (requestSource === "mini") {
+    if (!routing.useLLM) {
+      const deterministicResponse = buildDeterministicScoutResponse(userMessage, mode)
+      budgetTracker.record({
+        feature: "scout_chat", model: MODEL, tier: inferTier(MODEL),
+        inputTokens: 0, outputTokens: 0, latencyMs: 0, costUsd: 0,
+        success: true, cached: true, timedOut: false,
+        userId: undefined, timestamp: Date.now(),
+      })
+      return NextResponse.json(sanitizeScoutResponse(deterministicResponse))
+    }
+
+    return NextResponse.json(
+      sanitizeScoutResponse({
+        answer: "Mini Scout only supports quick filters and lookups. Open full Scout for deep analysis.",
+        recommendation: "Explore",
+        actions: [],
+        explanations: [],
+        intent: "command",
+        confidence: 0.99,
+        mode,
+      } satisfies ScoutResponse)
+    )
+  }
+
+  // Every full Scout request counts against a daily message quota
+  // (free=5, pro=30, pro_max=60, see lib/usage/quotas.ts). Pro additionally unlocks
+  // actions, workflows, and deep analysis via separate gates below.
+  const { plan: userPlan } = await getUserPlan(request)
+  const isPro = canAccess(userPlan, "scout_actions")
+
+  const quota = await bumpScoutUsage(user.id, userPlan)
+  if (quota.exceeded) {
+    return NextResponse.json(
+      sanitizeScoutResponse({
+        answer: isPro
+          ? `You've used your ${quota.limit} Scout messages today. Your quota resets at midnight.`
+          : `You've used your ${quota.limit} free Scout messages today. Upgrade to Pro for 30 messages a day — plus actions, workflows, and deep analysis.`,
+        recommendation: "Wait",
+        actions: [],
+        explanations: [],
+        gated: {
+          feature: "scout_actions",
+          reason: `Daily Scout message limit (${quota.limit}) reached.`,
+          upgradeMessage: isPro
+            ? "Quota resets at midnight."
+            : "Upgrade to Pro for 30 Scout messages a day.",
+        },
+      } satisfies ScoutResponse),
+      { status: 429 }
+    )
+  }
+
+  if (!anthropic) {
+    return NextResponse.json(
+      sanitizeScoutResponse({
+        answer: "Scout is temporarily unavailable. The AI service is not configured.",
+        recommendation: "Wait",
+        actions: [],
+        explanations: [],
+      } satisfies ScoutResponse),
+      { status: 503 }
+    )
   }
 
   // Bulk-prep intent — skip Claude entirely, build response deterministically.
@@ -913,6 +1061,8 @@ export async function POST(request: NextRequest) {
       if (bp.count)                  params.set("count", String(bp.count))
       if (bp.requireSponsorshipSignal) params.set("sponsorship", "true")
       if (bp.workMode)               params.set("workMode", String(bp.workMode))
+      if (bp.strictQuery)            params.set("strictQuery", "true")
+      if (bp.strictScoreOnly)        params.set("strictScoreOnly", "true")
       // Pass the full message so apply-agent can free-text search any condition
       params.set("q", userMessage)
       const origin = request.nextUrl.origin || process.env.NEXT_PUBLIC_APP_URL || "http://127.0.0.1:3000"
@@ -928,6 +1078,8 @@ export async function POST(request: NextRequest) {
               minMatchScore:           bp.minMatchScore as number | undefined,
               requireSponsorshipSignal: Boolean(bp.requireSponsorshipSignal),
               workMode:                bp.workMode as string | undefined,
+              strictQuery:             Boolean(bp.strictQuery),
+              strictScoreOnly:         Boolean(bp.strictScoreOnly),
               count:                   countHint,
             },
             currentIndex: 0,
@@ -961,8 +1113,9 @@ export async function POST(request: NextRequest) {
             .filter((r) => typeof r.job_id === "string" && r.job_id.length > 0)
             .filter((r) => typeof r.apply_url === "string" && r.apply_url.length > 0)
             .filter((r) => {
-              if (typeof bp.minMatchScore === "number" && typeof r.match_score === "number") {
-                return r.match_score >= bp.minMatchScore
+              if (typeof bp.minMatchScore === "number") {
+                if (bp.strictScoreOnly) return typeof r.match_score === "number" && r.match_score >= bp.minMatchScore
+                if (typeof r.match_score === "number") return r.match_score >= bp.minMatchScore
               }
               return true
             })
@@ -993,6 +1146,8 @@ export async function POST(request: NextRequest) {
                 minMatchScore:            bp.minMatchScore as number | undefined,
                 requireSponsorshipSignal: Boolean(bp.requireSponsorshipSignal),
                 workMode:                 bp.workMode as string | undefined,
+                strictQuery:              Boolean(bp.strictQuery),
+                strictScoreOnly:          Boolean(bp.strictScoreOnly),
                 count:                    countHint,
               },
               currentIndex: 0,
@@ -1028,7 +1183,7 @@ export async function POST(request: NextRequest) {
       void (async () => {
         try {
           if (bulkDirective) ctrl.enqueue(enc.encode(encodeSSE({ type: "workspace_directive", payload: bulkDirective })))
-          ctrl.enqueue(enc.encode(encodeSSE({ type: "response", payload: bulkResponse })))
+          ctrl.enqueue(enc.encode(encodeSSE({ type: "response", payload: sanitizeScoutResponse(bulkResponse) })))
           ctrl.enqueue(enc.encode(encodeSSE({ type: "done" })))
         } finally {
           try { ctrl.close() } catch {}
@@ -1044,31 +1199,22 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    return NextResponse.json(bulkResponse)
+    return NextResponse.json(sanitizeScoutResponse(bulkResponse))
   }
 
   // Deterministic routing gate — no LLM needed for pure UI/filter commands
-  const routing = routeScoutMessage(userMessage)
   if (!routing.useLLM) {
+    const deterministicResponse = buildDeterministicScoutResponse(userMessage, mode)
     budgetTracker.record({
       feature: "scout_chat", model: MODEL, tier: inferTier(MODEL),
       inputTokens: 0, outputTokens: 0, latencyMs: 0, costUsd: 0,
       success: true, cached: true, timedOut: false,
       userId: undefined, timestamp: Date.now(),
     })
-    return NextResponse.json({
-      answer: "Got it — applying that filter now.",
-      recommendation: "Explore",
-      actions: [],
-      explanations: [],
-      intent: "command",
-      confidence: 0.99,
-      mode,
-    } satisfies ScoutResponse)
+    return NextResponse.json(sanitizeScoutResponse(deterministicResponse))
   }
 
-  const { plan } = await getUserPlan(request)
-  const effectivePlan = plan ?? "free"
+  const effectivePlan = userPlan ?? "free"
   const inferredIntent = inferIntentFromMessage(userMessage)
 
   // TODO(scout-usage): Add persistent free daily usage tracking once storage schema is finalized.
@@ -1086,12 +1232,12 @@ export async function POST(request: NextRequest) {
 
   if (shouldShortCircuitForGate) {
     return NextResponse.json(
-      buildGatedScoutResponse({
+      sanitizeScoutResponse(buildGatedScoutResponse({
         gate: premiumGate,
         mode,
         answer:
           "Here is the free version: focus on your top 2 gaps first, prioritize roles with clear fit signals, and keep decisions simple (apply / improve / skip).",
-      })
+      }))
     )
   }
 
@@ -1107,19 +1253,21 @@ export async function POST(request: NextRequest) {
     (body.compareJobIds?.length ?? 0) > 2 &&
     !canAccess(effectivePlan, "scout_deep_analysis")
   ) {
-    return NextResponse.json({
-      answer:
-        "Free Scout can compare up to 2 jobs. Upgrade to Scout Pro to compare 3 or more jobs with deep analysis.",
-      recommendation: "Explore",
-      actions: [],
-      explanations: [],
-      mode,
-      gated: {
-        feature: "scout_deep_analysis" as const,
-        reason: "Comparing 3+ jobs requires Scout Pro deep analysis.",
-        upgradeMessage: "Upgrade to unlock multi-job comparison with deep analysis and sponsorship signals.",
-      },
-    } satisfies ScoutResponse)
+    return NextResponse.json(
+      sanitizeScoutResponse({
+        answer:
+          "Free Scout can compare up to 2 jobs. Upgrade to Scout Pro to compare 3 or more jobs with deep analysis.",
+        recommendation: "Explore",
+        actions: [],
+        explanations: [],
+        mode,
+        gated: {
+          feature: "scout_deep_analysis" as const,
+          reason: "Comparing 3+ jobs requires Scout Pro deep analysis.",
+          upgradeMessage: "Upgrade to unlock multi-job comparison with deep analysis and sponsorship signals.",
+        },
+      } satisfies ScoutResponse)
+    )
   }
 
   // Cap auto-compare to 2 jobs for free users, 5 for paid
@@ -1155,30 +1303,34 @@ export async function POST(request: NextRequest) {
     if (!resolvedJob) {
       const topSaved = await listTopSavedJobs(user.id, pool, 5).catch(() => [])
       if (topSaved.length === 0) {
-        return NextResponse.json({
-          answer:
-            "I don't see any saved jobs in your list. To tailor your resume or prepare an application, save a job from the feed first — then come back and I can prepare everything for that specific role.",
-          recommendation: "Explore",
-          actions: [{ type: "APPLY_FILTERS", payload: { sponsorship: "high" }, label: "Find sponsorship-friendly roles" }],
-          explanations: [],
-          intent: "command",
-          confidence: 0.95,
-          mode,
-        } satisfies ScoutResponse)
+        return NextResponse.json(
+          sanitizeScoutResponse({
+            answer:
+              "I don't see any saved jobs in your list. To tailor your resume or prepare an application, save a job from the feed first — then come back and I can prepare everything for that specific role.",
+            recommendation: "Explore",
+            actions: [{ type: "APPLY_FILTERS", payload: { sponsorship: "high" }, label: "Find sponsorship-friendly roles" }],
+            explanations: [],
+            intent: "command",
+            confidence: 0.95,
+            mode,
+          } satisfies ScoutResponse)
+        )
       }
       // There are saved jobs but none with a resolved job_id — prompt selection
       const jobList = topSaved
         .map((j, i) => `${i + 1}. **${j.title}** at ${j.company}${j.score ? ` (${j.score}% match)` : ""}`)
         .join("\n")
-      return NextResponse.json({
-        answer: `I found ${topSaved.length} saved job${topSaved.length !== 1 ? "s" : ""}. Which one should I tailor for?\n\n${jobList}\n\nNavigate to the job and open Scout from that page, or tell me which role to target.`,
-        recommendation: "Explore",
-        actions: [],
-        explanations: [],
-        intent: "command",
-        confidence: 0.9,
-        mode,
-      } satisfies ScoutResponse)
+      return NextResponse.json(
+        sanitizeScoutResponse({
+          answer: `I found ${topSaved.length} saved job${topSaved.length !== 1 ? "s" : ""}. Which one should I tailor for?\n\n${jobList}\n\nNavigate to the job and open Scout from that page, or tell me which role to target.`,
+          recommendation: "Explore",
+          actions: [],
+          explanations: [],
+          intent: "command",
+          confidence: 0.9,
+          mode,
+        } satisfies ScoutResponse)
+      )
     }
   }
 
@@ -1677,28 +1829,30 @@ export async function POST(request: NextRequest) {
     // ── End personal brand enrichment ─────────────────────────────────────────────
 
     if (isInterviewPrepIntent && !context.job) {
-      return NextResponse.json({
-        answer:
-          "I need a specific job loaded before I can create interview prep. Open a job page or send a jobId, then ask me again.",
-        recommendation: "Explore",
-        actions: [],
-        explanations: [],
-        intent: "analysis",
-        confidence: 0.92,
-        mode,
-      } satisfies ScoutResponse)
+      return NextResponse.json(
+        sanitizeScoutResponse({
+          answer:
+            "I need a specific job loaded before I can create interview prep. Open a job page or send a jobId, then ask me again.",
+          recommendation: "Explore",
+          actions: [],
+          explanations: [],
+          intent: "analysis",
+          confidence: 0.92,
+          mode,
+        } satisfies ScoutResponse)
+      )
     }
 
     if (isInterviewPrepIntent && context.job && !canAccess(effectivePlan, "interview_prep")) {
       return NextResponse.json(
-        buildInterviewPrepPreview({
+        sanitizeScoutResponse(buildInterviewPrepPreview({
           jobTitle: context.job.title,
           companyName: context.job.company_name,
           jobId: context.job.id,
           hasResume: Boolean(context.resume),
           hasMatchScore: Boolean(context.matchScore),
           mode,
-        })
+        }))
       )
     }
 
@@ -1881,7 +2035,9 @@ User Input: ${userMessage}`
 
           attachDebug(scoutResponse)
 
-          const finalScoutResponse = stripProOnlyFieldsForFreeUsers(scoutResponse, isPro)
+          const finalScoutResponse = sanitizeScoutResponse(
+            stripProOnlyFieldsForFreeUsers(scoutResponse, userPlan)
+          )
 
           // Emit workspace/workflow directives early so client can morph immediately
           if (finalScoutResponse.workspace_directive) emit({ type: "workspace_directive", payload: finalScoutResponse.workspace_directive })
@@ -2199,6 +2355,8 @@ User Input: ${userMessage}`
         if (bp.count)         params.set("count", String(bp.count))
         if (bp.requireSponsorshipSignal) params.set("sponsorship", "true")
         if (bp.workMode)      params.set("workMode", String(bp.workMode))
+        if (bp.strictQuery)   params.set("strictQuery", "true")
+        if (bp.strictScoreOnly) params.set("strictScoreOnly", "true")
         params.set("q", userMessage)
 
         const origin = request.nextUrl.origin || process.env.NEXT_PUBLIC_APP_URL || "http://127.0.0.1:3000"
@@ -2214,6 +2372,8 @@ User Input: ${userMessage}`
                 minMatchScore:           bp.minMatchScore as number | undefined,
                 requireSponsorshipSignal: Boolean(bp.requireSponsorshipSignal),
                 workMode:                bp.workMode as string | undefined,
+                strictQuery:             Boolean(bp.strictQuery),
+                strictScoreOnly:         Boolean(bp.strictScoreOnly),
                 count:                   (bp.count as number | undefined) ?? 5,
               },
               currentIndex: 0,
@@ -2273,7 +2433,9 @@ User Input: ${userMessage}`
       }
     })()
 
-    return NextResponse.json(stripProOnlyFieldsForFreeUsers(scoutResponse, isPro))
+    return NextResponse.json(
+      sanitizeScoutResponse(stripProOnlyFieldsForFreeUsers(scoutResponse, userPlan))
+    )
   } catch (error) {
     console.error("Scout chat error:", error)
 

@@ -15,6 +15,7 @@ import { AI_TIMEOUTS } from "@/lib/scout/budget/router"
 import type { ScoutAIStrategy, ScoutAIStrategyGated } from "@/lib/scout/types"
 import { getUserPlan } from "@/lib/gates/server-gate"
 import { canAccess } from "@/lib/gates"
+import { sanitizeGeneratedText } from "@/lib/text/sanitize-generated-text"
 
 export const runtime = "nodejs"
 export const maxDuration = 30
@@ -89,9 +90,9 @@ export async function POST(request: NextRequest) {
           upgradeMessage: "Upgrade to Scout Pro to unlock your full strategy: priority targets, what to avoid, and specific resume improvements.",
           lockedSections: ["prioritize", "avoid", "improve"],
         }
-        return NextResponse.json({ strategy: freeStrategy, gated, isPremium: false, cached: true })
+        return NextResponse.json(sanitizeGeneratedText({ strategy: freeStrategy, gated, isPremium: false, cached: true }))
       }
-      return NextResponse.json({ strategy, gated: null, isPremium: true, cached: true })
+      return NextResponse.json(sanitizeGeneratedText({ strategy, gated: null, isPremium: true, cached: true }))
     }
 
     // Build Scout context + strategy board data in parallel
@@ -143,10 +144,10 @@ export async function POST(request: NextRequest) {
         upgradeMessage: "Upgrade to Scout Pro to unlock your full strategy: priority targets, what to avoid, and specific resume improvements.",
         lockedSections: ["prioritize", "avoid", "improve"],
       }
-      return NextResponse.json({ strategy: freeStrategy, gated, isPremium: false })
+      return NextResponse.json(sanitizeGeneratedText({ strategy: freeStrategy, gated, isPremium: false }))
     }
 
-    return NextResponse.json({ strategy, gated: null, isPremium: true })
+    return NextResponse.json(sanitizeGeneratedText({ strategy, gated: null, isPremium: true }))
   } catch (error) {
     console.error("Scout AI strategy error:", error)
     return scoutError(500, "Unable to generate strategy right now. Please try again.")

@@ -2,62 +2,42 @@
 
 import { useMemo, useEffect, useRef, useState } from "react"
 import { usePathname, useSearchParams } from "next/navigation"
-import { Loader2, RefreshCw, Send, Sparkles, X, Search, GitCompareArrows, Wand2, MessageSquare, Lock } from "lucide-react"
+import { Loader2, RefreshCw, Send, Sparkles, X, SlidersHorizontal, Star, MessageSquare } from "lucide-react"
 import { ScoutMessageBubble } from "@/components/scout/ScoutMessageBubble"
 import { ScoutActivityTimeline } from "@/components/scout/ScoutActivityTimeline"
 import { ScoutContextChip } from "@/components/scout/ScoutContextChip"
 import { ScoutChatbotAnimation } from "@/components/scout/ScoutChatbotAnimation"
-import { useUpgradeModal } from "@/lib/context/UpgradeModalContext"
-import { useSubscription } from "@/lib/hooks/useSubscription"
 import { useResumeContext } from "@/components/resume/ResumeProvider"
-import { canAccess } from "@/lib/gates"
+import { useScoutActionExecutor } from "@/components/scout/useScoutActionExecutor"
 import { normalizeScoutResponse } from "@/lib/scout/normalize"
 import { cn } from "@/lib/utils"
-import type { ScoutResponse } from "@/lib/scout/types"
+import type { ScoutAction, ScoutResponse } from "@/lib/scout/types"
 
-type Capability = {
-  group: string
-  icon: typeof Sparkles
-  isPro: boolean
-  examples: string[]
+type MiniTask = {
+  title: string
+  description: string
+  prompt: string
+  icon: typeof SlidersHorizontal
 }
 
-const SCOUT_CAPABILITIES: Capability[] = [
+const MINI_TASKS: MiniTask[] = [
   {
-    group: "Find",
-    icon: Search,
-    isPro: false,
-    examples: [
-      "Show jobs worth my time",
-      "Filter for sponsorship-friendly companies",
-    ],
+    title: "Adjust Preferences",
+    description: "Fine-tune your current job search criteria.",
+    prompt: "Show my current preferences and tighten filters for my target roles.",
+    icon: SlidersHorizontal,
   },
   {
-    group: "Compare",
-    icon: GitCompareArrows,
-    isPro: true,
-    examples: [
-      "Compare my saved jobs",
-      "Which job has the best fit?",
-    ],
+    title: "Top Match Jobs",
+    description: "Explore roles where you are a strong fit.",
+    prompt: "Show jobs worth my time and prioritize top matches.",
+    icon: Star,
   },
   {
-    group: "Improve",
-    icon: Wand2,
-    isPro: true,
-    examples: [
-      "Tailor my resume to this job",
-      "What's weak about my resume?",
-    ],
-  },
-  {
-    group: "Prepare",
+    title: "Ask Scout",
+    description: "Get detailed insights on specific jobs.",
+    prompt: "Show this job's match score, location, sponsorship signal, and salary if available.",
     icon: MessageSquare,
-    isPro: true,
-    examples: [
-      "Prep me for this interview",
-      "Likely interview questions for this role",
-    ],
   },
 ]
 
@@ -93,6 +73,23 @@ function TypingIndicator() {
   )
 }
 
+function sanitizeMiniResponse(response: ScoutResponse): ScoutResponse {
+  if (!response.gated) return response
+  return {
+    ...response,
+    answer: "I can help with free tasks here: adjust preferences, surface top matches, and explain specific jobs.",
+    gated: undefined,
+  }
+}
+
+function isMiniAutoAction(action: ScoutAction): boolean {
+  return (
+    action.type === "APPLY_FILTERS" ||
+    action.type === "SET_FOCUS_MODE" ||
+    action.type === "RESET_CONTEXT"
+  )
+}
+
 export function ScoutMiniPanel({
   pagePath,
   jobId,
@@ -103,10 +100,8 @@ export function ScoutMiniPanel({
 }: ScoutMiniPanelProps) {
   const pathname = usePathname()
   const searchParams = useSearchParams()
-  const { showUpgrade } = useUpgradeModal()
-  const { plan } = useSubscription()
-  const isPro = canAccess(plan, "scout_actions")
   const { primaryResume } = useResumeContext()
+  const { executeAction } = useScoutActionExecutor()
 
   const [isOpen, setIsOpen] = useState(false)
   const [query, setQuery] = useState("")
@@ -175,13 +170,19 @@ export function ScoutMiniPanel({
     setIsLoading(true)
     setError(null)
 
+    let timeoutId: ReturnType<typeof setTimeout> | null = null
     try {
+      const controller = new AbortController()
+      timeoutId = setTimeout(() => controller.abort(), 25000)
+
       const res = await fetch("/api/scout/chat", {
         method: "POST",
         headers: { Accept: "application/json", "Content-Type": "application/json" },
+        signal: controller.signal,
         body: JSON.stringify({
           message: trimmed,
           pagePath: resolvedPagePath,
+          source: "mini",
           focusMode: searchParams.get("focus") === "1",
           activeFilters: {
             q: searchParams.get("q") ?? undefined,
@@ -196,9 +197,8 @@ export function ScoutMiniPanel({
       const raw = (await res.json().catch(() => null)) as unknown
       const rawObj = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : null
 
-      // The server returns 403 (gated) / 503 (anthropic unavailable) with a fully-formed
-      // ScoutResponse body so users see the actual upgrade/availability message instead of
-      // a generic "could not respond". Render those as normal Scout messages.
+      // The server can return non-2xx with a fully-formed ScoutResponse body.
+      // In MiniScout we still render a normal response message.
       const looksLikeScoutResponse =
         rawObj !== null && typeof rawObj.answer === "string" && rawObj.answer.length > 0
 
@@ -210,11 +210,27 @@ export function ScoutMiniPanel({
         return
       }
 
-      const normalized = normalizeScoutResponse(raw)
-      setMessages((prev) => [...prev, { id: `s-${Date.now()}`, role: "scout", response: normalized }])
-    } catch {
-      setError("Network error. Please try again.")
+      const normalized = sanitizeMiniResponse(normalizeScoutResponse(raw))
+      const autoActions = normalized.actions.filter(isMiniAutoAction)
+      for (const action of autoActions) {
+        executeAction(action, {
+          source: "chat",
+          reason: "Mini Scout quick task",
+        })
+      }
+      const visibleResponse =
+        autoActions.length > 0
+          ? { ...normalized, actions: normalized.actions.filter((a) => !isMiniAutoAction(a)) }
+          : normalized
+      setMessages((prev) => [...prev, { id: `s-${Date.now()}`, role: "scout", response: visibleResponse }])
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        setError("Scout took too long to respond. Try again.")
+      } else {
+        setError("Network error. Please try again.")
+      }
     } finally {
+      if (timeoutId) clearTimeout(timeoutId)
       setIsLoading(false)
     }
   }
@@ -334,64 +350,29 @@ export function ScoutMiniPanel({
                   </div>
                 )}
 
-                {/* Categorized capability menu */}
+                {/* Free quick tasks */}
                 <div className="mt-5 w-full">
                   <p className="mb-2 text-left text-[10px] font-bold uppercase tracking-wider text-gray-400">
-                    Things Scout can do
+                    Tasks I Can Help With
                   </p>
                   <div className="space-y-3">
-                    {SCOUT_CAPABILITIES.map((cap) => {
-                      const Icon = cap.icon
-                      const locked = cap.isPro && !isPro
+                    {MINI_TASKS.map((task) => {
+                      const Icon = task.icon
                       return (
-                        <div
-                          key={cap.group}
-                          className="rounded-xl border border-gray-200 bg-white p-3 text-left shadow-sm"
+                        <button
+                          key={task.title}
+                          type="button"
+                          onClick={() => runChip(task.prompt)}
+                          className="group w-full rounded-xl border border-gray-200 bg-white p-3 text-left shadow-sm transition hover:border-[#FF5C18]/30 hover:bg-[#FFF8F5]"
                         >
-                          <div className="mb-2 flex items-center gap-2">
+                          <div className="mb-1.5 flex items-center gap-2">
                             <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-[#FF5C18]/10 text-[#FF5C18]">
                               <Icon className="h-3.5 w-3.5" />
                             </span>
-                            <p className="text-[12px] font-bold text-gray-900">{cap.group}</p>
-                            {cap.isPro && (
-                              <span
-                                className={cn(
-                                  "ml-auto inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wide",
-                                  locked
-                                    ? "bg-gradient-to-br from-[#FF5C18] to-[#FF9A3C] text-white"
-                                    : "bg-gray-100 text-gray-500"
-                                )}
-                              >
-                                {locked && <Lock className="h-2.5 w-2.5" />}
-                                Pro
-                              </span>
-                            )}
+                            <p className="text-[12px] font-bold text-gray-900 group-hover:text-[#FF5C18]">{task.title}</p>
                           </div>
-                          <div className="space-y-1.5">
-                            {cap.examples.map((example) => (
-                              <button
-                                key={example}
-                                type="button"
-                                onClick={() => {
-                                  if (locked) {
-                                    showUpgrade("scout_actions")
-                                  } else {
-                                    runChip(example)
-                                  }
-                                }}
-                                className={cn(
-                                  "group flex w-full items-center justify-between rounded-lg px-3 py-2 text-[12.5px] transition",
-                                  locked
-                                    ? "cursor-pointer text-gray-500 hover:bg-gray-50"
-                                    : "text-gray-700 hover:bg-[#FFF8F5] hover:text-[#FF5C18]"
-                                )}
-                              >
-                                <span className="text-left">{example}</span>
-                                <span className="text-gray-300 transition group-hover:text-[#FF5C18]/60">→</span>
-                              </button>
-                            ))}
-                          </div>
-                        </div>
+                          <p className="text-[11.5px] text-gray-500">{task.description}</p>
+                        </button>
                       )
                     })}
                   </div>
@@ -418,7 +399,6 @@ export function ScoutMiniPanel({
                   response={msg.response}
                   context="mini"
                   compact
-                  onUpgrade={showUpgrade}
                 />
               )
             )}

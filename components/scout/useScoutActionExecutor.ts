@@ -30,6 +30,7 @@ export type ScoutAuditEntry = {
 
 type ExecutorOptions = {
   onExecuted?: () => void
+  onNotExecuted?: () => void
   /** Where this action originated (chat, nudge, strategy, workflow). */
   source?: ScoutActionSource
   /** Human-readable reason Scout suggested this action. */
@@ -83,8 +84,13 @@ function summarizeSearchParams(p: URLSearchParams): string {
   const parts: string[] = []
   if (p.get("q")) parts.push(`"${p.get("q")}"`)
   if (p.get("location")) parts.push(p.get("location")!)
-  if (p.get("workMode")) parts.push(p.get("workMode")!)
-  if (p.get("sponsorship")) parts.push(`${p.get("sponsorship")} sponsorship`)
+  if (p.get("remote") === "true") parts.push("remote")
+  if (p.get("hybrid") === "true") parts.push("hybrid")
+  if (p.get("onsite") === "true") parts.push("on-site")
+  if (!p.get("remote") && !p.get("hybrid") && !p.get("onsite") && p.get("workMode")) {
+    parts.push(p.get("workMode")!)
+  }
+  if (p.get("sponsorship")) parts.push("sponsorship")
   if (p.get("focus") === "1") parts.push("Focus Mode")
   return parts.length > 0 ? parts.join(" · ") : "No active filters"
 }
@@ -98,8 +104,15 @@ function buildStateSummaries(
       const newParams = new URLSearchParams()
       if (action.payload.query) newParams.set("q", action.payload.query)
       if (action.payload.location) newParams.set("location", action.payload.location)
-      if (action.payload.workMode) newParams.set("workMode", action.payload.workMode)
-      if (action.payload.sponsorship) newParams.set("sponsorship", action.payload.sponsorship)
+      if (action.payload.sponsorship) newParams.set("sponsorship", "true")
+      if (action.payload.workMode) {
+        const mode = action.payload.workMode.toLowerCase()
+        if (mode.includes("remote")) newParams.set("remote", "true")
+        if (mode.includes("hybrid")) newParams.set("hybrid", "true")
+        if (mode.includes("on-site") || mode.includes("onsite") || mode.includes("on_site")) {
+          newParams.set("onsite", "true")
+        }
+      }
       return {
         previousStateSummary: summarizeSearchParams(currentSearchParams),
         newStateSummary: summarizeSearchParams(newParams),
@@ -262,6 +275,7 @@ export function useScoutActionExecutor() {
           pageContext: pathname ?? undefined,
         })
       }
+      options?.onNotExecuted?.()
       return
     }
 
@@ -286,6 +300,7 @@ export function useScoutActionExecutor() {
     // 3. Gate required — only one gate at a time
     if (gateInFlightRef.current) {
       showFeedback("Please respond to the pending permission request first.")
+      options?.onNotExecuted?.()
       return
     }
     gateInFlightRef.current = true
@@ -318,10 +333,13 @@ export function useScoutActionExecutor() {
         pageContext: pathname ?? undefined,
       })
       showFeedback("Action cancelled.")
+      options?.onNotExecuted?.()
     }
 
     // Listen for the shell's gate response (once only)
-    function onGateResponse(e: Event) {
+    const onGateResponse = (e: Event) => {
+      window.removeEventListener("scout:gate-response", onGateResponse)
+      if (gateTimeout) clearTimeout(gateTimeout)
       gateInFlightRef.current = false
       const detail = (e as CustomEvent<{ approved: boolean; alwaysAllow: boolean }>).detail
 
@@ -343,7 +361,19 @@ export function useScoutActionExecutor() {
       act?.()
     }
 
-    window.addEventListener("scout:gate-response", onGateResponse, { once: true })
+    // Safety: if the gate UI is unavailable on this surface, never leave the
+    // action in a permanent "processing" state.
+    const gateTimeout = setTimeout(() => {
+      window.removeEventListener("scout:gate-response", onGateResponse)
+      if (!gateInFlightRef.current) return
+      gateInFlightRef.current = false
+      pendingCancelRef.current?.()
+      pendingCancelRef.current = null
+      pendingActionRef.current = null
+      showFeedback("Permission prompt timed out. Try again.")
+    }, 15000)
+
+    window.addEventListener("scout:gate-response", onGateResponse)
 
     // Dispatch the gate open event — shell listens and renders ScoutActionGate
     window.dispatchEvent(new CustomEvent("scout:gate-open", {
@@ -373,8 +403,19 @@ export function useScoutActionExecutor() {
           const params = new URLSearchParams()
           if (action.payload.query) params.set("q", action.payload.query)
           if (action.payload.location) params.set("location", action.payload.location)
-          if (action.payload.workMode) params.set("workMode", action.payload.workMode)
-          if (action.payload.sponsorship) params.set("sponsorship", action.payload.sponsorship)
+          if (action.payload.sponsorship) params.set("sponsorship", "true")
+          if (action.payload.workMode) {
+            const normalizedMode = action.payload.workMode.toLowerCase()
+            if (normalizedMode.includes("remote")) params.set("remote", "true")
+            if (normalizedMode.includes("hybrid")) params.set("hybrid", "true")
+            if (
+              normalizedMode.includes("on-site") ||
+              normalizedMode.includes("onsite") ||
+              normalizedMode.includes("on_site")
+            ) {
+              params.set("onsite", "true")
+            }
+          }
 
           const queryString = params.toString()
           router.push(`/dashboard${queryString ? `?${queryString}` : ""}`)
@@ -704,6 +745,7 @@ export function useScoutActionExecutor() {
     } catch (err) {
       console.error("Error executing Scout action:", err)
       showFeedback("Failed to execute action")
+      options?.onNotExecuted?.()
     }
   }
 

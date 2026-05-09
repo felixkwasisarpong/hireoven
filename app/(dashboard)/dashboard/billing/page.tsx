@@ -29,7 +29,7 @@ const COMPARISON_ROWS: Array<{
   { feature: "Watchlist", free: "5 max", pro: "Unlimited", proMax: "Unlimited" },
   { feature: "Job alerts", free: "3 max", pro: "Unlimited", proMax: "Unlimited" },
   { feature: "Resume tools", free: "", pro: "", proMax: "", isGroupHeader: true },
-  { feature: "Cover letters", free: false, pro: "10/mo", proMax: "Unlimited" },
+  { feature: "Cover letters", free: false, pro: "25/mo", proMax: "Unlimited" },
   { feature: "Deep analyses", free: false, pro: "20/mo", proMax: "Unlimited" },
 ]
 
@@ -50,13 +50,13 @@ interface BillingInfo {
 const PLAN_LABELS: Record<string, string> = {
   free: "Free",
   pro: "Pro",
-  pro_international: "Pro International",
+  pro_max: "Pro Max",
 }
 
 const PLAN_TAGLINES: Record<string, string> = {
   free: "Browse the live job feed and track applications.",
   pro: "AI tools, unlimited alerts, autofill, and deep analyses.",
-  pro_international: "Everything in Pro plus H1B intel and OPT urgency routing.",
+  pro_max: "Everything in Pro plus live interviews and Scout strategy.",
 }
 
 const STATUS_LABELS: Record<string, { label: string; color: string; dot: string }> = {
@@ -280,7 +280,7 @@ export default function BillingPage() {
               <UsageMeter
                 label="Cover letters"
                 used={usage.cover_letters_used}
-                limit={currentPlan === "pro_max" ? null : 10}
+                limit={currentPlan === "pro_max" ? null : 25}
               />
               <UsageMeter
                 label="Deep analyses"
@@ -400,9 +400,9 @@ export default function BillingPage() {
         {currentPlan === "pro" && (
           <UpgradeCard
             tone="orange"
-            kicker="For international job seekers"
-            title="Upgrade to Pro International"
-            description="Unlimited cover letters, H1B sponsorship intel, and OPT urgency routing."
+            kicker="For advanced preparation"
+            title="Upgrade to Pro Max"
+            description="Live voice interviews, Scout strategy, and unlimited AI usage."
             ctaLabel="Upgrade"
             onClick={() => startCheckout("pro_max", resolvedInterval)}
           />

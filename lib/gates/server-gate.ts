@@ -15,12 +15,7 @@ function normalisePlan(raw: string | null | undefined): Plan {
   return "free"
 }
 
-export async function getUserPlan(
-  request?: NextRequest
-): Promise<{ userId: string | null; plan: Plan | null }> {
-  const session = request ? await getSessionUserFromRequest(request) : await getSessionUser()
-  if (!session) return { userId: null, plan: null }
-
+export async function getPlanForUserId(userId: string): Promise<Plan> {
   const pool = getPostgresPool()
   try {
     const result = await pool.query<{ plan: string | null }>(
@@ -30,18 +25,27 @@ export async function getUserPlan(
          AND status IN ('active', 'trialing')
        ORDER BY created_at DESC
        LIMIT 1`,
-      [session.sub]
+      [userId]
     )
-    const plan = normalisePlan(result.rows[0]?.plan)
-    return { userId: session.sub, plan }
+    return normalisePlan(result.rows[0]?.plan)
   } catch (error) {
     const code =
       typeof error === "object" && error !== null && "code" in error
         ? (error as { code?: string }).code
         : null
-    if (code === "42P01") return { userId: session.sub, plan: "free" }
+    if (code === "42P01") return "free"
     throw error
   }
+}
+
+export async function getUserPlan(
+  request?: NextRequest
+): Promise<{ userId: string | null; plan: Plan | null }> {
+  const session = request ? await getSessionUserFromRequest(request) : await getSessionUser()
+  if (!session) return { userId: null, plan: null }
+
+  const plan = await getPlanForUserId(session.sub)
+  return { userId: session.sub, plan }
 }
 
 /** True when the user's profile indicates they are an international candidate.

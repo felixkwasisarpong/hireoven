@@ -80,7 +80,7 @@ export function useScoutStream(): ScoutStreamActions {
       const res = await fetch(url, {
         method:  "POST",
         headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
-        body:    JSON.stringify({ ...body, stream: true }),
+        body:    JSON.stringify({ source: "workspace", ...body, stream: true }),
         signal:  abortRef.current.signal,
       })
 

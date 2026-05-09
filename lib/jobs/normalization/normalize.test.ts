@@ -175,6 +175,20 @@ test("extractSkillsFromText only tags go when language context exists", () => {
   assert.equal(language.includes("Go"), true)
 })
 
+test("extractSkillsFromText does not treat generic agile prose as a hard skill", () => {
+  const proseOnly = extractSkillsFromText(
+    "Software Engineer",
+    "You will thrive in a fast-paced, agile environment and collaborate across teams."
+  )
+  assert.equal(proseOnly.includes("Agile"), false)
+
+  const frameworkSignal = extractSkillsFromText(
+    "Product Manager",
+    "Experience with Scrum ceremonies, Kanban workflows, and agile methodologies."
+  )
+  assert.equal(frameworkSignal.includes("Agile"), true)
+})
+
 test("detectSourceAdapter recognizes ats-prefixed external ids", () => {
   assert.equal(detectSourceAdapter({ externalId: "greenhouse-embedded:1234" }), "greenhouse")
   assert.equal(detectSourceAdapter({ externalId: "oracle:abc" }), "oracle")

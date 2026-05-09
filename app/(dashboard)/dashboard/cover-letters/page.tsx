@@ -2,8 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { Clipboard, Check, FileText, LayoutGrid, List, Search, Star, Trash2 } from "lucide-react"
-import DashboardPageHeader from "@/components/layout/DashboardPageHeader"
+import { ArrowLeft, Clipboard, Check, FileText, LayoutGrid, List, Search, Star, Trash2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { CoverLetter } from "@/types"
 
@@ -327,13 +326,17 @@ export default function CoverLettersPage() {
   return (
     <main className="app-page">
       <div className="app-shell w-full space-y-5">
-        <DashboardPageHeader
-          kicker="Cover letters"
-          title="Saved drafts, tailored for real roles"
-          description="Keep every generated letter in one place, revisit the strongest ones, and reopen drafts when a live application needs one more pass."
-          backHref="/dashboard"
-          backLabel="Back to dashboard"
-        />
+        <section className="animate-fade-in">
+          <Link href="/dashboard" className="subpage-back mb-3">
+            <ArrowLeft className="h-4 w-4" />
+            Back to dashboard
+          </Link>
+          <p className="section-kicker">Cover letters</p>
+          <h1 className="section-title mt-2.5">Saved drafts, tailored for real roles</h1>
+          <p className="section-copy mt-2.5 max-w-2xl">
+            Keep every generated letter in one place, revisit the strongest ones, and reopen drafts when a live application needs one more pass.
+          </p>
+        </section>
 
         {/* Filters + search */}
         <div className="surface-card flex flex-wrap items-center gap-3 px-4 py-3">

@@ -29,8 +29,9 @@ import {
   requireExtensionAuth,
 } from "@/lib/extension/auth"
 import { requireQuota } from "@/lib/usage/server-quota"
-import { getUserPlan, gateResponse } from "@/lib/gates/server-gate"
+import { getPlanForUserId, gateResponse } from "@/lib/gates/server-gate"
 import { canAccess } from "@/lib/gates"
+import { replaceEmDash } from "@/lib/text/sanitize-generated-text"
 import type { CoverLetter, Resume } from "@/types"
 
 export const runtime = "nodejs"
@@ -62,7 +63,7 @@ function buildTemplateCoverLetter(params: {
     ? ` My experience extends to ${params.missingKeywords.slice(0, 2).join(" and ")}, which align directly with your team's needs.`
     : ""
 
-  return `Dear Hiring Manager,
+  return replaceEmDash(`Dear Hiring Manager,
 
 I am writing to express my strong interest in the ${role} position at ${co}. With ${exp} and proven expertise in ${skills || "software engineering"}, I am confident in my ability to contribute meaningfully from day one.${kwPhrase}
 
@@ -71,7 +72,7 @@ ${params.summary ? params.summary.trim() + "\n\n" : ""}I am particularly drawn t
 Thank you for your consideration.
 
 Sincerely,
-${name}`
+${name}`)
 }
 
 // ── Route handlers ─────────────────────────────────────────────────────────────
@@ -87,7 +88,7 @@ export async function POST(request: Request) {
   const [user, errResponse] = await requireExtensionAuth(request)
   if (errResponse) return errResponse
 
-  const { plan } = await getUserPlan()
+  const plan = await getPlanForUserId(user.sub)
   if (!canAccess(plan, "cover_letter")) return gateResponse(403, "Cover letter generation requires sign-in", "auth")
 
   const quotaResult = await requireQuota(user.sub, "cover_letter", plan)
@@ -309,6 +310,7 @@ Return ONLY the cover letter text. No commentary, no JSON wrapper, no preamble.`
       .map((b) => b.text)
       .join("")
       .trim()
+    const sanitizedCoverLetter = replaceEmDash(coverLetter)
 
     const saved = await persistCoverLetter({
       userId: user.sub,
@@ -316,13 +318,13 @@ Return ONLY the cover letter text. No commentary, no JSON wrapper, no preamble.`
       jobId,
       jobTitle: jobTitle ?? "",
       companyName: companyName ?? "",
-      body: coverLetter,
+      body: sanitizedCoverLetter,
     })
 
     return NextResponse.json(
       {
         coverLetterId: saved?.id ?? null,
-        coverLetter,
+        coverLetter: sanitizedCoverLetter,
         jobTitle,
         company: companyName,
         atsName: atsProfile.name,

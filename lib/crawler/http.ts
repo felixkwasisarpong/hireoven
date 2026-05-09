@@ -170,6 +170,15 @@ export function detectBlockedHtml(html: string | null | undefined): string | nul
       compact.includes("perimeterx, inc.")
     )
 
+  // AngularJS SPA shell — content not server-rendered, only template markup present
+  const isAngularShell =
+    compact.includes("ng-app") &&
+    compact.includes("ng-controller") &&
+    compact.includes("{{") &&
+    !compact.includes('"description"') &&
+    !compact.includes("job-description")
+  if (isAngularShell) return "blocked_html_angular_spa"
+
   if (compact.includes("access denied")) return "blocked_html_access_denied"
   if (compact.includes("forbidden")) return "blocked_html_forbidden"
   if (compact.includes("request blocked")) return "blocked_html_request_blocked"

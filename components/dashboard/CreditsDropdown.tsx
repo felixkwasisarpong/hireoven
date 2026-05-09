@@ -209,7 +209,7 @@ export default function CreditsDropdown() {
 
       {/* ── Dropdown ── */}
       {open && (
-        <div className="absolute right-0 top-full z-50 mt-2 w-72 rounded-xl border border-slate-200 bg-white p-3 shadow-lg">
+        <div className="opaque-dropdown absolute right-0 top-full z-50 mt-2 w-72 rounded-xl border border-slate-200 bg-white p-3 shadow-lg">
           {/* Period quotas */}
           <p className="mb-2.5 text-[10.5px] font-bold uppercase tracking-wider text-slate-400">
             Usage this period

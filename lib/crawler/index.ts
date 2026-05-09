@@ -111,6 +111,14 @@ const TCS_MAX_JOBS = Math.max(
   TCS_SEARCH_PAGE_SIZE,
   Number.parseInt(process.env.CRAWLER_TCS_MAX_JOBS ?? "3000", 10)
 )
+const TCS_DETAIL_CONCURRENCY = Math.max(
+  1,
+  Number.parseInt(process.env.CRAWLER_TCS_DETAIL_CONCURRENCY ?? "6", 10)
+)
+const TCS_DETAIL_MAX_JOBS = Math.max(
+  0,
+  Number.parseInt(process.env.CRAWLER_TCS_DETAIL_MAX_JOBS ?? "300", 10)
+)
 const MICROSOFT_PCSX_PAGE_SIZE = 10
 const MICROSOFT_PCSX_MAX_JOBS = Math.max(
   MICROSOFT_PCSX_PAGE_SIZE,
@@ -1352,6 +1360,13 @@ function isLikelyJobLink(url: URL, text: string, baseUrl: URL): boolean {
 function extractGenericJobsFromHtml(html: string, baseUrl: URL): RawJob[] {
   const out: RawJob[] = []
   const seen = new Set<string>()
+  for (const job of extractWordPressCategoryJobsFromHtml(html, baseUrl)) {
+    if (seen.has(job.url)) continue
+    seen.add(job.url)
+    out.push(job)
+    if (out.length >= MAX_GENERIC_JOBS) return out
+  }
+
   for (const link of extractAnchorLinks(html, baseUrl)) {
     if (!isLikelyJobLink(link.href, link.text, baseUrl)) continue
     const url = normalizeJobApplyUrl(link.href.toString())
@@ -1372,6 +1387,61 @@ function extractGenericJobsFromHtml(html: string, baseUrl: URL): RawJob[] {
 
     if (out.length >= MAX_GENERIC_JOBS) break
   }
+  return out
+}
+
+function extractWordPressCategoryJobsFromHtml(html: string, baseUrl: URL): RawJob[] {
+  // WordPress category pages often publish job posts under generic slugs
+  // without `/jobs` path hints, so parse post cards directly by category.
+  if (!/\bcategory-(jobs|careers)\b/i.test(html)) return []
+
+  const out: RawJob[] = []
+  const seen = new Set<string>()
+  const articleRegex =
+    /<article\b[^>]*\bid\s*=\s*(["'])post-(\d+)\1[^>]*\bclass\s*=\s*(["'])([^"']*)\3[^>]*>([\s\S]*?)<\/article>/gi
+
+  for (const match of html.matchAll(articleRegex)) {
+    const postId = (match[2] ?? "").trim()
+    const classList = (match[4] ?? "").toLowerCase()
+    if (!classList.includes("category-jobs") && !classList.includes("category-careers")) {
+      continue
+    }
+
+    const articleHtml = match[5] ?? ""
+    const titleMatch = articleHtml.match(
+      /<h[1-6]\b[^>]*\bclass\s*=\s*(["'])[^"']*\bentry-title\b[^"']*\1[^>]*>\s*<a\b[^>]*\bhref\s*=\s*(["'])(.*?)\2[^>]*>([\s\S]*?)<\/a>/i
+    )
+    const fallbackLinkMatch = articleHtml.match(
+      /<span\b[^>]*\bclass\s*=\s*(["'])[^"']*\bposted-on\b[^"']*\1[^>]*>[\s\S]*?<a\b[^>]*\bhref\s*=\s*(["'])(.*?)\2/i
+    )
+    const rawHref = decodeHtmlEntities(
+      (titleMatch?.[3] ?? fallbackLinkMatch?.[3] ?? "").trim()
+    )
+    if (!rawHref) continue
+
+    const href = toUrl(rawHref, baseUrl)
+    if (!href) continue
+    if (href.hostname.toLowerCase() !== baseUrl.hostname.toLowerCase()) continue
+    if (href.hash.toLowerCase() === "#respond") continue
+
+    const url = normalizeJobApplyUrl(href.toString())
+    if (seen.has(url)) continue
+    seen.add(url)
+
+    const rawTitle = titleMatch?.[4] ?? ""
+    const title = cleanText(rawTitle) || inferTitleFromUrl(href) || "Open role"
+    const postedAt = articleHtml.match(/<time\b[^>]*\bdatetime\s*=\s*(["'])(.*?)\1/i)?.[2]
+
+    out.push({
+      externalId: postId ? `wordpress:${postId}` : undefined,
+      title,
+      url,
+      postedAt,
+    })
+
+    if (out.length >= MAX_GENERIC_JOBS) break
+  }
+
   return out
 }
 
@@ -2302,6 +2372,118 @@ function parseFiniteInteger(value: unknown): number | null {
   return Math.floor(direct)
 }
 
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T, index: number) => Promise<R>
+): Promise<R[]> {
+  if (items.length === 0) return []
+  const limit = Math.max(1, Math.min(concurrency, items.length))
+  const out = new Array<R>(items.length)
+  let next = 0
+
+  const runners = Array.from({ length: limit }, async () => {
+    while (true) {
+      const current = next
+      next += 1
+      if (current >= items.length) break
+      out[current] = await worker(items[current]!, current)
+    }
+  })
+
+  await Promise.all(runners)
+  return out
+}
+
+type TcsJobDetailApiPayload = {
+  jobId?: number | string | null
+  title?: string | null
+  location?: string | null
+  qualifications?: string | null
+  skilldetail?: string | null
+  experience?: string | null
+  role?: string | null
+  description?: string | null
+  additionalInfo?: string | null
+  functionName?: string | null
+  applyby?: string | null
+}
+
+type TcsJobDetailApiResponse = {
+  result?: string
+  message?: string
+  data?: TcsJobDetailApiPayload | null
+}
+
+function tcsDetailRequestFromJobId(rawId: string): {
+  endpoint: "/candidate/api/v1/job/desc" | "/candidate/api/v1/job/desc/walkin"
+  payloadJobId: string
+} | null {
+  const id = rawId.trim()
+  if (!id) return null
+  const suffix = id.slice(-1).toUpperCase()
+  const payloadJobId =
+    /[A-Z]$/.test(suffix)
+      ? id.slice(0, -1).trim()
+      : id
+  if (!payloadJobId) return null
+  const endpoint =
+    suffix === "W" ? "/candidate/api/v1/job/desc/walkin" : "/candidate/api/v1/job/desc"
+  return { endpoint, payloadJobId }
+}
+
+function buildTcsJobDescription(detail: TcsJobDetailApiPayload): string | undefined {
+  const primary = cleanJobDescription(detail.description ?? null) ?? null
+  const supplemental = [
+    String(detail.functionName ?? "").trim()
+      ? `Function: ${String(detail.functionName ?? "").trim()}`
+      : null,
+    String(detail.role ?? "").trim()
+      ? `Role: ${String(detail.role ?? "").trim()}`
+      : null,
+    String(detail.experience ?? "").trim()
+      ? `Experience: ${String(detail.experience ?? "").trim()}`
+      : null,
+    String(detail.skilldetail ?? "").trim()
+      ? `Skills: ${String(detail.skilldetail ?? "").trim()}`
+      : null,
+    cleanJobDescription(detail.qualifications ?? null) ?? null,
+    cleanJobDescription(detail.additionalInfo ?? null) ?? null,
+  ].filter(Boolean)
+
+  if (!primary && supplemental.length === 0) return undefined
+  if (!primary) return supplemental.join("\n\n")
+  if (supplemental.length === 0) return primary
+  return `${primary}\n\n${supplemental.join("\n\n")}`.trim()
+}
+
+async function fetchTcsJobDetail(
+  careersUrl: URL,
+  rawJobId: string,
+  detailUrl: string
+): Promise<TcsJobDetailApiPayload | null> {
+  const request = tcsDetailRequestFromJobId(rawJobId)
+  if (!request) return null
+  const apiUrl = new URL(request.endpoint, careersUrl.origin).toString()
+  const result = await fetchCrawlerJson<TcsJobDetailApiResponse>(
+    apiUrl,
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-requested-with": "XMLHttpRequest",
+        origin: careersUrl.origin,
+        referer: detailUrl,
+      },
+      body: JSON.stringify({ jobId: request.payloadJobId }),
+    }
+  )
+  if (!result.ok) return null
+  const status = String(result.data?.result ?? "").trim().toUpperCase()
+  if (status && status !== "Y") return null
+  return result.data?.data ?? null
+}
+
 async function crawlTcsCandidatePortal(careersUrl: URL): Promise<RawJob[]> {
   if (!isTcsCandidateJobsUrl(careersUrl)) return []
 
@@ -2399,6 +2581,37 @@ async function crawlTcsCandidatePortal(careersUrl: URL): Promise<RawJob[]> {
     if (addedOnPage === 0) break
     if (pageJobs.length < TCS_SEARCH_PAGE_SIZE) break
     if (Number.isFinite(totalJobs) && page * TCS_SEARCH_PAGE_SIZE >= totalJobs) break
+  }
+
+  if (jobs.length > 0 && TCS_DETAIL_MAX_JOBS > 0) {
+    const detailTarget = jobs.slice(0, Math.min(TCS_DETAIL_MAX_JOBS, jobs.length))
+    const enriched = await mapWithConcurrency(
+      detailTarget,
+      TCS_DETAIL_CONCURRENCY,
+      async (job) => {
+        const rawExternalId = String(job.externalId ?? "").trim()
+        const rawJobId = rawExternalId.startsWith("tcs:")
+          ? rawExternalId.slice(4)
+          : ""
+        if (!rawJobId) return job
+
+        const detail = await fetchTcsJobDetail(careersUrl, rawJobId, job.url)
+        if (!detail) return job
+
+        const description = buildTcsJobDescription(detail)
+        const location = String(detail.location ?? "").trim() || job.location
+        const title = String(detail.title ?? "").trim() || job.title
+        return {
+          ...job,
+          title,
+          location,
+          description: description ?? job.description,
+        }
+      }
+    )
+    for (let i = 0; i < enriched.length; i++) {
+      jobs[i] = enriched[i]!
+    }
   }
 
   return jobs

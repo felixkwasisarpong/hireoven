@@ -6,7 +6,6 @@ import { ScoutMessageBubble } from "@/components/scout/ScoutMessageBubble"
 import { ScoutMissionStrip } from "@/components/scout/ScoutMissionStrip"
 import { ScoutNudgeStrip } from "@/components/scout/ScoutNudgeStrip"
 import { ScoutStreamingText } from "@/components/scout/ScoutStreamingText"
-import { ScoutFirstRunBanner } from "@/components/scout/ScoutFirstRunBanner"
 import { ScoutExtensionPromo } from "@/components/scout/ScoutExtensionPromo"
 import { ScoutTrustBadge } from "@/components/scout/ScoutTrustBadge"
 import { useUpgradeModal } from "@/lib/context/UpgradeModalContext"
@@ -43,10 +42,8 @@ type Props = {
   onMissionsDisable?: () => void
   continuationContexts?: ScoutResumableContext[]
   onContinuationOpen?: (context: ScoutResumableContext) => void
-  isFirstRun?: boolean
   showExtensionPromo?: boolean
   hasData?: boolean
-  onDismissFirstRun?: () => void
   onDismissExtPromo?: () => void
 }
 
@@ -95,10 +92,8 @@ export function IdleMode({
   onMissionsDisable,
   continuationContexts = [],
   onContinuationOpen,
-  isFirstRun = false,
   showExtensionPromo = false,
   hasData = true,
-  onDismissFirstRun,
   onDismissExtPromo,
   userInitial,
 }: Props) {
@@ -133,55 +128,47 @@ export function IdleMode({
       {/* ── Idle / empty state ─────────────────────────────────────────── */}
       {!hasConversation && !isLoading && (
         <div>
-          {isFirstRun ? (
-            <ScoutFirstRunBanner
-              firstName={firstName}
-              onDismiss={onDismissFirstRun ?? (() => {})}
-              onTileClick={onTileClick}
-            />
-          ) : (
-            <>
-              {/* Hero greeting */}
-              <div className={`mb-10 ${fade} ${mounted ? show : hide}`}>
-                <div className="mb-4 inline-flex items-center gap-1.5 rounded-full border border-[#FFD5C2] bg-[#FFF8F5] px-3 py-1 text-[11px] font-semibold text-[#FF5C18]">
-                  <span className="h-1.5 w-1.5 rounded-full bg-[#FF5C18] animate-pulse" />
-                  Scout is ready
-                </div>
-                <h2 className="text-[2.1rem] font-semibold leading-tight tracking-tight text-slate-900 sm:text-[2.4rem]">
-                  {greeting}, {firstName}.
-                </h2>
-                <p className="mt-2.5 text-base text-slate-500">
-                  {!hasData
-                    ? "Scout prepares applications, research, and workflows — you stay in control."
-                    : "What are you working on today?"}
-                </p>
-                {hasSession && onStartFresh && (
-                  <button
-                    type="button"
-                    onClick={onStartFresh}
-                    className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-slate-400 transition-colors hover:text-slate-700"
-                  >
-                    <RotateCcw className="h-3.5 w-3.5" />
-                    Start fresh
-                  </button>
-                )}
+          <>
+            {/* Hero greeting */}
+            <div className={`mb-10 ${fade} ${mounted ? show : hide}`}>
+              <div className="mb-4 inline-flex items-center gap-1.5 rounded-full border border-[#FFD5C2] bg-[#FFF8F5] px-3 py-1 text-[11px] font-semibold text-[#FF5C18]">
+                <span className="h-1.5 w-1.5 rounded-full bg-[#FF5C18] animate-pulse" />
+                Scout is ready
               </div>
-
-              {resumeRefreshedNotice && (
-                <div className={`mb-5 inline-flex items-center gap-2 text-xs text-slate-500 ${fade} ${mounted ? show : hide}`}
-                  style={{ transitionDelay: "60ms" }}>
-                  <RefreshCw className="h-3.5 w-3.5 flex-shrink-0 text-[#FF5C18]" />
-                  Scout refreshed context for your updated resume.
-                </div>
+              <h2 className="text-[2.1rem] font-semibold leading-tight tracking-tight text-slate-900 sm:text-[2.4rem]">
+                {greeting}, {firstName}.
+              </h2>
+              <p className="mt-2.5 text-base text-slate-500">
+                {!hasData
+                  ? "Scout prepares applications, research, and workflows — you stay in control."
+                  : "What are you working on today?"}
+              </p>
+              {hasSession && onStartFresh && (
+                <button
+                  type="button"
+                  onClick={onStartFresh}
+                  className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-slate-400 transition-colors hover:text-slate-700"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  Start fresh
+                </button>
               )}
+            </div>
 
-              {showExtensionPromo && !hasSession && onDismissExtPromo && (
-                <div className={`mb-5 ${fade} ${mounted ? show : hide}`} style={{ transitionDelay: "60ms" }}>
-                  <ScoutExtensionPromo onDismiss={onDismissExtPromo} />
-                </div>
-              )}
-            </>
-          )}
+            {resumeRefreshedNotice && (
+              <div className={`mb-5 inline-flex items-center gap-2 text-xs text-slate-500 ${fade} ${mounted ? show : hide}`}
+                style={{ transitionDelay: "60ms" }}>
+                <RefreshCw className="h-3.5 w-3.5 flex-shrink-0 text-[#FF5C18]" />
+                Scout refreshed context for your updated resume.
+              </div>
+            )}
+
+            {showExtensionPromo && !hasSession && onDismissExtPromo && (
+              <div className={`mb-5 ${fade} ${mounted ? show : hide}`} style={{ transitionDelay: "60ms" }}>
+                <ScoutExtensionPromo onDismiss={onDismissExtPromo} />
+              </div>
+            )}
+          </>
 
           {/* Action cards */}
           <div

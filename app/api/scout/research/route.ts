@@ -6,6 +6,7 @@ import { runResearchEngine } from "@/lib/scout/research/engine"
 import { encodeResearchSSE } from "@/lib/scout/research/types"
 import type { ResearchSSEEvent } from "@/lib/scout/research/types"
 import { logApiUsage } from "@/lib/admin/usage"
+import { sanitizeGeneratedText } from "@/lib/text/sanitize-generated-text"
 
 export const runtime    = "nodejs"
 export const maxDuration = 35   // 30 s engine + 5 s buffer
@@ -39,7 +40,7 @@ export async function POST(request: NextRequest) {
   })
 
   const emit = (event: ResearchSSEEvent) => {
-    try { ctrl.enqueue(enc.encode(encodeResearchSSE(event))) } catch {}
+    try { ctrl.enqueue(enc.encode(encodeResearchSSE(sanitizeGeneratedText(event)))) } catch {}
   }
 
   void (async () => {
