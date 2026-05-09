@@ -10,6 +10,8 @@ import {
   getInterviewSession,
 } from "@/lib/scout/interview/queries"
 import { deriveSkillList } from "@/lib/scout/interview/context"
+import { canAccess, requiredPlanFor } from "@/lib/gates"
+import { gateResponse, getPlanForUserId } from "@/lib/gates/server-gate"
 
 export const runtime = "nodejs"
 export const maxDuration = 60
@@ -41,6 +43,12 @@ export async function POST(
   if (!session) return NextResponse.json({ error: "Not found" }, { status: 404 })
   if (session.status === "abandoned") {
     return NextResponse.json({ error: "Session is abandoned" }, { status: 400 })
+  }
+  const plan = await getPlanForUserId(user.id)
+  const feature = session.type === "live" ? "interview_live" : "interview_prep"
+  if (!canAccess(plan, feature)) {
+    const needed = requiredPlanFor(feature)
+    return gateResponse(403, `This feature requires the ${needed} plan`, needed ?? undefined)
   }
 
   const body = await request.json().catch(() => ({})) as {

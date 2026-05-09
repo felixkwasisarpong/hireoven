@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getInterviewSession } from "@/lib/scout/interview/queries"
 import { generateDebrief } from "@/lib/scout/interview/debriefGenerator"
+import { canAccess, requiredPlanFor } from "@/lib/gates"
+import { gateResponse, getPlanForUserId } from "@/lib/gates/server-gate"
 
 export const runtime = "nodejs"
 export const maxDuration = 60
@@ -14,6 +16,11 @@ export async function POST(
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const plan = await getPlanForUserId(user.id)
+  if (!canAccess(plan, "interview_prep")) {
+    const needed = requiredPlanFor("interview_prep")
+    return gateResponse(403, `This feature requires the ${needed} plan`, needed ?? undefined)
+  }
 
   const session = await getInterviewSession(id, user.id)
   if (!session) return NextResponse.json({ error: "Not found" }, { status: 404 })

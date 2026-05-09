@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { SONNET_MODEL } from "@/lib/ai/anthropic-models"
+import { canAccess, requiredPlanFor } from "@/lib/gates"
+import { gateResponse, getPlanForUserId } from "@/lib/gates/server-gate"
 import {
   getInterviewSession,
   appendTurn,
@@ -11,6 +13,7 @@ import {
 } from "@/lib/scout/interview/queries"
 import { buildInterviewContext, deriveSkillList } from "@/lib/scout/interview/context"
 import { buildTextInterviewerSystemPrompt } from "@/lib/scout/interview/agentPrompts"
+import { replaceEmDash, sanitizeGeneratedText } from "@/lib/text/sanitize-generated-text"
 
 export const runtime = "nodejs"
 export const maxDuration = 60
@@ -74,6 +77,11 @@ export async function GET(
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const plan = await getPlanForUserId(user.id)
+  if (!canAccess(plan, "interview_prep")) {
+    const needed = requiredPlanFor("interview_prep")
+    return gateResponse(403, `This feature requires the ${needed} plan`, needed ?? undefined)
+  }
 
   const session = await getInterviewSession(id, user.id)
   if (!session) return NextResponse.json({ error: "Not found" }, { status: 404 })
@@ -119,6 +127,11 @@ export async function POST(
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const plan = await getPlanForUserId(user.id)
+  if (!canAccess(plan, "interview_prep")) {
+    const needed = requiredPlanFor("interview_prep")
+    return gateResponse(403, `This feature requires the ${needed} plan`, needed ?? undefined)
+  }
 
   // 1 & 2. Load + validate session
   const pool = getPostgresPool()
@@ -233,8 +246,8 @@ export async function POST(
   const endTokenIdx = rawVisible.indexOf(endToken)
   const isEnded = endTokenIdx !== -1
   const visibleContent = isEnded
-    ? rawVisible.slice(0, endTokenIdx).trim()
-    : rawVisible
+    ? replaceEmDash(rawVisible.slice(0, endTokenIdx).trim())
+    : replaceEmDash(rawVisible)
 
   // 10. Save interviewer turn
   const savedTurn = await appendTurn({
@@ -257,7 +270,7 @@ export async function POST(
   const updatedTurns = await getTurns(id)
   const skillsCovered = extractSkillsCovered(updatedTurns)
 
-  return NextResponse.json({
+  return NextResponse.json(sanitizeGeneratedText({
     turn: {
       id: savedTurn.id,
       turn_index: savedTurn.turnIndex,
@@ -268,5 +281,5 @@ export async function POST(
     sessionStatus: isEnded ? "completed" : "active",
     timeRemainingSec: remainingSec,
     skillsCovered,
-  })
+  }))
 }
