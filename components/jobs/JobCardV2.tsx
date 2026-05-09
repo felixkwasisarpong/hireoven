@@ -44,6 +44,7 @@ import {
   fetchJobSavedState,
   saveJobToPipeline,
 } from "@/lib/applications/save-job-client"
+import { getApplyCtaLabel, isKnownAtsApplyUrl } from "@/lib/jobs/apply-cta"
 import { getJobIntelligence } from "@/lib/jobs/intelligence"
 import { useToast } from "@/components/ui/ToastProvider"
 import { cn } from "@/lib/utils"
@@ -440,9 +441,11 @@ export default function JobCardV2({
 
   // LinkedIn indicator: detect from the apply URL
   const isLinkedIn = /linkedin\.com/i.test(job.apply_url ?? "")
+  const isAtsApplyLink = isKnownAtsApplyUrl(job.apply_url)
+  const applyCtaLabel = getApplyCtaLabel(job.apply_url)
 
-  // Autofill & Apply: use the internal autofill wizard when the job has a known ATS.
-  // 'custom' means we couldn't detect the ATS — fall back to external Quick Apply.
+  // Use the internal autofill wizard when the company ATS is known.
+  // 'custom' means ATS unknown at company level — use external apply CTA label by URL.
   const atsType = job.company?.ats_type
   const canAutofill = atsType != null && atsType !== "custom"
 
@@ -1033,7 +1036,7 @@ export default function JobCardV2({
                       className="inline-flex items-center gap-1.5 rounded-lg border border-white/20 bg-white/5 px-3.5 py-2 text-[12px] font-semibold text-white transition hover:bg-white/10"
                     >
                       <Sparkles className="h-3.5 w-3.5 text-violet-400" aria-hidden />
-                      Autofill & Apply
+                      {isAtsApplyLink ? "Quick Apply" : "Apply"}
                     </button>
                   ) : (
                     <a
@@ -1043,8 +1046,12 @@ export default function JobCardV2({
                       onClick={(e) => e.stopPropagation()}
                       className="inline-flex items-center gap-1.5 rounded-lg border border-white/20 bg-white/5 px-3.5 py-2 text-[12px] font-semibold text-white transition hover:bg-white/10"
                     >
-                      <Zap className="h-3.5 w-3.5 text-amber-400" aria-hidden />
-                      Quick Apply
+                      {isAtsApplyLink ? (
+                        <Zap className="h-3.5 w-3.5 text-amber-400" aria-hidden />
+                      ) : (
+                        <ArrowUpRight className="h-3.5 w-3.5 text-slate-300" aria-hidden />
+                      )}
+                      {applyCtaLabel}
                     </a>
                   )}
                   <button

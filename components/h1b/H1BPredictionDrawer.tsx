@@ -390,15 +390,15 @@ export default function H1BPredictionDrawer({
             ) : (
               <div className="space-y-2 rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-600">
                 <p>
-                  Upgrade to Pro International for AI-powered detailed H1B
+                  Upgrade to Pro Max for AI-powered detailed H1B
                   assessment - employer context, SOC fit, wage-level risk, and
                   specific recommendations.
                 </p>
                 <Link
-                  href="/dashboard/upgrade?plan=pro_international"
+                  href="/dashboard/upgrade?plan=pro_max"
                   className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800"
                 >
-                  Upgrade to Pro International
+                  Upgrade to Pro Max
                 </Link>
               </div>
             )}

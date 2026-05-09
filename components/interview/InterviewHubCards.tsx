@@ -71,6 +71,7 @@ function LockedCard({
   requiredPlan: "pro" | "pro_max"
 }) {
   const badge = requiredPlan === "pro_max" ? "Pro Max" : "Pro"
+  const upgradeHref = `/dashboard/upgrade?plan=${requiredPlan}`
   const badgeCls = requiredPlan === "pro_max"
     ? "bg-blue-600 text-white"
     : "bg-orange-500 text-white"
@@ -89,7 +90,7 @@ function LockedCard({
             : "Upgrade to Pro to unlock text & coding interviews."}
         </p>
         <Link
-          href="/dashboard/upgrade"
+          href={upgradeHref}
           className="mt-3 rounded-lg bg-slate-900 px-4 py-1.5 text-[12px] font-semibold text-white transition hover:bg-slate-700"
         >
           Upgrade

@@ -11,7 +11,11 @@ export default function ResumeHubLayout({
       <ResumeSubNav />
       {children}
       <ScoutMiniPanel
-        suggestionChips={["What is weak?", "Improve for backend roles"]}
+        suggestionChips={[
+          "Adjust my current preferences",
+          "Show jobs worth my time",
+          "Give me insights on this job",
+        ]}
       />
     </div>
   )

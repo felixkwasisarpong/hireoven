@@ -21,6 +21,7 @@ import {
   fetchJobSavedState,
   saveJobToPipeline,
 } from "@/lib/applications/save-job-client"
+import { getApplyCtaLabel, isKnownAtsApplyUrl } from "@/lib/jobs/apply-cta"
 import { JobCardEvidenceFactChips } from "@/components/jobs/card/JobCardEvidenceFactChips"
 import { RejectionBadge } from "@/components/rejections/RejectionBadge"
 import { EmployerHealthBadge } from "@/components/employers/EmployerHealthBadge"
@@ -139,6 +140,8 @@ export default function JobCard({
   const cardView = resolveJobCardView(job)
   const displayTitle = cardView.title
   const topSkills = cardView.skills.slice(0, 3)
+  const isAtsApplyLink = isKnownAtsApplyUrl(job.apply_url)
+  const applyCtaLabel = getApplyCtaLabel(job.apply_url)
 
   const showVerified =
     employerLikelySponsorsH1b(job) || companyConf >= 35 || Boolean(job.company?.sponsors_h1b)
@@ -350,9 +353,12 @@ export default function JobCard({
               onClick={(e) => e.stopPropagation()}
               className="group/apply inline-flex items-center gap-1 self-end text-[12px] font-semibold text-orange-600 transition hover:text-orange-700 focus-visible:outline-none focus-visible:underline"
             >
-              Apply Now
+              {applyCtaLabel}
               <ExternalLink
-                className="h-3 w-3 transition group-hover/apply:translate-x-0.5"
+                className={cn(
+                  "h-3 w-3 transition group-hover/apply:translate-x-0.5",
+                  isAtsApplyLink ? "text-amber-500" : ""
+                )}
                 strokeWidth={2.25}
               />
             </a>

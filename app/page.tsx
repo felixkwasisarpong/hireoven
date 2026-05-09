@@ -449,13 +449,13 @@ export default async function HomePage() {
               note="per month · $149/yr"
               badge="Most popular"
               highlight
-              features={["Scout AI — 50 msg/day", "Resume tailoring", "Cover letter generator", "Deep analysis", "Interview prep", "Unlimited watchlist"]}
+              features={["Scout AI — 30 msg/day", "Resume tailoring", "Cover letter generator", "Deep analysis", "Interview prep", "Unlimited watchlist"]}
             />
             <PlanCard
               name="Max"
-              price="$39"
-              note="per month · $299/yr"
-              features={["Scout AI — unlimited", "Everything unlimited", "Bulk apply agent", "Mock interviews", "Career strategy AI"]}
+              price="$29"
+              note="per month · $229/yr"
+              features={["Scout AI — 60 msg/day", "Live voice interviews", "Unlimited AI tools", "Scout strategy insights", "Everything in Pro"]}
             />
           </div>
           <p className="mt-8 text-center text-sm text-slate-400">

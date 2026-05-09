@@ -123,13 +123,13 @@ export default function DashboardHomeClient({
               <Sparkles className="h-6 w-6 text-primary" />
             </div>
             <h2 className="mt-4 text-2xl font-semibold tracking-tight text-strong">
-              {upgradeModal.plan === "pro_international"
-                ? "Welcome to Hireoven Pro International!"
+              {upgradeModal.plan === "pro_max"
+                ? "Welcome to Hireoven Pro Max!"
                 : "Welcome to Hireoven Pro!"}
             </h2>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              {upgradeModal.plan === "pro_international"
-                ? "You now have everything built for your journey - from OPT tracking to sponsorship intel."
+              {upgradeModal.plan === "pro_max"
+                ? "You now have live interviews, Scout strategy insights, and unlimited AI tools unlocked."
                 : "You now have AI match scores, resume tools, cover letters, autofill, and deeper job intelligence unlocked."}
             </p>
             <div className="mt-4 rounded-lg border border-[hsl(var(--accent-soft-border))] bg-[hsl(var(--accent-soft))] p-4">
