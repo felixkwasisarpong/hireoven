@@ -4,7 +4,7 @@ import { notFound } from "next/navigation"
 import { getPostBySlug } from "@/lib/blog/queries"
 import Navbar from "@/components/layout/Navbar"
 
-export const revalidate = 3600
+export const dynamic = "force-dynamic"
 
 const CATEGORY_COLORS: Record<string, { bar: string; badge: string }> = {
   "h1b-visa-intel":     { bar: "bg-blue-500",   badge: "bg-blue-50 text-blue-700 border-blue-200" },

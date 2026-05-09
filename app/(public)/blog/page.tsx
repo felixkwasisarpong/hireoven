@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   description: "Job market intelligence, H1B sponsorship insights, career strategy, and hiring trends — updated weekly by AI research.",
 }
 
-export const revalidate = 3600
+export const dynamic = "force-dynamic"
 
 // One accent color per category slug for visual variety
 const CATEGORY_COLORS: Record<string, { bar: string; badge: string; text: string }> = {

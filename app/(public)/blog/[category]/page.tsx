@@ -5,12 +5,7 @@ import { getCategoryBySlug, getPublishedPostsByCategory, getAllCategories } from
 import Navbar from "@/components/layout/Navbar"
 import type { BlogPost, BlogCategory } from "@/types/blog"
 
-export const revalidate = 3600
-
-export async function generateStaticParams() {
-  const categories = await getAllCategories()
-  return categories.map((c) => ({ category: c.slug }))
-}
+export const dynamic = "force-dynamic"
 
 export async function generateMetadata({ params }: { params: { category: string } }): Promise<Metadata> {
   const category = await getCategoryBySlug(params.category)
