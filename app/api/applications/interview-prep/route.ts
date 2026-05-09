@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server"
 import Anthropic from "@anthropic-ai/sdk"
 import { SONNET_MODEL } from "@/lib/ai/anthropic-models"
 import { requireFeature } from "@/lib/gates/server-gate"
+import { replaceEmDash, sanitizeGeneratedText } from "@/lib/text/sanitize-generated-text"
 
 export const runtime = "nodejs"
 
@@ -70,9 +71,11 @@ Respond in JSON: { "score": 1-10, "strengths": ["..."], "improvements": ["..."],
     try {
       const jsonMatch = text.match(/\{[\s\S]*\}/)
       const parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : { score: 7, strengths: [], improvements: [], better_answer_tip: "" }
-      return NextResponse.json(parsed)
+      return NextResponse.json(sanitizeGeneratedText(parsed))
     } catch {
-      return NextResponse.json({ score: 7, strengths: [], improvements: [], better_answer_tip: text })
+      return NextResponse.json(
+        sanitizeGeneratedText({ score: 7, strengths: [], improvements: [], better_answer_tip: replaceEmDash(text) })
+      )
     }
   }
 
@@ -101,7 +104,7 @@ Respond in JSON: { "questions": [{ "id": "q1", "category": "behavioral|technical
   try {
     const jsonMatch = text.match(/\{[\s\S]*\}/)
     const parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : { questions: [] }
-    return NextResponse.json(parsed)
+    return NextResponse.json(sanitizeGeneratedText(parsed))
   } catch {
     return NextResponse.json({ questions: [] })
   }

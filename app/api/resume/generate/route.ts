@@ -9,6 +9,7 @@ import { createClient } from "@/lib/supabase/server"
 import { normalizeSkillsBuckets } from "@/lib/skills/taxonomy"
 import { requireFeature } from "@/lib/gates/server-gate"
 import { requireQuota } from "@/lib/usage/server-quota"
+import { sanitizeGeneratedText } from "@/lib/text/sanitize-generated-text"
 import type { Education, Profile, Project, Resume, Skills, WorkExperience } from "@/types"
 import type {
   ResumeExperienceLevel,
@@ -126,7 +127,7 @@ function mergeClaudeResume(
   const score = buildResumeScoreBreakdown(next as Resume)
   next.resume_score = score.overall
   next.ats_score = score.atsReadability
-  return next
+  return sanitizeGeneratedText(next)
 }
 
 async function generateResumeWithClaude(input: ResumeGenerationInput, userId: string) {
@@ -369,6 +370,7 @@ export async function POST(request: Request) {
     console.error("Claude resume generation failed; falling back to local generator", error)
     draft = createGeneratedResume(generationInput, userId)
   }
+  draft = sanitizeGeneratedText(draft)
   const result = await pool.query<Resume>(
     `INSERT INTO resumes (
       user_id,
@@ -446,5 +448,5 @@ export async function POST(request: Request) {
   )
 
   const resume = result.rows[0]
-  return NextResponse.json({ resume, resumeId: resume?.id })
+  return NextResponse.json(sanitizeGeneratedText({ resume, resumeId: resume?.id }))
 }

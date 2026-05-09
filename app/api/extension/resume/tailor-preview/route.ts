@@ -22,7 +22,7 @@ import {
   readExtensionJsonBody,
   requireExtensionAuth,
 } from "@/lib/extension/auth"
-import { getUserPlan } from "@/lib/gates/server-gate"
+import { getPlanForUserId } from "@/lib/gates/server-gate"
 import { requireQuota } from "@/lib/usage/server-quota"
 import type { Resume } from "@/types"
 
@@ -65,7 +65,7 @@ export async function POST(request: Request) {
   const [user, errResponse] = await requireExtensionAuth(request)
   if (errResponse) return errResponse
 
-  const { plan } = await getUserPlan()
+  const plan = await getPlanForUserId(user.sub)
   const quotaResult = await requireQuota(user.sub, "resume_tailor", plan)
   if (quotaResult instanceof NextResponse) return quotaResult
 

@@ -28,7 +28,13 @@ export async function GET() {
   )
   const sub = result.rows[0]
 
-  const plan: Plan = (sub?.plan as Plan) ?? "free"
+  const rawPlan = sub?.plan ?? "free"
+  const plan: Plan =
+    rawPlan === "pro_international"
+      ? "pro_max"
+      : rawPlan === "pro" || rawPlan === "pro_max"
+        ? rawPlan
+        : "free"
   const trialEnd = sub?.trial_end ?? sub?.current_period_end ?? null
   const trialDaysRemaining =
     sub?.status === "trialing" && trialEnd
