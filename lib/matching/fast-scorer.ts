@@ -23,6 +23,7 @@ import type {
 import {
   canonicalizeSkill,
   extractSkillsFromText,
+  filterSkillsByTextEvidence,
   getAllResumeSkillLabels,
   normalizeSkillKey,
   normalizeSkillList,
@@ -144,18 +145,30 @@ function recency(skillName: string, resumeContext: FastScoreResumeContext): numb
 function deriveSkillsFromJobText(job: Job): string[] {
   const description = job.description ?? ""
   const requirementsText = extractRequirementsText(description)
-  const derivedFromRequirements = normalizeSkillList(
-    extractSkillsFromText(job.title, requirementsText),
-    24
+  const derivedFromRequirements = filterSkillsByTextEvidence(
+    normalizeSkillList(
+      extractSkillsFromText(job.title, requirementsText),
+      24
+    ),
+    job.title,
+    requirementsText
   )
 
   if (derivedFromRequirements.length > 0) return derivedFromRequirements
 
-  return normalizeSkillList(extractSkillsFromText(job.title, description), 24)
+  return filterSkillsByTextEvidence(
+    normalizeSkillList(extractSkillsFromText(job.title, description), 24),
+    job.title,
+    description
+  )
 }
 
 function scoreSkills(resumeContext: FastScoreResumeContext, job: Job): SkillsScoreResult {
-  const storedJobSkills = normalizeSkillList(job.skills ?? [], 24)
+  const storedJobSkills = filterSkillsByTextEvidence(
+    normalizeSkillList(job.skills ?? [], 24),
+    job.title,
+    job.description ?? ""
+  )
   const usedDerivedSkills = storedJobSkills.length === 0
   const jobSkills = usedDerivedSkills ? deriveSkillsFromJobText(job) : storedJobSkills
 

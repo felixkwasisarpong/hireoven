@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk"
 import { logApiUsage } from "@/lib/admin/usage"
 import { ANTHROPIC_TIER_PRICING, SONNET_MODEL } from "@/lib/ai/anthropic-models"
 import { getPostgresPool } from "@/lib/postgres/server"
+import { replaceEmDash, sanitizeGeneratedText } from "@/lib/text/sanitize-generated-text"
 import type {
   CoverLetter,
   CoverLetterInsert,
@@ -163,19 +164,19 @@ async function callClaudeForLetter(
     .map((b) => b.text)
     .join("\n")
 
-  const parsed = JSON.parse(extractJsonObject(text)) as {
+  const parsed = sanitizeGeneratedText(JSON.parse(extractJsonObject(text))) as {
     subject_line?: unknown
     body?: unknown
     word_count?: unknown
     opening_line?: unknown
   }
 
-  return {
+  return sanitizeGeneratedText({
     subject_line: typeof parsed.subject_line === "string" ? parsed.subject_line : "",
     body: typeof parsed.body === "string" ? parsed.body : "",
     word_count: typeof parsed.word_count === "number" ? parsed.word_count : 0,
     opening_line: typeof parsed.opening_line === "string" ? parsed.opening_line : "",
-  }
+  })
 }
 
 export async function generateCoverLetter(
@@ -334,8 +335,8 @@ Instruction: ${instruction}`,
     .join("\n")
     .trim()
 
-  paragraphs[paragraphIndex] = newParagraph
-  const newBody = paragraphs.join("\n\n")
+  paragraphs[paragraphIndex] = replaceEmDash(newParagraph)
+  const newBody = replaceEmDash(paragraphs.join("\n\n"))
   const wordCount = newBody.split(/\s+/).filter(Boolean).length
 
   await pool.query(

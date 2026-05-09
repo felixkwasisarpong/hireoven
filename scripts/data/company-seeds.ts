@@ -49,7 +49,7 @@ export const COMPANY_SEED_ROWS: ReadonlyArray<
   ["Plaid", "plaid.com", "https://plaid.com/careers", "Finance", "large", { sponsors_h1b: true, sponsorship_confidence: 88 }],
   ["Coinbase", "coinbase.com", "https://www.coinbase.com/careers", "Finance", "large", { sponsors_h1b: true, sponsorship_confidence: 85 }],
   ["Robinhood", "robinhood.com", "https://careers.robinhood.com", "Finance", "large", { sponsors_h1b: true, sponsorship_confidence: 82 }],
-  ["DoorDash", "doordash.com", "https://careers.doordash.com", "Technology", "large", { sponsors_h1b: true, sponsorship_confidence: 85 }],
+  ["DoorDash", "doordash.com", "https://careersatdoordash.com/jobs", "Technology", "large", { sponsors_h1b: true, sponsorship_confidence: 85 }],
   ["Instacart", "instacart.com", "https://careers.instacart.com", "Retail", "large", { sponsors_h1b: true, sponsorship_confidence: 82 }],
   ["Etsy", "etsy.com", "https://careers.etsy.com", "Retail", "large", { sponsors_h1b: true, sponsorship_confidence: 78 }],
   ["eBay", "ebay.com", "https://careers.ebayinc.com", "Retail", "enterprise", { sponsors_h1b: true, sponsorship_confidence: 85 }],
@@ -211,7 +211,7 @@ export const COMPANY_SEED_ROWS: ReadonlyArray<
   // ── Tier 11: More fintech & commerce ──────────────────────────────────────
   ["Affirm", "affirm.com", "https://www.affirm.com/careers", "Finance", "large", { sponsors_h1b: true, sponsorship_confidence: 82 }],
   ["Klarna", "klarna.com", "https://www.klarna.com/careers", "Finance", "large", { sponsors_h1b: true, sponsorship_confidence: 75 }],
-  ["Chime", "chime.com", "https://www.chime.com/careers", "Finance", "large", { sponsors_h1b: true, sponsorship_confidence: 78 }],
+  ["Chime", "chime.com", "https://boards.greenhouse.io/chime", "Finance", "large", { ats_type: "greenhouse", ats_identifier: "chime", sponsors_h1b: true, sponsorship_confidence: 78 }],
   ["SoFi", "sofi.com", "https://www.sofi.com/careers", "Finance", "large", { sponsors_h1b: true, sponsorship_confidence: 75 }],
   ["Wise", "wise.com", "https://wise.com/careers", "Finance", "large", { sponsors_h1b: true, sponsorship_confidence: 78 }],
   ["Toast", "toasttab.com", "https://careers.toasttab.com", "Technology", "large", { sponsors_h1b: true, sponsorship_confidence: 78 }],
