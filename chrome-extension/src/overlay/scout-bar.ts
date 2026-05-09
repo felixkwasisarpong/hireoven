@@ -29,6 +29,7 @@ import {
 import { extractJob, type ExtractedJob } from "../extractors/scout-extractor"
 import {
   analyzeExtractedJob,
+  answerQuestion,
   checkExtractedJob,
   fetchCoverLetterDocx,
   fetchPrimaryResume,
@@ -43,6 +44,7 @@ import {
   applySafeFills,
   buildAutofillPreview,
   injectDocxFile,
+  setReactValue,
   type AutofillFieldResult,
   type SafeProfile,
 } from "../autofill/safe-fields"
@@ -644,6 +646,37 @@ const STYLES = `
   .af-row-skipped .af-row-status  { background: rgba(15, 23, 42, 0.06); color: #52525b; }
   .af-row-pending .af-row-status  { background: rgba(255, 92, 24, 0.10); color: #c2410c; }
 
+  .af-ai-btn {
+    margin-top: 6px;
+    padding: 3px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    border-radius: 5px;
+    border: 1px solid rgba(3, 105, 161, 0.35);
+    background: rgba(3, 105, 161, 0.07);
+    color: #0369A1;
+    cursor: pointer;
+    transition: background 0.15s;
+    white-space: nowrap;
+  }
+  .af-ai-btn:hover:not(:disabled) { background: rgba(3, 105, 161, 0.14); }
+  .af-ai-btn:disabled { opacity: 0.55; cursor: default; }
+  .af-ai-btn.af-ai-fill {
+    background: rgba(3, 105, 161, 0.14);
+    border-color: rgba(3, 105, 161, 0.5);
+  }
+  .af-ai-answer-text {
+    margin-top: 5px;
+    font-size: 11px;
+    color: #374151;
+    line-height: 1.5;
+    background: rgba(3, 105, 161, 0.05);
+    border-radius: 4px;
+    padding: 5px 7px;
+    white-space: pre-wrap;
+  }
+  .af-ai-error { margin-top: 4px; font-size: 11px; color: #b91c1c; }
+
   .af-actions {
     display: flex;
     justify-content: flex-end;
@@ -1014,6 +1047,9 @@ export class ScoutBar {
   private coverLetterDirty: boolean = false
   private coverLetterSelector: string | null = null
   private coverLetterError: string | null = null
+
+  // Per-row AI answer state — keyed by field selector.
+  private aiAnswers = new Map<string, { status: "loading" | "done" | "error"; answer?: string; error?: string }>()
 
   // Read-only application-form detection — runs on every detection cycle and
   // decides whether autofill is supported / partial / not-detected for the
@@ -1762,6 +1798,25 @@ export class ScoutBar {
       statusClass = "af-row-pending"
     }
 
+    const isCustomQuestion = f.skippedReason === "Custom question — answer manually."
+    const aiState = f.selector ? this.aiAnswers.get(f.selector) : undefined
+
+    let aiWidget = ""
+    if (isCustomQuestion && f.selector && !isDone) {
+      if (!aiState) {
+        aiWidget = `<button class="af-ai-btn" data-action="ai-answer" data-selector="${escapeHtml(f.selector)}" data-label="${escapeHtml(f.label)}">✦ AI Answer</button>`
+      } else if (aiState.status === "loading") {
+        aiWidget = `<button class="af-ai-btn" disabled>Answering…</button>`
+      } else if (aiState.status === "error") {
+        aiWidget = `<div class="af-ai-error">${escapeHtml(aiState.error ?? "Failed — try again.")}</div>
+          <button class="af-ai-btn" data-action="ai-answer" data-selector="${escapeHtml(f.selector)}" data-label="${escapeHtml(f.label)}">Retry</button>`
+      } else if (aiState.status === "done" && aiState.answer) {
+        aiWidget = `
+          <div class="af-ai-answer-text">${escapeHtml(aiState.answer)}</div>
+          <button class="af-ai-btn af-ai-fill" data-action="ai-fill" data-selector="${escapeHtml(f.selector)}" data-answer="${escapeHtml(aiState.answer)}">Fill it ↗</button>`
+      }
+    }
+
     return `
       <div class="af-row ${statusClass}">
         <div class="af-row-main">
@@ -1769,6 +1824,7 @@ export class ScoutBar {
           <div class="af-row-value">
             ${f.valuePreview ? escapeHtml(f.valuePreview) : `<em>${escapeHtml(f.skippedReason ?? "—")}</em>`}
           </div>
+          ${aiWidget}
         </div>
         <div class="af-row-status">${escapeHtml(statusLabel)}</div>
       </div>
@@ -2046,6 +2102,14 @@ export class ScoutBar {
         void this.onSaveCoverLetterEdits()
       } else if (action === "cl-attach") {
         void this.onAttachCoverLetter()
+      } else if (action === "ai-answer") {
+        const selector = actionEl.getAttribute("data-selector") ?? ""
+        const label = actionEl.getAttribute("data-label") ?? ""
+        if (selector) void this.onAiAnswer(selector, label)
+      } else if (action === "ai-fill") {
+        const selector = actionEl.getAttribute("data-selector") ?? ""
+        const answer = actionEl.getAttribute("data-answer") ?? ""
+        if (selector && answer) this.onAiFill(selector, answer)
       } else if (action === "toggle-analysis") {
         this.analysisOpen = !this.analysisOpen
         this.render()
@@ -2336,7 +2400,55 @@ export class ScoutBar {
     this.autofillPreview = null
     this.autofillResults = null
     this.autofillError = null
+    this.aiAnswers.clear()
     this.render()
+  }
+
+  // ── AI Answer flow ────────────────────────────────────────────────────────
+
+  private async onAiAnswer(selector: string, label: string): Promise<void> {
+    if (this.aiAnswers.get(selector)?.status === "loading") return
+    this.aiAnswers.set(selector, { status: "loading" })
+    this.render()
+
+    const job = this.job
+    try {
+      const result = await answerQuestion({
+        question: label,
+        jobTitle: job?.title ?? undefined,
+        company: job?.company ?? undefined,
+      })
+      this.aiAnswers.set(selector, { status: "done", answer: result.answer })
+    } catch (err) {
+      this.aiAnswers.set(selector, {
+        status: "error",
+        error: err instanceof Error ? err.message : "Failed to generate answer.",
+      })
+    }
+    this.render()
+  }
+
+  private onAiFill(selector: string, answer: string): void {
+    try {
+      const el = document.querySelector<HTMLElement>(selector)
+      if (!el) return
+      setReactValue(el, answer)
+      // Mark as done in the preview list so the row flips to "Filled"
+      const list = this.autofillPreview ?? this.autofillResults
+      if (list) {
+        const row = list.find((f) => f.selector === selector)
+        if (row) {
+          row.valuePreview = answer
+          row.skippedReason = undefined
+          row.source = "resume"
+          row.filled = true
+        }
+      }
+      this.aiAnswers.delete(selector)
+      this.render()
+    } catch {
+      // silently fail — field may have navigated away
+    }
   }
 
   // ── Cover letter review flow ───────────────────────────────────────────────

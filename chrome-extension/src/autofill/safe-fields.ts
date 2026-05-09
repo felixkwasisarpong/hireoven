@@ -598,7 +598,7 @@ function injectResumeFile(target: HTMLInputElement, bytes: ResumeBytes): boolean
  * Set an input/textarea value in a way React's controlled-input synthetic
  * event system will accept. Mirrors the pattern in chrome-extension/src/content.ts.
  */
-function setReactValue(el: HTMLElement, value: string): boolean {
+export function setReactValue(el: HTMLElement, value: string): boolean {
   const tag = el.tagName.toLowerCase()
   try {
     if (tag === "textarea") {
