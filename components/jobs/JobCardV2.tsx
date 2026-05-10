@@ -22,12 +22,13 @@ import { useRouter } from "next/navigation"
 import CompanyLogo from "@/components/ui/CompanyLogo"
 import { useResumeContext } from "@/components/resume/ResumeProvider"
 import { useH1BPrediction } from "@/lib/context/H1BPredictionContext"
+// Import only from view-model — never from the normalization index, which
+// transitively pulls in normalize.ts → @anthropic-ai/sdk and breaks the browser bundle.
 import {
   formatEmploymentLabel,
   formatSalaryLabel,
-  resolveJobCardView,
-  type JobCardViewModel,
-} from "@/lib/jobs/normalization"
+} from "@/lib/jobs/normalization/view-model"
+import type { JobCardViewModel } from "@/lib/jobs/normalization/types"
 import {
   employerLikelySponsorsH1b,
   resolveH1BSponsorshipDisplay,
@@ -344,15 +345,27 @@ export default function JobCardV2({
   })
   const matchLabel = getMatchCardLabel(score)
 
-  // Use server-precomputed card view when available (avoids client-side normalization).
-  // Fall back to local resolution only for detail-page usage or stale payloads.
-  const cardView = useMemo(
-    () => ("card_view" in job && job.card_view)
-      ? (job.card_view as JobCardViewModel)
-      : resolveJobCardView(job),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [job.id]
-  )
+  // Use server-precomputed card view. Never call resolveJobCardView() on the client —
+  // it chains into normalize.ts which imports @anthropic-ai/sdk and crashes the browser.
+  // The API always provides card_view; when missing (e.g. stale cache) fall back to
+  // raw job fields which are always available.
+  const cardView = useMemo((): JobCardViewModel => {
+    if ("card_view" in job && job.card_view) return job.card_view as JobCardViewModel
+    return {
+      title: job.title,
+      location: job.location ?? null,
+      salary_label: formatSalaryLabel(job.salary_min, job.salary_max, job.salary_currency) ?? null,
+      employment_label: formatEmploymentLabel(job.employment_type) ?? null,
+      seniority_label: null,
+      preview_description: null,
+      skills: [],
+      skill_groups: { programmingLanguages:[], frameworks:[], cloud:[], databases:[], devops:[], aiMl:[], data:[], security:[], engineering:[], testing:[], networking:[], media:[], healthcare:[], science:[], softSkills:[] },
+      sponsorship_badge: null,
+      visa_card_label: null,
+      show_visa_drawer: false,
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [job.id])
   const displayTitle = cardView.title
   const companyName = job.company?.name ?? "Unknown company"
   const companyDomain = job.company?.domain ?? null
