@@ -42,17 +42,20 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  const queries = (process.env.DICE_SEARCH_QUERIES ?? "")
-    .split(",")
-    .map((q) => q.trim())
-    .filter(Boolean)
-    .concat(DEFAULT_QUERIES.filter(
-      (q) => !(process.env.DICE_SEARCH_QUERIES ?? "").includes(q)
-    ))
-    .slice(0, 20)
+  const url = new URL(request.url)
+  const queryOverride = url.searchParams.get("q")
+  const queries = queryOverride
+    ? [queryOverride]
+    : (process.env.DICE_SEARCH_QUERIES ?? "")
+        .split(",")
+        .map((q) => q.trim())
+        .filter(Boolean)
+        .concat(DEFAULT_QUERIES)
+        .filter((q, i, arr) => arr.indexOf(q) === i)
+        .slice(0, 20)
 
-  const postedDate = process.env.DICE_POSTED_DATE ?? "THREE_DAYS_AGO"
-  const maxJobs = Number(process.env.DICE_MAX_JOBS ?? "300")
+  const postedDate = url.searchParams.get("postedDate") ?? process.env.DICE_POSTED_DATE ?? "THREE_DAYS_AGO"
+  const maxJobs = Number(url.searchParams.get("maxJobs") ?? process.env.DICE_MAX_JOBS ?? "300")
 
   const pool = getPostgresPool()
   const stats = { queries: 0, fetched: 0, inserted: 0, updated: 0, errors: 0 }
@@ -125,64 +128,61 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // Upsert jobs
+  // Bulk-check which external_ids already exist
+  const allExternalIds = [...seen.values()].map((j) => `dice:${j.id}`)
+  const existingRows = await pool.query<{ id: string; external_id: string }>(
+    `SELECT id, external_id FROM jobs WHERE external_id = ANY($1)`,
+    [allExternalIds]
+  )
+  const existingByExtId = new Map(existingRows.rows.map((r) => [r.external_id, r.id]))
+
+  // Insert new + update existing
   for (const job of seen.values()) {
     const companyId = companyIdMap.get(job.company.toLowerCase().trim())
     if (!companyId) continue
 
     const { min: salaryMin, max: salaryMax, currency } = parseDiceSalary(job.salary)
-    const { isRemote, isHybrid } = parseDiceWorkMode(job.workplaceTypes)
+    const { isRemote, isHybrid } = parseDiceWorkMode(job.workFromHome)
     const externalId = `dice:${job.id}`
-    const employmentType = job.employmentType?.[0]?.toLowerCase().replace("_", "-") ?? null
+    const employmentType = job.employmentType?.toLowerCase().replace("_", "-") ?? null
+    const rawData = JSON.stringify({ source: "dice", diceId: job.id, workFromHome: job.workFromHome, easyApply: job.easyApply })
+    const firstDetected = job.postedDate ? new Date(job.postedDate).toISOString() : new Date().toISOString()
+
+    const existingId = existingByExtId.get(externalId)
 
     try {
-      const res = await pool.query<{ id: string; is_new: boolean }>(
-        `INSERT INTO jobs (
-           company_id, title, location, is_remote, is_hybrid,
-           employment_type, description, apply_url, external_id,
-           salary_min, salary_max, salary_currency,
-           skills, is_active, last_seen_at, first_detected_at,
-           created_at, updated_at, raw_data
-         ) VALUES (
-           $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,
-           true, NOW(), COALESCE($14::timestamptz, NOW()), NOW(), NOW(), $15
-         )
-         ON CONFLICT (external_id) DO UPDATE SET
-           title         = EXCLUDED.title,
-           location      = EXCLUDED.location,
-           is_remote     = EXCLUDED.is_remote,
-           is_hybrid     = EXCLUDED.is_hybrid,
-           employment_type = EXCLUDED.employment_type,
-           description   = EXCLUDED.description,
-           salary_min    = EXCLUDED.salary_min,
-           salary_max    = EXCLUDED.salary_max,
-           salary_currency = EXCLUDED.salary_currency,
-           skills        = EXCLUDED.skills,
-           is_active     = true,
-           last_seen_at  = NOW(),
-           updated_at    = NOW(),
-           raw_data      = EXCLUDED.raw_data
-         RETURNING id, (xmax = 0) AS is_new`,
-        [
-          companyId,
-          job.title,
-          job.location,
-          isRemote,
-          isHybrid,
-          employmentType,
-          job.description,
-          job.applyUrl,
-          externalId,
-          salaryMin ?? null,
-          salaryMax ?? null,
-          currency,
-          job.skills?.length ? job.skills : null,
-          job.postedDate ? new Date(job.postedDate).toISOString() : null,
-          JSON.stringify({ source: "dice", diceId: job.id, workplaceTypes: job.workplaceTypes }),
-        ]
-      )
-      if (res.rows[0]?.is_new) stats.inserted++
-      else stats.updated++
+      if (existingId) {
+        await pool.query(
+          `UPDATE jobs SET
+             title=$1, location=$2, is_remote=$3, is_hybrid=$4,
+             employment_type=$5, description=$6, salary_min=$7,
+             salary_max=$8, salary_currency=$9, is_active=true,
+             last_seen_at=NOW(), updated_at=NOW(), raw_data=$10
+           WHERE id=$11`,
+          [job.title, job.location, isRemote, isHybrid, employmentType,
+           job.summary, salaryMin ?? null, salaryMax ?? null, currency,
+           rawData, existingId]
+        )
+        stats.updated++
+      } else {
+        await pool.query(
+          `INSERT INTO jobs (
+             company_id, title, location, is_remote, is_hybrid,
+             employment_type, description, apply_url, external_id,
+             salary_min, salary_max, salary_currency,
+             is_active, last_seen_at, first_detected_at,
+             created_at, updated_at, raw_data
+           ) VALUES (
+             $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,
+             true, NOW(), $13, NOW(), NOW(), $14
+           )`,
+          [companyId, job.title, job.location, isRemote, isHybrid,
+           employmentType, job.summary, job.applyUrl, externalId,
+           salaryMin ?? null, salaryMax ?? null, currency,
+           firstDetected, rawData]
+        )
+        stats.inserted++
+      }
     } catch (err) {
       console.error(`[dice-ingest] failed to upsert job ${job.id}:`, err)
       stats.errors++

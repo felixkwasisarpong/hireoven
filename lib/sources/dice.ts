@@ -1,28 +1,32 @@
 /**
  * Dice.com job search API client.
  *
- * Dice exposes a public JSON search API used by their own frontend.
- * We search it with a set of configurable queries and map results
- * into the same RawJob shape the crawler uses.
+ * Uses the same public API Dice's own frontend calls, authenticated with
+ * the NEXT_PUBLIC_JOB_SEARCH_API_KEY embedded in their JS bundle.
+ * Override via DICE_API_KEY env var if they rotate it.
  */
 
 const DICE_SEARCH_URL = "https://job-search-api.svc.dhigroupinc.com/v1/dice/jobs/search"
 const PAGE_SIZE = 100
 const REQUEST_TIMEOUT_MS = 12_000
+// Public key from Dice's own frontend bundle (NEXT_PUBLIC_JOB_SEARCH_API_KEY)
+const DICE_API_KEY = process.env.DICE_API_KEY ?? "1xgTdC84Vj5OI6cr4BBnH9v8rEJOCgLN3gVmyObZ"
 
 export interface DiceJob {
   id: string
   title: string
   company: string
   location: string
-  postedDate: string          // ISO string
-  description: string
+  postedDate: string
+  summary: string
   applyUrl: string
   salary?: string
-  workplaceTypes?: string[]   // e.g. ["Remote", "Hybrid"]
-  employmentType?: string[]   // e.g. ["FULLTIME"]
-  skills?: string[]
+  workFromHome: "TRUE" | "PARTIAL" | "FALSE"
+  employmentType?: string
+  easyApply: boolean
+  willingToSponsor: boolean
   companyPageUrl?: string
+  companyLogoUrl?: string
 }
 
 export interface DiceSearchResult {
@@ -53,11 +57,10 @@ export async function searchDiceJobs(opts: DiceSearchOptions): Promise<DiceSearc
   if (opts.employmentType) params.set("filters.employmentType", opts.employmentType)
   if (opts.workplaceType) params.set("filters.workplaceTypes", opts.workplaceType)
 
-  const url = `${DICE_SEARCH_URL}?${params}`
-
-  const res = await fetch(url, {
+  const res = await fetch(`${DICE_SEARCH_URL}?${params}`, {
     headers: {
-      Accept: "application/json, text/plain, */*",
+      Accept: "application/json",
+      "x-api-key": DICE_API_KEY,
       "User-Agent":
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
       Referer: "https://www.dice.com/",
@@ -66,27 +69,22 @@ export async function searchDiceJobs(opts: DiceSearchOptions): Promise<DiceSearc
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   })
 
-  if (!res.ok) {
-    throw new Error(`Dice API responded ${res.status} for query "${opts.q}"`)
-  }
+  if (!res.ok) throw new Error(`Dice API ${res.status} for "${opts.q}"`)
 
   const body = await res.json() as {
     data?: RawDiceJob[]
-    meta?: { totalResults?: number; pageSize?: number; page?: number }
+    meta?: { totalResults?: number; pageSize?: number; currentPage?: number }
   }
 
   const jobs = (body.data ?? []).map(mapDiceJob).filter(Boolean) as DiceJob[]
   return {
     jobs,
     totalResults: body.meta?.totalResults ?? jobs.length,
-    page: body.meta?.page ?? (opts.page ?? 1),
-    pageSize: body.meta?.pageSize ?? PAGE_SIZE,
+    page: body.meta?.currentPage ?? (opts.page ?? 1),
+    pageSize: PAGE_SIZE,
   }
 }
 
-/**
- * Search multiple pages of Dice results for a single query, up to maxJobs.
- */
 export async function searchDiceAllPages(
   opts: Omit<DiceSearchOptions, "page">,
   maxJobs = 500,
@@ -108,34 +106,49 @@ export async function searchDiceAllPages(
 
 interface RawDiceJob {
   id?: string
+  guid?: string
   title?: string
-  company?: string
-  location?: string
+  companyName?: string
+  jobLocation?: { displayName?: string }
   postedDate?: string
-  description?: string
-  applyUrl?: string | null
+  summary?: string
+  detailsPageUrl?: string
+  redirectUrl?: string
   salary?: string | null
-  workplaceTypes?: string[]
-  employmentType?: string[]
-  skills?: string[]
+  workFromHomeAvailability?: string
+  employmentType?: string
+  easyApply?: boolean
+  willingToSponsor?: boolean
   companyPageUrl?: string | null
+  companyLogoUrl?: string | null
 }
 
 function mapDiceJob(raw: RawDiceJob): DiceJob | null {
-  if (!raw.id || !raw.title || !raw.company) return null
+  const id = raw.guid ?? raw.id
+  if (!id || !raw.title || !raw.companyName) return null
+
+  const applyUrl =
+    raw.detailsPageUrl?.startsWith("http") ? raw.detailsPageUrl
+    : raw.redirectUrl?.startsWith("http")  ? raw.redirectUrl
+    : `https://www.dice.com/job-detail/${id}`
+
+  const wfh = (raw.workFromHomeAvailability ?? "FALSE").toUpperCase()
+
   return {
-    id: raw.id,
+    id,
     title: raw.title.trim(),
-    company: raw.company.trim(),
-    location: raw.location?.trim() ?? "",
+    company: raw.companyName.trim(),
+    location: raw.jobLocation?.displayName?.trim() ?? "",
     postedDate: raw.postedDate ?? new Date().toISOString(),
-    description: raw.description?.trim() ?? "",
-    applyUrl: raw.applyUrl ?? `https://www.dice.com/job-detail/${raw.id}`,
+    summary: raw.summary?.trim() ?? "",
+    applyUrl,
     salary: raw.salary ?? undefined,
-    workplaceTypes: raw.workplaceTypes,
-    employmentType: raw.employmentType,
-    skills: raw.skills,
+    workFromHome: (wfh === "TRUE" || wfh === "PARTIAL" || wfh === "FALSE") ? wfh as DiceJob["workFromHome"] : "FALSE",
+    employmentType: raw.employmentType ?? undefined,
+    easyApply: raw.easyApply ?? false,
+    willingToSponsor: raw.willingToSponsor ?? false,
     companyPageUrl: raw.companyPageUrl ?? undefined,
+    companyLogoUrl: raw.companyLogoUrl ?? undefined,
   }
 }
 
@@ -148,22 +161,21 @@ export function parseDiceSalary(salary: string | undefined): {
 } {
   if (!salary) return { currency: "USD" }
   const currency = /£|GBP/i.test(salary) ? "GBP" : /€|EUR/i.test(salary) ? "EUR" : "USD"
+  // Normalise "165,000" and "$90 - $100 per hour" etc.
   const nums = [...salary.matchAll(/[\d,]+(?:\.\d+)?/g)]
     .map((m) => Math.round(parseFloat(m[0].replace(/,/g, ""))))
-    .filter((n) => n > 0)
+    .filter((n) => n > 1000) // ignore small numbers like "90" hourly rates misread as salary
   if (nums.length === 0) return { currency }
   if (nums.length === 1) return { min: nums[0], max: nums[0], currency }
   return { min: Math.min(...nums), max: Math.max(...nums), currency }
 }
 
-export function parseDiceWorkMode(types: string[] | undefined): {
+export function parseDiceWorkMode(wfh: DiceJob["workFromHome"]): {
   isRemote: boolean
   isHybrid: boolean
 } {
-  if (!types?.length) return { isRemote: false, isHybrid: false }
-  const t = types.map((s) => s.toLowerCase())
   return {
-    isRemote: t.some((s) => s.includes("remote")),
-    isHybrid: t.some((s) => s.includes("hybrid")),
+    isRemote: wfh === "TRUE",
+    isHybrid: wfh === "PARTIAL",
   }
 }
