@@ -19,7 +19,10 @@ const nextConfig = {
   },
   experimental: {
     serverActions: { allowedOrigins: ["hireoven.com", "localhost:3000"] },
-    serverComponentsExternalPackages: ["pdf-parse", "mammoth"],
+    serverComponentsExternalPackages: ["pdf-parse", "mammoth", "sharp"],
+    outputFileTracingIncludes: {
+      "/**": ["./node_modules/sharp/**/*"],
+    },
   },
   async headers() {
     return [
