@@ -9,7 +9,7 @@ import { useRouter } from "next/navigation"
 import CompanyLogo from "@/components/ui/CompanyLogo"
 import { useResumeContext } from "@/components/resume/ResumeProvider"
 import { useH1BPrediction } from "@/lib/context/H1BPredictionContext"
-import { resolveJobCardView } from "@/lib/jobs/normalization"
+import type { JobCardViewModel } from "@/lib/jobs/normalization/types"
 import {
   effectiveEmployerSponsorshipScore,
   employerLikelySponsorsH1b,
@@ -137,7 +137,9 @@ export default function JobCard({
   const companyProfileHref = job.company?.id ? `/companies/${job.company.id}` : null
   const companyConf = job.company?.sponsorship_confidence ?? 0
 
-  const cardView = resolveJobCardView(job)
+  const cardView: JobCardViewModel = ("card_view" in job && job.card_view)
+    ? (job.card_view as JobCardViewModel)
+    : { title: job.title, location: job.location ?? null, salary_label: null, employment_label: null, seniority_label: null, preview_description: null, skills: [], skill_groups: { programmingLanguages:[], frameworks:[], cloud:[], databases:[], devops:[], aiMl:[], data:[], security:[], engineering:[], testing:[], networking:[], media:[], healthcare:[], science:[], softSkills:[] }, sponsorship_badge: null, visa_card_label: null, show_visa_drawer: false }
   const displayTitle = cardView.title
   const topSkills = cardView.skills.slice(0, 3)
   const isAtsApplyLink = isKnownAtsApplyUrl(job.apply_url)

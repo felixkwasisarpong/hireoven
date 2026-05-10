@@ -20,8 +20,8 @@ import { useToast } from "@/components/ui/ToastProvider"
 import {
   formatEmploymentLabel,
   formatSalaryLabel,
-  resolveJobCardView,
-} from "@/lib/jobs/normalization"
+} from "@/lib/jobs/normalization/view-model"
+import type { JobCardViewModel } from "@/lib/jobs/normalization/types"
 import {
   resolveH1BSponsorshipDisplay,
   type SponsorshipVisaCardLabel,
@@ -98,7 +98,9 @@ export default function JobListRow({
   const score = resolveOverallMatchScore({ preferredScore: resolvedMatchScore, rawData: raw })
   const matchLabel = getMatchCardLabel(score)
 
-  const cardView = resolveJobCardView(job)
+  const cardView: JobCardViewModel = ("card_view" in job && job.card_view)
+    ? (job.card_view as JobCardViewModel)
+    : { title: job.title, location: job.location ?? null, salary_label: null, employment_label: null, seniority_label: null, preview_description: null, skills: [], skill_groups: { programmingLanguages:[], frameworks:[], cloud:[], databases:[], devops:[], aiMl:[], data:[], security:[], engineering:[], testing:[], networking:[], media:[], healthcare:[], science:[], softSkills:[] }, sponsorship_badge: null, visa_card_label: null, show_visa_drawer: false }
   const displayTitle = cardView.title
   const companyName = job.company?.name ?? "Unknown company"
   const companyDomain = job.company?.domain ?? null
