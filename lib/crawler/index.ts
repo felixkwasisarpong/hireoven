@@ -283,6 +283,37 @@ function parseGreenhouseBoard(url: URL) {
   return extractGreenhouseBoardToken(url.toString())
 }
 
+function greenhouseBoardCandidatesFromCustomCareers(url: URL): string[] {
+  const host = url.hostname.toLowerCase().replace(/^www\./, "")
+  const labels = host.split(".").filter(Boolean)
+  const candidates = new Set<string>()
+
+  const first = (labels[0] ?? "").replace(/[^a-z0-9-]/g, "")
+  if (first && first !== "jobs" && first !== "careers") candidates.add(first)
+
+  const core = domainCoreLabel(host).replace(/[^a-z0-9-]/g, "")
+  if (core && core !== "jobs" && core !== "careers") candidates.add(core)
+
+  return [...candidates].filter((token) => token.length >= 3 && token.length <= 50)
+}
+
+async function crawlGreenhouseFromGhJidSignals(
+  html: string,
+  careersUrl: URL
+): Promise<RawJob[]> {
+  if (!/gh_jid=\d+/i.test(html)) return []
+
+  const ghBoardCandidates = greenhouseBoardCandidatesFromCustomCareers(careersUrl)
+  for (const board of ghBoardCandidates) {
+    const jobs = await crawlGreenhouse(
+      new URL(`https://boards.greenhouse.io/${encodeURIComponent(board)}`)
+    )
+    if (jobs.length > 0) return jobs
+  }
+
+  return []
+}
+
 function parseLeverCompany(url: URL) {
   if (url.hostname.toLowerCase() !== "jobs.lever.co") return null
   return url.pathname.split("/").filter(Boolean)[0] ?? null
@@ -1143,6 +1174,22 @@ function extractAbsoluteUrlsFromHtml(html: string, baseUrl: URL): URL[] {
     const raw = match[0]?.replace(/[),.;]+$/, "")
     if (!raw) continue
     const url = toUrl(raw)
+    if (!url) continue
+    found.set(url.toString(), url)
+  }
+
+  // Handle JSON-escaped absolute URLs (for example: https:\/\/api.greenhouse.io\/v1\/boards\/...)
+  const escapedAbsoluteUrlRegex = /https?:\\\/\\\/[^\s"'<>]+/gi
+  for (const match of html.matchAll(escapedAbsoluteUrlRegex)) {
+    const raw = match[0]
+    if (!raw) continue
+    const normalized = raw
+      .replace(/\\\//g, "/")
+      .replace(/\\u([0-9a-f]{4})/gi, (_, hex: string) =>
+        String.fromCharCode(Number.parseInt(hex, 16))
+      )
+      .replace(/[),.;]+$/, "")
+    const url = toUrl(normalized)
     if (!url) continue
     found.set(url.toString(), url)
   }
@@ -3115,6 +3162,19 @@ async function discoverAndCrawlFromHtml(careersUrl: URL): Promise<DiscoverAndCra
       }
     }
 
+    // Some custom-hosted career pages only expose Greenhouse job ids (`gh_jid`)
+    // inside serialized app state, without linking the canonical Greenhouse board URL.
+    const ghSignalJobs = await crawlGreenhouseFromGhJidSignals(html, careersUrl)
+    if (ghSignalJobs.length > 0) {
+      return {
+        jobs: ghSignalJobs,
+        primaryStatusCode,
+        primaryErrorReason,
+        blocked,
+        fallbackUsed,
+      }
+    }
+
     const discoveredUrls = extractAbsoluteUrlsFromHtml(html, careersUrl)
     const knownAtsCandidates: URL[] = []
     const seen = new Set<string>()
@@ -3191,6 +3251,7 @@ async function discoverAndCrawlFromHtml(careersUrl: URL): Promise<DiscoverAndCra
           )
             ? 100
             : 0) +
+          (/\/company\/careers\/roles(?:\/|$)/.test(leftPath) ? 120 : 0) +
           (/\/(jobs|careers)\/(search|results)/.test(leftPath) ? 70 : 0) +
           (/\/(jobs|careers)\b/.test(leftPath) ? 30 : 0)
         const rightScore =
@@ -3199,6 +3260,7 @@ async function discoverAndCrawlFromHtml(careersUrl: URL): Promise<DiscoverAndCra
           )
             ? 100
             : 0) +
+          (/\/company\/careers\/roles(?:\/|$)/.test(rightPath) ? 120 : 0) +
           (/\/(jobs|careers)\/(search|results)/.test(rightPath) ? 70 : 0) +
           (/\/(jobs|careers)\b/.test(rightPath) ? 30 : 0)
 
@@ -3226,8 +3288,15 @@ async function discoverAndCrawlFromHtml(careersUrl: URL): Promise<DiscoverAndCra
 
     for (const page of oneHopPages) {
       if (!page.html) continue
+
+      const ghSignalJobs = await crawlGreenhouseFromGhJidSignals(
+        page.html,
+        page.candidate.href
+      )
+
       oneHopJobs.push(
         ...extractGreenhouseEmbeddedJobsFromHtml(page.html, page.candidate.href),
+        ...ghSignalJobs,
         ...extractJobsFromJsonLd(page.html, page.candidate.href),
         ...extractGenericJobsFromHtml(page.html, page.candidate.href)
       )
@@ -3409,6 +3478,41 @@ export async function crawlCareersPage(
   }
 
   let resolvedCareersUrl: string | undefined
+  if (
+    jobs.length === 0 &&
+    (target.atsType?.toLowerCase() ?? "") === "greenhouse"
+  ) {
+    const ghBoardCandidates = greenhouseBoardCandidatesFromCustomCareers(careersUrl)
+    for (const board of ghBoardCandidates) {
+      const candidateUrl = new URL(`https://boards.greenhouse.io/${encodeURIComponent(board)}`)
+      try {
+        const ghJobs = await crawlGreenhouse(candidateUrl)
+        diagnostics.push({
+          provider: "greenhouse",
+          originalUrl: target.careersUrl,
+          normalizedUrl: candidateUrl.toString(),
+          statusCode: null,
+          reason: `greenhouse_domain_fallback:${board}`,
+          crawlResult: ghJobs.length > 0 ? "success" : "fallback",
+        })
+        if (ghJobs.length > 0) {
+          jobs = ghJobs
+          resolvedCareersUrl = candidateUrl.toString()
+          break
+        }
+      } catch {
+        diagnostics.push({
+          provider: "greenhouse",
+          originalUrl: target.careersUrl,
+          normalizedUrl: candidateUrl.toString(),
+          statusCode: null,
+          reason: `greenhouse_domain_fallback_error:${board}`,
+          crawlResult: "fallback",
+        })
+      }
+    }
+  }
+
   if (
     jobs.length === 0 &&
     (target.atsType?.toLowerCase() ?? "") === "workday"

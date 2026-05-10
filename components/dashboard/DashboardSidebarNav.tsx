@@ -43,13 +43,13 @@ function NavItem({
   navSkin: "default" | "feed"
 }) {
   const pathname = usePathname()
-  const { plan } = useSubscription()
+  const { plan, isLoading: subLoading } = useSubscription()
   const { showUpgrade } = useUpgradeModal()
 
   const Icon = item.icon
   const active = isDashboardNavActive(pathname, item.href)
   const external = isExternalNavHref(item.href)
-  const locked = item.gate ? !canAccess(plan, item.gate) : false
+  const locked = subLoading ? false : item.gate ? !canAccess(plan, item.gate) : false
   const feedSkin = navSkin === "feed" && variant === "light"
 
   const badge =
@@ -94,6 +94,22 @@ function NavItem({
               ? "text-slate-400 group-hover:text-primary"
               : "text-muted-foreground group-hover:text-primary"
       )
+
+  if (subLoading && item.gate) {
+    return (
+      <div
+        className={cn(
+          feedSkin
+            ? "flex min-h-[40px] items-center gap-3 rounded-lg px-3 py-2"
+            : "group neo-nav-link neo-nav-link-idle opacity-70"
+        )}
+        aria-hidden
+      >
+        <div className={cn("h-4 w-4 animate-pulse rounded bg-slate-200/80")} />
+        <div className="h-3 w-24 animate-pulse rounded bg-slate-200/80" />
+      </div>
+    )
+  }
 
   const inner = (
     <>

@@ -49,6 +49,14 @@ export function extractGreenhouseBoardToken(rawUrl: string): string | null {
   const fromQuery = cleanBoardToken(url.searchParams.get("for"))
   if (fromQuery) return fromQuery
 
+  // API endpoints often carry the board token in the path:
+  // /v1/boards/{board}/jobs
+  const boardsIndex = pathParts.findIndex((part) => part.toLowerCase() === "boards")
+  if (boardsIndex >= 0) {
+    const fromPath = cleanBoardToken(pathParts[boardsIndex + 1])
+    if (fromPath) return fromPath
+  }
+
   if (host === "boards.greenhouse.io" || host === "job-boards.greenhouse.io") {
     const firstPathPart = cleanBoardToken(pathParts[0])
     if (firstPathPart && firstPathPart !== "embed") return firstPathPart
@@ -56,7 +64,13 @@ export function extractGreenhouseBoardToken(rawUrl: string): string | null {
 
   if (host.endsWith(".greenhouse.io")) {
     const subdomain = cleanBoardToken(host.split(".")[0])
-    if (subdomain && subdomain !== "boards" && subdomain !== "job-boards") {
+    if (
+      subdomain &&
+      subdomain !== "boards" &&
+      subdomain !== "job-boards" &&
+      subdomain !== "boards-api" &&
+      subdomain !== "api"
+    ) {
       return subdomain
     }
   }

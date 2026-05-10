@@ -239,6 +239,16 @@ function continuationContextKey(context: ScoutResumableContext): string {
   return `${context.type}:${context.id}`
 }
 
+function toSpokenText(value: string): string {
+  return value
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/[*_>#~-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+}
+
 function openContinuationPrompt(context: ScoutResumableContext): string {
   switch (context.type) {
     case "workflow":
@@ -293,6 +303,7 @@ export function ScoutWorkspaceShell() {
   const prevQueueStatusRef   = useRef<Record<string, string>>({})
   const prevQueueCompletedAtRef = useRef<string | null>(null)
   const commandStartedAtRef  = useRef<number | null>(null)
+  const pendingVoiceReplyRef = useRef(false)
   const lastCommandLatencyRef = useRef<number | null>(null)
   const lastDebugRef = useRef<ScoutResponse["debug"] | null>(null)
 
@@ -470,6 +481,30 @@ export function ScoutWorkspaceShell() {
   useEffect(() => {
     const h = new Date().getHours()
     setGreeting(h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening")
+  }, [])
+
+  const speakScoutReply = useCallback((text: string) => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return
+    const spoken = toSpokenText(text).slice(0, 420)
+    if (!spoken) return
+    try {
+      window.speechSynthesis.cancel()
+      const utterance = new SpeechSynthesisUtterance(spoken)
+      utterance.lang = "en-US"
+      utterance.rate = 1
+      utterance.pitch = 1
+      window.speechSynthesis.speak(utterance)
+    } catch {
+      // Voice reply is best-effort and should never block Scout UX.
+    }
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        window.speechSynthesis.cancel()
+      }
+    }
   }, [])
 
   const proactive = useScoutProactive({
@@ -1007,6 +1042,12 @@ export function ScoutWorkspaceShell() {
     setHasSession(true)
     writeScoutSession({ mode: newMode, chips: directive?.chips ?? chips, recentCommands: updatedCmds, rail: extractRailMetadata(newRail), modeMetadata: extractModeMetadata(newMode, safeResponse) })
     streamMsgId.current = null
+
+    if (pendingVoiceReplyRef.current) {
+      pendingVoiceReplyRef.current = false
+      const responseText = safeResponse.answer?.trim() || buildNarrative(newMode, safeResponse)
+      if (responseText) speakScoutReply(responseText)
+    }
   }, [scoutStream.finalResponse])
 
   // Handle stream errors
@@ -1014,6 +1055,7 @@ export function ScoutWorkspaceShell() {
     if (!scoutStream.error || scoutStream.isStreaming) return
     commandStartedAtRef.current = null
     lastDebugRef.current = null
+    pendingVoiceReplyRef.current = false
     setError(scoutStream.error)
     isSubmittingRef.current = false; setIsLoading(false)
     // Replace the streaming bubble with an error notice (remove it)
@@ -1450,11 +1492,16 @@ export function ScoutWorkspaceShell() {
   // ── Submit ───────────────────────────────────────────────────────────────────
 
   const handleSubmit = useCallback(
-    async (event: React.FormEvent, overrideMessage?: string) => {
+    async (
+      event: React.FormEvent,
+      overrideMessage?: string,
+      source: "typed" | "voice" = "typed"
+    ) => {
       event.preventDefault()
       const message = (overrideMessage ?? query).trim()
       if (!message || isSubmittingRef.current || isLoading || scoutStream.isStreaming || researchStream.isRunning) return
       isSubmittingRef.current = true
+      pendingVoiceReplyRef.current = source === "voice"
 
       const msgId = `s-${Date.now()}`
       streamMsgId.current = msgId
@@ -1489,6 +1536,7 @@ export function ScoutWorkspaceShell() {
 
       // ── Career strategy — before research (research RE also catches career phrases) ──
       if (isCareerStrategyIntent(message)) {
+        pendingVoiceReplyRef.current = false
         setWorkspaceMode("career_strategy")
         setNarrative(PREFLIGHT_NARRATIVE.career_strategy ?? "")
         careerStrategy.reset()
@@ -1501,6 +1549,7 @@ export function ScoutWorkspaceShell() {
 
       // ── Research intent — route to research endpoint, not chat ────────────
       if (isResearchIntent(message)) {
+        pendingVoiceReplyRef.current = false
         setWorkspaceMode("research")
         setNarrative(PREFLIGHT_NARRATIVE.research ?? "")
         researchStream.reset()
@@ -1541,6 +1590,13 @@ export function ScoutWorkspaceShell() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [query, isLoading, pathname, isFocusMode, searchParams, contextIds, searchProfile, recentCommands]
   )
+
+  const handleVoiceCommand = useCallback((spokenMessage: string) => {
+    const message = spokenMessage.trim()
+    if (!message) return
+    const fakeEvent = { preventDefault: () => {} } as React.FormEvent
+    void handleSubmit(fakeEvent, message, "voice")
+  }, [handleSubmit])
 
   function handleChipClick(chip: string) { setQuery(chip); setTimeout(() => inputRef.current?.focus(), 50) }
   function handleFollowUp(text: string)  { setQuery(text); setTimeout(() => inputRef.current?.focus(), 50) }
@@ -1784,6 +1840,7 @@ export function ScoutWorkspaceShell() {
         {!isWelcomeState && (
           <ScoutCommandBar
             query={query} onChange={setQuery} onSubmit={handleSubmit}
+            onVoiceCommand={handleVoiceCommand}
             isLoading={isLoading} chips={displayChips} onChipClick={handleChipClick}
             inputRef={inputRef} variant="light" commandHistory={recentCommands}
             onOpenPalette={() => setPaletteOpen(true)}
@@ -1944,6 +2001,7 @@ export function ScoutWorkspaceShell() {
                           query={query}
                           onChange={setQuery}
                           onSubmit={handleSubmit}
+                          onVoiceCommand={handleVoiceCommand}
                           isLoading={isLoading}
                           chips={[]}
                           onChipClick={handleChipClick}

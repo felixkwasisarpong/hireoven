@@ -166,6 +166,11 @@ export interface ExtensionSafeProfile {
   ethnicity: string | null
   veteran_status: string | null
   disability_status: string | null
+  // Resume-derived fields
+  current_title: string | null
+  current_company: string | null
+  resume_summary: string | null
+  skills: string | null
 }
 
 export type ContentResponseType =

@@ -46,6 +46,8 @@
     "db:seed-universities:execute": "npx tsx scripts/seed-universities.ts --execute",
     "db:seed-trending-tech-companies": "npx tsx scripts/seed-trending-tech-companies.ts",
     "db:seed-trending-tech-companies:execute": "npx tsx scripts/seed-trending-tech-companies.ts --execute",
+    "db:seed-crawl-software-firms": "npx tsx scripts/seed-crawl-software-firms.ts",
+    "db:seed-crawl-software-firms:execute": "npx tsx scripts/seed-crawl-software-firms.ts --execute",
     "db:crawl-trending-tech-companies": "npx tsx scripts/crawl-trending-tech-companies.ts",
     "db:crawl-trending-tech-companies:execute": "npx tsx scripts/crawl-trending-tech-companies.ts --execute",
     "db:repair-trending-tech-zero-jobs": "npx tsx scripts/repair-trending-tech-zero-job-careers-urls.ts",

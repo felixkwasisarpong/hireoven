@@ -28,6 +28,11 @@ export type SafeProfile = {
   country?: string | null
   authorized_to_work?: boolean | null
   requires_sponsorship?: boolean | null
+  // Resume-derived
+  current_title?: string | null
+  current_company?: string | null
+  resume_summary?: string | null
+  skills?: string | null
 }
 
 /** Per-field result returned from detection (preview) and from filling. */
@@ -99,6 +104,10 @@ type SafeKey =
   | "website_url"
   | "resume_upload"
   | "cover_letter_upload"
+  | "current_title"
+  | "current_company"
+  | "resume_summary"
+  | "skills"
 
 interface SafeKeyRule {
   key: SafeKey
@@ -131,6 +140,12 @@ const SAFE_KEY_RULES: SafeKeyRule[] = [
 
   // Location (single-line city/region)
   { key: "location", patterns: [/\blocation\b|\bcity\b|\baddress\b(?!\s*line\s*2)/i] },
+
+  // Resume-derived fields
+  { key: "current_title",   patterns: [/current[\s_-]?(?:job[\s_-]?)?title|job[\s_-]?title|\btitle\b|current[\s_-]?role|position[\s_-]?title/i] },
+  { key: "current_company", patterns: [/current[\s_-]?(?:employer|company|organization)|employer[\s_-]?name|company[\s_-]?name|\bemployer\b/i] },
+  { key: "resume_summary",  patterns: [/professional[\s_-]?summary|about[\s_-]?(?:you|yourself)|tell[\s_-]?us[\s_-]?about|career[\s_-]?(?:summary|objective)|personal[\s_-]?summary/i] },
+  { key: "skills",          patterns: [/\bskills?\b|technical[\s_-]?skills?|key[\s_-]?skills?|core[\s_-]?competenc|areas?[\s_-]?of[\s_-]?expertise/i] },
 ]
 
 // ── Form scoping per source ──────────────────────────────────────────────────
@@ -271,6 +286,10 @@ function profileValueFor(profile: SafeProfile, key: SafeKey): string | null {
     case "resume_upload":
     case "cover_letter_upload":
       return null // Always manual_required — file uploads aren't filled by the MVP
+    case "current_title":   return profile.current_title ?? null
+    case "current_company": return profile.current_company ?? null
+    case "resume_summary":  return profile.resume_summary ?? null
+    case "skills":          return profile.skills ?? null
   }
 }
 
@@ -579,7 +598,7 @@ function injectResumeFile(target: HTMLInputElement, bytes: ResumeBytes): boolean
  * Set an input/textarea value in a way React's controlled-input synthetic
  * event system will accept. Mirrors the pattern in chrome-extension/src/content.ts.
  */
-function setReactValue(el: HTMLElement, value: string): boolean {
+export function setReactValue(el: HTMLElement, value: string): boolean {
   const tag = el.tagName.toLowerCase()
   try {
     if (tag === "textarea") {
