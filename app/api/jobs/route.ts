@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { createClient } from "@/lib/supabase/server"
-import { resolveJobCardView } from "@/lib/jobs/normalization"
+import { formatEmploymentLabel, formatSalaryLabel } from "@/lib/jobs/normalization/view-model"
 import type { Job, JobMatchScore } from "@/types"
 
 const FAST_SCORE_ALGORITHM_UPDATED_AT = "2026-05-07T14:00:00.000Z"
@@ -126,7 +126,25 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const jobsWithCardView = jobs.map(job => ({ ...job, card_view: resolveJobCardView(job as unknown as Job) }))
+    const jobsWithCardView = jobs.map((job: unknown) => {
+      const j = job as Job
+      return {
+        ...j,
+        card_view: {
+          title: j.title,
+          location: j.location ?? null,
+          salary_label: formatSalaryLabel(j.salary_min, j.salary_max, j.salary_currency) ?? null,
+          employment_label: formatEmploymentLabel(j.employment_type) ?? null,
+          seniority_label: null,
+          preview_description: null,
+          skills: j.skills ?? [],
+          skill_groups: null,
+          sponsorship_badge: null,
+          visa_card_label: null,
+          show_visa_drawer: false,
+        },
+      }
+    })
     return NextResponse.json({ jobs: jobsWithCardView, total, newInLastHour })
   } catch (error) {
     return NextResponse.json(

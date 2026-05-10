@@ -7,7 +7,7 @@ import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
 import { scoreJobsForUser } from "@/lib/matching/batch-scorer"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { createClient } from "@/lib/supabase/server"
-import { resolveJobCardView } from "@/lib/jobs/normalization"
+import { formatEmploymentLabel, formatSalaryLabel } from "@/lib/jobs/normalization/view-model"
 import type {
   EmploymentType,
   JobMatchScore,
@@ -226,7 +226,19 @@ export async function GET(request: NextRequest) {
 
   const paginated = ranked.slice(offset, offset + limit).map(job => ({
     ...job,
-    card_view: resolveJobCardView(job),
+    card_view: {
+      title: job.title,
+      location: job.location ?? null,
+      salary_label: formatSalaryLabel(job.salary_min, job.salary_max, job.salary_currency) ?? null,
+      employment_label: formatEmploymentLabel(job.employment_type) ?? null,
+      seniority_label: null,
+      preview_description: null,
+      skills: job.skills ?? [],
+      skill_groups: null,
+      sponsorship_badge: null,
+      visa_card_label: null,
+      show_visa_drawer: false,
+    },
   }))
   const newInLastHour = ranked.filter(
     (job) => Date.now() - new Date(job.first_detected_at).getTime() <= 3_600_000
