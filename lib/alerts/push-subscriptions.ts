@@ -36,23 +36,12 @@ export async function savePushSubscription(
   const pool = getPostgresPool()
   const normalized = normalizeSubscription(subscription)
 
-  const existing = await pool.query<{ id: string }>(
-    `SELECT id FROM push_subscriptions
-     WHERE user_id = $1 AND subscription->>'endpoint' = $2
-     LIMIT 1`,
-    [userId, normalized.endpoint]
-  )
-
-  if (existing.rows[0]?.id) {
-    await pool.query(`UPDATE push_subscriptions SET subscription = $1::jsonb WHERE id = $2`, [
-      normalized,
-      existing.rows[0].id,
-    ])
-    return
-  }
-
+  // Atomic upsert — prevents duplicate key errors from concurrent registrations
   await pool.query(
-    `INSERT INTO push_subscriptions (user_id, subscription) VALUES ($1, $2::jsonb)`,
+    `INSERT INTO push_subscriptions (user_id, subscription)
+     VALUES ($1, $2::jsonb)
+     ON CONFLICT ((subscription->>'endpoint'))
+     DO UPDATE SET subscription = EXCLUDED.subscription, user_id = EXCLUDED.user_id`,
     [userId, normalized]
   )
 }
