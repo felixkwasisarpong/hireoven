@@ -5,7 +5,7 @@ import type {
 } from "@/types"
 import type { CategorizedSkills } from "@/lib/skills/taxonomy"
 
-export const JOB_NORMALIZATION_VERSION = "job_normalization_v2"
+export const JOB_NORMALIZATION_VERSION = "job_normalization_v3"
 
 export type SourceAdapterKind =
   | "greenhouse"

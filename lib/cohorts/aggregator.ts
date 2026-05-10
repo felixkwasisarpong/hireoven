@@ -60,7 +60,8 @@ export async function aggregateCohortStats(cohortId: string): Promise<void> {
   )
 
   if (cohort.status === "forming" && memberCount >= 5) newStatus = "active"
-  if (cohort.status === "active" && requestCount >= 1) newStatus = "matching"
+  // 3+ employer requests before "matching" — 1 is too low a bar.
+  if (cohort.status === "active" && requestCount >= 3) newStatus = "matching"
   if ((cohort.status === "active" || cohort.status === "matching") && daysSinceLayoff >= 180)
     newStatus = "closed"
 

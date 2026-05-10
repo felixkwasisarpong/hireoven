@@ -101,6 +101,7 @@ export const SKILL_DEFINITIONS: SkillDefinition[] = [
 
   // ─── Databases ────────────────────────────────────────────────────────────
   { label: "SQL",         aliases: ["sql"] },
+  { label: "NoSQL",       aliases: ["nosql", "no-sql", "no sql"] },
   { label: "PostgreSQL",  aliases: ["postgresql", "postgres"] },
   { label: "MySQL",       aliases: ["mysql"] },
   { label: "MongoDB",     aliases: ["mongodb", "mongo"] },
@@ -492,6 +493,7 @@ const CLOUD_SKILLS = new Set(["AWS", "GCP", "Azure"])
 
 const DATABASE_SKILLS = new Set([
   "SQL",
+  "NoSQL",
   "PostgreSQL",
   "MySQL",
   "MongoDB",

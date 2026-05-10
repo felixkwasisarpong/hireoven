@@ -159,14 +159,16 @@ function StatCell({ label, value }: { label: string; value: string | number | nu
 
 function CohortCard({
   cohort,
+  isMember,
   onJoin,
   onView,
 }: {
   cohort: CohortListItem
+  isMember: boolean
   onJoin: (id: string) => void
   onView: (id: string) => void
 }) {
-  const isHot = cohort.strength_score >= 75
+  const isHot = cohort.strength_score >= 60
 
   return (
     <div className="border-b border-[var(--color-border,#E2E8F0)] pb-5 last:border-0">
@@ -229,14 +231,21 @@ function CohortCard({
 
       {/* Actions */}
       <div className="flex items-center gap-3">
-        <button
-          type="button"
-          onClick={() => onJoin(cohort.id)}
-          className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-4 py-1.5 text-[13px] font-semibold text-white hover:bg-emerald-700 transition-colors"
-        >
-          <MI name="group_add" className="text-[15px]" />
-          Join this cohort
-        </button>
+        {isMember ? (
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-200 px-4 py-1.5 text-[13px] font-semibold text-emerald-700">
+            <MI name="check_circle" className="text-[15px]" />
+            You're in this cohort
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={() => onJoin(cohort.id)}
+            className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-4 py-1.5 text-[13px] font-semibold text-white hover:bg-emerald-700 transition-colors"
+          >
+            <MI name="group_add" className="text-[15px]" />
+            Join this cohort
+          </button>
+        )}
         <button
           type="button"
           onClick={() => onView(cohort.id)}
@@ -722,12 +731,14 @@ function ActiveCohortsTab({
   cohorts,
   loading,
   error,
+  joinedCohortIds,
   onJoin,
   onView,
 }: {
   cohorts: CohortListItem[]
   loading: boolean
   error: string | null
+  joinedCohortIds: Set<string>
   onJoin: (id: string) => void
   onView: (id: string) => void
 }) {
@@ -765,7 +776,7 @@ function ActiveCohortsTab({
 
       <div className="space-y-6">
         {cohorts.map((c) => (
-          <CohortCard key={c.id} cohort={c} onJoin={onJoin} onView={onView} />
+          <CohortCard key={c.id} cohort={c} isMember={joinedCohortIds.has(c.id)} onJoin={onJoin} onView={onView} />
         ))}
       </div>
     </div>
@@ -1123,6 +1134,8 @@ export default function LayoffCohortHub() {
   }, [])
 
   useEffect(() => { loadCohorts() }, [loadCohorts])
+  // Load myCohorts on mount so the "Join" button can be hidden for already-joined cohorts.
+  useEffect(() => { loadMyCohorts() }, [loadMyCohorts])
   useEffect(() => { if (tab === "my") loadMyCohorts() }, [tab, loadMyCohorts])
 
   async function handleViewDetail(cohortId: string) {
@@ -1179,6 +1192,7 @@ export default function LayoffCohortHub() {
             cohorts={cohorts}
             loading={cohortsLoading}
             error={cohortsError}
+            joinedCohortIds={new Set(myCohorts.map((mc) => mc.cohortId))}
             onJoin={(id) => {
               const c = cohorts.find((x) => x.id === id)
               if (c) setJoiningCohort(c)

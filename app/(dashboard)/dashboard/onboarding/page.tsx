@@ -78,6 +78,24 @@ export default function OnboardingPage() {
     seniority: [],
   })
 
+  // Pre-populate from existing profile when revisiting to edit
+  useEffect(() => {
+    fetch("/api/profile")
+      .then(r => r.ok ? r.json() : null)
+      .then((data: { profile?: { desired_roles?: string[] | null; desired_locations?: string[] | null; desired_seniority?: string[] | null; remote_only?: boolean } | null } | null) => {
+        const p = data?.profile
+        if (!p) return
+        setStepOne(prev => ({
+          ...prev,
+          roles: p.desired_roles?.length ? p.desired_roles : prev.roles,
+          locations: p.desired_locations?.length ? p.desired_locations : prev.locations,
+          remoteOnly: p.remote_only ?? prev.remoteOnly,
+          seniority: p.desired_seniority?.length ? (p.desired_seniority as StepOneData["seniority"]) : prev.seniority,
+        }))
+      })
+      .catch(() => {})
+  }, [])
+
   const [stepTwo, setStepTwo] = useState<StepTwoData>({
     isInternational: false,
     visaStatus: "",
@@ -105,9 +123,9 @@ export default function OnboardingPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         desired_roles: stepOne.roles,
-        desired_locations: stepOne.remoteOnly ? ["Remote"] : stepOne.locations,
+        desired_locations: stepOne.locations,
         desired_seniority: stepOne.seniority,
-        remote_only: stepOne.remoteOnly,
+        remote_only: stepOne.locations.includes("Remote"),
         is_international: stepTwo.isInternational,
         visa_status: stepTwo.visaStatus || null,
         opt_end_date: stepTwo.optEndDate || null,
@@ -358,7 +376,7 @@ function StepOne({
         </Field>
 
         {/* Locations */}
-        <Field label="Preferred locations" hint="Add cities, regions, or leave blank for anywhere.">
+        <Field label="Preferred locations" hint="Add cities or regions. You can combine remote with specific cities.">
           {data.locations.length > 0 && (
             <div className="mb-2.5 flex flex-wrap gap-2">
               {data.locations.map((l) => (
@@ -372,16 +390,18 @@ function StepOne({
             onChange={(e) => setLocationInput(e.target.value)}
             onKeyDown={(e) => handleKeyDown(e, "locations", locationInput, setLocationInput)}
             onBlur={() => addTag("locations", locationInput, setLocationInput)}
-            disabled={data.remoteOnly}
-            placeholder={data.remoteOnly ? "Remote selected" : 'e.g. "New York"'}
-            className={`${inputClass} disabled:bg-gray-50 disabled:text-gray-400`}
+            placeholder='e.g. "New York" — press Enter to add'
+            className={inputClass}
           />
           <label className="mt-3 inline-flex cursor-pointer items-center gap-2">
             <Checkbox
-              checked={data.remoteOnly}
-              onChange={(v) => onChange({ ...data, remoteOnly: v, locations: v ? [] : data.locations })}
+              checked={data.locations.includes("Remote")}
+              onChange={(v) => {
+                const without = data.locations.filter(l => l !== "Remote")
+                onChange({ ...data, locations: v ? ["Remote", ...without] : without, remoteOnly: v && without.length === 0 })
+              }}
             />
-            <span className="text-sm text-gray-600">Remote only</span>
+            <span className="text-sm text-gray-600">Open to remote</span>
           </label>
         </Field>
 
