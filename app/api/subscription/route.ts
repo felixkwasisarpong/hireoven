@@ -21,8 +21,8 @@ export async function GET() {
     `SELECT plan, status, current_period_end, billing_interval, amount_cents, cancel_at_period_end, trial_end
      FROM subscriptions
      WHERE user_id = $1
-       AND status IN ('active', 'trialing')
-     ORDER BY created_at DESC
+       AND status IN ('active', 'trialing', 'past_due', 'unpaid')
+     ORDER BY updated_at DESC NULLS LAST, created_at DESC
      LIMIT 1`,
     [user.id]
   )

@@ -43,12 +43,18 @@ const VOICE_STATUS: Partial<Record<VoiceState, string>> = {
   error:       "Couldn't hear that. Try again.",
 }
 
+const WAKE_WORD_RE = /\bhey\s+scout\b[\s,.:;!?-]*/i
+const WAKE_COMMAND_WINDOW_MS = 10_000
+
 // ── useVoiceRecognition ───────────────────────────────────────────────────────
 
 function useVoiceRecognition(onTranscript: (text: string, isFinal: boolean) => void) {
   const [voiceState, setVoiceState] = useState<VoiceState>("idle")
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null)
   const isListeningRef = useRef(false)
+  const shouldListenRef = useRef(false)
+  const manualStopRef = useRef(false)
+  const restartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const voiceStateRef = useRef<VoiceState>("idle")
 
   // Keep ref in sync so callbacks can read the latest state
@@ -60,14 +66,25 @@ function useVoiceRecognition(onTranscript: (text: string, isFinal: boolean) => v
     setSupported("SpeechRecognition" in window || "webkitSpeechRecognition" in window)
   }, [])
 
-  function stop() {
-    recognitionRef.current?.stop()
+  function clearRestartTimer() {
+    if (restartTimerRef.current) {
+      clearTimeout(restartTimerRef.current)
+      restartTimerRef.current = null
+    }
   }
 
-  function start() {
+  function stop() {
+    shouldListenRef.current = false
+    manualStopRef.current = true
+    clearRestartTimer()
+    recognitionRef.current?.stop()
+    setVoiceState("idle")
+  }
+
+  function startRecognition() {
     const API = window.SpeechRecognition ?? window.webkitSpeechRecognition
     const recognition = new API()
-    recognition.continuous = false
+    recognition.continuous = true
     recognition.interimResults = true
     recognition.lang = "en-US"
 
@@ -81,17 +98,23 @@ function useVoiceRecognition(onTranscript: (text: string, isFinal: boolean) => v
       const transcript = result[0].transcript.trim()
       const isFinal = result.isFinal
       onTranscript(transcript, isFinal)
-      if (isFinal) setVoiceState("processing")
+      if (isFinal) setVoiceState("listening")
     }
 
     recognition.onerror = (event) => {
       isListeningRef.current = false
       recognitionRef.current = null
       if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+        shouldListenRef.current = false
         setVoiceState("unsupported")
-      } else if (event.error === "no-speech" || event.error === "aborted") {
-        setVoiceState(voiceStateRef.current === "listening" ? "error" : "idle")
+      } else if (event.error === "no-speech") {
+        // Keep listening; browser may emit this after a short quiet spell.
+        if (!shouldListenRef.current) setVoiceState("error")
+      } else if (event.error === "aborted") {
+        // Abort is expected on manual stop; keep state stable for auto-restart paths.
+        if (manualStopRef.current || !shouldListenRef.current) setVoiceState("idle")
       } else {
+        shouldListenRef.current = false
         setVoiceState("error")
       }
     }
@@ -99,6 +122,23 @@ function useVoiceRecognition(onTranscript: (text: string, isFinal: boolean) => v
     recognition.onend = () => {
       isListeningRef.current = false
       recognitionRef.current = null
+
+      if (shouldListenRef.current && voiceStateRef.current !== "unsupported") {
+        // Some engines stop after short pauses even in continuous mode; auto-restart.
+        clearRestartTimer()
+        restartTimerRef.current = setTimeout(() => {
+          if (!shouldListenRef.current || recognitionRef.current) return
+          try {
+            manualStopRef.current = false
+            startRecognition()
+          } catch {
+            shouldListenRef.current = false
+            setVoiceState("error")
+          }
+        }, 140)
+        return
+      }
+
       // Reset to idle after listen/finalize; keep explicit unsupported/error states.
       setVoiceState((prev) =>
         prev === "listening" || prev === "processing" ? "idle" : prev
@@ -109,17 +149,29 @@ function useVoiceRecognition(onTranscript: (text: string, isFinal: boolean) => v
     recognition.start()
   }
 
-  function toggle() {
+  function start() {
     if (!supported) { setVoiceState("unsupported"); return }
-    if (isListeningRef.current) { stop(); return }
+    if (recognitionRef.current) return
+    shouldListenRef.current = true
+    manualStopRef.current = false
+    clearRestartTimer()
     setVoiceState("idle") // clear previous error before starting
+    startRecognition()
+  }
+
+  function toggle() {
+    if (isListeningRef.current || shouldListenRef.current) { stop(); return }
     start()
   }
 
   // Clean up on unmount
-  useEffect(() => () => { recognitionRef.current?.abort() }, [])
+  useEffect(() => () => {
+    shouldListenRef.current = false
+    clearRestartTimer()
+    recognitionRef.current?.abort()
+  }, [])
 
-  return { voiceState, toggle, supported }
+  return { voiceState, toggle, start, stop, supported }
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -128,6 +180,8 @@ type Props = {
   query: string
   onChange: (value: string) => void
   onSubmit: (e: React.FormEvent) => void
+  /** Optional wake-word path: "Hey Scout <command>" auto-sends the command. */
+  onVoiceCommand?: (message: string) => void
   isLoading: boolean
   chips: string[]
   onChipClick: (chip: string) => void
@@ -145,6 +199,7 @@ export function ScoutCommandBar({
   query,
   onChange,
   onSubmit,
+  onVoiceCommand,
   isLoading,
   chips,
   onChipClick,
@@ -157,16 +212,78 @@ export function ScoutCommandBar({
   const isDark = variant === "dark"
   const [historyIndex, setHistoryIndex] = useState(-1)
   const [draftQuery,   setDraftQuery]   = useState("")
+  const wakeArmedRef = useRef(false)
+  const wakeArmedAtRef = useRef(0)
 
-  const { voiceState, toggle: toggleVoice, supported: voiceSupported } =
+  function normalizeSpeech(text: string) {
+    return text.replace(/\s+/g, " ").trim()
+  }
+
+  function stripWakePrefix(text: string) {
+    const m = text.match(WAKE_WORD_RE)
+    if (!m) return null
+    const wakeEnd = (m.index ?? 0) + m[0].length
+    return text.slice(wakeEnd).replace(/^[\s,.:;!?-]+/, "").trim()
+  }
+
+  const {
+    voiceState,
+    toggle: toggleVoice,
+    stop: stopVoice,
+    supported: voiceSupported,
+  } =
     useVoiceRecognition((text, isFinal) => {
-      onChange(text)
-      if (isFinal) return
+      const normalized = normalizeSpeech(text)
+      if (!normalized) return
+
+      // Interim transcript previews in the input, same as before.
+      if (!isFinal) {
+        onChange(normalized)
+        return
+      }
+
+      // Wake-word flow: "Hey Scout <command>" (single utterance) OR
+      // "Hey Scout" followed by command within a short window.
+      if (onVoiceCommand) {
+        const inlineCommand = stripWakePrefix(normalized)
+        if (inlineCommand !== null) {
+          if (inlineCommand.length > 0) {
+            wakeArmedRef.current = false
+            onChange(inlineCommand)
+            stopVoice()
+            onVoiceCommand(inlineCommand)
+            return
+          }
+          wakeArmedRef.current = true
+          wakeArmedAtRef.current = Date.now()
+          onChange("")
+          return
+        }
+
+        if (
+          wakeArmedRef.current &&
+          Date.now() - wakeArmedAtRef.current <= WAKE_COMMAND_WINDOW_MS
+        ) {
+          wakeArmedRef.current = false
+          onChange(normalized)
+          stopVoice()
+          onVoiceCommand(normalized)
+          return
+        }
+
+        wakeArmedRef.current = false
+      }
+
+      // Fallback: plain voice dictation behavior.
+      onChange(normalized)
     })
 
   const isListening = voiceState === "listening"
   const isProcessing = voiceState === "processing"
-  const statusText  = VOICE_STATUS[voiceState]
+  const statusText  =
+    isListening && onVoiceCommand
+      ? 'Say "Hey Scout" and your command'
+      : VOICE_STATUS[voiceState]
 
   // ── History navigation ──────────────────────────────────────────────────────
 

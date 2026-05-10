@@ -54,7 +54,7 @@ export const COMPANY_SEED_ROWS: ReadonlyArray<
   ["Etsy", "etsy.com", "https://careers.etsy.com", "Retail", "large", { sponsors_h1b: true, sponsorship_confidence: 78 }],
   ["eBay", "ebay.com", "https://careers.ebayinc.com", "Retail", "enterprise", { sponsors_h1b: true, sponsorship_confidence: 85 }],
   ["Target", "target.com", "https://corporate.target.com/careers", "Retail", "enterprise", { sponsors_h1b: true, sponsorship_confidence: 70 }],
-  ["Walmart", "walmart.com", "https://careers.walmart.com", "Retail", "enterprise", { sponsors_h1b: true, sponsorship_confidence: 72 }],
+  ["Walmart", "walmart.com", "https://walmart.wd5.myworkdayjobs.com/WalmartExternal", "Retail", "enterprise", { sponsors_h1b: true, sponsorship_confidence: 72 }],
   ["Costco", "costco.com", "https://www.costco.com/jobs.html", "Retail", "enterprise", { sponsors_h1b: true, sponsorship_confidence: 65 }],
   ["Nike", "nike.com", "https://jobs.nike.com", "Retail", "enterprise", { sponsors_h1b: true, sponsorship_confidence: 70 }],
   ["Starbucks", "starbucks.com", "https://careers.starbucks.com", "Retail", "enterprise", { sponsors_h1b: true, sponsorship_confidence: 65 }],

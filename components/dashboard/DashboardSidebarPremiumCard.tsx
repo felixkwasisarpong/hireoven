@@ -15,8 +15,8 @@ export default function DashboardSidebarPremiumCard({
 }: {
   variant?: "light" | "dark"
 } = {}) {
-  const { isPro } = useSubscription()
-  const hideUpgrade = isPro || isSitePreviewMode()
+  const { isPro, isLoading } = useSubscription()
+  const hideUpgrade = isLoading || isPro || isSitePreviewMode()
 
   return (
     <div

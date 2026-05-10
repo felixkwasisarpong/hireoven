@@ -22,8 +22,8 @@ export async function getPlanForUserId(userId: string): Promise<Plan> {
       `SELECT plan
        FROM subscriptions
        WHERE user_id = $1
-         AND status IN ('active', 'trialing')
-       ORDER BY created_at DESC
+         AND status IN ('active', 'trialing', 'past_due', 'unpaid')
+       ORDER BY updated_at DESC NULLS LAST, created_at DESC
        LIMIT 1`,
       [userId]
     )

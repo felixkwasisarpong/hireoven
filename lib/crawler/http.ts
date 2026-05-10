@@ -128,6 +128,18 @@ export function detectBlockedHtml(html: string | null | undefined): string | nul
   if (!html) return null
   const compact = html.toLowerCase()
 
+  const hasForbiddenBlockSignal =
+    compact.includes("forbidden") &&
+    (
+      compact.includes("403 forbidden") ||
+      compact.includes("error 403") ||
+      compact.includes("http 403") ||
+      compact.includes("status code 403") ||
+      compact.includes("you don't have permission to access") ||
+      compact.includes("you dont have permission to access") ||
+      compact.includes("you do not have permission to access")
+    )
+
   const hasCloudflareBlockSignal =
     compact.includes("cloudflare") &&
     (
@@ -170,7 +182,7 @@ export function detectBlockedHtml(html: string | null | undefined): string | nul
       compact.includes("perimeterx, inc.")
     )
 
-  // AngularJS SPA shell — content not server-rendered, only template markup present
+  // AngularJS SPA shell - content not server-rendered, only template markup present
   const isAngularShell =
     compact.includes("ng-app") &&
     compact.includes("ng-controller") &&
@@ -180,7 +192,7 @@ export function detectBlockedHtml(html: string | null | undefined): string | nul
   if (isAngularShell) return "blocked_html_angular_spa"
 
   if (compact.includes("access denied")) return "blocked_html_access_denied"
-  if (compact.includes("forbidden")) return "blocked_html_forbidden"
+  if (hasForbiddenBlockSignal) return "blocked_html_forbidden"
   if (compact.includes("request blocked")) return "blocked_html_request_blocked"
   if (compact.includes("attention required")) return "blocked_html_attention_required"
   if (hasCloudflareBlockSignal) return "blocked_html_cloudflare"

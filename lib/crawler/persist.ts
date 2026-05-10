@@ -759,6 +759,28 @@ export async function persistCrawlJobs({
         `UPDATE jobs SET is_active = false, updated_at = $1 WHERE id = ANY($2::uuid[])`,
         [crawledAtIso, staleChunk]
       )
+
+      // Keep user tracker in sync: if a job disappears from active crawl results,
+      // move in-flight applications from Applied to Closed (withdrawn lane).
+      await pool.query(
+        `UPDATE job_applications ja
+         SET status = 'withdrawn',
+             timeline = COALESCE(ja.timeline, '[]'::jsonb) || jsonb_build_array(
+               jsonb_build_object(
+                 'id', gen_random_uuid(),
+                 'type', 'status_change',
+                 'status', 'withdrawn',
+                 'date', $1::timestamptz,
+                 'auto', true,
+                 'note', 'Auto-closed because the job is no longer active.'
+               )
+             ),
+             updated_at = $1
+         WHERE ja.job_id = ANY($2::uuid[])
+           AND ja.is_archived = false
+           AND ja.status = 'applied'`,
+        [crawledAtIso, staleChunk]
+      )
     }
   }
 
