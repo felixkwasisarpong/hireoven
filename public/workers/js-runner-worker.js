@@ -1,8 +1,8 @@
 /**
- * JavaScript/TypeScript Web Worker — runs JS code in a sandboxed environment.
+ * JavaScript Web Worker — runs JS code in a sandboxed environment.
  *
- * Security note: same as pyodide-worker.js — network APIs blocked, this is a
- * practice tool with honor-system security.
+ * Security note: network APIs are blocked. This is a practice tool with
+ * honor-system security — users can inspect state via React devtools.
  */
 
 /* eslint-disable no-restricted-globals */
@@ -59,21 +59,44 @@ function deepEqual(a, b) {
   return JSON.stringify(a) === JSON.stringify(b)
 }
 
+// Extract top-level declaration names from user code
+function extractTopLevelNames(code) {
+  const names = new Set()
+  // function declarations
+  for (const m of code.matchAll(/^function\s+(\w+)/gm)) names.add(m[1])
+  // const / let / var assignments
+  for (const m of code.matchAll(/^(?:const|let|var)\s+(\w+)/gm)) names.add(m[1])
+  // class declarations
+  for (const m of code.matchAll(/^class\s+(\w+)/gm)) names.add(m[1])
+  return names
+}
+
 function runUserCode(code) {
-  // Evaluate user code in worker scope using indirect eval
-  // This gives the user's functions a name in the global scope
-  const fn = new Function(TREE_HELPERS + "\n" + code + "\n; return {TreeNode, ListNode, _arrayToTree, _treeToArray}")
-  const exports = fn()
-  // Make helpers available on self
-  Object.assign(self, exports)
-  // Evaluate again at top-level to register any named functions
+  // Inject helpers + user code at global scope via indirect eval.
+  // function declarations and var assignments become globals (self.*).
   // eslint-disable-next-line no-eval
-  eval(TREE_HELPERS + "\n" + code)
+  ;(0, eval)(TREE_HELPERS + "\n" + code)
+
+  // const/let/class declarations don't leak to global scope via eval.
+  // Extract them by running the code inside a Function that returns them.
+  const names = extractTopLevelNames(code)
+  if (names.size > 0) {
+    const returnExpr = [...names]
+      .map(n => `"${n}": typeof ${n} !== "undefined" ? ${n} : undefined`)
+      .join(", ")
+    try {
+      const getter = new Function(TREE_HELPERS + "\n" + code + `\nreturn {${returnExpr}}`)
+      const exports = getter()
+      for (const [k, v] of Object.entries(exports)) {
+        if (v !== undefined && typeof self[k] === "undefined") self[k] = v
+      }
+    } catch (_) {
+      // ignore — the eval pass above will surface any real syntax errors
+    }
+  }
 }
 
 function callFn(fnName, input, slug) {
-  const fn = self[fnName]
-
   if (CLASS_OPS_SLUGS.has(slug)) {
     const [ops, args] = input
     let inst = null
@@ -92,7 +115,7 @@ function callFn(fnName, input, slug) {
 
   if (TREE_INPUT_SLUGS.has(slug)) {
     const root = self._arrayToTree(input[0])
-    return fn(root, ...input.slice(1))
+    return self[fnName](root, ...input.slice(1))
   }
 
   if (CODEC_SLUGS.has(slug)) {
@@ -103,7 +126,11 @@ function callFn(fnName, input, slug) {
     return self._treeToArray(deserialized)
   }
 
-  if (typeof fn !== "function") throw new Error(`Function '${fnName}' not found`)
+  const fn = self[fnName]
+  if (typeof fn !== "function" && typeof fn !== "object") {
+    throw new Error(`'${fnName}' is not defined. Make sure your function or class is named exactly '${fnName}'.`)
+  }
+  if (typeof fn !== "function") throw new Error(`'${fnName}' is not a function`)
   return fn(...input)
 }
 
@@ -145,7 +172,6 @@ function runTests(code, fnName, tests, slug) {
     }
 
     if (performance.now() - testStart > 5000) {
-      // This test ran too long — stop remaining tests
       for (let j = i + 1; j < tests.length; j++) {
         results.failed += tests[j].weight
         results.failedCount++

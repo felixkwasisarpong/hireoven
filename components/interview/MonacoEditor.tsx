@@ -7,7 +7,7 @@ import type { editor } from "monaco-editor"
 const MonacoEditorBase = dynamic(() => import("@monaco-editor/react"), { ssr: false })
 
 type Props = {
-  language: "python" | "javascript"
+  language: string
   value: string
   onChange: (v: string) => void
   readOnly?: boolean
@@ -31,7 +31,7 @@ export default function MonacoEditor({ language, value, onChange, readOnly }: Pr
   return (
     <MonacoEditorBase
       height="100%"
-      language={language === "python" ? "python" : "javascript"}
+      language={language === "python" ? "python" : language === "typescript" ? "typescript" : language === "go" ? "go" : language === "java" ? "java" : "javascript"}
       value={value}
       onChange={(v) => onChange(v ?? "")}
       theme="vs-dark"

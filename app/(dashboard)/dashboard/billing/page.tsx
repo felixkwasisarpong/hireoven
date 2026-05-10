@@ -56,7 +56,7 @@ const PLAN_LABELS: Record<string, string> = {
 const PLAN_TAGLINES: Record<string, string> = {
   free: "Browse the live job feed and track applications.",
   pro: "AI tools, unlimited alerts, autofill, and deep analyses.",
-  pro_max: "Everything in Pro plus live interviews and Scout strategy.",
+  pro_max: "Everything in Pro plus Scout strategy and unlimited AI tools.",
 }
 
 const STATUS_LABELS: Record<string, { label: string; color: string; dot: string }> = {

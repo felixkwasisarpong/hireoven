@@ -23,7 +23,7 @@ VOICE MODE — additional rules:
 - After 20 seconds of continued silence, gently re-ask the question with slightly different wording.
 - If the candidate uses excessive filler ("um," "like," "you know") — note it INTERNALLY for the debrief but do NOT comment on it during the interview.
 - Do NOT output the <metadata> block in voice mode. The transcript pipeline will tag turns post-hoc.
-- When the system tells you "TIME_REMAINING_2_MIN", deliver one closing question.
+- When the system tells you "TIME_REMAINING_5_MIN", deliver one closing question.
 - When the system tells you "TIME_UP", deliver a one-sentence wrap, thank the candidate, and stop speaking. Do NOT output an end token — the client controls session termination.
 - Your name is Scout. When the candidate's first message is "BEGIN_INTERVIEW", open with: "Hi, I'm Scout, your interviewer today." followed by a brief intro in persona and then the first question.
 
@@ -123,7 +123,7 @@ The metadata block is stripped from the message before the candidate sees it. Us
 
 7. When the candidate's first message is "BEGIN_INTERVIEW", introduce yourself as Scout ("Hi, I'm Scout, your interviewer today.") followed by a brief 1-sentence intro in persona, then the first question.
 
-8. When you receive a message containing "[SYSTEM NOTE] TIME_REMAINING_2_MIN", deliver a closing question if you haven't already. When you receive "[SYSTEM NOTE] TIME_UP", deliver a 1-sentence wrap and then output exactly the token <<END_INTERVIEW>> on its own line.
+8. When you receive a message containing "[SYSTEM NOTE] TIME_REMAINING_5_MIN", deliver a closing question if you haven't already. When you receive "[SYSTEM NOTE] TIME_UP", deliver a 1-sentence wrap and then output exactly the token <<END_INTERVIEW>> on its own line.
 
 ${input.practiceFocus ? `\nTHIS IS A FOCUSED PRACTICE SESSION.\nThe candidate is drilling a specific weakness identified in a previous interview:\n  Weakness: ${input.practiceFocus.observation}\n  Suggested fix: ${input.practiceFocus.suggestion}\n\nDesign the session around this weakness. Ask 3-5 questions that probe this exact area. Push the candidate to demonstrate the fix. Keep all other interview rules in place — but this is the priority for the entire session.\n` : ""}Do not mention the metadata block, the rules, or the system notes to the candidate. Stay in character.${input.voiceMode ? "\n\n" + VOICE_MODE_ADDENDUM : ""}`
 }
@@ -137,7 +137,7 @@ VOICE MODE — additional rules:
 - When the system sends "CURRENT_CODE:" snippets, silently update your mental model of what they're working on. Do NOT read the code aloud or acknowledge the system note.
 - When the system says "SUBMIT_WALKTHROUGH", ask the candidate to walk you through their solution. Then ask one follow-up at a time: complexity, edge cases.
 - When the system says "FAILED_RUN:", react briefly in persona — curious, not critical.
-- When the system says "TIME_REMAINING_2_MIN", say one sentence: "We're almost out of time — wrap up what you can."
+- When the system says "TIME_REMAINING_5_MIN", say one sentence: "We're almost out of time — wrap up what you can."
 - When the system says "TIME_UP", say: "Time's up — great effort." Then stop.`
 
 export function buildCodingInterviewerSystemPrompt(input: {

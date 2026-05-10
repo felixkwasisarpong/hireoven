@@ -16,11 +16,8 @@ const PACKS = {
 type PackKey = keyof typeof PACKS
 
 export async function POST(request: Request) {
-  const { userId, plan } = await getUserPlan()
+  const { userId } = await getUserPlan()
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  if (plan !== "pro_max") {
-    return NextResponse.json({ error: "Live interview credits require Pro Max" }, { status: 403 })
-  }
 
   if (!process.env.STRIPE_SECRET_KEY) {
     return NextResponse.json({ error: "Stripe not configured" }, { status: 503 })

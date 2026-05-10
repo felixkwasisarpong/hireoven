@@ -113,9 +113,9 @@ export default function LiveInterviewRoom({ sessionId }: { sessionId: string }) 
   useEffect(() => {
     if (phase !== "live" || !clientRef.current) return
 
-    if (remainingSec <= 120 && !timeWarningSentRef.current) {
+    if (remainingSec <= 300 && !timeWarningSentRef.current) {
       timeWarningSentRef.current = true
-      void clientRef.current.sendSystemNote("TIME_REMAINING_2_MIN")
+      void clientRef.current.sendSystemNote("TIME_REMAINING_5_MIN")
     }
 
     if (remainingSec === 0 && !autoEndFiredRef.current) {

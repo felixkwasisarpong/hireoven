@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils"
 
 type InterviewType = "text" | "live" | "coding"
 type QuestionSet = "behavioral" | "technical_screen" | "system_design" | "mixed"
-type Duration = 15 | 30 | 45 | 60
+type Duration = 15 | 30
 
 type SavedJob = {
   id: string
@@ -34,7 +34,7 @@ const QUESTION_SET_OPTIONS: { id: QuestionSet; label: string }[] = [
   { id: "mixed",           label: "Mixed" },
 ]
 
-const DURATION_OPTIONS: Duration[] = [15, 30, 45, 60]
+const DURATION_OPTIONS: Duration[] = [15, 30]
 
 type Props = {
   initialType?: InterviewType
@@ -57,16 +57,16 @@ export default function SetupForm({ initialType, initialJobId }: Props) {
   const [jobs, setJobs] = useState<SavedJob[]>([])
 
   // Credits — only fetched when Pro Max and live mode selected
-  const [credits, setCredits] = useState<{ balance: number; costs: { short: number; long: number } } | null>(null)
+  const [credits, setCredits] = useState<{ balance: number; costs: { short: number } } | null>(null)
   const [buyingCredits, setBuyingCredits] = useState(false)
 
   useEffect(() => {
-    if (!isProMax || type !== "live") return
+    if (type !== "live") return
     fetch("/api/interview/credits/balance")
       .then((r) => r.json())
-      .then((d) => setCredits({ balance: d.balance ?? 0, costs: d.costs ?? { short: 4, long: 7 } }))
+      .then((d) => setCredits({ balance: d.balance ?? 0, costs: d.costs ?? { short: 1 } }))
       .catch(() => {})
-  }, [isProMax, type])
+  }, [type])
 
   async function buyCredits(pack: string) {
     setBuyingCredits(true)
@@ -194,33 +194,9 @@ export default function SetupForm({ initialType, initialJobId }: Props) {
       )
     }
 
-    // Live requires Pro Max
-    if (type === "live" && !isProMax) {
-      return (
-        <div className="space-y-4">
-          <Link href="/dashboard/interview" className="text-[13px] font-medium text-slate-500 hover:text-slate-700">
-            ← Back to interview hub
-          </Link>
-          <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
-            <Lock className="mx-auto mb-3 h-8 w-8 text-slate-400" />
-            <h2 className="text-[16px] font-bold text-slate-900">Live Interview requires Pro Max</h2>
-            <p className="mt-2 text-[13px] text-slate-500">
-              Upgrade to Pro Max for live voice + webcam interviews and included monthly session credits.
-            </p>
-            <Link
-              href="/dashboard/upgrade?plan=pro_max"
-              className="mt-5 inline-flex rounded-lg bg-orange-500 px-6 py-2.5 text-[14px] font-semibold text-white hover:bg-orange-600"
-            >
-              Upgrade to Pro Max — $29/mo
-            </Link>
-          </div>
-        </div>
-      )
-    }
-
     // Live requires credits
-    if (type === "live" && isProMax && credits !== null) {
-      const needed = duration <= 30 ? (credits.costs.short ?? 4) : (credits.costs.long ?? 7)
+    if (type === "live" && credits !== null) {
+      const needed = credits.costs.short ?? 1
       if (credits.balance < needed) {
         return (
           <div className="space-y-4">
@@ -237,10 +213,8 @@ export default function SetupForm({ initialType, initialJobId }: Props) {
               </p>
               <div className="mt-5 grid grid-cols-2 gap-3 max-w-xs mx-auto">
                 {[
-                  { pack: "session_short_1", label: "1 session", price: "30 min — $12" },
-                  { pack: "session_long_1",  label: "1 session", price: "60 min — $20" },
-                  { pack: "session_short_3", label: "3 sessions", price: "3x30 min — $30" },
-                  { pack: "session_short_5", label: "5 sessions", price: "5x30 min — $45" },
+                  { pack: "session_short_1", label: "1 session",  price: "30 min — $12" },
+                  { pack: "session_short_3", label: "3 sessions", price: "3×30 min — $30" },
                 ].map(({ pack, label, price }) => (
                   <button
                     key={pack}
@@ -405,7 +379,7 @@ export default function SetupForm({ initialType, initialJobId }: Props) {
         <div className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3 text-[13px]">
           <span className="text-slate-600">
             This session will use{" "}
-            <strong>{duration <= 30 ? credits.costs.short : credits.costs.long} credits</strong>
+            <strong>{credits.costs.short} credits</strong>
           </span>
           <span className="font-semibold text-slate-900">
             Balance: {credits.balance} cr

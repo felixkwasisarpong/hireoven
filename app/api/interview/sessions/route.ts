@@ -28,7 +28,7 @@ const VALID_QUESTION_SETS: InterviewQuestionSet[] = [
   "coding",
   "mixed",
 ]
-const VALID_DURATIONS = [15, 30, 45, 60]
+const VALID_DURATIONS = [15, 30]
 
 export async function GET(request: NextRequest) {
   const supabase = await createClient()

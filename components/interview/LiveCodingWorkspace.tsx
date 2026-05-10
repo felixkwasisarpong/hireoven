@@ -440,7 +440,8 @@ export default function LiveCodingWorkspace({ sessionId }: { sessionId: string }
   }
 
   // ── Language toggle ────────────────────────────────────────────────────────
-  async function handleLanguageChange(newLang: "python" | "javascript") {
+  async function handleLanguageChange(newLang: import("@/lib/scout/interview/codingRunner").CodingLanguage) {
+    if (newLang !== "python" && newLang !== "javascript") return
     if (newLang === language) return
     const hasCode = code.trim() !== "" && code !== (problem?.functionSignature?.[language] ?? "")
     if (hasCode && !confirm("Switching language clears your current code. Continue?")) return

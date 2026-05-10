@@ -57,5 +57,6 @@ export async function POST(
     slug,
     pythonFnName,
     jsFnName,
+    pythonSignature: function_signature.python ?? "",
   })
 }
