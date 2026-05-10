@@ -19,6 +19,7 @@ type DigestQueryRow = {
   first_detected_at: string
   overall_score: number
   company_name: string | null
+  company_domain: string | null
   sponsors_h1b: boolean | null
   sponsorship_score: number | null
   requires_authorization: boolean
@@ -46,20 +47,17 @@ export type CrawlTopMatchDigestSummary = {
 }
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null
-const HERO_GIF_URL =
-  process.env.CRAWL_MATCH_DIGEST_GIF_URL ??
-  "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM3A2M3Fua2Myam1pNWJoN3N2OHQ2M2p6bnV1eWc5aXk5OW9jaW1xbyZlcD12MV9naWZzX3NlYXJjaCZjdD1n/26ufdipQqU2lhNA4g/giphy.gif"
 
 function getBaseUrl() {
   return process.env.NEXT_PUBLIC_APP_URL ?? "https://hireoven.com"
 }
 
-function escapeHtml(value: string) {
+function esc(value: string) {
   return value
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
-    .replace(/\"/g, "&quot;")
+    .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;")
 }
 
@@ -72,149 +70,197 @@ function formatLocation(row: DigestQueryRow) {
 }
 
 function formatFreshness(timestamp: string) {
-  const diffMinutes = Math.max(1, Math.floor((Date.now() - new Date(timestamp).getTime()) / 60_000))
-  if (diffMinutes < 60) return `${diffMinutes}m ago`
-  const diffHours = Math.floor(diffMinutes / 60)
-  if (diffHours < 24) return `${diffHours}h ago`
-  const diffDays = Math.floor(diffHours / 24)
-  return `${diffDays}d ago`
+  const diffMins = Math.max(1, Math.floor((Date.now() - new Date(timestamp).getTime()) / 60_000))
+  if (diffMins < 60) return `${diffMins}m ago`
+  const diffH = Math.floor(diffMins / 60)
+  if (diffH < 24) return `${diffH}h ago`
+  return `${Math.floor(diffH / 24)}d ago`
 }
 
 function formatSalary(row: DigestQueryRow) {
   const currency = (row.salary_currency ?? "USD").toUpperCase()
   if (row.salary_min != null && row.salary_max != null) {
-    return `${currency} ${Math.round(row.salary_min / 1000)}k - ${Math.round(row.salary_max / 1000)}k`
+    return `${currency} ${Math.round(row.salary_min / 1000)}k – ${Math.round(row.salary_max / 1000)}k`
   }
-  if (row.salary_min != null) {
-    return `${currency} ${Math.round(row.salary_min / 1000)}k+`
-  }
+  if (row.salary_min != null) return `${currency} ${Math.round(row.salary_min / 1000)}k+`
   return null
 }
 
-function sponsorshipLabel(row: DigestQueryRow) {
-  if (row.sponsors_h1b === true || (row.sponsorship_score ?? 0) >= 70) {
-    return "H1B likely"
-  }
-  if (row.requires_authorization) {
-    return "No sponsorship"
-  }
-  return "Visa signal mixed"
+function logoProxyUrl(domain: string | null | undefined): string | null {
+  if (!domain) return null
+  return `${getBaseUrl()}/api/logo?domain=${encodeURIComponent(domain.trim().toLowerCase())}`
 }
 
-function sponsorshipStyles(row: DigestQueryRow) {
-  if (row.sponsors_h1b === true || (row.sponsorship_score ?? 0) >= 70) {
-    return "display:inline-block;border:1px solid #86efac;background:#f0fdf4;color:#166534;border-radius:999px;padding:5px 10px;font-size:11px;font-weight:700;"
-  }
-  if (row.requires_authorization) {
-    return "display:inline-block;border:1px solid #fecaca;background:#fef2f2;color:#991b1b;border-radius:999px;padding:5px 10px;font-size:11px;font-weight:700;"
-  }
-  return "display:inline-block;border:1px solid #fed7aa;background:#fff7ed;color:#9a3412;border-radius:999px;padding:5px 10px;font-size:11px;font-weight:700;"
+function scoreColor(score: number): { bg: string; border: string; text: string } {
+  if (score >= 90) return { bg: "#f0fdf4", border: "#bbf7d0", text: "#15803d" }
+  if (score >= 80) return { bg: "#eff6ff", border: "#bfdbfe", text: "#1d4ed8" }
+  return { bg: "#fff7ed", border: "#fed7aa", text: "#9a3412" }
 }
 
-function scoreStyles(score: number) {
-  if (score >= 90) {
-    return "display:inline-block;border:1px solid #86efac;background:#ecfdf5;color:#166534;border-radius:999px;padding:6px 12px;font-size:12px;font-weight:800;"
-  }
-  if (score >= 85) {
-    return "display:inline-block;border:1px solid #7dd3fc;background:#f0f9ff;color:#075985;border-radius:999px;padding:6px 12px;font-size:12px;font-weight:800;"
-  }
-  return "display:inline-block;border:1px solid #fdba74;background:#fff7ed;color:#9a3412;border-radius:999px;padding:6px 12px;font-size:12px;font-weight:800;"
-}
-
-function renderJobCard(row: DigestQueryRow) {
-  const salary = formatSalary(row)
+function renderJobRow(row: DigestQueryRow, index: number) {
   const company = row.company_name ?? "Tracked company"
+  const proxyUrl = logoProxyUrl(row.company_domain)
+  const salary = formatSalary(row)
+  const score = Math.round(row.overall_score)
+  const sc = scoreColor(score)
+
+  const logoHtml = proxyUrl
+    ? `<img src="${esc(proxyUrl)}" alt="${esc(company)}" width="48" height="48"
+          style="width:48px;height:48px;border-radius:8px;object-fit:contain;border:1px solid #e2e8f0;background:#fff;display:block;" />`
+    : `<div style="width:48px;height:48px;border-radius:8px;background:linear-gradient(135deg,#FF5C18,#FF9A3C);font-size:20px;font-weight:800;color:#fff;text-align:center;line-height:48px;">${esc(company.charAt(0).toUpperCase())}</div>`
+
+  let sponsorBadge = ""
+  if (row.sponsors_h1b)
+    sponsorBadge = `<span style="display:inline-block;background:#f0fdf4;border:1px solid #bbf7d0;color:#15803d;border-radius:4px;padding:2px 7px;font-size:11px;font-weight:600;">✓ H1B sponsor</span>`
+  else if (row.requires_authorization)
+    sponsorBadge = `<span style="display:inline-block;background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;border-radius:4px;padding:2px 7px;font-size:11px;font-weight:600;">No sponsorship</span>`
+  else if ((row.sponsorship_score ?? 0) > 60)
+    sponsorBadge = `<span style="display:inline-block;background:#faf5ff;border:1px solid #e9d5ff;color:#7c3aed;border-radius:4px;padding:2px 7px;font-size:11px;font-weight:600;">Likely sponsors</span>`
+
+  const scoreBadge = `<span style="display:inline-block;background:${sc.bg};border:1px solid ${sc.border};color:${sc.text};border-radius:4px;padding:2px 7px;font-size:11px;font-weight:700;">${score}% match</span>`
+  const badges = [scoreBadge, sponsorBadge].filter(Boolean).join("&nbsp;")
+
+  const jobUrl = `${getBaseUrl()}/dashboard/jobs/${esc(row.job_id)}`
+  const divider = index > 0
+    ? `<tr><td colspan="2" style="padding:0 0 16px;"><div style="height:1px;background:#f1f5f9;"></div></td></tr>`
+    : ""
 
   return `
-    <div style="border:1px solid #ffe7d6;border-radius:18px;padding:18px;margin-bottom:14px;background:#ffffff;">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
-        <div style="min-width:0;flex:1;">
-          <div style="font-size:12px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#9ca3af;">
-            ${escapeHtml(company)}
-          </div>
-          <div style="font-size:19px;line-height:1.35;font-weight:800;color:#111827;margin-top:6px;">
-            ${escapeHtml(row.title)}
-          </div>
-          <div style="font-size:13px;color:#475569;margin-top:10px;">
-            ${escapeHtml(formatLocation(row))}
-          </div>
-          <div style="font-size:12px;color:#64748b;margin-top:6px;">
-            Freshness: ${escapeHtml(formatFreshness(row.first_detected_at))}
-            ${salary ? ` · ${escapeHtml(salary)}` : ""}
-          </div>
-          <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-            <span style="${sponsorshipStyles(row)}">${escapeHtml(sponsorshipLabel(row))}</span>
-            <span style="font-size:11px;color:#94a3b8;">Rank #${row.rank}</span>
-          </div>
+    ${divider}
+    <tr>
+      <td style="vertical-align:top;padding-right:14px;width:62px;padding-bottom:20px;">${logoHtml}</td>
+      <td style="vertical-align:top;padding-bottom:20px;">
+        <div style="font-size:15px;font-weight:700;color:#0f172a;line-height:1.3;margin-bottom:3px;">
+          <a href="${jobUrl}" style="color:#0f172a;text-decoration:none;">${esc(row.title)}</a>
         </div>
-        <div style="text-align:right;flex-shrink:0;">
-          <span style="${scoreStyles(row.overall_score)}">${Math.round(row.overall_score)}% match</span>
+        <div style="font-size:13px;color:#475569;margin-bottom:2px;">${esc(company)}</div>
+        <div style="font-size:12px;color:#94a3b8;margin-bottom:8px;">
+          ${esc(formatLocation(row))}&nbsp;·&nbsp;${formatFreshness(row.first_detected_at)}${salary ? `&nbsp;·&nbsp;${esc(salary)}` : ""}
         </div>
-      </div>
-
-      <div style="margin-top:16px;">
-        <a href="${escapeHtml(row.apply_url)}" style="display:inline-block;background:#f97316;color:#ffffff;text-decoration:none;padding:11px 18px;border-radius:999px;font-size:13px;font-weight:800;">
-          Open role
-        </a>
-      </div>
-    </div>
+        ${badges ? `<div>${badges}</div>` : ""}
+      </td>
+    </tr>
   `
 }
 
 function renderDigestHtml(args: {
-  recipientName: string
+  firstName: string
   jobs: DigestQueryRow[]
   minScore: number
-  jobsInsertedInWindow: number
-  windowStartIso: string
-  windowEndIso: string
 }) {
   const base = getBaseUrl()
-  const windowStart = new Date(args.windowStartIso).toLocaleDateString()
-  const windowEnd = new Date(args.windowEndIso).toLocaleDateString()
-  const cardsHtml = args.jobs.map(renderJobCard).join("")
+  const count = args.jobs.length
+  const year = new Date().getFullYear()
+  const jobRowsHtml = args.jobs.map((row, i) => renderJobRow(row, i)).join("")
 
-  return `
-    <!doctype html>
-    <html>
-      <body style="margin:0;padding:28px;background:#fff9f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#111827;">
-        <div style="display:none;max-height:0;overflow:hidden;opacity:0;">Top ${args.jobs.length} job matches from your latest crawl.</div>
-        <div style="max-width:680px;margin:0 auto;background:#ffffff;border:1px solid #fed7aa;border-radius:26px;overflow:hidden;">
-          <div style="padding:26px 28px 18px;background:linear-gradient(180deg,#fff7ed 0%,#ffffff 95%);border-bottom:1px solid #ffedd5;">
-            <div style="font-size:13px;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:#ea580c;">Hireoven Match Drop</div>
-            <div style="font-size:30px;line-height:1.15;font-weight:900;color:#111827;margin-top:12px;">
-              Your Top ${args.jobs.length} Matches Are In
-            </div>
-            <div style="font-size:15px;line-height:1.6;color:#475569;margin-top:10px;">
-              Hey ${escapeHtml(args.recipientName)} - we just finished a crawl and found high-fit roles with score <strong>${args.minScore}%+</strong>.
-            </div>
-          </div>
+  const headerTitle = count === 1
+    ? `1 new match for you`
+    : `${count} new matches for you`
 
-          <div style="padding:0 28px 22px;background:#ffffff;">
-            <img src="${escapeHtml(HERO_GIF_URL)}" alt="New opportunities" style="display:block;width:100%;max-width:624px;height:200px;object-fit:cover;border-radius:16px;margin-top:18px;border:1px solid #ffe8d8;" />
-          </div>
+  const topCompanies = [...new Set(args.jobs.slice(0, 2).map(j => j.company_name).filter(Boolean))]
+  const headerSub = topCompanies.length > 0
+    ? `High-fit roles from ${topCompanies.join(", ")}${count > topCompanies.length ? ` and ${count - topCompanies.length} more` : ""}.`
+    : `Fresh roles that align with your resume and profile.`
 
-          <div style="padding:0 28px 10px;">
-            <div style="font-size:13px;color:#64748b;margin-bottom:18px;">
-              Crawl window: ${escapeHtml(windowStart)} - ${escapeHtml(windowEnd)} · New jobs indexed: ${args.jobsInsertedInWindow}
-            </div>
-            ${cardsHtml}
-          </div>
+  const preheader = topCompanies.length > 0
+    ? `${headerTitle} — ${topCompanies.join(", ")}${count > 2 ? ` +${count - 2} more` : ""}`
+    : headerTitle
 
-          <div style="padding:10px 28px 30px;">
-            <a href="${escapeHtml(base)}/dashboard?sort=match" style="display:inline-block;background:#111827;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:999px;font-size:14px;font-weight:800;">
-              View all matches on Hireoven
-            </a>
-          </div>
+  return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/></head>
+<body style="margin:0;padding:0;background:#f3f2ef;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
 
-          <div style="padding:0 28px 28px;font-size:12px;line-height:1.6;color:#94a3b8;">
-            You’re receiving this because email alerts are enabled on your account.
-            <a href="${escapeHtml(base)}/dashboard/onboarding" style="color:#ea580c;">Manage preferences</a>
+  <div style="display:none;max-height:0;overflow:hidden;font-size:1px;color:#f3f2ef;">${esc(preheader)}</div>
+
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f2ef;padding:24px 16px 0;">
+    <tr><td align="center">
+      <table width="100%" style="max-width:584px;" cellpadding="0" cellspacing="0">
+
+        <!-- Wordmark -->
+        <tr><td style="padding:0 0 16px;">
+          <span style="font-size:20px;font-weight:900;letter-spacing:-0.5px;">
+            <span style="color:#FF5C18;">Hire</span><span style="color:#0f172a;">oven</span>
+          </span>
+        </td></tr>
+
+        <!-- Card -->
+        <tr><td style="background:#ffffff;border-radius:8px;overflow:hidden;border:1px solid #e2e8f0;">
+
+          <!-- Header -->
+          <table width="100%" cellpadding="0" cellspacing="0">
+            <tr><td style="padding:20px 24px 16px;border-bottom:1px solid #f1f5f9;">
+              <div style="font-size:22px;font-weight:800;color:#0f172a;line-height:1.2;margin-bottom:4px;">${esc(headerTitle)}</div>
+              <div style="font-size:14px;color:#64748b;line-height:1.5;">
+                Hi ${esc(args.firstName)} — ${esc(headerSub)}
+              </div>
+            </td></tr>
+          </table>
+
+          <!-- Jobs -->
+          <table width="100%" cellpadding="0" cellspacing="0">
+            <tr><td style="padding:20px 24px 4px;">
+              <table width="100%" cellpadding="0" cellspacing="0">
+                ${jobRowsHtml}
+              </table>
+            </td></tr>
+          </table>
+
+          <!-- CTA -->
+          <table width="100%" cellpadding="0" cellspacing="0">
+            <tr><td style="padding:4px 24px 24px;">
+              <a href="${esc(base)}/dashboard?sort=match"
+                 style="display:inline-block;border:1.5px solid #FF5C18;color:#FF5C18;text-decoration:none;padding:10px 24px;border-radius:999px;font-size:14px;font-weight:700;">
+                See all your matches
+              </a>
+            </td></tr>
+          </table>
+
+        </td></tr>
+
+        <!-- Footer -->
+        <tr><td style="padding:24px 4px 32px;">
+          <div style="font-size:12px;color:#64748b;line-height:1.7;">
+            You're receiving this because new jobs matching your profile were found.<br>
+            <a href="${esc(base)}/dashboard/alerts" style="color:#64748b;text-decoration:underline;">Manage alerts</a>
+            &nbsp;·&nbsp;
+            <a href="${esc(base)}/dashboard/onboarding" style="color:#64748b;text-decoration:underline;">Update preferences</a>
           </div>
-        </div>
-      </body>
-    </html>
-  `
+          <div style="margin-top:12px;">
+            <span style="font-size:14px;font-weight:900;letter-spacing:-0.3px;">
+              <span style="color:#FF5C18;">Hire</span><span style="color:#0f172a;">oven</span>
+            </span>
+          </div>
+          <div style="font-size:11px;color:#94a3b8;margin-top:6px;">
+            &copy; ${year} Hireoven. Jobs served fresh.
+          </div>
+        </td></tr>
+
+      </table>
+    </td></tr>
+  </table>
+
+</body>
+</html>`
+}
+
+function buildSubjectLine(firstName: string, jobs: DigestQueryRow[]): string {
+  const count = jobs.length
+  const topCompanies = [...new Set(jobs.slice(0, 2).map(j => j.company_name).filter(Boolean))]
+
+  if (topCompanies.length === 0) {
+    return count === 1
+      ? `${firstName}, 1 new match just landed`
+      : `${firstName}, ${count} new matches just landed`
+  }
+
+  const companyStr = topCompanies.length === 1
+    ? topCompanies[0]!
+    : `${topCompanies[0]} and ${topCompanies[1]}`
+
+  return count === 1
+    ? `New match at ${companyStr}`
+    : `${count} new matches — ${companyStr}${count > 2 ? ` +${count - 2} more` : ""}`
 }
 
 async function fetchDigestRows(params: {
@@ -264,6 +310,7 @@ async function fetchDigestRows(params: {
          j.first_detected_at,
          b.overall_score,
          c.name AS company_name,
+         c.domain AS company_domain,
          j.sponsors_h1b,
          j.sponsorship_score,
          j.requires_authorization,
@@ -292,10 +339,7 @@ function groupRowsByUser(rows: DigestQueryRow[]) {
   const byUser = new Map<string, UserDigestPayload>()
   for (const row of rows) {
     const existing = byUser.get(row.user_id)
-    if (existing) {
-      existing.jobs.push(row)
-      continue
-    }
+    if (existing) { existing.jobs.push(row); continue }
     byUser.set(row.user_id, {
       userId: row.user_id,
       email: row.email,
@@ -309,10 +353,8 @@ function groupRowsByUser(rows: DigestQueryRow[]) {
 async function countInsertedJobs(windowStartIso: string, windowEndIso: string) {
   const pool = getPostgresPool()
   const result = await pool.query<{ count: string }>(
-    `SELECT COUNT(*)::text AS count
-     FROM jobs
-     WHERE created_at >= $1::timestamptz
-       AND created_at <= $2::timestamptz`,
+    `SELECT COUNT(*)::text AS count FROM jobs
+     WHERE created_at >= $1::timestamptz AND created_at <= $2::timestamptz`,
     [windowStartIso, windowEndIso]
   )
   return Number(result.rows[0]?.count ?? 0)
@@ -344,12 +386,7 @@ export async function sendCrawlTopMatchDigests(params: {
 
   const [jobsInsertedInWindow, rows] = await Promise.all([
     countInsertedJobs(params.windowStartIso, params.windowEndIso),
-    fetchDigestRows({
-      windowStartIso: params.windowStartIso,
-      windowEndIso: params.windowEndIso,
-      minScore,
-      maxJobsPerUser,
-    }),
+    fetchDigestRows({ windowStartIso: params.windowStartIso, windowEndIso: params.windowEndIso, minScore, maxJobsPerUser }),
   ])
 
   if (rows.length === 0) {
@@ -372,20 +409,14 @@ export async function sendCrawlTopMatchDigests(params: {
   let emailsFailed = 0
 
   for (const user of users) {
-    const recipientName = user.fullName?.split(" ")[0]?.trim() || "there"
-    const html = renderDigestHtml({
-      recipientName,
-      jobs: user.jobs,
-      minScore,
-      jobsInsertedInWindow,
-      windowStartIso: params.windowStartIso,
-      windowEndIso: params.windowEndIso,
-    })
+    const firstName = user.fullName?.split(" ")[0]?.trim() || "there"
+    const subject = buildSubjectLine(firstName, user.jobs)
+    const html = renderDigestHtml({ firstName, jobs: user.jobs, minScore })
 
     const { error } = await resend.emails.send({
       from: getAlertsFromEmail(),
       to: [user.email],
-      subject: `Top ${user.jobs.length} job matches (${minScore}%+) from the latest crawl`,
+      subject,
       html,
     })
 
@@ -396,12 +427,7 @@ export async function sendCrawlTopMatchDigests(params: {
     }
 
     emailsSent += 1
-    await logApiUsage({
-      service: "resend",
-      operation: "crawl-top-match-digest",
-      tokens_used: null,
-      cost_usd: 0,
-    })
+    await logApiUsage({ service: "resend", operation: "crawl-top-match-digest", tokens_used: null, cost_usd: 0 })
   }
 
   return {

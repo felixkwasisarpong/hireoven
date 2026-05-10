@@ -8,7 +8,6 @@ import {
   Bookmark,
   Briefcase,
   Building2,
-  Check,
   MapPin,
   ShieldCheck,
   ShieldX,
@@ -27,6 +26,7 @@ import {
   formatEmploymentLabel,
   formatSalaryLabel,
   resolveJobCardView,
+  type JobCardViewModel,
 } from "@/lib/jobs/normalization"
 import {
   employerLikelySponsorsH1b,
@@ -45,14 +45,8 @@ import {
   saveJobToPipeline,
 } from "@/lib/applications/save-job-client"
 import { getApplyCtaLabel, isKnownAtsApplyUrl } from "@/lib/jobs/apply-cta"
-import { getJobIntelligence } from "@/lib/jobs/intelligence"
 import { useToast } from "@/components/ui/ToastProvider"
 import { cn } from "@/lib/utils"
-import {
-  getAllResumeSkillLabels,
-  normalizeSkillList,
-  skillMatches,
-} from "@/lib/skills/taxonomy"
 import type { JobMatchScore, JobWithCompany, JobWithMatchScore } from "@/types"
 
 type RawRecord = Record<string, unknown>
@@ -126,27 +120,6 @@ function resolveVisaCardLabel(
   return null
 }
 
-function buildSkillDiff(
-  explicitMatched: string[],
-  explicitMissing: string[],
-  jobSkills: string[],
-  resumeSkills: string[]
-) {
-  if (explicitMatched.length > 0 || explicitMissing.length > 0) {
-    return { matched: explicitMatched.slice(0, 6), missing: explicitMissing.slice(0, 6) }
-  }
-  if (!jobSkills.length || !resumeSkills.length) {
-    return { matched: [] as string[], missing: [] as string[] }
-  }
-  const matched: string[] = []
-  const missing: string[] = []
-  for (const skill of jobSkills) {
-    const found = resumeSkills.some((c) => skillMatches(skill, c))
-    if (found) matched.push(skill)
-    else missing.push(skill)
-  }
-  return { matched: matched.slice(0, 6), missing: missing.slice(0, 6) }
-}
 
 // ---------------------------------------------------------------------------
 // Score-derived styles
@@ -360,7 +333,7 @@ export default function JobCardV2({
   const router = useRouter()
   const detailHref = `/dashboard/jobs/${job.id}`
   const { primaryResume } = useResumeContext()
-  const showResumeSignal = typeof hasPrimaryResume === "boolean" ? hasPrimaryResume : Boolean(primaryResume)
+  void (typeof hasPrimaryResume === "boolean" ? hasPrimaryResume : Boolean(primaryResume))
   void isBestMatch
 
   const raw = useMemo(() => readRawRecord(job), [job])
@@ -371,7 +344,15 @@ export default function JobCardV2({
   })
   const matchLabel = getMatchCardLabel(score)
 
-  const cardView = resolveJobCardView(job)
+  // Use server-precomputed card view when available (avoids client-side normalization).
+  // Fall back to local resolution only for detail-page usage or stale payloads.
+  const cardView = useMemo(
+    () => ("card_view" in job && job.card_view)
+      ? (job.card_view as JobCardViewModel)
+      : resolveJobCardView(job),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [job.id]
+  )
   const displayTitle = cardView.title
   const companyName = job.company?.name ?? "Unknown company"
   const companyDomain = job.company?.domain ?? null
@@ -449,7 +430,6 @@ export default function JobCardV2({
   const atsType = job.company?.ats_type
   const canAutofill = atsType != null && atsType !== "custom"
 
-  const intelMatchScore = useMemo(() => getJobIntelligence(job).matchScore, [job])
 
   const visaCardLabel = useMemo(
     () => resolveVisaCardLabel(job, cardView.visa_card_label),
@@ -481,48 +461,12 @@ export default function JobCardV2({
     return show
   }, [rawTopApplicantFlag, job, score])
 
-  const explicitMatchedSkills = useMemo(
-    () => normalizeSkillList([
-      ...(resolvedMatchScore?.score_breakdown?.matchedSkills ?? []),
-      ...(intelMatchScore?.matchedSkills ?? []),
-    ], 8),
-    [resolvedMatchScore?.score_breakdown?.matchedSkills, intelMatchScore?.matchedSkills]
-  )
-  const explicitMissingSkills = useMemo(
-    () => normalizeSkillList([
-      ...(resolvedMatchScore?.score_breakdown?.missingSkills ?? []),
-      ...(intelMatchScore?.missingSkills ?? []),
-    ], 8),
-    [resolvedMatchScore?.score_breakdown?.missingSkills, intelMatchScore?.missingSkills]
-  )
-
-  const resumeSkills = useMemo(() => getAllResumeSkillLabels(primaryResume), [primaryResume])
-  const jobSkills = useMemo(
-    () => normalizeSkillList([...(job.skills ?? []), ...cardView.skills], 10),
-    [job.skills, cardView.skills]
-  )
-
-  const skillDiff = useMemo(
-    () => buildSkillDiff(explicitMatchedSkills, explicitMissingSkills, jobSkills, showResumeSignal ? resumeSkills : []),
-    [explicitMatchedSkills, explicitMissingSkills, jobSkills, resumeSkills, showResumeSignal]
-  )
-
-  const matchedSkills = skillDiff.matched
-  const missingSkills = skillDiff.missing
-  const matchedVisible = matchedSkills.slice(0, 4)
-  const missingVisible = missingSkills.slice(0, 3)
-  const matchedExtra = Math.max(0, matchedSkills.length - matchedVisible.length)
-  const missingExtra = Math.max(0, missingSkills.length - missingVisible.length)
-
   const whyBullets = useMemo(() => {
     const bullets: string[] = []
     if (score !== null) {
       if (score >= 85) bullets.push("Excellent match based on your resume and profile.")
       else if (score >= 70) bullets.push("Strong overall alignment for this role.")
       else if (score >= 55) bullets.push("Moderate match — worth tailoring your resume.")
-    }
-    if (matchedSkills.length > 0) {
-      bullets.push(`Skills overlap: ${matchedSkills.slice(0, 3).join(", ")}.`)
     }
     if (visaCardLabel === "Sponsors" || visaCardLabel === "Historical sponsorship signal") {
       bullets.push("Favorable sponsorship signals vs similar listings.")
@@ -532,7 +476,7 @@ export default function JobCardV2({
     }
     if (bullets.length === 0) bullets.push("Role signals align with your search preferences.")
     return bullets.slice(0, 2)
-  }, [score, matchedSkills, visaCardLabel, topApplicantSignal, activelyHiring])
+  }, [score, visaCardLabel, topApplicantSignal, activelyHiring])
 
   useEffect(() => {
     let cancelled = false
@@ -771,46 +715,6 @@ export default function JobCardV2({
                 </div>
               )}
 
-              {/* Skills — or preview description when no diff data */}
-              {(matchedSkills.length > 0 || missingSkills.length > 0) && (
-                <div className="mt-3 flex flex-wrap gap-1.5">
-                  {matchedVisible.map((skill) => (
-                    <span
-                      key={`m-${job.id}-${skill}`}
-                      className="inline-flex items-center gap-1 rounded-full bg-emerald-500 px-2.5 py-0.5 text-[11px] font-medium text-white"
-                    >
-                      <Check className="h-3 w-3" aria-hidden />
-                      {skill}
-                    </span>
-                  ))}
-                  {matchedExtra > 0 && (
-                    <span className="rounded-full bg-emerald-500 px-2.5 py-0.5 text-[11px] font-medium text-white">
-                      +{matchedExtra}
-                    </span>
-                  )}
-                  {missingVisible.map((skill) => (
-                    <span
-                      key={`x-${job.id}-${skill}`}
-                      className="inline-flex items-center gap-1 rounded-full bg-rose-500 px-2.5 py-0.5 text-[11px] font-medium text-white"
-                    >
-                      <span className="text-[12px] leading-none">+</span>
-                      {skill}
-                    </span>
-                  ))}
-                  {missingExtra > 0 && (
-                    <span className="rounded-full bg-rose-500 px-2.5 py-0.5 text-[11px] font-medium text-white">
-                      +{missingExtra} to learn
-                    </span>
-                  )}
-                </div>
-              )}
-
-              {/* Preview description — only when no skills to diff */}
-              {matchedSkills.length === 0 && missingSkills.length === 0 && cardView.preview_description && (
-                <p className="mt-3 line-clamp-2 text-[12px] leading-5 text-slate-500">
-                  {cardView.preview_description}
-                </p>
-              )}
             </div>
           </div>
 

@@ -551,9 +551,11 @@ function findInlineHeadingMatches(description: string): InlineHeadingMatch[] {
       if (index < 0) break
 
       let beforeNonWhitespace = ""
+      let crossedNewline = false
       for (let i = index - 1; i >= 0; i -= 1) {
         const char = description[i]
-        if (char === " " || char === "\n" || char === "\r" || char === "\t") continue
+        if (char === "\n" || char === "\r") { crossedNewline = true; break }
+        if (char === " " || char === "\t") continue
         beforeNonWhitespace = char
         break
       }
@@ -561,9 +563,8 @@ function findInlineHeadingMatches(description: string): InlineHeadingMatch[] {
 
       const hasStartBoundary =
         index === 0 ||
+        crossedNewline ||
         beforeNonWhitespace === "" ||
-        beforeNonWhitespace === "\n" ||
-        beforeNonWhitespace === "\r" ||
         beforeNonWhitespace === "." ||
         beforeNonWhitespace === "!" ||
         beforeNonWhitespace === "?" ||

@@ -1,15 +1,15 @@
 /**
  * Fast resume↔job scorer — pure TypeScript, runs in-process with no external calls.
  *
- * Seven weighted dimensions (weights sum to 1.0):
- *   skills 0.35 · experience 0.20 · title 0.10 · education 0.10
- *   domain 0.10 · certs 0.05 · semantic 0.10
+ * Eight weighted dimensions (weights sum to 1.0):
+ *   skills 0.40 · experience 0.22 · title 0.10 · education 0.10
+ *   location 0.05 · domain 0.03 · certs 0.02 · semantic 0.08
  *
  * Hard gates applied after aggregation:
- *   missing-required-cert          → cap at 60
- *   >50 % required skills missing  → cap at 50
- *   relevant-years < 50 % required → cap at 55
- *   hard disqualifier              → cap at 25
+ *   missing-required-cert (≥5 required)  → –15 pts, floor 45
+ *   >60 % required skills missing (≥5)   → cap at 55
+ *   relevant-years < 40 % required       → cap at 55
+ *   hard disqualifier                    → cap at 25
  */
 
 import type {
@@ -68,9 +68,10 @@ const W = {
   experience: 0.22,
   title:      0.10,
   education:  0.10,
-  domain:     0.05,
-  certs:      0.03,
-  semantic:   0.10,
+  location:   0.05,
+  domain:     0.03,
+  certs:      0.02,
+  semantic:   0.08,
 } as const
 
 // ─── Primitive helpers ────────────────────────────────────────────────────────
@@ -104,16 +105,15 @@ function rankExperienceByRecency(a: ResumeExperienceSnapshot, b: ResumeExperienc
   return (b.endYear ?? 0) - (a.endYear ?? 0)
 }
 
+// Exact key match only — the taxonomy alias system handles synonyms.
+// Substring matching caused false positives (e.g. "rust" inside "trust",
+// "java" inside "javascript"). Rely on normalizeSkillKey + canonicalizeSkill
+// to collapse variations before comparison.
 function hasNormalizedSkillOverlap(requiredKey: string, candidateKey: string) {
-  if (!requiredKey || !candidateKey) return false
-  return (
-    requiredKey === candidateKey ||
-    (requiredKey.length >= 3 && candidateKey.includes(requiredKey)) ||
-    (candidateKey.length >= 3 && requiredKey.includes(candidateKey))
-  )
+  return requiredKey.length > 0 && candidateKey.length > 0 && requiredKey === candidateKey
 }
 
-// ─── 1. Skills (weight 0.35) ──────────────────────────────────────────────────
+// ─── 1. Skills (weight 0.40) ──────────────────────────────────────────────────
 
 type SkillsScoreResult = {
   score: number
@@ -137,9 +137,16 @@ function inferLastUsedYear(
   return null
 }
 
+// Gradual recency decay — skills used recently score full credit; older skills
+// decay smoothly rather than a hard cliff at 5 years.
 function recency(skillName: string, resumeContext: FastScoreResumeContext): number {
   const y = inferLastUsedYear(skillName, resumeContext.experienceByRecency)
-  return y !== null && CURRENT_YEAR - y > 5 ? 0.5 : 1.0
+  if (y === null) return 1.0   // no evidence of last use → assume current
+  const age = CURRENT_YEAR - y
+  if (age <= 2) return 1.0
+  if (age <= 4) return 0.90
+  if (age <= 6) return 0.75
+  return 0.55
 }
 
 function deriveSkillsFromJobText(job: Job): string[] {
@@ -190,17 +197,9 @@ function scoreSkills(resumeContext: FastScoreResumeContext, job: Job): SkillsSco
 
   for (const req of jobSkills) {
     const reqKey = normalizeSkillKey(canonicalizeSkill(req))
-    // Fast-path: exact key match (Set lookup O(1))
-    // Slow-path: normalized overlap check (only when key misses)
-    let found = resumeContext.candidateSkillKeySet.has(reqKey)
-    if (!found) {
-      for (const candidateKey of resumeContext.candidateSkillKeys) {
-        if (hasNormalizedSkillOverlap(reqKey, candidateKey)) {
-          found = true
-          break
-        }
-      }
-    }
+    const found = resumeContext.candidateSkillKeySet.has(reqKey) ||
+      resumeContext.candidateSkillKeys.some(ck => hasNormalizedSkillOverlap(reqKey, ck))
+
     if (found) {
       sum += recency(req, resumeContext)
       continue
@@ -232,7 +231,7 @@ function scoreSkills(resumeContext: FastScoreResumeContext, job: Job): SkillsSco
   }
 }
 
-// ─── 2. Experience (weight 0.20) ──────────────────────────────────────────────
+// ─── 2. Experience (weight 0.22) ──────────────────────────────────────────────
 
 const MIN_YEARS_PATTERNS = [
   // Range "X-Y years" or "X to Y years" — always take the lower bound
@@ -245,13 +244,10 @@ const MIN_YEARS_PATTERNS = [
 
 function extractMinYears(desc: string | null | undefined): number {
   if (!desc) return 0
-  // Most specific patterns first; last resort excluded to avoid matching
-  // company history ("15+ years in business") or unrelated numbers.
   for (const re of MIN_YEARS_PATTERNS) {
     const m = re.exec(desc)
     if (m) {
       const n = parseInt(m[1], 10)
-      // Sanity bounds: 1–20 years. Catches "100+ years in business" etc.
       if (n >= 1 && n <= 20) return n
     }
   }
@@ -263,23 +259,18 @@ function roleYears(exp: { start_date: string; end_date: string | null; is_curren
   if (!start) return 0
   if (exp.is_current) return CURRENT_YEAR - start
   const end = extractYear(exp.end_date)
-  // Unknown end date on a past role: assume ~1 year rather than inflating to present
   if (!end) return 1
   return Math.max(0, end - start)
 }
 
 function candidateYears(resume: Resume): number {
-  // years_of_experience is LLM-parsed and far more reliable than date arithmetic.
   if (resume.years_of_experience != null && resume.years_of_experience > 0) {
     return resume.years_of_experience
   }
-  // Fallback: sum role durations (capped at 40 to guard bad dates)
   const summed = (resume.work_experience ?? []).reduce((s, exp) => s + roleYears(exp), 0)
   return Math.min(summed, 40)
 }
 
-// Minimum years implied by seniority level — used as a floor when the JD
-// states an unusually low number (e.g. "2+ years" for a Senior role).
 const SENIORITY_YEAR_FLOOR: Partial<Record<SeniorityLevel, number>> = {
   junior: 1, mid: 3, senior: 5, staff: 7, principal: 8, director: 10, vp: 12, exec: 15,
 }
@@ -287,7 +278,6 @@ const SENIORITY_YEAR_FLOOR: Partial<Record<SeniorityLevel, number>> = {
 function scoreExperience(resumeContext: FastScoreResumeContext, job: Job) {
   const extracted = extractMinYears(job.description)
   const seniorityFloor = (job.seniority_level ? SENIORITY_YEAR_FLOOR[job.seniority_level] : 0) ?? 0
-  // Use the higher of: what the JD explicitly says vs what the seniority implies
   const required = Math.max(extracted, seniorityFloor)
   const years = resumeContext.years
 
@@ -320,8 +310,6 @@ const SENIORITY_TIERS = [
   ["director", "vp", "head", "chief"],
 ]
 
-// Only strip seniority qualifiers — keep role-type words (engineer, scientist, manager)
-// so "Software Engineer" and "Data Scientist" don't collapse to the same token set.
 const TITLE_STOP = new Set([
   "and", "or", "the", "a", "an", "of", "in", "for", "to", "with", "at",
   "senior", "sr", "junior", "jr", "lead", "principal", "staff", "associate",
@@ -356,7 +344,6 @@ function scoreTitle(resumeContext: FastScoreResumeContext, job: Job) {
     if (sim > maxSim) { maxSim = sim; bestTitle = exp.title }
   }
 
-  // Seniority progression bonus: ascending levels ending near target
   const targetTier = seniorityTier(job.title)
   const bonus = resumeContext.hasProgressiveSeniority &&
     resumeContext.experienceForTitles.length > 1 &&
@@ -364,7 +351,6 @@ function scoreTitle(resumeContext: FastScoreResumeContext, job: Job) {
     ? 0.1
     : 0
 
-  // Jaccard on title tokens is low (0.05–0.4); scale into useful range
   const score = clamp(maxSim * 1.8 + 0.25 + bonus)
   const evidence = `Best title match "${bestTitle}" vs "${job.title}" (sim ${maxSim.toFixed(2)})${bonus > 0 ? "; seniority progression bonus" : ""}.`
 
@@ -373,7 +359,6 @@ function scoreTitle(resumeContext: FastScoreResumeContext, job: Job) {
 
 // ─── 4. Education (weight 0.10) ───────────────────────────────────────────────
 
-// Fields that are relevant for tech/engineering roles
 const TECH_FIELDS = new Set([
   "computer science", "computer engineering", "software engineering",
   "electrical engineering", "information technology", "information systems",
@@ -382,44 +367,127 @@ const TECH_FIELDS = new Set([
   "mathematics and computer science", "math", "cs", "cse", "it",
 ])
 
-// Fields relevant for business/PM/ops roles
 const BUSINESS_FIELDS = new Set([
   "business administration", "business", "management", "finance",
   "economics", "marketing", "accounting", "mba", "operations management",
+  "communications", "public relations", "journalism", "advertising",
+  "psychology", "sociology", "liberal arts", "english", "political science",
+  "international relations", "human resources", "organizational behavior",
 ])
 
-const TECH_JOB_RE = /\b(engineer|developer|programmer|architect|devops|sre|scientist|data|ml|ai|software|backend|frontend|fullstack|full.?stack|cloud|platform|infrastructure|security|analytics)\b/i
+const HEALTHCARE_FIELDS = new Set([
+  "nursing", "medicine", "pharmacy", "pharmacology", "public health",
+  "biology", "biochemistry", "chemistry", "microbiology", "health sciences",
+  "health administration", "clinical psychology", "physical therapy",
+  "occupational therapy", "nutrition", "kinesiology", "pre-med",
+  "medical laboratory science", "radiologic technology",
+])
 
-const BUSINESS_JOB_RE = /\b(product manager|project manager|operations|marketing|sales|finance|accounting|strategy|business analyst)\b/i
+const DESIGN_FIELDS = new Set([
+  "graphic design", "visual design", "industrial design", "product design",
+  "communication design", "interaction design", "human-computer interaction",
+  "hci", "fine arts", "art", "animation", "illustration", "photography",
+  "film", "media arts", "interior design", "architecture",
+])
+
+const LEGAL_FIELDS = new Set([
+  "law", "juris doctor", "jd", "legal studies", "pre-law",
+  "political science", "criminal justice", "paralegal studies",
+])
+
+const EDUCATION_FIELDS = new Set([
+  "education", "teaching", "curriculum design", "instructional design",
+  "educational psychology", "early childhood education", "special education",
+])
+
+// Job type detectors — checked against job title only for speed
+const TECH_JOB_RE       = /\b(engineer|developer|programmer|architect|devops|sre|scientist|data|ml|ai|software|backend|frontend|fullstack|full.?stack|cloud|platform|infrastructure|security|analytics)\b/i
+const HEALTHCARE_JOB_RE = /\b(nurse|nursing|physician|doctor|clinical|medical|healthcare|pharmacist|therapist|patient care|hospital|dental|radiology|surgeon|clinician|caregiver)\b/i
+const DESIGN_JOB_RE     = /\b(designer|design lead|ux|ui|creative director|art director|brand designer|visual designer|motion designer|illustrator|animator)\b/i
+const MARKETING_JOB_RE  = /\b(marketing|growth|demand generation|brand manager|content strategist|seo specialist|sem|social media|communications?|public relations|pr manager|copywriter)\b/i
+const SALES_JOB_RE      = /\b(sales|account executive|account manager|business development|bdr|sdr|revenue|customer success|solutions engineer)\b/i
+const HR_JOB_RE         = /\b(human resources|recruiter|recruiting|talent acquisition|hrbp|people ops|people operations|compensation|workforce)\b/i
+const LEGAL_JOB_RE      = /\b(lawyer|attorney|legal counsel|paralegal|compliance officer|general counsel)\b/i
+const FINANCE_JOB_RE    = /\b(financial analyst|finance manager|controller|cfo|investment|trader|banker|auditor|actuar|fp&a|treasury)\b/i
+const OPS_JOB_RE        = /\b(supply chain|logistics|procurement|warehouse|manufacturing|program manager|project manager|operations manager)\b/i
+const EDUCATION_JOB_RE  = /\b(teacher|instructor|professor|curriculum|learning|training|coach|educator|academic)\b/i
 
 function fieldRelevance(field: string, job: Job): number {
-  // Combine job title + description for context; both inform what field is relevant
   const jobText = `${job.title} ${job.description ?? ""}`.toLowerCase()
   const f = (field ?? "").toLowerCase().trim()
 
-  if (!f) return 0.75  // no field listed — neutral, don't penalise
-
-  // Exact / substring match against the job text (e.g. field "Data Science" in a data science JD)
+  if (!f) return 0.75
+  // Exact substring match against job description is the strongest signal
   if (f.length > 3 && jobText.includes(f)) return 1.0
 
-  const isTechJob = TECH_JOB_RE.test(job.title)
-  const isBusinessJob = BUSINESS_JOB_RE.test(job.title)
+  const title = job.title
 
-  if (isTechJob) {
+  if (TECH_JOB_RE.test(title)) {
     if (TECH_FIELDS.has(f)) return 1.0
-    // Partial: any engineering/science/computing word in the field name
     if (/\b(engineer|science|computing|technology|technical|math|physics|stat|data|information|system)\b/.test(f)) return 0.9
     if (BUSINESS_FIELDS.has(f)) return 0.6
     return 0.55
   }
 
-  if (isBusinessJob) {
+  if (HEALTHCARE_JOB_RE.test(title)) {
+    if (HEALTHCARE_FIELDS.has(f)) return 1.0
+    if (TECH_FIELDS.has(f)) return 0.75   // bioinformatics, CS relevant in health tech
+    if (BUSINESS_FIELDS.has(f)) return 0.6
+    return 0.6
+  }
+
+  if (DESIGN_JOB_RE.test(title)) {
+    if (DESIGN_FIELDS.has(f)) return 1.0
+    if (TECH_FIELDS.has(f)) return 0.8    // CS grads common in UX/product design
+    return 0.6
+  }
+
+  if (MARKETING_JOB_RE.test(title)) {
     if (BUSINESS_FIELDS.has(f)) return 1.0
+    if (DESIGN_FIELDS.has(f)) return 0.8  // creative/design grads common in marketing
     if (TECH_FIELDS.has(f)) return 0.7
+    return 0.6
+  }
+
+  if (SALES_JOB_RE.test(title)) {
+    if (BUSINESS_FIELDS.has(f)) return 1.0
+    if (TECH_FIELDS.has(f)) return 0.75   // technical sales values CS background
+    return 0.65
+  }
+
+  if (HR_JOB_RE.test(title)) {
+    if (BUSINESS_FIELDS.has(f)) return 1.0
+    if (f.includes("psychology") || f.includes("sociology") || f.includes("human")) return 0.95
+    if (TECH_FIELDS.has(f)) return 0.6
+    return 0.65
+  }
+
+  if (LEGAL_JOB_RE.test(title)) {
+    if (LEGAL_FIELDS.has(f)) return 1.0
+    if (BUSINESS_FIELDS.has(f)) return 0.7
     return 0.55
   }
 
-  // Unclassified job type — be generous; field mismatch is rarely catastrophic
+  if (FINANCE_JOB_RE.test(title)) {
+    if (BUSINESS_FIELDS.has(f)) return 1.0
+    if (TECH_FIELDS.has(f)) return 0.75   // quant finance values CS/math
+    return 0.55
+  }
+
+  if (OPS_JOB_RE.test(title)) {
+    if (BUSINESS_FIELDS.has(f)) return 1.0
+    if (TECH_FIELDS.has(f)) return 0.8
+    if (f.includes("supply chain") || f.includes("industrial") || f.includes("logistics")) return 1.0
+    return 0.65
+  }
+
+  if (EDUCATION_JOB_RE.test(title)) {
+    if (EDUCATION_FIELDS.has(f)) return 1.0
+    if (BUSINESS_FIELDS.has(f)) return 0.65
+    return 0.7
+  }
+
+  // Unknown job type — be generous; field mismatch is rarely catastrophic
   return 0.8
 }
 
@@ -455,7 +523,6 @@ function scoreEducation(resume: Resume, job: Job) {
 
   const edus = resume.education ?? []
   if (edus.length === 0) {
-    // No education data at all — soft penalty; many roles accept equivalent experience
     return { score: isHard ? 0.35 : 0.55, evidence: `No education listed; ${required >= 4 ? "master's" : "bachelor's"} expected.` }
   }
 
@@ -464,7 +531,6 @@ function scoreEducation(resume: Resume, job: Job) {
   for (const edu of edus) {
     const cr = degreeRank(edu.degree)
     const diff = required - cr
-    // Hierarchical score: over-qualified → 1.0, one level below → softer penalty
     const hier = diff <= 0 ? 1.0 : diff === 1 ? (isHard ? 0.5 : 0.7) : (isHard ? 0.25 : 0.45)
     const fr = fieldRelevance(edu.field, job)
     const combined = clamp(hier * fr)
@@ -477,20 +543,61 @@ function scoreEducation(resume: Resume, job: Job) {
   return { score: best, evidence }
 }
 
-// ─── 5. Domain (weight 0.10) ──────────────────────────────────────────────────
+// ─── 5. Location (weight 0.05) ────────────────────────────────────────────────
+
+function scoreLocation(profile: Profile, job: Job) {
+  // Remote-only candidates can't work onsite
+  if (profile.remote_only && !job.is_remote && !job.is_hybrid) {
+    return { score: 0.3, evidence: "Candidate is remote-only; job is onsite.", locationMatch: false }
+  }
+
+  if (job.is_remote) {
+    return { score: 1.0, evidence: "Remote role — location compatible.", locationMatch: true }
+  }
+
+  if (job.is_hybrid) {
+    return { score: 0.85, evidence: "Hybrid role — partially location flexible.", locationMatch: true }
+  }
+
+  // Onsite: check desired_locations against job location
+  const desired = (profile.desired_locations ?? []).map(l => l.toLowerCase().trim()).filter(Boolean)
+  const jobLoc = (job.location ?? "").toLowerCase()
+
+  if (desired.length === 0 || !jobLoc) {
+    return { score: 0.7, evidence: "On-site role; no location preference set.", locationMatch: null }
+  }
+
+  const locationMatch = desired.some(loc => {
+    const tokens = loc.split(/[,\s]+/).filter(t => t.length > 2)
+    return tokens.some(t => jobLoc.includes(t))
+  })
+
+  return locationMatch
+    ? { score: 1.0, evidence: `On-site location match (${job.location}).`, locationMatch: true }
+    : { score: 0.45, evidence: `On-site location mismatch: desired ${profile.desired_locations?.join(", ")}, job ${job.location}.`, locationMatch: false }
+}
+
+// ─── 6. Domain (weight 0.03) ──────────────────────────────────────────────────
 
 const ADJACENT_PAIRS: Array<[string, string]> = [
   ["fintech", "finance"], ["fintech", "banking"], ["fintech", "technology"],
   ["finance", "banking"], ["finance", "technology"], ["finance", "saas"],
-  ["healthtech", "healthcare"],
-  ["edtech", "education"],
-  ["e-commerce", "retail"],
+  ["finance", "insurance"],
+  ["healthtech", "healthcare"], ["healthtech", "technology"],
+  ["edtech", "education"], ["edtech", "technology"],
+  ["e-commerce", "retail"], ["e-commerce", "technology"],
   ["saas", "technology"], ["saas", "fintech"],
   ["technology", "cybersecurity"], ["technology", "data analytics"],
-  ["media", "entertainment"], ["gaming", "entertainment"],
+  ["media", "entertainment"], ["gaming", "entertainment"], ["gaming", "technology"],
+  ["consulting", "fintech"], ["consulting", "technology"], ["consulting", "finance"],
+  ["real estate", "finance"], ["real estate", "technology"],
+  ["manufacturing", "logistics"], ["manufacturing", "technology"],
+  ["retail", "e-commerce"], ["retail", "technology"],
+  ["marketing", "media"], ["marketing", "technology"],
+  ["non-profit", "education"], ["non-profit", "healthcare"],
+  ["government", "technology"], ["government", "consulting"],
 ]
 
-// Pre-build bidirectional adjacency Map for O(1) lookups at scoring time.
 const ADJACENT_MAP = new Map<string, Set<string>>()
 for (const [a, b] of ADJACENT_PAIRS) {
   if (!ADJACENT_MAP.has(a)) ADJACENT_MAP.set(a, new Set())
@@ -500,24 +607,35 @@ for (const [a, b] of ADJACENT_PAIRS) {
 }
 
 const JOB_INDUSTRY_KEYWORDS: Record<string, string[]> = {
-  // More specific industries first — "software" is in almost every tech JD so
-  // checking "technology" early would swallow finance, healthcare, etc.
-  fintech:          ["fintech", "payments platform", "payment processing", "neobank"],
-  healthcare:       ["healthcare", "health system", "medical", "clinical", "biotech", "pharma"],
-  "data analytics": ["data analytics", "data science platform", "business intelligence"],
-  "e-commerce":     ["e-commerce", "ecommerce", "online marketplace", "direct-to-consumer"],
-  cybersecurity:    ["cybersecurity", "infosec", "information security", "zero trust"],
+  // Specific industries first — generic terms checked last
+  fintech:          ["fintech", "payments platform", "payment processing", "neobank", "digital banking"],
+  healthcare:       ["healthcare", "health system", "hospital", "medical center", "clinical", "biotech",
+                     "pharmaceutical", "pharma", "health insurance", "medical device"],
+  "data analytics": ["data analytics", "data science platform", "business intelligence", "analytics platform"],
+  "e-commerce":     ["e-commerce", "ecommerce", "online marketplace", "direct-to-consumer", "dtc"],
+  cybersecurity:    ["cybersecurity", "infosec", "information security", "zero trust", "managed security"],
   finance:          ["asset management", "investment management", "investment bank", "hedge fund",
                      "wealth management", "financial services", "brokerage", "insurance carrier",
                      "capital markets", "private equity", "venture capital", "trading firm",
-                     "finance", "investment"],
-  education:        ["edtech", "education technology", "e-learning", "higher education", "university"],
-  media:            ["media company", "streaming", "content platform", "publishing"],
-  gaming:           ["gaming", "game studio", "esports"],
-  // "technology" and "saas" last — they use generic words like "software", "tech", "platform"
-  // that appear in virtually every job description.
-  saas:             ["saas", "software-as-a-service", "cloud platform", "developer tools"],
-  technology:       ["tech company", "technology company", "software company", "startup"],
+                     "financial institution", "credit union"],
+  "real estate":    ["real estate", "property management", "commercial real estate", "realty", "proptech"],
+  manufacturing:    ["manufacturing", "factory", "production facility", "industrial", "automotive",
+                     "aerospace", "defense contractor", "semiconductor", "electronics manufacturer"],
+  retail:           ["retailer", "retail chain", "consumer goods", "cpg", "grocery", "apparel", "fashion brand"],
+  logistics:        ["logistics", "supply chain company", "freight", "shipping company", "fulfillment",
+                     "last-mile delivery"],
+  education:        ["edtech", "education technology", "e-learning", "higher education", "university",
+                     "school district", "online learning"],
+  media:            ["media company", "streaming", "content platform", "publishing", "news organization",
+                     "broadcast", "digital media"],
+  gaming:           ["gaming", "game studio", "game developer", "esports", "video game"],
+  marketing:        ["marketing agency", "advertising agency", "digital agency", "pr firm", "creative agency"],
+  "non-profit":     ["non-profit", "nonprofit", "ngo", "foundation", "501c3", "charity", "social impact"],
+  government:       ["government agency", "federal agency", "state agency", "public sector", "department of"],
+  consulting:       ["consulting firm", "management consulting", "strategy consulting", "advisory firm"],
+  insurance:        ["insurance company", "insurer", "underwriting", "actuarial", "insurtech"],
+  saas:             ["saas", "software-as-a-service", "cloud platform", "developer tools", "enterprise software"],
+  technology:       ["tech company", "technology company", "software company", "startup", "tech startup"],
 }
 
 function inferJobIndustry(job: Job): string | null {
@@ -538,7 +656,6 @@ function scoreDomain(resumeContext: FastScoreResumeContext, job: Job) {
     return { score: 1.0, evidence: `Direct ${jobIndustry} industry experience.` }
   }
 
-  // O(1) adjacency lookup via pre-built Map
   const adjacent = ADJACENT_MAP.get(jobIndustry)
   if (adjacent) {
     for (const ind of resumeContext.resumeIndustries) {
@@ -551,7 +668,7 @@ function scoreDomain(resumeContext: FastScoreResumeContext, job: Job) {
   return { score: 0.45, evidence: `No industry overlap (resume: ${resumeContext.resumeIndustries.slice(0, 2).join(", ")}; job: ${jobIndustry}).` }
 }
 
-// ─── 6. Certs (weight 0.05) ───────────────────────────────────────────────────
+// ─── 7. Certs (weight 0.02) ───────────────────────────────────────────────────
 
 const CERT_REQUIRED_RE =
   /(?:required|must have|minimum)\s*[^.]*?(aws[\w\s-]*(?:certified|certification)[\w\s-]*|cka|ckad|cks|pmp|cissp|ceh|ccna|ccnp|azure[\w\s-]*certified[\w\s-]*|google[\w\s-]*certified[\w\s-]*)/gi
@@ -573,14 +690,15 @@ function scoreCerts(resumeContext: FastScoreResumeContext, job: Job) {
   )
 
   if (missing.length > 0) {
-    return { score: 0.0, evidence: `Missing required cert(s): ${missing.join(", ")}.`, certGate: true }
+    // Soft gate: missing cert applies a score penalty rather than a hard cap,
+    // so a strong overall match isn't completely killed by a single cert gap.
+    return { score: 0.1, evidence: `Missing required cert(s): ${missing.join(", ")}.`, certGate: true }
   }
   return { score: 1.0, evidence: `Has all required certifications: ${required.join(", ")}.`, certGate: false }
 }
 
-// ─── 7. Semantic overlap (weight 0.10) ────────────────────────────────────────
+// ─── 8. Semantic overlap (weight 0.08) ────────────────────────────────────────
 
-// Section headers that contain actual requirements — we want these.
 const REQ_HEADERS = new Set([
   "qualifications", "requirements", "required", "preferred",
   "preferred qualifications", "nice to have", "what you need",
@@ -588,7 +706,6 @@ const REQ_HEADERS = new Set([
   "responsibilities", "what you'll do", "role summary", "the role",
   "key responsibilities", "what you will do",
 ])
-// Pre-built arrays for startsWith checks — avoids spread in the per-line hot loop
 const REQ_HEADERS_ARR = [...REQ_HEADERS]
 
 const BOILERPLATE_HEADERS = new Set([
@@ -604,17 +721,14 @@ function extractRequirementsText(description: string | null | undefined): string
 
   const lines = description.split(/\r?\n/)
   const kept: string[] = []
-  // Start false — skip company-intro paragraphs that precede the first real section.
   let capturing = false
 
   for (const raw of lines) {
     const trimmed = raw.trim()
     if (!trimmed) continue
 
-    // Normalise for header matching: strip trailing punctuation/whitespace
     const norm = trimmed.toLowerCase().replace(/[:\-–*•#\s]+$/, "").trim()
 
-    // Check boilerplate first (higher priority)
     if (BOILERPLATE_HEADERS.has(norm) || BOILERPLATE_HEADERS_ARR.some(h => norm.startsWith(h))) {
       capturing = false
       continue
@@ -628,23 +742,18 @@ function extractRequirementsText(description: string | null | undefined): string
     if (capturing) kept.push(trimmed)
   }
 
-  // Fallback: if no headers were found (flat JD), use the full description
   const result = kept.join(" ")
   return result.length > 80 ? result : description
 }
 
 function scoreSemanticOverlap(resumeContext: FastScoreResumeContext, job: Job) {
-  // Only score against the requirements / responsibilities text, not boilerplate.
   const jdRequirements = extractRequirementsText(job.description)
   const jobTok = new Set(tokenize(`${job.title} ${jdRequirements}`))
-
-  // Jaccard on requirements text is inherently low (0.05–0.35); ×3.5 maps a
-  // solid match (jaccard≈0.20) to ~0.70 and a strong match (≈0.28) to ~1.0.
   const score = clamp(jaccard(resumeContext.semanticTokens, jobTok) * 3.5)
   return { score, evidence: `Requirements text overlap: ${(score * 100).toFixed(0)}%.` }
 }
 
-// ─── Location + sponsorship (hard-gate contributors, not primary weights) ──────
+// ─── Sponsorship / seniority helpers ─────────────────────────────────────────
 
 const SENIORITY_MAP: Record<SeniorityLevel, number> = {
   intern: 1, junior: 2, mid: 3, senior: 4, staff: 5,
@@ -731,6 +840,7 @@ export function computeFastScore({
   const experience = scoreExperience(context, job)
   const title      = scoreTitle(context, job)
   const education  = scoreEducation(resume, job)
+  const location   = scoreLocation(profile, job)
   const domain     = scoreDomain(context, job)
   const certs      = scoreCerts(context, job)
   const semantic   = scoreSemanticOverlap(context, job)
@@ -743,6 +853,7 @@ export function computeFastScore({
     experience.score * W.experience * 100 +
     title.score      * W.title      * 100 +
     education.score  * W.education  * 100 +
+    location.score   * W.location   * 100 +
     domain.score     * W.domain     * 100 +
     certs.score      * W.certs      * 100 +
     semantic.score   * W.semantic   * 100
@@ -752,23 +863,31 @@ export function computeFastScore({
   const gatesTriggered: string[] = []
   const totalRequired = skills.requiredCount
 
+  // Cert gate — soft penalty (–15 pts) rather than hard cap, preserving strong
+  // overall matches. Certs are obtainable; a 95-match candidate shouldn't be
+  // capped at 60 for missing a single cert.
   if (certs.certGate) {
-    overall = Math.min(overall, 60)
+    overall = Math.max(45, overall - 15)
     gatesTriggered.push("missing_required_cert")
   }
 
-  if (totalRequired > 0 && skills.missing.length / totalRequired > 0.6) {
+  // Skills gate — only fires when there are enough skills to make the ratio
+  // meaningful (≥5 required). Sparse job listings with 2–3 skills shouldn't
+  // trigger an aggressive cap when the candidate is missing just one.
+  if (totalRequired >= 5 && skills.missing.length / totalRequired > 0.6) {
     overall = Math.min(overall, 55)
     gatesTriggered.push("missing_required_skills_gt60pct")
   }
 
+  // Experience gate — threshold lowered from 0.4 to 0.35 to avoid
+  // over-penalising candidates who are slightly under the stated minimum.
   const minYears = extractMinYears(job.description)
-  if (minYears > 0 && experience.score < 0.4) {
+  if (minYears > 0 && experience.score < 0.35) {
     overall = Math.min(overall, 55)
     gatesTriggered.push("insufficient_experience")
   }
 
-  // Seniority gap > 3 levels is a true extreme mismatch (e.g. exec applying for intern)
+  // Extreme seniority mismatch (e.g. exec applying for intern)
   if (seniorityGap !== null && Math.abs(seniorityGap) > 3) {
     overall = Math.min(overall, 35)
     gatesTriggered.push("extreme_seniority_mismatch")
@@ -777,7 +896,6 @@ export function computeFastScore({
   overall = clamp(overall, 0, 100)
 
   // Curve: stretch scores above 55 upward so strong matches reach 90–98.
-  // Mirrors how competitors calibrate — a genuinely good match should feel like one.
   if (overall > 55) {
     overall = Math.min(99, Math.round(overall + (overall - 55) * 0.25))
   }
@@ -797,16 +915,16 @@ export function computeFastScore({
     job_id: job.id,
     overall_score: overall,
     skills_score:          Math.round(skills.score * 100),
-    seniority_score:       Math.round(experience.score * 100),  // experience → seniority slot
+    seniority_score:       Math.round(experience.score * 100),
     education_score:       Math.round(education.score * 100),
-    role_fit_score:        Math.round(title.score * 100),        // title → role_fit slot
-    location_score:        null,
+    role_fit_score:        Math.round(title.score * 100),
+    location_score:        Math.round(location.score * 100),
     employment_type_score: null,
     sponsorship_score:     sponsorship.score,
     is_seniority_match:    experience.score >= 0.5,
     is_education_match:    education.score >= 0.6,
     is_role_fit_match:     title.score >= 0.5,
-    is_location_match:     null,
+    is_location_match:     location.locationMatch,
     is_employment_type_match: null,
     is_sponsorship_compatible: sponsorship.compatible,
     matching_skills_count: skills.matched.length,
@@ -817,14 +935,12 @@ export function computeFastScore({
     score_method:  "fast",
     computed_at:   now,
     resume_version: getResumeVersion(resume),
-    // score_breakdown is not persisted to DB (no column) but the single-job route
-    // attaches it to the response so the detail panel can render skill pills.
     score_breakdown: {
       overallScore:        overall,
       skillsScore:         Math.round(skills.score * 100),
       experienceScore:     Math.round(experience.score * 100),
       seniorityScore:      null,
-      locationScore:       null,
+      locationScore:       Math.round(location.score * 100),
       employmentTypeScore: null,
       sponsorshipScore:    sponsorship.score,
       visaFitScore:        null,

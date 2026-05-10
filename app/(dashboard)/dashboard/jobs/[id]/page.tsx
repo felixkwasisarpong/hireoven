@@ -136,37 +136,37 @@ function isLikelyAtomicSkill(value: string) {
 const NON_TECHNICAL_WORD_RE =
   /^(experience|expertise|knowledge|understanding|familiarity|proficiency|proficient|ability|abilities|skill|skills|capability|capabilities|aptitude|attitude|mindset|background|exposure|interest|passion|commitment|focus|attention|excellence|excellent|good|great|solid|strong|deep|broad|extensive|effective|efficient|outstanding|exceptional|proven|demonstrated|hands-on|working|writing|verbal|written|communication|collaboration|teamwork|leadership|mentoring|stakeholder|cross-functional|interpersonal|analytical|organizational|adaptability|adaptable|willingness|willing|ability|able|personal|professional|technical|professional|engineering|application|applications|protocol|protocols|requirement|requirements|qualification|qualifications|degree|bachelor|bachelors|master|masters|phd|years?|year|months?|month|day|days|culture|values?|mission|opportunity|equity|equal|accommodation|insurance|medical|dental|vision|salary|compensation|benefits?|perks?|preferred|required|must|will|can|should|the|a|an|or|and|with|in|on|of|for|to|by|as)$/i
 
-// Tokens that look like tech names. We accept:
-//   • CamelCase single words: JavaScript, PyTorch, LangChain
-//   • Tokens with tech punctuation: C++, Next.js, CI/CD
-//   • All-caps acronyms 2–8 chars: AWS, REST, K8S
+// Tokens that look like specific named tools, platforms, or skills (any domain).
+// Accepts:
+//   • CamelCase single words: JavaScript, HubSpot, QuickBooks
+//   • Tokens with punctuation: C++, Next.js, CI/CD, FP&A
+//   • All-caps acronyms 2–8 chars: AWS, SEO, CRM, EHR, GD&T
 //   • Mixed-case-with-digit: ES2022, Python3, S3
-function looksLikeTechToken(token: string): boolean {
-  // Multi-word tokens are almost always prose lifted from a sentence.
-  // Allow them ONLY if every word individually looks tech-y.
+//   • Known non-tech proper nouns: Salesforce, Figma, Tableau, etc.
+function looksLikeNamedSkillToken(token: string): boolean {
   const words = token.split(/\s+/)
   if (words.length > 1) {
-    return words.every(looksLikeTechToken)
+    return words.every(looksLikeNamedSkillToken)
   }
 
   if (NON_TECHNICAL_WORD_RE.test(token)) return false
 
-  // CamelCase: starts uppercase, has internal lowercase, has internal uppercase.
+  // CamelCase (applies to all domains: HubSpot, Salesforce, QuickBooks, PyTorch)
   if (/^[A-Z][a-z]+[A-Z]/.test(token)) return true
 
-  // Tech punctuation
-  if (/[+#./]/.test(token)) return true
+  // Special characters common in tool/skill names
+  if (/[+#./&]/.test(token)) return true
 
-  // All-caps acronym (2–8 chars, letters only)
+  // All-caps acronym (2–8 chars): AWS, SEO, CRM, EHR, SQL, CAD
   if (/^[A-Z]{2,8}$/.test(token)) return true
 
-  // Letter+digit mix (S3, K8s, ES2022, Python3)
+  // Letter+digit mix: S3, K8s, ES2022, Python3
   if (/^[A-Za-z]+\d/.test(token) || /\d[A-Za-z]/.test(token)) return true
 
   return false
 }
 
-function extractTechTokensFromText(items: string[]): string[] {
+function extractUnknownSkillTokens(items: string[]): string[] {
   const found: string[] = []
   for (const item of items) {
     const segments = item.split(
@@ -177,7 +177,7 @@ function extractTechTokensFromText(items: string[]): string[] {
       if (!token || token.length < 2 || token.length > 40) continue
       const words = token.split(/\s+/)
       if (words.length > 4) continue
-      if (!looksLikeTechToken(token)) continue
+      if (!looksLikeNamedSkillToken(token)) continue
       found.push(token)
     }
   }
@@ -314,6 +314,7 @@ export default async function DashboardJobDetailPage({ params }: Props) {
   const extractedSkillSignals = extractSkillsFromText(
     displayTitle,
     job.title,
+    page.clean_description,
     ...page.sections.skills.items,
     ...page.sections.requirements.items,
     ...page.sections.preferred_qualifications.items,
@@ -362,7 +363,7 @@ export default async function DashboardJobDetailPage({ params }: Props) {
      WHERE j.is_active = true AND ${sqlJobLocatedInUsa("j")}`
 
   // Score algorithm version stamp — bump when scoring logic changes to bust the cache.
-  const SCORE_ALGORITHM_VERSION = new Date("2026-05-09T05:00:00.000Z").getTime()
+  const SCORE_ALGORITHM_VERSION = new Date("2026-05-10T00:00:00.000Z").getTime()
 
   const [cachedScoreResult, resumeSkillResult, similarByTitleResult, similarByCompanyResult] = await Promise.all([
     // Lightweight cache check — joins match score with resume updated_at in one query.
@@ -490,7 +491,7 @@ export default async function DashboardJobDetailPage({ params }: Props) {
   // Uses the tech-signal heuristic — not raw section items — to avoid marketing
   // copy ("Progress starts with you.") appearing as skills.
   const fallbackTokens = normalizeSkillList(
-    extractTechTokensFromText([
+    extractUnknownSkillTokens([
       ...page.sections.requirements.items,
       ...page.sections.preferred_qualifications.items,
       ...page.sections.skills.items,

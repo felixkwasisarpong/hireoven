@@ -133,24 +133,6 @@ function renderJobRow(job: JobWithCompanyContext, index: number) {
   `
 }
 
-// ── Extension promo block (like LinkedIn's app download section) ──────────────
-
-function renderExtensionPromo(base: string) {
-  return `
-    <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;border-top:1px solid #e2e8f0;">
-      <tr><td style="padding:28px;text-align:center;">
-        <div style="font-size:16px;font-weight:700;color:#0f172a;margin-bottom:6px;">Apply faster with the Hireoven extension</div>
-        <div style="font-size:13px;color:#64748b;margin-bottom:20px;line-height:1.5;">
-          One-click autofill on Greenhouse, Lever, Ashby and Workday.<br>Your profile, pre-filled. You review before it goes in.
-        </div>
-        <a href="${esc(base)}/dashboard/autofill"
-           style="display:inline-block;background:linear-gradient(135deg,#FF5C18,#FF7A35);color:#fff;text-decoration:none;padding:11px 28px;border-radius:999px;font-size:14px;font-weight:700;letter-spacing:0.01em;">
-          Get the Chrome extension
-        </a>
-      </td></tr>
-    </table>
-  `
-}
 
 // ── Full email shell ──────────────────────────────────────────────────────────
 
@@ -228,9 +210,6 @@ function renderEmailShell({
             </td></tr>
           </table>
 
-          <!-- Extension promo -->
-          ${renderExtensionPromo(base)}
-
         </td></tr>
 
         <!-- LinkedIn-style footer -->
@@ -299,25 +278,38 @@ export async function sendEmailAlert(userId: string, jobs: Job[], alertName: str
   const total = hydratedJobs.length
   const visible = hydratedJobs.slice(0, 5)
   const jobRowsHtml = visible.map((j, i) => renderJobRow(j, i)).join("")
-  const viewAllLabel = total > 5 ? `View all ${total} matching jobs` : "View all matching jobs"
+  const viewAllLabel = total > 5 ? `See all ${total} matches` : "View all matching jobs"
+
+  const topCompanies = [...new Set(visible.slice(0, 2).map(j => j.company?.name).filter(Boolean))]
+  const companyStr = topCompanies.length > 0
+    ? ` from ${topCompanies.join(" and ")}${total > topCompanies.length ? ` +${total - topCompanies.length} more` : ""}`
+    : ""
+
+  const subject = total === 1
+    ? `New match${companyStr} — "${alertName}"`
+    : `${total} new matches${companyStr} — "${alertName}"`
+
+  const headerSub = topCompanies.length > 0
+    ? `Roles from ${topCompanies.join(", ")}${total > topCompanies.length ? ` and ${total - topCompanies.length} more` : ""} matched your alert.`
+    : `${total} role${total === 1 ? "" : "s"} matched your alert.`
 
   const html = renderEmailShell({
-    preheader: `${total} new job${total === 1 ? "" : "s"} match your alert "${alertName}"`,
-    headerTitle: `${total} new job${total === 1 ? "" : "s"} for you`,
-    headerSub: `Based on your alert "${alertName}"`,
+    preheader: subject,
+    headerTitle: total === 1 ? "1 new match for you" : `${total} new matches for you`,
+    headerSub,
     jobRowsHtml,
     viewAllUrl: buildAlertDashboardUrl(alertName),
     viewAllLabel,
     recipientName: profile.full_name ?? null,
     recipientEmail: profile.email,
-    alertNote: `You're receiving this because of your job alert "${alertName}".`,
+    alertNote: `You're receiving this because of your saved alert "${alertName}".`,
     manageUrl: buildManageAlertsUrl(),
   })
 
   const { error } = await resend.emails.send({
     from: getAlertsFromEmail(),
     to: [profile.email],
-    subject: `${total} new job${total === 1 ? "" : "s"} match your alert: ${alertName}`,
+    subject,
     html,
   })
   if (error) throw new Error(error.message)
@@ -338,13 +330,24 @@ export async function sendWatchlistAlert(userId: string, jobs: Job[], companyNam
   const visible = hydratedJobs.slice(0, 5)
   const jobRowsHtml = visible.map((j, i) => renderJobRow(j, i)).join("")
 
+  const topTitles = visible.slice(0, 2).map(j => j.title).filter(Boolean)
+  const rolesStr = topTitles.length > 0
+    ? `: ${topTitles[0]}${topTitles.length > 1 ? `, ${topTitles[1]}` : ""}${total > 2 ? ` +${total - 2} more` : ""}`
+    : ""
+
+  const subject = total === 1
+    ? `${companyName} is hiring${rolesStr}`
+    : `${companyName} posted ${total} new roles${rolesStr}`
+
   const html = renderEmailShell({
-    preheader: `${companyName} just posted ${total} new job${total === 1 ? "" : "s"}`,
+    preheader: subject,
     headerTitle: `${companyName} is hiring`,
-    headerSub: `${total} new role${total === 1 ? "" : "s"} just landed from a company on your watchlist.`,
+    headerSub: total === 1
+      ? `A new role just landed from a company on your watchlist.`
+      : `${total} new roles just landed from a company on your watchlist.`,
     jobRowsHtml,
     viewAllUrl: new URL("/dashboard/watchlist", getBaseUrl()).toString(),
-    viewAllLabel: "View all jobs",
+    viewAllLabel: "View all watchlist jobs",
     recipientName: profile.full_name ?? null,
     recipientEmail: profile.email,
     alertNote: `You're receiving this because ${companyName} is on your watchlist.`,
@@ -354,7 +357,7 @@ export async function sendWatchlistAlert(userId: string, jobs: Job[], companyNam
   const { error } = await resend.emails.send({
     from: getAlertsFromEmail(),
     to: [profile.email],
-    subject: `${companyName} just posted ${total} new job${total === 1 ? "" : "s"}`,
+    subject,
     html,
   })
   if (error) throw new Error(error.message)

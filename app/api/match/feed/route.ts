@@ -7,6 +7,7 @@ import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
 import { scoreJobsForUser } from "@/lib/matching/batch-scorer"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { createClient } from "@/lib/supabase/server"
+import { resolveJobCardView } from "@/lib/jobs/normalization"
 import type {
   EmploymentType,
   JobMatchScore,
@@ -200,7 +201,7 @@ export async function GET(request: NextRequest) {
       const matchScore = scoreMap.get(job.id) ?? null
       const overall = matchScore?.overall_score ?? 0
       const finalRank = Number(
-        ((overall * 0.65) + (freshnessScore(job.first_detected_at) * 0.35)).toFixed(2)
+        ((overall * 0.75) + (freshnessScore(job.first_detected_at) * 0.25)).toFixed(2)
       )
 
       return {
@@ -223,7 +224,10 @@ export async function GET(request: NextRequest) {
       )
     })
 
-  const paginated = ranked.slice(offset, offset + limit)
+  const paginated = ranked.slice(offset, offset + limit).map(job => ({
+    ...job,
+    card_view: resolveJobCardView(job),
+  }))
   const newInLastHour = ranked.filter(
     (job) => Date.now() - new Date(job.first_detected_at).getTime() <= 3_600_000
   ).length

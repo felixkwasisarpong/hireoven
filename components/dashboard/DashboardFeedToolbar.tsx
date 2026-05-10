@@ -263,7 +263,7 @@ export default function DashboardFeedToolbar({
   const sortValue = filters.sort ?? "freshest"
   const withinLockedBySort = sortValue === "match" || sortValue === "relevant"
   const effectiveWithin = withinLockedBySort ? "24h" : (filters.within ?? "all")
-  const postedLabel =
+  const postedLabel = withinLockedBySort || effectiveWithin === "all" ? "Posted" :
     WITHIN_OPTIONS.find((o) => o.value === effectiveWithin)?.label ?? "Posted"
 
   useEffect(() => {
@@ -383,13 +383,7 @@ export default function DashboardFeedToolbar({
       ref={filtersBarRef as RefObject<HTMLDivElement>}
       className="space-y-2"
     >
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-slate-600">
-          <span className="text-lg font-bold tracking-tight text-slate-900">
-            {feedMeta.totalCount.toLocaleString()}
-          </span>{" "}
-          Jobs found
-        </p>
+      <div className="flex flex-wrap items-center justify-end gap-3">
         <div className="flex items-center gap-2">
           <span className="shrink-0 text-sm text-slate-500">Sort by:</span>
           <select
@@ -669,57 +663,6 @@ export default function DashboardFeedToolbar({
           </button>
         </div>
 
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => {
-              if (withinLockedBySort) return
-              openDropdown("posted")
-            }}
-            title={withinLockedBySort ? "Posted window is fixed to Last 24 hours for this sort mode." : undefined}
-            className={filterBtn(
-              Boolean(effectiveWithin && effectiveWithin !== "all"),
-              "rose"
-            )}
-          >
-            <Clock
-              className={iconCls(
-                Boolean(effectiveWithin && effectiveWithin !== "all"),
-                "rose"
-              )}
-            />
-            {postedLabel}
-            {withinLockedBySort ? (
-              <span className="rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-rose-700">
-                locked
-              </span>
-            ) : null}
-            <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-          </button>
-          {filterDropdown === "posted" && (
-            <div className="absolute left-0 top-full z-50 mt-1.5 min-w-[200px] rounded-xl border border-slate-200 bg-white p-2 shadow-lg">
-              {WITHIN_OPTIONS.map((opt) => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => {
-                    replaceFilters({ ...filters, within: opt.value })
-                    setFilterDropdown(null)
-                  }}
-                  className={cn(
-                    "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition hover:bg-slate-50",
-                    effectiveWithin === opt.value ? "font-semibold text-[#0052CC]" : "text-slate-800"
-                  )}
-                >
-                  {effectiveWithin === opt.value && (
-                    <span className="h-1.5 w-1.5 rounded-full bg-[#0052CC]" />
-                  )}
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
 
         <div className="relative">
           {scoutPulse.has("remote") && <ScoutPulseBadge />}
