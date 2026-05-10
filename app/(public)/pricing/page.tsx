@@ -29,7 +29,7 @@ const FAQ_ITEMS = [
   },
   {
     q: "I'm on OPT or H1B. Do I need to pay for international tools?",
-    a: "International tools are free for OPT, STEM OPT, and H1B candidates. Just set your visa status during signup. OPT countdown, offer risk analysis, urgency routing, and all sponsorship intelligence unlock automatically. Pro Max adds live interview sessions and unlimited AI tools on top.",
+    a: "International tools are free for OPT, STEM OPT, and H1B candidates. Just set your visa status during signup. OPT countdown, offer risk analysis, urgency routing, and all sponsorship intelligence unlock automatically. Pro and Pro Max add unlimited AI tools, resume editing, and deep analysis on top.",
   },
   {
     q: "Does Hireoven help with the H1B application itself?",

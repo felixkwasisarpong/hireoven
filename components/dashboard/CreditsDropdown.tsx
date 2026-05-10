@@ -130,7 +130,7 @@ function BuyPackButton({
 export default function CreditsDropdown() {
   const { quotas, config, isLoading } = useQuotas()
   const { isProMax } = useSubscription()
-  const { credits, loading: liveLoading, refresh: refreshLive } = useLiveCredits(isProMax)
+  const { credits, loading: liveLoading, refresh: refreshLive } = useLiveCredits(true)
 
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -151,7 +151,7 @@ export default function CreditsDropdown() {
 
   const worst = mostConstrained(quotas ?? null)
   const worstPct = worst ? pct(worst) : 0
-  const liveEmpty = isProMax && credits !== null && credits.balance === 0
+  const liveEmpty = credits !== null && credits.balance === 0
 
   // Trigger colour: rose if any quota exceeded or live credits empty, amber at 80%
   const triggerColor =
@@ -193,18 +193,16 @@ export default function CreditsDropdown() {
           />
         </span>
 
-        {/* Live credits pill — only for Pro Max */}
-        {isProMax && (
-          <>
-            <span className="text-slate-300">·</span>
-            <span className="inline-flex items-center gap-1">
-              <Video className="h-3 w-3 shrink-0" />
-              <span className={cn("tabular-nums", liveEmpty ? "text-rose-600" : "")}>
-                {liveLoading || credits === null ? "—" : credits.balance}
-              </span>
+        {/* Live credits pill */}
+        <>
+          <span className="text-slate-300">·</span>
+          <span className="inline-flex items-center gap-1">
+            <Video className="h-3 w-3 shrink-0" />
+            <span className={cn("tabular-nums", liveEmpty ? "text-rose-600" : "")}>
+              {liveLoading || credits === null ? "—" : credits.balance}
             </span>
-          </>
-        )}
+          </span>
+        </>
       </button>
 
       {/* ── Dropdown ── */}
@@ -226,61 +224,55 @@ export default function CreditsDropdown() {
             })}
           </ul>
 
-          {/* Live interview credits — Pro Max only */}
-          {isProMax && (
-            <>
-              <div className="my-3 border-t border-slate-100" />
-              <p className="mb-2 text-[10.5px] font-bold uppercase tracking-wider text-slate-400">
-                Live interview credits
-              </p>
+          {/* Live interview credits */}
+          <>
+            <div className="my-3 border-t border-slate-100" />
+            <p className="mb-2 text-[10.5px] font-bold uppercase tracking-wider text-slate-400">
+              Live interview credits
+            </p>
 
-              {liveLoading ? (
-                <div className="h-6 animate-pulse rounded bg-slate-100" />
-              ) : (
-                <>
-                  <div className="mb-2.5 flex items-center justify-between">
-                    <span className="flex items-center gap-1.5 text-[13px] font-semibold text-slate-900">
-                      <Video className="h-3.5 w-3.5 text-orange-500" />
-                      {credits?.balance ?? 0} session{(credits?.balance ?? 0) !== 1 ? "s" : ""}
-                    </span>
-                    <span className="text-[11px] text-slate-400">
-                      $12 / 30 min · $20 / 60 min
-                    </span>
-                  </div>
+            {liveLoading ? (
+              <div className="h-6 animate-pulse rounded bg-slate-100" />
+            ) : (
+              <>
+                <div className="mb-2.5 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5 text-[13px] font-semibold text-slate-900">
+                    <Video className="h-3.5 w-3.5 text-orange-500" />
+                    {credits?.balance ?? 0} session{(credits?.balance ?? 0) !== 1 ? "s" : ""}
+                  </span>
+                  <span className="text-[11px] text-slate-400">
+                    $12 / 30 min · $20 / 60 min
+                  </span>
+                </div>
 
-                  {/* Low-balance warning */}
-                  {(credits?.balance ?? 0) === 0 && (
-                    <p className="mb-2 rounded-lg bg-rose-50 px-2.5 py-1.5 text-[11px] text-rose-600">
-                      No sessions — buy a pack to run a live interview.
-                    </p>
-                  )}
-                  {(credits?.balance ?? 0) === 1 && (
-                    <p className="mb-2 rounded-lg bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-700">
-                      1 session left — consider topping up.
-                    </p>
-                  )}
-
-                  {/* Buy pack grid */}
-                  <div className="grid grid-cols-4 gap-1.5">
-                    {PACKS.map((p) => (
-                      <BuyPackButton
-                        key={p.key}
-                        packKey={p.key}
-                        label={p.label}
-                        price={p.price}
-                        highlight={p.key === "session_short_1" || p.key === "session_short_3"}
-                        onBought={refreshLive}
-                      />
-                    ))}
-                  </div>
-
-                  <p className="mt-2 text-center text-[10px] text-slate-400">
-                    Pro Max includes 2 free sessions/month
+                {/* Low-balance warning */}
+                {(credits?.balance ?? 0) === 0 && (
+                  <p className="mb-2 rounded-lg bg-rose-50 px-2.5 py-1.5 text-[11px] text-rose-600">
+                    No sessions — buy a pack to run a live interview.
                   </p>
-                </>
-              )}
-            </>
-          )}
+                )}
+                {(credits?.balance ?? 0) === 1 && (
+                  <p className="mb-2 rounded-lg bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-700">
+                    1 session left — consider topping up.
+                  </p>
+                )}
+
+                {/* Buy pack grid */}
+                <div className="grid grid-cols-4 gap-1.5">
+                  {PACKS.map((p) => (
+                    <BuyPackButton
+                      key={p.key}
+                      packKey={p.key}
+                      label={p.label}
+                      price={p.price}
+                      highlight={p.key === "session_short_1" || p.key === "session_short_3"}
+                      onBought={refreshLive}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
+          </>
         </div>
       )}
     </div>

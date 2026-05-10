@@ -32,7 +32,7 @@ export const PLAN_DATA = {
     monthly: 29,
     yearly: 19,
     yearlyBilled: 229,
-    tagline: "Live interviews, Scout strategy, and unlimited everything",
+    tagline: "Scout strategy, unlimited everything, and live interview credits",
     cta: "Start Pro Max free for 7 days",
     ctaHref: "/signup?plan=pro_max&interval=monthly",
     color: "blue",
@@ -97,7 +97,5 @@ export const PRO_MAX_FEATURES = [
   "Unlimited cover letters",
   "Unlimited deep resume analyses",
   "Unlimited autofill",
-  "Live voice + webcam interviews (2/month)",
-  "Buy extra live interview credits",
   "Scout strategy plans + cohort insights",
 ]

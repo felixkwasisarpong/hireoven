@@ -40,7 +40,7 @@ export const FEATURE_GATES: Record<FeatureKey, AccessLevel> = {
   // Pro Max only
   international_advanced: "pro_max",
   scout_strategy:         "pro_max",
-  interview_live:         "pro_max",
+  interview_live:         "auth",    // credit-gated: any auth user can buy and use live sessions
 }
 
 export const FEATURE_DESCRIPTIONS: Record<FeatureKey, string> = {

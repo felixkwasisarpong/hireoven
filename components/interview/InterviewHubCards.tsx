@@ -187,14 +187,13 @@ export default function InterviewHubCards() {
     }
   }, [searchParams, pushToast])
 
-  // Fetch credit balance for Pro Max users
+  // Fetch credit balance for live interviews
   useEffect(() => {
-    if (!isProMax) return
     fetch("/api/interview/credits/balance")
       .then((r) => r.json())
       .then((d) => setCredits({ balance: d.balance ?? 0, costs: d.costs ?? { short: 1, long: 1 } }))
       .catch(() => {})
-  }, [isProMax])
+  }, [])
 
   if (isLoading) {
     return (
@@ -239,17 +238,7 @@ export default function InterviewHubCards() {
       )}
 
       {/* ── Live Interview ── */}
-      {isProMax ? (
-        <LiveCard credits={credits} />
-      ) : (
-        <LockedCard
-          icon={Video}
-          label="Live Interview"
-          tagline="Voice + webcam. Real pressure."
-          description="Best for final-round prep. Speak your answers, hold eye contact, get real-time interviewer energy."
-          requiredPlan="pro_max"
-        />
-      )}
+      <LiveCard credits={credits} />
 
       {/* ── Live Coding Test ── */}
       {isPro ? (

@@ -63,13 +63,13 @@ export async function POST(
   // ── Credit check — live sessions only (coding is covered by Pro subscription) ──
   if (session.type === "live") {
     const bal = await getBalance(user.id, plan)
-    if (bal.balance < (session.durationTargetMin <= 30 ? 4 : 7)) {
+    if (bal.balance < 1) {
       return NextResponse.json(
         {
           error: "Not enough live interview credits.",
           code: "INSUFFICIENT_CREDITS",
           balance: bal.balance,
-          needed: session.durationTargetMin <= 30 ? 4 : 7,
+          needed: 1,
         },
         { status: 402 }
       )

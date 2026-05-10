@@ -9,7 +9,8 @@ import ProblemStatement from "@/components/interview/ProblemStatement"
 import LanguageToggle from "@/components/interview/LanguageToggle"
 import TestConsole from "@/components/interview/TestConsole"
 import CodingInterviewerPanel from "@/components/interview/CodingInterviewerPanel"
-import { CodingRunner, type TestRunResult, type CodingLanguage, type RunnerStatus } from "@/lib/scout/interview/codingRunner"
+import { CodingRunner, isServerSideLanguage, type TestRunResult, type CodingLanguage, type RunnerStatus } from "@/lib/scout/interview/codingRunner"
+import { parsePythonSignature, generateGoStarter, generateJavaStarter } from "@/lib/scout/interview/languageUtils"
 
 // Monaco must be client-only and lazy
 const MonacoEditor = dynamic(() => import("@/components/interview/MonacoEditor"), { ssr: false })
@@ -74,7 +75,7 @@ export default function CodingWorkspace({ sessionId }: { sessionId: string }) {
   const [problem, setProblem] = useState<PublicProblem | null>(null)
   const [jobInfo, setJobInfo] = useState<{ title: string; company: string | null } | null>(null)
   const [code, setCode] = useState("")
-  const [language, setLanguage] = useState<"python" | "javascript">("python")
+  const [language, setLanguage] = useState<CodingLanguage>("python")
   const [sessionStatus, setSessionStatus] = useState("setup")
   const [isInitializing, setIsInitializing] = useState(true)
 
@@ -85,6 +86,7 @@ export default function CodingWorkspace({ sessionId }: { sessionId: string }) {
   // Tests
   const [hiddenTests, setHiddenTests] = useState<HiddenTest[]>([])
   const [fnNames, setFnNames] = useState({ python: "solution", javascript: "solution" })
+  const [pythonSignature, setPythonSignature] = useState("")
   const [slug, setSlug] = useState("")
   const [testResult, setTestResult] = useState<TestRunResult | null>(null)
   const [isRunning, setIsRunning] = useState(false)
@@ -143,8 +145,10 @@ export default function CodingWorkspace({ sessionId }: { sessionId: string }) {
         setRemainingSec(timeRemainingSec)
 
         // Detect language from saved attempt
+        const VALID_LANGS: CodingLanguage[] = ["python", "javascript", "typescript", "go", "java"]
         const langRaw = (attempt.languageUsed as string) ?? "python"
-        const lang: "python" | "javascript" = langRaw === "javascript" ? "javascript" : "python"
+        const lang: CodingLanguage = VALID_LANGS.includes(langRaw as CodingLanguage)
+          ? (langRaw as CodingLanguage) : "python"
         setLanguage(lang)
 
         // Restore code from finalCode or latest snapshot
@@ -152,7 +156,7 @@ export default function CodingWorkspace({ sessionId }: { sessionId: string }) {
           (attempt.codeSnapshots?.length > 0
             ? attempt.codeSnapshots[attempt.codeSnapshots.length - 1].code
             : null) ??
-          p.functionSignature?.[lang] ?? ""
+          p.functionSignature?.[lang as "python" | "javascript"] ?? ""
         setCode(savedCode)
         lastSnapshotCodeRef.current = savedCode
 
@@ -178,6 +182,7 @@ export default function CodingWorkspace({ sessionId }: { sessionId: string }) {
           const testsData = await testsRes.json()
           setHiddenTests(testsData.tests ?? [])
           setFnNames({ python: testsData.pythonFnName, javascript: testsData.jsFnName })
+          setPythonSignature(testsData.pythonSignature ?? "")
           if (testsData.slug) setSlug(testsData.slug)
         }
 
@@ -296,7 +301,9 @@ export default function CodingWorkspace({ sessionId }: { sessionId: string }) {
     try {
       const tests = allTests ? hiddenTests : hiddenTests.slice(0, 3)
       const fnName = language === "python" ? fnNames.python : fnNames.javascript
-      const result = await runnerRef.current.run(code, fnName, tests, slug)
+      const result = isServerSideLanguage(language)
+        ? await runnerRef.current.runServerSide({ code, fnName, tests, pythonSignature, sessionId })
+        : await runnerRef.current.run(code, fnName, tests, slug)
       setTestResult(result)
 
       // Log to server
@@ -329,7 +336,9 @@ export default function CodingWorkspace({ sessionId }: { sessionId: string }) {
       let result: TestRunResult | undefined
       if (runnerRef.current && runnerStatus === "ready") {
         const fnName = language === "python" ? fnNames.python : fnNames.javascript
-        result = await runnerRef.current.run(code, fnName, hiddenTests, slug)
+        result = isServerSideLanguage(language)
+          ? await runnerRef.current.runServerSide({ code, fnName, tests: hiddenTests, pythonSignature, sessionId })
+          : await runnerRef.current.run(code, fnName, hiddenTests, slug)
         setTestResult(result)
       }
 
@@ -351,22 +360,34 @@ export default function CodingWorkspace({ sessionId }: { sessionId: string }) {
   }
 
   // ── Language toggle ────────────────────────────────────────────────────────
-  async function handleLanguageChange(newLang: "python" | "javascript") {
+  async function handleLanguageChange(newLang: CodingLanguage) {
     if (newLang === language) return
-    const hasCode = code.trim() !== "" && code !== (problem?.functionSignature?.[language] ?? "")
+    const hasCode = code.trim() !== ""
     if (hasCode) {
       if (!confirm("Switching language clears your current code. Continue?")) return
     }
     setLanguage(newLang)
-    setCode(problem?.functionSignature?.[newLang] ?? "")
+
+    // Generate starter code for the new language
+    const sig = pythonSignature ? parsePythonSignature(pythonSignature) : null
+    let starter = ""
+    if (newLang === "python") {
+      starter = problem?.functionSignature?.python ?? ""
+    } else if (newLang === "javascript" || newLang === "typescript") {
+      starter = problem?.functionSignature?.javascript ?? ""
+    } else if (newLang === "go" && sig) {
+      starter = generateGoStarter(sig)
+    } else if (newLang === "java" && sig) {
+      starter = generateJavaStarter(sig)
+    }
+    setCode(starter)
     lastSnapshotCodeRef.current = ""
-    // Update language on server
+
     void fetch(`/api/interview/sessions/${sessionId}/coding/attempt`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ languageUsed: newLang }),
     })
-    // Re-init runner
     void initRunner(newLang)
   }
 
@@ -427,7 +448,7 @@ export default function CodingWorkspace({ sessionId }: { sessionId: string }) {
           </p>
         </div>
       )}
-      {runnerStatus === "error" && (
+      {runnerStatus === "error" && !isServerSideLanguage(language) && (
         <div className="border-b border-red-100 bg-red-50 px-4 py-2 text-center">
           <p className="text-[12px] text-red-600">
             Runtime failed to load. Try refreshing or switch to JavaScript.

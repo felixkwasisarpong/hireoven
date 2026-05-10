@@ -1,33 +1,25 @@
 import { getPostgresPool } from "@/lib/postgres/server"
 import type { Plan } from "@/lib/gates"
 
-// 1 credit = 1 session slot (any duration)
+// 1 credit = 1 live session slot (max 30 min)
 export function creditsForDuration(_durationMin: number): number {
   return 1
 }
 
-// Pro Max monthly grant: 2 free session slots
-const PRO_MAX_MONTHLY_GRANT = 2
-// Days between auto-grants (28 keeps it inside any billing cycle)
+// Pro Max monthly grant: 1 free session per billing cycle
+const PRO_MAX_MONTHLY_GRANT = 1
 const GRANT_INTERVAL_DAYS = 28
 
 export interface CreditBalance {
   balance: number
-  /** Credits the user can get via the next monthly grant, or 0 if already granted this cycle */
   pendingProMaxGrant: number
-  /** ISO timestamp of last monthly grant, or null */
-  lastGrantAt: string | null
 }
 
 // ── Read balance (with lazy monthly grant for Pro Max) ──────────────────────
 
-export async function getBalance(
-  userId: string,
-  plan: Plan | null
-): Promise<CreditBalance> {
+export async function getBalance(userId: string, plan: Plan | null): Promise<CreditBalance> {
   const pool = getPostgresPool()
 
-  // Check last monthly grant date
   const grantResult = await pool.query<{ created_at: string }>(
     `SELECT created_at FROM interview_credit_transactions
      WHERE user_id = $1 AND reason = 'monthly_pro_max_grant'
@@ -39,21 +31,19 @@ export async function getBalance(
     ? (Date.now() - new Date(lastGrant).getTime()) / 86_400_000
     : Infinity
 
-  // Lazy grant: Pro Max users who haven't received their monthly grant
   const shouldGrant = plan === "pro_max" && daysSinceGrant >= GRANT_INTERVAL_DAYS
   if (shouldGrant) {
     await grantCredits(userId, PRO_MAX_MONTHLY_GRANT, "monthly_pro_max_grant")
   }
 
-  const balResult = await pool.query<{ balance: number }>(
+  const result = await pool.query<{ balance: number }>(
     `SELECT balance FROM interview_credit_balances WHERE user_id = $1`,
     [userId]
   )
 
   return {
-    balance: balResult.rows[0]?.balance ?? 0,
+    balance: result.rows[0]?.balance ?? 0,
     pendingProMaxGrant: shouldGrant ? PRO_MAX_MONTHLY_GRANT : 0,
-    lastGrantAt: shouldGrant ? new Date().toISOString() : lastGrant,
   }
 }
 
