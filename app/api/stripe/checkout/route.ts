@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { isPaymentsDisabled } from "@/lib/admin/feature-flags"
 import { getPlanAmountCents, type BillingInterval, type PlanKey } from "@/lib/pricing"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { createClient } from "@/lib/supabase/server"
@@ -17,6 +18,13 @@ const PRICE_IDS: Record<string, Record<string, string | undefined>> = {
 }
 
 export async function POST(request: Request) {
+  if (await isPaymentsDisabled()) {
+    return NextResponse.json(
+      { error: "Payments are temporarily paused. Please check back soon." },
+      { status: 503 },
+    )
+  }
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })

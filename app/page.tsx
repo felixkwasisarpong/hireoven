@@ -8,6 +8,7 @@ import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
 import { getPostgresPool, hasPostgresEnv } from "@/lib/postgres/server"
 import { createClient } from "@/lib/supabase/server"
 import HireovenLogo from "@/components/ui/HireovenLogo"
+import MaintenanceBanner from "@/components/marketing/MaintenanceBanner"
 
 export const metadata: Metadata = {
   title: "Hireoven — Jobs served fresh. Be an early bird applicant.",
@@ -161,6 +162,7 @@ export default async function HomePage() {
 
   return (
     <div className="min-h-screen bg-white">
+      <MaintenanceBanner />
       <Navbar />
 
       {/* ── Hero ────────────────────────────────────────────────────────── */}
@@ -545,9 +547,12 @@ export default async function HomePage() {
               { href: "/terms", label: "Terms" },
             ]} />
           </div>
-          <div className="mt-10 border-t border-slate-100 pt-6 flex items-center justify-between">
+          <div className="mt-10 border-t border-slate-100 pt-6 flex flex-wrap items-center justify-between gap-y-2">
             <p className="text-[12px] text-slate-400">© {new Date().getFullYear()} Hireoven. All rights reserved.</p>
-            <p className="text-[12px] text-slate-300">Built for people who move fast.</p>
+            <div className="flex items-center gap-4">
+              <p className="text-[12px] text-slate-300">Built for people who move fast.</p>
+              <p className="text-[12px] text-slate-400">Powered by Sepurux</p>
+            </div>
           </div>
         </div>
       </footer>

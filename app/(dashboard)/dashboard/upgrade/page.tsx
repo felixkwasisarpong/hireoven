@@ -11,6 +11,7 @@ import PricingCard from "@/components/pricing/PricingCard"
 import FeatureRow from "@/components/pricing/FeatureRow"
 import { useAuth } from "@/lib/hooks/useAuth"
 import { useSubscription } from "@/lib/hooks/useSubscription"
+import { useFeatureFlags } from "@/lib/hooks/useFeatureFlags"
 import { type BillingInterval, type PlanKey } from "@/lib/pricing"
 
 const COMPARISON_ROWS: Array<{
@@ -65,6 +66,7 @@ export default function UpgradePage() {
   const autoCheckoutStarted = useRef(false)
   const { user, profile } = useAuth()
   const { plan: currentPlan, isLoading } = useSubscription()
+  const { paymentsDisabled } = useFeatureFlags()
 
   const isIntlUser = profile?.is_international || profile?.visa_status || profile?.needs_sponsorship
 
@@ -106,6 +108,28 @@ export default function UpgradePage() {
       setCheckoutError(data.error ?? "Could not start checkout. Please try again.")
       setCheckoutLoading(null)
     }
+  }
+
+  if (paymentsDisabled) {
+    return (
+      <div className="app-page">
+        <div className="app-shell max-w-2xl">
+          <div className="mb-6">
+            <Link href="/dashboard" className="subpage-back">
+              <ArrowLeft className="h-3.5 w-3.5" />
+              Back to dashboard
+            </Link>
+          </div>
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-8 text-amber-900">
+            <h1 className="text-xl font-semibold">Payments are temporarily paused</h1>
+            <p className="mt-2 text-sm leading-relaxed">
+              We&apos;re not accepting new upgrades right now. Your existing
+              access is unaffected — check back soon.
+            </p>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
