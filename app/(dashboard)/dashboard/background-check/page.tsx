@@ -1,9 +1,9 @@
 export const dynamic = "force-dynamic"
 
-import dynamic from "next/dynamic"
+import dynamicImport from "next/dynamic"
 import DashboardPageHeader from "@/components/layout/DashboardPageHeader"
 
-const BackgroundCheckTool = dynamic(
+const BackgroundCheckTool = dynamicImport(
   () => import("@/components/background-check/BackgroundCheckTool"),
   { ssr: false }
 )
