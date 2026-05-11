@@ -21,6 +21,7 @@ import { bumpScoutUsage } from "@/lib/scout/free-tier-quota"
 import { ANTHROPIC_TIER_PRICING, SONNET_MODEL } from "@/lib/ai/anthropic-models"
 import { budgetTracker, calcCost, inferTier } from "@/lib/scout/budget/tracker"
 import { streamWithTimeout } from "@/lib/scout/budget/ai-call"
+import { isAiBudgetExceeded } from "@/lib/scout/budget/cap"
 import { routeScoutMessage, AI_TIMEOUTS } from "@/lib/scout/budget/router"
 import { scoutCache, CACHE_TTL, cacheKey, stableHash } from "@/lib/scout/budget/cache"
 import { sanitizeGeneratedText } from "@/lib/text/sanitize-generated-text"
@@ -1039,6 +1040,26 @@ export async function POST(request: NextRequest) {
         recommendation: "Wait",
         actions: [],
         explanations: [],
+      } satisfies ScoutResponse),
+      { status: 503 }
+    )
+  }
+
+  // Daily AI spend ceiling. When today's total Anthropic cost crosses the
+  // configured cap (AI_DAILY_BUDGET_USD), Scout pauses gracefully instead
+  // of running up the bill. Resets at UTC midnight when api_usage rolls.
+  if (await isAiBudgetExceeded()) {
+    return NextResponse.json(
+      sanitizeScoutResponse({
+        answer: "Scout's daily AI budget for today has been reached. Try again after midnight UTC — your quota will refresh then.",
+        recommendation: "Wait",
+        actions: [],
+        explanations: [],
+        gated: {
+          feature: "scout_actions",
+          reason: "Daily AI spend cap reached.",
+          upgradeMessage: "Quota resets at midnight UTC.",
+        },
       } satisfies ScoutResponse),
       { status: 503 }
     )
