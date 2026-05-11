@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
 import { Resend } from "resend"
+import { getEmailCompanyLogoUrl, getHireovenEmailLogoUrl, getHireovenJobDetailUrl } from "@/lib/email/branding"
 import { getRecentJobsFromEmail } from "@/lib/email/identity"
 import { requireCronAuth } from "@/lib/env"
+import { matchesLocationFilter } from "@/lib/jobs/search-match"
 import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
 import { getPostgresPool } from "@/lib/postgres/server"
+import type { Job, JobAlert } from "@/types"
 
 export const dynamic = "force-dynamic"
 export const maxDuration = 300
@@ -17,6 +20,8 @@ type UserProfile = {
   email_alerts: boolean
 }
 
+type CompanyShape = { name: string; domain: string | null; logo_url: string | null }
+
 type MatchedJobRow = {
   user_id: string
   overall_score: number
@@ -27,7 +32,7 @@ type MatchedJobRow = {
     location: string | null
     is_remote: boolean
     first_detected_at: string
-    company: { name: string } | null
+    company: CompanyShape | null
   } | null
 }
 
@@ -38,7 +43,25 @@ type FallbackJob = {
   location: string | null
   is_remote: boolean
   first_detected_at: string
-  company: { name: string } | null
+  company: CompanyShape | null
+}
+
+function matchesAlert(alert: JobAlert, job: Job): boolean {
+  if (alert.sponsorship_required && !job.sponsors_h1b && (job.sponsorship_score ?? 0) <= 60) return false
+  if (alert.remote_only && !job.is_remote) return false
+  if (alert.seniority_levels?.length && job.seniority_level && !alert.seniority_levels.includes(job.seniority_level)) return false
+  if (alert.employment_types?.length && job.employment_type && !alert.employment_types.includes(job.employment_type)) return false
+  if (alert.company_ids?.length && !alert.company_ids.includes(job.company_id)) return false
+  if (alert.keywords?.length) {
+    const haystack = `${job.title} ${job.normalized_title ?? ""} ${(job.skills ?? []).join(" ")}`.toLowerCase()
+    if (!alert.keywords.some((kw) => haystack.includes(kw.toLowerCase()))) return false
+  }
+  if (alert.locations?.length) {
+    if (!alert.locations.some((entry) => matchesLocationFilter(job.location, entry, { isRemote: job.is_remote }))) {
+      return false
+    }
+  }
+  return true
 }
 
 function getBaseUrl() {
@@ -81,7 +104,7 @@ function renderJobRows(
     location: string | null
     is_remote: boolean
     first_detected_at: string
-    company: { name: string } | null
+    company: CompanyShape | null
     score?: number
   }>
 ) {
@@ -92,10 +115,20 @@ function renderJobRows(
           ? `<span style="display:inline-block;margin-top:8px;padding:4px 8px;border-radius:999px;border:1px solid #bae6fd;background:#f0f9ff;color:#0369a1;font-size:11px;font-weight:700;">${job.score}% match</span>`
           : ""
 
+      const logoSrc = getEmailCompanyLogoUrl(job.company?.domain, job.company?.logo_url)
+      const logoCell = logoSrc
+        ? `<td width="48" valign="top" style="padding:16px 12px 16px 0;width:48px;">
+             <img src="${htmlEscape(logoSrc)}" width="44" height="44" alt=""
+                  style="display:block;width:44px;height:44px;border-radius:9px;border:1px solid #e2e8f0;background:#fff;object-fit:contain;" />
+           </td>`
+        : ""
+
+      const href = getHireovenJobDetailUrl(job.id)
       return `
       <tr>
-        <td style="padding:14px 0;border-bottom:1px solid #eef2f7;">
-          <a href="${htmlEscape(job.apply_url)}" style="font-size:16px;font-weight:700;color:#0369A1;text-decoration:none;">
+        ${logoCell}
+        <td style="padding:16px 0;border-bottom:1px solid #eef2f7;">
+          <a href="${htmlEscape(href)}" style="font-size:16px;font-weight:700;color:#0369A1;text-decoration:none;">
             ${htmlEscape(job.title)}
           </a>
           <div style="font-size:13px;color:#64748b;margin-top:4px;">
@@ -127,6 +160,8 @@ function buildEmail({
 }) {
   const baseUrl = getBaseUrl()
 
+  const hireovenLogo = getHireovenEmailLogoUrl("wordmark")
+
   return `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
@@ -136,8 +171,9 @@ function buildEmail({
       <table width="620" cellpadding="0" cellspacing="0" style="max-width:620px;background:#ffffff;border:1px solid #dbeafe;border-radius:18px;overflow:hidden;">
         <tr>
           <td style="padding:28px 30px;background:linear-gradient(135deg,#0369a1 0%,#0ea5e9 100%);">
-            <div style="font-size:12px;font-weight:700;color:#dbeafe;letter-spacing:0.12em;text-transform:uppercase;">Hireoven</div>
-            <div style="margin-top:12px;font-size:28px;line-height:1.2;font-weight:800;color:#ffffff;">${htmlEscape(title)}</div>
+            <img src="${hireovenLogo}" alt="Hireoven" height="28"
+                 style="display:block;height:28px;width:auto;border:0;outline:none;text-decoration:none;" />
+            <div style="margin-top:14px;font-size:28px;line-height:1.2;font-weight:800;color:#ffffff;">${htmlEscape(title)}</div>
             <div style="margin-top:10px;font-size:15px;line-height:1.5;color:#e0f2fe;">${htmlEscape(subtitle)}</div>
           </td>
         </tr>
@@ -245,6 +281,9 @@ export async function GET(request: NextRequest) {
         is_remote: boolean
         first_detected_at: string
         company_name: string | null
+        company_domain: string | null
+        company_logo_url: string | null
+        job_full: Job
       }
     >(
       `SELECT
@@ -256,7 +295,10 @@ export async function GET(request: NextRequest) {
          jobs.location,
          jobs.is_remote,
          jobs.first_detected_at,
-         companies.name AS company_name
+         companies.name     AS company_name,
+         companies.domain   AS company_domain,
+         companies.logo_url AS company_logo_url,
+         to_jsonb(jobs.*)   AS job_full
        FROM job_match_scores jms
        INNER JOIN jobs ON jobs.id = jms.job_id
        LEFT JOIN companies ON companies.id = jobs.company_id
@@ -265,14 +307,34 @@ export async function GET(request: NextRequest) {
          AND jobs.first_detected_at >= $2
          AND jobs.is_active = true
          AND ${sqlJobLocatedInUsa("jobs")}
-       ORDER BY jms.overall_score DESC, jobs.first_detected_at DESC
+       -- Freshest first per user-facing convention. Score is the threshold
+       -- (>=75), not the primary sort key.
+       ORDER BY jobs.first_detected_at DESC, jms.overall_score DESC
        LIMIT 1000`,
       [resumeRecipients.map((user) => user.id), withResumeSince]
     )
 
-    const byUser = new Map<string, Array<MatchedJobRow>>()
+    // Bulk-fetch active job_alerts for the resume recipients so we can scope
+    // each user's email to their own alert criteria (if any). Users with
+    // no alerts continue to get the match-score-only behaviour.
+    const alertsResult = await pool.query<JobAlert & { user_id: string }>(
+      `SELECT * FROM job_alerts WHERE user_id = ANY($1::uuid[]) AND is_active = true`,
+      [resumeRecipients.map((user) => user.id)]
+    )
+    const alertsByUser = new Map<string, JobAlert[]>()
+    for (const row of alertsResult.rows) {
+      const list = alertsByUser.get(row.user_id) ?? []
+      list.push(row)
+      alertsByUser.set(row.user_id, list)
+    }
+
+    type EnrichedMatchedRow = MatchedJobRow & { jobFull?: Job }
+    const byUser = new Map<string, Array<EnrichedMatchedRow>>()
     for (const row of matchedRowsResult.rows) {
-      const normalized: MatchedJobRow = {
+      const company = row.company_name
+        ? { name: row.company_name, domain: row.company_domain, logo_url: row.company_logo_url }
+        : null
+      const normalized: EnrichedMatchedRow = {
         user_id: row.user_id,
         overall_score: row.overall_score,
         jobs: {
@@ -282,8 +344,9 @@ export async function GET(request: NextRequest) {
           location: row.location,
           is_remote: row.is_remote,
           first_detected_at: row.first_detected_at,
-          company: row.company_name ? { name: row.company_name } : null,
+          company,
         },
+        jobFull: row.job_full,
       }
       const current = byUser.get(row.user_id) ?? []
       current.push(normalized)
@@ -294,7 +357,15 @@ export async function GET(request: NextRequest) {
       const rows = byUser.get(user.id) ?? []
       if (!rows.length) continue
 
-      const topJobs = rows
+      // If the user has saved job_alerts, only include matches that ALSO
+      // satisfy at least one alert. Otherwise fall through to the
+      // match-score-only filter.
+      const userAlerts = alertsByUser.get(user.id) ?? []
+      const filtered = userAlerts.length
+        ? rows.filter((row) => row.jobFull && userAlerts.some((alert) => matchesAlert(alert, row.jobFull as Job)))
+        : rows
+
+      const topJobs = filtered
         .filter((row) => row.jobs)
         .slice(0, 5)
         .map((row) => ({
@@ -334,6 +405,8 @@ export async function GET(request: NextRequest) {
         is_remote: boolean
         first_detected_at: string
         company_name: string | null
+        company_domain: string | null
+        company_logo_url: string | null
       }
     >(
       `SELECT
@@ -343,7 +416,9 @@ export async function GET(request: NextRequest) {
          jobs.location,
          jobs.is_remote,
          jobs.first_detected_at,
-         companies.name AS company_name
+         companies.name     AS company_name,
+         companies.domain   AS company_domain,
+         companies.logo_url AS company_logo_url
        FROM jobs
        LEFT JOIN companies ON companies.id = jobs.company_id
        WHERE jobs.is_active = true
@@ -361,7 +436,9 @@ export async function GET(request: NextRequest) {
       location: row.location,
       is_remote: row.is_remote,
       first_detected_at: row.first_detected_at,
-      company: row.company_name ? { name: row.company_name } : null,
+      company: row.company_name
+        ? { name: row.company_name, domain: row.company_domain, logo_url: row.company_logo_url }
+        : null,
     }))
     if (fallbackJobs.length) {
       for (const user of noResumeRecipients) {

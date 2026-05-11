@@ -1,11 +1,18 @@
 import { NextRequest, NextResponse } from "next/server"
 import { Resend } from "resend"
+import { getEmailCompanyLogoUrl, getHireovenEmailLogoUrl, getHireovenJobDetailUrl } from "@/lib/email/branding"
 import { getAlertsFromEmail } from "@/lib/email/identity"
 import { requireCronAuth } from "@/lib/env"
 import { matchesLocationFilter } from "@/lib/jobs/search-match"
 import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
 import { getPostgresPool } from "@/lib/postgres/server"
 import type { Job, JobAlert, Profile } from "@/types"
+
+type JobEmailRow = Job & {
+  company_name?: string | null
+  company_domain?: string | null
+  company_logo_url?: string | null
+}
 
 export const dynamic = "force-dynamic"
 export const maxDuration = 300
@@ -39,8 +46,7 @@ function matchesAlert(alert: JobAlert, job: Job): boolean {
   return true
 }
 
-function jobCard(job: Job & { company_name?: string }): string {
-  const base = getBaseUrl()
+function jobCard(job: JobEmailRow): string {
   const salary =
     job.salary_min && job.salary_max
       ? `$${Math.round(job.salary_min / 1000)}k–$${Math.round(job.salary_max / 1000)}k`
@@ -54,10 +60,20 @@ function jobCard(job: Job & { company_name?: string }): string {
     .filter(Boolean)
     .join(" · ")
 
+  const logoSrc = getEmailCompanyLogoUrl(job.company_domain, job.company_logo_url)
+  const logoCell = logoSrc
+    ? `<td width="44" valign="top" style="padding:14px 12px 14px 0;width:44px;">
+         <img src="${logoSrc}" width="40" height="40" alt=""
+              style="display:block;width:40px;height:40px;border-radius:8px;border:1px solid #e2e8f0;background:#fff;object-fit:contain;" />
+       </td>`
+    : ""
+
+  const href = getHireovenJobDetailUrl(job.id)
   return `
     <tr>
-      <td style="padding:12px 0;border-bottom:1px solid #f1f5f9;">
-        <a href="${job.apply_url}" style="font-size:15px;font-weight:600;color:#0369A1;text-decoration:none;">
+      ${logoCell}
+      <td style="padding:14px 0;border-bottom:1px solid #f1f5f9;">
+        <a href="${href}" style="font-size:15px;font-weight:600;color:#0369A1;text-decoration:none;line-height:1.35;">
           ${job.title}
         </a>
         <div style="font-size:13px;color:#64748b;margin-top:2px;">${job.company_name ?? ""}</div>
@@ -68,12 +84,13 @@ function jobCard(job: Job & { company_name?: string }): string {
 
 function buildDigestEmail(
   profile: Pick<Profile, "full_name" | "email">,
-  sections: Array<{ alertName: string; jobs: Array<Job & { company_name?: string }> }>,
+  sections: Array<{ alertName: string; jobs: Array<JobEmailRow> }>,
   totalCount: number,
   windowLabel: string
 ): string {
   const base = getBaseUrl()
   const name = profile.full_name?.split(" ")[0] ?? "there"
+  const hireovenLogo = getHireovenEmailLogoUrl("wordmark")
 
   const sectionsHtml = sections
     .map(
@@ -96,9 +113,10 @@ function buildDigestEmail(
       <table width="600" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:16px;border:1px solid #e2e8f0;overflow:hidden;max-width:600px;">
 
         <!-- Header -->
-        <tr><td style="background:#0369A1;padding:28px 32px;">
-          <div style="font-size:20px;font-weight:700;color:#fff;letter-spacing:-0.02em;">Hireoven</div>
-          <div style="font-size:13px;color:#bae6fd;margin-top:4px;">Jobs served fresh</div>
+        <tr><td style="background:#0369A1;padding:24px 32px;">
+          <img src="${hireovenLogo}" alt="Hireoven" height="32"
+               style="display:block;height:32px;width:auto;border:0;outline:none;text-decoration:none;" />
+          <div style="font-size:13px;color:#bae6fd;margin-top:6px;">Jobs served fresh</div>
         </td></tr>
 
         <!-- Body -->
@@ -161,9 +179,13 @@ export async function GET(request: NextRequest) {
 
   if (!users?.length) return NextResponse.json({ sent: 0, reason: "no daily users" })
 
-  // Fetch all jobs posted in last 24h
-  const recentJobsResult = await pool.query<(Job & { company_name: string })>(
-    `SELECT jobs.*, companies.name AS company_name
+  // Fetch all jobs posted in last 24h, including the company's domain and
+  // any stored logo_url so the email can render brand marks.
+  const recentJobsResult = await pool.query<JobEmailRow>(
+    `SELECT jobs.*,
+            companies.name      AS company_name,
+            companies.domain    AS company_domain,
+            companies.logo_url  AS company_logo_url
      FROM jobs
      LEFT JOIN companies ON companies.id = jobs.company_id
      WHERE jobs.is_active = true
@@ -176,8 +198,7 @@ export async function GET(request: NextRequest) {
 
   if (!recentJobs?.length) return NextResponse.json({ sent: 0, reason: "no new jobs" })
 
-  type JobWithCompanyName = Job & { company_name: string }
-  const flatJobs = recentJobs as JobWithCompanyName[]
+  const flatJobs: JobEmailRow[] = recentJobs
 
   let sent = 0
   let errors = 0
@@ -194,11 +215,11 @@ export async function GET(request: NextRequest) {
 
     if (!alerts?.length) continue
 
-    const sections: Array<{ alertName: string; jobs: typeof flatJobs }> = []
+    const sections: Array<{ alertName: string; jobs: JobEmailRow[] }> = []
     let totalCount = 0
 
     for (const alert of alerts) {
-      const matched = flatJobs.filter((job) => matchesAlert(alert, job)).slice(0, 5)
+      const matched: JobEmailRow[] = flatJobs.filter((job) => matchesAlert(alert, job)).slice(0, 5)
       if (!matched.length) continue
       sections.push({ alertName: alert.name ?? "Untitled alert", jobs: matched })
       totalCount += matched.length
