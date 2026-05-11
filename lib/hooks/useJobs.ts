@@ -189,7 +189,7 @@ function matchesClientFilters(job: JobWithCompany, filters: JobFilters, query: s
   return matchesSearch(job, query)
 }
 
-function sortJobs(rows: JobWithCompany[], filters: JobFilters, searchQuery: string) {
+function sortJobs(rows: JobWithMatchScore[], filters: JobFilters, searchQuery: string) {
   const query = searchQuery.trim().toLowerCase()
 
   function freshnessScore(timestamp: string) {
@@ -200,7 +200,7 @@ function sortJobs(rows: JobWithCompany[], filters: JobFilters, searchQuery: stri
     return Math.max(0, 500 - minutes)
   }
 
-  function textScore(job: JobWithCompany) {
+  function textScore(job: JobWithMatchScore) {
     if (!query) return 0
 
     const title = `${job.title} ${job.normalized_title ?? ""}`.toLowerCase()
@@ -220,6 +220,23 @@ function sortJobs(rows: JobWithCompany[], filters: JobFilters, searchQuery: stri
 
   return [...rows].sort((left, right) => {
     if (filters.sort === "match") {
+      // When real per-user match scores are present (server attached them
+      // via withScores=1), sort primarily by overall_score. Falls back to
+      // the synthetic freshness/text/sponsorship blend only when scores
+      // are missing — typical for users without a primary resume.
+      const leftMatch = left.match_score?.overall_score
+      const rightMatch = right.match_score?.overall_score
+      if (leftMatch != null || rightMatch != null) {
+        const a = leftMatch ?? -1
+        const b = rightMatch ?? -1
+        if (a !== b) return b - a
+        // tie-break on freshness
+        return (
+          new Date(right.first_detected_at).getTime() -
+          new Date(left.first_detected_at).getTime()
+        )
+      }
+      // Fallback synthetic match-ish score for users without resume scores.
       const leftScore =
         freshnessScore(left.first_detected_at) +
         textScore(left) +

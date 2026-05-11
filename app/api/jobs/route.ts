@@ -42,7 +42,21 @@ export async function GET(request: NextRequest) {
     return `$${values.length}`
   }
 
-  if (q?.trim()) where.push(`jobs.title ILIKE ${addParam(`%${q.trim()}%`)}`)
+  if (q?.trim()) {
+    // Match on title, normalized_title, skills array, OR company name —
+    // mirrors the broader matching in /api/match/feed so the two routes
+    // return the same candidate pool for the same `q`. The previous
+    // title-only ILIKE diverged: ?q=java&sort=freshest missed jobs that
+    // had Java in their skills/company but not in the literal title.
+    const pattern = `%${q.trim()}%`
+    const p = addParam(pattern)
+    where.push(`(
+      jobs.title ILIKE ${p}
+      OR jobs.normalized_title ILIKE ${p}
+      OR companies.name ILIKE ${p}
+      OR EXISTS (SELECT 1 FROM unnest(jobs.skills) s WHERE s ILIKE ${p})
+    )`)
+  }
   if (companyId) where.push(`jobs.company_id = ${addParam(companyId)}`)
   if (remote) where.push("jobs.is_remote = true")
   if (sponsorship) where.push("(jobs.sponsors_h1b = true OR jobs.sponsorship_score > 60)")
@@ -55,8 +69,13 @@ export async function GET(request: NextRequest) {
     where.push(`jobs.first_detected_at >= ${addParam(cutoff)}`)
   }
 
-  const orderBy =
-    sort === "match" ? "jobs.sponsorship_score DESC NULLS LAST" : "jobs.first_detected_at DESC NULLS LAST"
+  // `sort=match` without a personalized feed isn't meaningful here — the
+  // route doesn't have a per-user resume context to compute scores. Fall
+  // back to freshness so we don't accidentally order by sponsorship_score
+  // (the previous, surprising behaviour). The match-aware sort happens
+  // in /api/match/feed; the client routes there when the user has a
+  // primary resume.
+  const orderBy = "jobs.first_detected_at DESC NULLS LAST"
   const pool = getPostgresPool()
   const oneHourAgo = new Date(Date.now() - 3_600_000).toISOString()
 
