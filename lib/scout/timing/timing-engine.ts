@@ -72,9 +72,10 @@ export async function computeJobTiming(
   const pool = getPostgresPool()
   const now = new Date()
 
-  // Fetch job row
+  // Fetch job row. jobs.first_detected_at is aliased to posted_at because
+  // downstream code + the job_timing_scores schema use the posted_at name.
   const jobResult = await pool.query<JobRow>(
-    `SELECT id, posted_at, company_id FROM jobs WHERE id = $1 LIMIT 1`,
+    `SELECT id, first_detected_at AS posted_at, company_id FROM jobs WHERE id = $1 LIMIT 1`,
     [jobId],
   )
   const job = jobResult.rows[0] ?? null
