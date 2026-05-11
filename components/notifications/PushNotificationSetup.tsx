@@ -39,6 +39,7 @@ export default function PushNotificationSetup() {
   const [subscribed, setSubscribed] = useState(false)
   const [dismissed, setDismissed] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [permissionState, setPermissionState] = useState<NotificationPermission>("default")
 
   useEffect(() => {
     async function checkStatus() {
@@ -52,6 +53,8 @@ export default function PushNotificationSetup() {
         setLoading(false)
         return
       }
+
+      setPermissionState(Notification.permission)
 
       const dismissedUntil = Number(window.localStorage.getItem(DISMISS_KEY) ?? "0")
       if (dismissedUntil > Date.now()) {
@@ -87,9 +90,18 @@ export default function PushNotificationSetup() {
     setLoading(true)
 
     try {
+      // Already blocked — browser won't show a dialog, so guide the user to fix it manually.
+      if (Notification.permission === "denied") {
+        throw new Error(
+          "Notifications are blocked. Click the lock icon in your address bar → Site settings → allow Notifications."
+        )
+      }
+
       const permission = await Notification.requestPermission()
       if (permission !== "granted") {
-        throw new Error("Notification permission was not granted")
+        throw new Error(
+          "Permission not granted. Click the lock icon in your address bar and allow notifications for this site."
+        )
       }
 
       const [publicKey, registration] = await Promise.all([
@@ -143,14 +155,20 @@ export default function PushNotificationSetup() {
         </div>
 
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => void enableNotifications()}
-            disabled={loading}
-            className="inline-flex items-center justify-center rounded-lg bg-[#FF5C18] px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-[#E14F0E] disabled:opacity-60"
-          >
-            {loading ? "Enabling…" : "Enable"}
-          </button>
+          {permissionState === "denied" ? (
+            <span className="text-xs text-gray-500">
+              Blocked — allow in browser settings
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={() => void enableNotifications()}
+              disabled={loading}
+              className="inline-flex items-center justify-center rounded-lg bg-[#FF5C18] px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-[#E14F0E] disabled:opacity-60"
+            >
+              {loading ? "Enabling…" : "Enable"}
+            </button>
+          )}
           <button
             type="button"
             onClick={dismiss}
