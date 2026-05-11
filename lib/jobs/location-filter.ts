@@ -132,28 +132,45 @@ export function isAllowedLocation(input: {
   if (!haystack) return true
   const lower = haystack.toLowerCase()
 
-  let hasUsCaSignal = false
+  // Strong US/CA signals: an explicit country name, a full state/province
+  // name, or a recognized major US/CA city. These are unambiguous — they
+  // cannot be confused with foreign ISO-2 codes (which is the main leak
+  // path, e.g. "IN" reading as Indiana when the string also says "India").
+  let hasStrongUsCaSignal = false
   if (US_NAME_RE.test(haystack) || CANADA_NAME_RE.test(haystack)) {
-    hasUsCaSignal = true
+    hasStrongUsCaSignal = true
   }
-  for (const name of US_STATES) {
-    if (lower.includes(name)) {
-      hasUsCaSignal = true
-      break
-    }
-  }
-  if (!hasUsCaSignal) {
-    for (const name of CA_PROVINCES) {
+  if (!hasStrongUsCaSignal) {
+    for (const name of US_STATES) {
       if (lower.includes(name)) {
-        hasUsCaSignal = true
+        hasStrongUsCaSignal = true
         break
       }
     }
   }
-  if (!hasUsCaSignal && MAJOR_US_CA_CITY_RE.test(haystack)) {
-    hasUsCaSignal = true
+  if (!hasStrongUsCaSignal) {
+    for (const name of CA_PROVINCES) {
+      if (lower.includes(name)) {
+        hasStrongUsCaSignal = true
+        break
+      }
+    }
+  }
+  if (!hasStrongUsCaSignal && MAJOR_US_CA_CITY_RE.test(haystack)) {
+    hasStrongUsCaSignal = true
   }
 
+  // If an explicit foreign signal is present, only a *strong* US/CA signal
+  // can rescue it. A bare 2-letter code like "IN" / "SC" / "PA" is not
+  // enough because those collide with foreign ISO-2 codes
+  // (IN → India, SC → Santa Catarina/Brazil, etc.).
+  if (isExplicitlyForeign(input) && !hasStrongUsCaSignal) {
+    return false
+  }
+
+  // Weaker signal: 2-letter region codes. Only consulted when no explicit
+  // foreign signal contests them.
+  let hasUsCaSignal = hasStrongUsCaSignal
   if (!hasUsCaSignal) {
     const tokens = extractRegionCodeTokens(haystack)
     for (const token of tokens) {
@@ -162,12 +179,6 @@ export function isAllowedLocation(input: {
         break
       }
     }
-  }
-
-  // Strictly exclude explicit foreign locations unless they also include
-  // a US/Canada signal.
-  if (isExplicitlyForeign(input) && !hasUsCaSignal) {
-    return false
   }
 
   // Remote is allowed, including generic remote listings with no region hint.
