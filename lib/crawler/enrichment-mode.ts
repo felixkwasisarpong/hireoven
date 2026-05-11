@@ -18,10 +18,18 @@ const AI_ENRICHMENT_MIN_COMPLETENESS_SCORE = clampScore(
   0.78
 )
 
+/**
+ * Default: "off". AI enrichment is opt-in via env var only — the system
+ * runs deterministic-only normalization out of the box (no Anthropic
+ * spend on background crawls). To enable a Haiku-backed enrichment pass
+ * once you have AI budget, set CRAWLER_AI_ENRICHMENT_MODE=async (queues
+ * jobs for the /api/crawl/enrichment cron) or =sync (enriches inline at
+ * crawl time — careful, expensive).
+ */
 export function getCrawlerAiEnrichmentMode(): CrawlerAiEnrichmentMode {
-  const mode = (process.env.CRAWLER_AI_ENRICHMENT_MODE ?? "async").trim().toLowerCase()
+  const mode = (process.env.CRAWLER_AI_ENRICHMENT_MODE ?? "off").trim().toLowerCase()
   if (mode === "sync" || mode === "async" || mode === "off") return mode
-  return "async"
+  return "off"
 }
 
 export function shouldAttemptAiEnrichment(normalization: NormalizationResult): boolean {
