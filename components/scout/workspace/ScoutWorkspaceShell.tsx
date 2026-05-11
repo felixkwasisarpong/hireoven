@@ -781,11 +781,18 @@ export function ScoutWorkspaceShell() {
   }, [continuation.state?.resumableContexts, dismissedContinuationIds])
 
   // ── Session restore ─────────────────────────────────────────────────────────
+  // We intentionally do NOT restore session.mode here. The persisted session
+  // covers chips/rail/recent commands only — `messages` and `activeResponse`
+  // are deliberately excluded (see lib/scout/session.ts header). Restoring a
+  // non-idle mode without the response stranded the UI in a permanent
+  // "Scanning jobs for you..." skeleton state because the render branch
+  // below has no signal that the mode is stale rather than mid-stream.
+  // Recent commands + chips are enough re-entry context; the user re-fires
+  // their last command if they want the mode-specific view back.
   useEffect(() => {
     const session = readScoutSession()
     if (!session) { setChips(getScoutSuggestionChips(scoutMode)); return }
     setHasSession(true)
-    setWorkspaceMode(session.mode)
     setRecentCommands(session.recentCommands)
     setChips(session.chips.length > 0 ? session.chips : getScoutSuggestionChips(scoutMode))
     if (session.rail) setRail({ title: session.rail.title, summary: session.rail.summary })
@@ -2046,8 +2053,46 @@ export function ScoutWorkspaceShell() {
                   />
                 )
               }
-              // Non-idle mode with no response yet → show skeleton instead of blank white
+              // Non-idle mode with no response yet → show skeleton ONLY while
+              // a request is actually in flight. Without this guard, returning
+              // to /dashboard/scout after navigating away strands the UI in a
+              // permanent "Scanning..." state when workspaceMode is non-idle
+              // but no stream/load is active.
               if (!activeResponse) {
+                const isActuallyWorking =
+                  isLoading || scoutStream.isStreaming || researchStream.isRunning
+                if (!isActuallyWorking) {
+                  return (
+                    <IdleMode
+                      greeting={greeting} firstName={firstName} messages={messages}
+                      isLoading={isLoading} error={error} nudges={nudges}
+                      strategyLoading={strategyLoading || behaviorLoading}
+                      resumeRefreshedNotice={resumeRefreshedNotice}
+                      onClearChat={handleClearChat}
+                      onTileClick={(q) => { setQuery(q); setTimeout(() => inputRef.current?.focus(), 50) }}
+                      chatEndRef={chatEndRef as React.RefObject<HTMLDivElement>}
+                      recentCommands={recentCommands} hasSession={hasSession}
+                      onStartFresh={handleStartFresh}
+                      userInitial={firstName ? firstName.charAt(0).toUpperCase() : undefined}
+                      missions={missionStore?.disabled ? [] : (missionStore?.missions ?? [])}
+                      momentumLine={missionStore?.momentumLine}
+                      onMissionLaunch={(q) => {
+                        setQuery(q)
+                        setTimeout(() => inputRef.current?.focus(), 50)
+                      }}
+                      onMissionDismiss={(id) => {
+                        setMissionStore((prev) => prev ? patchMissionStatus(prev, id, "dismissed") : prev)
+                      }}
+                      onMissionsDisable={() => {
+                        setMissionsDisabled(true)
+                        setMissionStore((prev) => prev ? { ...prev, disabled: true } : prev)
+                      }}
+                      showExtensionPromo={showExtPromo}
+                      hasData={hasData}
+                      onDismissExtPromo={handleDismissExtPromo}
+                    />
+                  )
+                }
                 const lastMsg = messages.findLast?.((m) => m.role === "user")
                 return (
                   <ScoutThinkingCanvas

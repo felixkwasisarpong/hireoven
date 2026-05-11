@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server"
 import { formatEmploymentLabel, formatSalaryLabel } from "@/lib/jobs/normalization/view-model"
 import type { Job, JobMatchScore } from "@/types"
 
-const FAST_SCORE_ALGORITHM_UPDATED_AT = "2026-05-07T14:00:00.000Z"
+const FAST_SCORE_ALGORITHM_UPDATED_AT = "2026-05-10T00:00:00.000Z"
 
 const WITHIN_MS: Record<string, number> = {
   "1h": 3_600_000,
@@ -30,7 +30,11 @@ export async function GET(request: NextRequest) {
   const offset = parseInt(sp.get("offset") ?? "0", 10)
   const withScores = sp.get("withScores") === "1" || sp.get("with_scores") === "1"
 
-  const where: string[] = ["jobs.is_active = true", sqlJobLocatedInUsa("jobs")]
+  // Pass companyAlias so the predicate's H1B-rescue path can admit
+  // null-location remote jobs from US H1B-sponsoring employers (Nestle USA,
+  // UT Houston, etc.) while still rejecting null-loc remotes from companies
+  // with no US-sponsorship evidence.
+  const where: string[] = ["jobs.is_active = true", sqlJobLocatedInUsa("jobs", { companyAlias: "companies" })]
   const values: Array<string | number | boolean | string[]> = []
 
   const addParam = (value: string | number | boolean | string[]) => {
@@ -77,9 +81,14 @@ export async function GET(request: NextRequest) {
         values
       ),
       pool.query<{ count: string }>(
-        `SELECT COUNT(*)::text AS count FROM jobs WHERE is_active = true AND ${sqlJobLocatedInUsa(
-          "jobs"
-        )} AND first_detected_at >= $1`,
+        // Mirror the main feed predicate (including companies join) so the
+        // "new in last hour" count matches what users actually see in the feed.
+        `SELECT COUNT(*)::text AS count
+         FROM jobs
+         LEFT JOIN companies ON companies.id = jobs.company_id
+         WHERE jobs.is_active = true
+           AND ${sqlJobLocatedInUsa("jobs", { companyAlias: "companies" })}
+           AND jobs.first_detected_at >= $1`,
         [oneHourAgo]
       ),
     ])

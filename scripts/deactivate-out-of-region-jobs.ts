@@ -11,7 +11,7 @@
 
 import { loadEnvConfig } from "@next/env"
 import { Pool } from "pg"
-import { isExplicitlyForeign } from "@/lib/jobs/location-filter"
+import { isAllowedLocation, isExplicitlyForeign } from "@/lib/jobs/location-filter"
 
 loadEnvConfig(process.cwd())
 
@@ -55,9 +55,14 @@ async function main() {
 
     for (const row of res.rows) {
       scanned += 1
-      // Exclude only explicit foreign locations. Generic remote jobs with no
-      // country signal remain active and can still be US/CA eligible.
-      if (isExplicitlyForeign({ location: row.location })) {
+      // Flag rows that carry an explicit foreign signal *and* lack a
+      // US/Canada signal that would rescue them. Using isAllowedLocation
+      // here prevents false positives like "South Jordan, USA",
+      // "Lake Zurich, IL, USA", or "Panama, PA" — confusable place names
+      // that share a string with a foreign country/city but are clearly
+      // in-region. Generic remote jobs with no country signal stay active.
+      const input = { location: row.location }
+      if (isExplicitlyForeign(input) && !isAllowedLocation(input)) {
         toDeactivate.push(row)
       }
     }

@@ -57,6 +57,12 @@ export interface FastScoreResumeContext {
   resumeIndustrySet: Set<string>
   resumeCertificationsLower: string[]
   semanticTokens: Set<string>
+  /**
+   * Role families inferred from the candidate's three most recent roles.
+   * Used by the role-family gate to reject obvious cross-domain matches
+   * (e.g. SWE matched to physical-security / inspection / clinical roles).
+   */
+  recentRoleFamilies: RoleFamily[]
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -181,11 +187,14 @@ function scoreSkills(resumeContext: FastScoreResumeContext, job: Job): SkillsSco
 
   if (jobSkills.length === 0) {
     return {
-      score: 0.55,
+      // Lowered from 0.55 → 0.40: when we can't extract skills it usually
+      // means the JD is non-technical. A neutral-high default lets unrelated
+      // roles ride the missing-signal up into the 90s.
+      score: 0.40,
       matched: [],
       missing: [],
       evidence:
-        "No reliable skills detected in this posting; applied a neutral skills score.",
+        "No reliable skills detected in this posting; applied a conservative score.",
       certGate: false,
       requiredCount: 0,
     }
@@ -283,7 +292,10 @@ function scoreExperience(resumeContext: FastScoreResumeContext, job: Job) {
 
   if (required <= 0) {
     return {
-      score: 1.0,
+      // Lowered from 1.0 → 0.70: "no minimum stated" is not the same as
+      // "perfect fit". Most legitimate tech roles state a minimum and will
+      // still score 1.0 via the years/required path below.
+      score: 0.70,
       evidence: `No minimum experience required; candidate has ${years.toFixed(1)} years.`,
       flags: [] as string[],
       relevantYears: years,
@@ -351,7 +363,11 @@ function scoreTitle(resumeContext: FastScoreResumeContext, job: Job) {
     ? 0.1
     : 0
 
-  const score = clamp(maxSim * 1.8 + 0.25 + bonus)
+  // Lowered baseline 0.25 → 0.10. With the previous baseline, "Security
+  // Officer" vs "Software Engineer" (zero token overlap) still scored 0.25
+  // — a free 2.5 pts. The role-family gate downstream is the primary
+  // defense, but this removes the auto-rebate for unrelated titles.
+  const score = clamp(maxSim * 1.8 + 0.10 + bonus)
   const evidence = `Best title match "${bestTitle}" vs "${job.title}" (sim ${maxSim.toFixed(2)})${bonus > 0 ? "; seniority progression bonus" : ""}.`
 
   return { score, evidence }
@@ -400,17 +416,146 @@ const EDUCATION_FIELDS = new Set([
   "educational psychology", "early childhood education", "special education",
 ])
 
-// Job type detectors — checked against job title only for speed
-const TECH_JOB_RE       = /\b(engineer|developer|programmer|architect|devops|sre|scientist|data|ml|ai|software|backend|frontend|fullstack|full.?stack|cloud|platform|infrastructure|security|analytics)\b/i
-const HEALTHCARE_JOB_RE = /\b(nurse|nursing|physician|doctor|clinical|medical|healthcare|pharmacist|therapist|patient care|hospital|dental|radiology|surgeon|clinician|caregiver)\b/i
-const DESIGN_JOB_RE     = /\b(designer|design lead|ux|ui|creative director|art director|brand designer|visual designer|motion designer|illustrator|animator)\b/i
-const MARKETING_JOB_RE  = /\b(marketing|growth|demand generation|brand manager|content strategist|seo specialist|sem|social media|communications?|public relations|pr manager|copywriter)\b/i
-const SALES_JOB_RE      = /\b(sales|account executive|account manager|business development|bdr|sdr|revenue|customer success|solutions engineer)\b/i
-const HR_JOB_RE         = /\b(human resources|recruiter|recruiting|talent acquisition|hrbp|people ops|people operations|compensation|workforce)\b/i
-const LEGAL_JOB_RE      = /\b(lawyer|attorney|legal counsel|paralegal|compliance officer|general counsel)\b/i
-const FINANCE_JOB_RE    = /\b(financial analyst|finance manager|controller|cfo|investment|trader|banker|auditor|actuar|fp&a|treasury)\b/i
-const OPS_JOB_RE        = /\b(supply chain|logistics|procurement|warehouse|manufacturing|program manager|project manager|operations manager)\b/i
-const EDUCATION_JOB_RE  = /\b(teacher|instructor|professor|curriculum|learning|training|coach|educator|academic)\b/i
+// Job type detectors — used by both fieldRelevance and the role-family gate.
+// `security` removed from TECH_JOB_RE: it was incorrectly catching physical
+// security roles ("Security Officer", "Security Guard"). Cyber/InfoSec roles
+// still match via "engineer"/"analyst" + their description text.
+// Ambiguous short words (`data`, `ai`, `ml`) now require context to prevent
+// "Data Entry Clerk" / "AI Care Assistant" from misclassifying as tech.
+const TECH_JOB_RE       = /\b(?:engineer|developer|programmer|architect|devops|sre|software|backend|frontend|fullstack|full.?stack|infrastructure|platform engineer|cloud engineer|data\s+(?:scientist|engineer|analyst|architect|specialist)|ml\s+(?:engineer|scientist|researcher)|machine\s+learning\s+engineer|ai\s+(?:engineer|scientist|researcher)|analytics\s+engineer|qa\s+engineer|test\s+engineer)\b/i
+const HEALTHCARE_JOB_RE = /\b(?:nurse|nursing|physician|doctor|clinical|medical|healthcare|pharmacist|pharmacy|therapist|patient\s+(?:care|journey)|hospital|dental|radiology|radiologic|surgeon|clinician|caregiver|sonograph|phlebotom|cna|rn\b|lpn|emt|paramedic|(?:radiologic|surgical|ultrasound|cardiovascular|nuclear|medical|imaging|laboratory|respiratory|pharmacy)\s+technologist|(?:pharmacy|surgical|lab|medical|dental|veterinary|patient\s+care)\s+(?:technician|tech))\b/i
+const DESIGN_JOB_RE     = /\b(?:designer|design lead|ux|ui|creative director|art director|brand designer|visual designer|motion designer|illustrator|animator)\b/i
+const MARKETING_JOB_RE  = /\b(?:marketing|growth|demand generation|brand manager|content strategist|seo specialist|sem|social media|public relations|pr manager|copywriter)\b/i
+const SALES_JOB_RE      = /\b(?:sales|account executive|account manager|business development|bdr|sdr|customer success|solutions engineer)\b/i
+const HR_JOB_RE         = /\b(?:human resources|recruiter|recruiting|talent acquisition|hrbp|people\s+ops(?:erations)?|compensation\s+(?:analyst|specialist)|workforce)\b/i
+const LEGAL_JOB_RE      = /\b(?:lawyer|attorney|legal counsel|paralegal|compliance officer|general counsel)\b/i
+const FINANCE_JOB_RE    = /\b(?:financial analyst|finance manager|controller|cfo|investment|trader|banker|auditor|actuar|fp&a|treasury|accountant|bookkeeper)\b/i
+const OPS_JOB_RE        = /\b(?:supply chain|logistics|procurement|warehouse manager|manufacturing|program manager|project manager|operations manager|data entry)\b/i
+const EDUCATION_JOB_RE  = /\b(?:teacher|instructor|professor|curriculum|learning|coach|educator|academic|tutor|principal|dean)\b/i
+
+// Non-tech families used by the role-family gate. These are domains
+// fundamentally incompatible with most office/tech backgrounds — when the JD
+// looks like one of these and the candidate's recent roles are different,
+// the match is almost certainly bad regardless of soft-skill overlap.
+const PHYSICAL_SECURITY_JOB_RE = /\b(?:security officer|security guard|security agent|guard|patrol(?:\s+officer)?|loss prevention|protective services|correctional officer|bouncer|bodyguard|crossing guard|surveillance officer)\b/i
+// `technician` only counts as a trade when paired with a trade qualifier;
+// bare "Technician" stays unclassified rather than misrouting to trades.
+const SKILLED_TRADES_JOB_RE    = /\b(?:electrician|plumber|hvac|welder|carpenter|locksmith|machinist|millwright|pipefitter|ironworker|roofer|mason|(?:hvac|automotive|auto|mechanical|electrical|electronics|maintenance|field|service|industrial)\s+(?:technician|tech)|(?:diesel|aircraft)\s+mechanic)\b/i
+const INSPECTION_JOB_RE        = /\b(?:ndt|non.?destructive|ultrasonic|utsw|paut|radiographic\s+(?:testing|technician)|inspector|inspect(?:ion)?\s+(?:level|technician)|qa\s+inspect|magnetic\s+particle|penetrant\s+test)\b/i
+const FOODSERVICE_JOB_RE       = /\b(?:chef|cook|server|waiter|waitress|barista|bartender|sous chef|line cook|prep cook|host(?:ess)?\s+server)\b/i
+const LABOR_JOB_RE             = /\b(?:forklift|truck driver|cdl|warehouse associate|warehouse worker|picker|packer|janitor|custodian|cleaner|housekeep|landscape|groundskeep|laborer|stocker)\b/i
+const VEHICLE_JOB_RE           = /\b(?:veterinarian|veterinary|groomer|delivery driver|courier|uber driver|lyft driver|taxi driver|chauffeur|bus driver)\b/i
+
+export type RoleFamily =
+  | "tech" | "design" | "healthcare" | "physical_security" | "trades"
+  | "inspection" | "foodservice" | "labor" | "vehicle" | "finance"
+  | "marketing" | "sales" | "hr" | "legal" | "ops" | "education" | "unknown"
+
+/**
+ * Single-pass classifier. Order matters because regex domains overlap
+ * (a Pharmacy Technician contains both a healthcare term and a trade term).
+ * We check the most specific families before the broader ones.
+ */
+function classifyByText(text: string): RoleFamily {
+  if (!text || !text.trim()) return "unknown"
+  if (PHYSICAL_SECURITY_JOB_RE.test(text)) return "physical_security"
+  if (INSPECTION_JOB_RE.test(text))        return "inspection"
+  if (FOODSERVICE_JOB_RE.test(text))       return "foodservice"
+  if (VEHICLE_JOB_RE.test(text))           return "vehicle"
+  if (LABOR_JOB_RE.test(text))             return "labor"
+  // Healthcare before trades because "Pharmacy Technician" / "Surgical Tech"
+  // are healthcare even though "technician" appears in the trades regex.
+  if (HEALTHCARE_JOB_RE.test(text))        return "healthcare"
+  if (SKILLED_TRADES_JOB_RE.test(text))    return "trades"
+  if (LEGAL_JOB_RE.test(text))             return "legal"
+  if (HR_JOB_RE.test(text))                return "hr"
+  if (FINANCE_JOB_RE.test(text))           return "finance"
+  if (EDUCATION_JOB_RE.test(text))         return "education"
+  if (DESIGN_JOB_RE.test(text))            return "design"
+  if (SALES_JOB_RE.test(text))             return "sales"
+  if (MARKETING_JOB_RE.test(text))         return "marketing"
+  if (TECH_JOB_RE.test(text))              return "tech"
+  if (OPS_JOB_RE.test(text))               return "ops"
+  return "unknown"
+}
+
+/**
+ * Classifies a JD into a single role family. Tries the **title first** —
+ * descriptions often contain incidental references (e.g. a SWE job
+ * mentioning "warehouse" in its product description) that would mis-route a
+ * title+description scan. Only falls back to the description when the title
+ * is too generic to classify (e.g. "Manager", "Coordinator", "Specialist").
+ */
+export function classifyRoleFamily(title: string, description?: string | null): RoleFamily {
+  const titleFamily = classifyByText(title ?? "")
+  if (titleFamily !== "unknown") return titleFamily
+  if (description) return classifyByText(description)
+  return "unknown"
+}
+
+/**
+ * Adjacency map for the role-family gate. A candidate in family X can
+ * reasonably target a job in family Y iff X→Y appears here. Pairs are
+ * mirrored — the helper below enforces symmetry at lookup time, so editing
+ * one direction is enough.
+ *
+ * Conservative by design: a few common transitions (tech↔design, sales↔
+ * marketing, healthcare↔education, trades↔labor, hr↔ops, finance↔legal) are
+ * allowed because they happen routinely in the wild. Anything else gets
+ * gated so cross-domain matches can't ride soft-skill overlap into the 90s.
+ */
+const ROLE_FAMILY_ADJACENT_RAW: Partial<Record<RoleFamily, RoleFamily[]>> = {
+  tech:              ["design", "ops", "finance", "marketing", "sales"],
+  design:            ["tech", "marketing"],
+  marketing:         ["sales", "design", "tech"],
+  sales:             ["marketing", "tech", "ops"],
+  finance:           ["tech", "ops", "legal", "hr"],
+  ops:               ["tech", "finance", "sales", "trades", "labor", "hr"],
+  healthcare:        ["education"],
+  trades:            ["labor", "ops", "inspection"],
+  labor:             ["trades", "ops", "foodservice", "physical_security", "vehicle"],
+  inspection:        ["trades", "ops"],
+  foodservice:       ["labor", "vehicle"],
+  vehicle:           ["labor", "foodservice"],
+  physical_security: ["labor"],
+  legal:             ["finance", "hr"],
+  hr:                ["ops", "finance", "legal"],
+  education:         ["healthcare"],
+}
+
+/**
+ * Symmetric adjacency derived from the raw map. Each entry contains itself
+ * (X is always compatible with X) plus every neighbour from both directions,
+ * so editing one side of a pair is enough.
+ */
+const ROLE_FAMILY_ADJACENT: Map<RoleFamily, Set<RoleFamily>> = (() => {
+  const map = new Map<RoleFamily, Set<RoleFamily>>()
+  const ensure = (key: RoleFamily) => {
+    let set = map.get(key)
+    if (!set) {
+      set = new Set<RoleFamily>([key])
+      map.set(key, set)
+    }
+    return set
+  }
+  for (const [from, tos] of Object.entries(ROLE_FAMILY_ADJACENT_RAW) as Array<[RoleFamily, RoleFamily[]]>) {
+    const fromSet = ensure(from)
+    for (const to of tos) {
+      fromSet.add(to)
+      ensure(to).add(from)
+    }
+  }
+  return map
+})()
+
+export function isRoleFamilyCompatible(candidate: RoleFamily, job: RoleFamily): boolean {
+  // Unknown on either side → don't penalise. The gate's job is to catch
+  // obvious mismatches, not to demote candidates with hard-to-classify
+  // resumes or JDs.
+  if (candidate === "unknown" || job === "unknown") return true
+  if (candidate === job) return true
+  return ROLE_FAMILY_ADJACENT.get(candidate)?.has(job) ?? false
+}
 
 function fieldRelevance(field: string, job: Job): number {
   const jobText = `${job.title} ${job.description ?? ""}`.toLowerCase()
@@ -487,8 +632,11 @@ function fieldRelevance(field: string, job: Job): number {
     return 0.7
   }
 
-  // Unknown job type — be generous; field mismatch is rarely catastrophic
-  return 0.8
+  // Unknown job type — lowered 0.8 → 0.55. The previous value was a free
+  // 5.5 pts whenever the title regex didn't recognise the job. Combined
+  // with the no-requirement default it was the main source of inflation
+  // for cross-domain matches.
+  return 0.55
 }
 
 function degreeRank(d: string | null | undefined): number {
@@ -519,7 +667,10 @@ function detectRequiredDegree(job: Job): { rank: number; isHard: boolean } {
 
 function scoreEducation(resume: Resume, job: Job) {
   const { rank: required, isHard } = detectRequiredDegree(job)
-  if (required === 0) return { score: 0.85, evidence: "No degree requirement specified." }
+  // Lowered no-requirement default from 0.85 → 0.65. The previous value
+  // handed out 8.5 pts to every job that didn't state a degree, which is
+  // most non-corporate listings.
+  if (required === 0) return { score: 0.65, evidence: "No degree requirement specified." }
 
   const edus = resume.education ?? []
   if (edus.length === 0) {
@@ -812,6 +963,14 @@ export function buildFastScoreResumeContext(resume: Resume): FastScoreResumeCont
     ...(resume.work_experience ?? []).map((exp) => `${exp.title} ${exp.description}`),
   ].join(" ")
 
+  // Recent role families: classify the three most recent positions so the
+  // gate can compare against the JD's family. Three is a balance — enough
+  // to reflect a career pivot, few enough that one ancient unrelated role
+  // doesn't keep the candidate eligible for everything.
+  const recentRoleFamilies = experienceByRecency
+    .slice(0, 3)
+    .map((exp) => classifyRoleFamily(exp.title))
+
   return {
     candidateSkillKeys,
     candidateSkillKeySet: new Set(candidateSkillKeys),
@@ -824,6 +983,7 @@ export function buildFastScoreResumeContext(resume: Resume): FastScoreResumeCont
     resumeIndustrySet: new Set(resumeIndustries),
     resumeCertificationsLower: (resume.skills?.certifications ?? []).map((cert) => cert.toLowerCase()),
     semanticTokens: new Set(tokenize(semanticText)),
+    recentRoleFamilies,
   }
 }
 
@@ -893,10 +1053,27 @@ export function computeFastScore({
     gatesTriggered.push("extreme_seniority_mismatch")
   }
 
+  // Role-family gate — caps scores when the JD belongs to a fundamentally
+  // different career family from the candidate's recent roles. Caused by
+  // soft-skill overlap inflating cross-domain matches (e.g. SWE matched to
+  // "Security Officer" at 91% because both resumes/JDs mention
+  // "Communication"). `unknown` on either side skips the gate.
+  const jobFamily = classifyRoleFamily(job.title, job.description)
+  const candidateFamilies = context.recentRoleFamilies
+  if (jobFamily !== "unknown" && candidateFamilies.length > 0) {
+    const compatible = candidateFamilies.some((cf) => isRoleFamilyCompatible(cf, jobFamily))
+    if (!compatible) {
+      overall = Math.min(overall, 40)
+      gatesTriggered.push(`role_family_mismatch:${candidateFamilies[0]}→${jobFamily}`)
+    }
+  }
+
   overall = clamp(overall, 0, 100)
 
   // Curve: stretch scores above 55 upward so strong matches reach 90–98.
-  if (overall > 55) {
+  // Skipped when the role-family gate fired — we don't want a capped score
+  // re-inflated by the curve.
+  if (overall > 55 && !gatesTriggered.some((g) => g.startsWith("role_family_mismatch"))) {
     overall = Math.min(99, Math.round(overall + (overall - 55) * 0.25))
   }
 

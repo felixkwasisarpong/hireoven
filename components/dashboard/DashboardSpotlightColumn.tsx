@@ -82,8 +82,28 @@ function PromoIcon({ icon, className }: { icon: string; className?: string }) {
   }
 }
 
+/**
+ * Returns the href if parseable against a dummy origin, otherwise null.
+ * Guards against malformed promo CTAs from the database (the unguarded value
+ * would crash Next.js's <Link> prefetch with "Failed to construct 'URL'").
+ */
+function safeHref(href: string | null | undefined): string | null {
+  if (typeof href !== "string") return null
+  const trimmed = href.trim()
+  if (!trimmed) return null
+  try {
+    new URL(trimmed, "https://hireoven.com")
+    return trimmed
+  } catch {
+    return null
+  }
+}
+
 function PromoCard({ promo }: { promo: ActivePromo }) {
   const t = THEME[(promo.theme as ThemeKey) ?? "orange"] ?? THEME.orange
+  const ctaHref = safeHref(promo.cta_url)
+  if (!ctaHref) return null
+  const isExternal = /^https?:\/\//i.test(ctaHref)
 
   return (
     <section
@@ -120,15 +140,28 @@ function PromoCard({ promo }: { promo: ActivePromo }) {
           </div>
         </div>
 
-        {/* CTA */}
-        <Link
-          href={promo.cta_url}
-          className={`mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r ${t.cta} px-3 py-2.5 text-sm font-bold text-white ring-1 transition hover:brightness-105 active:brightness-95`}
-        >
-          <Sparkles className="h-4 w-4 shrink-0" aria-hidden />
-          {promo.cta_label}
-          <ChevronRight className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
-        </Link>
+        {/* CTA — external links use <a> to avoid Next.js Link prefetch on potentially-rich URLs */}
+        {isExternal ? (
+          <a
+            href={ctaHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r ${t.cta} px-3 py-2.5 text-sm font-bold text-white ring-1 transition hover:brightness-105 active:brightness-95`}
+          >
+            <Sparkles className="h-4 w-4 shrink-0" aria-hidden />
+            {promo.cta_label}
+            <ChevronRight className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
+          </a>
+        ) : (
+          <Link
+            href={ctaHref}
+            className={`mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r ${t.cta} px-3 py-2.5 text-sm font-bold text-white ring-1 transition hover:brightness-105 active:brightness-95`}
+          >
+            <Sparkles className="h-4 w-4 shrink-0" aria-hidden />
+            {promo.cta_label}
+            <ChevronRight className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
+          </Link>
+        )}
       </div>
     </section>
   )

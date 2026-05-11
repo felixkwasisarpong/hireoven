@@ -30,7 +30,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     `SELECT j.title, j.location, j.is_remote, c.name AS company_name
      FROM jobs j
      LEFT JOIN companies c ON c.id = j.company_id
-     WHERE j.id = $1::uuid AND ${sqlJobLocatedInUsa("j")}
+     WHERE j.id = $1::uuid AND ${sqlJobLocatedInUsa("j", { companyAlias: "c" })}
      LIMIT 1`,
     [id]
   )
@@ -56,7 +56,11 @@ export default async function PublicJobPage({ params }: Props) {
   const pool = getPostgresPool()
 
   const jobResult = await pool.query<Job>(
-    `SELECT * FROM jobs WHERE id = $1::uuid AND ${sqlJobLocatedInUsa("jobs")} LIMIT 1`,
+    `SELECT jobs.*
+     FROM jobs
+     LEFT JOIN companies ON companies.id = jobs.company_id
+     WHERE jobs.id = $1::uuid AND ${sqlJobLocatedInUsa("jobs", { companyAlias: "companies" })}
+     LIMIT 1`,
     [id]
   )
   const jobRow = jobResult.rows[0]

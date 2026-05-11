@@ -1930,7 +1930,15 @@ User Input: ${userMessage}`
       const systemPrompt = getScoutSystemPrompt(mode, {
         premiumEnabled: canUsePremiumScoutFeatures(effectivePlan) && !premiumGate,
       })
-      const msgParams = { model: MODEL, max_tokens: maxTokens, system: systemPrompt, messages: [{ role: "user" as const, content: contextualPrompt }] }
+      // Mark the system prompt for ephemeral (5-minute) prompt caching.
+      // The Scout system prompt is large (~500 lines); without this each
+      // streaming call pays full input cost for identical preamble bytes.
+      const msgParams = {
+        model: MODEL,
+        max_tokens: maxTokens,
+        system: [{ type: "text" as const, text: systemPrompt, cache_control: { type: "ephemeral" as const } }],
+        messages: [{ role: "user" as const, content: contextualPrompt }],
+      }
 
       void (async () => {
         const streamStart = Date.now()
@@ -2073,7 +2081,14 @@ User Input: ${userMessage}`
       const createParams = {
         model: MODEL,
         max_tokens: maxTokens,
-        system: getScoutSystemPrompt(mode, { premiumEnabled: canUsePremiumScoutFeatures(effectivePlan) && !premiumGate }),
+        // Ephemeral prompt caching: identical Scout system prompts reuse
+        // the cached tokens across requests within ~5 min, cutting input
+        // cost on the large preamble to ~10% of normal.
+        system: [{
+          type: "text" as const,
+          text: getScoutSystemPrompt(mode, { premiumEnabled: canUsePremiumScoutFeatures(effectivePlan) && !premiumGate }),
+          cache_control: { type: "ephemeral" as const },
+        }],
         messages: [{ role: "user" as const, content: contextualPrompt }],
       }
       message = await anthropicClient.messages.create(createParams, { signal: chatAbort.signal })
