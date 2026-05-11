@@ -502,13 +502,23 @@ function applyHaikuEnrichment(
   }
 
   const skillsFromModel = normalizeSkillList(cleanLines(payload.extractedSkills, 28, 80), 24)
-  const sectionSkillSource = [
+  const sectionSkillItems = [
     ...canonical.sections.skills.items,
     ...canonical.sections.requirements.items,
     ...canonical.sections.qualifications.items,
     ...canonical.sections.preferred_qualifications.items,
     ...canonical.sections.responsibilities.items,
-  ].join("\n")
+    ...canonical.sections.about_role.items,
+    ...canonical.sections.other.items,
+  ]
+  // Same sparse-section fallback as the deterministic path: scan the clean
+  // description when the heading parser produced little to chew on.
+  const sectionCharCount = sectionSkillItems.reduce((sum, item) => sum + item.length, 0)
+  const descriptionFallback =
+    sectionCharCount < 200 ? nextColumns.description ?? canonical.descriptions.clean ?? "" : ""
+  const sectionSkillSource = [...sectionSkillItems, descriptionFallback]
+    .filter(Boolean)
+    .join("\n")
   const skillsFromSections = normalizeSkillList(extractSkillsFromText(sectionSkillSource), 24)
   const mergedSkills = normalizeSkillList(
     [...skillsFromModel, ...skillsFromSections, ...nextColumns.skills],
@@ -727,17 +737,32 @@ function normalizeFromCoreInput(input: {
     structuredSections: input.structuredSections,
   })
 
-  // Do NOT include the full raw description here. Skills already flow through
-  // the canonical section buckets above; including the raw description blob
-  // adds nav/footer/sidebar noise that contaminates skill matching.
-  const skillSource = [
-    cleanedTitle,
+  // Primary source: structured / classified section buckets. We add about_role
+  // and other on top of the obvious requirement-style buckets because prose-heavy
+  // JDs (Notion-style, "What you'll do"/"What you bring") often leave skill
+  // mentions in those catch-all sections after heading classification.
+  const sectionSkillItems = [
     ...sections.skills.items,
     ...sections.requirements.items,
     ...sections.qualifications.items,
     ...sections.preferred_qualifications.items,
     ...sections.responsibilities.items,
-  ].filter(Boolean).join("\n")
+    ...sections.about_role.items,
+    ...sections.other.items,
+  ]
+
+  // Fallback: when the heading parser couldn't bucket much (sparse sections),
+  // scan the raw description. The taxonomy regex requires word-boundary-like
+  // context, and ambiguous aliases (Rust, ML, Go) are already gated behind
+  // requiresPattern, so footer/sidebar noise rarely false-positives.
+  const sectionCharCount = sectionSkillItems.reduce((sum, item) => sum + item.length, 0)
+  const SECTION_FALLBACK_THRESHOLD = 200
+  const descriptionFallback =
+    sectionCharCount < SECTION_FALLBACK_THRESHOLD ? nextColumns.description ?? "" : ""
+
+  const skillSource = [cleanedTitle, ...sectionSkillItems, descriptionFallback]
+    .filter(Boolean)
+    .join("\n")
   const extractedSkills = extractSkillsFromText(skillSource).slice(0, 24)
   const skillGroups =
     extractedSkills.length > 0 ? categorizeSkills(extractedSkills) : emptyCategorizedSkills()
