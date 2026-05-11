@@ -1,5 +1,7 @@
 "use client"
 
+export const dynamic = "force-dynamic"
+
 import { useCallback, useEffect, useMemo, useRef, useState, type ElementType, type ReactNode } from "react"
 import { flushSync } from "react-dom"
 import { useRouter, useSearchParams } from "next/navigation"
