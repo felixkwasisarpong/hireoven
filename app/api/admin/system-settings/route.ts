@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { assertAdminAccess } from "@/lib/admin/auth"
+import { FEATURE_FLAG_KEYS, invalidateFeatureFlagsCache } from "@/lib/admin/feature-flags"
 import { getPostgresPool } from "@/lib/postgres/server"
 
 export async function GET() {
@@ -28,5 +29,10 @@ export async function POST(request: NextRequest) {
            updated_at = now()`,
     [body.key, JSON.stringify(body.value ?? null), access.profile.id]
   )
+
+  if (body.key === FEATURE_FLAG_KEYS.paymentsDisabled || body.key === FEATURE_FLAG_KEYS.maintenanceBanner) {
+    invalidateFeatureFlagsCache()
+  }
+
   return NextResponse.json({ ok: true })
 }

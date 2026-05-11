@@ -131,6 +131,12 @@ const SETTINGS_NAV: { href: string; label: string; chip: string }[] = [
       "bg-gradient-to-r from-orange-500 to-red-600 text-white shadow-lg shadow-orange-500/40 hover:brightness-110",
   },
   {
+    href: "#platform",
+    label: "Platform",
+    chip:
+      "bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-lg shadow-amber-500/40 hover:brightness-110",
+  },
+  {
     href: "#danger",
     label: "Danger",
     chip:
@@ -307,6 +313,14 @@ export default function AdminSettingsPage() {
       fromEmail: String(settingsMap.email?.fromEmail ?? meta?.resendFromEmail ?? ""),
     }),
     [settingsMap.email, meta?.resendFromEmail, meta?.resendFromName]
+  )
+  const paymentsDisabled = Boolean(settingsMap.payments_disabled?.enabled)
+  const maintenanceBanner = useMemo(
+    () => ({
+      enabled: Boolean(settingsMap.maintenance_banner?.enabled),
+      message: String(settingsMap.maintenance_banner?.message ?? ""),
+    }),
+    [settingsMap.maintenance_banner]
   )
 
   async function upsertSetting(key: string, value: Record<string, unknown>, successTitle: string) {
@@ -849,6 +863,124 @@ export default function AdminSettingsPage() {
               </pre>
             </div>
           ) : null}
+        </div>
+      </SettingsSection>
+
+      <SettingsSection
+        id="platform"
+        accent="blaze"
+        icon={AlertTriangle}
+        eyebrow="Live controls"
+        title="Platform switches"
+        description="Pause Stripe checkouts globally and show a top-of-page banner on the marketing site. Existing Pro subscriptions keep flowing — only new checkouts are blocked."
+      >
+        <div className="grid gap-5 md:grid-cols-2">
+          {/* Payments kill switch */}
+          <div className="rounded-2xl border border-amber-200 bg-white/90 p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[13px] font-bold tracking-tight text-slate-900">Disable payments</p>
+                <p className="mt-1 text-[12px] leading-relaxed text-slate-600">
+                  /api/stripe/checkout and interview-credit purchases will return 503; upgrade CTAs hide across the UI. The Stripe portal and existing subscriptions are untouched.
+                </p>
+              </div>
+              <span
+                className={cn(
+                  "rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider",
+                  paymentsDisabled
+                    ? "bg-amber-100 text-amber-800 ring-1 ring-amber-300"
+                    : "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200"
+                )}
+              >
+                {paymentsDisabled ? "Paused" : "Live"}
+              </span>
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <AdminButton
+                tone={paymentsDisabled ? "secondary" : "danger"}
+                disabled={busyAction === "payments_disabled"}
+                onClick={() =>
+                  void upsertSetting(
+                    "payments_disabled",
+                    { enabled: !paymentsDisabled },
+                    paymentsDisabled ? "Payments re-enabled" : "Payments paused"
+                  )
+                }
+              >
+                {busyAction === "payments_disabled" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden /> : null}
+                {paymentsDisabled ? "Re-enable payments" : "Pause payments now"}
+              </AdminButton>
+            </div>
+          </div>
+
+          {/* Maintenance banner */}
+          <div className="rounded-2xl border border-amber-200 bg-white/90 p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[13px] font-bold tracking-tight text-slate-900">Maintenance banner</p>
+                <p className="mt-1 text-[12px] leading-relaxed text-slate-600">
+                  Shows at the top of the landing page when enabled. Logged-in dashboard users won&apos;t see it.
+                </p>
+              </div>
+              <span
+                className={cn(
+                  "rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider",
+                  maintenanceBanner.enabled
+                    ? "bg-amber-100 text-amber-800 ring-1 ring-amber-300"
+                    : "bg-slate-100 text-slate-600 ring-1 ring-slate-200"
+                )}
+              >
+                {maintenanceBanner.enabled ? "Visible" : "Hidden"}
+              </span>
+            </div>
+            <div className="mt-3 space-y-2">
+              <label htmlFor="maintenance-message" className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                Banner message
+              </label>
+              <textarea
+                id="maintenance-message"
+                rows={3}
+                value={maintenanceBanner.message}
+                onChange={(e) =>
+                  setSettingValue("maintenance_banner", {
+                    enabled: maintenanceBanner.enabled,
+                    message: e.target.value,
+                  })
+                }
+                placeholder="Scheduled maintenance Saturday 9–11pm UTC. Some features may be unavailable."
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-[13px] text-slate-800 outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-300/40"
+              />
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <AdminButton
+                tone={maintenanceBanner.enabled ? "secondary" : "primary"}
+                disabled={busyAction === "maintenance_banner"}
+                onClick={() =>
+                  void upsertSetting(
+                    "maintenance_banner",
+                    { enabled: !maintenanceBanner.enabled, message: maintenanceBanner.message },
+                    maintenanceBanner.enabled ? "Banner hidden" : "Banner visible"
+                  )
+                }
+              >
+                {busyAction === "maintenance_banner" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden /> : null}
+                {maintenanceBanner.enabled ? "Hide banner" : "Show banner"}
+              </AdminButton>
+              <AdminButton
+                tone="ghost"
+                disabled={busyAction === "maintenance_banner_save"}
+                onClick={() =>
+                  void upsertSetting(
+                    "maintenance_banner",
+                    { enabled: maintenanceBanner.enabled, message: maintenanceBanner.message },
+                    "Banner message saved"
+                  )
+                }
+              >
+                Save message
+              </AdminButton>
+            </div>
+          </div>
         </div>
       </SettingsSection>
 
