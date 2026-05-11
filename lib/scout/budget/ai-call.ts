@@ -12,6 +12,7 @@ import type Anthropic from "@anthropic-ai/sdk"
 import type { MessageParam, MessageCreateParamsNonStreaming } from "@anthropic-ai/sdk/resources/messages"
 import type { ScoutFeature, ModelTier } from "./types"
 import { budgetTracker, calcCost, inferTier } from "./tracker"
+import { isAiBudgetExceeded } from "./cap"
 import { logApiUsage } from "@/lib/admin/usage"
 import { sanitizeGeneratedText } from "@/lib/text/sanitize-generated-text"
 
@@ -55,6 +56,26 @@ export async function withAICall<T>({
   let outputTokens = 0
   let costUsd      = 0
   let value: T
+
+  // Hard daily-spend ceiling. Checked before opening the AbortController +
+  // network call so a tripped budget short-circuits cheaply.
+  if (await isAiBudgetExceeded()) {
+    budgetTracker.record({
+      feature, model, tier,
+      inputTokens: 0, outputTokens: 0, latencyMs: 0, costUsd: 0,
+      success: false, cached: false, timedOut: false,
+      userId, timestamp: Date.now(),
+    })
+    return {
+      value: sanitizeGeneratedText(fallback()),
+      timedOut: false,
+      latencyMs: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+      costUsd: 0,
+      cached: false,
+    }
+  }
 
   const controller = new AbortController()
   const timer = setTimeout(() => {
