@@ -22,11 +22,13 @@ export async function GET(request: NextRequest) {
   const pool = getPostgresPool()
   const start = Date.now()
 
-  // Jobs posted in the last 7 days with no score or stale score (>6 hours old)
+  // Jobs detected in the last 7 days with no score or stale score (>6 hours old).
+  // Note: jobs table uses `first_detected_at` — `posted_at` is the column on
+  // job_timing_scores (populated downstream from jobs.first_detected_at).
   const staleResult = await pool.query<StaleJobRow>(
     `SELECT j.id, j.company_id
      FROM jobs j
-     WHERE j.posted_at > now() - INTERVAL '7 days'
+     WHERE j.first_detected_at > now() - INTERVAL '7 days'
        AND (
          NOT EXISTS (SELECT 1 FROM job_timing_scores jts WHERE jts.job_id = j.id)
          OR EXISTS (
