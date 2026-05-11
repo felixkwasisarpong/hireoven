@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { isPaymentsDisabled } from "@/lib/admin/feature-flags"
 import { createClient } from "@/lib/supabase/server"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { getUserPlan } from "@/lib/gates/server-gate"
@@ -16,6 +17,13 @@ const PACKS = {
 type PackKey = keyof typeof PACKS
 
 export async function POST(request: Request) {
+  if (await isPaymentsDisabled()) {
+    return NextResponse.json(
+      { error: "Payments are temporarily paused. Please check back soon." },
+      { status: 503 },
+    )
+  }
+
   const { userId } = await getUserPlan()
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 

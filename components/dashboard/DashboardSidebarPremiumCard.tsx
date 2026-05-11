@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { ChevronRight, Crown } from "lucide-react"
 import { useSubscription } from "@/lib/hooks/useSubscription"
+import { useFeatureFlags } from "@/lib/hooks/useFeatureFlags"
 import { cn } from "@/lib/utils"
 
 /** Set NEXT_PUBLIC_HIREOVEN_SITE_PREVIEW=1 on demo / preview deploys to hide billing CTAs. */
@@ -16,7 +17,8 @@ export default function DashboardSidebarPremiumCard({
   variant?: "light" | "dark"
 } = {}) {
   const { isPro, isLoading } = useSubscription()
-  const hideUpgrade = isLoading || isPro || isSitePreviewMode()
+  const { paymentsDisabled } = useFeatureFlags()
+  const hideUpgrade = isLoading || isPro || isSitePreviewMode() || paymentsDisabled
 
   return (
     <div

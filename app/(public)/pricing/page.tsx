@@ -11,6 +11,7 @@ import TestimonialCard from "@/components/pricing/TestimonialCard"
 import { getSignupUrl, type BillingInterval, type PlanKey } from "@/lib/pricing"
 import { useAuth } from "@/lib/hooks/useAuth"
 import { useSubscription } from "@/lib/hooks/useSubscription"
+import { useFeatureFlags } from "@/lib/hooks/useFeatureFlags"
 
 // ─── FAQ ─────────────────────────────────────────────────────────────────────
 
@@ -157,8 +158,11 @@ export default function PricingPage() {
   const [interval, setInterval] = useState<BillingInterval>("monthly")
   const { user } = useAuth()
   const { plan: currentPlan } = useSubscription()
+  const { paymentsDisabled } = useFeatureFlags()
 
   async function handleUpgrade(plan: PlanKey, bil: BillingInterval) {
+    if (paymentsDisabled) return
+
     if (!user) {
       window.location.href = getSignupUrl(plan, bil)
       return
