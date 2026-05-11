@@ -107,7 +107,9 @@ export async function POST(request: NextRequest) {
       params: {
         model:      MODEL,
         max_tokens: 1200,
-        system:     MOCK_INTERVIEW_SYSTEM_PROMPT,
+        // Ephemeral prompt caching — the mock-interview preamble is static
+        // and identical across all users; cache it for the 5-min TTL.
+        system:     [{ type: "text", text: MOCK_INTERVIEW_SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
         messages:   [{ role: "user", content: userMessage }],
       },
       parse:    (text) => parseMockInterviewResponse(text),

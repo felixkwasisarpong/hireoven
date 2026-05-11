@@ -110,7 +110,8 @@ export async function POST(request: NextRequest) {
       params: {
         model:      MODEL,
         max_tokens: 2000,
-        system:     STRATEGY_SYSTEM_PROMPT,
+        // Ephemeral prompt caching for the static strategy preamble.
+        system:     [{ type: "text", text: STRATEGY_SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
         messages:   [{ role: "user", content: contextStr }],
       },
       parse:    (text) => parseStrategyResponse(text, context.resume?.id),

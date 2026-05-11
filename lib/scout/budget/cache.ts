@@ -114,11 +114,17 @@ export function cacheKey(...parts: (string | number | boolean | null | undefined
   return parts.map((p) => String(p ?? "_")).join(":")
 }
 
-/** Stable hash for longer strings (message text, prompts, etc.) */
+/**
+ * Stable hash for longer strings (message text, prompts, etc.).
+ * Uses SHA-256 truncated to 16 hex chars (64 bits) — collision probability
+ * is negligible at our scale, replacing the prior 32-bit djb2 variant which
+ * had real collision risk across thousands of cached prompts.
+ *
+ * Callers MUST still namespace keys with userId via `cacheKey(..., userId)`;
+ * a strong hash alone doesn't prevent cross-user leakage if userId is missing.
+ */
+import { createHash } from "node:crypto"
+
 export function stableHash(input: string): string {
-  let h = 0
-  for (let i = 0; i < input.length; i++) {
-    h = ((h << 5) - h + input.charCodeAt(i)) | 0
-  }
-  return (h >>> 0).toString(36)
+  return createHash("sha256").update(input).digest("hex").slice(0, 16)
 }
