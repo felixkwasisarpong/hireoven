@@ -1,5 +1,7 @@
 "use client"
 
+export const dynamic = "force-dynamic"
+
 import OfferRiskAnalyzer from "@/components/immigration/OfferRiskAnalyzer"
 
 export default function OfferRiskAnalyzerPage() {

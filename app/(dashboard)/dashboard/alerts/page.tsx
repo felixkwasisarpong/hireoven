@@ -1,5 +1,7 @@
 "use client"
 
+export const dynamic = "force-dynamic"
+
 import { useEffect, useMemo, useState } from "react"
 import { BellRing, Plus, Trash2, X } from "lucide-react"
 import DashboardPageHeader from "@/components/layout/DashboardPageHeader"

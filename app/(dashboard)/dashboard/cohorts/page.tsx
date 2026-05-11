@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic"
+
 import dynamic from "next/dynamic"
 import DashboardPageHeader from "@/components/layout/DashboardPageHeader"
 

@@ -1,5 +1,7 @@
 "use client"
 
+export const dynamic = "force-dynamic"
+
 import { ClipboardList } from "lucide-react"
 import HistoryTable from "@/components/interview/HistoryTable"
 
