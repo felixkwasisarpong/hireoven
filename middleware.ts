@@ -16,6 +16,18 @@ const PROTECTED_API_PREFIXES = [
   "/api/billing",
 ]
 
+/**
+ * Cron-authenticated routes under `/api/alerts/*` that do their own
+ * Bearer-token auth via requireCronAuth(). The middleware must skip the
+ * session check for these or the cron call gets 401 before the route's
+ * own auth can run.
+ */
+const CRON_ALERTS_PATHS = [
+  "/api/alerts/digest",
+  "/api/alerts/weekly",
+  "/api/alerts/recent-jobs",
+]
+
 function isProtected(pathname: string): boolean {
   return PROTECTED_PREFIXES.some((prefix) => pathname.startsWith(prefix))
 }
@@ -24,8 +36,19 @@ function isProtectedApi(pathname: string): boolean {
   return PROTECTED_API_PREFIXES.some((prefix) => pathname.startsWith(prefix))
 }
 
+function isCronAlertsPath(pathname: string): boolean {
+  return CRON_ALERTS_PATHS.some(
+    (path) => pathname === path || pathname.startsWith(`${path}/`),
+  )
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
+
+  // Cron-authenticated alerts routes manage their own Bearer auth — pass through.
+  if (isCronAlertsPath(pathname)) {
+    return NextResponse.next({ request: { headers: request.headers } })
+  }
 
   const token = request.cookies.get(SESSION_COOKIE_NAME)?.value ?? null
   const session = token ? await verifySessionJwt(token) : null

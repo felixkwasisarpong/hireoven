@@ -6,6 +6,15 @@ import { parseSSELine, type ScoutStreamEvent } from "@/lib/scout/streaming/types
 import type { ScoutResponse } from "@/lib/scout/types"
 import type { ScoutWorkspaceDirective, ScoutWorkflowDirective } from "@/lib/scout/types"
 
+/**
+ * Client-side hard deadline. Server's scout_chat_stream timeout is 25s; this
+ * is the safety net for cases where the server emits `done` (or the
+ * connection drops) without a preceding `response` event — proxy timeouts,
+ * mid-stream crashes, etc. Without this, isStreaming flips false but
+ * finalResponse stays null, and the UI hangs on the thinking canvas.
+ */
+const STREAM_HARD_TIMEOUT_MS = 32_000
+
 export type ScoutStreamState = {
   /** Accumulated raw text from text_delta events */
   streamText:          string
@@ -71,6 +80,20 @@ export function useScoutStream(): ScoutStreamActions {
     abortRef.current?.abort()
     abortRef.current = new AbortController()
 
+    // Hard client-side deadline. Fires only if no `response` arrives within
+    // the window; cleared on every received event below.
+    let receivedFinalResponse = false
+    const hardTimeout = window.setTimeout(() => {
+      if (!receivedFinalResponse) {
+        try { abortRef.current?.abort() } catch {}
+        setState((prev) => ({
+          ...prev,
+          isStreaming: false,
+          error: prev.error ?? "Scout took too long to respond. Please try again.",
+        }))
+      }
+    }, STREAM_HARD_TIMEOUT_MS)
+
     setState({
       ...INITIAL,
       isStreaming: true,
@@ -115,6 +138,8 @@ export function useScoutStream(): ScoutStreamActions {
             break
 
           case "response":
+            receivedFinalResponse = true
+            window.clearTimeout(hardTimeout)
             setState((prev) => ({
               ...prev,
               finalResponse: normalizeScoutResponse(event.payload),
@@ -123,10 +148,13 @@ export function useScoutStream(): ScoutStreamActions {
             break
 
           case "done":
+            window.clearTimeout(hardTimeout)
             setState((prev) => ({ ...prev, isStreaming: false }))
             break
 
           case "error":
+            receivedFinalResponse = true // suppress hard-timeout error override
+            window.clearTimeout(hardTimeout)
             setState((prev) => ({
               ...prev,
               isStreaming: false,
@@ -158,6 +186,21 @@ export function useScoutStream(): ScoutStreamActions {
           if (event) processEvent(event)
         }
       }
+
+      // Stream ended (reader.done or aborted). If we never received a
+      // `response` event AND nothing already set an error, surface a
+      // recovery message so the workspace doesn't hang on the thinking
+      // canvas forever.
+      if (!receivedFinalResponse) {
+        setState((prev) => {
+          if (prev.finalResponse || prev.error) return { ...prev, isStreaming: false }
+          return {
+            ...prev,
+            isStreaming: false,
+            error: "Scout's response was cut off. Please try again.",
+          }
+        })
+      }
     } catch (err) {
       if ((err as Error).name === "AbortError") {
         setState((prev) => ({ ...prev, isStreaming: false }))
@@ -168,6 +211,8 @@ export function useScoutStream(): ScoutStreamActions {
           error: "Network error. Please check your connection.",
         }))
       }
+    } finally {
+      window.clearTimeout(hardTimeout)
     }
   }, [])
 
