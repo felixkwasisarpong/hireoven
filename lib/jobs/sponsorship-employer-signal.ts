@@ -1,8 +1,23 @@
-import { resolveJobCardView } from "@/lib/jobs/normalization/read-model"
 import type { Company, Job } from "@/types"
 
 /** Job row plus joined company (nullable when join missing). */
 export type EmployerSponsorshipJobInput = Job & { company?: Company | null }
+
+// Derived directly from raw DB fields — avoids importing read-model/normalize (which pulls
+// in @anthropic-ai/sdk and breaks client bundles).
+function deriveVisaCardLabel(job: EmployerSponsorshipJobInput): SponsorshipVisaCardLabel | null {
+  if (job.sponsors_h1b === true) return "Sponsors"
+  if (job.requires_authorization === true) return "No sponsorship"
+  return null
+}
+
+function deriveSponsorshipBadge(job: EmployerSponsorshipJobInput): string | null {
+  const score = coercedSponsorshipPercent(job.sponsorship_score)
+  if (job.sponsors_h1b === true) return "sponsors"
+  if (job.requires_authorization === true) return "no_sponsorship"
+  if (score >= 65) return "likely"
+  return null
+}
 
 /** Normalize DB/API values: 0–100, fractional 0–1, or numeric strings. */
 export function coercedSponsorshipPercent(value: unknown): number {
@@ -68,7 +83,7 @@ export function resolveH1BSponsorshipDisplay(
   job: EmployerSponsorshipJobInput,
   options?: { visaCardLabel?: SponsorshipVisaCardLabel }
 ): H1BSponsorshipDisplay | null {
-  const resolvedVisaLabel = options?.visaCardLabel ?? resolveJobCardView(job).visa_card_label
+  const resolvedVisaLabel = options?.visaCardLabel ?? deriveVisaCardLabel(job)
   const blockedByPosting = resolvedVisaLabel === "No sponsorship" || job.requires_authorization === true
   if (blockedByPosting) {
     return {
@@ -153,8 +168,7 @@ const PILL_UNSPECIFIED: EmployerSponsorshipPill = {
  * overridden by a stale `jobs.sponsorship_score` column.
  */
 export function employerSponsorshipPill(job: EmployerSponsorshipJobInput): EmployerSponsorshipPill {
-  const card = resolveJobCardView(job)
-  const badge = card.sponsorship_badge
+  const badge = deriveSponsorshipBadge(job)
   const s = effectiveEmployerSponsorshipScore(job)
   const sponsors = employerLikelySponsorsH1b(job)
 
