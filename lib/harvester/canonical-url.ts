@@ -39,6 +39,10 @@ export function canonicalCareersUrl(atsType: AtsName, slug: string): string | nu
       return `https://${encodeURIComponent(slug)}.bamboohr.com/careers`
     case "jazzhr":
       return `https://${encodeURIComponent(slug)}.applytojob.com/`
+    case "icims":
+      // Slug is the full hostname (careers-tenant.icims.com, etc.) — used
+      // directly as the careers URL root.
+      return `https://${slug}/`
     default:
       return null
   }

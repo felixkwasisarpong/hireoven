@@ -177,7 +177,27 @@ const ATS_CONFIGS: Record<string, AtsConfig> = {
   },
   icims: {
     ats: "icims",
-    isWorkerReady: () => false, // No iCIMS adapter yet — any iCIMS URL is an improvement over a vanity domain
+    // Worker-ready iff the host is a *.icims.com customer portal that the
+    // adapter would accept (i.e. not asset/internal/employee/legal/etc.).
+    isWorkerReady: (u) => {
+      const host = u.hostname.toLowerCase()
+      if (!host.endsWith(".icims.com")) return false
+      if (
+        /^(cdn\d*|www|api|developer|images?|cookie-policy-scripts|community|partners|trust|legal)\.icims\.com$/.test(
+          host
+        )
+      )
+        return false
+      const sub = host.replace(/\.icims\.com$/, "")
+      if (
+        /^(internal|faculty|facultycareers|alumni|retiree|login|signin)-/.test(
+          sub
+        )
+      )
+        return false
+      if (/employee/.test(sub)) return false
+      return true
+    },
     matchesAts: (u) => {
       const host = u.hostname.toLowerCase()
       const isIcims = host.endsWith(".icims.com") || host === "icims.com"
