@@ -2,7 +2,6 @@ import crypto from "crypto"
 import pLimit from "p-limit"
 import { NextRequest, NextResponse } from "next/server"
 import { assertAdminAccess } from "@/lib/admin/auth"
-import { sendCrawlTopMatchDigests, type CrawlTopMatchDigestSummary } from "@/lib/alerts/crawl-match-digest"
 import { crawlCareersPage, type CrawlTarget } from "@/lib/crawler"
 import {
   applyCrawlQueuePolicy,
@@ -191,7 +190,6 @@ export async function POST(request: NextRequest) {
   let failed = 0
   let inserted = 0
   let lastError: string | null = null
-  let topMatchDigest: CrawlTopMatchDigestSummary | null = null
 
   await pool.query(
     `INSERT INTO system_settings (key, value) VALUES ($1, $2::jsonb)
@@ -367,33 +365,6 @@ export async function POST(request: NextRequest) {
     succeeded = results.filter((result) => !isFailureLikeStatus(result.status)).length
     failed = results.filter((result) => isFailureLikeStatus(result.status)).length
     inserted = results.reduce((sum, result) => sum + result.newJobs, 0)
-    const digestWindowEndIso = new Date().toISOString()
-    if (inserted > 0) {
-      try {
-        topMatchDigest = await sendCrawlTopMatchDigests({
-          windowStartIso: startedAtIso,
-          windowEndIso: digestWindowEndIso,
-          minScore: 80,
-          maxJobsPerUser: 5,
-        })
-      } catch (digestError) {
-        const message = digestError instanceof Error ? digestError.message : String(digestError)
-        console.error(`[admin/crawl] top-match digest failed: ${message}`)
-      }
-    } else {
-      topMatchDigest = {
-        enabled: Boolean(process.env.RESEND_API_KEY),
-        windowStartIso: startedAtIso,
-        windowEndIso: digestWindowEndIso,
-        minScore: 80,
-        maxJobsPerUser: 5,
-        jobsInsertedInWindow: 0,
-        matchedUsers: 0,
-        emailsSent: 0,
-        emailsFailed: 0,
-        skippedReason: "No new jobs inserted in this crawl window",
-      }
-    }
     completed = true
 
     return NextResponse.json({
@@ -403,7 +374,6 @@ export async function POST(request: NextRequest) {
       count: results.length,
       results,
       queuePolicy: queuePolicySummary,
-      topMatchDigest,
       totalDurationMs: Date.now() - runStartedAt,
     })
   } catch (error) {

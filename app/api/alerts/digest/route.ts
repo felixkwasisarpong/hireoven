@@ -82,27 +82,50 @@ function jobCard(job: JobEmailRow): string {
     </tr>`
 }
 
+type DigestEmailVariant =
+  | { kind: "alerts"; sections: Array<{ alertName: string; jobs: JobEmailRow[] }>; totalCount: number; windowLabel: string }
+  | { kind: "top-picks"; jobs: JobEmailRow[] }
+
 function buildDigestEmail(
   profile: Pick<Profile, "full_name" | "email">,
-  sections: Array<{ alertName: string; jobs: Array<JobEmailRow> }>,
-  totalCount: number,
-  windowLabel: string
+  variant: DigestEmailVariant
 ): string {
   const base = getBaseUrl()
   const name = profile.full_name?.split(" ")[0] ?? "there"
   const hireovenLogo = getHireovenEmailLogoUrl("wordmark")
 
-  const sectionsHtml = sections
-    .map(
-      ({ alertName, jobs }) => `
+  let intro: string
+  let bodyHtml: string
+  let footerNote: string
+  let tagline: string
+
+  if (variant.kind === "alerts") {
+    tagline = "Jobs served fresh"
+    intro = `You have <strong style="color:#0369A1;">${variant.totalCount} new job${variant.totalCount === 1 ? "" : "s"}</strong> matching your alerts ${variant.windowLabel}.`
+    bodyHtml = variant.sections
+      .map(
+        ({ alertName, jobs }) => `
+        <tr><td style="padding:20px 0 8px;">
+          <div style="font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#94a3b8;">
+            ${alertName}
+          </div>
+        </td></tr>
+        ${jobs.map(jobCard).join("")}`
+      )
+      .join("")
+    footerNote = `You're receiving this because you have ${variant.windowLabel} alerts enabled.`
+  } else {
+    tagline = "Your top picks for today"
+    intro = `Here ${variant.jobs.length === 1 ? "is" : "are"} <strong style="color:#0369A1;">${variant.jobs.length} top pick${variant.jobs.length === 1 ? "" : "s"}</strong> based on your resume.`
+    bodyHtml = `
       <tr><td style="padding:20px 0 8px;">
         <div style="font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#94a3b8;">
-          ${alertName}
+          Top picks for you
         </div>
       </td></tr>
-      ${jobs.map(jobCard).join("")}`
-    )
-    .join("")
+      ${variant.jobs.map(jobCard).join("")}`
+    footerNote = "You're receiving this because email alerts are on. Create a saved alert to get matches as soon as they're posted."
+  }
 
   return `<!DOCTYPE html>
 <html>
@@ -116,7 +139,7 @@ function buildDigestEmail(
         <tr><td style="background:#0369A1;padding:24px 32px;">
           <img src="${hireovenLogo}" alt="Hireoven" height="32"
                style="display:block;height:32px;width:auto;border:0;outline:none;text-decoration:none;" />
-          <div style="font-size:13px;color:#bae6fd;margin-top:6px;">Jobs served fresh</div>
+          <div style="font-size:13px;color:#bae6fd;margin-top:6px;">${tagline}</div>
         </td></tr>
 
         <!-- Body -->
@@ -125,11 +148,11 @@ function buildDigestEmail(
             Hey ${name} 👋
           </p>
           <p style="margin:0 0 24px;font-size:15px;color:#64748b;line-height:1.6;">
-            You have <strong style="color:#0369A1;">${totalCount} new job${totalCount === 1 ? "" : "s"}</strong> matching your alerts ${windowLabel}.
+            ${intro}
           </p>
 
           <table width="100%" cellpadding="0" cellspacing="0">
-            ${sectionsHtml}
+            ${bodyHtml}
           </table>
 
           <div style="margin-top:32px;text-align:center;">
@@ -143,7 +166,7 @@ function buildDigestEmail(
         <!-- Footer -->
         <tr><td style="padding:20px 32px;border-top:1px solid #f1f5f9;background:#f8fafc;">
           <p style="margin:0;font-size:12px;color:#94a3b8;text-align:center;">
-            You're receiving this because you have ${windowLabel} alerts enabled.
+            ${footerNote}
             <a href="${base}/dashboard/onboarding" style="color:#0369A1;">Manage preferences</a>
           </p>
         </td></tr>
@@ -153,6 +176,49 @@ function buildDigestEmail(
   </table>
 </body>
 </html>`
+}
+
+const TOP_PICKS_MIN_SCORE = 80
+const TOP_PICKS_PER_USER = 5
+
+async function fetchTopPicksForUser(
+  pool: ReturnType<typeof getPostgresPool>,
+  userId: string,
+  sinceIso: string
+): Promise<JobEmailRow[]> {
+  const result = await pool.query<JobEmailRow & { overall_score: number }>(
+    `WITH user_resume AS (
+       SELECT id FROM resumes
+       WHERE user_id = $1
+         AND is_primary = true
+         AND parse_status = 'complete'
+       LIMIT 1
+     ),
+     scored AS (
+       SELECT DISTINCT ON (s.job_id)
+         s.job_id, s.overall_score
+       FROM job_match_scores s
+       JOIN user_resume ur ON ur.id = s.resume_id
+       JOIN jobs j ON j.id = s.job_id
+       WHERE s.user_id = $1
+         AND s.overall_score >= $2
+         AND j.is_active = true
+         AND j.first_detected_at >= $3
+       ORDER BY s.job_id, s.overall_score DESC, s.computed_at DESC
+     )
+     SELECT j.*,
+            c.name AS company_name,
+            c.domain AS company_domain,
+            c.logo_url AS company_logo_url,
+            scored.overall_score
+     FROM scored
+     JOIN jobs j ON j.id = scored.job_id
+     LEFT JOIN companies c ON c.id = j.company_id
+     ORDER BY scored.overall_score DESC, j.first_detected_at DESC
+     LIMIT $4`,
+    [userId, TOP_PICKS_MIN_SCORE, sinceIso, TOP_PICKS_PER_USER]
+  )
+  return result.rows
 }
 
 export async function GET(request: NextRequest) {
@@ -167,17 +233,26 @@ export async function GET(request: NextRequest) {
   const pool = getPostgresPool()
   const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString()
 
-  // Fetch all daily-frequency users with active alerts
-  const usersResult = await pool.query<Pick<Profile, "id" | "email" | "full_name" | "email_alerts">>(
-    `SELECT id, email, full_name, email_alerts
-     FROM profiles
-     WHERE alert_frequency = 'daily'
-       AND email_alerts = true
-       AND email IS NOT NULL`
+  // Fetch every user with email alerts enabled. We branch per-user:
+  //   - users with active alerts → daily alert digest (alert_frequency='daily' only)
+  //   - users with NO active alerts → evening top-picks digest
+  const usersResult = await pool.query<
+    Pick<Profile, "id" | "email" | "full_name" | "alert_frequency"> & { has_active_alert: boolean }
+  >(
+    `SELECT p.id,
+            p.email,
+            p.full_name,
+            p.alert_frequency,
+            EXISTS (
+              SELECT 1 FROM job_alerts a
+              WHERE a.user_id = p.id AND a.is_active = true
+            ) AS has_active_alert
+     FROM profiles p
+     WHERE p.email_alerts = true
+       AND p.email IS NOT NULL`
   )
   const users = usersResult.rows
-
-  if (!users?.length) return NextResponse.json({ sent: 0, reason: "no daily users" })
+  if (!users.length) return NextResponse.json({ sent: 0, reason: "no eligible users" })
 
   // Fetch all jobs posted in last 24h, including the company's domain and
   // any stored logo_url so the email can render brand marks.
@@ -194,51 +269,69 @@ export async function GET(request: NextRequest) {
      ORDER BY jobs.first_detected_at DESC`,
     [since]
   )
-  const recentJobs = recentJobsResult.rows
+  const flatJobs: JobEmailRow[] = recentJobsResult.rows
 
-  if (!recentJobs?.length) return NextResponse.json({ sent: 0, reason: "no new jobs" })
-
-  const flatJobs: JobEmailRow[] = recentJobs
-
-  let sent = 0
+  let sentAlerts = 0
+  let sentTopPicks = 0
   let errors = 0
 
   for (const user of users) {
-    const alertsResult = await pool.query<JobAlert>(
-      `SELECT *
-       FROM job_alerts
-       WHERE user_id = $1
-         AND is_active = true`,
-      [user.id]
-    )
-    const alerts = alertsResult.rows
+    if (user.has_active_alert) {
+      // Only `daily` alert-frequency users get processed in this cron;
+      // `weekly` is handled by /api/alerts/weekly, `instant` by the webhook.
+      if (user.alert_frequency !== "daily") continue
+      if (!flatJobs.length) continue
 
-    if (!alerts?.length) continue
+      const alertsResult = await pool.query<JobAlert>(
+        `SELECT * FROM job_alerts WHERE user_id = $1 AND is_active = true`,
+        [user.id]
+      )
+      const sections: Array<{ alertName: string; jobs: JobEmailRow[] }> = []
+      let totalCount = 0
+      for (const alert of alertsResult.rows) {
+        const matched = flatJobs.filter((job) => matchesAlert(alert, job)).slice(0, 5)
+        if (!matched.length) continue
+        sections.push({ alertName: alert.name ?? "Untitled alert", jobs: matched })
+        totalCount += matched.length
+      }
+      if (!sections.length) continue
 
-    const sections: Array<{ alertName: string; jobs: JobEmailRow[] }> = []
-    let totalCount = 0
-
-    for (const alert of alerts) {
-      const matched: JobEmailRow[] = flatJobs.filter((job) => matchesAlert(alert, job)).slice(0, 5)
-      if (!matched.length) continue
-      sections.push({ alertName: alert.name ?? "Untitled alert", jobs: matched })
-      totalCount += matched.length
+      try {
+        await resend.emails.send({
+          from: getAlertsFromEmail(),
+          to: user.email!,
+          subject: `Your daily job digest - ${totalCount} new match${totalCount === 1 ? "" : "es"}`,
+          html: buildDigestEmail(user, { kind: "alerts", sections, totalCount, windowLabel: "today" }),
+        })
+        sentAlerts++
+      } catch {
+        errors++
+      }
+      continue
     }
 
-    if (!sections.length) continue
+    // No active alerts → evening top picks
+    const picks = await fetchTopPicksForUser(pool, user.id, since)
+    if (!picks.length) continue
 
     try {
       await resend.emails.send({
         from: getAlertsFromEmail(),
         to: user.email!,
-        subject: `Your daily job digest - ${totalCount} new match${totalCount === 1 ? "" : "es"}`,
-        html: buildDigestEmail(user, sections, totalCount, "today"),
+        subject: `Your top ${picks.length} pick${picks.length === 1 ? "" : "s"} today`,
+        html: buildDigestEmail(user, { kind: "top-picks", jobs: picks }),
       })
-      sent++
+      sentTopPicks++
     } catch {
       errors++
     }
   }
 
-  return NextResponse.json({ sent, errors, window: "24h" })
+  return NextResponse.json({
+    sentAlerts,
+    sentTopPicks,
+    sent: sentAlerts + sentTopPicks,
+    errors,
+    window: "24h",
+  })
 }
