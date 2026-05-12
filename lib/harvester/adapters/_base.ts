@@ -13,6 +13,7 @@ export type AtsName =
   | "personio"
   | "bamboohr"
   | "jazzhr"
+  | "icims"
 
 export type HarvestCtx = {
   etag: string | null
