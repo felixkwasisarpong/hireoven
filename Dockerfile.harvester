@@ -12,12 +12,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
 COPY package.json package-lock.json ./
 RUN npm ci
 
-# Worker only imports from lib/ + types/. tsconfig provides the @/* path alias.
+# Worker imports from lib/ + scripts/ only. `@/types` references in the
+# transitive import chain are all `import type {...}` — tsconfig has
+# `isolatedModules: true` so tsx/esbuild strip them. The top-level types/
+# directory is not needed at runtime.
 COPY tsconfig.json ./
 COPY next-env.d.ts ./
 COPY lib ./lib
 COPY scripts ./scripts
-COPY types ./types
 
 USER nodeapp
 ENV NODE_ENV=production
