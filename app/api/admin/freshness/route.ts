@@ -1,5 +1,6 @@
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import { assertAdminAccess } from "@/lib/admin/auth"
+import { requireCronAuth } from "@/lib/env"
 import { getPostgresPool } from "@/lib/postgres/server"
 
 export const dynamic = "force-dynamic"
@@ -110,10 +111,16 @@ SELECT
   (SELECT row_to_json(r) FROM recent_runs r)                                AS recent_runs
 `
 
-export async function GET() {
-  const access = await assertAdminAccess()
-  if (!access.ok) {
-    return NextResponse.json({ error: access.error }, { status: access.status })
+export async function GET(request: NextRequest) {
+  // Accept either:
+  //   (a) Admin cookie auth (UI access from the dashboard), or
+  //   (b) Bearer $CRON_SECRET (cron probes from the host).
+  const isCron = requireCronAuth(request.headers.get("authorization"))
+  if (!isCron) {
+    const access = await assertAdminAccess()
+    if (!access.ok) {
+      return NextResponse.json({ error: access.error }, { status: access.status })
+    }
   }
 
   const pool = getPostgresPool()
