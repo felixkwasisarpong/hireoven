@@ -1,3 +1,4 @@
+import pLimit from "p-limit"
 import {
   hashContent,
   type AtsAdapter,
@@ -29,6 +30,21 @@ const DEFAULT_LOCALE = "en-US"
 const DEFAULT_USER_AGENT = "hireoven-harvester/1.0 (+bot@hireoven.com)"
 const DEFAULT_TIMEOUT_MS = 15_000
 const RETRY_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504])
+
+// Per-job detail fetch — enriches descriptions beyond the bullet snippets.
+// Env-tunable for operators who want to trade throughput for richer text.
+const DETAIL_MAX_JOBS = Math.max(
+  0,
+  Number.parseInt(process.env.HARVESTER_WORKDAY_DETAIL_MAX_JOBS ?? "100", 10)
+)
+const DETAIL_CONCURRENCY = Math.max(
+  1,
+  Number.parseInt(process.env.HARVESTER_WORKDAY_DETAIL_CONCURRENCY ?? "4", 10)
+)
+const DETAIL_TIMEOUT_MS = Math.max(
+  1_000,
+  Number.parseInt(process.env.HARVESTER_WORKDAY_DETAIL_TIMEOUT_MS ?? "8000", 10)
+)
 
 type WorkdayLocation = { descriptor?: string }
 
@@ -152,6 +168,93 @@ function parseWorkdayPostedOn(value: string | undefined | null): string | undefi
   return undefined
 }
 
+function stripHtml(value: string | undefined | null): string | undefined {
+  if (!value) return undefined
+  const text = value
+    .replace(/<\/(p|div|li|br|h[1-6])>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/\s+/g, " ")
+    .trim()
+  return text || undefined
+}
+
+type WorkdayDetailResponse = {
+  jobPostingInfo?: {
+    jobDescription?: string
+    briefDescription?: string
+    location?: string
+    jobRequisitionLocation?: {
+      descriptor?: string
+      country?: { descriptor?: string; alpha2Code?: string }
+    }
+  }
+}
+
+/**
+ * Build the per-job detail URL from the parsed slug and the listing's
+ * `externalPath` (which starts with `/`).
+ */
+export function detailUrlFor(parsed: ParsedSlug, externalPath: string): string {
+  const base = `https://${parsed.tenant}.${parsed.wd}.myworkdayjobs.com/wday/cxs/${encodeURIComponent(parsed.tenant)}/${encodeURIComponent(parsed.site)}`
+  const suffix = externalPath.startsWith("/") ? externalPath : `/${externalPath}`
+  return `${base}${suffix}`
+}
+
+/**
+ * Fetch a single job's detail payload (description + canonical location).
+ * Returns null on any error; callers should fall back to whatever the
+ * listing produced.
+ */
+export async function fetchWorkdayJobDetail(
+  parsed: ParsedSlug,
+  externalPath: string,
+  ctx: HarvestCtx
+): Promise<{ description?: string; location?: string } | null> {
+  const doFetch = ctx.fetchImpl ?? harvesterFetch
+  const userAgent = ctx.userAgent ?? DEFAULT_USER_AGENT
+  const url = detailUrlFor(parsed, externalPath)
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), DETAIL_TIMEOUT_MS)
+
+  try {
+    const response = await doFetch(url, {
+      method: "GET",
+      headers: { "user-agent": userAgent, accept: "application/json" },
+      signal: controller.signal,
+    })
+    if (!response.ok) return null
+    const data = (await response.json()) as WorkdayDetailResponse
+    const info = data.jobPostingInfo
+    if (!info) return null
+
+    const description = stripHtml(info.jobDescription) ?? stripHtml(info.briefDescription)
+
+    // Prefer the country-qualified descriptor for location resolution.
+    const reqLoc = info.jobRequisitionLocation
+    const country = reqLoc?.country?.descriptor
+    let location: string | undefined
+    if (reqLoc?.descriptor?.trim()) {
+      location = country && !reqLoc.descriptor.includes(country)
+        ? `${reqLoc.descriptor.trim()}, ${country}`
+        : reqLoc.descriptor.trim()
+    } else if (info.location?.trim()) {
+      location = info.location.trim()
+    }
+
+    return { description, location }
+  } catch {
+    return null
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 function pickLocation(raw: WorkdayPosting): string | undefined {
   if (raw.locationsText?.trim()) return raw.locationsText.trim()
   const desc = raw.locations?.find((l) => l?.descriptor?.trim())?.descriptor?.trim()
@@ -234,7 +337,23 @@ async function postWorkdayListing(
   return { kind: "error", status: lastStatus, reason: lastReason, upstreamLatencyMs }
 }
 
-function mapRawJob(parsed: ParsedSlug, raw: WorkdayPosting): HarvestedJob | null {
+function computeContentHash(args: {
+  title: string
+  applyUrl: string
+  location: string | undefined
+  postedAt: string | undefined
+  description: string | undefined
+}): string {
+  return hashContent([
+    args.title,
+    args.applyUrl,
+    args.location,
+    args.postedAt,
+    args.description?.slice(0, 4_000),
+  ])
+}
+
+function mapRawJob(parsed: ParsedSlug, raw: WorkdayPosting): (HarvestedJob & { externalPath: string | undefined }) | null {
   if (!raw.title) return null
 
   const title = raw.title.trim()
@@ -246,14 +365,6 @@ function mapRawJob(parsed: ParsedSlug, raw: WorkdayPosting): HarvestedJob | null
   const postedAt = parseWorkdayPostedOn(raw.postedOn)
   const description = raw.bulletFields?.filter(Boolean).join("\n").trim() || undefined
 
-  const contentHash = hashContent([
-    title,
-    applyUrl,
-    location,
-    postedAt,
-    description?.slice(0, 4_000),
-  ])
-
   return {
     externalId,
     title,
@@ -261,8 +372,49 @@ function mapRawJob(parsed: ParsedSlug, raw: WorkdayPosting): HarvestedJob | null
     description,
     location,
     postedAt,
-    contentHash,
+    contentHash: computeContentHash({ title, applyUrl, location, postedAt, description }),
+    externalPath: raw.externalPath,
   }
+}
+
+/**
+ * Enrich already-mapped jobs with per-job detail descriptions. Mutates the
+ * passed array in place. Capped by DETAIL_MAX_JOBS and DETAIL_CONCURRENCY.
+ * Falls back to the listing's bulletFields on any per-job failure.
+ */
+async function enrichWithDetail(
+  parsed: ParsedSlug,
+  jobs: Array<HarvestedJob & { externalPath: string | undefined }>,
+  ctx: HarvestCtx
+): Promise<void> {
+  if (DETAIL_MAX_JOBS === 0) return
+  const targets = jobs.filter((j) => Boolean(j.externalPath)).slice(0, DETAIL_MAX_JOBS)
+  if (targets.length === 0) return
+
+  const limit = pLimit(DETAIL_CONCURRENCY)
+  await Promise.all(
+    targets.map((job) =>
+      limit(async () => {
+        const detail = await fetchWorkdayJobDetail(parsed, job.externalPath!, ctx)
+        if (!detail) return
+        if (detail.description && detail.description.length > (job.description?.length ?? 0)) {
+          job.description = detail.description
+        }
+        if (detail.location && !job.location) {
+          job.location = detail.location
+        }
+        // Recompute content_hash with the richer payload so persist-bulk's
+        // IS-DISTINCT-FROM check fires and writes the new description.
+        job.contentHash = computeContentHash({
+          title: job.title,
+          applyUrl: job.applyUrl,
+          location: job.location,
+          postedAt: job.postedAt,
+          description: job.description,
+        })
+      })
+    )
+  )
 }
 
 export const workdayAdapter: AtsAdapter = {
@@ -279,7 +431,7 @@ export const workdayAdapter: AtsAdapter = {
     }
 
     const url = listingUrl(parsed)
-    const jobs: HarvestedJob[] = []
+    const jobs: Array<HarvestedJob & { externalPath: string | undefined }> = []
     let upstreamLatencyMs = 0
     let offset = 0
     let pageCount = 0
@@ -311,6 +463,14 @@ export const workdayAdapter: AtsAdapter = {
       if (postings.length < PAGE_LIMIT) break
       offset += PAGE_LIMIT
     }
+
+    // Phase 2: fetch per-job detail to populate full descriptions. The
+    // listing-only `bulletFields` is too sparse for matching/skills
+    // extraction. Capped at DETAIL_MAX_JOBS per board, DETAIL_CONCURRENCY
+    // parallel — env-tunable for operators tuning throughput vs richness.
+    const detailStart = Date.now()
+    await enrichWithDetail(parsed, jobs, ctx)
+    upstreamLatencyMs += Date.now() - detailStart
 
     return {
       jobs,

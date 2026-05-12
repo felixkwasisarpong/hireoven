@@ -22,6 +22,8 @@
     "backfill:workday": "tsx scripts/backfill-workday-ats-identifier.ts",
     "backfill:workday:execute": "tsx scripts/backfill-workday-ats-identifier.ts --execute",
     "backfill:workday:resolve": "tsx scripts/backfill-workday-ats-identifier.ts --execute --resolve-missing",
+    "backfill:workday-descriptions": "tsx scripts/backfill-workday-descriptions.ts",
+    "backfill:workday-descriptions:execute": "tsx scripts/backfill-workday-descriptions.ts --execute",
     "bench": "tsx scripts/bench.ts",
     "db:backfill-careers-urls": "npx tsx scripts/backfill-company-careers-urls.ts",
     "db:backfill-ats": "npx tsx scripts/backfill-company-ats.ts",
