@@ -13,9 +13,10 @@
  */
 
 import { loadEnvConfig } from "@next/env"
-import { createClient } from "@supabase/supabase-js"
+import type { Pool } from "pg"
 import { detectAtsFromHtml } from "../lib/companies/ats-signatures"
 import { detectAtsFromUrl } from "../lib/companies/detect-ats"
+import { getPostgresPool } from "../lib/postgres/server"
 
 loadEnvConfig(process.cwd())
 
@@ -255,72 +256,65 @@ async function runWithConcurrency<T>(
 }
 
 async function main() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !key) {
-    throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY")
-  }
+  const pool = getPostgresPool()
 
-  const supabase = createClient(url, key, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  })
+  const activeFilter = includeInactive ? "" : "AND is_active = true"
+  const { rows: companiesData } = await pool.query<CompanyRow>(
+    `SELECT id, name, domain, careers_url, ats_type, is_active
+       FROM companies
+      WHERE careers_url IS NOT NULL
+        ${activeFilter}
+      ORDER BY updated_at ASC NULLS FIRST
+      LIMIT $1`,
+    [limit]
+  )
 
-  let companiesQuery = supabase
-    .from("companies")
-    .select("id, name, domain, careers_url, ats_type, is_active")
-    .not("careers_url", "is", null)
-    .order("updated_at", { ascending: true })
-    .limit(limit)
-
-  if (!includeInactive) {
-    companiesQuery = companiesQuery.eq("is_active", true)
-  }
-
-  const { data: companiesData, error: companiesError } = await companiesQuery
-  if (companiesError || !companiesData) {
-    throw new Error(companiesError?.message ?? "Could not load companies")
-  }
-
-  const companies = companiesData as CompanyRow[]
+  const companies = companiesData
   console.log(`Loaded ${companies.length} companies for ATS discovery.`)
 
-  const { data: jobsData } = await supabase
-    .from("jobs")
-    .select("company_id, apply_url")
-    .eq("is_active", true)
-    .not("apply_url", "is", null)
-    .limit(100000)
+  // Pull apply_urls grouped by company so we can detect ATS from existing
+  // job links (cheaper than fetching candidate careers pages).
+  const { rows: jobsData } = await pool.query<{
+    company_id: string | null
+    apply_url: string | null
+  }>(
+    `SELECT company_id, apply_url
+       FROM jobs
+      WHERE is_active = true
+        AND apply_url IS NOT NULL
+      LIMIT 100000`
+  )
 
   const applyUrlsByCompany = new Map<string, string[]>()
-  for (const row of jobsData ?? []) {
-    const companyId = row.company_id as string | null
-    const applyUrl = row.apply_url as string | null
-    if (!companyId || !applyUrl) continue
-    const list = applyUrlsByCompany.get(companyId) ?? []
-    list.push(applyUrl)
-    applyUrlsByCompany.set(companyId, list)
+  for (const row of jobsData) {
+    if (!row.company_id || !row.apply_url) continue
+    const list = applyUrlsByCompany.get(row.company_id) ?? []
+    list.push(row.apply_url)
+    applyUrlsByCompany.set(row.company_id, list)
   }
 
   await runDiscovery({
     companies,
-    supabase,
+    pool,
     dryRun,
     overwrite,
     reactivateOnDiscovery,
     applyUrlsByCompany,
   })
+
+  await pool.end()
 }
 
 async function runDiscovery({
   companies,
-  supabase,
+  pool,
   dryRun,
   overwrite,
   reactivateOnDiscovery,
   applyUrlsByCompany,
 }: {
   companies: CompanyRow[]
-  supabase: any
+  pool: Pool
   dryRun: boolean
   overwrite: boolean
   reactivateOnDiscovery: boolean
@@ -387,25 +381,24 @@ async function runDiscovery({
 
     if (dryRun) return
 
-    const nextPayload: Record<string, unknown> = {
-      ats_type: detection.atsType,
-      updated_at: new Date().toISOString(),
-    }
-    if (!company.is_active && reactivateOnDiscovery) {
-      nextPayload.is_active = true
-    }
-
-    const { error: updateError } = await supabase
-      .from("companies")
-      .update(nextPayload as any)
-      .eq("id", company.id)
-
-    if (updateError) {
-      console.error(`  FAILED: ${updateError.message}`)
+    const shouldReactivate = !company.is_active && reactivateOnDiscovery
+    try {
+      await pool.query(
+        shouldReactivate
+          ? `UPDATE companies
+                SET ats_type = $1, is_active = true, updated_at = now()
+              WHERE id = $2`
+          : `UPDATE companies
+                SET ats_type = $1, updated_at = now()
+              WHERE id = $2`,
+        [detection.atsType, company.id]
+      )
+    } catch (err) {
+      console.error(`  FAILED: ${(err as Error).message}`)
       return
     }
     updated += 1
-    if (!company.is_active && reactivateOnDiscovery) reactivated += 1
+    if (shouldReactivate) reactivated += 1
   })
 
   await runWithConcurrency(tasks, concurrency)

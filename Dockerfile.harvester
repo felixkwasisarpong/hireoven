@@ -25,3 +25,5 @@ USER nodeapp
 ENV NODE_ENV=production
 
 CMD ["npm", "run", "harvester:worker"]
+
+
