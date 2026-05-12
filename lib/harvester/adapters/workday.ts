@@ -114,6 +114,44 @@ function externalIdFor(externalPath: string | undefined, title: string): string 
   return `workday:title:${title}`
 }
 
+/**
+ * Workday's `postedOn` is human-readable text ("Posted Today",
+ * "Posted 5 Days Ago", "Posted 30+ Days Ago"), not an ISO timestamp.
+ * Convert relative phrases to an ISO date; drop anything we can't parse so
+ * the persist layer doesn't fail on `::timestamptz` cast.
+ */
+function parseWorkdayPostedOn(value: string | undefined | null): string | undefined {
+  if (!value) return undefined
+  const trimmed = value.trim()
+  if (!trimmed) return undefined
+
+  // Already ISO-ish?
+  if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) {
+    const d = new Date(trimmed)
+    return Number.isNaN(d.getTime()) ? undefined : d.toISOString()
+  }
+
+  const lower = trimmed.toLowerCase()
+  if (lower === "posted today" || lower === "today") {
+    return new Date().toISOString()
+  }
+  if (lower === "posted yesterday" || lower === "yesterday") {
+    return new Date(Date.now() - 86_400_000).toISOString()
+  }
+
+  // "Posted N Days Ago" or "Posted N+ Days Ago"
+  const daysMatch = lower.match(/^(?:posted\s+)?(\d+)\+?\s+days?\s+ago$/)
+  if (daysMatch) {
+    const days = Number.parseInt(daysMatch[1], 10)
+    if (Number.isFinite(days)) {
+      return new Date(Date.now() - days * 86_400_000).toISOString()
+    }
+  }
+
+  // Unrecognized — drop rather than poison the timestamptz cast.
+  return undefined
+}
+
 function pickLocation(raw: WorkdayPosting): string | undefined {
   if (raw.locationsText?.trim()) return raw.locationsText.trim()
   const desc = raw.locations?.find((l) => l?.descriptor?.trim())?.descriptor?.trim()
@@ -205,7 +243,7 @@ function mapRawJob(parsed: ParsedSlug, raw: WorkdayPosting): HarvestedJob | null
   const applyUrl = applyUrlFor(parsed, raw.externalPath)
   const externalId = externalIdFor(raw.externalPath, title)
   const location = pickLocation(raw)
-  const postedAt = raw.postedOn ?? undefined
+  const postedAt = parseWorkdayPostedOn(raw.postedOn)
   const description = raw.bulletFields?.filter(Boolean).join("\n").trim() || undefined
 
   const contentHash = hashContent([
