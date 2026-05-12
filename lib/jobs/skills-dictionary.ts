@@ -14,7 +14,24 @@
 export type SkillEntry = {
   canonical: string
   aliases: string[]
-  category: "language" | "framework" | "database" | "cloud" | "tool" | "method" | "ml" | "domain"
+  category:
+    | "language"
+    | "framework"
+    | "database"
+    | "cloud"
+    | "tool"
+    | "method"
+    | "ml"
+    | "domain"
+    | "retail"
+    | "sales"
+    | "healthcare"
+    | "finance"
+    | "marketing"
+    | "hr"
+    | "operations"
+    | "soft"
+    | "natlang"
 }
 
 export const SKILL_DICTIONARY: SkillEntry[] = [
@@ -137,4 +154,166 @@ export const SKILL_DICTIONARY: SkillEntry[] = [
   { canonical: "Blockchain", aliases: ["blockchain", "web3"], category: "domain" },
   { canonical: "Data Engineering", aliases: ["data engineering", "data engineer"], category: "domain" },
   { canonical: "Data Science", aliases: ["data science", "data scientist"], category: "domain" },
+
+  // Retail / Customer Service
+  { canonical: "Customer Service", aliases: ["customer service", "customer support"], category: "retail" },
+  { canonical: "POS Systems", aliases: ["point of sale", "pos system", "\\bPOS\\b"], category: "retail" },
+  { canonical: "Cash Handling", aliases: ["cash handling", "cash register"], category: "retail" },
+  { canonical: "Visual Merchandising", aliases: ["visual merchandising"], category: "retail" },
+  { canonical: "Product Knowledge", aliases: ["product knowledge"], category: "retail" },
+  { canonical: "Inventory Management", aliases: ["inventory management", "stock management"], category: "retail" },
+  { canonical: "Loss Prevention", aliases: ["loss prevention"], category: "retail" },
+  { canonical: "Retail Operations", aliases: ["retail operations"], category: "retail" },
+  { canonical: "Restocking", aliases: ["restocking", "stocking shelves"], category: "retail" },
+  { canonical: "Cashier", aliases: ["cashier"], category: "retail" },
+  { canonical: "Upselling", aliases: ["upselling", "up-selling"], category: "retail" },
+  { canonical: "Cross-selling", aliases: ["cross-selling", "cross selling"], category: "retail" },
+  { canonical: "Merchandising", aliases: ["merchandising"], category: "retail" },
+  { canonical: "Customer Experience", aliases: ["customer experience", "\\bCX\\b"], category: "retail" },
+  { canonical: "Returns Processing", aliases: ["returns processing", "handling returns"], category: "retail" },
+
+  // Sales / Account Management
+  { canonical: "Salesforce", aliases: ["salesforce"], category: "sales" },
+  { canonical: "HubSpot", aliases: ["hubspot"], category: "sales" },
+  { canonical: "Cold Calling", aliases: ["cold calling", "cold call"], category: "sales" },
+  { canonical: "B2B Sales", aliases: ["b2b sales", "b2b selling"], category: "sales" },
+  { canonical: "B2C Sales", aliases: ["b2c sales"], category: "sales" },
+  { canonical: "Pipeline Management", aliases: ["pipeline management", "sales pipeline"], category: "sales" },
+  { canonical: "CRM", aliases: ["\\bCRM\\b", "customer relationship management"], category: "sales" },
+  { canonical: "Account Management", aliases: ["account management"], category: "sales" },
+  { canonical: "Lead Generation", aliases: ["lead generation", "lead gen"], category: "sales" },
+  { canonical: "Sales Forecasting", aliases: ["sales forecasting"], category: "sales" },
+  { canonical: "Sales Enablement", aliases: ["sales enablement"], category: "sales" },
+  { canonical: "Outbound Sales", aliases: ["outbound sales", "outbound prospecting"], category: "sales" },
+  { canonical: "Inbound Sales", aliases: ["inbound sales"], category: "sales" },
+  { canonical: "Negotiation", aliases: ["negotiation"], category: "sales" },
+  { canonical: "Customer Success", aliases: ["customer success"], category: "sales" },
+  { canonical: "Sales Operations", aliases: ["sales operations", "sales ops"], category: "sales" },
+  { canonical: "Quota Attainment", aliases: ["quota attainment", "quota carrying"], category: "sales" },
+  { canonical: "Outreach", aliases: ["outreach\\.io", "outreach tool"], category: "sales" },
+  { canonical: "Salesloft", aliases: ["salesloft"], category: "sales" },
+  { canonical: "ZoomInfo", aliases: ["zoominfo"], category: "sales" },
+
+  // Healthcare
+  { canonical: "Registered Nurse", aliases: ["registered nurse", "\\bRN\\b"], category: "healthcare" },
+  { canonical: "LPN", aliases: ["licensed practical nurse", "\\bLPN\\b"], category: "healthcare" },
+  { canonical: "CPR Certified", aliases: ["\\bCPR\\b", "cpr certified", "cpr certification"], category: "healthcare" },
+  { canonical: "EMR", aliases: ["electronic medical record", "\\bEMR\\b"], category: "healthcare" },
+  { canonical: "EHR", aliases: ["electronic health record", "\\bEHR\\b"], category: "healthcare" },
+  { canonical: "Epic", aliases: ["epic systems", "epic emr"], category: "healthcare" },
+  { canonical: "Cerner", aliases: ["cerner"], category: "healthcare" },
+  { canonical: "HIPAA", aliases: ["\\bHIPAA\\b"], category: "healthcare" },
+  { canonical: "Phlebotomy", aliases: ["phlebotomy", "phlebotomist"], category: "healthcare" },
+  { canonical: "Patient Care", aliases: ["patient care"], category: "healthcare" },
+  { canonical: "Triage", aliases: ["triage"], category: "healthcare" },
+  { canonical: "Vital Signs", aliases: ["vital signs"], category: "healthcare" },
+  { canonical: "IV Therapy", aliases: ["iv therapy", "intravenous therapy"], category: "healthcare" },
+  { canonical: "Medication Administration", aliases: ["medication administration"], category: "healthcare" },
+  { canonical: "Wound Care", aliases: ["wound care"], category: "healthcare" },
+  { canonical: "ICU", aliases: ["\\bICU\\b", "intensive care unit"], category: "healthcare" },
+  { canonical: "Pediatrics", aliases: ["pediatrics", "pediatric"], category: "healthcare" },
+  { canonical: "Pharmacology", aliases: ["pharmacology"], category: "healthcare" },
+  { canonical: "BLS", aliases: ["\\bBLS\\b", "basic life support"], category: "healthcare" },
+  // ACLS healthcare alias deliberately omits the bare "\bACLS\b" — too easy
+  // to collide with "Access Control Lists" in networking/security JDs. Only
+  // match the full phrase or a "ACLS certified" context.
+  { canonical: "ACLS", aliases: ["advanced cardiac life support", "acls certified", "acls certification"], category: "healthcare" },
+
+  // Finance / Accounting
+  { canonical: "GAAP", aliases: ["\\bGAAP\\b"], category: "finance" },
+  { canonical: "IFRS", aliases: ["\\bIFRS\\b"], category: "finance" },
+  { canonical: "QuickBooks", aliases: ["quickbooks"], category: "finance" },
+  { canonical: "SAP", aliases: ["sap erp", "sap hana", "sap s/4"], category: "finance" },
+  { canonical: "Reconciliation", aliases: ["reconciliation", "account reconciliation"], category: "finance" },
+  { canonical: "Audit", aliases: ["financial audit", "internal audit", "external audit"], category: "finance" },
+  { canonical: "Tax Preparation", aliases: ["tax preparation", "tax filing"], category: "finance" },
+  { canonical: "Accounts Payable", aliases: ["accounts payable"], category: "finance" },
+  { canonical: "Accounts Receivable", aliases: ["accounts receivable"], category: "finance" },
+  { canonical: "Budgeting", aliases: ["budgeting", "budget management"], category: "finance" },
+  { canonical: "Financial Reporting", aliases: ["financial reporting"], category: "finance" },
+  { canonical: "Financial Modeling", aliases: ["financial modeling", "financial modelling"], category: "finance" },
+  { canonical: "Forecasting", aliases: ["financial forecasting"], category: "finance" },
+  { canonical: "Excel", aliases: ["microsoft excel", "ms excel", "advanced excel"], category: "finance" },
+  { canonical: "Pivot Tables", aliases: ["pivot tables", "pivot table"], category: "finance" },
+  { canonical: "Variance Analysis", aliases: ["variance analysis"], category: "finance" },
+  { canonical: "Cost Accounting", aliases: ["cost accounting"], category: "finance" },
+  { canonical: "Payroll", aliases: ["payroll processing", "payroll administration"], category: "finance" },
+  { canonical: "Bookkeeping", aliases: ["bookkeeping", "bookkeeper"], category: "finance" },
+  { canonical: "CPA", aliases: ["\\bCPA\\b", "certified public accountant"], category: "finance" },
+
+  // Marketing
+  { canonical: "SEO", aliases: ["\\bSEO\\b", "search engine optimization"], category: "marketing" },
+  { canonical: "SEM", aliases: ["\\bSEM\\b", "search engine marketing"], category: "marketing" },
+  { canonical: "Google Analytics", aliases: ["google analytics", "\\bGA4\\b"], category: "marketing" },
+  { canonical: "Google Ads", aliases: ["google ads", "google adwords"], category: "marketing" },
+  { canonical: "Facebook Ads", aliases: ["facebook ads", "meta ads"], category: "marketing" },
+  { canonical: "Mailchimp", aliases: ["mailchimp"], category: "marketing" },
+  { canonical: "Marketo", aliases: ["marketo"], category: "marketing" },
+  { canonical: "Content Marketing", aliases: ["content marketing"], category: "marketing" },
+  { canonical: "Social Media Marketing", aliases: ["social media marketing", "smm"], category: "marketing" },
+  { canonical: "A/B Testing", aliases: ["a/b testing", "split testing"], category: "marketing" },
+  { canonical: "Email Marketing", aliases: ["email marketing", "email campaigns"], category: "marketing" },
+  { canonical: "Marketing Automation", aliases: ["marketing automation"], category: "marketing" },
+  { canonical: "Brand Management", aliases: ["brand management", "brand strategy"], category: "marketing" },
+  { canonical: "Copywriting", aliases: ["copywriting", "copy writing"], category: "marketing" },
+  { canonical: "Adobe Creative Suite", aliases: ["adobe creative suite", "creative cloud"], category: "marketing" },
+  { canonical: "Photoshop", aliases: ["photoshop"], category: "marketing" },
+  { canonical: "Figma", aliases: ["figma"], category: "marketing" },
+  { canonical: "Canva", aliases: ["canva"], category: "marketing" },
+  { canonical: "Influencer Marketing", aliases: ["influencer marketing"], category: "marketing" },
+  { canonical: "Performance Marketing", aliases: ["performance marketing"], category: "marketing" },
+
+  // HR / Recruiting
+  { canonical: "ATS", aliases: ["applicant tracking system", "\\bATS\\b"], category: "hr" },
+  { canonical: "Onboarding", aliases: ["onboarding", "new-hire orientation"], category: "hr" },
+  { canonical: "Compensation", aliases: ["compensation planning", "comp & benefits"], category: "hr" },
+  { canonical: "Benefits Administration", aliases: ["benefits administration"], category: "hr" },
+  { canonical: "Employee Relations", aliases: ["employee relations"], category: "hr" },
+  { canonical: "HRIS", aliases: ["\\bHRIS\\b"], category: "hr" },
+  { canonical: "Performance Management", aliases: ["performance management", "performance reviews"], category: "hr" },
+  { canonical: "Talent Acquisition", aliases: ["talent acquisition"], category: "hr" },
+  { canonical: "Recruiting", aliases: ["technical recruiting", "full-cycle recruiting", "sourcing candidates"], category: "hr" },
+  { canonical: "DEI", aliases: ["diversity equity inclusion", "diversity and inclusion", "\\bDEI\\b"], category: "hr" },
+  { canonical: "Employee Engagement", aliases: ["employee engagement"], category: "hr" },
+  { canonical: "Training & Development", aliases: ["training and development", "learning and development", "\\bL&D\\b"], category: "hr" },
+
+  // Operations / Supply Chain
+  { canonical: "Lean", aliases: ["lean manufacturing", "lean methodology", "lean process"], category: "operations" },
+  { canonical: "Six Sigma", aliases: ["six sigma", "lean six sigma"], category: "operations" },
+  { canonical: "ERP", aliases: ["\\bERP\\b", "enterprise resource planning"], category: "operations" },
+  { canonical: "Logistics", aliases: ["logistics"], category: "operations" },
+  { canonical: "Procurement", aliases: ["procurement", "purchasing"], category: "operations" },
+  { canonical: "Supply Chain Management", aliases: ["supply chain management", "scm"], category: "operations" },
+  { canonical: "Warehouse Management", aliases: ["warehouse management", "wms"], category: "operations" },
+  { canonical: "Vendor Management", aliases: ["vendor management"], category: "operations" },
+  { canonical: "Process Improvement", aliases: ["process improvement", "continuous improvement"], category: "operations" },
+  { canonical: "Operations Management", aliases: ["operations management"], category: "operations" },
+  { canonical: "Project Management", aliases: ["project management"], category: "operations" },
+  { canonical: "PMP", aliases: ["\\bPMP\\b", "project management professional"], category: "operations" },
+
+  // Soft skills
+  { canonical: "Communication", aliases: ["written communication", "verbal communication", "strong communicator"], category: "soft" },
+  { canonical: "Teamwork", aliases: ["teamwork"], category: "soft" },
+  { canonical: "Leadership", aliases: ["leadership skills", "team lead", "people leadership"], category: "soft" },
+  { canonical: "Problem Solving", aliases: ["problem solving", "problem-solving"], category: "soft" },
+  { canonical: "Mentorship", aliases: ["mentorship", "mentoring", "coaching"], category: "soft" },
+  { canonical: "Cross-functional Collaboration", aliases: ["cross-functional", "cross functional"], category: "soft" },
+  { canonical: "Critical Thinking", aliases: ["critical thinking"], category: "soft" },
+  { canonical: "Time Management", aliases: ["time management"], category: "soft" },
+  { canonical: "Conflict Resolution", aliases: ["conflict resolution"], category: "soft" },
+  { canonical: "Stakeholder Management", aliases: ["stakeholder management"], category: "soft" },
+  { canonical: "Public Speaking", aliases: ["public speaking", "presentation skills"], category: "soft" },
+  { canonical: "Attention to Detail", aliases: ["attention to detail", "detail-oriented", "detail oriented"], category: "soft" },
+
+  // Languages (natural)
+  { canonical: "Bilingual", aliases: ["bilingual"], category: "natlang" },
+  { canonical: "Spanish", aliases: ["fluent in spanish", "spanish speaking", "spanish-speaking"], category: "natlang" },
+  { canonical: "French", aliases: ["fluent in french", "french speaking", "french-speaking"], category: "natlang" },
+  { canonical: "Mandarin", aliases: ["mandarin", "mandarin chinese"], category: "natlang" },
+  { canonical: "Cantonese", aliases: ["cantonese"], category: "natlang" },
+  { canonical: "German", aliases: ["fluent in german", "german speaking"], category: "natlang" },
+  { canonical: "Japanese", aliases: ["fluent in japanese", "japanese speaking"], category: "natlang" },
+  { canonical: "Korean", aliases: ["fluent in korean", "korean speaking"], category: "natlang" },
+  { canonical: "Portuguese", aliases: ["fluent in portuguese", "brazilian portuguese"], category: "natlang" },
+  { canonical: "ASL", aliases: ["american sign language", "\\bASL\\b"], category: "natlang" },
 ]
