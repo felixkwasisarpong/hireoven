@@ -24,6 +24,8 @@
     "backfill:workday:resolve": "tsx scripts/backfill-workday-ats-identifier.ts --execute --resolve-missing",
     "backfill:workday-descriptions": "tsx scripts/backfill-workday-descriptions.ts",
     "backfill:workday-descriptions:execute": "tsx scripts/backfill-workday-descriptions.ts --execute",
+    "backfill:sr-descriptions": "tsx scripts/backfill-smartrecruiters-descriptions.ts",
+    "backfill:sr-descriptions:execute": "tsx scripts/backfill-smartrecruiters-descriptions.ts --execute",
     "repair:vanity-urls": "tsx scripts/repair-vanity-careers-urls.ts",
     "repair:vanity-urls:execute": "tsx scripts/repair-vanity-careers-urls.ts --execute",
     "bench": "tsx scripts/bench.ts",

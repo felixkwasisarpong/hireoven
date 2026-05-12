@@ -1,3 +1,4 @@
+import pLimit from "p-limit"
 import {
   conditionalFetchJson,
   hashContent,
@@ -11,13 +12,23 @@ import {
  * SmartRecruiters public posting API.
  * https://api.smartrecruiters.com/v1/companies/{slug}/postings?offset=N&limit=100
  *
- * Pagination via offset/limit; descriptions sometimes inline under
- * `jobAd.sections.jobDescription.text`, otherwise undefined (detail fetch is a
- * potential future addition).
+ * Pagination via offset/limit. The list endpoint does NOT return job
+ * descriptions — `jobAd.sections.*` is only on the per-posting detail
+ * endpoint `/v1/companies/{slug}/postings/{id}`. We fetch a bounded subset
+ * of detail records per cycle (newest first) to enrich descriptions; the
+ * remainder ship as listing-only and get filled in on subsequent cycles.
  */
 
 const PAGE_LIMIT = 100
 const MAX_PAGES = 20
+const DETAIL_MAX_JOBS = Math.max(
+  0,
+  Number.parseInt(process.env.HARVESTER_SR_DETAIL_MAX_JOBS ?? "60", 10)
+)
+const DETAIL_CONCURRENCY = Math.max(
+  1,
+  Number.parseInt(process.env.HARVESTER_SR_DETAIL_CONCURRENCY ?? "4", 10)
+)
 
 type SRSection = { text?: string }
 
@@ -68,6 +79,10 @@ function listingUrl(slug: string, offset: number): string {
   return `https://api.smartrecruiters.com/v1/companies/${safe}/postings?offset=${offset}&limit=${PAGE_LIMIT}`
 }
 
+function detailUrl(slug: string, postingId: string): string {
+  return `https://api.smartrecruiters.com/v1/companies/${encodeURIComponent(slug)}/postings/${encodeURIComponent(postingId)}`
+}
+
 function detectFromUrl(url: string): { slug: string } | null {
   let parsed: URL
   try {
@@ -109,7 +124,9 @@ function publicApplyUrl(slug: string, postingId: string | undefined): string {
   return `https://jobs.smartrecruiters.com/${encodeURIComponent(slug)}/${encodeURIComponent(postingId ?? "")}`
 }
 
-function mapRawJob(slug: string, raw: SRPosting): HarvestedJob | null {
+type SRMapped = HarvestedJob & { postingId: string }
+
+function mapRawJob(slug: string, raw: SRPosting): SRMapped | null {
   const id = raw.id ?? raw.uuid ?? raw.refNumber ?? raw.ref
   if (!id || !raw.name) return null
 
@@ -140,7 +157,50 @@ function mapRawJob(slug: string, raw: SRPosting): HarvestedJob | null {
     workMode,
     employmentType,
     contentHash,
+    postingId: String(id),
   }
+}
+
+/**
+ * Enrich a bounded subset of jobs with descriptions from the per-posting
+ * detail endpoint. Mutates the array in place. Most recent jobs first.
+ */
+async function enrichDescriptions(
+  slug: string,
+  jobs: SRMapped[],
+  ctx: HarvestCtx
+): Promise<void> {
+  if (DETAIL_MAX_JOBS === 0) return
+  const targets = jobs
+    .filter((j) => !j.description || j.description.length < 300)
+    .slice(0, DETAIL_MAX_JOBS)
+  if (targets.length === 0) return
+
+  const limiter = pLimit(DETAIL_CONCURRENCY)
+  await Promise.all(
+    targets.map((job) =>
+      limiter(async () => {
+        const detail = await conditionalFetchJson<SRPosting>(detailUrl(slug, job.postingId), {
+          ...ctx,
+          etag: null,
+          lastModified: null,
+        })
+        if (detail.kind !== "ok" || !detail.data) return
+        const desc = buildDescription(detail.data.jobAd)
+        if (!desc || desc.length <= (job.description?.length ?? 0)) return
+        job.description = desc
+        job.contentHash = hashContent([
+          job.title,
+          job.applyUrl,
+          job.location,
+          job.postedAt,
+          job.workMode,
+          job.employmentType,
+          desc.slice(0, 4_000),
+        ])
+      })
+    )
+  )
 }
 
 async function fetchSingle(
@@ -181,7 +241,7 @@ export const smartrecruitersAdapter: AtsAdapter = {
       throw err
     }
 
-    const jobs: HarvestedJob[] = []
+    const jobs: SRMapped[] = []
     const collect = (postings: SRPosting[] | undefined) => {
       for (const raw of postings ?? []) {
         const mapped = mapRawJob(slug, raw)
@@ -209,8 +269,16 @@ export const smartrecruitersAdapter: AtsAdapter = {
       offset += PAGE_LIMIT
     }
 
+    const enrichStarted = Date.now()
+    await enrichDescriptions(slug, jobs, ctx)
+    upstreamLatency += Date.now() - enrichStarted
+
+    // Strip the internal postingId field before returning — it's not part
+    // of the HarvestedJob contract.
+    const out: HarvestedJob[] = jobs.map(({ postingId: _postingId, ...rest }) => rest)
+
     return {
-      jobs,
+      jobs: out,
       notModified: false,
       etag: first.etag,
       lastModified: first.lastModified,
