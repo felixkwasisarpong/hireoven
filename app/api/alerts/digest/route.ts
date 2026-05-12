@@ -46,7 +46,7 @@ function matchesAlert(alert: JobAlert, job: Job): boolean {
   return true
 }
 
-function jobCard(job: JobEmailRow): string {
+function jobCard(job: JobEmailRow, matchScore?: number | null): string {
   const salary =
     job.salary_min && job.salary_max
       ? `$${Math.round(job.salary_min / 1000)}k–$${Math.round(job.salary_max / 1000)}k`
@@ -68,6 +68,11 @@ function jobCard(job: JobEmailRow): string {
        </td>`
     : ""
 
+  const scoreBadge =
+    typeof matchScore === "number"
+      ? `<span style="display:inline-block;margin-top:6px;padding:3px 8px;border-radius:999px;border:1px solid #bae6fd;background:#f0f9ff;color:#0369a1;font-size:11px;font-weight:700;">${matchScore}% match</span>`
+      : ""
+
   const href = getHireovenJobDetailUrl(job.id)
   return `
     <tr>
@@ -78,6 +83,7 @@ function jobCard(job: JobEmailRow): string {
         </a>
         <div style="font-size:13px;color:#64748b;margin-top:2px;">${job.company_name ?? ""}</div>
         ${tags ? `<div style="font-size:12px;color:#94a3b8;margin-top:4px;">${tags}</div>` : ""}
+        ${scoreBadge}
       </td>
     </tr>`
 }
@@ -86,7 +92,8 @@ function buildDigestEmail(
   profile: Pick<Profile, "full_name" | "email">,
   sections: Array<{ alertName: string; jobs: Array<JobEmailRow> }>,
   totalCount: number,
-  windowLabel: string
+  windowLabel: string,
+  scoresByJobId?: Map<string, number>,
 ): string {
   const base = getBaseUrl()
   const name = profile.full_name?.split(" ")[0] ?? "there"
@@ -100,7 +107,7 @@ function buildDigestEmail(
           ${alertName}
         </div>
       </td></tr>
-      ${jobs.map(jobCard).join("")}`
+      ${jobs.map((job) => jobCard(job, scoresByJobId?.get(job.id))).join("")}`
     )
     .join("")
 
@@ -227,12 +234,33 @@ export async function GET(request: NextRequest) {
 
     if (!sections.length) continue
 
+    // Pull this user's cached match scores for the jobs we're about to
+    // include. Bounded by sections × 5 jobs = ~tens at most, so a single
+    // small query per user is cheap.
+    const allJobIds = sections.flatMap((s) => s.jobs.map((j) => j.id))
+    const scoresByJobId = new Map<string, number>()
+    if (allJobIds.length > 0) {
+      try {
+        const scoresResult = await pool.query<{ job_id: string; overall_score: number }>(
+          `SELECT job_id, overall_score
+           FROM job_match_scores
+           WHERE user_id = $1 AND job_id = ANY($2::uuid[])`,
+          [user.id, allJobIds],
+        )
+        for (const row of scoresResult.rows) {
+          scoresByJobId.set(row.job_id, row.overall_score)
+        }
+      } catch {
+        // Non-fatal — email still renders without score badges
+      }
+    }
+
     try {
       await resend.emails.send({
         from: getAlertsFromEmail(),
         to: user.email!,
         subject: `Your daily job digest - ${totalCount} new match${totalCount === 1 ? "" : "es"}`,
-        html: buildDigestEmail(user, sections, totalCount, "today"),
+        html: buildDigestEmail(user, sections, totalCount, "today", scoresByJobId),
       })
       sent++
     } catch {

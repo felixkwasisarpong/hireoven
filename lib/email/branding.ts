@@ -19,15 +19,20 @@ function getEmailBaseUrl(): string {
 
 /**
  * Returns an absolute URL for the Hireoven logo image suitable for use in
- * the <img src> of an email header. Tries the wordmark first (works on
- * white backgrounds); accepts a `variant` override for dark headers.
+ * an email header. Defaults to the text/wordmark — the cleanest read on
+ * the dark-blue email header. Accepts a `variant` override for icon-only
+ * or the older combined header lockup.
  */
-export function getHireovenEmailLogoUrl(variant: "wordmark" | "icon" = "wordmark"): string {
+export function getHireovenEmailLogoUrl(
+  variant: "wordmark" | "icon" | "header" = "wordmark",
+): string {
   const base = getEmailBaseUrl()
   const path =
     variant === "icon"
       ? "/brand/hireoven-icon-256.png"
-      : "/brand/hireoven-logo-header-transparent.png"
+      : variant === "header"
+        ? "/brand/hireoven-logo-header-transparent.png"
+        : "/brand/hireoven-wordmark-transparent.png"
   return `${base}${path}`
 }
 

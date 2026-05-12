@@ -45,7 +45,7 @@ function matchesAlert(alert: JobAlert, job: Job): boolean {
   return true
 }
 
-function jobRow(job: JobEmailRow): string {
+function jobRow(job: JobEmailRow, matchScore?: number | null): string {
   const salary =
     job.salary_min && job.salary_max
       ? `$${Math.round(job.salary_min / 1000)}k–$${Math.round(job.salary_max / 1000)}k`
@@ -64,12 +64,18 @@ function jobRow(job: JobEmailRow): string {
        </td>`
     : ""
 
+  const scoreBadge =
+    typeof matchScore === "number"
+      ? `<span style="display:inline-block;margin-top:4px;padding:3px 8px;border-radius:999px;border:1px solid #bae6fd;background:#f0f9ff;color:#0369a1;font-size:11px;font-weight:700;">${matchScore}% match</span>`
+      : ""
+
   const href = getHireovenJobDetailUrl(job.id)
   return `<tr>
     ${logoCell}
     <td style="padding:12px 0;border-bottom:1px solid #f1f5f9;">
       <a href="${href}" style="font-size:14px;font-weight:600;color:#0369A1;text-decoration:none;">${job.title}</a>
       <div style="font-size:12px;color:#64748b;margin-top:2px;">${job.company_name ?? ""} ${meta ? `· ${meta}` : ""}</div>
+      ${scoreBadge}
     </td></tr>`
 }
 
@@ -77,7 +83,8 @@ function buildWeeklyEmail(
   profile: Pick<Profile, "full_name" | "email">,
   sections: Array<{ alertName: string; jobs: Array<JobEmailRow> }>,
   totalCount: number,
-  platformStats: { totalNewJobs: number; topCompanies: string[]; newCompanies: number }
+  platformStats: { totalNewJobs: number; topCompanies: string[]; newCompanies: number },
+  scoresByJobId?: Map<string, number>,
 ): string {
   const base = getBaseUrl()
   const name = profile.full_name?.split(" ")[0] ?? "there"
@@ -94,7 +101,7 @@ function buildWeeklyEmail(
       <tr><td style="padding:18px 0 6px;">
         <div style="font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#94a3b8;">${alertName}</div>
       </td></tr>
-      ${jobs.map(jobRow).join("")}`)
+      ${jobs.map((job) => jobRow(job, scoresByJobId?.get(job.id))).join("")}`)
     .join("")
 
   return `<!DOCTYPE html>
@@ -260,12 +267,31 @@ export async function GET(request: NextRequest) {
 
     if (!sections.length) continue
 
+    // Per-user cached match scores for the jobs in this email.
+    const allJobIds = sections.flatMap((s) => s.jobs.map((j) => j.id))
+    const scoresByJobId = new Map<string, number>()
+    if (allJobIds.length > 0) {
+      try {
+        const scoresResult = await pool.query<{ job_id: string; overall_score: number }>(
+          `SELECT job_id, overall_score
+           FROM job_match_scores
+           WHERE user_id = $1 AND job_id = ANY($2::uuid[])`,
+          [user.id, allJobIds],
+        )
+        for (const row of scoresResult.rows) {
+          scoresByJobId.set(row.job_id, row.overall_score)
+        }
+      } catch {
+        // Non-fatal — email still renders without score badges
+      }
+    }
+
     try {
       await resend.emails.send({
         from: getAlertsFromEmail(),
         to: user.email!,
         subject: `Your weekly job digest - ${totalCount} new match${totalCount === 1 ? "" : "es"} this week`,
-        html: buildWeeklyEmail(user, sections, totalCount, platformStats),
+        html: buildWeeklyEmail(user, sections, totalCount, platformStats, scoresByJobId),
       })
       sent++
     } catch {
