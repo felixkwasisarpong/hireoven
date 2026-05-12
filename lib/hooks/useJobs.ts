@@ -319,10 +319,16 @@ export function useJobs(
     setAllJobsState(jobs)
   }
 
-  const jobs = useMemo(
-    () => allJobs.slice(0, visibleCount),
-    [allJobs, visibleCount]
-  )
+  /**
+   * Apply client-side sort here (not at fetch time) so changing `filters.sort`
+   * between non-personalized options re-orders the list instantly without a
+   * round-trip. Personalized mode keeps the server-blended order from
+   * `/api/match/feed`.
+   */
+  const jobs = useMemo(() => {
+    const ordered = personalized ? allJobs : sortJobs(allJobs, filters, searchQuery)
+    return ordered.slice(0, visibleCount)
+  }, [allJobs, visibleCount, personalized, filters, searchQuery])
 
   const fetchChunk = useCallback(
     async (offset: number) => {
@@ -456,10 +462,15 @@ export function useJobs(
                 collection.findIndex((item) => item.id === job.id) === index
             )
 
-            nextRows = personalized ? merged : sortJobs(merged, filters, searchQuery)
+            // Client-side sorting is applied in the `jobs` memo, so the merged
+            // list here can stay unsorted — pagination order is reapplied
+            // before render anyway.
+            nextRows = merged
 
-            // Fast first paint: after a filter/reset, render the first chunk immediately
-            // instead of waiting for additional chunk fetches to complete.
+            // Fast first paint: after a filter/reset, swap the list to the first
+            // chunk immediately instead of waiting for additional chunks. We do
+            // *not* clear allJobs before the fetch (see `refresh`), so until this
+            // line runs the user keeps seeing the previous results.
             if (reset && chunksFetched === 1) {
               setAllJobs(nextRows)
               setVisibleCount(Math.min(targetVisible, nextRows.length))
@@ -509,9 +520,10 @@ export function useJobs(
   const refresh = useCallback(async () => {
     offsetRef.current = 0
     exhaustedRef.current = false
-    setAllJobs([])
-    setVisibleCount(PAGE_SIZE)
     setHasMore(true)
+    // Keep the previous list visible while the new fetch runs so filter/sort
+    // changes don't flash an empty skeleton — `ensureVisibleJobs` atomically
+    // replaces the list when the first chunk lands.
     await ensureVisibleJobs(PAGE_SIZE, true)
   }, [ensureVisibleJobs])
 
