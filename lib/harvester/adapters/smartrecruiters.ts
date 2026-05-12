@@ -1,0 +1,223 @@
+import {
+  conditionalFetchJson,
+  hashContent,
+  type AtsAdapter,
+  type HarvestCtx,
+  type HarvestResult,
+  type HarvestedJob,
+} from "@/lib/harvester/adapters/_base"
+
+/**
+ * SmartRecruiters public posting API.
+ * https://api.smartrecruiters.com/v1/companies/{slug}/postings?offset=N&limit=100
+ *
+ * Pagination via offset/limit; descriptions sometimes inline under
+ * `jobAd.sections.jobDescription.text`, otherwise undefined (detail fetch is a
+ * potential future addition).
+ */
+
+const PAGE_LIMIT = 100
+const MAX_PAGES = 20
+
+type SRSection = { text?: string }
+
+type SRJobAd = {
+  sections?: {
+    companyDescription?: SRSection
+    jobDescription?: SRSection
+    qualifications?: SRSection
+    additionalInformation?: SRSection
+  }
+}
+
+type SRLocation = {
+  city?: string
+  region?: string
+  country?: string
+  remote?: boolean
+  fullLocation?: string
+}
+
+type SRPosting = {
+  id?: string
+  refNumber?: string
+  name?: string
+  uuid?: string
+  location?: SRLocation
+  releasedDate?: string
+  createdOn?: string
+  updatedOn?: string
+  typeOfEmployment?: { id?: string; label?: string }
+  experienceLevel?: { id?: string; label?: string }
+  customField?: Array<{ fieldId?: string; fieldLabel?: string; valueId?: string; valueLabel?: string }>
+  jobAd?: SRJobAd
+  ref?: string
+  postingUrl?: string
+  company?: { identifier?: string }
+}
+
+type SRPostingsResponse = {
+  offset?: number
+  limit?: number
+  totalFound?: number
+  content?: SRPosting[]
+}
+
+function listingUrl(slug: string, offset: number): string {
+  const safe = encodeURIComponent(slug)
+  return `https://api.smartrecruiters.com/v1/companies/${safe}/postings?offset=${offset}&limit=${PAGE_LIMIT}`
+}
+
+function detectFromUrl(url: string): { slug: string } | null {
+  let parsed: URL
+  try {
+    parsed = new URL(url)
+  } catch {
+    return null
+  }
+  const host = parsed.hostname.toLowerCase()
+  if (host !== "jobs.smartrecruiters.com" && host !== "careers.smartrecruiters.com") return null
+  const slug = parsed.pathname.split("/").filter(Boolean)[0]
+  if (!slug) return null
+  if (!/^[a-z0-9][a-z0-9_-]*$/i.test(slug)) return null
+  return { slug }
+}
+
+function flattenLocation(loc: SRLocation | undefined): string | undefined {
+  if (!loc) return undefined
+  if (loc.fullLocation?.trim()) return loc.fullLocation.trim()
+  const parts = [loc.city, loc.region, loc.country].map((p) => p?.trim()).filter(Boolean)
+  if (parts.length) return parts.join(", ")
+  return undefined
+}
+
+function buildDescription(jobAd: SRJobAd | undefined): string | undefined {
+  if (!jobAd?.sections) return undefined
+  const segments = [
+    jobAd.sections.companyDescription?.text,
+    jobAd.sections.jobDescription?.text,
+    jobAd.sections.qualifications?.text,
+    jobAd.sections.additionalInformation?.text,
+  ]
+    .map((text) => text?.trim())
+    .filter((text): text is string => Boolean(text))
+  if (segments.length === 0) return undefined
+  return segments.join("\n\n")
+}
+
+function publicApplyUrl(slug: string, postingId: string | undefined): string {
+  return `https://jobs.smartrecruiters.com/${encodeURIComponent(slug)}/${encodeURIComponent(postingId ?? "")}`
+}
+
+function mapRawJob(slug: string, raw: SRPosting): HarvestedJob | null {
+  const id = raw.id ?? raw.uuid ?? raw.refNumber ?? raw.ref
+  if (!id || !raw.name) return null
+
+  const applyUrl = raw.postingUrl?.trim() || publicApplyUrl(slug, id)
+  const description = buildDescription(raw.jobAd)
+  const location = flattenLocation(raw.location)
+  const postedAt = raw.releasedDate ?? raw.createdOn ?? raw.updatedOn ?? undefined
+  const employmentType = raw.typeOfEmployment?.label ?? raw.typeOfEmployment?.id ?? undefined
+  const workMode = raw.location?.remote ? "remote" : undefined
+
+  const contentHash = hashContent([
+    raw.name,
+    applyUrl,
+    location,
+    postedAt,
+    workMode,
+    employmentType,
+    description?.slice(0, 4_000),
+  ])
+
+  return {
+    externalId: `smartrecruiters:${id}`,
+    title: raw.name.trim(),
+    applyUrl,
+    description,
+    location,
+    postedAt,
+    workMode,
+    employmentType,
+    contentHash,
+  }
+}
+
+async function fetchSingle(
+  slug: string,
+  offset: number,
+  ctx: HarvestCtx
+): ReturnType<typeof conditionalFetchJson<SRPostingsResponse>> {
+  return conditionalFetchJson<SRPostingsResponse>(listingUrl(slug, offset), ctx)
+}
+
+export const smartrecruitersAdapter: AtsAdapter = {
+  name: "smartrecruiters",
+  // Paginated, ~600ms per page; lower cap to avoid hitting their rate limits.
+  concurrency: 6,
+  detectFromUrl,
+  async fetchJobs({ slug, ctx }): Promise<HarvestResult> {
+    const fetchedAt = new Date()
+
+    // Page 1 carries the conditional headers — change to any posting almost
+    // always reorders/touches the first page, so 304 on page 1 lets us skip.
+    const first = await fetchSingle(slug, 0, ctx)
+
+    if (first.kind === "not_modified") {
+      return {
+        jobs: [],
+        notModified: true,
+        etag: first.etag,
+        lastModified: first.lastModified,
+        sourceAts: "smartrecruiters",
+        sourceAtsSlug: slug,
+        fetchedAt,
+        upstreamLatencyMs: first.upstreamLatencyMs,
+      }
+    }
+    if (first.kind === "error") {
+      const err = new Error(`smartrecruiters fetch failed: ${first.reason}`)
+      ;(err as Error & { status?: number | null }).status = first.status
+      throw err
+    }
+
+    const jobs: HarvestedJob[] = []
+    const collect = (postings: SRPosting[] | undefined) => {
+      for (const raw of postings ?? []) {
+        const mapped = mapRawJob(slug, raw)
+        if (mapped) jobs.push(mapped)
+      }
+    }
+
+    collect(first.data?.content)
+    const totalFound = first.data?.totalFound ?? jobs.length
+    let upstreamLatency = first.upstreamLatencyMs
+
+    let offset = PAGE_LIMIT
+    let pageCount = 1
+    while (offset < totalFound && pageCount < MAX_PAGES) {
+      const next = await fetchSingle(slug, offset, {
+        ...ctx,
+        etag: null,
+        lastModified: null,
+      })
+      pageCount += 1
+      if (next.kind !== "ok") break
+      collect(next.data?.content)
+      upstreamLatency += next.upstreamLatencyMs
+      if ((next.data?.content?.length ?? 0) === 0) break
+      offset += PAGE_LIMIT
+    }
+
+    return {
+      jobs,
+      notModified: false,
+      etag: first.etag,
+      lastModified: first.lastModified,
+      sourceAts: "smartrecruiters",
+      sourceAtsSlug: slug,
+      fetchedAt,
+      upstreamLatencyMs: upstreamLatency,
+    }
+  },
+}

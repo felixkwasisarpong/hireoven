@@ -11,6 +11,11 @@ import {
 import { persistCrawlJobs } from "@/lib/crawler/persist"
 import { requireCronAuth } from "@/lib/env"
 import { getPostgresPool } from "@/lib/postgres/server"
+import {
+  harvesterFlagEnabled,
+  runAtsHarvest,
+  type AtsHarvestCompany,
+} from "@/lib/harvester/run-harvest"
 
 const MAX_COMPANY_ATTEMPTS = Math.max(
   1,
@@ -203,6 +208,9 @@ export async function GET(request: NextRequest) {
       job_count: number | null
       domain: string | null
       raw_ats_config: Record<string, unknown> | null
+      etag: string | null
+      last_modified: string | null
+      freshness_tier: string | null
     }> = []
     try {
       const companyResult = await pool.query<{
@@ -215,9 +223,12 @@ export async function GET(request: NextRequest) {
         job_count: number | null
         domain: string | null
         raw_ats_config: Record<string, unknown> | null
+        etag: string | null
+        last_modified: string | null
+        freshness_tier: string | null
       }>(
         `SELECT id, name, careers_url, last_crawled_at, ats_type, ats_identifier, job_count,
-                domain, raw_ats_config
+                domain, raw_ats_config, etag, last_modified, freshness_tier
          FROM companies
          WHERE is_active = true
          ORDER BY last_crawled_at ASC NULLS FIRST`
@@ -250,9 +261,49 @@ export async function GET(request: NextRequest) {
     }
 
     const limitCompany = pLimit(CRAWLER_COMPANY_CONCURRENCY)
+    const useNewHarvester = harvesterFlagEnabled()
     const results = await Promise.all(
       companies.map((company) => limitCompany(async () => {
         const companyStartedAt = Date.now()
+
+        if (useNewHarvester) {
+          const harvestCompany: AtsHarvestCompany = {
+            id: company.id,
+            name: company.name,
+            careers_url: company.careers_url,
+            domain: company.domain,
+            ats_type: company.ats_type,
+            raw_ats_config: company.raw_ats_config,
+            etag: company.etag,
+            last_modified: company.last_modified,
+            freshness_tier: company.freshness_tier,
+          }
+          const outcome = await runAtsHarvest({ pool, company: harvestCompany })
+          if (outcome.matched) {
+            void insertCrawlLogSafe(`[crawl:new-${outcome.adapter}]`, {
+              companyId: company.id,
+              status: outcome.status,
+              jobsFound: outcome.jobsFound,
+              newJobs: outcome.newJobs,
+              durationMs: outcome.durationMs,
+              crawledAtIso: outcome.crawledAtIso,
+              errorMessage: outcome.notModified
+                ? `not_modified (upstream ${outcome.upstreamLatencyMs}ms)`
+                : outcome.errorMessage,
+            })
+            return {
+              status: outcome.status === "failed" ? ("rejected" as const) : ("fulfilled" as const),
+              crawlStatus: outcome.status,
+              companyId: company.id,
+              jobsFound: outcome.jobsFound,
+              newJobs: outcome.newJobs,
+              durationMs: outcome.durationMs,
+              ...(outcome.errorMessage ? { error: outcome.errorMessage } : {}),
+            }
+          }
+          // adapter didn't match this company — fall through to legacy crawl path
+        }
+
         const target: CrawlTarget = {
           id: company.id,
           companyName: company.name,
