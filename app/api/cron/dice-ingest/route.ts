@@ -12,17 +12,27 @@
  */
 
 import { NextRequest, NextResponse } from "next/server"
+import pLimit from "p-limit"
 import { requireCronAuth } from "@/lib/env"
 import { getPostgresPool } from "@/lib/postgres/server"
 import {
   searchDiceAllPages,
   parseDiceSalary,
   parseDiceWorkMode,
+  fetchDiceJobDescription,
   type DiceJob,
 } from "@/lib/sources/dice"
 
 export const runtime = "nodejs"
 export const maxDuration = 300
+
+// Cap per-run detail enrichments to stay under the 5-min Vercel limit.
+// At pLimit(3) × ~1s per fetch, 400 ≈ 130s of network — leaves ample budget
+// for the search/upsert phases. Existing rows with long descriptions are
+// skipped so each run prioritises freshly-ingested or stale entries.
+const DICE_ENRICH_CONCURRENCY = Number(process.env.DICE_ENRICH_CONCURRENCY ?? "3")
+const DICE_ENRICH_MAX_PER_RUN = Number(process.env.DICE_ENRICH_MAX_PER_RUN ?? "400")
+const DICE_ENRICH_STALE_LENGTH = 800
 
 const DEFAULT_QUERIES = [
   "software engineer",
@@ -58,7 +68,10 @@ export async function GET(request: NextRequest) {
   const maxJobs = Number(url.searchParams.get("maxJobs") ?? process.env.DICE_MAX_JOBS ?? "300")
 
   const pool = getPostgresPool()
-  const stats = { queries: 0, fetched: 0, inserted: 0, updated: 0, errors: 0 }
+  const stats: Record<string, number> = {
+    queries: 0, fetched: 0, inserted: 0, updated: 0, errors: 0,
+    enrichmentAttempted: 0, enriched: 0, enrichFail: 0,
+  }
 
   // Dedupe across queries by Dice job ID
   const seen = new Map<string, DiceJob>()
@@ -128,13 +141,58 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // Bulk-check which external_ids already exist
+  // Bulk-check which external_ids already exist + how long their stored
+  // description is. We use the length to decide whether to spend a detail
+  // fetch on enrichment.
   const allExternalIds = [...seen.values()].map((j) => `dice:${j.id}`)
-  const existingRows = await pool.query<{ id: string; external_id: string }>(
-    `SELECT id, external_id FROM jobs WHERE external_id = ANY($1)`,
+  const existingRows = await pool.query<{ id: string; external_id: string; desc_len: number }>(
+    `SELECT id, external_id, COALESCE(length(description), 0) AS desc_len
+     FROM jobs WHERE external_id = ANY($1)`,
     [allExternalIds]
   )
-  const existingByExtId = new Map(existingRows.rows.map((r) => [r.external_id, r.id]))
+  const existingByExtId = new Map(
+    existingRows.rows.map((r) => [r.external_id, { id: r.id, descLen: r.desc_len }])
+  )
+
+  // Phase-2 enrichment: fetch full descriptions for net-new jobs and jobs
+  // whose stored description is still summary-length. Cap per-run to keep
+  // the cron under maxDuration.
+  const enrichmentTargets: DiceJob[] = []
+  for (const job of seen.values()) {
+    const existing = existingByExtId.get(`dice:${job.id}`)
+    if (!existing || existing.descLen < DICE_ENRICH_STALE_LENGTH) {
+      enrichmentTargets.push(job)
+      if (enrichmentTargets.length >= DICE_ENRICH_MAX_PER_RUN) break
+    }
+  }
+
+  const enrichedDescriptions = new Map<string, string>()
+  let enrichOk = 0
+  let enrichFail = 0
+  if (enrichmentTargets.length > 0) {
+    const limit = pLimit(DICE_ENRICH_CONCURRENCY)
+    await Promise.all(
+      enrichmentTargets.map((job) =>
+        limit(async () => {
+          const detail = job.applyUrl.startsWith("https://www.dice.com/job-detail/")
+            ? job.applyUrl
+            : `https://www.dice.com/job-detail/${job.id}`
+          const fullDescription = await fetchDiceJobDescription(detail)
+          if (fullDescription && fullDescription.length > job.summary.length) {
+            enrichedDescriptions.set(job.id, fullDescription)
+            enrichOk++
+          } else {
+            enrichFail++
+          }
+        })
+      )
+    )
+  }
+  Object.assign(stats, {
+    enrichmentAttempted: enrichmentTargets.length,
+    enriched: enrichOk,
+    enrichFail,
+  })
 
   // Insert new + update existing
   for (const job of seen.values()) {
@@ -148,21 +206,44 @@ export async function GET(request: NextRequest) {
     const rawData = JSON.stringify({ source: "dice", diceId: job.id, workFromHome: job.workFromHome, easyApply: job.easyApply })
     const firstDetected = job.postedDate ? new Date(job.postedDate).toISOString() : new Date().toISOString()
 
-    const existingId = existingByExtId.get(externalId)
+    const existing = existingByExtId.get(externalId)
+    // Prefer the enriched JD when we have one; otherwise fall back to the
+    // search-result summary. When updating an existing row, never shrink an
+    // already-longer description we may have previously enriched.
+    const enriched = enrichedDescriptions.get(job.id)
+    const candidateDescription = enriched ?? job.summary
+    const description = existing && existing.descLen > candidateDescription.length
+      ? null  // keep what's there
+      : candidateDescription
 
     try {
-      if (existingId) {
-        await pool.query(
-          `UPDATE jobs SET
-             title=$1, location=$2, is_remote=$3, is_hybrid=$4,
-             employment_type=$5, description=$6, salary_min=$7,
-             salary_max=$8, salary_currency=$9, is_active=true,
-             last_seen_at=NOW(), updated_at=NOW(), raw_data=$10
-           WHERE id=$11`,
-          [job.title, job.location, isRemote, isHybrid, employmentType,
-           job.summary, salaryMin ?? null, salaryMax ?? null, currency,
-           rawData, existingId]
-        )
+      if (existing) {
+        if (description === null) {
+          // No description change needed; refresh the other fields only.
+          await pool.query(
+            `UPDATE jobs SET
+               title=$1, location=$2, is_remote=$3, is_hybrid=$4,
+               employment_type=$5, salary_min=$6, salary_max=$7,
+               salary_currency=$8, is_active=true,
+               last_seen_at=NOW(), updated_at=NOW(), raw_data=$9
+             WHERE id=$10`,
+            [job.title, job.location, isRemote, isHybrid, employmentType,
+             salaryMin ?? null, salaryMax ?? null, currency,
+             rawData, existing.id]
+          )
+        } else {
+          await pool.query(
+            `UPDATE jobs SET
+               title=$1, location=$2, is_remote=$3, is_hybrid=$4,
+               employment_type=$5, description=$6, salary_min=$7,
+               salary_max=$8, salary_currency=$9, is_active=true,
+               last_seen_at=NOW(), updated_at=NOW(), raw_data=$10
+             WHERE id=$11`,
+            [job.title, job.location, isRemote, isHybrid, employmentType,
+             description, salaryMin ?? null, salaryMax ?? null, currency,
+             rawData, existing.id]
+          )
+        }
         stats.updated++
       } else {
         await pool.query(
@@ -177,7 +258,7 @@ export async function GET(request: NextRequest) {
              true, NOW(), $13, NOW(), NOW(), $14
            )`,
           [companyId, job.title, job.location, isRemote, isHybrid,
-           employmentType, job.summary, job.applyUrl, externalId,
+           employmentType, candidateDescription, job.applyUrl, externalId,
            salaryMin ?? null, salaryMax ?? null, currency,
            firstDetected, rawData]
         )

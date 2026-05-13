@@ -179,3 +179,84 @@ export function parseDiceWorkMode(wfh: DiceJob["workFromHome"]): {
     isHybrid: wfh === "PARTIAL",
   }
 }
+
+// ── Full description enrichment ───────────────────────────────────────────────
+// The Dice search API only returns a ~500-char `summary`. The full job
+// description lives on the detail page as a JSON-LD JobPosting blob. Fetch it
+// on demand and strip HTML.
+
+const DICE_DETAIL_TIMEOUT_MS = 10_000
+const DICE_DETAIL_UA =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " +
+  "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+
+export type FetchDiceDescriptionOptions = {
+  timeoutMs?: number
+  fetchImpl?: typeof fetch
+}
+
+export async function fetchDiceJobDescription(
+  detailsPageUrl: string,
+  opts: FetchDiceDescriptionOptions = {}
+): Promise<string | null> {
+  const doFetch = opts.fetchImpl ?? fetch
+  const timeoutMs = Math.max(1_000, opts.timeoutMs ?? DICE_DETAIL_TIMEOUT_MS)
+
+  try {
+    const response = await doFetch(detailsPageUrl, {
+      headers: {
+        Accept: "text/html,application/xhtml+xml",
+        "User-Agent": DICE_DETAIL_UA,
+        Referer: "https://www.dice.com/",
+      },
+      signal: AbortSignal.timeout(timeoutMs),
+    })
+    if (!response.ok) return null
+    const html = await response.text()
+    return extractJobPostingDescription(html)
+  } catch {
+    return null
+  }
+}
+
+const JSON_LD_RE =
+  /<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi
+
+function extractJobPostingDescription(html: string): string | null {
+  let m: RegExpExecArray | null
+  // Reset state for the global regex on every call.
+  JSON_LD_RE.lastIndex = 0
+  while ((m = JSON_LD_RE.exec(html)) !== null) {
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(m[1].trim())
+    } catch {
+      continue
+    }
+    const nodes = Array.isArray(parsed) ? parsed : [parsed]
+    for (const node of nodes) {
+      if (!node || typeof node !== "object") continue
+      const obj = node as Record<string, unknown>
+      if (obj["@type"] !== "JobPosting") continue
+      const desc = typeof obj.description === "string" ? obj.description : null
+      if (!desc) continue
+      const text = stripHtmlEntities(desc)
+      if (text && text.length > 0) return text
+    }
+  }
+  return null
+}
+
+function stripHtmlEntities(value: string): string {
+  return value
+    .replace(/<\/(p|div|li|br|h[1-6])>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/\s+/g, " ")
+    .trim()
+}
