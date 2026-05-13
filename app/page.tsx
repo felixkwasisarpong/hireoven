@@ -314,6 +314,34 @@ export default async function HomePage() {
         </div>
       </section>
 
+      {/* ── Chrome extension launch ribbon ─────────────────────────────── */}
+      <section className="border-y border-slate-100 bg-white px-6 py-8">
+        <Link
+          href="/extension"
+          className="group mx-auto flex max-w-5xl flex-col items-center gap-3 rounded-3xl border border-slate-200/70 bg-gradient-to-br from-[#0C0A1E] via-[#16102e] to-[#1a0a2e] p-6 transition hover:border-[#FF5C18]/40 sm:flex-row sm:gap-5 sm:p-5"
+        >
+          <span
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-lg"
+            style={{ background: "linear-gradient(135deg,#FF5C18,#FF9A3C)" }}
+            aria-hidden
+          >
+            🧩
+          </span>
+          <div className="min-w-0 flex-1 text-center sm:text-left">
+            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#FF9A3C]">
+              New · now on the Chrome Web Store
+            </p>
+            <p className="mt-1 text-[15px] font-semibold text-white">
+              Match score + autofill on every job posting — free Chrome extension.
+            </p>
+          </div>
+          <span className="inline-flex items-center gap-1.5 rounded-xl bg-white px-4 py-2 text-[13px] font-bold text-slate-900 transition group-hover:bg-[#FF5C18] group-hover:text-white">
+            Get the extension
+            <ArrowRight className="h-3.5 w-3.5" />
+          </span>
+        </Link>
+      </section>
+
       {/* ── Core features ───────────────────────────────────────────────── */}
       <section className="relative overflow-hidden px-6 py-24"
         style={{ background: "linear-gradient(160deg,#FFF8F4 0%,#F9F8FF 45%,#F4F8FF 100%)" }}>
