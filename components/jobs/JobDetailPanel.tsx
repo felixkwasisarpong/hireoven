@@ -39,6 +39,7 @@ import {
   saveJobToPipeline,
 } from "@/lib/applications/save-job-client"
 import { isKnownAtsApplyUrl } from "@/lib/jobs/apply-cta"
+import { jobSourceFallbackLogo } from "@/lib/jobs/source-fallback-logo"
 import { useToast } from "@/components/ui/ToastProvider"
 import { cn } from "@/lib/utils"
 import { normalizeSkillList } from "@/lib/skills/taxonomy"
@@ -225,10 +226,15 @@ export default function JobDetailPanel({
     if (saving || saved) return
     setSaving(true)
     try {
+      const sourceFallback = jobSourceFallbackLogo(
+        job,
+        job.company?.domain ?? null,
+        job.company?.logo_url ?? null
+      )
       const result = await saveJobToPipeline({
         jobId: job.id,
         companyName: job.company?.name ?? "Company",
-        companyLogoUrl: job.company?.logo_url ?? null,
+        companyLogoUrl: sourceFallback?.logoUrl ?? job.company?.logo_url ?? null,
         jobTitle: displayTitle,
         applyUrl,
         matchScore: overall,

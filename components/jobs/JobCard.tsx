@@ -30,6 +30,7 @@ import { FairChanceBadge } from "@/components/background-check/FairChanceBadge"
 import { CohortBadge } from "@/components/cohorts/CohortBadge"
 import { useToast } from "@/components/ui/ToastProvider"
 import { buildJobCardFactList, buildJobEvidenceFacts } from "@/lib/jobs/job-evidence-facts"
+import { jobSourceFallbackLogo } from "@/lib/jobs/source-fallback-logo"
 import { cn } from "@/lib/utils"
 import type { JobMatchScore, JobWithCompany, JobWithMatchScore } from "@/types"
 
@@ -132,8 +133,11 @@ export default function JobCard({
   const score = resolvedMatchScore?.overall_score ?? null
 
   const companyName = job.company?.name ?? "Unknown company"
-  const companyDomain = job.company?.domain ?? null
-  const companyLogoUrl = job.company?.logo_url ?? null
+  const rawCompanyDomain = job.company?.domain ?? null
+  const rawCompanyLogoUrl = job.company?.logo_url ?? null
+  const sourceFallback = jobSourceFallbackLogo(job, rawCompanyDomain, rawCompanyLogoUrl)
+  const companyDomain = sourceFallback?.domain ?? rawCompanyDomain
+  const companyLogoUrl = sourceFallback?.logoUrl ?? rawCompanyLogoUrl
   const companyProfileHref = job.company?.id ? `/companies/${job.company.id}` : null
   const companyConf = job.company?.sponsorship_confidence ?? 0
 

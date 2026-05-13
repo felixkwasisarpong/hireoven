@@ -37,6 +37,7 @@ import {
   saveJobToPipeline,
 } from "@/lib/applications/save-job-client"
 import { getApplyCtaLabel, isKnownAtsApplyUrl } from "@/lib/jobs/apply-cta"
+import { jobSourceFallbackLogo } from "@/lib/jobs/source-fallback-logo"
 import { cn } from "@/lib/utils"
 import type { JobMatchScore, JobWithCompany, JobWithMatchScore } from "@/types"
 
@@ -106,8 +107,11 @@ export default function JobListRow({
     : { title: job.title, location: job.location ?? null, salary_label: null, employment_label: null, seniority_label: null, preview_description: null, skills: [], skill_groups: { programmingLanguages:[], frameworks:[], cloud:[], databases:[], devops:[], aiMl:[], data:[], security:[], engineering:[], testing:[], networking:[], media:[], healthcare:[], science:[], softSkills:[] }, sponsorship_badge: null, visa_card_label: null, show_visa_drawer: false }
   const displayTitle = cardView.title
   const companyName = job.company?.name ?? "Unknown company"
-  const companyDomain = job.company?.domain ?? null
-  const companyLogoUrl = job.company?.logo_url ?? null
+  const rawCompanyDomain = job.company?.domain ?? null
+  const rawCompanyLogoUrl = job.company?.logo_url ?? null
+  const sourceFallback = jobSourceFallbackLogo(job, rawCompanyDomain, rawCompanyLogoUrl)
+  const companyDomain = sourceFallback?.domain ?? rawCompanyDomain
+  const companyLogoUrl = sourceFallback?.logoUrl ?? rawCompanyLogoUrl
   const companyHref = job.company?.id ? `/companies/${job.company.id}` : null
 
   const workMode = formatWorkMode(job)

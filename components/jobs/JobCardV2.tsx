@@ -46,6 +46,7 @@ import {
   saveJobToPipeline,
 } from "@/lib/applications/save-job-client"
 import { getApplyCtaLabel, isKnownAtsApplyUrl } from "@/lib/jobs/apply-cta"
+import { jobSourceFallbackLogo } from "@/lib/jobs/source-fallback-logo"
 import { useToast } from "@/components/ui/ToastProvider"
 import { MatchScoreBreakdownPopover } from "@/components/matching/MatchScoreBreakdownPopover"
 import { cn } from "@/lib/utils"
@@ -371,8 +372,11 @@ export default function JobCardV2({
   }, [job.id])
   const displayTitle = cardView.title
   const companyName = job.company?.name ?? "Unknown company"
-  const companyDomain = job.company?.domain ?? null
-  const companyLogoUrl = job.company?.logo_url ?? pickRawString(raw, ["companyLogo", "company_logo"]) ?? null
+  const rawCompanyDomain = job.company?.domain ?? null
+  const rawCompanyLogoUrl = job.company?.logo_url ?? pickRawString(raw, ["companyLogo", "company_logo"]) ?? null
+  const sourceFallback = jobSourceFallbackLogo(job, rawCompanyDomain, rawCompanyLogoUrl)
+  const companyDomain = sourceFallback?.domain ?? rawCompanyDomain
+  const companyLogoUrl = sourceFallback?.logoUrl ?? rawCompanyLogoUrl
   const companyProfileHref = job.company?.id ? `/companies/${job.company.id}` : null
 
   const workMode = formatWorkMode(job)
