@@ -98,6 +98,7 @@ WHERE id IN (
       OR careers_url ~* '^https?://[a-z0-9-]+\.bamboohr\.com/'
       OR careers_url ~* '^https?://[a-z0-9-]+\.applytojob\.com/'
       OR careers_url ILIKE 'https://digitalcareers.infosys.com/%'
+      OR careers_url ILIKE 'https://jobs.apple.com/%'
     )
     AND (next_harvest_at IS NULL OR next_harvest_at <= now())
   ORDER BY
@@ -129,6 +130,7 @@ const SUPPORTED_ATS_TYPES = [
   "jazzhr",
   "icims",
   "infosys",
+  "apple",
 ]
 
 type ClaimedRow = {
