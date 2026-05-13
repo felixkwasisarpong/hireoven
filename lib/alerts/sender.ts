@@ -137,6 +137,56 @@ function renderJobRow(job: JobWithCompanyContext, index: number) {
 
 // ── Full email shell ──────────────────────────────────────────────────────────
 
+const CHROME_STORE_URL =
+  "https://chromewebstore.google.com/detail/hireoven-scout-bridge/mkmfffcaimjnaecoelnanifookmdbfok"
+
+/**
+ * Email-safe promo block for the Chrome extension. Rendered between the
+ * white job card and the footer in every alert/digest email. Inline-styled
+ * tables for maximum email-client compatibility (Gmail, Outlook, Apple Mail).
+ */
+function renderExtensionPromoBlock(baseUrl: string): string {
+  const learnMoreUrl = `${baseUrl}/extension`
+  return `
+        <!-- Chrome extension promo -->
+        <tr><td style="padding:18px 0 0;">
+          <table width="100%" cellpadding="0" cellspacing="0" style="background:linear-gradient(135deg,#0C0A1E 0%,#1a0a2e 100%);border-radius:10px;overflow:hidden;">
+            <tr><td style="padding:18px 22px;">
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="vertical-align:middle;width:44px;">
+                    <div style="width:36px;height:36px;border-radius:9px;background:linear-gradient(135deg,#FF5C18,#FF9A3C);text-align:center;line-height:36px;font-size:18px;">🧩</div>
+                  </td>
+                  <td style="vertical-align:middle;padding-left:12px;">
+                    <div style="font-size:11px;font-weight:700;letter-spacing:0.15em;color:#FF9A3C;text-transform:uppercase;">New · Chrome extension</div>
+                    <div style="font-size:14px;font-weight:600;color:#ffffff;line-height:1.4;margin-top:2px;">
+                      Get match scores &amp; autofill on every job posting.
+                    </div>
+                  </td>
+                </tr>
+              </table>
+              <table cellpadding="0" cellspacing="0" style="margin-top:12px;">
+                <tr>
+                  <td>
+                    <a href="${esc(CHROME_STORE_URL)}"
+                       style="display:inline-block;background:#ffffff;color:#0C0A1E;text-decoration:none;padding:8px 16px;border-radius:8px;font-size:12.5px;font-weight:700;">
+                      Add to Chrome — free
+                    </a>
+                  </td>
+                  <td style="padding-left:8px;">
+                    <a href="${esc(learnMoreUrl)}"
+                       style="display:inline-block;color:rgba(255,255,255,0.75);text-decoration:none;padding:8px 12px;font-size:12.5px;font-weight:600;">
+                      Learn more →
+                    </a>
+                  </td>
+                </tr>
+              </table>
+            </td></tr>
+          </table>
+        </td></tr>
+`
+}
+
 function renderEmailShell({
   preheader,
   headerTitle,
@@ -211,6 +261,8 @@ function renderEmailShell({
           </table>
 
         </td></tr>
+
+        ${renderExtensionPromoBlock(base)}
 
         <!-- LinkedIn-style footer -->
         <tr><td style="padding:24px 4px 32px;">
