@@ -116,16 +116,42 @@ export async function GET(request: NextRequest) {
     )`)
   }
 
+  const userIdParam = addParam(user.id)
   const limitParam = addParam(fetchLimit)
-  let data: JobWithMatchScore[] = []
+  let data: (JobWithMatchScore & { is_user_saved?: boolean })[] = []
   try {
-    const result = await pool.query<JobWithMatchScore>(
-      `SELECT jobs.*, to_jsonb(companies.*) AS company
-       FROM jobs
-       LEFT JOIN companies ON companies.id = jobs.company_id
-       WHERE ${where.join(" AND ")}
-       ORDER BY jobs.first_detected_at DESC NULLS LAST
-       LIMIT ${limitParam}`,
+    // UNION pulls in any job the user has explicitly saved (job_applications)
+    // even if it falls outside the recent-120 window, so the feed never hides
+    // a job the user just saved via the extension.
+    const result = await pool.query<JobWithMatchScore & { is_user_saved: boolean }>(
+      `WITH base AS (
+         SELECT jobs.*, to_jsonb(companies.*) AS company,
+                EXISTS (
+                  SELECT 1 FROM job_applications ja
+                  WHERE ja.user_id = ${userIdParam}::uuid
+                    AND ja.job_id = jobs.id
+                    AND ja.is_archived = false
+                ) AS is_user_saved
+         FROM jobs
+         LEFT JOIN companies ON companies.id = jobs.company_id
+         WHERE ${where.join(" AND ")}
+         ORDER BY jobs.first_detected_at DESC NULLS LAST
+         LIMIT ${limitParam}
+       ),
+       saved AS (
+         SELECT jobs.*, to_jsonb(companies.*) AS company, true AS is_user_saved
+         FROM jobs
+         LEFT JOIN companies ON companies.id = jobs.company_id
+         JOIN job_applications ja
+           ON ja.job_id = jobs.id
+          AND ja.user_id = ${userIdParam}::uuid
+          AND ja.is_archived = false
+         WHERE jobs.is_active = true
+           AND jobs.id NOT IN (SELECT id FROM base)
+       )
+       SELECT * FROM base
+       UNION ALL
+       SELECT * FROM saved`,
       params
     )
     data = result.rows
@@ -204,8 +230,19 @@ export async function GET(request: NextRequest) {
       const matchScore = scoreMap.get(job.id) ?? null
       return { ...job, match_score: matchScore }
     })
-    .filter((job) => job.match_score ? job.match_score.overall_score >= minScore : minScore <= 0)
+    // User-saved jobs bypass the minScore gate — the user has signalled intent.
+    .filter((job) =>
+      job.is_user_saved
+        ? true
+        : job.match_score
+        ? job.match_score.overall_score >= minScore
+        : minScore <= 0,
+    )
     .sort((left, right) => {
+      // Pin user-saved jobs to the top regardless of score.
+      if (Boolean(left.is_user_saved) !== Boolean(right.is_user_saved)) {
+        return left.is_user_saved ? -1 : 1
+      }
       const a = left.match_score?.overall_score ?? -1
       const b = right.match_score?.overall_score ?? -1
       if (a !== b) return b - a
