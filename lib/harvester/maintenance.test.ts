@@ -65,6 +65,16 @@ test("STATUS_LIFECYCLE_SQL: marks dead only after 7+ consecutive failures", () =
   assert.match(STATUS_LIFECYCLE_SQL, /companies\.status = 'active'/)
 })
 
+test("TIER_ASSIGNMENT_SQL: top H1B sponsors get tier_1 regardless of recent jobs", () => {
+  // Threshold-based promotion: >=50 LCAs/yr forces tier_1, >=10 forces at least tier_2.
+  assert.match(TIER_ASSIGNMENT_SQL, /COALESCE\(c\.h1b_sponsor_count_1yr, 0\) >= 50/)
+  assert.match(TIER_ASSIGNMENT_SQL, /COALESCE\(c\.h1b_sponsor_count_1yr, 0\) >= 10/)
+})
+
+test("STATUS_LIFECYCLE_SQL: spares H1B sponsors from auto-dead even after parser failures", () => {
+  assert.match(STATUS_LIFECYCLE_SQL, /COALESCE\(companies\.h1b_sponsor_count_1yr, 0\) < 10/)
+})
+
 test("assignTiers: aggregates returned rows by tier", async () => {
   const { client, getCommitted } = makeFakeClient([
     { tier: "tier_1" },
