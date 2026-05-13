@@ -8,8 +8,17 @@ import {
   sendWatchlistAlert,
 } from "@/lib/alerts/sender"
 import { verifyWebhookSignature } from "@/lib/alerts/webhook"
+import { scoreJobsForUser } from "@/lib/matching/batch-scorer"
 import { getPostgresPool } from "@/lib/postgres/server"
 import type { Job, JobAlert, NotificationType, Profile } from "@/types"
+
+/**
+ * Minimum match-score (0-100) required for an *instant* alert email to fire.
+ * Set to 75 so users only get pinged for jobs that are genuinely strong fits.
+ * Users without a primary resume have no computable score and are exempt —
+ * they get the current behaviour (alerts filter is the only gate).
+ */
+const INSTANT_EMAIL_MIN_MATCH_SCORE = 75
 
 type JobWebhookPayload = {
   type?: "INSERT" | "UPDATE" | "DELETE"
@@ -33,6 +42,7 @@ type TriggerSummary = {
   duplicatesSkipped: number
   notificationsLogged: number
   rateLimitedEmails: number
+  belowMatchThreshold: number
   errors: string[]
 }
 
@@ -171,6 +181,7 @@ export async function POST(request: NextRequest) {
     duplicatesSkipped: 0,
     notificationsLogged: 0,
     rateLimitedEmails: 0,
+    belowMatchThreshold: 0,
     errors: [],
   }
 
@@ -225,7 +236,23 @@ export async function POST(request: NextRequest) {
       let emailSent = false
       let pushSent = false
 
-      if (profile.email_alerts) {
+      // Score-quality gate: only email when the per-user match score is >= 75.
+      // Users without a primary resume have no computable score — exempt them
+      // so their alert filter remains the only gate (current behaviour).
+      let belowThreshold = false
+      try {
+        const scoreMap = await scoreJobsForUser(userId, [job.id])
+        const matchScore = scoreMap.get(job.id)
+        if (matchScore && matchScore.overall_score < INSTANT_EMAIL_MIN_MATCH_SCORE) {
+          belowThreshold = true
+          summary.belowMatchThreshold += 1
+        }
+      } catch (error) {
+        // Don't let a scoring failure block alerts — fall back to legacy behaviour.
+        console.warn("[alerts] match-score gate skipped due to error", error)
+      }
+
+      if (profile.email_alerts && !belowThreshold) {
         try {
           const limited = await hasReachedEmailRateLimit(userId)
           if (limited) {
