@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import {
   ArrowUpRight,
   Banknote,
@@ -16,6 +16,7 @@ import {
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import CompanyLogo from "@/components/ui/CompanyLogo"
+import { MatchScoreBreakdownPopover } from "@/components/matching/MatchScoreBreakdownPopover"
 import { useToast } from "@/components/ui/ToastProvider"
 import {
   formatEmploymentLabel,
@@ -89,6 +90,8 @@ export default function JobListRow({
   const router = useRouter()
   const [saved, setSaved] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [breakdownOpen, setBreakdownOpen] = useState(false)
+  const matchBadgeRef = useRef<HTMLButtonElement | null>(null)
 
   const now = nowProp ?? Date.now()
   const detailHref = `/dashboard/jobs/${job.id}`
@@ -270,19 +273,29 @@ export default function JobListRow({
 
       <span className="hidden text-[11px] font-medium text-slate-400 sm:inline">{postedAt}</span>
 
-      <div
+      <button
+        ref={matchBadgeRef}
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation()
+          if (resolvedMatchScore) setBreakdownOpen((v) => !v)
+          else router.push(detailHref)
+        }}
+        disabled={score === null && !isMatchScoreLoading}
+        aria-label={matchLabel}
+        aria-haspopup="dialog"
+        aria-expanded={breakdownOpen}
+        title={resolvedMatchScore ? "See match breakdown" : matchLabel}
         className={cn(
-          "flex h-10 w-12 shrink-0 flex-col items-center justify-center rounded-lg ring-1 tabular-nums",
+          "flex h-10 w-12 shrink-0 flex-col items-center justify-center rounded-lg ring-1 tabular-nums transition hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/30 disabled:cursor-default",
           scoreColor(score)
         )}
-        aria-label={matchLabel}
-        title={matchLabel}
       >
         <span className="text-[14px] font-extrabold leading-none">
           {isMatchScoreLoading && score === null ? "…" : (score ?? "—")}
         </span>
         <span className="mt-0.5 text-[8px] font-bold uppercase tracking-widest opacity-70">match</span>
-      </div>
+      </button>
 
       <div className="flex shrink-0 items-center gap-1" onClick={(e) => e.stopPropagation()}>
         <button
@@ -325,6 +338,17 @@ export default function JobListRow({
           <ArrowUpRight className="h-3.5 w-3.5" />
         </button>
       </div>
+
+      <MatchScoreBreakdownPopover
+        score={resolvedMatchScore}
+        open={breakdownOpen}
+        anchorRef={matchBadgeRef}
+        onClose={() => setBreakdownOpen(false)}
+        onSeeFullAnalysis={() => {
+          setBreakdownOpen(false)
+          router.push(detailHref)
+        }}
+      />
     </article>
   )
 }

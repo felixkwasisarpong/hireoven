@@ -60,6 +60,16 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ score: { ...saved, score_breakdown: scoreInsert.score_breakdown } })
   } catch (error) {
     console.error("[match/score] failed:", error)
-    return NextResponse.json({ error: "Match scoring unavailable." }, { status: 503 })
+    const isDev = process.env.NODE_ENV !== "production"
+    return NextResponse.json(
+      {
+        error: "Match scoring unavailable.",
+        ...(isDev && {
+          detail: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+        }),
+      },
+      { status: 503 }
+    )
   }
 }

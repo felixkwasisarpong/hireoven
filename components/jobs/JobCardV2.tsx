@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import {
   ArrowUpRight,
   BadgeCheck,
@@ -47,6 +47,7 @@ import {
 } from "@/lib/applications/save-job-client"
 import { getApplyCtaLabel, isKnownAtsApplyUrl } from "@/lib/jobs/apply-cta"
 import { useToast } from "@/components/ui/ToastProvider"
+import { MatchScoreBreakdownPopover } from "@/components/matching/MatchScoreBreakdownPopover"
 import { cn } from "@/lib/utils"
 import type { JobMatchScore, JobWithCompany, JobWithMatchScore } from "@/types"
 
@@ -328,6 +329,8 @@ export default function JobCardV2({
   const [saving, setSaving] = useState(false)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [h1bDrawerOpen, setH1bDrawerOpen] = useState(false)
+  const [breakdownOpen, setBreakdownOpen] = useState(false)
+  const matchBadgeRef = useRef<HTMLButtonElement | null>(null)
 
   const { attachRef: h1bAttachRef, prediction: h1bPrediction, isLoading: h1bIsLoading } = useH1BPrediction(job.id)
   const now = nowProp ?? Date.now()
@@ -543,13 +546,21 @@ export default function JobCardV2({
     }
   }
 
-  function openMatchDetail(e: React.MouseEvent) {
-    e.stopPropagation()
-    if (score === null) return
+  function openFullAnalysis() {
     if (resolvedMatchScore?.score_method === "deep") {
       router.push(`/dashboard/resume/analyze/${job.id}`)
     } else {
       setDrawerOpen(true)
+    }
+  }
+
+  function onMatchBadgeClick(e: React.MouseEvent) {
+    e.stopPropagation()
+    if (score === null) return
+    if (resolvedMatchScore) {
+      setBreakdownOpen((v) => !v)
+    } else {
+      openFullAnalysis()
     }
   }
 
@@ -671,10 +682,13 @@ export default function JobCardV2({
 
                 {/* Match badge */}
                 <button
+                  ref={matchBadgeRef}
                   type="button"
-                  onClick={openMatchDetail}
+                  onClick={onMatchBadgeClick}
                   disabled={score === null && !isMatchScoreLoading}
                   aria-label={matchLabel}
+                  aria-haspopup="dialog"
+                  aria-expanded={breakdownOpen}
                   className="shrink-0 rounded-xl transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/30 disabled:cursor-default"
                 >
                   <MatchBadge score={score} loading={isMatchScoreLoading && score === null} />
@@ -988,6 +1002,17 @@ export default function JobCardV2({
           </div>
         </div>
       </article>
+
+      <MatchScoreBreakdownPopover
+        score={resolvedMatchScore}
+        open={breakdownOpen}
+        anchorRef={matchBadgeRef}
+        onClose={() => setBreakdownOpen(false)}
+        onSeeFullAnalysis={() => {
+          setBreakdownOpen(false)
+          openFullAnalysis()
+        }}
+      />
 
       {drawerOpen && primaryResume?.id && (
         <QuickAnalysisDrawer
