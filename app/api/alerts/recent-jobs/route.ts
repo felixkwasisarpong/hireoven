@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { Resend } from "resend"
+import { logApiUsage } from "@/lib/admin/usage"
 import { getEmailCompanyLogoUrl, getHireovenEmailLogoUrl, getHireovenJobDetailUrl } from "@/lib/email/branding"
 import { getRecentJobsFromEmail } from "@/lib/email/identity"
 import { requireCronAuth } from "@/lib/env"
@@ -389,6 +390,7 @@ export async function GET(request: NextRequest) {
           }),
         })
         sentWithResume += 1
+        await logApiUsage({ service: "resend", operation: "recent-jobs-with-resume", tokens_used: null, cost_usd: 0 })
       } catch {
         errors += 1
       }
@@ -457,6 +459,7 @@ export async function GET(request: NextRequest) {
             }),
           })
           sentWithoutResume += 1
+          await logApiUsage({ service: "resend", operation: "recent-jobs-without-resume", tokens_used: null, cost_usd: 0 })
         } catch {
           errors += 1
         }
