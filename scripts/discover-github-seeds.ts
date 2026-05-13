@@ -3,12 +3,14 @@
  *
  *   npx tsx scripts/discover-github-seeds.ts --dry-run      # default
  *   npx tsx scripts/discover-github-seeds.ts --execute
+ *   npx tsx scripts/discover-github-seeds.ts --execute --only=workday,greenhouse
+ *   npx tsx scripts/discover-github-seeds.ts --execute --exclude=icims
  *   npx tsx scripts/discover-github-seeds.ts --source=https://raw.githubusercontent.com/owner/repo/branch/README.md
  *
  * Fetches each curated README, extracts every URL that detectAdapter matches,
  * dedupes by (atsType, slug) across all sources, and INSERTs new companies
  * with discovered_via='github-seed:{source-name}', freshness_tier='tier_3'.
- * Idempotent.
+ * Idempotent. `--only` / `--exclude` filter by ATS adapter name.
  */
 
 import { loadEnvConfig } from "@next/env"
@@ -29,6 +31,15 @@ const sourceOverrides = args
   .filter((a) => a.startsWith("--source="))
   .map((a) => a.slice("--source=".length))
   .filter(Boolean)
+
+const onlyArg = args.find((a) => a.startsWith("--only="))
+const onlyAts = onlyArg
+  ? new Set(onlyArg.slice("--only=".length).split(",").map((s) => s.trim().toLowerCase()).filter(Boolean))
+  : null
+const excludeArg = args.find((a) => a.startsWith("--exclude="))
+const excludeAts = excludeArg
+  ? new Set(excludeArg.slice("--exclude=".length).split(",").map((s) => s.trim().toLowerCase()).filter(Boolean))
+  : null
 
 const sources: SeedSource[] = sourceOverrides.length
   ? sourceOverrides.map((url, idx) => ({ name: `cli-source-${idx}`, url }))
@@ -67,6 +78,8 @@ async function main() {
     summaries.push(summary)
     candidatesPerSource.set(source.name, candidates)
     for (const c of candidates) {
+      if (onlyAts && !onlyAts.has(c.atsType)) continue
+      if (excludeAts?.has(c.atsType)) continue
       const key = `${c.atsType}:${c.slug}`
       if (!seenKeys.has(key)) {
         seenKeys.add(key)
