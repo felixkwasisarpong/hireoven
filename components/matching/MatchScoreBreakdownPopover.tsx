@@ -1,0 +1,320 @@
+"use client"
+
+import { useEffect, useRef, useState, type ReactNode } from "react"
+import { createPortal } from "react-dom"
+import { AlertTriangle, Check, X } from "lucide-react"
+import { cn } from "@/lib/utils"
+import { getMatchVerdict } from "@/lib/jobs/match-score-display"
+import type { JobMatchScore } from "@/types"
+
+type Dimension = {
+  label: string
+  value: number | null
+  weight: number
+  hint?: string
+}
+
+function clamp(value: number, lo: number, hi: number) {
+  return Math.max(lo, Math.min(hi, value))
+}
+
+function barColor(value: number | null): string {
+  if (value == null) return "bg-slate-200"
+  if (value >= 80) return "bg-emerald-500"
+  if (value >= 60) return "bg-blue-500"
+  if (value >= 40) return "bg-amber-500"
+  return "bg-rose-400"
+}
+
+function ConfidenceTag({ confidence }: { confidence: string | null }) {
+  if (!confidence) return null
+  const tone =
+    confidence === "high"
+      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+      : confidence === "medium"
+        ? "border-amber-200 bg-amber-50 text-amber-700"
+        : "border-slate-200 bg-slate-100 text-slate-600"
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+        tone
+      )}
+    >
+      {confidence} confidence
+    </span>
+  )
+}
+
+function DimensionBar({ dim }: { dim: Dimension }) {
+  const pct = dim.value == null ? 0 : clamp(dim.value, 0, 100)
+  return (
+    <div className="space-y-1">
+      <div className="flex items-baseline justify-between text-[11px]">
+        <span className="font-semibold text-slate-700">{dim.label}</span>
+        <span className="tabular-nums text-slate-500">
+          {dim.value == null ? "—" : `${pct}`}
+          <span className="ml-1 text-slate-400">· {Math.round(dim.weight * 100)}%</span>
+        </span>
+      </div>
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+        <div
+          className={cn("h-full rounded-full transition-[width]", barColor(dim.value))}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </div>
+  )
+}
+
+type BreakdownPanelProps = {
+  score: JobMatchScore
+  onClose: () => void
+  onSeeFullAnalysis?: () => void
+}
+
+function formatConcern(raw: string): string {
+  // Convert internal gate labels into something readable.
+  if (raw.startsWith("Gate: missing_required_cert")) return "Missing a required certification"
+  if (raw.startsWith("Gate: missing_required_skills_gt60pct"))
+    return "Missing more than 60% of required skills"
+  if (raw.startsWith("Gate: insufficient_experience"))
+    return "Below the stated minimum years of experience"
+  if (raw.startsWith("Gate: extreme_seniority_mismatch")) return "Seniority is far from the role"
+  if (raw.startsWith("Gate: role_family_mismatch")) {
+    const m = /role_family_mismatch:(.+?)→(.+)$/.exec(raw)
+    if (m) return `Career family mismatch (your background: ${m[1]} → role: ${m[2]})`
+    return "Career family mismatch with your recent roles"
+  }
+  return raw.replace(/^Gate:\s*/, "")
+}
+
+function BreakdownPanel({ score, onClose, onSeeFullAnalysis }: BreakdownPanelProps) {
+  const breakdown = score.score_breakdown ?? null
+  const overall = score.overall_score
+  const verdict = getMatchVerdict(overall)
+
+  const dimensions: Dimension[] = [
+    { label: "Skills", value: score.skills_score, weight: 0.4 },
+    { label: "Experience", value: score.seniority_score, weight: 0.22 },
+    { label: "Title fit", value: score.role_fit_score, weight: 0.1 },
+    { label: "Education", value: score.education_score, weight: 0.1 },
+    { label: "Location", value: score.location_score, weight: 0.05 },
+    { label: "Sponsorship", value: score.sponsorship_score, weight: 0.02 },
+  ]
+
+  const matched = breakdown?.matchedSkills?.slice(0, 6) ?? []
+  const missing = breakdown?.missingSkills?.slice(0, 6) ?? []
+  const concerns = (breakdown?.concerns ?? []).map(formatConcern).filter(Boolean)
+  const matchedCount = score.matching_skills_count ?? matched.length
+  const requiredCount = score.total_required_skills ?? 0
+
+  return (
+    <div
+      role="dialog"
+      aria-label="Match score breakdown"
+      className="w-[340px] max-w-[calc(100vw-24px)] rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_18px_40px_rgba(15,23,42,0.18)]"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <header className="flex items-start justify-between gap-3">
+        <div>
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-2xl font-extrabold leading-none tabular-nums text-slate-900">
+              {overall}
+            </span>
+            <span className="text-sm font-semibold text-slate-500">%</span>
+            <span className={cn("ml-1 text-[12px] font-semibold", verdict.colorClass)}>
+              {verdict.label}
+            </span>
+          </div>
+          <div className="mt-1.5 flex items-center gap-1.5">
+            <ConfidenceTag confidence={breakdown?.confidence ?? null} />
+            {requiredCount > 0 && (
+              <span className="text-[11px] text-slate-500">
+                {matchedCount}/{requiredCount} required skills
+              </span>
+            )}
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close breakdown"
+          className="rounded-lg p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </header>
+
+      <div className="mt-4 space-y-2.5">
+        {dimensions.map((dim) => (
+          <DimensionBar key={dim.label} dim={dim} />
+        ))}
+      </div>
+
+      {(matched.length > 0 || missing.length > 0) && (
+        <div className="mt-4 space-y-2.5">
+          {matched.length > 0 && (
+            <div>
+              <div className="mb-1.5 flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-emerald-700">
+                <Check className="h-3 w-3" /> You have
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {matched.map((skill) => (
+                  <span
+                    key={skill}
+                    className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700"
+                  >
+                    {skill}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+          {missing.length > 0 && (
+            <div>
+              <div className="mb-1.5 flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-amber-700">
+                <AlertTriangle className="h-3 w-3" /> Missing
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {missing.map((skill) => (
+                  <span
+                    key={skill}
+                    className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700"
+                  >
+                    {skill}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {concerns.length > 0 && (
+        <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50/60 p-2.5">
+          <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-amber-700">
+            Why it&apos;s capped
+          </div>
+          <ul className="space-y-0.5 text-[12px] text-amber-900">
+            {concerns.slice(0, 4).map((concern, i) => (
+              <li key={i} className="flex gap-1.5">
+                <span className="mt-0.5 inline-block h-1 w-1 shrink-0 rounded-full bg-amber-500" />
+                <span>{concern}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {onSeeFullAnalysis && (
+        <button
+          type="button"
+          onClick={onSeeFullAnalysis}
+          className="mt-4 inline-flex w-full items-center justify-center rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-[12px] font-semibold text-indigo-600 transition hover:bg-indigo-100"
+        >
+          See full analysis →
+        </button>
+      )}
+    </div>
+  )
+}
+
+type MatchScoreBreakdownPopoverProps = {
+  score: JobMatchScore | null
+  open: boolean
+  anchorRef: React.RefObject<HTMLElement | null>
+  onClose: () => void
+  onSeeFullAnalysis?: () => void
+}
+
+type Coords = { top: number; left: number; placeAbove: boolean }
+
+function computeCoords(anchor: HTMLElement): Coords {
+  const rect = anchor.getBoundingClientRect()
+  const POPOVER_WIDTH = 340
+  const POPOVER_HEIGHT_ESTIMATE = 420
+  const GAP = 8
+
+  const viewportWidth = window.innerWidth
+  const viewportHeight = window.innerHeight
+
+  // Prefer below; flip above if not enough room.
+  const spaceBelow = viewportHeight - rect.bottom
+  const placeAbove = spaceBelow < POPOVER_HEIGHT_ESTIMATE + GAP && rect.top > spaceBelow
+
+  const top = placeAbove
+    ? rect.top + window.scrollY - POPOVER_HEIGHT_ESTIMATE - GAP
+    : rect.bottom + window.scrollY + GAP
+
+  // Center-align under anchor, but clamp to viewport with 12px padding.
+  const centerX = rect.left + rect.width / 2
+  let left = centerX - POPOVER_WIDTH / 2 + window.scrollX
+  const minLeft = window.scrollX + 12
+  const maxLeft = window.scrollX + viewportWidth - POPOVER_WIDTH - 12
+  left = Math.max(minLeft, Math.min(maxLeft, left))
+
+  return { top, left, placeAbove }
+}
+
+export function MatchScoreBreakdownPopover({
+  score,
+  open,
+  anchorRef,
+  onClose,
+  onSeeFullAnalysis,
+}: MatchScoreBreakdownPopoverProps) {
+  const [coords, setCoords] = useState<Coords | null>(null)
+  const panelRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (!open || !anchorRef.current) return
+    setCoords(computeCoords(anchorRef.current))
+
+    function update() {
+      if (anchorRef.current) setCoords(computeCoords(anchorRef.current))
+    }
+    window.addEventListener("scroll", update, true)
+    window.addEventListener("resize", update)
+    return () => {
+      window.removeEventListener("scroll", update, true)
+      window.removeEventListener("resize", update)
+    }
+  }, [open, anchorRef])
+
+  useEffect(() => {
+    if (!open) return
+    function onDocClick(e: MouseEvent) {
+      const target = e.target as Node
+      if (panelRef.current?.contains(target)) return
+      if (anchorRef.current?.contains(target)) return
+      onClose()
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose()
+    }
+    document.addEventListener("mousedown", onDocClick)
+    document.addEventListener("keydown", onKey)
+    return () => {
+      document.removeEventListener("mousedown", onDocClick)
+      document.removeEventListener("keydown", onKey)
+    }
+  }, [open, onClose, anchorRef])
+
+  if (!open || !score || !coords || typeof document === "undefined") return null
+
+  const panel: ReactNode = (
+    <div
+      ref={panelRef}
+      style={{ position: "absolute", top: coords.top, left: coords.left, zIndex: 1000 }}
+    >
+      <BreakdownPanel
+        score={score}
+        onClose={onClose}
+        onSeeFullAnalysis={onSeeFullAnalysis}
+      />
+    </div>
+  )
+
+  return createPortal(panel, document.body)
+}

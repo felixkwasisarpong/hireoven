@@ -179,3 +179,112 @@ export function parseDiceWorkMode(wfh: DiceJob["workFromHome"]): {
     isHybrid: wfh === "PARTIAL",
   }
 }
+
+// ── Full description enrichment ───────────────────────────────────────────────
+// The Dice search API only returns a ~500-char `summary`. The full job
+// description lives on the detail page as a JSON-LD JobPosting blob. Fetch it
+// on demand and strip HTML.
+
+const DICE_DETAIL_TIMEOUT_MS = 10_000
+const DICE_DETAIL_UA =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " +
+  "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+
+export type FetchDiceDescriptionOptions = {
+  timeoutMs?: number
+  fetchImpl?: typeof fetch
+}
+
+/** Discriminated result so callers can react to "gone" vs transient failures. */
+export type DiceDetailResult =
+  | { kind: "ok"; description: string }
+  /** 404 / 410 from Dice — the job has been removed and won't come back. */
+  | { kind: "gone"; status: number }
+  /** 200 but no JobPosting JSON-LD blob — e.g. CAPTCHA page or layout change. */
+  | { kind: "no_jsonld" }
+  /** Other HTTP error (5xx, 403, 429, etc.) — likely transient. */
+  | { kind: "http_error"; status: number }
+  /** Timeout or network error. */
+  | { kind: "network_error" }
+
+export async function fetchDiceJobDetail(
+  detailsPageUrl: string,
+  opts: FetchDiceDescriptionOptions = {}
+): Promise<DiceDetailResult> {
+  const doFetch = opts.fetchImpl ?? fetch
+  const timeoutMs = Math.max(1_000, opts.timeoutMs ?? DICE_DETAIL_TIMEOUT_MS)
+
+  let response: Response
+  try {
+    response = await doFetch(detailsPageUrl, {
+      headers: {
+        Accept: "text/html,application/xhtml+xml",
+        "User-Agent": DICE_DETAIL_UA,
+        Referer: "https://www.dice.com/",
+      },
+      signal: AbortSignal.timeout(timeoutMs),
+    })
+  } catch {
+    return { kind: "network_error" }
+  }
+  if (response.status === 404 || response.status === 410) {
+    return { kind: "gone", status: response.status }
+  }
+  if (!response.ok) {
+    return { kind: "http_error", status: response.status }
+  }
+  const html = await response.text()
+  const description = extractJobPostingDescription(html)
+  return description ? { kind: "ok", description } : { kind: "no_jsonld" }
+}
+
+/** Backwards-compat wrapper — returns just the description text or null. */
+export async function fetchDiceJobDescription(
+  detailsPageUrl: string,
+  opts: FetchDiceDescriptionOptions = {}
+): Promise<string | null> {
+  const result = await fetchDiceJobDetail(detailsPageUrl, opts)
+  return result.kind === "ok" ? result.description : null
+}
+
+const JSON_LD_RE =
+  /<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi
+
+function extractJobPostingDescription(html: string): string | null {
+  let m: RegExpExecArray | null
+  // Reset state for the global regex on every call.
+  JSON_LD_RE.lastIndex = 0
+  while ((m = JSON_LD_RE.exec(html)) !== null) {
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(m[1].trim())
+    } catch {
+      continue
+    }
+    const nodes = Array.isArray(parsed) ? parsed : [parsed]
+    for (const node of nodes) {
+      if (!node || typeof node !== "object") continue
+      const obj = node as Record<string, unknown>
+      if (obj["@type"] !== "JobPosting") continue
+      const desc = typeof obj.description === "string" ? obj.description : null
+      if (!desc) continue
+      const text = stripHtmlEntities(desc)
+      if (text && text.length > 0) return text
+    }
+  }
+  return null
+}
+
+function stripHtmlEntities(value: string): string {
+  return value
+    .replace(/<\/(p|div|li|br|h[1-6])>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/\s+/g, " ")
+    .trim()
+}

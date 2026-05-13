@@ -72,8 +72,10 @@ export type FeedToolbarDropdown =
   | "posted"
   | "skills"
   | "industry"
-  | "keywords"
+  | "titles"
   | null
+
+type TitleSuggestion = { title: string; n: number }
 
 type Props = {
   filters: JobFilters
@@ -158,7 +160,9 @@ export default function DashboardFeedToolbar({
   const [locationDraft, setLocationDraft] = useState(filters.locationQuery ?? "")
   const [skillsDraft, setSkillsDraft] = useState(filters.skills?.join(", ") ?? "")
   const [industryDraft, setIndustryDraft] = useState(filters.industryQuery ?? "")
-  const [keywordsDraft, setKeywordsDraft] = useState(searchQuery)
+  const [titlesQuery, setTitlesQuery] = useState("")
+  const [titleSuggestions, setTitleSuggestions] = useState<TitleSuggestion[]>([])
+  const [titlesLoading, setTitlesLoading] = useState(false)
   const [advancedOpen, setAdvancedOpen] = useState(false)
   // Set of toolbar button keys that Scout just changed — cleared after the pulse animation
   const [scoutPulse, setScoutPulse] = useState<Set<string>>(new Set())
@@ -166,7 +170,7 @@ export default function DashboardFeedToolbar({
 
   // Map APPLY_FILTERS URL param keys → toolbar button identifiers
   const PARAM_TO_BUTTON: Record<string, string> = {
-    q: "keywords",
+    titles: "titles",
     location: "location",
     sponsorship: "sponsorship",
     workMode: "remote",
@@ -203,12 +207,6 @@ export default function DashboardFeedToolbar({
     const next = filtersToSearchParams(searchParams, nextFilters)
     const withSearch = searchQueryToParams(next, searchQuery)
     const value = withSearch.toString()
-    router.replace(value ? `${pathname}?${value}` : pathname, { scroll: false })
-  }
-
-  const replaceSearchQuery = (q: string) => {
-    const next = searchQueryToParams(filtersToSearchParams(searchParams, filters), q)
-    const value = next.toString()
     router.replace(value ? `${pathname}?${value}` : pathname, { scroll: false })
   }
 
@@ -260,15 +258,50 @@ export default function DashboardFeedToolbar({
       : `${filters.seniority.length} levels`
     : "Experience"
 
+  const titlesLabel = filters.titles?.length
+    ? filters.titles.length === 1
+      ? filters.titles[0]
+      : `${filters.titles.length} titles`
+    : "Job title"
+
   const sortValue = filters.sort ?? "freshest"
   const withinLockedBySort = sortValue === "match" || sortValue === "relevant"
   const effectiveWithin = withinLockedBySort ? "24h" : (filters.within ?? "all")
   const postedLabel = withinLockedBySort || effectiveWithin === "all" ? "Posted" :
     WITHIN_OPTIONS.find((o) => o.value === effectiveWithin)?.label ?? "Posted"
 
+  // Title suggest: debounced fetch whenever the dropdown is open and the
+  // query changes. Returns the top frequency-ranked cleaned titles ILIKE the
+  // input. The endpoint short-circuits on queries < 2 chars.
   useEffect(() => {
-    if (filterDropdown === "keywords") setKeywordsDraft(searchQuery)
-  }, [filterDropdown, searchQuery])
+    if (filterDropdown !== "titles") return
+    const q = titlesQuery.trim()
+    if (q.length < 2) {
+      setTitleSuggestions([])
+      setTitlesLoading(false)
+      return
+    }
+    let cancelled = false
+    setTitlesLoading(true)
+    const handle = window.setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/jobs/title-suggest?q=${encodeURIComponent(q)}`, {
+          cache: "no-store",
+        })
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const data = (await res.json()) as { titles?: TitleSuggestion[] }
+        if (!cancelled) setTitleSuggestions(data.titles ?? [])
+      } catch {
+        if (!cancelled) setTitleSuggestions([])
+      } finally {
+        if (!cancelled) setTitlesLoading(false)
+      }
+    }, 220)
+    return () => {
+      cancelled = true
+      window.clearTimeout(handle)
+    }
+  }, [filterDropdown, titlesQuery])
 
   useEffect(() => {
     if (withinLockedBySort && filterDropdown === "posted") {
@@ -281,12 +314,25 @@ export default function DashboardFeedToolbar({
     if (next === "location") setLocationDraft(filters.locationQuery ?? "")
     if (next === "skills") setSkillsDraft(filters.skills?.join(", ") ?? "")
     if (next === "industry") setIndustryDraft(filters.industryQuery ?? "")
-    if (next === "keywords") setKeywordsDraft(searchQuery)
+    if (next === "titles") {
+      setTitlesQuery("")
+      setTitleSuggestions([])
+    }
   }
 
-  function focusHeaderSearch() {
-    setFilterDropdown(null)
-    document.getElementById("dashboard-feed-q")?.focus()
+  function addTitle(rawTitle: string) {
+    const t = rawTitle.trim()
+    if (!t) return
+    const existing = filters.titles ?? []
+    if (existing.some((x) => x.toLowerCase() === t.toLowerCase())) return
+    replaceFilters({ ...filters, titles: [...existing, t] })
+  }
+
+  function removeTitle(rawTitle: string) {
+    const next = (filters.titles ?? []).filter(
+      (x) => x.toLowerCase() !== rawTitle.toLowerCase()
+    )
+    replaceFilters({ ...filters, titles: next.length ? next : undefined })
   }
 
   const pillIcon = (pill: FilterPill) => {
@@ -397,69 +443,137 @@ export default function DashboardFeedToolbar({
             className="h-9 min-w-[10.5rem] rounded-md border border-[#E5E7EB] bg-white px-3 text-sm font-medium text-slate-800 outline-none focus:border-[#0052CC] focus:ring-1 focus:ring-[#0052CC]/20"
             aria-label="Sort jobs"
           >
-            {SORT_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
+            {SORT_OPTIONS.map((opt) => {
+              // "Most relevant" without a search query collapses to
+              // freshest-within-24h — disable it so users don't pick a
+              // sort that promises something it can't deliver until they
+              // type a query.
+              const disabled = opt.value === "relevant" && !searchQuery.trim()
+              return (
+                <option key={opt.value} value={opt.value} disabled={disabled}>
+                  {disabled ? `${opt.label} — search first` : opt.label}
+                </option>
+              )
+            })}
           </select>
         </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative">
-          {scoutPulse.has("keywords") && <ScoutPulseBadge />}
+          {scoutPulse.has("titles") && <ScoutPulseBadge />}
           <button
             type="button"
-            onClick={() => (filterDropdown === "keywords" ? setFilterDropdown(null) : openDropdown("keywords"))}
+            onClick={() => (filterDropdown === "titles" ? setFilterDropdown(null) : openDropdown("titles"))}
             className={cn(
-              filterBtn(Boolean(searchQuery.trim()), "blue"),
-              scoutPulse.has("keywords") && "ring-2 ring-orange-400/60 ring-offset-1"
+              filterBtn(Boolean(filters.titles?.length), "blue"),
+              scoutPulse.has("titles") && "ring-2 ring-orange-400/60 ring-offset-1"
             )}
           >
-            <Search className={iconCls(Boolean(searchQuery.trim()), "blue")} />
-            Keywords
+            <Briefcase className={iconCls(Boolean(filters.titles?.length), "blue")} />
+            <span className="max-w-[140px] truncate">{titlesLabel}</span>
             <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
           </button>
-          {filterDropdown === "keywords" && (
-            <div className="absolute left-0 top-full z-50 mt-1.5 w-72 rounded-xl border border-slate-200 bg-white p-3 shadow-lg">
+          {filterDropdown === "titles" && (
+            <div className="absolute left-0 top-full z-50 mt-1.5 w-80 rounded-xl border border-slate-200 bg-white p-3 shadow-lg">
               <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                Search keywords
+                Job titles
               </p>
+
+              {(filters.titles?.length ?? 0) > 0 && (
+                <div className="mb-2 flex flex-wrap gap-1.5">
+                  {filters.titles!.map((t) => (
+                    <span
+                      key={t}
+                      className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[12px] font-medium text-blue-800"
+                    >
+                      <span className="max-w-[180px] truncate">{t}</span>
+                      <button
+                        type="button"
+                        onClick={() => removeTitle(t)}
+                        className="rounded-full p-0.5 text-blue-600 hover:bg-blue-100 hover:text-blue-900"
+                        aria-label={`Remove ${t}`}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+
               <input
                 autoFocus
                 type="text"
-                value={keywordsDraft}
-                onChange={(e) => setKeywordsDraft(e.target.value)}
+                value={titlesQuery}
+                onChange={(e) => setTitlesQuery(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
-                    replaceSearchQuery(keywordsDraft)
-                    setFilterDropdown(null)
+                    e.preventDefault()
+                    // First suggestion if any, else literal text.
+                    const candidate = titleSuggestions[0]?.title ?? titlesQuery
+                    if (candidate.trim()) {
+                      addTitle(candidate)
+                      setTitlesQuery("")
+                    }
+                  } else if (
+                    e.key === "Backspace" &&
+                    titlesQuery.length === 0 &&
+                    (filters.titles?.length ?? 0) > 0
+                  ) {
+                    removeTitle(filters.titles![filters.titles!.length - 1])
                   }
                 }}
-                placeholder="Job title, company, skills…"
+                placeholder={
+                  (filters.titles?.length ?? 0) > 0
+                    ? "Add another title…"
+                    : "Try \"registered nurse\", \"backend\", \"electrician\"…"
+                }
                 className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-[#0052CC]/40 focus:ring-2 focus:ring-[#0052CC]/10"
               />
-              <div className="mt-2 flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    focusHeaderSearch()
-                  }}
-                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
-                >
-                  Use header search
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    replaceSearchQuery(keywordsDraft)
-                    setFilterDropdown(null)
-                  }}
-                  className="flex-1 rounded-lg bg-[#0052CC] py-1.5 text-xs font-semibold text-white hover:bg-[#0041a3]"
-                >
-                  Apply
-                </button>
+
+              <div className="mt-2 max-h-72 overflow-y-auto rounded-lg border border-slate-100">
+                {titlesQuery.trim().length < 2 ? (
+                  <div className="px-3 py-3 text-[12px] text-slate-500">
+                    Type at least 2 characters to see matching titles.
+                  </div>
+                ) : titlesLoading ? (
+                  <div className="px-3 py-3 text-[12px] text-slate-500">Loading…</div>
+                ) : titleSuggestions.length === 0 ? (
+                  <div className="px-3 py-3 text-[12px] text-slate-500">
+                    No titles match. Press Enter to use &quot;{titlesQuery.trim()}&quot; anyway.
+                  </div>
+                ) : (
+                  <ul className="divide-y divide-slate-100">
+                    {titleSuggestions.map((s) => {
+                      const isSelected = (filters.titles ?? []).some(
+                        (x) => x.toLowerCase() === s.title.toLowerCase()
+                      )
+                      return (
+                        <li key={s.title}>
+                          <button
+                            type="button"
+                            disabled={isSelected}
+                            onClick={() => {
+                              addTitle(s.title)
+                              setTitlesQuery("")
+                            }}
+                            className={cn(
+                              "flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-[13px] transition",
+                              isSelected
+                                ? "cursor-default bg-blue-50/40 text-slate-400"
+                                : "hover:bg-slate-50"
+                            )}
+                          >
+                            <span className="min-w-0 truncate">{s.title}</span>
+                            <span className="shrink-0 text-[11px] text-slate-400">
+                              {s.n.toLocaleString()}
+                            </span>
+                          </button>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )}
               </div>
             </div>
           )}

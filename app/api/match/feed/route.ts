@@ -53,16 +53,6 @@ function matchesSearch(job: JobWithMatchScore, query: string) {
   })
 }
 
-function freshnessScore(timestamp: string) {
-  const hours = (Date.now() - new Date(timestamp).getTime()) / 3_600_000
-  if (hours <= 1) return 100
-  if (hours <= 6) return 85
-  if (hours <= 24) return 65
-  if (hours <= 72) return 45
-  if (hours <= 168) return 25
-  return 10
-}
-
 export async function GET(request: NextRequest) {
   const supabase = await createClient()
   const {
@@ -87,6 +77,7 @@ export async function GET(request: NextRequest) {
   const onsite = sp.get("onsite") === "true"
   const minSalary = Math.max(0, parseInt(sp.get("minSalary") ?? "0", 10) || 0)
   const skills = parseList<string>(sp.get("skills"))?.map((value) => value.toLowerCase()) ?? []
+  const titles = parseList<string>(sp.get("titles"))?.map((value) => value.trim()).filter(Boolean) ?? []
   const industryQuery = sp.get("industry")?.trim().toLowerCase() ?? ""
   const hideBlockers = sp.get("hideBlockers") === "true"
   const hasSalary = sp.get("hasSalary") === "true"
@@ -116,6 +107,13 @@ export async function GET(request: NextRequest) {
     where.push(`jobs.first_detected_at >= ${addParam(
       new Date(Date.now() - WITHIN_MS[within]).toISOString()
     )}`)
+  }
+  if (titles.length) {
+    const patterns = titles.map((t) => `%${t}%`)
+    where.push(`(
+      jobs.normalized_title ILIKE ANY(${addParam(patterns)}::text[])
+      OR jobs.title ILIKE ANY(${addParam(patterns)}::text[])
+    )`)
   }
 
   const limitParam = addParam(fetchLimit)
@@ -196,28 +194,21 @@ export async function GET(request: NextRequest) {
     console.error("Failed to score personalized feed", error)
   }
 
+  // Sort purely by overall_score (highest first) so "Best match" means
+  // exactly what it says. Freshness is the tie-breaker. Previously this
+  // path blended `overall*0.75 + freshness*0.25` into a `final_rank`,
+  // which allowed a fresh 85% to outrank a 95% from 3 days ago — confusing
+  // when the UI badge labels the higher-% card as the best match.
   const ranked = jobs
     .map((job) => {
       const matchScore = scoreMap.get(job.id) ?? null
-      const overall = matchScore?.overall_score ?? 0
-      const finalRank = Number(
-        ((overall * 0.75) + (freshnessScore(job.first_detected_at) * 0.25)).toFixed(2)
-      )
-
-      return {
-        ...job,
-        match_score: matchScore,
-        final_rank: finalRank,
-      }
+      return { ...job, match_score: matchScore }
     })
     .filter((job) => job.match_score ? job.match_score.overall_score >= minScore : minScore <= 0)
     .sort((left, right) => {
-      if ((right.final_rank ?? 0) !== (left.final_rank ?? 0)) {
-        return (right.final_rank ?? 0) - (left.final_rank ?? 0)
-      }
-      if ((right.match_score?.overall_score ?? 0) !== (left.match_score?.overall_score ?? 0)) {
-        return (right.match_score?.overall_score ?? 0) - (left.match_score?.overall_score ?? 0)
-      }
+      const a = left.match_score?.overall_score ?? -1
+      const b = right.match_score?.overall_score ?? -1
+      if (a !== b) return b - a
       return (
         new Date(right.first_detected_at).getTime() -
         new Date(left.first_detected_at).getTime()

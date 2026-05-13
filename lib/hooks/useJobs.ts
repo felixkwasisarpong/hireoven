@@ -128,6 +128,15 @@ function matchesClientFilters(job: JobWithCompany, filters: JobFilters, query: s
     }
   }
 
+  if (filters.titles?.length) {
+    const titleHaystack = `${job.title} ${job.normalized_title ?? ""}`.toLowerCase()
+    const matchesAny = filters.titles.some((t) => {
+      const needle = t.trim().toLowerCase()
+      return needle.length > 0 && titleHaystack.includes(needle)
+    })
+    if (!matchesAny) return false
+  }
+
   if (filters.industryQuery?.trim()) {
     const needle = filters.industryQuery.trim().toLowerCase()
     const industry = job.company?.industry?.toLowerCase() ?? ""
@@ -320,15 +329,14 @@ export function useJobs(
   }
 
   /**
-   * Apply client-side sort here (not at fetch time) so changing `filters.sort`
-   * between non-personalized options re-orders the list instantly without a
-   * round-trip. Personalized mode keeps the server-blended order from
-   * `/api/match/feed`.
+   * Always apply client sort. Server (`/api/match/feed`) and client now use
+   * the same comparator for `sort=match` — pure `overall_score` DESC with
+   * freshness as tie-break — so this is order-preserving for personalized
+   * data and avoids a stale-order flash during sort transitions.
    */
   const jobs = useMemo(() => {
-    const ordered = personalized ? allJobs : sortJobs(allJobs, filters, searchQuery)
-    return ordered.slice(0, visibleCount)
-  }, [allJobs, visibleCount, personalized, filters, searchQuery])
+    return sortJobs(allJobs, filters, searchQuery).slice(0, visibleCount)
+  }, [allJobs, visibleCount, filters, searchQuery])
 
   const fetchChunk = useCallback(
     async (offset: number) => {
@@ -356,6 +364,7 @@ export function useJobs(
           params.set("minSalary", String(filters.min_salary))
         }
         if (filters.skills?.length) params.set("skills", filters.skills.join(","))
+        if (filters.titles?.length) params.set("titles", filters.titles.join(","))
         if (filters.industryQuery?.trim()) params.set("industry", filters.industryQuery.trim())
         if (filters.hide_blockers) params.set("hideBlockers", "true")
         if (filters.has_salary) params.set("hasSalary", "true")
@@ -398,6 +407,7 @@ export function useJobs(
       if (filters.employment_type?.length) params.set("employment_type", filters.employment_type.join(","))
       if (filters.company_ids?.length) params.set("company_id", filters.company_ids[0])
       if (effectiveWithin && effectiveWithin !== "all") params.set("within", effectiveWithin)
+      if (filters.titles?.length) params.set("titles", filters.titles.join(","))
       if (withScores) params.set("withScores", "1")
       params.set("limit", String(chunkSize))
       params.set("offset", String(offset))

@@ -16,7 +16,7 @@ const BACKGROUND_USER_LIMIT = 10_000
 const UPSERT_CHUNK_SIZE = 250
 const BACKGROUND_CONCURRENCY = 50
 // Bump this when the scoring algorithm changes to invalidate stale cached rows.
-const FAST_SCORE_ALGORITHM_UPDATED_AT = new Date("2026-05-10T00:00:00.000Z").getTime()
+const FAST_SCORE_ALGORITHM_UPDATED_AT = new Date("2026-05-13T12:00:00.000Z").getTime()
 const FAST_SCORE_ALGORITHM_UPDATED_AT_ISO = new Date(FAST_SCORE_ALGORITHM_UPDATED_AT).toISOString()
 
 function chunkArray<T>(items: T[], size: number) {
@@ -132,10 +132,12 @@ export async function upsertMatchScores(scores: JobMatchScoreInsert[]) {
           score.score_method,
           score.computed_at,
           score.resume_version,
+          score.score_breakdown ? JSON.stringify(score.score_breakdown) : null,
         ]
-        const placeholders = rowValues.map((value) => {
-          params.push(value)
-          return `$${params.length}`
+        const placeholders = rowValues.map((value, idx) => {
+          params.push(value as string | number | boolean | null)
+          // Final column is JSONB; the rest are regular params.
+          return idx === rowValues.length - 1 ? `$${params.length}::jsonb` : `$${params.length}`
         })
         return `(${placeholders.join(", ")})`
       })
@@ -165,7 +167,8 @@ export async function upsertMatchScores(scores: JobMatchScoreInsert[]) {
         skills_match_rate,
         score_method,
         computed_at,
-        resume_version
+        resume_version,
+        score_breakdown
       ) VALUES ${valuesSql}
       ON CONFLICT (user_id, resume_id, job_id)
       DO UPDATE SET
@@ -188,7 +191,8 @@ export async function upsertMatchScores(scores: JobMatchScoreInsert[]) {
         skills_match_rate = EXCLUDED.skills_match_rate,
         score_method = EXCLUDED.score_method,
         computed_at = EXCLUDED.computed_at,
-        resume_version = EXCLUDED.resume_version
+        resume_version = EXCLUDED.resume_version,
+        score_breakdown = EXCLUDED.score_breakdown
       RETURNING *`
 
     const result = await pool.query<JobMatchScore>(query, params)

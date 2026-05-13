@@ -32,6 +32,38 @@ test("extractCustomerSlug: rejects malformed labels", () => {
   assert.equal(extractCustomerSlug("a.workable.com", "workable.com"), null) // too short
 })
 
+test("extractCustomerSlug: BambooHR filters obvious trial/demo/random slugs", () => {
+  // Real-looking customers pass.
+  assert.equal(extractCustomerSlug("acmecorp.bamboohr.com", "bamboohr.com"), "acmecorp")
+  assert.equal(extractCustomerSlug("tipton-associates.bamboohr.com", "bamboohr.com"), "tipton-associates")
+  // Trial/demo/test suffixes get filtered.
+  assert.equal(extractCustomerSlug("csgdemo.bamboohr.com", "bamboohr.com"), null)
+  assert.equal(extractCustomerSlug("falconheatinganairtrial.bamboohr.com", "bamboohr.com"), null)
+  assert.equal(extractCustomerSlug("blogtest.bamboohr.com", "bamboohr.com"), null)
+  assert.equal(extractCustomerSlug("envisionstaging.bamboohr.com", "bamboohr.com"), null)
+  assert.equal(extractCustomerSlug("hrboss-sandbox.bamboohr.com", "bamboohr.com"), null)
+  // Random consonant-only slugs and short numbered slugs get filtered.
+  assert.equal(extractCustomerSlug("chgjhkjlkj.bamboohr.com", "bamboohr.com"), null)
+  assert.equal(extractCustomerSlug("bhgjj.bamboohr.com", "bamboohr.com"), null)
+  assert.equal(extractCustomerSlug("ybr1.bamboohr.com", "bamboohr.com"), null)
+  assert.equal(extractCustomerSlug("tnp2.bamboohr.com", "bamboohr.com"), null)
+})
+
+test("extractCustomerSlug: Workday requires {tenant}.wdN.myworkdayjobs.com shape", () => {
+  // Real tenant hosts pass.
+  assert.equal(
+    extractCustomerSlug("nvidia.wd5.myworkdayjobs.com", "myworkdayjobs.com"),
+    "nvidia"
+  )
+  // Workday-internal infra returned by crt.sh must be filtered out — these
+  // hosts have no customer tenant in front of the `wdN` cluster label.
+  assert.equal(extractCustomerSlug("wd117.myworkdayjobs.com", "myworkdayjobs.com"), null)
+  assert.equal(extractCustomerSlug("dr-wd501.myworkdayjobs.com", "myworkdayjobs.com"), null)
+  assert.equal(extractCustomerSlug("impl-wd108.myworkdayjobs.com", "myworkdayjobs.com"), null)
+  assert.equal(extractCustomerSlug("impltest-wd11.myworkdayjobs.com", "myworkdayjobs.com"), null)
+  assert.equal(extractCustomerSlug("wd3-dr.myworkdayjobs.com", "myworkdayjobs.com"), null)
+})
+
 test("discoverHostsForApex: parses name_value SAN lists and dedupes", async () => {
   const fakeFetch = (async () =>
     ({

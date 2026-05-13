@@ -23,6 +23,7 @@ export async function GET(request: NextRequest) {
   const empType = sp.get("employment_type")?.split(",").filter(Boolean)
   const remote = sp.get("remote") === "true"
   const sponsorship = sp.get("sponsorship") === "true"
+  const titles = sp.get("titles")?.split(",").map((t) => t.trim()).filter(Boolean)
   const within = sp.get("within") ?? "all"
   const since = sp.get("since")?.trim()
   const sort = sp.get("sort") ?? "fresh"
@@ -62,6 +63,17 @@ export async function GET(request: NextRequest) {
   if (sponsorship) where.push("(jobs.sponsors_h1b = true OR jobs.sponsorship_score > 60)")
   if (seniority?.length) where.push(`jobs.seniority_level = ANY(${addParam(seniority)}::text[])`)
   if (empType?.length) where.push(`jobs.employment_type = ANY(${addParam(empType)}::text[])`)
+  if (titles?.length) {
+    // OR across the selected titles. Substring match because cleaned
+    // user-facing titles ("Registered Nurse") often appear inside longer
+    // raw titles ("Registered Nurse — Per Diem · ICU").
+    const patterns = titles.map((t) => `%${t}%`)
+    const pat = addParam(patterns)
+    where.push(`(
+      jobs.normalized_title ILIKE ANY(${pat}::text[])
+      OR jobs.title ILIKE ANY(${pat}::text[])
+    )`)
+  }
   if (since) {
     where.push(`jobs.first_detected_at >= ${addParam(since)}`)
   } else if (within !== "all" && WITHIN_MS[within]) {
@@ -80,16 +92,22 @@ export async function GET(request: NextRequest) {
   const oneHourAgo = new Date(Date.now() - 3_600_000).toISOString()
 
   try {
+    // Snapshot WHERE-only params before appending limit/offset so the count
+    // query (no LIMIT/OFFSET) doesn't get extra unused $N params bound.
+    const whereOnlyValues = [...values]
     const limitParam = addParam(limit)
     const offsetParam = addParam(offset)
 
-    const [jobsResult, newInLastHourResult] = await Promise.all([
-      pool.query<Record<string, unknown> & { company: unknown; total_count: string }>(
+    // Run main fetch + both counts in parallel. The previous query used
+    // `COUNT(*) OVER()` which forced full materialization of the filtered set
+    // (~2.5s on 113K matching rows). With idx_jobs_us_ca_active_freshest the
+    // separate COUNT is index-only and effectively free.
+    const [jobsResult, totalCountResult, newInLastHourResult] = await Promise.all([
+      pool.query<Record<string, unknown> & { company: unknown }>(
         `SELECT jobs.*,
                 to_jsonb(companies.*) AS company,
                 gjs.risk_score AS ghost_risk_score,
-                gjs.risk_level AS ghost_risk_level,
-                COUNT(*) OVER()::text AS total_count
+                gjs.risk_level AS ghost_risk_level
          FROM jobs
          LEFT JOIN companies ON companies.id = jobs.company_id
          LEFT JOIN ghost_job_scores gjs ON gjs.job_id = jobs.id
@@ -98,6 +116,13 @@ export async function GET(request: NextRequest) {
          LIMIT ${limitParam}
          OFFSET ${offsetParam}`,
         values
+      ),
+      pool.query<{ count: string }>(
+        `SELECT COUNT(*)::text AS count
+         FROM jobs
+         LEFT JOIN companies ON companies.id = jobs.company_id
+         WHERE ${where.join(" AND ")}`,
+        whereOnlyValues
       ),
       pool.query<{ count: string }>(
         // Mirror the main feed predicate (including companies join) so the
@@ -112,8 +137,8 @@ export async function GET(request: NextRequest) {
       ),
     ])
 
-    const jobs = jobsResult.rows.map(({ total_count: _ignore, ...row }) => row)
-    const total = Number(jobsResult.rows[0]?.total_count ?? 0)
+    const jobs = jobsResult.rows
+    const total = Number(totalCountResult.rows[0]?.count ?? 0)
     const newInLastHour = Number(newInLastHourResult.rows[0]?.count ?? 0)
 
     if (withScores && jobs.length > 0) {

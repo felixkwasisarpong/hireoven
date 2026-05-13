@@ -18,16 +18,9 @@ import { loadEnvConfig } from "@next/env"
 import pLimit from "p-limit"
 import { detectAdapter, type AtsName } from "@/lib/harvester/adapters"
 import { discoverHostsForApex, type DiscoveredHost } from "@/lib/harvester/discovery/crtsh"
-import { resolveWorkdaySite } from "@/lib/harvester/discovery/workday-resolver"
 import { getPostgresPool } from "@/lib/postgres/server"
 
 loadEnvConfig(process.cwd())
-
-const WORKDAY_RESOLVE_CONCURRENCY = Math.max(
-  1,
-  Number.parseInt(process.env.DISCOVER_WORKDAY_RESOLVE_CONCURRENCY ?? "8", 10)
-)
-const WORKDAY_HOST_RE = /^([a-z0-9-]+)\.(wd\d{1,3})\.myworkdayjobs\.com$/i
 
 type AtsTarget = {
   ats: AtsName
@@ -113,23 +106,11 @@ const TARGETS: AtsTarget[] = [
     // JazzHR public boards are {slug}.applytojob.com/
     toCareersUrl: ({ host }) => `https://${host}/`,
   },
-  {
-    ats: "workday",
-    apex: "myworkdayjobs.com",
-    // Highest-yield apex by far — every Workday tenant has a unique subdomain.
-    // We must resolve {site} per-tenant via redirect/sites-API/POST probe before
-    // we can construct a usable careers URL.
-    synthesisConcurrency: WORKDAY_RESOLVE_CONCURRENCY,
-    toCareersUrl: async ({ host }) => {
-      const m = host.match(WORKDAY_HOST_RE)
-      if (!m) return null
-      const tenant = m[1]
-      const wd = m[2]
-      const result = await resolveWorkdaySite({ tenant, wd })
-      if (!result) return null
-      return `https://${tenant}.${wd}.myworkdayjobs.com/en-US/${result.site}`
-    },
-  },
+  // Workday intentionally excluded. Workday issues a single wildcard cert
+  // per cluster (`*.wdN.myworkdayjobs.com`), so customer-tenant hostnames
+  // (`acme.wd5.…`) never appear in CT logs. crt.sh only returns Workday's
+  // own infra labels (`wd117.…`, `dr-wd501.…`, `impl-wd108.…`). Use
+  // `discover-github-seeds.ts` or `discover-company-ats-live.ts` for Workday.
 ]
 
 const args = new Set(process.argv.slice(2))

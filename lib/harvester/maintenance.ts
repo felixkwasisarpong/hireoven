@@ -16,12 +16,20 @@ WITH new_tiers AS (
     CASE
       WHEN EXISTS (SELECT 1 FROM watchlist w WHERE w.company_id = c.id)
         THEN 'tier_1'
+      -- Top H1B sponsors get tier_1 unconditionally. Custom-ATS parsers
+      -- often misread their career pages, so recent-job signal alone
+      -- demotes them to tier_dead. Sponsorship volume is a stronger
+      -- "this company is hiring" signal than our extraction success rate.
+      WHEN COALESCE(c.h1b_sponsor_count_1yr, 0) >= 50
+        THEN 'tier_1'
       WHEN COUNT(j.id) FILTER (
         WHERE j.is_active = true AND j.first_detected_at >= now() - interval '24 hours'
       ) >= 1 THEN 'tier_1'
       WHEN COUNT(j.id) FILTER (
         WHERE j.is_active = true AND j.first_detected_at >= now() - interval '7 days'
       ) >= 5 THEN 'tier_1'
+      WHEN COALESCE(c.h1b_sponsor_count_1yr, 0) >= 10
+        THEN 'tier_2'
       WHEN COUNT(j.id) FILTER (
         WHERE j.is_active = true AND j.first_detected_at >= now() - interval '30 days'
       ) >= 1 THEN 'tier_2'
@@ -215,6 +223,11 @@ WHERE companies.id = recent.company_id
   AND recent.failures >= 7
   AND recent.failures = recent.total
   AND (recent.last_success IS NULL OR recent.last_success < now() - interval '14 days')
+  -- Don't auto-dead top H1B sponsors even when our parser keeps failing
+  -- against their custom careers pages — the company is clearly hiring,
+  -- the problem is our extraction. Keep them claimable so any parser
+  -- improvement lands a recovery automatically.
+  AND COALESCE(companies.h1b_sponsor_count_1yr, 0) < 10
 RETURNING companies.id
 `
 

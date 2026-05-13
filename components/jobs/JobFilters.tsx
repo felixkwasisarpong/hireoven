@@ -107,6 +107,7 @@ export function clearedJobFilters(): JobFilters {
     locationQuery: undefined,
     min_salary: undefined,
     skills: undefined,
+    titles: undefined,
     industryQuery: undefined,
     // Advanced filters
     hide_blockers: undefined,
@@ -181,6 +182,10 @@ export function parseJobFilters(
   const skills =
     skillsRaw?.map((s) => s.trim()).filter(Boolean).length ? skillsRaw.map((s) => s.trim()) : undefined
 
+  const titlesRaw = parseList<string>(params, "titles")
+  const titles =
+    titlesRaw?.map((t) => t.trim()).filter(Boolean).length ? titlesRaw.map((t) => t.trim()) : undefined
+
   const ghostRiskRaw = params.get("ghost_risk_max")
   const ghost_risk_max =
     ghostRiskRaw === "low" || ghostRiskRaw === "medium"
@@ -199,6 +204,7 @@ export function parseJobFilters(
     within,
     company_ids: parseList<string>(params, "companies"),
     sort,
+    titles,
     locationQuery: params.get("location")?.trim() || undefined,
     min_salary,
     skills,
@@ -265,6 +271,10 @@ export function filtersToSearchParams(
   const skills = normalizeArray(filters.skills)
   if (skills?.length) next.set("skills", skills.join(","))
   else next.delete("skills")
+
+  const titles = normalizeArray(filters.titles)
+  if (titles?.length) next.set("titles", titles.join(","))
+  else next.delete("titles")
 
   const industry = filters.industryQuery?.trim()
   if (industry) next.set("industry", industry)

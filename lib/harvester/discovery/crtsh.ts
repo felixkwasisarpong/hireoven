@@ -240,10 +240,37 @@ export function extractCustomerSlug(host: string, apex: string): string | null {
   const candidate = labels[0]
   if (!isSlugLabel(candidate)) return null
 
+  // Workday tenants must sit one level under a `wdN` cluster host. crt.sh
+  // floods this apex with vendor infra (`wd117.…`, `dr-wd501.…`, `impl-wd108.…`)
+  // that has no customer prefix — reject anything that isn't the
+  // `{tenant}.wdN.myworkdayjobs.com` shape.
+  if (apex === "myworkdayjobs.com") {
+    const second = labels[1]
+    if (!second || !/^wd\d{1,3}$/.test(second)) return null
+  }
+
+  // BambooHR's free trial creates a public subdomain for every signup, so
+  // crt.sh surfaces thousands of trial/demo accounts that aren't real
+  // employers (`csgdemo`, `falconheatinganairtrial`, `pss1919`, random
+  // gibberish like `chgjhkjlkj`). Filter the most obvious patterns at
+  // discovery time; the harvester's tier_dead promotion handles the rest.
+  if (apex === "bamboohr.com" && isBogusBambooSlug(candidate)) return null
+
   const reserved = VENDOR_RESERVED[apex]
   if (reserved?.has(candidate)) return null
 
   return candidate
+}
+
+const BAMBOO_TRIAL_SUFFIX_RE = /(demo|trial|test|staging|sandbox|playground|training)\d*$/i
+const BAMBOO_RANDOM_RE = /^[bcdfghjklmnpqrstvwxyz]{5,}\d*$/i
+const BAMBOO_SHORT_NUMBERED_RE = /^[a-z]{1,3}\d+$/i
+
+function isBogusBambooSlug(slug: string): boolean {
+  if (BAMBOO_TRIAL_SUFFIX_RE.test(slug)) return true
+  if (BAMBOO_RANDOM_RE.test(slug)) return true
+  if (BAMBOO_SHORT_NUMBERED_RE.test(slug)) return true
+  return false
 }
 
 function sleep(ms: number) {

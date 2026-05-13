@@ -97,6 +97,7 @@ WHERE id IN (
       OR careers_url ~* '^https?://[a-z0-9-]+\.jobs\.personio\.(com|de)/'
       OR careers_url ~* '^https?://[a-z0-9-]+\.bamboohr\.com/'
       OR careers_url ~* '^https?://[a-z0-9-]+\.applytojob\.com/'
+      OR careers_url ILIKE 'https://digitalcareers.infosys.com/%'
     )
     AND (next_harvest_at IS NULL OR next_harvest_at <= now())
   ORDER BY
@@ -126,6 +127,8 @@ const SUPPORTED_ATS_TYPES = [
   "personio",
   "bamboohr",
   "jazzhr",
+  "icims",
+  "infosys",
 ]
 
 type ClaimedRow = {

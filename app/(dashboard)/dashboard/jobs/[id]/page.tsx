@@ -36,8 +36,6 @@ import {
 } from "@/lib/jobs/sponsorship-employer-signal"
 import { getSessionUser } from "@/lib/auth/session-user"
 import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
-import { computeFastScore } from "@/lib/matching/fast-scorer"
-import { getScoringContextForUser, upsertMatchScores } from "@/lib/matching/batch-scorer"
 import { getPostgresPool } from "@/lib/postgres/server"
 import {
   extractSkillsFromText,
@@ -404,8 +402,10 @@ export default async function DashboardJobDetailPage({ params }: Props) {
       : Promise.resolve({ rows: [] as SimilarJob[] }),
   ])
 
-  // Resolve match score: cache hit (fast path) or fresh compute (slow path).
-  let initialMatchScore: JobMatchScore | null = null
+  // Resolve match score: cache hit only on the critical path. On a cache miss
+  // we leave this `undefined` so JobDetailPanel fetches via /api/match/score
+  // after first paint — avoids stalling navigation behind a fresh compute.
+  let initialMatchScore: JobMatchScore | null | undefined = undefined
 
   if (session?.sub) {
     const cached = cachedScoreResult.rows[0] ?? null
@@ -458,23 +458,9 @@ export default async function DashboardJobDetailPage({ params }: Props) {
           computedAt: cached.computed_at,
         },
       } as unknown as JobMatchScore
-    } else {
-      // Slow path: cache miss — fetch full context and compute fresh
-      try {
-        const context = await getScoringContextForUser(session.sub)
-        if (context) {
-          const score = computeFastScore({
-            resume: context.resume,
-            job: rawJob as unknown as Job,
-            profile: context.profile,
-          })
-          void upsertMatchScores([score]).catch(() => {})
-          initialMatchScore = score as unknown as JobMatchScore
-        }
-      } catch (err) {
-        console.warn("[job page] score compute failed:", err)
-      }
     }
+    // Cache miss: leave `initialMatchScore` undefined so the client fetches
+    // and computes after first paint via the /api/match/score endpoint.
   }
 
   const resumeSkillLabels = normalizeSkillList([
