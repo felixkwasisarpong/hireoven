@@ -284,11 +284,33 @@ const SENIORITY_YEAR_FLOOR: Partial<Record<SeniorityLevel, number>> = {
   junior: 1, mid: 3, senior: 5, staff: 7, principal: 8, director: 10, vp: 12, exec: 15,
 }
 
-function scoreExperience(resumeContext: FastScoreResumeContext, job: Job) {
+function scoreExperience(
+  resumeContext: FastScoreResumeContext,
+  job: Job,
+  resumeSeniority?: SeniorityLevel | null
+) {
   const extracted = extractMinYears(job.description)
   const seniorityFloor = (job.seniority_level ? SENIORITY_YEAR_FLOOR[job.seniority_level] : 0) ?? 0
   const required = Math.max(extracted, seniorityFloor)
   const years = resumeContext.years
+
+  // Over-qualification penalty: when the candidate is meaningfully above the
+  // job's seniority tier, return a partial score instead of the implicit 1.0
+  // that years/required would produce. Without this, an 8-year senior would
+  // match cashier/intern roles at seniority=100% just because years >> minimum.
+  const gap = getSeniorityGap(resumeSeniority, job.seniority_level)
+  if (gap !== null && gap >= 2) {
+    // gap=2 (senior→junior) = 0.55, gap=3 (senior→intern) = 0.35,
+    // gap=4 (staff→intern) = 0.20 (the extreme_seniority gate caps at 35 anyway)
+    const overqualPenalty = Math.max(0.20, 0.85 - 0.20 * gap)
+    return {
+      score: overqualPenalty,
+      evidence: `Candidate is ~${gap} tiers above this role; partial fit only.`,
+      flags: ["overqualified"] as string[],
+      relevantYears: years,
+      required,
+    }
+  }
 
   if (required <= 0) {
     return {
@@ -997,7 +1019,7 @@ export function computeFastScore({
 }: FastScoreInput): JobMatchScoreInsert {
   const context = resumeContext ?? buildFastScoreResumeContext(resume)
   const skills     = scoreSkills(context, job)
-  const experience = scoreExperience(context, job)
+  const experience = scoreExperience(context, job, resume.seniority_level)
   const title      = scoreTitle(context, job)
   const education  = scoreEducation(resume, job)
   const location   = scoreLocation(profile, job)
@@ -1058,8 +1080,15 @@ export function computeFastScore({
   // soft-skill overlap inflating cross-domain matches (e.g. SWE matched to
   // "Security Officer" at 91% because both resumes/JDs mention
   // "Communication"). `unknown` on either side skips the gate.
+  // Fallback: when work_experience didn't yield any classifiable families
+  // (sparse resumes, non-traditional titles), classify from `primary_role`
+  // so the gate still fires for an obvious cross-domain mismatch.
   const jobFamily = classifyRoleFamily(job.title, job.description)
-  const candidateFamilies = context.recentRoleFamilies
+  let candidateFamilies = context.recentRoleFamilies
+  if (candidateFamilies.length === 0 && resume.primary_role) {
+    const fromPrimaryRole = classifyRoleFamily(resume.primary_role)
+    if (fromPrimaryRole !== "unknown") candidateFamilies = [fromPrimaryRole]
+  }
   if (jobFamily !== "unknown" && candidateFamilies.length > 0) {
     const compatible = candidateFamilies.some((cf) => isRoleFamilyCompatible(cf, jobFamily))
     if (!compatible) {
@@ -1070,12 +1099,10 @@ export function computeFastScore({
 
   overall = clamp(overall, 0, 100)
 
-  // Curve: stretch scores above 55 upward so strong matches reach 90–98.
-  // Skipped when the role-family gate fired — we don't want a capped score
-  // re-inflated by the curve.
-  if (overall > 55 && !gatesTriggered.some((g) => g.startsWith("role_family_mismatch"))) {
-    overall = Math.min(99, Math.round(overall + (overall - 55) * 0.25))
-  }
+  // Previously: a curve at >55 inflated 80→86 and 90→99, which combined
+  // with the seniority over-generosity to push unrelated jobs into the
+  // "great match" band. Removed — scores now reflect the weighted sum
+  // directly, with the gates above as the only post-hoc adjustments.
 
   const now = new Date().toISOString()
   const confidence = skills.missing.length === 0 && experience.score >= 0.8
