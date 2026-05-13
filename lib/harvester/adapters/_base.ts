@@ -14,6 +14,7 @@ export type AtsName =
   | "bamboohr"
   | "jazzhr"
   | "icims"
+  | "infosys"
 
 export type HarvestCtx = {
   etag: string | null
