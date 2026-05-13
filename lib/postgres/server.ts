@@ -40,6 +40,9 @@ export function getPostgresPool(): Pool {
     pool = new Pool({
       connectionString,
       ssl: shouldUseSsl(connectionString) ? { rejectUnauthorized: false } : undefined,
+      max: Number(process.env.PG_POOL_MAX ?? 20),
+      idleTimeoutMillis: 30_000,
+      connectionTimeoutMillis: 10_000,
     })
   }
 
