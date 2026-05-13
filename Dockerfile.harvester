@@ -38,12 +38,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && groupadd --system --gid 1001 nodejs \
     && useradd --system --uid 1001 --gid nodejs nodeapp
 
+# Install Chromium into a shared system path that the `nodeapp` user can read.
+# By default Playwright writes to $HOME/.cache/ms-playwright — `nodeapp` has no
+# writable home in this image, so set PLAYWRIGHT_BROWSERS_PATH globally and
+# install during build (as root) so the binary lives at a known, world-readable
+# location at runtime.
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+
 COPY package.json package-lock.json ./
 RUN npm ci
 
-# Install only the Chromium browser binary (Playwright supports Firefox/WebKit
-# too but we don't need them — keeps the layer ~280MB instead of ~900MB).
-RUN npx -y playwright install chromium
+# Only Chromium (Playwright supports Firefox/WebKit too — skipping them keeps
+# the layer ~280MB instead of ~900MB).
+RUN mkdir -p $PLAYWRIGHT_BROWSERS_PATH \
+    && npx -y playwright install chromium \
+    && chmod -R go+rX $PLAYWRIGHT_BROWSERS_PATH
 
 # Worker imports from lib/ + scripts/ only. `@/types` references in the
 # transitive import chain are all `import type {...}` — tsconfig has
