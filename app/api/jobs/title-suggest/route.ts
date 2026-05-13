@@ -1,10 +1,9 @@
 /**
  * GET /api/jobs/title-suggest?q=<prefix>&limit=15
  *
- * Returns popular `normalized_title` values matching the prefix (or substring),
- * after light cleanup of salary/hour qualifiers and "Full Time / Part Time"
- * suffixes that dominate the raw column. Used by the Job-title filter
- * typeahead on the feed page.
+ * Reads from the pre-aggregated `title_suggestions` table populated by
+ * scripts/refresh-title-suggestions.ts. The live-aggregation variant ran
+ * ~2.6s per keystroke against the 327k-row jobs table; this lookup is ~30ms.
  *
  * Non-tech first — orders by usage frequency, not category, so the same
  * endpoint serves nurses, electricians, sales associates, etc.
@@ -19,7 +18,6 @@ export const dynamic = "force-dynamic"
 const MAX_LIMIT = 25
 const DEFAULT_LIMIT = 15
 const MIN_QUERY_LENGTH = 2
-const MIN_OCCURRENCES = 2
 
 export async function GET(request: NextRequest) {
   const q = (request.nextUrl.searchParams.get("q") ?? "").trim()
@@ -32,40 +30,13 @@ export async function GET(request: NextRequest) {
     : DEFAULT_LIMIT
 
   const pool = getPostgresPool()
-  // Cleanup pipeline:
-  //  - strip leading salary patterns like "$28/hr ", "$10,000 Retention bonus - "
-  //  - strip trailing "– Full Time" / "- Part Time" / " FT" / " PT" qualifiers
-  //  - collapse whitespace
-  // Done in SQL so the suggestion list is the same across callers and we can
-  // GROUP BY the cleaned form.
-  const cleanupSql = `
-    trim(
-      regexp_replace(
-        regexp_replace(
-          regexp_replace(normalized_title,
-            '^\\$[0-9.,]+\\s*(/?hr|/?hour|k|/yr|/year)?\\s*[-–—]?\\s*', '', 'i'),
-          '\\s*[-–—/]\\s*(full[ -]?time|part[ -]?time|ft|pt|temporary|temp|contract|contract[ -]?to[ -]?hire)\\s*$', '', 'i'),
-        '\\s+', ' ', 'g'
-      )
-    )
-  `
   try {
     const { rows } = await pool.query<{ title: string; n: number }>(
-      `WITH cleaned AS (
-         SELECT ${cleanupSql} AS title
-         FROM jobs
-         WHERE is_active = true
-           AND normalized_title IS NOT NULL
-       )
-       SELECT title, COUNT(*)::int AS n
-       FROM cleaned
-       WHERE title <> ''
-         AND title ILIKE $1
-       GROUP BY title
-       HAVING COUNT(*) >= $3
+      `SELECT title, n FROM title_suggestions
+       WHERE title ILIKE $1
        ORDER BY (title ILIKE $2) DESC, n DESC, title ASC
-       LIMIT $4`,
-      [`%${q}%`, `${q}%`, MIN_OCCURRENCES, limit]
+       LIMIT $3`,
+      [`%${q}%`, `${q}%`, limit]
     )
     return NextResponse.json({ titles: rows })
   } catch (error) {
