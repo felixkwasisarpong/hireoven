@@ -443,11 +443,18 @@ export default function DashboardFeedToolbar({
             className="h-9 min-w-[10.5rem] rounded-md border border-[#E5E7EB] bg-white px-3 text-sm font-medium text-slate-800 outline-none focus:border-[#0052CC] focus:ring-1 focus:ring-[#0052CC]/20"
             aria-label="Sort jobs"
           >
-            {SORT_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
+            {SORT_OPTIONS.map((opt) => {
+              // "Most relevant" without a search query collapses to
+              // freshest-within-24h — disable it so users don't pick a
+              // sort that promises something it can't deliver until they
+              // type a query.
+              const disabled = opt.value === "relevant" && !searchQuery.trim()
+              return (
+                <option key={opt.value} value={opt.value} disabled={disabled}>
+                  {disabled ? `${opt.label} — search first` : opt.label}
+                </option>
+              )
+            })}
           </select>
         </div>
       </div>

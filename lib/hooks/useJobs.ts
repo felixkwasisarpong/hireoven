@@ -329,15 +329,14 @@ export function useJobs(
   }
 
   /**
-   * Apply client-side sort here (not at fetch time) so changing `filters.sort`
-   * between non-personalized options re-orders the list instantly without a
-   * round-trip. Personalized mode keeps the server-blended order from
-   * `/api/match/feed`.
+   * Always apply client sort. Server (`/api/match/feed`) and client now use
+   * the same comparator for `sort=match` — pure `overall_score` DESC with
+   * freshness as tie-break — so this is order-preserving for personalized
+   * data and avoids a stale-order flash during sort transitions.
    */
   const jobs = useMemo(() => {
-    const ordered = personalized ? allJobs : sortJobs(allJobs, filters, searchQuery)
-    return ordered.slice(0, visibleCount)
-  }, [allJobs, visibleCount, personalized, filters, searchQuery])
+    return sortJobs(allJobs, filters, searchQuery).slice(0, visibleCount)
+  }, [allJobs, visibleCount, filters, searchQuery])
 
   const fetchChunk = useCallback(
     async (offset: number) => {
