@@ -95,11 +95,10 @@ function BreakdownPanel({ score, onClose, onSeeFullAnalysis }: BreakdownPanelPro
   const verdict = getMatchVerdict(overall)
 
   const dimensions: Dimension[] = [
-    { label: "Skills", value: score.skills_score, weight: 0.4 },
+    { label: "Skills", value: score.skills_score, weight: 0.45 },
     { label: "Experience", value: score.seniority_score, weight: 0.22 },
     { label: "Title fit", value: score.role_fit_score, weight: 0.1 },
     { label: "Education", value: score.education_score, weight: 0.1 },
-    { label: "Location", value: score.location_score, weight: 0.05 },
     { label: "Sponsorship", value: score.sponsorship_score, weight: 0.02 },
   ]
 

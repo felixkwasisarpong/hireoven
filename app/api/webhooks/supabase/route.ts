@@ -2,16 +2,19 @@ import { NextRequest, NextResponse } from "next/server"
 import { matchJobToAlerts, matchJobToWatchlists } from "@/lib/alerts/matcher"
 import {
   combineChannels,
-  sendEmailAlert,
   sendPushNotification,
-  sendWatchlistAlert,
 } from "@/lib/alerts/sender"
 import { requireWebhookAuth } from "@/lib/env"
-import { scoreJobsForUser, scoreNewJobForAllUsers } from "@/lib/matching/batch-scorer"
+import { scoreNewJobForAllUsers } from "@/lib/matching/batch-scorer"
 import { getPostgresPool } from "@/lib/postgres/server"
 import type { AlertFrequency, Job, NotificationChannel, NotificationType } from "@/types"
 
-const INSTANT_EMAIL_MIN_MATCH_SCORE = 75
+/**
+ * Instant email alerts were removed — every webhook fire used to mail every
+ * matching alert regardless of match quality, which burned Resend credit
+ * during big crawls. Daily / weekly / recent-jobs digest crons still cover
+ * the email channel. This route now only triggers push notifications.
+ */
 
 type ProfileChannels = {
   id: string
@@ -99,37 +102,18 @@ async function processNotifications(job: Job) {
 
       if (!profile) continue
 
-      // Only fire instant emails/pushes for users who explicitly opted into
-      // instant frequency. Daily/weekly users are handled by digest crons.
+      // Only fire instant pushes for users who explicitly opted into instant
+      // frequency. Daily/weekly users are handled by digest crons.
       if (profile.alert_frequency !== "instant") continue
 
-      // Score-quality gate: skip the instant email when the per-user match
-      // score is below threshold. Users without a primary resume have no
-      // computable score — fall through to legacy behaviour for them.
-      let belowThreshold = false
-      try {
-        const scoreMap = await scoreJobsForUser(alert.user_id, [job.id])
-        const matchScore = scoreMap.get(job.id)
-        if (matchScore && matchScore.overall_score < INSTANT_EMAIL_MIN_MATCH_SCORE) {
-          belowThreshold = true
-        }
-      } catch {
-        // Don't let scoring failure block alerts.
-      }
-
       const channel = combineChannels({
-        emailSent: Boolean(profile.email_alerts) && !belowThreshold,
+        emailSent: false,
         pushSent: Boolean(profile.push_alerts),
       })
       if (!channel) continue
 
       try {
-        if (channel === "email" || channel === "both") {
-          await sendEmailAlert(alert.user_id, [job], alert.name ?? "Job alert")
-        }
-        if (channel === "push" || channel === "both") {
-          await sendPushNotification(alert.user_id, job, "alert")
-        }
+        await sendPushNotification(alert.user_id, job, "alert")
         await insertAlertNotificationRow({
           userId: alert.user_id,
           jobId: job.id,
@@ -143,46 +127,32 @@ async function processNotifications(job: Job) {
     }
 
     // Watchlist notifications
-    if (watchlistUserIds.length > 0) {
-      const pool = getPostgresPool()
-      const companyResult = await pool.query<{ name: string }>(
-        `SELECT name FROM companies WHERE id = $1 LIMIT 1`,
-        [job.company_id]
-      )
-      const companyName = companyResult.rows[0]?.name ?? "Tracked company"
+    for (const userId of watchlistUserIds) {
+      const profile = await fetchProfileChannels(userId)
 
-      for (const userId of watchlistUserIds) {
-        const profile = await fetchProfileChannels(userId)
+      if (!profile) continue
 
-        if (!profile) continue
+      // Watchlist instant pings only fire for users on instant frequency;
+      // daily/weekly users see watchlist hits inside their digest.
+      if (profile.alert_frequency !== "instant") continue
 
-        // Watchlist instant pings only fire for users on instant frequency;
-        // daily/weekly users see watchlist hits inside their digest.
-        if (profile.alert_frequency !== "instant") continue
+      const channel = combineChannels({
+        emailSent: false,
+        pushSent: Boolean(profile.push_alerts),
+      })
+      if (!channel) continue
 
-        const channel = combineChannels({
-          emailSent: Boolean(profile.email_alerts),
-          pushSent: Boolean(profile.push_alerts),
+      try {
+        await sendPushNotification(userId, job, "watchlist")
+        await insertAlertNotificationRow({
+          userId: userId,
+          jobId: job.id,
+          alertId: null,
+          notificationType: "watchlist",
+          channel,
         })
-        if (!channel) continue
-
-        try {
-          if (channel === "email" || channel === "both") {
-            await sendWatchlistAlert(userId, [job], companyName)
-          }
-          if (channel === "push" || channel === "both") {
-            await sendPushNotification(userId, job, "watchlist")
-          }
-          await insertAlertNotificationRow({
-            userId: userId,
-            jobId: job.id,
-            alertId: null,
-            notificationType: "watchlist",
-            channel,
-          })
-        } catch {
-          // Don't let one user's failure block the rest
-        }
+      } catch {
+        // Don't let one user's failure block the rest
       }
     }
   } catch {

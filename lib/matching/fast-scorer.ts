@@ -1,9 +1,9 @@
 /**
  * Fast resume↔job scorer — pure TypeScript, runs in-process with no external calls.
  *
- * Eight weighted dimensions (weights sum to 1.0):
- *   skills 0.40 · experience 0.22 · title 0.10 · education 0.10
- *   location 0.05 · domain 0.03 · certs 0.02 · semantic 0.08
+ * Seven weighted dimensions (weights sum to 1.0):
+ *   skills 0.45 · experience 0.22 · title 0.10 · education 0.10
+ *   domain 0.03 · certs 0.02 · semantic 0.08
  *
  * Hard gates applied after aggregation:
  *   missing-required-cert (≥5 required)  → –15 pts, floor 45
@@ -70,11 +70,10 @@ export interface FastScoreResumeContext {
 const CURRENT_YEAR = new Date().getFullYear()
 
 const W = {
-  skills:     0.40,
+  skills:     0.45,
   experience: 0.22,
   title:      0.10,
   education:  0.10,
-  location:   0.05,
   domain:     0.03,
   certs:      0.02,
   semantic:   0.08,
@@ -182,8 +181,20 @@ function scoreSkills(resumeContext: FastScoreResumeContext, job: Job): SkillsSco
     job.title,
     job.description ?? ""
   )
-  const usedDerivedSkills = storedJobSkills.length === 0
-  const jobSkills = usedDerivedSkills ? deriveSkillsFromJobText(job) : storedJobSkills
+  // Always union stored ∪ text-derived. Previously we only fell back to
+  // text-derivation when stored was empty — but a job with a single soft skill
+  // like {"Problem Solving"} would skip derivation entirely, letting a candidate
+  // match 1/1 = 100% while the JD actually demanded HTML, .NET, Docker, etc.
+  const derivedSkills = deriveSkillsFromJobText(job)
+  const seenKeys = new Set<string>()
+  const jobSkills: string[] = []
+  for (const skill of [...storedJobSkills, ...derivedSkills]) {
+    const key = normalizeSkillKey(canonicalizeSkill(skill))
+    if (seenKeys.has(key)) continue
+    seenKeys.add(key)
+    jobSkills.push(skill)
+  }
+  const usedDerivedSkills = storedJobSkills.length === 0 && derivedSkills.length > 0
 
   if (jobSkills.length === 0) {
     return {
@@ -671,18 +682,54 @@ function degreeRank(d: string | null | undefined): number {
   return 0
 }
 
-function detectRequiredDegree(job: Job): { rank: number; isHard: boolean } {
-  const text = `${job.description ?? ""} ${job.title}`.toLowerCase()
-  let rank = 0
-  if (/(ph\.?d|doctor(ate|al))/.test(text)) rank = 5
-  else if (/(master(?:'?s)?|m\.?s\.?\b|graduate degree)/.test(text)) rank = 4
-  else if (/(bachelor(?:'?s)?|b\.?s\.?\b|undergraduate|four.year degree)/.test(text)) rank = 3
-  else if (/(associate(?:'?s)?)/.test(text)) rank = 2
+const DEGREE_PATTERNS: Array<{ rank: number; re: RegExp }> = [
+  { rank: 5, re: /(ph\.?d|doctor(ate|al)|d\.phil)/ },
+  { rank: 4, re: /(master(?:'?s)?|m\.?s\.?\b|m\.?eng\b|m\.?b\.?a\b|graduate degree)/ },
+  { rank: 3, re: /(bachelor(?:'?s)?|b\.?s\.?\b|b\.?a\.?\b|undergraduate|four.year degree)/ },
+  { rank: 2, re: /(associate(?:'?s)?)/ },
+]
 
-  const hasRequiredSignal = /(required|must have|minimum|mandatory)\b/.test(text)
-  const hasExemption = /\b(or equivalent|or related|or relevant experience|or commensurate)\b/.test(text)
-  const isPreferred = /\b(preferred|a plus|nice to have|desired)\b/.test(text) && !hasRequiredSignal
-  const isHard = rank > 0 && hasRequiredSignal && !hasExemption && !isPreferred
+const PREFERRED_RE = /\b(preferred|a plus|nice to have|desired|bonus|plus|ideal(?:ly)?)\b/
+const REQUIRED_HINT_RE = /\b(required|must have|mandatory|need(?:ed)?|minimum (?:of )?(?:education|degree|qualification)|qualifications?:|requirements?:)\b/
+// Common exemption phrases. The `(?:a |an )?` group allows "or a related field",
+// "or an equivalent...", "or related field" — all of which weaken a hard
+// degree requirement to soft.
+const EXEMPTION_RE = /\bor\s+(?:a\s+|an\s+)?(equivalent|related|relevant\s+(?:experience|background)|similar|commensurate)\b/
+
+/**
+ * Detect the required degree by scanning sentence-level context. A degree
+ * mentioned only inside a sentence with "preferred"/"a plus"/etc. doesn't
+ * bump the required floor — only degrees outside a preferred-context (or
+ * inside an explicit required-context) count toward `rank`.
+ */
+function detectRequiredDegree(job: Job): { rank: number; isHard: boolean } {
+  const text = `${job.description ?? ""} ${job.title}`
+  const lower = text.toLowerCase()
+  const sentences = lower.split(/(?<=[.!?])\s+|\n+/).map((s) => s.trim()).filter(Boolean)
+
+  let requiredRank = 0
+  let preferredRank = 0
+
+  for (const sentence of sentences) {
+    const isPreferredSentence = PREFERRED_RE.test(sentence)
+    const isRequiredSentence = REQUIRED_HINT_RE.test(sentence)
+    for (const { rank, re } of DEGREE_PATTERNS) {
+      if (!re.test(sentence)) continue
+      if (isPreferredSentence && !isRequiredSentence) {
+        if (rank > preferredRank) preferredRank = rank
+      } else {
+        if (rank > requiredRank) requiredRank = rank
+      }
+      break
+    }
+  }
+
+  // Fall back to "highest preferred" only when no required mention exists at all.
+  const rank = requiredRank > 0 ? requiredRank : preferredRank
+
+  const hasRequiredSignal = /\b(required|must have|minimum|mandatory)\b/.test(lower)
+  const hasExemption = EXEMPTION_RE.test(lower)
+  const isHard = requiredRank > 0 && hasRequiredSignal && !hasExemption
 
   return { rank, isHard }
 }
@@ -716,41 +763,7 @@ function scoreEducation(resume: Resume, job: Job) {
   return { score: best, evidence }
 }
 
-// ─── 5. Location (weight 0.05) ────────────────────────────────────────────────
-
-function scoreLocation(profile: Profile, job: Job) {
-  // Remote-only candidates can't work onsite
-  if (profile.remote_only && !job.is_remote && !job.is_hybrid) {
-    return { score: 0.3, evidence: "Candidate is remote-only; job is onsite.", locationMatch: false }
-  }
-
-  if (job.is_remote) {
-    return { score: 1.0, evidence: "Remote role — location compatible.", locationMatch: true }
-  }
-
-  if (job.is_hybrid) {
-    return { score: 0.85, evidence: "Hybrid role — partially location flexible.", locationMatch: true }
-  }
-
-  // Onsite: check desired_locations against job location
-  const desired = (profile.desired_locations ?? []).map(l => l.toLowerCase().trim()).filter(Boolean)
-  const jobLoc = (job.location ?? "").toLowerCase()
-
-  if (desired.length === 0 || !jobLoc) {
-    return { score: 0.7, evidence: "On-site role; no location preference set.", locationMatch: null }
-  }
-
-  const locationMatch = desired.some(loc => {
-    const tokens = loc.split(/[,\s]+/).filter(t => t.length > 2)
-    return tokens.some(t => jobLoc.includes(t))
-  })
-
-  return locationMatch
-    ? { score: 1.0, evidence: `On-site location match (${job.location}).`, locationMatch: true }
-    : { score: 0.45, evidence: `On-site location mismatch: desired ${profile.desired_locations?.join(", ")}, job ${job.location}.`, locationMatch: false }
-}
-
-// ─── 6. Domain (weight 0.03) ──────────────────────────────────────────────────
+// ─── 5. Domain (weight 0.03) ──────────────────────────────────────────────────
 
 const ADJACENT_PAIRS: Array<[string, string]> = [
   ["fintech", "finance"], ["fintech", "banking"], ["fintech", "technology"],
@@ -1022,7 +1035,6 @@ export function computeFastScore({
   const experience = scoreExperience(context, job, resume.seniority_level)
   const title      = scoreTitle(context, job)
   const education  = scoreEducation(resume, job)
-  const location   = scoreLocation(profile, job)
   const domain     = scoreDomain(context, job)
   const certs      = scoreCerts(context, job)
   const semantic   = scoreSemanticOverlap(context, job)
@@ -1035,7 +1047,6 @@ export function computeFastScore({
     experience.score * W.experience * 100 +
     title.score      * W.title      * 100 +
     education.score  * W.education  * 100 +
-    location.score   * W.location   * 100 +
     domain.score     * W.domain     * 100 +
     certs.score      * W.certs      * 100 +
     semantic.score   * W.semantic   * 100
@@ -1054,24 +1065,30 @@ export function computeFastScore({
   }
 
   // Skills gate — only fires when there are enough skills to make the ratio
-  // meaningful (≥5 required). Sparse job listings with 2–3 skills shouldn't
-  // trigger an aggressive cap when the candidate is missing just one.
-  if (totalRequired >= 5 && skills.missing.length / totalRequired > 0.6) {
-    overall = Math.min(overall, 55)
-    gatesTriggered.push("missing_required_skills_gt60pct")
+  // meaningful (≥5 required) AND the candidate is missing >75% of them.
+  // Threshold raised from 60% → 75% so candidates missing half the stack
+  // (a common state, especially as our extractor now pulls more skills per
+  // JD) aren't capped at 55. Cap relaxed 55 → 65 so a partial-skill match
+  // can still reach "good match" territory.
+  if (totalRequired >= 5 && skills.missing.length / totalRequired > 0.75) {
+    overall = Math.min(overall, 65)
+    gatesTriggered.push("missing_required_skills_gt75pct")
   }
 
-  // Experience gate — threshold lowered from 0.4 to 0.35 to avoid
-  // over-penalising candidates who are slightly under the stated minimum.
+  // Experience gate — relaxed 55 → 65. Years-of-experience is a soft signal:
+  // a candidate just under the stated minimum but otherwise a strong match
+  // shouldn't be capped below the "good match" band.
   const minYears = extractMinYears(job.description)
   if (minYears > 0 && experience.score < 0.35) {
-    overall = Math.min(overall, 55)
+    overall = Math.min(overall, 65)
     gatesTriggered.push("insufficient_experience")
   }
 
-  // Extreme seniority mismatch (e.g. exec applying for intern)
+  // Extreme seniority mismatch (e.g. exec applying for intern) — relaxed
+  // 35 → 50. The gap still pushes the score below the "great match" band
+  // but doesn't crush it to a single-digit territory.
   if (seniorityGap !== null && Math.abs(seniorityGap) > 3) {
-    overall = Math.min(overall, 35)
+    overall = Math.min(overall, 50)
     gatesTriggered.push("extreme_seniority_mismatch")
   }
 
@@ -1092,7 +1109,11 @@ export function computeFastScore({
   if (jobFamily !== "unknown" && candidateFamilies.length > 0) {
     const compatible = candidateFamilies.some((cf) => isRoleFamilyCompatible(cf, jobFamily))
     if (!compatible) {
-      overall = Math.min(overall, 40)
+      // Relaxed 40 → 55: the role-family classifier mis-fires on
+      // multidisciplinary roles (SWE → "Data Scientist", "Security Engineer"
+      // → "Software Engineer", etc.). Cap at 55 keeps these out of the
+      // "great match" band but doesn't bury legitimate adjacent fits.
+      overall = Math.min(overall, 55)
       gatesTriggered.push(`role_family_mismatch:${candidateFamilies[0]}→${jobFamily}`)
     }
   }
@@ -1122,13 +1143,13 @@ export function computeFastScore({
     seniority_score:       Math.round(experience.score * 100),
     education_score:       Math.round(education.score * 100),
     role_fit_score:        Math.round(title.score * 100),
-    location_score:        Math.round(location.score * 100),
+    location_score:        null,
     employment_type_score: null,
     sponsorship_score:     sponsorship.score,
     is_seniority_match:    experience.score >= 0.5,
     is_education_match:    education.score >= 0.6,
     is_role_fit_match:     title.score >= 0.5,
-    is_location_match:     location.locationMatch,
+    is_location_match:     null,
     is_employment_type_match: null,
     is_sponsorship_compatible: sponsorship.compatible,
     matching_skills_count: skills.matched.length,
@@ -1144,7 +1165,7 @@ export function computeFastScore({
       skillsScore:         Math.round(skills.score * 100),
       experienceScore:     Math.round(experience.score * 100),
       seniorityScore:      null,
-      locationScore:       Math.round(location.score * 100),
+      locationScore:       null,
       employmentTypeScore: null,
       sponsorshipScore:    sponsorship.score,
       visaFitScore:        null,

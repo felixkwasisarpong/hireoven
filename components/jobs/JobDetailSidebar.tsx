@@ -160,11 +160,6 @@ export default function JobDetailSidebar({ jobId, initialMatchScore }: Props) {
         value: analysis?.education_score ?? null,
       },
       {
-        label: "Location",
-        description: "You meet the location preference.",
-        value: fastScore?.location_score ?? null,
-      },
-      {
         label: hasDeepRoleFit ? "Job role fit" : "Authorization fit",
         description: hasDeepRoleFit
           ? "Your profile keywords align with this role."

@@ -49,6 +49,9 @@ const COMPUTER_VISION_SIGNAL_RE =
 const AGILE_SIGNAL_RE =
   /\b(?:scrum|kanban|sprint planning|agile\s+(?:methodolog(?:y|ies)|frameworks?|project management|software development|delivery|ceremon(?:y|ies)|practices?))\b/i
 
+const SALES_SIGNAL_RE =
+  /\b(?:b2b\s+sales|enterprise\s+sales|saas\s+sales|inside\s+sales|outbound\s+sales|sales\s+(?:experience|role|team|engineer|representative|manager|director|executive|operations|cycle|funnel|pipeline|quota|account|enablement|methodology|forecasting)|account\s+executive|sales\s+development\s+rep)\b/i
+
 
 export const SKILL_DEFINITIONS: SkillDefinition[] = [
   // ─── Languages ────────────────────────────────────────────────────────────
@@ -87,6 +90,11 @@ export const SKILL_DEFINITIONS: SkillDefinition[] = [
   { label: "Vite",          aliases: ["vite"] },
   { label: "React Native",  aliases: ["react native"] },
   { label: "Flutter",       aliases: ["flutter"] },
+  { label: "iOS",           aliases: ["ios", "ios development", "ios engineer", "ios developer", "ios applications", "ios apps"] },
+  { label: "Android",       aliases: ["android", "android development", "android engineer", "android developer", "android applications", "android apps", "android sdk"] },
+  { label: "SwiftUI",       aliases: ["swiftui"] },
+  { label: "Objective-C",   aliases: ["objective-c", "objective c", "obj-c"] },
+  { label: "Jetpack Compose", aliases: ["jetpack compose"] },
 
   // ─── Backend / Runtime ────────────────────────────────────────────────────
   { label: "Node.js",    aliases: ["node", "node.js", "nodejs"] },
@@ -160,7 +168,8 @@ export const SKILL_DEFINITIONS: SkillDefinition[] = [
   { label: "Data Visualization", aliases: ["data visualization", "data viz", "tableau", "power bi", "looker"] },
   { label: "NLP",               aliases: ["nlp", "natural language processing"], patterns: [NLP_SIGNAL_RE], requiresPattern: false },
   { label: "Computer Vision",   aliases: ["computer vision", "cv"], patterns: [COMPUTER_VISION_SIGNAL_RE], requiresPattern: false },
-  { label: "LLMs",              aliases: ["llm", "llms", "large language models", "generative ai", "gen ai", "rag"] },
+  { label: "LLMs",              aliases: ["llm", "llms", "large language models", "generative ai", "gen ai"] },
+  { label: "RAG",               aliases: ["rag", "retrieval-augmented generation", "retrieval augmented generation"] },
   { label: "Statistics",        aliases: ["statistics", "statistical analysis", "statistical modeling"] },
   { label: "A/B Testing",       aliases: ["a/b testing", "a/b test", "experimentation", "hypothesis testing"] },
 
@@ -169,7 +178,7 @@ export const SKILL_DEFINITIONS: SkillDefinition[] = [
   { label: "Penetration Testing", aliases: ["penetration testing", "pen testing", "pentest"] },
   { label: "Network Security",    aliases: ["network security"] },
   { label: "SIEM",                aliases: ["siem"] },
-  { label: "Compliance",          aliases: ["compliance", "sox", "hipaa", "gdpr", "pci", "iso 27001"] },
+  { label: "Compliance",          aliases: ["compliance", "sox", "hipaa", "gdpr", "ccpa", "pci", "iso 27001"] },
 
   // ─── Design & UX ─────────────────────────────────────────────────────────
   { label: "Figma",              aliases: ["figma"] },
@@ -182,7 +191,7 @@ export const SKILL_DEFINITIONS: SkillDefinition[] = [
   { label: "UX Research",        aliases: ["ux research", "user research", "usability testing"] },
   { label: "UI Design",          aliases: ["ui design", "user interface design"] },
   { label: "UX Design",          aliases: ["ux design", "user experience design"] },
-  { label: "Wireframing",        aliases: ["wireframing", "wireframes", "prototyping"] },
+  { label: "Wireframing",        aliases: ["wireframing", "wireframes"] },
   { label: "Design Systems",     aliases: ["design systems", "design system"] },
   { label: "Motion Design",      aliases: ["motion design", "motion graphics"] },
   { label: "Accessibility",      aliases: ["accessibility", "a11y", "wcag", "ada compliance"] },
@@ -226,7 +235,7 @@ export const SKILL_DEFINITIONS: SkillDefinition[] = [
   { label: "Influencer Marketing",  aliases: ["influencer marketing"] },
 
   // ─── Sales ───────────────────────────────────────────────────────────────
-  { label: "Sales",              aliases: ["sales", "b2b sales", "enterprise sales"] },
+  { label: "Sales",              aliases: ["sales"], patterns: [SALES_SIGNAL_RE], requiresPattern: true },
   { label: "Account Management", aliases: ["account management", "account executive"] },
   { label: "Business Development", aliases: ["business development", "biz dev"] },
   { label: "Lead Generation",    aliases: ["lead generation", "lead gen"] },
@@ -280,7 +289,7 @@ export const SKILL_DEFINITIONS: SkillDefinition[] = [
   { label: "Corporate Law",       aliases: ["corporate law", "corporate governance"] },
   { label: "Intellectual Property", aliases: ["intellectual property", "ip law", "trademark", "patent"] },
   { label: "Employment Law",      aliases: ["employment law", "labor law"] },
-  { label: "Privacy Law",         aliases: ["privacy law", "data privacy", "gdpr", "ccpa"] },
+  { label: "Privacy Law",         aliases: ["privacy law"] },
 
   // ─── Customer Success & Support ───────────────────────────────────────────
   { label: "Customer Success",    aliases: ["customer success", "csm"] },
@@ -321,7 +330,7 @@ export const SKILL_DEFINITIONS: SkillDefinition[] = [
   { label: "DO-178",            aliases: ["do-178", "do-178c", "do178"] },
   { label: "DO-254",            aliases: ["do-254", "do254"] },
   { label: "Systems Engineering", aliases: ["systems engineering", "model-based systems engineering", "mbse"] },
-  { label: "Robotics",          aliases: ["robotics", "robot operating system", "ros", "ros2"] },
+  { label: "Robotics",          aliases: ["robotics", "robot operating system", "ros2"] },
   { label: "PLC",               aliases: ["plc", "programmable logic controller", "ladder logic"] },
   { label: "CAM",               aliases: ["cam", "computer-aided manufacturing"] },
   { label: "Mechanical Design", aliases: ["mechanical design", "mechanical engineering", "mechanism design"] },
@@ -374,7 +383,7 @@ export const SKILL_DEFINITIONS: SkillDefinition[] = [
   // ─── Media & Creative Tools ───────────────────────────────────────────────
   { label: "Premiere Pro",      aliases: ["premiere pro", "adobe premiere", "premiere"] },
   { label: "Final Cut Pro",     aliases: ["final cut pro", "final cut", "fcp"] },
-  { label: "DaVinci Resolve",   aliases: ["davinci resolve", "resolve"] },
+  { label: "DaVinci Resolve",   aliases: ["davinci resolve"] },
   { label: "Avid",              aliases: ["avid", "avid media composer", "media composer"] },
   { label: "Logic Pro",         aliases: ["logic pro", "logic x", "logic audio"] },
   { label: "Pro Tools",         aliases: ["pro tools", "avid pro tools"] },
@@ -435,7 +444,7 @@ export const SKILL_DEFINITIONS: SkillDefinition[] = [
   { label: "Time Management",      aliases: ["time management"] },
   { label: "Mentoring",            aliases: ["mentoring", "mentorship", "coaching"] },
   { label: "Public Speaking",      aliases: ["public speaking", "presentations", "presenting"] },
-  { label: "Writing",              aliases: ["technical writing", "writing skills", "documentation"] },
+  { label: "Writing",              aliases: ["technical writing", "writing skills", "copywriting", "content writing"] },
   { label: "Adaptability",         aliases: ["adaptability", "adaptable"] },
   { label: "Organizational Skills", aliases: ["organizational skills", "highly organized"] },
 ]
@@ -480,6 +489,11 @@ const FRAMEWORK_SKILLS = new Set([
   "Redux",
   "React Native",
   "Flutter",
+  "iOS",
+  "Android",
+  "SwiftUI",
+  "Objective-C",
+  "Jetpack Compose",
   "Node.js",
   "Django",
   "FastAPI",
@@ -692,8 +706,78 @@ export function normalizeSkillList(values: Array<string | null | undefined>, lim
   return out
 }
 
+// Sentences that are clearly employer boilerplate, anti-fraud, EEO, salary
+// disclaimers, or generic recruiter copy. "Recruiting" / "Compensation" /
+// "Compliance" frequently false-positive when scanned in these contexts on
+// tech-job postings — strip them before skill extraction.
+const BOILERPLATE_SENTENCE_PATTERNS: RegExp[] = [
+  // EEO / non-discrimination
+  /\bequal\s+opportunity\s+employ/i,
+  /\bwithout\s+regard\s+to\s+(?:race|color|gender|sex|religion|national|age|disabilit|sexual\s+orientation)/i,
+  /\bprotected\s+veteran/i,
+  /\baffirmative\s+action/i,
+  /\bqualified\s+individuals?\s+with\s+disabilit/i,
+  /\breasonable\s+accommodation/i,
+  /\b(?:inclusive|accessible)\s+(?:recruiting|hiring|application|interview|workplace)/i,
+  /\b(?:candidates?|applicants?|employees?)\s+with\s+disabilit/i,
+  /\b(?:criminal\s+history|fair\s+chance\s+ordinance|ban\s+the\s+box)/i,
+  /\bbackground\s+check/i,
+  /\bwe\s+(?:are\s+committed\s+to|believe\s+in|value|celebrate)\s+(?:diversity|inclusion|equity|differences)/i,
+  /\bdiversity,?\s+equity,?\s+and\s+inclusion/i,
+
+  // Anti-fraud / hiring-fraud disclaimers
+  /\bpotentially\s+fraudulent\s+job/i,
+  /\bnever\s+ask(?:s)?\s+for\s+(?:any\s+)?(?:financial|payment|fee|money)/i,
+  /\bfraudulent\s+(?:job|recruiting)\s+post/i,
+  /\bposing\s+as\s+\w+\s+employees?/i,
+  /\bdoes\s+not\s+work\s+with\s+any\s+recruiters?\s+or\s+third\s+parties?/i,
+  /\bif\s+applicable,?\s+your\s+recruiter/i,
+  /\brecruiter\s+can\s+share\s+more\s+about\s+the\s+(?:specific\s+)?pay/i,
+  /\bfollows?\s+a\s+recruiting\s+process/i,
+  /\b(?:phishing|fraudulent)\s+(?:scam|attempt|email)/i,
+
+  // Benefits / total-rewards marketing
+  /\bcomprehensive\s+benefits?\s+package/i,
+  /\btotal\s+rewards?\s+(?:package|program|statement|philosophy)/i,
+  /\blearn\s+more\s+about\s+our\s+(?:total\s+rewards|benefits|culture|values|mission)/i,
+  /\b(?:competitive|generous|robust)\s+(?:salary|compensation|pay|benefits)/i,
+  /\b(?:medical|dental|vision)(?:,\s+(?:medical|dental|vision))+/i,
+  /\b401\s?\(k\)\s+(?:plan|match|matching)/i,
+  /\bpaid\s+(?:time\s+off|holidays?|parental\s+leave)/i,
+  /\btuition\s+(?:reimbursement|assistance)/i,
+
+  // Marketing CTAs / "About us" boilerplate / social links
+  /\bapply\s+(?:today|now|here)\b/i,
+  /\bjoin\s+(?:our\s+team|us)\b.*\b(?:today|now)\b/i,
+  /\b(?:check\s+out|learn\s+more|find\s+out\s+more|read\s+more)\b.*\b(?:life|culture|career|story|values)\b/i,
+  /\bwww\.linkedin\.com\/company\//i,
+  /\b(?:visit|see)\s+(?:our\s+)?(?:website|careers\s+page)\b/i,
+  /\babout\s+(?:us|our\s+company|the\s+role)\s*[:\-]/i,
+  /\bwe\s+are\s+(?:proud|excited|thrilled|committed)\s+to\b/i,
+  /\bare\s+you\s+a\s+good\s+match/i,
+
+  // Salary disclaimers (very common at JD bottoms)
+  /\bsalary\s+(?:range|may\s+vary|will\s+vary|depend(?:s|ing)?)/i,
+  /\bcompensation\s+(?:will|may|depends)\b/i,
+  /\bpay\s+range\s+(?:for\s+this\s+position|is)/i,
+]
+
+function stripBoilerplateSentences(text: string): string {
+  if (!text) return ""
+  // Split on sentence-ending punctuation followed by whitespace, OR newlines —
+  // boilerplate is often emitted as separate paragraphs without trailing punctuation.
+  return text
+    .split(/(?<=[.!?])\s+|\n+/)
+    .filter((sentence) => {
+      const s = sentence.trim()
+      if (!s) return false
+      return !BOILERPLATE_SENTENCE_PATTERNS.some((re) => re.test(s))
+    })
+    .join(" ")
+}
+
 export function extractSkillsFromText(...parts: Array<string | null | undefined>) {
-  const blob = parts.filter(Boolean).join(" ")
+  const blob = stripBoilerplateSentences(parts.filter(Boolean).join(" "))
   if (!blob.trim()) return []
 
   const found: string[] = []
@@ -724,6 +808,19 @@ export function extractSkillsFromText(...parts: Array<string | null | undefined>
   return normalizeSkillList(found)
 }
 
+// Skills that frequently false-positive when extracted from employer boilerplate
+// (EEO statements, anti-fraud notices, salary disclaimers, generic recruiter copy).
+// These are kept only when an alias still matches *outside* boilerplate text.
+const BOILERPLATE_PRONE_SKILLS = new Set([
+  "Recruiting",
+  "Compensation",
+  "Compliance",
+  "Customer Support",
+  "Sales",
+  "Writing",
+  "Public Speaking",
+])
+
 export function filterSkillsByTextEvidence(
   values: Array<string | null | undefined>,
   ...parts: Array<string | null | undefined>
@@ -732,11 +829,21 @@ export function filterSkillsByTextEvidence(
   const blob = parts.filter(Boolean).join(" ")
   if (!blob.trim()) return normalized
 
+  const cleanBlob = stripBoilerplateSentences(blob)
+
   return normalized.filter((skill) => {
+    const canonical = canonicalizeSkill(skill)
     // "Agile" is frequently a prose adjective ("agile environment") in JDs.
     // Keep it only when stronger framework/methodology context is present.
-    if (canonicalizeSkill(skill) === "Agile") {
-      return AGILE_SIGNAL_RE.test(blob)
+    if (canonical === "Agile") {
+      return AGILE_SIGNAL_RE.test(cleanBlob)
+    }
+    // Soft-skill / role-label terms that show up in EEO and anti-fraud copy.
+    // Require evidence outside boilerplate before keeping them.
+    if (BOILERPLATE_PRONE_SKILLS.has(canonical)) {
+      const def = SKILL_DEFINITIONS.find((d) => d.label === canonical)
+      if (!def) return true
+      return def.aliases.some((alias) => aliasPattern(alias).test(cleanBlob))
     }
     return true
   })

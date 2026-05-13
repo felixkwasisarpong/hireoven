@@ -1,23 +1,12 @@
 import webpush from "web-push"
-import { Resend } from "resend"
 import { logApiUsage } from "@/lib/admin/usage"
 import { removeSubscription, getUserSubscriptions } from "@/lib/alerts/push-subscriptions"
-import { getHireovenEmailLogoUrl } from "@/lib/email/branding"
-import { getAlertsFromEmail } from "@/lib/email/identity"
 import { env } from "@/lib/env"
 import { getPostgresPool } from "@/lib/postgres/server"
-import type { Company, Job, NotificationChannel, Profile } from "@/types"
+import type { Company, Job, NotificationChannel } from "@/types"
 
 type JobWithCompanyContext = Job & {
   company: Pick<Company, "id" | "name" | "logo_url" | "domain" | "sponsors_h1b"> | null
-}
-
-const resend = process.env.RESEND_API_KEY
-  ? new Resend(process.env.RESEND_API_KEY)
-  : null
-
-function getBaseUrl() {
-  return process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
 }
 
 function configureWebPush() {
@@ -26,17 +15,6 @@ function configureWebPush() {
   const email = env.VAPID_EMAIL
   if (!publicKey || !privateKey || !email) throw new Error("Missing VAPID environment variables")
   webpush.setVapidDetails(email, publicKey, privateKey)
-}
-
-async function getProfileForNotifications(userId: string) {
-  const pool = getPostgresPool()
-  const result = await pool.query<Pick<Profile, "id" | "email" | "full_name">>(
-    `SELECT id, email, full_name FROM profiles WHERE id = $1 LIMIT 1`,
-    [userId]
-  )
-  const data = result.rows[0]
-  if (!data) throw new Error(`Profile not found for user ${userId}`)
-  return data
 }
 
 async function hydrateJobs(jobs: Job[]): Promise<JobWithCompanyContext[]> {
@@ -50,20 +28,6 @@ async function hydrateJobs(jobs: Job[]): Promise<JobWithCompanyContext[]> {
   return jobs.map((j) => ({ ...j, company: companyMap.get(j.company_id) ?? null }))
 }
 
-function esc(value: string) {
-  return value
-    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;").replace(/'/g, "&#39;")
-}
-
-function formatFreshness(timestamp: string) {
-  const mins = Math.max(1, Math.floor((Date.now() - new Date(timestamp).getTime()) / 60_000))
-  if (mins < 60) return `${mins}m ago`
-  const h = Math.floor(mins / 60)
-  if (h < 24) return `${h}h ago`
-  return `${Math.floor(h / 24)}d ago`
-}
-
 function getLocationLabel(job: JobWithCompanyContext) {
   if (job.is_remote && job.location) return `${job.location} · Remote`
   if (job.is_remote) return "Remote"
@@ -71,300 +35,16 @@ function getLocationLabel(job: JobWithCompanyContext) {
   return job.location ?? "Location not listed"
 }
 
-// ── Job row (LinkedIn-style — no per-card apply button) ──────────────────────
-
-/** Returns an absolute proxy URL so email clients fetch logos through our
- *  server rather than hitting logo.dev directly (which validates the request
- *  origin and rejects requests from email-client IP ranges). */
-function logoProxyUrl(domain: string | null | undefined): string | null {
-  if (!domain) return null
-  const base = getBaseUrl()
-  return `${base}/api/logo?domain=${encodeURIComponent(domain.trim().toLowerCase())}`
-}
-
-function renderJobRow(job: JobWithCompanyContext, index: number) {
-  const co = job.company
-  const companyName = co?.name ?? "Tracked company"
-  const proxyUrl = logoProxyUrl(co?.domain)
-
-  const logoHtml = proxyUrl
-    ? `<img src="${esc(proxyUrl)}" alt="${esc(companyName)}" width="56" height="56"
-          style="width:56px;height:56px;border-radius:10px;object-fit:contain;border:1px solid #e2e8f0;background:#fff;display:block;" />`
-    : `<div style="width:56px;height:56px;border-radius:10px;background:linear-gradient(135deg,#FF5C18,#FF9A3C);font-size:22px;font-weight:800;color:#fff;text-align:center;line-height:56px;">${esc(companyName.charAt(0).toUpperCase())}</div>`
-
-  // Sponsorship score used as a proxy match signal when no AI score is available
-  const rawScore = job.sponsorship_score ?? null
-  const matchBadge = rawScore !== null && rawScore >= 70
-    ? (() => {
-        const s = Math.round(rawScore)
-        const color = s >= 85 ? "#15803d" : "#1d4ed8"
-        const bg   = s >= 85 ? "#f0fdf4" : "#eff6ff"
-        const bd   = s >= 85 ? "#bbf7d0" : "#bfdbfe"
-        return `<span style="display:inline-block;background:${bg};border:1px solid ${bd};color:${color};border-radius:4px;padding:2px 7px;font-size:11px;font-weight:700;">${s}% signal</span>`
-      })()
-    : ""
-
-  // Sponsorship signal
-  let sponsorBadge = ""
-  if (job.sponsors_h1b)
-    sponsorBadge = `<span style="display:inline-block;background:#f0fdf4;border:1px solid #bbf7d0;color:#15803d;border-radius:4px;padding:2px 7px;font-size:11px;font-weight:600;">✓ H1B sponsor</span>`
-  else if (job.requires_authorization)
-    sponsorBadge = `<span style="display:inline-block;background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;border-radius:4px;padding:2px 7px;font-size:11px;font-weight:600;">No sponsorship</span>`
-  else if ((job.sponsorship_score ?? 0) > 60)
-    sponsorBadge = `<span style="display:inline-block;background:#faf5ff;border:1px solid #e9d5ff;color:#7c3aed;border-radius:4px;padding:2px 7px;font-size:11px;font-weight:600;">Likely sponsors</span>`
-
-  const badges = [matchBadge, sponsorBadge].filter(Boolean).join("&nbsp;")
-
-  const jobUrl = `${getBaseUrl()}/dashboard?jobId=${esc(job.id)}`
-  const divider = index > 0 ? `<tr><td colspan="2" style="padding:0 0 18px;"><div style="height:1px;background:#f1f5f9;"></div></td></tr>` : ""
-
-  return `
-    ${divider}
-    <tr>
-      <td style="vertical-align:top;padding-right:16px;width:72px;padding-bottom:20px;">${logoHtml}</td>
-      <td style="vertical-align:top;padding-bottom:20px;">
-        <div style="font-size:16px;font-weight:700;color:#0f172a;line-height:1.3;margin-bottom:4px;">
-          <a href="${jobUrl}" style="color:#0f172a;text-decoration:none;">${esc(job.title)}</a>
-        </div>
-        <div style="font-size:13px;color:#475569;margin-bottom:2px;">${esc(companyName)}</div>
-        <div style="font-size:12px;color:#94a3b8;margin-bottom:8px;">${esc(getLocationLabel(job))} &nbsp;·&nbsp; ${formatFreshness(job.first_detected_at)}</div>
-        ${badges ? `<div>${badges}</div>` : ""}
-      </td>
-    </tr>
-  `
-}
-
-
-// ── Full email shell ──────────────────────────────────────────────────────────
-
-function renderEmailShell({
-  preheader,
-  headerTitle,
-  headerSub,
-  jobRowsHtml,
-  viewAllUrl,
-  viewAllLabel,
-  recipientName,
-  recipientEmail,
-  alertNote,
-  manageUrl,
-}: {
-  preheader: string
-  headerTitle: string
-  headerSub: string
-  jobRowsHtml: string
-  viewAllUrl: string
-  viewAllLabel: string
-  recipientName: string | null
-  recipientEmail: string
-  alertNote: string
-  manageUrl: string
-}) {
-  const base = getBaseUrl()
-  const year = new Date().getFullYear()
-
-  return `<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/></head>
-<body style="margin:0;padding:0;background:#f3f2ef;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
-
-  <div style="display:none;max-height:0;overflow:hidden;font-size:1px;color:#f3f2ef;">${esc(preheader)}</div>
-
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f2ef;padding:24px 16px 0;">
-    <tr><td align="center">
-      <table width="100%" style="max-width:584px;" cellpadding="0" cellspacing="0">
-
-        <!-- Wordmark header -->
-        <tr><td style="padding:0 0 16px;">
-          <img src="${getHireovenEmailLogoUrl("wordmark")}" alt="Hireoven" height="28"
-               style="display:block;height:28px;width:auto;border:0;outline:none;text-decoration:none;" />
-        </td></tr>
-
-        <!-- White card -->
-        <tr><td style="background:#ffffff;border-radius:8px;overflow:hidden;border:1px solid #e2e8f0;">
-
-          <!-- Card header -->
-          <table width="100%" cellpadding="0" cellspacing="0">
-            <tr><td style="padding:20px 24px 16px;border-bottom:1px solid #f1f5f9;">
-              <div style="font-size:22px;font-weight:800;color:#0f172a;line-height:1.2;margin-bottom:4px;">${esc(headerTitle)}</div>
-              <div style="font-size:14px;color:#64748b;line-height:1.5;">${esc(headerSub)}</div>
-            </td></tr>
-          </table>
-
-          <!-- Job list -->
-          <table width="100%" cellpadding="0" cellspacing="0">
-            <tr><td style="padding:20px 24px 4px;">
-              <table width="100%" cellpadding="0" cellspacing="0">
-                ${jobRowsHtml}
-              </table>
-            </td></tr>
-          </table>
-
-          <!-- View all button -->
-          <table width="100%" cellpadding="0" cellspacing="0">
-            <tr><td style="padding:4px 24px 24px;">
-              <a href="${esc(viewAllUrl)}"
-                 style="display:inline-block;border:1.5px solid #FF5C18;color:#FF5C18;text-decoration:none;padding:10px 24px;border-radius:999px;font-size:14px;font-weight:700;">
-                ${esc(viewAllLabel)}
-              </a>
-            </td></tr>
-          </table>
-
-        </td></tr>
-
-        <!-- LinkedIn-style footer -->
-        <tr><td style="padding:24px 4px 32px;">
-          <div style="font-size:12px;color:#64748b;line-height:1.7;">
-            This email was sent to <strong>${recipientName ? esc(recipientName) + " (" + esc(recipientEmail) + ")" : esc(recipientEmail)}</strong>.<br>
-            ${esc(alertNote)}<br>
-            <a href="${esc(manageUrl)}" style="color:#64748b;text-decoration:underline;">Manage alerts</a>
-            &nbsp;&middot;&nbsp;
-            <a href="${esc(manageUrl)}" style="color:#64748b;text-decoration:underline;">Unsubscribe</a>
-            &nbsp;&middot;&nbsp;
-            <a href="${esc(base)}" style="color:#64748b;text-decoration:underline;">Help</a>
-          </div>
-          <div style="margin-top:12px;">
-            <img src="${getHireovenEmailLogoUrl("wordmark")}" alt="Hireoven" height="20"
-                 style="display:block;height:20px;width:auto;border:0;outline:none;text-decoration:none;" />
-          </div>
-          <div style="font-size:11px;color:#94a3b8;margin-top:6px;">
-            &copy; ${year} Hireoven. Jobs served fresh.
-          </div>
-        </td></tr>
-
-      </table>
-    </td></tr>
-  </table>
-
-</body>
-</html>`
-}
-
-function buildAlertDashboardUrl(alertName: string) {
-  const url = new URL("/dashboard", getBaseUrl())
-  url.searchParams.set("alert", alertName)
-  return url.toString()
-}
-
-function buildManageAlertsUrl() {
-  return new URL("/dashboard/alerts", getBaseUrl()).toString()
-}
-
-// ── Rate limiting ─────────────────────────────────────────────────────────────
-
-export async function hasReachedEmailRateLimit(userId: string): Promise<boolean> {
-  const pool = getPostgresPool()
-  const oneHourAgo = new Date(Date.now() - 3_600_000).toISOString()
-  const result = await pool.query<{ count: string }>(
-    `SELECT COUNT(*)::text AS count FROM alert_notifications
-     WHERE user_id = $1 AND sent_at >= $2 AND channel IN ('email', 'both')`,
-    [userId, oneHourAgo]
-  )
-  return Number(result.rows[0]?.count ?? 0) >= 10
-}
-
-// ── Email senders ─────────────────────────────────────────────────────────────
-
-export async function sendEmailAlert(userId: string, jobs: Job[], alertName: string): Promise<void> {
-  if (!resend) throw new Error("Missing RESEND_API_KEY")
-
-  const [profile, hydratedJobs] = await Promise.all([
-    getProfileForNotifications(userId),
-    hydrateJobs(jobs),
-  ])
-  if (!profile.email) throw new Error(`User ${userId} has no email address`)
-
-  const total = hydratedJobs.length
-  const visible = hydratedJobs.slice(0, 5)
-  const jobRowsHtml = visible.map((j, i) => renderJobRow(j, i)).join("")
-  const viewAllLabel = total > 5 ? `See all ${total} matches` : "View all matching jobs"
-
-  const topCompanies = [...new Set(visible.slice(0, 2).map(j => j.company?.name).filter(Boolean))]
-  const companyStr = topCompanies.length > 0
-    ? ` from ${topCompanies.join(" and ")}${total > topCompanies.length ? ` +${total - topCompanies.length} more` : ""}`
-    : ""
-
-  const subject = total === 1
-    ? `New match${companyStr} — "${alertName}"`
-    : `${total} new matches${companyStr} — "${alertName}"`
-
-  const headerSub = topCompanies.length > 0
-    ? `Roles from ${topCompanies.join(", ")}${total > topCompanies.length ? ` and ${total - topCompanies.length} more` : ""} matched your alert.`
-    : `${total} role${total === 1 ? "" : "s"} matched your alert.`
-
-  const html = renderEmailShell({
-    preheader: subject,
-    headerTitle: total === 1 ? "1 new match for you" : `${total} new matches for you`,
-    headerSub,
-    jobRowsHtml,
-    viewAllUrl: buildAlertDashboardUrl(alertName),
-    viewAllLabel,
-    recipientName: profile.full_name ?? null,
-    recipientEmail: profile.email,
-    alertNote: `You're receiving this because of your saved alert "${alertName}".`,
-    manageUrl: buildManageAlertsUrl(),
-  })
-
-  const { error } = await resend.emails.send({
-    from: getAlertsFromEmail(),
-    to: [profile.email],
-    subject,
-    html,
-  })
-  if (error) throw new Error(error.message)
-
-  await logApiUsage({ service: "resend", operation: "email", tokens_used: null, cost_usd: 0 })
-}
-
-export async function sendWatchlistAlert(userId: string, jobs: Job[], companyName: string): Promise<void> {
-  if (!resend) throw new Error("Missing RESEND_API_KEY")
-
-  const [profile, hydratedJobs] = await Promise.all([
-    getProfileForNotifications(userId),
-    hydrateJobs(jobs),
-  ])
-  if (!profile.email) throw new Error(`User ${userId} has no email address`)
-
-  const total = jobs.length
-  const visible = hydratedJobs.slice(0, 5)
-  const jobRowsHtml = visible.map((j, i) => renderJobRow(j, i)).join("")
-
-  const topTitles = visible.slice(0, 2).map(j => j.title).filter(Boolean)
-  const rolesStr = topTitles.length > 0
-    ? `: ${topTitles[0]}${topTitles.length > 1 ? `, ${topTitles[1]}` : ""}${total > 2 ? ` +${total - 2} more` : ""}`
-    : ""
-
-  const subject = total === 1
-    ? `${companyName} is hiring${rolesStr}`
-    : `${companyName} posted ${total} new roles${rolesStr}`
-
-  const html = renderEmailShell({
-    preheader: subject,
-    headerTitle: `${companyName} is hiring`,
-    headerSub: total === 1
-      ? `A new role just landed from a company on your watchlist.`
-      : `${total} new roles just landed from a company on your watchlist.`,
-    jobRowsHtml,
-    viewAllUrl: new URL("/dashboard/watchlist", getBaseUrl()).toString(),
-    viewAllLabel: "View all watchlist jobs",
-    recipientName: profile.full_name ?? null,
-    recipientEmail: profile.email,
-    alertNote: `You're receiving this because ${companyName} is on your watchlist.`,
-    manageUrl: new URL("/dashboard/watchlist", getBaseUrl()).toString(),
-  })
-
-  const { error } = await resend.emails.send({
-    from: getAlertsFromEmail(),
-    to: [profile.email],
-    subject,
-    html,
-  })
-  if (error) throw new Error(error.message)
-
-  await logApiUsage({ service: "resend", operation: "watchlist-email", tokens_used: null, cost_usd: 0 })
-}
-
 // ── Push notification ─────────────────────────────────────────────────────────
+//
+// Instant per-job email alerts (and their watchlist sibling) used to live in
+// this file. They burned Resend credit on every crawl tick — every matching
+// alert fired an email regardless of match quality, and during a big harvest
+// that meant hundreds of low-signal sends. We removed those senders entirely.
+// Daily / weekly digests + recent-jobs crons remain (they call resend
+// directly, not through this module). Push notifications stay because the
+// device-side opt-in already provides quality control and they don't cost
+// per-send.
 
 export async function sendPushNotification(userId: string, job: Job, type: "alert" | "watchlist"): Promise<void> {
   configureWebPush()

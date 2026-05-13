@@ -2,23 +2,18 @@ import { NextRequest, NextResponse } from "next/server"
 import { matchJobToAlerts, matchJobToWatchlists } from "@/lib/alerts/matcher"
 import {
   combineChannels,
-  hasReachedEmailRateLimit,
-  sendEmailAlert,
   sendPushNotification,
-  sendWatchlistAlert,
 } from "@/lib/alerts/sender"
 import { verifyWebhookSignature } from "@/lib/alerts/webhook"
-import { scoreJobsForUser } from "@/lib/matching/batch-scorer"
 import { getPostgresPool } from "@/lib/postgres/server"
 import type { Job, JobAlert, NotificationType, Profile } from "@/types"
 
 /**
- * Minimum match-score (0-100) required for an *instant* alert email to fire.
- * Set to 75 so users only get pinged for jobs that are genuinely strong fits.
- * Users without a primary resume have no computable score and are exempt —
- * they get the current behaviour (alerts filter is the only gate).
+ * Instant email alerts were removed — every webhook fire used to mail every
+ * matching alert regardless of match quality, which burned Resend credit
+ * during big crawls. The daily / weekly / recent-jobs digest crons still
+ * cover the email channel. This route now only triggers push notifications.
  */
-const INSTANT_EMAIL_MIN_MATCH_SCORE = 75
 
 type JobWebhookPayload = {
   type?: "INSERT" | "UPDATE" | "DELETE"
@@ -36,13 +31,10 @@ type NotificationProfile = Pick<
 type TriggerSummary = {
   matchedAlerts: number
   matchedWatchlists: number
-  emailSent: number
   pushSent: number
   queued: number
   duplicatesSkipped: number
   notificationsLogged: number
-  rateLimitedEmails: number
-  belowMatchThreshold: number
   errors: string[]
 }
 
@@ -82,18 +74,6 @@ async function fetchProfiles(userIds: string[]) {
   return new Map(
     data.map((profile) => [profile.id, profile])
   )
-}
-
-async function fetchCompanyName(companyId: string) {
-  const pool = getPostgresPool()
-  const result = await pool.query<{ name: string }>(
-    `SELECT name
-     FROM companies
-     WHERE id = $1
-     LIMIT 1`,
-    [companyId]
-  )
-  return result.rows[0]?.name ?? "A company you watch"
 }
 
 async function fetchExistingNotifications(jobId: string, userIds: string[]) {
@@ -175,21 +155,17 @@ export async function POST(request: NextRequest) {
   const summary: TriggerSummary = {
     matchedAlerts: 0,
     matchedWatchlists: 0,
-    emailSent: 0,
     pushSent: 0,
     queued: 0,
     duplicatesSkipped: 0,
     notificationsLogged: 0,
-    rateLimitedEmails: 0,
-    belowMatchThreshold: 0,
     errors: [],
   }
 
   try {
-    const [matchedAlerts, watchlistUsers, companyName] = await Promise.all([
+    const [matchedAlerts, watchlistUsers] = await Promise.all([
       matchJobToAlerts(job),
       matchJobToWatchlists(job),
-      fetchCompanyName(job.company_id),
     ])
 
     summary.matchedAlerts = matchedAlerts.length
@@ -233,43 +209,7 @@ export async function POST(request: NextRequest) {
       }
 
       const primaryAlert = alerts[0]
-      let emailSent = false
       let pushSent = false
-
-      // Score-quality gate: only email when the per-user match score is >= 75.
-      // Users without a primary resume have no computable score — exempt them
-      // so their alert filter remains the only gate (current behaviour).
-      let belowThreshold = false
-      try {
-        const scoreMap = await scoreJobsForUser(userId, [job.id])
-        const matchScore = scoreMap.get(job.id)
-        if (matchScore && matchScore.overall_score < INSTANT_EMAIL_MIN_MATCH_SCORE) {
-          belowThreshold = true
-          summary.belowMatchThreshold += 1
-        }
-      } catch (error) {
-        // Don't let a scoring failure block alerts — fall back to legacy behaviour.
-        console.warn("[alerts] match-score gate skipped due to error", error)
-      }
-
-      if (profile.email_alerts && !belowThreshold) {
-        try {
-          const limited = await hasReachedEmailRateLimit(userId)
-          if (limited) {
-            summary.rateLimitedEmails += 1
-            console.warn(`[alerts] email rate limit hit for user ${userId}`)
-          } else {
-            await sendEmailAlert(userId, [job], primaryAlert.name ?? "Saved alert")
-            emailSent = true
-            summary.emailSent += 1
-          }
-        } catch (error) {
-          console.error("[alerts] email send failed", error)
-          summary.errors.push(
-            `Alert email failed for user ${userId}: ${(error as Error).message}`
-          )
-        }
-      }
 
       if (profile.push_alerts) {
         try {
@@ -284,7 +224,7 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      const channel = combineChannels({ emailSent, pushSent })
+      const channel = combineChannels({ emailSent: false, pushSent })
       if (!channel) continue
 
       await insertNotificationLog({
@@ -311,27 +251,7 @@ export async function POST(request: NextRequest) {
         continue
       }
 
-      let emailSent = false
       let pushSent = false
-
-      if (profile.email_alerts) {
-        try {
-          const limited = await hasReachedEmailRateLimit(userId)
-          if (limited) {
-            summary.rateLimitedEmails += 1
-            console.warn(`[alerts] email rate limit hit for watchlist user ${userId}`)
-          } else {
-            await sendWatchlistAlert(userId, [job], companyName)
-            emailSent = true
-            summary.emailSent += 1
-          }
-        } catch (error) {
-          console.error("[alerts] watchlist email failed", error)
-          summary.errors.push(
-            `Watchlist email failed for user ${userId}: ${(error as Error).message}`
-          )
-        }
-      }
 
       if (profile.push_alerts) {
         try {
@@ -346,7 +266,7 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      const channel = combineChannels({ emailSent, pushSent })
+      const channel = combineChannels({ emailSent: false, pushSent })
       if (!channel) continue
 
       await insertNotificationLog({

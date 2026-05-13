@@ -15,6 +15,14 @@ const BLOCKED_TITLE_PATTERNS = [
 
 const BLOCKED_PATH_PATTERNS = [/\/jobs\/login$/i, /\/jobs\/intro$/i, /\/intro$/i]
 
+// Generic listing / search-results URLs that don't point to a specific posting.
+// LinkedIn's "linkster" public discovery emits URLs like
+// `linkedin.com/jobs/<slug>-jobs?trk=public_jobs_linkster_link` — a search
+// page, not a real posting. Real postings live at `linkedin.com/jobs/view/<id>`.
+const BLOCKED_HOST_PATH_PATTERNS: Array<{ host: RegExp; path: RegExp }> = [
+  { host: /(^|\.)linkedin\.com$/i, path: /^\/jobs\/[^/]+-jobs$/i },
+]
+
 export function isBlockedCrawlTitle(title: string): boolean {
   const normalized = title.replace(/\s+/g, " ").trim()
   if (!normalized || normalized.length < 3) return true
@@ -27,6 +35,10 @@ export function isBlockedApplyUrl(url: string): boolean {
     const path = parsed.pathname.replace(/\/+$/, "")
     if (BLOCKED_PATH_PATTERNS.some((pattern) => pattern.test(path))) return true
     if (parsed.searchParams.has("loginOnly") && parsed.searchParams.get("loginOnly") === "1") {
+      return true
+    }
+    const host = parsed.hostname
+    if (BLOCKED_HOST_PATH_PATTERNS.some(({ host: h, path: p }) => h.test(host) && p.test(path))) {
       return true
     }
     return false
