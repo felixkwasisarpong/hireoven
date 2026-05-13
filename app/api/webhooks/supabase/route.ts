@@ -7,21 +7,24 @@ import {
   sendWatchlistAlert,
 } from "@/lib/alerts/sender"
 import { requireWebhookAuth } from "@/lib/env"
-import { scoreNewJobForAllUsers } from "@/lib/matching/batch-scorer"
+import { scoreJobsForUser, scoreNewJobForAllUsers } from "@/lib/matching/batch-scorer"
 import { getPostgresPool } from "@/lib/postgres/server"
-import type { Job, NotificationChannel, NotificationType } from "@/types"
+import type { AlertFrequency, Job, NotificationChannel, NotificationType } from "@/types"
+
+const INSTANT_EMAIL_MIN_MATCH_SCORE = 75
 
 type ProfileChannels = {
   id: string
   email: string | null
   email_alerts: boolean | null
   push_alerts: boolean | null
+  alert_frequency: AlertFrequency | null
 }
 
 async function fetchProfileChannels(userId: string): Promise<ProfileChannels | null> {
   const pool = getPostgresPool()
   const { rows } = await pool.query<ProfileChannels>(
-    `SELECT id, email, email_alerts, push_alerts FROM profiles WHERE id = $1 LIMIT 1`,
+    `SELECT id, email, email_alerts, push_alerts, alert_frequency FROM profiles WHERE id = $1 LIMIT 1`,
     [userId]
   )
   return rows[0] ?? null
@@ -96,8 +99,26 @@ async function processNotifications(job: Job) {
 
       if (!profile) continue
 
+      // Only fire instant emails/pushes for users who explicitly opted into
+      // instant frequency. Daily/weekly users are handled by digest crons.
+      if (profile.alert_frequency !== "instant") continue
+
+      // Score-quality gate: skip the instant email when the per-user match
+      // score is below threshold. Users without a primary resume have no
+      // computable score — fall through to legacy behaviour for them.
+      let belowThreshold = false
+      try {
+        const scoreMap = await scoreJobsForUser(alert.user_id, [job.id])
+        const matchScore = scoreMap.get(job.id)
+        if (matchScore && matchScore.overall_score < INSTANT_EMAIL_MIN_MATCH_SCORE) {
+          belowThreshold = true
+        }
+      } catch {
+        // Don't let scoring failure block alerts.
+      }
+
       const channel = combineChannels({
-        emailSent: Boolean(profile.email_alerts),
+        emailSent: Boolean(profile.email_alerts) && !belowThreshold,
         pushSent: Boolean(profile.push_alerts),
       })
       if (!channel) continue
@@ -134,6 +155,10 @@ async function processNotifications(job: Job) {
         const profile = await fetchProfileChannels(userId)
 
         if (!profile) continue
+
+        // Watchlist instant pings only fire for users on instant frequency;
+        // daily/weekly users see watchlist hits inside their digest.
+        if (profile.alert_frequency !== "instant") continue
 
         const channel = combineChannels({
           emailSent: Boolean(profile.email_alerts),

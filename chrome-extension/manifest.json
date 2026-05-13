@@ -10,6 +10,7 @@
     "scripting"
   ],
   "host_permissions": [
+    "http://localhost:3000/*",
     "https://hireoven.com/*",
     "https://*.hireoven.com/*",
     "https://*.greenhouse.io/*",

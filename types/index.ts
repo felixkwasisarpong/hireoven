@@ -1307,6 +1307,7 @@ export type ScoreExplanation = {
 export type JobWithMatchScore = JobWithCompany & {
   match_score?: JobMatchScore | null;
   final_rank?: number | null;
+  is_user_saved?: boolean;
 };
 
 // ---------------------------------------------------------------------------

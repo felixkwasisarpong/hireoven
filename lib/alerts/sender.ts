@@ -2,6 +2,7 @@ import webpush from "web-push"
 import { Resend } from "resend"
 import { logApiUsage } from "@/lib/admin/usage"
 import { removeSubscription, getUserSubscriptions } from "@/lib/alerts/push-subscriptions"
+import { getHireovenEmailLogoUrl } from "@/lib/email/branding"
 import { getAlertsFromEmail } from "@/lib/email/identity"
 import { env } from "@/lib/env"
 import { getPostgresPool } from "@/lib/postgres/server"
@@ -175,9 +176,8 @@ function renderEmailShell({
 
         <!-- Wordmark header -->
         <tr><td style="padding:0 0 16px;">
-          <span style="font-size:20px;font-weight:900;letter-spacing:-0.5px;line-height:1;">
-            <span style="color:#FF5C18;">Hire</span><span style="color:#0f172a;">oven</span>
-          </span>
+          <img src="${getHireovenEmailLogoUrl("wordmark")}" alt="Hireoven" height="28"
+               style="display:block;height:28px;width:auto;border:0;outline:none;text-decoration:none;" />
         </td></tr>
 
         <!-- White card -->
@@ -224,9 +224,8 @@ function renderEmailShell({
             <a href="${esc(base)}" style="color:#64748b;text-decoration:underline;">Help</a>
           </div>
           <div style="margin-top:12px;">
-            <span style="font-size:14px;font-weight:900;letter-spacing:-0.3px;">
-              <span style="color:#FF5C18;">Hire</span><span style="color:#0f172a;">oven</span>
-            </span>
+            <img src="${getHireovenEmailLogoUrl("wordmark")}" alt="Hireoven" height="20"
+                 style="display:block;height:20px;width:auto;border:0;outline:none;text-decoration:none;" />
           </div>
           <div style="font-size:11px;color:#94a3b8;margin-top:6px;">
             &copy; ${year} Hireoven. Jobs served fresh.

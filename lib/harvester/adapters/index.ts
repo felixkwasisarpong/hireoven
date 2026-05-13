@@ -1,6 +1,7 @@
 import type { AtsAdapter, AtsName } from "@/lib/harvester/adapters/_base"
 import { ashbyAdapter } from "@/lib/harvester/adapters/ashby"
 import { bamboohrAdapter } from "@/lib/harvester/adapters/bamboohr"
+import { appleAdapter } from "@/lib/harvester/adapters/apple"
 import { greenhouseAdapter } from "@/lib/harvester/adapters/greenhouse"
 import { icimsAdapter } from "@/lib/harvester/adapters/icims"
 import { infosysAdapter } from "@/lib/harvester/adapters/infosys"
@@ -27,6 +28,7 @@ export const adapters: Partial<Record<AtsName, AtsAdapter>> = {
   jazzhr: jazzhrAdapter,
   icims: icimsAdapter,
   infosys: infosysAdapter,
+  apple: appleAdapter,
 }
 
 export function getAdapter(name: AtsName): AtsAdapter | undefined {
