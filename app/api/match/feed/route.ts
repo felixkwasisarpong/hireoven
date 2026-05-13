@@ -87,6 +87,7 @@ export async function GET(request: NextRequest) {
   const onsite = sp.get("onsite") === "true"
   const minSalary = Math.max(0, parseInt(sp.get("minSalary") ?? "0", 10) || 0)
   const skills = parseList<string>(sp.get("skills"))?.map((value) => value.toLowerCase()) ?? []
+  const titles = parseList<string>(sp.get("titles"))?.map((value) => value.trim()).filter(Boolean) ?? []
   const industryQuery = sp.get("industry")?.trim().toLowerCase() ?? ""
   const hideBlockers = sp.get("hideBlockers") === "true"
   const hasSalary = sp.get("hasSalary") === "true"
@@ -116,6 +117,13 @@ export async function GET(request: NextRequest) {
     where.push(`jobs.first_detected_at >= ${addParam(
       new Date(Date.now() - WITHIN_MS[within]).toISOString()
     )}`)
+  }
+  if (titles.length) {
+    const patterns = titles.map((t) => `%${t}%`)
+    where.push(`(
+      jobs.normalized_title ILIKE ANY(${addParam(patterns)}::text[])
+      OR jobs.title ILIKE ANY(${addParam(patterns)}::text[])
+    )`)
   }
 
   const limitParam = addParam(fetchLimit)

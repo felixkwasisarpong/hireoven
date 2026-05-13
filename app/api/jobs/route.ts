@@ -23,6 +23,7 @@ export async function GET(request: NextRequest) {
   const empType = sp.get("employment_type")?.split(",").filter(Boolean)
   const remote = sp.get("remote") === "true"
   const sponsorship = sp.get("sponsorship") === "true"
+  const titles = sp.get("titles")?.split(",").map((t) => t.trim()).filter(Boolean)
   const within = sp.get("within") ?? "all"
   const since = sp.get("since")?.trim()
   const sort = sp.get("sort") ?? "fresh"
@@ -62,6 +63,17 @@ export async function GET(request: NextRequest) {
   if (sponsorship) where.push("(jobs.sponsors_h1b = true OR jobs.sponsorship_score > 60)")
   if (seniority?.length) where.push(`jobs.seniority_level = ANY(${addParam(seniority)}::text[])`)
   if (empType?.length) where.push(`jobs.employment_type = ANY(${addParam(empType)}::text[])`)
+  if (titles?.length) {
+    // OR across the selected titles. Substring match because cleaned
+    // user-facing titles ("Registered Nurse") often appear inside longer
+    // raw titles ("Registered Nurse — Per Diem · ICU").
+    const patterns = titles.map((t) => `%${t}%`)
+    const pat = addParam(patterns)
+    where.push(`(
+      jobs.normalized_title ILIKE ANY(${pat}::text[])
+      OR jobs.title ILIKE ANY(${pat}::text[])
+    )`)
+  }
   if (since) {
     where.push(`jobs.first_detected_at >= ${addParam(since)}`)
   } else if (within !== "all" && WITHIN_MS[within]) {

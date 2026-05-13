@@ -1689,6 +1689,10 @@ export type JobFilters = {
   min_salary?: number;
   /** Required skill tokens (AND); URL `skills=a,b` */
   skills?: string[];
+  /** Job titles to match (OR across the list, prefix-or-substring against
+   *  `normalized_title` / `title`). URL `titles=a,b`. Replaces the legacy
+   *  "Keywords" filter so the user can multi-select canonical titles. */
+  titles?: string[];
   /** Substring match on `company.industry` (client-side) */
   industryQuery?: string;
 
