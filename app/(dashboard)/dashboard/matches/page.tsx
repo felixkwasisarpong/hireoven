@@ -76,7 +76,7 @@ export default function MatchesPage() {
     let cancelled = false
     setIsLoading(true)
 
-    fetch(`/api/match/feed?limit=120&within=7d&minScore=${threshold}`, {
+    fetch(`/api/match/feed?limit=120&within=24h&minScore=${threshold}`, {
       cache: "no-store",
     })
       .then(async (response) => {
@@ -352,7 +352,6 @@ export default function MatchesPage() {
                           <div className="space-y-3 rounded-[18px] border border-slate-200/70 bg-slate-50/70 p-4">
                             <BreakdownBar label="Skills" value={score.skills_score} />
                             <BreakdownBar label="Seniority" value={score.seniority_score} />
-                            <BreakdownBar label="Location" value={score.location_score} />
                             <BreakdownBar
                               label="Sponsorship"
                               value={score.sponsorship_score}

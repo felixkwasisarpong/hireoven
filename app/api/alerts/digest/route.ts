@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { Resend } from "resend"
+import { logApiUsage } from "@/lib/admin/usage"
 import { getEmailCompanyLogoUrl, getHireovenEmailLogoUrl, getHireovenJobDetailUrl } from "@/lib/email/branding"
 import { getAlertsFromEmail } from "@/lib/email/identity"
 import { requireCronAuth } from "@/lib/env"
@@ -304,6 +305,7 @@ export async function GET(request: NextRequest) {
           html: buildDigestEmail(user, { kind: "alerts", sections, totalCount, windowLabel: "today" }),
         })
         sentAlerts++
+        await logApiUsage({ service: "resend", operation: "daily-digest-alerts", tokens_used: null, cost_usd: 0 })
       } catch {
         errors++
       }
@@ -322,6 +324,7 @@ export async function GET(request: NextRequest) {
         html: buildDigestEmail(user, { kind: "top-picks", jobs: picks }),
       })
       sentTopPicks++
+      await logApiUsage({ service: "resend", operation: "daily-digest-top-picks", tokens_used: null, cost_usd: 0 })
     } catch {
       errors++
     }

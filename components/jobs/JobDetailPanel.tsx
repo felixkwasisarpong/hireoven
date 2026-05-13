@@ -9,7 +9,6 @@ import {
   ArrowRight,
   Bookmark,
   BookmarkCheck,
-  Check,
   CheckCircle2,
   ChevronRight,
   ExternalLink,
@@ -269,15 +268,9 @@ export default function JobDetailPanel({
     { label: "Skills",     value: fastScore?.skills_score     ?? null },
     { label: "Experience", value: fastScore?.seniority_score  ?? null },
     { label: "Education",  value: fastScore?.education_score  ?? null },
-    { label: "Location",   value: fastScore?.location_score   ?? null },
     { label: "Role fit",   value: fastScore?.role_fit_score   ?? null },
   ]
   const activeFactors = allFactors.filter((f): f is { label: string; value: number } => f.value != null)
-
-  const matchedSkills = useMemo(() => normalizeSkillList([
-    ...(analysis?.matching_skills ?? []),
-    ...(fastScore?.score_breakdown?.matchedSkills ?? []),
-  ], 6), [analysis?.matching_skills, fastScore?.score_breakdown?.matchedSkills])
 
   const missingSkills = useMemo(() => normalizeSkillList([
     ...(analysis?.missing_skills ?? []),
@@ -474,40 +467,22 @@ export default function JobDetailPanel({
               )}
 
               {/* Skill pills */}
-              {(matchedSkills.length > 0 || missingSkills.length > 0) && (
+              {missingSkills.length > 0 && (
                 <div className="mt-4 space-y-3 border-t border-slate-100 pt-4">
-                  {matchedSkills.length > 0 && (
-                    <div>
-                      <p className="mb-2 text-[11px] font-semibold text-slate-500">Skills you have</p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {matchedSkills.map((skill) => (
-                          <span
-                            key={skill}
-                            className="inline-flex items-center gap-1 rounded-lg bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700 ring-1 ring-emerald-100"
-                          >
-                            <Check className="h-3 w-3 shrink-0" aria-hidden />
-                            {skill}
-                          </span>
-                        ))}
-                      </div>
+                  <div>
+                    <p className="mb-2 text-[11px] font-semibold text-slate-500">Consider adding</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {missingSkills.map((skill) => (
+                        <span
+                          key={skill}
+                          className="inline-flex items-center gap-1 rounded-lg bg-red-50 px-2.5 py-1 text-[11px] font-medium text-red-600 ring-1 ring-red-100"
+                        >
+                          <Plus className="h-3 w-3 shrink-0" aria-hidden />
+                          {skill}
+                        </span>
+                      ))}
                     </div>
-                  )}
-                  {missingSkills.length > 0 && (
-                    <div>
-                      <p className="mb-2 text-[11px] font-semibold text-slate-500">Consider adding</p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {missingSkills.map((skill) => (
-                          <span
-                            key={skill}
-                            className="inline-flex items-center gap-1 rounded-lg bg-orange-50 px-2.5 py-1 text-[11px] font-medium text-orange-600 ring-1 ring-orange-100"
-                          >
-                            <Plus className="h-3 w-3 shrink-0" aria-hidden />
-                            {skill}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                  </div>
                 </div>
               )}
             </div>

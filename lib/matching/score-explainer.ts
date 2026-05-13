@@ -45,12 +45,6 @@ export function explainScore(
     concerns.push("You may be somewhat overqualified for this level.")
   }
 
-  if ((score.location_score ?? 0) >= 80) {
-    strengths.push(job.is_remote ? "The role is remote, so location is a clean fit." : "The role location matches your search preferences.")
-  } else if ((score.location_score ?? 0) < 70) {
-    concerns.push("Location is a weaker fit for your current search preferences.")
-  }
-
   if ((score.sponsorship_score ?? 0) >= 80) {
     strengths.push("The company shows a strong sponsorship signal for international candidates.")
   } else if (score.is_sponsorship_compatible === false) {

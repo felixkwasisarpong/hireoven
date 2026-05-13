@@ -40,6 +40,7 @@ import {
   updateCoverLetter,
 } from "../api-client"
 import type { ExtensionJobAnalysis, ExtensionSaveResult } from "../api-types"
+import type { TailorPreviewResult, TailorApproveResult } from "../types"
 import {
   applySafeFills,
   buildAutofillPreview,
@@ -972,6 +973,31 @@ function escapeHtml(s: string): string {
   )
 }
 
+/**
+ * Send a popup-style message (raw response, not the {ok, data} EXT_MVP_*
+ * envelope) to the background. Used for tailor preview/approve from inline
+ * scout-bar flows so we don't need to add EXT_MVP_ wrappers for every action.
+ */
+function sendBackgroundMessage<T>(message: unknown): Promise<T> {
+  return new Promise((resolve, reject) => {
+    if (!chrome.runtime?.id) {
+      reject(new Error("Extension context invalidated"))
+      return
+    }
+    chrome.runtime.sendMessage(message, (response: T | undefined) => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message))
+        return
+      }
+      if (response === undefined) {
+        reject(new Error("No response from background"))
+        return
+      }
+      resolve(response)
+    })
+  })
+}
+
 // ── Implementation ────────────────────────────────────────────────────────────
 
 export class ScoutBar {
@@ -1010,11 +1036,12 @@ export class ScoutBar {
   // drawer. Only one open at a time. null = all collapsed.
   private expandedSignalIndex: number | null = null
 
-  // Tailor Resume button state. Tailor is a handoff to the Hireoven web app
-  // (we don't tailor inside the extension). On click, ensures a jobId exists
-  // (saves the job first when needed) then opens /dashboard/resume/tailor.
-  private tailorStatus: "idle" | "loading" | "error" = "idle"
+  // Tailor Resume runs inline on the autofill page — no redirect to the web
+  // app. Click triggers GET_TAILOR_PREVIEW → APPROVE_TAILORED_RESUME in one
+  // shot via the background, then surfaces success in the bar / panel.
+  private tailorStatus: "idle" | "loading" | "done" | "error" = "idle"
   private tailorError: string | null = null
+  private tailorMatchScore: number | null = null
 
   // Autofill MVP state — Greenhouse + Lever only.
   // States walk: idle → loading (fetch profile + preview) → preview (user
@@ -1140,6 +1167,7 @@ export class ScoutBar {
     this.expandedSignalIndex = null
     this.tailorStatus = "idle"
     this.tailorError = null
+    this.tailorMatchScore = null
     this.autofillStatus = "idle"
     this.autofillPreview = null
     this.autofillResults = null
@@ -1412,7 +1440,13 @@ export class ScoutBar {
   private renderTailorButton(): string {
     const enabled = this.state === "ready" && Boolean(this.job)
     if (this.tailorStatus === "loading") {
-      return `<button class="action" data-action="tailor" disabled>Opening…</button>`
+      return `<button class="action" data-action="tailor" disabled>Tailoring…</button>`
+    }
+    if (this.tailorStatus === "done") {
+      const tip = this.tailorMatchScore !== null
+        ? `Tailored resume saved · ${this.tailorMatchScore}% match`
+        : "Tailored resume saved"
+      return `<button class="action analyzed" data-action="tailor" disabled title="${escapeHtml(tip)}">✓ Tailored</button>`
     }
     if (this.tailorStatus === "error") {
       return `<button class="action error" data-action="tailor" title="${escapeHtml(this.tailorError ?? "Try again")}">Retry tailor</button>`
@@ -2013,10 +2047,18 @@ export class ScoutBar {
     })()
 
     // Tailor is enabled whenever we have an extracted job; the click handler
-    // saves implicitly when needed and opens the web app's tailor flow.
+    // saves implicitly when needed, then runs preview+approve inline (no
+    // redirect to the web app). On success the autofill below will pick up
+    // the tailored resume version automatically.
     const tailorBtn = (() => {
       if (this.tailorStatus === "loading") {
-        return `<button class="ap-action" disabled>Opening…</button>`
+        return `<button class="ap-action" disabled>Tailoring…</button>`
+      }
+      if (this.tailorStatus === "done") {
+        const tip = this.tailorMatchScore !== null
+          ? `Tailored resume saved · ${this.tailorMatchScore}% match`
+          : "Tailored resume saved"
+        return `<button class="ap-action ap-action-saved" disabled title="${escapeHtml(tip)}">✓ Tailored</button>`
       }
       if (this.tailorStatus === "error") {
         return `<button class="ap-action ap-action-saved" data-action="tailor" title="${escapeHtml(this.tailorError ?? "Try again")}">Retry tailor</button>`
@@ -2214,16 +2256,13 @@ export class ScoutBar {
   }
 
   /**
-   * Tailor Resume handoff. We don't tailor inside the extension — the user
-   * approves changes in the existing web-app flow. Steps:
-   *   1. Resolve a jobId. Use existing one (analysis.jobId / saveResult.jobId)
-   *      if present; otherwise call /save which is idempotent and returns one.
-   *   2. Build the Hireoven dashboard URL from whichever response carried it.
-   *   3. Open /dashboard/resume/tailor?jobId=...&autoAnalyze=1 in a new tab.
+   * One-click inline tailor. No redirect: resolve a jobId (save if needed),
+   * fetch a tailor preview, and immediately approve it as a new resume
+   * version. The autofill flow's fetchPrimaryResume({ jobId }) call then
+   * picks up the tailored copy automatically.
    *
    * Note: when the user hasn't saved yet, this implicitly creates a tracker
-   * entry. That's intentional — keeps the flow one-click and the job ends up
-   * accessible in their Applications list. They can archive if undesired.
+   * entry — same trade-off as before.
    */
   private async onTailor(): Promise<void> {
     if (this.tailorStatus === "loading") return
@@ -2233,41 +2272,51 @@ export class ScoutBar {
 
     this.tailorStatus = "loading"
     this.tailorError = null
+    this.tailorMatchScore = null
     this.render()
 
     try {
-      // Resolve jobId — prefer cached responses, fall back to a save call.
       let jobId = this.knownJobId ?? this.analysis?.jobId ?? this.saveResult?.jobId ?? null
-      let dashboardUrl = this.saveResult?.dashboardUrl ?? this.existingDashboardUrl ?? null
-
       if (!jobId) {
         const result = await saveExtractedJob(job)
         jobId = result.jobId
-        dashboardUrl = result.dashboardUrl ?? dashboardUrl
-        // Reflect the save in local state so the bar's Save button hides.
         this.saveResult = result
         this.knownJobId = result.jobId
         this.alreadySaved = true
       }
 
-      // Derive the dashboard origin from any URL we have. This is needed
-      // because the bar doesn't otherwise know whether the app is on
-      // localhost vs hireoven.com.
-      let origin: string | null = null
-      if (dashboardUrl) {
-        try { origin = new URL(dashboardUrl).origin } catch { /* fall through */ }
+      const detectedAts = this.formDetection?.detectedAts
+      const ats = detectedAts && detectedAts !== "unknown" ? detectedAts : undefined
+
+      const preview = await sendBackgroundMessage<TailorPreviewResult>({
+        type: "GET_TAILOR_PREVIEW",
+        jobId,
+        ats,
+      })
+
+      if (preview.status === "missing_resume") {
+        throw new Error(preview.summary || "No resume on file — upload one in Hireoven first.")
       }
-      if (!origin) {
-        throw new Error("Could not resolve Hireoven origin — try saving first.")
+      if (preview.status === "gated") {
+        throw new Error(preview.summary || "Tailor is gated for your plan.")
+      }
+      if (preview.status === "missing_job_context") {
+        throw new Error(preview.summary || "Missing job context — try Save first.")
       }
 
-      const tailorUrl =
-        `${origin}/dashboard/resume/tailor` +
-        `?jobId=${encodeURIComponent(jobId)}` +
-        `&autoAnalyze=1`
+      const approve = await sendBackgroundMessage<TailorApproveResult>({
+        type: "APPROVE_TAILORED_RESUME",
+        jobId,
+        resumeId: preview.resumeId ?? undefined,
+        ats,
+      })
 
-      window.open(tailorUrl, "_blank", "noopener")
-      this.tailorStatus = "idle" // open is a one-shot — return to idle
+      if (!approve.success) {
+        throw new Error(approve.error || "Could not save tailored resume version.")
+      }
+
+      this.tailorStatus = "done"
+      this.tailorMatchScore = approve.matchScore ?? preview.matchScore ?? null
     } catch (err) {
       this.tailorStatus = "error"
       this.tailorError = err instanceof Error ? err.message : "Tailor failed"

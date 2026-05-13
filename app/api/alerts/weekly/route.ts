@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { Resend } from "resend"
+import { logApiUsage } from "@/lib/admin/usage"
 import { getEmailCompanyLogoUrl, getHireovenEmailLogoUrl, getHireovenJobDetailUrl } from "@/lib/email/branding"
 import { getAlertsFromEmail } from "@/lib/email/identity"
 import { requireCronAuth } from "@/lib/env"
@@ -268,6 +269,7 @@ export async function GET(request: NextRequest) {
         html: buildWeeklyEmail(user, sections, totalCount, platformStats),
       })
       sent++
+      await logApiUsage({ service: "resend", operation: "weekly-digest", tokens_used: null, cost_usd: 0 })
     } catch {
       errors++
     }

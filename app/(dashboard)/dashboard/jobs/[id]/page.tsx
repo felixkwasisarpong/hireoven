@@ -132,7 +132,7 @@ function isLikelyAtomicSkill(value: string) {
 // or "Excellent personal communication". `^…$` is intentional — these match
 // only when the *whole* token is the rejected word.
 const NON_TECHNICAL_WORD_RE =
-  /^(experience|expertise|knowledge|understanding|familiarity|proficiency|proficient|ability|abilities|skill|skills|capability|capabilities|aptitude|attitude|mindset|background|exposure|interest|passion|commitment|focus|attention|excellence|excellent|good|great|solid|strong|deep|broad|extensive|effective|efficient|outstanding|exceptional|proven|demonstrated|hands-on|working|writing|verbal|written|communication|collaboration|teamwork|leadership|mentoring|stakeholder|cross-functional|interpersonal|analytical|organizational|adaptability|adaptable|willingness|willing|ability|able|personal|professional|technical|professional|engineering|application|applications|protocol|protocols|requirement|requirements|qualification|qualifications|degree|bachelor|bachelors|master|masters|phd|years?|year|months?|month|day|days|culture|values?|mission|opportunity|equity|equal|accommodation|insurance|medical|dental|vision|salary|compensation|benefits?|perks?|preferred|required|must|will|can|should|the|a|an|or|and|with|in|on|of|for|to|by|as)$/i
+  /^(experience|expertise|knowledge|understanding|familiarity|proficiency|proficient|ability|abilities|skill|skills|capability|capabilities|aptitude|attitude|mindset|background|exposure|interest|passion|commitment|focus|attention|excellence|excellent|good|great|solid|strong|deep|broad|extensive|effective|efficient|outstanding|exceptional|proven|demonstrated|hands-on|working|writing|verbal|written|communication|collaboration|teamwork|leadership|mentoring|stakeholder|cross-functional|interpersonal|analytical|organizational|adaptability|adaptable|willingness|willing|ability|able|personal|professional|technical|professional|engineering|application|applications|protocol|protocols|requirement|requirements|qualification|qualifications|degree|bachelor|bachelors|master|masters|phd|years?|year|months?|month|day|days|culture|values?|mission|opportunity|equity|equal|accommodation|insurance|medical|dental|vision|salary|compensation|benefits?|perks?|preferred|required|must|will|can|should|the|a|an|or|and|with|in|on|of|for|to|by|as|e\.g\.?|i\.e\.?|etc\.?|vs\.?|inc\.?|ltd\.?|co\.?|n\/a|tbd|cv|resume)$/i
 
 // Tokens that look like specific named tools, platforms, or skills (any domain).
 // Accepts:
@@ -141,19 +141,26 @@ const NON_TECHNICAL_WORD_RE =
 //   • All-caps acronyms 2–8 chars: AWS, SEO, CRM, EHR, GD&T
 //   • Mixed-case-with-digit: ES2022, Python3, S3
 //   • Known non-tech proper nouns: Salesforce, Figma, Tableau, etc.
+// Tokens that look like dates, prices, or other pure-numeric noise — reject
+// regardless of any tech-name heuristic below. Common JD bottoms have things
+// like "between 5/4/2026 and 7/10/2026" or "$170,000 - $200,000".
+const NUMERIC_NOISE_RE = /^[\d./\-:$,%()\s]+$/
+
 function looksLikeNamedSkillToken(token: string): boolean {
   const words = token.split(/\s+/)
   if (words.length > 1) {
     return words.every(looksLikeNamedSkillToken)
   }
 
+  if (NUMERIC_NOISE_RE.test(token)) return false
   if (NON_TECHNICAL_WORD_RE.test(token)) return false
 
   // CamelCase (applies to all domains: HubSpot, Salesforce, QuickBooks, PyTorch)
   if (/^[A-Z][a-z]+[A-Z]/.test(token)) return true
 
-  // Special characters common in tool/skill names
-  if (/[+#./&]/.test(token)) return true
+  // Special characters common in tool/skill names — but require at least one
+  // letter so dates / version strings / prices don't slip through.
+  if (/[+#./&]/.test(token) && /[A-Za-z]/.test(token)) return true
 
   // All-caps acronym (2–8 chars): AWS, SEO, CRM, EHR, SQL, CAD
   if (/^[A-Z]{2,8}$/.test(token)) return true
@@ -235,7 +242,7 @@ export default async function DashboardJobDetailPage({ params }: Props) {
       `SELECT j.*, to_jsonb(c.*) AS company
        FROM jobs j
        LEFT JOIN companies c ON c.id = j.company_id
-       WHERE j.id = $1::uuid AND j.is_active = true AND ${sqlJobLocatedInUsa("j")}
+       WHERE j.id = $1::uuid AND j.is_active = true AND ${sqlJobLocatedInUsa("j", { companyAlias: "c" })}
        LIMIT 1`,
       [id]
     ),
@@ -361,7 +368,7 @@ export default async function DashboardJobDetailPage({ params }: Props) {
      WHERE j.is_active = true AND ${sqlJobLocatedInUsa("j")}`
 
   // Score algorithm version stamp — bump when scoring logic changes to bust the cache.
-  const SCORE_ALGORITHM_VERSION = new Date("2026-05-10T00:00:00.000Z").getTime()
+  const SCORE_ALGORITHM_VERSION = new Date("2026-05-14T00:00:00.000Z").getTime()
 
   const [cachedScoreResult, resumeSkillResult, similarByTitleResult, similarByCompanyResult] = await Promise.all([
     // Lightweight cache check — joins match score with resume updated_at in one query.
