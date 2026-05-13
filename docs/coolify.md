@@ -50,6 +50,7 @@ The production **Dockerfile** installs **`curl`** in the final image so schedule
 | `/api/alerts/weekly` | `0 9 * * 1` (UTC) | Weekly digest emails |
 | `/api/alerts/recent-jobs?segment=with-resume` | `0 */6 * * *` | 75%+ resume-match recent jobs |
 | `/api/alerts/recent-jobs?segment=without-resume` | `0 20 * * *` | End-of-day jobs for users without resumes |
+| `/api/cron/refresh-title-suggestions` | `30 3 * * *` (UTC) | Rebuild title_suggestions lookup that backs the feed Job-title typeahead |
 
 Example (replace host and secret):
 
