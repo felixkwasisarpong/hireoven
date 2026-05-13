@@ -17,7 +17,7 @@
 
 import { loadEnvConfig } from "@next/env"
 import pLimit from "p-limit"
-import { fetchDiceJobDescription } from "@/lib/sources/dice"
+import { fetchDiceJobDetail } from "@/lib/sources/dice"
 import { getPostgresPool } from "@/lib/postgres/server"
 
 loadEnvConfig(process.cwd())
@@ -84,7 +84,11 @@ async function main() {
   }
 
   let skippedNoUrl = 0
-  let fetchFailed = 0
+  let gone = 0
+  let deactivated = 0
+  let httpError = 0
+  let networkError = 0
+  let noJsonLd = 0
   let unchanged = 0
   let enriched = 0
   let updated = 0
@@ -102,7 +106,7 @@ async function main() {
         processed += 1
         if (processed % progressEvery === 0) {
           console.log(
-            `[backfill-dice-descriptions] progress ${processed}/${total} enriched=${enriched} fetchFailed=${fetchFailed} unchanged=${unchanged}`
+            `[backfill-dice-descriptions] progress ${processed}/${total} enriched=${enriched} gone=${gone} httpErr=${httpError} netErr=${networkError} noLd=${noJsonLd}`
           )
         }
 
@@ -110,11 +114,36 @@ async function main() {
           skippedNoUrl += 1
           return
         }
-        const newDescription = await fetchDiceJobDescription(url)
-        if (!newDescription) {
-          fetchFailed += 1
+
+        const result = await fetchDiceJobDetail(url)
+
+        if (result.kind === "gone") {
+          gone += 1
+          if (dryRun) return
+          await pool.query(
+            `UPDATE jobs
+                SET is_active = false,
+                    updated_at = now()
+              WHERE id = $1`,
+            [row.job_id]
+          )
+          deactivated += 1
           return
         }
+        if (result.kind === "http_error") {
+          httpError += 1
+          return
+        }
+        if (result.kind === "network_error") {
+          networkError += 1
+          return
+        }
+        if (result.kind === "no_jsonld") {
+          noJsonLd += 1
+          return
+        }
+
+        const newDescription = result.description
         if (newDescription.length <= (row.job_description?.length ?? 0)) {
           unchanged += 1
           return
@@ -136,7 +165,10 @@ async function main() {
   )
 
   console.log(
-    `[backfill-dice-descriptions] done enriched=${enriched} updated=${updated} unchanged=${unchanged} fetchFailed=${fetchFailed} skippedNoUrl=${skippedNoUrl}`
+    `[backfill-dice-descriptions] done enriched=${enriched} updated=${updated} ` +
+    `gone=${gone} deactivated=${deactivated} unchanged=${unchanged} ` +
+    `httpErr=${httpError} netErr=${networkError} noJsonLd=${noJsonLd} ` +
+    `skippedNoUrl=${skippedNoUrl}`
   )
   await pool.end()
 }

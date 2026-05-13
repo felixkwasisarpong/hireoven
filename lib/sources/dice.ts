@@ -195,15 +195,28 @@ export type FetchDiceDescriptionOptions = {
   fetchImpl?: typeof fetch
 }
 
-export async function fetchDiceJobDescription(
+/** Discriminated result so callers can react to "gone" vs transient failures. */
+export type DiceDetailResult =
+  | { kind: "ok"; description: string }
+  /** 404 / 410 from Dice — the job has been removed and won't come back. */
+  | { kind: "gone"; status: number }
+  /** 200 but no JobPosting JSON-LD blob — e.g. CAPTCHA page or layout change. */
+  | { kind: "no_jsonld" }
+  /** Other HTTP error (5xx, 403, 429, etc.) — likely transient. */
+  | { kind: "http_error"; status: number }
+  /** Timeout or network error. */
+  | { kind: "network_error" }
+
+export async function fetchDiceJobDetail(
   detailsPageUrl: string,
   opts: FetchDiceDescriptionOptions = {}
-): Promise<string | null> {
+): Promise<DiceDetailResult> {
   const doFetch = opts.fetchImpl ?? fetch
   const timeoutMs = Math.max(1_000, opts.timeoutMs ?? DICE_DETAIL_TIMEOUT_MS)
 
+  let response: Response
   try {
-    const response = await doFetch(detailsPageUrl, {
+    response = await doFetch(detailsPageUrl, {
       headers: {
         Accept: "text/html,application/xhtml+xml",
         "User-Agent": DICE_DETAIL_UA,
@@ -211,12 +224,27 @@ export async function fetchDiceJobDescription(
       },
       signal: AbortSignal.timeout(timeoutMs),
     })
-    if (!response.ok) return null
-    const html = await response.text()
-    return extractJobPostingDescription(html)
   } catch {
-    return null
+    return { kind: "network_error" }
   }
+  if (response.status === 404 || response.status === 410) {
+    return { kind: "gone", status: response.status }
+  }
+  if (!response.ok) {
+    return { kind: "http_error", status: response.status }
+  }
+  const html = await response.text()
+  const description = extractJobPostingDescription(html)
+  return description ? { kind: "ok", description } : { kind: "no_jsonld" }
+}
+
+/** Backwards-compat wrapper — returns just the description text or null. */
+export async function fetchDiceJobDescription(
+  detailsPageUrl: string,
+  opts: FetchDiceDescriptionOptions = {}
+): Promise<string | null> {
+  const result = await fetchDiceJobDetail(detailsPageUrl, opts)
+  return result.kind === "ok" ? result.description : null
 }
 
 const JSON_LD_RE =
