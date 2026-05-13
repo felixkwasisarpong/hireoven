@@ -247,7 +247,10 @@ export const SKILL_DEFINITIONS: SkillDefinition[] = [
   { label: "Valuation",           aliases: ["valuation", "dcf", "discounted cash flow"] },
   { label: "M&A",                 aliases: ["m&a", "mergers and acquisitions", "mergers & acquisitions"] },
   { label: "FP&A",                aliases: ["fp&a", "financial planning and analysis"] },
-  { label: "Tax",                 aliases: ["tax", "tax compliance", "tax planning"] },
+  // Bare "tax" is too generic — fires on JDs that mention "post-tax 401k",
+  // "pre-tax benefits", state-tax disclosures, etc. Require a phrase that
+  // signals the actual discipline.
+  { label: "Tax",                 aliases: ["tax compliance", "tax planning", "tax accounting", "tax analyst", "tax preparation", "tax advisory", "corporate tax", "income tax"] },
   { label: "Auditing",            aliases: ["auditing", "internal audit", "external audit"] },
 
   // ─── Operations ──────────────────────────────────────────────────────────
@@ -267,7 +270,10 @@ export const SKILL_DEFINITIONS: SkillDefinition[] = [
   { label: "Employee Relations",  aliases: ["employee relations"] },
   { label: "HRIS",                aliases: ["hris", "workday", "bamboohr"] },
   { label: "Onboarding",          aliases: ["onboarding"] },
-  { label: "Compensation",        aliases: ["compensation", "total rewards", "compensation design"] },
+  // Bare "compensation" matches the salary boilerplate ("Compensation: $80k–$120k")
+  // present in most US JDs, so we only count phrases that clearly mean the HR
+  // discipline, not the pay disclosure.
+  { label: "Compensation",        aliases: ["compensation design", "compensation planning", "compensation analyst", "compensation strategy", "compensation management", "total rewards", "comp & benefits", "comp and benefits"] },
 
   // ─── Legal ────────────────────────────────────────────────────────────────
   { label: "Contract Management", aliases: ["contract management", "contract drafting", "contract review"] },
@@ -640,12 +646,43 @@ export function canonicalizeSkill(value: string) {
   return BY_KEY.get(key) ?? value.trim()
 }
 
+/**
+ * Reject obvious non-skills that bleed in from upstream extractors:
+ * zip codes, LinkedIn boilerplate tags, country/work-mode tokens, etc.
+ * Run against the canonicalized value so taxonomy-mapped legit skills
+ * (e.g. canonical "R" or "Go") survive — only the post-canonical form
+ * is checked, so noise that didn't map to anything gets dropped.
+ */
+function isPlausibleSkill(value: string): boolean {
+  const trimmed = value.trim()
+  if (!trimmed || trimmed.length > 80) return false
+  const lower = trimmed.toLowerCase()
+  // LinkedIn no-index / boilerplate tags: "#LI-DNI", "#LI-REMOTE", etc.
+  if (/^#li-[a-z]+$/.test(lower)) return false
+  // Pure digits or zip codes (e.g. "20210", "20210-1234").
+  if (/^\d{3,}$/.test(lower)) return false
+  if (/^\d{5}(-\d{4})?$/.test(lower)) return false
+  // "DC 20210", "CA 94104" — state-ish prefix + zip.
+  if (/^[a-z]{2,3}\s+\d{4,}$/.test(lower)) return false
+  // US / U.S / U.S. / USA / "United States" — country tokens.
+  if (/^u\.?\s?s\.?\s?(a\.?)?$/.test(lower)) return false
+  if (lower === "united states") return false
+  // Work-mode boilerplate (these belong in filters, not skills).
+  if (/^(remote|hybrid|on[ -]?site|in[ -]?office)$/.test(lower)) return false
+  // Bare URLs.
+  if (/^https?:\/\//.test(lower)) return false
+  // Pure punctuation / no alphanumerics at all.
+  if (!/[a-z0-9]/.test(lower)) return false
+  return true
+}
+
 export function normalizeSkillList(values: Array<string | null | undefined>, limit = Number.POSITIVE_INFINITY) {
   const out: string[] = []
   const seen = new Set<string>()
   for (const value of values) {
     if (!value?.trim()) continue
     const canonical = canonicalizeSkill(value)
+    if (!isPlausibleSkill(canonical)) continue
     const key = normalizeSkillKey(canonical)
     if (!key || seen.has(key)) continue
     seen.add(key)
