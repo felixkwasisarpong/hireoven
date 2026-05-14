@@ -115,7 +115,7 @@ function FactorBar({ label, value }: { label: string; value: number }) {
   const pct = clamp(value)
   const barColor = pct >= 70 ? "bg-emerald-400" : pct >= 45 ? "bg-orange-400" : "bg-red-400"
   return (
-    <div className="grid grid-cols-[64px_1fr_24px] items-center gap-2">
+    <div className="grid grid-cols-[110px_1fr_24px] items-center gap-2">
       <span className="truncate text-[11.5px] text-slate-500">{label}</span>
       <div className="h-2 overflow-hidden rounded-full bg-slate-100">
         <div
@@ -265,10 +265,9 @@ export default function JobDetailPanel({
   const verdict = getMatchVerdict(overall)
 
   const allFactors = [
-    { label: "Skills",     value: fastScore?.skills_score     ?? null },
-    { label: "Experience", value: fastScore?.seniority_score  ?? null },
-    { label: "Education",  value: fastScore?.education_score  ?? null },
-    { label: "Role fit",   value: fastScore?.role_fit_score   ?? null },
+    { label: "Experience Level", value: fastScore?.seniority_score ?? null },
+    { label: "Skill",            value: fastScore?.skills_score    ?? null },
+    { label: "Industry Exp.",    value: fastScore?.domain_score    ?? null },
   ]
   const activeFactors = allFactors.filter((f): f is { label: string; value: number } => f.value != null)
 
