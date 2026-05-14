@@ -1,0 +1,51 @@
+# Hireoven cron entries — for the Hetzner cron-runner box.
+#
+# Setup (one-time):
+#   1. SSH into the cron-runner host as the user that owns the repo clone.
+#   2. Edit your user's crontab:    crontab -e
+#   3. Paste the contents below.
+#   4. Save & exit. Confirm with:   crontab -l
+#
+# Adjust HIREOVEN_REPO and the env vars before pasting if your paths/secrets differ.
+# Every entry redirects stdout+stderr to /var/log/hireoven/<task>.log so you can
+# tail any single task to see when it last ran and what it returned.
+#
+# To run one task ad-hoc:
+#   APP_URL=https://hireoven.com CRON_SECRET=*** bash scripts/crons.sh crawl
+#
+# Schedules mirror the previous Coolify Scheduled Tasks block in crons.sh.
+
+# ── Environment (crontab requires explicit env — it doesn't source ~/.bashrc) ──
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+HIREOVEN_REPO=/opt/hireoven
+APP_URL=https://hireoven.com
+CRON_SECRET=REPLACE_ME
+
+# ── Schedules ───────────────────────────────────────────────────────────────────
+# m h dom mon dow  command
+  0 */2 * * *      cd $HIREOVEN_REPO && bash scripts/crons.sh crawl              >>/var/log/hireoven/crawl.log 2>&1
+# crawl-enrichment intentionally disabled — backfills descriptions via Claude
+# (lib/crawler/normalizer.ts uses Anthropic SDK). Re-enable by uncommenting and
+# only when you want to spend on AI normalization.
+# 30 */2 * * *    cd $HIREOVEN_REPO && bash scripts/crons.sh crawl-enrichment   >>/var/log/hireoven/crawl-enrichment.log 2>&1
+  0 */6 * * *      cd $HIREOVEN_REPO && bash scripts/crons.sh ghost-scan         >>/var/log/hireoven/ghost-scan.log 2>&1
+  0 */6 * * *      cd $HIREOVEN_REPO && bash scripts/crons.sh timing-refresh     >>/var/log/hireoven/timing-refresh.log 2>&1
+  0 */4 * * *      cd $HIREOVEN_REPO && bash scripts/crons.sh cohort-detect      >>/var/log/hireoven/cohort-detect.log 2>&1
+  0 */12 * * *     cd $HIREOVEN_REPO && bash scripts/crons.sh cohort-match       >>/var/log/hireoven/cohort-match.log 2>&1
+  0 1 * * *        cd $HIREOVEN_REPO && bash scripts/crons.sh layoffs-fyi        >>/var/log/hireoven/layoffs-fyi.log 2>&1
+  0 2 * * *        cd $HIREOVEN_REPO && bash scripts/crons.sh health-scores      >>/var/log/hireoven/health-scores.log 2>&1
+  0 3 * * *        cd $HIREOVEN_REPO && bash scripts/crons.sh rejection-patterns >>/var/log/hireoven/rejection-patterns.log 2>&1
+  0 4 * * *        cd $HIREOVEN_REPO && bash scripts/crons.sh burnout-classify   >>/var/log/hireoven/burnout-classify.log 2>&1
+  0 5 * * *        cd $HIREOVEN_REPO && bash scripts/crons.sh salary-digest      >>/var/log/hireoven/salary-digest.log 2>&1
+  0 6 * * *        cd $HIREOVEN_REPO && bash scripts/crons.sh warn-act           >>/var/log/hireoven/warn-act.log 2>&1
+  0 7 * * *        cd $HIREOVEN_REPO && bash scripts/crons.sh cohort-aggregate   >>/var/log/hireoven/cohort-aggregate.log 2>&1
+  0 9 * * *        cd $HIREOVEN_REPO && bash scripts/crons.sh deliver-checkins   >>/var/log/hireoven/deliver-checkins.log 2>&1
+# blog-generate intentionally disabled — uses Claude via lib/blog/generate-worker.
+# Re-enable when you want AI-authored blog drafts.
+# 0 8 * * 1-5    cd $HIREOVEN_REPO && bash scripts/crons.sh blog-generate      >>/var/log/hireoven/blog-generate.log 2>&1
+  0 */6 * * *      cd $HIREOVEN_REPO && bash scripts/crons.sh dice-ingest        >>/var/log/hireoven/dice-ingest.log 2>&1
+
+# ── First-time bootstrap commands (run once, then delete this comment block) ──
+#   sudo mkdir -p /var/log/hireoven && sudo chown $USER:$USER /var/log/hireoven
+#   sudo apt-get install -y curl   # if not already installed
