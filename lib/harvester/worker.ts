@@ -265,16 +265,37 @@ export function startWorkerLoop(
       ),
     })
 
+    // Track memory delta across ticks so a leak is visible in the log stream.
+    // We've been losing the worker to silent crashes after a few hours; if RSS
+    // climbs monotonically each tick, that's the smoking gun.
+    let lastRssMb = process.memoryUsage().rss / 1024 / 1024
+
     while (!stopping) {
       const tickStartedAt = Date.now()
       try {
         const summary = await runTick(pool, config, limits)
         if (summary.claimed > 0) {
-          log("tick", summary)
+          const mem = process.memoryUsage()
+          const rssMb = mem.rss / 1024 / 1024
+          const heapMb = mem.heapUsed / 1024 / 1024
+          // @ts-expect-error process._getActiveHandles is undocumented but stable
+          const handles = typeof process._getActiveHandles === "function"
+            // @ts-expect-error see above
+            ? process._getActiveHandles().length
+            : null
+          log("tick", {
+            ...summary,
+            rssMb: Math.round(rssMb),
+            rssDeltaMb: Math.round(rssMb - lastRssMb),
+            heapMb: Math.round(heapMb),
+            handles,
+          })
+          lastRssMb = rssMb
         }
       } catch (error) {
         log("tick_error", {
           message: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack?.split("\n").slice(0, 5).join("\n") : undefined,
         })
       }
 
