@@ -1146,6 +1146,7 @@ export function computeFastScore({
     location_score:        null,
     employment_type_score: null,
     sponsorship_score:     sponsorship.score,
+    domain_score:          Math.round(domain.score * 100),
     is_seniority_match:    experience.score >= 0.5,
     is_education_match:    education.score >= 0.6,
     is_role_fit_match:     title.score >= 0.5,

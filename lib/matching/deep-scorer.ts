@@ -27,6 +27,7 @@ export function mapAnalysisToDeepScore(
     location_score: fastScore.location_score ?? null,
     employment_type_score: fastScore.employment_type_score ?? null,
     sponsorship_score: fastScore.sponsorship_score ?? null,
+    domain_score: fastScore.domain_score ?? null,
     is_seniority_match: fastScore.is_seniority_match ?? null,
     is_education_match: fastScore.is_education_match ?? null,
     is_role_fit_match: fastScore.is_role_fit_match ?? null,

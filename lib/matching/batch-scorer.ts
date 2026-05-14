@@ -16,7 +16,7 @@ const BACKGROUND_USER_LIMIT = 10_000
 const UPSERT_CHUNK_SIZE = 250
 const BACKGROUND_CONCURRENCY = 50
 // Bump this when the scoring algorithm changes to invalidate stale cached rows.
-const FAST_SCORE_ALGORITHM_UPDATED_AT = new Date("2026-05-14T00:00:00.000Z").getTime()
+const FAST_SCORE_ALGORITHM_UPDATED_AT = new Date("2026-05-14T16:00:00.000Z").getTime()
 const FAST_SCORE_ALGORITHM_UPDATED_AT_ISO = new Date(FAST_SCORE_ALGORITHM_UPDATED_AT).toISOString()
 
 function chunkArray<T>(items: T[], size: number) {
@@ -120,6 +120,7 @@ export async function upsertMatchScores(scores: JobMatchScoreInsert[]) {
           score.location_score,
           score.employment_type_score,
           score.sponsorship_score,
+          score.domain_score,
           score.is_seniority_match,
           score.is_education_match,
           score.is_role_fit_match,
@@ -156,6 +157,7 @@ export async function upsertMatchScores(scores: JobMatchScoreInsert[]) {
         location_score,
         employment_type_score,
         sponsorship_score,
+        domain_score,
         is_seniority_match,
         is_education_match,
         is_role_fit_match,
@@ -180,6 +182,7 @@ export async function upsertMatchScores(scores: JobMatchScoreInsert[]) {
         location_score = EXCLUDED.location_score,
         employment_type_score = EXCLUDED.employment_type_score,
         sponsorship_score = EXCLUDED.sponsorship_score,
+        domain_score = EXCLUDED.domain_score,
         is_seniority_match = EXCLUDED.is_seniority_match,
         is_education_match = EXCLUDED.is_education_match,
         is_role_fit_match = EXCLUDED.is_role_fit_match,

@@ -81,6 +81,7 @@ type CachedScoreRow = {
   location_score: number | null
   employment_type_score: number | null
   sponsorship_score: number | null
+  domain_score: number | null
   matching_skills_count: number
   total_required_skills: number
   skills_match_rate: number | null
@@ -368,7 +369,7 @@ export default async function DashboardJobDetailPage({ params }: Props) {
      WHERE j.is_active = true AND ${sqlJobLocatedInUsa("j")}`
 
   // Score algorithm version stamp — bump when scoring logic changes to bust the cache.
-  const SCORE_ALGORITHM_VERSION = new Date("2026-05-14T00:00:00.000Z").getTime()
+  const SCORE_ALGORITHM_VERSION = new Date("2026-05-14T16:00:00.000Z").getTime()
 
   const [cachedScoreResult, resumeSkillResult, similarByTitleResult, similarByCompanyResult] = await Promise.all([
     // Lightweight cache check — joins match score with resume updated_at in one query.
