@@ -938,6 +938,10 @@ export type MatchScoreBreakdown = {
   freshnessScore: number | null;
   matchedSkills: string[];
   missingSkills: string[];
+  /** Per-skill score on a 0–1 scale. 1.0 = direct match, 0.5 = related-family
+   * substitute (e.g. resume has DynamoDB when JD wants MongoDB), 0 = no
+   * match. Surfaced in UI as full / half / red pills. */
+  skillScores?: Array<{ skill: string; score: number; relatedTo?: string }> | null;
   totalRequiredSkills: number | null;
   scoreMethod: ScoreMethod;
   confidence: IntelligenceConfidence;
