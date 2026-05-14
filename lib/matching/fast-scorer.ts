@@ -25,6 +25,7 @@ import {
   extractSkillsFromText,
   filterSkillsByTextEvidence,
   getAllResumeSkillLabels,
+  isSoftSkill,
   normalizeSkillKey,
   normalizeSkillList,
 } from "@/lib/skills/taxonomy"
@@ -211,35 +212,71 @@ function scoreSkills(resumeContext: FastScoreResumeContext, job: Job): SkillsSco
     }
   }
 
+  // Partition into hard vs soft skills. Soft skills (Leadership, Communication,
+  // Mentoring, Adaptability, etc.) are excluded from the skills_score
+  // denominator AND the missing-skills gate — every senior engineer can
+  // claim them, so a JD lifting them as "required" shouldn't pull a
+  // strong technical match down to a partial one.
+  // Observed: Home Depot "Senior Software Engineer" listed 4 soft skills
+  // as required. A backend engineer matching Java + CI/CD was scoring
+  // 16% (2/11) and tripping the >75% missing gate. With soft skills
+  // separated, hard-skill ratio is 2/7 and the gate logic uses the
+  // tightened denominator.
+  const hardSkills: string[] = []
+  const softSkills: string[] = []
+  for (const skill of jobSkills) {
+    if (isSoftSkill(skill)) softSkills.push(skill)
+    else hardSkills.push(skill)
+  }
+
   const missing: string[] = []
   const missingSet = new Set<string>()
-  let sum = 0
+  let hardSum = 0
 
-  for (const req of jobSkills) {
+  for (const req of hardSkills) {
     const reqKey = normalizeSkillKey(canonicalizeSkill(req))
     const found = resumeContext.candidateSkillKeySet.has(reqKey) ||
       resumeContext.candidateSkillKeys.some(ck => hasNormalizedSkillOverlap(reqKey, ck))
 
     if (found) {
-      sum += recency(req, resumeContext)
+      hardSum += recency(req, resumeContext)
       continue
     }
     missing.push(req)
     missingSet.add(req)
   }
 
+  // Soft skills get auto-half-credit each (most candidates implicitly cover
+  // them; we don't gate on them). They appear in `matched` for transparency
+  // but don't affect the numerator's growth.
+  for (const skill of softSkills) {
+    const reqKey = normalizeSkillKey(canonicalizeSkill(skill))
+    const found = resumeContext.candidateSkillKeySet.has(reqKey) ||
+      resumeContext.candidateSkillKeys.some(ck => hasNormalizedSkillOverlap(reqKey, ck))
+    if (!found) {
+      // Still surface as "missing" in the breakdown so the user can see what
+      // the JD called for, but it doesn't reduce the score.
+      missingSet.add(skill)
+      missing.push(skill)
+    }
+  }
+
   const matched = jobSkills.filter((skill) => !missingSet.has(skill))
-  const score = sum / jobSkills.length
+  // Score is computed against the hard-skill set only. If a JD is 100% soft
+  // skills (unusual but possible — e.g. a creative role), fall back to the
+  // default neutral score.
+  const score = hardSkills.length === 0 ? 0.55 : hardSum / hardSkills.length
 
   const sourcePrefix = usedDerivedSkills
     ? `Structured skills were missing; derived ${jobSkills.length} skill${jobSkills.length === 1 ? "" : "s"} from posting text. `
     : ""
-  const label = missing.length > 3
-    ? `${missing.slice(0, 3).join(", ")} +${missing.length - 3} more`
-    : missing.join(", ")
-  const evidence = missing.length === 0
-    ? `${sourcePrefix}Matched all ${jobSkills.length} required skills.`
-    : `${sourcePrefix}Matched ${matched.length}/${jobSkills.length}; missing: ${label}.`
+  const hardMissing = missing.filter((m) => !isSoftSkill(m))
+  const label = hardMissing.length > 3
+    ? `${hardMissing.slice(0, 3).join(", ")} +${hardMissing.length - 3} more`
+    : hardMissing.join(", ")
+  const evidence = hardMissing.length === 0
+    ? `${sourcePrefix}Matched all ${hardSkills.length} hard-skill requirements.`
+    : `${sourcePrefix}Matched ${hardSkills.length - hardMissing.length}/${hardSkills.length} hard skills; missing: ${label}.`
 
   return {
     score,
@@ -247,7 +284,9 @@ function scoreSkills(resumeContext: FastScoreResumeContext, job: Job): SkillsSco
     missing,
     evidence,
     certGate: false,
-    requiredCount: jobSkills.length,
+    // Gate uses hard-skill count so a 4-soft + 2-hard job doesn't trip
+    // the "≥5 required" precondition off soft-skill fluff.
+    requiredCount: hardSkills.length,
   }
 }
 
