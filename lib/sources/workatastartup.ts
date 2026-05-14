@@ -76,7 +76,12 @@ export type WaasJobDetail = {
     equityRange: string | null
     location: string | null
     jobType: string | null
-    sponsorsVisa: boolean | null
+    /**
+     * Free-form WAAS field. Common values: "Will sponsor", "Won't sponsor",
+     * "US citizen/visa only", "Sponsorship available", null. Use
+     * `parseWaasSponsorship()` to map to a strict boolean.
+     */
+    sponsorsVisa: string | boolean | null
     minExperience: string | null
     skills: string[] | null
     descriptionHtml: string | null
@@ -213,6 +218,31 @@ export function parseWaasSalary(raw: string | null | undefined): {
   if (numbers.length === 0) return { min: null, max: null, currency }
   if (numbers.length === 1) return { min: numbers[0], max: numbers[0], currency }
   return { min: numbers[0], max: numbers[numbers.length - 1], currency }
+}
+
+/**
+ * Map WAAS's free-form `sponsorsVisa` field to a strict boolean (or null when
+ * unknown / ambiguous). WAAS observed values include:
+ *   "Will sponsor"                → true
+ *   "Sponsorship available"       → true
+ *   "Won't sponsor"               → false
+ *   "US citizen/visa only"        → false (requires existing US auth)
+ *   null / ""                     → null
+ * Falls through to null when nothing matches so we don't lie about
+ * sponsorship support.
+ */
+export function parseWaasSponsorship(
+  value: string | boolean | null | undefined
+): boolean | null {
+  if (value == null) return null
+  if (typeof value === "boolean") return value
+  const v = value.toLowerCase().trim()
+  if (!v) return null
+  if (/(will|do|does|happy to|open to)\s+sponsor/.test(v)) return true
+  if (/\bsponsorship\s+(available|provided|offered)/.test(v)) return true
+  if (/won['’]?t\s+sponsor|no\s+sponsor|do\s+not\s+sponsor/.test(v)) return false
+  if (/us\s+citizen|visa\s+only|citizens?\s+only/.test(v)) return false
+  return null
 }
 
 /**
