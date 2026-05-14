@@ -20,9 +20,15 @@ const MAX_COMPANY_ATTEMPTS = Math.max(
   1,
   Number.parseInt(process.env.CRAWLER_COMPANY_MAX_ATTEMPTS ?? "2", 10)
 )
+// Bumped 150 → 300. With the cron at 0 */1 * * * (hourly) this gives a full
+// queue cycle of ~21h across the ~6,340 active companies — fast enough that
+// large-volume employers (AutoZone 10K+ jobs, Macy's 3K+, Kroger 3K+) get
+// their new postings within a day instead of waiting 2–4 days. Per-run
+// duration stays under 60s in practice; if it doesn't on prod, override
+// via the CRAWLER_MAX_COMPANIES_PER_RUN env var.
 const MAX_COMPANIES_PER_RUN = Math.max(
   10,
-  Number.parseInt(process.env.CRAWLER_MAX_COMPANIES_PER_RUN ?? "150", 10)
+  Number.parseInt(process.env.CRAWLER_MAX_COMPANIES_PER_RUN ?? "300", 10)
 )
 const COMPANY_RETRY_BASE_DELAY_MS = Math.max(
   250,
