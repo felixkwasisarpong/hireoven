@@ -369,7 +369,7 @@ export default async function DashboardJobDetailPage({ params }: Props) {
      WHERE j.is_active = true AND ${sqlJobLocatedInUsa("j")}`
 
   // Score algorithm version stamp — bump when scoring logic changes to bust the cache.
-  const SCORE_ALGORITHM_VERSION = new Date("2026-05-14T22:00:00.000Z").getTime()
+  const SCORE_ALGORITHM_VERSION = new Date("2026-05-15T01:00:00.000Z").getTime()
 
   const [cachedScoreResult, resumeSkillResult, similarByTitleResult, similarByCompanyResult] = await Promise.all([
     // Lightweight cache check — joins match score with resume updated_at in one query.

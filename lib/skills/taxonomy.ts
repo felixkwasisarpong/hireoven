@@ -620,7 +620,7 @@ const SCIENCE_SKILLS = new Set([
   "Experimental Design", "Mass Spectrometry", "Protein Analysis", "Animal Studies", "GIS",
 ])
 
-const SOFT_SKILLS = new Set([
+export const SOFT_SKILLS = new Set([
   "Leadership",
   "Communication",
   "Collaboration",
@@ -945,4 +945,15 @@ export function skillMatches(required: string, candidate: string) {
     (requiredKey.length >= 3 && candidateKey.includes(requiredKey)) ||
     (candidateKey.length >= 3 && requiredKey.includes(candidateKey))
   )
+}
+
+/**
+ * True when a skill belongs to the SOFT_SKILLS set (Leadership,
+ * Communication, etc.). The matcher uses this to exclude soft skills
+ * from the required-skills denominator: every senior engineer can
+ * claim these, so they shouldn't drag down the score when missing
+ * from a resume's skills array.
+ */
+export function isSoftSkill(skill: string): boolean {
+  return SOFT_SKILLS.has(canonicalizeSkill(skill))
 }
