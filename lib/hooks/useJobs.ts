@@ -357,6 +357,9 @@ export function useJobs(
         }
         if (filters.company_ids?.length) params.set("companies", filters.company_ids.join(","))
         if (effectiveWithin && effectiveWithin !== "all") params.set("within", effectiveWithin)
+        // Tell the server when we're in Best Match — it drops the saved-jobs
+        // UNION in that mode so the surface stays "fresh fit only".
+        if (filters.sort === "match") params.set("sort", "match")
         if (filters.locationQuery?.trim()) {
           params.set("location", filters.locationQuery.trim())
         }

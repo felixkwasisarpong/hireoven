@@ -83,6 +83,12 @@ export async function GET(request: NextRequest) {
   const hasSalary = sp.get("hasSalary") === "true"
   const directAtsOnly = sp.get("directAtsOnly") === "true"
   const within = sp.get("within") ?? "all"
+  // Best Match is a "fresh fit" view — saved jobs (which live on the
+  // Applications board) are excluded from it. Any other sort or the default
+  // feed surfaces saved jobs via the UNION so a job saved via the chrome
+  // extension shows up immediately.
+  const sortMode = sp.get("sort") ?? ""
+  const isBestMatch = sortMode === "match"
   const limit = Math.min(100, parseInt(sp.get("limit") ?? "24", 10))
   const offset = Math.max(0, parseInt(sp.get("offset") ?? "0", 10))
   const minScore = Number(sp.get("minScore") ?? "0")
@@ -104,16 +110,14 @@ export async function GET(request: NextRequest) {
   if (employment?.length) where.push(`jobs.employment_type = ANY(${addParam(employment)}::text[])`)
   if (sponsorship) where.push("(jobs.sponsors_h1b = true OR jobs.sponsorship_score >= 60)")
 
-  // Capture the freshness clause separately so the saved CTE can apply it too.
-  // Without this, the saved UNION used to surface saved jobs of any age — which
-  // pinned 10d-old jobs to the top of "Best Match" (24h-bounded) results.
-  let savedFreshnessClause = ""
+  // Freshness window applies to the base query only. The saved-jobs UNION
+  // deliberately ignores it so a job the user just saved via the extension
+  // appears in the feed regardless of the JD's age. The pin-to-top sort was
+  // removed separately — saved jobs rank by score in Best Match.
   if (within !== "all" && WITHIN_MS[within]) {
-    const freshnessParam = addParam(
+    where.push(`jobs.first_detected_at >= ${addParam(
       new Date(Date.now() - WITHIN_MS[within]).toISOString()
-    )
-    where.push(`jobs.first_detected_at >= ${freshnessParam}`)
-    savedFreshnessClause = ` AND jobs.first_detected_at >= ${freshnessParam}`
+    )}`)
   }
   if (titles.length) {
     const patterns = titles.map((t) => `%${t}%`)
@@ -126,12 +130,26 @@ export async function GET(request: NextRequest) {
   const userIdParam = addParam(user.id)
   const limitParam = addParam(fetchLimit)
   let data: (JobWithMatchScore & { is_user_saved?: boolean })[] = []
-  try {
-    // UNION pulls in any job the user has explicitly saved (job_applications)
-    // even if it falls outside the recent-120 window, so the feed never hides
-    // a job the user just saved via the extension.
-    const result = await pool.query<JobWithMatchScore & { is_user_saved: boolean }>(
-      `WITH base AS (
+
+  // Best Match is fresh+fit only — no saved-jobs UNION. Saved jobs live on
+  // the Applications board (and in the regular feed below). For everything
+  // else, the UNION pulls in jobs the user has explicitly saved even if
+  // they fall outside the within window, so a chrome-extension save shows
+  // up in the main feed regardless of the JD's age.
+  const sql = isBestMatch
+    ? `SELECT jobs.*, to_jsonb(companies.*) AS company,
+              EXISTS (
+                SELECT 1 FROM job_applications ja
+                WHERE ja.user_id = ${userIdParam}::uuid
+                  AND ja.job_id = jobs.id
+                  AND ja.is_archived = false
+              ) AS is_user_saved
+       FROM jobs
+       LEFT JOIN companies ON companies.id = jobs.company_id
+       WHERE ${where.join(" AND ")}
+       ORDER BY jobs.first_detected_at DESC NULLS LAST
+       LIMIT ${limitParam}`
+    : `WITH base AS (
          SELECT jobs.*, to_jsonb(companies.*) AS company,
                 EXISTS (
                   SELECT 1 FROM job_applications ja
@@ -153,12 +171,16 @@ export async function GET(request: NextRequest) {
            ON ja.job_id = jobs.id
           AND ja.user_id = ${userIdParam}::uuid
           AND ja.is_archived = false
-         WHERE jobs.is_active = true${savedFreshnessClause}
+         WHERE jobs.is_active = true
            AND jobs.id NOT IN (SELECT id FROM base)
        )
        SELECT * FROM base
        UNION ALL
-       SELECT * FROM saved`,
+       SELECT * FROM saved`
+
+  try {
+    const result = await pool.query<JobWithMatchScore & { is_user_saved: boolean }>(
+      sql,
       params
     )
     data = result.rows
