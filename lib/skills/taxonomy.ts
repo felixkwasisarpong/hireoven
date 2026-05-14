@@ -957,3 +957,51 @@ export function skillMatches(required: string, candidate: string) {
 export function isSoftSkill(skill: string): boolean {
   return SOFT_SKILLS.has(canonicalizeSkill(skill))
 }
+
+/**
+ * Skill families used for partial-match scoring. When a job requires skill X
+ * but the candidate has skill Y in the same family, we award fractional
+ * credit (~0.5) instead of treating it as a hard miss. Example: JD wants
+ * "MongoDB", candidate has "DynamoDB" → both NoSQL → partial match.
+ *
+ * Conservative by design — only group skills that are genuine substitutes
+ * within the same domain. Cross-family substitution (e.g. AWS ↔ Docker)
+ * is not allowed and produces 0.0 for the missing skill.
+ */
+export const SKILL_FAMILIES: Record<string, string[]> = {
+  cloud_provider:    ["AWS", "GCP", "Azure"],
+  containers:        ["Docker", "Kubernetes"],
+  nosql_db:          ["MongoDB", "DynamoDB", "Cassandra", "Redis", "Elasticsearch"],
+  sql_db:            ["PostgreSQL", "MySQL", "Microsoft SQL Server", "SQL"],
+  frontend_fw:       ["React", "Vue.js", "Angular", "Svelte"],
+  jvm_lang:          ["Java", "Kotlin", "Scala"],
+  scripting_lang:    ["Python", "Ruby", "PHP"],
+  js_lang:           ["JavaScript", "TypeScript"],
+  c_family_lang:     ["C++", "C#", "Rust", "Go"],
+  message_queue:     ["Kafka", "RabbitMQ", "SQS", "Pub/Sub"],
+  stream_processing: ["Apache Spark", "Kafka", "Spark"],
+  ci_cd:             ["Jenkins", "GitHub Actions", "GitLab CI", "CircleCI", "CI/CD"],
+  ml_framework:      ["PyTorch", "TensorFlow", "scikit-learn"],
+  api_style:         ["REST", "GraphQL", "gRPC"],
+  data_warehouse:    ["Snowflake", "BigQuery", "Redshift", "Databricks"],
+  iac_tool:          ["Terraform", "CloudFormation", "Pulumi"],
+} as const
+
+const SKILL_TO_FAMILY: Map<string, string> = (() => {
+  const map = new Map<string, string>()
+  for (const [family, skills] of Object.entries(SKILL_FAMILIES)) {
+    for (const skill of skills) {
+      map.set(normalizeSkillKey(canonicalizeSkill(skill)), family)
+    }
+  }
+  return map
+})()
+
+/**
+ * Returns the family identifier for a skill, or null when the skill isn't
+ * in any defined family. Lookup is by normalized key.
+ */
+export function getSkillFamily(skill: string): string | null {
+  const key = normalizeSkillKey(canonicalizeSkill(skill))
+  return SKILL_TO_FAMILY.get(key) ?? null
+}

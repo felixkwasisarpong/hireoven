@@ -25,6 +25,7 @@ import {
   extractSkillsFromText,
   filterSkillsByTextEvidence,
   getAllResumeSkillLabels,
+  getSkillFamily,
   isSoftSkill,
   normalizeSkillKey,
   normalizeSkillList,
@@ -49,6 +50,9 @@ type ResumeExperienceSnapshot = {
 export interface FastScoreResumeContext {
   candidateSkillKeys: string[]
   candidateSkillKeySet: Set<string>
+  /** Set of skill-family ids the candidate covers (e.g. "nosql_db"). Used for
+   * partial-credit scoring when JD wants a related-family skill. */
+  candidateFamilies: Set<string>
   experienceByRecency: ResumeExperienceSnapshot[]
   experienceForTitles: ResumeExperienceSnapshot[]
   hasProgressiveSeniority: boolean
@@ -121,10 +125,27 @@ function hasNormalizedSkillOverlap(requiredKey: string, candidateKey: string) {
 
 // ─── 1. Skills (weight 0.40) ──────────────────────────────────────────────────
 
+/**
+ * Per-skill match score on a 0–1 scale.
+ *   - direct hit (alias match in resume) → recency(0.55–1.0)
+ *   - related-family hit (e.g. resume has DynamoDB, JD wants MongoDB) → 0.5 × recency
+ *   - no match → 0.0
+ * Surfaced through score_breakdown.skillScores so the UI can show
+ * "Spring Boot 100% · MongoDB 100% · Node.js 0%" instead of bare green/red pills.
+ */
+type PerSkillScore = {
+  skill: string
+  score: number
+  /** Source resume skill when this was a related-family hit (not a direct match). */
+  relatedTo?: string
+}
+
 type SkillsScoreResult = {
   score: number
   matched: string[]
   missing: string[]
+  /** Each required skill graded 0–1; consumed by score_breakdown.skillScores. */
+  perSkill: PerSkillScore[]
   evidence: string
   certGate: boolean
   requiredCount: number
@@ -205,6 +226,7 @@ function scoreSkills(resumeContext: FastScoreResumeContext, job: Job): SkillsSco
       score: 0.40,
       matched: [],
       missing: [],
+      perSkill: [],
       evidence:
         "No reliable skills detected in this posting; applied a conservative score.",
       certGate: false,
@@ -212,16 +234,14 @@ function scoreSkills(resumeContext: FastScoreResumeContext, job: Job): SkillsSco
     }
   }
 
-  // Partition into hard vs soft skills. Soft skills (Leadership, Communication,
+  // Partition into hard vs soft. Soft skills (Leadership, Communication,
   // Mentoring, Adaptability, etc.) are excluded from the skills_score
   // denominator AND the missing-skills gate — every senior engineer can
-  // claim them, so a JD lifting them as "required" shouldn't pull a
-  // strong technical match down to a partial one.
-  // Observed: Home Depot "Senior Software Engineer" listed 4 soft skills
-  // as required. A backend engineer matching Java + CI/CD was scoring
-  // 16% (2/11) and tripping the >75% missing gate. With soft skills
-  // separated, hard-skill ratio is 2/7 and the gate logic uses the
-  // tightened denominator.
+  // claim them, so a JD listing them as "required" shouldn't pull a
+  // strong technical match down to a partial one. Observed: Home Depot
+  // "Senior Software Engineer" listed 4 soft skills as required and a
+  // backend engineer matching Java + CI/CD was scoring 16% (2/11). With
+  // soft skills separated, the hard-skill ratio drives the score.
   const hardSkills: string[] = []
   const softSkills: string[] = []
   for (const skill of jobSkills) {
@@ -229,42 +249,56 @@ function scoreSkills(resumeContext: FastScoreResumeContext, job: Job): SkillsSco
     else hardSkills.push(skill)
   }
 
-  const missing: string[] = []
-  const missingSet = new Set<string>()
+  // Partial-credit weight for related-family substitutes (e.g. JD wants
+  // MongoDB, resume has DynamoDB — both in nosql_db family → 0.5 × recency).
+  const FAMILY_PARTIAL = 0.5
+
+  const perSkill: PerSkillScore[] = []
   let hardSum = 0
 
   for (const req of hardSkills) {
     const reqKey = normalizeSkillKey(canonicalizeSkill(req))
-    const found = resumeContext.candidateSkillKeySet.has(reqKey) ||
-      resumeContext.candidateSkillKeys.some(ck => hasNormalizedSkillOverlap(reqKey, ck))
+    const directHit =
+      resumeContext.candidateSkillKeySet.has(reqKey) ||
+      resumeContext.candidateSkillKeys.some((ck) => hasNormalizedSkillOverlap(reqKey, ck))
 
-    if (found) {
-      hardSum += recency(req, resumeContext)
+    if (directHit) {
+      const score = recency(req, resumeContext)
+      perSkill.push({ skill: req, score })
+      hardSum += score
       continue
     }
-    missing.push(req)
-    missingSet.add(req)
+
+    // No direct match — check for a related-family substitute. We only know
+    // the family of the *required* skill; if the candidate covers that family
+    // at all (via any skill), they get partial credit.
+    const reqFamily = getSkillFamily(req)
+    if (reqFamily && resumeContext.candidateFamilies.has(reqFamily)) {
+      const score = FAMILY_PARTIAL * recency(req, resumeContext)
+      perSkill.push({ skill: req, score, relatedTo: reqFamily })
+      hardSum += score
+      continue
+    }
+
+    perSkill.push({ skill: req, score: 0 })
   }
 
-  // Soft skills get auto-half-credit each (most candidates implicitly cover
-  // them; we don't gate on them). They appear in `matched` for transparency
-  // but don't affect the numerator's growth.
+  // Soft skills are surfaced in perSkill (with their actual match score) for
+  // UI completeness, but they don't contribute to hardSum/denominator.
   for (const skill of softSkills) {
     const reqKey = normalizeSkillKey(canonicalizeSkill(skill))
-    const found = resumeContext.candidateSkillKeySet.has(reqKey) ||
-      resumeContext.candidateSkillKeys.some(ck => hasNormalizedSkillOverlap(reqKey, ck))
-    if (!found) {
-      // Still surface as "missing" in the breakdown so the user can see what
-      // the JD called for, but it doesn't reduce the score.
-      missingSet.add(skill)
-      missing.push(skill)
-    }
+    const directHit =
+      resumeContext.candidateSkillKeySet.has(reqKey) ||
+      resumeContext.candidateSkillKeys.some((ck) => hasNormalizedSkillOverlap(reqKey, ck))
+    perSkill.push({ skill, score: directHit ? recency(skill, resumeContext) : 0 })
   }
 
-  const matched = jobSkills.filter((skill) => !missingSet.has(skill))
+  // Matched = ≥0.7 credit, missing = <0.4 (in-between is "partial" via
+  // perSkill[].score). Backwards-compatible matched/missing arrays remain.
+  const matched = perSkill.filter((p) => p.score >= 0.7).map((p) => p.skill)
+  const missing = perSkill.filter((p) => p.score < 0.4).map((p) => p.skill)
   // Score is computed against the hard-skill set only. If a JD is 100% soft
-  // skills (unusual but possible — e.g. a creative role), fall back to the
-  // default neutral score.
+  // skills, fall back to a neutral 0.55.
   const score = hardSkills.length === 0 ? 0.55 : hardSum / hardSkills.length
 
   const sourcePrefix = usedDerivedSkills
@@ -282,6 +316,7 @@ function scoreSkills(resumeContext: FastScoreResumeContext, job: Job): SkillsSco
     score,
     matched,
     missing,
+    perSkill,
     evidence,
     certGate: false,
     // Gate uses hard-skill count so a 4-soft + 2-hard job doesn't trip
@@ -1016,9 +1051,15 @@ function toResumeExperienceSnapshot(exp: WorkExperience): ResumeExperienceSnapsh
 }
 
 export function buildFastScoreResumeContext(resume: Resume): FastScoreResumeContext {
-  const candidateSkillKeys = getAllResumeSkillLabels(resume).map((candidateSkill) =>
+  const candidateSkillLabels = getAllResumeSkillLabels(resume)
+  const candidateSkillKeys = candidateSkillLabels.map((candidateSkill) =>
     normalizeSkillKey(canonicalizeSkill(candidateSkill))
   )
+  const candidateFamilies = new Set<string>()
+  for (const label of candidateSkillLabels) {
+    const family = getSkillFamily(label)
+    if (family) candidateFamilies.add(family)
+  }
 
   const experienceForTitles = (resume.work_experience ?? []).map(toResumeExperienceSnapshot)
   const experienceByRecency = [...experienceForTitles].sort(rankExperienceByRecency)
@@ -1048,6 +1089,7 @@ export function buildFastScoreResumeContext(resume: Resume): FastScoreResumeCont
   return {
     candidateSkillKeys,
     candidateSkillKeySet: new Set(candidateSkillKeys),
+    candidateFamilies,
     experienceByRecency,
     experienceForTitles,
     hasProgressiveSeniority,
@@ -1224,6 +1266,7 @@ export function computeFastScore({
       freshnessScore:      null,
       matchedSkills:       skills.matched,
       missingSkills:       skills.missing,
+      skillScores:         skills.perSkill,
       totalRequiredSkills: totalRequired,
       scoreMethod:         "fast",
       confidence,
