@@ -4,7 +4,7 @@ import {
   matchesSearchQuery,
 } from "@/lib/jobs/search-match"
 import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
-import { scoreJobsForUser } from "@/lib/matching/batch-scorer"
+import { getCachedScoresForUser, scoreJobsForUser } from "@/lib/matching/batch-scorer"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { createClient } from "@/lib/supabase/server"
 import { formatEmploymentLabel, formatSalaryLabel } from "@/lib/jobs/normalization/view-model"
@@ -239,12 +239,19 @@ export async function GET(request: NextRequest) {
   })
   let scoreMap = new Map<string, JobMatchScore>()
 
+  // Best Match pays the full scoring cost (compute on cache miss). Every
+  // other sort reads from cache only — that's the bottleneck users feel
+  // when toggling between Best Match and Freshest, because each algorithm
+  // version bump invalidates the cache and Best Match's next load has to
+  // recompute ~120 scores in-process (6-24s). Freshest doesn't strictly
+  // need fresh scores; cards with no cached score just render without a
+  // match badge until the next Best Match pass back-fills the cache.
   try {
-    scoreMap = await scoreJobsForUser(
-      user.id,
-      jobs.map((job) => job.id)
-    )
-    console.log(`[match/feed] scored ${scoreMap.size}/${jobs.length} jobs for user ${user.id}`)
+    const ids = jobs.map((job) => job.id)
+    scoreMap = isBestMatch
+      ? await scoreJobsForUser(user.id, ids)
+      : await getCachedScoresForUser(user.id, ids)
+    console.log(`[match/feed] scored ${scoreMap.size}/${jobs.length} jobs for user ${user.id} (mode: ${isBestMatch ? "compute" : "cache-only"})`)
   } catch (error) {
     console.error("Failed to score personalized feed", error)
   }

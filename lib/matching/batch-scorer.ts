@@ -205,6 +205,43 @@ export async function upsertMatchScores(scores: JobMatchScoreInsert[]) {
   return upserted
 }
 
+/**
+ * Read-only variant: returns whatever fresh-cached scores exist for the
+ * given jobs without ever computing missing ones. Used by feed paths
+ * (e.g. sort=freshest) where the server doesn't need to block on score
+ * recomputation — the UI can render cards with no badge for cache-miss
+ * rows and let Best Match be the path that pays the compute cost.
+ *
+ * "Fresh" = same definition as scoreJobsForUser: computed after the current
+ * algorithm version stamp AND newer than the candidate's resume update.
+ */
+export async function getCachedScoresForUser(userId: string, jobIds: string[]) {
+  const uniqueJobIds = Array.from(new Set(jobIds.filter(Boolean)))
+  if (uniqueJobIds.length === 0) return new Map<string, JobMatchScore>()
+
+  const pool = getPostgresPool()
+  const result = await pool.query<JobMatchScore & { resume_updated_at: string }>(
+    `SELECT jms.*, r.updated_at AS resume_updated_at
+     FROM job_match_scores jms
+     JOIN resumes r
+       ON r.id = jms.resume_id
+      AND r.user_id = jms.user_id
+      AND r.is_primary = true
+      AND r.parse_status = 'complete'
+     WHERE jms.user_id = $1
+       AND jms.job_id = ANY($2::uuid[])
+       AND jms.computed_at >= $3::timestamptz`,
+    [userId, uniqueJobIds, FAST_SCORE_ALGORITHM_UPDATED_AT_ISO]
+  )
+
+  const fresh = result.rows.filter((row) => {
+    const computedAtMs = new Date(row.computed_at).getTime()
+    const resumeUpdatedAtMs = new Date(row.resume_updated_at).getTime()
+    return Number.isFinite(computedAtMs) && computedAtMs >= resumeUpdatedAtMs
+  })
+  return new Map<string, JobMatchScore>(fresh.map((row) => [row.job_id, row]))
+}
+
 export async function scoreJobsForUser(userId: string, jobIds: string[]) {
   const uniqueJobIds = Array.from(new Set(jobIds.filter(Boolean)))
   if (uniqueJobIds.length === 0) return new Map<string, JobMatchScore>()
