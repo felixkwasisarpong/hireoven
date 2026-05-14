@@ -58,8 +58,16 @@ export function loadWorkerConfig(
   }
   return {
     tickIntervalMs: intPositive(env.HARVESTER_TICK_INTERVAL_MS, 30_000, 500),
-    claimBatchSize: intPositive(env.HARVESTER_CLAIM_BATCH_SIZE, 50),
-    leaseSeconds: intPositive(env.HARVESTER_LEASE_SECONDS, 120),
+    // Lowered from 50 → 20. Production logs from PR #60 showed each tick
+    // taking 5–6 minutes because slow per-company adapters (Apple = 1,
+    // infosys = 1, iCIMS = 3, Workday = 4) serialize when several land
+    // in the same batch. Smaller batch keeps each tick around 2 min so
+    // the lease still covers it and Coolify's health checks don't flag
+    // the worker as unresponsive.
+    claimBatchSize: intPositive(env.HARVESTER_CLAIM_BATCH_SIZE, 20),
+    // Bumped 120 → 240 to give a worst-case slightly-slow tick room
+    // before the lease expires and companies get re-claimed.
+    leaseSeconds: intPositive(env.HARVESTER_LEASE_SECONDS, 240),
     concurrency: intPositive(env.HARVESTER_CONCURRENCY, 8),
   }
 }
