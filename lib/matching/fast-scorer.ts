@@ -475,7 +475,7 @@ const PHYSICAL_SECURITY_JOB_RE = /\b(?:security officer|security guard|security 
 // bare "Technician" stays unclassified rather than misrouting to trades.
 const SKILLED_TRADES_JOB_RE    = /\b(?:electrician|plumber|hvac|welder|carpenter|locksmith|machinist|millwright|pipefitter|ironworker|roofer|mason|(?:hvac|automotive|auto|mechanical|electrical|electronics|maintenance|field|service|industrial)\s+(?:technician|tech)|(?:diesel|aircraft)\s+mechanic)\b/i
 const INSPECTION_JOB_RE        = /\b(?:ndt|non.?destructive|ultrasonic|utsw|paut|radiographic\s+(?:testing|technician)|inspector|inspect(?:ion)?\s+(?:level|technician)|qa\s+inspect|magnetic\s+particle|penetrant\s+test)\b/i
-const FOODSERVICE_JOB_RE       = /\b(?:chef|cook|server|waiter|waitress|barista|bartender|sous chef|line cook|prep cook|host(?:ess)?\s+server)\b/i
+const FOODSERVICE_JOB_RE       = /\b(?:chef|cook|server|waiter|waitress|barista|bro?ista|bartender|barback|sous chef|line cook|prep cook|host(?:ess)?\s+server|crew member|food (?:runner|prep)|dishwasher|fast food|restaurant (?:associate|team)|cashier|food service|kitchen (?:staff|helper))\b/i
 const LABOR_JOB_RE             = /\b(?:forklift|truck driver|cdl|warehouse associate|warehouse worker|picker|packer|janitor|custodian|cleaner|housekeep|landscape|groundskeep|laborer|stocker)\b/i
 const VEHICLE_JOB_RE           = /\b(?:veterinarian|veterinary|groomer|delivery driver|courier|uber driver|lyft driver|taxi driver|chauffeur|bus driver)\b/i
 
@@ -1062,6 +1062,18 @@ export function computeFastScore({
   if (certs.certGate) {
     overall = Math.max(45, overall - 15)
     gatesTriggered.push("missing_required_cert")
+  }
+
+  // Low-signal gate — when the JD only yields 1-2 extracted skills, the
+  // ratio (matched/total) becomes meaningless: 1 soft-skill hit like
+  // "Communication" or "Leadership" reads as 100% match. Cap any tiny-
+  // skill-set listing at the "good match" ceiling so they can't be
+  // promoted into the "strong match" band.
+  // Observed: Dutch Bros "Broista" job with 1 extracted skill scored 72
+  // against a SWE resume — caught here at 65.
+  if (totalRequired > 0 && totalRequired < 5) {
+    overall = Math.min(overall, 65)
+    gatesTriggered.push(`low_signal_skills_lt5:${totalRequired}`)
   }
 
   // Skills gate — only fires when there are enough skills to make the ratio

@@ -9,7 +9,7 @@ export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 // Bump when the scoring algorithm changes so stale cached rows get recomputed.
-const SCORE_ALGORITHM_VERSION = new Date("2026-05-14T16:00:00.000Z").getTime()
+const SCORE_ALGORITHM_VERSION = new Date("2026-05-14T22:00:00.000Z").getTime()
 
 export async function GET(request: NextRequest) {
   try {
