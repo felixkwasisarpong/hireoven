@@ -111,20 +111,19 @@ function CircleScore({ value }: { value: number | null }) {
   )
 }
 
-/**
- * Big-number breakdown row used in the right-side match panel. The number is
- * emphasised over a tiny "%" suffix, à la the design mock: bold percentage,
- * lighter label. Three rows total: Experience Level, Skill, Industry Exp.
- */
-function FactorRow({ label, value }: { label: string; value: number }) {
+function FactorBar({ label, value }: { label: string; value: number }) {
   const pct = clamp(value)
+  const barColor = pct >= 70 ? "bg-emerald-400" : pct >= 45 ? "bg-orange-400" : "bg-red-400"
   return (
-    <div className="flex items-center justify-between">
-      <span className="text-[14px] font-medium text-slate-700">{label}</span>
-      <span className="font-bold tabular-nums text-slate-900">
-        <span className="text-[20px]">{pct}</span>
-        <span className="ml-0.5 text-[11px] text-slate-500">%</span>
-      </span>
+    <div className="grid grid-cols-[64px_1fr_24px] items-center gap-2">
+      <span className="truncate text-[11.5px] text-slate-500">{label}</span>
+      <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+        <div
+          className={cn("h-full rounded-full transition-[width] duration-500", barColor)}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <span className="text-right text-[11px] font-semibold tabular-nums text-slate-500">{pct}</span>
     </div>
   )
 }
@@ -265,13 +264,11 @@ export default function JobDetailPanel({
   })
   const verdict = getMatchVerdict(overall)
 
-  // Three-row mini breakdown matching the simplified design: Experience
-  // Level, Skill, Industry Exp. Each one is the per-dimension subscore
-  // from fast-scorer, not a re-weighted view of the overall.
   const allFactors = [
-    { label: "Experience Level", value: fastScore?.seniority_score ?? null },
-    { label: "Skill",            value: fastScore?.skills_score    ?? null },
-    { label: "Industry Exp.",    value: fastScore?.domain_score    ?? null },
+    { label: "Skills",     value: fastScore?.skills_score     ?? null },
+    { label: "Experience", value: fastScore?.seniority_score  ?? null },
+    { label: "Education",  value: fastScore?.education_score  ?? null },
+    { label: "Role fit",   value: fastScore?.role_fit_score   ?? null },
   ]
   const activeFactors = allFactors.filter((f): f is { label: string; value: number } => f.value != null)
 
@@ -460,11 +457,11 @@ export default function JobDetailPanel({
                 </div>
               </div>
 
-              {/* Per-dimension breakdown — three rows, big-number readout */}
+              {/* Factor bars */}
               {activeFactors.length > 0 && (
-                <div className="mt-5 space-y-3 rounded-2xl bg-emerald-50/30 px-4 py-3.5 ring-1 ring-emerald-100/60">
+                <div className="mt-4 space-y-2.5">
                   {activeFactors.map((f) => (
-                    <FactorRow key={f.label} label={f.label} value={f.value} />
+                    <FactorBar key={f.label} label={f.label} value={f.value} />
                   ))}
                 </div>
               )}
