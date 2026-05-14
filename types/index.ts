@@ -1278,6 +1278,8 @@ export type JobMatchScore = {
   location_score: number | null;
   employment_type_score: number | null;
   sponsorship_score: number | null;
+  /** Industry-domain fit (0–100). Persisted from scoreDomain in fast-scorer. */
+  domain_score: number | null;
   is_seniority_match: boolean | null;
   is_education_match: boolean | null;
   is_role_fit_match: boolean | null;
