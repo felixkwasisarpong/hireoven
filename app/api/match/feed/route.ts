@@ -103,10 +103,17 @@ export async function GET(request: NextRequest) {
   if (seniority?.length) where.push(`jobs.seniority_level = ANY(${addParam(seniority)}::text[])`)
   if (employment?.length) where.push(`jobs.employment_type = ANY(${addParam(employment)}::text[])`)
   if (sponsorship) where.push("(jobs.sponsors_h1b = true OR jobs.sponsorship_score >= 60)")
+
+  // Capture the freshness clause separately so the saved CTE can apply it too.
+  // Without this, the saved UNION used to surface saved jobs of any age — which
+  // pinned 10d-old jobs to the top of "Best Match" (24h-bounded) results.
+  let savedFreshnessClause = ""
   if (within !== "all" && WITHIN_MS[within]) {
-    where.push(`jobs.first_detected_at >= ${addParam(
+    const freshnessParam = addParam(
       new Date(Date.now() - WITHIN_MS[within]).toISOString()
-    )}`)
+    )
+    where.push(`jobs.first_detected_at >= ${freshnessParam}`)
+    savedFreshnessClause = ` AND jobs.first_detected_at >= ${freshnessParam}`
   }
   if (titles.length) {
     const patterns = titles.map((t) => `%${t}%`)
@@ -146,7 +153,7 @@ export async function GET(request: NextRequest) {
            ON ja.job_id = jobs.id
           AND ja.user_id = ${userIdParam}::uuid
           AND ja.is_archived = false
-         WHERE jobs.is_active = true
+         WHERE jobs.is_active = true${savedFreshnessClause}
            AND jobs.id NOT IN (SELECT id FROM base)
        )
        SELECT * FROM base
@@ -239,10 +246,10 @@ export async function GET(request: NextRequest) {
         : minScore <= 0,
     )
     .sort((left, right) => {
-      // Pin user-saved jobs to the top regardless of score.
-      if (Boolean(left.is_user_saved) !== Boolean(right.is_user_saved)) {
-        return left.is_user_saved ? -1 : 1
-      }
+      // Best Match is purely score-ordered. Saved jobs no longer pin to the
+      // top — they're still visible (with the bookmark badge) and bypass
+      // minScore via the filter above, but they're ranked alongside everything
+      // else so a 99% fresh match doesn't get outranked by a 60% saved one.
       const a = left.match_score?.overall_score ?? -1
       const b = right.match_score?.overall_score ?? -1
       if (a !== b) return b - a
