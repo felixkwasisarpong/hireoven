@@ -33,9 +33,15 @@ const RETRY_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504])
 
 // Per-job detail fetch — enriches descriptions beyond the bullet snippets.
 // Env-tunable for operators who want to trade throughput for richer text.
+//
+// Bumped default 100 → 300. Large Workday tenants (Leidos, Amentum, AT&T)
+// publish 1000+ jobs each; at 100 per tick most rows never got their
+// description filled before the row aged out of the freshness rotation,
+// leaving ~50% of Workday rows with empty descriptions. 300 per tick at
+// DETAIL_CONCURRENCY = 4 still fits the 240s lease.
 const DETAIL_MAX_JOBS = Math.max(
   0,
-  Number.parseInt(process.env.HARVESTER_WORKDAY_DETAIL_MAX_JOBS ?? "100", 10)
+  Number.parseInt(process.env.HARVESTER_WORKDAY_DETAIL_MAX_JOBS ?? "300", 10)
 )
 const DETAIL_CONCURRENCY = Math.max(
   1,
