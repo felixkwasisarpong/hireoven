@@ -270,6 +270,19 @@ export async function GET(request: NextRequest) {
   let sentWithoutResume = 0
   let errors = 0
 
+  // Hoisted: both segments need to check user-alert existence as the explicit
+  // opt-in signal. Fetch alerts for ALL eligible users (with + without resume).
+  const alertsResult = await pool.query<JobAlert & { user_id: string }>(
+    `SELECT * FROM job_alerts WHERE user_id = ANY($1::uuid[]) AND is_active = true`,
+    [users.map((user) => user.id)]
+  )
+  const alertsByUser = new Map<string, JobAlert[]>()
+  for (const row of alertsResult.rows) {
+    const list = alertsByUser.get(row.user_id) ?? []
+    list.push(row)
+    alertsByUser.set(row.user_id, list)
+  }
+
   if (resumeRecipients.length) {
     const matchedRowsResult = await pool.query<
       {
@@ -315,20 +328,6 @@ export async function GET(request: NextRequest) {
       [resumeRecipients.map((user) => user.id), withResumeSince]
     )
 
-    // Bulk-fetch active job_alerts for the resume recipients so we can scope
-    // each user's email to their own alert criteria (if any). Users with
-    // no alerts continue to get the match-score-only behaviour.
-    const alertsResult = await pool.query<JobAlert & { user_id: string }>(
-      `SELECT * FROM job_alerts WHERE user_id = ANY($1::uuid[]) AND is_active = true`,
-      [resumeRecipients.map((user) => user.id)]
-    )
-    const alertsByUser = new Map<string, JobAlert[]>()
-    for (const row of alertsResult.rows) {
-      const list = alertsByUser.get(row.user_id) ?? []
-      list.push(row)
-      alertsByUser.set(row.user_id, list)
-    }
-
     type EnrichedMatchedRow = MatchedJobRow & { jobFull?: Job }
     const byUser = new Map<string, Array<EnrichedMatchedRow>>()
     for (const row of matchedRowsResult.rows) {
@@ -358,13 +357,14 @@ export async function GET(request: NextRequest) {
       const rows = byUser.get(user.id) ?? []
       if (!rows.length) continue
 
-      // If the user has saved job_alerts, only include matches that ALSO
-      // satisfy at least one alert. Otherwise fall through to the
-      // match-score-only filter.
+      // Require an explicit opt-in: the user must have at least one active
+      // job_alert. Without that, skip them entirely — we no longer fall
+      // through to a "match-score-only" blast.
       const userAlerts = alertsByUser.get(user.id) ?? []
-      const filtered = userAlerts.length
-        ? rows.filter((row) => row.jobFull && userAlerts.some((alert) => matchesAlert(alert, row.jobFull as Job)))
-        : rows
+      if (userAlerts.length === 0) continue
+      const filtered = rows.filter(
+        (row) => row.jobFull && userAlerts.some((alert) => matchesAlert(alert, row.jobFull as Job))
+      )
 
       const topJobs = filtered
         .filter((row) => row.jobs)
@@ -444,18 +444,28 @@ export async function GET(request: NextRequest) {
     }))
     if (fallbackJobs.length) {
       for (const user of noResumeRecipients) {
+        // Same opt-in rule: only send if the user has at least one active
+        // job_alert. Without that signal, a resume-less account gets no email.
+        const userAlerts = alertsByUser.get(user.id) ?? []
+        if (userAlerts.length === 0) continue
+        // Filter the fallback list by the user's alerts so we don't ship
+        // off-target jobs to a careful opt-in.
+        const userJobs = fallbackJobs.filter((job) =>
+          userAlerts.some((alert) => matchesAlert(alert, job as unknown as Job))
+        )
+        if (userJobs.length === 0) continue
         try {
           await resend.emails.send({
             from: getRecentJobsFromEmail(),
             to: [user.email!],
-            subject: `Today's 5 fresh jobs on Hireoven`,
+            subject: `Today's ${userJobs.length} fresh jobs on Hireoven`,
             html: buildEmail({
               firstName: firstNameOf(user.full_name),
               title: "Today's fresh jobs",
               subtitle:
-                "We picked recent openings for you. Upload your resume to unlock personalized 75%+ match emails.",
-              jobsTableRows: renderJobRows(fallbackJobs),
-              ctaLabel: "Upload resume and personalize",
+                "Matches against your saved alerts. Upload your resume to unlock 75%+ match scores.",
+              jobsTableRows: renderJobRows(userJobs),
+              ctaLabel: "View more in Hireoven",
             }),
           })
           sentWithoutResume += 1
