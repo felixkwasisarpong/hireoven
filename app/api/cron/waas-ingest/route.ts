@@ -25,6 +25,7 @@ import {
   fetchWaasListing,
   htmlToPlainText,
   parseWaasSalary,
+  parseWaasSponsorship,
   parseWaasWorkMode,
   type WaasJobSummary,
   type WaasRoleSlug,
@@ -205,7 +206,7 @@ export async function GET(request: NextRequest) {
     const skills = detail?.job?.skills ?? null
     const employmentType =
       (detail?.job?.jobType ?? job.jobType)?.toLowerCase().replace(/\s+/g, "-") ?? null
-    const sponsorsH1B = detail?.job?.sponsorsVisa ?? null
+    const sponsorsH1B = parseWaasSponsorship(detail?.job?.sponsorsVisa)
 
     // Use the detail-page salary fields when available, otherwise fall back
     // to the listing's free-form `salary` string.
