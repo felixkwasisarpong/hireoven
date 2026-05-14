@@ -52,5 +52,17 @@ export async function POST(request: NextRequest) {
     ]
   )
 
+  // Creating an alert is the explicit opt-in signal — flip email_alerts on
+  // for this user so the recent-jobs cron starts sending to them. Best-effort
+  // (we don't fail alert creation if the profile update errors).
+  try {
+    await pool.query(
+      `UPDATE profiles SET email_alerts = true, updated_at = now() WHERE id = $1`,
+      [user.id]
+    )
+  } catch {
+    // ignore — user can flip it manually in settings
+  }
+
   return NextResponse.json({ alert: result.rows[0] }, { status: 201 })
 }
