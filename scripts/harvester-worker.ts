@@ -24,6 +24,33 @@ async function main() {
   const config = loadWorkerConfig()
   const pool = getPostgresPool()
   const healthServer = startHealthServer()
+
+  // ── Defensive process-level handlers ────────────────────────────────────────
+  // Without these, any unhandled promise rejection (e.g. inside an adapter
+  // callback that's not awaited on the main chain) crashes the worker. We've
+  // been seeing the container go silent after 1–3h of activity; the dominant
+  // hypothesis is one adapter throwing async and Node terminating on default.
+  //
+  // We log loudly and KEEP RUNNING. If something is truly fatal it'll keep
+  // re-throwing each tick — the log makes that visible. The alternative
+  // (silent crash + Coolify restart loop) hid the root cause entirely.
+  process.on("unhandledRejection", (reason, promise) => {
+    console.error("[harvester] UNHANDLED_REJECTION", {
+      message: reason instanceof Error ? reason.message : String(reason),
+      stack: reason instanceof Error ? reason.stack : undefined,
+      // promise reference itself isn't serializable; tag just so logs differ.
+      promiseHint: String(promise).slice(0, 80),
+    })
+  })
+  process.on("uncaughtException", (err, origin) => {
+    console.error("[harvester] UNCAUGHT_EXCEPTION", {
+      message: err.message,
+      stack: err.stack,
+      origin,
+    })
+    // Don't `process.exit()` — let the tick loop keep going if it can.
+  })
+
   const handle = startWorkerLoop(pool, config)
 
   let signaled = false

@@ -39,7 +39,18 @@ let browserInstance: Browser | null = null
 let browserInitInflight: Promise<Browser> | null = null
 
 export async function getAppleBrowser(): Promise<Browser> {
-  if (browserInstance) return browserInstance
+  // Health-check the cached singleton. If the chromium process died (OOM kill,
+  // network sandbox eviction, manual restart), Playwright's `isConnected()`
+  // returns false. In that state every newContext/newPage call rejects, so we
+  // drop the dead reference and recreate. Without this the worker would log
+  // "Apple harvest failed" for every subsequent claim until the container was
+  // restarted manually.
+  if (browserInstance) {
+    if (browserInstance.isConnected()) return browserInstance
+    const dead = browserInstance
+    browserInstance = null
+    void dead.close().catch(() => {})
+  }
   if (browserInitInflight) return browserInitInflight
   browserInitInflight = (async () => {
     const { chromium } = await import("playwright")
@@ -48,9 +59,12 @@ export async function getAppleBrowser(): Promise<Browser> {
       args: ["--no-sandbox", "--disable-blink-features=AutomationControlled"],
     })
   })()
-  browserInstance = await browserInitInflight
-  browserInitInflight = null
-  return browserInstance
+  try {
+    browserInstance = await browserInitInflight
+    return browserInstance
+  } finally {
+    browserInitInflight = null
+  }
 }
 
 export async function closeAppleBrowser(): Promise<void> {
