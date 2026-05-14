@@ -104,16 +104,14 @@ export async function GET(request: NextRequest) {
   if (employment?.length) where.push(`jobs.employment_type = ANY(${addParam(employment)}::text[])`)
   if (sponsorship) where.push("(jobs.sponsors_h1b = true OR jobs.sponsorship_score >= 60)")
 
-  // Capture the freshness clause separately so the saved CTE can apply it too.
-  // Without this, the saved UNION used to surface saved jobs of any age — which
-  // pinned 10d-old jobs to the top of "Best Match" (24h-bounded) results.
-  let savedFreshnessClause = ""
+  // Freshness window applies to the base query only. The saved-jobs UNION
+  // deliberately ignores it so a job the user just saved via the extension
+  // appears in the feed regardless of the JD's age. The pin-to-top sort was
+  // removed separately — saved jobs rank by score in Best Match.
   if (within !== "all" && WITHIN_MS[within]) {
-    const freshnessParam = addParam(
+    where.push(`jobs.first_detected_at >= ${addParam(
       new Date(Date.now() - WITHIN_MS[within]).toISOString()
-    )
-    where.push(`jobs.first_detected_at >= ${freshnessParam}`)
-    savedFreshnessClause = ` AND jobs.first_detected_at >= ${freshnessParam}`
+    )}`)
   }
   if (titles.length) {
     const patterns = titles.map((t) => `%${t}%`)
@@ -153,7 +151,7 @@ export async function GET(request: NextRequest) {
            ON ja.job_id = jobs.id
           AND ja.user_id = ${userIdParam}::uuid
           AND ja.is_archived = false
-         WHERE jobs.is_active = true${savedFreshnessClause}
+         WHERE jobs.is_active = true
            AND jobs.id NOT IN (SELECT id FROM base)
        )
        SELECT * FROM base
