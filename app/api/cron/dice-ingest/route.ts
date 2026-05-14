@@ -27,11 +27,15 @@ export const runtime = "nodejs"
 export const maxDuration = 300
 
 // Cap per-run detail enrichments to stay under the 5-min Vercel limit.
-// At pLimit(3) × ~1s per fetch, 400 ≈ 130s of network — leaves ample budget
+// At pLimit(3) × ~1s per fetch, 800 ≈ 270s of network — leaves enough budget
 // for the search/upsert phases. Existing rows with long descriptions are
 // skipped so each run prioritises freshly-ingested or stale entries.
+//
+// Previously 400 — bumped after observing search batches returning 500+ new
+// rows in a single tick, causing the overflow to land as summary-only until
+// the next cron run.
 const DICE_ENRICH_CONCURRENCY = Number(process.env.DICE_ENRICH_CONCURRENCY ?? "3")
-const DICE_ENRICH_MAX_PER_RUN = Number(process.env.DICE_ENRICH_MAX_PER_RUN ?? "400")
+const DICE_ENRICH_MAX_PER_RUN = Number(process.env.DICE_ENRICH_MAX_PER_RUN ?? "800")
 const DICE_ENRICH_STALE_LENGTH = 800
 
 const DEFAULT_QUERIES = [

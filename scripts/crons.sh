@@ -39,6 +39,7 @@ run() {
 # deliver-checkins   0 9 * * *         run api/cron/deliver-checkins
 # blog-generate      0 8 * * 1-5       run api/cron/blog-generate
 # dice-ingest        0 */6 * * *       run api/cron/dice-ingest
+# waas-ingest        15 */6 * * *      run api/cron/waas-ingest
 # ──────────────────────────────────────────────────────────────────────────────
 
 case "${1:-}" in
@@ -58,6 +59,7 @@ case "${1:-}" in
   deliver-checkins)  run api/cron/deliver-checkins ;;
   blog-generate)     run api/cron/blog-generate ;;
   dice-ingest)       run api/cron/dice-ingest ;;
+  waas-ingest)       run api/cron/waas-ingest ;;
   all)
     run api/crawl
     run api/crawl/enrichment
@@ -75,6 +77,7 @@ case "${1:-}" in
     run api/cron/deliver-checkins
     run api/cron/blog-generate
     run api/cron/dice-ingest
+    run api/cron/waas-ingest
     ;;
   *)
     echo "Usage: $0 <name|all>"
@@ -84,6 +87,7 @@ case "${1:-}" in
     echo "  cohort-detect  cohort-match  layoffs-fyi  health-scores"
     echo "  rejection-patterns  burnout-classify  salary-digest  warn-act"
     echo "  cohort-aggregate  deliver-checkins  blog-generate  dice-ingest"
+    echo "  waas-ingest"
     exit 1
     ;;
 esac
