@@ -23,7 +23,7 @@ run() {
 #
 # Name               Schedule          Command (paste into Coolify)
 # ──────────────────────────────────────────────────────────────────────────────
-# crawl              0 */2 * * *       run api/crawl
+# crawl              0 * * * *         run api/crawl
 # crawl-enrichment   30 */2 * * *      run api/crawl/enrichment
 # ghost-scan         0 */6 * * *       run api/cron/ghost-scan
 # timing-refresh     0 */6 * * *       run api/cron/timing-refresh
