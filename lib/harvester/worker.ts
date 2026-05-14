@@ -58,8 +58,16 @@ export function loadWorkerConfig(
   }
   return {
     tickIntervalMs: intPositive(env.HARVESTER_TICK_INTERVAL_MS, 30_000, 500),
-    claimBatchSize: intPositive(env.HARVESTER_CLAIM_BATCH_SIZE, 50),
-    leaseSeconds: intPositive(env.HARVESTER_LEASE_SECONDS, 120),
+    // Lowered from 50 → 20. With slow per-company adapters (Playwright Apple
+    // = concurrency 1, iCIMS = 3, Workday = 4) a batch of 50 was taking
+    // 5–6 minutes per tick — far longer than the 120s lease and long
+    // enough that Coolify's container health checks may flag it as
+    // unresponsive. 20 keeps each tick around 2 minutes.
+    claimBatchSize: intPositive(env.HARVESTER_CLAIM_BATCH_SIZE, 20),
+    // Bumped 120 → 240 so the lease still covers a worst-case tick after
+    // the batch shrink. Stale leases caused companies to be re-claimed and
+    // duplicated work.
+    leaseSeconds: intPositive(env.HARVESTER_LEASE_SECONDS, 240),
     concurrency: intPositive(env.HARVESTER_CONCURRENCY, 8),
   }
 }
