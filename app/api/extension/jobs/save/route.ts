@@ -14,6 +14,12 @@
 
 import { NextResponse } from "next/server"
 import { randomUUID } from "crypto"
+import { fetchEmbeddedGreenhouseJobDetails } from "@/lib/extension/embedded-greenhouse"
+import {
+  buildExtensionJobFingerprint,
+  isPlaceholderJobTitle,
+  normalizeExtensionJobUrl,
+} from "@/lib/extension/job-fingerprint"
 import { enrichJobWithNormalization } from "@/lib/jobs/enrich-job-with-normalization"
 import { getPostgresPool } from "@/lib/postgres/server"
 import {
@@ -42,6 +48,7 @@ interface SaveJobBody {
   source: SupportedSite
   url: string
   canonicalUrl?: string
+  sourceUrl?: string
   title?: string
   company?: string
   location?: string
@@ -50,6 +57,7 @@ interface SaveJobBody {
   employmentType?: string
   applyUrl?: string
   detectedAts?: SupportedSite
+  externalJobId?: string
   activelyHiring?: boolean
   postedAt?: string
   confidence?: "high" | "medium" | "low"
@@ -61,47 +69,6 @@ interface SaveResultBody {
   created: boolean
   updated: boolean
   dashboardUrl?: string
-}
-
-// ── URL normalization (copied from /import to avoid touching that file) ───────
-
-function normalizeUrl(raw: string | null | undefined): string | null {
-  if (!raw?.trim()) return null
-  try {
-    const parsed = new URL(raw.trim())
-    parsed.hash = ""
-
-    // LinkedIn canonicalization: side-pane URLs all carry currentJobId. Collapse
-    // them to the canonical /jobs/view/[id]/ form so dedup works across
-    // search/sidebar/collection variants and the saved URL is clean.
-    //
-    //   /jobs/search/?currentJobId=X&keywords=...    → /jobs/view/X/
-    //   /jobs/collections/similar-jobs?currentJobId=X → /jobs/view/X/
-    //   /jobs/view/X/?...                            → /jobs/view/X/
-    if (
-      (parsed.hostname === "www.linkedin.com" || parsed.hostname === "linkedin.com") &&
-      /^\/jobs\//.test(parsed.pathname)
-    ) {
-      const fromPath = parsed.pathname.match(/^\/jobs\/view\/(\d+)/)?.[1]
-      const fromQuery = parsed.searchParams.get("currentJobId")
-      const jobId = fromPath ?? fromQuery
-      if (jobId && /^\d+$/.test(jobId)) {
-        return `https://www.linkedin.com/jobs/view/${jobId}/`
-      }
-    }
-
-    for (const key of [...parsed.searchParams.keys()]) {
-      if (/^(utm_|gclid|fbclid|source|share|ref|trk|gh_src)/i.test(key)) {
-        parsed.searchParams.delete(key)
-      }
-    }
-    if (parsed.pathname !== "/") {
-      parsed.pathname = parsed.pathname.replace(/\/+$/, "")
-    }
-    return parsed.toString()
-  } catch {
-    return raw.trim()
-  }
 }
 
 function resolveOriginFromRequest(request: Request): string {
@@ -178,28 +145,61 @@ export async function POST(request: Request) {
   if (!url) {
     return extensionError(request, 400, "url is required", { headers: corsHeaders })
   }
-  const canonical = normalizeUrl(body.canonicalUrl ?? body.url)
-  // apply_url column priority:
-  //   1. body.applyUrl    — explicit external apply link found by the extractor
-  //                         (e.g. LinkedIn external "Apply" → company's ATS URL)
-  //   2. canonical        — page URL stripped of tracking params
-  //   3. url              — raw URL the user was on
-  // Using the external apply link as the dedup key means saves of the same
-  // posting from different surfaces (LinkedIn, Greenhouse) collapse to one row.
-  const applyUrl =
-    normalizeUrl(body.applyUrl?.trim() || null) ?? canonical ?? url
-  const title = body.title?.trim() || "Unknown Role"
-  const extractedCompany = body.company?.trim() || null
-  const description = body.descriptionText?.trim().slice(0, 12000) || null
+  const sourceUrl = body.sourceUrl?.trim() || url
+  const canonical = normalizeExtensionJobUrl(body.canonicalUrl ?? sourceUrl)
+  const parsedApplyUrl = normalizeExtensionJobUrl(body.applyUrl?.trim() || null)
+  const rawTitle = body.title?.trim() || "Unknown Role"
+  const rawDescription = body.descriptionText?.trim().slice(0, 12000) || null
+  const rawCompany = body.company?.trim() || null
   const ats = body.detectedAts ?? body.source
+
+  const fingerprint = buildExtensionJobFingerprint({
+    urls: [body.applyUrl, body.canonicalUrl, sourceUrl, url],
+    externalJobId: body.externalJobId ?? null,
+  })
+  const externalJobId = fingerprint.externalJobIds[0] ?? null
+
+  const shouldEnrichEmbeddedGreenhouse =
+    (isPlaceholderJobTitle(rawTitle) || !rawDescription || !rawCompany || !body.location?.trim()) &&
+    externalJobId != null
+  const embeddedDetails = shouldEnrichEmbeddedGreenhouse
+    ? await fetchEmbeddedGreenhouseJobDetails({
+        urls: [body.applyUrl, body.canonicalUrl, sourceUrl, url],
+        externalJobId,
+      })
+    : null
+  const ghScopedCandidateUrl =
+    fingerprint.candidateUrls.find((candidate) => /[?&]gh_jid=/i.test(candidate)) ?? null
+
+  // apply_url priority:
+  //   1) explicit applyUrl from extractor
+  //   2) embedded Greenhouse resolved absolute URL
+  //   3) gh_jid-scoped URL candidate
+  //   4) canonical URL
+  //   5) normalized source URL
+  const applyUrl =
+    parsedApplyUrl ??
+    normalizeExtensionJobUrl(embeddedDetails?.applyUrl ?? null) ??
+    normalizeExtensionJobUrl(ghScopedCandidateUrl) ??
+    canonical ??
+    normalizeExtensionJobUrl(sourceUrl) ??
+    url
+
+  const title =
+    isPlaceholderJobTitle(rawTitle) && embeddedDetails?.title?.trim()
+      ? embeddedDetails.title.trim()
+      : rawTitle
+  const extractedCompany = rawCompany ?? embeddedDetails?.company?.trim() ?? null
+  const description = rawDescription ?? embeddedDetails?.descriptionText?.trim() ?? null
+  const extractedLocation = body.location?.trim() || embeddedDetails?.location?.trim() || null
 
   // Resolve location, is_remote, is_hybrid using the same heuristics as
   // /import. Critical for the feed's US-only filter — a job with NULL
   // location and is_remote=false would never appear.
   const { location, isRemote, isHybrid } = resolveLocation(
-    body.location,
-    body.title,
-    body.descriptionText,
+    extractedLocation,
+    title,
+    description,
     body.employmentType,
   )
 
@@ -335,12 +335,16 @@ export async function POST(request: Request) {
     }
   }
 
-  // ── 2. Upsert job by canonical apply_url ───────────────────────────────────
+  // ── 2. Upsert job by apply_url / external_id ──────────────────────────────
 
   const existingJob = await pool
     .query<{ id: string }>(
-      `SELECT id FROM jobs WHERE apply_url = $1 LIMIT 1`,
-      [applyUrl],
+      `SELECT id
+       FROM jobs
+       WHERE apply_url = $1
+          OR ($2::text IS NOT NULL AND external_id = $2::text)
+       LIMIT 1`,
+      [applyUrl, externalJobId],
     )
     .catch(() => null)
 
@@ -352,13 +356,13 @@ export async function POST(request: Request) {
       .query<{ id: string }>(
         `INSERT INTO jobs (
            company_id, title, location, description,
-           apply_url, is_remote, is_hybrid, is_active,
+           apply_url, is_remote, is_hybrid, is_active, external_id,
            raw_data,
            first_detected_at, last_seen_at
          ) VALUES (
            $1, $2, $3, $4,
-           $5, $6, $7, true,
-           $8::jsonb,
+           $5, $6, $7, true, $8,
+           $9::jsonb,
            NOW(), NOW()
          )
          RETURNING id`,
@@ -370,11 +374,16 @@ export async function POST(request: Request) {
           applyUrl,
           isRemote,
           isHybrid,
+          externalJobId,
           JSON.stringify({
             captureSource: "scout-mvp",
             captureAdapter: ats,
-            sourceUrl: url,
+            sourceUrl,
+            applyUrl,
             canonicalUrl: canonical,
+            canonicalSourceUrl: normalizeExtensionJobUrl(sourceUrl),
+            canonicalApplyUrl: applyUrl,
+            externalJobId,
             employmentType: body.employmentType,
             salaryText: body.salaryText,
             // Field name matches what JobCardV2 reads from raw_data.
@@ -395,7 +404,14 @@ export async function POST(request: Request) {
     // Race-loss recovery: another save may have inserted between our SELECT and INSERT.
     if (!jobId) {
       const retry = await pool
-        .query<{ id: string }>(`SELECT id FROM jobs WHERE apply_url = $1 LIMIT 1`, [applyUrl])
+        .query<{ id: string }>(
+          `SELECT id
+           FROM jobs
+           WHERE apply_url = $1
+              OR ($2::text IS NOT NULL AND external_id = $2::text)
+           LIMIT 1`,
+          [applyUrl, externalJobId],
+        )
         .catch(() => null)
       jobId = retry?.rows[0]?.id ?? null
     }
@@ -406,18 +422,33 @@ export async function POST(request: Request) {
     // Build the merge patch dynamically so postedAt is only written when present.
     const rawPatch: Record<string, unknown> = { activelyHiring }
     if (body.postedAt) rawPatch.postedAt = body.postedAt
+    if (externalJobId) rawPatch.externalJobId = externalJobId
+    if (canonical) rawPatch.canonicalUrl = canonical
+    rawPatch.canonicalApplyUrl = applyUrl
+    rawPatch.canonicalSourceUrl = normalizeExtensionJobUrl(sourceUrl)
+    rawPatch.applyUrl = applyUrl
 
     await pool
       .query(
         `UPDATE jobs
          SET company_id = COALESCE(company_id, $2::uuid),
-             location = COALESCE(NULLIF(trim(location), ''), $3),
-             description = COALESCE(NULLIF(trim(description), ''), $4),
-             raw_data = COALESCE(raw_data, '{}'::jsonb) || $5::jsonb,
+             title = CASE
+               WHEN lower(coalesce(title, '')) IN ('', 'unknown role', 'no job found', 'open role')
+               THEN COALESCE(NULLIF(trim($3), ''), title)
+               ELSE title
+             END,
+             location = COALESCE(NULLIF(trim(location), ''), $4),
+             description = CASE
+               WHEN lower(coalesce(trim(description), '')) IN ('', 'no job found', 'no job found.')
+               THEN COALESCE(NULLIF(trim($5), ''), description)
+               ELSE description
+             END,
+             external_id = COALESCE(NULLIF(trim(external_id), ''), $6),
+             raw_data = COALESCE(raw_data, '{}'::jsonb) || $7::jsonb,
              last_seen_at = NOW(),
              updated_at = NOW()
          WHERE id = $1::uuid`,
-        [jobId, companyId, location, description, JSON.stringify(rawPatch)],
+        [jobId, companyId, title, location, description, externalJobId, JSON.stringify(rawPatch)],
       )
       .catch(() => null)
     jobUpdated = true

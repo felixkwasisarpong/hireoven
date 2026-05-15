@@ -15,6 +15,8 @@
 import { NextResponse } from "next/server"
 import { randomUUID } from "crypto"
 import { domainFromApplyUrl } from "@/lib/applications/company-domain"
+import { fetchEmbeddedGreenhouseJobDetails } from "@/lib/extension/embedded-greenhouse"
+import { isPlaceholderJobTitle } from "@/lib/extension/job-fingerprint"
 import { enrichJobWithNormalization } from "@/lib/jobs/enrich-job-with-normalization"
 import { getPostgresPool } from "@/lib/postgres/server"
 import {
@@ -224,7 +226,23 @@ export async function POST(request: Request) {
   const [body, bodyError] = await readExtensionJsonBody<ImportJobBody>(request)
   if (bodyError) return bodyError
   const sourceUrl = toOptionalString(body.sourceUrl ?? body.url, 1400)
-  const applyUrl = toOptionalString(body.applyUrl ?? body.url, 1400)
+  const initialApplyUrl = toOptionalString(body.applyUrl ?? body.url, 1400)
+  const initialExternalJobId = toOptionalString(body.externalJobId, 220)
+  const shouldEnrichEmbeddedGreenhouse =
+    initialExternalJobId != null &&
+    (isPlaceholderJobTitle(body.title) ||
+      !toOptionalString(body.description, 10000) ||
+      !toOptionalString(body.company, 220) ||
+      !toOptionalString(body.location, 220))
+
+  const embeddedDetails = shouldEnrichEmbeddedGreenhouse
+    ? await fetchEmbeddedGreenhouseJobDetails({
+        urls: [initialApplyUrl, sourceUrl, body.url],
+        externalJobId: initialExternalJobId,
+      })
+    : null
+
+  const applyUrl = toOptionalString(body.applyUrl ?? embeddedDetails?.applyUrl ?? body.url, 1400)
   const jobUrl = applyUrl
 
   if (!jobUrl) {
@@ -232,13 +250,20 @@ export async function POST(request: Request) {
   }
 
   const pool = getPostgresPool()
-  const companyName = body.company?.trim() || null
-  const jobTitle = body.title?.trim() || "Unknown Role"
+  const companyName = toOptionalString(body.company, 220) ?? embeddedDetails?.company ?? null
+  const jobTitle =
+    isPlaceholderJobTitle(body.title) && embeddedDetails?.title?.trim()
+      ? embeddedDetails.title.trim()
+      : (body.title?.trim() || "Unknown Role")
+  const descriptionText =
+    toOptionalString(body.description, 10000) ?? embeddedDetails?.descriptionText ?? null
+  const extractedLocation =
+    toOptionalString(body.location, 220) ?? embeddedDetails?.location ?? null
   const salaryInput = body.salaryRange?.trim() || body.salary?.trim() || null
   const { location, isRemote, isHybrid } = resolveLocation(
-    body.location,
-    body.title,
-    body.description,
+    extractedLocation,
+    jobTitle,
+    descriptionText,
     body.workMode
   )
   const { min: salaryMin, max: salaryMax } = parseSalary(salaryInput)
@@ -264,7 +289,7 @@ export async function POST(request: Request) {
   const sponsorshipSignal = toOptionalString(body.sponsorshipSignal, 180)
   const matchedSkills = toOptionalStringArray(body.matchedSkills, 10)
   const missingSkills = toOptionalStringArray(body.missingSkills, 10)
-  const externalJobId = toOptionalString(body.externalJobId, 220)
+  const externalJobId = initialExternalJobId ?? embeddedDetails?.externalJobId ?? null
   const canonicalSourceUrl = normalizeCaptureUrl(sourceUrl)
   const canonicalApplyUrl = normalizeCaptureUrl(applyUrl)
   const extensionRawData = compactRecord({
@@ -400,7 +425,7 @@ export async function POST(request: Request) {
           companyId,
           jobTitle,
           location,
-          body.description?.trim().slice(0, 10000) ?? null,
+          descriptionText,
           jobUrl,
           isRemote,
           isHybrid,
@@ -428,8 +453,17 @@ export async function POST(request: Request) {
       .query(
         `UPDATE jobs
          SET raw_data = COALESCE(raw_data, '{}'::jsonb) || $2::jsonb,
+             title = CASE
+               WHEN lower(coalesce(title, '')) IN ('', 'unknown role', 'no job found', 'open role')
+               THEN COALESCE(NULLIF(trim($10), ''), title)
+               ELSE title
+             END,
              location = COALESCE(NULLIF(trim(location), ''), $3),
-             description = COALESCE(NULLIF(trim(description), ''), $4),
+             description = CASE
+               WHEN lower(coalesce(trim(description), '')) IN ('', 'no job found', 'no job found.')
+               THEN COALESCE(NULLIF(trim($4), ''), description)
+               ELSE description
+             END,
              salary_min = COALESCE(salary_min, $5),
              salary_max = COALESCE(salary_max, $6),
              is_remote = CASE WHEN is_remote THEN true ELSE $7 END,
@@ -442,12 +476,13 @@ export async function POST(request: Request) {
           jobId,
           JSON.stringify(extensionRawData),
           location,
-          body.description?.trim().slice(0, 10000) ?? null,
+          descriptionText,
           salaryMin,
           salaryMax,
           isRemote,
           isHybrid,
           externalJobId,
+          jobTitle,
         ]
       )
       .catch(() => null)
