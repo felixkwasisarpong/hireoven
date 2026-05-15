@@ -86,6 +86,46 @@ type PersistRow = {
   raw_data: RawDataPayload
 }
 
+function normalizePostedAtForPersist(
+  rawPostedAt: string | null | undefined,
+  crawledAtIso: string
+): string | null {
+  const raw = rawPostedAt?.trim()
+  if (!raw) return null
+
+  const parsed = new Date(raw)
+  if (!Number.isNaN(parsed.getTime())) return parsed.toISOString()
+
+  const lower = raw.toLowerCase()
+  const crawledMs = Date.parse(crawledAtIso)
+  const baseMs = Number.isNaN(crawledMs) ? Date.now() : crawledMs
+
+  if (lower === "posted today" || lower === "today") {
+    return new Date(baseMs).toISOString()
+  }
+  if (lower === "posted yesterday" || lower === "yesterday") {
+    return new Date(baseMs - 86_400_000).toISOString()
+  }
+
+  const daysAgoMatch = lower.match(/^(?:posted\s+)?(\d+)\+?\s+days?\s+ago$/)
+  if (daysAgoMatch) {
+    const days = Number.parseInt(daysAgoMatch[1], 10)
+    if (Number.isFinite(days) && days >= 0) {
+      return new Date(baseMs - days * 86_400_000).toISOString()
+    }
+  }
+
+  const hoursAgoMatch = lower.match(/^(?:posted\s+)?(\d+)\+?\s+hours?\s+ago$/)
+  if (hoursAgoMatch) {
+    const hours = Number.parseInt(hoursAgoMatch[1], 10)
+    if (Number.isFinite(hours) && hours >= 0) {
+      return new Date(baseMs - hours * 3_600_000).toISOString()
+    }
+  }
+
+  return null
+}
+
 const UPSERT_SQL = `
 INSERT INTO jobs (
   company_id, external_id, title, normalized_title, apply_url, location, description,
@@ -164,6 +204,7 @@ function buildPersistRow(args: {
   crawledAtIso: string
 }): PersistRow | null {
   const { job, companyMeta, crawledAtIso } = args
+  const normalizedPostedAt = normalizePostedAtForPersist(job.postedAt, crawledAtIso)
 
   const normalization = normalizeCrawlerJobForPersistence({
     rawJob: {
@@ -258,7 +299,7 @@ function buildPersistRow(args: {
     sponsors_h1b: cols.sponsors_h1b ?? null,
     sponsorship_score: cols.sponsorship_score ?? null,
     visa_language_detected: cols.visa_language_detected ?? null,
-    posted_at: job.postedAt ?? null,
+    posted_at: normalizedPostedAt,
     content_hash: job.contentHash,
     raw_data: rawData,
   }

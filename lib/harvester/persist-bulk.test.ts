@@ -142,3 +142,35 @@ test("persistJobsBulk: empty input still updates company job_count", async () =>
   assert.equal(outcome.written, 0)
   assert.equal(outcome.inputCount, 0)
 })
+
+test("persistJobsBulk: normalizes relative postedAt and drops unparseable values", async () => {
+  const { pool, captured } = makeFakePool([[], []])
+  const crawledAt = new Date("2026-05-11T00:00:00.000Z")
+
+  await persistJobsBulk({
+    pool,
+    companyId: "00000000-0000-0000-0000-000000000004",
+    companyMeta: { name: "Acme", domain: null, careersUrl: null },
+    sourceAts: "workday",
+    sourceAtsSlug: "acme:wd1:External",
+    crawledAt,
+    jobs: [
+      makeJob({
+        externalId: "workday:1",
+        postedAt: "Posted Today",
+        contentHash: "4".repeat(32),
+      }),
+      makeJob({
+        externalId: "workday:2",
+        postedAt: "Soon-ish",
+        contentHash: "5".repeat(32),
+      }),
+    ],
+  })
+
+  const upsert = captured[0]
+  const payload = JSON.parse(upsert.values[4] as string) as Array<Record<string, unknown>>
+  assert.equal(payload.length, 2)
+  assert.equal(payload[0].posted_at, "2026-05-11T00:00:00.000Z")
+  assert.equal(payload[1].posted_at, null)
+})

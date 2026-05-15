@@ -87,6 +87,7 @@ SET next_harvest_at = now() + ($2 || ' seconds')::interval
 WHERE id IN (
   SELECT id FROM companies
   WHERE status = 'active'
+    AND is_active = true
     AND duplicate_of_company_id IS NULL
     AND careers_url IS NOT NULL
     AND (

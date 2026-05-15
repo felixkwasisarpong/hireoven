@@ -4,6 +4,7 @@ import { detectAtsFromUrl } from "@/lib/companies/detect-ats"
 export type CrawlLane =
   | "ats_direct_possible"
   | "general"
+  | "ats_low_signal"
   | "blocked"
   | "domain_broken"
   | "likely_inactive"
@@ -64,14 +65,23 @@ const ATS_DIRECT_TYPES = new Set([
   "jobvite",
 ])
 
+const ATS_LOW_SIGNAL_TYPES = new Set([
+  "bamboohr",
+  "teamtailor",
+  "workable",
+  "recruitee",
+  "jazzhr",
+])
+
 const FAILURE_STATUS = new Set(["failed", "blocked", "fetch_error", "bad_url"])
 
 const LANE_PRIORITY: Record<CrawlLane, number> = {
   ats_direct_possible: 0,
   general: 1,
-  blocked: 2,
-  domain_broken: 3,
-  likely_inactive: 4,
+  ats_low_signal: 2,
+  blocked: 3,
+  domain_broken: 4,
+  likely_inactive: 5,
 }
 
 function boolEnv(name: string, defaultValue: boolean) {
@@ -119,9 +129,28 @@ function isAtsDirectPossible(company: CrawlCompanyLike) {
   return Boolean(detected && detected.atsType !== "custom")
 }
 
-export function classifyCrawlLane(company: CrawlCompanyLike, latest: CrawlSignal | null): CrawlLane {
+function shouldDeprioritizeLowSignalAts(company: CrawlCompanyLike, signals: CrawlSignal[]): boolean {
+  if ((company.job_count ?? 0) > 0) return false
+
+  const atsType = (company.ats_type ?? "").toLowerCase()
+  if (!ATS_LOW_SIGNAL_TYPES.has(atsType)) return false
+
+  // Require repeated weak outcomes so newly-added companies still get a fair first pass.
+  const recent = signals.slice(0, 3)
+  if (recent.length < 2) return false
+  const unchanged = recent.filter((signal) => signal.status === "unchanged").length
+  const failures = recent.filter((signal) => FAILURE_STATUS.has(signal.status)).length
+  return unchanged >= 2 || failures >= 2
+}
+
+export function classifyCrawlLane(
+  company: CrawlCompanyLike,
+  latest: CrawlSignal | null,
+  signals: CrawlSignal[] = []
+): CrawlLane {
   if (latest && isBlockedSignal(latest.status, latest.errorMessage)) return "blocked"
   if (latest && isDomainBrokenSignal(latest.status, latest.errorMessage)) return "domain_broken"
+  if (shouldDeprioritizeLowSignalAts(company, signals)) return "ats_low_signal"
   if (isAtsDirectPossible(company)) return "ats_direct_possible"
   if ((company.job_count ?? 0) === 0 && latest?.status === "unchanged") return "likely_inactive"
   return "general"
@@ -163,6 +192,7 @@ function emptyLaneCounts(): Record<CrawlLane, number> {
   return {
     ats_direct_possible: 0,
     general: 0,
+    ats_low_signal: 0,
     blocked: 0,
     domain_broken: 0,
     likely_inactive: 0,
@@ -243,7 +273,7 @@ export function applyCrawlQueuePolicy<T extends CrawlCompanyLike>(
   for (const company of companies) {
     const signals = signalMap.get(company.id) ?? []
     const latest = signals[0] ?? null
-    const lane = classifyCrawlLane(company, latest)
+    const lane = classifyCrawlLane(company, latest, signals)
     const streak = failureStreak(signals)
 
     if (
