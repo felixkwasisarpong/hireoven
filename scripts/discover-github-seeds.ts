@@ -22,6 +22,8 @@ import {
   type SeedSource,
 } from "@/lib/harvester/discovery/github-seeds"
 import { getPostgresPool } from "@/lib/postgres/server"
+import { isAtsDomain } from "@/lib/companies/ats-domains"
+import { companyLogoUrlFromDomain } from "@/lib/companies/logo-url"
 
 loadEnvConfig(process.cwd())
 
@@ -60,6 +62,75 @@ function placeholderDomain(candidate: GitHubSeedCandidate): string {
   } catch {
     return candidate.careersUrl
   }
+}
+
+const DOMAIN_LABEL_STOPWORDS = new Set([
+  "app",
+  "apply",
+  "career",
+  "careers",
+  "docs",
+  "events",
+  "jobs",
+  "portal",
+  "sales",
+  "support",
+  "trust",
+  "webinars",
+  "www",
+])
+const WORKDAY_SITE_STOPWORDS = new Set([
+  "career",
+  "careers",
+  "external",
+  "ext",
+  "gateway",
+  "job",
+  "jobs",
+  "page",
+  "portal",
+  "rec",
+  "site",
+  "wd",
+  "workday",
+])
+
+function cleanLabel(raw: string | null | undefined): string {
+  return (raw ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "")
+}
+
+function labelToComDomain(rawLabel: string | null | undefined): string | null {
+  const label = cleanLabel(rawLabel)
+  if (!label) return null
+  if (label.length < 4 || label.length > 40) return null
+  if (/^\d+$/.test(label)) return null
+  if (DOMAIN_LABEL_STOPWORDS.has(label)) return null
+  return `${label}.com`
+}
+
+function workdaySiteDomain(atsIdentifier: string): string | null {
+  const parts = atsIdentifier.split(":")
+  if (parts.length < 3) return null
+  const site = parts.slice(2).join(":")
+  const tokens = site
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((token) => token.length >= 2 && !WORKDAY_SITE_STOPWORDS.has(token))
+  if (tokens.length >= 2) return labelToComDomain(tokens.slice(0, 2).join(""))
+  return tokens[0] ? labelToComDomain(tokens[0]) : null
+}
+
+function inferSeedDomain(candidate: GitHubSeedCandidate): string | null {
+  const host = placeholderDomain(candidate).toLowerCase()
+  if (host.includes(".") && !isAtsDomain(host)) return host
+
+  if (candidate.atsType === "workday") {
+    const tenant = candidate.slug.split(":")[0] ?? ""
+    return labelToComDomain(tenant) ?? workdaySiteDomain(candidate.slug)
+  }
+
+  const slugCore = candidate.slug.split(/[/:]/)[0] ?? ""
+  return labelToComDomain(slugCore)
 }
 
 async function main() {
@@ -133,19 +204,34 @@ async function main() {
 
       await pool.query(
         `INSERT INTO companies (
-           name, domain, careers_url, ats_type, ats_identifier,
-           status, freshness_tier, discovered_via, is_active
+           name, domain, logo_url, careers_url, ats_type, ats_identifier,
+           status, freshness_tier, discovered_via, is_active, raw_ats_config
          )
-         VALUES ($1, $2, $3, $4, $5, 'active', 'tier_3', $6, true)
+         VALUES ($1, $2, $3, $4, $5, $6, 'active', 'tier_3', $7, true, $8::jsonb)
          ON CONFLICT DO NOTHING`,
-        [
-          titleCase(candidate.slug),
-          placeholderDomain(candidate),
-          candidate.careersUrl,
-          candidate.atsType,
-          candidate.slug,
-          `github-seed:${firstSource}`,
-        ]
+        (() => {
+          const inferredDomain = inferSeedDomain(candidate)
+          const logoUrl =
+            inferredDomain && !isAtsDomain(inferredDomain)
+              ? companyLogoUrlFromDomain(inferredDomain) || null
+              : null
+          const rawAtsConfig = {
+            source: "github_seed_discovery",
+            discovery_host: placeholderDomain(candidate),
+            guessed_domain: inferredDomain,
+            domain_verified: Boolean(inferredDomain && !isAtsDomain(inferredDomain)),
+          }
+          return [
+            titleCase(candidate.slug),
+            inferredDomain,
+            logoUrl,
+            candidate.careersUrl,
+            candidate.atsType,
+            candidate.slug,
+            `github-seed:${firstSource}`,
+            JSON.stringify(rawAtsConfig),
+          ]
+        })()
       )
       inserted += 1
     } catch (error) {

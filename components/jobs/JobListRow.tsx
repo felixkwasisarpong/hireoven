@@ -74,6 +74,7 @@ function scoreColor(score: number | null): string {
 
 type JobListRowProps = {
   job: JobWithCompany | JobWithMatchScore
+  enableHoverEffects?: boolean
   matchScore?: JobMatchScore | null
   isMatchScoreLoading?: boolean
   now?: number
@@ -82,6 +83,7 @@ type JobListRowProps = {
 
 export default function JobListRow({
   job,
+  enableHoverEffects = true,
   matchScore: matchScoreProp,
   isMatchScoreLoading = false,
   now: nowProp,
@@ -197,7 +199,10 @@ export default function JobListRow({
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") { e.preventDefault(); router.push(detailHref) }
       }}
-      className="group flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-[0_1px_0_rgba(15,23,42,0.04)] transition hover:border-indigo-200 hover:shadow-[0_4px_14px_rgba(15,23,42,0.08)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/30 sm:px-4"
+      className={cn(
+        "group flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-[0_1px_0_rgba(15,23,42,0.04)] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/30 sm:px-4",
+        enableHoverEffects && "hover:border-indigo-200 hover:shadow-[0_4px_14px_rgba(15,23,42,0.08)]"
+      )}
     >
       <CompanyLogo
         companyName={companyName}
@@ -216,7 +221,10 @@ export default function JobListRow({
             <Link
               href={companyHref}
               onClick={(e) => e.stopPropagation()}
-              className="truncate font-medium text-slate-600 transition hover:text-indigo-600 hover:underline"
+              className={cn(
+                "truncate font-medium text-slate-600 transition",
+                enableHoverEffects && "hover:text-indigo-600 hover:underline"
+              )}
             >
               {companyName}
             </Link>
@@ -291,7 +299,8 @@ export default function JobListRow({
         aria-expanded={breakdownOpen}
         title={resolvedMatchScore ? "See match breakdown" : matchLabel}
         className={cn(
-          "flex h-10 w-12 shrink-0 flex-col items-center justify-center rounded-lg ring-1 tabular-nums transition hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/30 disabled:cursor-default",
+          "flex h-10 w-12 shrink-0 flex-col items-center justify-center rounded-lg ring-1 tabular-nums transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/30 disabled:cursor-default",
+          enableHoverEffects && "hover:opacity-85",
           scoreColor(score)
         )}
       >
@@ -311,7 +320,10 @@ export default function JobListRow({
             "inline-flex h-8 w-8 items-center justify-center rounded-lg border transition",
             saved
               ? "border-amber-200 bg-amber-50 text-amber-600"
-              : "border-slate-200 bg-white text-slate-400 hover:border-indigo-200 hover:text-indigo-500"
+              : cn(
+                  "border-slate-200 bg-white text-slate-400",
+                  enableHoverEffects && "hover:border-indigo-200 hover:text-indigo-500"
+                )
           )}
         >
           <Bookmark className={cn("h-3.5 w-3.5", saved && "fill-current")} />
@@ -326,8 +338,14 @@ export default function JobListRow({
           className={cn(
             "hidden h-8 w-8 items-center justify-center rounded-lg border transition sm:inline-flex",
             isAtsApplyLink
-              ? "border-amber-200 bg-amber-50 text-amber-600 hover:bg-amber-100"
-              : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700"
+              ? cn(
+                  "border-amber-200 bg-amber-50 text-amber-600",
+                  enableHoverEffects && "hover:bg-amber-100"
+                )
+              : cn(
+                  "border-slate-200 bg-white text-slate-500",
+                  enableHoverEffects && "hover:bg-slate-50 hover:text-slate-700"
+                )
           )}
         >
           {isAtsApplyLink ? <Zap className="h-3.5 w-3.5" /> : <ArrowUpRight className="h-3.5 w-3.5" />}
@@ -336,7 +354,10 @@ export default function JobListRow({
           type="button"
           onClick={() => router.push(detailHref)}
           aria-label="View details"
-          className="inline-flex h-8 items-center justify-center gap-1 rounded-lg border border-indigo-200 bg-indigo-50 px-2 text-[12px] font-semibold text-indigo-600 transition hover:bg-indigo-100"
+          className={cn(
+            "inline-flex h-8 items-center justify-center gap-1 rounded-lg border border-indigo-200 bg-indigo-50 px-2 text-[12px] font-semibold text-indigo-600 transition",
+            enableHoverEffects && "hover:bg-indigo-100"
+          )}
         >
           View
           <ArrowUpRight className="h-3.5 w-3.5" />

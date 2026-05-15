@@ -6,6 +6,7 @@ import {
   applyCrawlQueuePolicy,
   defaultCrawlPolicyOptions,
   loadRecentCrawlSignals,
+  selectPolicyBatchByLaneShare,
 } from "@/lib/crawler/scheduling"
 import { persistCrawlJobs } from "@/lib/crawler/persist"
 import { requireCronAuth } from "@/lib/env"
@@ -39,6 +40,19 @@ const CRAWLER_COMPANY_CONCURRENCY = Math.max(
   1,
   Number.parseInt(process.env.CRAWLER_COMPANY_CONCURRENCY ?? "4", 10)
 )
+const INCLUDE_LIKELY_INACTIVE_IN_MAIN = process.env.CRAWLER_INCLUDE_LIKELY_INACTIVE_IN_MAIN !== "false"
+
+function readLaneShareEnv(name: string, fallback: number, max = 0.9) {
+  const parsed = Number.parseFloat(process.env[name] ?? "")
+  if (!Number.isFinite(parsed)) return fallback
+  return Math.max(0, Math.min(max, parsed))
+}
+
+const CRAWLER_LIKELY_INACTIVE_SHARE = readLaneShareEnv(
+  "CRAWLER_LIKELY_INACTIVE_SHARE",
+  0.25
+)
+const CRAWLER_LOW_SIGNAL_SHARE = readLaneShareEnv("CRAWLER_LOW_SIGNAL_SHARE", 0.1)
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -185,6 +199,11 @@ export async function GET(request: NextRequest) {
     skippedLaneCounts: Record<string, number>
     skippedCooldown: number
     skippedLaneExcluded: number
+    selectedPool: number
+    laneShares: {
+      likelyInactive: number
+      lowSignal: number
+    }
   } | null = null
   let succeeded = 0
   let failed = 0
@@ -249,19 +268,26 @@ export async function GET(request: NextRequest) {
       companiesRaw.map((company) => company.id),
       6
     )
-    const policy = applyCrawlQueuePolicy(
-      companiesRaw,
-      signalMap,
-      defaultCrawlPolicyOptions()
-    )
-    const companies = policy.selected.slice(0, MAX_COMPANIES_PER_RUN)
+    const policy = applyCrawlQueuePolicy(companiesRaw, signalMap, defaultCrawlPolicyOptions({
+      includeLikelyInactive: INCLUDE_LIKELY_INACTIVE_IN_MAIN,
+    }))
+    const companies = selectPolicyBatchByLaneShare(policy, signalMap, MAX_COMPANIES_PER_RUN, {
+      likely_inactive: CRAWLER_LIKELY_INACTIVE_SHARE,
+      ats_low_signal: CRAWLER_LOW_SIGNAL_SHARE,
+    })
     companiesCount = companies.length
-    companiesSkipped = policy.skipped.length + (policy.selected.length - companies.length)
+    const selectedOverflow = Math.max(0, policy.selected.length - companies.length)
+    companiesSkipped = policy.skipped.length + selectedOverflow
     queuePolicySummary = {
       selectedLaneCounts: policy.selectedLaneCounts,
       skippedLaneCounts: policy.skippedLaneCounts,
       skippedCooldown: policy.skipped.filter((entry) => entry.reason === "cooldown_active").length,
       skippedLaneExcluded: policy.skipped.filter((entry) => entry.reason === "lane_excluded").length,
+      selectedPool: policy.selected.length,
+      laneShares: {
+        likelyInactive: CRAWLER_LIKELY_INACTIVE_SHARE,
+        lowSignal: CRAWLER_LOW_SIGNAL_SHARE,
+      },
     }
 
     const limitCompany = pLimit(CRAWLER_COMPANY_CONCURRENCY)
@@ -461,6 +487,7 @@ export async function GET(request: NextRequest) {
       inserted,
       totalDurationMs: completed ? totalDurationMs : duration,
       lastError: lastErrorMessage,
+      queuePolicy: queuePolicySummary,
     })
   }
 }

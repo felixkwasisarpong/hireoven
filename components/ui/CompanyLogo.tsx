@@ -133,11 +133,13 @@ function buildLogoSources(logoUrl: string | null | undefined, domain: string | n
     // companyLogoUrlFromDomain falls back to google-favicon when LOGO_DEV_TOKEN is absent,
     // so the google-favicon push below deduplicates cleanly via the Set check.
     push(companyLogoUrlFromDomain(canonicalDomain, "logo-dev"))
-    // 3. Google favicon — always returns something; final network fallback before initials.
+    // 3. DuckDuckGo icon service often has higher-resolution favicons than Google.
+    push(companyLogoUrlFromDomain(canonicalDomain, "duckduckgo"))
+    // 4. Google favicon — final network fallback before initials.
     push(companyLogoUrlFromDomain(canonicalDomain, "google-favicon"))
   }
 
-  // 4. Stored URL as last resort — but never Clearbit (being deprecated), ATS domains,
+  // 5. Stored URL as last resort — but never Clearbit (being deprecated), ATS domains,
   // or placeholder domains. logo.dev and static assets are already in the list.
   if (
     logoUrl &&
@@ -224,14 +226,18 @@ export default function CompanyLogo({
   const viaNext = shouldOptimizeWithNextImage(src)
 
   function handleSmallImage(naturalWidth: number, naturalHeight: number) {
+    const hasAnotherSource = index < sources.length - 1
     if (
+      hasAnotherSource &&
       naturalWidth > 0 &&
       naturalHeight > 0 &&
       (naturalWidth < MIN_CRISP_ICON_SIZE || naturalHeight < MIN_CRISP_ICON_SIZE)
     ) {
       setLoaded(false)
       setIndex((i) => i + 1)
+      return true
     }
+    return false
   }
 
   return (
@@ -258,7 +264,7 @@ export default function CompanyLogo({
           referrerPolicy="no-referrer"
           onLoad={(event) => {
             const image = event.currentTarget as HTMLImageElement
-            handleSmallImage(image.naturalWidth, image.naturalHeight)
+            if (handleSmallImage(image.naturalWidth, image.naturalHeight)) return
             setLoaded(true)
           }}
           onError={() => {
@@ -282,7 +288,7 @@ export default function CompanyLogo({
           )}
           onLoad={(event) => {
             const image = event.currentTarget
-            handleSmallImage(image.naturalWidth, image.naturalHeight)
+            if (handleSmallImage(image.naturalWidth, image.naturalHeight)) return
             setLoaded(true)
           }}
           onError={() => {

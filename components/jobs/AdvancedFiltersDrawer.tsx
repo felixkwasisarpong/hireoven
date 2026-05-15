@@ -36,6 +36,7 @@ interface Props {
   filters: JobFilters
   onFiltersChange: (next: JobFilters) => void
   isInternational?: boolean
+  enableHoverEffects?: boolean
 }
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
@@ -53,6 +54,7 @@ function ToggleRow({
   icon: Icon,
   iconColor,
   accent,
+  enableHoverEffects = true,
   onChange,
 }: {
   checked: boolean
@@ -61,6 +63,7 @@ function ToggleRow({
   icon: React.ComponentType<{ className?: string }>
   iconColor: string
   accent?: boolean
+  enableHoverEffects?: boolean
   onChange: (v: boolean) => void
 }) {
   return (
@@ -75,7 +78,7 @@ function ToggleRow({
           ? accent
             ? "border-indigo-200 bg-indigo-50"
             : "border-orange-200 bg-orange-50"
-          : "border-transparent hover:bg-slate-50"
+          : cn("border-transparent", enableHoverEffects && "hover:bg-slate-50")
       )}
     >
       <span
@@ -124,11 +127,13 @@ function ChipGroup<T extends string>({
   options,
   selected,
   accent,
+  enableHoverEffects = true,
   onChange,
 }: {
   options: { value: T; label: string }[]
   selected: T[]
   accent?: "indigo" | "orange"
+  enableHoverEffects?: boolean
   onChange: (next: T[]) => void
 }) {
   const col = accent ?? "orange"
@@ -157,7 +162,10 @@ function ChipGroup<T extends string>({
               "rounded-full border px-3 py-1 text-[12px] font-medium transition",
               active
                 ? activeClass
-                : "border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+                : cn(
+                    "border-slate-200 text-slate-600",
+                    enableHoverEffects && "hover:border-slate-300 hover:bg-slate-50"
+                  )
             )}
           >
             {active && <span className="mr-1">✓</span>}
@@ -175,6 +183,7 @@ export default function AdvancedFiltersDrawer({
   filters,
   onFiltersChange,
   isInternational = false,
+  enableHoverEffects = true,
 }: Props) {
   const drawerRef = useRef<HTMLDivElement>(null)
 
@@ -263,7 +272,10 @@ export default function AdvancedFiltersDrawer({
                     company_ids: undefined,
                   })
                 }
-                className="rounded-lg px-2.5 py-1.5 text-xs font-semibold text-orange-600 hover:bg-orange-50"
+                className={cn(
+                  "rounded-lg px-2.5 py-1.5 text-xs font-semibold text-orange-600",
+                  enableHoverEffects && "hover:bg-orange-50"
+                )}
               >
                 Clear all
               </button>
@@ -271,7 +283,10 @@ export default function AdvancedFiltersDrawer({
             <button
               type="button"
               onClick={onClose}
-              className="flex h-7 w-7 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+              className={cn(
+                "flex h-7 w-7 items-center justify-center rounded-full text-slate-400 transition",
+                enableHoverEffects && "hover:bg-slate-100 hover:text-slate-700"
+              )}
               aria-label="Close"
             >
               <X className="h-4 w-4" />
@@ -292,6 +307,7 @@ export default function AdvancedFiltersDrawer({
                 description="Office + remote flexibility"
                 icon={Building2}
                 iconColor="bg-orange-500"
+                enableHoverEffects={enableHoverEffects}
                 onChange={(v) => set({ hybrid: v || undefined })}
               />
               <ToggleRow
@@ -300,6 +316,7 @@ export default function AdvancedFiltersDrawer({
                 description="In-person roles"
                 icon={Globe2}
                 iconColor="bg-cyan-500"
+                enableHoverEffects={enableHoverEffects}
                 onChange={(v) => set({ onsite: v || undefined })}
               />
             </div>
@@ -315,6 +332,7 @@ export default function AdvancedFiltersDrawer({
                 description="Only jobs that disclose pay range"
                 icon={Banknote}
                 iconColor="bg-emerald-500"
+                enableHoverEffects={enableHoverEffects}
                 onChange={(v) => set({ has_salary: v || undefined })}
               />
               <ToggleRow
@@ -323,6 +341,7 @@ export default function AdvancedFiltersDrawer({
                 description="Apply directly via Greenhouse, Lever, Workday…"
                 icon={Link2}
                 iconColor="bg-blue-500"
+                enableHoverEffects={enableHoverEffects}
                 onChange={(v) => set({ direct_ats_only: v || undefined })}
               />
             </div>
@@ -340,6 +359,7 @@ export default function AdvancedFiltersDrawer({
                   options={GHOST_RISK_OPTIONS}
                   selected={filters.ghost_risk_max ? [filters.ghost_risk_max] : []}
                   accent="orange"
+                  enableHoverEffects={enableHoverEffects}
                   onChange={(vals) =>
                     set({ ghost_risk_max: vals[vals.length - 1] ?? undefined })
                   }
@@ -363,6 +383,7 @@ export default function AdvancedFiltersDrawer({
                   icon={CircleOff}
                   iconColor="bg-rose-500"
                   accent
+                  enableHoverEffects={enableHoverEffects}
                   onChange={(v) => set({ hide_blockers: v || undefined })}
                 />
                 <ToggleRow
@@ -372,6 +393,7 @@ export default function AdvancedFiltersDrawer({
                   icon={FlaskConical}
                   iconColor="bg-indigo-500"
                   accent
+                  enableHoverEffects={enableHoverEffects}
                   onChange={(v) => set({ stem_opt_ready: v || undefined })}
                 />
                 <ToggleRow
@@ -381,6 +403,7 @@ export default function AdvancedFiltersDrawer({
                   icon={BadgeCheck}
                   iconColor="bg-indigo-600"
                   accent
+                  enableHoverEffects={enableHoverEffects}
                   onChange={(v) => set({ e_verify_signal: v || undefined })}
                 />
                 <ToggleRow
@@ -390,6 +413,7 @@ export default function AdvancedFiltersDrawer({
                   icon={ShieldCheck}
                   iconColor="bg-orange-600"
                   accent
+                  enableHoverEffects={enableHoverEffects}
                   onChange={(v) => set({ cap_exempt_possible: v || undefined })}
                 />
                 <ToggleRow
@@ -399,6 +423,7 @@ export default function AdvancedFiltersDrawer({
                   icon={TrendingUp}
                   iconColor="bg-teal-500"
                   accent
+                  enableHoverEffects={enableHoverEffects}
                   onChange={(v) => set({ lca_salary_aligned: v || undefined })}
                 />
               </div>
@@ -411,6 +436,7 @@ export default function AdvancedFiltersDrawer({
                   options={VISA_FIT_OPTIONS}
                   selected={filters.visa_fit ?? []}
                   accent="indigo"
+                  enableHoverEffects={enableHoverEffects}
                   onChange={(vals) => set({ visa_fit: vals.length ? vals : undefined })}
                 />
                 <p className="mt-1 text-[11px] text-slate-400">
@@ -431,6 +457,7 @@ export default function AdvancedFiltersDrawer({
                   description="Remove jobs that explicitly exclude visa candidates"
                   icon={CircleOff}
                   iconColor="bg-rose-500"
+                  enableHoverEffects={enableHoverEffects}
                   onChange={(v) => set({ hide_blockers: v || undefined })}
                 />
               </div>
@@ -455,7 +482,10 @@ export default function AdvancedFiltersDrawer({
           <button
             type="button"
             onClick={onClose}
-            className="w-full rounded-xl bg-slate-900 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
+            className={cn(
+              "w-full rounded-xl bg-slate-900 py-2.5 text-sm font-semibold text-white transition",
+              enableHoverEffects && "hover:bg-slate-800"
+            )}
           >
             {activeCount > 0 ? `Apply ${activeCount} filter${activeCount !== 1 ? "s" : ""}` : "Done"}
           </button>

@@ -54,6 +54,8 @@ export type CrawlPolicyResult<T extends CrawlCompanyLike> = {
   skippedLaneCounts: Record<CrawlLane, number>
 }
 
+export type CrawlLaneShares = Partial<Record<CrawlLane, number>>
+
 const ATS_DIRECT_TYPES = new Set([
   "greenhouse",
   "lever",
@@ -197,6 +199,104 @@ function emptyLaneCounts(): Record<CrawlLane, number> {
     domain_broken: 0,
     likely_inactive: 0,
   }
+}
+
+function emptyLaneBuckets<T>(): Record<CrawlLane, T[]> {
+  return {
+    ats_direct_possible: [],
+    general: [],
+    ats_low_signal: [],
+    blocked: [],
+    domain_broken: [],
+    likely_inactive: [],
+  }
+}
+
+function lastCrawledMs(value: string | null | undefined): number {
+  const parsed = Date.parse(value ?? "")
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+function takeOldestFromLanes<T extends CrawlCompanyLike>(
+  buckets: Record<CrawlLane, T[]>,
+  lanes: CrawlLane[]
+): T | null {
+  let chosenLane: CrawlLane | null = null
+  let chosenTs = Number.POSITIVE_INFINITY
+
+  for (const lane of lanes) {
+    const candidate = buckets[lane][0]
+    if (!candidate) continue
+    const ts = lastCrawledMs(candidate.last_crawled_at)
+    if (chosenLane === null || ts < chosenTs) {
+      chosenLane = lane
+      chosenTs = ts
+    }
+  }
+
+  if (!chosenLane) return null
+  return buckets[chosenLane].shift() ?? null
+}
+
+export function selectPolicyBatchByLaneShare<T extends CrawlCompanyLike>(
+  policy: CrawlPolicyResult<T>,
+  signalMap: Map<string, CrawlSignal[]>,
+  limit: number,
+  shares: CrawlLaneShares = {}
+): T[] {
+  const cap = Math.max(0, Math.floor(limit))
+  if (cap === 0 || policy.selected.length === 0) return []
+  if (policy.selected.length <= cap) return policy.selected
+
+  const buckets = emptyLaneBuckets<T>()
+  for (const company of policy.selected) {
+    const signals = signalMap.get(company.id) ?? []
+    const lane = classifyCrawlLane(company, signals[0] ?? null, signals)
+    buckets[lane].push(company)
+  }
+
+  const positiveShares = Object.entries(shares).filter((entry) => {
+    const lane = entry[0] as CrawlLane
+    const share = Number(entry[1] ?? 0)
+    return share > 0 && buckets[lane].length > 0
+  }) as Array<[CrawlLane, number]>
+
+  const reserved = new Map<CrawlLane, number>()
+  let remaining = cap
+  for (const [lane, share] of positiveShares) {
+    if (remaining <= 0) break
+    const target = Math.min(
+      buckets[lane].length,
+      remaining,
+      Math.max(0, Math.floor(cap * Math.min(share, 1)))
+    )
+    if (target <= 0) continue
+    reserved.set(lane, target)
+    remaining -= target
+  }
+
+  const selected: T[] = []
+  const pick = (count: number, lanes: CrawlLane[]) => {
+    for (let i = 0; i < count && selected.length < cap; i += 1) {
+      const row = takeOldestFromLanes(buckets, lanes)
+      if (!row) break
+      selected.push(row)
+    }
+  }
+
+  pick(remaining, ["ats_direct_possible", "general"])
+  for (const [lane, count] of reserved.entries()) {
+    pick(count, [lane])
+  }
+
+  if (selected.length < cap) {
+    pick(
+      cap - selected.length,
+      ["ats_direct_possible", "general", "ats_low_signal", "likely_inactive", "blocked", "domain_broken"]
+    )
+  }
+
+  return selected
 }
 
 export function defaultCrawlPolicyOptions(overrides?: Partial<CrawlPolicyOptions>): CrawlPolicyOptions {

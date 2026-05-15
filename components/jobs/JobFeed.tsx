@@ -105,6 +105,15 @@ export default function JobFeed({
     return () => window.clearInterval(id)
   }, [])
 
+  const [canHover, setCanHover] = useState(false)
+  useEffect(() => {
+    const mql = window.matchMedia("(hover: hover) and (pointer: fine)")
+    const sync = () => setCanHover(mql.matches)
+    sync()
+    mql.addEventListener("change", sync)
+    return () => mql.removeEventListener("change", sync)
+  }, [])
+
   const [view, setView] = useState<JobFeedView>(defaultView ?? "grid")
   useEffect(() => {
     if (defaultView) return // honour forced view, ignore localStorage
@@ -186,7 +195,7 @@ export default function JobFeed({
               "inline-flex h-7 items-center gap-1 rounded-md px-2 text-[12px] font-semibold transition",
               view === "grid"
                 ? "bg-slate-900 text-white"
-                : "text-slate-500 hover:text-slate-700"
+                : cn("text-slate-500", canHover && "hover:text-slate-700")
             )}
           >
             <LayoutGrid className="h-3.5 w-3.5" />
@@ -201,7 +210,7 @@ export default function JobFeed({
               "inline-flex h-7 items-center gap-1 rounded-md px-2 text-[12px] font-semibold transition",
               view === "list"
                 ? "bg-slate-900 text-white"
-                : "text-slate-500 hover:text-slate-700"
+                : cn("text-slate-500", canHover && "hover:text-slate-700")
             )}
           >
             <List className="h-3.5 w-3.5" />
@@ -214,7 +223,10 @@ export default function JobFeed({
         <button
           type="button"
           onClick={() => void refresh()}
-          className="neo-strip flex w-full items-center justify-center gap-2 text-[13px] font-semibold text-brand-navy transition-colors hover:brightness-[1.02]"
+          className={cn(
+            "neo-strip flex w-full items-center justify-center gap-2 text-[13px] font-semibold text-brand-navy transition-colors",
+            canHover && "hover:brightness-[1.02]"
+          )}
         >
           <Sparkles className="h-3.5 w-3.5 text-primary" />
           {newJobsCount.toLocaleString()} new job{newJobsCount === 1 ? "" : "s"} — click to load
@@ -247,6 +259,7 @@ export default function JobFeed({
                 <JobListRow
                   key={job.id}
                   job={job}
+                  enableHoverEffects={canHover}
                   now={now}
                   priorityLogo={i < 6}
                   matchScore={matchScore}
@@ -259,6 +272,7 @@ export default function JobFeed({
                 key={job.id}
                 job={job}
                 hasPrimaryResume={hasPrimaryResume}
+                enableHoverEffects={canHover}
                 analysisIndex={i}
                 isBestMatch={Boolean(bestMatchJobId && job.id === bestMatchJobId)}
                 now={now}
@@ -281,7 +295,10 @@ export default function JobFeed({
             <button
               type="button"
               onClick={() => void loadMore()}
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-[13px] font-medium text-slate-500 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-700"
+              className={cn(
+                "inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-[13px] font-medium text-slate-500 shadow-sm transition-colors",
+                canHover && "hover:bg-slate-50 hover:text-slate-700"
+              )}
             >
               Load more
               <ArrowUp className="h-3.5 w-3.5 rotate-180" />

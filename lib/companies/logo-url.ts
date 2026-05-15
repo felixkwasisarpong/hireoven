@@ -103,6 +103,8 @@ const LOCAL_LOGO_URL_BY_DOMAIN: Record<string, string> = {
   // Curated marks shipped in /public so logos never depend on flaky favicon CDNs.
   "palantir.com": "/company-logos/palantir.svg",
   "capitalone.com": "/company-logos/capital-one.svg",
+  "fidelity.com": "/company-logos/fidelity.png",
+  "fidelityinvestments.com": "/company-logos/fidelity.png",
   "insulet.com": "/company-logos/insulet.svg",
   "planetscale.com": "/company-logos/planetscale.svg",
   "expediagroup.com": "/company-logos/expedia-group.svg",
@@ -158,6 +160,8 @@ const LOCAL_LOGO_URL_BY_DOMAIN: Record<string, string> = {
 const FAVICON_DOMAIN_OVERRIDES: Record<string, string> = {
   // career-soft.com favicon fails; its careers site host resolves.
   "career-soft.com": "career.com",
+  // Brand domain for S&P Global Market Intelligence; direct domain resolves to the wrong mark.
+  "spglobalmarketintelligence.com": "spglobal.com",
 }
 
 const GOOGLE_FAVICON_URL_OVERRIDES: Record<string, string> = {
