@@ -123,6 +123,141 @@ function hasNormalizedSkillOverlap(requiredKey: string, candidateKey: string) {
   return requiredKey.length > 0 && candidateKey.length > 0 && requiredKey === candidateKey
 }
 
+const PROGRAMMING_LANGUAGE_KEYS = new Set(
+  [
+    "JavaScript",
+    "TypeScript",
+    "Python",
+    "Java",
+    "Go",
+    "Rust",
+    "C++",
+    "C#",
+    "Ruby",
+    "PHP",
+    "Swift",
+    "Kotlin",
+    "Scala",
+    "R",
+    "MATLAB",
+    "Bash",
+    "Dart",
+    "Elixir",
+    "Haskell",
+  ].map((skill) => normalizeSkillKey(canonicalizeSkill(skill)))
+)
+
+const FOUNDATIONAL_CS_KEYS = new Set(
+  ["Data Structures", "Algorithms", "Object-Oriented Programming"].map((skill) =>
+    normalizeSkillKey(canonicalizeSkill(skill))
+  )
+)
+
+const TEST_AUTOMATION_REQ_KEYS = new Set(
+  ["Test Automation"].map((skill) => normalizeSkillKey(canonicalizeSkill(skill)))
+)
+
+const TESTING_SIGNAL_KEYS = new Set(
+  [
+    "Test Automation",
+    "pytest",
+    "JUnit",
+    "Jest",
+    "Selenium",
+    "Cypress",
+    "Playwright",
+    "Mocha",
+    "TestNG",
+    "API Testing",
+    "Load Testing",
+    "CI/CD",
+    "GitHub Actions",
+    "Jenkins",
+  ].map((skill) => normalizeSkillKey(canonicalizeSkill(skill)))
+)
+
+const BACKEND_SIGNAL_KEYS = new Set(
+  [
+    "Backend Development",
+    "Distributed Systems",
+    "API Development",
+    "Microservices",
+    "Spring",
+    "FastAPI",
+    "Django",
+    "Flask",
+    "Node.js",
+    "Express",
+    "Rails",
+    "Laravel",
+    ".NET",
+  ].map((skill) => normalizeSkillKey(canonicalizeSkill(skill)))
+)
+
+const GENERIC_SOFTWARE_ROLE_RE =
+  /\b(?:software(?:\s+development)?|backend|full.?stack|platform|application)\s+(?:engineer|developer)\b/i
+const LANGUAGE_SPECIFIC_ROLE_RE =
+  /\b(?:c\+\+|c#|java|python|go|golang|rust|scala|kotlin|ruby|php|swift|typescript|javascript)\b/i
+
+function countKeyHits(keys: Set<string>, candidateKeySet: Set<string>): number {
+  let count = 0
+  for (const key of keys) if (candidateKeySet.has(key)) count++
+  return count
+}
+
+function hasAnyKey(keys: Set<string>, candidateKeySet: Set<string>): boolean {
+  for (const key of keys) {
+    if (candidateKeySet.has(key)) return true
+  }
+  return false
+}
+
+function getGeneralistSubstituteScore(
+  requiredKey: string,
+  requiredLabel: string,
+  job: Job,
+  candidateSkillKeySet: Set<string>,
+  requiredLanguageCount: number,
+  resumeContext: FastScoreResumeContext
+): { score: number; relatedTo: string } | null {
+  const candidateLanguageCount = countKeyHits(PROGRAMMING_LANGUAGE_KEYS, candidateSkillKeySet)
+  const hasBackendSignals = hasAnyKey(BACKEND_SIGNAL_KEYS, candidateSkillKeySet)
+  const hasTestingSignals = hasAnyKey(TESTING_SIGNAL_KEYS, candidateSkillKeySet)
+  const isGenericSoftwareRole = GENERIC_SOFTWARE_ROLE_RE.test(job.title)
+  const isLanguageSpecificRole = LANGUAGE_SPECIFIC_ROLE_RE.test(job.title)
+
+  // For generic SWE postings, language variance is expected. Award modest
+  // partial credit when the candidate is clearly polyglot.
+  if (
+    PROGRAMMING_LANGUAGE_KEYS.has(requiredKey) &&
+    !isLanguageSpecificRole &&
+    isGenericSoftwareRole &&
+    requiredLanguageCount >= 3 &&
+    candidateLanguageCount >= 2
+  ) {
+    return { score: 0.4 * recency(requiredLabel, resumeContext), relatedTo: "polyglot_language_overlap" }
+  }
+
+  // CS fundamentals are often implied by sustained backend/software roles
+  // even when not explicitly listed in the resume skill section.
+  if (
+    FOUNDATIONAL_CS_KEYS.has(requiredKey) &&
+    candidateLanguageCount >= 2 &&
+    (hasBackendSignals || hasTestingSignals)
+  ) {
+    return { score: 0.75 * recency(requiredLabel, resumeContext), relatedTo: "software_fundamentals" }
+  }
+
+  if (
+    TEST_AUTOMATION_REQ_KEYS.has(requiredKey) &&
+    (hasTestingSignals || (candidateLanguageCount >= 1 && hasBackendSignals))
+  ) {
+    return { score: 0.7 * recency(requiredLabel, resumeContext), relatedTo: "testing_practice" }
+  }
+
+  return null
+}
+
 // ─── 1. Skills (weight 0.40) ──────────────────────────────────────────────────
 
 /**
@@ -144,6 +279,8 @@ type SkillsScoreResult = {
   score: number
   matched: string[]
   missing: string[]
+  hardMissing: string[]
+  hardMatchedCount: number
   /** Each required skill graded 0–1; consumed by score_breakdown.skillScores. */
   perSkill: PerSkillScore[]
   evidence: string
@@ -226,6 +363,8 @@ function scoreSkills(resumeContext: FastScoreResumeContext, job: Job): SkillsSco
       score: 0.40,
       matched: [],
       missing: [],
+      hardMissing: [],
+      hardMatchedCount: 0,
       perSkill: [],
       evidence:
         "No reliable skills detected in this posting; applied a conservative score.",
@@ -252,6 +391,11 @@ function scoreSkills(resumeContext: FastScoreResumeContext, job: Job): SkillsSco
   // Partial-credit weight for related-family substitutes (e.g. JD wants
   // MongoDB, resume has DynamoDB — both in nosql_db family → 0.5 × recency).
   const FAMILY_PARTIAL = 0.5
+
+  const requiredLanguageCount = hardSkills.reduce((count, skill) => {
+    const key = normalizeSkillKey(canonicalizeSkill(skill))
+    return PROGRAMMING_LANGUAGE_KEYS.has(key) ? count + 1 : count
+  }, 0)
 
   const perSkill: PerSkillScore[] = []
   let hardSum = 0
@@ -280,6 +424,24 @@ function scoreSkills(resumeContext: FastScoreResumeContext, job: Job): SkillsSco
       continue
     }
 
+    const generalistSubstitute = getGeneralistSubstituteScore(
+      reqKey,
+      req,
+      job,
+      resumeContext.candidateSkillKeySet,
+      requiredLanguageCount,
+      resumeContext
+    )
+    if (generalistSubstitute) {
+      perSkill.push({
+        skill: req,
+        score: generalistSubstitute.score,
+        relatedTo: generalistSubstitute.relatedTo,
+      })
+      hardSum += generalistSubstitute.score
+      continue
+    }
+
     perSkill.push({ skill: req, score: 0 })
   }
 
@@ -296,7 +458,9 @@ function scoreSkills(resumeContext: FastScoreResumeContext, job: Job): SkillsSco
   // Matched = ≥0.7 credit, missing = <0.4 (in-between is "partial" via
   // perSkill[].score). Backwards-compatible matched/missing arrays remain.
   const matched = perSkill.filter((p) => p.score >= 0.7).map((p) => p.skill)
+  const hardMatched = matched.filter((m) => !isSoftSkill(m))
   const missing = perSkill.filter((p) => p.score < 0.4).map((p) => p.skill)
+  const hardMissing = missing.filter((m) => !isSoftSkill(m))
   // Score is computed against the hard-skill set only. If a JD is 100% soft
   // skills, fall back to a neutral 0.55.
   const score = hardSkills.length === 0 ? 0.55 : hardSum / hardSkills.length
@@ -304,7 +468,6 @@ function scoreSkills(resumeContext: FastScoreResumeContext, job: Job): SkillsSco
   const sourcePrefix = usedDerivedSkills
     ? `Structured skills were missing; derived ${jobSkills.length} skill${jobSkills.length === 1 ? "" : "s"} from posting text. `
     : ""
-  const hardMissing = missing.filter((m) => !isSoftSkill(m))
   const label = hardMissing.length > 3
     ? `${hardMissing.slice(0, 3).join(", ")} +${hardMissing.length - 3} more`
     : hardMissing.join(", ")
@@ -316,6 +479,8 @@ function scoreSkills(resumeContext: FastScoreResumeContext, job: Job): SkillsSco
     score,
     matched,
     missing,
+    hardMissing,
+    hardMatchedCount: hardMatched.length,
     perSkill,
     evidence,
     certGate: false,
@@ -1051,7 +1216,10 @@ function toResumeExperienceSnapshot(exp: WorkExperience): ResumeExperienceSnapsh
 }
 
 export function buildFastScoreResumeContext(resume: Resume): FastScoreResumeContext {
-  const candidateSkillLabels = getAllResumeSkillLabels(resume)
+  const candidateSkillLabels = normalizeSkillList([
+    ...getAllResumeSkillLabels(resume),
+    ...extractSkillsFromText(resume.raw_text ?? ""),
+  ])
   const candidateSkillKeys = candidateSkillLabels.map((candidateSkill) =>
     normalizeSkillKey(canonicalizeSkill(candidateSkill))
   )
@@ -1163,7 +1331,7 @@ export function computeFastScore({
   // (a common state, especially as our extractor now pulls more skills per
   // JD) aren't capped at 55. Cap relaxed 55 → 65 so a partial-skill match
   // can still reach "good match" territory.
-  if (totalRequired >= 5 && skills.missing.length / totalRequired > 0.75) {
+  if (totalRequired >= 5 && skills.hardMissing.length / totalRequired > 0.75) {
     overall = Math.min(overall, 65)
     gatesTriggered.push("missing_required_skills_gt75pct")
   }
@@ -1219,11 +1387,11 @@ export function computeFastScore({
   // directly, with the gates above as the only post-hoc adjustments.
 
   const now = new Date().toISOString()
-  const confidence = skills.missing.length === 0 && experience.score >= 0.8
+  const confidence = skills.hardMissing.length === 0 && experience.score >= 0.8
     ? "high" as const
     : totalRequired === 0
       ? "low" as const
-    : skills.missing.length / Math.max(1, totalRequired) > 0.5
+    : skills.hardMissing.length / Math.max(1, totalRequired) > 0.5
       ? "low" as const
       : "medium" as const
 
@@ -1246,10 +1414,10 @@ export function computeFastScore({
     is_location_match:     null,
     is_employment_type_match: null,
     is_sponsorship_compatible: sponsorship.compatible,
-    matching_skills_count: skills.matched.length,
+    matching_skills_count: skills.hardMatchedCount,
     total_required_skills: totalRequired,
     skills_match_rate:     totalRequired > 0
-      ? Number((skills.matched.length / totalRequired).toFixed(3))
+      ? Number((skills.hardMatchedCount / totalRequired).toFixed(3))
       : null,
     score_method:  "fast",
     computed_at:   now,
@@ -1274,8 +1442,8 @@ export function computeFastScore({
         ...(totalRequired === 0
           ? ["Job posting skills were not reliably structured; confidence is reduced."]
           : []),
-        ...(skills.missing.length > 0
-          ? [`Missing ${skills.missing.length} required skill${skills.missing.length !== 1 ? "s" : ""}`]
+        ...(skills.hardMissing.length > 0
+          ? [`Missing ${skills.hardMissing.length} required skill${skills.hardMissing.length !== 1 ? "s" : ""}`]
           : []),
         ...gatesTriggered.map(g => `Gate: ${g}`),
       ],

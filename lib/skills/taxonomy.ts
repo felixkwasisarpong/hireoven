@@ -106,6 +106,13 @@ export const SKILL_DEFINITIONS: SkillDefinition[] = [
   { label: "Laravel",    aliases: ["laravel"] },
   { label: "Express",    aliases: ["express", "express.js", "expressjs"] },
   { label: ".NET",       aliases: [".net", "dotnet", "asp.net"] },
+  { label: "Distributed Systems", aliases: ["distributed systems", "distributed system", "distributed architecture"] },
+  { label: "Backend Development", aliases: ["backend development", "backend service development", "backend services", "server-side development"] },
+  { label: "Object-Oriented Programming", aliases: ["object-oriented programming", "object oriented programming", "oop"] },
+  { label: "Data Structures", aliases: ["data structures", "data structure"] },
+  { label: "Algorithms", aliases: ["algorithms", "algorithm design"] },
+  { label: "Code Review", aliases: ["code review", "code reviews", "peer review", "pull request review"] },
+  { label: "Git", aliases: ["git", "github", "gitlab", "version control"] },
 
   // ─── Databases ────────────────────────────────────────────────────────────
   { label: "SQL",         aliases: ["sql"] },
@@ -127,6 +134,7 @@ export const SKILL_DEFINITIONS: SkillDefinition[] = [
   { label: "AWS",          aliases: ["aws", "amazon web services"] },
   { label: "GCP",          aliases: ["gcp", "google cloud", "google cloud platform"] },
   { label: "Azure",        aliases: ["azure", "microsoft azure"] },
+  { label: "Cloud Platforms", aliases: ["cloud environments", "cloud environment", "cloud platforms", "cloud platform", "cloud infrastructure"] },
   { label: "Docker",       aliases: ["docker"] },
   { label: "Kubernetes",   aliases: ["kubernetes", "k8s"] },
   { label: "Terraform",    aliases: ["terraform"] },
@@ -143,6 +151,7 @@ export const SKILL_DEFINITIONS: SkillDefinition[] = [
   { label: "Datadog",      aliases: ["datadog"] },
 
   // ─── APIs & Integration ───────────────────────────────────────────────────
+  { label: "API Development", aliases: ["api", "apis", "api development", "api design"] },
   { label: "GraphQL",    aliases: ["graphql"] },
   { label: "REST",       aliases: ["rest", "restful", "rest api", "rest apis"] },
   { label: "gRPC",       aliases: ["grpc"] },
@@ -438,7 +447,7 @@ export const SKILL_DEFINITIONS: SkillDefinition[] = [
   // ─── Soft Skills ─────────────────────────────────────────────────────────
   { label: "Leadership",           aliases: ["leadership", "team leadership", "people management"] },
   { label: "Communication",        aliases: ["communication", "communications"] },
-  { label: "Collaboration",        aliases: ["collaboration", "cross-functional collaboration"] },
+  { label: "Collaboration",        aliases: ["collaboration", "cross-functional collaboration", "team collaboration"] },
   { label: "Problem Solving",      aliases: ["problem solving", "problem-solving", "analytical thinking"] },
   { label: "Critical Thinking",    aliases: ["critical thinking"] },
   { label: "Time Management",      aliases: ["time management"] },
@@ -503,13 +512,19 @@ const FRAMEWORK_SKILLS = new Set([
   "Laravel",
   "Express",
   ".NET",
+  "Distributed Systems",
+  "Backend Development",
+  "Object-Oriented Programming",
+  "Data Structures",
+  "Algorithms",
   "GraphQL",
+  "API Development",
   "REST",
   "gRPC",
   "WebSockets",
 ])
 
-const CLOUD_SKILLS = new Set(["AWS", "GCP", "Azure"])
+const CLOUD_SKILLS = new Set(["AWS", "GCP", "Azure", "Cloud Platforms"])
 
 const DATABASE_SKILLS = new Set([
   "SQL",
@@ -529,6 +544,7 @@ const DATABASE_SKILLS = new Set([
 ])
 
 const DEVOPS_SKILLS = new Set([
+  "Git",
   "Docker",
   "Kubernetes",
   "Terraform",
@@ -969,7 +985,7 @@ export function isSoftSkill(skill: string): boolean {
  * is not allowed and produces 0.0 for the missing skill.
  */
 export const SKILL_FAMILIES: Record<string, string[]> = {
-  cloud_provider:    ["AWS", "GCP", "Azure"],
+  cloud_provider:    ["AWS", "GCP", "Azure", "Cloud Platforms"],
   containers:        ["Docker", "Kubernetes"],
   nosql_db:          ["MongoDB", "DynamoDB", "Cassandra", "Redis", "Elasticsearch"],
   sql_db:            ["PostgreSQL", "MySQL", "Microsoft SQL Server", "SQL"],
@@ -978,11 +994,12 @@ export const SKILL_FAMILIES: Record<string, string[]> = {
   scripting_lang:    ["Python", "Ruby", "PHP"],
   js_lang:           ["JavaScript", "TypeScript"],
   c_family_lang:     ["C++", "C#", "Rust", "Go"],
+  backend_engineering: ["Backend Development", "Distributed Systems", "Microservices", "API Development"],
   message_queue:     ["Kafka", "RabbitMQ", "SQS", "Pub/Sub"],
   stream_processing: ["Apache Spark", "Kafka", "Spark"],
   ci_cd:             ["Jenkins", "GitHub Actions", "GitLab CI", "CircleCI", "CI/CD"],
   ml_framework:      ["PyTorch", "TensorFlow", "scikit-learn"],
-  api_style:         ["REST", "GraphQL", "gRPC"],
+  api_style:         ["REST", "GraphQL", "gRPC", "API Development"],
   data_warehouse:    ["Snowflake", "BigQuery", "Redshift", "Databricks"],
   iac_tool:          ["Terraform", "CloudFormation", "Pulumi"],
 } as const

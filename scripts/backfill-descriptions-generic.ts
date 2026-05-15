@@ -69,12 +69,64 @@ async function loadCandidates(): Promise<Row[]> {
   return rows
 }
 
+function isTransientPgError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err)
+  return (
+    msg.includes("administrator command") ||
+    msg.includes("Connection terminated") ||
+    msg.includes("connection terminated") ||
+    msg.includes("ECONNRESET") ||
+    msg.includes("ETIMEDOUT") ||
+    msg.includes("Client has encountered a connection error") ||
+    msg.includes("server closed the connection") ||
+    msg.includes("read ECONNRESET")
+  )
+}
+
+async function updateWithRetry(
+  id: string,
+  description: string,
+  maxAttempts = 5
+): Promise<void> {
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      const pool = getPostgresPool()
+      await pool.query(
+        `UPDATE jobs SET description = $1, updated_at = now() WHERE id = $2`,
+        [description, id]
+      )
+      return
+    } catch (err) {
+      if (attempt === maxAttempts || !isTransientPgError(err)) {
+        console.error(`[backfill-descriptions] update failed for ${id}:`, err)
+        return
+      }
+      const backoff = 500 * 2 ** (attempt - 1)
+      console.warn(
+        `[backfill-descriptions] transient pg error on ${id} (attempt ${attempt}), retrying in ${backoff}ms`
+      )
+      await new Promise((resolve) => setTimeout(resolve, backoff))
+    }
+  }
+}
+
 async function main() {
   console.log(
     `[backfill-descriptions] mode=${execute ? "execute" : "dry-run"} limit=${limit} concurrency=${concurrency} min-length=${minLength}` +
       (sourceFilter ? ` source=${sourceFilter}` : "") +
       (atsFilter ? ` ats=${atsFilter}` : "")
   )
+
+  process.on("unhandledRejection", (reason) => {
+    if (isTransientPgError(reason)) {
+      console.warn("[backfill-descriptions] swallowed transient pg error:", reason)
+      return
+    }
+    console.error("[backfill-descriptions] unhandledRejection:", reason)
+  })
+  getPostgresPool().on("error", (err) => {
+    console.warn("[backfill-descriptions] idle pg client error (recoverable):", err.message)
+  })
 
   const candidates = await loadCandidates()
   console.log(`[backfill-descriptions] loaded ${candidates.length} candidates`)
@@ -99,14 +151,7 @@ async function main() {
           tooShort += 1
         } else if (description.length > (row.description?.length ?? 0)) {
           if (execute) {
-            await pool
-              .query(
-                `UPDATE jobs SET description = $1, updated_at = now() WHERE id = $2`,
-                [description, row.id]
-              )
-              .catch((err) => {
-                console.error(`[backfill-descriptions] update failed for ${row.id}:`, err)
-              })
+            await updateWithRetry(row.id, description)
           }
           enriched += 1
         }
