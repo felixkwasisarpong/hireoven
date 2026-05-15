@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { Resend } from "resend"
 import { logApiUsage } from "@/lib/admin/usage"
-import { getEmailCompanyLogoUrl, getHireovenEmailLogoUrl, getHireovenJobDetailUrl } from "@/lib/email/branding"
+import { getEmailCompanyLogoUrl, getHireovenEmailLogoUrl, getHireovenJobDetailUrl, renderEmailExtensionFooter } from "@/lib/email/branding"
 import { getAlertsFromEmail } from "@/lib/email/identity"
 import { requireCronAuth } from "@/lib/env"
 import { matchesLocationFilter } from "@/lib/jobs/search-match"
@@ -146,6 +146,9 @@ function buildWeeklyEmail(
             </a>
           </div>
         </td></tr>
+
+        <!-- Chrome extension footer -->
+        ${renderEmailExtensionFooter()}
 
         <tr><td style="padding:20px 32px;border-top:1px solid #f1f5f9;background:#f8fafc;border-radius:0 0 16px 16px;">
           <p style="margin:0;font-size:12px;color:#94a3b8;text-align:center;">

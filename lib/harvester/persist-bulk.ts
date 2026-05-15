@@ -86,6 +86,29 @@ type PersistRow = {
   raw_data: RawDataPayload
 }
 
+function salvageHarvesterDescription(value: string | null | undefined): string | null {
+  if (!value) return null
+  const normalized = value
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .filter(Boolean)
+    .join("\n")
+    .trim()
+  if (!normalized) return null
+  if (normalized.length < 80) return null
+  if (normalized.length > 12_000) return normalized.slice(0, 12_000).trim()
+
+  const letterCount = (normalized.match(/[a-z]/gi) ?? []).length
+  const words = normalized.split(/\s+/).length
+  if (letterCount < 50 || words < 8) return null
+
+  // Reject common Workday placeholder payloads like requisition IDs.
+  if (/^[A-Za-z]\d{6,}$/.test(normalized)) return null
+
+  return normalized
+}
+
 function normalizePostedAtForPersist(
   rawPostedAt: string | null | undefined,
   crawledAtIso: string
@@ -172,7 +195,7 @@ DO UPDATE SET
   normalized_title       = EXCLUDED.normalized_title,
   apply_url              = EXCLUDED.apply_url,
   location               = EXCLUDED.location,
-  description            = EXCLUDED.description,
+  description            = COALESCE(NULLIF(EXCLUDED.description, ''), jobs.description),
   employment_type        = EXCLUDED.employment_type,
   seniority_level        = EXCLUDED.seniority_level,
   is_remote              = EXCLUDED.is_remote,
@@ -286,7 +309,7 @@ function buildPersistRow(args: {
     normalized_title: cols.normalized_title ?? null,
     apply_url: job.applyUrl,
     location: cols.location ?? null,
-    description: cols.description ?? null,
+    description: cols.description ?? salvageHarvesterDescription(job.description),
     employment_type: cols.employment_type ?? null,
     seniority_level: cols.seniority_level ?? null,
     is_remote: Boolean(cols.is_remote),

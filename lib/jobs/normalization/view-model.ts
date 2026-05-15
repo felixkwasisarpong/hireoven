@@ -183,6 +183,35 @@ const ABOUT_FALLBACK_HEADING_RE =
 const ABOUT_FALLBACK_NOISE_RE =
   /\b(equal opportunity|eeo employer|reasonable accommodation|protected veteran|affirmative action|cookie|privacy notice|terms of (service|use))\b/i
 
+function splitLongFallbackLine(line: string, target = 360): string[] {
+  const normalized = line.replace(/\s+/g, " ").trim()
+  if (!normalized) return []
+  if (normalized.length <= target) return [normalized]
+
+  const chunks: string[] = []
+  let rest = normalized
+
+  while (rest.length > target) {
+    const window = rest.slice(0, target)
+    const commaBreak = window.lastIndexOf(", ")
+    const semicolonBreak = window.lastIndexOf("; ")
+    const spaceBreak = window.lastIndexOf(" ")
+    const bestBreak = Math.max(commaBreak, semicolonBreak, spaceBreak)
+
+    if (bestBreak >= Math.floor(target * 0.45)) {
+      chunks.push(rest.slice(0, bestBreak + 1).trim())
+      rest = rest.slice(bestBreak + 1).trim()
+      continue
+    }
+
+    chunks.push(window.trim())
+    rest = rest.slice(target).trim()
+  }
+
+  if (rest) chunks.push(rest)
+  return chunks
+}
+
 /**
  * Page-level fallback for the "About the role" section. When the extractor's
  * about_role bucket is empty (cached canonical, low-signal description, etc.),
@@ -197,10 +226,21 @@ export function deriveAboutRoleParagraphs(
 
   if (!cleanDescription) return []
 
+  const lineFallback = cleanDescription
+    .split(/\n+/)
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .filter((line) => line.length >= 40)
+    .filter((line) => !ABOUT_FALLBACK_HEADING_RE.test(line))
+    .filter((line) => !ABOUT_FALLBACK_NOISE_RE.test(line))
+    .flatMap((line) => splitLongFallbackLine(line))
+    .filter((line) => line.length >= 40)
+
+  if (lineFallback.length > 0) return lineFallback.slice(0, 2)
+
   const paragraphs = cleanDescription
     .split(/\n{2,}/)
     .map((line) => line.replace(/\s+/g, " ").trim())
-    .filter((line) => line.length >= 60 && line.length <= 700)
+    .filter((line) => line.length >= 60 && line.length <= 2000)
     .filter((line) => !ABOUT_FALLBACK_HEADING_RE.test(line))
     .filter((line) => !ABOUT_FALLBACK_NOISE_RE.test(line))
 

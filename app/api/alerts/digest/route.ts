@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { Resend } from "resend"
 import { logApiUsage } from "@/lib/admin/usage"
-import { getEmailCompanyLogoUrl, getHireovenEmailLogoUrl, getHireovenJobDetailUrl } from "@/lib/email/branding"
+import { getEmailCompanyLogoUrl, getHireovenEmailLogoUrl, getHireovenJobDetailUrl, renderEmailExtensionFooter } from "@/lib/email/branding"
 import { getAlertsFromEmail } from "@/lib/email/identity"
 import { requireCronAuth } from "@/lib/env"
 import { matchesLocationFilter } from "@/lib/jobs/search-match"
@@ -163,6 +163,9 @@ function buildDigestEmail(
             </a>
           </div>
         </td></tr>
+
+        <!-- Chrome extension footer -->
+        ${renderEmailExtensionFooter()}
 
         <!-- Footer -->
         <tr><td style="padding:20px 32px;border-top:1px solid #f1f5f9;background:#f8fafc;">

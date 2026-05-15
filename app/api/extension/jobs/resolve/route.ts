@@ -19,6 +19,7 @@ import {
   readExtensionJsonBody,
   requireExtensionAuth,
 } from "@/lib/extension/auth"
+import { buildExtensionJobFingerprint } from "@/lib/extension/job-fingerprint"
 
 export const runtime = "nodejs"
 
@@ -36,41 +37,6 @@ function cleanText(value: unknown, max = 280): string | null {
   const trimmed = value.trim()
   if (!trimmed) return null
   return trimmed.slice(0, max)
-}
-
-const TRANSIENT_QUERY_KEYS = new Set([
-  "utm_source",
-  "utm_medium",
-  "utm_campaign",
-  "utm_content",
-  "utm_term",
-  "gclid",
-  "fbclid",
-  "source",
-  "share",
-  "ref",
-  "referral",
-  "trk",
-])
-
-function normalizeUrl(input: string | null | undefined): string | null {
-  if (!input?.trim()) return null
-  try {
-    const parsed = new URL(input.trim())
-    parsed.hash = ""
-    for (const key of [...parsed.searchParams.keys()]) {
-      if (TRANSIENT_QUERY_KEYS.has(key.toLowerCase())) {
-        parsed.searchParams.delete(key)
-      }
-    }
-    parsed.hostname = parsed.hostname.toLowerCase()
-    if (parsed.pathname !== "/") {
-      parsed.pathname = parsed.pathname.replace(/\/+$/, "")
-    }
-    return parsed.toString()
-  } catch {
-    return null
-  }
 }
 
 function unique(values: Array<string | null | undefined>): string[] {
@@ -100,20 +66,26 @@ export async function POST(request: Request) {
   const [body, bodyError] = await readExtensionJsonBody<ResolveBody>(request)
   if (bodyError) return bodyError
 
-  const sourceUrl = normalizeUrl(cleanText(body.sourceUrl, 1400))
-  const applyUrl = normalizeUrl(cleanText(body.applyUrl, 1400))
+  const sourceUrl = cleanText(body.sourceUrl, 1400)
+  const applyUrl = cleanText(body.applyUrl, 1400)
   const title = cleanText(body.title, 220)
   const company = cleanText(body.company, 220)
   const externalJobId = cleanText(body.externalJobId, 220)
 
-  const candidateUrls = unique([
-    sourceUrl,
-    applyUrl,
-    cleanText(body.sourceUrl, 1400),
-    cleanText(body.applyUrl, 1400),
-  ])
+  const fingerprint = buildExtensionJobFingerprint({
+    urls: [
+      sourceUrl,
+      applyUrl,
+      cleanText(body.sourceUrl, 1400),
+      cleanText(body.applyUrl, 1400),
+    ],
+    externalJobId,
+  })
+  const candidateUrls = unique(fingerprint.candidateUrls)
+  const externalJobIds = unique([...fingerprint.externalJobIds, externalJobId])
+  const primaryExternalJobId = externalJobIds[0] ?? null
 
-  if (candidateUrls.length === 0 && !externalJobId && !(title && company)) {
+  if (candidateUrls.length === 0 && externalJobIds.length === 0 && !(title && company)) {
     return extensionError(request, 400, "Missing fingerprint fields", { headers })
   }
 
@@ -134,7 +106,7 @@ export async function POST(request: Request) {
            OR (j.raw_data->>'canonicalSourceUrl') = ANY($2::text[])
            OR (j.raw_data->>'applyUrl') = ANY($2::text[])
            OR (j.raw_data->>'canonicalApplyUrl') = ANY($2::text[])
-           OR ($3::text IS NOT NULL AND j.external_id = $3::text)
+           OR (array_length($3::text[], 1) IS NOT NULL AND j.external_id = ANY($3::text[]))
            OR (
              $4::text IS NOT NULL
              AND $5::text IS NOT NULL
@@ -144,7 +116,7 @@ export async function POST(request: Request) {
          )
        ORDER BY ja.updated_at DESC NULLS LAST, ja.created_at DESC
        LIMIT 1`,
-      [user.sub, candidateUrls, externalJobId, title, company],
+      [user.sub, candidateUrls, externalJobIds, title, company],
     )
     .catch(() => null)
 
@@ -168,7 +140,7 @@ export async function POST(request: Request) {
          OR (j.raw_data->>'canonicalSourceUrl') = ANY($1::text[])
          OR (j.raw_data->>'applyUrl') = ANY($1::text[])
          OR (j.raw_data->>'canonicalApplyUrl') = ANY($1::text[])
-         OR ($2::text IS NOT NULL AND j.external_id = $2::text)
+         OR (array_length($2::text[], 1) IS NOT NULL AND j.external_id = ANY($2::text[]))
          OR (
            $3::text IS NOT NULL
            AND $4::text IS NOT NULL
@@ -178,7 +150,7 @@ export async function POST(request: Request) {
        )
        ORDER BY j.updated_at DESC NULLS LAST, j.created_at DESC
        LIMIT 1`,
-      [candidateUrls, externalJobId, title, company],
+      [candidateUrls, externalJobIds, title, company],
     )
     .catch(() => null)
 
@@ -275,7 +247,12 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json(
-    { exists: true, jobId: globalRow.job_id, status: "created" },
+    {
+      exists: true,
+      jobId: globalRow.job_id,
+      status: "created",
+      externalJobId: primaryExternalJobId ?? undefined,
+    },
     { headers },
   )
 }

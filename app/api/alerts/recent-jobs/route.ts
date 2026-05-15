@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { Resend } from "resend"
 import { logApiUsage } from "@/lib/admin/usage"
-import { getEmailCompanyLogoUrl, getHireovenEmailLogoUrl, getHireovenJobDetailUrl } from "@/lib/email/branding"
+import { getEmailCompanyLogoUrl, getHireovenEmailLogoUrl, getHireovenJobDetailUrl, renderEmailExtensionFooter } from "@/lib/email/branding"
 import { getRecentJobsFromEmail } from "@/lib/email/identity"
 import { requireCronAuth } from "@/lib/env"
 import { matchesLocationFilter } from "@/lib/jobs/search-match"
@@ -191,6 +191,10 @@ function buildEmail({
             </div>
           </td>
         </tr>
+
+        <!-- Chrome extension footer -->
+        ${renderEmailExtensionFooter()}
+
         <tr>
           <td style="padding:18px 30px;background:#f8fafc;border-top:1px solid #e2e8f0;">
             <p style="margin:0;font-size:12px;color:#94a3b8;text-align:center;">

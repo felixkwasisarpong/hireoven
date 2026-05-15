@@ -68,6 +68,10 @@ test("persistJobsBulk: single ON CONFLICT upsert with content_hash short-circuit
   assert.match(upsert.text, /INSERT INTO jobs/)
   assert.match(upsert.text, /ON CONFLICT \(company_id, external_id\)/)
   assert.match(upsert.text, /WHERE jobs\.content_hash IS DISTINCT FROM EXCLUDED\.content_hash/)
+  assert.match(
+    upsert.text,
+    /description\s*=\s*COALESCE\(NULLIF\(EXCLUDED\.description,\s*''\),\s*jobs\.description\)/
+  )
   assert.match(upsert.text, /jsonb_array_elements\(\$5::jsonb\)/)
   assert.match(upsert.text, /RETURNING \(xmax = 0\) AS inserted/)
   assert.equal(upsert.values[0], "00000000-0000-0000-0000-000000000001")
@@ -173,4 +177,33 @@ test("persistJobsBulk: normalizes relative postedAt and drops unparseable values
   assert.equal(payload.length, 2)
   assert.equal(payload[0].posted_at, "2026-05-11T00:00:00.000Z")
   assert.equal(payload[1].posted_at, null)
+})
+
+test("persistJobsBulk: salvages substantive adapter descriptions when strict normalizer drops them", async () => {
+  const { pool, captured } = makeFakePool([[], []])
+
+  await persistJobsBulk({
+    pool,
+    companyId: "00000000-0000-0000-0000-000000000005",
+    companyMeta: { name: "Acme", domain: null, careersUrl: null },
+    sourceAts: "lever",
+    sourceAtsSlug: "acme",
+    crawledAt: new Date("2026-05-11T00:00:00.000Z"),
+    jobs: [
+      makeJob({
+        externalId: "lever:salvage-1",
+        description:
+          "RESPONSIBILITIES\nBuild backend services and operate production APIs across multiple teams with strong ownership and collaboration mindset",
+        contentHash: "6".repeat(32),
+      }),
+    ],
+  })
+
+  const upsert = captured[0]
+  const payload = JSON.parse(upsert.values[4] as string) as Array<Record<string, unknown>>
+  assert.equal(payload.length, 1)
+  assert.equal(
+    payload[0].description,
+    "RESPONSIBILITIES\nBuild backend services and operate production APIs across multiple teams with strong ownership and collaboration mindset"
+  )
 })

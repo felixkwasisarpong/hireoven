@@ -23,29 +23,9 @@ import {
   handleExtensionPreflight,
   requireExtensionAuth,
 } from "@/lib/extension/auth"
+import { buildExtensionJobFingerprint } from "@/lib/extension/job-fingerprint"
 
 export const runtime = "nodejs"
-
-// Mirrors the normalizeUrl in /save — strip tracking params so the lookup
-// matches what /save persisted.
-function normalizeUrl(raw: string | null | undefined): string | null {
-  if (!raw?.trim()) return null
-  try {
-    const parsed = new URL(raw.trim())
-    parsed.hash = ""
-    for (const key of [...parsed.searchParams.keys()]) {
-      if (/^(utm_|gclid|fbclid|source|share|ref|trk|gh_src)/i.test(key)) {
-        parsed.searchParams.delete(key)
-      }
-    }
-    if (parsed.pathname !== "/") {
-      parsed.pathname = parsed.pathname.replace(/\/+$/, "")
-    }
-    return parsed.toString()
-  } catch {
-    return raw.trim()
-  }
-}
 
 function originFromRequest(request: Request): string {
   const origin = request.headers.get("origin")
@@ -64,21 +44,30 @@ export async function GET(request: Request) {
   if (errResponse) return errResponse
 
   const params = new URL(request.url).searchParams
-  const candidates = [params.get("applyUrl"), params.get("url"), params.get("canonicalUrl")]
-    .map((u) => normalizeUrl(u))
-    .filter((u): u is string => Boolean(u))
+  const fingerprint = buildExtensionJobFingerprint({
+    urls: [params.get("applyUrl"), params.get("url"), params.get("canonicalUrl")],
+    externalJobId: params.get("externalJobId"),
+  })
+  const candidates = fingerprint.candidateUrls
+  const externalIds = fingerprint.externalJobIds
 
-  if (candidates.length === 0) {
+  if (candidates.length === 0 && externalIds.length === 0) {
     return extensionError(request, 400, "url is required", { headers: corsHeaders })
   }
 
   const pool = getPostgresPool()
 
-  // Find job by apply_url match (any of the candidate URLs).
+  // Find job by apply_url OR external_id match.
   const jobRow = await pool
     .query<{ id: string }>(
-      `SELECT id FROM jobs WHERE apply_url = ANY($1::text[]) LIMIT 1`,
-      [candidates],
+      `SELECT id
+       FROM jobs
+       WHERE (
+         (array_length($1::text[], 1) IS NOT NULL AND apply_url = ANY($1::text[]))
+         OR (array_length($2::text[], 1) IS NOT NULL AND external_id = ANY($2::text[]))
+       )
+       LIMIT 1`,
+      [candidates, externalIds],
     )
     .catch((err: unknown) => {
       console.error("[extension/jobs/check] jobs lookup failed:", err)

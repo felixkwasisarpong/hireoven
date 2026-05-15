@@ -117,7 +117,7 @@ function buildLogoSources(logoUrl: string | null | undefined, domain: string | n
   const explicitDomain = domain ? normalizeCompanyDomain(domain) : ""
   const logoDomain = domainFromLogoUrl(logoUrl)
 
-  const canonicalDomain = [logoDomain, explicitDomain].find(
+  const canonicalDomain = [explicitDomain, logoDomain].find(
     (item) => item && !isPlaceholderDomain(item) && !isAtsDomain(item)
   )
 
@@ -129,14 +129,12 @@ function buildLogoSources(logoUrl: string | null | undefined, domain: string | n
   if (logoUrl && !invalidPlaceholderFavicon && !invalidAtsLogo && isStaticAsset) push(logoUrl)
 
   if (canonicalDomain) {
-    // 2. logo.dev — primary brand-mark provider.
-    // companyLogoUrlFromDomain falls back to google-favicon when LOGO_DEV_TOKEN is absent,
-    // so the google-favicon push below deduplicates cleanly via the Set check.
-    push(companyLogoUrlFromDomain(canonicalDomain, "logo-dev"))
-    // 3. DuckDuckGo icon service often has higher-resolution favicons than Google.
+    // 2. DuckDuckGo icon service is stable and avoids API-key failures.
     push(companyLogoUrlFromDomain(canonicalDomain, "duckduckgo"))
-    // 4. Google favicon — final network fallback before initials.
+    // 3. Google favicon — final stable network fallback before initials.
     push(companyLogoUrlFromDomain(canonicalDomain, "google-favicon"))
+    // 4. logo.dev as optional late fallback when configured and reachable.
+    push(companyLogoUrlFromDomain(canonicalDomain, "logo-dev"))
   }
 
   // 5. Stored URL as last resort — but never Clearbit (being deprecated), ATS domains,

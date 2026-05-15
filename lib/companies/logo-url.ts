@@ -170,14 +170,13 @@ const GOOGLE_FAVICON_URL_OVERRIDES: Record<string, string> = {
 }
 
 /**
- * Public logo URL for img[src] - no API key for these providers.
- * - clearbit: high-quality brand marks when available (project already allows logo.clearbit.com in next.config).
- * - unavatar: aggregates favicons / avatars; good fallback.
- * - google-favicon: always returns something small (128px).
+ * Public logo URL for img[src].
+ * Default favors DuckDuckGo favicon CDN because it's stable without API keys.
+ * `logo-dev` remains opt-in and can be requested explicitly by provider.
  */
 export function companyLogoUrlFromDomain(
   domain: string,
-  provider: LogoProvider = "logo-dev"
+  provider: LogoProvider = "duckduckgo"
 ): string {
   const normalized = normalizeCompanyDomain(domain)
   if (!normalized || isAtsDomain(normalized)) return ""

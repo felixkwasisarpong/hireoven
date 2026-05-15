@@ -27,8 +27,55 @@ export function getHireovenEmailLogoUrl(variant: "wordmark" | "icon" = "wordmark
   const path =
     variant === "icon"
       ? "/brand/hireoven-icon-256.png"
-      : "/brand/hireoven-logo-header-transparent.png"
+      : "/brand/hireoven-wordmark-transparent.png"
   return `${base}${path}`
+}
+
+/** Canonical Chrome Web Store URL for the Hireoven Scout Bridge extension. */
+const CHROME_STORE_URL =
+  "https://chromewebstore.google.com/detail/hireoven-scout-bridge/mkmfffcaimjnaecoelnanifookmdbfok"
+
+/**
+ * Light, tasteful Chrome-extension promo block rendered just above the
+ * unsubscribe footer in every notification email (digest, weekly, recent-jobs).
+ *
+ * Inline-styled tables — no flex, no max-width media queries, no SVG —
+ * so it renders consistently across Gmail / Outlook / Apple Mail / mobile.
+ */
+export function renderEmailExtensionFooter(): string {
+  const base = getEmailBaseUrl()
+  const learnMoreUrl = `${base}/extension`
+  const favicon = `${base}/brand/hireoven-favicon-64.png`
+  return `
+        <tr><td style="padding:0 32px 24px;">
+          <table width="100%" cellpadding="0" cellspacing="0"
+                 style="background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;">
+            <tr>
+              <td style="padding:18px 20px;vertical-align:middle;width:56px;">
+                <img src="${favicon}" alt="Hireoven" width="40" height="40"
+                     style="display:block;width:40px;height:40px;border-radius:10px;border:0;outline:none;text-decoration:none;" />
+              </td>
+              <td style="padding:18px 8px 18px 0;vertical-align:middle;">
+                <div style="font-size:11px;font-weight:700;letter-spacing:0.12em;color:#FF6B1A;text-transform:uppercase;">
+                  Chrome extension
+                </div>
+                <div style="font-size:14px;font-weight:600;color:#0f172a;line-height:1.4;margin-top:3px;">
+                  See your match score on every LinkedIn, Indeed &amp; ATS job.
+                </div>
+                <div style="font-size:12px;color:#64748b;line-height:1.5;margin-top:2px;">
+                  Autofill applications, save in one click.
+                  <a href="${learnMoreUrl}" style="color:#0369A1;text-decoration:none;font-weight:600;">Learn more</a>
+                </div>
+              </td>
+              <td style="padding:18px 20px;vertical-align:middle;text-align:right;white-space:nowrap;">
+                <a href="${CHROME_STORE_URL}"
+                   style="display:inline-block;background:#0369A1;color:#ffffff;text-decoration:none;padding:9px 14px;border-radius:8px;font-size:12.5px;font-weight:700;">
+                  Add to Chrome
+                </a>
+              </td>
+            </tr>
+          </table>
+        </td></tr>`
 }
 
 /**

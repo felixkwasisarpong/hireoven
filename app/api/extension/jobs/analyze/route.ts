@@ -23,6 +23,7 @@ import {
   readExtensionJsonBody,
   requireExtensionAuth,
 } from "@/lib/extension/auth"
+import { buildExtensionJobFingerprint, normalizeExtensionJobUrl } from "@/lib/extension/job-fingerprint"
 import { extractSkillsFromText, skillMatches } from "@/lib/skills/taxonomy"
 import type { EmploymentType, Job, Resume, SeniorityLevel } from "@/types"
 
@@ -53,45 +54,6 @@ interface AnalyzeJobBody {
   employmentType?: string
   detectedAts?: SupportedSite
   activelyHiring?: boolean
-}
-
-// Mirrors normalizeUrl in /save and /check — strips tracking params
-// (utm_*, gclid, fbclid, gh_src, etc.), drops hash, trims trailing slashes,
-// and collapses LinkedIn URLs to canonical /jobs/view/[id]/.
-//
-// Without this, an analyze request from a page like
-//   https://job-boards.greenhouse.io/kepora/jobs/4233066009?gh_src=...
-// does an exact-match SELECT against the stored URL and misses, leaving
-// existsInHireoven=false and actions.canSave=true even when the user
-// already has the job saved (which /check correctly reports as saved).
-function normalizeUrl(raw: string | null | undefined): string | null {
-  if (!raw?.trim()) return null
-  try {
-    const parsed = new URL(raw.trim())
-    parsed.hash = ""
-    if (
-      (parsed.hostname === "www.linkedin.com" || parsed.hostname === "linkedin.com") &&
-      /^\/jobs\//.test(parsed.pathname)
-    ) {
-      const fromPath = parsed.pathname.match(/^\/jobs\/view\/(\d+)/)?.[1]
-      const fromQuery = parsed.searchParams.get("currentJobId")
-      const jobId = fromPath ?? fromQuery
-      if (jobId && /^\d+$/.test(jobId)) {
-        return `https://www.linkedin.com/jobs/view/${jobId}/`
-      }
-    }
-    for (const key of [...parsed.searchParams.keys()]) {
-      if (/^(utm_|gclid|fbclid|source|share|ref|trk|gh_src)/i.test(key)) {
-        parsed.searchParams.delete(key)
-      }
-    }
-    if (parsed.pathname !== "/") {
-      parsed.pathname = parsed.pathname.replace(/\/+$/, "")
-    }
-    return parsed.toString()
-  } catch {
-    return raw.trim()
-  }
 }
 
 type SignalType =
@@ -348,9 +310,9 @@ function buildSyntheticJobForScoring(body: AnalyzeJobBody): Job {
   const { isRemote, isHybrid } = inferWorkModeFlags(body, description ?? "")
 
   const applyUrl =
-    normalizeUrl(body.applyUrl) ??
-    normalizeUrl(body.canonicalUrl) ??
-    normalizeUrl(body.url) ??
+    normalizeExtensionJobUrl(body.applyUrl) ??
+    normalizeExtensionJobUrl(body.canonicalUrl) ??
+    normalizeExtensionJobUrl(body.url) ??
     body.url
 
   return {
@@ -419,14 +381,23 @@ export async function POST(request: Request) {
   const pool = getPostgresPool()
   let jobId: string | undefined
   let existingJob: Job | undefined
-  const candidates = [body.applyUrl, body.url, body.canonicalUrl]
-    .map((u) => normalizeUrl(u))
-    .filter((u): u is string => Boolean(u))
-  if (candidates.length > 0) {
+  const fingerprint = buildExtensionJobFingerprint({
+    urls: [body.applyUrl, body.url, body.canonicalUrl],
+    externalJobId: null,
+  })
+  const candidates = fingerprint.candidateUrls
+  const externalIds = fingerprint.externalJobIds
+  if (candidates.length > 0 || externalIds.length > 0) {
     try {
       const existing = await pool.query<Job>(
-        `SELECT * FROM jobs WHERE apply_url = ANY($1::text[]) LIMIT 1`,
-        [candidates],
+        `SELECT *
+         FROM jobs
+         WHERE (
+           (array_length($1::text[], 1) IS NOT NULL AND apply_url = ANY($1::text[]))
+           OR (array_length($2::text[], 1) IS NOT NULL AND external_id = ANY($2::text[]))
+         )
+         LIMIT 1`,
+        [candidates, externalIds],
       )
       if (existing.rows[0]) {
         existingJob = existing.rows[0]
