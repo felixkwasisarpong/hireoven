@@ -42,6 +42,56 @@ const ATS_SUBDOMAIN_PATTERNS = [
   ".bamboohr.com",
 ]
 
+const LEGAL_SUFFIX_RE =
+  /\b(incorporated|inc|llc|llp|lp|corp|corporation|ltd|limited|co|company|plc|holdings|holding|group|us|usa|north|america)\b/g
+const DOMAIN_LABEL_STOPWORDS = new Set([
+  "about",
+  "academy",
+  "api",
+  "app",
+  "career",
+  "careers",
+  "docs",
+  "events",
+  "help",
+  "home",
+  "jobs",
+  "login",
+  "news",
+  "operations",
+  "portal",
+  "sales",
+  "support",
+  "trust",
+  "webinars",
+  "www",
+])
+const WORKDAY_SITE_STOPWORDS = new Set([
+  "career",
+  "careers",
+  "external",
+  "ext",
+  "gateway",
+  "job",
+  "jobs",
+  "page",
+  "portal",
+  "rec",
+  "site",
+  "wd",
+  "workday",
+])
+const NON_BRAND_HOST_BLOCKLIST = new Set([
+  "github.com",
+  "google.com",
+  "linkedin.com",
+  "medium.com",
+  "notion.site",
+  "notion.so",
+  "x.com",
+  "youtube.com",
+])
+
 function normalizeDomain(raw: string | null | undefined): string {
   return (raw ?? "")
     .toLowerCase()
@@ -61,9 +111,157 @@ function domainFromUrl(url: string | null | undefined): string {
   try { return normalizeDomain(new URL(url).hostname) } catch { return "" }
 }
 
+function isBlockedNonBrandHost(domain: string): boolean {
+  const d = normalizeDomain(domain)
+  if (!d) return true
+  if (NON_BRAND_HOST_BLOCKLIST.has(d)) return true
+  if (d.endsWith(".github.com")) return true
+  if (d.endsWith(".google.com")) return true
+  if (d.endsWith(".linkedin.com")) return true
+  if (d.endsWith(".medium.com")) return true
+  if (d.endsWith(".youtube.com")) return true
+  return false
+}
+
+function isAtsVendorSelfCompany(companyName: string, domain: string): boolean {
+  const d = normalizeDomain(domain)
+  const name = companyName.toLowerCase()
+  if (d === "greenhouse.io" && name.includes("greenhouse")) return true
+  if (d === "lever.co" && name.includes("lever")) return true
+  if (d === "ashbyhq.com" && name.includes("ashby")) return true
+  if (d === "smartrecruiters.com" && name.includes("smartrecruiters")) return true
+  if (d === "workable.com" && name.includes("workable")) return true
+  if (d === "teamtailor.com" && name.includes("teamtailor")) return true
+  if (d === "personio.com" && name.includes("personio")) return true
+  if (d === "bamboohr.com" && name.includes("bamboohr")) return true
+  return false
+}
+
 function isPlaceholderDomain(d: string | null | undefined): boolean {
   const n = normalizeDomain(d)
-  return n.endsWith(".lca-employer") || n.endsWith(".uscis-employer") || !n
+  return (
+    n.endsWith(".lca-employer") ||
+    n.endsWith(".uscis-employer") ||
+    n.endsWith(".scout-placeholder") ||
+    !n
+  )
+}
+
+function uniq<T>(values: T[]): T[] {
+  return [...new Set(values)]
+}
+
+function normalizeNameTokens(name: string): string[] {
+  return name
+    .toLowerCase()
+    .replace(LEGAL_SUFFIX_RE, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .split(/\s+/)
+    .filter((token) => token.length >= 2)
+}
+
+function cleanLabel(raw: string | null | undefined): string {
+  return (raw ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "")
+}
+
+function labelToComDomain(rawLabel: string | null | undefined): string {
+  const label = cleanLabel(rawLabel)
+  if (!label) return ""
+  if (label.length < 4 || label.length > 40) return ""
+  if (/^\d+$/.test(label)) return ""
+  if (DOMAIN_LABEL_STOPWORDS.has(label)) return ""
+  return `${label}.com`
+}
+
+function looksPlausibleForName(domain: string, companyName: string): boolean {
+  const root = normalizeDomain(domain).split(".")[0] ?? ""
+  if (!root) return false
+  const tokens = normalizeNameTokens(companyName)
+  if (tokens.length === 0) return root.length >= 5
+
+  const collapsed = tokens.join("")
+  if (collapsed.includes(root)) return true
+  if (tokens.some((token) => token.length >= 4 && root.includes(token))) return true
+
+  const acronym = tokens.map((token) => token[0]).join("")
+  return root.length >= 4 && root.length <= 6 && acronym === root
+}
+
+function workdaySiteLabelCandidates(atsIdentifier: string | null | undefined): string[] {
+  if (!atsIdentifier) return []
+  const parts = atsIdentifier.split(":")
+  if (parts.length < 3) return []
+  const site = parts.slice(2).join(":")
+  const tokens = site
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((token) => token.length >= 2 && !WORKDAY_SITE_STOPWORDS.has(token))
+
+  const out: string[] = []
+  if (tokens.length >= 2) out.push(tokens.slice(0, 2).join(""))
+  if (tokens.length >= 3) out.push(tokens.slice(0, 3).join(""))
+  for (const token of tokens) out.push(token)
+  return uniq(out)
+}
+
+function domainsFromAtsIdentifier(args: {
+  atsType: string | null
+  atsIdentifier: string | null
+}): string[] {
+  const out: string[] = []
+  const add = (rawLabel: string | null | undefined) => {
+    const domain = labelToComDomain(rawLabel)
+    if (domain) out.push(domain)
+  }
+  const raw = args.atsIdentifier?.trim() ?? ""
+  if (!raw) return out
+
+  if (args.atsType === "workday") {
+    const tenant = raw.split(":")[0] ?? ""
+    add(tenant)
+    for (const label of workdaySiteLabelCandidates(raw)) add(label)
+    return uniq(out)
+  }
+
+  const firstSegment = raw.split(/[/:]/)[0] ?? ""
+  add(firstSegment)
+  return uniq(out)
+}
+
+function domainsFromAtsDomain(domain: string): string[] {
+  const d = normalizeDomain(domain)
+  if (!d || !isAtsDomain(d)) return []
+  const out: string[] = []
+  const add = (rawLabel: string | null | undefined) => {
+    const candidate = labelToComDomain(rawLabel)
+    if (candidate) out.push(candidate)
+  }
+
+  const workdayMatch = d.match(/^([a-z0-9-]+)\.wd\d{1,3}\.myworkdayjobs\.com$/)
+  if (workdayMatch?.[1]) add(workdayMatch[1])
+
+  const genericMatch = d.match(/^([a-z0-9-]+)\.(?:ashbyhq\.com|teamtailor\.com|bamboohr\.com|recruitee\.com|smartrecruiters\.com)$/)
+  if (genericMatch?.[1]) add(genericMatch[1])
+
+  const personioMatch = d.match(/^([a-z0-9-]+)\.jobs\.personio\.(?:com|de)$/)
+  if (personioMatch?.[1]) add(personioMatch[1])
+
+  return uniq(out)
+}
+
+function domainsFromCompanyName(name: string): string[] {
+  const tokens = normalizeNameTokens(name)
+  if (tokens.length === 0) return []
+  const out: string[] = []
+  const add = (rawLabel: string | null | undefined) => {
+    const candidate = labelToComDomain(rawLabel)
+    if (candidate) out.push(candidate)
+  }
+  add(tokens.join(""))
+  add(tokens.slice(0, 2).join(""))
+  if (tokens[0] && tokens[0].length >= 4) add(tokens[0])
+  return uniq(out)
 }
 
 async function getPool(): Promise<Pool> {
@@ -216,9 +414,11 @@ async function stepLogos(pool: Pool) {
   const companies = await pool.query<{
     id: string; name: string; domain: string | null
     logo_url: string | null; careers_url: string | null
+    ats_type: string | null; ats_identifier: string | null
+    job_count: number | null
     raw_ats_config: Record<string, unknown> | null
   }>(
-    `SELECT id, name, domain, logo_url, careers_url, raw_ats_config
+    `SELECT id, name, domain, logo_url, careers_url, ats_type, ats_identifier, job_count, raw_ats_config
      FROM companies WHERE is_active = true`
   )
 
@@ -228,7 +428,8 @@ async function stepLogos(pool: Pool) {
     const domain = normalizeDomain(co.domain)
     const logoUrl = co.logo_url ?? ""
 
-    const isBrokenDomain = isAtsDomain(domain) || isPlaceholderDomain(domain)
+    const keepAtsVendorDomain = isAtsVendorSelfCompany(co.name, domain)
+    const isBrokenDomain = (isAtsDomain(domain) && !keepAtsVendorDomain) || isPlaceholderDomain(domain)
     const logoIsUnsafe = !isLogoUrlSafe(logoUrl)
     const logoHasAtsDomain = ATS_SUBDOMAIN_PATTERNS.some((p) =>
       logoUrl.toLowerCase().includes(p.slice(1))
@@ -260,11 +461,43 @@ async function stepLogos(pool: Pool) {
           )
         : ""
 
-    // Pick best candidate that isn't an ATS subdomain or placeholder
-    const candidates = [guessedDomain, !isBrokenDomain ? domain : "", safeCareersHost, matchedUrlHost].filter(
-      (d) => d && !isAtsDomain(d) && !isPlaceholderDomain(d) && d.includes(".")
-    )
-    const bestDomain = candidates[0] ?? null
+    const inferredFromAtsSignals =
+      (co.job_count ?? 0) > 0
+        ? uniq([
+            ...domainsFromAtsIdentifier({
+              atsType: co.ats_type,
+              atsIdentifier: co.ats_identifier,
+            }),
+            ...domainsFromAtsDomain(domain),
+            ...domainsFromCompanyName(co.name),
+          ])
+        : []
+
+    type DomainCandidate = { domain: string; source: string }
+    const candidates: DomainCandidate[] = []
+    const addCandidate = (candidate: string, source: string, strictNameCheck = false) => {
+      const d = normalizeDomain(candidate)
+      if (!d || !d.includes(".")) return
+      const isVendorDomainPreserved = keepAtsVendorDomain && d === domain
+      if ((isAtsDomain(d) && !isVendorDomainPreserved) || isPlaceholderDomain(d)) return
+      if (isBlockedNonBrandHost(d)) return
+      if (candidates.some((entry) => entry.domain === d)) return
+      if (strictNameCheck && !looksPlausibleForName(d, co.name)) return
+      candidates.push({ domain: d, source })
+    }
+
+    addCandidate(guessedDomain, "raw_ats_config.guessed_domain")
+    addCandidate(!isBrokenDomain ? domain : "", "companies.domain")
+    addCandidate(safeCareersHost, "careers_url")
+    addCandidate(matchedUrlHost, "raw_ats_config.ats_detection.matchedUrl")
+
+    for (const inferred of inferredFromAtsSignals) {
+      const strict = !co.ats_identifier && !domain
+      addCandidate(inferred, "ats_heuristic", strict)
+    }
+
+    const best = candidates[0] ?? null
+    const bestDomain = best?.domain ?? null
 
     if (!bestDomain) {
       console.log(`  [review] ${co.name.slice(0, 42)} — cannot infer domain (current: ${domain || "null"})`)
@@ -273,6 +506,11 @@ async function stepLogos(pool: Pool) {
     }
 
     const nextLogo = companyLogoUrlFromDomain(bestDomain)
+    if (!nextLogo) {
+      console.log(`  [review] ${co.name.slice(0, 42)} — inferred domain has no safe logo provider (${bestDomain})`)
+      reviewed++
+      continue
+    }
     // If we already have a safe logo and the domain isn't broken, skip unless domain changes
     if (!isBrokenDomain && isLogoUrlSafe(logoUrl) && nextLogo === logoUrl) continue
     if (nextLogo === logoUrl && bestDomain === domain) continue
@@ -288,12 +526,36 @@ async function stepLogos(pool: Pool) {
       : "logo-refresh"
 
     console.log(
-      `  ${execute ? "" : "[dry] "}${co.name.slice(0, 36).padEnd(36)} [${reason}]\n    domain: ${domain} → ${bestDomain}\n    logo:   ${(logoUrl || "(none)").slice(0, 60)}\n         → ${nextLogo}`
+      `  ${execute ? "" : "[dry] "}${co.name.slice(0, 36).padEnd(36)} [${reason}]\n    domain: ${domain} → ${bestDomain} (${best?.source ?? "n/a"})\n    logo:   ${(logoUrl || "(none)").slice(0, 60)}\n         → ${nextLogo}`
     )
 
     if (execute) {
+      const collision = await pool.query<{ id: string }>(
+        `SELECT id FROM companies WHERE domain = $1 AND id <> $2 LIMIT 1`,
+        [bestDomain, co.id]
+      )
+      if (collision.rows.length > 0) {
+        console.log(
+          `  [review] ${co.name.slice(0, 42)} — domain ${bestDomain} already used by ${collision.rows[0]?.id}; applying logo-only repair`
+        )
+        await pool.query(
+          `UPDATE companies
+           SET logo_url=$1,
+               raw_ats_config = COALESCE(raw_ats_config, '{}'::jsonb) || jsonb_build_object('guessed_domain', $2::text, 'domain_verified', false),
+               updated_at=NOW()
+           WHERE id=$3`,
+          [nextLogo, bestDomain, co.id]
+        )
+        fixed++
+        continue
+      }
       await pool.query(
-        `UPDATE companies SET domain=$1, logo_url=$2, updated_at=NOW() WHERE id=$3`,
+        `UPDATE companies
+         SET domain=$1,
+             logo_url=$2,
+             raw_ats_config = COALESCE(raw_ats_config, '{}'::jsonb) || jsonb_build_object('guessed_domain', $1::text, 'domain_verified', true),
+             updated_at=NOW()
+         WHERE id=$3`,
         [bestDomain, nextLogo, co.id]
       )
     }

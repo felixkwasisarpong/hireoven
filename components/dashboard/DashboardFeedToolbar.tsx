@@ -164,9 +164,18 @@ export default function DashboardFeedToolbar({
   const [titleSuggestions, setTitleSuggestions] = useState<TitleSuggestion[]>([])
   const [titlesLoading, setTitlesLoading] = useState(false)
   const [advancedOpen, setAdvancedOpen] = useState(false)
+  const [canHover, setCanHover] = useState(false)
   // Set of toolbar button keys that Scout just changed — cleared after the pulse animation
   const [scoutPulse, setScoutPulse] = useState<Set<string>>(new Set())
   const scoutPulseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    const mql = window.matchMedia("(hover: hover) and (pointer: fine)")
+    const sync = () => setCanHover(mql.matches)
+    sync()
+    mql.addEventListener("change", sync)
+    return () => mql.removeEventListener("change", sync)
+  }, [])
 
   // Map APPLY_FILTERS URL param keys → toolbar button identifiers
   const PARAM_TO_BUTTON: Record<string, string> = {
@@ -415,7 +424,10 @@ export default function DashboardFeedToolbar({
       "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border bg-white px-3 text-[13px] font-medium shadow-sm transition",
       active
         ? TONE_STYLES[tone].activeWrap
-        : "border-[#E5E7EB] text-slate-700 hover:border-slate-300 hover:bg-slate-50/80"
+        : cn(
+            "border-[#E5E7EB] text-slate-700",
+            canHover && "hover:border-slate-300 hover:bg-slate-50/80"
+          )
     )
 
   const iconCls = (active: boolean, tone: FilterTone) =>
@@ -491,7 +503,10 @@ export default function DashboardFeedToolbar({
                       <button
                         type="button"
                         onClick={() => removeTitle(t)}
-                        className="rounded-full p-0.5 text-blue-600 hover:bg-blue-100 hover:text-blue-900"
+                        className={cn(
+                          "rounded-full p-0.5 text-blue-600",
+                          canHover && "hover:bg-blue-100 hover:text-blue-900"
+                        )}
                         aria-label={`Remove ${t}`}
                       >
                         <X className="h-3 w-3" />
@@ -561,7 +576,7 @@ export default function DashboardFeedToolbar({
                               "flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-[13px] transition",
                               isSelected
                                 ? "cursor-default bg-blue-50/40 text-slate-400"
-                                : "hover:bg-slate-50"
+                                : canHover && "hover:bg-slate-50"
                             )}
                           >
                             <span className="min-w-0 truncate">{s.title}</span>
@@ -626,7 +641,7 @@ export default function DashboardFeedToolbar({
                     "flex-1 rounded-lg border py-1.5 text-xs font-semibold transition",
                     filters.remote
                       ? "border-[#0052CC]/30 bg-[#0052CC]/10 text-[#0052CC]"
-                      : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                      : cn("border-slate-200 text-slate-600", canHover && "hover:bg-slate-50")
                   )}
                 >
                   Remote only
@@ -637,7 +652,10 @@ export default function DashboardFeedToolbar({
                     replaceFilters({ ...filters, locationQuery: locationDraft.trim() || undefined })
                     setFilterDropdown(null)
                   }}
-                  className="flex-1 rounded-lg bg-[#0052CC] py-1.5 text-xs font-semibold text-white hover:bg-[#0041a3]"
+                  className={cn(
+                    "flex-1 rounded-lg bg-[#0052CC] py-1.5 text-xs font-semibold text-white",
+                    canHover && "hover:bg-[#0041a3]"
+                  )}
                 >
                   Apply
                 </button>
@@ -671,7 +689,8 @@ export default function DashboardFeedToolbar({
                       replaceFilters({ ...filters, employment_type: next?.length ? next : undefined })
                     }}
                     className={cn(
-                      "flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm transition hover:bg-slate-50",
+                      "flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm transition",
+                      canHover && "hover:bg-slate-50",
                       active ? "font-semibold text-[#0052CC]" : "text-slate-800"
                     )}
                   >
@@ -709,7 +728,8 @@ export default function DashboardFeedToolbar({
                       replaceFilters({ ...filters, seniority: next?.length ? next : undefined })
                     }}
                     className={cn(
-                      "flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm transition hover:bg-slate-50",
+                      "flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm transition",
+                      canHover && "hover:bg-slate-50",
                       active ? "font-semibold text-[#0052CC]" : "text-slate-800"
                     )}
                   >
@@ -749,7 +769,8 @@ export default function DashboardFeedToolbar({
                       setFilterDropdown(null)
                     }}
                     className={cn(
-                      "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition hover:bg-slate-50",
+                      "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition",
+                      canHover && "hover:bg-slate-50",
                       active ? "font-semibold text-[#0052CC]" : "text-slate-800"
                     )}
                   >
@@ -816,20 +837,23 @@ export default function DashboardFeedToolbar({
                 placeholder="e.g. Python, AWS, React"
                 className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-[#0052CC]/40 focus:ring-2 focus:ring-[#0052CC]/10"
               />
-              <button
-                type="button"
-                onClick={() => {
-                  const parts = skillsDraft
-                    .split(",")
+                <button
+                  type="button"
+                  onClick={() => {
+                    const parts = skillsDraft
+                      .split(",")
                     .map((s: string) => s.trim())
                     .filter(Boolean)
-                  replaceFilters({ ...filters, skills: parts.length ? parts : undefined })
-                  setFilterDropdown(null)
-                }}
-                className="mt-2 w-full rounded-lg bg-[#0052CC] py-2 text-xs font-semibold text-white hover:bg-[#0041a3]"
-              >
-                Apply
-              </button>
+                    replaceFilters({ ...filters, skills: parts.length ? parts : undefined })
+                    setFilterDropdown(null)
+                  }}
+                  className={cn(
+                    "mt-2 w-full rounded-lg bg-[#0052CC] py-2 text-xs font-semibold text-white",
+                    canHover && "hover:bg-[#0041a3]"
+                  )}
+                >
+                  Apply
+                </button>
             </div>
           )}
         </div>
@@ -857,19 +881,22 @@ export default function DashboardFeedToolbar({
                 placeholder="e.g. Software, Finance"
                 className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-[#0052CC]/40 focus:ring-2 focus:ring-[#0052CC]/10"
               />
-              <button
-                type="button"
-                onClick={() => {
-                  replaceFilters({
+                <button
+                  type="button"
+                  onClick={() => {
+                    replaceFilters({
                     ...filters,
                     industryQuery: industryDraft.trim() || undefined,
-                  })
-                  setFilterDropdown(null)
-                }}
-                className="mt-2 w-full rounded-lg bg-[#0052CC] py-2 text-xs font-semibold text-white hover:bg-[#0041a3]"
-              >
-                Apply
-              </button>
+                    })
+                    setFilterDropdown(null)
+                  }}
+                  className={cn(
+                    "mt-2 w-full rounded-lg bg-[#0052CC] py-2 text-xs font-semibold text-white",
+                    canHover && "hover:bg-[#0041a3]"
+                  )}
+                >
+                  Apply
+                </button>
             </div>
           )}
         </div>
@@ -884,7 +911,7 @@ export default function DashboardFeedToolbar({
             "inline-flex h-8 items-center gap-1.5 rounded-lg border bg-white px-3 text-[13px] font-semibold transition shadow-sm",
             moreFilterCount > 0
               ? "border-[#0052CC]/30 bg-sky-50 text-[#0052CC] ring-1 ring-[#0052CC]/15"
-              : "border-[#E5E7EB] text-[#0052CC] hover:bg-sky-50/60"
+              : cn("border-[#E5E7EB] text-[#0052CC]", canHover && "hover:bg-sky-50/60")
           )}
         >
           <SlidersHorizontal className="h-3.5 w-3.5" strokeWidth={2} />
@@ -903,6 +930,7 @@ export default function DashboardFeedToolbar({
         filters={filters}
         onFiltersChange={replaceFilters}
         isInternational={isInternational}
+        enableHoverEffects={canHover}
       />
 
       <div className="flex flex-wrap items-center gap-2 pt-1">
@@ -925,7 +953,10 @@ export default function DashboardFeedToolbar({
           <button
             type="button"
             onClick={clearAll}
-            className="ml-1 inline-flex items-center gap-1 text-[12px] font-medium text-slate-500 transition hover:text-slate-800"
+            className={cn(
+              "ml-1 inline-flex items-center gap-1 text-[12px] font-medium text-slate-500 transition",
+              canHover && "hover:text-slate-800"
+            )}
           >
             <RotateCcw className="h-3 w-3" />
             Clear all
@@ -937,7 +968,10 @@ export default function DashboardFeedToolbar({
             type="button"
             onClick={saveAsDefault}
             disabled={savingDefault}
-            className="inline-flex items-center gap-1 rounded-full border border-orange-200 bg-orange-50 px-2.5 py-1 text-[12px] font-medium text-orange-700 transition hover:bg-orange-100 disabled:opacity-60"
+            className={cn(
+              "inline-flex items-center gap-1 rounded-full border border-orange-200 bg-orange-50 px-2.5 py-1 text-[12px] font-medium text-orange-700 transition disabled:opacity-60",
+              canHover && "hover:bg-orange-100"
+            )}
             title={savedDefault ? "Update your saved default" : "Apply these filters whenever you open the feed"}
           >
             <Bookmark className="h-3 w-3" />
@@ -957,7 +991,10 @@ export default function DashboardFeedToolbar({
             type="button"
             onClick={clearDefault}
             disabled={savingDefault}
-            className="inline-flex items-center gap-1 text-[12px] font-medium text-slate-400 transition hover:text-slate-700 disabled:opacity-60"
+            className={cn(
+              "inline-flex items-center gap-1 text-[12px] font-medium text-slate-400 transition disabled:opacity-60",
+              canHover && "hover:text-slate-700"
+            )}
           >
             <X className="h-3 w-3" />
             Clear default

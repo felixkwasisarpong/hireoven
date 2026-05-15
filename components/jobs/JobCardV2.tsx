@@ -307,6 +307,7 @@ const H1BPredictionDrawer = dynamic(() => import("@/components/h1b/H1BPrediction
 type JobCardV2Props = {
   job: JobWithCompany | JobWithMatchScore
   hasPrimaryResume?: boolean
+  enableHoverEffects?: boolean
   analysisIndex?: number
   isBestMatch?: boolean
   matchScore?: JobMatchScore | null
@@ -318,6 +319,7 @@ type JobCardV2Props = {
 export default function JobCardV2({
   job,
   hasPrimaryResume,
+  enableHoverEffects = true,
   analysisIndex = -1,
   isBestMatch = false,
   matchScore: matchScoreProp,
@@ -591,8 +593,9 @@ export default function JobCardV2({
           if (e.key === "Enter" || e.key === " ") { e.preventDefault(); router.push(detailHref) }
         }}
         className={cn(
-          "group relative flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_2px_8px_rgba(15,23,42,0.06)] transition-all duration-200 hover:-translate-y-0.5 hover:border-transparent hover:shadow-[0_12px_32px_rgba(15,23,42,0.12)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/30",
-          scoreHoverRing(score)
+          "group relative flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_2px_8px_rgba(15,23,42,0.06)] transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/30",
+          enableHoverEffects && "hover:-translate-y-0.5 hover:border-transparent hover:shadow-[0_12px_32px_rgba(15,23,42,0.12)]",
+          enableHoverEffects && scoreHoverRing(score)
         )}
       >
         {/* ── Gradient accent strip — color maps to match quality ── */}
@@ -624,7 +627,10 @@ export default function JobCardV2({
                       <Link
                         href={companyProfileHref}
                         onClick={(e) => e.stopPropagation()}
-                        className="text-[13px] font-semibold text-slate-600 transition hover:text-indigo-600 hover:underline"
+                        className={cn(
+                          "text-[13px] font-semibold text-slate-600 transition",
+                          enableHoverEffects && "hover:text-indigo-600 hover:underline"
+                        )}
                       >
                         {companyName}
                       </Link>
@@ -693,7 +699,10 @@ export default function JobCardV2({
                   aria-label={matchLabel}
                   aria-haspopup="dialog"
                   aria-expanded={breakdownOpen}
-                  className="shrink-0 rounded-xl transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/30 disabled:cursor-default"
+                  className={cn(
+                    "shrink-0 rounded-xl transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/30 disabled:cursor-default",
+                    enableHoverEffects && "hover:opacity-90"
+                  )}
                 >
                   <MatchBadge score={score} loading={isMatchScoreLoading && score === null} />
                 </button>
@@ -757,7 +766,11 @@ export default function JobCardV2({
             </span>
 
             <div
-              className="flex items-center gap-1.5 transition-opacity duration-150 group-hover:pointer-events-none group-hover:opacity-0 group-focus-within:pointer-events-none group-focus-within:opacity-0"
+              className={cn(
+                "flex items-center gap-1.5 transition-opacity duration-150",
+                enableHoverEffects &&
+                  "group-hover:pointer-events-none group-hover:opacity-0 group-focus-within:pointer-events-none group-focus-within:opacity-0"
+              )}
               onClick={(e) => e.stopPropagation()}
             >
               <button
@@ -769,7 +782,10 @@ export default function JobCardV2({
                   "inline-flex h-8 w-8 items-center justify-center rounded-lg border transition",
                   saved
                     ? "border-amber-200 bg-amber-50 text-amber-600"
-                    : "border-slate-200 bg-white text-slate-400 hover:border-indigo-200 hover:text-indigo-500"
+                    : cn(
+                        "border-slate-200 bg-white text-slate-400",
+                        enableHoverEffects && "hover:border-indigo-200 hover:text-indigo-500"
+                      )
                 )}
               >
                 <Bookmark className={cn("h-3.5 w-3.5", saved && "fill-current")} />
@@ -778,7 +794,10 @@ export default function JobCardV2({
                 type="button"
                 onClick={() => router.push(detailHref)}
                 aria-label="View details"
-                className="inline-flex h-8 items-center justify-center gap-1 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 text-[12px] font-semibold text-indigo-600 transition hover:bg-indigo-100"
+                className={cn(
+                  "inline-flex h-8 items-center justify-center gap-1 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 text-[12px] font-semibold text-indigo-600 transition",
+                  enableHoverEffects && "hover:bg-indigo-100"
+                )}
               >
                 View
                 <ArrowUpRight className="h-3.5 w-3.5" />
@@ -789,7 +808,14 @@ export default function JobCardV2({
 
         {/* ── Hover expansion (dark panel) ── */}
         <div className="overflow-hidden">
-          <div className="max-h-0 translate-y-1 opacity-0 transition-all duration-200 ease-out group-hover:max-h-[380px] group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:max-h-[380px] group-focus-within:translate-y-0 group-focus-within:opacity-100">
+          <div
+            className={cn(
+              "transition-all duration-200 ease-out",
+              enableHoverEffects
+                ? "max-h-0 translate-y-1 opacity-0 group-hover:max-h-[380px] group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:max-h-[380px] group-focus-within:translate-y-0 group-focus-within:opacity-100"
+                : "hidden"
+            )}
+          >
             <div className="bg-slate-950 px-5 pb-4 pt-4 sm:px-6">
 
               {/* Info tiles */}
