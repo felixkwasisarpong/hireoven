@@ -24,6 +24,7 @@ CRON_SECRET=REPLACE_ME
 
 # ── Schedules ───────────────────────────────────────────────────────────────────
 # m h dom mon dow  command
+  0 * * * *        cd $HIREOVEN_REPO && bash scripts/crons.sh recent-jobs        >>/var/log/hireoven/recent-jobs.log 2>&1
   0 * * * *        cd $HIREOVEN_REPO && bash scripts/crons.sh crawl              >>/var/log/hireoven/crawl.log 2>&1
 # crawl-enrichment intentionally disabled — backfills descriptions via Claude
 # (lib/crawler/normalizer.ts uses Anthropic SDK). Re-enable by uncommenting and
