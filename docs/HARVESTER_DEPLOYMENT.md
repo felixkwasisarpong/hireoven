@@ -128,20 +128,22 @@ worker.
 6. **Env vars** (copy from web service + add):
    - `DATABASE_URL` — same as web service
    - `HARVESTER_TICK_INTERVAL_MS=30000`
-   - `HARVESTER_CLAIM_BATCH_SIZE=50`
-   - `HARVESTER_LEASE_SECONDS=120`
+   - `HARVESTER_CLAIM_BATCH_SIZE=20`
+   - `HARVESTER_LEASE_SECONDS=240`
    - `HARVESTER_CONCURRENCY=8`
+   - `HARVESTER_FAILURE_COOLDOWN_SECONDS=1800` (failed rows wait at least 30m before retry)
    - `HARVESTER_HTTP2=false` (only set `true` if on Node 22+)
 7. **Start command:** uses the Dockerfile's `CMD` — leave default
 8. Set **auto-restart on exit**
 
 **Verify worker logs:**
 
-```
-[harvester] started {"tickMs":30000,"batch":50,"leaseSec":120,"defaultConcurrency":8,
+```text
+[harvester] started {"tickMs":30000,"batch":20,"leaseSec":240,"defaultConcurrency":8,
   "perAdapter":{"greenhouse":16,"lever":8,"ashby":8,"smartrecruiters":6,"workable":8,
-  "workday":4,"recruitee":8,"teamtailor":8,"personio":6,"bamboohr":6,"jazzhr":6}}
-[harvester] tick {"claimed":50,"succeeded":48,"failed":1,"notModified":12,"newJobs":17,"durationMs":4231}
+  "workday":4,"recruitee":8,"teamtailor":8,"personio":6,"bamboohr":6,"jazzhr":6,"icims":3,"infosys":1,"apple":1}}
+[harvester] tick {"claimed":20,"succeeded":18,"failed":2,"notModified":4,"newJobs":6,"durationMs":3120,
+  "failedByAdapter":{"workday":1,"apple":1},"failedByReason":{"timeout":1,"http_403":1}}
 ```
 
 If the worker logs `claimed=0` repeatedly, check the claim filter — usually

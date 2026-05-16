@@ -11,8 +11,8 @@ import {
 test("loadWorkerConfig: defaults when env is empty", () => {
   const config = loadWorkerConfig({})
   assert.equal(config.tickIntervalMs, 30_000)
-  assert.equal(config.claimBatchSize, 50)
-  assert.equal(config.leaseSeconds, 120)
+  assert.equal(config.claimBatchSize, 20)
+  assert.equal(config.leaseSeconds, 240)
   assert.equal(config.concurrency, 8)
 })
 
@@ -37,8 +37,8 @@ test("loadWorkerConfig: falls back on garbage env", () => {
     HARVESTER_CONCURRENCY: "",
   })
   assert.equal(config.tickIntervalMs, 30_000)
-  assert.equal(config.claimBatchSize, 50)
-  assert.equal(config.leaseSeconds, 120)
+  assert.equal(config.claimBatchSize, 20)
+  assert.equal(config.leaseSeconds, 240)
   assert.equal(config.concurrency, 8)
 })
 
@@ -86,6 +86,9 @@ test("claimEligibleCompanies: issues SKIP LOCKED claim with lease params and sha
     "personio",
     "bamboohr",
     "jazzhr",
+    "icims",
+    "infosys",
+    "apple",
   ])
 
   assert.equal(result.length, 1)
@@ -156,7 +159,7 @@ test("buildAdapterLimits: each registered adapter gets its own limiter using its
   // Fallback uses the default
   assert.equal(fallback.concurrency, 8)
   // All supported adapters have a limiter
-  for (const name of ["greenhouse", "lever", "ashby", "smartrecruiters", "workable", "workday", "recruitee", "teamtailor", "personio", "bamboohr", "jazzhr"]) {
+  for (const name of ["greenhouse", "lever", "ashby", "smartrecruiters", "workable", "workday", "recruitee", "teamtailor", "personio", "bamboohr", "jazzhr", "icims", "infosys", "apple"]) {
     assert.ok(byAdapter.has(name as "greenhouse"), `missing limiter for ${name}`)
   }
 })
