@@ -8,11 +8,32 @@ import { matchesLocationFilter } from "@/lib/jobs/search-match"
 import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
 import { getPostgresPool } from "@/lib/postgres/server"
 import type { Job, JobAlert } from "@/types"
+import type { Pool, PoolClient } from "pg"
 
 export const dynamic = "force-dynamic"
 export const maxDuration = 300
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null
+const RECENT_JOBS_LOCK_ID = 83319421
+const DEFAULT_MIN_SEND_INTERVAL_MINUTES = 60
+
+async function acquireRecentJobsLock(pool: Pool): Promise<PoolClient | null> {
+  const client = await pool.connect()
+  try {
+    const result = await client.query<{ locked: boolean }>(
+      "SELECT pg_try_advisory_lock($1) AS locked",
+      [RECENT_JOBS_LOCK_ID]
+    )
+    if (!result.rows[0]?.locked) {
+      client.release()
+      return null
+    }
+    return client
+  } catch {
+    client.release()
+    throw new Error("Failed to acquire recent-jobs advisory lock")
+  }
+}
 
 type UserProfile = {
   id: string
@@ -232,47 +253,115 @@ export async function GET(request: NextRequest) {
 
   const segment = getSegment(request.nextUrl.searchParams)
   const withResumeWindowHours = Number(request.nextUrl.searchParams.get("withResumeHours") ?? "6")
+  const minSendIntervalMinutes = Number(
+    request.nextUrl.searchParams.get("minSendIntervalMinutes") ?? String(DEFAULT_MIN_SEND_INTERVAL_MINUTES)
+  )
   const withResumeSince = new Date(
     Date.now() - Math.max(1, withResumeWindowHours) * 3_600_000
   ).toISOString()
   const endOfDaySince = new Date(Date.now() - 24 * 3_600_000).toISOString()
 
   const pool = getPostgresPool()
-  const usersResult = await pool.query<UserProfile>(
-    `SELECT id, email, full_name, email_alerts
-     FROM profiles
-     WHERE email_alerts = true
-       AND email IS NOT NULL`
-  )
-  const users = usersResult.rows
-  if (!users.length) return NextResponse.json({ sent: 0, skipped: "No eligible users" })
+  const lockClient = await acquireRecentJobsLock(pool)
+  if (!lockClient) {
+    return NextResponse.json({ skipped: true, reason: "recent-jobs run already in progress" })
+  }
 
-  const userIds = users.map((user) => user.id)
-  const resumeRowsResult = await pool.query<{ user_id: string | null }>(
-    `SELECT DISTINCT user_id
-     FROM resumes
-     WHERE user_id = ANY($1::uuid[])`,
-    [userIds]
-  )
+  try {
+    const usersResult = await pool.query<UserProfile>(
+      `SELECT id, email, full_name, email_alerts
+       FROM profiles
+       WHERE email_alerts = true
+         AND email IS NOT NULL`
+    )
+    const users = usersResult.rows
+    if (!users.length) return NextResponse.json({ sent: 0, skipped: "No eligible users" })
 
-  const usersWithResume = new Set(
-    (resumeRowsResult.rows as Array<{ user_id: string | null }>)
-      .map((row) => row.user_id)
-      .filter((value): value is string => Boolean(value))
-  )
+    const userIds = users.map((user) => user.id)
+    const resumeRowsResult = await pool.query<{ user_id: string | null }>(
+      `SELECT DISTINCT user_id
+       FROM resumes
+       WHERE user_id = ANY($1::uuid[])`,
+      [userIds]
+    )
 
-  const resumeRecipients =
-    segment === "without-resume"
-      ? []
-      : users.filter((user) => usersWithResume.has(user.id))
-  const noResumeRecipients =
-    segment === "with-resume"
-      ? []
-      : users.filter((user) => !usersWithResume.has(user.id))
+    const usersWithResume = new Set(
+      (resumeRowsResult.rows as Array<{ user_id: string | null }>)
+        .map((row) => row.user_id)
+        .filter((value): value is string => Boolean(value))
+    )
 
-  let sentWithResume = 0
-  let sentWithoutResume = 0
-  let errors = 0
+    const resumeRecipients =
+      segment === "without-resume"
+        ? []
+        : users.filter((user) => usersWithResume.has(user.id))
+    const noResumeRecipients =
+      segment === "with-resume"
+        ? []
+        : users.filter((user) => !usersWithResume.has(user.id))
+
+    let sentWithResume = 0
+    let sentWithoutResume = 0
+    let errors = 0
+    let suppressedDupes = 0
+    let suppressedByCooldown = 0
+
+  // Per-(user, job) email-send ledger keyed off alert_notifications.
+  // Without this, frequent cron ticks can re-email the same top jobs
+  // from the current window until the job ages out.
+  async function loadAlreadyEmailed(
+    userIds: string[],
+    jobIds: string[]
+  ): Promise<Map<string, Set<string>>> {
+    const out = new Map<string, Set<string>>()
+    if (userIds.length === 0 || jobIds.length === 0) return out
+    const { rows: sent } = await pool.query<{ user_id: string; job_id: string }>(
+      `SELECT user_id, job_id FROM alert_notifications
+        WHERE channel = 'email'
+          AND user_id = ANY($1::uuid[])
+          AND job_id = ANY($2::uuid[])
+          AND sent_at > now() - interval '14 days'`,
+      [userIds, jobIds]
+    )
+    for (const r of sent) {
+      const set = out.get(r.user_id) ?? new Set<string>()
+      set.add(r.job_id)
+      out.set(r.user_id, set)
+    }
+    return out
+  }
+  async function loadUsersEmailedRecently(
+    userIds: string[],
+    minMinutes: number
+  ): Promise<Set<string>> {
+    if (userIds.length === 0) return new Set<string>()
+    const windowMinutes = Math.max(1, Math.floor(minMinutes))
+    const { rows } = await pool.query<{ user_id: string }>(
+      `SELECT DISTINCT user_id
+       FROM alert_notifications
+       WHERE channel = 'email'
+         AND user_id = ANY($1::uuid[])
+         AND sent_at > now() - ($2::int * interval '1 minute')`,
+      [userIds, windowMinutes]
+    )
+    return new Set(rows.map((row) => row.user_id))
+  }
+  async function recordEmailSends(userId: string, jobIds: string[]): Promise<void> {
+    if (jobIds.length === 0) return
+    await pool.query(
+      `INSERT INTO alert_notifications (user_id, job_id, channel)
+       SELECT $1::uuid, ids.job_id, 'email'
+       FROM unnest($2::uuid[]) AS ids(job_id)
+       WHERE NOT EXISTS (
+         SELECT 1
+         FROM alert_notifications an
+         WHERE an.user_id = $1::uuid
+           AND an.job_id = ids.job_id
+           AND an.channel = 'email'
+       )`,
+      [userId, jobIds]
+    )
+  }
 
   // Hoisted: both segments need to check user-alert existence as the explicit
   // opt-in signal. Fetch alerts for ALL eligible users (with + without resume).
@@ -286,6 +375,15 @@ export async function GET(request: NextRequest) {
     list.push(row)
     alertsByUser.set(row.user_id, list)
   }
+
+  const recentlyEmailedResumeUsers = await loadUsersEmailedRecently(
+    resumeRecipients.map((user) => user.id),
+    minSendIntervalMinutes
+  )
+  const recentlyEmailedNoResumeUsers = await loadUsersEmailedRecently(
+    noResumeRecipients.map((user) => user.id),
+    minSendIntervalMinutes
+  )
 
   if (resumeRecipients.length) {
     const matchedRowsResult = await pool.query<
@@ -334,6 +432,7 @@ export async function GET(request: NextRequest) {
 
     type EnrichedMatchedRow = MatchedJobRow & { jobFull?: Job }
     const byUser = new Map<string, Array<EnrichedMatchedRow>>()
+    const allCandidateJobIds = new Set<string>()
     for (const row of matchedRowsResult.rows) {
       const company = row.company_name
         ? { name: row.company_name, domain: row.company_domain, logo_url: row.company_logo_url }
@@ -355,9 +454,19 @@ export async function GET(request: NextRequest) {
       const current = byUser.get(row.user_id) ?? []
       current.push(normalized)
       byUser.set(normalized.user_id, current)
+      allCandidateJobIds.add(row.id)
     }
 
+    const alreadyEmailed = await loadAlreadyEmailed(
+      resumeRecipients.map((u) => u.id),
+      Array.from(allCandidateJobIds)
+    )
+
     for (const user of resumeRecipients) {
+      if (recentlyEmailedResumeUsers.has(user.id)) {
+        suppressedByCooldown += 1
+        continue
+      }
       const rows = byUser.get(user.id) ?? []
       if (!rows.length) continue
 
@@ -366,9 +475,12 @@ export async function GET(request: NextRequest) {
       // through to a "match-score-only" blast.
       const userAlerts = alertsByUser.get(user.id) ?? []
       if (userAlerts.length === 0) continue
-      const filtered = rows.filter(
-        (row) => row.jobFull && userAlerts.some((alert) => matchesAlert(alert, row.jobFull as Job))
-      )
+      const sentSet = alreadyEmailed.get(user.id) ?? new Set<string>()
+      const filtered = rows.filter((row) => {
+        if (!row.jobFull) return false
+        if (sentSet.has(row.jobs!.id)) { suppressedDupes += 1; return false }
+        return userAlerts.some((alert) => matchesAlert(alert, row.jobFull as Job))
+      })
 
       const topJobs = filtered
         .filter((row) => row.jobs)
@@ -394,6 +506,12 @@ export async function GET(request: NextRequest) {
           }),
         })
         sentWithResume += 1
+        try {
+          await recordEmailSends(user.id, topJobs.map((j) => j.id))
+        } catch (err) {
+          errors += 1
+          console.warn("[recent-jobs] failed to record send", err)
+        }
         await logApiUsage({ service: "resend", operation: "recent-jobs-with-resume", tokens_used: null, cost_usd: 0 })
       } catch {
         errors += 1
@@ -447,16 +565,26 @@ export async function GET(request: NextRequest) {
         : null,
     }))
     if (fallbackJobs.length) {
+      const alreadyEmailedNoResume = await loadAlreadyEmailed(
+        noResumeRecipients.map((u) => u.id),
+        fallbackJobs.map((j) => j.id)
+      )
       for (const user of noResumeRecipients) {
+        if (recentlyEmailedNoResumeUsers.has(user.id)) {
+          suppressedByCooldown += 1
+          continue
+        }
         // Same opt-in rule: only send if the user has at least one active
         // job_alert. Without that signal, a resume-less account gets no email.
         const userAlerts = alertsByUser.get(user.id) ?? []
         if (userAlerts.length === 0) continue
+        const sentSet = alreadyEmailedNoResume.get(user.id) ?? new Set<string>()
         // Filter the fallback list by the user's alerts so we don't ship
         // off-target jobs to a careful opt-in.
-        const userJobs = fallbackJobs.filter((job) =>
-          userAlerts.some((alert) => matchesAlert(alert, job as unknown as Job))
-        )
+        const userJobs = fallbackJobs.filter((job) => {
+          if (sentSet.has(job.id)) { suppressedDupes += 1; return false }
+          return userAlerts.some((alert) => matchesAlert(alert, job as unknown as Job))
+        })
         if (userJobs.length === 0) continue
         try {
           await resend.emails.send({
@@ -473,6 +601,12 @@ export async function GET(request: NextRequest) {
             }),
           })
           sentWithoutResume += 1
+          try {
+            await recordEmailSends(user.id, userJobs.map((j) => j.id))
+          } catch (err) {
+            errors += 1
+            console.warn("[recent-jobs] failed to record send", err)
+          }
           await logApiUsage({ service: "resend", operation: "recent-jobs-without-resume", tokens_used: null, cost_usd: 0 })
         } catch {
           errors += 1
@@ -485,7 +619,18 @@ export async function GET(request: NextRequest) {
     segment,
     sentWithResume,
     sentWithoutResume,
+    suppressedDupes,
+    suppressedByCooldown,
     errors,
     withResumeWindowHours,
+    minSendIntervalMinutes: Math.max(1, Math.floor(minSendIntervalMinutes)),
   })
+  } finally {
+    try {
+      await lockClient.query("SELECT pg_advisory_unlock($1)", [RECENT_JOBS_LOCK_ID])
+    } catch (error) {
+      console.warn("[recent-jobs] failed to release advisory lock", error)
+    }
+    lockClient.release()
+  }
 }

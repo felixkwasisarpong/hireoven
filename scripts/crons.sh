@@ -23,6 +23,7 @@ run() {
 #
 # Name               Schedule          Command (paste into Coolify)
 # ──────────────────────────────────────────────────────────────────────────────
+# recent-jobs        0 * * * *         run api/alerts/recent-jobs?segment=with-resume
 # crawl              0 * * * *         run api/crawl
 # crawl-enrichment   30 */2 * * *      run api/crawl/enrichment
 # ghost-scan         0 */6 * * *       run api/cron/ghost-scan
@@ -43,6 +44,7 @@ run() {
 # ──────────────────────────────────────────────────────────────────────────────
 
 case "${1:-}" in
+  recent-jobs)       run 'api/alerts/recent-jobs?segment=with-resume' ;;
   crawl)             run api/crawl ;;
   crawl-enrichment)  run api/crawl/enrichment ;;
   ghost-scan)        run api/cron/ghost-scan ;;
@@ -61,6 +63,7 @@ case "${1:-}" in
   dice-ingest)       run api/cron/dice-ingest ;;
   waas-ingest)       run api/cron/waas-ingest ;;
   all)
+    run 'api/alerts/recent-jobs?segment=with-resume'
     run api/crawl
     run api/crawl/enrichment
     run api/cron/ghost-scan
@@ -83,7 +86,7 @@ case "${1:-}" in
     echo "Usage: $0 <name|all>"
     echo ""
     echo "Available:"
-    echo "  crawl  crawl-enrichment  ghost-scan  timing-refresh"
+    echo "  recent-jobs  crawl  crawl-enrichment  ghost-scan  timing-refresh"
     echo "  cohort-detect  cohort-match  layoffs-fyi  health-scores"
     echo "  rejection-patterns  burnout-classify  salary-digest  warn-act"
     echo "  cohort-aggregate  deliver-checkins  blog-generate  dice-ingest"
