@@ -12,6 +12,10 @@
 #
 # To run one task ad-hoc:
 #   APP_URL=https://hireoven.com CRON_SECRET=*** bash scripts/crons.sh crawl
+# Full sweep (all active companies, bypass cooldown/lane exclusions):
+#   APP_URL=https://hireoven.com CRON_SECRET=*** bash scripts/crons.sh crawl-full
+# Full sweep focused on non-ATS companies (recommended when harvester is running):
+#   APP_URL=https://hireoven.com CRON_SECRET=*** bash scripts/crons.sh crawl-full-non-ats
 #
 # Schedules mirror the previous Coolify Scheduled Tasks block in crons.sh.
 
@@ -26,6 +30,10 @@ CRON_SECRET=REPLACE_ME
 # m h dom mon dow  command
   0 * * * *        cd $HIREOVEN_REPO && bash scripts/crons.sh recent-jobs        >>/var/log/hireoven/recent-jobs.log 2>&1
   0 * * * *        cd $HIREOVEN_REPO && bash scripts/crons.sh crawl              >>/var/log/hireoven/crawl.log 2>&1
+# Optional deep sweep lane (heavier): run once nightly off-peak.
+# 15 2 * * *      cd $HIREOVEN_REPO && bash scripts/crons.sh crawl-full         >>/var/log/hireoven/crawl-full.log 2>&1
+# Recommended deep sweep lane for crawler-only territory:
+# 45 2 * * *      cd $HIREOVEN_REPO && bash scripts/crons.sh crawl-full-non-ats >>/var/log/hireoven/crawl-full-non-ats.log 2>&1
 # crawl-enrichment intentionally disabled — backfills descriptions via Claude
 # (lib/crawler/normalizer.ts uses Anthropic SDK). Re-enable by uncommenting and
 # only when you want to spend on AI normalization.

@@ -45,7 +45,9 @@ The production **Dockerfile** installs **`curl`** in the final image so schedule
 
 | Path | Suggested schedule | Purpose |
 |------|--------------------|---------|
-| `/api/crawl` | `*/30 * * * *` | Crawl active companies |
+| `/api/crawl` | `*/30 * * * *` | Crawl active companies (rolling queue) |
+| `/api/crawl?sweep=all` | `15 2 * * *` (optional) | Full sweep of active companies (heavier) |
+| `/api/crawl?sweep=all&scope=non_ats` | `45 2 * * *` (recommended with harvester) | Full sweep of crawler-owned/non-ATS companies |
 | `/api/alerts/digest` | `0 8 * * *` (UTC) | Daily digest emails |
 | `/api/alerts/weekly` | `0 9 * * 1` (UTC) | Weekly digest emails |
 | `/api/alerts/recent-jobs?segment=with-resume` | `0 */6 * * *` | 75%+ resume-match recent jobs |

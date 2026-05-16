@@ -126,7 +126,9 @@ Not bundled in-repo: call these URLs on a schedule (Coolify scheduled tasks, sys
 
 | Route | Suggested schedule | Purpose |
 |---|---|---|
-| `/api/crawl` | Every 30 min | Crawl all active companies for new jobs |
+| `/api/crawl` | Every 30 min | Crawl active companies (rolling queue) for new jobs |
+| `/api/crawl?sweep=all` | Nightly off-peak (optional) | Full sweep across active companies (heavier run) |
+| `/api/crawl?sweep=all&scope=non_ats` | Nightly off-peak (recommended with harvester) | Full sweep focused on non-ATS/crawler-owned companies |
 | `/api/alerts/digest` | 8am UTC daily | Send daily digest emails |
 | `/api/alerts/weekly` | 9am UTC Monday | Send weekly digest emails |
 | `/api/alerts/recent-jobs?segment=with-resume` | Every 6 hours | Send 75%+ resume-match recent jobs (max 5) |

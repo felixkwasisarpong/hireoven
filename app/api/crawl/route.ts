@@ -11,6 +11,7 @@ import {
 import { persistCrawlJobs } from "@/lib/crawler/persist"
 import { requireCronAuth } from "@/lib/env"
 import { getPostgresPool } from "@/lib/postgres/server"
+import { detectAdapter, registeredAdapterNames } from "@/lib/harvester/adapters"
 import {
   harvesterFlagEnabled,
   runAtsHarvest,
@@ -53,9 +54,33 @@ const CRAWLER_LIKELY_INACTIVE_SHARE = readLaneShareEnv(
   0.25
 )
 const CRAWLER_LOW_SIGNAL_SHARE = readLaneShareEnv("CRAWLER_LOW_SIGNAL_SHARE", 0.1)
+const CRAWLER_FORCE_FULL_SWEEP = process.env.CRAWLER_FULL_SWEEP === "true"
+const HARVESTER_ADAPTER_TYPES = new Set(registeredAdapterNames().map((name) => name.toLowerCase()))
+type CrawlScope = "all" | "non_ats" | "ats_only"
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function readBoolQueryParam(value: string | null): boolean {
+  if (!value) return false
+  const normalized = value.trim().toLowerCase()
+  return normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on"
+}
+
+function readCrawlScope(value: string | null): CrawlScope {
+  const normalized = (value ?? "").trim().toLowerCase()
+  if (normalized === "non_ats" || normalized === "non-ats" || normalized === "nonats") return "non_ats"
+  if (normalized === "ats" || normalized === "ats_only" || normalized === "ats-only") return "ats_only"
+  return "all"
+}
+
+function isHarvesterOwnedCompany(company: { ats_type: string | null; careers_url: string | null }): boolean {
+  const atsType = company.ats_type?.trim().toLowerCase() ?? ""
+  if (atsType && HARVESTER_ADAPTER_TYPES.has(atsType)) return true
+  const url = company.careers_url?.trim()
+  if (!url) return false
+  return Boolean(detectAdapter(url))
 }
 
 function toErrorMessage(error: unknown) {
@@ -187,14 +212,23 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
+  const crawlScope = readCrawlScope(
+    request.nextUrl.searchParams.get("scope") ?? process.env.CRAWLER_SCOPE ?? null
+  )
+  const fullSweepRequested = CRAWLER_FORCE_FULL_SWEEP ||
+    readBoolQueryParam(request.nextUrl.searchParams.get("full")) ||
+    request.nextUrl.searchParams.get("sweep") === "all"
   const runId = crypto.randomUUID()
   const startedAtIso = new Date().toISOString()
   const fullCrawlStartedAt = Date.now()
   const pool = getPostgresPool()
+  let totalActiveCompanies = 0
   let companiesCount = 0
   let companiesConsidered = 0
   let companiesSkipped = 0
   let queuePolicySummary: {
+    mode: "rolling" | "full"
+    scope: CrawlScope
     selectedLaneCounts: Record<string, number>
     skippedLaneCounts: Record<string, number>
     skippedCooldown: number
@@ -218,6 +252,8 @@ export async function GET(request: NextRequest) {
     startedAt: startedAtIso,
     route: "api/crawl",
     trigger: "cron",
+    scope: crawlScope,
+    mode: fullSweepRequested ? "full" : "rolling",
   })
 
   try {
@@ -262,31 +298,47 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: lastErrorMessage }, { status: 500 })
     }
 
-    companiesConsidered = companiesRaw.length
-    const signalMap = await loadRecentCrawlSignals(
+    totalActiveCompanies = companiesRaw.length
+    const scopedCompanies = companiesRaw.filter((company) => {
+      const harvesterOwned = isHarvesterOwnedCompany(company)
+      if (crawlScope === "non_ats") return !harvesterOwned
+      if (crawlScope === "ats_only") return harvesterOwned
+      return true
+    })
+    companiesConsidered = scopedCompanies.length
+    const scopedSignalMap = await loadRecentCrawlSignals(
       pool,
-      companiesRaw.map((company) => company.id),
+      scopedCompanies.map((company) => company.id),
       6
     )
-    const policy = applyCrawlQueuePolicy(companiesRaw, signalMap, defaultCrawlPolicyOptions({
-      includeLikelyInactive: INCLUDE_LIKELY_INACTIVE_IN_MAIN,
-    }))
-    const companies = selectPolicyBatchByLaneShare(policy, signalMap, MAX_COMPANIES_PER_RUN, {
-      likely_inactive: CRAWLER_LIKELY_INACTIVE_SHARE,
-      ats_low_signal: CRAWLER_LOW_SIGNAL_SHARE,
+    const policyOptions = defaultCrawlPolicyOptions({
+      includeBlocked: fullSweepRequested ? true : undefined,
+      includeDomainBroken: fullSweepRequested ? true : undefined,
+      includeLikelyInactive: fullSweepRequested ? true : INCLUDE_LIKELY_INACTIVE_IN_MAIN,
+      bypassCooldown: fullSweepRequested ? true : undefined,
     })
+    const policy = applyCrawlQueuePolicy(scopedCompanies, scopedSignalMap, policyOptions)
+    const fullSweepLimit = Math.max(MAX_COMPANIES_PER_RUN, policy.selected.length)
+    const companies = fullSweepRequested
+      ? selectPolicyBatchByLaneShare(policy, scopedSignalMap, fullSweepLimit, {})
+      : selectPolicyBatchByLaneShare(policy, scopedSignalMap, MAX_COMPANIES_PER_RUN, {
+          likely_inactive: CRAWLER_LIKELY_INACTIVE_SHARE,
+          ats_low_signal: CRAWLER_LOW_SIGNAL_SHARE,
+        })
     companiesCount = companies.length
     const selectedOverflow = Math.max(0, policy.selected.length - companies.length)
     companiesSkipped = policy.skipped.length + selectedOverflow
     queuePolicySummary = {
+      mode: fullSweepRequested ? "full" : "rolling",
+      scope: crawlScope,
       selectedLaneCounts: policy.selectedLaneCounts,
       skippedLaneCounts: policy.skippedLaneCounts,
       skippedCooldown: policy.skipped.filter((entry) => entry.reason === "cooldown_active").length,
       skippedLaneExcluded: policy.skipped.filter((entry) => entry.reason === "lane_excluded").length,
       selectedPool: policy.selected.length,
       laneShares: {
-        likelyInactive: CRAWLER_LIKELY_INACTIVE_SHARE,
-        lowSignal: CRAWLER_LOW_SIGNAL_SHARE,
+        likelyInactive: fullSweepRequested ? 0 : CRAWLER_LIKELY_INACTIVE_SHARE,
+        lowSignal: fullSweepRequested ? 0 : CRAWLER_LOW_SIGNAL_SHARE,
       },
     }
 
@@ -455,6 +507,7 @@ export async function GET(request: NextRequest) {
     completed = true
     return NextResponse.json({
       success: true,
+      totalActiveCompanies,
       companiesConsidered,
       companiesCrawled: companiesCount,
       companiesSkipped,
@@ -479,6 +532,8 @@ export async function GET(request: NextRequest) {
       finishedAt: finishedAtIso,
       route: "api/crawl",
       trigger: "cron",
+      scope: crawlScope,
+      totalActiveCompanies,
       companiesCrawled: companiesCount,
       companiesConsidered,
       companiesSkipped,
