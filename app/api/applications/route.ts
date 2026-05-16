@@ -58,7 +58,9 @@ export async function GET(request: NextRequest) {
   const result = await pool.query<Record<string, unknown> & { company_domain: string | null }>(
     `SELECT
        ja.*,
-       companies.domain AS company_domain
+       companies.domain AS company_domain,
+       jobs.is_remote AS job_is_remote,
+       jobs.is_hybrid AS job_is_hybrid
      FROM job_applications ja
      LEFT JOIN jobs ON jobs.id = ja.job_id
      LEFT JOIN companies ON companies.id = jobs.company_id

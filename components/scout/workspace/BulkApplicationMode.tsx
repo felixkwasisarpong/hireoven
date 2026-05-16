@@ -27,7 +27,7 @@ export function BulkApplicationMode({ engine, onFollowUp, onOpenApp }: Props) {
         <div className="flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50 px-4 py-5">
           <Loader2 className="h-4 w-4 animate-spin flex-shrink-0 text-[#FF5C18]" />
           <p className="text-sm text-slate-600">
-            Loading your saved jobs and selecting the best matches…
+            Scanning the live feed and selecting the best matches…
           </p>
         </div>
       )}
@@ -41,8 +41,8 @@ export function BulkApplicationMode({ engine, onFollowUp, onOpenApp }: Props) {
               <p className="text-sm font-semibold text-red-700">{engine.initError}</p>
               <div className="mt-3 flex flex-wrap gap-2">
                 {[
-                  "Show my saved jobs",
-                  "Find remote backend jobs to save",
+                  "Show top feed matches",
+                  "Find remote backend jobs",
                   "Find visa-friendly roles",
                 ].map((chip) => (
                   <button

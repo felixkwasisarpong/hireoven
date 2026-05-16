@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import type { BulkApplicationQueue, BulkJobItem, BulkJobStatus, BulkFailReason, BulkJobArtifacts, BulkJobWarning } from "./types"
 import { readBulkQueue, writeBulkQueue, clearBulkQueue } from "./store"
-import { selectJobsForBulk, type BulkJobCandidate, type BulkSelectionOptions } from "./selector"
+import type { BulkSelectionOptions } from "./selector"
+import type { ApplyAgentJob } from "@/lib/scout/apply-agent/types"
 
 const MAX_CONCURRENT = 2
 
@@ -42,17 +43,6 @@ export type BulkEngineActions = {
   reviewingQueueId: string | null
   openReview:       (queueId: string) => void
   closeReview:      () => void
-}
-
-type SavedApplication = {
-  id: string
-  job_id?: string | null
-  job_title?: string | null
-  company_name?: string | null
-  apply_url?: string | null
-  match_score?: number | null
-  sponsorship_signal?: string | null
-  ghost_risk?: string | null
 }
 
 export function useBulkApplicationEngine(): BulkEngineActions {
@@ -172,36 +162,41 @@ export function useBulkApplicationEngine(): BulkEngineActions {
     setInitError(null)
 
     try {
-      const res = await fetch("/api/applications?status=saved&limit=100", {
+      const params = new URLSearchParams()
+      params.set("count", String(typeof opts.count === "number" ? opts.count : 10))
+      if (typeof opts.minMatchScore === "number") params.set("minMatchScore", String(opts.minMatchScore))
+      if (opts.requireSponsorshipSignal) params.set("sponsorship", "true")
+      if (typeof opts.workMode === "string" && opts.workMode.length > 0) params.set("workMode", opts.workMode)
+      if (opts.strictScoreOnly) params.set("strictScoreOnly", "true")
+
+      const res = await fetch(`/api/scout/apply-agent?${params.toString()}`, {
         headers: { Accept: "application/json" },
       })
-      if (!res.ok) throw new Error("Could not load saved applications")
+      if (!res.ok) throw new Error("Could not load feed matches")
 
-      const data = (await res.json().catch(() => null)) as { applications?: SavedApplication[] } | null
-      const rows: SavedApplication[] = data?.applications ?? []
-
-      const candidates: BulkJobCandidate[] = rows
-        .filter((r) => r.job_id)
-        .map((r) => ({
-          jobId:              r.job_id!,
-          jobTitle:           r.job_title ?? "Unknown role",
-          company:            r.company_name ?? undefined,
-          applyUrl:           r.apply_url,
-          matchScore:         r.match_score,
-          sponsorshipSignal:  r.sponsorship_signal,
-          ghostRisk:          r.ghost_risk as BulkJobCandidate["ghostRisk"],
-          alreadyApplied:     false,
-        }))
-
-      const selected = selectJobsForBulk(candidates, opts)
+      const data = (await res.json().catch(() => null)) as { jobs?: ApplyAgentJob[] } | null
+      const selected: BulkJobItem[] = (data?.jobs ?? []).map((j) => ({
+        queueId:           `bj-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        jobId:             j.jobId,
+        jobTitle:          j.jobTitle,
+        company:           j.company ?? undefined,
+        applyUrl:          j.applyUrl ?? undefined,
+        matchScore:        j.matchScore,
+        sponsorshipSignal: j.sponsorshipSignal,
+        ghostRisk:         undefined,
+        status:            "pending" as const,
+        artifacts: {
+          resumeTailorStatus: "pending",
+          coverLetterStatus:  "pending",
+          autofillStatus:     "pending",
+        },
+        warnings: [],
+        addedAt: new Date().toISOString(),
+      }))
 
       if (selected.length === 0) {
         setInitState("error")
-        setInitError(
-          rows.length === 0
-            ? "No saved applications found. Save jobs from the feed first, then run bulk prep."
-            : "No eligible jobs matched the criteria (missing apply URL, or filters too strict)."
-        )
+        setInitError("No eligible feed jobs matched the criteria. Try relaxing filters or lowering the match threshold.")
         return
       }
 
@@ -210,7 +205,7 @@ export function useBulkApplicationEngine(): BulkEngineActions {
       setInitState("done")
     } catch (err) {
       setInitState("error")
-      setInitError(err instanceof Error ? err.message : "Could not load saved jobs")
+      setInitError(err instanceof Error ? err.message : "Could not load feed matches")
     }
   }, [])
 

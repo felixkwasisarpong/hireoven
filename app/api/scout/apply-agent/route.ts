@@ -67,6 +67,7 @@ export async function GET(request: NextRequest) {
   const count              = parseClampedInt(searchParams.get("count"), { min: 1, max: 20, fallback: 5 })
   const requireSponsorship = searchParams.get("sponsorship") === "true"
   const workMode           = searchParams.get("workMode") ?? null
+  const normalizedWorkMode = workMode?.toLowerCase().replace(/_/g, "-") ?? null
   const rawQuery           = (searchParams.get("q") ?? "").trim()
   const strictQuery        = searchParams.get("strictQuery") === "true"
   const strictScoreOnly    = searchParams.get("strictScoreOnly") === "true"
@@ -78,12 +79,11 @@ export async function GET(request: NextRequest) {
     "j.apply_url IS NOT NULL",
     // Only recently posted jobs (last 30 days)
     "j.first_detected_at >= NOW() - INTERVAL '30 days'",
-    // Exclude jobs user has already applied to, is interviewing for, or rejected
+    // Exclude jobs already in the user's application tracker (including saved/watchlist)
     `NOT EXISTS (
        SELECT 1 FROM job_applications ja
        WHERE ja.job_id = j.id
          AND ja.user_id = $1
-         AND ja.status NOT IN ('saved')
          AND ja.is_archived = false
      )`,
   ]
@@ -121,8 +121,13 @@ export async function GET(request: NextRequest) {
     conditions.push("c.sponsors_h1b = true")
   }
 
-  if (workMode === "remote") {
+  if (normalizedWorkMode === "remote") {
     conditions.push("j.is_remote = true")
+  } else if (normalizedWorkMode === "hybrid") {
+    conditions.push("j.is_hybrid = true")
+  } else if (normalizedWorkMode === "onsite" || normalizedWorkMode === "on-site") {
+    conditions.push("COALESCE(j.is_remote, false) = false")
+    conditions.push("COALESCE(j.is_hybrid, false) = false")
   }
 
   const where = conditions.join(" AND ")
@@ -173,8 +178,7 @@ export async function GET(request: NextRequest) {
       userId: user.id,
       error:  error instanceof Error ? error.message : String(error),
     })
-    // Never dead-end bulk workflows on selector failures. The chat route can
-    // fall back to saved applications when this returns an empty set.
+    // Never dead-end bulk workflows on selector failures.
     return NextResponse.json({ jobs: [] })
   }
 }

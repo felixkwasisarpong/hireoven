@@ -108,7 +108,10 @@ export async function POST(request: Request) {
   const dedupe = await dedupeJob(pool, companyId, job)
 
   if (dedupe.kind === "exact_match") {
-    await touchJob(pool, dedupe.jobId, job, body.applyMethod)
+    const touched = await touchJob(pool, dedupe.jobId, job, body.applyMethod)
+    if (!touched) {
+      return extensionError(request, 500, "job update failed", { headers: corsHeaders })
+    }
     return NextResponse.json<IngestResult>({
       jobId: dedupe.jobId,
       created: false,
@@ -117,7 +120,10 @@ export async function POST(request: Request) {
   }
 
   if (dedupe.kind === "attach_secondary_source") {
-    await attachSecondarySource(pool, dedupe.jobId, job)
+    const attached = await attachSecondarySource(pool, dedupe.jobId, job)
+    if (!attached) {
+      return extensionError(request, 500, "secondary source attach failed", { headers: corsHeaders })
+    }
     return NextResponse.json<IngestResult>({
       jobId: dedupe.jobId,
       created: false,
@@ -383,7 +389,7 @@ async function touchJob(
   jobId: string,
   job: ScrapedJob,
   applyMethod: string | undefined,
-): Promise<void> {
+): Promise<boolean> {
   const patch: Record<string, unknown> = {
     postedAt: job.postedAt,
     postedAtPrecision: job.postedAtPrecision,
@@ -408,8 +414,8 @@ async function touchJob(
   ]
   if (deadlinePatch) params.push(String(job.metadata.deadline))
 
-  await pool
-    .query(
+  try {
+    const result = await pool.query(
       `UPDATE jobs
        SET raw_data = COALESCE(raw_data, '{}'::jsonb) || $2::jsonb,
            posted_at = COALESCE(${earliest}, posted_at),
@@ -418,7 +424,16 @@ async function touchJob(
        WHERE id = $1::uuid`,
       params,
     )
-    .catch(() => null)
+    return (result.rowCount ?? 0) > 0
+  } catch (error) {
+    console.error("[scout/jobs/ingest] touchJob failed", {
+      jobId,
+      site: job.site,
+      sourceId: job.sourceId,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return false
+  }
 }
 
 /**
@@ -429,10 +444,10 @@ async function attachSecondarySource(
   pool: ReturnType<typeof getPostgresPool>,
   jobId: string,
   job: ScrapedJob,
-): Promise<void> {
+): Promise<boolean> {
   const newEntry = JSON.stringify({ source: job.site, sourceId: job.sourceId })
-  await pool
-    .query(
+  try {
+    const result = await pool.query(
       `UPDATE jobs
        SET raw_data = jsonb_set(
              COALESCE(raw_data, '{}'::jsonb),
@@ -445,5 +460,14 @@ async function attachSecondarySource(
        WHERE id = $1::uuid`,
       [jobId, newEntry],
     )
-    .catch(() => null)
+    return (result.rowCount ?? 0) > 0
+  } catch (error) {
+    console.error("[scout/jobs/ingest] attachSecondarySource failed", {
+      jobId,
+      site: job.site,
+      sourceId: job.sourceId,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return false
+  }
 }
