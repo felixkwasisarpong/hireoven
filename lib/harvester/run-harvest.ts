@@ -9,9 +9,17 @@ const TIER_INTERVAL_SEC: Record<string, number> = {
   tier_dead: 604_800,
 }
 
+const DEFAULT_FAILURE_COOLDOWN_SEC = 1_800
+
 function tierIntervalSeconds(tier: string | null): number {
   if (!tier) return TIER_INTERVAL_SEC.tier_2
   return TIER_INTERVAL_SEC[tier] ?? TIER_INTERVAL_SEC.tier_2
+}
+
+function failureCooldownSeconds(env: Record<string, string | undefined> = process.env): number {
+  const raw = Number.parseInt(env.HARVESTER_FAILURE_COOLDOWN_SECONDS ?? "", 10)
+  if (Number.isFinite(raw) && raw >= 60) return raw
+  return DEFAULT_FAILURE_COOLDOWN_SEC
 }
 
 export type AtsHarvestCompany = {
@@ -142,6 +150,19 @@ export async function runAtsHarvest(input: {
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
+    const crawledAtIso = new Date().toISOString()
+    const cooldownSec = Math.max(intervalSec, failureCooldownSeconds())
+    try {
+      await updateCompanyHarvestState(pool, company.id, {
+        etag: company.etag,
+        lastModified: company.last_modified,
+        intervalSec: cooldownSec,
+        crawledAtIso,
+        bumpLastCrawled: false,
+      })
+    } catch {
+      // Secondary DB failures should not mask the original adapter error.
+    }
     return {
       matched: true,
       status: "failed",
@@ -149,7 +170,7 @@ export async function runAtsHarvest(input: {
       newJobs: 0,
       durationMs: Date.now() - startedAt,
       errorMessage: message.slice(0, 800),
-      crawledAtIso: new Date().toISOString(),
+      crawledAtIso,
       adapter: adapterName,
       upstreamLatencyMs: 0,
       notModified: false,

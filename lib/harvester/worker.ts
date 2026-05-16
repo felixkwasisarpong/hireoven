@@ -79,6 +79,8 @@ export type TickSummary = {
   notModified: number
   newJobs: number
   durationMs: number
+  failedByAdapter?: Record<string, number>
+  failedByReason?: Record<string, number>
 }
 
 const CLAIM_QUERY = `
@@ -154,6 +156,91 @@ type ClaimedRow = {
   freshness_tier: string | null
 }
 
+type TickCompanyOutcome = {
+  companyId: string
+  outcome: AtsHarvestOutcome
+}
+
+function incrementCount(map: Record<string, number>, key: string) {
+  map[key] = (map[key] ?? 0) + 1
+}
+
+function topCounts(source: Record<string, number>, limit = 6): Record<string, number> {
+  return Object.fromEntries(
+    Object.entries(source)
+      .sort((a, b) => {
+        if (b[1] !== a[1]) return b[1] - a[1]
+        return a[0].localeCompare(b[0])
+      })
+      .slice(0, limit)
+  )
+}
+
+function summarizeFailureReason(message: string | null): string {
+  if (!message) return "unknown"
+  const trimmed = message.replace(/\s+/g, " ").trim()
+  const lower = trimmed.toLowerCase()
+  const statusMatch = lower.match(/\bhttp[_\s-]?(\d{3})\b/)
+  if (statusMatch) return `http_${statusMatch[1]}`
+  if (lower.includes("timeout") || lower.includes("abort")) return "timeout"
+  if (lower.includes("fetch_error") || lower.includes("fetch failed")) return "fetch_error"
+  if (lower.includes("econnreset") || lower.includes("socket hang up")) return "socket_error"
+  if (lower.includes("enotfound") || lower.includes("eai_again") || lower.includes("dns")) return "dns_error"
+  if (lower.includes("too many requests") || lower.includes("rate limit")) return "rate_limited"
+  if (lower.includes("forbidden") || lower.includes("blocked")) return "blocked"
+  return trimmed.slice(0, 80)
+}
+
+function crawlLogErrorMessage(outcome: Exclude<AtsHarvestOutcome, { matched: false }>): string | null {
+  if (outcome.notModified) {
+    return `not_modified (upstream ${outcome.upstreamLatencyMs}ms)`
+  }
+  return outcome.errorMessage
+}
+
+async function insertTickCrawlLogsSafe(pool: Pool, outcomes: TickCompanyOutcome[]) {
+  const rows = outcomes.flatMap((entry) => {
+    if (!entry.outcome.matched) return []
+    const outcome = entry.outcome
+    return [{
+      companyId: entry.companyId,
+      status: outcome.status,
+      jobsFound: outcome.jobsFound,
+      newJobs: outcome.newJobs,
+      durationMs: outcome.durationMs,
+      crawledAtIso: outcome.crawledAtIso,
+      errorMessage: crawlLogErrorMessage(outcome),
+    }]
+  })
+
+  if (rows.length === 0) return
+
+  const values: Array<string | number | null> = []
+  const tuples = rows.map((row, idx) => {
+    const offset = idx * 7
+    values.push(
+      row.companyId,
+      row.status,
+      row.jobsFound,
+      row.newJobs,
+      row.durationMs,
+      row.crawledAtIso,
+      row.errorMessage
+    )
+    return `($${offset + 1}::uuid, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5}, $${offset + 6}::timestamptz, $${offset + 7})`
+  })
+
+  try {
+    await pool.query(
+      `INSERT INTO crawl_logs (company_id, status, jobs_found, new_jobs, duration_ms, crawled_at, error_message)
+       VALUES ${tuples.join(", ")}`,
+      values
+    )
+  } catch {
+    // Keep the harvest loop resilient even when log persistence is unavailable.
+  }
+}
+
 export async function claimEligibleCompanies(
   pool: Pool,
   batchSize: number,
@@ -198,11 +285,14 @@ export async function runTick(
     }
   }
 
-  const results: AtsHarvestOutcome[] = await Promise.all(
+  const results: TickCompanyOutcome[] = await Promise.all(
     companies.map((company) => {
       const adapterName = adapterNameFor(company)
       const limit = adapterName ? limits.byAdapter.get(adapterName) ?? limits.fallback : limits.fallback
-      return limit(() => runAtsHarvest({ pool, company }))
+      return limit(async () => ({
+        companyId: company.id,
+        outcome: await runAtsHarvest({ pool, company }),
+      }))
     })
   )
 
@@ -210,17 +300,33 @@ export async function runTick(
   let failed = 0
   let notModified = 0
   let newJobs = 0
-  for (const r of results) {
+  const failedByAdapter: Record<string, number> = {}
+  const failedByReason: Record<string, number> = {}
+
+  for (const { outcome } of results) {
+    const r = outcome
     if (!r.matched) {
       // claimed by tier filter but adapter didn't match — treat as failed so the lease expires naturally
       failed += 1
+      incrementCount(failedByAdapter, "adapter_mismatch")
+      incrementCount(failedByReason, "adapter_mismatch")
       continue
     }
-    if (r.status === "failed") failed += 1
-    else succeeded += 1
+    if (r.status === "failed") {
+      failed += 1
+      incrementCount(failedByAdapter, r.adapter)
+      incrementCount(failedByReason, summarizeFailureReason(r.errorMessage))
+    } else {
+      succeeded += 1
+    }
     if (r.notModified) notModified += 1
     newJobs += r.newJobs
   }
+
+  await insertTickCrawlLogsSafe(pool, results)
+
+  const failedAdapterTop = failed > 0 ? topCounts(failedByAdapter) : undefined
+  const failedReasonTop = failed > 0 ? topCounts(failedByReason) : undefined
 
   return {
     claimed: companies.length,
@@ -229,6 +335,8 @@ export async function runTick(
     notModified,
     newJobs,
     durationMs: Date.now() - startedAt,
+    ...(failedAdapterTop ? { failedByAdapter: failedAdapterTop } : {}),
+    ...(failedReasonTop ? { failedByReason: failedReasonTop } : {}),
   }
 }
 
