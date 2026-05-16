@@ -86,22 +86,32 @@ export async function POST(request: Request) {
     },
   }
 
-  await pool
-    .query(
+  try {
+    const updateResult = await pool.query(
       `UPDATE companies
        SET scout_enrichment = COALESCE(scout_enrichment, '{}'::jsonb) || $2::jsonb,
            updated_at = NOW()
        WHERE id = $1::uuid`,
       [companyId, JSON.stringify(enrichmentPayload)],
     )
-    .catch(() => null)
+    if ((updateResult.rowCount ?? 0) < 1) {
+      return extensionError(request, 500, "company enrichment update failed", { headers: corsHeaders })
+    }
+  } catch (error) {
+    console.error("[scout/companies/enrich] update failed", {
+      companyId,
+      source: body.source,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return extensionError(request, 500, "company enrichment update failed", { headers: corsHeaders })
+  }
 
   // When a Glassdoor rating arrives, update company_health_scores in-place
   // so the health badge reflects fresh data without waiting for a full recompute.
   if (body.source === "glassdoor") {
     const rating = body.signals?.rating
     if (typeof rating === "number" && rating >= 1 && rating <= 5) {
-      pool.query(
+      void pool.query(
         `WITH gs AS (
            SELECT
              CASE
@@ -142,7 +152,13 @@ export async function POST(request: Request) {
          FROM upd u
          WHERE chs.company_id = u.company_id`,
         [companyId, rating],
-      ).catch(() => null)
+      ).catch((error) => {
+        console.error("[scout/companies/enrich] health score update failed", {
+          companyId,
+          rating,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      })
     }
   }
 

@@ -318,7 +318,10 @@ function inferBulkWorkspaceDirective(message: string): import("@/lib/scout/types
   const countMatch = message.match(/\b(\d+)\b/)
   const count = countMatch ? parseInt(countMatch[1], 10) : 10
   const requireSponsorshipSignal = /\b(visa|h-?1b|sponsor)/i.test(message)
-  const workMode = /\bremote\b/i.test(message) ? "remote" : undefined
+  let workMode: "remote" | "hybrid" | "onsite" | undefined
+  if (/\bremote\b/i.test(message)) workMode = "remote"
+  else if (/\bhybrid\b/i.test(message)) workMode = "hybrid"
+  else if (/\b(on-?site|onsite|in[ -]?office)\b/i.test(message)) workMode = "onsite"
   const strictQuery = /\b(strict\s+query|exact\s+keywords?|all\s+keywords?|must\s+include\s+all)\b/i.test(message)
   const strictScoreOnly = /\b(only\s+scored|scored\s+only|exclude\s+unscored|with\s+scores?\s+only|no\s+null\s+scores?)\b/i.test(message)
   // Matches: "over 80", "above 80", "greater than 80", "more than 80", "> 80", ">= 80", "80 match", "80%"
@@ -916,6 +919,42 @@ function isActionUsingKnownIds(action: ScoutResponse["actions"][number], knownId
   }
 }
 
+/**
+ * Ensure OPEN_RESUME_TAILOR actions always carry a concrete jobId before
+ * ID-safety filtering runs. Without this, valid tailor actions can be dropped
+ * when Claude omits jobId and we only resolve it server-side.
+ */
+function backfillResumeTailorJobIds(response: ScoutResponse, fallbackJobId?: string): void {
+  if (!fallbackJobId) return
+
+  response.actions = response.actions.map((action) => {
+    if (action.type !== "OPEN_RESUME_TAILOR") return action
+    return {
+      ...action,
+      payload: {
+        ...action.payload,
+        jobId: action.payload.jobId ?? fallbackJobId,
+      },
+    }
+  })
+
+  if (response.workflow?.steps) {
+    response.workflow.steps = response.workflow.steps.map((step) => {
+      if (step.action?.type !== "OPEN_RESUME_TAILOR") return step
+      return {
+        ...step,
+        action: {
+          ...step.action,
+          payload: {
+            ...step.action.payload,
+            jobId: step.action.payload.jobId ?? fallbackJobId,
+          },
+        },
+      }
+    })
+  }
+}
+
 export async function POST(request: NextRequest) {
   const requestStartedAt = Date.now()
   const supabase = await createClient()
@@ -1109,80 +1148,12 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // Fallback: derive queue from saved applications so "apply to N top jobs"
-      // still progresses when apply-agent pool selection is too strict.
-      if (!applyAgentDirective) {
-        const savedRes = await fetch(`${origin}/api/applications?status=saved&limit=200&sort=match_score`, {
-          headers: { cookie: request.headers.get("cookie") ?? "" },
-        })
-        if (savedRes.ok) {
-          const savedData = await savedRes.json() as {
-            applications?: Array<{
-              job_id?: string | null
-              job_title?: string | null
-              company_name?: string | null
-              apply_url?: string | null
-              match_score?: number | null
-              sponsorship_signal?: string | null
-              location?: string | null
-              is_remote?: boolean | null
-            }>
-          }
-          const rows = savedData.applications ?? []
-
-          const jobs = rows
-            .filter((r) => typeof r.job_id === "string" && r.job_id.length > 0)
-            .filter((r) => typeof r.apply_url === "string" && r.apply_url.length > 0)
-            .filter((r) => {
-              if (typeof bp.minMatchScore === "number") {
-                if (bp.strictScoreOnly) return typeof r.match_score === "number" && r.match_score >= bp.minMatchScore
-                if (typeof r.match_score === "number") return r.match_score >= bp.minMatchScore
-              }
-              return true
-            })
-            .filter((r) => {
-              if (!bp.requireSponsorshipSignal) return true
-              const sig = (r.sponsorship_signal ?? "").toLowerCase()
-              // Keep unknown/likely; drop explicit no-sponsorship signals.
-              return !(/\bno\b|\bnone\b|\bnot\b|\bdoes not sponsor\b|\bwithout sponsorship\b/.test(sig))
-            })
-            .sort((a, b) => (b.match_score ?? -1) - (a.match_score ?? -1))
-            .slice(0, countHint)
-            .map((r) => ({
-              jobId:             r.job_id!,
-              jobTitle:          r.job_title ?? "Saved job",
-              company:           r.company_name ?? null,
-              matchScore:        r.match_score ?? null,
-              applyUrl:          r.apply_url ?? null,
-              sponsorshipSignal: r.sponsorship_signal ?? null,
-              location:          r.location ?? null,
-              isRemote:          Boolean(r.is_remote),
-              status:            "pending" as const,
-            }))
-
-          if (jobs.length > 0) {
-            applyAgentDirective = {
-              jobs,
-              criteria: {
-                minMatchScore:            bp.minMatchScore as number | undefined,
-                requireSponsorshipSignal: Boolean(bp.requireSponsorshipSignal),
-                workMode:                 bp.workMode as string | undefined,
-                strictQuery:              Boolean(bp.strictQuery),
-                strictScoreOnly:          Boolean(bp.strictScoreOnly),
-                count:                    countHint,
-              },
-              currentIndex: 0,
-              phase:        "select",
-            }
-          }
-        }
-      }
     } catch { /* non-critical */ }
 
     const jobCount = applyAgentDirective?.jobs.length ?? 0
     const answer   = jobCount > 0
-      ? `I found **${jobCount} job${jobCount !== 1 ? "s" : ""}**${scoreHint}${sponsorHint} in your list. I'll walk you through tailoring and applying to each one — starting with the best match.`
-      : `I didn't find any saved jobs${scoreHint}${sponsorHint}. Save some jobs from the feed first, then come back and I'll queue them up for you.`
+      ? `I found **${jobCount} job${jobCount !== 1 ? "s" : ""}**${scoreHint}${sponsorHint} in the live feed. I'll walk you through tailoring and applying to each one — starting with the best match.`
+      : `I couldn't find feed jobs${scoreHint}${sponsorHint} right now. Try relaxing filters or lowering the match threshold, and I’ll rebuild the queue.`
 
     const bulkResponse: ScoutResponse = {
       answer,
@@ -1455,6 +1426,7 @@ export async function POST(request: NextRequest) {
            WHERE user_id = $1 AND is_archived = false
            ORDER BY
              CASE status
+               WHEN 'offer'        THEN 1
                WHEN 'offered'      THEN 1
                WHEN 'interviewing' THEN 2
                WHEN 'applied'      THEN 3
@@ -1471,7 +1443,7 @@ export async function POST(request: NextRequest) {
           const daysSince = (d: string | null) =>
             d ? Math.floor((now - new Date(d).getTime()) / 86_400_000) : null
 
-          const offered      = apps.filter(a => a.status === "offered")
+          const offered      = apps.filter(a => a.status === "offer" || a.status === "offered")
           const interviewing = apps.filter(a => a.status === "interviewing")
           const applied      = apps.filter(a => a.status === "applied")
           const saved        = apps.filter(a => a.status === "saved")
@@ -1990,6 +1962,7 @@ User Input: ${userMessage}`
           const knownIds = getKnownScoutIds({ bodyJobId: body.jobId, bodyCompanyId: body.companyId, bodyResumeId: body.resumeId, contextJobId: context.job?.id, contextCompanyId: context.company?.id, contextResumeId: context.resume?.id })
           if (resolvedJob) { knownIds.jobIds.add(resolvedJob.jobId); if (resolvedJob.companyId) knownIds.companyIds.add(resolvedJob.companyId) }
           if (context.compareJobs) { for (const cj of context.compareJobs) { knownIds.jobIds.add(cj.id); if (cj.company_id) knownIds.companyIds.add(cj.company_id) } }
+          backfillResumeTailorJobIds(scoutResponse, resolvedJob?.jobId ?? effectiveJobId ?? context.job?.id)
           scoutResponse.actions = scoutResponse.actions.filter((action) => isActionUsingKnownIds(action, knownIds))
           if (scoutResponse.workflow?.steps) { scoutResponse.workflow.steps = scoutResponse.workflow.steps.map((step) => ({ ...step, action: step.action && isActionUsingKnownIds(step.action, knownIds) ? step.action : undefined })) }
           if (safetyNotes.length > 0) scoutResponse.answer = `${scoutResponse.answer}\n\nNote: ${safetyNotes.join(" ")}`
@@ -2191,6 +2164,8 @@ User Input: ${userMessage}`
       }
     }
 
+    backfillResumeTailorJobIds(scoutResponse, resolvedJob?.jobId ?? effectiveJobId ?? context.job?.id)
+
     const beforeActionCount = scoutResponse.actions.length
     scoutResponse.actions = scoutResponse.actions.filter((action) => isActionUsingKnownIds(action, knownIds))
 
@@ -2281,38 +2256,6 @@ User Input: ${userMessage}`
       }
       if (Object.keys(ctxPayload).length > 0) workflowDirective.payload = ctxPayload
       scoutResponse.workflow_directive = workflowDirective
-    }
-
-    // Ensure every OPEN_RESUME_TAILOR action carries the resolved job ID.
-    // Claude may return no jobId or a hallucinated one — override with the resolved one.
-    if (resolvedJob || effectiveJobId) {
-      const resolvedJobId = resolvedJob?.jobId ?? effectiveJobId
-      scoutResponse.actions = scoutResponse.actions.map((action) => {
-        if (action.type !== "OPEN_RESUME_TAILOR") return action
-        return {
-          ...action,
-          payload: {
-            ...action.payload,
-            jobId: action.payload.jobId ?? resolvedJobId,
-          },
-        }
-      })
-      // Also patch workflow steps that have OPEN_RESUME_TAILOR
-      if (scoutResponse.workflow?.steps) {
-        scoutResponse.workflow.steps = scoutResponse.workflow.steps.map((step) => {
-          if (step.action?.type !== "OPEN_RESUME_TAILOR") return step
-          return {
-            ...step,
-            action: {
-              ...step.action,
-              payload: {
-                ...step.action.payload,
-                jobId: step.action.payload.jobId ?? resolvedJobId,
-              },
-            },
-          }
-        })
-      }
     }
 
     // Compare guard: when compare context was loaded and compare intent fired, always
