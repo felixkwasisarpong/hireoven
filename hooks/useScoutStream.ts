@@ -13,7 +13,7 @@ import type { ScoutWorkspaceDirective, ScoutWorkflowDirective } from "@/lib/scou
  * mid-stream crashes, etc. Without this, isStreaming flips false but
  * finalResponse stays null, and the UI hangs on the thinking canvas.
  */
-const STREAM_HARD_TIMEOUT_MS = 32_000
+const STREAM_HARD_TIMEOUT_MS = 45_000
 
 export type ScoutStreamState = {
   /** Accumulated raw text from text_delta events */
@@ -80,19 +80,24 @@ export function useScoutStream(): ScoutStreamActions {
     abortRef.current?.abort()
     abortRef.current = new AbortController()
 
-    // Hard client-side deadline. Fires only if no `response` arrives within
-    // the window; cleared on every received event below.
+    // Hard client-side deadline. Reset on any stream activity.
     let receivedFinalResponse = false
-    const hardTimeout = window.setTimeout(() => {
-      if (!receivedFinalResponse) {
-        try { abortRef.current?.abort() } catch {}
-        setState((prev) => ({
-          ...prev,
-          isStreaming: false,
-          error: prev.error ?? "Scout took too long to respond. Please try again.",
-        }))
-      }
-    }, STREAM_HARD_TIMEOUT_MS)
+    let sawDoneEvent = false
+    let hardTimeout = 0
+    const resetHardTimeout = () => {
+      if (hardTimeout) window.clearTimeout(hardTimeout)
+      hardTimeout = window.setTimeout(() => {
+        if (!receivedFinalResponse) {
+          try { abortRef.current?.abort() } catch {}
+          setState((prev) => ({
+            ...prev,
+            isStreaming: false,
+            error: prev.error ?? "Scout took too long to respond. Please try again.",
+          }))
+        }
+      }, STREAM_HARD_TIMEOUT_MS)
+    }
+    resetHardTimeout()
 
     setState({
       ...INITIAL,
@@ -123,6 +128,7 @@ export function useScoutStream(): ScoutStreamActions {
       let rawStreamText = ""
 
       const processEvent = (event: ScoutStreamEvent) => {
+        resetHardTimeout()
         switch (event.type) {
           case "text_delta":
             rawStreamText += event.text
@@ -148,6 +154,7 @@ export function useScoutStream(): ScoutStreamActions {
             break
 
           case "done":
+            sawDoneEvent = true
             window.clearTimeout(hardTimeout)
             setState((prev) => ({ ...prev, isStreaming: false }))
             break
@@ -176,6 +183,7 @@ export function useScoutStream(): ScoutStreamActions {
         }
 
         if (readResult.done) break
+        resetHardTimeout()
         buffer += decoder.decode(readResult.value, { stream: true })
 
         const lines = buffer.split("\n")
@@ -194,6 +202,24 @@ export function useScoutStream(): ScoutStreamActions {
       if (!receivedFinalResponse) {
         setState((prev) => {
           if (prev.finalResponse || prev.error) return { ...prev, isStreaming: false }
+
+          const raw = rawStreamText.trim()
+          // Best-effort recovery: when stream dropped after text was emitted,
+          // promote the partial/final text into a minimal safe ScoutResponse.
+          if (raw.length > 0) {
+            const recovered = normalizeScoutResponse({
+              answer: deriveDisplayStreamText(raw).trim() || "Scout response recovered from a partial stream.",
+              recommendation: "Explore",
+              actions: [],
+            })
+            return {
+              ...prev,
+              isStreaming: false,
+              finalResponse: recovered,
+              error: sawDoneEvent ? null : "Scout connection ended early. Showing partial response.",
+            }
+          }
+
           return {
             ...prev,
             isStreaming: false,
