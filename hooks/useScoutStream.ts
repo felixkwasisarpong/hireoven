@@ -112,6 +112,45 @@ export function useScoutStream(): ScoutStreamActions {
         signal:  abortRef.current.signal,
       })
 
+      const contentType = (res.headers.get("content-type") ?? "").toLowerCase()
+      const isJson = contentType.includes("application/json")
+
+      // Some server branches intentionally short-circuit with JSON (deterministic
+      // routing, quota/budget gates, auth errors). Handle those directly instead
+      // of trying to parse as SSE and incorrectly reporting "cut off".
+      if (isJson) {
+        const json = await res.json().catch(() => null) as
+          | (Record<string, unknown> & { message?: string; error?: string; answer?: string })
+          | null
+        if (!res.ok) {
+          setState((prev) => ({
+            ...prev,
+            isStreaming: false,
+            error:
+              (typeof json?.message === "string" && json.message) ||
+              (typeof json?.error === "string" && json.error) ||
+              "Scout could not respond right now.",
+          }))
+          return
+        }
+
+        if (json && typeof json === "object") {
+          setState((prev) => ({
+            ...prev,
+            isStreaming: false,
+            finalResponse: normalizeScoutResponse(json),
+          }))
+          return
+        }
+
+        setState((prev) => ({
+          ...prev,
+          isStreaming: false,
+          error: "Scout could not respond right now.",
+        }))
+        return
+      }
+
       if (!res.ok || !res.body) {
         const errJson = await res.json().catch(() => null) as { message?: string } | null
         setState((prev) => ({
