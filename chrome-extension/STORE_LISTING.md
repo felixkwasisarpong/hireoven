@@ -75,7 +75,7 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 MAILTO=""
 
 # ── Critical loop (frequent) ─────────────────────────────────────────────────
-*/30 * * * * root /usr/local/bin/hireoven-cron alerts/recent-jobs 120      >> /var/log/hireoven-cron.log 2>&1
+0 * * * *    root /usr/local/bin/hireoven-cron alerts/recent-jobs 120      >> /var/log/hireoven-cron.log 2>&1
 0 */2 * * *  root /usr/local/bin/hireoven-cron crawl 1800                  >> /var/log/hireoven-cron.log 2>&1
 0 */6 * * *  root /usr/local/bin/hireoven-cron cron/dice-ingest 600        >> /var/log/hireoven-cron.log 2>&1
 0 */6 * * *  root /usr/local/bin/hireoven-cron cron/timing-refresh 600     >> /var/log/hireoven-cron.log 2>&1

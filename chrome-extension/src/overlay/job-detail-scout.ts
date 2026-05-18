@@ -21,11 +21,13 @@ import {
   checkExtractedJob,
 } from "../api-client"
 import type { ExtensionJobAnalysis, ExtensionSaveResult } from "../api-types"
+import { sendToBackground } from "../bridge"
 import type { SupportedSite } from "../detectors/site"
 import {
   detectApplicationForm,
   detectLinkedInEasyApplyModal,
 } from "../detectors/application-form"
+import type { TailorApproveResult, TailorPreviewResult } from "../types"
 
 const HOST_ID = "hireoven-detail-scout"
 const COLLAPSED_KEY = "hireovenDetailScoutCollapsed"
@@ -42,6 +44,10 @@ let saveStatus: "idle" | "saving" | "saved" | "error" = "idle"
 let saveResult: ExtensionSaveResult | null = null
 let alreadySaved = false
 let dashboardUrlForExisting: string | null = null
+let knownJobId: string | null = null
+let tailorStatus: "idle" | "loading" | "done" | "error" = "idle"
+let tailorError: string | null = null
+let tailorMatchScore: number | null = null
 let collapsed = false
 let evidenceOpen = false
 
@@ -251,6 +257,10 @@ export async function mountDetailScoutPanel(_site: SupportedSite): Promise<void>
   saveResult = null
   alreadySaved = false
   dashboardUrlForExisting = null
+  knownJobId = null
+  tailorStatus = "idle"
+  tailorError = null
+  tailorMatchScore = null
   evidenceOpen = false
   mountedUrl = url
 
@@ -282,6 +292,7 @@ async function runCheck(): Promise<void> {
     })
     alreadySaved = res.saved
     dashboardUrlForExisting = res.dashboardUrl ?? null
+    knownJobId = res.jobId ?? null
     render()
   } catch {
     // ignore — Save button still works as fallback
@@ -311,6 +322,7 @@ async function onSave(): Promise<void> {
     saveResult = await saveExtractedJob(job)
     saveStatus = "saved"
     alreadySaved = true
+    knownJobId = saveResult.jobId
     if (saveResult.dashboardUrl) dashboardUrlForExisting = saveResult.dashboardUrl
   } catch (err) {
     saveStatus = "error"
@@ -319,16 +331,64 @@ async function onSave(): Promise<void> {
   render()
 }
 
-function onTailor(): void {
-  // Open Hireoven's resume tailor flow in a new tab. Server handles
-  // job-context injection via querystring.
-  if (!job) return
-  const params = new URLSearchParams()
-  if (job.url) params.set("jobUrl", job.url)
-  if (job.title) params.set("title", job.title)
-  if (job.company) params.set("company", job.company)
-  const target = `https://hireoven.com/dashboard/resume/tailor?${params.toString()}`
-  window.open(target, "_blank", "noopener")
+async function onTailor(): Promise<void> {
+  if (!job || tailorStatus === "loading") return
+
+  tailorStatus = "loading"
+  tailorError = null
+  tailorMatchScore = null
+  render()
+
+  try {
+    let jobId = knownJobId ?? analysis?.jobId ?? saveResult?.jobId ?? null
+    if (!jobId) {
+      const result = await saveExtractedJob(job)
+      saveResult = result
+      saveStatus = "saved"
+      alreadySaved = true
+      knownJobId = result.jobId
+      if (result.dashboardUrl) dashboardUrlForExisting = result.dashboardUrl
+      jobId = result.jobId
+    }
+
+    const formAts = detectApplicationForm(document).detectedAts
+    const ats = formAts && formAts !== "unknown" ? formAts : undefined
+
+    const previewRaw = await sendToBackground({
+      type: "GET_TAILOR_PREVIEW",
+      jobId,
+      ats,
+    })
+    const preview = previewRaw as TailorPreviewResult
+
+    if (preview.status === "missing_resume") {
+      throw new Error(preview.summary || "No resume on file — upload one in Hireoven first.")
+    }
+    if (preview.status === "gated") {
+      throw new Error(preview.summary || "Tailor is gated for your plan.")
+    }
+    if (preview.status === "missing_job_context") {
+      throw new Error(preview.summary || "Missing job context — try Save first.")
+    }
+
+    const approveRaw = await sendToBackground({
+      type: "APPROVE_TAILORED_RESUME",
+      jobId,
+      resumeId: preview.resumeId ?? undefined,
+      ats,
+    })
+    const approve = approveRaw as TailorApproveResult
+    if (!approve.success) {
+      throw new Error(approve.error || "Could not save tailored resume version.")
+    }
+
+    tailorStatus = "done"
+    tailorMatchScore = approve.matchScore ?? preview.matchScore ?? null
+  } catch (err) {
+    tailorStatus = "error"
+    tailorError = err instanceof Error ? err.message : "Tailor failed"
+  }
+  render()
 }
 
 function onOpenHireoven(): void {
@@ -426,7 +486,7 @@ function onClick(event: Event): void {
   if (!actionEl) return
   const action = actionEl.getAttribute("data-action")
   if (action === "save")          void onSave()
-  else if (action === "tailor")   onTailor()
+  else if (action === "tailor")   void onTailor()
   else if (action === "open")     onOpenHireoven()
   else if (action === "apply")    onApplyOnSite()
   else if (action === "highlight") onHighlightSkills()
@@ -537,6 +597,17 @@ function render(): void {
     analyzeStatus === "error"   ? "Retry analyze" :
                                    "Re-analyze"
 
+  const tailorLabel =
+    tailorStatus === "loading" ? "Tailoring…" :
+    tailorStatus === "done" ? "✓ Tailored" :
+    tailorStatus === "error" ? "Retry tailor" :
+    "Tailor Resume"
+  const tailorTitle =
+    tailorStatus === "done"
+      ? (tailorMatchScore == null ? "Tailored resume saved" : `Tailored resume saved · ${Math.round(tailorMatchScore)}% match`)
+      : (tailorError ?? "")
+  const tailorDisabled = tailorStatus === "loading" || tailorStatus === "done"
+
   const root = document.createElement("div")
   root.className = `panel ${collapsed ? "collapsed" : ""}`
   root.innerHTML = `
@@ -578,7 +649,7 @@ function render(): void {
       <div class="actions">
         <button class="btn" data-action="analyze" ${analyzeStatus === "loading" ? "disabled" : ""}>${analyzeLabel}</button>
         <button class="btn ${alreadySaved ? "" : "btn-primary"}" data-action="save" ${saveDisabled ? "disabled" : ""}>${saveLabel}</button>
-        <button class="btn" data-action="tailor">Tailor Resume</button>
+        <button class="btn" data-action="tailor" ${tailorDisabled ? "disabled" : ""} title="${escAttr(tailorTitle)}">${tailorLabel}</button>
         <button class="btn" data-action="highlight" ${matched.length === 0 ? "disabled" : ""} title="${matched.length === 0 ? "Run Analyze first to detect matched skills." : ""}">Highlight Skills</button>
         <button class="btn" data-action="open">Open in Hireoven</button>
         <button class="btn" data-action="apply" ${!job.applyUrl && !job.url ? "disabled" : ""}>Apply on Site</button>

@@ -105,6 +105,12 @@ const APPLICATION_FORM_SELECTORS: ReadonlyArray<string> = [
   // shadow-rendered shell when present.
   "form[action*='workday']",
   "form[action*='myworkday']",
+  "form[data-automation-id]",
+  "[data-automation-id='applicationSummaryStep']",
+  "[data-automation-id='applyStep']",
+  "[data-automation-id='applyFlow']",
+  "[data-automation-id='applicationStep']",
+  "[data-automation-id='stepContent']",
   // iCIMS
   "form[action*='icims']",
   "form#applicationForm",
@@ -119,7 +125,12 @@ const APPLICATION_FORM_SELECTORS: ReadonlyArray<string> = [
 
 function pageHasApplicationForm(doc: Document): boolean {
   for (const sel of APPLICATION_FORM_SELECTORS) {
-    if (doc.querySelector(sel)) return true
+    const root = doc.querySelector(sel)
+    if (!root) continue
+    const fieldCount = root.querySelectorAll(
+      "input:not([type=hidden]):not([type=submit]):not([type=button]):not([type=reset]), select, textarea",
+    ).length
+    if (fieldCount >= 2) return true
   }
   // Structural fallback: a <form> with a file input + ≥2 text-like inputs.
   // Conservative — catches custom application shells without false-positiving
@@ -131,6 +142,16 @@ function pageHasApplicationForm(doc: Document): boolean {
       "input[type=text], input[type=email], input[type=tel], input[type=url], textarea",
     ).length
     if (textCount >= 2) return true
+  }
+  // Workday frequently uses div-based containers with no top-level <form>.
+  const workdayLikeRoot = doc.querySelector<HTMLElement>(
+    "[data-automation-id='applicationSummaryStep'], [data-automation-id='applyStep'], [data-automation-id='applyFlow'], [data-automation-id='applicationStep'], [data-automation-id='stepContent']",
+  )
+  if (workdayLikeRoot) {
+    const count = workdayLikeRoot.querySelectorAll(
+      "input:not([type=hidden]):not([type=submit]):not([type=button]):not([type=reset]), select, textarea",
+    ).length
+    if (count >= 2) return true
   }
   return false
 }

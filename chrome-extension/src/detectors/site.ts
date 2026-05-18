@@ -72,6 +72,8 @@ const SITE_HOST_RULES: SiteHostRule[] = [
     match: h =>
       h.endsWith(".myworkdayjobs.com") ||
       h === "myworkdayjobs.com" ||
+      /^wd\d+\.myworkdayjobs\.com$/.test(h) ||
+      h === "apply.workday.com" ||
       h.endsWith(".workdayjobs.com") ||
       h === "workdayjobs.com",
     site: "workday",

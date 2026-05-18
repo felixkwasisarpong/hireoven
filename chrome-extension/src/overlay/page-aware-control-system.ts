@@ -11,6 +11,7 @@ import type {
   ExtensionPageMode,
   ExtensionResumeSummary,
   ExtractedJob,
+  InjectResumeFileInTabResult,
   ListResumesResult,
   QueueAddResult,
   QueueStateResult,
@@ -2281,7 +2282,12 @@ export class PageAwareControlSystem {
         if (approved.success && approved.resumeId) {
           this.currentTailorResumeId = approved.resumeId
           this.approvedTailoredVersion = approved.versionName ?? "Tailored version"
-          this.setStatus("Resume tailored — click Fill to attach it.")
+          const injected = await this.injectResumeFileWithRetry(approved.resumeId, { attempts: 7, delayMs: 700 })
+          if (injected.injected) {
+            this.setStatus("Resume tailored and attached. Review, then click Next.")
+          } else {
+            this.setStatus("Resume tailored. Open Autofill and click Fill to attach it.")
+          }
         } else {
           this.setStatus(approved.error ?? "Could not tailor resume.")
         }
@@ -2289,6 +2295,40 @@ export class PageAwareControlSystem {
         this.setStatus("Could not tailor resume.")
       }
     })
+  }
+
+  private async injectResumeFileWithRetry(
+    resumeId: string,
+    opts?: { attempts?: number; delayMs?: number },
+  ): Promise<InjectResumeFileInTabResult> {
+    const attempts = Math.max(1, opts?.attempts ?? 5)
+    const delayMs = Math.max(200, opts?.delayMs ?? 600)
+    let lastResult: InjectResumeFileInTabResult = {
+      type: "INJECT_RESUME_FILE_IN_TAB_RESULT",
+      injected: false,
+      error: "No resume input found",
+    }
+
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+      try {
+        const raw = await sendToBackground({ type: "INJECT_RESUME_FILE_IN_TAB", resumeId })
+        const result = raw as InjectResumeFileInTabResult
+        if (result.injected) return result
+        lastResult = result
+      } catch (err) {
+        lastResult = {
+          type: "INJECT_RESUME_FILE_IN_TAB_RESULT",
+          injected: false,
+          error: err instanceof Error ? err.message : String(err),
+        }
+      }
+
+      if (attempt < attempts) {
+        await new Promise<void>((resolve) => window.setTimeout(resolve, delayMs))
+      }
+    }
+
+    return lastResult
   }
 
   /**
@@ -2398,10 +2438,9 @@ export class PageAwareControlSystem {
         // ── Resume file injection ─────────────────────────────────────────────
         if (resumeId) {
           try {
-            const injectRaw = await sendToBackground({ type: "INJECT_RESUME_FILE_IN_TAB", resumeId })
-            const injected  = (injectRaw as import("../types").InjectResumeFileInTabResult)?.injected ?? false
-            fieldResults.push({ label: "Resume", filled: injected })
-            if (injected) filledCount++
+            const injectResult = await this.injectResumeFileWithRetry(resumeId, { attempts: 7, delayMs: 600 })
+            fieldResults.push({ label: "Resume", filled: injectResult.injected })
+            if (injectResult.injected) filledCount++
           } catch {
             fieldResults.push({ label: "Resume", filled: false })
           }
@@ -2481,7 +2520,14 @@ export class PageAwareControlSystem {
         if (result.success) {
           this.approvedTailoredVersion = result.versionName ?? "Tailored version"
           this.currentTailorResumeId = result.resumeId ?? this.currentTailorResumeId
-          this.setStatus("Tailored version saved. Download it to attach to this form.")
+          if (result.resumeId) {
+            const injected = await this.injectResumeFileWithRetry(result.resumeId, { attempts: 7, delayMs: 700 })
+            if (injected.injected) {
+              this.setStatus("Tailored version saved and attached. Review, then continue.")
+              return
+            }
+          }
+          this.setStatus("Tailored version saved. Open Autofill and click Fill to attach it.")
           return
         }
         this.setStatus(result.error ?? "Could not approve tailored version.")
@@ -3063,7 +3109,7 @@ export class PageAwareControlSystem {
     const preview = this.tailorPreview
 
     if (this.approvedTailoredVersion) {
-      // Show download link so user can grab the PDF and attach it manually
+      // Tailored resume is now auto-attached when possible; keep download fallback.
       const versionId = this.currentTailorResumeId ?? ""
       const downloadUrl = `${this.appOrigin}/api/resume/download?resumeId=${encodeURIComponent(versionId)}&versionName=${encodeURIComponent(this.approvedTailoredVersion)}`
       return `
@@ -3072,7 +3118,7 @@ export class PageAwareControlSystem {
           <div style="font-size:10px;color:#166534;margin-bottom:6px">${esc(this.approvedTailoredVersion)}</div>
           <a href="${esc(downloadUrl)}" target="_blank" rel="noopener noreferrer"
              style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;color:#c94010;text-decoration:none">
-            ⬇ Download tailored PDF → attach to form
+            ⬇ Download tailored PDF (fallback)
           </a>
         </div>
         <button class="btn ghost" data-action="open-tailor-editor" style="width:100%">Open full editor</button>

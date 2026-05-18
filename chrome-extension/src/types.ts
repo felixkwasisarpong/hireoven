@@ -171,6 +171,17 @@ export interface ExtensionSafeProfile {
   current_company: string | null
   resume_summary: string | null
   skills: string | null
+  top_skills?: string[] | null
+  work_experience?: Array<{
+    title?: string | null
+    company?: string | null
+    location?: string | null
+    start_date?: string | null
+    end_date?: string | null
+    is_current?: boolean | null
+    description?: string | null
+    achievements?: string[] | null
+  }> | null
 }
 
 export type ContentResponseType =
