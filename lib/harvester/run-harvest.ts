@@ -10,6 +10,7 @@ const TIER_INTERVAL_SEC: Record<string, number> = {
 }
 
 const DEFAULT_FAILURE_COOLDOWN_SEC = 1_800
+const DEFAULT_HTTP_403_COOLDOWN_SEC = 21_600
 
 function tierIntervalSeconds(tier: string | null): number {
   if (!tier) return TIER_INTERVAL_SEC.tier_2
@@ -22,10 +23,22 @@ function failureCooldownSeconds(env: Record<string, string | undefined> = proces
   return DEFAULT_FAILURE_COOLDOWN_SEC
 }
 
+function http403CooldownSeconds(env: Record<string, string | undefined> = process.env): number {
+  const raw = Number.parseInt(env.HARVESTER_HTTP_403_COOLDOWN_SECONDS ?? "", 10)
+  if (Number.isFinite(raw) && raw >= 300) return raw
+  return DEFAULT_HTTP_403_COOLDOWN_SEC
+}
+
+function isHttp403Error(message: string): boolean {
+  const lower = message.toLowerCase()
+  return lower.includes("http_403") || lower.includes("http 403") || lower.includes("forbidden")
+}
+
 export type AtsHarvestCompany = {
   id: string
   name: string
   careers_url: string
+  direct_ats_url?: string | null
   domain: string | null
   ats_type: string | null
   raw_ats_config: Record<string, unknown> | null
@@ -78,7 +91,8 @@ export async function runAtsHarvest(input: {
   company: AtsHarvestCompany
 }): Promise<AtsHarvestOutcome> {
   const { pool, company } = input
-  const detection = detectAdapter(company.careers_url)
+  const detectionUrl = company.direct_ats_url?.trim() || company.careers_url
+  const detection = detectAdapter(detectionUrl)
   if (!detection) return { matched: false }
 
   const startedAt = Date.now()
@@ -151,7 +165,13 @@ export async function runAtsHarvest(input: {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     const crawledAtIso = new Date().toISOString()
-    const cooldownSec = Math.max(intervalSec, failureCooldownSeconds())
+    const baseCooldownSec = failureCooldownSeconds()
+    const cooldownSec = Math.max(
+      intervalSec,
+      isHttp403Error(message)
+        ? Math.max(baseCooldownSec, http403CooldownSeconds())
+        : baseCooldownSec
+    )
     try {
       await updateCompanyHarvestState(pool, company.id, {
         etag: company.etag,

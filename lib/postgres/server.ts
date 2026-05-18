@@ -44,6 +44,12 @@ export function getPostgresPool(): Pool {
       idleTimeoutMillis: 30_000,
       connectionTimeoutMillis: 10_000,
     })
+    pool.on("error", (error) => {
+      console.error("[postgres] idle_client_error", {
+        message: error.message,
+        name: error.name,
+      })
+    })
   }
 
   return pool
