@@ -13,7 +13,8 @@ import type { ScoutWorkspaceDirective, ScoutWorkflowDirective } from "@/lib/scou
  * mid-stream crashes, etc. Without this, isStreaming flips false but
  * finalResponse stays null, and the UI hangs on the thinking canvas.
  */
-const STREAM_HARD_TIMEOUT_MS = 32_000
+const STREAM_HARD_TIMEOUT_MS = 45_000
+const STREAM_ABSOLUTE_TIMEOUT_MS = 75_000
 
 export type ScoutStreamState = {
   /** Accumulated raw text from text_delta events */
@@ -80,19 +81,36 @@ export function useScoutStream(): ScoutStreamActions {
     abortRef.current?.abort()
     abortRef.current = new AbortController()
 
-    // Hard client-side deadline. Fires only if no `response` arrives within
-    // the window; cleared on every received event below.
+    // Two client-side safeguards:
+    // 1) Activity timeout (resets on stream activity).
+    // 2) Absolute timeout (never resets; prevents infinite keepalive hangs).
     let receivedFinalResponse = false
-    const hardTimeout = window.setTimeout(() => {
+    let hardTimeout = 0
+    let absoluteTimeout = 0
+    const resetHardTimeout = () => {
+      if (hardTimeout) window.clearTimeout(hardTimeout)
+      hardTimeout = window.setTimeout(() => {
+        if (!receivedFinalResponse) {
+          try { abortRef.current?.abort() } catch {}
+          setState((prev) => ({
+            ...prev,
+            isStreaming: false,
+            error: prev.error ?? "Scout took too long to respond. Please try again.",
+          }))
+        }
+      }, STREAM_HARD_TIMEOUT_MS)
+    }
+    absoluteTimeout = window.setTimeout(() => {
       if (!receivedFinalResponse) {
         try { abortRef.current?.abort() } catch {}
         setState((prev) => ({
           ...prev,
           isStreaming: false,
-          error: prev.error ?? "Scout took too long to respond. Please try again.",
+          error: prev.error ?? "Scout is taking longer than expected. Please try again.",
         }))
       }
-    }, STREAM_HARD_TIMEOUT_MS)
+    }, STREAM_ABSOLUTE_TIMEOUT_MS)
+    resetHardTimeout()
 
     setState({
       ...INITIAL,
@@ -140,6 +158,7 @@ export function useScoutStream(): ScoutStreamActions {
           case "response":
             receivedFinalResponse = true
             window.clearTimeout(hardTimeout)
+            window.clearTimeout(absoluteTimeout)
             setState((prev) => ({
               ...prev,
               finalResponse: normalizeScoutResponse(event.payload),
@@ -149,12 +168,14 @@ export function useScoutStream(): ScoutStreamActions {
 
           case "done":
             window.clearTimeout(hardTimeout)
+            window.clearTimeout(absoluteTimeout)
             setState((prev) => ({ ...prev, isStreaming: false }))
             break
 
           case "error":
             receivedFinalResponse = true // suppress hard-timeout error override
             window.clearTimeout(hardTimeout)
+            window.clearTimeout(absoluteTimeout)
             setState((prev) => ({
               ...prev,
               isStreaming: false,
@@ -213,6 +234,7 @@ export function useScoutStream(): ScoutStreamActions {
       }
     } finally {
       window.clearTimeout(hardTimeout)
+      window.clearTimeout(absoluteTimeout)
     }
   }, [])
 

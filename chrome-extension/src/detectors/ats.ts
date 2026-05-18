@@ -5,6 +5,7 @@ import { hasLdJsonJobPostingHint } from "../extractors/job"
 
 const ATS_URL_PATTERNS: Array<{ pattern: RegExp; provider: ATSProvider }> = [
   { pattern: /myworkdayjobs\.com/i, provider: "workday" },
+  { pattern: /apply\.workday\.com/i, provider: "workday" },
   { pattern: /workday\.com\/[^/]+\/d\/[^/]+\/job\//i, provider: "workday" },
   { pattern: /boards\.greenhouse\.io/i, provider: "greenhouse" },
   { pattern: /greenhouse\.io\/job_app/i, provider: "greenhouse" },

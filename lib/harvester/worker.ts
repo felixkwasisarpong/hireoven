@@ -19,7 +19,8 @@ export function adapterNameFor(company: AtsHarvestCompany): AtsName | null {
     const known = SUPPORTED_ATS_TYPES.find((n) => n === company.ats_type)
     if (known) return known as AtsName
   }
-  const detection = detectAdapter(company.careers_url)
+  const detectionUrl = company.direct_ats_url?.trim() || company.careers_url
+  const detection = detectAdapter(detectionUrl)
   return (detection?.adapter.name as AtsName | undefined) ?? null
 }
 
@@ -110,6 +111,22 @@ WHERE id IN (
       OR careers_url ~* '^https?://[a-z0-9-]+\.applytojob\.com/'
       OR careers_url ILIKE 'https://digitalcareers.infosys.com/%'
       OR careers_url ILIKE 'https://jobs.apple.com/%'
+      OR direct_ats_url ILIKE 'https://boards.greenhouse.io/%'
+      OR direct_ats_url ILIKE 'https://job-boards.greenhouse.io/%'
+      OR direct_ats_url ILIKE 'https://jobs.lever.co/%'
+      OR direct_ats_url ILIKE 'https://jobs.ashbyhq.com/%'
+      OR direct_ats_url ILIKE 'https://jobs.smartrecruiters.com/%'
+      OR direct_ats_url ILIKE 'https://careers.smartrecruiters.com/%'
+      OR direct_ats_url ILIKE 'https://apply.workable.com/%'
+      OR direct_ats_url ILIKE 'https://jobs.workable.com/%'
+      OR direct_ats_url ~* '^https?://[a-z0-9-]+\.wd[0-9]{1,3}\.myworkdayjobs\.com/'
+      OR direct_ats_url ~* '^https?://[a-z0-9-]+\.recruitee\.com/'
+      OR direct_ats_url ~* '^https?://[a-z0-9-]+\.teamtailor\.com/'
+      OR direct_ats_url ~* '^https?://[a-z0-9-]+\.jobs\.personio\.(com|de)/'
+      OR direct_ats_url ~* '^https?://[a-z0-9-]+\.bamboohr\.com/'
+      OR direct_ats_url ~* '^https?://[a-z0-9-]+\.applytojob\.com/'
+      OR direct_ats_url ILIKE 'https://digitalcareers.infosys.com/%'
+      OR direct_ats_url ILIKE 'https://jobs.apple.com/%'
     )
     AND (next_harvest_at IS NULL OR next_harvest_at <= now())
   ORDER BY
@@ -124,7 +141,7 @@ WHERE id IN (
   LIMIT $1
   FOR UPDATE SKIP LOCKED
 )
-RETURNING id, name, careers_url, domain, ats_type, raw_ats_config, etag, last_modified, freshness_tier
+RETURNING id, name, careers_url, direct_ats_url, domain, ats_type, raw_ats_config, etag, last_modified, freshness_tier
 `
 
 const SUPPORTED_ATS_TYPES = [
@@ -148,6 +165,7 @@ type ClaimedRow = {
   id: string
   name: string
   careers_url: string
+  direct_ats_url: string | null
   domain: string | null
   ats_type: string | null
   raw_ats_config: Record<string, unknown> | null
@@ -255,6 +273,7 @@ export async function claimEligibleCompanies(
     id: row.id,
     name: row.name,
     careers_url: row.careers_url,
+    direct_ats_url: row.direct_ats_url,
     domain: row.domain,
     ats_type: row.ats_type,
     raw_ats_config: row.raw_ats_config,

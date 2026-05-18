@@ -11,7 +11,7 @@
  *   3. Surface the list of detected fields (label / type / required) for
  *      review *before* the user enables autofill.
  *
- * The MVP autofill is wired only for Greenhouse + Lever; this detector
+ * The MVP autofill is wired for Greenhouse + Lever + Workday; this detector
  * intentionally also recognizes other ATSes (Workday, Ashby, etc.) so the
  * bar can say "form detected — autofill not supported here yet" instead of
  * silently going dark.
@@ -53,6 +53,12 @@ const ATS_FORM_SELECTORS: ReadonlyArray<string> = [
   // Workday
   "form[action*='workday']",
   "form[action*='myworkday']",
+  "form[data-automation-id]",
+  "[data-automation-id='applicationSummaryStep']",
+  "[data-automation-id='applyStep']",
+  "[data-automation-id='applyFlow']",
+  "[data-automation-id='applicationStep']",
+  "[data-automation-id='stepContent']",
   // Generic ATS hints
   "form[action*='greenhouse']",
   "form[action*='lever']",
@@ -77,12 +83,26 @@ const COVER_LETTER_LABEL_RE = /\bcover[\s_-]?letter\b/i
 const SAFE_PROFILE_FIELD_RE =
   /\b(first[\s_-]?name|last[\s_-]?name|full[\s_-]?name|email|phone|tel|mobile|linkedin|github|portfolio|website|location|city|address)\b/i
 
-function findFormRoots(doc: Document): HTMLFormElement[] {
-  const seen = new Set<HTMLFormElement>()
+function hasApplicationLikeInputs(root: Element): boolean {
+  const candidates = root.querySelectorAll(
+    "input:not([type=hidden]):not([type=submit]):not([type=button]):not([type=reset]), select, textarea",
+  )
+  if (candidates.length >= 4) return true
+  const textLike = root.querySelectorAll(
+    "input[type=text], input[type=email], input[type=tel], input[type=url], textarea",
+  ).length
+  const hasFile = Boolean(root.querySelector("input[type=file]"))
+  return hasFile && textLike >= 2
+}
+
+function findFormRoots(doc: Document): HTMLElement[] {
+  const seen = new Set<HTMLElement>()
 
   // 1. ATS-specific selectors — strongest signal.
   for (const sel of ATS_FORM_SELECTORS) {
-    doc.querySelectorAll<HTMLFormElement>(sel).forEach((f) => seen.add(f))
+    doc.querySelectorAll<HTMLElement>(sel).forEach((root) => {
+      if (hasApplicationLikeInputs(root)) seen.add(root)
+    })
   }
 
   // 2. Otherwise: any <form> whose id/class/action hints at an application form,
@@ -103,6 +123,22 @@ function findFormRoots(doc: Document): HTMLFormElement[] {
       ).length
       if (hasFileInput && textCount >= 2) seen.add(f)
     })
+  }
+
+  // 3. Workday frequently renders application steps without a <form> wrapper.
+  //    If ATS selectors above missed, use a conservative density fallback.
+  if (seen.size === 0) {
+    const denseRoots = Array.from(
+      doc.querySelectorAll<HTMLElement>(
+        "main section, main article, [role='main'] section, [role='main'] article, [data-automation-id]",
+      ),
+    )
+      .filter((root) => hasApplicationLikeInputs(root))
+      .sort((a, b) => b.querySelectorAll("input, select, textarea").length - a.querySelectorAll("input, select, textarea").length)
+
+    if (denseRoots.length > 0) {
+      seen.add(denseRoots[0])
+    }
   }
 
   return [...seen]
@@ -272,19 +308,19 @@ export function detectApplicationForm(doc: Document = document): ApplicationForm
   if (coverLetterUpload) reasons.push("Cover letter upload field detected.")
 
   // Heuristic: autofill is "supported" only when the ATS is one we've actually
-  // wired (Greenhouse / Lever) AND we see at least 2 profile-fillable fields
+  // wired (Greenhouse / Lever / Workday) AND we see at least 2 profile-fillable fields
   // (so a contact form with a single email box doesn't qualify).
   const safeFieldCount = fields.filter((f) =>
     SAFE_PROFILE_FIELD_RE.test(`${f.label} ${f.name ?? ""}`),
   ).length
 
-  const atsIsWired = ats === "greenhouse" || ats === "lever"
+  const atsIsWired = ats === "greenhouse" || ats === "lever" || ats === "workday"
   const supportsAutofill = atsIsWired && safeFieldCount >= 2
 
   if (!atsIsWired) {
     reasons.push(
       ats === "unknown"
-        ? "ATS not recognized — autofill is supported only on Greenhouse and Lever."
+        ? "ATS not recognized — autofill is supported only on Greenhouse, Lever, and Workday."
         : `Autofill not yet wired for ${ats} in this MVP.`,
     )
   } else if (safeFieldCount < 2) {

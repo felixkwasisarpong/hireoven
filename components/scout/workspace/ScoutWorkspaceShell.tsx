@@ -1728,6 +1728,9 @@ export function ScoutWorkspaceShell() {
     !researchStream.isRunning &&
     query.trim().length === 0 &&
     Boolean(proactive.topEvent)
+  const showIdleStoryScene =
+    workspaceMode === "idle" &&
+    (scoutStream.isStreaming || researchStream.isRunning)
 
   const MODE_DISPLAY_LABELS: Partial<Record<WorkspaceMode, string>> = {
     search:           "Job Search",
@@ -1972,24 +1975,23 @@ export function ScoutWorkspaceShell() {
             )
           })()}
 
-          {/* Story scene overlay — shown during streaming/loading transition */}
-          {(scoutStream.isStreaming || researchStream.isRunning) && workspaceMode === "idle" && (
-            <ScoutStoryScene
-              command={messages.findLast?.((m) => m.role === "user")?.role === "user"
-                ? (messages.findLast((m) => m.role === "user") as { text: string } | undefined)?.text
-                : undefined}
-              narrative={narrative}
-              mode={workspaceMode}
-              streamText={scoutStream.streamText}
-            />
-          )}
-
           {/* WorkspaceSurface — smooth opacity fade between modes */}
           <ScoutErrorBoundary surface="Workspace" retryLabel="Reload workspace">
           <WorkspaceSurface
             mode={workspaceMode}
             render={(displayedMode) => {
               if (displayedMode === "idle") {
+                if (showIdleStoryScene) {
+                  const lastUserMessage = messages.findLast((m) => m.role === "user")
+                  return (
+                    <ScoutStoryScene
+                      command={lastUserMessage?.role === "user" ? lastUserMessage.text : undefined}
+                      narrative={narrative}
+                      mode={workspaceMode}
+                      streamText={scoutStream.streamText}
+                    />
+                  )
+                }
                 // No conversation yet → premium welcome scene (story-mode aesthetic)
                 if (messages.length === 0 && !isLoading) {
                   return (

@@ -50,7 +50,10 @@ function matchesRemoteOnly(alert: JobAlert, job: Job) {
 
 function matchesSponsorship(alert: JobAlert, job: Job) {
   if (!alert.sponsorship_required) return true
-  return job.sponsors_h1b === true || (job.sponsorship_score ?? 0) > 60
+  if (job.sponsors_h1b === true) return true
+  if ((job.sponsorship_score ?? 0) <= 60) return false
+  if (/(^|\\.)dice\\.com/i.test(job.apply_url)) return false
+  return true
 }
 
 function matchesCompanyIds(alert: JobAlert, job: Job) {

@@ -24,6 +24,86 @@ export function OPTIONS(request: Request) {
   return handleExtensionPreflight(request)
 }
 
+type SafeResumeExperience = {
+  title: string | null
+  company: string | null
+  location: string | null
+  start_date: string | null
+  end_date: string | null
+  is_current: boolean
+  description: string | null
+  achievements: string[]
+}
+
+type SafeResumeEducation = {
+  institution: string | null
+  degree: string | null
+  field: string | null
+  start_date: string | null
+  end_date: string | null
+  gpa: string | null
+}
+
+function cleanString(value: unknown, maxLen: number): string | null {
+  if (typeof value !== "string") return null
+  const trimmed = value.trim()
+  if (!trimmed) return null
+  return trimmed.slice(0, maxLen)
+}
+
+function cleanStringArray(value: unknown, maxItems: number, maxLen: number): string[] {
+  if (!Array.isArray(value)) return []
+  const out: string[] = []
+  for (const item of value) {
+    if (typeof item !== "string") continue
+    const trimmed = item.trim()
+    if (!trimmed) continue
+    out.push(trimmed.slice(0, maxLen))
+    if (out.length >= maxItems) break
+  }
+  return out
+}
+
+function cleanWorkExperience(value: unknown, maxItems = 8): SafeResumeExperience[] {
+  if (!Array.isArray(value)) return []
+  const out: SafeResumeExperience[] = []
+  for (const item of value) {
+    if (!item || typeof item !== "object") continue
+    const row = item as Record<string, unknown>
+    out.push({
+      title: cleanString(row.title, 160),
+      company: cleanString(row.company, 160),
+      location: cleanString(row.location, 160),
+      start_date: cleanString(row.start_date, 40),
+      end_date: cleanString(row.end_date, 40),
+      is_current: row.is_current === true,
+      description: cleanString(row.description, 2400),
+      achievements: cleanStringArray(row.achievements, 8, 360),
+    })
+    if (out.length >= maxItems) break
+  }
+  return out
+}
+
+function cleanEducation(value: unknown, maxItems = 6): SafeResumeEducation[] {
+  if (!Array.isArray(value)) return []
+  const out: SafeResumeEducation[] = []
+  for (const item of value) {
+    if (!item || typeof item !== "object") continue
+    const row = item as Record<string, unknown>
+    out.push({
+      institution: cleanString(row.institution, 180),
+      degree: cleanString(row.degree, 140),
+      field: cleanString(row.field, 140),
+      start_date: cleanString(row.start_date, 40),
+      end_date: cleanString(row.end_date, 40),
+      gpa: cleanString(row.gpa, 32),
+    })
+    if (out.length >= maxItems) break
+  }
+  return out
+}
+
 export async function GET(request: Request) {
   const origin = request.headers.get("origin")
   const headers = extensionCorsHeaders(origin)
@@ -33,19 +113,35 @@ export async function GET(request: Request) {
 
   const pool = getPostgresPool()
   const result = await pool.query<AutofillProfile & {
+    resume_full_name: string | null
     resume_current_title: string | null
     resume_current_company: string | null
+    resume_email: string | null
+    resume_phone: string | null
+    resume_location: string | null
+    resume_linkedin_url: string | null
+    resume_portfolio_url: string | null
     resume_summary: string | null
     resume_top_skills: string[] | null
+    resume_work_experience: unknown
+    resume_education: unknown
   }>(
     `SELECT ap.*,
+            r.full_name     AS resume_full_name,
             r.primary_role   AS resume_current_title,
             r.work_experience->0->>'company' AS resume_current_company,
+            r.email         AS resume_email,
+            r.phone         AS resume_phone,
+            r.location      AS resume_location,
+            r.linkedin_url  AS resume_linkedin_url,
+            r.portfolio_url AS resume_portfolio_url,
             r.summary        AS resume_summary,
-            r.top_skills     AS resume_top_skills
+            r.top_skills     AS resume_top_skills,
+            r.work_experience AS resume_work_experience,
+            r.education       AS resume_education
      FROM autofill_profiles ap
      LEFT JOIN LATERAL (
-       SELECT primary_role, summary, top_skills, work_experience
+       SELECT full_name, primary_role, email, phone, location, linkedin_url, portfolio_url, summary, top_skills, work_experience, education
        FROM resumes
        WHERE user_id = $1
        ORDER BY is_primary DESC, updated_at DESC
@@ -72,6 +168,10 @@ export async function GET(request: Request) {
       { status: 200, headers }
     )
   }
+
+  const topSkills = cleanStringArray(profile.resume_top_skills, 24, 100)
+  const workExperience = cleanWorkExperience(profile.resume_work_experience)
+  const education = cleanEducation(profile.resume_education)
 
   // Return only safe fields for autofill.
   // Diversity fields (gender, ethnicity, veteran, disability) are included only
@@ -113,12 +213,19 @@ export async function GET(request: Request) {
     veteran_status: profile.auto_fill_diversity ? (profile.veteran_status ?? null) : null,
     disability_status: profile.auto_fill_diversity ? (profile.disability_status ?? null) : null,
     // Resume-derived fields
+    resume_full_name: profile.resume_full_name ?? null,
     current_title: profile.resume_current_title ?? null,
     current_company: profile.resume_current_company ?? null,
+    resume_email: profile.resume_email ?? null,
+    resume_phone: profile.resume_phone ?? null,
+    resume_location: profile.resume_location ?? null,
+    resume_linkedin_url: profile.resume_linkedin_url ?? null,
+    resume_portfolio_url: profile.resume_portfolio_url ?? null,
     resume_summary: profile.resume_summary ?? null,
-    skills: profile.resume_top_skills?.length
-      ? profile.resume_top_skills.join(", ")
-      : null,
+    skills: topSkills.length ? topSkills.join(", ") : null,
+    top_skills: topSkills,
+    work_experience: workExperience,
+    resume_education: education,
   }
 
   return NextResponse.json(

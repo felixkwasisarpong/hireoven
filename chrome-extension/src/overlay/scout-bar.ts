@@ -23,6 +23,7 @@ import {
 } from "../detectors/confirmation"
 import {
   detectExtensionPageMode,
+  isAtsSite,
   shouldShowAutofillFeatures,
   type ExtensionPageMode,
 } from "../detectors/page-mode"
@@ -40,7 +41,11 @@ import {
   updateCoverLetter,
 } from "../api-client"
 import type { ExtensionJobAnalysis, ExtensionSaveResult } from "../api-types"
-import type { TailorPreviewResult, TailorApproveResult } from "../types"
+import type {
+  InjectResumeFileInTabResult,
+  TailorPreviewResult,
+  TailorApproveResult,
+} from "../types"
 import {
   applySafeFills,
   buildAutofillPreview,
@@ -49,6 +54,11 @@ import {
   type AutofillFieldResult,
   type SafeProfile,
 } from "../autofill/safe-fields"
+import {
+  isWorkdayApplicationPage,
+  runWorkdayAutofillInExistingBar,
+  type WorkdayAutofillSnapshot,
+} from "../autofill/workday-autofill"
 
 // ── Public types ──────────────────────────────────────────────────────────────
 
@@ -59,6 +69,7 @@ export type ScoutBarState = "detecting" | "not_job_page" | "ready" | "error"
 const HOST_ID = "hireoven-scout-bar"
 const MINIMIZED_STORAGE_KEY = "hireovenScoutBarMinimized"
 const URL_POLL_INTERVAL_MS = 600
+const ATS_FORM_REFRESH_INTERVAL_MS = 1200
 
 const STATUS_TEXT: Record<ScoutBarState, string> = {
   detecting:    "Detecting job page…",
@@ -1011,6 +1022,7 @@ export class ScoutBar {
   private minimized = false
   private mounted = false
   private urlTimer: ReturnType<typeof setInterval> | null = null
+  private atsFormRefreshTimer: ReturnType<typeof setInterval> | null = null
   private lastUrl = ""
 
   // ── Action state (Save / Analyze) ──────────────────────────────────────────
@@ -1042,8 +1054,11 @@ export class ScoutBar {
   private tailorStatus: "idle" | "loading" | "done" | "error" = "idle"
   private tailorError: string | null = null
   private tailorMatchScore: number | null = null
+  private tailoredResumeId: string | null = null
+  private tailorSnapStatus: "idle" | "snapping" | "snapped" | "error" = "idle"
+  private tailorSnapError: string | null = null
 
-  // Autofill MVP state — Greenhouse + Lever only.
+  // Autofill MVP state — Greenhouse + Lever + Workday.
   // States walk: idle → loading (fetch profile + preview) → preview (user
   // confirms) → filling → done | error.
   private autofillStatus:
@@ -1057,6 +1072,7 @@ export class ScoutBar {
   private autofillResults: AutofillFieldResult[] | null = null
   private autofillError: string | null = null
   private autofillProfile: SafeProfile | null = null
+  private workdaySnapshot: WorkdayAutofillSnapshot | null = null
 
   // Cover-letter review flow. Triggered after profile fill completes when the
   // form has a cover_letter_upload slot. The user reviews and edits the
@@ -1143,6 +1159,8 @@ export class ScoutBar {
   destroy(): void {
     if (this.urlTimer) clearInterval(this.urlTimer)
     this.urlTimer = null
+    if (this.atsFormRefreshTimer) clearInterval(this.atsFormRefreshTimer)
+    this.atsFormRefreshTimer = null
     this.stopConfirmationPolling()
     this.tearDownSurface()
     this.mounted = false
@@ -1168,11 +1186,15 @@ export class ScoutBar {
     this.tailorStatus = "idle"
     this.tailorError = null
     this.tailorMatchScore = null
+    this.tailoredResumeId = null
+    this.tailorSnapStatus = "idle"
+    this.tailorSnapError = null
     this.autofillStatus = "idle"
     this.autofillPreview = null
     this.autofillResults = null
     this.autofillError = null
     this.autofillProfile = null
+    this.workdaySnapshot = null
     this.coverLetterStatus = "idle"
     this.coverLetterId = null
     this.coverLetterBody = null
@@ -1278,6 +1300,45 @@ export class ScoutBar {
       this.lastUrl = next
       this.runDetection()
     }, URL_POLL_INTERVAL_MS)
+    this.bindAtsFormRefreshObserver()
+  }
+
+  /** Workday and other ATS UIs can change steps without changing URL. */
+  private bindAtsFormRefreshObserver(): void {
+    if (this.atsFormRefreshTimer) clearInterval(this.atsFormRefreshTimer)
+    this.atsFormRefreshTimer = setInterval(() => {
+      if (this.state !== "ready") return
+      if (!isAtsSite(this.site)) return
+
+      let nextFormDetection: ApplicationFormDetection | null = null
+      try {
+        nextFormDetection = detectApplicationForm(document)
+      } catch {
+        nextFormDetection = null
+      }
+
+      let nextPageMode: ExtensionPageMode = "unknown"
+      try {
+        nextPageMode = detectExtensionPageMode(location.href, document)
+      } catch {
+        nextPageMode = "unknown"
+      }
+
+      const prev = this.formDetection
+      const formChanged =
+        (prev?.hasForm ?? false) !== (nextFormDetection?.hasForm ?? false) ||
+        (prev?.supportsAutofill ?? false) !== (nextFormDetection?.supportsAutofill ?? false) ||
+        (prev?.formCount ?? 0) !== (nextFormDetection?.formCount ?? 0) ||
+        (prev?.fields.length ?? 0) !== (nextFormDetection?.fields.length ?? 0) ||
+        (prev?.detectedAts ?? "unknown") !== (nextFormDetection?.detectedAts ?? "unknown")
+
+      const modeChanged = this.pageMode !== nextPageMode
+      if (!formChanged && !modeChanged) return
+
+      this.formDetection = nextFormDetection
+      this.pageMode = nextPageMode
+      this.render()
+    }, ATS_FORM_REFRESH_INTERVAL_MS)
   }
 
   // ── Surface (Shadow DOM) ─────────────────────────────────────────────────────
@@ -1443,10 +1504,19 @@ export class ScoutBar {
       return `<button class="action" data-action="tailor" disabled>Tailoring…</button>`
     }
     if (this.tailorStatus === "done") {
-      const tip = this.tailorMatchScore !== null
-        ? `Tailored resume saved · ${this.tailorMatchScore}% match`
-        : "Tailored resume saved"
-      return `<button class="action analyzed" data-action="tailor" disabled title="${escapeHtml(tip)}">✓ Tailored</button>`
+      if (this.tailorSnapStatus === "snapping") {
+        return `<button class="action analyzed" data-action="snap-resume" disabled>Snapping…</button>`
+      }
+      if (this.tailorSnapStatus === "snapped") {
+        const tip = this.tailorMatchScore !== null
+          ? `Tailored resume saved · ${this.tailorMatchScore}% match`
+          : "Tailored resume saved"
+        return `<button class="action analyzed" data-action="snap-resume" disabled title="${escapeHtml(tip)}">✓ Tailored</button>`
+      }
+      const snapTip = this.tailorSnapError
+        ? `Tailored resume saved. ${this.tailorSnapError}`
+        : "Tailored resume saved. Click to snap it into this form."
+      return `<button class="action error" data-action="snap-resume" title="${escapeHtml(snapTip)}">Snap Resume</button>`
     }
     if (this.tailorStatus === "error") {
       return `<button class="action error" data-action="tailor" title="${escapeHtml(this.tailorError ?? "Try again")}">Retry tailor</button>`
@@ -1464,7 +1534,7 @@ export class ScoutBar {
    * promising autofill on a discovery surface where it can't actually run.
    */
   private renderAutofillPill(): string {
-    if (!shouldShowAutofillFeatures(this.pageMode) && this.formDetection?.hasForm !== true) {
+    if (!shouldShowAutofillFeatures(this.pageMode) && this.formDetection?.hasForm !== true && !isAtsSite(this.site)) {
       return ""
     }
     const det = this.formDetection
@@ -1486,7 +1556,8 @@ export class ScoutBar {
     // form was detected on a page we'd otherwise classify as job_board).
     if (
       !shouldShowAutofillFeatures(this.pageMode) &&
-      this.formDetection?.hasForm !== true
+      this.formDetection?.hasForm !== true &&
+      !isAtsSite(this.site)
     ) {
       return ""
     }
@@ -1494,8 +1565,8 @@ export class ScoutBar {
     const hasForm = det?.hasForm === true
     const supports = det?.supportsAutofill === true
 
-    // Form-only ATSes (Workday/Ashby/etc.) — let the user see what we detected
-    // even though we can't safely fill. The button toggles a read-only panel.
+    // Form-only ATSes where we don't yet fill (Ashby/iCIMS/etc.) — let the
+    // user inspect detected fields via a read-only panel.
     if (this.autofillSiteSupported() === false || !supports) {
       if (!hasForm) {
         return `<button class="action" data-action="autofill" disabled title="No application form detected on this page.">Autofill</button>`
@@ -1503,7 +1574,7 @@ export class ScoutBar {
       const open = this.detectionPanelOpen
       const label = open ? "Hide detected fields" : "View detected fields"
       const tooltip = !this.autofillSiteSupported()
-        ? "Autofill supports Greenhouse and Lever only in this MVP."
+        ? "Autofill supports Greenhouse, Lever, and Workday in this MVP."
         : "Form detected but profile-fillable fields are limited."
       return `<button class="action" data-action="toggle-detection" title="${escapeHtml(tooltip)}">${label}</button>`
     }
@@ -1681,9 +1752,13 @@ export class ScoutBar {
     const filledCount = isDone ? list.filter((f) => f.filled).length : 0
     const skippedCount = isDone ? list.filter((f) => !f.filled).length : 0
 
-    const headerSummary = isDone
+    const workdaySummary = this.site === "workday" && this.workdaySnapshot
+      ? `Step ${this.workdaySnapshot.step.index} of ${this.workdaySnapshot.step.total} · ${this.workdaySnapshot.step.name} · ${this.workdaySnapshot.progressPct}%`
+      : null
+
+    const headerSummary = workdaySummary ?? (isDone
       ? `${filledCount} filled · ${skippedCount} need review`
-      : `${willFill} ready to fill · ${reviewCount} need review`
+      : `${willFill} ready to fill · ${reviewCount} need review`)
 
     return `
       <div class="autofill-panel" role="dialog" aria-label="Autofill review">
@@ -2055,10 +2130,19 @@ export class ScoutBar {
         return `<button class="ap-action" disabled>Tailoring…</button>`
       }
       if (this.tailorStatus === "done") {
-        const tip = this.tailorMatchScore !== null
-          ? `Tailored resume saved · ${this.tailorMatchScore}% match`
-          : "Tailored resume saved"
-        return `<button class="ap-action ap-action-saved" disabled title="${escapeHtml(tip)}">✓ Tailored</button>`
+        if (this.tailorSnapStatus === "snapping") {
+          return `<button class="ap-action ap-action-saved" disabled>Snapping…</button>`
+        }
+        if (this.tailorSnapStatus === "snapped") {
+          const tip = this.tailorMatchScore !== null
+            ? `Tailored resume saved · ${this.tailorMatchScore}% match`
+            : "Tailored resume saved"
+          return `<button class="ap-action ap-action-saved" disabled title="${escapeHtml(tip)}">✓ Tailored</button>`
+        }
+        const snapTip = this.tailorSnapError
+          ? `Tailored resume saved. ${this.tailorSnapError}`
+          : "Tailored resume saved. Click to snap it into this form."
+        return `<button class="ap-action ap-action-saved" data-action="snap-resume" title="${escapeHtml(snapTip)}">Snap Resume</button>`
       }
       if (this.tailorStatus === "error") {
         return `<button class="ap-action ap-action-saved" data-action="tailor" title="${escapeHtml(this.tailorError ?? "Try again")}">Retry tailor</button>`
@@ -2066,12 +2150,12 @@ export class ScoutBar {
       return `<button class="ap-action" data-action="tailor">Tailor Resume</button>`
     })()
 
-    // Panel's Autofill button mirrors the bar's behavior — Greenhouse + Lever
+    // Panel's Autofill button mirrors the bar's behavior — supported ATSes only
     // only in the MVP. Click triggers the preview flow regardless of where
     // the click came from (bar or panel).
     const autofillBtn = (() => {
       if (!this.autofillSiteSupported()) {
-        return `<button class="ap-action" data-action="autofill" disabled title="Autofill supports Greenhouse and Lever only in this MVP.">Autofill</button>`
+        return `<button class="ap-action" data-action="autofill" disabled title="Autofill supports Greenhouse, Lever, and Workday in this MVP.">Autofill</button>`
       }
       if (this.autofillStatus === "loading" || this.autofillStatus === "filling") {
         return `<button class="ap-action" disabled>${this.autofillStatus === "loading" ? "Detecting…" : "Filling…"}</button>`
@@ -2123,6 +2207,8 @@ export class ScoutBar {
         void this.onAnalyze()
       } else if (action === "tailor") {
         void this.onTailor()
+      } else if (action === "snap-resume") {
+        void this.onSnapTailoredResume()
       } else if (action === "autofill") {
         void this.onAutofillPreview()
       } else if (action === "autofill-confirm") {
@@ -2273,6 +2359,9 @@ export class ScoutBar {
     this.tailorStatus = "loading"
     this.tailorError = null
     this.tailorMatchScore = null
+    this.tailoredResumeId = null
+    this.tailorSnapStatus = "idle"
+    this.tailorSnapError = null
     this.render()
 
     try {
@@ -2317,6 +2406,8 @@ export class ScoutBar {
 
       this.tailorStatus = "done"
       this.tailorMatchScore = approve.matchScore ?? preview.matchScore ?? null
+      this.tailoredResumeId = approve.resumeId ?? preview.resumeId ?? null
+      await this.onSnapTailoredResume()
     } catch (err) {
       this.tailorStatus = "error"
       this.tailorError = err instanceof Error ? err.message : "Tailor failed"
@@ -2324,11 +2415,56 @@ export class ScoutBar {
     this.render()
   }
 
-  // ── Autofill MVP (Greenhouse + Lever only) ─────────────────────────────────
+  private async onSnapTailoredResume(): Promise<void> {
+    if (this.tailorStatus !== "done") return
+    if (!this.tailoredResumeId) {
+      this.tailorSnapStatus = "error"
+      this.tailorSnapError = "No tailored resume version found."
+      this.render()
+      return
+    }
+    if (this.tailorSnapStatus === "snapping") return
+
+    this.tailorSnapStatus = "snapping"
+    this.tailorSnapError = null
+    this.render()
+
+    const attempts = 8
+    const delayMs = 700
+    let lastError = "Could not find resume upload field on this step."
+
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+      try {
+        const result = await sendBackgroundMessage<InjectResumeFileInTabResult>({
+          type: "INJECT_RESUME_FILE_IN_TAB",
+          resumeId: this.tailoredResumeId,
+        })
+        if (result.injected) {
+          this.tailorSnapStatus = "snapped"
+          this.tailorSnapError = null
+          this.render()
+          return
+        }
+        if (result.error) lastError = result.error
+      } catch (err) {
+        lastError = err instanceof Error ? err.message : "Could not attach resume."
+      }
+
+      if (attempt < attempts) {
+        await new Promise<void>((resolve) => setTimeout(resolve, delayMs))
+      }
+    }
+
+    this.tailorSnapStatus = "error"
+    this.tailorSnapError = lastError
+    this.render()
+  }
+
+  // ── Autofill MVP (Greenhouse + Lever + Workday) ───────────────────────────
 
   /** True when the current site supports the autofill MVP. */
   private autofillSiteSupported(): boolean {
-    return this.site === "greenhouse" || this.site === "lever"
+    return this.site === "greenhouse" || this.site === "lever" || this.site === "workday"
   }
 
   /**
@@ -2342,23 +2478,47 @@ export class ScoutBar {
 
     this.autofillStatus = "loading"
     this.autofillError = null
+    this.workdaySnapshot = null
     this.render()
 
     try {
       const { profile, profileMissing } = await getAutofillProfile()
       this.autofillProfile = profile
 
+      if (this.site === "workday") {
+        const ready = Boolean(profile) && isWorkdayApplicationPage()
+        this.autofillPreview = [
+          {
+            label: "Workday multi-step autofill",
+            valuePreview: ready
+              ? "Ready: My Information → My Experience → Questions"
+              : "Workday application container not detected on this page.",
+            confidence: ready ? "high" : "needs_review",
+            source: profile ? "profile" : "manual_required",
+            filled: false,
+            skippedReason: profileMissing || !profile
+              ? "No saved autofill profile."
+              : ready
+                ? undefined
+                : "Open an active Workday application step first.",
+          },
+        ]
+        this.autofillStatus = "preview"
+        this.render()
+        return
+      }
+
       if (profileMissing || !profile) {
         // Still build a preview so the user sees which fields would be filled
         // — they'll appear with skippedReason "No saved autofill profile."
         this.autofillPreview = buildAutofillPreview(
-          this.site as "greenhouse" | "lever",
+          this.site as "greenhouse" | "lever" | "workday",
           null,
           document,
         )
       } else {
         this.autofillPreview = buildAutofillPreview(
-          this.site as "greenhouse" | "lever",
+          this.site as "greenhouse" | "lever" | "workday",
           profile,
           document,
         )
@@ -2394,6 +2554,58 @@ export class ScoutBar {
     this.render()
 
     try {
+      if (this.site === "workday") {
+        const result = await runWorkdayAutofillInExistingBar({
+          profile: this.autofillProfile,
+          onSnapshot: (snapshot) => {
+            this.workdaySnapshot = snapshot
+            this.autofillPreview = [
+              {
+                label: `Workday Step ${snapshot.step.index} of ${snapshot.step.total} · ${snapshot.step.name}`,
+                valuePreview: `${snapshot.fieldsFilledCount}/${snapshot.totalExpectedFields} · ${snapshot.progressPct}%`,
+                confidence: "high",
+                source: "profile",
+                filled: false,
+                skippedReason: undefined,
+              },
+            ]
+            this.render()
+          },
+          onWarning: (line) => {
+            const note = line.replace(/^⚠️\s*/u, "")
+            const existing = this.autofillPreview ?? []
+            const has = existing.some((row) => row.label === note && row.skippedReason)
+            if (!has) {
+              existing.push({
+                label: note,
+                confidence: "needs_review",
+                source: "manual_required",
+                filled: false,
+                skippedReason: line,
+              })
+              this.autofillPreview = existing
+            }
+          },
+          maxCycles: 14,
+        })
+
+        this.autofillResults = result.rows
+        if (result.phase === "error") {
+          this.autofillStatus = "error"
+          this.autofillError = "Workday autofill could not complete. In DevTools Console run: window.__hoWorkdayAutofillDebug?.slice(-120)"
+        } else if (result.eeoPaused) {
+          this.autofillStatus = "done"
+          this.autofillError = "Self-Identify step reached. Complete manually, then run Autofill again to continue."
+        } else if (!result.reachedReview && result.fieldsFilledCount === 0) {
+          this.autofillStatus = "error"
+          this.autofillError = "No Workday fields were filled. In DevTools Console run: window.__hoWorkdayAutofillDebug?.slice(-120)"
+        } else {
+          this.autofillStatus = "done"
+        }
+        this.render()
+        return
+      }
+
       // Only fetch the resume if the page actually has a resume_upload field
       // and we have something to attach. Saves a roundtrip on forms with no
       // file inputs.
@@ -2420,7 +2632,7 @@ export class ScoutBar {
       }
 
       this.autofillResults = await applySafeFills(
-        this.site as "greenhouse" | "lever",
+        this.site as "greenhouse" | "lever" | "workday",
         this.autofillProfile,
         resumeBytes,
         document,
@@ -2438,7 +2650,10 @@ export class ScoutBar {
       }
     } catch (err) {
       this.autofillStatus = "error"
-      this.autofillError = err instanceof Error ? err.message : "Fill failed"
+      const base = err instanceof Error ? err.message : "Fill failed"
+      this.autofillError = this.site === "workday"
+        ? `${base}. In DevTools Console run: window.__hoWorkdayAutofillDebug?.slice(-120)`
+        : base
     }
     this.render()
   }
@@ -2449,6 +2664,7 @@ export class ScoutBar {
     this.autofillPreview = null
     this.autofillResults = null
     this.autofillError = null
+    this.workdaySnapshot = null
     this.aiAnswers.clear()
     this.render()
   }

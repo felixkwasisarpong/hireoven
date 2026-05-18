@@ -66,7 +66,9 @@ function matchesClientFilters(job: JobWithCompany, filters: JobFilters, query: s
   if (
     filters.sponsorship &&
     (job.requires_authorization ||
-      (!job.sponsors_h1b && (job.sponsorship_score ?? 0) <= 60))
+      (!job.sponsors_h1b &&
+        ((job.sponsorship_score ?? 0) <= 60 ||
+          /(^|\\.)dice\\.com/i.test(job.apply_url))))
   ) {
     return false
   }

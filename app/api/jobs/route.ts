@@ -60,7 +60,15 @@ export async function GET(request: NextRequest) {
   }
   if (companyId) where.push(`jobs.company_id = ${addParam(companyId)}`)
   if (remote) where.push("jobs.is_remote = true")
-  if (sponsorship) where.push("(jobs.sponsors_h1b = true OR jobs.sponsorship_score > 60)")
+  if (sponsorship) {
+    where.push(`(
+      jobs.sponsors_h1b = true
+      OR (
+        jobs.sponsorship_score > 60
+        AND jobs.apply_url NOT ILIKE '%dice.com%'
+      )
+    )`)
+  }
   if (seniority?.length) where.push(`jobs.seniority_level = ANY(${addParam(seniority)}::text[])`)
   if (empType?.length) where.push(`jobs.employment_type = ANY(${addParam(empType)}::text[])`)
   if (titles?.length) {

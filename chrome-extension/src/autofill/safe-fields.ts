@@ -1,8 +1,8 @@
 /**
- * Scout MVP — Safe-fields autofill detector for Greenhouse and Lever only.
+ * Scout MVP — Safe-fields autofill detector for Greenhouse, Lever, and Workday.
  *
  * Hard constraints (do NOT relax without owner review):
- *   - Greenhouse + Lever only. Workday/iCIMS/etc. NOT supported in this MVP.
+ *   - Greenhouse + Lever + Workday only. Other ATSes are NOT supported yet.
  *   - No demographic questions (gender, ethnicity, race, veteran, disability).
  *   - No final-submit clicks.
  *   - File inputs are *detected* but never filled — listed as "Needs user action".
@@ -33,6 +33,17 @@ export type SafeProfile = {
   current_company?: string | null
   resume_summary?: string | null
   skills?: string | null
+  top_skills?: string[] | null
+  work_experience?: Array<{
+    title?: string | null
+    company?: string | null
+    start_date?: string | null
+    end_date?: string | null
+    is_current?: boolean | null
+    description?: string | null
+    achievements?: string[] | null
+    location?: string | null
+  }> | null
 }
 
 /** Per-field result returned from detection (preview) and from filling. */
@@ -40,6 +51,8 @@ export type AutofillFieldResult = {
   label: string
   selector?: string
   valuePreview?: string
+  /** Raw unmasked value used at fill-time. */
+  fillValue?: string
   confidence: "high" | "medium" | "needs_review"
   source:
     | "profile"
@@ -107,6 +120,10 @@ type SafeKey =
   | "current_title"
   | "current_company"
   | "resume_summary"
+  | "work_exp_start"
+  | "work_exp_end"
+  | "work_exp_current"
+  | "work_exp_description"
   | "skills"
 
 interface SafeKeyRule {
@@ -115,6 +132,8 @@ interface SafeKeyRule {
   patterns: RegExp[]
   /** When the input element type matches one of these (lowercased). */
   inputTypes?: string[]
+  /** Restrict matching to the visible field label only. */
+  labelOnly?: boolean
 }
 
 /** Order matters — first match wins. More specific rules go before general. */
@@ -142,34 +161,85 @@ const SAFE_KEY_RULES: SafeKeyRule[] = [
   { key: "location", patterns: [/\blocation\b|\bcity\b|\baddress\b(?!\s*line\s*2)/i] },
 
   // Resume-derived fields
+  { key: "work_exp_current", patterns: [/\bi[\s_-]*currently[\s_-]*work[\s_-]*here\b|currently[\s_-]*(?:employed|work(?:ing)?)\b/i], inputTypes: ["checkbox"], labelOnly: true },
+  { key: "work_exp_start",   patterns: [/^\s*from\s*$/i, /\bstart[\s_-]?date\b/i, /\bdate[\s_-]?started\b/i, /\bemployment[\s_-]?start\b/i], inputTypes: ["text", "date", "month"], labelOnly: true },
+  { key: "work_exp_end",     patterns: [/^\s*to\s*$/i, /\bend[\s_-]?date\b/i, /\bdate[\s_-]?ended\b/i, /\bemployment[\s_-]?end\b/i, /\bthrough\b/i], inputTypes: ["text", "date", "month"], labelOnly: true },
+  { key: "work_exp_description", patterns: [/\brole[\s_-]?description\b|\bjob[\s_-]?description\b|\bresponsibilit/i, /\baccomplishment|achievement|duties\b/i], labelOnly: true },
   { key: "current_title",   patterns: [/current[\s_-]?(?:job[\s_-]?)?title|job[\s_-]?title|\btitle\b|current[\s_-]?role|position[\s_-]?title/i] },
-  { key: "current_company", patterns: [/current[\s_-]?(?:employer|company|organization)|employer[\s_-]?name|company[\s_-]?name|\bemployer\b/i] },
+  { key: "current_company", patterns: [/current[\s_-]?(?:employer|company|organization)|employer[\s_-]?name|company[\s_-]?name|\bemployer\b|\bcompany\b/i] },
   { key: "resume_summary",  patterns: [/professional[\s_-]?summary|about[\s_-]?(?:you|yourself)|tell[\s_-]?us[\s_-]?about|career[\s_-]?(?:summary|objective)|personal[\s_-]?summary/i] },
   { key: "skills",          patterns: [/\bskills?\b|technical[\s_-]?skills?|key[\s_-]?skills?|core[\s_-]?competenc|areas?[\s_-]?of[\s_-]?expertise/i] },
 ]
 
 // ── Form scoping per source ──────────────────────────────────────────────────
 
+const FORM_CONTROL_SELECTOR =
+  "input:not([type=hidden]):not([type=submit]):not([type=button]):not([type=reset]), select, textarea"
+const FRAME_SELECTOR_PREFIX = "__ho_frame:"
+type FormControlElement = HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+type LocatedControl = { el: FormControlElement; framePath: number[] }
+
 /**
  * Scope detection to the application form container so we don't hit unrelated
  * inputs on the page (search bars, newsletter, etc.). Returns the form root
  * element if found, or null when not on a supported application form.
  */
-function findApplicationFormRoot(doc: Document, source: "greenhouse" | "lever"): HTMLElement | null {
-  if (source === "greenhouse") {
-    return (
-      // job-boards.greenhouse.io
-      doc.querySelector<HTMLElement>("form#application-form, form.application--form") ??
-      // boards.greenhouse.io legacy
-      doc.querySelector<HTMLElement>("#grnhse_app form, form[action*='boards']") ??
-      doc.querySelector<HTMLElement>("form")
-    )
+function findApplicationFormRoot(
+  doc: Document,
+  source: "greenhouse" | "lever" | "workday",
+): HTMLElement | null {
+  const selectors: string[] =
+    source === "greenhouse"
+      ? [
+          "form#application-form",
+          "form.application--form",
+          "#grnhse_app form",
+          "form[action*='boards']",
+          "form[action*='greenhouse']",
+          "form",
+        ]
+      : source === "lever"
+      ? [
+          "form.application-form",
+          "form[action*='lever']",
+          "form",
+        ]
+      : [
+          "[data-automation-id='applyStep']",
+          "[data-automation-id='applicationStep']",
+          "[data-automation-id='stepContent']",
+          "[data-automation-id='applyFlow']",
+          "[data-automation-id='applicationSummaryStep']",
+          "form[data-automation-id]",
+          "form[action*='workday']",
+          "form[action*='myworkday']",
+          "form",
+        ]
+
+  const seen = new Set<HTMLElement>()
+  const candidates: Array<{ root: HTMLElement; score: number }> = []
+
+  for (const sel of selectors) {
+    doc.querySelectorAll<HTMLElement>(sel).forEach((root) => {
+      if (seen.has(root)) return
+      seen.add(root)
+      const score = root.querySelectorAll(FORM_CONTROL_SELECTOR).length
+      if (score > 0) candidates.push({ root, score })
+    })
   }
-  // Lever
-  return (
-    doc.querySelector<HTMLElement>("form.application-form, form[action*='lever']") ??
-    doc.querySelector<HTMLElement>("form")
-  )
+
+  // Fallback for Workday-style layouts where the visible step has no formal form wrapper.
+  if (candidates.length === 0) {
+    doc.querySelectorAll<HTMLElement>("main section, [role='main'] section, main article, [role='main'] article").forEach((root) => {
+      if (seen.has(root)) return
+      const score = root.querySelectorAll(FORM_CONTROL_SELECTOR).length
+      if (score >= 3) candidates.push({ root, score })
+    })
+  }
+
+  if (candidates.length === 0) return null
+  candidates.sort((a, b) => b.score - a.score)
+  return candidates[0].root
 }
 
 // ── Label resolution ─────────────────────────────────────────────────────────
@@ -210,10 +280,39 @@ function getFieldLabel(input: HTMLElement): string {
   return input.getAttribute("name") ?? input.id ?? "Unlabelled field"
 }
 
+const WORK_EXPERIENCE_CONTEXT_RE = /\bwork[\s_-]?experience\b/i
+
+function hasWorkExperienceContext(input: HTMLElement): boolean {
+  let node: HTMLElement | null = input
+  for (let depth = 0; node && depth < 8; depth += 1, node = node.parentElement) {
+    const attrs = [
+      node.getAttribute("data-automation-id") ?? "",
+      node.getAttribute("aria-label") ?? "",
+      node.id,
+      typeof node.className === "string" ? node.className : "",
+    ].join(" ")
+    if (WORK_EXPERIENCE_CONTEXT_RE.test(attrs)) return true
+
+    const heading = node.querySelector<HTMLElement>(
+      ":scope > h1, :scope > h2, :scope > h3, :scope > h4, :scope > legend, :scope > [role='heading']",
+    )
+    if (heading?.textContent && WORK_EXPERIENCE_CONTEXT_RE.test(heading.textContent)) {
+      return true
+    }
+
+    const directText = Array.from(node.childNodes)
+      .filter((child) => child.nodeType === Node.TEXT_NODE)
+      .map((child) => child.textContent ?? "")
+      .join(" ")
+    if (WORK_EXPERIENCE_CONTEXT_RE.test(directText)) return true
+  }
+  return false
+}
+
 // ── Detection + classification ───────────────────────────────────────────────
 
 interface DetectedField {
-  el: HTMLInputElement | HTMLTextAreaElement
+  el: FormControlElement
   label: string
   selector: string
   inputType: string
@@ -230,9 +329,79 @@ function buildSelector(input: HTMLElement): string {
   return input.tagName.toLowerCase()
 }
 
-function classifyField(input: HTMLInputElement | HTMLTextAreaElement): DetectedField {
+function buildSelectorWithFrame(input: HTMLElement, framePath: number[]): string {
+  const base = buildSelector(input)
+  if (framePath.length === 0) return base
+  return `${FRAME_SELECTOR_PREFIX}${framePath.join(".")}::${base}`
+}
+
+function collectControlsInElement(root: ParentNode, framePath: number[]): LocatedControl[] {
+  return Array.from(root.querySelectorAll<FormControlElement>(FORM_CONTROL_SELECTOR)).map((el) => ({ el, framePath }))
+}
+
+function collectControlsInDocument(doc: Document, framePath: number[] = []): LocatedControl[] {
+  const out: LocatedControl[] = collectControlsInElement(doc, framePath)
+  const frameNodes: HTMLIFrameElement[] = Array.from(doc.querySelectorAll("iframe"))
+  frameNodes.forEach((frameNode, index) => {
+    try {
+      const childDoc = frameNode.contentDocument
+      if (!childDoc) return
+      out.push(...collectControlsInDocument(childDoc, [...framePath, index]))
+    } catch {
+      // Cross-origin frame: inaccessible from this frame context.
+    }
+  })
+  return out
+}
+
+function resolveFramePrefixedSelector(
+  selector: string,
+  topDoc: Document = document,
+): HTMLElement | null {
+  if (!selector.startsWith(FRAME_SELECTOR_PREFIX)) {
+    try {
+      return topDoc.querySelector<HTMLElement>(selector)
+    } catch {
+      return null
+    }
+  }
+
+  const split = selector.indexOf("::")
+  if (split < 0) return null
+  const pathRaw = selector.slice(FRAME_SELECTOR_PREFIX.length, split)
+  const baseSelector = selector.slice(split + 2)
+  const indexes = pathRaw.split(".").map((v) => Number.parseInt(v, 10)).filter((n) => Number.isFinite(n))
+  if (indexes.length === 0) return null
+
+  let doc: Document | null = topDoc
+  for (const idx of indexes) {
+    if (!doc) return null
+    const frameNodes: HTMLIFrameElement[] = Array.from(doc.querySelectorAll("iframe"))
+    const frameNode: HTMLIFrameElement | undefined = frameNodes[idx]
+    if (!frameNode) return null
+    try {
+      doc = frameNode.contentDocument
+    } catch {
+      return null
+    }
+  }
+  if (!doc) return null
+  try {
+    return doc.querySelector<HTMLElement>(baseSelector)
+  } catch {
+    return null
+  }
+}
+
+function classifyField(input: FormControlElement): DetectedField {
   const label = getFieldLabel(input)
-  const inputType = (input as HTMLInputElement).type?.toLowerCase() ?? "text"
+  const tag = input.tagName.toLowerCase()
+  const inputType =
+    tag === "textarea"
+      ? "textarea"
+      : tag === "select"
+      ? "select"
+      : (input as HTMLInputElement).type?.toLowerCase() ?? "text"
   const haystack = [
     label,
     input.getAttribute("name") ?? "",
@@ -246,7 +415,11 @@ function classifyField(input: HTMLInputElement | HTMLTextAreaElement): DetectedF
   if (!sensitive) {
     for (const rule of SAFE_KEY_RULES) {
       if (rule.inputTypes && !rule.inputTypes.includes(inputType)) continue
-      if (rule.patterns.some((p) => p.test(haystack))) {
+      const target = rule.labelOnly ? label : haystack
+      if (rule.patterns.some((p) => p.test(target))) {
+        if (rule.key.startsWith("work_exp_") && !hasWorkExperienceContext(input)) {
+          continue
+        }
         safeKey = rule.key
         break
       }
@@ -265,7 +438,97 @@ function classifyField(input: HTMLInputElement | HTMLTextAreaElement): DetectedF
 
 // ── Profile → field-value resolution ─────────────────────────────────────────
 
-function profileValueFor(profile: SafeProfile, key: SafeKey): string | null {
+type ValueResolutionState = {
+  keyHits: Partial<Record<SafeKey, number>>
+}
+
+function nextKeyHitIndex(state: ValueResolutionState, key: SafeKey): number {
+  const current = state.keyHits[key] ?? 0
+  state.keyHits[key] = current + 1
+  return current
+}
+
+function toTrimmed(value: string | null | undefined): string | null {
+  if (!value) return null
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : null
+}
+
+function getWorkExperienceAt(profile: SafeProfile, index: number) {
+  const rows = Array.isArray(profile.work_experience) ? profile.work_experience : []
+  if (index < 0 || index >= rows.length) return null
+  return rows[index] ?? null
+}
+
+function formatMonthYear(raw: string | null | undefined): string | null {
+  const value = toTrimmed(raw)
+  if (!value) return null
+
+  const iso = value.match(/^(\d{4})-(\d{1,2})(?:-(\d{1,2}))?$/)
+  if (iso) {
+    const month = Number.parseInt(iso[2], 10)
+    const year = Number.parseInt(iso[1], 10)
+    if (Number.isFinite(month) && month >= 1 && month <= 12 && Number.isFinite(year)) {
+      return `${String(month).padStart(2, "0")}/${year}`
+    }
+  }
+
+  const slash = value.match(/^(\d{1,2})\/(\d{4})$/)
+  if (slash) {
+    const month = Number.parseInt(slash[1], 10)
+    const year = Number.parseInt(slash[2], 10)
+    if (Number.isFinite(month) && month >= 1 && month <= 12 && Number.isFinite(year)) {
+      return `${String(month).padStart(2, "0")}/${year}`
+    }
+  }
+
+  const parsed = new Date(value)
+  if (!Number.isNaN(parsed.getTime())) {
+    const month = parsed.getUTCMonth() + 1
+    const year = parsed.getUTCFullYear()
+    if (year > 1900) return `${String(month).padStart(2, "0")}/${year}`
+  }
+
+  return value
+}
+
+function buildWorkDescription(row: {
+  description?: string | null
+  achievements?: string[] | null
+} | null): string | null {
+  if (!row) return null
+  const description = toTrimmed(row.description)
+  const achievements = Array.isArray(row.achievements)
+    ? row.achievements
+        .map((item) => toTrimmed(item ?? null))
+        .filter((item): item is string => Boolean(item))
+    : []
+  if (description && achievements.length > 0) {
+    return `${description}\n${achievements.map((a) => `• ${a}`).join("\n")}`.slice(0, 2800)
+  }
+  if (description) return description.slice(0, 2800)
+  if (achievements.length > 0) return achievements.map((a) => `• ${a}`).join("\n").slice(0, 2800)
+  return null
+}
+
+function normalizedTopSkills(profile: SafeProfile): string[] {
+  const fromArray = Array.isArray(profile.top_skills) ? profile.top_skills : []
+  const fromString = typeof profile.skills === "string" ? profile.skills.split(",") : []
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const raw of [...fromArray, ...fromString]) {
+    const skill = typeof raw === "string" ? raw.trim() : ""
+    if (!skill) continue
+    const key = skill.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(skill)
+    if (out.length >= 28) break
+  }
+  return out
+}
+
+function profileValueFor(profile: SafeProfile, key: SafeKey, state: ValueResolutionState): string | null {
   switch (key) {
     case "first_name":   return profile.first_name ?? null
     case "last_name":    return profile.last_name ?? null
@@ -286,10 +549,42 @@ function profileValueFor(profile: SafeProfile, key: SafeKey): string | null {
     case "resume_upload":
     case "cover_letter_upload":
       return null // Always manual_required — file uploads aren't filled by the MVP
-    case "current_title":   return profile.current_title ?? null
-    case "current_company": return profile.current_company ?? null
+    case "current_title": {
+      const idx = nextKeyHitIndex(state, key)
+      const row = getWorkExperienceAt(profile, idx)
+      return toTrimmed(row?.title ?? null) ?? (idx === 0 ? toTrimmed(profile.current_title ?? null) : null)
+    }
+    case "current_company": {
+      const idx = nextKeyHitIndex(state, key)
+      const row = getWorkExperienceAt(profile, idx)
+      return toTrimmed(row?.company ?? null) ?? (idx === 0 ? toTrimmed(profile.current_company ?? null) : null)
+    }
     case "resume_summary":  return profile.resume_summary ?? null
-    case "skills":          return profile.skills ?? null
+    case "work_exp_start": {
+      const idx = nextKeyHitIndex(state, key)
+      const row = getWorkExperienceAt(profile, idx)
+      return formatMonthYear(row?.start_date ?? null)
+    }
+    case "work_exp_end": {
+      const idx = nextKeyHitIndex(state, key)
+      const row = getWorkExperienceAt(profile, idx)
+      if (!row || row.is_current) return null
+      return formatMonthYear(row.end_date ?? null)
+    }
+    case "work_exp_current": {
+      const idx = nextKeyHitIndex(state, key)
+      const row = getWorkExperienceAt(profile, idx)
+      return row?.is_current ? "true" : null
+    }
+    case "work_exp_description": {
+      const idx = nextKeyHitIndex(state, key)
+      const row = getWorkExperienceAt(profile, idx)
+      return buildWorkDescription(row)
+    }
+    case "skills": {
+      const skills = normalizedTopSkills(profile)
+      return skills.length > 0 ? skills.join(", ") : null
+    }
   }
 }
 
@@ -301,29 +596,33 @@ function profileValueFor(profile: SafeProfile, key: SafeKey): string | null {
  * this preview, then calls applySafeFills() with the same list to commit.
  */
 export function buildAutofillPreview(
-  source: "greenhouse" | "lever",
+  source: "greenhouse" | "lever" | "workday",
   profile: SafeProfile | null,
   doc: Document = document,
 ): AutofillFieldResult[] {
   const root = findApplicationFormRoot(doc, source)
-  if (!root) return []
-
-  const inputs = Array.from(
-    root.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
-      "input:not([type=hidden]):not([type=submit]):not([type=button]), textarea",
-    ),
-  )
+  let inputs: LocatedControl[] = []
+  if (root) {
+    inputs = collectControlsInElement(root, [])
+  }
+  if (inputs.length === 0) {
+    // Fallback: include controls from the whole document tree (including
+    // accessible same-origin iframes) when scoped root detection misses.
+    inputs = collectControlsInDocument(doc)
+  }
 
   const results: AutofillFieldResult[] = []
+  const valueState: ValueResolutionState = { keyHits: {} }
 
-  for (const input of inputs) {
+  for (const { el: input, framePath } of inputs) {
     const f = classifyField(input)
+    const selector = buildSelectorWithFrame(input, framePath)
 
     // Skip sensitive
     if (f.sensitive) {
       results.push({
         label: f.label,
-        selector: f.selector,
+        selector,
         confidence: "needs_review",
         source: "manual_required",
         filled: false,
@@ -339,7 +638,7 @@ export function buildAutofillPreview(
     if (f.safeKey === "resume_upload") {
       results.push({
         label: f.label,
-        selector: f.selector,
+        selector,
         valuePreview: "Your primary resume",
         confidence: "high",
         source: "resume",
@@ -355,7 +654,7 @@ export function buildAutofillPreview(
     if (f.safeKey === "cover_letter_upload") {
       results.push({
         label: f.label,
-        selector: f.selector,
+        selector,
         valuePreview: "Will generate & attach below",
         confidence: "high",
         source: "cover_letter",
@@ -368,7 +667,7 @@ export function buildAutofillPreview(
     if (!f.safeKey) {
       results.push({
         label: f.label,
-        selector: f.selector,
+        selector,
         confidence: "needs_review",
         source: "manual_required",
         filled: false,
@@ -381,7 +680,7 @@ export function buildAutofillPreview(
     if (!profile) {
       results.push({
         label: f.label,
-        selector: f.selector,
+        selector,
         confidence: "needs_review",
         source: "manual_required",
         filled: false,
@@ -390,11 +689,11 @@ export function buildAutofillPreview(
       continue
     }
 
-    const value = profileValueFor(profile, f.safeKey)
+    const value = profileValueFor(profile, f.safeKey, valueState)
     if (!value) {
       results.push({
         label: f.label,
-        selector: f.selector,
+        selector,
         confidence: "needs_review",
         source: "profile",
         filled: false,
@@ -414,8 +713,9 @@ export function buildAutofillPreview(
 
     results.push({
       label: f.label,
-      selector: f.selector,
+      selector,
       valuePreview: previewValue(f.safeKey, value),
+      fillValue: value,
       confidence,
       source: "profile",
       filled: false,
@@ -435,6 +735,12 @@ function previewValue(key: SafeKey, value: string): string {
   }
   if (key === "phone") {
     return value.length > 4 ? `…${value.slice(-4)}` : value
+  }
+  if (key === "work_exp_current") {
+    return value === "true" ? "Yes" : value
+  }
+  if (key === "skills" && value.length > 140) {
+    return `${value.slice(0, 137)}…`
   }
   return value
 }
@@ -458,7 +764,7 @@ export type ResumeBytes = { base64: string; filename: string }
  * skippedReason populated when fill failed.
  */
 export async function applySafeFills(
-  source: "greenhouse" | "lever",
+  source: "greenhouse" | "lever" | "workday",
   profile: SafeProfile,
   resumeBytes: ResumeBytes | null,
   doc: Document = document,
@@ -467,7 +773,7 @@ export async function applySafeFills(
   const out: AutofillFieldResult[] = []
 
   for (const item of preview) {
-    if (!item.selector || item.skippedReason || !item.valuePreview) {
+    if (!item.selector || item.skippedReason) {
       out.push(item)
       continue
     }
@@ -478,33 +784,14 @@ export async function applySafeFills(
       continue
     }
     let el: HTMLElement | null = null
-    try {
-      el = doc.querySelector<HTMLElement>(item.selector)
-    } catch {
-      out.push({ ...item, skippedReason: "Invalid selector — skipped." })
-      continue
-    }
+    el = resolveFramePrefixedSelector(item.selector, doc)
     if (!el) {
       out.push({ ...item, skippedReason: "Field disappeared from page — skipped." })
       continue
     }
 
-    // Recompute the actual safeKey at fill-time (so the masked preview can't
-    // diverge from what we end up writing).
-    const safeKey = SAFE_KEY_RULES.find((rule) => {
-      if (rule.inputTypes && el && el.tagName.toLowerCase() === "input") {
-        const t = (el as HTMLInputElement).type?.toLowerCase() ?? "text"
-        if (!rule.inputTypes.includes(t)) return false
-      }
-      return rule.patterns.some((p) =>
-        [
-          getFieldLabel(el!),
-          el!.getAttribute("name") ?? "",
-          el!.id,
-          el!.getAttribute("placeholder") ?? "",
-        ].some((s) => p.test(s)),
-      )
-    })?.key
+    // Recompute the actual safeKey at fill-time (so preview and apply stay aligned).
+    const safeKey = classifyField(el as FormControlElement).safeKey
     if (!safeKey) {
       out.push({ ...item, skippedReason: "Could not re-classify at fill time — skipped." })
       continue
@@ -528,13 +815,23 @@ export async function applySafeFills(
       continue
     }
 
-    const value = profileValueFor(profile, safeKey)
-    if (!value) {
-      out.push({ ...item, skippedReason: "Profile value missing at fill time — skipped." })
-      continue
+    let ok = false
+    if (safeKey === "skills") {
+      const skills = (item.fillValue ?? "")
+        .split(",")
+        .map((part) => part.trim())
+        .filter((part) => part.length > 0)
+      ok = fillSkillTokens(el, skills)
+    } else if (safeKey === "work_exp_current") {
+      ok = item.fillValue === "true" ? setReactChecked(el, true) : true
+    } else {
+      const value = item.fillValue ?? null
+      if (!value) {
+        out.push({ ...item, skippedReason: "Profile value missing at fill time — skipped." })
+        continue
+      }
+      ok = setReactValue(el, value)
     }
-
-    const ok = setReactValue(el, value)
     out.push(ok
       ? { ...item, filled: true }
       : { ...item, skippedReason: "Could not set field value — fill it manually." },
@@ -594,16 +891,101 @@ function injectResumeFile(target: HTMLInputElement, bytes: ResumeBytes): boolean
   }
 }
 
+function setReactChecked(el: HTMLElement, checked: boolean): boolean {
+  if (el.tagName.toLowerCase() !== "input") return false
+  const inputEl = el as HTMLInputElement
+  const type = (inputEl.type ?? "").toLowerCase()
+  if (type !== "checkbox" && type !== "radio") return false
+  try {
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "checked")?.set
+    setter?.call(inputEl, checked)
+    inputEl.dispatchEvent(new Event("input", { bubbles: true }))
+    inputEl.dispatchEvent(new Event("change", { bubbles: true }))
+    inputEl.dispatchEvent(new Event("blur", { bubbles: true }))
+    return inputEl.checked === checked
+  } catch {
+    return false
+  }
+}
+
+function dispatchEnterKey(el: HTMLElement): void {
+  el.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", code: "Enter", bubbles: true, cancelable: true }))
+  el.dispatchEvent(new KeyboardEvent("keypress", { key: "Enter", code: "Enter", bubbles: true, cancelable: true }))
+  el.dispatchEvent(new KeyboardEvent("keyup", { key: "Enter", code: "Enter", bubbles: true, cancelable: true }))
+}
+
+function isTokenizedSkillInput(el: HTMLElement): boolean {
+  const role = (el.getAttribute("role") ?? "").toLowerCase()
+  const ariaAutocomplete = (el.getAttribute("aria-autocomplete") ?? "").toLowerCase()
+  if (role === "combobox") return true
+  if (ariaAutocomplete === "list" || ariaAutocomplete === "both") return true
+  const container = el.closest(
+    "[data-automation-id*='token'], [data-automation-id*='chip'], [data-automation-id*='tag'], [class*='token'], [class*='chip'], [class*='tag']",
+  )
+  return Boolean(container)
+}
+
+function fillSkillTokens(el: HTMLElement, skills: string[]): boolean {
+  const normalized = skills
+    .map((skill) => skill.trim())
+    .filter((skill) => skill.length > 0)
+    .slice(0, 20)
+
+  if (normalized.length === 0) return false
+
+  if (el.tagName.toLowerCase() === "select") {
+    const select = el as HTMLSelectElement
+    let matched = 0
+    const want = new Set(normalized.map((skill) => skill.toLowerCase()))
+    Array.from(select.options).forEach((option) => {
+      const txt = option.textContent?.trim().toLowerCase() ?? ""
+      const val = option.value.trim().toLowerCase()
+      if (want.has(txt) || want.has(val)) {
+        option.selected = true
+        matched += 1
+      }
+    })
+    if (matched > 0) {
+      select.dispatchEvent(new Event("input", { bubbles: true }))
+      select.dispatchEvent(new Event("change", { bubbles: true }))
+      select.dispatchEvent(new Event("blur", { bubbles: true }))
+      return true
+    }
+    return false
+  }
+
+  if (el.tagName.toLowerCase() !== "input" && el.tagName.toLowerCase() !== "textarea") {
+    return false
+  }
+
+  if (!isTokenizedSkillInput(el)) {
+    return setReactValue(el, normalized.join(", "))
+  }
+
+  let wrote = false
+  for (const skill of normalized) {
+    const ok = setReactValue(el, skill, { blur: false })
+    if (!ok) continue
+    dispatchEnterKey(el)
+    wrote = true
+  }
+  el.dispatchEvent(new Event("blur", { bubbles: true }))
+  return wrote
+}
+
 /**
- * Set an input/textarea value in a way React's controlled-input synthetic
+ * Set an input/textarea/select value in a way React's controlled-input synthetic
  * event system will accept. Mirrors the pattern in chrome-extension/src/content.ts.
  */
-export function setReactValue(el: HTMLElement, value: string): boolean {
+export function setReactValue(el: HTMLElement, value: string, opts?: { blur?: boolean }): boolean {
   const tag = el.tagName.toLowerCase()
   try {
     if (tag === "textarea") {
       const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set
       setter?.call(el as HTMLTextAreaElement, value)
+    } else if (tag === "select") {
+      const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set
+      setter?.call(el as HTMLSelectElement, value)
     } else if (tag === "input") {
       const inputEl = el as HTMLInputElement
       const type = (inputEl.type ?? "").toLowerCase()
@@ -616,7 +998,9 @@ export function setReactValue(el: HTMLElement, value: string): boolean {
     }
     el.dispatchEvent(new Event("input", { bubbles: true }))
     el.dispatchEvent(new Event("change", { bubbles: true }))
-    el.dispatchEvent(new Event("blur", { bubbles: true }))
+    if (opts?.blur !== false) {
+      el.dispatchEvent(new Event("blur", { bubbles: true }))
+    }
     return true
   } catch {
     return false

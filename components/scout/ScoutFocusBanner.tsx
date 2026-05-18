@@ -7,7 +7,17 @@ export function ScoutFocusBanner() {
   const router = useRouter()
   const searchParams = useSearchParams()
 
+  function clearPersistedFocusMode() {
+    try {
+      localStorage.removeItem("hireoven:scout-focus-mode:v1")
+    } catch {}
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("scout:focus-mode-changed", { detail: { enabled: false } }))
+    }
+  }
+
   function turnOff() {
+    clearPersistedFocusMode()
     const params = new URLSearchParams(searchParams.toString())
     params.delete("focus")
     // Only remove sort=match if it was set by focus mode (not by the user directly).

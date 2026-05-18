@@ -653,7 +653,19 @@ function matchExplain(score: number, roleAlignment: TailorRoleAlignment | null |
   return `Low surface overlap (~${score}%) with the posting. Prioritize provable experience edits before skills.`
 }
 
-function TailorMatchInsightPanel({ analysis, matchingSkills }: { analysis: TailorAnalysisResult | null; matchingSkills: string[] }) {
+function TailorMatchInsightPanel({
+  analysis,
+  matchingSkills,
+  liveMatchScore,
+  liveRoleAlignment,
+  baselineMatchScore,
+}: {
+  analysis: TailorAnalysisResult | null
+  matchingSkills: string[]
+  liveMatchScore: number | null
+  liveRoleAlignment: TailorRoleAlignment | null
+  baselineMatchScore: number | null
+}) {
   if (!analysis) {
     return (
       <section
@@ -666,7 +678,10 @@ function TailorMatchInsightPanel({ analysis, matchingSkills }: { analysis: Tailo
   }
 
   const { matchScore, roleAlignment, skillSuggestions } = analysis
-  const strength = roleAlignmentChip(roleAlignment)
+  const resolvedScore = liveMatchScore ?? matchScore
+  const resolvedAlignment = liveRoleAlignment ?? roleAlignment
+  const strength = roleAlignmentChip(resolvedAlignment)
+  const delta = baselineMatchScore == null ? null : resolvedScore - baselineMatchScore
   const safeAdd = skillSuggestions
     .filter((s) => s.status === "missing_supported")
     .map((s) => s.skill)
@@ -683,9 +698,19 @@ function TailorMatchInsightPanel({ analysis, matchingSkills }: { analysis: Tailo
           <div>
             <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-indigo-700/85">Match score</p>
             <p className="mt-0.5 bg-gradient-to-r from-[#5B4DFF] via-orange-600 to-indigo-600 bg-clip-text text-3xl font-black tabular-nums tracking-tight text-transparent sm:text-[2.4rem]">
-              {matchScore}
+              {resolvedScore}
               <span className="text-[0.55em] font-extrabold text-indigo-600/90">%</span>
             </p>
+            {delta !== null && (
+              <p
+                className={cn(
+                  "mt-0.5 text-[10.5px] font-semibold",
+                  delta > 0 ? "text-emerald-700" : delta < 0 ? "text-amber-700" : "text-slate-500"
+                )}
+              >
+                {delta > 0 ? `+${delta}` : `${delta}`} since analysis
+              </p>
+            )}
           </div>
           <span
             className={cn("inline-flex shrink-0 items-center rounded-full px-2.5 py-0.5 text-[10.5px] font-bold ring-1", strength.className)}
@@ -693,7 +718,7 @@ function TailorMatchInsightPanel({ analysis, matchingSkills }: { analysis: Tailo
             {strength.text}
           </span>
         </div>
-        <p className="mt-1.5 line-clamp-2 text-[11px] leading-relaxed text-slate-600 sm:line-clamp-none">{matchExplain(matchScore, roleAlignment)}</p>
+        <p className="mt-1.5 line-clamp-2 text-[11px] leading-relaxed text-slate-600 sm:line-clamp-none">{matchExplain(resolvedScore, resolvedAlignment)}</p>
       </div>
 
       <details className="group border-t border-indigo-100/80">
@@ -986,6 +1011,7 @@ export default function ResumeStudioPage() {
   const [applyingFixId, setApplyingFixId] = useState<string | null>(null)
   const [appliedFixIds, setAppliedFixIds] = useState<string[]>([])
   const [analysis, setAnalysis] = useState<TailorAnalysisResult | null>(null)
+  const [analysisBaselineScore, setAnalysisBaselineScore] = useState<number | null>(null)
   const [sections, setSections] = useState<ResumeSectionState[]>(INITIAL_SECTIONS)
   const [customSections, setCustomSections] = useState<Record<string, ResumePreviewCustomSection>>({})
   const [aiLoadingSectionId, setAiLoadingSectionId] = useState<string | null>(null)
@@ -993,7 +1019,7 @@ export default function ResumeStudioPage() {
   const [isSaving, setIsSaving] = useState(false)
   const [isDownloading, setIsDownloading] = useState(false)
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const saveDraftLatestRef = useRef<() => Promise<void>>(() => Promise.resolve())
+  const saveDraftLatestRef = useRef<() => Promise<boolean>>(() => Promise.resolve(false))
   const isSavingRef = useRef(false)
   const lastAutoAnalyzeKeyRef = useRef<string | null>(null)
   const [undoStack, setUndoStack] = useState<EditorSnapshot[]>([])
@@ -1029,6 +1055,7 @@ export default function ResumeStudioPage() {
   useEffect(() => {
     setTailorStep("idle")
     setAppliedFixIds([])
+    setAnalysisBaselineScore(null)
   }, [jobDescription])
 
   useEffect(() => {
@@ -1113,7 +1140,6 @@ export default function ResumeStudioPage() {
       }),
     [experienceDrafts, profileSummary, sections, skillsText]
   )
-  const matchingSkills = analysis?.presentKeywords?.length ? analysis.presentKeywords : []
   const previewPersonalFields = useMemo<ResumePreviewPersonalField[]>(
     () => personalCustomFields
       .map((field) => ({ label: field.label.trim(), value: field.value.trim() }))
@@ -1181,6 +1207,20 @@ export default function ResumeStudioPage() {
       projects: previewProjects,
     } as Resume
   }, [educationDrafts, experienceDrafts, headline, personalInfo, profile, profileSummary, projectsDraft, selectedResume, skillsText])
+  const liveTailorAnalysis = useMemo(() => {
+    if (!analysis || !jobDescription.trim()) return null
+    return buildLocalTailorAnalysis({
+      resume: (livePreviewResume as Resume) ?? null,
+      jobDescription,
+      skillsText,
+      profileSummary,
+      experienceDraft: experienceDrafts,
+    })
+  }, [analysis, experienceDrafts, jobDescription, livePreviewResume, profileSummary, skillsText])
+  const liveMatchScore = liveTailorAnalysis?.matchScore ?? analysis?.matchScore ?? null
+  const liveRoleAlignment = liveTailorAnalysis?.roleAlignment ?? analysis?.roleAlignment ?? null
+  const matchingSkills =
+    (liveTailorAnalysis?.presentKeywords?.length ? liveTailorAnalysis.presentKeywords : analysis?.presentKeywords) ?? []
 
   useEffect(() => {
     if (!selectedResume || initializedResumeIdRef.current === selectedResume.id) return
@@ -1513,6 +1553,7 @@ export default function ResumeStudioPage() {
       experienceDraft: experienceDrafts,
     })
     setAnalysis(local)
+    setAnalysisBaselineScore(local.matchScore)
     setTailorStep("analyzed")
     setAppliedFixIds([])
 
@@ -1544,7 +1585,9 @@ export default function ResumeStudioPage() {
       })
       const data = (await res.json().catch(() => ({}))) as { analysis?: unknown; error?: string }
       if (res.ok && data.analysis) {
-        setAnalysis(normalizeTailorAnalysis(data.analysis))
+        const refined = normalizeTailorAnalysis(data.analysis)
+        setAnalysis(refined)
+        setAnalysisBaselineScore(refined.matchScore)
         setTailorStep("analyzed")
         pushToast({
           tone: "success",
@@ -1611,11 +1654,11 @@ export default function ResumeStudioPage() {
     applyEditorSnapshot(next)
   }
 
-  async function saveDraft(silent = false, createVersion = false) {
-    if (isSavingRef.current) return  // prevent concurrent saves
+  async function saveDraft(silent = false, createVersion = false): Promise<boolean> {
+    if (isSavingRef.current) return false  // prevent concurrent saves
     if (!selectedResume?.id) {
       if (!silent) pushToast({ tone: "info", title: "Select a resume to save." })
-      return
+      return false
     }
     isSavingRef.current = true
     setIsSaving(true)
@@ -1699,6 +1742,8 @@ export default function ResumeStudioPage() {
             body: JSON.stringify({
               parentResumeId: selectedResume.id,
               jobId: tailorJobId,
+              matchScore: liveMatchScore,
+              jobDescription: jobDescription.trim(),
               payload: resumePayload,
             }),
           })
@@ -1768,6 +1813,7 @@ export default function ResumeStudioPage() {
       isSavingRef.current = false
       setIsSaving(false)
     }
+    return savedOk
   }
 
   function updatePersonalInfo(field: keyof typeof personalInfo, value: string) {
@@ -2121,7 +2167,28 @@ export default function ResumeStudioPage() {
     setIsTailoring(true)
     try {
       // Flush editor state to DB first so duplication starts from the latest edits.
-      await saveDraft(true)
+      const saved = await saveDraft(true)
+      if (!saved) {
+        throw new Error("Could not save tailored resume content.")
+      }
+
+      const tailorJobId = searchParams.get("jobId")
+      if (mode === "tailor" && tailorJobId) {
+        window.dispatchEvent(new Event("hireoven:resumes-changed"))
+        await refreshHubData()
+        const roleTitle = jobTitle.trim() || selectedTargetJob?.title || "Role"
+        const companyName = company.trim() || selectedTargetJob?.company || ""
+        const resumeName = companyName
+          ? `Tailored for ${roleTitle} at ${companyName}`
+          : `Tailored for ${roleTitle}`
+        pushToast({
+          tone: "success",
+          title: `"${resumeName}" saved as a new resume`,
+          description: "Tailored content and final match score were saved to your Library.",
+          action: { label: "Open Library", href: "/dashboard/resume/library" },
+        })
+        return
+      }
 
       const roleTitle = jobTitle.trim() || selectedTargetJob?.title || "Role"
       const companyName = company.trim() || selectedTargetJob?.company || ""
@@ -2875,7 +2942,13 @@ export default function ResumeStudioPage() {
 
             <div className="flex min-h-0 max-h-[calc(100vh-7.5rem)] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
               <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto overscroll-contain p-3 sm:space-y-3 sm:p-4">
-                <TailorMatchInsightPanel analysis={analysis} matchingSkills={matchingSkills} />
+                <TailorMatchInsightPanel
+                  analysis={analysis}
+                  matchingSkills={matchingSkills}
+                  liveMatchScore={liveMatchScore}
+                  liveRoleAlignment={liveRoleAlignment}
+                  baselineMatchScore={analysisBaselineScore}
+                />
                 {analysis ? (
                   <p className="text-[11px] text-slate-500">
                     Only apply suggestions that accurately reflect your real experience.

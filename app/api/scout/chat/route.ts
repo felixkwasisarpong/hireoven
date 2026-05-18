@@ -37,6 +37,7 @@ import {
   type ScoutExplanationBlockType,
   type ScoutExplanationItemStatus,
   type ScoutInterviewPrep,
+  type ScoutAction,
   type ScoutStandardExplanationBlock,
   type ScoutIntent,
   type ScoutMode,
@@ -482,6 +483,51 @@ function inferIntentFromMessage(message: string): ScoutIntent {
   if (ANALYSIS_HINT_RE.test(normalized)) return "analysis"
   if (QUESTION_HINT_RE.test(normalized)) return "question"
   return "question"
+}
+
+/**
+ * Guardrail: sponsorship/company-only requests should not inherit stale role
+ * keyword queries from prior profile context (e.g. "backend java kafka ...").
+ * If the user didn't ask for role/skill keywords, strip `payload.query`.
+ */
+function normalizeFilterQueriesForRequest(response: ScoutResponse, userMessage: string): void {
+  if (!response.actions?.length) return
+
+  const sponsorshipIntent = /\b(sponsorship|sponsor|h-?1b|visa)\b/i.test(userMessage)
+  const companyIntent = /\b(company|companies|employer|employers|firm|firms)\b/i.test(userMessage)
+  const explicitRoleOrKeywordIntent =
+    /\b(keyword|keywords|query|title|titles|role|roles|job|jobs|position|positions|opening|openings|engineer|developer|backend|frontend|full[-\s]?stack|data|ml|ai|devops|sre|product|designer|qa|security|java|python|node|react|kafka|spring|golang|go|dotnet|c\+\+|c#|kotlin|swift|ruby|php)\b/i.test(
+      userMessage
+    )
+
+  if (!(sponsorshipIntent && companyIntent && !explicitRoleOrKeywordIntent)) return
+
+  const normalizedMessage = userMessage.toLowerCase()
+  response.actions = response.actions.map((action) => {
+    if (action.type !== "APPLY_FILTERS" || !action.payload.query) return action
+
+    const suggestedQuery = action.payload.query.trim().toLowerCase()
+    if (suggestedQuery.length > 0 && normalizedMessage.includes(suggestedQuery)) {
+      return action
+    }
+
+    const payload: Extract<ScoutAction, { type: "APPLY_FILTERS" }>["payload"] = {}
+    if (action.payload.location) payload.location = action.payload.location
+    if (action.payload.workMode) payload.workMode = action.payload.workMode
+    if (action.payload.sponsorship) payload.sponsorship = action.payload.sponsorship
+    if (!payload.location && !payload.workMode && !payload.sponsorship) {
+      payload.sponsorship = "high"
+    }
+
+    return {
+      ...action,
+      payload,
+      label:
+        typeof action.label === "string" && /sponsorship/i.test(action.label)
+          ? action.label
+          : "Filter sponsorship-friendly roles",
+    }
+  })
 }
 
 function defaultConfidenceForIntent(intent: ScoutIntent): number {
@@ -2035,6 +2081,7 @@ User Input: ${userMessage}`
             }
           }
 
+          normalizeFilterQueriesForRequest(scoutResponse, userMessage)
           attachDebug(scoutResponse)
 
           const finalScoutResponse = sanitizeScoutResponse(
@@ -2394,6 +2441,7 @@ User Input: ${userMessage}`
       }
     }
 
+    normalizeFilterQueriesForRequest(scoutResponse, userMessage)
     attachDebug(scoutResponse)
 
     // ── Async memory extraction (fire-and-forget) ────────────────────────────

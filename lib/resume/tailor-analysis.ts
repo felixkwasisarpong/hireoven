@@ -252,6 +252,57 @@ function scoreToRoleAlignment(score: number): TailorRoleAlignment {
   return "weak"
 }
 
+function scoreKeywordCoverage(presentKeywords: string[], jobTerms: string[]): number {
+  if (jobTerms.length === 0) return 45
+  return Math.round((presentKeywords.length / jobTerms.length) * 100)
+}
+
+function scoreBulletQuality(experienceDraft: ExperienceLite[], jobTerms: string[]): number {
+  let total = 0
+  let weak = 0
+  for (const exp of experienceDraft) {
+    const expTextForRole = [exp.description, exp.role, exp.company].filter(Boolean).join("\n")
+    for (const raw of exp.description.split(/\r?\n/)) {
+      const line = raw.trim()
+      if (!line) continue
+      total += 1
+      if (isWeakOrThinBullet(line, jobTerms, expTextForRole)?.weak) weak += 1
+    }
+  }
+  if (total === 0) return 55
+  const strong = Math.max(0, total - weak)
+  // Keep floor non-zero so users with sparse bullets aren't hard-penalized.
+  return Math.max(25, Math.min(100, Math.round((strong / total) * 100)))
+}
+
+function scoreSummaryAlignment(summary: string, jobTerms: string[]): number {
+  const text = summary.trim()
+  if (!text) return 30
+  if (jobTerms.length === 0) return 65
+  const cap = Math.min(jobTerms.length, 8)
+  const hits = jobTerms.slice(0, cap).filter((term) => keywordInText(term, text)).length
+  return Math.max(30, Math.min(100, Math.round((hits / cap) * 100)))
+}
+
+function blendTailorMatchScore(opts: {
+  keywordCoverageScore: number
+  bulletQualityScore: number
+  summaryAlignmentScore: number
+  hasJobTerms: boolean
+}): number {
+  const { keywordCoverageScore, bulletQualityScore, summaryAlignmentScore, hasJobTerms } = opts
+  if (!hasJobTerms) {
+    // With no extracted job terms, rely primarily on writing quality.
+    return Math.round(bulletQualityScore * 0.7 + summaryAlignmentScore * 0.3)
+  }
+  // Emphasize JD keyword coverage while still rewarding stronger bullets.
+  return Math.round(
+    keywordCoverageScore * 0.78
+    + bulletQualityScore * 0.18
+    + summaryAlignmentScore * 0.04
+  )
+}
+
 function hasIndirectEvidence(resumeBundle: string, term: string): { ok: boolean; evidence: string } {
   const n = normalizeKeyword(term)
   const lower = resumeBundle.toLowerCase()
@@ -471,10 +522,15 @@ export function buildLocalTailorAnalysis(input: BuildLocalTailorInput): TailorAn
 
   const presentSet = new Set(presentKeywords.map((k) => normalizeKeyword(k)))
   const missingKeywords = missingFromCanon.filter((k) => !presentSet.has(normalizeKeyword(k)))
-
-  const matchScore = Math.round(
-    jobTerms.length > 0 ? (presentKeywords.length / jobTerms.length) * 100 : 45
-  )
+  const keywordCoverageScore = scoreKeywordCoverage(presentKeywords, jobTerms)
+  const bulletQualityScore = scoreBulletQuality(input.experienceDraft, jobTerms)
+  const summaryAlignmentScore = scoreSummaryAlignment(input.profileSummary, jobTerms)
+  const matchScore = blendTailorMatchScore({
+    keywordCoverageScore,
+    bulletQualityScore,
+    summaryAlignmentScore,
+    hasJobTerms: jobTerms.length > 0,
+  })
   const roleAlignment = scoreToRoleAlignment(matchScore)
 
   const skillSuggestions: TailorSkillSuggestion[] = jobTerms.map((skill) => {

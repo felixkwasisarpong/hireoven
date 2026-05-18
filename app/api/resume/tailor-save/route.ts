@@ -25,6 +25,8 @@ export const runtime = "nodejs"
 interface TailorSaveBody {
   parentResumeId: string
   jobId: string
+  matchScore?: number | null
+  jobDescription?: string | null
   payload: {
     name?: string | null
     full_name?: string | null
@@ -42,6 +44,32 @@ interface TailorSaveBody {
     projects?: unknown
     certifications?: unknown
   }
+}
+
+async function ensureResumeTailoringTable(pool: ReturnType<typeof getPostgresPool>) {
+  await pool.query(
+    `CREATE TABLE IF NOT EXISTS resume_tailoring_analyses (
+      id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+      user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+      resume_id UUID REFERENCES resumes(id) ON DELETE CASCADE,
+      job_id UUID,
+      job_title TEXT,
+      company TEXT,
+      job_description TEXT NOT NULL,
+      match_score INTEGER NOT NULL,
+      present_keywords TEXT[],
+      missing_keywords TEXT[],
+      suggested_summary_rewrite TEXT,
+      suggested_skills_to_add TEXT[],
+      bullet_suggestions JSONB,
+      warnings TEXT[],
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`
+  )
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_resume_tailoring_user_resume_created
+     ON resume_tailoring_analyses(user_id, resume_id, created_at DESC)`
+  )
 }
 
 export async function POST(request: Request) {
@@ -78,8 +106,10 @@ export async function POST(request: Request) {
   const jobResult = await pool.query<{
     title: string | null
     company_name: string | null
+    description: string | null
   }>(
     `SELECT j.title,
+            j.description,
             COALESCE(c.name, ja.company_name) AS company_name
      FROM jobs j
      LEFT JOIN companies c ON c.id = j.company_id
@@ -96,6 +126,10 @@ export async function POST(request: Request) {
 
   const tailoredCompany = jobRow.company_name?.trim() || null
   const tailoredRole = jobRow.title?.trim() || null
+  const jobDescription =
+    (typeof body.jobDescription === "string" ? body.jobDescription.trim() : "") ||
+    (jobRow.description?.trim() ?? "") ||
+    "Job description unavailable."
   const resumeName =
     body.payload.name?.trim() ||
     [tailoredRole, tailoredCompany].filter(Boolean).join(" — ") ||
@@ -211,6 +245,50 @@ export async function POST(request: Request) {
       ],
     )
     savedRow = ins.rows[0]
+  }
+
+  if (typeof body.matchScore === "number" && Number.isFinite(body.matchScore)) {
+    const clamped = Math.max(0, Math.min(100, Math.round(body.matchScore)))
+    try {
+      await ensureResumeTailoringTable(pool)
+      await pool.query(
+        `INSERT INTO resume_tailoring_analyses (
+           user_id,
+           resume_id,
+           job_id,
+           job_title,
+           company,
+           job_description,
+           match_score,
+           present_keywords,
+           missing_keywords,
+           suggested_summary_rewrite,
+           suggested_skills_to_add,
+           bullet_suggestions,
+           warnings
+         ) VALUES (
+           $1, $2, $3, $4, $5, $6, $7,
+           $8::text[], $9::text[], $10, $11::text[], $12::jsonb, $13::text[]
+         )`,
+        [
+          session.sub,
+          savedRow.id,
+          body.jobId,
+          tailoredRole,
+          tailoredCompany,
+          jobDescription,
+          clamped,
+          [],
+          [],
+          null,
+          [],
+          JSON.stringify([]),
+          [],
+        ],
+      )
+    } catch (error) {
+      console.warn("[tailor-save] failed to persist match snapshot", error)
+    }
   }
 
   return NextResponse.json({
