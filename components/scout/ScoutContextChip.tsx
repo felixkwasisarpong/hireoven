@@ -31,7 +31,17 @@ export function ScoutContextChip({ onReset, jobTitle, companyName }: ScoutContex
   const hasAnything = isFocusMode || hasFilters || primaryResume || jobTitle || companyName
   if (!hasAnything) return null
 
+  function clearPersistedFocusMode() {
+    try {
+      localStorage.removeItem("hireoven:scout-focus-mode:v1")
+    } catch {}
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("scout:focus-mode-changed", { detail: { enabled: false } }))
+    }
+  }
+
   function clearFilters() {
+    clearPersistedFocusMode()
     const params = new URLSearchParams(searchParams.toString())
     params.delete("q")
     params.delete("location")
@@ -44,6 +54,7 @@ export function ScoutContextChip({ onReset, jobTitle, companyName }: ScoutContex
   }
 
   function turnOffFocus() {
+    clearPersistedFocusMode()
     const params = new URLSearchParams(searchParams.toString())
     params.delete("focus")
     params.delete("sort")
@@ -52,6 +63,7 @@ export function ScoutContextChip({ onReset, jobTitle, companyName }: ScoutContex
   }
 
   function resetContext() {
+    clearPersistedFocusMode()
     if (typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent("scout:reset-context"))
     }

@@ -99,6 +99,7 @@ export function IdleMode({
 }: Props) {
   const { showUpgrade } = useUpgradeModal()
   const hasConversation = messages.length > 0
+  const hasStreamingMessage = messages.some((msg) => msg.role === "scout_streaming")
 
   const [mounted, setMounted] = useState(false)
   useEffect(() => {
@@ -328,7 +329,7 @@ export function IdleMode({
             )
           })}
 
-          {isLoading && <TypingIndicator />}
+          {isLoading && !hasStreamingMessage && <TypingIndicator />}
 
           {error && (
             <div className="flex items-start gap-2.5 rounded-xl border border-red-100 bg-red-50/60 px-4 py-3">

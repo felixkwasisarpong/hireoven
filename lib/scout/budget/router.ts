@@ -24,6 +24,10 @@ const DATA_LOOKUP_RE = /^(what (is|are|was) my match score|what is the (salary|l
 
 // Sponsorship signal lookup — purely DB query
 const SPONSORSHIP_LOOKUP_RE = /^(does|did|will|has|have)\s+\S+\s+(sponsor|h.?1b|visa|work auth)/i
+// Sponsorship/company filter commands should stay deterministic to avoid
+// over-fitting the query to prior profile keywords.
+const SPONSORSHIP_FILTER_COMMAND_RE =
+  /^(find|show|filter|prioritize|focus|only|list)\b.*\b(sponsorship|sponsor|h.?1b|visa)\b.*\b(company|companies|employer|employers|roles|jobs|openings)?/i
 
 // Commands that map directly to app navigation
 const NAV_COMMANDS_RE = /^(go to|open|show me|take me to)\s+(my (jobs|pipeline|applications|resume|profile|saved|matches|dashboard|settings))/i
@@ -42,6 +46,9 @@ export function routeScoutMessage(message: string): RoutingDecision {
   }
   if (SPONSORSHIP_LOOKUP_RE.test(msg) && msg.split(" ").length <= 8) {
     return { useLLM: false, reason: "sponsorship lookup — resolved from DB data" }
+  }
+  if (SPONSORSHIP_FILTER_COMMAND_RE.test(msg)) {
+    return { useLLM: false, reason: "sponsorship filter command — deterministic action routing" }
   }
   if (NAV_COMMANDS_RE.test(msg)) {
     return { useLLM: false, reason: "navigation command" }

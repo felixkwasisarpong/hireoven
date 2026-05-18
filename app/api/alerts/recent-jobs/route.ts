@@ -69,7 +69,10 @@ type FallbackJob = {
 }
 
 function matchesAlert(alert: JobAlert, job: Job): boolean {
-  if (alert.sponsorship_required && !job.sponsors_h1b && (job.sponsorship_score ?? 0) <= 60) return false
+  if (alert.sponsorship_required) {
+    if (!job.sponsors_h1b && (job.sponsorship_score ?? 0) <= 60) return false
+    if (!job.sponsors_h1b && /(^|\\.)dice\\.com/i.test(job.apply_url)) return false
+  }
   if (alert.remote_only && !job.is_remote) return false
   if (alert.seniority_levels?.length && job.seniority_level && !alert.seniority_levels.includes(job.seniority_level)) return false
   if (alert.employment_types?.length && job.employment_type && !alert.employment_types.includes(job.employment_type)) return false

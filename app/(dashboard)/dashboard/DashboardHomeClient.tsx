@@ -58,7 +58,41 @@ export default function DashboardHomeClient({
    * Default to `sort=match` once a resume is ready without rewriting the URL
    * (the old rewrite caused a visible double-fetch on first load).
    */
-  const focusMode = searchParams.get("focus") === "1"
+  const [localFocusMode, setLocalFocusMode] = useState(false)
+  const focusMode = searchParams.get("focus") === "1" || localFocusMode
+
+  // Persist focus mode across navigation even when the URL param is absent.
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    if (searchParams.get("focus") === "1") {
+      try { localStorage.setItem("hireoven:scout-focus-mode:v1", "1") } catch {}
+      setLocalFocusMode(true)
+      return
+    }
+    try {
+      setLocalFocusMode(localStorage.getItem("hireoven:scout-focus-mode:v1") === "1")
+    } catch {
+      setLocalFocusMode(false)
+    }
+  }, [searchParams])
+
+  useEffect(() => {
+    function onFocusChanged(e: Event) {
+      const detail = (e as CustomEvent<{ enabled: boolean }>).detail
+      setLocalFocusMode(Boolean(detail?.enabled))
+    }
+    function onStorage(e: StorageEvent) {
+      if (e.key === "hireoven:scout-focus-mode:v1") {
+        setLocalFocusMode(e.newValue === "1")
+      }
+    }
+    window.addEventListener("scout:focus-mode-changed", onFocusChanged)
+    window.addEventListener("storage", onStorage)
+    return () => {
+      window.removeEventListener("scout:focus-mode-changed", onFocusChanged)
+      window.removeEventListener("storage", onStorage)
+    }
+  }, [])
 
   const filters = useMemo(() => {
     const parsed = parseJobFilters(searchParams)

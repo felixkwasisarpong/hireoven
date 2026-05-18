@@ -108,7 +108,19 @@ export async function GET(request: NextRequest) {
   if (remote) where.push("jobs.is_remote = true")
   if (seniority?.length) where.push(`jobs.seniority_level = ANY(${addParam(seniority)}::text[])`)
   if (employment?.length) where.push(`jobs.employment_type = ANY(${addParam(employment)}::text[])`)
-  if (sponsorship) where.push("(jobs.sponsors_h1b = true OR jobs.sponsorship_score >= 60)")
+  // Sponsorship filter policy:
+  // - Explicit sponsors_h1b=true always passes.
+  // - Score-only passes require >60 and are disabled for Dice URLs because
+  //   Dice postings in our dataset currently lack explicit sponsorship truth.
+  if (sponsorship) {
+    where.push(`(
+      jobs.sponsors_h1b = true
+      OR (
+        jobs.sponsorship_score > 60
+        AND jobs.apply_url NOT ILIKE '%dice.com%'
+      )
+    )`)
+  }
 
   // Freshness window applies to the base query only. The saved-jobs UNION
   // deliberately ignores it so a job the user just saved via the extension
