@@ -125,12 +125,39 @@ export function useScoutStream(): ScoutStreamActions {
         signal:  abortRef.current.signal,
       })
 
-      if (!res.ok || !res.body) {
+      if (!res.ok) {
         const errJson = await res.json().catch(() => null) as { message?: string } | null
         setState((prev) => ({
           ...prev,
           isStreaming: false,
           error: errJson?.message ?? "Scout could not respond right now.",
+        }))
+        return
+      }
+
+      const contentType = res.headers.get("content-type")?.toLowerCase() ?? ""
+      // Some Scout paths intentionally return JSON even when stream=true
+      // (deterministic / early-return responses). Treat those as a completed
+      // response instead of trying to parse SSE frames.
+      if (contentType.includes("application/json")) {
+        receivedFinalResponse = true
+        window.clearTimeout(hardTimeout)
+        window.clearTimeout(absoluteTimeout)
+        const payload = await res.json().catch(() => null)
+        setState((prev) => ({
+          ...prev,
+          finalResponse: normalizeScoutResponse(payload),
+          isStreaming: false,
+          error: null,
+        }))
+        return
+      }
+
+      if (!res.body) {
+        setState((prev) => ({
+          ...prev,
+          isStreaming: false,
+          error: "Scout could not open a response stream. Please try again.",
         }))
         return
       }
