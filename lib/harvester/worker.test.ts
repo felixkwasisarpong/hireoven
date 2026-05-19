@@ -50,6 +50,7 @@ test("claimEligibleCompanies: issues SKIP LOCKED claim with lease params and sha
     careers_url: "https://boards.greenhouse.io/acme",
     domain: "acme.com",
     ats_type: "greenhouse",
+    ats_identifier: "acme",
     raw_ats_config: { crawl_allowed: true },
     etag: 'W/"abc"',
     last_modified: null,
@@ -86,6 +87,7 @@ test("claimEligibleCompanies: issues SKIP LOCKED claim with lease params and sha
     "personio",
     "bamboohr",
     "jazzhr",
+    "jobvite",
     "icims",
     "infosys",
     "apple",
@@ -94,6 +96,7 @@ test("claimEligibleCompanies: issues SKIP LOCKED claim with lease params and sha
   assert.equal(result.length, 1)
   assert.equal(result[0].id, fakeRow.id)
   assert.equal(result[0].careers_url, fakeRow.careers_url)
+  assert.equal(result[0].ats_identifier, fakeRow.ats_identifier)
   assert.equal(result[0].etag, fakeRow.etag)
   assert.equal(result[0].freshness_tier, "tier_2")
 })
@@ -177,10 +180,13 @@ test("buildAdapterLimits: each registered adapter gets its own limiter using its
   // SmartRecruiters declares 6
   const sr = byAdapter.get("smartrecruiters")
   assert.equal(sr!.concurrency, 6)
+  // Jobvite declares 4
+  const jv = byAdapter.get("jobvite")
+  assert.equal(jv!.concurrency, 4)
   // Fallback uses the default
   assert.equal(fallback.concurrency, 8)
   // All supported adapters have a limiter
-  for (const name of ["greenhouse", "lever", "ashby", "smartrecruiters", "workable", "workday", "recruitee", "teamtailor", "personio", "bamboohr", "jazzhr", "icims", "infosys", "apple"]) {
+  for (const name of ["greenhouse", "lever", "ashby", "smartrecruiters", "workable", "workday", "recruitee", "teamtailor", "personio", "bamboohr", "jazzhr", "jobvite", "icims", "infosys", "apple"]) {
     assert.ok(byAdapter.has(name as "greenhouse"), `missing limiter for ${name}`)
   }
 })

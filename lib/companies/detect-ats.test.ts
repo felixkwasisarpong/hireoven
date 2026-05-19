@@ -8,13 +8,15 @@ test("detectAtsFromUrl recognizes greenhouse boards", () => {
   assert.equal(result?.atsIdentifier, "example")
 })
 
-test("detectAtsFromUrl recognizes lever, ashby, smartrecruiters, workday, icims, bamboohr", () => {
+test("detectAtsFromUrl recognizes lever, ashby, smartrecruiters, workday, icims, bamboohr, jobvite", () => {
   assert.equal(detectAtsFromUrl("https://jobs.lever.co/acme/abc")?.atsType, "lever")
   assert.equal(detectAtsFromUrl("https://jobs.ashbyhq.com/acme/role")?.atsType, "ashby")
   assert.equal(detectAtsFromUrl("https://jobs.smartrecruiters.com/acme")?.atsType, "smartrecruiters")
   assert.equal(detectAtsFromUrl("https://acme.wd5.myworkdayjobs.com/en-US/Careers")?.atsType, "workday")
   assert.equal(detectAtsFromUrl("https://acme.icims.com/jobs/search")?.atsType, "icims")
   assert.equal(detectAtsFromUrl("https://acme.bamboohr.com/careers")?.atsType, "bamboohr")
+  assert.equal(detectAtsFromUrl("https://jobs.jobvite.com/acme/job/o123")?.atsType, "jobvite")
+  assert.equal(detectAtsFromUrl("https://jobs.jobvite.com/acme/job/o123")?.atsIdentifier, "acme")
 })
 
 test("detectAts prefers apply URL evidence over careers URL", () => {

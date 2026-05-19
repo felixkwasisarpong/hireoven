@@ -71,6 +71,11 @@ export function detectAtsFromUrl(rawUrl: string): AtsDetection | null {
     return { atsType: "smartrecruiters", atsIdentifier: identifier, confidence: "high" }
   }
 
+  if (host === "jobs.jobvite.com") {
+    const identifier = cleanIdentifier(pathParts[0])
+    return { atsType: "jobvite", atsIdentifier: identifier, confidence: "high" }
+  }
+
   if (host.endsWith(".bamboohr.com") || host === "bamboohr.com") {
     const identifier = cleanIdentifier(host.split(".")[0])
     return { atsType: "bamboohr", atsIdentifier: identifier, confidence: "high" }

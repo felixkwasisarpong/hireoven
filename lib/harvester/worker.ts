@@ -109,6 +109,7 @@ WHERE id IN (
       OR careers_url ~* '^https?://[a-z0-9-]+\.jobs\.personio\.(com|de)/'
       OR careers_url ~* '^https?://[a-z0-9-]+\.bamboohr\.com/'
       OR careers_url ~* '^https?://[a-z0-9-]+\.applytojob\.com/'
+      OR careers_url ILIKE 'https://jobs.jobvite.com/%'
       OR careers_url ILIKE 'https://digitalcareers.infosys.com/%'
       OR careers_url ILIKE 'https://jobs.apple.com/%'
       OR direct_ats_url ILIKE 'https://boards.greenhouse.io/%'
@@ -125,6 +126,7 @@ WHERE id IN (
       OR direct_ats_url ~* '^https?://[a-z0-9-]+\.jobs\.personio\.(com|de)/'
       OR direct_ats_url ~* '^https?://[a-z0-9-]+\.bamboohr\.com/'
       OR direct_ats_url ~* '^https?://[a-z0-9-]+\.applytojob\.com/'
+      OR direct_ats_url ILIKE 'https://jobs.jobvite.com/%'
       OR direct_ats_url ILIKE 'https://digitalcareers.infosys.com/%'
       OR direct_ats_url ILIKE 'https://jobs.apple.com/%'
     )
@@ -136,7 +138,7 @@ WHERE id IN (
   LIMIT $1
   FOR UPDATE SKIP LOCKED
 )
-RETURNING id, name, careers_url, direct_ats_url, domain, ats_type, raw_ats_config, etag, last_modified, freshness_tier
+RETURNING id, name, careers_url, direct_ats_url, domain, ats_type, ats_identifier, raw_ats_config, etag, last_modified, freshness_tier
 `
 
 const SUPPORTED_ATS_TYPES = [
@@ -151,6 +153,7 @@ const SUPPORTED_ATS_TYPES = [
   "personio",
   "bamboohr",
   "jazzhr",
+  "jobvite",
   "icims",
   "infosys",
   "apple",
@@ -163,6 +166,7 @@ type ClaimedRow = {
   direct_ats_url: string | null
   domain: string | null
   ats_type: string | null
+  ats_identifier: string | null
   raw_ats_config: Record<string, unknown> | null
   etag: string | null
   last_modified: string | null
@@ -271,6 +275,7 @@ export async function claimEligibleCompanies(
     direct_ats_url: row.direct_ats_url,
     domain: row.domain,
     ats_type: row.ats_type,
+    ats_identifier: row.ats_identifier,
     raw_ats_config: row.raw_ats_config,
     etag: row.etag,
     last_modified: row.last_modified,

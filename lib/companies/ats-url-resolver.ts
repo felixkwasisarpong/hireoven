@@ -107,6 +107,11 @@ async function probeHeadOk(url: string, timeoutMs = 6_000): Promise<boolean> {
   }
 }
 
+async function probeJobviteSlug(slug: string): Promise<boolean> {
+  const html = await fetchPlainHtml(`https://jobs.jobvite.com/${encodeURIComponent(slug)}/jobs/all`, 6_000)
+  return Boolean(html && new RegExp(`jobs\\.jobvite\\.com/${slug}/job/|/${slug}/job/`, "i").test(html))
+}
+
 /**
  * Probe public ATS APIs with company-name-derived slugs.
  * Returns a hit when an API confirms the slug exists (200 + non-empty data).
@@ -118,11 +123,12 @@ export async function probeKnownAtsSlugs(
   const slugs = generateCompanySlugs(companyName)
   if (slugs.length === 0) return null
   const provider = (hint ?? "").toLowerCase()
-  const order: Array<"greenhouse" | "lever" | "ashby" | "smartrecruiters"> =
+  const order: Array<"greenhouse" | "lever" | "ashby" | "smartrecruiters" | "jobvite"> =
     provider === "greenhouse" ? ["greenhouse", "lever", "ashby", "smartrecruiters"] :
     provider === "lever" ? ["lever", "greenhouse", "ashby", "smartrecruiters"] :
     provider === "ashby" ? ["ashby", "greenhouse", "lever", "smartrecruiters"] :
     provider === "smartrecruiters" ? ["smartrecruiters", "greenhouse", "lever", "ashby"] :
+    provider === "jobvite" ? ["jobvite", "greenhouse", "lever", "ashby", "smartrecruiters"] :
     ["greenhouse", "lever", "ashby", "smartrecruiters"]
 
   for (const slug of slugs) {
@@ -156,6 +162,10 @@ export async function probeKnownAtsSlugs(
             return { provider: "smartrecruiters", directUrl: `https://jobs.smartrecruiters.com/${slug}`, identifier: slug, source: "slug_probe" }
           }
         }
+      } else if (target === "jobvite") {
+        if (await probeJobviteSlug(slug)) {
+          return { provider: "jobvite", directUrl: `https://jobs.jobvite.com/${slug}/jobs`, identifier: slug, source: "slug_probe" }
+        }
       }
     }
   }
@@ -186,6 +196,11 @@ const ASHBY_PATTERNS: RegExp[] = [
 const SMARTRECRUITERS_PATTERNS: RegExp[] = [
   /https?:\/\/jobs\.smartrecruiters\.com\/([a-z0-9][a-z0-9._-]*)/gi,
   /https?:\/\/careers\.smartrecruiters\.com\/([a-z0-9][a-z0-9._-]*)/gi,
+]
+
+const JOBVITE_PATTERNS: RegExp[] = [
+  /https?:\/\/jobs\.jobvite\.com\/([a-z0-9][a-z0-9_-]*)/gi,
+  /jobs\.jobvite\.com\/([a-z0-9][a-z0-9_-]*)/gi,
 ]
 
 const WORKDAY_PATTERNS: RegExp[] = [
@@ -252,6 +267,15 @@ function detectAtsInHtml(html: string): ResolvedAtsUrl | null {
       provider: "smartrecruiters",
       directUrl: `https://jobs.smartrecruiters.com/${sr.id}`,
       identifier: sr.id,
+      source: "embedded_link",
+    }
+  }
+  const jobvite = firstMatch(html, JOBVITE_PATTERNS)
+  if (jobvite) {
+    return {
+      provider: "jobvite",
+      directUrl: `https://jobs.jobvite.com/${jobvite.id}/jobs`,
+      identifier: jobvite.id,
       source: "embedded_link",
     }
   }
@@ -343,4 +367,3 @@ export async function resolveDirectAtsUrl(
 
   return null
 }
-

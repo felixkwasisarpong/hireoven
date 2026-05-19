@@ -9,6 +9,7 @@ export type NormalizedAtsProvider =
   | "icims"
   | "smartrecruiters"
   | "bamboohr"
+  | "jobvite"
   | "custom"
 
 export type AtsUrlNormalization = {
@@ -156,6 +157,18 @@ export function normalizeAtsUrl(
         : url.origin,
       atsIdentifier: company,
       reason: company ? "smartrecruiters_company_url" : "smartrecruiters_missing_company",
+      shouldPersist: Boolean(company),
+    }
+  }
+
+  if (host === "jobs.jobvite.com") {
+    const company = cleanIdentifier(pathParts[0])
+    return {
+      provider: "jobvite",
+      originalUrl,
+      normalizedUrl: company ? `https://jobs.jobvite.com/${encodeURIComponent(company)}/jobs` : url.origin,
+      atsIdentifier: company,
+      reason: company ? "jobvite_company_url" : "jobvite_missing_company",
       shouldPersist: Boolean(company),
     }
   }

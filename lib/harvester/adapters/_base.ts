@@ -13,6 +13,7 @@ export type AtsName =
   | "personio"
   | "bamboohr"
   | "jazzhr"
+  | "jobvite"
   | "icims"
   | "infosys"
   | "apple"
