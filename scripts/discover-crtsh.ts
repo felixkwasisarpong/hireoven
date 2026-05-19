@@ -29,10 +29,14 @@ type AtsTarget = {
    *  if this ATS doesn't expose customers via subdomain-derivable identifiers.
    *  Async so adapters that need per-host resolution (Workday) can fetch. */
   toCareersUrl: (host: DiscoveredHost) => string | null | Promise<string | null>
-  /** Optional override of the default in-script concurrency for this ATS's
-   *  URL synthesis step. Workday needs network calls; the path-based ATSes
-   *  don't, so the default 1 is fine for them. */
+  /** Optional override for per-target candidate processing concurrency. */
   synthesisConcurrency?: number
+}
+
+type ProbeDecision = {
+  admitted: boolean
+  jobsFound: number
+  reason: string
 }
 
 const TARGETS: AtsTarget[] = [
@@ -115,10 +119,26 @@ const TARGETS: AtsTarget[] = [
 
 const args = new Set(process.argv.slice(2))
 const dryRun = args.has("--dry-run") || !args.has("--execute")
+const skipLiveProbe = args.has("--skip-live-probe")
 const onlyArg = process.argv.find((a) => a.startsWith("--only="))
 const onlyList = onlyArg
   ? new Set(onlyArg.split("=")[1].split(",").map((s) => s.trim().toLowerCase()))
   : null
+const candidateConcurrency = Math.max(
+  1,
+  Number.parseInt(process.env.DISCOVER_CRTSH_CANDIDATE_CONCURRENCY ?? "6", 10)
+)
+const probeTimeoutMs = Math.max(
+  1_000,
+  Number.parseInt(process.env.DISCOVER_CRTSH_PROBE_TIMEOUT_MS ?? "8000", 10)
+)
+const probeMaxAttempts = Math.max(
+  1,
+  Number.parseInt(process.env.DISCOVER_CRTSH_PROBE_MAX_ATTEMPTS ?? "2", 10)
+)
+const probeUserAgent =
+  process.env.DISCOVER_CRTSH_PROBE_USER_AGENT ??
+  "hireoven-discovery/1.0 (+https://hireoven.com; bot@hireoven.com)"
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -137,6 +157,9 @@ type RunSummary = {
   apex: string
   candidates: number
   validated: number
+  probeChecked: number
+  probeAccepted: number
+  probeRejected: number
   alreadyKnown: number
   inserted: number
   skippedAdapter: number
@@ -146,12 +169,216 @@ type RunSummary = {
   error: string | null
 }
 
+type FetchTextResult =
+  | { ok: true; status: number; body: string }
+  | { ok: false; status: number | null; reason: string }
+
+const RETRYABLE_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504])
+
+async function fetchTextWithRetry(
+  url: string,
+  init: RequestInit & { accept: string }
+): Promise<FetchTextResult> {
+  let attempt = 0
+  let lastReason = "fetch_error"
+  let lastStatus: number | null = null
+
+  while (attempt < probeMaxAttempts) {
+    attempt += 1
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), probeTimeoutMs)
+    try {
+      const response = await fetch(url, {
+        ...init,
+        method: init.method ?? "GET",
+        redirect: "follow",
+        headers: {
+          "user-agent": probeUserAgent,
+          accept: init.accept,
+          ...(init.headers ?? {}),
+        },
+        signal: controller.signal,
+      })
+      lastStatus = response.status
+
+      if (response.ok) {
+        const body = await response.text()
+        return { ok: true, status: response.status, body }
+      }
+
+      lastReason = `http_${response.status}`
+      if (!RETRYABLE_STATUSES.has(response.status) || attempt >= probeMaxAttempts) {
+        return { ok: false, status: response.status, reason: lastReason }
+      }
+      await sleep(250 * attempt)
+    } catch (error) {
+      lastStatus = null
+      lastReason =
+        error instanceof Error && error.name === "AbortError"
+          ? "timeout"
+          : "fetch_error"
+      if (attempt >= probeMaxAttempts) {
+        return { ok: false, status: null, reason: lastReason }
+      }
+      await sleep(250 * attempt)
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+
+  return { ok: false, status: lastStatus, reason: lastReason }
+}
+
+async function fetchJsonWithRetry<T>(
+  url: string,
+  init: RequestInit & { accept?: string } = {}
+): Promise<
+  | { ok: true; status: number; data: T }
+  | { ok: false; status: number | null; reason: string }
+> {
+  const result = await fetchTextWithRetry(url, {
+    ...init,
+    accept: init.accept ?? "application/json",
+  })
+  if (!result.ok) return result
+  try {
+    return { ok: true, status: result.status, data: JSON.parse(result.body) as T }
+  } catch {
+    return { ok: false, status: result.status, reason: "invalid_json" }
+  }
+}
+
+function hasJobPostingJsonLd(html: string): boolean {
+  return /<script[^>]+type=["']application\/ld\+json["'][^>]*>[\s\S]*?"@type"\s*:\s*("JobPosting"|\[[^\]]*?"JobPosting")/i.test(
+    html
+  )
+}
+
+async function liveProbeHasJobs(input: {
+  target: AtsTarget
+  slug: string
+  careersUrl: string
+}): Promise<ProbeDecision> {
+  const { target, slug, careersUrl } = input
+
+  switch (target.ats) {
+    case "greenhouse": {
+      const result = await fetchJsonWithRetry<{ jobs?: unknown[] }>(
+        `https://boards-api.greenhouse.io/v1/boards/${encodeURIComponent(slug)}/jobs`
+      )
+      if (!result.ok) return { admitted: false, jobsFound: 0, reason: result.reason }
+      const jobsFound = Array.isArray(result.data?.jobs) ? result.data.jobs.length : 0
+      return jobsFound > 0
+        ? { admitted: true, jobsFound, reason: "live_jobs" }
+        : { admitted: false, jobsFound: 0, reason: "empty_board" }
+    }
+    case "lever": {
+      const result = await fetchJsonWithRetry<unknown[]>(
+        `https://api.lever.co/v0/postings/${encodeURIComponent(slug)}?mode=json`
+      )
+      if (!result.ok) return { admitted: false, jobsFound: 0, reason: result.reason }
+      const jobsFound = Array.isArray(result.data) ? result.data.length : 0
+      return jobsFound > 0
+        ? { admitted: true, jobsFound, reason: "live_jobs" }
+        : { admitted: false, jobsFound: 0, reason: "empty_board" }
+    }
+    case "ashby": {
+      const result = await fetchJsonWithRetry<{ jobs?: unknown[] }>(
+        `https://api.ashbyhq.com/posting-api/job-board/${encodeURIComponent(slug)}`
+      )
+      if (!result.ok) return { admitted: false, jobsFound: 0, reason: result.reason }
+      const jobsFound = Array.isArray(result.data?.jobs) ? result.data.jobs.length : 0
+      return jobsFound > 0
+        ? { admitted: true, jobsFound, reason: "live_jobs" }
+        : { admitted: false, jobsFound: 0, reason: "empty_board" }
+    }
+    case "smartrecruiters": {
+      const result = await fetchJsonWithRetry<{ totalFound?: number; content?: unknown[] }>(
+        `https://api.smartrecruiters.com/v1/companies/${encodeURIComponent(slug)}/postings?offset=0&limit=1`
+      )
+      if (!result.ok) return { admitted: false, jobsFound: 0, reason: result.reason }
+      const jobsFound =
+        typeof result.data?.totalFound === "number"
+          ? result.data.totalFound
+          : Array.isArray(result.data?.content)
+            ? result.data.content.length
+            : 0
+      return jobsFound > 0
+        ? { admitted: true, jobsFound, reason: "live_jobs" }
+        : { admitted: false, jobsFound: 0, reason: "empty_board" }
+    }
+    case "workable": {
+      const result = await fetchJsonWithRetry<{ results?: unknown[] }>(
+        `https://apply.workable.com/api/v3/accounts/${encodeURIComponent(slug)}/jobs?page=1`
+      )
+      if (!result.ok) return { admitted: false, jobsFound: 0, reason: result.reason }
+      const jobsFound = Array.isArray(result.data?.results) ? result.data.results.length : 0
+      return jobsFound > 0
+        ? { admitted: true, jobsFound, reason: "live_jobs" }
+        : { admitted: false, jobsFound: 0, reason: "empty_board" }
+    }
+    case "recruitee": {
+      const result = await fetchJsonWithRetry<{ offers?: Array<{ status?: string }> }>(
+        `https://${encodeURIComponent(slug)}.recruitee.com/api/offers/`
+      )
+      if (!result.ok) return { admitted: false, jobsFound: 0, reason: result.reason }
+      const offers = Array.isArray(result.data?.offers) ? result.data.offers : []
+      const jobsFound = offers.filter((offer) => {
+        const status = (offer?.status ?? "").toLowerCase()
+        return status === "" || status === "published" || status === "open"
+      }).length
+      return jobsFound > 0
+        ? { admitted: true, jobsFound, reason: "live_jobs" }
+        : { admitted: false, jobsFound: 0, reason: "empty_board" }
+    }
+    case "teamtailor": {
+      const result = await fetchJsonWithRetry<{ jobs?: unknown[] }>(
+        `https://${encodeURIComponent(slug)}.teamtailor.com/jobs.json`
+      )
+      if (!result.ok) return { admitted: false, jobsFound: 0, reason: result.reason }
+      const jobsFound = Array.isArray(result.data?.jobs) ? result.data.jobs.length : 0
+      return jobsFound > 0
+        ? { admitted: true, jobsFound, reason: "live_jobs" }
+        : { admitted: false, jobsFound: 0, reason: "empty_board" }
+    }
+    case "personio": {
+      const result = await fetchTextWithRetry(
+        `https://${encodeURIComponent(slug)}.jobs.personio.com/xml`,
+        { accept: "application/xml,text/xml" }
+      )
+      if (!result.ok) return { admitted: false, jobsFound: 0, reason: result.reason }
+      const matches = result.body.match(/<position>/gi)
+      const jobsFound = matches ? matches.length : 0
+      return jobsFound > 0
+        ? { admitted: true, jobsFound, reason: "live_jobs" }
+        : { admitted: false, jobsFound: 0, reason: "empty_board" }
+    }
+    case "bamboohr":
+    case "jazzhr": {
+      const result = await fetchTextWithRetry(careersUrl, {
+        accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      })
+      if (!result.ok) return { admitted: false, jobsFound: 0, reason: result.reason }
+      const jobsFound = hasJobPostingJsonLd(result.body) ? 1 : 0
+      return jobsFound > 0
+        ? { admitted: true, jobsFound, reason: "live_jobs" }
+        : { admitted: false, jobsFound: 0, reason: "no_jobposting_jsonld" }
+    }
+    default:
+      // Shouldn't happen with current TARGETS, but keep future-safe.
+      return { admitted: true, jobsFound: 1, reason: "probe_not_required" }
+  }
+}
+
 async function runForTarget(target: AtsTarget): Promise<RunSummary> {
   const summary: RunSummary = {
     ats: target.ats,
     apex: target.apex,
     candidates: 0,
     validated: 0,
+    probeChecked: 0,
+    probeAccepted: 0,
+    probeRejected: 0,
     alreadyKnown: 0,
     inserted: 0,
     skippedAdapter: 0,
@@ -177,7 +404,7 @@ async function runForTarget(target: AtsTarget): Promise<RunSummary> {
   }
 
   const pool = getPostgresPool()
-  const synthesisLimit = pLimit(target.synthesisConcurrency ?? 1)
+  const synthesisLimit = pLimit(target.synthesisConcurrency ?? candidateConcurrency)
 
   // Step 1: synthesize and validate in parallel (Workday needs network calls
   // per host; for others toCareersUrl is sync and the parallelism is a no-op).
@@ -202,22 +429,56 @@ async function runForTarget(target: AtsTarget): Promise<RunSummary> {
 
   summary.skippedAdapter = validations.filter((v) => v.kind === "skipped-adapter").length
   summary.synthesisFailed = validations.filter((v) => v.kind === "synthesis-failed").length
-  summary.validated = validations.filter((v) => v.kind === "validated").length
+  const validated = validations.filter(
+    (v): v is Extract<SynthesisResult, { kind: "validated" }> => v.kind === "validated"
+  )
+  summary.validated = validated.length
+  if (validated.length === 0) return finalise()
+
+  const knownUrls = new Set<string>()
+  if (!dryRun) {
+    const urls = validated.map((entry) => entry.careersUrl)
+    const { rows } = await pool.query<{ careers_url: string }>(
+      `SELECT careers_url
+         FROM companies
+        WHERE careers_url = ANY($1::text[])`,
+      [urls]
+    )
+    for (const row of rows) knownUrls.add(row.careers_url)
+  }
+  summary.alreadyKnown = knownUrls.size
+
+  const toProbe = validated.filter((entry) => dryRun || !knownUrls.has(entry.careersUrl))
+  summary.probeChecked = toProbe.length
+
+  const liveDecisions = skipLiveProbe
+    ? toProbe.map((entry) => ({
+        entry,
+        decision: { admitted: true, jobsFound: 1, reason: "probe_skipped" } as ProbeDecision,
+      }))
+    : await Promise.all(
+        toProbe.map((entry) =>
+          synthesisLimit(async () => ({
+            entry,
+            decision: await liveProbeHasJobs({
+              target,
+              slug: entry.detection.slug,
+              careersUrl: entry.careersUrl,
+            }),
+          }))
+        )
+      )
+
+  summary.probeAccepted = liveDecisions.filter((d) => d.decision.admitted).length
+  summary.probeRejected = liveDecisions.filter((d) => !d.decision.admitted).length
 
   if (dryRun) return finalise()
 
-  // Step 2: serial DB upserts (idempotent SELECT-then-INSERT).
-  for (const entry of validations) {
-    if (!entry || entry.kind !== "validated") continue
+  // Step 2: serial DB upserts (idempotent SELECT-then-INSERT) for probe-admitted candidates.
+  for (const row of liveDecisions) {
+    const { entry, decision } = row
+    if (!decision.admitted) continue
     try {
-      const { rows } = await pool.query<{ id: string }>(
-        `SELECT id FROM companies WHERE careers_url = $1 LIMIT 1`,
-        [entry.careersUrl]
-      )
-      if (rows.length > 0) {
-        summary.alreadyKnown += 1
-        continue
-      }
       await pool.query(
         `INSERT INTO companies (
            name, domain, careers_url, ats_type, ats_identifier,
@@ -251,7 +512,7 @@ async function runForTarget(target: AtsTarget): Promise<RunSummary> {
 
 async function main() {
   console.log(
-    `[discover-crtsh] mode=${dryRun ? "dry-run" : "execute"} only=${onlyList ? [...onlyList].join(",") : "all"}`
+    `[discover-crtsh] mode=${dryRun ? "dry-run" : "execute"} only=${onlyList ? [...onlyList].join(",") : "all"} liveProbe=${skipLiveProbe ? "off" : "on"}`
   )
 
   const targets = TARGETS.filter((t) => !onlyList || onlyList.has(t.ats))
@@ -263,7 +524,7 @@ async function main() {
     const summary = await runForTarget(target)
     summaries.push(summary)
     console.log(
-      `[discover-crtsh] ${target.ats}: candidates=${summary.candidates} validated=${summary.validated} known=${summary.alreadyKnown} inserted=${summary.inserted} skipped=${summary.skippedAdapter} synthFailed=${summary.synthesisFailed} duration=${summary.durationMs}ms${summary.error ? ` error=${summary.error}` : ""}`
+      `[discover-crtsh] ${target.ats}: candidates=${summary.candidates} validated=${summary.validated} probeChecked=${summary.probeChecked} probeAccepted=${summary.probeAccepted} probeRejected=${summary.probeRejected} known=${summary.alreadyKnown} inserted=${summary.inserted} skipped=${summary.skippedAdapter} synthFailed=${summary.synthesisFailed} duration=${summary.durationMs}ms${summary.error ? ` error=${summary.error}` : ""}`
     )
     if (i < targets.length - 1) await sleep(2_000)
   }
@@ -272,15 +533,27 @@ async function main() {
     (acc, s) => ({
       candidates: acc.candidates + s.candidates,
       validated: acc.validated + s.validated,
+      probeChecked: acc.probeChecked + s.probeChecked,
+      probeAccepted: acc.probeAccepted + s.probeAccepted,
+      probeRejected: acc.probeRejected + s.probeRejected,
       alreadyKnown: acc.alreadyKnown + s.alreadyKnown,
       inserted: acc.inserted + s.inserted,
       skippedAdapter: acc.skippedAdapter + s.skippedAdapter,
     }),
-    { candidates: 0, validated: 0, alreadyKnown: 0, inserted: 0, skippedAdapter: 0 }
+    {
+      candidates: 0,
+      validated: 0,
+      probeChecked: 0,
+      probeAccepted: 0,
+      probeRejected: 0,
+      alreadyKnown: 0,
+      inserted: 0,
+      skippedAdapter: 0,
+    }
   )
 
   console.log(
-    `[discover-crtsh] totals: candidates=${totals.candidates} validated=${totals.validated} known=${totals.alreadyKnown} inserted=${totals.inserted} skipped=${totals.skippedAdapter}`
+    `[discover-crtsh] totals: candidates=${totals.candidates} validated=${totals.validated} probeChecked=${totals.probeChecked} probeAccepted=${totals.probeAccepted} probeRejected=${totals.probeRejected} known=${totals.alreadyKnown} inserted=${totals.inserted} skipped=${totals.skippedAdapter}`
   )
 
   if (!dryRun) {
