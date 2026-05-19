@@ -426,8 +426,9 @@ async function enrichWithDetail(
 export const workdayAdapter: AtsAdapter = {
   name: "workday",
   // Each tenant is its own host + slow paginated POSTs (30-60s per board).
-  // 4 concurrent across all tenants keeps the slot pool from being dominated.
-  concurrency: 4,
+  // Per-process limit; with N replicas the cluster total is N×this. Halved
+  // from 4 → 2 so 2 workers stay at the original 4-concurrent cluster budget.
+  concurrency: 2,
   detectFromUrl,
   async fetchJobs({ slug, ctx }): Promise<HarvestResult> {
     const fetchedAt = new Date()

@@ -129,15 +129,10 @@ WHERE id IN (
       OR direct_ats_url ILIKE 'https://jobs.apple.com/%'
     )
     AND (next_harvest_at IS NULL OR next_harvest_at <= now())
-  ORDER BY
-    CASE COALESCE(freshness_tier, 'tier_2')
-      WHEN 'tier_1' THEN 0
-      WHEN 'tier_2' THEN 1
-      WHEN 'tier_3' THEN 2
-      WHEN 'tier_dead' THEN 3
-      ELSE 1
-    END,
-    next_harvest_at ASC NULLS FIRST
+  -- Sort by overdueness only. Tier still controls cadence via the interval
+  -- written to next_harvest_at after each crawl; a strict tier CASE here
+  -- starved tier_2/tier_3 because tier_1's backlog never cleared.
+  ORDER BY next_harvest_at ASC NULLS FIRST
   LIMIT $1
   FOR UPDATE SKIP LOCKED
 )

@@ -98,6 +98,27 @@ test("claimEligibleCompanies: issues SKIP LOCKED claim with lease params and sha
   assert.equal(result[0].freshness_tier, "tier_2")
 })
 
+test("claimEligibleCompanies: orders strictly by next_harvest_at (no tier priority)", async () => {
+  // A strict tier CASE in ORDER BY caused tier_2/tier_3 starvation when
+  // tier_1's backlog stayed permanently overdue. Pin the contract: ordering
+  // is overdueness-only; tier influence flows through next_harvest_at itself.
+  let captured = ""
+  const pool = {
+    query: async (text: string) => {
+      captured = text
+      return { rows: [], rowCount: 0 } as unknown as QueryResult
+    },
+  } as unknown as Pool
+
+  await claimEligibleCompanies(pool, 10, 60)
+
+  assert.match(captured, /ORDER BY next_harvest_at ASC NULLS FIRST/)
+  assert.ok(
+    !/CASE\s+COALESCE\(freshness_tier/i.test(captured),
+    "ORDER BY must not include a freshness_tier CASE — that re-introduces tier_2/tier_3 starvation"
+  )
+})
+
 test("adapterNameFor: uses ats_type when present and supported", () => {
   const name = adapterNameFor({
     id: "x",
@@ -149,10 +170,10 @@ test("buildAdapterLimits: each registered adapter gets its own limiter using its
   const gh = byAdapter.get("greenhouse")
   assert.ok(gh)
   assert.equal(gh!.concurrency, 16)
-  // Workday declares 4
+  // Workday declares 2 (lowered from 4 to leave headroom for 2 worker replicas)
   const wd = byAdapter.get("workday")
   assert.ok(wd)
-  assert.equal(wd!.concurrency, 4)
+  assert.equal(wd!.concurrency, 2)
   // SmartRecruiters declares 6
   const sr = byAdapter.get("smartrecruiters")
   assert.equal(sr!.concurrency, 6)

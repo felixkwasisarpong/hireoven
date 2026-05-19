@@ -219,7 +219,9 @@ async function enrichWithDetails(links: JobLink[], ctx: HarvestCtx): Promise<Har
 export const icimsAdapter: AtsAdapter = {
   name: "icims",
   // iCIMS sites are slow + customer-isolated; keep concurrency low.
-  concurrency: 3,
+  // Per-process limit; with N replicas the cluster total is N×this. Lowered
+  // from 3 → 2 so 2 workers stay near the original cluster budget.
+  concurrency: 2,
   detectFromUrl,
   async fetchJobs({ slug, ctx }): Promise<HarvestResult> {
     const fetchedAt = new Date()
