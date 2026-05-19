@@ -88,7 +88,9 @@
     "db:apply-careers-url-repairs:execute": "npx tsx scripts/apply-high-confidence-careers-url-repairs.ts --execute",
     "db:export-careers-url-review": "npx tsx scripts/export-low-confidence-careers-review.ts",
     "verify:no-junk-in-descriptions": "npx tsx scripts/verify-no-junk-in-descriptions.ts",
-    "verify:custom-ats-have-targets": "npx tsx scripts/verify-custom-ats-have-targets.ts"
+    "verify:custom-ats-have-targets": "npx tsx scripts/verify-custom-ats-have-targets.ts",
+    "db:repair-jobvite-urls": "npx tsx scripts/repair-jobvite-company-urls.ts",
+    "db:repair-jobvite-urls:execute": "npx tsx scripts/repair-jobvite-company-urls.ts --execute"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.52.0",
