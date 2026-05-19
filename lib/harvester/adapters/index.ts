@@ -6,6 +6,7 @@ import { greenhouseAdapter } from "@/lib/harvester/adapters/greenhouse"
 import { icimsAdapter } from "@/lib/harvester/adapters/icims"
 import { infosysAdapter } from "@/lib/harvester/adapters/infosys"
 import { jazzhrAdapter } from "@/lib/harvester/adapters/jazzhr"
+import { jobviteAdapter } from "@/lib/harvester/adapters/jobvite"
 import { leverAdapter } from "@/lib/harvester/adapters/lever"
 import { smartrecruitersAdapter } from "@/lib/harvester/adapters/smartrecruiters"
 import { personioAdapter } from "@/lib/harvester/adapters/personio"
@@ -26,6 +27,7 @@ export const adapters: Partial<Record<AtsName, AtsAdapter>> = {
   personio: personioAdapter,
   bamboohr: bamboohrAdapter,
   jazzhr: jazzhrAdapter,
+  jobvite: jobviteAdapter,
   icims: icimsAdapter,
   infosys: infosysAdapter,
   apple: appleAdapter,

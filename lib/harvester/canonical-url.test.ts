@@ -25,6 +25,10 @@ test("canonicalCareersUrl: returns workable URL with trailing slash", () => {
   assert.equal(canonicalCareersUrl("workable", "loomly"), "https://apply.workable.com/loomly/")
 })
 
+test("canonicalCareersUrl: returns jobvite hosted URL", () => {
+  assert.equal(canonicalCareersUrl("jobvite", "martinmarietta"), "https://jobs.jobvite.com/martinmarietta/jobs")
+})
+
 test("canonicalCareersUrl: assembles workday URL from 3-tuple slug", () => {
   assert.equal(
     canonicalCareersUrl("workday", "nvidia:wd5:NVIDIAExternalCareerSite"),
@@ -52,6 +56,7 @@ test("canonicalCareersUrl: round-trips through detectFromUrl", async () => {
     ["workday", "nvidia:wd5:NVIDIAExternalCareerSite"],
     ["bamboohr", "acme"],
     ["jazzhr", "acme"],
+    ["jobvite", "acme"],
   ]
   for (const [atsType, slug] of pairs) {
     const url = canonicalCareersUrl(atsType, slug)

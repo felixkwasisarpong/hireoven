@@ -33,6 +33,14 @@ test("normalizeAtsUrl persists clean ashby company URL", () => {
   assert.equal(result.normalizedUrl, "https://jobs.ashbyhq.com/example")
 })
 
+test("normalizeAtsUrl persists clean jobvite company URL", () => {
+  const result = normalizeAtsUrl("https://jobs.jobvite.com/example/job/o123?__jvst=CareerSite")
+  assert.equal(result.provider, "jobvite")
+  assert.equal(result.shouldPersist, true)
+  assert.equal(result.normalizedUrl, "https://jobs.jobvite.com/example/jobs")
+  assert.equal(result.atsIdentifier, "example")
+})
+
 test("normalizeAtsUrl persists branded iCIMS portals when ats_type hint provided", () => {
   const result = normalizeAtsUrl("https://careers.acme.com/jobs", {
     atsType: "icims",

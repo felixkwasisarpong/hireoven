@@ -1,5 +1,6 @@
 import type { Pool } from "pg"
-import { detectAdapter } from "@/lib/harvester/adapters"
+import { detectAdapter, type AtsAdapter, type AtsName } from "@/lib/harvester/adapters"
+import { canonicalCareersUrl } from "@/lib/harvester/canonical-url"
 import { persistJobsBulk } from "@/lib/harvester/persist-bulk"
 
 const TIER_INTERVAL_SEC: Record<string, number> = {
@@ -41,10 +42,26 @@ export type AtsHarvestCompany = {
   direct_ats_url?: string | null
   domain: string | null
   ats_type: string | null
+  ats_identifier?: string | null
   raw_ats_config: Record<string, unknown> | null
   etag: string | null
   last_modified: string | null
   freshness_tier: string | null
+}
+
+function detectCompanyAdapter(
+  company: AtsHarvestCompany
+): { adapter: AtsAdapter; slug: string } | null {
+  const detectionUrl = company.direct_ats_url?.trim() || company.careers_url
+  const fromUrl = detectAdapter(detectionUrl)
+  if (fromUrl) return fromUrl
+
+  const atsType = company.ats_type?.trim()
+  const atsIdentifier = company.ats_identifier?.trim()
+  if (!atsType || !atsIdentifier) return null
+
+  const canonicalUrl = canonicalCareersUrl(atsType as AtsName, atsIdentifier)
+  return canonicalUrl ? detectAdapter(canonicalUrl) : null
 }
 
 export type AtsHarvestOutcome =
@@ -91,8 +108,7 @@ export async function runAtsHarvest(input: {
   company: AtsHarvestCompany
 }): Promise<AtsHarvestOutcome> {
   const { pool, company } = input
-  const detectionUrl = company.direct_ats_url?.trim() || company.careers_url
-  const detection = detectAdapter(detectionUrl)
+  const detection = detectCompanyAdapter(company)
   if (!detection) return { matched: false }
 
   const startedAt = Date.now()
