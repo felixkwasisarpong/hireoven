@@ -10,7 +10,7 @@ import {
 import { isAtsDomain } from "@/lib/companies/ats-domains"
 
 const PLACEHOLDER_DOMAIN_RE = /\.(uscis-employer|lca-employer)$/i
-const MIN_CRISP_ICON_SIZE = 48
+const MIN_CRISP_ICON_SIZE = 20
 
 function isPlaceholderDomain(value: string | null | undefined) {
   const normalized = normalizeCompanyDomain(value ?? "")
@@ -129,11 +129,10 @@ function buildLogoSources(logoUrl: string | null | undefined, domain: string | n
   if (logoUrl && !invalidPlaceholderFavicon && !invalidAtsLogo && isStaticAsset) push(logoUrl)
 
   if (canonicalDomain) {
-    // logo.dev serves true brand marks at high resolution — preferred when configured.
+    // logo.dev — true brand marks, preferred source.
     push(companyLogoUrlFromDomain(canonicalDomain, "logo-dev"))
-    // Google favicon at 128px — decent fallback when logo.dev 404s.
-    push(companyLogoUrlFromDomain(canonicalDomain, "google-favicon"))
-    // DuckDuckGo last: returns tiny site favicons, not brand logos.
+    // DuckDuckGo — site favicons, reliable fallback with no token required.
+    // Google favicon removed: returns 404 for many domains and duplicates the noise.
     push(companyLogoUrlFromDomain(canonicalDomain, "duckduckgo"))
   }
 
