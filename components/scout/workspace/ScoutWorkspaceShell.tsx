@@ -2245,6 +2245,8 @@ export function ScoutWorkspaceShell() {
             strategyBoard={strategyBoard}
             permissions={shellPermissions}
             onPermissionsChange={setShellPermissions}
+            onOpenMemory={() => setMemoryPanelOpen(true)}
+            onOpenPermissions={() => setShowPermissions(true)}
           />
         )}
 

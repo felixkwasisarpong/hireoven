@@ -4,7 +4,6 @@ import { useEffect, useState } from "react"
 import { Activity, Eye, Search, Layers, Zap, FileText, CheckCircle2, AlertCircle, Clock, Send, Bookmark } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import type { ScoutTimelineEvent } from "@/lib/scout/timeline/types"
-import { ScoutOrb } from "@/components/scout/ScoutOrb"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -156,29 +155,6 @@ export function ScoutLeftPanel({ isActive, recentEvents, onCommand, firstName }:
 
   return (
     <aside className="flex h-full w-[240px] flex-shrink-0 flex-col overflow-hidden border-r border-slate-100 bg-white">
-
-      {/* ── Identity ── */}
-      <div className="border-b border-slate-100 px-4 py-4">
-        <div className="flex items-center gap-3">
-          <ScoutOrb size="sm" state={isActive ? "thinking" : "idle"} />
-          <div className="min-w-0">
-            <p className="text-[15px] font-semibold leading-tight text-slate-900">
-              Scout{firstName ? <span className="font-normal text-slate-400"> · {firstName}</span> : null}
-            </p>
-            <div className="mt-1 flex items-center gap-1.5">
-              {/* #2B Watching dot — blinks/pulses when idle */}
-              <span className={`h-1.5 w-1.5 rounded-full transition-colors ${
-                isActive
-                  ? "bg-[#FF5C18] animate-pulse"
-                  : "bg-emerald-400 animate-[pulse-dot_2s_ease-in-out_infinite]"
-              }`} />
-              <p className="text-[11px] text-slate-400">
-                {isActive ? "Working…" : "Watching"}
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
 
       {/* ── Monitoring ── */}
       <div className="border-b border-slate-100 px-4 py-3.5">

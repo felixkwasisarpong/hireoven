@@ -47,15 +47,6 @@ export function ScoutWelcomeScene({
       {/* Premium animated orb — Scout is alive */}
       <ScoutOrb size="lg" state="idle" className="mb-4" />
 
-      {/* Status pill */}
-      <div className="inline-flex items-center gap-2 rounded-full border border-[#FFD5C2] bg-[#FFF8F5]/80 px-3 py-1 text-[10.5px] font-semibold uppercase tracking-[0.18em] text-[#FF5C18] backdrop-blur">
-        <span className="relative flex h-1.5 w-1.5">
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#FF5C18] opacity-60" />
-          <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[#FF5C18]" />
-        </span>
-        Scout · Ready
-      </div>
-
       {/* Greeting */}
       <h1 className="mt-5 text-[2.4rem] font-semibold leading-[1.05] tracking-tight text-slate-900 sm:text-[3rem]">
         {greeting}, <span className="text-slate-950">{firstName}</span>

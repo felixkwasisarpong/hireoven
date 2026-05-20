@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
+import { ArrowRight } from "lucide-react"
 import SessionStatusBadge from "@/components/interview/SessionStatusBadge"
-import ScoreBadge from "@/components/interview/ScoreBadge"
 import { cn } from "@/lib/utils"
 
 type Session = {
@@ -18,27 +18,34 @@ type Session = {
 }
 
 const TYPE_LABELS: Record<string, string> = {
-  text: "Text",
-  live: "Live",
+  text:   "Text",
+  live:   "Live",
   coding: "Coding",
 }
 
-const TYPE_COLORS: Record<string, string> = {
-  text: "bg-blue-50 text-blue-700",
-  live: "bg-purple-50 text-purple-700",
-  coding: "bg-amber-50 text-amber-700",
+const TYPE_STYLES: Record<string, { pill: string; bar: string }> = {
+  text:   { pill: "bg-blue-50 text-blue-700",   bar: "bg-blue-500" },
+  live:   { pill: "bg-violet-50 text-violet-700", bar: "bg-violet-500" },
+  coding: { pill: "bg-amber-50 text-amber-700",  bar: "bg-amber-500" },
 }
 
 const PERSONA_LABELS: Record<string, string> = {
   friendly_recruiter: "Friendly Recruiter",
-  skeptical_hm: "Skeptical HM",
-  senior_staff: "Senior Staff",
-  founder: "Founder",
-  panel: "Panel",
+  skeptical_hm:       "Skeptical HM",
+  senior_staff:       "Senior Staff",
+  founder:            "Founder",
+  panel:              "Panel",
+}
+
+function scoreColor(score: number | null) {
+  if (score === null) return "text-slate-400"
+  if (score >= 80) return "text-emerald-600"
+  if (score >= 60) return "text-amber-600"
+  return "text-red-500"
 }
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" })
 }
 
 export default function RecentSessionsList() {
@@ -55,11 +62,11 @@ export default function RecentSessionsList() {
 
   if (loading) {
     return (
-      <section className="mt-8">
+      <section className="mt-10">
         <div className="h-4 w-32 animate-pulse rounded bg-slate-100" />
         <div className="mt-3 space-y-2">
           {[0, 1, 2].map((i) => (
-            <div key={i} className="h-14 animate-pulse rounded-lg bg-slate-100" />
+            <div key={i} className="h-16 animate-pulse rounded-xl bg-slate-100" />
           ))}
         </div>
       </section>
@@ -69,55 +76,83 @@ export default function RecentSessionsList() {
   if (sessions.length === 0) return null
 
   return (
-    <section className="mt-8">
+    <section className="mt-10">
       <div className="flex items-center justify-between">
-        <h2 className="text-[14px] font-semibold text-slate-700">Recent sessions</h2>
-        <Link href="/dashboard/interview/history" className="text-[12px] font-medium text-orange-500 hover:text-orange-600">
-          View all
+        <h2 className="text-[13px] font-semibold uppercase tracking-wide text-slate-400">
+          Recent sessions
+        </h2>
+        <Link
+          href="/dashboard/interview/history"
+          className="flex items-center gap-1 text-[12px] font-medium text-[#FF5C18] hover:text-orange-600"
+        >
+          View all <ArrowRight className="h-3 w-3" />
         </Link>
       </div>
 
-      <div className="mt-3 divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white">
-        {sessions.map((session) => (
-          <div key={session.id} className="flex items-center gap-3 px-4 py-3">
-            <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold", TYPE_COLORS[session.type] ?? "bg-slate-100 text-slate-600")}>
-              {TYPE_LABELS[session.type] ?? session.type}
-            </span>
+      <div className="mt-3 space-y-2">
+        {sessions.map((session) => {
+          const style = TYPE_STYLES[session.type] ?? { pill: "bg-slate-100 text-slate-600", bar: "bg-slate-300" }
+          const score = session.debrief?.overallScore ?? null
+          const isCompleted = session.status === "completed" && session.debrief
+          const isActive = session.status === "active"
 
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-[13px] font-medium text-slate-900">
-                {session.jobTitle
-                  ? `${session.jobTitle}${session.jobCompany ? ` @ ${session.jobCompany}` : ""}`
-                  : "Generic"}
-              </p>
-              <p className="text-[11px] text-slate-400">
-                {PERSONA_LABELS[session.persona] ?? session.persona} · {formatDate(session.createdAt)}
-              </p>
-            </div>
+          return (
+            <div
+              key={session.id}
+              className="group flex items-center gap-3 overflow-hidden rounded-xl border border-slate-200 bg-white px-4 py-3 transition hover:border-slate-300 hover:shadow-sm"
+            >
+              {/* Mode color bar */}
+              <div className={cn("h-8 w-1 flex-shrink-0 rounded-full", style.bar)} />
 
-            <div className="flex shrink-0 items-center gap-2">
-              {session.debrief ? (
-                <ScoreBadge score={session.debrief.overallScore} />
-              ) : null}
-              <SessionStatusBadge status={session.status} />
-              {session.status === "completed" && session.debrief ? (
-                <Link
-                  href={`/dashboard/interview/${session.id}/debrief`}
-                  className="text-[12px] font-medium text-orange-500 hover:text-orange-600"
-                >
-                  View debrief
-                </Link>
-              ) : session.status === "active" ? (
-                <Link
-                  href={`/dashboard/interview/${session.type}/${session.id}`}
-                  className="text-[12px] font-medium text-blue-600 hover:text-blue-700"
-                >
-                  Resume
-                </Link>
-              ) : null}
+              {/* Type pill */}
+              <span className={cn("hidden shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-semibold sm:inline-flex", style.pill)}>
+                {TYPE_LABELS[session.type] ?? session.type}
+              </span>
+
+              {/* Title + meta */}
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[13px] font-semibold text-slate-900">
+                  {session.jobTitle
+                    ? `${session.jobTitle}${session.jobCompany ? ` · ${session.jobCompany}` : ""}`
+                    : "Generic practice"}
+                </p>
+                <p className="text-[11px] text-slate-400">
+                  {PERSONA_LABELS[session.persona] ?? session.persona} · {formatDate(session.createdAt)}
+                </p>
+              </div>
+
+              {/* Score */}
+              {score !== null && (
+                <div className="flex shrink-0 flex-col items-center">
+                  <span className={cn("text-[18px] font-black tabular-nums leading-none", scoreColor(score))}>
+                    {score}
+                  </span>
+                  <span className="text-[9px] font-medium uppercase tracking-wide text-slate-400">score</span>
+                </div>
+              )}
+
+              {/* Status + action */}
+              <div className="flex shrink-0 items-center gap-2">
+                <SessionStatusBadge status={session.status} />
+                {isCompleted ? (
+                  <Link
+                    href={`/dashboard/interview/${session.id}/debrief`}
+                    className="flex items-center gap-1 text-[12px] font-medium text-[#FF5C18] hover:text-orange-600"
+                  >
+                    Debrief <ArrowRight className="h-3 w-3" />
+                  </Link>
+                ) : isActive ? (
+                  <Link
+                    href={`/dashboard/interview/${session.type}/${session.id}`}
+                    className="flex items-center gap-1 text-[12px] font-medium text-blue-600 hover:text-blue-700"
+                  >
+                    Resume <ArrowRight className="h-3 w-3" />
+                  </Link>
+                ) : null}
+              </div>
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
     </section>
   )

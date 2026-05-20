@@ -875,6 +875,22 @@
   40%  { transform: scale(1.12); }
   100% { transform: scale(1); }
 }
+/* Oven orb — slow warm breath */
+@keyframes ovenGlow {
+  0%, 100% { transform: scale(1);    filter: brightness(1); }
+  50%       { transform: scale(1.05); filter: brightness(1.12); }
+}
+/* Oven heat ring — expands and fades like heat shimmer off a hot surface */
+@keyframes ovenHeatRing {
+  0%   { transform: scale(1);   opacity: 0.6; }
+  100% { transform: scale(3.2); opacity: 0; }
+}
+/* Oven inner flicker — embers shifting when active */
+@keyframes ovenFlicker {
+  0%, 100% { opacity: 0.25; }
+  50%       { opacity: 0.75; }
+}
+
 /* Mic — idle breathing ring */
 @keyframes scoutMicBreath {
   0%, 100% { transform: scale(1);    opacity: 0.6; }

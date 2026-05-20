@@ -153,13 +153,13 @@ function buildLogoSources(logoUrl: string | null | undefined, domain: string | n
   return out
 }
 
-/** Hostnames proxied via /_next/image (avoids noisy __cf_bm Cloudflare cookie warnings). */
+/** Hostnames proxied via /_next/image. */
 function shouldOptimizeWithNextImage(src: string): boolean {
   try {
     const { hostname } = new URL(src)
-    if (hostname === "img.logo.dev") return true
-    // Google favicon is excluded: the service 404s for many domains, which Next.js logs as
-    // server-side errors. Plain <img> lets the browser handle 404s silently via onError.
+    // logo.dev uses publishable (browser) tokens — must be fetched by the browser
+    // directly so the correct origin is sent. Server-side proxy via /_next/image
+    // sends requests from the server IP which logo.dev may reject.
     if (hostname.endsWith(".supabase.co") || hostname.endsWith(".supabase.in")) return true
     return false
   } catch {

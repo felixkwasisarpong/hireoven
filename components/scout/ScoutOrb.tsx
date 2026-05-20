@@ -14,12 +14,18 @@ const SIZES = {
   lg: "h-14 w-14",
 } as const
 
+// Ring delays staggered so heat waves feel continuous, not simultaneous
+const RING_DELAYS = ["0s", "1s", "2s"]
+
 /**
- * Scout brand orb — violet-to-orange gradient, clean glow, no gimmicks.
- * idle: slow gentle breath · thinking: faster + stronger glow · done: pop
+ * Hireoven orb — glowing oven heat, brand orange palette.
+ * idle: slow warm breath · thinking: faster + heat rings pulse · done: pop
  */
 export function ScoutOrb({ state = "idle", size = "md", className }: Props) {
-  const isActive = state === "thinking" || state === "speaking"
+  const isActive  = state === "thinking" || state === "speaking"
+  const isDone    = state === "done"
+
+  const ringDuration = isActive ? "1.6s" : "3s"
 
   return (
     <span
@@ -30,47 +36,58 @@ export function ScoutOrb({ state = "idle", size = "md", className }: Props) {
         className
       )}
     >
-      {/* Outer glow ring — active states only */}
-      {isActive && (
+      {/* Heat shimmer rings — three expanding waves, staggered */}
+      {RING_DELAYS.map((delay, i) => (
         <span
-          className="pointer-events-none absolute inset-[-3px] rounded-full motion-safe:animate-[scoutOrbAura_1.6s_ease-out_infinite]"
-          style={{ background: "radial-gradient(circle, rgba(139,92,246,0.3) 0%, transparent 70%)" }}
+          key={i}
+          className="pointer-events-none absolute inset-0 rounded-full"
+          style={{
+            border: `${i === 0 ? 1.5 : 1}px solid rgba(255,92,24,${isActive ? 0.45 - i * 0.1 : 0.28 - i * 0.07})`,
+            animation: `ovenHeatRing ${ringDuration} ease-out ${delay} infinite`,
+          }}
         />
-      )}
+      ))}
 
       {/* Core sphere */}
       <span
         className={cn(
           "relative inline-flex h-full w-full items-center justify-center rounded-full",
-          "motion-safe:animate-[scoutOrbBreath_3s_ease-in-out_infinite]",
-          state === "thinking" && "motion-safe:[animation-duration:1s]",
-          state === "done"     && "motion-safe:animate-[scoutOrbDone_0.4s_ease-out_both]",
-          state === "speaking" && "motion-safe:[animation-duration:1.4s]"
+          isDone
+            ? "motion-safe:animate-[scoutOrbDone_0.4s_ease-out_both]"
+            : isActive
+              ? "motion-safe:animate-[ovenGlow_1.2s_ease-in-out_infinite]"
+              : "motion-safe:animate-[ovenGlow_3.5s_ease-in-out_infinite]"
         )}
         style={{
-          background: "linear-gradient(135deg, #7C3AED 0%, #C026D3 35%, #FF5C18 75%, #FF9A3C 100%)",
+          background: "radial-gradient(circle at 38% 32%, #FFCC70 0%, #FF7A20 38%, #FF5C18 62%, #D93800 100%)",
           boxShadow: isActive
-            ? "0 0 0 2px rgba(124,58,237,0.25), 0 4px_20px_-2px_rgba(124,58,237,0.45), 0 0 24px rgba(255,92,24,0.35)"
-            : "0 2px 12px -2px rgba(124,58,237,0.4), 0 1px 4px rgba(0,0,0,0.12)",
+            ? "0 0 0 1.5px rgba(255,92,24,0.25), 0 0 28px rgba(255,92,24,0.65), 0 0 56px rgba(255,140,0,0.35), inset 0 1px 0 rgba(255,220,120,0.4)"
+            : "0 0 18px rgba(255,92,24,0.45), 0 2px 8px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,220,120,0.35)",
         }}
       >
-        {/* Top-left specular */}
-        <span className="absolute left-[15%] top-[12%] h-[30%] w-[30%] rounded-full bg-white/40 blur-[2px]" />
-        {/* Spark icon — a simple 4-point star in SVG */}
-        <svg
-          viewBox="0 0 20 20"
-          fill="none"
-          className={cn(
-            "relative drop-shadow-[0_1px_2px_rgba(0,0,0,0.2)]",
-            size === "sm" ? "h-[42%] w-[42%]" : size === "md" ? "h-[40%] w-[40%]" : "h-[38%] w-[38%]"
-          )}
-        >
-          <path
-            d="M10 2 L11.2 8.8 L18 10 L11.2 11.2 L10 18 L8.8 11.2 L2 10 L8.8 8.8 Z"
-            fill="white"
-            fillOpacity="0.95"
+        {/* Hot-centre highlight — fixed, simulates glowing coil centre */}
+        <span
+          className="pointer-events-none absolute rounded-full"
+          style={{
+            width: "38%",
+            height: "32%",
+            top: "14%",
+            left: "18%",
+            background: "radial-gradient(circle, rgba(255,240,160,0.85) 0%, rgba(255,200,80,0.4) 55%, transparent 100%)",
+            filter: "blur(1.5px)",
+          }}
+        />
+
+        {/* Ember flicker layer — visible only when active */}
+        {isActive && (
+          <span
+            className="pointer-events-none absolute inset-0 rounded-full"
+            style={{
+              background: "radial-gradient(circle at 52% 58%, rgba(255,180,50,0.35) 0%, transparent 60%)",
+              animation: "ovenFlicker 0.9s ease-in-out infinite",
+            }}
           />
-        </svg>
+        )}
       </span>
     </span>
   )

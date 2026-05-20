@@ -2,6 +2,7 @@
 
 import Link from "next/link"
 import { Menu, MessageSquare } from "lucide-react"
+import { usePathname } from "next/navigation"
 import DashboardFeedSearch from "@/components/dashboard/DashboardFeedSearch"
 import DashboardUserMenu from "@/components/dashboard/DashboardUserMenu"
 import CreditsDropdown from "@/components/dashboard/CreditsDropdown"
@@ -12,10 +13,13 @@ import { useAuth } from "@/lib/hooks/useAuth"
 /**
  * Header for all `/dashboard/*` routes. The logo lives in the left rail, so the header
  * is just: search pill + bell + messages + user menu — flat white, slate borders.
+ * On the Scout page the search pill is hidden — Scout has its own command bar.
  */
 export default function DashboardHeader() {
   const { user } = useAuth()
   const { toggle } = useDashboardMobileNav()
+  const pathname = usePathname()
+  const isScoutPage = pathname.startsWith("/dashboard/scout")
 
   return (
     <header className="dashboard-feed-skin sticky top-0 z-30 border-b border-slate-200 bg-white">
@@ -29,7 +33,7 @@ export default function DashboardHeader() {
           <Menu className="h-5 w-5" />
         </button>
         <div className="min-w-0 flex-1">
-          <DashboardFeedSearch />
+          {!isScoutPage && <DashboardFeedSearch />}
         </div>
 
         <div className="flex shrink-0 items-center gap-1 sm:gap-2">

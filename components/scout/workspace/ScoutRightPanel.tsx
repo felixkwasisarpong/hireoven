@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { Brain, Shield, Target, Layers, ToggleLeft, ToggleRight, ArrowRight } from "lucide-react"
+import { Brain, Shield, Target, Layers, ToggleLeft, ArrowRight } from "lucide-react"
 import type { ScoutSearchProfile } from "@/lib/scout/search-profile"
 import type { ScoutStrategyBoard } from "@/lib/scout/types"
 import { type ScoutPermissionState, PERMISSION_LABELS, writePermissions } from "@/lib/scout/permissions"
@@ -16,6 +16,8 @@ type Props = {
   strategyBoard: ScoutStrategyBoard | null
   permissions: ScoutPermissionState[]
   onPermissionsChange: (next: ScoutPermissionState[]) => void
+  onOpenMemory?: () => void
+  onOpenPermissions?: () => void
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
@@ -76,6 +78,8 @@ export function ScoutRightPanel({
   strategyBoard,
   permissions,
   onPermissionsChange,
+  onOpenMemory,
+  onOpenPermissions,
 }: Props) {
   const savedJobs = strategyBoard?.snapshot?.savedJobs ?? 0
   const activeApps = strategyBoard?.snapshot?.activeApplications ?? 0
@@ -136,10 +140,10 @@ export function ScoutRightPanel({
         </div>
       </div>
 
-      {/* ── Current task ── */}
-      <div className="border-b border-slate-100 px-4 py-3.5">
-        <SectionLabel icon={Layers} label="Current Task" />
-        {isActive ? (
+      {/* ── Current task — only shown while Scout is active ── */}
+      {isActive && (
+        <div className="border-b border-slate-100 px-4 py-3.5">
+          <SectionLabel icon={Layers} label="Current Task" />
           <div>
             <div className="flex items-start gap-2">
               <span className="mt-[5px] h-1.5 w-1.5 flex-shrink-0 animate-pulse rounded-full bg-[#FF5C18]" />
@@ -154,10 +158,8 @@ export function ScoutRightPanel({
               </p>
             )}
           </div>
-        ) : (
-          <p className="text-[12px] text-slate-400">Scout is ready.</p>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* ── Memory ── */}
       <div className="border-b border-slate-100 px-4 py-3.5">
@@ -176,6 +178,7 @@ export function ScoutRightPanel({
             </div>
             <button
               type="button"
+              onClick={onOpenMemory}
               className="mt-2.5 text-[10px] font-medium text-[#FF5C18] hover:underline"
             >
               Manage memory →
@@ -195,36 +198,60 @@ export function ScoutRightPanel({
         )}
       </div>
 
-      {/* ── Permissions ── */}
+      {/* ── Permissions — compact summary; full list in the side panel ── */}
       <div className="flex-1 px-4 py-3.5">
-        <SectionLabel icon={Shield} label="Permissions" />
+        <div className="mb-2.5 flex items-center justify-between">
+          <SectionLabel icon={Shield} label="Permissions" />
+          {onOpenPermissions && (
+            <button
+              type="button"
+              onClick={onOpenPermissions}
+              className="mb-2.5 text-[10px] font-medium text-[#FF5C18] hover:underline"
+            >
+              Manage →
+            </button>
+          )}
+        </div>
         {sortedPerms.length === 0 ? (
           <p className="text-[11px] italic text-slate-400">No permissions configured</p>
-        ) : (
-          <div className="space-y-2.5">
-            {sortedPerms.map((p) => {
-              const meta = PERMISSION_LABELS[p.permission]
-              const permIndex = permissions.findIndex((x) => x.permission === p.permission)
-              return (
-                <div key={p.permission} className="flex items-center justify-between gap-2">
-                  <p className="flex-1 truncate text-[11px] text-slate-600">
-                    {meta?.name ?? p.permission}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => togglePermission(permIndex)}
-                    className="flex-shrink-0 transition-opacity hover:opacity-70"
-                    aria-label={p.allowed ? `Disable ${meta?.name}` : `Enable ${meta?.name}`}
-                  >
-                    {p.allowed
-                      ? <ToggleRight className="h-4 w-4 text-[#FF5C18]" />
-                      : <ToggleLeft  className="h-4 w-4 text-slate-300" />}
-                  </button>
+        ) : (() => {
+          const enabledCount = sortedPerms.filter((p) => p.allowed).length
+          const offPerms = sortedPerms.filter((p) => !p.allowed)
+          return (
+            <div>
+              <p className="text-[12px] text-slate-600">
+                <span className="font-semibold text-slate-800">{enabledCount}</span>
+                <span className="text-slate-400">/{sortedPerms.length} enabled</span>
+              </p>
+              {offPerms.length > 0 && (
+                <div className="mt-2 space-y-1.5">
+                  {offPerms.slice(0, 3).map((p) => {
+                    const meta = PERMISSION_LABELS[p.permission]
+                    const permIndex = permissions.findIndex((x) => x.permission === p.permission)
+                    return (
+                      <div key={p.permission} className="flex items-center justify-between gap-2">
+                        <p className="flex-1 truncate text-[11px] text-slate-500">
+                          {meta?.name ?? p.permission}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => togglePermission(permIndex)}
+                          className="flex-shrink-0 transition-opacity hover:opacity-70"
+                          aria-label={`Enable ${meta?.name}`}
+                        >
+                          <ToggleLeft className="h-4 w-4 text-slate-300" />
+                        </button>
+                      </div>
+                    )
+                  })}
+                  {offPerms.length > 3 && (
+                    <p className="text-[10px] text-slate-400">+{offPerms.length - 3} more off</p>
+                  )}
                 </div>
-              )
-            })}
-          </div>
-        )}
+              )}
+            </div>
+          )
+        })()}
       </div>
     </aside>
   )
