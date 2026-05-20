@@ -10,7 +10,7 @@ import {
 import { isAtsDomain } from "@/lib/companies/ats-domains"
 
 const PLACEHOLDER_DOMAIN_RE = /\.(uscis-employer|lca-employer)$/i
-const MIN_CRISP_ICON_SIZE = 24
+const MIN_CRISP_ICON_SIZE = 48
 
 function isPlaceholderDomain(value: string | null | undefined) {
   const normalized = normalizeCompanyDomain(value ?? "")
@@ -129,12 +129,12 @@ function buildLogoSources(logoUrl: string | null | undefined, domain: string | n
   if (logoUrl && !invalidPlaceholderFavicon && !invalidAtsLogo && isStaticAsset) push(logoUrl)
 
   if (canonicalDomain) {
-    // 2. DuckDuckGo icon service is stable and avoids API-key failures.
-    push(companyLogoUrlFromDomain(canonicalDomain, "duckduckgo"))
-    // 3. Google favicon — final stable network fallback before initials.
-    push(companyLogoUrlFromDomain(canonicalDomain, "google-favicon"))
-    // 4. logo.dev as optional late fallback when configured and reachable.
+    // logo.dev serves true brand marks at high resolution — preferred when configured.
     push(companyLogoUrlFromDomain(canonicalDomain, "logo-dev"))
+    // Google favicon at 128px — decent fallback when logo.dev 404s.
+    push(companyLogoUrlFromDomain(canonicalDomain, "google-favicon"))
+    // DuckDuckGo last: returns tiny site favicons, not brand logos.
+    push(companyLogoUrlFromDomain(canonicalDomain, "duckduckgo"))
   }
 
   // 5. Stored URL as last resort — but never Clearbit (being deprecated), ATS domains,

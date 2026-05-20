@@ -44,19 +44,21 @@ export async function GET(request: NextRequest) {
   }
 
   if (q?.trim()) {
-    // Match on title, normalized_title, skills array, OR company name —
-    // mirrors the broader matching in /api/match/feed so the two routes
-    // return the same candidate pool for the same `q`. The previous
-    // title-only ILIKE diverged: ?q=java&sort=freshest missed jobs that
-    // had Java in their skills/company but not in the literal title.
-    const pattern = `%${q.trim()}%`
-    const p = addParam(pattern)
-    where.push(`(
-      jobs.title ILIKE ${p}
-      OR jobs.normalized_title ILIKE ${p}
-      OR companies.name ILIKE ${p}
-      OR EXISTS (SELECT 1 FROM unnest(jobs.skills) s WHERE s ILIKE ${p})
-    )`)
+    // Tokenize so multi-word queries like "senior backend engineer Java
+    // Spring Boot Python" don't require the whole phrase to appear as a
+    // single substring (it never does — those words are split across the
+    // title and the skills array). Each token must match somewhere in the
+    // field group: AND across tokens, OR across fields.
+    const tokens = q.trim().split(/\s+/).filter(Boolean)
+    for (const token of tokens) {
+      const p = addParam(`%${token}%`)
+      where.push(`(
+        jobs.title ILIKE ${p}
+        OR jobs.normalized_title ILIKE ${p}
+        OR companies.name ILIKE ${p}
+        OR EXISTS (SELECT 1 FROM unnest(jobs.skills) s WHERE s ILIKE ${p})
+      )`)
+    }
   }
   if (companyId) where.push(`jobs.company_id = ${addParam(companyId)}`)
   if (remote) where.push("jobs.is_remote = true")

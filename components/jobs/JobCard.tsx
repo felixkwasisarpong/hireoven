@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { BadgeCheck, Bookmark, Clock, ExternalLink, MapPin, Plane, Trophy } from "lucide-react"
+import { BadgeCheck, Bookmark, Clock, ExternalLink, Linkedin, MapPin, Plane, Trophy, Zap } from "lucide-react"
 
 import dynamic from "next/dynamic"
 import Link from "next/link"
@@ -21,7 +21,7 @@ import {
   fetchJobSavedState,
   saveJobToPipeline,
 } from "@/lib/applications/save-job-client"
-import { getApplyCtaLabel, isKnownAtsApplyUrl } from "@/lib/jobs/apply-cta"
+import { getApplyVariant, getApplyVariantLabel } from "@/lib/jobs/apply-cta"
 import { JobCardEvidenceFactChips } from "@/components/jobs/card/JobCardEvidenceFactChips"
 import { RejectionBadge } from "@/components/rejections/RejectionBadge"
 import { EmployerHealthBadge } from "@/components/employers/EmployerHealthBadge"
@@ -146,8 +146,8 @@ export default function JobCard({
     : { title: job.title, location: job.location ?? null, salary_label: null, employment_label: null, seniority_label: null, preview_description: null, skills: [], skill_groups: { programmingLanguages:[], frameworks:[], cloud:[], databases:[], devops:[], aiMl:[], data:[], security:[], engineering:[], testing:[], networking:[], media:[], healthcare:[], science:[], softSkills:[] }, sponsorship_badge: null, visa_card_label: null, show_visa_drawer: false }
   const displayTitle = cardView.title
   const topSkills = cardView.skills.slice(0, 3)
-  const isAtsApplyLink = isKnownAtsApplyUrl(job.apply_url)
-  const applyCtaLabel = getApplyCtaLabel(job.apply_url)
+  const applyVariant = getApplyVariant(job.apply_url)
+  const applyCtaLabel = getApplyVariantLabel(applyVariant)
 
   const showVerified =
     employerLikelySponsorsH1b(job) || companyConf >= 35 || Boolean(job.company?.sponsors_h1b)
@@ -357,16 +357,32 @@ export default function JobCard({
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
-              className="group/apply inline-flex items-center gap-1 self-end text-[12px] font-semibold text-orange-600 transition hover:text-orange-700 focus-visible:outline-none focus-visible:underline"
+              className={cn(
+                "group/apply inline-flex items-center gap-1 self-end text-[12px] font-semibold transition focus-visible:outline-none focus-visible:underline",
+                applyVariant === "linkedin"
+                  ? "text-[#0a66c2] hover:text-[#004182]"
+                  : applyVariant === "autofill"
+                    ? "text-amber-600 hover:text-amber-700"
+                    : "text-orange-600 hover:text-orange-700"
+              )}
             >
               {applyCtaLabel}
-              <ExternalLink
-                className={cn(
-                  "h-3 w-3 transition group-hover/apply:translate-x-0.5",
-                  isAtsApplyLink ? "text-amber-500" : ""
-                )}
-                strokeWidth={2.25}
-              />
+              {applyVariant === "linkedin" ? (
+                <Linkedin
+                  className="h-3 w-3 transition group-hover/apply:translate-x-0.5"
+                  strokeWidth={2.25}
+                />
+              ) : applyVariant === "autofill" ? (
+                <Zap
+                  className="h-3 w-3 text-amber-500 transition group-hover/apply:translate-x-0.5"
+                  strokeWidth={2.25}
+                />
+              ) : (
+                <ExternalLink
+                  className="h-3 w-3 transition group-hover/apply:translate-x-0.5"
+                  strokeWidth={2.25}
+                />
+              )}
             </a>
 
             {showSponsorshipBanner && sponsorshipCopy && (

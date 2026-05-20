@@ -29,3 +29,31 @@ export function isKnownAtsApplyUrl(applyUrl: string | null | undefined): boolean
 export function getApplyCtaLabel(applyUrl: string | null | undefined): "Quick Apply" | "Apply" {
   return isKnownAtsApplyUrl(applyUrl) ? "Quick Apply" : "Apply"
 }
+
+export type ApplyVariant = "linkedin" | "autofill" | "external"
+
+export function isLinkedInApplyUrl(applyUrl: string | null | undefined): boolean {
+  const host = applyUrl ? safeHost(applyUrl) : null
+  if (!host) return false
+  return host === "linkedin.com" || host.endsWith(".linkedin.com")
+}
+
+/**
+ * Three-way classification used by job-card Apply CTAs:
+ *   - "linkedin": apply URL is on LinkedIn (no autofill possible)
+ *   - "autofill": apply URL is on a known ATS the extension can autofill
+ *   - "external": company career site or unknown host — opens externally
+ */
+export function getApplyVariant(applyUrl: string | null | undefined): ApplyVariant {
+  if (isLinkedInApplyUrl(applyUrl)) return "linkedin"
+  if (isKnownAtsApplyUrl(applyUrl)) return "autofill"
+  return "external"
+}
+
+export function getApplyVariantLabel(variant: ApplyVariant): string {
+  switch (variant) {
+    case "linkedin": return "Apply on LinkedIn"
+    case "autofill": return "Quick Apply"
+    case "external": return "Apply"
+  }
+}
