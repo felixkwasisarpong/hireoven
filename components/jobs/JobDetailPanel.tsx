@@ -325,13 +325,15 @@ export default function JobDetailPanel({
         {/* ── Actions ── */}
         <div className="space-y-2.5 p-5">
           {applyVariant === "autofill" ? (
-            <Link
-              href={`/dashboard/autofill/fill/${job.id}`}
+            <a
+              href={applyUrl}
+              target="_blank"
+              rel="noopener noreferrer"
               className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-orange-500 px-4 py-3 text-[13.5px] font-bold text-white shadow-[0_4px_16px_rgba(249,115,22,0.3)] transition hover:bg-orange-400 active:scale-[0.98]"
             >
-              Apply with Autofill
-              <ArrowRight className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden />
-            </Link>
+              Quick Apply
+              <ExternalLink className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden />
+            </a>
           ) : applyVariant === "linkedin" ? (
             <a
               href={applyUrl}
