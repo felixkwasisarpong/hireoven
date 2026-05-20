@@ -45,6 +45,34 @@ export function canonicalCareersUrl(atsType: AtsName, slug: string): string | nu
       // Slug is the full hostname (careers-tenant.icims.com, etc.) — used
       // directly as the careers URL root.
       return `https://${slug}/`
+    case "successfactors": {
+      // Slug shape: `career{N}.{tld}:{companyId}` (e.g. `career4.com:novartis`).
+      const [hostPart, companyId] = slug.split(":")
+      if (!hostPart || !companyId) return null
+      const m = hostPart.match(/^(career(?:1[0-2]?|[2-9]))\.(com|eu)$/)
+      if (!m) return null
+      return `https://${m[1]}.successfactors.${m[2]}/career?company=${encodeURIComponent(companyId)}`
+    }
+    case "taleo": {
+      // Slug shape: `{tenant}:{section}` (e.g. `marriott:2`).
+      const [tenant, section] = slug.split(":")
+      if (!tenant || !section) return null
+      return `https://${tenant}.taleo.net/careersection/${encodeURIComponent(section)}/jobsearch.ftl?lang=en`
+    }
+    case "oraclecloud": {
+      // Slug shape: `{pod}:{siteCode}` where pod can contain dots
+      // (e.g. `eeho.fa.us2:CX_1`).
+      const idx = slug.lastIndexOf(":")
+      if (idx <= 0) return null
+      const pod = slug.slice(0, idx)
+      const site = slug.slice(idx + 1)
+      if (!pod || !site) return null
+      return `https://${pod}.oraclecloud.com/hcmUI/CandidateExperience/en/sites/${encodeURIComponent(site)}/`
+    }
+    case "usajobs":
+      // Slug shape: USAJOBS Organization filter (typically a department name).
+      // Synthesize a URL the adapter's detectFromUrl round-trips on.
+      return `https://www.usajobs.gov/Search/Results?d=${encodeURIComponent(slug)}`
     default:
       return null
   }

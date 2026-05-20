@@ -155,6 +155,10 @@ const SUPPORTED_ATS_TYPES = [
   "jazzhr",
   "jobvite",
   "icims",
+  "successfactors",
+  "taleo",
+  "oraclecloud",
+  "usajobs",
   "infosys",
   "apple",
 ]

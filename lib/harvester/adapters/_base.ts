@@ -15,6 +15,10 @@ export type AtsName =
   | "jazzhr"
   | "jobvite"
   | "icims"
+  | "successfactors"
+  | "taleo"
+  | "oraclecloud"
+  | "usajobs"
   | "infosys"
   | "apple"
 
@@ -24,6 +28,14 @@ export type HarvestCtx = {
   userAgent?: string
   timeoutMs?: number
   fetchImpl?: typeof fetch
+  /**
+   * External IDs for this company's jobs that already carry a non-trivial
+   * description in the DB. Adapters with per-cycle detail-fetch budgets
+   * (workday, smartrecruiters, jobvite, icims, successfactors, taleo) should
+   * skip these so the cap goes to jobs that still need descriptions.
+   * Optional — adapters that don't have a detail-fetch step just ignore it.
+   */
+  alreadyDescribedIds?: ReadonlySet<string>
 }
 
 export type HarvestedJob = {
