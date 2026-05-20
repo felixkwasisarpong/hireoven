@@ -1,8 +1,13 @@
+const INTERN_RE = /\b(internship|intern|co[\s-]?op)\b/i
+// Title terms that disqualify a description-only intern hit (e.g. a "Senior Manager"
+// req that mentions "Internship experience does not apply" in the description).
+const NON_INTERN_TITLE_RE =
+  /\b(senior|sr\.?|staff|principal|lead|manager|director|head|vp|vice president|chief|ceo|cto|cfo|coo|president|founder)\b/i
+
 const EMPLOYMENT_RULES: Array<{
   type: InferredEmploymentType
   pattern: RegExp
 }> = [
-  { type: "internship", pattern: /\b(internship|intern|co[\s-]?op)\b/i },
   { type: "parttime", pattern: /\bpart[\s-]?time\b/i },
   {
     type: "contract",
@@ -122,8 +127,19 @@ export function inferEmploymentType(
   title: string | null | undefined,
   description: string | null | undefined
 ): InferredEmploymentType | null {
+  const titleBlob = toTextBlob(title)
+  const descBlob = toTextBlob(description)
   const blob = toTextBlob(title, description)
   if (!blob) return null
+
+  // Internship is handled separately: the description often mentions "internship"
+  // in exclusion clauses ("internship experience does not apply") on senior roles.
+  // Trust the title; only fall back to description when the title has no
+  // disqualifying seniority terms.
+  if (INTERN_RE.test(titleBlob)) return "internship"
+  if (INTERN_RE.test(descBlob) && !NON_INTERN_TITLE_RE.test(titleBlob)) {
+    return "internship"
+  }
 
   for (const rule of EMPLOYMENT_RULES) {
     if (rule.pattern.test(blob)) return rule.type

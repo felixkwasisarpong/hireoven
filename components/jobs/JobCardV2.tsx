@@ -449,10 +449,6 @@ export default function JobCardV2({
   const isLinkedIn = applyVariant === "linkedin"
   const isAtsApplyLink = applyVariant === "autofill"
 
-  // Internal autofill wizard requires both a known ATS URL and a known company ATS type.
-  const atsType = job.company?.ats_type
-  const canAutofill = isAtsApplyLink && atsType != null && atsType !== "custom"
-
 
   const visaCardLabel = useMemo(
     () => resolveVisaCardLabel(job, cardView.visa_card_label),
@@ -991,33 +987,22 @@ export default function JobCardV2({
                 </div>
 
                 <div className="flex gap-2">
-                  {canAutofill ? (
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/autofill/fill/${job.id}`) }}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-white/20 bg-white/5 px-3.5 py-2 text-[12px] font-semibold text-white transition hover:bg-white/10"
-                    >
-                      <Sparkles className="h-3.5 w-3.5 text-violet-400" aria-hidden />
-                      Quick Apply
-                    </button>
-                  ) : (
-                    <a
-                      href={job.apply_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-white/20 bg-white/5 px-3.5 py-2 text-[12px] font-semibold text-white transition hover:bg-white/10"
-                    >
-                      {isLinkedIn ? (
-                        <Linkedin className="h-3.5 w-3.5 text-[#0a66c2]" aria-hidden />
-                      ) : isAtsApplyLink ? (
-                        <Zap className="h-3.5 w-3.5 text-amber-400" aria-hidden />
-                      ) : (
-                        <ArrowUpRight className="h-3.5 w-3.5 text-slate-300" aria-hidden />
-                      )}
-                      {applyCtaLabel}
-                    </a>
-                  )}
+                  <a
+                    href={job.apply_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-white/20 bg-white/5 px-3.5 py-2 text-[12px] font-semibold text-white transition hover:bg-white/10"
+                  >
+                    {isLinkedIn ? (
+                      <Linkedin className="h-3.5 w-3.5 text-[#0a66c2]" aria-hidden />
+                    ) : isAtsApplyLink ? (
+                      <Zap className="h-3.5 w-3.5 text-amber-400" aria-hidden />
+                    ) : (
+                      <ArrowUpRight className="h-3.5 w-3.5 text-slate-300" aria-hidden />
+                    )}
+                    {applyCtaLabel}
+                  </a>
                   <button
                     type="button"
                     onClick={() => router.push(detailHref)}
