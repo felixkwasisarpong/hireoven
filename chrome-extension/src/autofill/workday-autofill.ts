@@ -3,6 +3,7 @@ import type { SafeProfile } from "./safe-fields"
 import type { AutofillFieldResult } from "./safe-fields"
 
 type WorkdayStepId =
+  | "account_required"
   | "my_information"
   | "my_experience"
   | "application_questions"
@@ -79,6 +80,7 @@ type WorkdayCvEducation = {
 
 type WorkdayCv = {
   firstName: string
+  middleName: string
   lastName: string
   preferredName: string
   email: string
@@ -126,12 +128,21 @@ export type WorkdayAutofillSnapshot = {
 
 export type WorkdayAutofillRunResult = {
   phase: WorkdayAutofillPhase
+  stepId: WorkdayStepId
+  stepName: string
   fieldsFilledCount: number
   totalExpectedFields: number
   manualReviewCount: number
   manualReviewNotes: string[]
   eeoPaused: boolean
   reachedReview: boolean
+  /**
+   * Set when the runner stopped because it needs the user to do something
+   * before autofill can continue (e.g. sign in, create account). When
+   * present, the bar should show the message rather than treating
+   * fieldsFilledCount === 0 as a fill failure.
+   */
+  blockedReason: "account_required" | null
   debugEntryCount: number
   debugTail: WorkdayDebugEntry[]
   rows: AutofillFieldResult[]
@@ -232,6 +243,49 @@ function nonEmpty(value: string | null | undefined): string {
   return typeof value === "string" ? value.trim() : ""
 }
 
+/**
+ * Capitalize a name segment: "FELIX" → "Felix", "mcdonald" → "Mcdonald",
+ * "o'brien" → "O'Brien", "anne-marie" → "Anne-Marie". Preserves hyphens,
+ * apostrophes, and existing mixed case in the input — we only touch tokens
+ * that are entirely upper- or lowercase. Mixed case is treated as
+ * intentional (e.g. "deSilva", "MacKay") and passed through.
+ */
+function toTitleCase(raw: string): string {
+  const trimmed = nonEmpty(raw)
+  if (!trimmed) return ""
+  return trimmed
+    .split(/(\s+)/)
+    .map((segment) => {
+      if (/^\s+$/.test(segment)) return segment
+      return segment
+        .split(/([-'])/)
+        .map((part) => {
+          if (part === "-" || part === "'") return part
+          if (!part) return part
+          // Leave mixed-case tokens (e.g. "MacKay", "deSilva") alone.
+          const isAllUpper = part === part.toUpperCase()
+          const isAllLower = part === part.toLowerCase()
+          if (!isAllUpper && !isAllLower) return part
+          return part.charAt(0).toUpperCase() + part.slice(1).toLowerCase()
+        })
+        .join("")
+    })
+    .join("")
+}
+
+/**
+ * True when a value looks like the artifact of a resume parser that dumped
+ * everything in one case (typically ALL CAPS). Workday flags these with
+ * capitalization warnings on the Legal Name section.
+ */
+function looksMiscased(value: string): boolean {
+  const trimmed = nonEmpty(value)
+  if (trimmed.length < 2) return false
+  const letters = trimmed.replace(/[^A-Za-z]/g, "")
+  if (letters.length < 2) return false
+  return letters === letters.toUpperCase() || letters === letters.toLowerCase()
+}
+
 function sanitizePhone(value: string): string {
   return value.replace(/\s+/g, " ").trim()
 }
@@ -289,18 +343,48 @@ function parseMonthYear(value: string | null | undefined): { month: string; year
   return null
 }
 
-function extractNameParts(profile: ExtendedSafeProfile): { firstName: string; lastName: string } {
+function extractNameParts(
+  profile: ExtendedSafeProfile,
+): { firstName: string; middleName: string; lastName: string } {
   const first = nonEmpty(profile.first_name)
   const last = nonEmpty(profile.last_name)
-  if (first || last) return { firstName: first, lastName: last }
-
   const full = nonEmpty(profile.resume_full_name)
-  if (!full) return { firstName: "", lastName: "" }
+
+  // Always derive a middle name from resume_full_name when present — the
+  // SafeProfile schema doesn't currently carry middle_name explicitly, so
+  // the resume's parsed full name is our only source.
+  let middle = ""
+  if (full) {
+    const parts = full.split(/\s+/).filter(Boolean)
+    if (parts.length >= 3) {
+      middle = parts.slice(1, -1).join(" ")
+    }
+  }
+
+  if (first || last) {
+    return {
+      firstName: toTitleCase(first),
+      middleName: toTitleCase(middle),
+      lastName: toTitleCase(last),
+    }
+  }
+
+  if (!full) return { firstName: "", middleName: "", lastName: "" }
   const parts = full.split(/\s+/).filter(Boolean)
-  if (parts.length === 1) return { firstName: parts[0], lastName: "" }
+  if (parts.length === 1) {
+    return { firstName: toTitleCase(parts[0]), middleName: "", lastName: "" }
+  }
+  if (parts.length === 2) {
+    return {
+      firstName: toTitleCase(parts[0] ?? ""),
+      middleName: "",
+      lastName: toTitleCase(parts[1] ?? ""),
+    }
+  }
   return {
-    firstName: parts[0] ?? "",
-    lastName: parts.slice(1).join(" "),
+    firstName: toTitleCase(parts[0] ?? ""),
+    middleName: toTitleCase(parts.slice(1, -1).join(" ")),
+    lastName: toTitleCase(parts[parts.length - 1] ?? ""),
   }
 }
 
@@ -455,6 +539,7 @@ function mapProfileToWorkdayCv(profile: ExtendedSafeProfile): WorkdayCv {
 
   return {
     firstName: name.firstName,
+    middleName: name.middleName,
     lastName: name.lastName,
     preferredName: name.firstName,
     email: nonEmpty(profile.email) || nonEmpty(profile.resume_email),
@@ -465,7 +550,7 @@ function mapProfileToWorkdayCv(profile: ExtendedSafeProfile): WorkdayCv {
       city: nonEmpty(profile.city) || fallbackLocation.city,
       state: nonEmpty(profile.state) || fallbackLocation.state,
       zip: nonEmpty(profile.zip_code),
-      country: nonEmpty(profile.country) || "United States of America",
+      country: nonEmpty(profile.country) || "United States",
     },
     linkedIn: nonEmpty(profile.linkedin_url) || nonEmpty(profile.resume_linkedin_url),
     portfolio:
@@ -517,12 +602,22 @@ function findOptionByText(options: Element[], desired: string): HTMLElement | nu
   const htmlOptions = options
     .filter((opt): opt is HTMLElement => opt instanceof HTMLElement)
     .filter((opt) => isVisible(opt))
+
+  const optionText = (option: HTMLElement): string => {
+    const txt = nonEmpty(option.textContent)
+    if (txt) return txt
+    const automationLabel = nonEmpty(option.getAttribute("data-automation-label"))
+    if (automationLabel) return automationLabel
+    const ds = option.dataset ? nonEmpty(option.dataset.automationLabel) : ""
+    return ds
+  }
+
   for (const option of htmlOptions) {
-    const txt = normText(option.textContent)
+    const txt = normText(optionText(option))
     if (txt === target) return option
   }
   for (const option of htmlOptions) {
-    const txt = normText(option.textContent)
+    const txt = normText(optionText(option))
     if (txt && (txt.includes(target) || target.includes(txt))) return option
   }
   return null
@@ -534,6 +629,170 @@ function safeEscapeSelector(value: string): string {
   } catch {
     return value.replace(/["\\]/g, "")
   }
+}
+
+const US_STATE_CODE_TO_NAME: Record<string, string> = {
+  al: "alabama",
+  ak: "alaska",
+  az: "arizona",
+  ar: "arkansas",
+  ca: "california",
+  co: "colorado",
+  ct: "connecticut",
+  de: "delaware",
+  fl: "florida",
+  ga: "georgia",
+  hi: "hawaii",
+  id: "idaho",
+  il: "illinois",
+  in: "indiana",
+  ia: "iowa",
+  ks: "kansas",
+  ky: "kentucky",
+  la: "louisiana",
+  me: "maine",
+  md: "maryland",
+  ma: "massachusetts",
+  mi: "michigan",
+  mn: "minnesota",
+  ms: "mississippi",
+  mo: "missouri",
+  mt: "montana",
+  ne: "nebraska",
+  nv: "nevada",
+  nh: "new hampshire",
+  nj: "new jersey",
+  nm: "new mexico",
+  ny: "new york",
+  nc: "north carolina",
+  nd: "north dakota",
+  oh: "ohio",
+  ok: "oklahoma",
+  or: "oregon",
+  pa: "pennsylvania",
+  ri: "rhode island",
+  sc: "south carolina",
+  sd: "south dakota",
+  tn: "tennessee",
+  tx: "texas",
+  ut: "utah",
+  vt: "vermont",
+  va: "virginia",
+  wa: "washington",
+  wv: "west virginia",
+  wi: "wisconsin",
+  wy: "wyoming",
+  dc: "district of columbia",
+}
+
+const US_STATE_NAME_TO_CODE: Record<string, string> = Object.fromEntries(
+  Object.entries(US_STATE_CODE_TO_NAME).map(([code, name]) => [name, code]),
+)
+
+function normalizeCountryToken(raw: string): string {
+  const value = normText(raw)
+  if (!value) return ""
+  if (
+    value === "us" ||
+    value === "usa" ||
+    value === "u s" ||
+    value === "u s a" ||
+    value.includes("united states")
+  ) {
+    return "united states"
+  }
+  return value
+}
+
+function normalizeStateToken(raw: string): string {
+  const value = normText(raw).replace(/\./g, "")
+  if (!value) return ""
+  const compact = value.replace(/\s+/g, " ").trim()
+  const noSpaces = compact.replace(/\s+/g, "")
+  if (US_STATE_CODE_TO_NAME[compact]) return US_STATE_CODE_TO_NAME[compact]
+  if (US_STATE_CODE_TO_NAME[noSpaces]) return US_STATE_CODE_TO_NAME[noSpaces]
+  if (US_STATE_NAME_TO_CODE[compact]) return compact
+  return compact
+}
+
+function isComboboxValueEquivalent(displayedRaw: string, desiredRaw: string, fieldName: string): boolean {
+  const displayed = normText(displayedRaw)
+  const desired = normText(desiredRaw)
+  if (!displayed || !desired) return false
+  if (displayed === desired) return true
+
+  const field = normText(fieldName)
+  const isCountryField = field.includes("country")
+  const isStateField = field.includes("state") || field.includes("province") || field.includes("region")
+
+  if (isCountryField) {
+    const normalizedDisplayed = normalizeCountryToken(displayedRaw)
+    const normalizedDesired = normalizeCountryToken(desiredRaw)
+    if (normalizedDisplayed && normalizedDisplayed === normalizedDesired) return true
+
+    // Workday often shows "United States" or "+1" while the desired value
+    // is "United States of America". Treat these as equivalent so we avoid
+    // re-opening comboboxes that can trigger flaky apply-flow refetches.
+    if (
+      field.includes("phone") &&
+      normalizedDesired === "united states" &&
+      (/\+?\s*1\b/.test(displayedRaw) || /united states/i.test(displayedRaw))
+    ) {
+      return true
+    }
+
+    if (
+      normalizedDisplayed &&
+      normalizedDesired &&
+      (normalizedDisplayed.includes(normalizedDesired) || normalizedDesired.includes(normalizedDisplayed))
+    ) {
+      return true
+    }
+  }
+
+  if (isStateField) {
+    const normalizedDisplayed = normalizeStateToken(displayedRaw)
+    const normalizedDesired = normalizeStateToken(desiredRaw)
+    if (normalizedDisplayed && normalizedDisplayed === normalizedDesired) return true
+  }
+
+  return false
+}
+
+/**
+ * Reads the currently-displayed selection text of a Workday combobox without
+ * clicking it. Workday renders the selected value in one of these patterns:
+ *   1. <input value="…">                     — classic text-box combobox
+ *   2. <button>…selected text…</button>      — apply-flow newer template
+ *   3. [data-automation-id="selectedItem"]   — explicit selected-item node
+ *   4. .css-* button textContent             — falls back to the shell's text
+ * The caller compares this with the desired value to decide whether to even
+ * open the dropdown — a re-open on a flaky Workday tenant refetches the
+ * dependent list (e.g. states for Country) and can hit a 500 + crash.
+ */
+function extractComboboxDisplayValue(target: HTMLElement): string {
+  // Explicit selected-item slot — strongest signal when present.
+  const selected = target.querySelector<HTMLElement>(
+    '[data-automation-id="selectedItem"], [data-automation-id="selectedItemList"]',
+  )
+  if (selected?.textContent && selected.textContent.trim()) {
+    return selected.textContent.trim()
+  }
+  // Native input inside the combobox.
+  const input = target instanceof HTMLInputElement
+    ? target
+    : target.querySelector("input")
+  if (input instanceof HTMLInputElement && input.value.trim()) {
+    return input.value.trim()
+  }
+  // Button-based combobox shell — read its text.
+  const button = target.closest("button") ?? target.querySelector("button")
+  if (button?.textContent && button.textContent.trim()) {
+    return button.textContent.trim()
+  }
+  // Last resort: target's own text content (usually the selected label).
+  const own = target.textContent?.trim() ?? ""
+  return own
 }
 
 function resolveInputControlFromElement(
@@ -575,6 +834,11 @@ class WorkdayAutofillRunner {
   private totalExpectedFields = 1
   private manualReviewCount = 0
   private manualReviewNotes: string[] = []
+  // Per-step tally of required fields that hit manual review (empty profile
+  // value or selector miss). When > 0 the runner skips auto-advance so we
+  // don't submit incomplete data to Workday — that's the most common cause
+  // of the server-side "Something went wrong / 500" page on apply-flow tenants.
+  private requiredFieldMissesThisStep = 0
   private phase: WorkdayAutofillPhase = "idle"
   private statusTitle = "Idle"
   private statusSubtitle = ""
@@ -721,40 +985,36 @@ class WorkdayAutofillRunner {
     this.debug("info", "runner.skip_step", { moved })
   }
 
-  async runUntilSettled(maxCycles = 10): Promise<WorkdayAutofillRunResult> {
+  /**
+   * Fill the currently-visible Workday step and stop. The runner deliberately
+   * does NOT auto-advance through the wizard — the user reviews, fixes any
+   * misses, and clicks Save and Continue themselves. When the next step's DOM
+   * appears, the scout-bar's MutationObserver re-detects it and re-enables
+   * the Autofill button so the user can click it again for the next step.
+   *
+   * `maxCycles` is kept on the signature for backwards-compat but ignored.
+   */
+  async runCurrentStep(_maxCycles?: number): Promise<WorkdayAutofillRunResult> {
     this.phase = "running"
     this.setToolbarState("WAITING", "Running Workday autofill…")
-    this.debug("info", "run_until_settled.start", { maxCycles })
+    this.debug("info", "run_current_step.start")
     const ok = await this.initializeContext()
     if (!ok) return this.buildResult()
-    let previousSignature = ""
     try {
-      for (let i = 0; i < maxCycles; i += 1) {
-        if (this.stopped) break
-        if (this.paused && !this.eeoPaused) break
-        await this.run("manual")
-        await sleep(120)
-        const step = this.detectStep()
-        const signature = this.captureApplicationPageSignature()
-        this.debug("info", "run_until_settled.cycle", {
-          cycle: i + 1,
-          stepId: step.id,
-          stepName: step.name,
-          signatureChanged: signature !== previousSignature,
-        })
-        if (step.id === "review") break
-        if (this.eeoPaused) break
-        if (signature === previousSignature) break
-        previousSignature = signature
-      }
+      await this.run("manual")
     } catch (error) {
       this.phase = "error"
       const message = error instanceof Error ? error.message : "Unexpected Workday autofill error"
       window[GLOBAL_LAST_ERROR_KEY] = message
-      this.debug("error", "run_until_settled.error", { message })
+      this.debug("error", "run_current_step.error", { message })
     }
-    this.debug("info", "run_until_settled.complete")
+    this.debug("info", "run_current_step.complete")
     return this.buildResult()
+  }
+
+  /** @deprecated alias retained for older call sites; behaves identically to runCurrentStep. */
+  async runUntilSettled(maxCycles = 10): Promise<WorkdayAutofillRunResult> {
+    return this.runCurrentStep(maxCycles)
   }
 
   private buildResult(): WorkdayAutofillRunResult {
@@ -783,18 +1043,22 @@ class WorkdayAutofillRunner {
     }
     const result: WorkdayAutofillRunResult = {
       phase: this.phase,
+      stepId: step.id,
+      stepName: step.name,
       fieldsFilledCount: this.fieldsFilledCount,
       totalExpectedFields: this.totalExpectedFields,
       manualReviewCount: this.manualReviewCount,
       manualReviewNotes: [...this.manualReviewNotes],
       eeoPaused: this.eeoPaused,
       reachedReview: step.id === "review",
+      blockedReason: step.id === "account_required" ? "account_required" : null,
       debugEntryCount: this.debugEntries.length,
       debugTail: this.debugEntries.slice(-120),
       rows,
     }
     this.debug("info", "run.result", {
       phase: result.phase,
+      stepId: result.stepId,
       reachedReview: result.reachedReview,
       fieldsFilledCount: result.fieldsFilledCount,
       manualReviewCount: result.manualReviewCount,
@@ -933,10 +1197,44 @@ class WorkdayAutofillRunner {
 
       this.lastStepId = step.id
       this.lastStepName = step.name
+      this.requiredFieldMissesThisStep = 0
       this.setToolbarState(
         "FILLING",
         `Autofilling Step ${step.index} of ${step.total} · ${step.name}`,
       )
+
+      const brokenState = this.detectBrokenApplyFlowState()
+      if (brokenState.broken) {
+        this.paused = true
+        this.setToolbarState(
+          "NEEDS_REVIEW",
+          "Workday session is in an error state. Refresh this page before retrying autofill.",
+        )
+        this.showResumeButton(true)
+        this.logWarning("Manual review needed: Workday returned internal errors (jobapplication/package undefined). Refresh and retry.")
+        this.debug(
+          "error",
+          "run.pause_broken_apply_flow_state",
+          brokenState.resource
+            ? { reason: brokenState.reason, resource: brokenState.resource }
+            : { reason: brokenState.reason },
+        )
+        return
+      }
+
+      if (step.id === "account_required") {
+        this.paused = true
+        this.setToolbarState(
+          "PAUSED",
+          "Sign in or create your Workday account, then click Resume.",
+        )
+        this.showResumeButton(true)
+        this.logWarning(
+          "Manual review needed: Workday requires an account before the application can be filled. Complete Sign In / Create Account, then resume.",
+        )
+        this.debug("warn", "run.pause_account_required")
+        return
+      }
 
       if (step.id === "self_identify" || document.querySelector('[data-automation-id="selfIdentifyPage"]')) {
         this.paused = true
@@ -979,11 +1277,34 @@ class WorkdayAutofillRunner {
       }
 
       this.processedStepSignatures.add(stepSignature)
-      const shouldAdvance = step.id === "my_information" || step.id === "my_experience" || step.id === "application_questions"
-      if (shouldAdvance) {
-        const moved = await this.clickNextAndWait()
-        this.debug("info", "run.advance_attempt", { stepId: step.id, moved })
-        if (moved) this.scheduleRun("manual")
+
+      // Per-step UX: never auto-click Save and Continue. Workday's apply-flow
+      // backend is intolerant of rapid sequential submits — racing its
+      // reactive validators with stale field state is the dominant cause of
+      // the generic 500 + "Something went wrong" page. Always let the user
+      // review, fix anything we missed, and click Save and Continue manually.
+      const fillsThisStep = step.id === "my_information" || step.id === "my_experience" || step.id === "application_questions"
+      if (fillsThisStep) {
+        if (this.requiredFieldMissesThisStep > 0) {
+          this.paused = true
+          this.setToolbarState(
+            "NEEDS_REVIEW",
+            `${step.name} filled (${this.fieldsFilledCount}/${this.totalExpectedFields}). ${this.requiredFieldMissesThisStep} field${this.requiredFieldMissesThisStep === 1 ? "" : "s"} need you.`,
+            "Fill the highlighted fields and click Save and Continue. I'll pick up the next step.",
+          )
+          this.debug("warn", "run.complete_with_misses", {
+            stepId: step.id,
+            misses: this.requiredFieldMissesThisStep,
+          })
+        } else {
+          this.paused = true
+          this.setToolbarState(
+            "DONE",
+            `${step.name} filled (${this.fieldsFilledCount}/${this.totalExpectedFields}).`,
+            "Review and click Save and Continue. I'll pick up the next step.",
+          )
+          this.debug("info", "run.complete_clean", { stepId: step.id })
+        }
       }
       this.debug("info", "run.complete", { stepId: step.id })
     } catch (error) {
@@ -999,16 +1320,46 @@ class WorkdayAutofillRunner {
   }
 
   private detectStep(): WorkdayStep {
+    // Workday gates the apply flow behind Sign In / Create Account. The fields
+    // there (email, password, confirm-password) would otherwise be filled as
+    // if they were the My Information step — detect this first and bail.
+    if (this.isAccountStep()) {
+      return { id: "account_required", name: "Sign in to Workday", index: 0, total: STEP_TOTAL }
+    }
+
     const stepEl =
       document.querySelector('[data-automation-id="currentPage"]') ??
-      document.querySelector(".css-1m7m4j2") ??
       document.querySelector('[aria-label*="Step"]')
     const text = nonEmpty(stepEl?.textContent)
     const normalized = normText(text)
 
-    if (document.querySelector('[data-automation-id="selfIdentifyPage"]')) {
+    // Newer "Apply Flow" template emits per-step page wrappers — strongest signal.
+    if (document.querySelector('[data-automation-id="selfIdentifyPage"], [data-automation-id="applyFlowSelfIdentifyPage"]')) {
       return { id: "self_identify", name: "Self Identify", index: 4, total: STEP_TOTAL }
     }
+    if (document.querySelector('[data-automation-id="applyFlowMyInfoPage"], [data-automation-id="myInformationPage"]')) {
+      return { id: "my_information", name: "My Information", index: 1, total: STEP_TOTAL }
+    }
+    if (
+      document.querySelector(
+        '[data-automation-id="applyFlowMyExperiencePage"], ' +
+        '[data-automation-id="myExperiencePage"]',
+      )
+    ) {
+      return { id: "my_experience", name: "My Experience", index: 2, total: STEP_TOTAL }
+    }
+    if (
+      document.querySelector(
+        '[data-automation-id="applyFlowApplicationQuestionsPage"], ' +
+        '[data-automation-id="applyFlowQuestionnairePage"]',
+      )
+    ) {
+      return { id: "application_questions", name: "Application Questions", index: 3, total: STEP_TOTAL }
+    }
+    if (document.querySelector('[data-automation-id="applyFlowReviewPage"], [data-automation-id="reviewPage"]')) {
+      return { id: "review", name: "Review", index: 5, total: STEP_TOTAL }
+    }
+
     if (normalized.includes("my information")) {
       return { id: "my_information", name: "My Information", index: 1, total: STEP_TOTAL }
     }
@@ -1025,88 +1376,270 @@ class WorkdayAutofillRunner {
       return { id: "review", name: "Review", index: 5, total: STEP_TOTAL }
     }
 
-    if (document.querySelector('[data-automation-id="legalNameSection_firstName"]')) {
+    // Last-resort: presence of legal-name inputs is unambiguous My Information.
+    if (
+      document.querySelector(
+        '[data-automation-id="legalNameSection_firstName"], ' +
+        '[data-automation-id="formField-legalName--firstName"], ' +
+        '[data-automation-id="legalName--firstName"]',
+      )
+    ) {
       return { id: "my_information", name: "My Information", index: 1, total: STEP_TOTAL }
     }
     if (
-      document.querySelector('[data-automation-id="workExperienceSection"]') ||
-      document.querySelector('[data-automation-id="educationSection"]')
+      document.querySelector(
+        '[data-automation-id="workExperienceSection"], ' +
+        '[data-automation-id="formField-workExperience"], ' +
+        '[data-automation-id="educationSection"], ' +
+        '[data-automation-id="formField-education"]',
+      )
     ) {
       return { id: "my_experience", name: "My Experience", index: 2, total: STEP_TOTAL }
     }
-    if (document.querySelector('input[type="radio"], select, textarea')) {
-      return { id: "application_questions", name: text || "Application Questions", index: 3, total: STEP_TOTAL }
-    }
-    if (document.querySelector('[data-automation-id*="review"]')) {
+    if (document.querySelector('[data-automation-id*="review"], [data-automation-id="reviewPage"]')) {
       return { id: "review", name: "Review", index: 5, total: STEP_TOTAL }
+    }
+    if (
+      document.querySelector(
+        '[data-automation-id="questionnairePage"], ' +
+        '[data-automation-id*="questionnaire"], ' +
+        '[data-automation-id*="applicationQuestion"]',
+      )
+    ) {
+      return { id: "application_questions", name: text || "Application Questions", index: 3, total: STEP_TOTAL }
     }
     return { id: "unknown", name: text || "Workday Application", index: 1, total: STEP_TOTAL }
   }
 
+  /**
+   * Detects the Workday Sign In / Create Account gate that precedes the apply
+   * wizard. Workday emits stable automation ids for these inputs; we also
+   * accept a heuristic where a password input is visible without any
+   * application-step markers above it.
+   */
+  private isAccountStep(): boolean {
+    const accountMarkers = document.querySelector(
+      '[data-automation-id="createAccountSubmitButton"], ' +
+      '[data-automation-id="signInSubmitButton"], ' +
+      '[data-automation-id="verifyNewPasswordSubmitButton"], ' +
+      '[data-automation-id="createAccountPage"], ' +
+      '[data-automation-id="signInPage"]',
+    )
+    if (accountMarkers) return true
+
+    const passwordInput = document.querySelector<HTMLInputElement>('input[type="password"]')
+    if (!passwordInput || !isVisible(passwordInput)) return false
+    const inApplicationFlow = document.querySelector(
+      '[data-automation-id="applicationPage"], [data-automation-id="applyFlow"], ' +
+      '[data-automation-id="applyFlowPage"], [data-automation-id="applyFlowMyInfoPage"], ' +
+      '[data-automation-id="currentPage"], [data-automation-id="legalNameSection_firstName"], ' +
+      '[data-automation-id="formField-legalName--firstName"]',
+    )
+    return !inApplicationFlow
+  }
+
   private captureApplicationPageSignature(): string {
-    const page = document.querySelector('[data-automation-id="applicationPage"]')
+    const page =
+      document.querySelector('[data-automation-id="applicationPage"]') ??
+      document.querySelector('[data-automation-id="applyFlowPage"]') ??
+      document.querySelector('[data-automation-id="applyFlow"]')
     if (!page) return `${window.location.pathname}|no-app-page`
     const text = nonEmpty(page.textContent).slice(0, 220)
     const controls = page.querySelectorAll("input, select, textarea, button").length
     return `${window.location.pathname}|${controls}|${text}`
   }
 
+  private detectBrokenApplyFlowState(): { broken: boolean; reason: string; resource?: string } {
+    const pageText = normText(document.body?.textContent ?? "")
+    if (pageText.includes("something went wrong") && pageText.includes("please refresh the page")) {
+      return { broken: true, reason: "error_page_visible" }
+    }
+
+    try {
+      const resources = performance.getEntriesByType("resource")
+      for (let i = resources.length - 1; i >= 0 && i >= resources.length - 120; i -= 1) {
+        const entry = resources[i]
+        const name = nonEmpty((entry as PerformanceResourceTiming).name)
+        if (!name) continue
+        if (!name.includes(window.location.hostname)) continue
+        if (/\/wday\/(?:calypso|cxs)\//i.test(name) && /\/(?:jobapplication|package)\/undefined(?:\/|$)/i.test(name)) {
+          return { broken: true, reason: "undefined_resource_path", resource: name.slice(0, 240) }
+        }
+      }
+    } catch {
+      // Ignore when resource timing is unavailable.
+    }
+
+    return { broken: false, reason: "ok" }
+  }
+
   private async fillMyInformationStep(): Promise<void> {
     if (!this.cv) return
     this.debug("info", "step.my_information.start")
-    await this.maybeUploadResume()
 
+    // Name fields are title-cased and force-overwritten — Workday's resume
+    // parser frequently dumps ALL CAPS values that fail the tenant's
+    // capitalization validator. salvageMiscased lets us rewrite the existing
+    // field even when our profile lacks a name (we title-case the value
+    // already on the page).
+    //
+    // Tenants render automation-ids in two schemes:
+    //   classic: legalNameSection_firstName, addressSection_city, …
+    //   apply-flow: formField-legalName--firstName, formField-city, …
+    // resolveInputControlFromElement drills into the wrapper to find the input
+    // regardless of which scheme the tenant uses.
     await this.fillFirstTextSelector(
-      ['[data-automation-id="legalNameSection_firstName"]', '[data-automation-id="firstName"]'],
+      [
+        '[data-automation-id="legalNameSection_firstName"]',
+        '[data-automation-id="formField-legalName--firstName"]',
+        '[data-automation-id="legalName--firstName"]',
+        '[data-automation-id="firstName"]',
+      ],
       this.cv.firstName,
       "Legal First Name",
+      { forceOverwrite: true, salvageMiscased: true },
     )
     await this.fillFirstTextSelector(
-      ['[data-automation-id="legalNameSection_lastName"]', '[data-automation-id="lastName"]'],
+      [
+        '[data-automation-id="legalNameSection_middleName"]',
+        '[data-automation-id="formField-legalName--middleName"]',
+        '[data-automation-id="legalName--middleName"]',
+        '[data-automation-id="middleName"]',
+      ],
+      this.cv.middleName,
+      "Legal Middle Name",
+      { optional: true, forceOverwrite: true, salvageMiscased: true },
+    )
+    await this.fillFirstTextSelector(
+      [
+        '[data-automation-id="legalNameSection_lastName"]',
+        '[data-automation-id="formField-legalName--lastName"]',
+        '[data-automation-id="legalName--lastName"]',
+        '[data-automation-id="lastName"]',
+      ],
       this.cv.lastName,
       "Legal Last Name",
+      { forceOverwrite: true, salvageMiscased: true },
     )
     await this.fillFirstTextSelector(
-      ['[data-automation-id="preferredName-firstName"]', '[data-automation-id="preferredName"]'],
+      [
+        '[data-automation-id="preferredName-firstName"]',
+        '[data-automation-id="formField-preferredName--firstName"]',
+        '[data-automation-id="preferredName"]',
+      ],
       this.cv.preferredName || this.cv.firstName,
       "Preferred Name",
-      { optional: true },
+      { optional: true, forceOverwrite: true },
     )
     await this.fillFirstTextSelector(
-      ['[data-automation-id="addressSection_addressLine1"]', '[data-automation-id="addressLine1"]'],
+      [
+        '[data-automation-id="addressSection_addressLine1"]',
+        '[data-automation-id="formField-address--addressLine1"]',
+        '[data-automation-id="formField-addressLine1"]',
+        '[data-automation-id="addressLine1"]',
+      ],
       this.cv.address.line1,
       "Address Line 1",
     )
     await this.fillFirstTextSelector(
-      ['[data-automation-id="addressSection_addressLine2"]', '[data-automation-id="addressLine2"]'],
+      [
+        '[data-automation-id="addressSection_addressLine2"]',
+        '[data-automation-id="formField-address--addressLine2"]',
+        '[data-automation-id="formField-addressLine2"]',
+        '[data-automation-id="addressLine2"]',
+      ],
       this.cv.address.line2,
       "Address Line 2",
       { optional: true },
     )
     await this.fillFirstTextSelector(
-      ['[data-automation-id="addressSection_city"]', '[data-automation-id="city"]'],
+      [
+        '[data-automation-id="addressSection_city"]',
+        '[data-automation-id="formField-address--city"]',
+        '[data-automation-id="formField-city"]',
+        '[data-automation-id="city"]',
+      ],
       this.cv.address.city,
       "City",
     )
-    await this.selectCombobox('[data-automation-id="addressSection_countryRegion"]', this.cv.address.state, "State/Province")
+    // Country MUST be selected before State and Postal Code on apply-flow
+    // tenants — the State dropdown options and the Postal Code validator are
+    // both downstream of the selected country. Filling state first triggers
+    // Workday's reactive validators with an inconsistent (country, state)
+    // pair, which is one of the known triggers for the server-side 500.
+    await this.selectCombobox(
+      '[data-automation-id="addressSection_country"], ' +
+      '[data-automation-id="formField-country"], ' +
+      '[data-automation-id="formField-address--country"]',
+      this.cv.address.country || "United States",
+      "Country",
+      { riskyApplyFlowField: true },
+    )
+    await sleep(400)
+    await this.selectCombobox(
+      '[data-automation-id="addressSection_countryRegion"], ' +
+      '[data-automation-id="formField-address--countryRegion"], ' +
+      '[data-automation-id="formField-countryRegion"], ' +
+      '[data-automation-id="formField-state"], ' +
+      '[data-automation-id="formField-stateRegion"]',
+      this.cv.address.state,
+      "State/Province",
+      { riskyApplyFlowField: true },
+    )
     await this.fillFirstTextSelector(
-      ['[data-automation-id="addressSection_postalCode"]', '[data-automation-id="postalCode"]'],
+      [
+        '[data-automation-id="addressSection_postalCode"]',
+        '[data-automation-id="formField-address--postalCode"]',
+        '[data-automation-id="formField-postalCode"]',
+        '[data-automation-id="postalCode"]',
+      ],
       this.cv.address.zip,
       "Postal Code",
     )
+    // Phone country code MUST be selected before the phone number on
+    // apply-flow tenants — Workday's phone validator chains off it. Skipping
+    // it is the dominant cause of the post-submit "Something went wrong"
+    // 500 errors when the phone number is otherwise valid.
     await this.selectCombobox(
-      '[data-automation-id="addressSection_country"]',
-      this.cv.address.country || "United States of America",
-      "Country",
+      '[data-automation-id="formField-countryPhoneCode"], ' +
+      '[data-automation-id="phone-country-code"], ' +
+      '[data-automation-id="formField-phone--countryPhoneCode"]',
+      this.cv.address.country || "United States",
+      "Phone Country Code",
+      { optional: true, riskyApplyFlowField: true },
+    )
+    await this.selectFirstCombobox(
+      [
+        '[data-automation-id="phone-device-type"]',
+        '[data-automation-id="formField-phone--phoneType"]',
+        '[data-automation-id="formField-phoneType"]',
+        '[data-automation-id="formField-phoneDeviceType"]',
+        '[data-automation-id="phoneType"]',
+        '[data-automation-id="phoneDeviceType"]',
+        '[data-automation-id="formField-phone--deviceType"]',
+        '[data-automation-id="formField-deviceType"]',
+        '[data-automation-id*="phone"][data-automation-id*="Type"]',
+      ],
+      "Mobile",
+      "Phone Device Type",
+      { optional: true },
     )
     await this.fillFirstTextSelector(
-      ['[data-automation-id="phone-number"]', '[data-automation-id="phoneNumber"]'],
+      [
+        '[data-automation-id="phone-number"]',
+        '[data-automation-id="formField-phoneNumber"]',
+        '[data-automation-id="formField-phone--phoneNumber"]',
+        '[data-automation-id="phoneNumber"]',
+      ],
       this.cv.phone,
       "Phone Number",
     )
-    await this.selectCombobox('[data-automation-id="phone-device-type"]', "Mobile", "Phone Device Type")
 
-    const emailTarget = document.querySelector<HTMLElement>('[data-automation-id="email"]')
+    const emailTarget = Array.from(document.querySelectorAll<HTMLElement>(
+      '[data-automation-id="email"], ' +
+      '[data-automation-id="formField-email"], ' +
+      '[data-automation-id="formField-emailAddress"]',
+    )).find((node) => isVisible(node)) ?? null
     const emailEl = resolveInputControlFromElement(emailTarget)
     if (emailEl instanceof HTMLInputElement || emailEl instanceof HTMLTextAreaElement) {
       const existing = nonEmpty(emailEl.value)
@@ -1125,12 +1658,10 @@ class WorkdayAutofillRunner {
       this.debug("warn", "field.email.not_found")
     }
 
-    await this.selectCombobox(
-      '[data-automation-id="jobPostingSource"]',
-      "Internet/Online Job Posting",
-      "How did you hear about us",
-      { optional: true },
-    )
+    // Do not auto-set Source. On some apply-flow tenants this optional field
+    // issues unstable backend calls and can collapse the page into Workday's
+    // generic "Something went wrong" screen.
+    this.debug("info", "field.source.skipped_by_policy")
     this.debug("info", "step.my_information.complete")
   }
 
@@ -1141,6 +1672,9 @@ class WorkdayAutofillRunner {
       educationCount: this.cv.education.length,
       skillsCount: this.cv.skills.length,
     })
+    // Resume upload is deferred to My Experience because some apply-flow
+    // tenants crash when attachment writes are attempted on My Information.
+    await this.maybeUploadResume()
     await this.fillWorkExperienceEntries()
     await this.fillEducationEntries()
     await this.fillSkillsSection()
@@ -1469,7 +2003,149 @@ class WorkdayAutofillRunner {
       this.bumpFilledCount()
       this.debug("info", "questions.select.answered", { label, desired: optionAnswer })
     }
+    await this.fillApplicationQuestionComboboxes()
     this.debug("info", "step.application_questions.complete")
+  }
+
+  private async fillApplicationQuestionComboboxes(): Promise<void> {
+    // Workday application questions are frequently rendered as custom
+    // combobox widgets (placeholder: "Select One") rather than native
+    // <select>. Handle those explicitly so yes/no screening questions fill.
+    const containers = Array.from(
+      document.querySelectorAll<HTMLElement>('[data-automation-id*="formField"]'),
+    ).filter((el) => isVisible(el))
+    this.debug("info", "questions.combobox.scan_start", { containers: containers.length })
+
+    for (const container of containers) {
+      if (this.stopped || this.paused) return
+      const comboboxTarget = container.querySelector<HTMLElement>(
+        '[role="combobox"], [aria-haspopup="listbox"], [data-automation-id*="dropDown"], [data-automation-id*="Dropdown"]',
+      )
+      if (!comboboxTarget || !isVisible(comboboxTarget)) continue
+
+      const label = this.extractApplicationQuestionLabel(container, comboboxTarget)
+      if (!label) continue
+      if (/\b(ethnicity|race|gender|veteran|disability)\b/i.test(label)) {
+        this.debug("info", "questions.combobox.skipped_sensitive", { label })
+        this.markManualReview(container, label)
+        continue
+      }
+
+      const existing = nonEmpty(extractComboboxDisplayValue(comboboxTarget))
+      if (existing && !this.isUnansweredSelectPlaceholder(existing)) {
+        this.debug("info", "questions.combobox.already_answered", {
+          label,
+          existing: existing.slice(0, 80),
+        })
+        continue
+      }
+
+      const yn = this.getYesNoAnswer(label)
+      let desired = yn === null ? this.getSelectAnswer(label) : (yn ? "Yes" : "No")
+      if (!desired) desired = this.inferDefaultQuestionComboboxAnswer(label)
+      if (!desired) {
+        this.debug("warn", "questions.combobox.unanswered", { label })
+        this.markManualReview(container, label)
+        continue
+      }
+
+      const ok = await this.selectComboboxElement(comboboxTarget, desired, label, { optional: true })
+      if (ok) {
+        this.debug("info", "questions.combobox.answered", { label, desired })
+      } else {
+        this.debug("warn", "questions.combobox.answer_failed", { label, desired })
+        this.markManualReview(container, label)
+      }
+    }
+  }
+
+  private normalizeQuestionLabel(raw: string): string {
+    return raw
+      .replace(/\s+/g, " ")
+      .replace(/\s*\*\s*$/g, "")
+      .trim()
+  }
+
+  private extractApplicationQuestionLabel(container: HTMLElement, target: HTMLElement): string {
+    const primary = this.normalizeQuestionLabel(parseQuestionLabel(target) || parseQuestionLabel(container))
+    if (primary && !this.isUnansweredSelectPlaceholder(primary) && primary.length > 8) return primary
+
+    const inlinePrompt = container.querySelector<HTMLElement>(
+      '[data-automation-id*="prompt"], [data-automation-id*="question"], [id*="prompt"], [id*="question"]',
+    )
+    if (inlinePrompt?.textContent?.trim()) {
+      const text = this.normalizeQuestionLabel(inlinePrompt.textContent)
+      if (text && !this.isUnansweredSelectPlaceholder(text)) return text
+    }
+
+    let hop: HTMLElement | null = target
+    while (hop && hop !== container) {
+      let prev = hop.previousElementSibling as HTMLElement | null
+      while (prev) {
+        const txt = this.normalizeQuestionLabel(prev.textContent ?? "")
+        if (
+          txt.length > 12 &&
+          !this.isUnansweredSelectPlaceholder(txt) &&
+          !/^\*?\s*indicates?\s+a\s+required\s+field\b/i.test(txt)
+        ) {
+          return txt
+        }
+        prev = prev.previousElementSibling as HTMLElement | null
+      }
+      hop = hop.parentElement
+    }
+
+    const explicit = container.querySelector<HTMLElement>(
+      ":scope > label, :scope > legend, :scope > [data-automation-id*='label'], :scope > [role='heading'], :scope > h1, :scope > h2, :scope > h3, :scope > h4",
+    )
+    if (explicit?.textContent?.trim()) {
+      const text = this.normalizeQuestionLabel(explicit.textContent)
+      if (text && !this.isUnansweredSelectPlaceholder(text)) return text
+    }
+
+    const candidates = Array.from(
+      container.querySelectorAll<HTMLElement>("label, legend, [role='heading'], h1, h2, h3, h4, p, span, div"),
+    )
+      .filter((el) => !el.closest("[role='combobox'], [aria-haspopup='listbox']"))
+      .map((el) => this.normalizeQuestionLabel(el.textContent ?? ""))
+      .filter((text) =>
+        text.length > 10 &&
+        text.length < 320 &&
+        !this.isUnansweredSelectPlaceholder(text) &&
+        !/^\*?\s*indicates?\s+a\s+required\s+field\b/i.test(text),
+      )
+      .sort((a, b) => b.length - a.length)
+
+    return candidates[0] ?? primary
+  }
+
+  private async selectComboboxElement(
+    target: HTMLElement,
+    value: string,
+    fieldName: string,
+    opts?: { optional?: boolean; riskyApplyFlowField?: boolean },
+  ): Promise<boolean> {
+    const attr = "data-ho-combobox-target"
+    const token = `ho-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    target.setAttribute(attr, token)
+    try {
+      return await this.selectCombobox(`[${attr}="${safeEscapeSelector(token)}"]`, value, fieldName, opts)
+    } finally {
+      if (target.getAttribute(attr) === token) target.removeAttribute(attr)
+    }
+  }
+
+  private isUnansweredSelectPlaceholder(value: string): boolean {
+    const v = normText(value)
+    return (
+      !v ||
+      v === "select one" ||
+      v === "select" ||
+      v === "choose one" ||
+      v === "choose" ||
+      v === "select an option" ||
+      v === "please select"
+    )
   }
 
   private getYesNoAnswer(question: string): boolean | null {
@@ -1477,12 +2153,55 @@ class WorkdayAutofillRunner {
     const q = normText(question)
     if (!q) return null
 
-    if (q.includes("legally authorized to work")) {
-      return this.cv.visa.authorizedCountries.length > 0 || !this.cv.visa.requiresSponsorship
-    }
-    if (q.includes("require sponsorship") || q.includes("future require sponsorship")) {
+    if (
+      q.includes("require sponsorship") ||
+      q.includes("future require sponsorship") ||
+      q.includes("require visa sponsorship")
+    ) {
       return this.cv.visa.requiresSponsorship
     }
+    if (
+      q.includes("legally authorized to work") ||
+      q.includes("authorized for employment in the u s") ||
+      q.includes("authorized to work in the u s")
+    ) {
+      // Conservative mapping:
+      // - if profile says sponsorship required -> answer NO for unrestricted
+      //   authorization wording.
+      // - otherwise answer YES.
+      if (q.includes("without any restrictions") || q.includes("without restriction")) {
+        return !this.cv.visa.requiresSponsorship
+      }
+      return true
+    }
+    if (
+      q.includes("order of prohibition from banking") ||
+      q.includes("order of removal from banking") ||
+      q.includes("federal reserve") ||
+      q.includes("fdic") ||
+      q.includes("ncua") ||
+      q.includes("occ")
+    ) {
+      return false
+    }
+    if (
+      q.includes("obligations to a previous employer") ||
+      q.includes("non solicitation") ||
+      q.includes("non compete")
+    ) {
+      return false
+    }
+    if (q.includes("conditional job offer") && q.includes("withdrawn")) return false
+    if (q.includes("discharged") || q.includes("terminated") || q.includes("resigned without notice")) return false
+    if (q.includes("immediate family member relationship") || q.includes("immediate family relationship")) return false
+    if (q.includes("familial relationships") && q.includes("public official")) return false
+    if (q.includes("government or regulatory entity")) return false
+    if (q.includes("licensed realtor") || q.includes("secondary employment") || q.includes("board positions")) return false
+    if (q.includes("worked for any consulting firms") && (q.includes("u s bank") || q.includes("elavon"))) return false
+    if (q.includes("willing to submit to a review of my criminal history")) return true
+    if (q.includes("unable to obtain bonding")) return true
+    if (q.includes("willing to work from the location")) return true
+    if (q.includes("as a condition of new or continued employment") && q.includes("background check")) return true
     if (q.includes("18 or older")) return true
     if (q.includes("degree")) return this.cv.education.length > 0
 
@@ -1503,6 +2222,23 @@ class WorkdayAutofillRunner {
     return null
   }
 
+  private inferDefaultQuestionComboboxAnswer(question: string): string | null {
+    const q = normText(question)
+    if (!q) return null
+    if (!(q.startsWith("are you") || q.startsWith("do you") || q.startsWith("have you") || q.startsWith("will you"))) {
+      return null
+    }
+    if (/\b(willing|authorized|eligible|able|available|submit|agree|consent|understand|18 or older)\b/.test(q)) return "Yes"
+    if (
+      /\b(ever|require|prohibit|prohibition|remove|withdrawn|discharged|terminated|resigned|obligation|relationship|government|regulatory|realtor|secondary employment|public official)\b/.test(
+        q,
+      )
+    ) {
+      return "No"
+    }
+    return null
+  }
+
   private getTextAnswer(question: string): string | null {
     if (!this.cv) return null
     const q = normText(question)
@@ -1516,6 +2252,12 @@ class WorkdayAutofillRunner {
     if (q.includes("why this role") || q.includes("why this company") || q.includes("why do you want")) {
       this.logWarning(`⚠️ Manual review needed: ${question}`)
       return null
+    }
+    if (q.includes("if not applicable") && (q.includes("enter n a") || q.includes("enter na"))) {
+      return "N/A"
+    }
+    if (q.includes("please describe the circumstances below")) {
+      return "N/A"
     }
     if (q.includes("years of experience")) {
       return String(this.cv.yearsOfExperience)
@@ -1564,10 +2306,7 @@ class WorkdayAutofillRunner {
       this.debug("info", "resume_upload.skipped_no_file")
       return
     }
-    const fileInput =
-      document.querySelector<HTMLInputElement>('input[type="file"][name*="resume" i]') ??
-      document.querySelector<HTMLInputElement>('input[type="file"][accept*="pdf"]') ??
-      document.querySelector<HTMLInputElement>('[data-automation-id="file-upload-drop-zone"] input[type="file"]')
+    const fileInput = this.findResumeFileInput()
     if (!fileInput) {
       this.debug("info", "resume_upload.input_not_found")
       return
@@ -1578,35 +2317,122 @@ class WorkdayAutofillRunner {
       return
     }
 
+    this.setToolbarField("Resume upload")
+    this.setToolbarState(
+      "FILLING",
+      `Autofilling Step ${this.detectStep().index} of ${STEP_TOTAL} · ${this.detectStep().name}`,
+      `Uploading resume: ${this.resumeFile.name}…`,
+    )
+
     const dt = new DataTransfer()
     dt.items.add(this.resumeFile)
-    fileInput.files = dt.files
+
+    // React-controlled file inputs require the native setter to fire BEFORE
+    // input/change events — otherwise React's onChange handler resolves with
+    // the prior (empty) FileList. Mirrors safe-fields.injectResumeFile.
+    const nativeSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "files")?.set
+    if (nativeSetter) nativeSetter.call(fileInput, dt.files)
+    else fileInput.files = dt.files
+
     fileInput.dispatchEvent(new Event("input", { bubbles: true }))
     fileInput.dispatchEvent(new Event("change", { bubbles: true }))
+
     this.debug("info", "resume_upload.started", { filename: this.resumeFile.name })
-    await this.waitForUploadComplete()
-    this.bumpFilledCount()
-    this.debug("info", "resume_upload.done")
+    const uploaded = await this.waitForUploadComplete()
+    if (uploaded) {
+      this.bumpFilledCount()
+      this.debug("info", "resume_upload.done")
+    } else {
+      this.logWarning("Manual review needed: resume upload may not have completed — verify before continuing.")
+      this.debug("warn", "resume_upload.unconfirmed")
+    }
   }
 
-  private async waitForUploadComplete(): Promise<void> {
-    const timeoutAt = Date.now() + 10000
+  private findResumeFileInput(): HTMLInputElement | null {
+    // Ordered by specificity. Workday tenants vary in markup but the
+    // file-upload-input-ref automation id and dropzone wrapper are the most
+    // stable signals; aria-labelledby fallbacks catch i18n / a11y variants.
+    const candidates: string[] = [
+      '[data-automation-id="file-upload-input-ref"]',
+      '[data-automation-id="select-files"] input[type="file"]',
+      '[data-automation-id="file-upload-drop-zone"] input[type="file"]',
+      '[data-automation-id="resume-upload"] input[type="file"]',
+      'input[type="file"][data-automation-id*="resume" i]',
+      'input[type="file"][name*="resume" i]',
+      'input[type="file"][accept*="pdf"]',
+      'input[type="file"][accept*=".doc"]',
+    ]
+    for (const selector of candidates) {
+      const found = document.querySelector<HTMLInputElement>(selector)
+      if (found instanceof HTMLInputElement) return found
+    }
+    // Last-ditch: any visible file input inside an apply step container.
+    const scoped = document.querySelectorAll<HTMLInputElement>(
+      '[data-automation-id="applicationPage"] input[type="file"], ' +
+      '[data-automation-id="applyFlow"] input[type="file"], ' +
+      '[data-automation-id="applyFlowPage"] input[type="file"], ' +
+      '[data-automation-id="applyFlowMyInfoPage"] input[type="file"]',
+    )
+    for (const input of scoped) {
+      if (input instanceof HTMLInputElement) return input
+    }
+    return null
+  }
+
+  /**
+   * Waits for Workday to acknowledge the resume upload. Resolves true on
+   * confirmed success, false on timeout. Uses DOM signals first (i18n-safe);
+   * the English text match is a last-resort fallback for older tenants.
+   */
+  private async waitForUploadComplete(): Promise<boolean> {
+    const timeoutAt = Date.now() + 15000
     let checks = 0
     while (Date.now() < timeoutAt) {
       checks += 1
+
+      // i18n-safe success markers Workday emits when an attachment is accepted.
+      const successMarker = document.querySelector(
+        '[data-automation-id="file-upload-success"], ' +
+        '[data-automation-id="successAttachmentIcon"], ' +
+        '[data-automation-id="delete-attachment"], ' +
+        '[data-automation-id="attachments-list"] [data-automation-id*="attachment"]',
+      )
+      if (successMarker) {
+        this.debug("info", "resume_upload.success_dom_marker", { checks })
+        return true
+      }
+
+      const errorMarker = document.querySelector(
+        '[data-automation-id="errorMessage"], [data-automation-id="file-upload-error"]',
+      )
+      if (errorMarker) {
+        this.debug("warn", "resume_upload.error_dom_marker", {
+          checks,
+          text: normText(errorMarker.textContent).slice(0, 120),
+        })
+        return false
+      }
+
       const progress = document.querySelector('[data-automation-id="file-upload-progress"]')
-      if (!progress) {
-        this.debug("info", "resume_upload.progress_not_present", { checks })
-        return
+      if (progress) {
+        const txt = normText(progress.textContent)
+        // English fallback for tenants that only render the text indicator.
+        if (txt.includes("complete") || txt.includes("uploaded") || txt.includes("success")) {
+          this.debug("info", "resume_upload.progress_complete_text", { checks, text: txt.slice(0, 80) })
+          return true
+        }
+      } else if (checks > 4) {
+        // No progress widget AND no success marker after ~1.2s usually means
+        // Workday removed the dropzone for this step or never had one — treat
+        // as "best-effort complete" so the runner continues.
+        this.debug("info", "resume_upload.no_progress_widget", { checks })
+        return true
       }
-      const txt = normText(progress.textContent)
-      if (txt.includes("complete") || txt.includes("uploaded") || txt.includes("success")) {
-        this.debug("info", "resume_upload.progress_complete", { checks, text: txt })
-        return
-      }
+
       await sleep(300)
     }
     this.debug("warn", "resume_upload.progress_timeout")
+    return false
   }
 
   private async clickNextAndWait(): Promise<boolean> {
@@ -1816,22 +2642,42 @@ class WorkdayAutofillRunner {
     return true
   }
 
-  private async fillTextSelector(selector: string, value: string, fieldName: string): Promise<boolean> {
-    const clean = nonEmpty(value)
-    if (!clean) {
-      this.debug("info", "field.text_skipped_empty", { fieldName, selector })
-      return false
-    }
-    const found = document.querySelector<HTMLElement>(selector)
-    const el = resolveInputControlFromElement(found)
+  private async fillTextSelector(
+    selector: string,
+    value: string,
+    fieldName: string,
+    opts?: { forceOverwrite?: boolean; salvageMiscased?: boolean },
+  ): Promise<boolean> {
+    let clean = nonEmpty(value)
+    const candidates = Array.from(document.querySelectorAll<HTMLElement>(selector))
+      .map((node) => resolveInputControlFromElement(node))
+      .filter((node): node is HTMLInputElement | HTMLTextAreaElement => Boolean(node))
+    const el = candidates.find((node) => isVisible(node)) ?? null
     if (!(el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement)) {
       this.debug("info", "field.text_selector_miss", { fieldName, selector })
       return false
     }
+
+    // salvageMiscased: when the profile value is empty but the field already
+    // holds an all-caps/all-lowercase value (typically dropped by Workday's
+    // resume parser), rewrite it to title case in place so the tenant's
+    // capitalization validator stops complaining.
+    if (!clean && opts?.salvageMiscased) {
+      const existing = nonEmpty(el.value)
+      if (existing && looksMiscased(existing)) {
+        clean = toTitleCase(existing)
+        this.debug("info", "field.text_salvaging_miscased", { fieldName, before: existing, after: clean })
+      }
+    }
+
+    if (!clean) {
+      this.debug("info", "field.text_skipped_empty", { fieldName, selector })
+      return false
+    }
     this.setToolbarField(fieldName)
-    const ok = this.setElementValue(el, clean, fieldName)
+    const ok = this.setElementValue(el, clean, fieldName, { forceOverwrite: opts?.forceOverwrite })
     if (ok) this.bumpFilledCount()
-    this.debug(ok ? "info" : "warn", "field.text_fill", { fieldName, selector, ok })
+    this.debug(ok ? "info" : "warn", "field.text_fill", { fieldName, selector, ok, forceOverwrite: Boolean(opts?.forceOverwrite) })
     return ok
   }
 
@@ -1839,10 +2685,13 @@ class WorkdayAutofillRunner {
     selectors: string[],
     value: string,
     fieldName: string,
-    opts?: { optional?: boolean },
+    opts?: { optional?: boolean; forceOverwrite?: boolean; salvageMiscased?: boolean },
   ): Promise<boolean> {
     for (const selector of selectors) {
-      const ok = await this.fillTextSelector(selector, value, fieldName)
+      const ok = await this.fillTextSelector(selector, value, fieldName, {
+        forceOverwrite: opts?.forceOverwrite,
+        salvageMiscased: opts?.salvageMiscased,
+      })
       if (ok) {
         this.debug("info", "field.text_filled_first_match", { fieldName, selector })
         return true
@@ -1854,8 +2703,41 @@ class WorkdayAutofillRunner {
         selectors: selectors.join(" | "),
       })
       this.logWarning(`Manual review needed: ${fieldName}`)
+      this.requiredFieldMissesThisStep += 1
     } else {
       this.debug("info", "field.text_optional_not_found", {
+        fieldName,
+        selectors: selectors.join(" | "),
+      })
+    }
+    return false
+  }
+
+  private async selectFirstCombobox(
+    selectors: string[],
+    value: string,
+    fieldName: string,
+    opts?: { optional?: boolean; riskyApplyFlowField?: boolean },
+  ): Promise<boolean> {
+    for (const selector of selectors) {
+      const ok = await this.selectCombobox(selector, value, fieldName, {
+        optional: true,
+        riskyApplyFlowField: opts?.riskyApplyFlowField,
+      })
+      if (ok) {
+        this.debug("info", "combobox.filled_first_match", { fieldName, selector })
+        return true
+      }
+    }
+    if (!opts?.optional) {
+      this.debug("warn", "combobox.all_selectors_failed", {
+        fieldName,
+        selectors: selectors.join(" | "),
+      })
+      this.logWarning(`Manual review needed: ${fieldName}`)
+      this.requiredFieldMissesThisStep += 1
+    } else {
+      this.debug("info", "combobox.optional_not_found", {
         fieldName,
         selectors: selectors.join(" | "),
       })
@@ -1867,7 +2749,7 @@ class WorkdayAutofillRunner {
     selector: string,
     value: string,
     fieldName: string,
-    opts?: { root?: ParentNode; optional?: boolean },
+    opts?: { root?: ParentNode; optional?: boolean; riskyApplyFlowField?: boolean },
   ): Promise<boolean> {
     const clean = nonEmpty(value)
     if (!clean) {
@@ -1875,21 +2757,64 @@ class WorkdayAutofillRunner {
       return false
     }
     const root = opts?.root ?? document
-    const target = root.querySelector<HTMLElement>(selector)
+    const target = Array.from(root.querySelectorAll<HTMLElement>(selector)).find((el) => isVisible(el)) ?? null
     if (!target) {
       if (!opts?.optional) {
         this.logWarning(`Manual review needed: ${fieldName}`)
+        this.requiredFieldMissesThisStep += 1
       }
       this.debug(opts?.optional ? "info" : "warn", "combobox.target_missing", { fieldName, selector })
       return false
     }
 
+    // Critical: skip re-click when the combobox already shows our target
+    // value. Workday's reactive bundle refetches dependent lists (e.g.
+    // state-list when Country is re-selected) on every click; on flaky
+    // tenants (US Bank, etc.) that refetch returns 500 and the entire
+    // apply-flow page crashes with "Cannot read properties of undefined".
+    // Treating a no-op fill as success is also accurate — the value IS set.
+    const displayed = nonEmpty(extractComboboxDisplayValue(target))
+    const displayedLooksLikeQuestionPrompt =
+      displayed.length > 120 && (displayed.includes("?") || displayed.toLowerCase().includes("select one"))
+    if (displayed && !displayedLooksLikeQuestionPrompt && isComboboxValueEquivalent(displayed, clean, fieldName)) {
+      this.bumpFilledCount()
+      this.debug("info", "combobox.skipped_already_matches", {
+        fieldName,
+        selector,
+        desired: clean.slice(0, 80),
+        displayed: displayed.slice(0, 80),
+      })
+      return true
+    }
+    // On fragile apply-flow tenants, re-opening country/state/phone-code
+    // combos can trigger server refetches that fail with 500/404 and crash the
+    // page bundle. If a risky field already has ANY non-empty value, keep it
+    // and avoid touching the combobox.
+    if (displayed && opts?.riskyApplyFlowField) {
+      this.bumpFilledCount()
+      this.logWarning(`Manual review needed: ${fieldName} (existing selection kept)`)
+      this.debug("warn", "combobox.skipped_risky_existing_value", {
+        fieldName,
+        selector,
+        desired: clean.slice(0, 80),
+        displayed: displayed.slice(0, 80),
+      })
+      return true
+    }
+
     this.setToolbarField(fieldName)
     const comboboxShell =
-      (target.closest('[role="combobox"]') as HTMLElement | null) ??
-      target.querySelector<HTMLElement>('[role="combobox"]') ??
+      target.closest<HTMLElement>(
+        '[data-automation-id*="dropDownSelectList"], [role="combobox"], button[aria-haspopup="listbox"], [aria-haspopup="listbox"]',
+      ) ??
+      target.querySelector<HTMLElement>(
+        '[data-automation-id*="dropDownSelectList"], [role="combobox"], button[aria-haspopup="listbox"], [aria-haspopup="listbox"], button',
+      ) ??
       target
+    comboboxShell.focus()
+    comboboxShell.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }))
     comboboxShell.click()
+    comboboxShell.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }))
     this.debug("info", "combobox.clicked", { fieldName, selector, role: comboboxShell.getAttribute("role") || "" })
 
     const resolved = resolveInputControlFromElement(target)
@@ -1901,32 +2826,74 @@ class WorkdayAutofillRunner {
           ? (target.querySelector("input") as HTMLInputElement)
           : null
 
-    if (input) {
+    if (input && !opts?.riskyApplyFlowField) {
       this.setElementValue(input, clean, `${fieldName} (combobox)`)
     }
-    await sleep(500)
 
+    // Workday renders dropdown options into a portal asynchronously after the
+    // shell click — poll for ~1.5s before falling back to keyboard Enter so
+    // slow tenants still hit the match path.
     const automationId = target.getAttribute("data-automation-id") ?? ""
-    const menuOptions = automationId
-      ? Array.from(document.querySelectorAll(`[data-automation-id^="${safeEscapeSelector(automationId)}-menu-item--"]`))
-      : []
-    const roleOptions = Array.from(document.querySelectorAll('[role="option"]'))
-    const option = findOptionByText([...menuOptions, ...roleOptions], clean)
+    const POLL_DEADLINE = Date.now() + 1500
+    let option: HTMLElement | null = null
+    let menuOptionCount = 0
+    let roleOptionCount = 0
+    let pollAttempts = 0
+    while (Date.now() < POLL_DEADLINE) {
+      pollAttempts += 1
+      const menuOptions = automationId
+        ? Array.from(document.querySelectorAll(`[data-automation-id^="${safeEscapeSelector(automationId)}-menu-item--"]`))
+        : []
+      const roleOptions = Array.from(document.querySelectorAll('[role="option"], [role="menuitem"]'))
+      const promptOptions = Array.from(document.querySelectorAll('[data-automation-id="promptOption"]'))
+      const activePopupOptions = Array.from(
+        document.querySelectorAll(
+          '[data-automation-activepopup="true"] [role="option"], ' +
+            '[data-automation-activepopup="true"] [role="menuitem"], ' +
+            '[data-automation-activepopup="true"] [data-automation-id="promptOption"]',
+        ),
+      )
+      menuOptionCount = menuOptions.length
+      roleOptionCount = roleOptions.length + promptOptions.length + activePopupOptions.length
+      const candidateOptions = [...activePopupOptions, ...promptOptions, ...menuOptions, ...roleOptions]
+      if (candidateOptions.length > 0) {
+        option = findOptionByText(candidateOptions, clean)
+        if (option) break
+      }
+      await sleep(100)
+    }
     this.debug("info", "combobox.options_scanned", {
       fieldName,
       selector,
-      menuOptions: menuOptions.length,
-      roleOptions: roleOptions.length,
+      menuOptions: menuOptionCount,
+      roleOptions: roleOptionCount,
+      pollAttempts,
       matched: Boolean(option),
     })
     if (option) {
-      option.click()
+      const clickTarget =
+        option.closest<HTMLElement>('[role="option"], [role="menuitem"], [data-automation-id="promptOption"]') ?? option
+      clickTarget.click()
+      await sleep(120)
+      const displayedAfter = nonEmpty(extractComboboxDisplayValue(target))
+      if (displayedAfter && !this.isUnansweredSelectPlaceholder(displayedAfter)) {
+        this.bumpFilledCount()
+        this.debug("info", "combobox.option_selected", {
+          fieldName,
+          optionText: nonEmpty(clickTarget.textContent),
+          displayedAfter: displayedAfter.slice(0, 80),
+        })
+        return true
+      }
       this.bumpFilledCount()
-      this.debug("info", "combobox.option_selected", { fieldName, optionText: nonEmpty(option.textContent) })
+      this.debug("warn", "combobox.option_selected_unverified", {
+        fieldName,
+        optionText: nonEmpty(clickTarget.textContent),
+      })
       return true
     }
 
-    if (input) {
+    if (input && !opts?.riskyApplyFlowField) {
       input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", code: "Enter", bubbles: true }))
       input.dispatchEvent(new KeyboardEvent("keyup", { key: "Enter", code: "Enter", bubbles: true }))
       this.bumpFilledCount()
@@ -1934,8 +2901,27 @@ class WorkdayAutofillRunner {
       return true
     }
 
+    // For risky fields we do NOT synthesize Enter fallback because that path
+    // can fire unstable apply-flow lookups ("countryphonecode", "regions",
+    // etc.) that often 500/404 on some tenants.
+    if (opts?.riskyApplyFlowField) {
+      if (!opts?.optional) {
+        this.logWarning(`Manual review needed: ${fieldName}`)
+        this.requiredFieldMissesThisStep += 1
+      } else {
+        this.logWarning(`Manual review needed: ${fieldName}`)
+      }
+      this.debug(opts?.optional ? "info" : "warn", "combobox.risky_fallback_blocked", {
+        fieldName,
+        selector,
+        optional: Boolean(opts?.optional),
+      })
+      return false
+    }
+
     if (!opts?.optional) {
       this.logWarning(`Manual review needed: ${fieldName}`)
+      this.requiredFieldMissesThisStep += 1
     }
     this.debug(opts?.optional ? "info" : "warn", "combobox.unresolved", {
       fieldName,
@@ -1945,7 +2931,12 @@ class WorkdayAutofillRunner {
     return false
   }
 
-  private setElementValue(el: HTMLInputElement | HTMLTextAreaElement, value: string, fieldName = "field"): boolean {
+  private setElementValue(
+    el: HTMLInputElement | HTMLTextAreaElement,
+    value: string,
+    fieldName = "field",
+    opts?: { forceOverwrite?: boolean },
+  ): boolean {
     const clean = nonEmpty(value)
     if (!clean) {
       this.debug("info", "set_value.skipped_empty", { fieldName })
@@ -1953,8 +2944,15 @@ class WorkdayAutofillRunner {
     }
     try {
       const current = nonEmpty(el.value)
-      if (current && normText(current) === normText(clean)) {
-        this.debug("info", "set_value.already_matches", { fieldName })
+      // forceOverwrite=true: still rewrite when only the casing differs.
+      // Used for name fields where Workday's resume parser drops ALL CAPS
+      // values that fail tenant-side capitalization validators.
+      if (
+        current &&
+        normText(current) === normText(clean) &&
+        (!opts?.forceOverwrite || current === clean)
+      ) {
+        this.debug("info", "set_value.already_matches", { fieldName, forceOverwrite: Boolean(opts?.forceOverwrite) })
         return true
       }
       el.focus()
@@ -1976,7 +2974,13 @@ class WorkdayAutofillRunner {
       el.dispatchEvent(new Event("input", { bubbles: true }))
       el.dispatchEvent(new Event("change", { bubbles: true }))
       el.dispatchEvent(new KeyboardEvent("keyup", { bubbles: true }))
-      el.blur()
+      // Intentionally NO el.blur() here. Workday's apply-flow tenants
+      // auto-save on blur via the cx-applyflow bundle; firing blur after
+      // every field hammers their backend with N save calls in quick
+      // succession, which is a known trigger for the generic 500 +
+      // "Something went wrong" page on flaky tenants (US Bank, etc.).
+      // The change event alone is enough for React to pick up the new value;
+      // the user's first real focus/blur after our run will commit cleanly.
       this.debug("info", "set_value.success", {
         fieldName,
         tag: el.tagName.toLowerCase(),
@@ -2330,6 +3334,58 @@ export async function startWorkdayAutofillModule(): Promise<void> {
 
 export function isWorkdayApplicationPage(): boolean {
   return WorkdayAutofillRunner.isWorkdayDetected()
+}
+
+/**
+ * Lightweight estimate of how many Workday fields the runner will attempt to
+ * fill for this profile, broken down by section. Used by the scout-bar
+ * preview so users see "≈48 fields across 4 sections" instead of the
+ * misleading "1 ready to fill" placeholder.
+ *
+ * Mirrors WorkdayAutofillRunner.estimateTotalFields but is pure — no DOM,
+ * no runner state — so the bar can call it during the preview stage.
+ */
+export function estimateWorkdayAutofillFields(profile: SafeProfile): {
+  total: number
+  myInformation: number
+  experience: number
+  education: number
+  skills: number
+  websites: number
+  questions: number
+} {
+  const ext = profile as ExtendedSafeProfile
+  const workExperienceCount = ext.resume_education ? 0 : 0
+  // We don't have a structured work-experience array on the profile yet — the
+  // runner derives one from the resume parser. Estimate conservatively using
+  // years_of_experience to suggest 1–4 entries.
+  const years = typeof ext.years_of_experience === "number" ? ext.years_of_experience : 0
+  const estimatedJobs = Math.max(1, Math.min(4, Math.round(years / 3)))
+  const experience = estimatedJobs * 10 + workExperienceCount
+
+  const educationCount = ext.resume_education?.length ?? (ext.highest_degree ? 1 : 0)
+  const education = educationCount * 6
+
+  // SafeProfile doesn't carry skills as an array directly; the runner reads
+  // them from the parsed resume. Assume ≤12 for the preview estimate.
+  const skills = 12
+
+  const websites =
+    (ext.resume_linkedin_url ? 2 : 0) +
+    (ext.resume_portfolio_url ? 2 : 0)
+
+  const myInformation = 12
+  const questions = 8
+
+  return {
+    total: myInformation + experience + education + skills + websites + questions,
+    myInformation,
+    experience,
+    education,
+    skills,
+    websites,
+    questions,
+  }
 }
 
 export async function runWorkdayAutofillInExistingBar(options: RunInBarOptions): Promise<WorkdayAutofillRunResult> {

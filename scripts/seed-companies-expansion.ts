@@ -82,7 +82,7 @@ async function main() {
 
   const pool = new Pool({
     connectionString,
-    ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : undefined,
+    ssl: process.env.PGSSLMODE === "require" ? { rejectUnauthorized: false } : undefined,
   })
 
   const { rows: [{ count: before }] } = await pool.query<{ count: string }>(

@@ -270,7 +270,20 @@ async function resolveOrigin(): Promise<string> {
   const result = await chrome.storage.local.get("devMode")
   if (result.devMode === true) return APP_ORIGINS[0]
   if (result.devMode === false) return APP_ORIGINS[1]
-  return isUnpackedInstall() ? APP_ORIGINS[0] : APP_ORIGINS[1]
+  const preferred = isUnpackedInstall() ? APP_ORIGINS[0] : APP_ORIGINS[1]
+  // If the preferred origin has a session cookie, use it. Otherwise fall back
+  // to the other origin — this handles the common case where the user is
+  // running an unpacked dev build but is only signed in at hireoven.com (or
+  // vice versa). Skipping this fallback is what surfaces as the misleading
+  // "Sign in to Hireoven" tooltip while the user is in fact signed in.
+  if (await hasSessionCookie(preferred)) return preferred
+  const fallback = preferred === APP_ORIGINS[0] ? APP_ORIGINS[1] : APP_ORIGINS[0]
+  if (await hasSessionCookie(fallback)) return fallback
+  return preferred
+}
+
+async function hasSessionCookie(origin: string): Promise<boolean> {
+  return (await getSessionToken(origin)) !== null
 }
 
 /** Get the session JWT from hireoven cookies (apex + www fallback for production). */
