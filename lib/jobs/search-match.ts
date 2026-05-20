@@ -78,7 +78,12 @@ export function matchesSearchQuery(
   const haystack = normalizeSearchText(parts.filter(Boolean).join(" "))
   if (!haystack) return false
 
-  return haystack.includes(needle)
+  // Each whitespace-separated token must appear somewhere in the haystack
+  // (AND across tokens). Substring-matching the full phrase produced zero
+  // hits for queries like "senior backend engineer Java Spring Boot Python"
+  // because the words live in different fields (title vs. skills array).
+  const tokens = needle.split(" ").filter(Boolean)
+  return tokens.every((token) => haystack.includes(token))
 }
 
 export function matchesLocationFilter(
