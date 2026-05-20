@@ -7,6 +7,7 @@ import {
   Bookmark,
   Briefcase,
   Building2,
+  Linkedin,
   MapPin,
   ShieldCheck,
   ShieldX,
@@ -36,7 +37,7 @@ import {
   fetchJobSavedState,
   saveJobToPipeline,
 } from "@/lib/applications/save-job-client"
-import { getApplyCtaLabel, isKnownAtsApplyUrl } from "@/lib/jobs/apply-cta"
+import { getApplyVariant, getApplyVariantLabel } from "@/lib/jobs/apply-cta"
 import { jobSourceFallbackLogo } from "@/lib/jobs/source-fallback-logo"
 import { cn } from "@/lib/utils"
 import type { JobMatchScore, JobWithCompany, JobWithMatchScore } from "@/types"
@@ -125,8 +126,8 @@ export default function JobListRow({
 
   const postedSource = (raw["posted_at_normalized"] as string | undefined) ?? job.first_detected_at
   const postedAt = formatPostedLabel(postedSource, now)
-  const isAtsApplyLink = isKnownAtsApplyUrl(job.apply_url)
-  const applyCtaLabel = getApplyCtaLabel(job.apply_url)
+  const applyVariant = getApplyVariant(job.apply_url)
+  const applyCtaLabel = getApplyVariantLabel(applyVariant)
 
   const visaCardLabel: SponsorshipVisaCardLabel = cardView.visa_card_label
   const sponsorshipDisplay = useMemo(
@@ -337,18 +338,29 @@ export default function JobListRow({
           title={applyCtaLabel}
           className={cn(
             "hidden h-8 w-8 items-center justify-center rounded-lg border transition sm:inline-flex",
-            isAtsApplyLink
+            applyVariant === "linkedin"
               ? cn(
-                  "border-amber-200 bg-amber-50 text-amber-600",
-                  enableHoverEffects && "hover:bg-amber-100"
+                  "border-[#0a66c2]/30 bg-[#0a66c2]/10 text-[#0a66c2]",
+                  enableHoverEffects && "hover:bg-[#0a66c2]/15"
                 )
-              : cn(
-                  "border-slate-200 bg-white text-slate-500",
-                  enableHoverEffects && "hover:bg-slate-50 hover:text-slate-700"
-                )
+              : applyVariant === "autofill"
+                ? cn(
+                    "border-amber-200 bg-amber-50 text-amber-600",
+                    enableHoverEffects && "hover:bg-amber-100"
+                  )
+                : cn(
+                    "border-slate-200 bg-white text-slate-500",
+                    enableHoverEffects && "hover:bg-slate-50 hover:text-slate-700"
+                  )
           )}
         >
-          {isAtsApplyLink ? <Zap className="h-3.5 w-3.5" /> : <ArrowUpRight className="h-3.5 w-3.5" />}
+          {applyVariant === "linkedin" ? (
+            <Linkedin className="h-3.5 w-3.5" />
+          ) : applyVariant === "autofill" ? (
+            <Zap className="h-3.5 w-3.5" />
+          ) : (
+            <ArrowUpRight className="h-3.5 w-3.5" />
+          )}
         </a>
         <button
           type="button"
