@@ -54,7 +54,7 @@ const COMMON_HEADING_RULES: HeadingRule[] = [
   {
     key: "responsibilities",
     pattern:
-      /\b(responsibilit|what you(?:'|’)ll do|what you will do|what you'll be doing|day-to-day|in this role)\b/i,
+      /\b(responsibilit(?:y|ies)?|responsibilities?|what you(?:'|’)ll do|what you will do|what you'll be doing|day-to-day|in this role)\b/i,
   },
   {
     key: "requirements",
@@ -191,9 +191,12 @@ const INLINE_HEADING_MARKERS: Partial<Record<SourceAdapterKind, string[]>> = {
     "Overview",
     "About the Role",
     "Job Description",
+    "Position Responsibilities",
+    "Key Responsibilities",
     "Responsibilities",
     "What you'll do",
     "What you will do",
+    "Position Requirements",
     "Basic Qualifications",
     "Minimum Qualifications",
     "Required Qualifications",
@@ -262,9 +265,12 @@ const COMMON_INLINE_ALIASES: HeadingAlias[] = [
   { key: "about_role", alias: "Role overview" },
   { key: "about_role", alias: "Overview" },
   { key: "about_role", alias: "Job summary" },
+  { key: "responsibilities", alias: "Position responsibilities" },
+  { key: "responsibilities", alias: "Key responsibilities" },
   { key: "responsibilities", alias: "Responsibilities" },
   { key: "responsibilities", alias: "What you'll do" },
   { key: "responsibilities", alias: "What you will do" },
+  { key: "requirements", alias: "Position requirements" },
   { key: "requirements", alias: "Requirements" },
   { key: "requirements", alias: "Minimum qualifications" },
   { key: "requirements", alias: "Basic qualifications" },
@@ -350,10 +356,18 @@ function uniqCaseInsensitive(values: string[], max = Number.POSITIVE_INFINITY): 
   return out
 }
 
+const SENTENCE_DOT_TOKEN = "__HIREOVEN_SENTENCE_DOT__"
+
+function protectSentenceAbbreviations(value: string): string {
+  return value.replace(/\b(?:[A-Za-z]\.){2,}/g, (match) =>
+    match.replace(/\./g, SENTENCE_DOT_TOKEN)
+  )
+}
+
 function splitSentences(text: string): string[] {
-  return text
+  return protectSentenceAbbreviations(text)
     .split(/(?<=[.!?])\s+(?=[A-Z0-9])/g)
-    .map((line) => line.trim())
+    .map((line) => line.replaceAll(SENTENCE_DOT_TOKEN, ".").trim())
     .filter((line) => line.length >= 16)
 }
 
@@ -463,6 +477,15 @@ function findInlineHeadings(
       }
       const afterIndex = index + aliasLower.length
       const after = afterIndex < text.length ? text[afterIndex] : ""
+      const nextNonWhitespace = (() => {
+        for (let i = afterIndex; i < text.length; i += 1) {
+          const char = text[i]
+          if (char === " " || char === "\t") continue
+          return char
+        }
+        return ""
+      })()
+      const singleWordAlias = !/\s/.test(entry.alias.trim())
 
       const hasStartBoundary =
         index === 0 ||
@@ -476,9 +499,11 @@ function findInlineHeadings(
       const hasEndSignal =
         after === ":" ||
         after === "-" ||
-        after === " " ||
         after === "\n" ||
-        after === "\r"
+        after === "\r" ||
+        ((after === " " || after === "\t") &&
+          !singleWordAlias &&
+          /[A-Z0-9]/.test(nextNonWhitespace))
 
       if (hasStartBoundary && hasEndSignal) {
         matches.push({
@@ -554,16 +579,16 @@ function normalizeInlineHeadingsForAdapter(
   for (const marker of markers) {
     const escaped = escapeRegExp(marker)
     output = output.replace(
-      new RegExp(`\\b(${escaped})\\s*[-–—]\\s*`, "gi"),
-      "\n\n$1:\n- "
+      new RegExp(`(^|[.!?\\n\\r])\\s*(${escaped})\\s*[-–—]\\s*`, "gi"),
+      "$1\n\n$2:\n- "
     )
     output = output.replace(
-      new RegExp(`\\b(${escaped})\\s*:\\s*`, "gi"),
-      "\n\n$1:\n"
+      new RegExp(`(^|[.!?\\n\\r])\\s*(${escaped})\\s*:\\s*`, "gi"),
+      "$1\n\n$2:\n"
     )
     output = output.replace(
-      new RegExp(`\\b(${escaped})\\s+(?=[A-Z0-9])`, "gi"),
-      "\n\n$1:\n"
+      new RegExp(`(^|[.!?\\n\\r])\\s*(${escaped})\\s+(?=[A-Z0-9])`, "gi"),
+      "$1\n\n$2:\n"
     )
   }
 

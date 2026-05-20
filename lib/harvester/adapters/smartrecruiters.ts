@@ -21,13 +21,17 @@ import {
 
 const PAGE_LIMIT = 100
 const MAX_PAGES = 20
+// Bumped 60 → 250. SR detail endpoint is fast (~150-300ms each); at
+// concurrency 6, 250 jobs takes ~10s of detail time, well under the 240s
+// lease. Previous cap left 50%+ of SR rows description-less because the
+// list endpoint alone has no jobAd.sections.* payload.
 const DETAIL_MAX_JOBS = Math.max(
   0,
-  Number.parseInt(process.env.HARVESTER_SR_DETAIL_MAX_JOBS ?? "60", 10)
+  Number.parseInt(process.env.HARVESTER_SR_DETAIL_MAX_JOBS ?? "250", 10)
 )
 const DETAIL_CONCURRENCY = Math.max(
   1,
-  Number.parseInt(process.env.HARVESTER_SR_DETAIL_CONCURRENCY ?? "4", 10)
+  Number.parseInt(process.env.HARVESTER_SR_DETAIL_CONCURRENCY ?? "6", 10)
 )
 
 type SRSection = { text?: string }
@@ -171,8 +175,12 @@ async function enrichDescriptions(
   ctx: HarvestCtx
 ): Promise<void> {
   if (DETAIL_MAX_JOBS === 0) return
+  // Skip jobs already known to have a real description in the DB — keeps the
+  // per-cycle budget focused on jobs that still need one.
+  const alreadyDescribed = ctx.alreadyDescribedIds
   const targets = jobs
     .filter((j) => !j.description || j.description.length < 300)
+    .filter((j) => !alreadyDescribed?.has(j.externalId))
     .slice(0, DETAIL_MAX_JOBS)
   if (targets.length === 0) return
 

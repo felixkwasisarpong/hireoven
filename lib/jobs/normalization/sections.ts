@@ -27,13 +27,13 @@ const PREFERRED_LIKE_RE =
   /\b(preferred qualifications|preferred|nice to have|bonus|plus|ideal candidate|would be a plus)\b/i
 
 const RESPONSIBILITY_LIKE_RE =
-  /\b(build|design|develop|deliver|collaborate|partner|lead|own|create|drive|maintain|implement|optimize|support)\b/i
+  /\b(builds?|building|designs?|designed|develops?|developing|delivers?|collaborates?|partners?|leads?|owns?|creates?|drives?|maintains?|implements?|optimizes?|supports?|performs?|validates?|documents?|manages?)\b/i
 
 const BENEFITS_LIKE_RE =
-  /\b(benefits?|perks?|health(?:care|[ -]?insurance)?|dental|vision|medical|401\s?\(k\)|retirement|pension|paid time off|pto|unlimited pto|parental(?: leave)?|maternity|paternity|family leave|wellness|wellbeing|stipend|bonus|equity|stock(?: options?| grants?|[ -]?units?)?|rsu|vesting|profit[ -]?sharing|commuter|gym|fitness|education(?:al)?|tuition|learning|home[ -]?office|life insurance|disability|fsa|hsa|flexible|reimbursement|vacation|holiday|time off|leave|coverage)\b/i
+  /\b(benefits?|perks?|total rewards?|health(?:care|[ -]?insurance)?|dental|vision|medical|401\s?\(k\)|retirement|pension|paid time off|pto|unlimited pto|parental(?: leave)?|maternity|paternity|family leave|wellness|wellbeing|stipend|bonus|equity|stock(?: options?| grants?|[ -]?units?)?|rsu|vesting|profit[ -]?sharing|commuter|gym|fitness|education(?:al)?|tuition|learning|home[ -]?office|life insurance|disability|fsa|hsa|flexible|reimbursement|vacation|holiday|time off|leave|coverage)\b/i
 
 const COMPANY_LIKE_RE =
-  /\b(we are|we(?:'|’)re looking|our mission|our values|our culture|founded|part of|customers|global team|across [a-z]+ countries|we offer|about us)\b/i
+  /\b(we are|we(?:'|’)re looking|we strive|at [A-Z][A-Za-z0-9&.' -]{1,48},?\s+we|our mission|our values|our culture|founded|part of|customers|global team|across [a-z]+ countries|we offer|about us)\b/i
 
 const APPLICATION_LIKE_RE =
   /\b(apply for this role|apply now|application process|how to apply|interview process|encouraged to apply)\b/i
@@ -57,6 +57,12 @@ const COMPENSATION_LIKE_RE =
 
 const NON_SUBSTANTIVE_REQUIREMENT_RE =
   /\b(meets? the minimum requirements|encouraged to apply|not a requirement|requirements are still being parsed)\b/i
+
+const VISA_LIKE_RE =
+  /\b(visa|sponsors?|sponsorship|work authorization|authorized to work|employment authorization|h-?1b|h1b|opt|stem opt|work permit|right to work|citizenship|u\.s\. person|export control|security clearance)\b/i
+
+const WORKDAY_FOOTER_META_RE =
+  /\b(contingent upon award|program award|shift\s*\d?|not applicable|language requirements?|relocation|safety sensitive|drug free workplace|codevue|coding challenge|stay safe from recruitment fraud|recruitment fraud|applicant privacy|request an accommodation|right to work statement|right to work \((?:english|spanish)\)|participates in e\s*[-–]?\s*verify|e\s*[-–]?\s*verify)(?:\b|$)/i
 
 const COMPANY_POSITIONING_RE =
   /\b(platform|mission|industry|customers|community|financial services|value out of|across europe)\b/i
@@ -94,6 +100,8 @@ const INLINE_SECTION_ALIASES: InlineHeadingAlias[] = [
   { key: "about_role", alias: "Overview" },
   { key: "about_role", alias: "About the team" },
   { key: "responsibilities", alias: "Responsibilities" },
+  { key: "responsibilities", alias: "Position responsibilities" },
+  { key: "responsibilities", alias: "Key responsibilities" },
   { key: "responsibilities", alias: "What you'll do" },
   { key: "responsibilities", alias: "What you will do" },
   { key: "requirements", alias: "Requirements" },
@@ -124,6 +132,16 @@ const INLINE_SECTION_ALIASES: InlineHeadingAlias[] = [
   { key: "application_info", alias: "Apply for this role" },
   { key: "application_info", alias: "Office locations" },
   { key: "application_info", alias: "Job type" },
+  { key: "requirements", alias: "Security Clearance" },
+  { key: "requirements", alias: "Export Control Requirement" },
+  { key: "other", alias: "Language Requirements" },
+  { key: "other", alias: "Education" },
+  { key: "other", alias: "Relocation" },
+  { key: "other", alias: "Safety Sensitive" },
+  { key: "other", alias: "Drug Free Workplace" },
+  { key: "other", alias: "CodeVue Coding Challenge" },
+  { key: "other", alias: "Contingent Upon Award Program" },
+  { key: "other", alias: "Shift" },
   // Expanded aliases for common real-world heading variations
   { key: "about_role", alias: "The opportunity" },
   { key: "about_role", alias: "The position" },
@@ -264,6 +282,13 @@ function stripBulletPrefix(value: string): string {
   return value.replace(LEADING_BULLET_RE, "").trim()
 }
 
+function stripSectionLeadIn(value: string): string {
+  return value
+    .replace(/^(what you(?:'|’)ll do|what you will do)\b[:\s-]*/i, "")
+    .replace(/^(position responsibilities|key responsibilities|responsibilities)\b[:\s-]*/i, "")
+    .trim()
+}
+
 function addItems(
   bucket: SectionBucket,
   items: string[],
@@ -275,11 +300,13 @@ function addItems(
 
   const trimmed = items
     .map((item) =>
-      stripBulletPrefix(
-        item
-          .replace(/[–—]/g, "-")
-          .replace(/\s+/g, " ")
-          .trim()
+      stripSectionLeadIn(
+        stripBulletPrefix(
+          item
+            .replace(/[–—]/g, "-")
+            .replace(/\s+/g, " ")
+            .trim()
+        )
       )
     )
     .filter(
@@ -311,16 +338,23 @@ function sectionConfidence(bucket: SectionBucket): number {
 }
 
 function splitParagraphIntoBullets(paragraph: string): string[] {
-  return paragraph
-    .split(/(?<=[.!?])\s+(?=[A-Z0-9])/g)
+  return splitIntoSentences(paragraph)
     .map((sentence) => sentence.trim())
     .filter((sentence) => sentence.length >= 12)
 }
 
+const SENTENCE_DOT_TOKEN = "__HIREOVEN_SENTENCE_DOT__"
+
+function protectSentenceAbbreviations(value: string): string {
+  return value.replace(/\b(?:[A-Za-z]\.){2,}/g, (match) =>
+    match.replace(/\./g, SENTENCE_DOT_TOKEN)
+  )
+}
+
 function splitIntoSentences(text: string): string[] {
-  return text
+  return protectSentenceAbbreviations(text)
     .split(/(?<=[.!?])\s+(?=[A-Z0-9])/g)
-    .map((sentence) => sentence.trim())
+    .map((sentence) => sentence.replaceAll(SENTENCE_DOT_TOKEN, ".").trim())
     .filter(Boolean)
 }
 
@@ -337,7 +371,7 @@ function flattenSectionContent(section: { bullets: string[]; paragraphs: string[
 }
 
 const EXPLICIT_HEADING_PATTERN =
-  /(about the role|about the team|role overview|job summary|what you(?:’|’)ll do|what you will do|responsibilities|preferred qualifications|minimum qualifications|minimum requirements|required qualifications|basic qualifications|qualifications|requirements|nice to have|technical skills|key skills|skills|technologies|benefits|perks|total rewards|what you(?:’|’)ll get|what we provide|employee benefits|benefits? package|compensation|compensation range|compensation details|compensation & benefits|base salary|base pay|pay range|salary range|on-target earnings|u\.?s\.? applicants? only|for u\.?s\.? (?:based )?applicants?|salary information|pay transparency|travel requirements?|physical requirements?|mental\/physical requirements?|work environment|work conditions?|physical demands?|working conditions?|additional information|about us|about the company|who we are|company|equal opportunity|eeo|application process|how to apply|work authorization|work eligibility|employment eligibility|visa sponsorship|visa requirements|h-?1b(?: sponsorship)?|immigration|sponsorship|legally authorized)\s*:/gi
+  /(about the role|about the team|role overview|job summary|what you(?:’|’)ll do|what you will do|responsibilities|preferred qualifications|minimum qualifications|minimum requirements|required qualifications|basic qualifications|qualifications|requirements|nice to have|technical skills|key skills|skills|technologies|benefits|perks|total rewards|what you(?:’|’)ll get|what we provide|employee benefits|benefits? package|compensation|compensation range|compensation details|compensation & benefits|base salary|base pay|pay range|salary range|on-target earnings|u\.?s\.? applicants? only|for u\.?s\.? (?:based )?applicants?|salary information|pay transparency|travel requirements?|physical requirements?|mental\/physical requirements?|work environment|work conditions?|physical demands?|working conditions?|additional information|about us|about the company|who we are|company|equal opportunity|eeo|application process|how to apply|work authorization|work eligibility|employment eligibility|visa sponsorship|visa requirements|h-?1b(?: sponsorship)?|immigration|sponsorship|legally authorized)(?:\s*\([^)\n]{1,100}\))?\s*:/gi
 
 function extractExplicitHeadingSegments(description: string): Array<{ heading: string; body: string }> {
   const matches = [...description.matchAll(EXPLICIT_HEADING_PATTERN)]
@@ -560,6 +594,15 @@ function findInlineHeadingMatches(description: string): InlineHeadingMatch[] {
         break
       }
       const after = description[index + target.length] ?? ""
+      const nextNonWhitespace = (() => {
+        for (let i = index + target.length; i < description.length; i += 1) {
+          const char = description[i]
+          if (char === " " || char === "\t") continue
+          return char
+        }
+        return ""
+      })()
+      const singleWordAlias = !/\s/.test(alias.alias.trim())
 
       const hasStartBoundary =
         index === 0 ||
@@ -570,14 +613,18 @@ function findInlineHeadingMatches(description: string): InlineHeadingMatch[] {
         beforeNonWhitespace === "?" ||
         beforeNonWhitespace === ":"
 
+      const hasWhitespaceHeadingSignal =
+        (after === " " || after === "\t") &&
+        !singleWordAlias &&
+        /[A-Z0-9]/.test(nextNonWhitespace)
+
       const hasEndSignal =
         !after ||
         after === ":" ||
         after === "-" ||
         after === "\n" ||
         after === "\r" ||
-        after === " " ||
-        /[A-Z0-9]/.test(after)
+        hasWhitespaceHeadingSignal
 
       if (hasStartBoundary && hasEndSignal) {
         matches.push({ ...alias, index })
@@ -635,15 +682,15 @@ function extractInlineHeadingSegments(description: string): Array<{
 function splitApplicationInfoFragments(value: string): string[] {
   const withMarkers = value
     .replace(
-      /\b(Office locations?|Job type|Apply for this role|Application process|How to apply|Equal opportunity)\b/gi,
+      /\b(Office locations?|Job type|Apply for this role|Application process|How to apply|Equal opportunity|Contingent Upon Award Program|Shift|Stay safe from recruitment fraud)\b/gi,
       "\n$1"
     )
     .replace(/\s+(At [A-Z][A-Za-z0-9&.' -]{1,48},?\s+we(?:'|’)re)\b/g, "\n$1")
     .replace(/\s+(Team)\s+(?=[A-Z])/g, "\n$1 ")
-    .replace(/\.\s+/g, "\n")
 
   return withMarkers
     .split(/\n+/)
+    .flatMap((item) => splitIntoSentences(item))
     .map((item) => item.trim())
     .filter((item) => item.length >= 12 && item.length <= 220)
 }
@@ -772,11 +819,15 @@ function rebalanceQualificationBuckets(
 function cleanQualificationLeadIn(value: string): string {
   return value
     .replace(/^job description\s*[:\-]?\s*/i, "")
+    .replace(/^\((?:required|desired)\s+skills\/\s*experience\):?\s*/i, "")
     .replace(/^minimum requirements?\b[:\s-]*/i, "")
     .replace(/^(minimum|basic|required|preferred)\s+qualifications?\b[:\s-]*/i, "")
     .replace(/^qualifications?\b[:\s-]*/i, "")
     .trim()
 }
+
+const QUALIFICATION_BULLET_SEPARATOR_RE =
+  /\s+-\s+(?=(?:\d+\+?\s+years?|bachelor|master|phd|experience|ability|must|required|minimum|proficiency|strong|knowledge)\b)/gi
 
 function splitQualificationItem(item: string): string[] {
   const withMarkers = item
@@ -784,7 +835,7 @@ function splitQualificationItem(item: string): string[] {
       /\s+(minimum qualifications|minimum requirements|basic qualifications|required qualifications|preferred qualifications)\s*:/gi,
       ". $1: "
     )
-    .replace(/\s+-\s+(?=[A-Z0-9])/g, ". ")
+    .replace(QUALIFICATION_BULLET_SEPARATOR_RE, ". ")
 
   const parts = withMarkers
     .split(/\s*[;•]\s+/g)
@@ -795,7 +846,7 @@ function splitQualificationItem(item: string): string[] {
   if (parts.length > 0) return parts
 
   return item
-    .split(/\s+-\s+(?=[A-Z0-9])/g)
+    .split(QUALIFICATION_BULLET_SEPARATOR_RE)
     .map((piece) => cleanQualificationLeadIn(piece))
     .filter((piece) => piece.length >= 16 && piece.length <= 220)
 }
@@ -884,7 +935,8 @@ function sanitizeResponsibilitiesBucket(
     const candidates = item.length > 260 ? splitIntoSentences(item) : [item]
     for (const candidateRaw of candidates) {
       const candidate = candidateRaw.trim()
-      if (candidate.length < 16 || candidate.length > 220) continue
+      if (candidate.length < 16 || candidate.length > 420) continue
+      if (/\b(including|includes?|such as|as follows|the following):?$/i.test(candidate)) continue
 
       if (/^about the team\b/i.test(candidate)) {
         const trimmed = candidate.replace(/^about the team\b[:\s-]*/i, "").trim()
@@ -1208,6 +1260,80 @@ function sanitizeBenefitsBucket(
   buckets.benefits.items = uniqNearDuplicate(kept, 12)
 }
 
+function sanitizeSkillsBucket(buckets: Record<CanonicalSectionKey, SectionBucket>) {
+  if (buckets.skills.items.length === 0) return
+
+  buckets.skills.items = uniqCaseInsensitive(
+    buckets.skills.items.filter((item) => {
+      if (item.length > 140) return false
+      if (/[.!?]$/.test(item) && /\b(we|you|engineer|candidate|team|role)\b/i.test(item)) {
+        return false
+      }
+      if (RESPONSIBILITY_LIKE_RE.test(item) && item.split(/\s+/).length > 8) return false
+      if (COMPANY_LIKE_RE.test(item) || PROMOTIONAL_LIKE_RE.test(item)) return false
+      return true
+    }),
+    12
+  )
+}
+
+function sanitizeVisaBucket(
+  buckets: Record<CanonicalSectionKey, SectionBucket>,
+  adapter: SourceAdapterKind
+) {
+  if (buckets.visa.items.length === 0) return
+
+  const kept: string[] = []
+
+  for (const item of buckets.visa.items) {
+    const fragments = splitApplicationInfoFragments(item)
+    const candidates = fragments.length > 0 ? fragments : splitIntoSentences(item)
+
+    for (const candidateRaw of candidates) {
+      const candidate = candidateRaw.trim()
+      if (candidate.length < 12 || candidate.length > 320) continue
+      if (/^(visa\s+)?sponsorship:?$/i.test(candidate)) continue
+
+      if (EQUAL_OPPORTUNITY_LIKE_RE.test(candidate)) {
+        addItems(
+          buckets.equal_opportunity,
+          [candidate],
+          0.72,
+          {
+            adapter,
+            method: "heuristic",
+            source_path: "visa.sanitized",
+            source_excerpt: candidate.slice(0, 200),
+          },
+          10
+        )
+        continue
+      }
+
+      if (APPLICATION_LIKE_RE.test(candidate) || /recruitment fraud|careers website/i.test(candidate)) {
+        addItems(
+          buckets.application_info,
+          [candidate],
+          0.58,
+          {
+            adapter,
+            method: "heuristic",
+            source_path: "visa.sanitized",
+            source_excerpt: candidate.slice(0, 200),
+          },
+          14
+        )
+        continue
+      }
+
+      if (WORKDAY_FOOTER_META_RE.test(candidate)) continue
+      if (VISA_LIKE_RE.test(candidate)) kept.push(candidate)
+    }
+  }
+
+  buckets.visa.items = uniqNearDuplicate(kept, 8)
+}
+
 function sanitizeCompensationBucket(
   buckets: Record<CanonicalSectionKey, SectionBucket>,
   adapter: SourceAdapterKind
@@ -1525,6 +1651,8 @@ export function extractCanonicalSections(input: {
     rebalanceQualificationBuckets(buckets, input.adapter)
     sanitizeResponsibilitiesBucket(buckets, input.adapter)
     sanitizeQualificationBuckets(buckets, input.adapter)
+    sanitizeSkillsBucket(buckets)
+    sanitizeVisaBucket(buckets, input.adapter)
     sanitizeCompensationBucket(buckets, input.adapter)
     sanitizeBenefitsBucket(buckets, input.adapter)
     sanitizeApplicationInfoBucket(buckets, input.adapter)

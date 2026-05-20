@@ -31,7 +31,11 @@ import {
  */
 
 const MAX_PAGES = 20
-const DETAIL_MAX_JOBS = 40
+// Bumped 40 → 150. iCIMS detail pages need `&in_iframe=1` and are slow
+// (~800-1500ms each customer); at concurrency 4 that's still ~30-60s of
+// detail time, within the 240s lease. Previous cap left 36% of iCIMS
+// rows description-less.
+const DETAIL_MAX_JOBS = 150
 const DETAIL_CONCURRENCY = 4
 
 type JobLink = { jobId: string; title: string; url: string; host: string }
@@ -200,7 +204,13 @@ function shallowJob(link: JobLink): HarvestedJob {
 
 async function enrichWithDetails(links: JobLink[], ctx: HarvestCtx): Promise<HarvestedJob[]> {
   const enriched = new Map<string, HarvestedJob>()
-  const targets = links.slice(0, DETAIL_MAX_JOBS)
+  // Skip links whose externalId already has a real description in the DB.
+  // External ID shape is `icims:{host}:{jobId}` (see shallowJob/fetchJobDetail).
+  const alreadyDescribed = ctx.alreadyDescribedIds
+  const linksNeedingDetail = alreadyDescribed
+    ? links.filter((link) => !alreadyDescribed.has(`icims:${link.host}:${link.jobId}`))
+    : links
+  const targets = linksNeedingDetail.slice(0, DETAIL_MAX_JOBS)
   let cursor = 0
   await Promise.all(
     Array.from({ length: Math.min(DETAIL_CONCURRENCY, targets.length) }, async () => {

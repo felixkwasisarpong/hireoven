@@ -105,6 +105,112 @@ test("extractCanonicalSections handles run-on inline headings without section le
   )
 })
 
+test("extractCanonicalSections keeps Workday position responsibility headings intact", () => {
+  const sections = extractCanonicalSections({
+    adapter: "workday",
+    description: `
+Software Engineer
+Company:
+The Boeing Company
+We support multiple programs, including:
+- E-3 variants
+- UK E-7
+- KC-46
+Position Responsibilities:
+- Designs, architects, and develops simulation models.
+- Partners with stakeholders to identify simulation requirements.
+Basic Qualifications (Required Skills/ Experience):
+- Bachelor's Degree
+- Ability to Obtain U.S. Secret - Final Post-Start
+- 2+ years of software development experience
+Preferred Qualifications:
+- Experience with C++ and Java
+Visa Sponsorship:
+Employer will not sponsor applicants for employment visa status.
+Contingent Upon Award Program
+This position is not contingent upon program award
+Shift:
+Shift 1 (United States of America)
+Right to Work Statement
+Right to Work (English)
+Right to Work (Spanish)
+`,
+  })
+
+  assert.ok(
+    sections.responsibilities.items.some((item) => /develops simulation models/i.test(item))
+  )
+  assert.ok(
+    sections.responsibilities.items.every(
+      (item) => !/we support multiple programs/i.test(item) && item.trim() !== "Position"
+    )
+  )
+  assert.ok(sections.requirements.items.some((item) => /Bachelor|2\+ years/i.test(item)))
+  assert.ok(sections.requirements.items.some((item) => /Ability to Obtain U\.S\. Secret/i.test(item)))
+  assert.ok(sections.requirements.items.every((item) => !/required skills/i.test(item)))
+  assert.ok(sections.preferred_qualifications.items.some((item) => /C\+\+|Java/i.test(item)))
+  assert.ok(sections.visa.items.some((item) => /will not sponsor/i.test(item)))
+  assert.ok(sections.visa.items.every((item) => !/contingent|shift|right to work|sponsorship:$/i.test(item)))
+})
+
+test("normalizeCrawlerJobForPersistence keeps Workday responsibilities out of skills", () => {
+  const result = normalizeCrawlerJobForPersistence({
+    rawJob: {
+      externalId: "workday:/job/Oklahoma-City/Software-Engineer_R123",
+      title: "Software Engineer - Simulation",
+      url: "https://boeing.wd1.myworkdayjobs.com/en-US/EXTERNAL_CAREERS/job/Oklahoma-City/Software-Engineer_R123",
+      location: "Oklahoma City, OK",
+      description: `
+Company:
+The Boeing Company
+We support multiple programs, including:
+- E-3 variants
+- UK E-7
+Position Responsibilities:
+- Designs, architects, and develops simulation models.
+- Partners with stakeholders to identify simulation requirements.
+Basic Qualifications (Required Skills/ Experience):
+- Bachelor's Degree
+- Ability to Obtain U.S. Secret - Final Post-Start
+- 2+ years of software development experience
+Preferred Qualifications:
+- Experience with C++ and Java
+Visa Sponsorship:
+Employer will not sponsor applicants for employment visa status.
+Contingent Upon Award Program
+This position is not contingent upon program award
+Shift:
+Shift 1 (United States of America)
+Right to Work Statement
+Right to Work (English)
+Right to Work (Spanish)
+`,
+    },
+    crawledAtIso: "2026-05-20T00:00:00.000Z",
+  })
+
+  assert.ok(
+    result.pageView.sections.responsibilities.items.some((item) =>
+      /develops simulation models/i.test(item)
+    )
+  )
+  assert.ok(
+    result.pageView.sections.skills.items.every((item) => !/simulation models/i.test(item))
+  )
+  assert.ok(
+    result.pageView.sections.requirements.items.some((item) =>
+      /Ability to Obtain U\.S\. Secret/i.test(item)
+    )
+  )
+  assert.ok(
+    result.pageView.sections.requirements.items.every((item) => !/required skills/i.test(item))
+  )
+  assert.ok(
+    result.pageView.sections.visa.items.every((item) => !/contingent|shift|right to work|sponsorship:$/i.test(item))
+  )
+  assert.ok(result.pageView.sections.requirements.items.some((item) => /2\+ years/i.test(item)))
+})
+
 test("normalizeCrawlerJobForPersistence derives canonical fields with provenance", () => {
   const result = normalizeCrawlerJobForPersistence({
     rawJob: {

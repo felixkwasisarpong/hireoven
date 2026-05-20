@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert"
 import { test } from "node:test"
-import { workdayAdapter } from "./workday"
+import { fetchWorkdayJobDetail, workdayAdapter } from "./workday"
 
 test("workday: detectFromUrl parses tenant/wd/site from a canonical Workday URL", () => {
   assert.deepEqual(
@@ -59,6 +59,44 @@ test("workday: fetchJobs throws when slug is malformed", async () => {
     }),
     /invalid slug/
   )
+})
+
+test("workday: fetchWorkdayJobDetail preserves section and bullet structure", async () => {
+  const fetchImpl = (async () =>
+    new Response(
+      JSON.stringify({
+        jobPostingInfo: {
+          jobDescription: `
+            Software Engineer<p><b>Company:</b></p>Acme Corp
+            <p>We support multiple programs, including:</p>
+            <ul><li><p>E-3 variants</p></li><li><p>UK E-7</p></li></ul>
+            <p><b>Position Responsibilities:</b></p>
+            <ul><li><p>Designs simulation models</p></li><li><p>Partners with stakeholders</p></li></ul>
+            <p><b>Basic Qualifications:</b></p>
+            <ul><li><p>2&#43; years of software development experience</p></li></ul>
+          `,
+          jobRequisitionLocation: {
+            descriptor: "Oklahoma City, OK",
+            country: { descriptor: "United States" },
+          },
+        },
+      }),
+      { status: 200, headers: { "content-type": "application/json" } }
+    )) as typeof fetch
+
+  const detail = await fetchWorkdayJobDetail(
+    { tenant: "acme", wd: "wd1", site: "External" },
+    "/job/Oklahoma-City/Software-Engineer_R123",
+    { etag: null, lastModified: null, fetchImpl }
+  )
+
+  assert.ok(detail?.description)
+  assert.match(detail.description, /Company:\nAcme Corp/)
+  assert.match(detail.description, /We support multiple programs, including:\n- E-3 variants\n- UK E-7/)
+  assert.match(detail.description, /Position Responsibilities:\n- Designs simulation models\n- Partners with stakeholders/)
+  assert.match(detail.description, /Basic Qualifications:\n- 2\+ years/)
+  assert.doesNotMatch(detail.description, /<p|&#43;/)
+  assert.equal(detail.location, "Oklahoma City, OK, United States")
 })
 
 const LIVE = process.env.HARVESTER_LIVE_TESTS === "1"
