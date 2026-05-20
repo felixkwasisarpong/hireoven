@@ -89,6 +89,10 @@ test("claimEligibleCompanies: issues SKIP LOCKED claim with lease params and sha
     "jazzhr",
     "jobvite",
     "icims",
+    "successfactors",
+    "taleo",
+    "oraclecloud",
+    "usajobs",
     "infosys",
     "apple",
   ])

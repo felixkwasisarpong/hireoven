@@ -79,6 +79,43 @@ export type AtsHarvestOutcome =
       notModified: boolean
     }
 
+// Threshold matches the `min-length` defaults used by the backfill scripts.
+// Anything below this isn't a usable description and the adapter should still
+// re-attempt a detail fetch.
+const ALREADY_DESCRIBED_MIN_LENGTH = 200
+
+async function loadAlreadyDescribedIds(
+  pool: Pool,
+  companyId: string,
+  adapterName: string
+): Promise<ReadonlySet<string>> {
+  try {
+    const { rows } = await pool.query<{ external_id: string }>(
+      `SELECT external_id
+       FROM jobs
+       WHERE company_id = $1
+         AND is_active = true
+         AND external_id IS NOT NULL
+         AND length(description) >= $2
+         -- Workday detail HTML used to be flattened into one long line.
+         -- Those rows are long, but still need one refresh so headings and
+         -- bullets can be preserved for section extraction.
+         AND ($3 <> 'workday' OR position(E'\n' in description) > 0)`,
+      [companyId, ALREADY_DESCRIBED_MIN_LENGTH, adapterName]
+    )
+    const out = new Set<string>()
+    for (const row of rows) {
+      if (row.external_id) out.add(row.external_id)
+    }
+    return out
+  } catch {
+    // If the pre-load fails (e.g. transient DB hiccup) we just lose the
+    // optimisation for this tick — fall through to the legacy behaviour
+    // rather than failing the whole harvest.
+    return new Set()
+  }
+}
+
 async function updateCompanyHarvestState(
   pool: Pool,
   companyId: string,
@@ -115,10 +152,20 @@ export async function runAtsHarvest(input: {
   const intervalSec = tierIntervalSeconds(company.freshness_tier)
   const adapterName = detection.adapter.name
 
+  // Pre-load externalIds of jobs that already have a real description in the
+  // DB. Adapters with per-cycle detail-fetch caps use this to skip jobs that
+  // don't need re-fetching, so the cap budget goes to jobs that still need a
+  // description. Adapters without a detail-fetch step ignore the field.
+  const alreadyDescribedIds = await loadAlreadyDescribedIds(pool, company.id, adapterName)
+
   try {
     const result = await detection.adapter.fetchJobs({
       slug: detection.slug,
-      ctx: { etag: company.etag, lastModified: company.last_modified },
+      ctx: {
+        etag: company.etag,
+        lastModified: company.last_modified,
+        alreadyDescribedIds,
+      },
     })
     const crawledAtIso = result.fetchedAt.toISOString()
 

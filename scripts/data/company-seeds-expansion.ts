@@ -600,4 +600,118 @@ export const EXPANSION_SEED_ROWS: ReadonlyArray<
   ["Bechtel", "bechtel.com", "https://www.bechtel.com/careers", "Industrial", "enterprise", { sponsors_h1b: true, sponsorship_confidence: 62 }],
   ["Fanatics", "fanatics.com", "https://careers.fanatics.com", "Technology", "large", { sponsors_h1b: true, sponsorship_confidence: 68 }],
   ["Anduril Industries", "anduril.com", "https://www.anduril.com/careers", "Technology", "large", { sponsors_h1b: true, sponsorship_confidence: 82 }],
+
+  // ── Cat 46: Frontier AI labs & foundation models (2026 trending) ─────────
+  ["Reka AI", "reka.ai", "https://reka.ai/careers", "Artificial Intelligence", "small", { sponsors_h1b: true, sponsorship_confidence: 72 }],
+  ["AI21 Labs", "ai21.com", "https://www.ai21.com/careers", "Artificial Intelligence", "medium", { sponsors_h1b: true, sponsorship_confidence: 75 }],
+  ["Stability AI", "stability.ai", "https://stability.ai/careers", "Artificial Intelligence", "medium", { sponsors_h1b: true, sponsorship_confidence: 70 }],
+  ["Liquid AI", "liquid.ai", "https://www.liquid.ai/careers", "Artificial Intelligence", "startup", { sponsors_h1b: true, sponsorship_confidence: 74 }],
+  ["Magic", "magic.dev", "https://magic.dev/careers", "Artificial Intelligence", "startup", { sponsors_h1b: true, sponsorship_confidence: 78 }],
+  ["Imbue", "imbue.com", "https://imbue.com/careers", "Artificial Intelligence", "startup", { sponsors_h1b: true, sponsorship_confidence: 72 }],
+  ["Black Forest Labs", "blackforestlabs.ai", "https://blackforestlabs.ai/careers", "Artificial Intelligence", "startup", { sponsors_h1b: true, sponsorship_confidence: 70 }],
+  ["Twelve Labs", "twelvelabs.io", "https://www.twelvelabs.io/careers", "Artificial Intelligence", "startup", { sponsors_h1b: true, sponsorship_confidence: 70 }],
+  ["Sakana AI", "sakana.ai", "https://sakana.ai/careers", "Artificial Intelligence", "startup", { sponsors_h1b: true, sponsorship_confidence: 65 }],
+  ["Krea AI", "krea.ai", "https://www.krea.ai/careers", "Artificial Intelligence", "startup", { sponsors_h1b: true, sponsorship_confidence: 68 }],
+  ["Ideogram", "ideogram.ai", "https://ideogram.ai/careers", "Artificial Intelligence", "startup", { sponsors_h1b: true, sponsorship_confidence: 70 }],
+  ["Luma AI", "lumalabs.ai", "https://lumalabs.ai/careers", "Artificial Intelligence", "small", { sponsors_h1b: true, sponsorship_confidence: 74 }],
+
+  // ── Cat 47: AI coding, agents & dev tools ────────────────────────────────
+  ["Sourcegraph", "sourcegraph.com", "https://boards.greenhouse.io/sourcegraph", "Artificial Intelligence", "medium", { ats_type: "greenhouse", ats_identifier: "sourcegraph", sponsors_h1b: true, sponsorship_confidence: 82 }],
+  ["Tabnine", "tabnine.com", "https://www.tabnine.com/careers", "Artificial Intelligence", "medium", { sponsors_h1b: true, sponsorship_confidence: 72 }],
+  ["Augment Code", "augmentcode.com", "https://www.augmentcode.com/careers", "Artificial Intelligence", "startup", { sponsors_h1b: true, sponsorship_confidence: 74 }],
+  ["Lovable", "lovable.dev", "https://lovable.dev/careers", "Artificial Intelligence", "startup", { sponsors_h1b: true, sponsorship_confidence: 65 }],
+  ["StackBlitz", "stackblitz.com", "https://stackblitz.com/careers", "Technology", "startup", { sponsors_h1b: true, sponsorship_confidence: 70 }],
+  ["Mintlify", "mintlify.com", "https://mintlify.com/careers", "Artificial Intelligence", "startup", { sponsors_h1b: true, sponsorship_confidence: 70 }],
+
+  // ── Cat 48: AI search, RAG & vector DBs ──────────────────────────────────
+  ["You.com", "you.com", "https://you.com/careers", "Artificial Intelligence", "medium", { sponsors_h1b: true, sponsorship_confidence: 72 }],
+  ["Exa", "exa.ai", "https://exa.ai/careers", "Artificial Intelligence", "startup", { sponsors_h1b: true, sponsorship_confidence: 70 }],
+  ["Tavily", "tavily.com", "https://tavily.com/careers", "Artificial Intelligence", "startup", { sponsors_h1b: true, sponsorship_confidence: 65 }],
+  ["Brave", "brave.com", "https://brave.com/careers", "Technology", "medium", { sponsors_h1b: true, sponsorship_confidence: 72 }],
+  ["Inkeep", "inkeep.com", "https://inkeep.com/careers", "Artificial Intelligence", "startup", { sponsors_h1b: true, sponsorship_confidence: 68 }],
+  ["LlamaIndex", "llamaindex.ai", "https://www.llamaindex.ai/careers", "Artificial Intelligence", "startup", { sponsors_h1b: true, sponsorship_confidence: 72 }],
+  ["Chroma", "trychroma.com", "https://www.trychroma.com/careers", "Artificial Intelligence", "startup", { sponsors_h1b: true, sponsorship_confidence: 72 }],
+  ["Qdrant", "qdrant.tech", "https://qdrant.tech/careers", "Artificial Intelligence", "small", { sponsors_h1b: true, sponsorship_confidence: 70 }],
+  ["Weaviate", "weaviate.io", "https://weaviate.io/company/careers", "Artificial Intelligence", "small", { sponsors_h1b: true, sponsorship_confidence: 72 }],
+  ["MindsDB", "mindsdb.com", "https://mindsdb.com/careers", "Artificial Intelligence", "small", { sponsors_h1b: true, sponsorship_confidence: 65 }],
+
+  // ── Cat 49: AI infra, GPU compute & inference ────────────────────────────
+  ["CoreWeave", "coreweave.com", "https://www.coreweave.com/careers", "Artificial Intelligence", "large", { sponsors_h1b: true, sponsorship_confidence: 82 }],
+  ["Voltage Park", "voltagepark.com", "https://www.voltagepark.com/careers", "Artificial Intelligence", "small", { sponsors_h1b: true, sponsorship_confidence: 65 }],
+  ["Hyperbolic", "hyperbolic.xyz", "https://hyperbolic.xyz/careers", "Artificial Intelligence", "startup", { sponsors_h1b: true, sponsorship_confidence: 68 }],
+  ["Lepton AI", "lepton.ai", "https://www.lepton.ai/careers", "Artificial Intelligence", "startup", { sponsors_h1b: true, sponsorship_confidence: 70 }],
+  ["Anyscale", "anyscale.com", "https://www.anyscale.com/careers", "Artificial Intelligence", "medium", { sponsors_h1b: true, sponsorship_confidence: 82 }],
+  ["Predibase", "predibase.com", "https://predibase.com/careers", "Artificial Intelligence", "small", { sponsors_h1b: true, sponsorship_confidence: 72 }],
+  ["Nebius", "nebius.com", "https://nebius.com/careers", "Artificial Intelligence", "large", { sponsors_h1b: true, sponsorship_confidence: 72 }],
+  ["Lightning AI", "lightning.ai", "https://lightning.ai/careers", "Artificial Intelligence", "medium", { sponsors_h1b: true, sponsorship_confidence: 78 }],
+  ["Arize AI", "arize.com", "https://arize.com/careers", "Artificial Intelligence", "medium", { sponsors_h1b: true, sponsorship_confidence: 76 }],
+  ["Galileo", "rungalileo.io", "https://www.rungalileo.io/careers", "Artificial Intelligence", "small", { sponsors_h1b: true, sponsorship_confidence: 70 }],
+  ["Comet", "comet.com", "https://www.comet.com/careers", "Artificial Intelligence", "medium", { sponsors_h1b: true, sponsorship_confidence: 72 }],
+  ["Datology AI", "datologyai.com", "https://www.datologyai.com/careers", "Artificial Intelligence", "startup", { sponsors_h1b: true, sponsorship_confidence: 68 }],
+  ["Cleanlab", "cleanlab.ai", "https://cleanlab.ai/careers", "Artificial Intelligence", "startup", { sponsors_h1b: true, sponsorship_confidence: 68 }],
+
+  // ── Cat 50: AI agents, voice, video ──────────────────────────────────────
+  ["Sana", "sana.ai", "https://sana.ai/careers", "Artificial Intelligence", "medium", { sponsors_h1b: true, sponsorship_confidence: 70 }],
+  ["Dust", "dust.tt", "https://dust.tt/jobs", "Artificial Intelligence", "startup", { sponsors_h1b: true, sponsorship_confidence: 65 }],
+  ["CrewAI", "crewai.com", "https://www.crewai.com/careers", "Artificial Intelligence", "startup", { sponsors_h1b: true, sponsorship_confidence: 68 }],
+  ["Vapi", "vapi.ai", "https://vapi.ai/careers", "Artificial Intelligence", "startup", { sponsors_h1b: true, sponsorship_confidence: 68 }],
+  ["Bland AI", "bland.ai", "https://www.bland.ai/careers", "Artificial Intelligence", "startup", { sponsors_h1b: true, sponsorship_confidence: 68 }],
+  ["Retell AI", "retellai.com", "https://www.retellai.com/careers", "Artificial Intelligence", "startup", { sponsors_h1b: true, sponsorship_confidence: 68 }],
+  ["Lindy", "lindy.ai", "https://www.lindy.ai/careers", "Artificial Intelligence", "startup", { sponsors_h1b: true, sponsorship_confidence: 68 }],
+  ["MultiOn", "multion.ai", "https://www.multion.ai/careers", "Artificial Intelligence", "startup", { sponsors_h1b: true, sponsorship_confidence: 68 }],
+  ["Descript", "descript.com", "https://www.descript.com/careers", "Artificial Intelligence", "medium", { sponsors_h1b: true, sponsorship_confidence: 76 }],
+  ["Resemble AI", "resemble.ai", "https://www.resemble.ai/careers", "Artificial Intelligence", "small", { sponsors_h1b: true, sponsorship_confidence: 68 }],
+  ["Hume AI", "hume.ai", "https://www.hume.ai/careers", "Artificial Intelligence", "small", { sponsors_h1b: true, sponsorship_confidence: 72 }],
+  ["Cartesia", "cartesia.ai", "https://cartesia.ai/careers", "Artificial Intelligence", "startup", { sponsors_h1b: true, sponsorship_confidence: 70 }],
+  ["Tavus", "tavus.io", "https://www.tavus.io/careers", "Artificial Intelligence", "startup", { sponsors_h1b: true, sponsorship_confidence: 68 }],
+  ["HeyGen", "heygen.com", "https://www.heygen.com/careers", "Artificial Intelligence", "medium", { sponsors_h1b: true, sponsorship_confidence: 74 }],
+  ["Captions", "captions.ai", "https://www.captions.ai/careers", "Artificial Intelligence", "small", { sponsors_h1b: true, sponsorship_confidence: 70 }],
+
+  // ── Cat 51: Humanoid robotics & physical AI ──────────────────────────────
+  ["1X Technologies", "1x.tech", "https://www.1x.tech/careers", "Technology", "medium", { sponsors_h1b: true, sponsorship_confidence: 72 }],
+  ["Apptronik", "apptronik.com", "https://apptronik.com/careers", "Technology", "small", { sponsors_h1b: true, sponsorship_confidence: 70 }],
+  ["Physical Intelligence", "physicalintelligence.company", "https://www.physicalintelligence.company/careers", "Artificial Intelligence", "startup", { sponsors_h1b: true, sponsorship_confidence: 72 }],
+  ["Covariant", "covariant.ai", "https://covariant.ai/careers", "Artificial Intelligence", "medium", { sponsors_h1b: true, sponsorship_confidence: 76 }],
+  ["Agility Robotics", "agilityrobotics.com", "https://www.agilityrobotics.com/careers", "Technology", "medium", { sponsors_h1b: true, sponsorship_confidence: 72 }],
+  ["Boston Dynamics", "bostondynamics.com", "https://www.bostondynamics.com/careers", "Technology", "large", { sponsors_h1b: true, sponsorship_confidence: 78 }],
+  ["Symbotic", "symbotic.com", "https://www.symbotic.com/careers", "Technology", "large", { sponsors_h1b: true, sponsorship_confidence: 70 }],
+
+  // ── Cat 52: Modern defense tech ──────────────────────────────────────────
+  ["Saronic", "saronic.com", "https://www.saronic.com/careers", "Technology", "small", { sponsors_h1b: true, sponsorship_confidence: 68 }],
+  ["Saildrone", "saildrone.com", "https://www.saildrone.com/careers", "Technology", "medium", { sponsors_h1b: true, sponsorship_confidence: 70 }],
+  ["Mach Industries", "mach.industries", "https://mach.industries/careers", "Technology", "small", { sponsors_h1b: true, sponsorship_confidence: 65 }],
+  ["Hermeus", "hermeus.com", "https://www.hermeus.com/careers", "Technology", "small", { sponsors_h1b: true, sponsorship_confidence: 68 }],
+  ["Stoke Space", "stokespace.com", "https://www.stokespace.com/careers", "Technology", "small", { sponsors_h1b: true, sponsorship_confidence: 65 }],
+  ["Hadrian", "hadrian.co", "https://www.hadrian.co/careers", "Technology", "small", { sponsors_h1b: true, sponsorship_confidence: 68 }],
+  ["True Anomaly", "trueanomaly.space", "https://www.trueanomaly.space/careers", "Technology", "small", { sponsors_h1b: true, sponsorship_confidence: 65 }],
+  ["Skydio", "skydio.com", "https://www.skydio.com/careers", "Technology", "medium", { sponsors_h1b: true, sponsorship_confidence: 75 }],
+  ["Epirus", "epirus.com", "https://www.epirusinc.com/careers", "Technology", "medium", { sponsors_h1b: true, sponsorship_confidence: 68 }],
+  ["Castelion", "castelion.com", "https://www.castelion.com/careers", "Technology", "small", { sponsors_h1b: true, sponsorship_confidence: 65 }],
+
+  // ── Cat 53: Autonomy & mobility ──────────────────────────────────────────
+  ["Aurora Innovation", "aurora.tech", "https://aurora.tech/careers", "Technology", "large", { sponsors_h1b: true, sponsorship_confidence: 80 }],
+  ["Archer Aviation", "archer.com", "https://www.archer.com/careers", "Technology", "medium", { sponsors_h1b: true, sponsorship_confidence: 70 }],
+  ["Kodiak Robotics", "kodiak.ai", "https://kodiak.ai/careers", "Technology", "small", { sponsors_h1b: true, sponsorship_confidence: 70 }],
+  ["Nuro", "nuro.ai", "https://www.nuro.ai/careers", "Technology", "medium", { sponsors_h1b: true, sponsorship_confidence: 75 }],
+
+  // ── Cat 54: Bio / health AI ──────────────────────────────────────────────
+  ["Insitro", "insitro.com", "https://insitro.com/careers", "Healthcare", "medium", { sponsors_h1b: true, sponsorship_confidence: 76 }],
+  ["Isomorphic Labs", "isomorphiclabs.com", "https://www.isomorphiclabs.com/careers", "Healthcare", "medium", { sponsors_h1b: true, sponsorship_confidence: 78 }],
+  ["Tempus AI", "tempus.com", "https://www.tempus.com/careers", "Healthcare", "large", { sponsors_h1b: true, sponsorship_confidence: 78 }],
+  ["PathAI", "pathai.com", "https://www.pathai.com/careers", "Healthcare", "medium", { sponsors_h1b: true, sponsorship_confidence: 72 }],
+  ["Generate Biomedicines", "generatebiomedicines.com", "https://generatebiomedicines.com/careers", "Healthcare", "medium", { sponsors_h1b: true, sponsorship_confidence: 72 }],
+  ["Inceptive", "inceptive.life", "https://www.inceptive.life/careers", "Healthcare", "small", { sponsors_h1b: true, sponsorship_confidence: 70 }],
+  ["Xaira Therapeutics", "xaira.com", "https://www.xaira.com/careers", "Healthcare", "medium", { sponsors_h1b: true, sponsorship_confidence: 72 }],
+
+  // ── Cat 55: Fusion, climate & energy ─────────────────────────────────────
+  ["Commonwealth Fusion Systems", "cfs.energy", "https://cfs.energy/careers", "Industrial", "medium", { sponsors_h1b: true, sponsorship_confidence: 72 }],
+  ["Helion Energy", "helionenergy.com", "https://www.helionenergy.com/careers", "Industrial", "medium", { sponsors_h1b: true, sponsorship_confidence: 70 }],
+  ["Form Energy", "formenergy.com", "https://formenergy.com/careers", "Industrial", "medium", { sponsors_h1b: true, sponsorship_confidence: 72 }],
+  ["KoBold Metals", "koboldmetals.com", "https://www.koboldmetals.com/careers", "Industrial", "small", { sponsors_h1b: true, sponsorship_confidence: 68 }],
+
+  // ── Cat 56: Quantum computing ────────────────────────────────────────────
+  ["PsiQuantum", "psiquantum.com", "https://psiquantum.com/careers", "Technology", "medium", { sponsors_h1b: true, sponsorship_confidence: 74 }],
+  ["IonQ", "ionq.com", "https://ionq.com/careers", "Technology", "medium", { sponsors_h1b: true, sponsorship_confidence: 72 }],
+  ["Rigetti Computing", "rigetti.com", "https://www.rigetti.com/careers", "Technology", "small", { sponsors_h1b: true, sponsorship_confidence: 68 }],
+  ["Quantinuum", "quantinuum.com", "https://www.quantinuum.com/careers", "Technology", "medium", { sponsors_h1b: true, sponsorship_confidence: 72 }],
 ]

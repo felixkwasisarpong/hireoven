@@ -10,6 +10,9 @@ export type NormalizedAtsProvider =
   | "smartrecruiters"
   | "bamboohr"
   | "jobvite"
+  | "successfactors"
+  | "taleo"
+  | "oraclecloud"
   | "custom"
 
 export type AtsUrlNormalization = {
@@ -213,6 +216,67 @@ export function normalizeAtsUrl(
       atsIdentifier: null,
       reason: "icims_branded_portal_url",
       shouldPersist: true,
+    }
+  }
+
+  // SAP SuccessFactors hosted career portals — one of the career{N} shards
+  // on .com or .eu, addressed by the `company` query param.
+  const sfMatch = host.match(/^(career(?:1[0-2]?|[2-9]))\.successfactors\.(com|eu)$/)
+  if (sfMatch) {
+    const companyId = url.searchParams.get("company")
+    const cleanedCompany =
+      companyId && /^[a-z0-9][a-z0-9_-]{0,63}$/i.test(companyId.trim()) ? companyId.trim() : null
+    const normalized = cleanedCompany
+      ? `https://${sfMatch[1]}.successfactors.${sfMatch[2]}/career?company=${encodeURIComponent(cleanedCompany)}`
+      : trimTrailingSlash(stripTransientParams(url).toString())
+    return {
+      provider: "successfactors",
+      originalUrl,
+      normalizedUrl: normalized,
+      atsIdentifier: cleanedCompany ? `${sfMatch[1]}.${sfMatch[2]}:${cleanedCompany}` : null,
+      reason: cleanedCompany ? "successfactors_company_url" : "successfactors_missing_company",
+      shouldPersist: Boolean(cleanedCompany),
+    }
+  }
+
+  // Oracle Taleo Enterprise Edition hosted career portals.
+  if (host.endsWith(".taleo.net")) {
+    const tenant = host.replace(/\.taleo\.net$/, "")
+    const parts = url.pathname.split("/").filter(Boolean)
+    const section = parts[0]?.toLowerCase() === "careersection" ? parts[1] : null
+    const cleanedSection = section && /^[a-z0-9][a-z0-9_-]{0,63}$/i.test(section) ? section : null
+    const isInfra = tenant === "www" || tenant === "tbe" || tenant === "taleocloud"
+    const shouldPersist = !isInfra && Boolean(cleanedSection)
+    return {
+      provider: "taleo",
+      originalUrl,
+      normalizedUrl: shouldPersist
+        ? `https://${tenant}.taleo.net/careersection/${encodeURIComponent(cleanedSection!)}/jobsearch.ftl?lang=en`
+        : trimTrailingSlash(stripTransientParams(url).toString()),
+      atsIdentifier: shouldPersist ? `${tenant}:${cleanedSection}` : null,
+      reason: shouldPersist ? "taleo_tenant_section_url" : "taleo_missing_section",
+      shouldPersist,
+    }
+  }
+
+  // Oracle Cloud HCM Candidate Experience portals.
+  if (host.endsWith(".oraclecloud.com") && host !== "oraclecloud.com") {
+    const pod = host.replace(/\.oraclecloud\.com$/, "")
+    const isMarketing = pod === "www" || pod === "docs" || pod === "support" || pod === "blogs"
+    const parts = url.pathname.split("/").filter(Boolean)
+    const sitesIdx = parts.findIndex((p) => p.toLowerCase() === "sites")
+    const siteRaw = sitesIdx !== -1 ? parts[sitesIdx + 1] : null
+    const cleanedSite = siteRaw && /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(siteRaw) ? siteRaw : null
+    const shouldPersist = !isMarketing && Boolean(cleanedSite)
+    return {
+      provider: "oraclecloud",
+      originalUrl,
+      normalizedUrl: shouldPersist
+        ? `https://${pod}.oraclecloud.com/hcmUI/CandidateExperience/en/sites/${encodeURIComponent(cleanedSite!)}/`
+        : trimTrailingSlash(stripTransientParams(url).toString()),
+      atsIdentifier: shouldPersist ? `${pod}:${cleanedSite}` : null,
+      reason: shouldPersist ? "oraclecloud_pod_site_url" : "oraclecloud_missing_site",
+      shouldPersist,
     }
   }
 

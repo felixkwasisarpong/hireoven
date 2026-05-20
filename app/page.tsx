@@ -283,10 +283,9 @@ export default async function HomePage() {
       {/* ── Stats + Logo wall ────────────────────────────────────────────── */}
       <section className="border-b border-slate-100 bg-slate-50/60 px-6 py-16">
         <div className="mx-auto max-w-6xl">
-          <div className="mb-12 grid grid-cols-2 gap-6 sm:grid-cols-4">
+          <div className="mb-12 grid grid-cols-3 gap-6">
             {[
               { value: stats.jobs > 0 ? stats.jobs.toLocaleString() : "10K+", label: "active jobs" },
-              { value: stats.companies > 0 ? stats.companies.toLocaleString() : "3K+", label: "companies tracked" },
               { value: "<30min", label: "avg. detection time" },
               { value: "Real-time", label: "feed updates" },
             ].map(({ value, label }) => (

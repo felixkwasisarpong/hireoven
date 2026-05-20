@@ -34,18 +34,18 @@ const RETRY_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504])
 // Per-job detail fetch — enriches descriptions beyond the bullet snippets.
 // Env-tunable for operators who want to trade throughput for richer text.
 //
-// Bumped default 100 → 300. Large Workday tenants (Leidos, Amentum, AT&T)
-// publish 1000+ jobs each; at 100 per tick most rows never got their
-// description filled before the row aged out of the freshness rotation,
-// leaving ~50% of Workday rows with empty descriptions. 300 per tick at
-// DETAIL_CONCURRENCY = 4 still fits the 240s lease.
+// Bumped default 300 → 600 alongside DETAIL_CONCURRENCY 4 → 6. Cap at 300
+// + 4 still left ~50% of large-tenant rows blank because tier_2 boards
+// (1000+ jobs) cycle faster than the cap could fill. 600 × concurrency 6
+// = ~100 round-trip-equivalents per tick; at ~500ms per detail call that's
+// ~50s of detail time, comfortably under the 240s lease.
 const DETAIL_MAX_JOBS = Math.max(
   0,
-  Number.parseInt(process.env.HARVESTER_WORKDAY_DETAIL_MAX_JOBS ?? "300", 10)
+  Number.parseInt(process.env.HARVESTER_WORKDAY_DETAIL_MAX_JOBS ?? "600", 10)
 )
 const DETAIL_CONCURRENCY = Math.max(
   1,
-  Number.parseInt(process.env.HARVESTER_WORKDAY_DETAIL_CONCURRENCY ?? "4", 10)
+  Number.parseInt(process.env.HARVESTER_WORKDAY_DETAIL_CONCURRENCY ?? "6", 10)
 )
 const DETAIL_TIMEOUT_MS = Math.max(
   1_000,
@@ -174,18 +174,56 @@ function parseWorkdayPostedOn(value: string | undefined | null): string | undefi
   return undefined
 }
 
+function decodeHtmlEntities(value: string): string {
+  return value
+    .replace(/&nbsp;?/gi, " ")
+    .replace(/&amp;?/gi, "&")
+    .replace(/&quot;?/gi, '"')
+    .replace(/&#39;?|&apos;?/gi, "'")
+    .replace(/&lt;?/gi, "<")
+    .replace(/&gt;?/gi, ">")
+    .replace(/&mdash;?/gi, "-")
+    .replace(/&ndash;?/gi, "–")
+    .replace(/&bull;?/gi, "•")
+    .replace(/&#x([0-9a-f]+);?/gi, (_, hex: string) => {
+      const code = Number.parseInt(hex, 16)
+      if (!Number.isFinite(code) || code < 32 || code > 0x10ffff) return ""
+      try {
+        return String.fromCodePoint(code)
+      } catch {
+        return ""
+      }
+    })
+    .replace(/&#(\d+);?/g, (_, dec: string) => {
+      const code = Number.parseInt(dec, 10)
+      if (!Number.isFinite(code) || code < 32 || code > 0x10ffff) return ""
+      try {
+        return String.fromCodePoint(code)
+      } catch {
+        return ""
+      }
+    })
+}
+
 function stripHtml(value: string | undefined | null): string | undefined {
   if (!value) return undefined
-  const text = value
-    .replace(/<\/(p|div|li|br|h[1-6])>/gi, "\n")
+  const text = decodeHtmlEntities(value)
+    .replace(/\r\n?/g, "\n")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<li\b[^>]*>/gi, "\n- ")
+    .replace(/<\/li>/gi, "\n")
+    .replace(/<\/(p|div|section|article|ul|ol|h[1-6]|tr)>/gi, "\n")
     .replace(/<[^>]+>/g, " ")
-    .replace(/&nbsp;/gi, " ")
-    .replace(/&amp;/gi, "&")
-    .replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">")
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;/gi, "'")
-    .replace(/\s+/g, " ")
+    .split("\n")
+    .map((line) =>
+      line
+        .replace(/[ \t]+/g, " ")
+        .replace(/\s+([,.;:!?])/g, "$1")
+        .trim()
+    )
+    .filter(Boolean)
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
     .trim()
   return text || undefined
 }
@@ -394,7 +432,14 @@ async function enrichWithDetail(
   ctx: HarvestCtx
 ): Promise<void> {
   if (DETAIL_MAX_JOBS === 0) return
-  const targets = jobs.filter((j) => Boolean(j.externalPath)).slice(0, DETAIL_MAX_JOBS)
+  // Skip jobs that already have a real description in the DB — the cap
+  // budget goes to jobs that still need one. After the cap budget is used
+  // up, any leftover detail fetches happen on the next harvest cycle.
+  const alreadyDescribed = ctx.alreadyDescribedIds
+  const targets = jobs
+    .filter((j) => Boolean(j.externalPath))
+    .filter((j) => !alreadyDescribed?.has(j.externalId))
+    .slice(0, DETAIL_MAX_JOBS)
   if (targets.length === 0) return
 
   const limit = pLimit(DETAIL_CONCURRENCY)

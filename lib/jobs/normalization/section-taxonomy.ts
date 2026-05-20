@@ -48,7 +48,7 @@ const HEADING_RULES: Rule[] = [
   {
     key: "responsibilities",
     pattern:
-      /\b(responsibilit|what you(?:'|')ll do|what you will do|what you(?:'|')ll be doing|day-to-day|in this role|key duties|key responsibilities|your day|how you(?:'|')ll spend your time|how you(?:'|')ll make an impact|what you(?:'|')ll build|what you(?:'|')ll own|your impact|the work)\b/i,
+      /\b(responsibilit(?:y|ies)?|responsibilities?|what you(?:'|')ll do|what you will do|what you(?:'|')ll be doing|day-to-day|in this role|key duties|key responsibilities|your day|how you(?:'|')ll spend your time|how you(?:'|')ll make an impact|what you(?:'|')ll build|what you(?:'|')ll own|your impact|the work)\b/i,
   },
   {
     key: "requirements",
@@ -90,7 +90,7 @@ const HEADING_RULES: Rule[] = [
   {
     key: "company_info",
     pattern:
-      /\b(about us|about the company|about the team|who we are|our mission|our values|culture|life at|company overview|our story|what we do|our product|the team|our team)\b/i,
+      /\b(company|about us|about the company|about the team|who we are|our mission|our values|culture|life at|company overview|our story|what we do|our product|the team|our team)\b/i,
   },
   {
     key: "application_info",

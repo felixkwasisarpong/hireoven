@@ -73,6 +73,11 @@ const ATS_SELECTORS: ReadonlyArray<{ ats: SupportedSite; selector: string }> = [
   { ats: "lever",      selector: ".completed-section" },
   { ats: "lever",      selector: ".application-completed" },
   { ats: "lever",      selector: ".posting-thank-you" },
+  // Workday emits stable automation ids on its post-apply confirmation pages.
+  { ats: "workday",    selector: '[data-automation-id="applicationSubmitted"]' },
+  { ats: "workday",    selector: '[data-automation-id="postApply"]' },
+  { ats: "workday",    selector: '[data-automation-id="confirmationPage"]' },
+  { ats: "workday",    selector: '[data-automation-id="applicationConfirmationPage"]' },
 ]
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

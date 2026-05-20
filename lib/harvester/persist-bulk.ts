@@ -12,6 +12,16 @@ import type { HarvestedJob } from "@/lib/harvester/adapters"
  */
 export type DbExecutor = Pick<Pool, "query"> | Pick<PoolClient, "query">
 
+/**
+ * Maximum jobs per upsert round-trip. Anything bigger risks blowing the
+ * pgbouncer message ceiling and dropping the connection mid-batch. 400 keeps
+ * a 4 KB-description payload comfortably under ~2 MB.
+ */
+const MAX_JOBS_PER_BATCH = (() => {
+  const raw = Number.parseInt(process.env.HARVESTER_PERSIST_BATCH_SIZE ?? "", 10)
+  return Number.isFinite(raw) && raw >= 1 ? raw : 400
+})()
+
 export type BulkPersistInput = {
   pool: DbExecutor
   companyId: string
@@ -383,19 +393,27 @@ export async function persistJobsBulk(
     if (built) rows.push(built)
   }
 
-  const result = await pool.query<{ inserted: boolean }>(UPSERT_SQL, [
-    companyId,
-    crawledAtIso,
-    sourceAts,
-    sourceAtsSlug,
-    JSON.stringify(rows),
-  ])
-
+  // Chunk the upsert. The whole payload is sent as a single $5::jsonb param,
+  // which means one mega-batch (~4k jobs × 4 KB descriptions ≈ 15 MB JSON)
+  // exceeds Supabase's pgbouncer message ceiling and the connection drops
+  // mid-flight. Splitting into ~400-row batches keeps each request comfortably
+  // under 2 MB while preserving idempotency (each batch shares the same
+  // ON CONFLICT semantics).
   let inserted = 0
   let updated = 0
-  for (const r of result.rows) {
-    if (r.inserted) inserted += 1
-    else updated += 1
+  for (let i = 0; i < rows.length; i += MAX_JOBS_PER_BATCH) {
+    const batch = rows.slice(i, i + MAX_JOBS_PER_BATCH)
+    const result = await pool.query<{ inserted: boolean }>(UPSERT_SQL, [
+      companyId,
+      crawledAtIso,
+      sourceAts,
+      sourceAtsSlug,
+      JSON.stringify(batch),
+    ])
+    for (const r of result.rows) {
+      if (r.inserted) inserted += 1
+      else updated += 1
+    }
   }
   const written = inserted + updated
   const unchanged = deduped.length - written

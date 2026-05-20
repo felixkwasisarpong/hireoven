@@ -27,9 +27,13 @@ const MAX_PAGES = Math.max(
   1,
   Number.parseInt(process.env.HARVESTER_JOBVITE_MAX_PAGES ?? "25", 10)
 )
+// Bumped 60 → 200. Jobvite detail pages are HTML + JSON-LD (slower than
+// SR's JSON), but at concurrency 4 with ~600ms per page that's still ~30s
+// of detail time per tick — within the 240s lease. Previous 60-job cap
+// left 78% of Jobvite rows description-less.
 const DETAIL_MAX_JOBS = Math.max(
   0,
-  Number.parseInt(process.env.HARVESTER_JOBVITE_DETAIL_MAX_JOBS ?? "60", 10)
+  Number.parseInt(process.env.HARVESTER_JOBVITE_DETAIL_MAX_JOBS ?? "200", 10)
 )
 const DETAIL_CONCURRENCY = Math.max(
   1,
@@ -287,10 +291,16 @@ function shallowJob(link: JobviteLink, slug: string): HarvestedJob {
 
 async function enrichWithDetails(links: JobviteLink[], slug: string, ctx: HarvestCtx): Promise<HarvestedJob[]> {
   if (DETAIL_MAX_JOBS === 0) return links.map((link) => shallowJob(link, slug))
+  // Skip links whose externalId already has a real description in the DB.
+  // External ID shape is `jobvite:{slug}:{jobId}` (see shallowJob/fetchJobDetail).
+  const alreadyDescribed = ctx.alreadyDescribedIds
+  const linksNeedingDetail = alreadyDescribed
+    ? links.filter((link) => !alreadyDescribed.has(`jobvite:${slug}:${link.jobId}`))
+    : links
   const limiter = pLimit(DETAIL_CONCURRENCY)
   const enriched = new Map<string, HarvestedJob>()
   await Promise.all(
-    links.slice(0, DETAIL_MAX_JOBS).map((link) =>
+    linksNeedingDetail.slice(0, DETAIL_MAX_JOBS).map((link) =>
       limiter(async () => {
         const detail = await fetchJobDetail(link, slug, ctx)
         if (detail) enriched.set(link.jobId, detail)

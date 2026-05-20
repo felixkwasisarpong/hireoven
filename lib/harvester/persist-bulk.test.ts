@@ -125,6 +125,51 @@ test("persistJobsBulk: filters blocked titles and dedupes by externalId", async 
   assert.equal(outcome.filteredOut, 2)
 })
 
+test("persistJobsBulk: splits large payloads into batches of HARVESTER_PERSIST_BATCH_SIZE", async () => {
+  // 950 jobs with batch=400 should produce 3 upsert calls + 1 company-count update.
+  process.env.HARVESTER_PERSIST_BATCH_SIZE = "400"
+  // Re-import the module so the constant picks up the new env value.
+  delete require.cache[require.resolve("./persist-bulk")]
+  const { persistJobsBulk: chunkedPersist } = await import("./persist-bulk")
+
+  const upsertResponses: Array<Array<{ inserted: boolean }>> = [
+    Array.from({ length: 400 }, () => ({ inserted: true })),
+    Array.from({ length: 400 }, () => ({ inserted: true })),
+    Array.from({ length: 150 }, () => ({ inserted: true })),
+    [],
+  ]
+  const { pool, captured } = makeFakePool(upsertResponses)
+
+  const jobs: HarvestedJob[] = Array.from({ length: 950 }, (_, i) =>
+    makeJob({
+      externalId: `greenhouse:${i}`,
+      title: `Engineer ${i}`,
+      applyUrl: `https://boards.greenhouse.io/acme/jobs/${i}`,
+      contentHash: i.toString(16).padStart(32, "0"),
+    })
+  )
+
+  const outcome = await chunkedPersist({
+    pool,
+    companyId: "00000000-0000-0000-0000-000000000099",
+    companyMeta: { name: "Acme", domain: "acme.com", careersUrl: null },
+    sourceAts: "greenhouse",
+    sourceAtsSlug: "acme",
+    crawledAt: new Date("2026-05-19T00:00:00.000Z"),
+    jobs,
+  })
+
+  // 3 upsert chunks + 1 company-count update.
+  assert.equal(captured.length, 4, `expected 4 calls, got ${captured.length}`)
+  const sizes = captured.slice(0, 3).map((c) => JSON.parse(c.values[4] as string).length)
+  assert.deepEqual(sizes, [400, 400, 150])
+  assert.equal(outcome.inserted, 950)
+  assert.equal(outcome.written, 950)
+  assert.equal(outcome.unchanged, 0)
+
+  delete process.env.HARVESTER_PERSIST_BATCH_SIZE
+})
+
 test("persistJobsBulk: empty input still updates company job_count", async () => {
   const { pool, captured } = makeFakePool([])
 

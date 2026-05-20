@@ -8,10 +8,14 @@ import { infosysAdapter } from "@/lib/harvester/adapters/infosys"
 import { jazzhrAdapter } from "@/lib/harvester/adapters/jazzhr"
 import { jobviteAdapter } from "@/lib/harvester/adapters/jobvite"
 import { leverAdapter } from "@/lib/harvester/adapters/lever"
+import { oraclecloudAdapter } from "@/lib/harvester/adapters/oraclecloud"
 import { smartrecruitersAdapter } from "@/lib/harvester/adapters/smartrecruiters"
 import { personioAdapter } from "@/lib/harvester/adapters/personio"
 import { recruiteeAdapter } from "@/lib/harvester/adapters/recruitee"
+import { successfactorsAdapter } from "@/lib/harvester/adapters/successfactors"
+import { taleoAdapter } from "@/lib/harvester/adapters/taleo"
 import { teamtailorAdapter } from "@/lib/harvester/adapters/teamtailor"
+import { usajobsAdapter } from "@/lib/harvester/adapters/usajobs"
 import { workableAdapter } from "@/lib/harvester/adapters/workable"
 import { workdayAdapter } from "@/lib/harvester/adapters/workday"
 
@@ -29,6 +33,10 @@ export const adapters: Partial<Record<AtsName, AtsAdapter>> = {
   jazzhr: jazzhrAdapter,
   jobvite: jobviteAdapter,
   icims: icimsAdapter,
+  successfactors: successfactorsAdapter,
+  taleo: taleoAdapter,
+  oraclecloud: oraclecloudAdapter,
+  usajobs: usajobsAdapter,
   infosys: infosysAdapter,
   apple: appleAdapter,
 }

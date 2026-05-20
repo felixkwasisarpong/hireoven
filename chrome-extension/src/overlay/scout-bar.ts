@@ -55,9 +55,11 @@ import {
   type SafeProfile,
 } from "../autofill/safe-fields"
 import {
+  estimateWorkdayAutofillFields,
   isWorkdayApplicationPage,
   runWorkdayAutofillInExistingBar,
   type WorkdayAutofillSnapshot,
+  type WorkdayDebugEntry,
 } from "../autofill/workday-autofill"
 
 // ── Public types ──────────────────────────────────────────────────────────────
@@ -985,6 +987,57 @@ function escapeHtml(s: string): string {
 }
 
 /**
+ * Pulls the most useful actionable hint out of the Workday runner's debug
+ * tail. Surfaces it in the bar's error toast so users don't have to open
+ * DevTools to learn why a run stopped. Returns null when there's nothing
+ * recognizable to summarize.
+ */
+function summarizeWorkdayDebug(tail: WorkdayDebugEntry[] | undefined): string | null {
+  if (!tail || tail.length === 0) return null
+
+  // Map specific debug events to human messages. Ordered by usefulness — the
+  // first match wins, so the user always sees the actionable cause.
+  const eventHints: Array<[string, (e: WorkdayDebugEntry) => string]> = [
+    ["context.initialize.profile_missing", () =>
+      "your Hireoven autofill profile is empty — open Hireoven and complete your profile first"],
+    ["context.initialize.resume_not_found", () =>
+      "no resume on file — upload one in Hireoven before retrying"],
+    ["run.pause_account_required", () =>
+      "Workday requires Sign In or Create Account first"],
+    ["run.pause_self_identify", () =>
+      "Self-Identify step reached — complete it manually, then click Retry"],
+    ["run.advance_blocked_required_missing", (e) =>
+      `${String(e.details?.misses ?? "Some")} required field(s) couldn't auto-fill — complete them manually before continuing`],
+    ["resume_upload.error_dom_marker", () =>
+      "Workday rejected the resume upload — try uploading manually"],
+    ["resume_upload.progress_timeout", () =>
+      "resume upload did not confirm within 15s — verify on the page and retry"],
+    ["combobox.target_missing", (e) =>
+      `couldn't find the ${String(e.details?.fieldName ?? "dropdown")} dropdown on this Workday tenant`],
+    ["navigation.next.fallback_missing", () =>
+      "no Next/Save button was visible after filling — Workday may be blocking advance on a required field"],
+  ]
+
+  // Most recent error/warn first.
+  for (let i = tail.length - 1; i >= 0; i -= 1) {
+    const entry = tail[i]
+    if (entry.level !== "warn" && entry.level !== "error") continue
+    for (const [eventName, build] of eventHints) {
+      if (entry.event === eventName) return build(entry)
+    }
+  }
+
+  // No specific match — surface the last warn/error event name as a clue.
+  for (let i = tail.length - 1; i >= 0; i -= 1) {
+    const entry = tail[i]
+    if (entry.level === "warn" || entry.level === "error") {
+      return `last issue: ${entry.event}${entry.stepName ? ` on ${entry.stepName}` : ""}`
+    }
+  }
+  return null
+}
+
+/**
  * Send a popup-style message (raw response, not the {ok, data} EXT_MVP_*
  * envelope) to the background. Used for tailor preview/approve from inline
  * scout-bar flows so we don't need to add EXT_MVP_ wrappers for every action.
@@ -1023,6 +1076,8 @@ export class ScoutBar {
   private mounted = false
   private urlTimer: ReturnType<typeof setInterval> | null = null
   private atsFormRefreshTimer: ReturnType<typeof setInterval> | null = null
+  private atsFormMutationObserver: MutationObserver | null = null
+  private atsFormMutationDebounce: ReturnType<typeof setTimeout> | null = null
   private lastUrl = ""
 
   // ── Action state (Save / Analyze) ──────────────────────────────────────────
@@ -1161,6 +1216,10 @@ export class ScoutBar {
     this.urlTimer = null
     if (this.atsFormRefreshTimer) clearInterval(this.atsFormRefreshTimer)
     this.atsFormRefreshTimer = null
+    this.atsFormMutationObserver?.disconnect()
+    this.atsFormMutationObserver = null
+    if (this.atsFormMutationDebounce) clearTimeout(this.atsFormMutationDebounce)
+    this.atsFormMutationDebounce = null
     this.stopConfirmationPolling()
     this.tearDownSurface()
     this.mounted = false
@@ -1306,39 +1365,75 @@ export class ScoutBar {
   /** Workday and other ATS UIs can change steps without changing URL. */
   private bindAtsFormRefreshObserver(): void {
     if (this.atsFormRefreshTimer) clearInterval(this.atsFormRefreshTimer)
-    this.atsFormRefreshTimer = setInterval(() => {
-      if (this.state !== "ready") return
-      if (!isAtsSite(this.site)) return
+    this.atsFormRefreshTimer = setInterval(() => this.refreshAtsFormDetection(), ATS_FORM_REFRESH_INTERVAL_MS)
 
-      let nextFormDetection: ApplicationFormDetection | null = null
-      try {
-        nextFormDetection = detectApplicationForm(document)
-      } catch {
-        nextFormDetection = null
-      }
+    // Workday transitions can happen mid-interval. A debounced MutationObserver
+    // catches those without dropping the 1.2s coarse poll (still useful when the
+    // observer is throttled on extreme pages). Both paths converge on the same
+    // detector so behaviour stays identical.
+    this.atsFormMutationObserver?.disconnect()
+    if (typeof MutationObserver === "undefined") return
+    this.atsFormMutationObserver = new MutationObserver(() => {
+      if (this.atsFormMutationDebounce) return
+      this.atsFormMutationDebounce = setTimeout(() => {
+        this.atsFormMutationDebounce = null
+        this.refreshAtsFormDetection()
+      }, 200)
+    })
+    this.atsFormMutationObserver.observe(document.documentElement, {
+      childList: true,
+      subtree: true,
+    })
+  }
 
-      let nextPageMode: ExtensionPageMode = "unknown"
-      try {
-        nextPageMode = detectExtensionPageMode(location.href, document)
-      } catch {
-        nextPageMode = "unknown"
-      }
+  private refreshAtsFormDetection(): void {
+    if (this.state !== "ready") return
+    if (!isAtsSite(this.site)) return
 
-      const prev = this.formDetection
-      const formChanged =
-        (prev?.hasForm ?? false) !== (nextFormDetection?.hasForm ?? false) ||
-        (prev?.supportsAutofill ?? false) !== (nextFormDetection?.supportsAutofill ?? false) ||
-        (prev?.formCount ?? 0) !== (nextFormDetection?.formCount ?? 0) ||
-        (prev?.fields.length ?? 0) !== (nextFormDetection?.fields.length ?? 0) ||
-        (prev?.detectedAts ?? "unknown") !== (nextFormDetection?.detectedAts ?? "unknown")
+    let nextFormDetection: ApplicationFormDetection | null = null
+    try {
+      nextFormDetection = detectApplicationForm(document)
+    } catch {
+      nextFormDetection = null
+    }
 
-      const modeChanged = this.pageMode !== nextPageMode
-      if (!formChanged && !modeChanged) return
+    let nextPageMode: ExtensionPageMode = "unknown"
+    try {
+      nextPageMode = detectExtensionPageMode(location.href, document)
+    } catch {
+      nextPageMode = "unknown"
+    }
 
-      this.formDetection = nextFormDetection
-      this.pageMode = nextPageMode
-      this.render()
-    }, ATS_FORM_REFRESH_INTERVAL_MS)
+    const prev = this.formDetection
+    const formChanged =
+      (prev?.hasForm ?? false) !== (nextFormDetection?.hasForm ?? false) ||
+      (prev?.supportsAutofill ?? false) !== (nextFormDetection?.supportsAutofill ?? false) ||
+      (prev?.formCount ?? 0) !== (nextFormDetection?.formCount ?? 0) ||
+      (prev?.fields.length ?? 0) !== (nextFormDetection?.fields.length ?? 0) ||
+      (prev?.detectedAts ?? "unknown") !== (nextFormDetection?.detectedAts ?? "unknown")
+
+    const modeChanged = this.pageMode !== nextPageMode
+    if (!formChanged && !modeChanged) return
+
+    // Workday per-step UX: when the form shape changes substantially while
+    // we're in a "done"/"error" autofill state, that's almost certainly the
+    // user clicking Save and Continue and Workday loading the next step.
+    // Re-arm the Autofill button so they can click it again for the new step.
+    if (
+      this.site === "workday" &&
+      formChanged &&
+      (this.autofillStatus === "done" || this.autofillStatus === "error")
+    ) {
+      this.autofillStatus = "idle"
+      this.autofillPreview = null
+      this.autofillResults = null
+      this.autofillError = null
+      this.workdaySnapshot = null
+    }
+
+    this.formDetection = nextFormDetection
+    this.pageMode = nextPageMode
+    this.render()
   }
 
   // ── Surface (Shadow DOM) ─────────────────────────────────────────────────────
@@ -1508,9 +1603,11 @@ export class ScoutBar {
         return `<button class="action analyzed" data-action="snap-resume" disabled>Snapping…</button>`
       }
       if (this.tailorSnapStatus === "snapped") {
-        const tip = this.tailorMatchScore !== null
-          ? `Tailored resume saved · ${this.tailorMatchScore}% match`
-          : "Tailored resume saved"
+        const tip = this.site === "workday"
+          ? "Tailored resume saved. It will attach during Workday My Experience autofill."
+          : this.tailorMatchScore !== null
+            ? `Tailored resume saved · ${this.tailorMatchScore}% match`
+            : "Tailored resume saved"
         return `<button class="action analyzed" data-action="snap-resume" disabled title="${escapeHtml(tip)}">✓ Tailored</button>`
       }
       const snapTip = this.tailorSnapError
@@ -1752,11 +1849,19 @@ export class ScoutBar {
     const filledCount = isDone ? list.filter((f) => f.filled).length : 0
     const skippedCount = isDone ? list.filter((f) => !f.filled).length : 0
 
-    const workdaySummary = this.site === "workday" && this.workdaySnapshot
+    const workdayRunningSummary = this.site === "workday" && this.workdaySnapshot
       ? `Step ${this.workdaySnapshot.step.index} of ${this.workdaySnapshot.step.total} · ${this.workdaySnapshot.step.name} · ${this.workdaySnapshot.progressPct}%`
       : null
 
-    const headerSummary = workdaySummary ?? (isDone
+    // Workday preview is multi-step — the per-section rows are estimates, not
+    // a literal field-by-field plan. Show that intent in the header instead of
+    // a flat "N ready to fill" which reads as if only N fields will be touched.
+    const workdayPreviewSummary =
+      this.site === "workday" && isPreview && this.autofillProfile
+        ? `Multi-step autofill · ≈${estimateWorkdayAutofillFields(this.autofillProfile).total} fields, paused at Self-Identify + Review`
+        : null
+
+    const headerSummary = workdayRunningSummary ?? workdayPreviewSummary ?? (isDone
       ? `${filledCount} filled · ${skippedCount} need review`
       : `${willFill} ready to fill · ${reviewCount} need review`)
 
@@ -2134,9 +2239,11 @@ export class ScoutBar {
           return `<button class="ap-action ap-action-saved" disabled>Snapping…</button>`
         }
         if (this.tailorSnapStatus === "snapped") {
-          const tip = this.tailorMatchScore !== null
-            ? `Tailored resume saved · ${this.tailorMatchScore}% match`
-            : "Tailored resume saved"
+          const tip = this.site === "workday"
+            ? "Tailored resume saved. It will attach during Workday My Experience autofill."
+            : this.tailorMatchScore !== null
+              ? `Tailored resume saved · ${this.tailorMatchScore}% match`
+              : "Tailored resume saved"
           return `<button class="ap-action ap-action-saved" disabled title="${escapeHtml(tip)}">✓ Tailored</button>`
         }
         const snapTip = this.tailorSnapError
@@ -2407,7 +2514,16 @@ export class ScoutBar {
       this.tailorStatus = "done"
       this.tailorMatchScore = approve.matchScore ?? preview.matchScore ?? null
       this.tailoredResumeId = approve.resumeId ?? preview.resumeId ?? null
-      await this.onSnapTailoredResume()
+      if (this.site === "workday") {
+        // Workday apply-flow tenants can crash when resume attachment is pushed
+        // before the Experience step creates a stable application context.
+        // WorkdayAutofillRunner uploads in My Experience, so mark tailored as
+        // ready and skip direct injection here.
+        this.tailorSnapStatus = "snapped"
+        this.tailorSnapError = null
+      } else {
+        await this.onSnapTailoredResume()
+      }
     } catch (err) {
       this.tailorStatus = "error"
       this.tailorError = err instanceof Error ? err.message : "Tailor failed"
@@ -2417,6 +2533,12 @@ export class ScoutBar {
 
   private async onSnapTailoredResume(): Promise<void> {
     if (this.tailorStatus !== "done") return
+    if (this.site === "workday") {
+      this.tailorSnapStatus = "snapped"
+      this.tailorSnapError = null
+      this.render()
+      return
+    }
     if (!this.tailoredResumeId) {
       this.tailorSnapStatus = "error"
       this.tailorSnapError = "No tailored resume version found."
@@ -2487,20 +2609,69 @@ export class ScoutBar {
 
       if (this.site === "workday") {
         const ready = Boolean(profile) && isWorkdayApplicationPage()
+        if (!ready) {
+          this.autofillPreview = [
+            {
+              label: "Workday multi-step autofill",
+              valuePreview: "Workday application container not detected on this page.",
+              confidence: "needs_review",
+              source: profile ? "profile" : "manual_required",
+              filled: false,
+              skippedReason: profileMissing || !profile
+                ? "No saved autofill profile."
+                : "Open an active Workday application step first.",
+            },
+          ]
+          this.autofillStatus = "preview"
+          this.render()
+          return
+        }
+
+        // Multi-step runner — preview can't enumerate every field up front, so
+        // surface a per-section estimate so the user sees roughly how much will
+        // happen when they click Confirm. Values come from the profile shape.
+        const est = estimateWorkdayAutofillFields(profile!)
+        const sections: Array<[string, number]> = (
+          [
+            ["My Information", est.myInformation],
+            ["My Experience", est.experience],
+            ["Education", est.education],
+            ["Skills", est.skills],
+            ["Websites", est.websites],
+            ["Application Questions", est.questions],
+          ] as Array<[string, number]>
+        ).filter(([, count]) => count > 0)
+
         this.autofillPreview = [
           {
-            label: "Workday multi-step autofill",
-            valuePreview: ready
-              ? "Ready: My Information → My Experience → Questions"
-              : "Workday application container not detected on this page.",
-            confidence: ready ? "high" : "needs_review",
-            source: profile ? "profile" : "manual_required",
+            label: `Workday autofill · ≈${est.total} fields across ${sections.length} sections`,
+            valuePreview: "Resume upload → My Information → Experience → Questions",
+            confidence: "high",
+            source: "profile",
             filled: false,
-            skippedReason: profileMissing || !profile
-              ? "No saved autofill profile."
-              : ready
-                ? undefined
-                : "Open an active Workday application step first.",
+          },
+          ...sections.map<AutofillFieldResult>(([name, count]) => ({
+            label: name,
+            valuePreview: `≈${count} field${count === 1 ? "" : "s"}`,
+            confidence: "high",
+            source: "profile",
+            filled: false,
+          })),
+          {
+            label: "Self-Identify (EEO)",
+            valuePreview: "Paused — you complete this manually",
+            confidence: "needs_review",
+            source: "manual_required",
+            filled: false,
+            skippedReason: "Scout never fills voluntary legal disclosures.",
+          },
+          {
+            label: "Review & Submit",
+            valuePreview: "Paused — review then click Submit yourself",
+            confidence: "needs_review",
+            source: "manual_required",
+            filled: false,
+            skippedReason: "Scout never auto-submits.",
           },
         ]
         this.autofillStatus = "preview"
@@ -2590,17 +2761,43 @@ export class ScoutBar {
         })
 
         this.autofillResults = result.rows
+        const hint = summarizeWorkdayDebug(result.debugTail)
+        const filledMsg = `${result.fieldsFilledCount} fields filled on this step.`
+        const nextStepHint = "Review, fix anything needed, then click Save and Continue on the page. I'll re-arm Autofill when the next step loads."
+
         if (result.phase === "error") {
           this.autofillStatus = "error"
-          this.autofillError = "Workday autofill could not complete. In DevTools Console run: window.__hoWorkdayAutofillDebug?.slice(-120)"
+          this.autofillError = hint
+            ? `Workday autofill stopped: ${hint}`
+            : "Workday autofill could not complete. In DevTools Console run: window.__hoWorkdayAutofillDebug?.slice(-120)"
+        } else if (result.blockedReason === "account_required") {
+          this.autofillStatus = "done"
+          this.autofillError =
+            "Workday requires Sign In or Create Account before autofill can continue. Complete that step, then click Autofill again."
         } else if (result.eeoPaused) {
           this.autofillStatus = "done"
-          this.autofillError = "Self-Identify step reached. Complete manually, then run Autofill again to continue."
-        } else if (!result.reachedReview && result.fieldsFilledCount === 0) {
-          this.autofillStatus = "error"
-          this.autofillError = "No Workday fields were filled. In DevTools Console run: window.__hoWorkdayAutofillDebug?.slice(-120)"
+          this.autofillError = "Self-Identify step reached. Complete manually, then click Save and Continue."
+        } else if (result.reachedReview) {
+          this.autofillStatus = "done"
+          this.autofillError = "Review step reached. Verify everything and submit yourself — Scout will not auto-submit."
+        } else if (result.manualReviewCount > 0) {
+          // Step partially filled — some required fields still need the user.
+          this.autofillStatus = "done"
+          this.autofillError = `${filledMsg} ${result.manualReviewCount} field${result.manualReviewCount === 1 ? "" : "s"} still need you${hint ? ` (${hint})` : ""}. Fix and click Save and Continue.`
+        } else if (result.fieldsFilledCount === 0) {
+          // Workday question pages frequently contain tenant-specific policy
+          // prompts where Scout cannot infer safe defaults. That's a review
+          // outcome, not a hard runtime failure.
+          this.autofillStatus = "done"
+          const questionStep = result.stepId === "application_questions"
+          this.autofillError = questionStep
+            ? "No safe auto-answers were applied on this questionnaire step. Answer the Select One fields manually, then click Save and Continue."
+            : hint
+              ? `No fields were changed on this step — ${hint}. Review and continue manually.`
+              : "No fields were changed on this step. Review and continue manually."
         } else {
           this.autofillStatus = "done"
+          this.autofillError = `${filledMsg} ${nextStepHint}`
         }
         this.render()
         return

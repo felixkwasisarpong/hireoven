@@ -193,7 +193,11 @@ const SECTION_HEADING_PATTERNS = [
 const INLINE_SECTION_HEADINGS = [
   "How You Will Make A Difference",
   "Who You Are",
+  "Position Responsibilities",
+  "Key Responsibilities",
   "Responsibilities",
+  "Position Requirements",
+  "Required Qualifications",
   "Requirements",
   "Preferred Qualifications",
   "Minimum Qualifications",
@@ -570,6 +574,7 @@ function isSectionHeading(line: string): boolean {
   if (!normalized || normalized.length > 80) return false
 
   if (SECTION_HEADING_PATTERNS.some((pattern) => pattern.test(normalized))) return true
+  if (isListIntroLine(normalized)) return false
 
   // ALL-CAPS heuristic: only treat as a heading when the phrase is not known
   // UI chrome and contains at least one meaningful job-section-related word.
@@ -593,16 +598,37 @@ function isSectionHeading(line: string): boolean {
   return false
 }
 
+function isListIntroLine(normalized: string): boolean {
+  const lower = normalized.toLowerCase()
+  return (
+    /\b(including|includes?|such as|as follows|the following)$/.test(lower) ||
+    /^we support\b.+\bincluding$/.test(lower)
+  )
+}
+
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+}
+
+const SENTENCE_DOT_TOKEN = "__HIREOVEN_SENTENCE_DOT__"
+
+function splitSentencesPreservingAbbreviations(value: string): string[] {
+  const protectedValue = value.replace(/\b(?:[A-Za-z]\.){2,}/g, (match) =>
+    match.replace(/\./g, SENTENCE_DOT_TOKEN)
+  )
+
+  return protectedValue
+    .split(/(?<=[.!?])\s+(?=[A-ZÀ-ÖØ-Ý0-9])/g)
+    .map((sentence) => sentence.replaceAll(SENTENCE_DOT_TOKEN, ".").trim())
+    .filter(Boolean)
 }
 
 function normalizeDescriptionForSections(input: string): string {
   let output = input.replace(/\u2022/g, "•")
 
   for (const heading of [...INLINE_SECTION_HEADINGS].sort((left, right) => right.length - left.length)) {
-    const pattern = new RegExp(`\\s(${escapeRegExp(heading)}:)\\s*`, "gi")
-    output = output.replace(pattern, "\n\n$1\n")
+    const pattern = new RegExp(`(^|[.!?\\n\\r])\\s*(${escapeRegExp(heading)}:)\\s*`, "gi")
+    output = output.replace(pattern, "$1\n\n$2\n")
   }
 
   output = output
@@ -623,10 +649,7 @@ function normalizeDescriptionForSections(input: string): string {
 function splitLongParagraph(line: string): string[] {
   if (line.length <= 360) return [line]
 
-  const sentences = line
-    .split(/(?<=[.!?])\s+(?=[A-ZÀ-ÖØ-Ý0-9])/g)
-    .map((sentence) => sentence.trim())
-    .filter(Boolean)
+  const sentences = splitSentencesPreservingAbbreviations(line)
 
   if (sentences.length <= 2) return [line]
 

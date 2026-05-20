@@ -45,6 +45,38 @@ test("canonicalCareersUrl: returns null for empty slug", () => {
   assert.equal(canonicalCareersUrl("greenhouse", ""), null)
 })
 
+test("canonicalCareersUrl: assembles successfactors URL from shard:companyId slug", () => {
+  assert.equal(
+    canonicalCareersUrl("successfactors", "career4.com:novartis"),
+    "https://career4.successfactors.com/career?company=novartis"
+  )
+  assert.equal(canonicalCareersUrl("successfactors", "career4.com"), null)
+  assert.equal(canonicalCareersUrl("successfactors", "careerX.com:foo"), null)
+})
+
+test("canonicalCareersUrl: assembles taleo URL from tenant:section slug", () => {
+  assert.equal(
+    canonicalCareersUrl("taleo", "marriott:2"),
+    "https://marriott.taleo.net/careersection/2/jobsearch.ftl?lang=en"
+  )
+  assert.equal(canonicalCareersUrl("taleo", "marriott"), null)
+})
+
+test("canonicalCareersUrl: assembles oraclecloud URL from pod:site slug (multi-dot pod)", () => {
+  assert.equal(
+    canonicalCareersUrl("oraclecloud", "eeho.fa.us2:CX_1"),
+    "https://eeho.fa.us2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1/"
+  )
+  assert.equal(canonicalCareersUrl("oraclecloud", "eeho.fa.us2"), null)
+})
+
+test("canonicalCareersUrl: assembles usajobs URL with URL-encoded slug", () => {
+  assert.equal(
+    canonicalCareersUrl("usajobs", "Department of Veterans Affairs"),
+    "https://www.usajobs.gov/Search/Results?d=Department%20of%20Veterans%20Affairs"
+  )
+})
+
 test("canonicalCareersUrl: round-trips through detectFromUrl", async () => {
   const { detectAdapter } = await import("@/lib/harvester/adapters")
   const pairs: Array<[Parameters<typeof canonicalCareersUrl>[0], string]> = [
@@ -57,6 +89,10 @@ test("canonicalCareersUrl: round-trips through detectFromUrl", async () => {
     ["bamboohr", "acme"],
     ["jazzhr", "acme"],
     ["jobvite", "acme"],
+    ["successfactors", "career4.com:novartis"],
+    ["taleo", "marriott:2"],
+    ["oraclecloud", "eeho.fa.us2:CX_1"],
+    ["usajobs", "Department of Veterans Affairs"],
   ]
   for (const [atsType, slug] of pairs) {
     const url = canonicalCareersUrl(atsType, slug)

@@ -83,6 +83,8 @@ const COVER_LETTER_LABEL_RE = /\bcover[\s_-]?letter\b/i
 const SAFE_PROFILE_FIELD_RE =
   /\b(first[\s_-]?name|last[\s_-]?name|full[\s_-]?name|email|phone|tel|mobile|linkedin|github|portfolio|website|location|city|address)\b/i
 
+const WORKDAY_QUESTION_PLACEHOLDER_RE = /^(select one|select|choose one|choose|please select)$/i
+
 function hasApplicationLikeInputs(root: Element): boolean {
   const candidates = root.querySelectorAll(
     "input:not([type=hidden]):not([type=submit]):not([type=button]):not([type=reset]), select, textarea",
@@ -171,6 +173,74 @@ function getFieldLabel(input: HTMLElement): string {
   const ph = input.getAttribute("placeholder")
   if (ph?.trim()) return ph.trim()
   return input.getAttribute("name") ?? input.id ?? "Unlabelled field"
+}
+
+function normalizeLabelText(raw: string): string {
+  return raw
+    .replace(/\s+/g, " ")
+    .replace(/\s*\*\s*$/g, "")
+    .trim()
+}
+
+function getWorkdayComboboxLabel(node: HTMLElement): string {
+  const container = node.closest<HTMLElement>("[data-automation-id*='formField']")
+  if (!container) return getFieldLabel(node)
+
+  const explicit = container.querySelector<HTMLElement>(
+    ":scope > label, :scope > legend, :scope > [data-automation-id*='label'], :scope > [role='heading'], :scope > h1, :scope > h2, :scope > h3, :scope > h4",
+  )
+  if (explicit?.textContent?.trim()) {
+    return normalizeLabelText(explicit.textContent)
+  }
+
+  const chunks = Array.from(
+    container.querySelectorAll<HTMLElement>("label, legend, [role='heading'], h1, h2, h3, h4, p, span, div"),
+  )
+    .filter((el) => !el.closest("[role='combobox']"))
+    .map((el) => normalizeLabelText(el.textContent ?? ""))
+    .filter((text) =>
+      text.length > 6 &&
+      !WORKDAY_QUESTION_PLACEHOLDER_RE.test(text) &&
+      !/^\*?\s*indicates?\s+a\s+required\s+field\b/i.test(text),
+    )
+    .sort((a, b) => b.length - a.length)
+
+  if (chunks.length > 0) return chunks[0]
+  return getFieldLabel(node)
+}
+
+function classifyWorkdayComboboxConfidence(node: HTMLElement): "high" | "medium" | "low" {
+  const container = node.closest<HTMLElement>("[data-automation-id*='formField']")
+  if (container?.querySelector(":scope > label, :scope > legend, :scope > [data-automation-id*='label']")) {
+    return "high"
+  }
+  if (node.getAttribute("aria-label")?.trim() || node.getAttribute("aria-labelledby")) {
+    return "medium"
+  }
+  return "low"
+}
+
+function isWorkdayComboboxRequired(node: HTMLElement): boolean {
+  if (node.getAttribute("aria-required") === "true") return true
+  if (node.hasAttribute("required")) return true
+  const container = node.closest<HTMLElement>("[data-automation-id*='formField']")
+  if (!container) return false
+  if (container.getAttribute("aria-required") === "true") return true
+  if (container.hasAttribute("required")) return true
+  const text = container.textContent ?? ""
+  return /(\*+\s*)$/.test(text.trim()) || /\brequired\b/i.test(container.getAttribute("class") ?? "")
+}
+
+function buildWorkdayComboboxSelector(node: HTMLElement): string {
+  const ownAutomation = node.getAttribute("data-automation-id")
+  if (ownAutomation) {
+    return `[data-automation-id="${CSS.escape(ownAutomation)}"]`
+  }
+  const containerAutomation = node.closest<HTMLElement>("[data-automation-id]")?.getAttribute("data-automation-id")
+  if (containerAutomation) {
+    return `[data-automation-id="${CSS.escape(containerAutomation)}"] [role="combobox"]`
+  }
+  return buildSelector(node)
 }
 
 /**
@@ -302,6 +372,28 @@ export function detectApplicationForm(doc: Document = document): ApplicationForm
         if (COVER_LETTER_LABEL_RE.test(haystack)) coverLetterUpload = true
       }
     }
+
+    // Workday question steps frequently use custom combobox widgets instead
+    // of native <select>. Include them in read-only detection so the user
+    // sees the real question fields rather than only hidden text inputs.
+    if (ats === "workday") {
+      const comboboxes = form.querySelectorAll<HTMLElement>(
+        "[data-automation-id*='formField'] [role='combobox'], [data-automation-id*='formField'] [aria-haspopup='listbox']",
+      )
+      for (const box of comboboxes) {
+        if (seenInputs.has(box)) continue
+        seenInputs.add(box)
+        const label = getWorkdayComboboxLabel(box)
+        fields.push({
+          label,
+          name: box.getAttribute("name") ?? undefined,
+          type: "combobox",
+          required: isFieldRequired(box) || isWorkdayComboboxRequired(box),
+          selector: buildWorkdayComboboxSelector(box),
+          confidence: classifyWorkdayComboboxConfidence(box),
+        })
+      }
+    }
   }
 
   if (resumeUpload)      reasons.push("Resume upload field detected.")
@@ -315,7 +407,7 @@ export function detectApplicationForm(doc: Document = document): ApplicationForm
   ).length
 
   const atsIsWired = ats === "greenhouse" || ats === "lever" || ats === "workday"
-  const supportsAutofill = atsIsWired && safeFieldCount >= 2
+  const supportsAutofill = atsIsWired && (ats === "workday" ? true : safeFieldCount >= 2)
 
   if (!atsIsWired) {
     reasons.push(
@@ -323,8 +415,10 @@ export function detectApplicationForm(doc: Document = document): ApplicationForm
         ? "ATS not recognized — autofill is supported only on Greenhouse, Lever, and Workday."
         : `Autofill not yet wired for ${ats} in this MVP.`,
     )
-  } else if (safeFieldCount < 2) {
+  } else if (ats !== "workday" && safeFieldCount < 2) {
     reasons.push("Form detected but profile-fillable fields are limited — autofill may be partial.")
+  } else if (ats === "workday") {
+    reasons.push("Workday step detected — Autofill uses step-aware runner (question dropdowns included).")
   }
 
   return {

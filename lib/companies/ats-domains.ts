@@ -9,6 +9,8 @@ export const ATS_DOMAIN_SUFFIXES = [
   "jobvite.com",
   "taleo.net",
   "oraclecloud.com",
+  "successfactors.com",
+  "successfactors.eu",
   "phenompeople.com",
   "breezy.hr",
   "comeet.co",

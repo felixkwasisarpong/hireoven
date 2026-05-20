@@ -873,13 +873,15 @@ function injectResumeFile(target: HTMLInputElement, bytes: ResumeBytes): boolean
 
     const dt = new DataTransfer()
     dt.items.add(file)
-    target.files = dt.files
 
-    // Fire React-compatible events with native setter for files property
-    target.dispatchEvent(new Event("input", { bubbles: true }))
-    target.dispatchEvent(new Event("change", { bubbles: true }))
+    // React-controlled inputs only re-render when the native setter is invoked
+    // BEFORE the input/change events fire — otherwise React's onChange sees the
+    // synthesized value and ignores the later setter call. Set first, dispatch
+    // second; plain assignment is the fallback for non-React forms.
     const nativeSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "files")?.set
     if (nativeSetter) nativeSetter.call(target, dt.files)
+    else target.files = dt.files
+
     target.dispatchEvent(new Event("input", { bubbles: true }))
     target.dispatchEvent(new Event("change", { bubbles: true }))
 
