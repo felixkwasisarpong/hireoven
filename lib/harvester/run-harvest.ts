@@ -12,6 +12,7 @@ const TIER_INTERVAL_SEC: Record<string, number> = {
 
 const DEFAULT_FAILURE_COOLDOWN_SEC = 1_800
 const DEFAULT_HTTP_403_COOLDOWN_SEC = 21_600
+const DEFAULT_MISMATCH_COOLDOWN_SEC = 86_400
 
 function tierIntervalSeconds(tier: string | null): number {
   if (!tier) return TIER_INTERVAL_SEC.tier_2
@@ -28,6 +29,12 @@ function http403CooldownSeconds(env: Record<string, string | undefined> = proces
   const raw = Number.parseInt(env.HARVESTER_HTTP_403_COOLDOWN_SECONDS ?? "", 10)
   if (Number.isFinite(raw) && raw >= 300) return raw
   return DEFAULT_HTTP_403_COOLDOWN_SEC
+}
+
+function mismatchCooldownSeconds(env: Record<string, string | undefined> = process.env): number {
+  const raw = Number.parseInt(env.HARVESTER_MISMATCH_COOLDOWN_SECONDS ?? "", 10)
+  if (Number.isFinite(raw) && raw >= 300) return raw
+  return DEFAULT_MISMATCH_COOLDOWN_SEC
 }
 
 function isHttp403Error(message: string): boolean {
@@ -146,7 +153,27 @@ export async function runAtsHarvest(input: {
 }): Promise<AtsHarvestOutcome> {
   const { pool, company } = input
   const detection = detectCompanyAdapter(company)
-  if (!detection) return { matched: false }
+  if (!detection) {
+    // No adapter could be resolved for this row even though the claim
+    // filter accepted it. Without bumping `next_harvest_at` here, the
+    // claim query (ORDER BY next_harvest_at ASC NULLS FIRST) re-leases
+    // these rows roughly every `leaseSeconds`, starving healthy work.
+    // Push them out a day so the worker focuses on detectable companies
+    // until they're cleaned up (or reclassified) out of band.
+    try {
+      await updateCompanyHarvestState(pool, company.id, {
+        etag: company.etag,
+        lastModified: company.last_modified,
+        intervalSec: mismatchCooldownSeconds(),
+        crawledAtIso: new Date().toISOString(),
+        bumpLastCrawled: false,
+      })
+    } catch {
+      // Best-effort: if the cooldown write fails the row will be retried
+      // next lease window, which is the pre-fix behaviour.
+    }
+    return { matched: false }
+  }
 
   const startedAt = Date.now()
   const intervalSec = tierIntervalSeconds(company.freshness_tier)
