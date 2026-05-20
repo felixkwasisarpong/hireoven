@@ -196,7 +196,7 @@ export function companyLogoUrlFromDomain(
     case "logo-dev": {
       const token = getLogoDevPublishableToken()
       if (token) {
-        return `https://img.logo.dev/${encodeURIComponent(d)}?token=${encodeURIComponent(token)}`
+        return `https://img.logo.dev/${encodeURIComponent(d)}?token=${encodeURIComponent(token)}&size=256&format=png`
       }
       return `https://www.google.com/s2/favicons?sz=128&domain=${encodeURIComponent(d)}`
     }

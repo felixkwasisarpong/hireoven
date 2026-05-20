@@ -8,6 +8,7 @@ import {
   Bookmark,
   Briefcase,
   Building2,
+  Linkedin,
   MapPin,
   ShieldCheck,
   ShieldX,
@@ -45,7 +46,7 @@ import {
   fetchJobSavedState,
   saveJobToPipeline,
 } from "@/lib/applications/save-job-client"
-import { getApplyCtaLabel, isKnownAtsApplyUrl } from "@/lib/jobs/apply-cta"
+import { getApplyVariant, getApplyVariantLabel } from "@/lib/jobs/apply-cta"
 import { jobSourceFallbackLogo } from "@/lib/jobs/source-fallback-logo"
 import { useToast } from "@/components/ui/ToastProvider"
 import { MatchScoreBreakdownPopover } from "@/components/matching/MatchScoreBreakdownPopover"
@@ -442,15 +443,15 @@ export default function JobCardV2({
     return /\b(?:actively\s+(?:recruiting|hiring|seeking|reviewing\s+(?:applicants?|applications?|candidates?))|urgently?\s+hiring|hiring\s+now|now\s+hiring|immediate(?:ly)?\s+(?:hire|hiring|need|opening)|urgent(?:ly)?\s+(?:hiring|need)|high(?:ly)?\s+priority\s+role)\b/i.test(haystack)
   }, [raw, job.title, cardView.preview_description])
 
-  // LinkedIn indicator: detect from the apply URL
-  const isLinkedIn = /linkedin\.com/i.test(job.apply_url ?? "")
-  const isAtsApplyLink = isKnownAtsApplyUrl(job.apply_url)
-  const applyCtaLabel = getApplyCtaLabel(job.apply_url)
+  // Three-way classification: linkedin, autofill, external.
+  const applyVariant = getApplyVariant(job.apply_url)
+  const applyCtaLabel = getApplyVariantLabel(applyVariant)
+  const isLinkedIn = applyVariant === "linkedin"
+  const isAtsApplyLink = applyVariant === "autofill"
 
-  // Use the internal autofill wizard when the company ATS is known.
-  // 'custom' means ATS unknown at company level — use external apply CTA label by URL.
+  // Internal autofill wizard requires both a known ATS URL and a known company ATS type.
   const atsType = job.company?.ats_type
-  const canAutofill = atsType != null && atsType !== "custom"
+  const canAutofill = isAtsApplyLink && atsType != null && atsType !== "custom"
 
 
   const visaCardLabel = useMemo(
@@ -997,7 +998,7 @@ export default function JobCardV2({
                       className="inline-flex items-center gap-1.5 rounded-lg border border-white/20 bg-white/5 px-3.5 py-2 text-[12px] font-semibold text-white transition hover:bg-white/10"
                     >
                       <Sparkles className="h-3.5 w-3.5 text-violet-400" aria-hidden />
-                      {isAtsApplyLink ? "Quick Apply" : "Apply"}
+                      Quick Apply
                     </button>
                   ) : (
                     <a
@@ -1007,7 +1008,9 @@ export default function JobCardV2({
                       onClick={(e) => e.stopPropagation()}
                       className="inline-flex items-center gap-1.5 rounded-lg border border-white/20 bg-white/5 px-3.5 py-2 text-[12px] font-semibold text-white transition hover:bg-white/10"
                     >
-                      {isAtsApplyLink ? (
+                      {isLinkedIn ? (
+                        <Linkedin className="h-3.5 w-3.5 text-[#0a66c2]" aria-hidden />
+                      ) : isAtsApplyLink ? (
                         <Zap className="h-3.5 w-3.5 text-amber-400" aria-hidden />
                       ) : (
                         <ArrowUpRight className="h-3.5 w-3.5 text-slate-300" aria-hidden />
