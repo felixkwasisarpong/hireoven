@@ -103,6 +103,7 @@ export type ContentMessageType =
   | "DETECT_FORM_FIELDS"
   | "FILL_FORM_FIELDS"
   | "INJECT_RESUME_FILE"
+  | "EXECUTE_SCOUT_COMMAND"
 
 export interface DetectPageMessage { type: "DETECT_PAGE" }
 export interface ExtractJobMessage { type: "EXTRACT_JOB" }
@@ -128,6 +129,7 @@ export type ContentMessage =
   | DetectFormFieldsMessage
   | FillFormFieldsMessage
   | InjectResumeFileContentMessage
+  | ExecuteScoutCommandMessage
 
 // Safe profile subset the extension receives
 export interface ExtensionSafeProfile {
@@ -190,6 +192,7 @@ export type ContentResponseType =
   | "FORM_FIELDS_DETECTED"
   | "FORM_FILLED"
   | "INJECT_RESUME_FILE_RESULT"
+  | "SCOUT_COMMAND_EXECUTED"
   | "ERROR"
 
 export interface PageDetectedResponse {
@@ -214,6 +217,12 @@ export interface FormFilledResponse {
   skippedCount: number
 }
 
+export interface ScoutCommandExecutedResponse {
+  type: "SCOUT_COMMAND_EXECUTED"
+  accepted: boolean
+  message?: string
+}
+
 export interface ErrorResponse {
   type: "ERROR"
   message: string
@@ -224,6 +233,7 @@ export type ContentResponse =
   | JobExtractedResponse
   | FormFieldsDetectedResponse
   | FormFilledResponse
+  | ScoutCommandExecutedResponse
   | InjectResumeFileResult
   | ErrorResponse
 
@@ -259,6 +269,7 @@ export type BackgroundMessageType =
   | "INJECT_RESUME_FILE_IN_TAB"
   | "SYNC_LINKEDIN_BRAND_PROFILE"
   | "GET_STORED_LINKEDIN_URL"
+  | "AGENT_APPLICATION_SUBMITTED"
 
 export interface ExtensionResumeSummary {
   id: string
@@ -475,6 +486,7 @@ export type BackgroundMessage =
   | InjectResumeFileInTabMessage
   | SyncLinkedInBrandProfileMessage
   | GetStoredLinkedInUrlMessage
+  | AgentApplicationSubmittedMessage
 
 export interface GetStoredLinkedInUrlMessage {
   type: "GET_STORED_LINKEDIN_URL"
@@ -506,6 +518,18 @@ export interface OperatorOpenTabMessage {
 
 export interface OperatorOpenTabAck {
   type: "OPERATOR_OPEN_TAB_ACK"
+}
+
+export interface AgentApplicationSubmittedMessage {
+  type: "AGENT_APPLICATION_SUBMITTED"
+  jobId?: string
+  applyUrl?: string
+  atsProvider?: string
+}
+
+export interface AgentApplicationSubmittedAck {
+  type: "AGENT_APPLICATION_SUBMITTED_ACK"
+  accepted: boolean
 }
 
 export interface FetchResumeFileMessage {
@@ -679,6 +703,7 @@ export type BackgroundResponse =
   | FetchResumeFileResult
   | InjectResumeFileInTabResult
   | StoredLinkedInUrlResult
+  | AgentApplicationSubmittedAck
   | BackgroundError
 
 export interface StoredLinkedInUrlResult {
@@ -751,6 +776,7 @@ export type ScoutExtensionCommandType =
   | "START_TAILOR"
   | "START_COMPARE"
   | "START_WORKFLOW"
+  | "AGENT_AUTOFILL"
 
 /** Content script on hireoven.com → background: relay a Scout UI command to the active job tab */
 export interface RelayScoutCommandMessage {

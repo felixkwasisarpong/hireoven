@@ -1,8 +1,8 @@
 /**
- * Scout MVP — Safe-fields autofill detector for Greenhouse, Lever, and Workday.
+ * Scout MVP — Safe-fields autofill detector for ATS application forms.
  *
  * Hard constraints (do NOT relax without owner review):
- *   - Greenhouse + Lever + Workday only. Other ATSes are NOT supported yet.
+ *   - Best-effort profile autofill across ATSes. Workday has its own step-aware runner.
  *   - No demographic questions (gender, ethnicity, race, veteran, disability).
  *   - No final-submit clicks.
  *   - File inputs are *detected* but never filled — listed as "Needs user action".
@@ -63,6 +63,16 @@ export type AutofillFieldResult = {
   filled: boolean
   skippedReason?: string
 }
+
+export type AutofillSource =
+  | "greenhouse"
+  | "lever"
+  | "workday"
+  | "ashby"
+  | "icims"
+  | "smartrecruiters"
+  | "bamboohr"
+  | "generic"
 
 // ── Sensitive field detection (always skip) ──────────────────────────────────
 
@@ -186,35 +196,76 @@ type LocatedControl = { el: FormControlElement; framePath: number[] }
  */
 function findApplicationFormRoot(
   doc: Document,
-  source: "greenhouse" | "lever" | "workday",
+  source: AutofillSource,
 ): HTMLElement | null {
-  const selectors: string[] =
-    source === "greenhouse"
-      ? [
-          "form#application-form",
-          "form.application--form",
-          "#grnhse_app form",
-          "form[action*='boards']",
-          "form[action*='greenhouse']",
-          "form",
-        ]
-      : source === "lever"
-      ? [
-          "form.application-form",
-          "form[action*='lever']",
-          "form",
-        ]
-      : [
-          "[data-automation-id='applyStep']",
-          "[data-automation-id='applicationStep']",
-          "[data-automation-id='stepContent']",
-          "[data-automation-id='applyFlow']",
-          "[data-automation-id='applicationSummaryStep']",
-          "form[data-automation-id]",
-          "form[action*='workday']",
-          "form[action*='myworkday']",
-          "form",
-        ]
+  const SELECTORS: Record<AutofillSource, string[]> = {
+    greenhouse: [
+      "form#application-form",
+      "form.application--form",
+      "#grnhse_app form",
+      "form[action*='boards']",
+      "form[action*='greenhouse']",
+      "form",
+    ],
+    lever: [
+      "form.application-form",
+      "form[action*='lever']",
+      "form",
+    ],
+    workday: [
+      "[data-automation-id='applyStep']",
+      "[data-automation-id='applicationStep']",
+      "[data-automation-id='stepContent']",
+      "[data-automation-id='applyFlow']",
+      "[data-automation-id='applicationSummaryStep']",
+      "form[data-automation-id]",
+      "form[action*='workday']",
+      "form[action*='myworkday']",
+      "form",
+    ],
+    ashby: [
+      "._ashby-application-form",
+      "._ashby-application-form-container form",
+      "form[action*='ashby']",
+      "form[action*='ashbyhq']",
+      "form[data-testid*='apply']",
+      "form",
+    ],
+    icims: [
+      "#icims_content form",
+      ".iCIMS_Content form",
+      "#iCIMS_JobsWidget form",
+      "form[action*='icims']",
+      "form",
+    ],
+    smartrecruiters: [
+      ".sr-apply-step",
+      ".smartrecruiters-widget form",
+      "#apply-form",
+      "form[action*='smartrecruiters']",
+      "form",
+    ],
+    bamboohr: [
+      "#bamboohr-apply",
+      ".BambooHR-ATS form",
+      "#apply-form-card form",
+      "form[action*='bamboohr']",
+      "form",
+    ],
+    generic: [
+      "form[action*='apply']",
+      "form[id*='apply']",
+      "form[class*='apply']",
+      "[id*='application-form'] form",
+      "[class*='application-form'] form",
+      "form",
+    ],
+  }
+
+  const selectors: string[] = [
+    ...(SELECTORS[source] ?? []),
+    ...(source === "generic" ? [] : SELECTORS.generic),
+  ]
 
   const seen = new Set<HTMLElement>()
   const candidates: Array<{ root: HTMLElement; score: number }> = []
@@ -596,7 +647,7 @@ function profileValueFor(profile: SafeProfile, key: SafeKey, state: ValueResolut
  * this preview, then calls applySafeFills() with the same list to commit.
  */
 export function buildAutofillPreview(
-  source: "greenhouse" | "lever" | "workday",
+  source: AutofillSource,
   profile: SafeProfile | null,
   doc: Document = document,
 ): AutofillFieldResult[] {
@@ -764,7 +815,7 @@ export type ResumeBytes = { base64: string; filename: string }
  * skippedReason populated when fill failed.
  */
 export async function applySafeFills(
-  source: "greenhouse" | "lever" | "workday",
+  source: AutofillSource,
   profile: SafeProfile,
   resumeBytes: ResumeBytes | null,
   doc: Document = document,

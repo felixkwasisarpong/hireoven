@@ -2156,6 +2156,7 @@ export function ScoutWorkspaceShell() {
                     <ApplyAgentFlow
                       initialJobs={applyAgent.jobs}
                       extensionConnected={isExtensionConnected}
+                      requireSponsorshipSignal={Boolean(applyAgent.criteria.requireSponsorshipSignal)}
                       onFollowUp={(q) => { setQuery(q); setTimeout(() => handleSubmit({ preventDefault: () => {} } as React.FormEvent), 50) }}
                     />
                   )
@@ -2166,7 +2167,7 @@ export function ScoutWorkspaceShell() {
                     <div className="mx-auto max-w-lg rounded-2xl border border-amber-200 bg-amber-50 px-6 py-8 text-center">
                       <p className="text-[15px] font-semibold text-amber-900">No matching jobs found in the feed</p>
                       <p className="mt-2 text-[13px] text-amber-800 leading-relaxed">
-                        No active jobs from the last 30 days matched your criteria. Try broadening the search — for example, drop the company filter or use a more general skill.
+                        No active jobs from the last 24 hours matched your criteria. Try broadening the search — for example, drop the company filter or use a more general skill.
                       </p>
                       <div className="mt-4 flex flex-wrap justify-center gap-2">
                         {["Apply to my top 5 matches", "Apply to 3 remote jobs", "Apply to 5 software engineer roles"].map((suggestion) => (

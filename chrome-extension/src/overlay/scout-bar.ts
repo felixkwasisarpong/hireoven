@@ -51,6 +51,7 @@ import {
   buildAutofillPreview,
   injectDocxFile,
   setReactValue,
+  type AutofillSource,
   type AutofillFieldResult,
   type SafeProfile,
 } from "../autofill/safe-fields"
@@ -1037,6 +1038,28 @@ function summarizeWorkdayDebug(tail: WorkdayDebugEntry[] | undefined): string | 
   return null
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function isActionableButton(el: Element | null): el is HTMLElement {
+  if (!(el instanceof HTMLElement)) return false
+  if (el.hidden) return false
+  const style = window.getComputedStyle(el)
+  if (style.display === "none" || style.visibility === "hidden" || style.opacity === "0") return false
+  if (el.getAttribute("aria-disabled") === "true") return false
+  if ("disabled" in el && (el as HTMLButtonElement | HTMLInputElement).disabled) return false
+  const rect = el.getBoundingClientRect()
+  return rect.width > 0 && rect.height > 0
+}
+
+function pageSignature(): string {
+  const body = document.body
+  const text = body ? body.innerText.replace(/\s+/g, " ").slice(0, 420) : ""
+  const fields = document.querySelectorAll("input, select, textarea, button").length
+  return `${location.href}|${fields}|${text}`
+}
+
 /**
  * Send a popup-style message (raw response, not the {ok, data} EXT_MVP_*
  * envelope) to the background. Used for tailor preview/approve from inline
@@ -1113,7 +1136,7 @@ export class ScoutBar {
   private tailorSnapStatus: "idle" | "snapping" | "snapped" | "error" = "idle"
   private tailorSnapError: string | null = null
 
-  // Autofill MVP state — Greenhouse + Lever + Workday.
+  // Autofill state across supported ATSes + generic form fallback.
   // States walk: idle → loading (fetch profile + preview) → preview (user
   // confirms) → filling → done | error.
   private autofillStatus:
@@ -1169,6 +1192,7 @@ export class ScoutBar {
   private proofError: string | null = null
   private proofPromptDismissed: boolean = false
   private confirmationTimer: ReturnType<typeof setInterval> | null = null
+  private agentModeRunning: boolean = false
 
   private isDevInstall(): boolean {
     try {
@@ -1662,8 +1686,8 @@ export class ScoutBar {
     const hasForm = det?.hasForm === true
     const supports = det?.supportsAutofill === true
 
-    // Form-only ATSes where we don't yet fill (Ashby/iCIMS/etc.) — let the
-    // user inspect detected fields via a read-only panel.
+    // If this page isn't currently fill-capable (or detection says only
+    // partial coverage), keep a read-only detected-fields entrypoint.
     if (this.autofillSiteSupported() === false || !supports) {
       if (!hasForm) {
         return `<button class="action" data-action="autofill" disabled title="No application form detected on this page.">Autofill</button>`
@@ -1671,7 +1695,7 @@ export class ScoutBar {
       const open = this.detectionPanelOpen
       const label = open ? "Hide detected fields" : "View detected fields"
       const tooltip = !this.autofillSiteSupported()
-        ? "Autofill supports Greenhouse, Lever, and Workday in this MVP."
+        ? "Autofill is not available on this form yet."
         : "Form detected but profile-fillable fields are limited."
       return `<button class="action" data-action="toggle-detection" title="${escapeHtml(tooltip)}">${label}</button>`
     }
@@ -1686,7 +1710,11 @@ export class ScoutBar {
       return `<button class="action" data-action="autofill" disabled>Filling…</button>`
     }
     if (this.autofillStatus === "done") {
-      return `<button class="action saved" data-action="autofill">✓ Filled</button>`
+      const anyFilled = (this.autofillResults ?? []).some((row) => row.filled)
+      if (anyFilled) {
+        return `<button class="action saved" data-action="autofill">✓ Filled</button>`
+      }
+      return `<button class="action analyzed" data-action="autofill">Review fields</button>`
     }
     if (this.autofillStatus === "error") {
       return `<button class="action error" data-action="autofill" title="${escapeHtml(this.autofillError ?? "Try again")}">Retry autofill</button>`
@@ -2257,18 +2285,21 @@ export class ScoutBar {
       return `<button class="ap-action" data-action="tailor">Tailor Resume</button>`
     })()
 
-    // Panel's Autofill button mirrors the bar's behavior — supported ATSes only
-    // only in the MVP. Click triggers the preview flow regardless of where
-    // the click came from (bar or panel).
+    // Panel's Autofill button mirrors the bar's behavior. Click triggers the
+    // preview flow regardless of where the click came from (bar or panel).
     const autofillBtn = (() => {
       if (!this.autofillSiteSupported()) {
-        return `<button class="ap-action" data-action="autofill" disabled title="Autofill supports Greenhouse, Lever, and Workday in this MVP.">Autofill</button>`
+        return `<button class="ap-action" data-action="autofill" disabled title="Autofill is not available on this form yet.">Autofill</button>`
       }
       if (this.autofillStatus === "loading" || this.autofillStatus === "filling") {
         return `<button class="ap-action" disabled>${this.autofillStatus === "loading" ? "Detecting…" : "Filling…"}</button>`
       }
       if (this.autofillStatus === "done") {
-        return `<button class="ap-action ap-action-saved" data-action="autofill">✓ Filled</button>`
+        const anyFilled = (this.autofillResults ?? []).some((row) => row.filled)
+        if (anyFilled) {
+          return `<button class="ap-action ap-action-saved" data-action="autofill">✓ Filled</button>`
+        }
+        return `<button class="ap-action" data-action="autofill">Review fields</button>`
       }
       return `<button class="ap-action" data-action="autofill">Autofill</button>`
     })()
@@ -2380,6 +2411,300 @@ export class ScoutBar {
         this.refreshCoverLetterActions()
       }
     })
+  }
+
+  public async executeScoutCommand(command: string, payload?: Record<string, unknown>): Promise<void> {
+    if (command === "OPEN_AUTOFILL") {
+      await this.onAutofillPreview()
+      return
+    }
+    if (command === "START_TAILOR") {
+      await this.onTailor()
+      return
+    }
+    if (command === "START_COMPARE" || command === "START_WORKFLOW") {
+      let url = this.saveResult?.dashboardUrl ?? this.existingDashboardUrl
+      if (!url && this.state === "ready" && this.job) {
+        await this.onSave()
+        url = this.saveResult?.dashboardUrl ?? this.existingDashboardUrl
+      }
+      if (url) window.open(url, "_blank", "noopener")
+      return
+    }
+    if (command === "AGENT_AUTOFILL") {
+      await this.runAgentAutofill(payload)
+    }
+  }
+
+  private toAutofillSource(): AutofillSource {
+    switch (this.site) {
+      case "greenhouse":
+      case "lever":
+      case "workday":
+      case "ashby":
+      case "icims":
+      case "smartrecruiters":
+      case "bamboohr":
+        return this.site
+      default:
+        return "generic"
+    }
+  }
+
+  private isConfirmationPage(): boolean {
+    const conf = detectConfirmation(document)
+    this.confirmation = conf
+    return conf.isConfirmation && conf.confidence !== "low"
+  }
+
+  private findBestActionButton(kind: "next" | "submit"): HTMLElement | null {
+    const selectors =
+      kind === "submit"
+        ? [
+            'button[type="submit"]',
+            'input[type="submit"]',
+            'button[data-qa="btn-submit"]',
+            '[data-automation-id*="submit"]',
+            'button[data-testid*="submit"]',
+            'button[aria-label*="submit" i]',
+            'button[aria-label*="apply" i]',
+          ]
+        : [
+            '[data-automation-id="pageFooterNextButton"]',
+            '[data-automation-id="saveAndContinueButton"]',
+            '[data-automation-id*="nextButton"]',
+            '[data-automation-id*="saveAndContinue"]',
+            'button[aria-label*="next" i]',
+            'button[aria-label*="continue" i]',
+          ]
+
+    const fromSelectors = selectors
+      .flatMap((selector) => Array.from(document.querySelectorAll(selector)))
+      .filter((el): el is HTMLElement => isActionableButton(el))
+
+    const fromText = Array.from(document.querySelectorAll<HTMLElement>("button, [role='button'], input[type='submit']"))
+      .filter((el) => isActionableButton(el))
+      .filter((el) => {
+        const text = `${el.textContent ?? ""} ${el.getAttribute("value") ?? ""}`.toLowerCase()
+        if (!text.trim()) return false
+        if (kind === "submit") {
+          return /submit|apply|finish|complete|send application|review and submit/.test(text)
+        }
+        if (/submit|apply now|review and submit/.test(text)) return false
+        return /next|continue|save and continue|review/.test(text)
+      })
+
+    const candidates = [...fromSelectors, ...fromText]
+    if (candidates.length === 0) return null
+
+    const score = (el: HTMLElement): number => {
+      const text = `${el.textContent ?? ""} ${el.getAttribute("value") ?? ""}`.toLowerCase()
+      let s = 0
+      if (kind === "submit") {
+        if (text.includes("review and submit")) s += 100
+        if (text.includes("submit")) s += 80
+        if (text.includes("apply")) s += 60
+        if (text.includes("finish") || text.includes("complete")) s += 40
+      } else {
+        if (text.includes("save and continue")) s += 100
+        if (text === "next" || text.includes(" next")) s += 80
+        if (text.includes("continue")) s += 60
+        if (text.includes("review")) s += 40
+      }
+      if (el.matches("button[type='submit'], input[type='submit']")) s += kind === "submit" ? 30 : -20
+      return s
+    }
+
+    candidates.sort((a, b) => score(b) - score(a))
+    return candidates[0] ?? null
+  }
+
+  private async clickAndWaitForProgress(button: HTMLElement, timeoutMs = 12000): Promise<boolean> {
+    const before = pageSignature()
+    try {
+      button.scrollIntoView({ block: "center", inline: "nearest" })
+    } catch {
+      // best-effort
+    }
+    button.click()
+
+    const start = Date.now()
+    while (Date.now() - start < timeoutMs) {
+      if (this.isConfirmationPage()) return true
+      if (pageSignature() !== before) return true
+      await sleep(250)
+    }
+    return this.isConfirmationPage()
+  }
+
+  private async maybeSaveProofAutomatically(): Promise<void> {
+    if (!this.isConfirmationPage()) return
+    try {
+      await this.onSaveProof()
+    } catch {
+      // best-effort only
+    }
+  }
+
+  private async runGenericAgentLoop(maxTransitions = 10): Promise<{ submitted: boolean; reason?: string }> {
+    for (let i = 0; i < maxTransitions; i += 1) {
+      if (this.isConfirmationPage()) return { submitted: true }
+
+      await this.onAutofillPreview()
+      if (this.autofillStatus === "preview") {
+        await this.onAutofillConfirm()
+      }
+      if (this.autofillStatus === "error") {
+        return { submitted: false, reason: this.autofillError ?? "Autofill failed." }
+      }
+
+      if (this.coverLetterSelector && this.coverLetterId) {
+        await this.onAttachCoverLetter()
+      }
+
+      if (this.isConfirmationPage()) return { submitted: true }
+
+      const submitButton = this.findBestActionButton("submit")
+      if (submitButton) {
+        const progressed = await this.clickAndWaitForProgress(submitButton)
+        if (this.isConfirmationPage()) return { submitted: true }
+        if (progressed) continue
+      }
+
+      const nextButton = this.findBestActionButton("next")
+      if (!nextButton) {
+        return { submitted: false, reason: "No Continue/Submit button was found after autofill." }
+      }
+      await this.clickAndWaitForProgress(nextButton)
+    }
+    return { submitted: false, reason: "Agent mode reached max step transitions before confirmation." }
+  }
+
+  private async runWorkdayAgentLoop(maxTransitions = 10): Promise<{ submitted: boolean; reason?: string }> {
+    if (!this.autofillProfile) {
+      return { submitted: false, reason: "No autofill profile found for Workday." }
+    }
+
+    for (let i = 0; i < maxTransitions; i += 1) {
+      if (this.isConfirmationPage()) return { submitted: true }
+
+      const result = await runWorkdayAutofillInExistingBar({
+        profile: this.autofillProfile,
+        resumeJobId: this.knownJobId ?? this.analysis?.jobId ?? this.saveResult?.jobId ?? undefined,
+        onSnapshot: (snapshot) => {
+          this.workdaySnapshot = snapshot
+          this.render()
+        },
+        onWarning: () => {
+          // warnings are already reflected in runner state; no-op
+        },
+        maxCycles: 14,
+      })
+      this.autofillResults = result.rows
+
+      if (result.phase === "error") {
+        return { submitted: false, reason: summarizeWorkdayDebug(result.debugTail) ?? "Workday autofill failed." }
+      }
+      if (result.blockedReason === "account_required") {
+        return { submitted: false, reason: "Workday requires account sign-in before autofill can continue." }
+      }
+
+      if (result.reachedReview) {
+        const submitButton = this.findBestActionButton("submit") ?? this.findBestActionButton("next")
+        if (!submitButton) return { submitted: false, reason: "Workday review submit button not found." }
+        await this.clickAndWaitForProgress(submitButton)
+        if (this.isConfirmationPage()) return { submitted: true }
+        return { submitted: false, reason: "Workday review submit did not reach confirmation." }
+      }
+
+      const nextButton = this.findBestActionButton("next")
+      if (!nextButton) {
+        return { submitted: false, reason: "Workday Save and Continue button not found." }
+      }
+      await this.clickAndWaitForProgress(nextButton)
+    }
+
+    return { submitted: false, reason: "Workday agent mode reached max step transitions before confirmation." }
+  }
+
+  private async runAgentAutofill(payload?: Record<string, unknown>): Promise<void> {
+    if (this.agentModeRunning) return
+    this.agentModeRunning = true
+
+    try {
+      if (typeof payload?.jobId === "string" && payload.jobId) {
+        this.knownJobId = payload.jobId
+      }
+      if (typeof payload?.coverLetterId === "string" && payload.coverLetterId) {
+        this.coverLetterId = payload.coverLetterId
+      }
+
+      // Always refresh form/context before automation kicks in.
+      this.runDetection()
+
+      if (!this.autofillSiteSupported()) {
+        this.autofillStatus = "error"
+        this.autofillError = "No supported application form detected for agent mode."
+        this.render()
+        return
+      }
+
+      // Ensure a tracker record exists for later proof persistence.
+      if (!this.knownJobId && this.job) {
+        await this.onSave()
+      }
+
+      // Load profile once up front so both generic and Workday flows can reuse it.
+      const { profile } = await getAutofillProfile()
+      this.autofillProfile = profile
+      if (!profile) {
+        this.autofillStatus = "error"
+        this.autofillError = "No saved autofill profile found."
+        this.render()
+        return
+      }
+
+      this.autofillStatus = "filling"
+      this.autofillError = null
+      this.render()
+
+      const result =
+        this.site === "workday"
+          ? await this.runWorkdayAgentLoop(12)
+          : await this.runGenericAgentLoop(10)
+
+      if (!result.submitted) {
+        this.autofillStatus = "error"
+        this.autofillError = result.reason ?? "Agent mode could not submit this application."
+        this.render()
+        return
+      }
+
+      await this.maybeSaveProofAutomatically()
+      if (chrome.runtime?.id) {
+        chrome.runtime.sendMessage(
+          {
+            type: "AGENT_APPLICATION_SUBMITTED",
+            jobId: this.knownJobId,
+            applyUrl: location.href,
+            atsProvider: this.site,
+          },
+          () => {
+            // Fire-and-forget signal to the dashboard tab; ignore response errors.
+            void chrome.runtime.lastError
+          },
+        )
+      }
+      this.autofillStatus = "done"
+      this.autofillError = null
+      this.render()
+    } catch (err) {
+      this.autofillStatus = "error"
+      this.autofillError = err instanceof Error ? err.message : "Agent mode failed unexpectedly."
+      this.render()
+    } finally {
+      this.agentModeRunning = false
+    }
   }
 
   private persistMinimized(): void {
@@ -2582,11 +2907,14 @@ export class ScoutBar {
     this.render()
   }
 
-  // ── Autofill MVP (Greenhouse + Lever + Workday) ───────────────────────────
+  // ── Autofill (ATS + generic form fallback) ─────────────────────────────────
 
-  /** True when the current site supports the autofill MVP. */
+  /** True when this page currently has an autofill-capable application form. */
   private autofillSiteSupported(): boolean {
-    return this.site === "greenhouse" || this.site === "lever" || this.site === "workday"
+    const det = this.formDetection
+    if (!det || !det.hasForm) return false
+    if (this.site === "workday") return true
+    return det.supportsAutofill
   }
 
   /**
@@ -2597,6 +2925,7 @@ export class ScoutBar {
   private async onAutofillPreview(): Promise<void> {
     if (this.autofillStatus === "loading" || this.autofillStatus === "filling") return
     if (!this.autofillSiteSupported()) return
+    const source = this.toAutofillSource()
 
     this.autofillStatus = "loading"
     this.autofillError = null
@@ -2683,13 +3012,13 @@ export class ScoutBar {
         // Still build a preview so the user sees which fields would be filled
         // — they'll appear with skippedReason "No saved autofill profile."
         this.autofillPreview = buildAutofillPreview(
-          this.site as "greenhouse" | "lever" | "workday",
+          source,
           null,
           document,
         )
       } else {
         this.autofillPreview = buildAutofillPreview(
-          this.site as "greenhouse" | "lever" | "workday",
+          source,
           profile,
           document,
         )
@@ -2726,8 +3055,9 @@ export class ScoutBar {
 
     try {
       if (this.site === "workday") {
-        const result = await runWorkdayAutofillInExistingBar({
+        const runOptions = {
           profile: this.autofillProfile,
+          resumeJobId: this.knownJobId ?? this.analysis?.jobId ?? this.saveResult?.jobId ?? undefined,
           onSnapshot: (snapshot) => {
             this.workdaySnapshot = snapshot
             this.autofillPreview = [
@@ -2758,7 +3088,26 @@ export class ScoutBar {
             }
           },
           maxCycles: 14,
-        })
+        } satisfies Parameters<typeof runWorkdayAutofillInExistingBar>[0]
+
+        let result = await runWorkdayAutofillInExistingBar(runOptions)
+        let autoAdvancedResumeStep = false
+        if (
+          result.stepId === "resume_upload" &&
+          result.phase !== "error" &&
+          result.fieldsFilledCount > 0 &&
+          result.manualReviewCount === 0 &&
+          !result.blockedReason
+        ) {
+          const nextButton = this.findBestActionButton("next")
+          if (nextButton) {
+            const progressed = await this.clickAndWaitForProgress(nextButton)
+            if (progressed) {
+              autoAdvancedResumeStep = true
+              result = await runWorkdayAutofillInExistingBar(runOptions)
+            }
+          }
+        }
 
         this.autofillResults = result.rows
         const hint = summarizeWorkdayDebug(result.debugTail)
@@ -2797,7 +3146,9 @@ export class ScoutBar {
               : "No fields were changed on this step. Review and continue manually."
         } else {
           this.autofillStatus = "done"
-          this.autofillError = `${filledMsg} ${nextStepHint}`
+          this.autofillError = autoAdvancedResumeStep
+            ? `${filledMsg} Step 1 resume upload was completed and advanced automatically. ${nextStepHint}`
+            : `${filledMsg} ${nextStepHint}`
         }
         this.render()
         return
@@ -2829,7 +3180,7 @@ export class ScoutBar {
       }
 
       this.autofillResults = await applySafeFills(
-        this.site as "greenhouse" | "lever" | "workday",
+        this.toAutofillSource(),
         this.autofillProfile,
         resumeBytes,
         document,

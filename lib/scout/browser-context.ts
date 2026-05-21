@@ -78,6 +78,7 @@ const HANDLED_EXT_EVENTS = new Set([
 ])
 
 const DEBOUNCE_MS   = 500
+const HEARTBEAT_MS  = 25_000
 const STALE_AFTER_MS = 90_000
 
 // ── Hook ──────────────────────────────────────────────────────────────────────
@@ -136,8 +137,22 @@ export function useActiveBrowserContext(): BrowserContextState & {
   useEffect(() => {
     window.addEventListener("message", handleMessage)
     requestSync()
+    // Keep the extension bridge "connected" state warm even when no tab-change
+    // events are happening (e.g. user stays on Scout dashboard for minutes).
+    const heartbeat = setInterval(() => requestSync(), HEARTBEAT_MS)
+
+    const handleFocus = () => requestSync()
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") requestSync()
+    }
+    window.addEventListener("focus", handleFocus)
+    document.addEventListener("visibilitychange", handleVisibility)
+
     return () => {
       window.removeEventListener("message", handleMessage)
+      window.removeEventListener("focus", handleFocus)
+      document.removeEventListener("visibilitychange", handleVisibility)
+      clearInterval(heartbeat)
       if (debounceRef.current) clearTimeout(debounceRef.current)
       if (staleRef.current) clearTimeout(staleRef.current)
     }

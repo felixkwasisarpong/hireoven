@@ -12,7 +12,11 @@ WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-# Build-time public envs (optional): pass via Coolify Docker build args if needed
+# Build-time public envs used by client bundles.
+ARG NEXT_PUBLIC_APP_URL
+ARG NEXT_PUBLIC_LOGO_DEV_TOKEN
+ENV NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}
+ENV NEXT_PUBLIC_LOGO_DEV_TOKEN=${NEXT_PUBLIC_LOGO_DEV_TOKEN}
 RUN npm run build
 
 FROM node:20-bookworm-slim AS runner

@@ -1169,6 +1169,8 @@ export async function POST(request: NextRequest) {
       if (bp.workMode)               params.set("workMode", String(bp.workMode))
       if (bp.strictQuery)            params.set("strictQuery", "true")
       if (bp.strictScoreOnly)        params.set("strictScoreOnly", "true")
+      // Keep "top matches" focused on fresh jobs from the last 24h.
+      params.set("freshnessHours", "24")
       // Pass the full message so apply-agent can free-text search any condition
       params.set("q", userMessage)
       const origin = request.nextUrl.origin || process.env.NEXT_PUBLIC_APP_URL || "http://127.0.0.1:3000"
@@ -2383,6 +2385,8 @@ User Input: ${userMessage}`
         if (bp.workMode)      params.set("workMode", String(bp.workMode))
         if (bp.strictQuery)   params.set("strictQuery", "true")
         if (bp.strictScoreOnly) params.set("strictScoreOnly", "true")
+        // Keep "top matches" focused on fresh jobs from the last 24h.
+        params.set("freshnessHours", "24")
         params.set("q", userMessage)
 
         const origin = request.nextUrl.origin || process.env.NEXT_PUBLIC_APP_URL || "http://127.0.0.1:3000"

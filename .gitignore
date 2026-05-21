@@ -13,5 +13,9 @@ scripts/output/
 
 data.sql
 schema.sql
+
+# Playwright browser session captures (contain cookies / auth)
+playwright-*-state.json
+
 # Cursor internal
 .claude/

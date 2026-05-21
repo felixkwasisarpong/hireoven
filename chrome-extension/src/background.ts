@@ -52,10 +52,11 @@ import type {
 
 // ── Config ─────────────────────────────────────────────────────────────────────
 
-const APP_ORIGINS = [
+const LOCAL_APP_ORIGINS = [
   "http://localhost:3000",
-  "https://hireoven.com",
+  "http://127.0.0.1:3000",
 ] as const
+const PROD_APP_ORIGIN = "https://hireoven.com" as const
 
 const SESSION_COOKIE_NAME = "ho_session"
 
@@ -98,7 +99,7 @@ function mapPageType(
 async function buildContextFromTab(tabId: number, tabUrl: string): Promise<ActiveBrowserContext | null> {
   if (!/^https?:/.test(tabUrl)) return null
   // Skip hireoven itself — that's the Scout dashboard, not an external job page
-  if (/hireoven\.com|localhost:3000/.test(tabUrl)) return null
+  if (isScoutDashboardUrl(tabUrl)) return null
 
   try {
     const pageResp = await queryContentScript(tabId, { type: "DETECT_PAGE" })
@@ -162,9 +163,9 @@ async function pushContextToHireovenTabs(
 ): Promise<void> {
   const origin = await resolveOrigin()
   const patterns =
-    origin === APP_ORIGINS[1]
+    origin === PROD_APP_ORIGIN
       ? ["https://hireoven.com/*", "https://www.hireoven.com/*"]
-      : ["http://localhost:3000/*"]
+      : ["http://localhost:3000/*", "http://127.0.0.1:3000/*"]
 
   for (const pattern of patterns) {
     try {
@@ -266,19 +267,45 @@ function isUnpackedInstall(): boolean {
   return !chrome.runtime.getManifest().update_url
 }
 
+function isScoutDashboardUrl(rawUrl: string): boolean {
+  try {
+    const parsed = new URL(rawUrl)
+    const host = parsed.hostname.toLowerCase()
+    if (host === "hireoven.com" || host.endsWith(".hireoven.com")) return true
+    if (host === "localhost" || host.endsWith(".localhost")) return true
+    if (host === "127.0.0.1" || host === "0.0.0.0" || host === "::1" || host === "[::1]") return true
+    return false
+  } catch {
+    return false
+  }
+}
+
 async function resolveOrigin(): Promise<string> {
   const result = await chrome.storage.local.get("devMode")
-  if (result.devMode === true) return APP_ORIGINS[0]
-  if (result.devMode === false) return APP_ORIGINS[1]
-  const preferred = isUnpackedInstall() ? APP_ORIGINS[0] : APP_ORIGINS[1]
-  // If the preferred origin has a session cookie, use it. Otherwise fall back
-  // to the other origin — this handles the common case where the user is
-  // running an unpacked dev build but is only signed in at hireoven.com (or
-  // vice versa). Skipping this fallback is what surfaces as the misleading
-  // "Sign in to Hireoven" tooltip while the user is in fact signed in.
+  if (result.devMode === true) {
+    for (const origin of LOCAL_APP_ORIGINS) {
+      if (await hasSessionCookie(origin)) return origin
+    }
+    return LOCAL_APP_ORIGINS[0]
+  }
+  if (result.devMode === false) return PROD_APP_ORIGIN
+
+  if (isUnpackedInstall()) {
+    for (const origin of LOCAL_APP_ORIGINS) {
+      if (await hasSessionCookie(origin)) return origin
+    }
+    // Keep unpacked installs pinned to local app origins by default.
+    return LOCAL_APP_ORIGINS[0]
+  }
+
+  const preferred = PROD_APP_ORIGIN
+  // Production install fallback: if hireoven.com has no active session,
+  // prefer any available local dev session before returning the production
+  // origin.
   if (await hasSessionCookie(preferred)) return preferred
-  const fallback = preferred === APP_ORIGINS[0] ? APP_ORIGINS[1] : APP_ORIGINS[0]
-  if (await hasSessionCookie(fallback)) return fallback
+  for (const fallback of LOCAL_APP_ORIGINS) {
+    if (await hasSessionCookie(fallback)) return fallback
+  }
   return preferred
 }
 
@@ -289,7 +316,7 @@ async function hasSessionCookie(origin: string): Promise<boolean> {
 /** Get the session JWT from hireoven cookies (apex + www fallback for production). */
 async function getSessionToken(origin: string): Promise<string | null> {
   const urls = [`${origin}/`]
-  if (origin === APP_ORIGINS[1]) {
+  if (origin === PROD_APP_ORIGIN) {
     urls.push("https://www.hireoven.com/")
   }
   for (const url of urls) {
@@ -513,6 +540,13 @@ async function handleMessage(
         Boolean(message.agentMode),
       )
       return { type: "OPERATOR_OPEN_TAB_ACK" }
+
+    case "AGENT_APPLICATION_SUBMITTED":
+      return handleAgentApplicationSubmitted(
+        message.jobId,
+        message.applyUrl,
+        message.atsProvider,
+      )
 
     case "GET_WORKFLOW_STATE":
       return { type: "WORKFLOW_STATE_RESULT", state: null } as WorkflowStateResult
@@ -921,6 +955,37 @@ function handleGetActiveContext(): ActiveContextResult {
   return { type: "ACTIVE_CONTEXT_RESULT", context: activeContextCache }
 }
 
+async function handleAgentApplicationSubmitted(
+  jobId?: string,
+  applyUrl?: string,
+  atsProvider?: string,
+): Promise<{ type: "AGENT_APPLICATION_SUBMITTED_ACK"; accepted: boolean }> {
+  const normalizedAts =
+    typeof atsProvider === "string" && atsProvider !== "generic"
+      ? (atsProvider as ActiveBrowserContext["atsProvider"])
+      : activeContextCache?.atsProvider
+
+  const nextContext: ActiveBrowserContext = {
+    pageType: "application_form",
+    url: applyUrl ?? activeContextCache?.url ?? "about:blank",
+    title: activeContextCache?.title,
+    company: activeContextCache?.company,
+    atsProvider: normalizedAts,
+    detectedJobId: jobId ?? activeContextCache?.detectedJobId,
+    autofillAvailable: true,
+    timestamp: Date.now(),
+  }
+
+  activeContextCache = nextContext
+
+  try {
+    await pushContextToHireovenTabs(nextContext, ["AGENT_APPLICATION_SUBMITTED"])
+    return { type: "AGENT_APPLICATION_SUBMITTED_ACK", accepted: true }
+  } catch {
+    return { type: "AGENT_APPLICATION_SUBMITTED_ACK", accepted: false }
+  }
+}
+
 async function handleRelayScoutCommand(
   command: string,
   payload?: Record<string, unknown>,
@@ -1009,12 +1074,15 @@ async function handleInjectResumeFileInTab(
 
 // ── Apply-agent tab opener ────────────────────────────────────────────────────
 
-/** Pending agent contexts keyed by tab ID — sent to content script once the tab finishes loading */
+/** Pending agent contexts keyed by tab ID — sent to content script once the tab is truly ready. */
 const pendingAgentTabs = new Map<number, {
   jobId?:         string
   jobTitle?:      string
   company?:       string
   coverLetterId?: string
+  createdAt:      number
+  attempts:       number
+  inFlight:       boolean
 }>()
 
 async function handleOperatorOpenTab(
@@ -1030,27 +1098,77 @@ async function handleOperatorOpenTab(
   if (!tab.id) return
 
   if (agentMode) {
-    pendingAgentTabs.set(tab.id, { jobId, jobTitle, company, coverLetterId })
+    pendingAgentTabs.set(tab.id, {
+      jobId,
+      jobTitle,
+      company,
+      coverLetterId,
+      createdAt: Date.now(),
+      attempts: 0,
+      inFlight: false,
+    })
   }
 }
 
-// When a tab completes loading, check if it has a pending agent context and send autofill command
-chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
-  if (changeInfo.status !== "complete") return
+const AGENT_CONTEXT_TTL_MS = 10 * 60 * 1000
+const AGENT_CONTEXT_MAX_ATTEMPTS = 30
+
+async function tryDispatchAgentAutofill(tabId: number): Promise<void> {
   const ctx = pendingAgentTabs.get(tabId)
   if (!ctx) return
-  pendingAgentTabs.delete(tabId)
+  if (ctx.inFlight) return
 
-  // Brief delay to let the page's React app hydrate before we send the command
-  setTimeout(() => {
-    chrome.tabs.sendMessage(tabId, {
-      type:          "EXECUTE_SCOUT_COMMAND",
-      command:       "AGENT_AUTOFILL",
-      payload:       ctx,
-    }).catch(() => {
-      // Content script not yet ready on this URL — not a supported ATS page
-    })
-  }, 1800)
+  // Expire stale contexts so we do not retry forever after abandoned flows.
+  if (Date.now() - ctx.createdAt > AGENT_CONTEXT_TTL_MS || ctx.attempts >= AGENT_CONTEXT_MAX_ATTEMPTS) {
+    pendingAgentTabs.delete(tabId)
+    return
+  }
+
+  ctx.inFlight = true
+  ctx.attempts += 1
+  pendingAgentTabs.set(tabId, ctx)
+
+  // Brief delay to let the page hydrate before we send the command.
+  await new Promise((resolve) => setTimeout(resolve, 1800))
+
+  try {
+    const response = await chrome.tabs.sendMessage(tabId, {
+      type: "EXECUTE_SCOUT_COMMAND",
+      command: "AGENT_AUTOFILL",
+      payload: {
+        jobId: ctx.jobId,
+        jobTitle: ctx.jobTitle,
+        company: ctx.company,
+        coverLetterId: ctx.coverLetterId,
+      },
+    }) as { type?: string; accepted?: boolean } | undefined
+
+    const accepted = response?.type === "SCOUT_COMMAND_EXECUTED" && response.accepted === true
+    if (accepted) {
+      pendingAgentTabs.delete(tabId)
+      return
+    }
+  } catch {
+    // Receiving end doesn't exist yet on intermediate pages (login/redirect).
+    // Keep context so the next navigation-complete can retry.
+  } finally {
+    const current = pendingAgentTabs.get(tabId)
+    if (current) {
+      current.inFlight = false
+      pendingAgentTabs.set(tabId, current)
+    }
+  }
+}
+
+// When a tab completes loading, try to dispatch pending agent autofill context.
+chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+  if (changeInfo.status !== "complete") return
+  void tryDispatchAgentAutofill(tabId)
+})
+
+// Clean up if the tab is closed before automation begins.
+chrome.tabs.onRemoved.addListener((tabId) => {
+  pendingAgentTabs.delete(tabId)
 })
 
 // ── Apply Queue handlers ───────────────────────────────────────────────────────

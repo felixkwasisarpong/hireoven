@@ -20,6 +20,7 @@ type BulkPrepareBody = {
   company?:           string
   applyUrl?:          string | null
   sponsorshipSignal?: string | null
+  requireSponsorshipSignal?: boolean
 }
 
 type DetectedAts =
@@ -58,7 +59,14 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => null)) as BulkPrepareBody | null
   if (!body) return NextResponse.json({ error: "Invalid body" }, { status: 400 })
 
-  const { jobId, jobTitle, company, applyUrl, sponsorshipSignal } = body
+  const {
+    jobId,
+    jobTitle,
+    company,
+    applyUrl,
+    sponsorshipSignal,
+    requireSponsorshipSignal,
+  } = body
   const warnings: Warning[] = []
   const atsProvider = detectAtsFromApplyUrl(applyUrl)
 
@@ -68,7 +76,7 @@ export async function POST(request: Request) {
   }
 
   // ── Hard gate 2: explicit no-sponsorship blocker ─────────────────────────────
-  if (sponsorshipSignal) {
+  if (requireSponsorshipSignal && sponsorshipSignal) {
     const sig = sponsorshipSignal.toLowerCase()
     if (/\bno\b|\bnone\b|\bnot\b|\bdoes not sponsor\b|\bwithout sponsorship\b/.test(sig)) {
       return NextResponse.json({ failReason: "no_sponsorship_blocker" satisfies BulkFailReason })
