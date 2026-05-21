@@ -48,14 +48,38 @@ export function slugifyEmployer(name: string): string {
 }
 
 export function guessPublicDomain(displayName: string): string | null {
-  const stripped = displayName
+  const cleaned = displayName
     .toLowerCase()
-    .replace(/\b(incorporated|inc|l\.?l\.?c\.?|llp|corp|corporation|ltd|limited|co|company|plc|holdings|group|technologies|technology|solutions|services|systems|us|usa|america|americas|north\s+america)\b/g, ' ')
+    // Lead-in articles before the brand name.
+    .replace(/^the\s+/, ' ')
+    // Legal / organizational suffix words. "co" is omitted on purpose — it
+    // appears inside legitimate single-word brands ("disco", "monaco") and the
+    // \b boundary trick caused historical mangling like "company" → "mpany".
+    .replace(
+      /\b(incorporated|inc|l\.?l\.?c\.?|llp|corp|corporation|company|companies|ltd|limited|plc|holdings|group|industries|technologies|technology|solutions|services|systems|operations|operating|university|universities|school|institute|hospital|center|us|usa|america|americas|north\s+america)\b/g,
+      ' '
+    )
+    .replace(/\bthe\b/g, ' ')
     .replace(/[^a-z0-9]+/g, ' ')
     .trim()
-    .replace(/\s+/g, '')
-  if (!stripped || stripped.length < 2) return null
-  return `${stripped}.com`
+  if (!cleaned) return null
+
+  const words = cleaned.split(/\s+/).filter(Boolean)
+  if (!words.length) return null
+
+  // Fragment guards: a leading or trailing "of"/"and" word means the strip
+  // list ate the brand chunk and left a connector orphaned. Better to bail
+  // than persist "bankof.com" / "oftexas.com" / "visaand.com".
+  if (["of", "and"].includes(words[0])) return null
+  if (["of", "and"].includes(words[words.length - 1])) return null
+
+  const joined = words.join("")
+  if (joined.length < 2) return null
+  // Real brand domains are short; if compression didn't fit, fall through to
+  // NULL rather than write a 25-char synthetic host into DB.
+  if (joined.length > 18) return null
+
+  return `${joined}.com`
 }
 
 /**
