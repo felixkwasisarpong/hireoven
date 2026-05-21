@@ -120,10 +120,10 @@ function buildLogoSources(logoUrl: string | null | undefined, domain: string | n
   if (logoUrl && !invalidPlaceholderFavicon && !invalidAtsLogo && isStaticAsset) push(logoUrl)
 
   if (canonicalDomain) {
-    // logo.dev — true brand marks, preferred source.
-    push(companyLogoUrlFromDomain(canonicalDomain, "logo-dev"))
+    // logo.dev via server-side proxy — avoids depending on NEXT_PUBLIC_LOGO_DEV_TOKEN
+    // being inlined at build time (Coolify's build-arg passthrough is unreliable).
+    push(`/api/logo?domain=${encodeURIComponent(canonicalDomain)}`)
     // DuckDuckGo — site favicons, reliable fallback with no token required.
-    // Google favicon removed: returns 404 for many domains and duplicates the noise.
     push(companyLogoUrlFromDomain(canonicalDomain, "duckduckgo"))
   }
 

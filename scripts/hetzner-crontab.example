@@ -12,6 +12,8 @@
 #
 # To run one task ad-hoc:
 #   APP_URL=https://hireoven.com CRON_SECRET=*** bash scripts/crons.sh crawl
+# Continuous multi-sector capture (seeding + discovery + rotating state crawl):
+#   npm run capture:companies:continuous:execute -- --states-per-run=4 --state-limit=36
 # Full sweep (all active companies, bypass cooldown/lane exclusions):
 #   APP_URL=https://hireoven.com CRON_SECRET=*** bash scripts/crons.sh crawl-full
 # Full sweep focused on non-ATS companies (recommended when harvester is running):
@@ -30,6 +32,8 @@ CRON_SECRET=REPLACE_ME
 # m h dom mon dow  command
   0 * * * *        cd $HIREOVEN_REPO && bash scripts/crons.sh recent-jobs        >>/var/log/hireoven/recent-jobs.log 2>&1
   0 * * * *        cd $HIREOVEN_REPO && bash scripts/crons.sh crawl              >>/var/log/hireoven/crawl.log 2>&1
+# Cross-sector capture sweep (includes discovery + rotating state-balanced crawl).
+ 20 1 * * *        cd $HIREOVEN_REPO && npm run capture:companies:continuous:execute -- --states-per-run=4 --state-limit=36 --state-min-certified=8 >>/var/log/hireoven/capture-companies-continuous.log 2>&1
 # Optional deep sweep lane (heavier): run once nightly off-peak.
 # 15 2 * * *      cd $HIREOVEN_REPO && bash scripts/crons.sh crawl-full         >>/var/log/hireoven/crawl-full.log 2>&1
 # Recommended deep sweep lane for crawler-only territory:

@@ -71,6 +71,10 @@ RETURNING id
  * coalesces to empty string so partitioning is stable across nullability.
  *
  * Idempotent: only touches rows whose duplicate_of_id is wrong.
+ *
+ * To reduce lock contention with live crawls/harvester updates, this pass only
+ * processes rows older than `MAINTENANCE_DEDUP_MIN_ROW_AGE_MINUTES` (default:
+ * 180 minutes). Freshly-updated rows are picked up on the next cycle.
  */
 export const DEDUP_SQL = `
 WITH ranked AS (
@@ -98,6 +102,7 @@ WITH ranked AS (
   WHERE j.is_active = true
     AND j.closed_at IS NULL
     AND j.title IS NOT NULL
+    AND COALESCE(j.updated_at, j.first_detected_at, to_timestamp(0)) < now() - $1::interval
 )
 UPDATE jobs
 SET duplicate_of_id = ranked.canonical_id,
@@ -272,11 +277,31 @@ export type CompanyDedupSummary = {
  */
 const DEADLOCK_CODE = "40P01"
 const SERIALIZATION_CODE = "40001"
-const MAX_RETRIES = 3
+const LOCK_NOT_AVAILABLE_CODE = "55P03"
+const MAX_RETRIES = Math.max(
+  3,
+  Number.parseInt(process.env.MAINTENANCE_RETRY_ATTEMPTS ?? "8", 10) || 8
+)
+const RETRY_BASE_MS = Math.max(
+  100,
+  Number.parseInt(process.env.MAINTENANCE_RETRY_BASE_MS ?? "300", 10) || 300
+)
+const LOCK_TIMEOUT_MS = Math.max(
+  500,
+  Number.parseInt(process.env.MAINTENANCE_LOCK_TIMEOUT_MS ?? "3000", 10) || 3000
+)
+const DEDUP_MIN_ROW_AGE_MINUTES = Math.max(
+  0,
+  Number.parseInt(process.env.MAINTENANCE_DEDUP_MIN_ROW_AGE_MINUTES ?? "180", 10) || 180
+)
 
 function isRetryableError(error: unknown): boolean {
   const code = (error as { code?: string } | null)?.code
-  return code === DEADLOCK_CODE || code === SERIALIZATION_CODE
+  return (
+    code === DEADLOCK_CODE ||
+    code === SERIALIZATION_CODE ||
+    code === LOCK_NOT_AVAILABLE_CODE
+  )
 }
 
 function sleep(ms: number) {
@@ -295,6 +320,9 @@ async function runWithOptionalRollback<T>(
     const client = await pool.connect()
     try {
       await client.query("BEGIN")
+      // Keep maintenance from waiting too long on hot rows while crawlers are
+      // updating them; we retry with backoff instead.
+      await client.query(`SET LOCAL lock_timeout = '${LOCK_TIMEOUT_MS}ms'`)
       const result = await run(client)
       if (dryRun) {
         await client.query("ROLLBACK")
@@ -310,9 +338,13 @@ async function runWithOptionalRollback<T>(
       if (!isRetryableError(error) || attempt >= MAX_RETRIES) {
         throw error
       }
-      // Jittered backoff: 200ms, 600ms, 1400ms — gives the conflicting
-      // transaction time to drop its locks before we try again.
-      const backoffMs = 200 * 2 ** (attempt - 1) + Math.floor(Math.random() * 200)
+      const code = (error as { code?: string } | null)?.code ?? "unknown"
+      // Jittered exponential backoff gives concurrent crawls time to release
+      // row locks before retrying the same idempotent statement.
+      const backoffMs = RETRY_BASE_MS * 2 ** (attempt - 1) + Math.floor(Math.random() * 300)
+      console.warn(
+        `[maintenance] retryable error code=${code} attempt=${attempt}/${MAX_RETRIES} backoffMs=${backoffMs}`
+      )
       await sleep(backoffMs)
     } finally {
       client.release()
@@ -372,8 +404,9 @@ export async function dedupJobs(
   pool: Pool,
   options: { dryRun: boolean }
 ): Promise<DedupSummary> {
+  const ageInterval = `${DEDUP_MIN_ROW_AGE_MINUTES} minutes`
   return runWithOptionalRollback(pool, options.dryRun, async (client) => {
-    const { rows } = await client.query<{ id: string }>(DEDUP_SQL)
+    const { rows } = await client.query<{ id: string }>(DEDUP_SQL, [ageInterval])
     return { markedDuplicate: rows.length, dryRun: options.dryRun }
   })
 }
