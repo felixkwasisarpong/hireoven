@@ -343,11 +343,19 @@ async function updateCompanyJobCount(
   companyId: string,
   crawledAtIso: string
 ): Promise<void> {
+  // Self-heal: any company that ends this run with ≥1 active job must be
+  // active. Companies that were flipped off long ago by a transient error
+  // get to come back. We never flip is_active=false here — only forward.
   await pool.query(
     `UPDATE companies
      SET job_count = (SELECT COUNT(*) FROM jobs WHERE company_id = $1 AND is_active = true),
          last_crawled_at = $2::timestamptz,
-         updated_at = $2::timestamptz
+         updated_at = $2::timestamptz,
+         is_active = CASE
+           WHEN (SELECT COUNT(*) FROM jobs WHERE company_id = $1 AND is_active = true) > 0
+           THEN true
+           ELSE is_active
+         END
      WHERE id = $1`,
     [companyId, crawledAtIso]
   )
