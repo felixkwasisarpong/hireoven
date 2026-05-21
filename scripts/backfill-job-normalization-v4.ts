@@ -79,7 +79,7 @@ async function main() {
     while (processed < totalLimit) {
       // Pull a batch of job ids whose normalized cache is stale.
       const remaining = Math.min(batchSize, totalLimit - processed)
-      const idsResult = await pool.query<{ id: string }>(
+      const { rows: idRows } = await pool.query<{ id: string }>(
         `SELECT id::text AS id FROM jobs
           WHERE (raw_data IS NULL
                  OR raw_data->'normalized'->>'schema_version' IS DISTINCT FROM $1)
@@ -88,7 +88,7 @@ async function main() {
           LIMIT $2`,
         lastId ? [JOB_NORMALIZATION_VERSION, remaining, lastId] : [JOB_NORMALIZATION_VERSION, remaining]
       )
-      const ids = idsResult.rows.map((r) => r.id)
+      const ids: string[] = idRows.map((r) => r.id)
       if (ids.length === 0) break
 
       const batchResult = await processBatch(pool, limiter, ids, execute)
