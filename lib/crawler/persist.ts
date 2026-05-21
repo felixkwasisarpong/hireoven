@@ -826,10 +826,17 @@ export async function persistCrawlJobs({
       }
     : nextRawAtsConfig
 
+  // Self-heal: if the crawl produced any jobs, the company is alive and should
+  // not stay inactive (e.g. flipped off long ago by a transient fetch error or
+  // a now-expired robots block). Mutually exclusive with the robots-block branch
+  // below — that one only fires when dedupedJobs.length === 0.
+  const shouldReactivateCompany = dedupedJobs.length > 0
+
   await pool.query(
     `UPDATE companies
      SET last_crawled_at = $1, job_count = $2, updated_at = $3, raw_ats_config = $5::jsonb
          ${shouldDeactivateCompanyForRobotsBlock ? ", is_active = false" : ""}
+         ${shouldReactivateCompany ? ", is_active = true" : ""}
          ${resolvedCareersUrl ? ", careers_url = $6" : ""}
      WHERE id = $4`,
     resolvedCareersUrl
