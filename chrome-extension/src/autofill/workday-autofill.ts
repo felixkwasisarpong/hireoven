@@ -4,6 +4,7 @@ import type { AutofillFieldResult } from "./safe-fields"
 
 type WorkdayStepId =
   | "account_required"
+  | "resume_upload"
   | "my_information"
   | "my_experience"
   | "application_questions"
@@ -164,6 +165,7 @@ type WorkdayAutofillRunnerOptions = {
   showToolbar?: boolean
   profile?: ExtendedSafeProfile | null
   resumeFile?: File | null
+  resumeJobId?: string | null
   onSnapshot?: (snapshot: WorkdayAutofillSnapshot) => void
   onWarning?: (line: string) => void
 }
@@ -205,6 +207,7 @@ declare global {
 
 type RunInBarOptions = {
   profile: SafeProfile
+  resumeJobId?: string
   onSnapshot?: (snapshot: WorkdayAutofillSnapshot) => void
   onWarning?: (line: string) => void
   maxCycles?: number
@@ -814,6 +817,8 @@ function resolveInputControlFromElement(
 class WorkdayAutofillRunner {
   private cv: WorkdayCv | null = null
   private resumeFile: File | null = null
+  private resumeUploadCounted = false
+  private readonly resumeJobId: string | null
   private readonly showToolbar: boolean
   private readonly externalProfile: ExtendedSafeProfile | null
   private readonly onSnapshot?: (snapshot: WorkdayAutofillSnapshot) => void
@@ -861,11 +866,13 @@ class WorkdayAutofillRunner {
     this.onSnapshot = options?.onSnapshot
     this.onWarning = options?.onWarning
     this.resumeFile = options?.resumeFile ?? null
+    this.resumeJobId = options?.resumeJobId ?? null
     this.publishDebug()
     this.debug("info", "runner.init", {
       showToolbar: this.showToolbar,
       hasExternalProfile: Boolean(this.externalProfile),
       hasResumeFile: Boolean(this.resumeFile),
+      hasResumeJobId: Boolean(this.resumeJobId),
       href: window.location.href,
     })
   }
@@ -927,11 +934,14 @@ class WorkdayAutofillRunner {
     this.refreshProgress()
 
     if (!this.resumeFile) {
-      const resumeBytes = await fetchPrimaryResume().catch(() => null)
+      const resumeBytes = await fetchPrimaryResume({
+        jobId: this.resumeJobId ?? undefined,
+      }).catch(() => null)
       if (resumeBytes) {
         const file = this.decodeBase64File(resumeBytes.base64, resumeBytes.filename)
         if (file) this.resumeFile = file
         this.debug("info", "context.initialize.resume_loaded", {
+          jobId: this.resumeJobId,
           filename: resumeBytes.filename,
           loaded: Boolean(this.resumeFile),
         })
@@ -1263,6 +1273,26 @@ class WorkdayAutofillRunner {
       }
 
       switch (step.id) {
+        case "resume_upload": {
+          const filledBefore = this.fieldsFilledCount
+          const uploaded = await this.maybeUploadResume()
+          this.paused = true
+          if (uploaded || this.fieldsFilledCount > filledBefore) {
+            this.setToolbarState(
+              "DONE",
+              "Resume upload complete. Click Continue to move to My Information.",
+            )
+            this.debug("info", "run.resume_upload.complete")
+          } else {
+            this.setToolbarState(
+              "NEEDS_REVIEW",
+              "Could not confirm resume upload on this step.",
+              "Attach your resume manually if needed, then click Continue.",
+            )
+            this.debug("warn", "run.resume_upload.needs_review")
+          }
+          break
+        }
         case "my_information":
           await this.fillMyInformationStep()
           break
@@ -1332,6 +1362,37 @@ class WorkdayAutofillRunner {
       document.querySelector('[aria-label*="Step"]')
     const text = nonEmpty(stepEl?.textContent)
     const normalized = normText(text)
+    const headingText = normText(
+      nonEmpty(
+        document.querySelector(
+          '[data-automation-id="pageHeader"], [data-automation-id="pageTitle"], h1, h2',
+        )?.textContent,
+      ),
+    )
+
+    const uploadSurfaceVisible = Boolean(
+      document.querySelector(
+        '[data-automation-id="file-upload-drop-zone"], ' +
+        '[data-automation-id="select-files"], ' +
+        '[data-automation-id="resume-upload"]',
+      ),
+    )
+    const bodyText = normText(document.body?.textContent ?? "")
+    const hasResumeUploadCopy =
+      bodyText.includes("autofill with resume") ||
+      (bodyText.includes("drop file here") && bodyText.includes("select file"))
+
+    const isResumeUploadHeading =
+      headingText.includes("autofill with resume") ||
+      ((headingText.includes("upload") || headingText.includes("drop file")) &&
+        (headingText.includes("resume") || headingText.includes("cv"))) ||
+      normalized.includes("autofill with resume")
+    if (isResumeUploadHeading && (this.findResumeFileInput() || uploadSurfaceVisible)) {
+      return { id: "resume_upload", name: "Autofill with Resume", index: 1, total: STEP_TOTAL }
+    }
+    if (hasResumeUploadCopy && (this.findResumeFileInput() || uploadSurfaceVisible)) {
+      return { id: "resume_upload", name: "Autofill with Resume", index: 1, total: STEP_TOTAL }
+    }
 
     // Newer "Apply Flow" template emits per-step page wrappers — strongest signal.
     if (document.querySelector('[data-automation-id="selfIdentifyPage"], [data-automation-id="applyFlowSelfIdentifyPage"]')) {
@@ -2301,20 +2362,67 @@ class WorkdayAutofillRunner {
     })
   }
 
-  private async maybeUploadResume(): Promise<void> {
+  private dispatchDropWithFile(target: HTMLElement, file: File): boolean {
+    try {
+      const dt = new DataTransfer()
+      dt.items.add(file)
+      const types = ["dragenter", "dragover", "drop"] as const
+      for (const type of types) {
+        const ev = new Event(type, { bubbles: true, cancelable: true }) as Event & {
+          dataTransfer?: DataTransfer
+        }
+        Object.defineProperty(ev, "dataTransfer", { value: dt })
+        target.dispatchEvent(ev)
+      }
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  private async maybeUploadResume(): Promise<boolean> {
     if (!this.resumeFile) {
       this.debug("info", "resume_upload.skipped_no_file")
-      return
+      return false
     }
     const fileInput = this.findResumeFileInput()
     if (!fileInput) {
-      this.debug("info", "resume_upload.input_not_found")
-      return
+      const dropSurface =
+        document.querySelector<HTMLElement>('[data-automation-id="file-upload-drop-zone"]') ??
+        document.querySelector<HTMLElement>('[data-automation-id="select-files"]') ??
+        document.querySelector<HTMLElement>('[data-automation-id="resume-upload"]')
+      if (!isVisible(dropSurface)) {
+        this.debug("info", "resume_upload.input_not_found")
+        return false
+      }
+      const dropped = this.dispatchDropWithFile(dropSurface!, this.resumeFile)
+      this.debug(dropped ? "info" : "warn", "resume_upload.dropzone_dispatch", {
+        dropped,
+        targetAutomationId: dropSurface?.getAttribute("data-automation-id") ?? null,
+      })
+      if (!dropped) return false
+      const uploadedFromDrop = await this.waitForUploadComplete()
+      if (uploadedFromDrop) {
+        if (!this.resumeUploadCounted) {
+          this.bumpFilledCount()
+          this.resumeUploadCounted = true
+        }
+        this.debug("info", "resume_upload.done_via_dropzone")
+        return true
+      }
+      this.logWarning("Manual review needed: resume upload may not have completed — verify before continuing.")
+      this.debug("warn", "resume_upload.unconfirmed_via_dropzone")
+      return false
     }
 
     if (fileInput.files && fileInput.files.length > 0) {
       this.debug("info", "resume_upload.skipped_already_present", { existingFiles: fileInput.files.length })
-      return
+      // Treat an already-attached file as a successful resume step.
+      if (!this.resumeUploadCounted) {
+        this.bumpFilledCount()
+        this.resumeUploadCounted = true
+      }
+      return true
     }
 
     this.setToolbarField("Resume upload")
@@ -2340,11 +2448,16 @@ class WorkdayAutofillRunner {
     this.debug("info", "resume_upload.started", { filename: this.resumeFile.name })
     const uploaded = await this.waitForUploadComplete()
     if (uploaded) {
-      this.bumpFilledCount()
+      if (!this.resumeUploadCounted) {
+        this.bumpFilledCount()
+        this.resumeUploadCounted = true
+      }
       this.debug("info", "resume_upload.done")
+      return true
     } else {
       this.logWarning("Manual review needed: resume upload may not have completed — verify before continuing.")
       this.debug("warn", "resume_upload.unconfirmed")
+      return false
     }
   }
 
@@ -3392,6 +3505,7 @@ export async function runWorkdayAutofillInExistingBar(options: RunInBarOptions):
   const runner = new WorkdayAutofillRunner({
     showToolbar: false,
     profile: options.profile as ExtendedSafeProfile,
+    resumeJobId: options.resumeJobId ?? null,
     onSnapshot: options.onSnapshot,
     onWarning: options.onWarning,
   })

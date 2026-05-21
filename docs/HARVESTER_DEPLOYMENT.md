@@ -225,6 +225,7 @@ Add to Coolify Scheduled Tasks (or extend `scripts/crons.sh`):
 |---|---|---|
 | `npm run discover:github-seeds:execute` | `0 2 * * 0` (Sun 2am) | Weekly GitHub-seed-list discovery |
 | `npm run discover:crtsh:execute` | `0 3 * * 0` (Sun 3am) | Weekly crt.sh discovery |
+| `npm run discover:startup-directories:execute -- --sources=yc,builtin --builtin-cities=san-francisco,new-york-city,austin,seattle,chicago --limit=250` | `30 3 * * 0` (Sun 3:30am) | Weekly YC + Built In directory discovery |
 | `npm run maintain:companies:execute` | `0 4 * * *` (daily 4am) | Tiers + status + resurrect + dedup + fuzzy-dedup |
 | `npm run enrich:skills:execute -- --limit=10000` | `30 4 * * *` (daily 4:30am) | Skill enrichment over recent jobs |
 
@@ -233,9 +234,16 @@ Add to Coolify Scheduled Tasks (or extend `scripts/crons.sh`):
 ```bash
 npm run discover:github-seeds                 # expect ~455 candidates
 npm run discover:crtsh                        # expect ~250+ candidates (crt.sh-dependent)
+npm run discover:startup-directories -- --sources=yc,builtin --limit=40
 npm run maintain:companies                    # expect changed counts > 0 per phase
 npm run enrich:skills                         # expect scanned/changed counts > 0
 ```
+
+Wellfound note: its public directory currently serves a DataDome challenge to
+clean headless sessions. Use
+`npm run discover:startup-directories:execute -- --sources=wellfound --storage-state=/path/to/state.json`
+only on runners where you can safely mount a real Playwright storage-state
+file.
 
 **Verify after 24h:**
 

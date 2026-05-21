@@ -77,15 +77,6 @@ function isClearbitUrl(logoUrl: string | null | undefined) {
   }
 }
 
-function isLogoDevUrl(logoUrl: string | null | undefined) {
-  if (!logoUrl) return false
-  try {
-    return new URL(logoUrl).hostname === "img.logo.dev"
-  } catch {
-    return false
-  }
-}
-
 function isInvalidPlaceholderGoogleFaviconUrl(logoUrl: string | null | undefined) {
   if (!logoUrl) return false
   try {
@@ -136,15 +127,14 @@ function buildLogoSources(logoUrl: string | null | undefined, domain: string | n
     push(companyLogoUrlFromDomain(canonicalDomain, "duckduckgo"))
   }
 
-  // 5. Stored URL as last resort — but never Clearbit (being deprecated), ATS domains,
-  // or placeholder domains. logo.dev and static assets are already in the list.
+  // 5. Stored URL as last resort — keep logo.dev URLs too as a safety net when
+  // NEXT_PUBLIC_LOGO_DEV_TOKEN is missing at build time in production.
   if (
     logoUrl &&
     !invalidPlaceholderFavicon &&
     !invalidAtsLogo &&
     !isStaticAsset &&
-    !isClearbitUrl(logoUrl) &&
-    !isLogoDevUrl(logoUrl)
+    !isClearbitUrl(logoUrl)
   ) {
     push(logoUrl)
   }

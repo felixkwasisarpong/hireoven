@@ -1,5 +1,5 @@
 /**
- * GET /api/scout/apply-agent?minMatchScore=80&count=5&sponsorship=true&workMode=remote&q=java+backend&strictQuery=true&strictScoreOnly=true
+ * GET /api/scout/apply-agent?minMatchScore=80&count=5&sponsorship=true&workMode=remote&q=java+backend&strictQuery=true&strictScoreOnly=true&freshnessHours=24
  *
  * Selects jobs from the live feed pool (recently added, active jobs) that match
  * the user's criteria. `q` is a free-text query matched against title + description
@@ -68,6 +68,7 @@ export async function GET(request: NextRequest) {
   const requireSponsorship = searchParams.get("sponsorship") === "true"
   const workMode           = searchParams.get("workMode") ?? null
   const normalizedWorkMode = workMode?.toLowerCase().replace(/_/g, "-") ?? null
+  const freshnessHours     = parseClampedInt(searchParams.get("freshnessHours"), { min: 1, max: 168, fallback: 24 })
   const rawQuery           = (searchParams.get("q") ?? "").trim()
   const strictQuery        = searchParams.get("strictQuery") === "true"
   const strictScoreOnly    = searchParams.get("strictScoreOnly") === "true"
@@ -77,8 +78,9 @@ export async function GET(request: NextRequest) {
   const conditions: string[] = [
     "j.is_active = true",
     "j.apply_url IS NOT NULL",
-    // Only recently posted jobs (last 30 days)
-    "j.first_detected_at >= NOW() - INTERVAL '30 days'",
+    // Fresh-posting guard: by default only return roles discovered in the
+    // last 24h so "top matched" prioritizes live opportunities.
+    "j.first_detected_at >= NOW() - ($2::int * INTERVAL '1 hour')",
     // Exclude jobs already in the user's application tracker (including saved/watchlist)
     `NOT EXISTS (
        SELECT 1 FROM job_applications ja
@@ -87,7 +89,7 @@ export async function GET(request: NextRequest) {
          AND ja.is_archived = false
      )`,
   ]
-  const params: unknown[] = [user.id]
+  const params: unknown[] = [user.id, freshnessHours]
 
   // minMatchScore normally keeps null-score jobs in the pool so the queue still
   // progresses while match scoring catches up. strictScoreOnly excludes nulls.

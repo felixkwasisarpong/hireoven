@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
   const token = getLogoDevPublishableToken()
   const logoUrl = token
     ? `https://img.logo.dev/${encodeURIComponent(domain)}?token=${token}&size=64&format=png`
-    : `https://logo.clearbit.com/${encodeURIComponent(domain)}`
+    : `https://icons.duckduckgo.com/ip3/${encodeURIComponent(domain)}.ico`
 
   try {
     const upstream = await fetch(logoUrl, {

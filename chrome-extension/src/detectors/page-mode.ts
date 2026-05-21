@@ -12,7 +12,7 @@
  *      backend analysis. Autofill is hidden.
  *
  *   2. ATS / application mode  — Greenhouse / Lever / Ashby / Workday /
- *      iCIMS / SmartRecruiters. These host the real application form, so
+ *      iCIMS / SmartRecruiters / BambooHR. These host the real application form, so
  *      autofill is the relevant primitive. Scout panel still works on
  *      ATS job-detail pages even before the user reaches the form.
  *
@@ -48,6 +48,7 @@ const ATS_SITES: ReadonlySet<SupportedSite> = new Set<SupportedSite>([
   "workday",
   "icims",
   "smartrecruiters",
+  "bamboohr",
 ])
 
 export function isJobBoardSite(site: SupportedSite): boolean {
@@ -117,13 +118,30 @@ const APPLICATION_FORM_SELECTORS: ReadonlyArray<string> = [
   // SmartRecruiters
   "form[action*='smartrecruiters']",
   "form.sr-application-form",
+  // BambooHR
+  "#bamboohr-apply",
+  ".BambooHR-ATS form",
+  "form[action*='bamboohr']",
   // Generic ATS-action hints
   "form[action*='greenhouse']",
   "form[action*='lever']",
   "form[action*='boards']",
 ]
 
-function pageHasApplicationForm(doc: Document): boolean {
+function pageHasApplicationForm(doc: Document, site: SupportedSite): boolean {
+  if (site === "workday") {
+    const workdayUploadInput = doc.querySelector(
+      '[data-automation-id="select-files"] input[type="file"], ' +
+      '[data-automation-id="file-upload-drop-zone"] input[type="file"], ' +
+      '[data-automation-id="resume-upload"] input[type="file"], ' +
+      '[data-automation-id="applicationPage"] input[type="file"], ' +
+      '[data-automation-id="applyFlow"] input[type="file"], ' +
+      '[data-automation-id="applyFlowPage"] input[type="file"], ' +
+      '[data-automation-id="applyFlowMyInfoPage"] input[type="file"]',
+    )
+    if (workdayUploadInput) return true
+  }
+
   for (const sel of APPLICATION_FORM_SELECTORS) {
     const root = doc.querySelector(sel)
     if (!root) continue
@@ -131,6 +149,7 @@ function pageHasApplicationForm(doc: Document): boolean {
       "input:not([type=hidden]):not([type=submit]):not([type=button]):not([type=reset]), select, textarea",
     ).length
     if (fieldCount >= 2) return true
+    if (site === "workday" && root.querySelector("input[type=file]")) return true
   }
   // Structural fallback: a <form> with a file input + ≥2 text-like inputs.
   // Conservative — catches custom application shells without false-positiving
@@ -138,6 +157,7 @@ function pageHasApplicationForm(doc: Document): boolean {
   const forms = doc.querySelectorAll<HTMLFormElement>("form")
   for (const form of forms) {
     if (!form.querySelector("input[type=file]")) continue
+    if (site === "workday") return true
     const textCount = form.querySelectorAll(
       "input[type=text], input[type=email], input[type=tel], input[type=url], textarea",
     ).length
@@ -148,6 +168,7 @@ function pageHasApplicationForm(doc: Document): boolean {
     "[data-automation-id='applicationSummaryStep'], [data-automation-id='applyStep'], [data-automation-id='applyFlow'], [data-automation-id='applicationStep'], [data-automation-id='stepContent']",
   )
   if (workdayLikeRoot) {
+    if (site === "workday" && workdayLikeRoot.querySelector("input[type=file]")) return true
     const count = workdayLikeRoot.querySelectorAll(
       "input:not([type=hidden]):not([type=submit]):not([type=button]):not([type=reset]), select, textarea",
     ).length
@@ -242,7 +263,7 @@ export function detectExtensionPageMode(
     // With DOM access, distinguish "we're reading a JD" from "the apply form
     // is rendered". Without DOM, default to JD; the bar will refresh once the
     // form mounts.
-    if (doc && pageHasApplicationForm(doc)) return "ats_application_form"
+    if (doc && pageHasApplicationForm(doc, site)) return "ats_application_form"
     return "ats_job_detail"
   }
 

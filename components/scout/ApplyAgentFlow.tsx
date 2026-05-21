@@ -88,11 +88,25 @@ type Props = {
   initialJobs: ApplyAgentJob[]
   resumeId?:   string
   extensionConnected?: boolean
+  requireSponsorshipSignal?: boolean
   onFollowUp?: (query: string) => void
   onDone?:     () => void
 }
 
 const FROM_SCOUT = "hireoven-scout"
+const FROM_EXT = "hireoven-ext"
+
+function isLocalScoutHost(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/^www\./, "")
+  return (
+    host === "localhost" ||
+    host.endsWith(".localhost") ||
+    host === "127.0.0.1" ||
+    host === "0.0.0.0" ||
+    host === "::1" ||
+    host === "[::1]"
+  )
+}
 
 const RESUME_QA_CHECKLIST = [
   "Can I defend every bullet in an interview?",
@@ -122,6 +136,18 @@ function normalizePreviewText(value: string | null | undefined): string {
 
 function joinParts(parts: Array<string | null | undefined>, sep = " · "): string {
   return parts.map((v) => (v ?? "").trim()).filter(Boolean).join(sep)
+}
+
+function normalizeUrlForMatch(value: string | null | undefined): string | null {
+  if (!value) return null
+  try {
+    const url = new URL(value)
+    url.hash = ""
+    const normalizedPath = url.pathname.replace(/\/+$/, "") || "/"
+    return `${url.origin}${normalizedPath}${url.search}`
+  } catch {
+    return value.trim().replace(/\/+$/, "")
+  }
 }
 
 function SkillBadges({ skills }: { skills: string[] }) {
@@ -426,7 +452,13 @@ function jobStatusLabel(job: JobState): string {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export function ApplyAgentFlow({ initialJobs, extensionConnected = false, onFollowUp, onDone }: Props) {
+export function ApplyAgentFlow({
+  initialJobs,
+  extensionConnected = false,
+  requireSponsorshipSignal = false,
+  onFollowUp,
+  onDone,
+}: Props) {
   const [jobs,         setJobs]         = useState<JobState[]>(initialJobs)
   const [currentIndex, setCurrentIndex] = useState(0)
   const [phase,        setPhase]        = useState<"tailoring" | "confirming" | "reviewing" | "applying" | "done">("tailoring")
@@ -468,6 +500,12 @@ export function ApplyAgentFlow({ initialJobs, extensionConnected = false, onFoll
     () => extensionConnected ? "connected" : "disconnected"
   )
   const [extMidFlowDisconnected, setExtMidFlowDisconnected] = useState(false)
+  const extensionInstallHref = useMemo(() => {
+    if (typeof window === "undefined") return "/extension"
+    return isLocalScoutHost(window.location.hostname)
+      ? "/extension"
+      : "https://chrome.google.com/webstore"
+  }, [])
 
   // Sync whenever the prop changes (e.g. extension connects after mount)
   useEffect(() => {
@@ -637,6 +675,7 @@ export function ApplyAgentFlow({ initialJobs, extensionConnected = false, onFoll
           company:           job.company,
           applyUrl:          job.applyUrl,
           sponsorshipSignal: job.sponsorshipSignal,
+          requireSponsorshipSignal,
         }),
       })
 
@@ -740,7 +779,7 @@ export function ApplyAgentFlow({ initialJobs, extensionConnected = false, onFoll
       advanceQueue(idx, buildPatchedJobs(jobs, idx, patch))
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [jobs, updateJob, appendSkillsToPrimaryResume, enterResumeReview, advanceQueue, buildPatchedJobs])
+  }, [jobs, updateJob, appendSkillsToPrimaryResume, enterResumeReview, advanceQueue, buildPatchedJobs, requireSponsorshipSignal])
 
   const resolveSkillConfirmation = useCallback(async (applySkills: boolean) => {
     if (pendingSkillJobIdx === null) return
@@ -975,6 +1014,77 @@ export function ApplyAgentFlow({ initialJobs, extensionConnected = false, onFoll
   useEffect(() => {
     void ensurePrimaryResume()
   }, [ensurePrimaryResume])
+
+  // In agent mode with extension connected, auto-open each apply step as soon
+  // as it becomes current. This avoids stalling on the "Open application" CTA.
+  useEffect(() => {
+    if (phase !== "applying") return
+    if (!extensionConnected) return
+    const idx = applyOrder[applyPointer]
+    if (idx === undefined) return
+    const job = jobs[idx]
+    if (!job) return
+    if (busy) return
+    if (job.applied || job.skipped || job.opened) return
+    if (job.status === "opening" || job.status === "filling") return
+    void openCurrentApplication()
+  }, [applyOrder, applyPointer, busy, extensionConnected, jobs, openCurrentApplication, phase])
+
+  // Extension agent-mode completion bridge:
+  // when the job tab reports submission, mark this job done and advance.
+  useEffect(() => {
+    if (phase !== "applying") return
+
+    const onAgentSubmitted = (event: MessageEvent) => {
+      if (typeof event.data !== "object" || event.data === null) return
+      const msg = event.data as {
+        source?: unknown
+        type?: unknown
+        context?: { detectedJobId?: unknown; url?: unknown } | null
+      }
+      if (msg.source !== FROM_EXT) return
+      if (msg.type !== "AGENT_APPLICATION_SUBMITTED") return
+
+      const idx = applyOrder[applyPointer]
+      if (idx === undefined) return
+      const current = jobs[idx]
+      if (!current || current.applied || current.skipped) return
+
+      const submittedJobId =
+        typeof msg.context?.detectedJobId === "string" ? msg.context.detectedJobId : null
+      const submittedUrl =
+        typeof msg.context?.url === "string" ? msg.context.url : null
+
+      const jobIdMatches = Boolean(submittedJobId && current.jobId && submittedJobId === current.jobId)
+      const currentUrl = normalizeUrlForMatch(current.applyUrl ?? null)
+      const eventUrl = normalizeUrlForMatch(submittedUrl)
+      const urlMatches = Boolean(currentUrl && eventUrl && currentUrl === eventUrl)
+      if (!jobIdMatches && !urlMatches) return
+
+      const nextPointer = applyPointer + 1
+      setBusy(true)
+      void fetch("/api/scout/mark-submitted", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jobId: current.jobId,
+          jobTitle: current.jobTitle,
+          companyName: current.company ?? "Unknown Company",
+          applyUrl: current.applyUrl,
+          notes: "Marked submitted automatically from extension agent mode",
+        }),
+      }).catch(() => {
+        // Non-blocking: local queue still advances.
+      }).finally(() => {
+        updateJob(idx, { applied: true, status: "applied", opened: false, error: undefined })
+        setBusy(false)
+        goToNextApplyJob(nextPointer)
+      })
+    }
+
+    window.addEventListener("message", onAgentSubmitted)
+    return () => window.removeEventListener("message", onAgentSubmitted)
+  }, [applyOrder, applyPointer, goToNextApplyJob, jobs, phase, updateJob])
 
   // ── Derived state ─────────────────────────────────────────────────────────
 
@@ -1460,12 +1570,12 @@ export function ApplyAgentFlow({ initialJobs, extensionConnected = false, onFoll
               </p>
               <div className="mt-1.5 flex gap-2">
                 <a
-                  href="https://chrome.google.com/webstore"
+                  href={extensionInstallHref}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-[10px] font-semibold text-red-800 underline"
                 >
-                  Install extension
+                  {extensionInstallHref === "/extension" ? "Open local extension setup" : "Install extension"}
                 </a>
                 <span className="text-[10px] text-red-400">or</span>
                 <button

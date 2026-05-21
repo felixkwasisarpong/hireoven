@@ -11,10 +11,8 @@
  *   3. Surface the list of detected fields (label / type / required) for
  *      review *before* the user enables autofill.
  *
- * The MVP autofill is wired for Greenhouse + Lever + Workday; this detector
- * intentionally also recognizes other ATSes (Workday, Ashby, etc.) so the
- * bar can say "form detected — autofill not supported here yet" instead of
- * silently going dark.
+ * The detector recognizes application forms across ATSes and reports whether
+ * profile-driven autofill is likely to work on this page.
  */
 
 import { detectSite, type SupportedSite } from "./site"
@@ -85,7 +83,7 @@ const SAFE_PROFILE_FIELD_RE =
 
 const WORKDAY_QUESTION_PLACEHOLDER_RE = /^(select one|select|choose one|choose|please select)$/i
 
-function hasApplicationLikeInputs(root: Element): boolean {
+function hasApplicationLikeInputs(root: Element, ats: SupportedSite): boolean {
   const candidates = root.querySelectorAll(
     "input:not([type=hidden]):not([type=submit]):not([type=button]):not([type=reset]), select, textarea",
   )
@@ -94,16 +92,19 @@ function hasApplicationLikeInputs(root: Element): boolean {
     "input[type=text], input[type=email], input[type=tel], input[type=url], textarea",
   ).length
   const hasFile = Boolean(root.querySelector("input[type=file]"))
+  // Workday's first "Autofill with Resume" step often exposes only a file
+  // picker before any text fields. Treat that as a valid application step.
+  if (ats === "workday" && hasFile) return true
   return hasFile && textLike >= 2
 }
 
-function findFormRoots(doc: Document): HTMLElement[] {
+function findFormRoots(doc: Document, ats: SupportedSite): HTMLElement[] {
   const seen = new Set<HTMLElement>()
 
   // 1. ATS-specific selectors — strongest signal.
   for (const sel of ATS_FORM_SELECTORS) {
     doc.querySelectorAll<HTMLElement>(sel).forEach((root) => {
-      if (hasApplicationLikeInputs(root)) seen.add(root)
+      if (hasApplicationLikeInputs(root, ats)) seen.add(root)
     })
   }
 
@@ -135,7 +136,7 @@ function findFormRoots(doc: Document): HTMLElement[] {
         "main section, main article, [role='main'] section, [role='main'] article, [data-automation-id]",
       ),
     )
-      .filter((root) => hasApplicationLikeInputs(root))
+      .filter((root) => hasApplicationLikeInputs(root, ats))
       .sort((a, b) => b.querySelectorAll("input, select, textarea").length - a.querySelectorAll("input, select, textarea").length)
 
     if (denseRoots.length > 0) {
@@ -318,7 +319,7 @@ export function detectApplicationForm(doc: Document = document): ApplicationForm
   const ats = detectSite()
   const reasons: string[] = []
 
-  const forms = findFormRoots(doc)
+  const forms = findFormRoots(doc, ats)
   if (forms.length === 0) {
     reasons.push("No application form element found on the page.")
     return {
@@ -399,26 +400,24 @@ export function detectApplicationForm(doc: Document = document): ApplicationForm
   if (resumeUpload)      reasons.push("Resume upload field detected.")
   if (coverLetterUpload) reasons.push("Cover letter upload field detected.")
 
-  // Heuristic: autofill is "supported" only when the ATS is one we've actually
-  // wired (Greenhouse / Lever / Workday) AND we see at least 2 profile-fillable fields
-  // (so a contact form with a single email box doesn't qualify).
+  // Heuristic: autofill is "supported" when we detect at least 2 profile-
+  // fillable fields. Workday is a special case because its step surfaces can
+  // intentionally expose fewer native controls while still being fillable by
+  // the dedicated runner.
   const safeFieldCount = fields.filter((f) =>
     SAFE_PROFILE_FIELD_RE.test(`${f.label} ${f.name ?? ""}`),
   ).length
 
-  const atsIsWired = ats === "greenhouse" || ats === "lever" || ats === "workday"
-  const supportsAutofill = atsIsWired && (ats === "workday" ? true : safeFieldCount >= 2)
+  const supportsAutofill = ats === "workday" ? true : safeFieldCount >= 2
 
-  if (!atsIsWired) {
-    reasons.push(
-      ats === "unknown"
-        ? "ATS not recognized — autofill is supported only on Greenhouse, Lever, and Workday."
-        : `Autofill not yet wired for ${ats} in this MVP.`,
-    )
-  } else if (ats !== "workday" && safeFieldCount < 2) {
+  if (ats !== "workday" && safeFieldCount < 2) {
     reasons.push("Form detected but profile-fillable fields are limited — autofill may be partial.")
   } else if (ats === "workday") {
     reasons.push("Workday step detected — Autofill uses step-aware runner (question dropdowns included).")
+  } else if (ats === "unknown") {
+    reasons.push("Application form detected on a non-standard ATS host — using generic autofill strategy.")
+  } else {
+    reasons.push(`Application form detected on ${ats} — using ATS-aware autofill strategy.`)
   }
 
   return {

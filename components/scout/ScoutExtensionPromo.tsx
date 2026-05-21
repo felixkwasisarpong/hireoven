@@ -8,6 +8,7 @@
  * No aggressive banners. No guilt.
  */
 
+import { useMemo } from "react"
 import { Chrome, Globe, X, Zap } from "lucide-react"
 
 type Props = {
@@ -20,7 +21,26 @@ const CAPABILITIES = [
   { icon: Chrome, label: "Workflow continuation on-page"  },
 ]
 
+function isLocalScoutHost(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/^www\./, "")
+  return (
+    host === "localhost" ||
+    host.endsWith(".localhost") ||
+    host === "127.0.0.1" ||
+    host === "0.0.0.0" ||
+    host === "::1" ||
+    host === "[::1]"
+  )
+}
+
 export function ScoutExtensionPromo({ onDismiss }: Props) {
+  const installHref = useMemo(() => {
+    if (typeof window === "undefined") return "/extension"
+    return isLocalScoutHost(window.location.hostname)
+      ? "/extension"
+      : "https://chrome.google.com/webstore/detail/hireoven"
+  }, [])
+
   return (
     <div className="mb-6 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
       <div className="flex items-start gap-3 px-4 py-3.5">
@@ -48,13 +68,13 @@ export function ScoutExtensionPromo({ onDismiss }: Props) {
 
           <div className="mt-3 flex items-center gap-3">
             <a
-              href="https://chrome.google.com/webstore/detail/hireoven"
+              href={installHref}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 rounded-lg bg-slate-950 px-3 py-1.5 text-[11px] font-semibold text-white transition hover:bg-slate-800"
             >
               <Chrome className="h-3 w-3" />
-              Install Chrome extension
+              {installHref === "/extension" ? "Open local extension setup" : "Install Chrome extension"}
             </a>
             <button
               type="button"

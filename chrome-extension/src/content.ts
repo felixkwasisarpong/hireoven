@@ -4,7 +4,8 @@
  * Boots the page-aware overlay on supported job sites and proxies
  * messages from background/popup to detection/extraction/fill helpers.
  *
- * Safety: never auto-submit, never auto-fill without explicit user click.
+ * Safety: never auto-submit; manual autofill requires explicit user action,
+ * while agent-mode autofill only runs when a trusted extension command is issued.
  */
 
 import { detectFormFields } from "./autofill/form-detector"
@@ -34,6 +35,8 @@ import type {
 type HireovenContentWindow = Window & {
   __hoContentBootstrapped?: boolean
 }
+
+let scoutBarInstance: ScoutBar | null = null
 
 // Sites where the Scout Bar is allowed to mount.
 //
@@ -281,6 +284,30 @@ function registerMessageBridge(): void {
           sendResponse(result)
           break
         }
+        case "EXECUTE_SCOUT_COMMAND": {
+          void (async () => {
+            if (!scoutBarInstance) {
+              await mountScoutBarWhenReady()
+            }
+            if (!scoutBarInstance) {
+              sendResponse({
+                type: "SCOUT_COMMAND_EXECUTED",
+                accepted: false,
+                message: "Scout Bar is not mounted on this page.",
+              })
+              return
+            }
+            await scoutBarInstance.executeScoutCommand(message.command, message.payload)
+            sendResponse({ type: "SCOUT_COMMAND_EXECUTED", accepted: true })
+          })().catch((err) => {
+            sendResponse({
+              type: "SCOUT_COMMAND_EXECUTED",
+              accepted: false,
+              message: err instanceof Error ? err.message : "Command execution failed.",
+            })
+          })
+          return true
+        }
         default:
           sendResponse({ type: "ERROR", message: "Unknown message type" })
       }
@@ -385,8 +412,10 @@ async function mountScoutBarWhenReady(): Promise<void> {
   }
 
   // ScoutBar manages its own lifecycle (SPA URL observer, mount/teardown).
-  const bar = new ScoutBar()
-  await bar.mount()
+  if (!scoutBarInstance) {
+    scoutBarInstance = new ScoutBar()
+  }
+  await scoutBarInstance.mount()
 }
 
 /**
@@ -490,9 +519,21 @@ async function mountJobCardBadgesWhenReady(): Promise<void> {
 const SCOUT_SOURCE = "hireoven-scout"
 const EXT_SOURCE = "hireoven-ext"
 
+function isLocalAppHost(host: string): boolean {
+  const normalized = host.toLowerCase().replace(/^www\./, "")
+  return (
+    normalized === "localhost" ||
+    normalized.endsWith(".localhost") ||
+    normalized === "127.0.0.1" ||
+    normalized === "0.0.0.0" ||
+    normalized === "::1" ||
+    normalized === "[::1]"
+  )
+}
+
 function isHireovenPage(): boolean {
   const host = window.location.hostname.toLowerCase().replace(/^www\./, "")
-  return host === "hireoven.com" || host === "localhost"
+  return host === "hireoven.com" || host.endsWith(".hireoven.com") || isLocalAppHost(host)
 }
 
 function registerPageBridge(): void {
@@ -500,7 +541,13 @@ function registerPageBridge(): void {
 
   // Page → extension: Scout dashboard requests current context
   // ── Page → Extension: Scout dashboard sends requests and commands ────────────
-  const SCOUT_RELAY_COMMANDS = new Set(["OPEN_AUTOFILL", "START_TAILOR", "START_COMPARE", "START_WORKFLOW"])
+  const SCOUT_RELAY_COMMANDS = new Set([
+    "OPEN_AUTOFILL",
+    "START_TAILOR",
+    "START_COMPARE",
+    "START_WORKFLOW",
+    "AGENT_AUTOFILL",
+  ])
 
   window.addEventListener("message", (event) => {
     if (event.source !== window) return

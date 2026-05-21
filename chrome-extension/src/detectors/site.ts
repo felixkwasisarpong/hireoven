@@ -7,8 +7,8 @@
  * environments as long as callers supply the url argument explicitly.
  *
  * Relationship to ats.ts:
- *   detectATS()  → which ATS platform owns the application form (7 providers)
- *   detectSite() → which major site/board are we currently on (8 sites)
+ *   detectATS()  → which ATS platform owns the application form (8 providers)
+ *   detectSite() → which major site/board are we currently on
  *   Both are complementary; content scripts may call both.
  */
 
@@ -25,6 +25,7 @@ export type SupportedSite =
   | "workday"
   | "icims"
   | "smartrecruiters"
+  | "bamboohr"
   | "unknown"
 
 // ── Internal helpers ──────────────────────────────────────────────────────────
@@ -101,6 +102,11 @@ const SITE_HOST_RULES: SiteHostRule[] = [
     // jobs.smartrecruiters.com / careers.smartrecruiters.com / [tenant].smartrecruiters.com
     match: h => h === "smartrecruiters.com" || h.endsWith(".smartrecruiters.com"),
     site: "smartrecruiters",
+  },
+  {
+    // [tenant].bamboohr.com/careers, /jobs
+    match: h => h === "bamboohr.com" || h.endsWith(".bamboohr.com"),
+    site: "bamboohr",
   },
 ]
 
@@ -190,6 +196,10 @@ const JOB_DETAIL_TESTS: Partial<Record<SupportedSite, (path: string, params: URL
   smartrecruiters: (path) =>
     // jobs.smartrecruiters.com/<tenant>/<numeric-id-or-slug>
     /^\/[^/]+\/[^/?#]+/.test(path),
+
+  bamboohr: (path, params) =>
+    // *.bamboohr.com/careers/<id> or /jobs/view.php?id=<id>
+    /\/careers\//.test(path) || /\/jobs\//.test(path) || params.has("id"),
 }
 
 /**
