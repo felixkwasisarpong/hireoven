@@ -70,7 +70,7 @@ Name: ${resume.full_name ?? "—"}
 Years experience (claimed): ${resume.years_of_experience ?? "?"}
 Primary role: ${resume.primary_role ?? "—"}
 Seniority self-assessed: ${resume.seniority_level ?? "—"}
-Top skills: ${(resume.top_skills ?? []).join(", ") || (resume.skills ?? []).slice(0, 25).join(", ")}
+Top skills: ${(resume.top_skills ?? []).join(", ") || (resume.skills?.technical ?? []).slice(0, 25).join(", ")}
 Industries: ${(resume.industries ?? []).join(", ") || "—"}
 Resume summary: ${(resume.summary ?? "").slice(0, 600)}
 
