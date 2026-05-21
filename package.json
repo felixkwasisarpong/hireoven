@@ -22,6 +22,8 @@
     "recover:blocked:execute": "tsx scripts/recover-blocked-companies.ts --execute",
     "recover:blocked:verify": "tsx scripts/recover-blocked-companies.ts --verify-recovered",
     "recover:blocked:verify:execute": "tsx scripts/recover-blocked-companies.ts --verify-recovered --execute",
+    "backfill:job-normalization": "tsx scripts/backfill-job-normalization-v4.ts",
+    "backfill:job-normalization:execute": "tsx scripts/backfill-job-normalization-v4.ts --execute",
     "maintain:companies": "tsx scripts/maintain-companies.ts",
     "maintain:companies:execute": "tsx scripts/maintain-companies.ts --execute",
     "enrich:skills": "tsx scripts/enrich-job-skills.ts",

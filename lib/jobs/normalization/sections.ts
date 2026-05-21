@@ -1251,9 +1251,12 @@ function sanitizeBenefitsBucket(
         continue
       }
 
-      if (!REQUIREMENT_LIKE_RE.test(normalizedCandidate) && !PREFERRED_LIKE_RE.test(normalizedCandidate)) {
-        kept.push(normalizedCandidate)
-      }
+      // No catch-all: items reach this point only when nothing above matched,
+      // including BENEFITS_LIKE_RE. Keeping them in benefits would let
+      // mis-routed content (from a misclassified heading like
+      // "...Careers Site for salary and benefits information") pollute the
+      // visible "Benefits & perks" list. Drop instead — the section is meant
+      // to be high-precision.
     }
   }
 

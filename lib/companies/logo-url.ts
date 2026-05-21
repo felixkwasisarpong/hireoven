@@ -171,12 +171,13 @@ const GOOGLE_FAVICON_URL_OVERRIDES: Record<string, string> = {
 
 /**
  * Public logo URL for img[src].
- * Default favors DuckDuckGo favicon CDN because it's stable without API keys.
- * `logo-dev` remains opt-in and can be requested explicitly by provider.
+ * Default is logo.dev (real brand marks) when LOGO_DEV_TOKEN is configured;
+ * gracefully falls back to a Google favicon URL when the token is missing.
+ * Other providers remain available by explicit opt-in.
  */
 export function companyLogoUrlFromDomain(
   domain: string,
-  provider: LogoProvider = "duckduckgo"
+  provider: LogoProvider = "logo-dev"
 ): string {
   const normalized = normalizeCompanyDomain(domain)
   if (!normalized || isAtsDomain(normalized)) return ""

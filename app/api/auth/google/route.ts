@@ -19,6 +19,13 @@ function getAppOrigin(request: NextRequest): string {
 }
 
 export async function GET(request: NextRequest) {
+  // Waitlist gate: same flag the signup route honors. Block Google sign-in
+  // so it can't be used as a side door around the invite requirement.
+  if (process.env.WAITLIST_ONLY === "true") {
+    const origin = getAppOrigin(request)
+    return NextResponse.redirect(`${origin}/login?error=waitlist`)
+  }
+
   const clientId = process.env.GOOGLE_CLIENT_ID?.trim()
   const secret = process.env.GOOGLE_CLIENT_SECRET?.trim()
   if (!clientId || !secret) {
