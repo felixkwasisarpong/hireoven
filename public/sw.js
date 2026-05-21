@@ -1,5 +1,5 @@
-const STATIC_CACHE = "hireoven-static-v3"
-const DATA_CACHE = "hireoven-data-v3"
+const STATIC_CACHE = "hireoven-static-v4"
+const DATA_CACHE = "hireoven-data-v4"
 const META_CACHE = "hireoven-meta-v2"
 const OFFLINE_URL = "/offline.html"
 const JOB_COUNT_META_URL = "/__offline__/jobs-count"
@@ -14,8 +14,16 @@ const CORE_ASSETS = [
 
 function isStaticAsset(request) {
   const url = new URL(request.url)
+  const sameOrigin = url.origin === self.location.origin
 
-  if (url.origin === self.location.origin && url.pathname.startsWith("/_next/")) {
+  if (sameOrigin && url.pathname.startsWith("/_next/")) {
+    return false
+  }
+
+  // Cross-origin images (logo.dev, favicon CDNs, etc.) must always come from the
+  // network. We can't bust their URLs to force a refresh, so a single bad/placeholder
+  // response would otherwise stick in the SW cache permanently.
+  if (request.destination === "image" && !sameOrigin) {
     return false
   }
 

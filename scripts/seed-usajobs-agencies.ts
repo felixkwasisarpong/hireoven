@@ -154,7 +154,7 @@ async function main() {
           a.domain,
           careersUrl,
           careersUrl,
-          companyLogoUrlFromDomain(a.domain, "google-favicon"),
+          companyLogoUrlFromDomain(a.domain, "logo-dev"),
           a.industry,
           a.size,
           a.organization,

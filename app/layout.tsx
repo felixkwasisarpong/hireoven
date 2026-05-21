@@ -7,7 +7,10 @@ import { AuthProvider } from "@/lib/context/AuthContext"
 import { SubscriptionProvider } from "@/lib/context/SubscriptionContext"
 import { UpgradeModalProvider } from "@/lib/context/UpgradeModalContext"
 import UpgradeModal from "@/components/gates/UpgradeModal"
+import WaitlistFeedback from "@/components/waitlist/WaitlistFeedback"
 import "./globals.css"
+
+const WAITLIST_MODE = process.env.NEXT_PUBLIC_WAITLIST_MODE === "true"
 
 /** Plus Jakarta Sans — geometric SaaS feel (Cruip / Mosaic-adjacent). */
 const jakarta = Plus_Jakarta_Sans({
@@ -63,6 +66,7 @@ export default function RootLayout({
               </Suspense>
               {children}
               <UpgradeModal />
+              {WAITLIST_MODE ? <WaitlistFeedback /> : null}
               <ServiceWorkerRegistration />
             </ToastProvider>
           </SubscriptionProvider>

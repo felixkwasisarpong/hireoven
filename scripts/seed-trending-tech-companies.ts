@@ -122,7 +122,7 @@ function rowFromTuple(row: SeedTuple): InsertRow {
     careers_url: row[2],
     industry: row[3],
     size: row[4],
-    logo_url: companyLogoUrlFromDomain(row[1], "google-favicon"),
+    logo_url: companyLogoUrlFromDomain(row[1], "logo-dev"),
     ats_type: extra.ats_type ?? null,
     ats_identifier: extra.ats_identifier ?? null,
     sponsors_h1b: sponsors,

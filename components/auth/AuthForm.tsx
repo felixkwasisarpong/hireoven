@@ -25,6 +25,7 @@ const OAUTH_ERRORS: Record<string, string> = {
   invalid_state:        "Sign-in session expired. Please try again.",
   missing_code:         "Google did not return an authorisation code.",
   access_denied:        "You declined Google sign-in.",
+  waitlist:             "We're invite-only right now. Join the waitlist below and we'll send you an invite when there's room.",
 }
 
 function sanitizeNext(next: string | null): string | null {
@@ -67,10 +68,15 @@ function ErrorBanner({ message }: { message: string }) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
+const WAITLIST_MODE = process.env.NEXT_PUBLIC_WAITLIST_MODE === "true"
+
 export function AuthForm({ defaultMode = "login" }: Props) {
   const searchParams = useSearchParams()
   const next = sanitizeNext(searchParams.get("next"))
   const inviteToken = searchParams.get("invite")?.trim() || null
+  // Hide Google sign-in while the waitlist is active so people don't bypass
+  // the invite gate by signing up via Google. Invitees still see it.
+  const showGoogle = !WAITLIST_MODE || Boolean(inviteToken)
 
   // If arriving via invite link, lock to signup mode
   const [mode, setMode] = useState<AuthMode>(inviteToken ? "signup" : defaultMode)
@@ -293,25 +299,29 @@ export function AuthForm({ defaultMode = "login" }: Props) {
           </div>
 
           {/* Google button */}
-          <button
-            type="button"
-            onClick={handleGoogle}
-            disabled={googleLoading || loading}
-            className="mb-5 flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 hover:border-slate-300 disabled:opacity-60"
-          >
-            {googleLoading ? <Spinner /> : <GoogleIcon />}
-            Continue with Google
-          </button>
+          {showGoogle && (
+            <>
+              <button
+                type="button"
+                onClick={handleGoogle}
+                disabled={googleLoading || loading}
+                className="mb-5 flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 hover:border-slate-300 disabled:opacity-60"
+              >
+                {googleLoading ? <Spinner /> : <GoogleIcon />}
+                Continue with Google
+              </button>
 
-          {/* Divider */}
-          <div className="relative mb-5">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-slate-200" />
-            </div>
-            <div className="relative flex justify-center">
-              <span className="bg-white px-3 text-xs text-slate-400">or with email</span>
-            </div>
-          </div>
+              {/* Divider */}
+              <div className="relative mb-5">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-slate-200" />
+                </div>
+                <div className="relative flex justify-center">
+                  <span className="bg-white px-3 text-xs text-slate-400">or with email</span>
+                </div>
+              </div>
+            </>
+          )}
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4">

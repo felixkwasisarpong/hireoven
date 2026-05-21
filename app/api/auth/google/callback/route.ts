@@ -90,7 +90,12 @@ export async function GET(request: NextRequest) {
         )
       }
     } else {
-      // New user — create account + profile in a transaction
+      // New user — create account + profile in a transaction.
+      // Waitlist gate: don't let Google sign-in be a side door around the
+      // invite requirement. Existing Google users (matched above) still work.
+      if (process.env.WAITLIST_ONLY === "true") {
+        return loginError(origin, "waitlist")
+      }
       userId = randomUUID()
       const client = await pool.connect()
       try {

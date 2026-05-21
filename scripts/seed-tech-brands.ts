@@ -266,7 +266,7 @@ async function runProbe(
           r.domain,
           r.careersUrl,
           r.directAtsUrl,
-          companyLogoUrlFromDomain(r.domain, "google-favicon"),
+          companyLogoUrlFromDomain(r.domain, "logo-dev"),
           r.industry,
           r.size,
           r.provider,
