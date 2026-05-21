@@ -152,6 +152,43 @@ function titleCase(slug: string): string {
     .join(" ")
 }
 
+/**
+ * crt.sh surfaces every cert SAN under an ATS apex — including the vendor's
+ * own internal/dev/CDN subdomains and raw client UUIDs. Those can return a
+ * Lever/SR API shape with a transient test job; without this filter we end up
+ * persisting fake "companies" like Admin2, 42dev, Cdn, c-<uuid>.hire.lever.co.
+ */
+const NOISE_SLUG_WORDS = new Set([
+  "admin", "auth", "billing", "box", "bugs", "cdn", "cert", "test", "tests",
+  "testing", "qa", "stage", "staging", "prod", "sandbox", "demo", "customer",
+  "customers", "assets", "argocd", "betest", "cttest", "dbdev", "ctdev",
+  "careerdev", "career", "careers", "careerscdncfl", "corporatehelp",
+  "corporatesrhelp", "status", "api", "dev", "internal", "infra", "ops",
+  "public", "private", "client", "tenant", "account", "template", "sample",
+  "hello", "world", "main", "master", "root", "unleash", "boundlessu",
+  "bluesteel", "cerebro", "arepa",
+])
+
+export function isLikelyNoiseSlug(slug: string): boolean {
+  const s = slug.toLowerCase().trim()
+  if (!s) return true
+  // Lever raw client UUIDs (c-<8>-<4>-<4>-<4>-<12>).
+  if (/^c-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(s)) return true
+  // Bare hex UUIDs.
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(s)) return true
+  // Numeric / dev-suffixed sluglets like "admin2", "test1", "cert-bel".
+  if (/^(admin|test|qa|cert|dev|stage|staging|sandbox|demo)[-_0-9]*$/i.test(s)) return true
+  if (/^(test|demo|sandbox|staging)\d+$/i.test(s)) return true
+  // Catches "42dev", "123test", "5cert"-style numeric-prefixed infra slugs.
+  if (/^\d+(dev|test|qa|cert|stage|demo|sandbox|admin)$/i.test(s)) return true
+  // Single common English / infra word, hyphenated variants included.
+  const flat = s.replace(/[-_]/g, "")
+  if (NOISE_SLUG_WORDS.has(flat) || NOISE_SLUG_WORDS.has(s)) return true
+  // Slugs with embedded "cdn"/"cert"/"unleash"/"int-bel" subdomain-style fragments.
+  if (/(^|[-.])(cdn|cert|unleash|int-bel|assets)([-.]|$)/i.test(s)) return true
+  return false
+}
+
 type RunSummary = {
   ats: AtsName
   apex: string
@@ -416,6 +453,10 @@ async function runForTarget(target: AtsTarget): Promise<RunSummary> {
   const validations: SynthesisResult[] = await Promise.all(
     hosts.map((host) =>
       synthesisLimit(async (): Promise<SynthesisResult> => {
+        // Drop SANs that obviously aren't real employer slugs before doing
+        // network work. Catches vendor infra subdomains and raw client UUIDs
+        // that crt.sh surfaces alongside legitimate customer hosts.
+        if (isLikelyNoiseSlug(host.slug)) return { kind: "skipped-adapter" }
         const careersUrl = await target.toCareersUrl(host)
         if (!careersUrl) return { kind: "synthesis-failed" }
         const detection = detectAdapter(careersUrl)
