@@ -154,6 +154,19 @@ async function main() {
   const skipStartupDiscovery = args.includes("--skip-startup-discovery")
   const skipWorkdayRecovery = args.includes("--skip-workday-recovery")
 
+  if (skipSeeding && skipDiscovery) {
+    console.warn(
+      [
+        "",
+        "[capture] WARNING: --skip-seeding and --skip-discovery are both set.",
+        "          This run will NOT add new companies; it only crawls/maintains existing rows.",
+        "          If you only want to avoid startup sources, use --skip-startup-discovery",
+        "          (without --skip-discovery) so non-startup discovery still runs.",
+        "",
+      ].join("\n")
+    )
+  }
+
   const includeTechnology = !args.includes("--exclude-technology")
   const includeFuzzyDedup = args.includes("--include-fuzzy-dedup")
 

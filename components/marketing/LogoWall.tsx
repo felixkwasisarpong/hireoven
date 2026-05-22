@@ -13,6 +13,17 @@ type Props = {
   companies: LogoWallCompany[]
 }
 
+function isGoogleFaviconUrl(logoUrl: string | null): boolean {
+  if (!logoUrl?.trim()) return false
+  try {
+    const parsed = new URL(logoUrl)
+    const host = parsed.hostname.toLowerCase()
+    return host.includes("google.com") || host.endsWith(".gstatic.com")
+  } catch {
+    return false
+  }
+}
+
 // Simple, server-data-driven logo wall for the marketing page. Renders the
 // company mark through our existing <CompanyLogo> which already has a
 // multi-provider fallback chain (stored url -> google favicon -> unavatar
@@ -32,7 +43,9 @@ export default function LogoWall({ companies }: Props) {
           <CompanyLogo
             companyName={company.name}
             domain={company.domain}
-            logoUrl={company.logo_url}
+            // Marketing wall should avoid tiny Google favicon marks and prefer
+            // brand-logo resolution by company domain.
+            logoUrl={isGoogleFaviconUrl(company.logo_url) ? null : company.logo_url}
             className="h-12 w-12 transition"
           />
           <span className="line-clamp-1 text-center text-[11px] font-medium text-gray-400 group-hover:text-gray-600">

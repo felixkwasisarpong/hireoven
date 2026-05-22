@@ -124,6 +124,16 @@ const MICROSOFT_PCSX_MAX_JOBS = Math.max(
   MICROSOFT_PCSX_PAGE_SIZE,
   Number.parseInt(process.env.CRAWLER_MICROSOFT_PCSX_MAX_JOBS ?? "3000", 10)
 )
+const IBM_CAREERS_PAGE_SIZE = Math.max(
+  20,
+  Number.parseInt(process.env.CRAWLER_IBM_CAREERS_PAGE_SIZE ?? "100", 10)
+)
+const IBM_CAREERS_MAX_JOBS = Math.max(
+  IBM_CAREERS_PAGE_SIZE,
+  Number.parseInt(process.env.CRAWLER_IBM_CAREERS_MAX_JOBS ?? "5000", 10)
+)
+const IBM_CAREERS_API_BASE =
+  "https://www-api.ibm.com/search/api/v2/ibmcom/appid/careers/responseFormat/json"
 const FAST_SECONDARY_MAX_ATTEMPTS = Math.max(
   1,
   Number.parseInt(process.env.CRAWLER_SECONDARY_MAX_ATTEMPTS ?? "1", 10)
@@ -135,6 +145,14 @@ const FAST_SECONDARY_TIMEOUT_MS = Math.max(
 const ONE_HOP_MAX_PAGES = Math.max(
   1,
   Number.parseInt(process.env.CRAWLER_ONE_HOP_MAX_PAGES ?? "2", 10)
+)
+const SITEMAP_MAX_JOBS = Math.max(
+  100,
+  Number.parseInt(process.env.CRAWLER_SITEMAP_MAX_JOBS ?? "10000", 10)
+)
+const SITEMAP_MAX_NESTED_FILES = Math.max(
+  1,
+  Number.parseInt(process.env.CRAWLER_SITEMAP_MAX_NESTED_FILES ?? "10", 10)
 )
 
 type DiscoverAndCrawlResult = {
@@ -379,6 +397,16 @@ function isMicrosoftCareersUrl(url: URL) {
   const path = url.pathname.toLowerCase()
   if (host !== "apply.careers.microsoft.com") return false
   return path === "/careers" || path.startsWith("/careers/")
+}
+
+function isIbmCareersUrl(url: URL) {
+  const host = url.hostname.toLowerCase()
+  const path = url.pathname.toLowerCase()
+  if (host === "careers.ibm.com") return true
+  if (host === "www.ibm.com" || host === "ibm.com") {
+    return path === "/careers" || path.startsWith("/careers/")
+  }
+  return false
 }
 
 function isLocaleSegment(part: string) {
@@ -1226,6 +1254,216 @@ function inferTitleFromUrl(url: URL): string {
 
   if (!cleaned) return "Open role"
   return cleaned
+}
+
+function isSameHostOrSubdomain(hostname: string, baseHostname: string): boolean {
+  const host = hostname.toLowerCase()
+  const base = baseHostname.toLowerCase()
+  return host === base || host.endsWith(`.${base}`)
+}
+
+function cleanXmlText(value: string): string {
+  return decodeHtmlEntities(value.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1"))
+    .replace(/\s+/g, " ")
+    .trim()
+}
+
+type SitemapUrlEntry = { url: URL; lastmod?: string }
+
+function parseSitemapUrlEntries(xml: string, baseUrl: URL): SitemapUrlEntry[] {
+  const out: SitemapUrlEntry[] = []
+  const seen = new Set<string>()
+  const urlNodeRegex = /<url\b[^>]*>([\s\S]*?)<\/url>/gi
+
+  for (const match of xml.matchAll(urlNodeRegex)) {
+    const node = match[1] ?? ""
+    const rawLoc = node.match(/<loc\b[^>]*>([\s\S]*?)<\/loc>/i)?.[1]
+    if (!rawLoc) continue
+
+    const resolved = toUrl(cleanXmlText(rawLoc), baseUrl)
+    if (!resolved) continue
+
+    const key = resolved.toString()
+    if (seen.has(key)) continue
+    seen.add(key)
+
+    const rawLastmod = node.match(/<lastmod\b[^>]*>([\s\S]*?)<\/lastmod>/i)?.[1]
+    const lastmod = rawLastmod ? cleanXmlText(rawLastmod) : undefined
+    out.push({ url: resolved, lastmod })
+  }
+
+  return out
+}
+
+function parseSitemapIndexEntries(xml: string, baseUrl: URL): URL[] {
+  const out: URL[] = []
+  const seen = new Set<string>()
+  const sitemapNodeRegex = /<sitemap\b[^>]*>([\s\S]*?)<\/sitemap>/gi
+
+  for (const match of xml.matchAll(sitemapNodeRegex)) {
+    const node = match[1] ?? ""
+    const rawLoc = node.match(/<loc\b[^>]*>([\s\S]*?)<\/loc>/i)?.[1]
+    if (!rawLoc) continue
+
+    const resolved = toUrl(cleanXmlText(rawLoc), baseUrl)
+    if (!resolved) continue
+
+    const key = resolved.toString()
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(resolved)
+  }
+
+  return out
+}
+
+function inferTitleFromSitemapUrl(url: URL): string {
+  const blocked = new Set([
+    "job",
+    "jobs",
+    "career",
+    "careers",
+    "position",
+    "positions",
+    "opening",
+    "openings",
+  ])
+  const segments = url.pathname.split("/").filter(Boolean)
+
+  for (let i = segments.length - 1; i >= 0; i--) {
+    const segment = decodeURIComponent(segments[i] ?? "").trim()
+    if (!segment) continue
+    if (blocked.has(segment.toLowerCase())) continue
+    if (/^\d+$/.test(segment)) continue
+
+    const cleaned = segment
+      .replace(/\.[a-z0-9]+$/i, "")
+      .replace(/[_-]+/g, " ")
+      .replace(/\b(?:r|req|requisition)[ -]?\d+\b/gi, "")
+      .replace(/\b\d{4,}\b/g, "")
+      .replace(/\s+/g, " ")
+      .trim()
+    if (cleaned) return cleaned
+  }
+
+  return inferTitleFromUrl(url)
+}
+
+function extractJobsFromSitemapXml(
+  xml: string,
+  careersUrl: URL,
+  sourceUrl: URL
+): RawJob[] {
+  if (!/<urlset\b/i.test(xml)) return []
+
+  const jobs: RawJob[] = []
+  for (const entry of parseSitemapUrlEntries(xml, sourceUrl)) {
+    const resolved = entry.url
+    if (!isSameHostOrSubdomain(resolved.hostname, careersUrl.hostname)) continue
+    if (!isLikelyJobLink(resolved, "", careersUrl)) continue
+
+    const normalizedUrl = normalizeJobApplyUrl(resolved.toString())
+    jobs.push({
+      title: inferTitleFromSitemapUrl(resolved) || "Open role",
+      url: normalizedUrl,
+      postedAt: entry.lastmod,
+    })
+
+    if (jobs.length >= SITEMAP_MAX_JOBS) break
+  }
+
+  return jobs
+}
+
+async function crawlJobsFromSitemaps(careersUrl: URL): Promise<RawJob[]> {
+  const candidateSet = new Set<string>([
+    new URL("/sitemap.xml", careersUrl).toString(),
+    new URL("/sitemap_index.xml", careersUrl).toString(),
+    new URL("/sitemap-index.xml", careersUrl).toString(),
+  ])
+
+  const robotsTxt = await fetchText(
+    new URL("/robots.txt", careersUrl).toString(),
+    {},
+    {
+      maxAttempts: FAST_SECONDARY_MAX_ATTEMPTS,
+      timeoutMs: FAST_SECONDARY_TIMEOUT_MS,
+    }
+  )
+  if (robotsTxt) {
+    for (const line of robotsTxt.split(/\r?\n/)) {
+      const raw = line.match(/^\s*sitemap:\s*(\S+)/i)?.[1]
+      if (!raw) continue
+      const resolved = toUrl(raw, careersUrl)
+      if (!resolved) continue
+      if (!isSameHostOrSubdomain(resolved.hostname, careersUrl.hostname)) continue
+      candidateSet.add(resolved.toString())
+    }
+  }
+
+  const candidateUrls = [...candidateSet]
+    .map((raw) => toUrl(raw))
+    .filter((url): url is URL => Boolean(url))
+    .slice(0, SITEMAP_MAX_NESTED_FILES)
+
+  const fetchedSitemaps = await Promise.all(
+    candidateUrls.map(async (url) => ({
+      url,
+      xml: await fetchText(
+        url.toString(),
+        {},
+        {
+          maxAttempts: FAST_SECONDARY_MAX_ATTEMPTS,
+          timeoutMs: FAST_SECONDARY_TIMEOUT_MS,
+        }
+      ),
+    }))
+  )
+
+  const allJobs: RawJob[] = []
+  const nestedSitemapSet = new Set<string>()
+
+  for (const fetched of fetchedSitemaps) {
+    if (!fetched.xml) continue
+    allJobs.push(...extractJobsFromSitemapXml(fetched.xml, careersUrl, fetched.url))
+
+    for (const nested of parseSitemapIndexEntries(fetched.xml, fetched.url)) {
+      if (!isSameHostOrSubdomain(nested.hostname, careersUrl.hostname)) continue
+      nestedSitemapSet.add(nested.toString())
+      if (nestedSitemapSet.size >= SITEMAP_MAX_NESTED_FILES) break
+    }
+
+    if (allJobs.length >= SITEMAP_MAX_JOBS) break
+  }
+
+  const nestedSitemapUrls = [...nestedSitemapSet]
+    .map((raw) => toUrl(raw))
+    .filter((url): url is URL => Boolean(url))
+    .slice(0, SITEMAP_MAX_NESTED_FILES)
+
+  if (allJobs.length < SITEMAP_MAX_JOBS && nestedSitemapUrls.length > 0) {
+    const nestedFetched = await Promise.all(
+      nestedSitemapUrls.map(async (url) => ({
+        url,
+        xml: await fetchText(
+          url.toString(),
+          {},
+          {
+            maxAttempts: FAST_SECONDARY_MAX_ATTEMPTS,
+            timeoutMs: FAST_SECONDARY_TIMEOUT_MS,
+          }
+        ),
+      }))
+    )
+
+    for (const fetched of nestedFetched) {
+      if (!fetched.xml) continue
+      allJobs.push(...extractJobsFromSitemapXml(fetched.xml, careersUrl, fetched.url))
+      if (allJobs.length >= SITEMAP_MAX_JOBS) break
+    }
+  }
+
+  return dedupeJobs(allJobs).slice(0, SITEMAP_MAX_JOBS)
 }
 
 function greenhouseEmbeddedJobId(url: URL): string | null {
@@ -2818,6 +3056,183 @@ async function crawlMicrosoftCareers(careersUrl: URL): Promise<RawJob[]> {
   return jobs
 }
 
+type IbmCareersDocAttribute = Record<string, unknown>
+
+type IbmCareersResultItem = {
+  id?: string
+  title?: string
+  description?: string
+  summary?: string
+  url?: string
+  docattributes?: IbmCareersDocAttribute[]
+}
+
+type IbmCareersApiResponse = {
+  resultset?: {
+    searchresults?: {
+      totalresults?: string | number
+      startindex?: string | number
+      numresults?: string | number
+      searchresultlist?: IbmCareersResultItem[]
+    }
+  }
+}
+
+function flattenIbmDocAttributes(
+  attributes: IbmCareersDocAttribute[] | undefined
+): Record<string, string> {
+  const flattened: Record<string, string> = {}
+  if (!attributes) return flattened
+  for (const attribute of attributes) {
+    for (const [key, value] of Object.entries(attribute)) {
+      const normalizedValue = String(value ?? "").trim()
+      if (!normalizedValue) continue
+      flattened[key] = normalizedValue
+    }
+  }
+  return flattened
+}
+
+function parseIbmPostedAt(value: string | undefined): string | undefined {
+  const raw = String(value ?? "").trim()
+  if (!raw) return undefined
+  const asDate = new Date(raw)
+  if (Number.isNaN(asDate.getTime())) return undefined
+  return asDate.toISOString()
+}
+
+function normalizeIbmJobDetailUrl(rawValue: string): string | null {
+  const resolved = toUrl(rawValue, new URL("https://careers.ibm.com"))
+  if (!resolved) return null
+  return normalizeJobApplyUrl(resolved.toString())
+}
+
+function ibmJobIdFromUrl(url: string): string | null {
+  try {
+    const parsed = new URL(url)
+    const fromParam = parsed.searchParams.get("jobId")
+    if (fromParam && fromParam.trim().length > 0) return fromParam.trim()
+  } catch {
+    return null
+  }
+  return null
+}
+
+async function crawlIbmCareers(careersUrl: URL): Promise<RawJob[]> {
+  if (!isIbmCareersUrl(careersUrl)) return []
+
+  const jobs: RawJob[] = []
+  const seen = new Set<string>()
+  let startIndex = 0
+  let totalJobs = Number.POSITIVE_INFINITY
+  const maxPages = Math.max(1, Math.ceil(IBM_CAREERS_MAX_JOBS / IBM_CAREERS_PAGE_SIZE) + 2)
+  let page = 1
+
+  while (
+    page <= maxPages &&
+    startIndex < totalJobs &&
+    jobs.length < IBM_CAREERS_MAX_JOBS
+  ) {
+    const apiUrl = new URL(IBM_CAREERS_API_BASE)
+    apiUrl.searchParams.set("appId", "careers")
+    apiUrl.searchParams.set("scope", "careers2")
+    apiUrl.searchParams.set("query", "")
+    apiUrl.searchParams.set("fr", String(startIndex))
+    apiUrl.searchParams.set("nr", String(IBM_CAREERS_PAGE_SIZE))
+    apiUrl.searchParams.set("page", String(page))
+    apiUrl.searchParams.set("ql", "en")
+    apiUrl.searchParams.set("languageSelector", "en")
+    apiUrl.searchParams.set("refinement", "ibmcom")
+    apiUrl.searchParams.set("filter", "(language:en OR language:zz)")
+    apiUrl.searchParams.set(
+      "rmdt",
+      [
+        "field_text_01",
+        "field_keyword_05",
+        "field_keyword_17",
+        "field_keyword_18",
+        "field_keyword_19",
+        "description",
+        "url",
+        "title",
+        "dcdate",
+        "effectivedate",
+      ].join(",")
+    )
+
+    const response = await fetchCrawlerJson<IbmCareersApiResponse>(apiUrl.toString(), {
+      method: "GET",
+      headers: {
+        accept: "application/json, text/plain, */*",
+        referer: careersUrl.toString(),
+        origin: careersUrl.origin,
+      },
+    })
+    if (!response.ok) break
+
+    const payload = response.data?.resultset?.searchresults
+    const pageJobs = payload?.searchresultlist ?? []
+    if (pageJobs.length === 0) break
+
+    const parsedTotal = parseFiniteInteger(payload?.totalresults)
+    if (parsedTotal !== null) totalJobs = parsedTotal
+
+    let addedOnPage = 0
+    for (const item of pageJobs) {
+      const attributes = flattenIbmDocAttributes(item.docattributes)
+      const title =
+        String(attributes.title ?? "").trim() ||
+        String(item.title ?? "").trim()
+      const detailUrl =
+        normalizeIbmJobDetailUrl(String(attributes.url ?? "").trim()) ??
+        normalizeIbmJobDetailUrl(String(item.url ?? "").trim())
+
+      if (!title || !detailUrl) continue
+
+      const idFromAttribute = String(attributes.field_text_01 ?? "").trim()
+      const idFromUrl = ibmJobIdFromUrl(detailUrl)
+      const externalId = `ibm:${idFromAttribute || idFromUrl || detailUrl}`
+      if (seen.has(externalId)) continue
+      seen.add(externalId)
+
+      const location =
+        String(attributes.field_keyword_19 ?? "").trim() ||
+        String(attributes.field_keyword_05 ?? "").trim() ||
+        undefined
+
+      const postedAt =
+        parseIbmPostedAt(String(attributes.dcdate ?? "").trim()) ??
+        parseIbmPostedAt(String(attributes.effectivedate ?? "").trim())
+
+      const description = cleanJobDescription(
+        String(attributes.description ?? "").trim() ||
+          String(item.description ?? "").trim() ||
+          String(item.summary ?? "").trim()
+      )
+
+      const workMode = String(attributes.field_keyword_17 ?? "").trim() || undefined
+
+      jobs.push({
+        externalId,
+        title,
+        url: detailUrl,
+        location,
+        postedAt,
+        description: description ?? undefined,
+        workMode,
+      })
+      addedOnPage += 1
+      if (jobs.length >= IBM_CAREERS_MAX_JOBS) break
+    }
+
+    if (addedOnPage === 0) break
+    startIndex += pageJobs.length
+    page += 1
+  }
+
+  return jobs
+}
+
 type AmazonJob = {
   id?: string
   title?: string
@@ -3021,6 +3436,10 @@ async function crawlByKnownAts(careersUrl: URL): Promise<RawJob[]> {
     return crawlMicrosoftCareers(careersUrl)
   }
 
+  if (isIbmCareersUrl(careersUrl)) {
+    return crawlIbmCareers(careersUrl)
+  }
+
   const greenhouseBoard = parseGreenhouseBoard(careersUrl)
   if (greenhouseBoard) {
     return crawlGreenhouse(careersUrl)
@@ -3192,6 +3611,7 @@ async function discoverAndCrawlFromHtml(careersUrl: URL): Promise<DiscoverAndCra
         isOracleCandidateExperienceUrl(candidate) ||
         isCiscoPhenomPortal(candidate) ||
         isMicrosoftCareersUrl(candidate) ||
+        isIbmCareersUrl(candidate) ||
         isGoogleCareersPortal(candidate)
 
       if (!known) continue
@@ -3306,6 +3726,17 @@ async function discoverAndCrawlFromHtml(careersUrl: URL): Promise<DiscoverAndCra
     if (dedupedOneHopJobs.length > 0) {
       return {
         jobs: dedupedOneHopJobs,
+        primaryStatusCode,
+        primaryErrorReason,
+        blocked,
+        fallbackUsed,
+      }
+    }
+
+    const sitemapJobs = await crawlJobsFromSitemaps(careersUrl)
+    if (sitemapJobs.length > 0) {
+      return {
+        jobs: sitemapJobs,
         primaryStatusCode,
         primaryErrorReason,
         blocked,
