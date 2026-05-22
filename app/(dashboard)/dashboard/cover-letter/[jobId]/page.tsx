@@ -20,6 +20,7 @@ import CoverLetterDocument from "@/components/cover-letter/CoverLetterDocument"
 import SponsorshipHelper from "@/components/cover-letter/SponsorshipHelper"
 import ToneSelector from "@/components/cover-letter/ToneSelector"
 import { useResumeContext } from "@/components/resume/ResumeProvider"
+import CompanyLogo from "@/components/ui/CompanyLogo"
 import { useCoverLetter } from "@/lib/hooks/useCoverLetter"
 import { cn } from "@/lib/utils"
 import type { Company, CoverLetterLength, CoverLetterStyle, Job, Profile } from "@/types"
@@ -225,18 +226,12 @@ export default function CoverLetterPage() {
         {job && (
           <div className="rounded-[32px] border border-white/80 bg-white/90 p-6 shadow-[0_4px_24px_rgba(15,23,42,0.06)]">
             <div className="flex items-start gap-4">
-              {job.company.logo_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={job.company.logo_url}
-                  alt={job.company.name}
-                  className="h-12 w-12 rounded-2xl border border-gray-200 object-cover"
-                />
-              ) : (
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#E0F2FE] text-lg font-bold text-[#0C4A6E]">
-                  {job.company.name.charAt(0).toUpperCase()}
-                </div>
-              )}
+              <CompanyLogo
+                companyName={job.company.name}
+                domain={job.company.domain}
+                logoUrl={job.company.logo_url}
+                className="h-12 w-12 shrink-0 rounded-2xl border-gray-200"
+              />
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">
                   {job.company.name}

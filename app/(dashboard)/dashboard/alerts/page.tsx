@@ -5,6 +5,7 @@ export const dynamic = "force-dynamic"
 import { useEffect, useMemo, useState } from "react"
 import { BellRing, Plus, Trash2, X } from "lucide-react"
 import DashboardPageHeader from "@/components/layout/DashboardPageHeader"
+import CompanyLogo from "@/components/ui/CompanyLogo"
 import { useAuth } from "@/lib/hooks/useAuth"
 import type { AlertFrequency, Company, JobAlert, SeniorityLevel } from "@/types"
 
@@ -486,18 +487,12 @@ export default function AlertsPage() {
                           : "border-gray-200 bg-white hover:bg-gray-50"
                       }`}
                     >
-                      {company.logo_url ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={company.logo_url}
-                          alt={company.name}
-                          className="h-10 w-10 rounded-2xl object-cover"
-                        />
-                      ) : (
-                        <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#FFF1E8] text-sm font-semibold text-[#ea580c]">
-                          {company.name.charAt(0).toUpperCase()}
-                        </div>
-                      )}
+                      <CompanyLogo
+                        companyName={company.name}
+                        domain={company.domain}
+                        logoUrl={company.logo_url}
+                        className="h-10 w-10 rounded-2xl"
+                      />
                       <div className="min-w-0">
                         <p className="truncate text-sm font-semibold text-gray-900">
                           {company.name}

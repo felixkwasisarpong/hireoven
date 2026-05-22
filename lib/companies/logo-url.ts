@@ -42,12 +42,24 @@ export function isLogoUrlSafe(logoUrl: string | null | undefined): boolean {
       return true
     }
 
-    // Google favicon: reject ATS domains in the domain param
-    if (u.hostname === "www.google.com" && u.pathname.includes("/s2/favicons")) {
-      const domainParam = u.searchParams.get("domain") ?? ""
-      if (!domainParam) return false
-      if (isAtsDomain(domainParam)) return false
-      if (/\.(uscis-employer|lca-employer)$/.test(domainParam)) return false
+    // Google favicon endpoints:
+    // - https://www.google.com/s2/favicons?...&domain=example.com
+    // - https://t3.gstatic.com/faviconV2?...&url=http://example.com
+    if (u.hostname.includes("google.com") || u.hostname.endsWith(".gstatic.com")) {
+      const direct = u.searchParams.get("domain") ?? u.searchParams.get("domain_url") ?? ""
+      const rawUrl = u.searchParams.get("url") ?? ""
+      let target = normalizeCompanyDomain(direct)
+      if (!target && rawUrl.trim()) {
+        try {
+          const parsed = rawUrl.includes("://") ? new URL(rawUrl) : new URL(`https://${rawUrl}`)
+          target = normalizeCompanyDomain(parsed.hostname)
+        } catch {
+          target = normalizeCompanyDomain(rawUrl)
+        }
+      }
+      if (!target) return false
+      if (isAtsDomain(target)) return false
+      if (/\.(uscis-employer|lca-employer)$/.test(target)) return false
       return true
     }
 

@@ -4,6 +4,7 @@ import Link from "next/link"
 import { useEffect, useState } from "react"
 import { useParams } from "next/navigation"
 import { ArrowLeft, Loader2, RefreshCw, Save } from "lucide-react"
+import CompanyLogo from "@/components/ui/CompanyLogo"
 import { useToast } from "@/components/ui/ToastProvider"
 import { formatDateTime, formatRelativeTime } from "@/lib/admin/format"
 import { cn } from "@/lib/utils"
@@ -190,15 +191,12 @@ export default function EditCompanyPage() {
           <div className="flex items-center gap-4">
             {/* Avatar */}
             <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-sky-100 to-sky-200 text-lg font-bold text-sky-700">
-              {company.logo_url ? (
-                <img
-                  src={company.logo_url}
-                  alt=""
-                  className="h-full w-full object-contain"
-                />
-              ) : (
-                company.name.charAt(0).toUpperCase()
-              )}
+              <CompanyLogo
+                companyName={company.name}
+                domain={company.domain}
+                logoUrl={company.logo_url}
+                className="h-12 w-12 rounded-2xl border-0"
+              />
             </div>
 
             {/* Meta */}

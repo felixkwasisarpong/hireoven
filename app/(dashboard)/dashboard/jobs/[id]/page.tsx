@@ -20,6 +20,7 @@ import JobDetailPanel from "@/components/jobs/JobDetailPanel"
 import JobShareRow from "@/components/jobs/JobShareRow"
 import { ScoutMiniPanel } from "@/components/scout/ScoutMiniPanel"
 import CompanyLogo from "@/components/ui/CompanyLogo"
+import { jobSourceFallbackLogo } from "@/lib/jobs/source-fallback-logo"
 import {
   deriveAboutRoleParagraphs,
   formatSalaryLabel,
@@ -253,6 +254,13 @@ export default async function DashboardJobDetailPage({ params }: Props) {
 
   const job = rawJob as unknown as Job & { company: Company | null }
   const company = job.company
+  const logoFallback = jobSourceFallbackLogo(
+    job,
+    company?.domain ?? null,
+    company?.logo_url ?? null
+  )
+  const companyLogoDomain = logoFallback?.domain ?? company?.domain ?? null
+  const companyLogoUrl = logoFallback?.logoUrl ?? company?.logo_url ?? null
 
   const normalized = resolveJobNormalization(job as unknown as PersistedJobForNormalization)
   const page = normalized.pageView
@@ -547,8 +555,8 @@ export default async function DashboardJobDetailPage({ params }: Props) {
               <div className="shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-1.5 backdrop-blur-sm">
                 <CompanyLogo
                   companyName={company?.name ?? "Company"}
-                  domain={company?.domain ?? null}
-                  logoUrl={company?.logo_url ?? null}
+                  domain={companyLogoDomain}
+                  logoUrl={companyLogoUrl}
                   className="h-[60px] w-[60px] rounded-xl border-0 sm:h-[68px] sm:w-[68px]"
                 />
               </div>
@@ -766,8 +774,8 @@ export default async function DashboardJobDetailPage({ params }: Props) {
                 <div className="mt-4 flex gap-4">
                   <CompanyLogo
                     companyName={company?.name ?? "Company"}
-                    domain={company?.domain ?? null}
-                    logoUrl={company?.logo_url ?? null}
+                    domain={companyLogoDomain}
+                    logoUrl={companyLogoUrl}
                     className="h-12 w-12 shrink-0 rounded-xl border-0 bg-transparent"
                   />
                   <div className="min-w-0 flex-1">

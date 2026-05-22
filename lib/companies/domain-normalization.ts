@@ -15,6 +15,20 @@ function domainFromUrlLike(value: string | null | undefined): string | null {
   }
 }
 
+function domainFromGoogleFaviconUrl(url: URL): string {
+  const direct = url.searchParams.get("domain") ?? url.searchParams.get("domain_url") ?? ""
+  if (direct.trim()) return normalizeCompanyDomain(direct)
+
+  const rawUrl = url.searchParams.get("url") ?? ""
+  if (!rawUrl.trim()) return ""
+  try {
+    const parsed = rawUrl.includes("://") ? new URL(rawUrl) : new URL(`https://${rawUrl}`)
+    return normalizeCompanyDomain(parsed.hostname)
+  } catch {
+    return normalizeCompanyDomain(rawUrl)
+  }
+}
+
 function domainFromLogoUrl(logoUrl: string | null | undefined): string | null {
   if (!logoUrl?.trim()) return null
   try {
@@ -22,7 +36,7 @@ function domainFromLogoUrl(logoUrl: string | null | undefined): string | null {
     const host = url.hostname.toLowerCase()
 
     if (host.includes("google.com") || host.endsWith(".gstatic.com")) {
-      return normalizeCompanyDomain(url.searchParams.get("domain") ?? url.searchParams.get("domain_url") ?? "")
+      return domainFromGoogleFaviconUrl(url)
     }
 
     if (host === "logo.clearbit.com" || host === "unavatar.io") {

@@ -17,18 +17,41 @@ function isPlaceholderDomain(value: string | null | undefined) {
   return PLACEHOLDER_DOMAIN_RE.test(normalized)
 }
 
+function extractGoogleFaviconDomain(url: URL) {
+  const direct =
+    url.searchParams.get("domain") ??
+    url.searchParams.get("domain_url") ??
+    ""
+  if (direct.trim()) return normalizeCompanyDomain(direct)
+
+  // Google faviconV2 URLs often carry the target as `url=http://example.com`.
+  const rawUrl = url.searchParams.get("url") ?? ""
+  if (!rawUrl.trim()) return ""
+  try {
+    const parsed = rawUrl.includes("://") ? new URL(rawUrl) : new URL(`https://${rawUrl}`)
+    return normalizeCompanyDomain(parsed.hostname)
+  } catch {
+    return normalizeCompanyDomain(rawUrl)
+  }
+}
+
 function domainFromLogoUrl(logoUrl: string | null | undefined) {
   if (!logoUrl) return ""
   try {
     const url = new URL(logoUrl)
     const host = url.hostname.toLowerCase()
 
-    if (host.includes("google.com")) {
-      const domain =
-        url.searchParams.get("domain") ??
-        url.searchParams.get("domain_url") ??
-        ""
-      return normalizeCompanyDomain(domain)
+    // Google favicon endpoints:
+    // - https://www.google.com/s2/favicons?...&domain=example.com
+    // - https://t3.gstatic.com/faviconV2?...&url=http://example.com
+    if (
+      host.includes("google.com") ||
+      host.endsWith(".gstatic.com") ||
+      url.pathname.toLowerCase().includes("favicon")
+    ) {
+      const domain = extractGoogleFaviconDomain(url)
+      if (domain) return domain
+      if (host.includes("google.com") || host.endsWith(".gstatic.com")) return ""
     }
 
     // logo.dev: https://img.logo.dev/{domain}?token=...
@@ -83,10 +106,7 @@ function isInvalidPlaceholderGoogleFaviconUrl(logoUrl: string | null | undefined
     const url = new URL(logoUrl)
     const host = url.hostname.toLowerCase()
     if (!host.includes("google.com") && !host.endsWith(".gstatic.com")) return false
-    const faviconDomain =
-      url.searchParams.get("domain") ??
-      url.searchParams.get("domain_url") ??
-      ""
+    const faviconDomain = extractGoogleFaviconDomain(url)
     return isPlaceholderDomain(faviconDomain)
   } catch {
     return false

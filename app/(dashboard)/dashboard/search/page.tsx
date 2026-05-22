@@ -9,6 +9,7 @@ import { Search, X } from "lucide-react"
 import CompanyCard from "@/components/companies/CompanyCard"
 import DashboardPageHeader from "@/components/layout/DashboardPageHeader"
 import JobCard from "@/components/jobs/JobCard"
+import CompanyLogo from "@/components/ui/CompanyLogo"
 import { useAuth } from "@/lib/hooks/useAuth"
 import { useWatchlist } from "@/lib/hooks/useWatchlist"
 import { searchCompanies, searchJobs } from "@/lib/search"
@@ -211,14 +212,12 @@ export default function SearchPage() {
                         href={`/dashboard/companies/${company.id}`}
                         className="surface-card-subtle flex items-center gap-3 rounded-md p-3 transition-colors hover:border-brand-tint-strong hover:bg-brand-tint"
                       >
-                        {company.logo_url ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={company.logo_url} alt={company.name} className="h-10 w-10 flex-shrink-0 rounded-xl border border-gray-100 object-contain bg-white p-0.5" />
-                        ) : (
-                          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-[#FFF1E8] text-sm font-bold text-[#ea580c]">
-                            {company.name.charAt(0).toUpperCase()}
-                          </div>
-                        )}
+                        <CompanyLogo
+                          companyName={company.name}
+                          domain={company.domain}
+                          logoUrl={company.logo_url}
+                          className="h-10 w-10 flex-shrink-0 rounded-xl border-gray-100"
+                        />
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-semibold text-gray-900"
                              dangerouslySetInnerHTML={{ __html: highlight(company.name, rawQ) }}

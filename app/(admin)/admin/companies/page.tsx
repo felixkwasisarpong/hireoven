@@ -15,6 +15,7 @@ import {
   X,
 } from "lucide-react"
 import AddCompanyModal from "@/components/admin/AddCompanyModal"
+import CompanyLogo from "@/components/ui/CompanyLogo"
 import { useToast } from "@/components/ui/ToastProvider"
 import { formatDateTime, formatNumber, formatRelativeTime, downloadCsv } from "@/lib/admin/format"
 import { cn } from "@/lib/utils"
@@ -479,17 +480,12 @@ export default function AdminCompaniesPage() {
                     {/* Company */}
                     <td className="py-3.5 pr-6">
                       <div className="flex items-center gap-3">
-                        {company.logo_url ? (
-                          <img
-                            src={company.logo_url}
-                            alt=""
-                            className="h-8 w-8 flex-shrink-0 rounded-xl border border-gray-100 bg-gray-50 object-contain"
-                          />
-                        ) : (
-                          <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-sky-100 to-sky-200 text-xs font-bold text-sky-700">
-                            {company.name.charAt(0).toUpperCase()}
-                          </div>
-                        )}
+                        <CompanyLogo
+                          companyName={company.name}
+                          domain={company.domain}
+                          logoUrl={company.logo_url}
+                          className="h-8 w-8 flex-shrink-0 rounded-xl border-gray-100"
+                        />
                         <div className="min-w-0">
                           <p className="max-w-[180px] truncate text-sm font-semibold text-gray-900">
                             {company.name}
