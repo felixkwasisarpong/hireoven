@@ -410,10 +410,32 @@ export function startWorkerLoop(
     // climbs monotonically each tick, that's the smoking gun.
     let lastRssMb = process.memoryUsage().rss / 1024 / 1024
 
+    // Hard ceiling per tick. Without this, a single adapter call whose promise
+    // never resolves (no working timeout / Playwright hang / dangling fetch)
+    // wedges the entire loop — the process stays alive (HTTP server keeps it
+    // ref'd) but no further ticks fire. We observed exactly this in prod: one
+    // tick succeeded, then 7+ hours of silence. The Promise.race below lets
+    // the loop abandon a stuck tick and try again with a fresh batch.
+    const tickTimeoutMs = Math.max(
+      60_000,
+      Number.parseInt(process.env.HARVESTER_TICK_TIMEOUT_MS ?? "300000", 10)
+    )
+
     while (!stopping) {
       const tickStartedAt = Date.now()
       try {
-        const summary = await runTick(pool, config, limits)
+        const summary = await Promise.race([
+          runTick(pool, config, limits),
+          new Promise<never>((_, reject) => {
+            const t = setTimeout(
+              () => reject(new Error(`tick exceeded ${tickTimeoutMs}ms — abandoning stuck batch`)),
+              tickTimeoutMs
+            )
+            // Don't keep the process alive on the watchdog alone; the loop
+            // itself + HTTP server provide that anchor.
+            t.unref?.()
+          }),
+        ])
         if (summary.claimed > 0) {
           const mem = process.memoryUsage()
           const rssMb = mem.rss / 1024 / 1024
