@@ -27,9 +27,33 @@ import { harvesterFetch } from "@/lib/harvester/http-agent"
 const PAGE_LIMIT = 20
 const MAX_PAGES = 50 // 1000 postings/board ceiling
 const DEFAULT_LOCALE = "en-US"
-const DEFAULT_USER_AGENT = "hireoven-harvester/1.0 (+bot@hireoven.com)"
+// Workday's WAF flags obvious bot UAs; a real-browser UA + matching
+// Origin/Referer headers reduce 403s on stricter tenants.
+const DEFAULT_USER_AGENT =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
 const DEFAULT_TIMEOUT_MS = 15_000
 const RETRY_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504])
+
+function browserHeadersForUrl(url: string, userAgent: string): Record<string, string> {
+  let origin: string | null = null
+  let referer: string | null = null
+  try {
+    const u = new URL(url)
+    origin = `${u.protocol}//${u.host}`
+    // Referer is the careers landing page (strip /wday/cxs/... API path).
+    const cxsIdx = u.pathname.indexOf("/wday/cxs/")
+    referer = cxsIdx > 0 ? `${origin}${u.pathname.slice(0, cxsIdx)}` : origin
+  } catch {
+    /* fall through */
+  }
+  const headers: Record<string, string> = {
+    "user-agent": userAgent,
+    "accept-language": "en-US,en;q=0.9",
+  }
+  if (origin) headers.origin = origin
+  if (referer) headers.referer = referer
+  return headers
+}
 
 // Per-job detail fetch — enriches descriptions beyond the bullet snippets.
 // Env-tunable for operators who want to trade throughput for richer text.
@@ -269,7 +293,10 @@ export async function fetchWorkdayJobDetail(
   try {
     const response = await doFetch(url, {
       method: "GET",
-      headers: { "user-agent": userAgent, accept: "application/json" },
+      headers: {
+        ...browserHeadersForUrl(url, userAgent),
+        accept: "application/json",
+      },
       signal: controller.signal,
     })
     if (!response.ok) return null
@@ -339,7 +366,7 @@ async function postWorkdayListing(
       const response = await doFetch(url, {
         method: "POST",
         headers: {
-          "user-agent": userAgent,
+          ...browserHeadersForUrl(url, userAgent),
           accept: "application/json",
           "content-type": "application/json",
         },
