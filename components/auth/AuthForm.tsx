@@ -74,9 +74,10 @@ export function AuthForm({ defaultMode = "login" }: Props) {
   const searchParams = useSearchParams()
   const next = sanitizeNext(searchParams.get("next"))
   const inviteToken = searchParams.get("invite")?.trim() || null
-  // Hide Google sign-in while the waitlist is active so people don't bypass
-  // the invite gate by signing up via Google. Invitees still see it.
-  const showGoogle = !WAITLIST_MODE || Boolean(inviteToken)
+  // Hide Google sign-in entirely while the waitlist is active — including for
+  // invitees — so signups go through the password flow and we get a captured
+  // email even when Google's OAuth profile diverges.
+  const showGoogle = !WAITLIST_MODE
 
   // If arriving via invite link, lock to signup mode
   const [mode, setMode] = useState<AuthMode>(inviteToken ? "signup" : defaultMode)
