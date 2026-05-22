@@ -302,6 +302,7 @@ export function ScoutWorkspaceShell() {
   const prevQueueIdRef       = useRef<string | null>(null)
   const prevQueueStatusRef   = useRef<Record<string, string>>({})
   const prevQueueCompletedAtRef = useRef<string | null>(null)
+  const bulkHydrationSeqRef = useRef(0)
   const commandStartedAtRef  = useRef<number | null>(null)
   const pendingVoiceReplyRef = useRef(false)
   const lastCommandLatencyRef = useRef<number | null>(null)
@@ -1019,23 +1020,102 @@ export function ScoutWorkspaceShell() {
       })
     }
     if (newMode === "bulk_application") {
-      // Prefer server-selected apply-agent jobs when available.
-      // This avoids running the legacy manual queue and the agent loop in parallel.
-      if (safeResponse.apply_agent?.jobs?.length) {
-        setApplyAgent(safeResponse.apply_agent)
-        if (bulkEngine.isConfirming) bulkEngine.cancelConfirm()
-      } else {
-        setApplyAgent(null)
-        const bp = directive?.payload ?? {}
-        void bulkEngine.initQueue({
-          count: typeof bp.count === "number" ? bp.count : 10,
-          requireSponsorshipSignal: Boolean(bp.requireSponsorshipSignal),
-          workMode: typeof bp.workMode === "string" ? bp.workMode : undefined,
-          minMatchScore: typeof bp.minMatchScore === "number" ? bp.minMatchScore : undefined,
-          strictScoreOnly: Boolean(bp.strictScoreOnly),
+      if (bulkEngine.isConfirming) bulkEngine.cancelConfirm()
+
+      const bp = directive?.payload ?? {}
+      const count = typeof bp.count === "number" ? bp.count : 10
+      const minMatchScore = typeof bp.minMatchScore === "number" ? bp.minMatchScore : undefined
+      const requireSponsorshipSignal = Boolean(bp.requireSponsorshipSignal)
+      const workMode = typeof bp.workMode === "string" ? bp.workMode : undefined
+      const strictQuery = Boolean(bp.strictQuery)
+      const strictScoreOnly = Boolean(bp.strictScoreOnly)
+
+      const selectorCriteria = {
+        minMatchScore,
+        requireSponsorshipSignal,
+        workMode,
+        strictQuery,
+        strictScoreOnly,
+        count,
+      }
+      const runSeq = ++bulkHydrationSeqRef.current
+
+      // Always prefer apply-agent UX. If the server didn't hydrate it in /chat,
+      // recover by selecting jobs client-side with identical criteria.
+      if (safeResponse.apply_agent) {
+        setApplyAgent({
+          jobs: safeResponse.apply_agent.jobs ?? [],
+          criteria: {
+            minMatchScore:
+              typeof safeResponse.apply_agent.criteria?.minMatchScore === "number"
+                ? safeResponse.apply_agent.criteria.minMatchScore
+                : selectorCriteria.minMatchScore,
+            requireSponsorshipSignal:
+              typeof safeResponse.apply_agent.criteria?.requireSponsorshipSignal === "boolean"
+                ? safeResponse.apply_agent.criteria.requireSponsorshipSignal
+                : selectorCriteria.requireSponsorshipSignal,
+            workMode:
+              typeof safeResponse.apply_agent.criteria?.workMode === "string"
+                ? safeResponse.apply_agent.criteria.workMode
+                : selectorCriteria.workMode,
+            strictQuery:
+              typeof safeResponse.apply_agent.criteria?.strictQuery === "boolean"
+                ? safeResponse.apply_agent.criteria.strictQuery
+                : selectorCriteria.strictQuery,
+            strictScoreOnly:
+              typeof safeResponse.apply_agent.criteria?.strictScoreOnly === "boolean"
+                ? safeResponse.apply_agent.criteria.strictScoreOnly
+                : selectorCriteria.strictScoreOnly,
+            count:
+              typeof safeResponse.apply_agent.criteria?.count === "number"
+                ? safeResponse.apply_agent.criteria.count
+                : selectorCriteria.count,
+          },
+          currentIndex:
+            typeof safeResponse.apply_agent.currentIndex === "number"
+              ? safeResponse.apply_agent.currentIndex
+              : 0,
+          phase: safeResponse.apply_agent.phase ?? "select",
         })
+      } else {
+        const params = new URLSearchParams()
+        params.set("count", String(selectorCriteria.count))
+        if (typeof selectorCriteria.minMatchScore === "number") {
+          params.set("minMatchScore", String(selectorCriteria.minMatchScore))
+        }
+        if (selectorCriteria.requireSponsorshipSignal) params.set("sponsorship", "true")
+        if (selectorCriteria.workMode) params.set("workMode", selectorCriteria.workMode)
+        if (selectorCriteria.strictQuery) params.set("strictQuery", "true")
+        if (selectorCriteria.strictScoreOnly) params.set("strictScoreOnly", "true")
+        params.set("freshnessHours", "24")
+        if (query.trim().length > 0) params.set("q", query.trim())
+
+        void (async () => {
+          try {
+            const res = await fetch(`/api/scout/apply-agent?${params.toString()}`, {
+              headers: { Accept: "application/json" },
+            })
+            const data = (await res.json().catch(() => null)) as { jobs?: ApplyAgentDirective["jobs"] } | null
+            if (bulkHydrationSeqRef.current !== runSeq) return
+            setApplyAgent({
+              jobs: data?.jobs ?? [],
+              criteria: selectorCriteria,
+              currentIndex: 0,
+              phase: "select",
+            })
+          } catch {
+            if (bulkHydrationSeqRef.current !== runSeq) return
+            setApplyAgent({
+              jobs: [],
+              criteria: selectorCriteria,
+              currentIndex: 0,
+              phase: "select",
+            })
+          }
+        })()
       }
     } else {
+      bulkHydrationSeqRef.current += 1
       setApplyAgent(null)
     }
     if (safeResponse.workflow_directive && newMode !== "bulk_application") {
