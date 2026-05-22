@@ -3,19 +3,32 @@ import { detectAdapter, type AtsAdapter, type AtsName } from "@/lib/harvester/ad
 import { canonicalCareersUrl } from "@/lib/harvester/canonical-url"
 import { persistJobsBulk } from "@/lib/harvester/persist-bulk"
 
-const TIER_INTERVAL_SEC: Record<string, number> = {
+const TIER_INTERVAL_DEFAULTS: Record<string, number> = {
   tier_1: 180,
   tier_2: 1_800,
   tier_3: 21_600,
   tier_dead: 604_800,
 }
 
+const TIER_INTERVAL_ENV: Record<string, string> = {
+  tier_1: "HARVESTER_TIER_1_INTERVAL_SEC",
+  tier_2: "HARVESTER_TIER_2_INTERVAL_SEC",
+  tier_3: "HARVESTER_TIER_3_INTERVAL_SEC",
+  tier_dead: "HARVESTER_TIER_DEAD_INTERVAL_SEC",
+}
+
 const DEFAULT_FAILURE_COOLDOWN_SEC = 1_800
 const DEFAULT_HTTP_403_COOLDOWN_SEC = 21_600
 
-function tierIntervalSeconds(tier: string | null): number {
-  if (!tier) return TIER_INTERVAL_SEC.tier_2
-  return TIER_INTERVAL_SEC[tier] ?? TIER_INTERVAL_SEC.tier_2
+function tierIntervalSeconds(
+  tier: string | null,
+  env: Record<string, string | undefined> = process.env
+): number {
+  const key = tier && tier in TIER_INTERVAL_DEFAULTS ? tier : "tier_2"
+  const envName = TIER_INTERVAL_ENV[key]
+  const raw = Number.parseInt(env[envName] ?? "", 10)
+  if (Number.isFinite(raw) && raw >= 60) return raw
+  return TIER_INTERVAL_DEFAULTS[key]
 }
 
 function failureCooldownSeconds(env: Record<string, string | undefined> = process.env): number {
