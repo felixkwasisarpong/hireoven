@@ -308,14 +308,67 @@ export async function runTick(
     }
   }
 
+  // Per-company timeout — caps any single runAtsHarvest call that hangs
+  // because its adapter's fetch / Playwright / DB call never propagates
+  // an abort. Without this, one stuck promise wedges the entire Promise.all
+  // and the tick-level watchdog has to fire (losing every other company's
+  // work in the batch). With it, the hung company resolves to a synthesized
+  // "failed" outcome so the rest of the batch completes normally, the
+  // crawl_logs row records the timeout, and we get a `company_hang` log line
+  // that names the culprit for later adapter fixes.
+  const perCompanyTimeoutMs = Math.max(
+    5_000,
+    Number.parseInt(process.env.HARVESTER_PER_COMPANY_TIMEOUT_MS ?? "60000", 10)
+  )
+
   const results: TickCompanyOutcome[] = await Promise.all(
     companies.map((company) => {
       const adapterName = adapterNameFor(company)
       const limit = adapterName ? limits.byAdapter.get(adapterName) ?? limits.fallback : limits.fallback
-      return limit(async () => ({
-        companyId: company.id,
-        outcome: await runAtsHarvest({ pool, company }),
-      }))
+      return limit(async () => {
+        let timeoutHandle: ReturnType<typeof setTimeout> | undefined
+        const timeoutPromise = new Promise<TickCompanyOutcome>((resolve) => {
+          timeoutHandle = setTimeout(() => {
+            const message = `per-company timeout ${perCompanyTimeoutMs}ms`
+            // Name the culprit so we can ship a real adapter-level fix.
+            // runTick is exported standalone and doesn't have the loop's logger
+            // wired in, so emit via console directly using the same format.
+            console.log(`[harvester] company_hang ${JSON.stringify({
+              companyId: company.id,
+              name: company.name,
+              adapter: adapterName ?? "unknown",
+              ats_type: company.ats_type,
+              careers_url: company.careers_url,
+              direct_ats_url: company.direct_ats_url ?? null,
+            })}`)
+            resolve({
+              companyId: company.id,
+              outcome: {
+                matched: true,
+                status: "failed",
+                jobsFound: 0,
+                newJobs: 0,
+                durationMs: perCompanyTimeoutMs,
+                errorMessage: message,
+                crawledAtIso: new Date().toISOString(),
+                adapter: adapterName ?? "unknown",
+                upstreamLatencyMs: perCompanyTimeoutMs,
+                notModified: false,
+              },
+            })
+          }, perCompanyTimeoutMs)
+          timeoutHandle.unref?.()
+        })
+        const workPromise = runAtsHarvest({ pool, company }).then((outcome) => ({
+          companyId: company.id,
+          outcome,
+        }))
+        try {
+          return await Promise.race([workPromise, timeoutPromise])
+        } finally {
+          if (timeoutHandle) clearTimeout(timeoutHandle)
+        }
+      })
     })
   )
 
