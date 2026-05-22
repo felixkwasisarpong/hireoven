@@ -137,7 +137,29 @@ export async function conditionalFetchJson<T>(
       }
 
       if (response.ok) {
-        const data = (await response.json()) as T
+        // Race body-read against an independent timeout. AbortController
+        // gates the initial response (line ~117 above), but Node's undici
+        // fetch doesn't reliably propagate abort signal into the body
+        // decompression stream — large gzip/brotli responses (greenhouse
+        // boards with hundreds of jobs + ?content=true) can hang forever
+        // inside response.json() even after the outer signal fires. This
+        // race forces a hard ceiling on body-read time so the per-company
+        // slot cannot wedge.
+        const bodyTimeoutMs = Math.max(1_000, timeoutMs * 2)
+        let bodyTimer: ReturnType<typeof setTimeout> | undefined
+        const bodyReadTimeout = new Promise<never>((_, reject) => {
+          bodyTimer = setTimeout(
+            () => reject(new Error("body_read_timeout")),
+            bodyTimeoutMs
+          )
+          bodyTimer.unref?.()
+        })
+        let data: T
+        try {
+          data = await Promise.race([response.json() as Promise<T>, bodyReadTimeout])
+        } finally {
+          if (bodyTimer) clearTimeout(bodyTimer)
+        }
         return {
           kind: "ok",
           status: response.status,
