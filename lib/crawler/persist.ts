@@ -122,16 +122,35 @@ const JOB_UPDATE_WHITELIST = new Set<string>(
 
 async function insertJobsChunk(pool: ReturnType<typeof getPostgresPool>, chunk: Record<string, unknown>[]) {
   if (chunk.length === 0) return
+  // Dedupe within the chunk by (company_id, external_id) — the upstream
+  // classifier looked up existing rows once, but a careers page can list the
+  // same external_id twice (different URLs / filters), and both would land
+  // in toInsert. Keep the last payload per key.
+  const dedup = new Map<string, Record<string, unknown>>()
+  for (const row of chunk) {
+    const eid = row.external_id == null ? null : String(row.external_id)
+    const cid = row.company_id == null ? null : String(row.company_id)
+    const key = eid && cid ? `${cid}|${eid}` : `__no_key_${dedup.size}`
+    dedup.set(key, row)
+  }
+  const deduped = [...dedup.values()]
   const values: unknown[] = []
-  const tuples = chunk.map((row) => {
+  const tuples = deduped.map((row) => {
     const placeholders = JOB_INSERT_COLUMNS.map((col) => {
       values.push(row[col] ?? null)
       return `$${values.length}`
     })
     return `(${placeholders.join(",")})`
   })
+  // ON CONFLICT DO NOTHING guards against the race where the upstream
+  // existing-row lookup ran before a concurrent worker inserted the same
+  // (company_id, external_id) pair. The conflict target matches the partial
+  // unique index `jobs_company_external_id_uq`.
   await pool.query(
-    `INSERT INTO jobs (${JOB_INSERT_COLUMNS.join(",")}) VALUES ${tuples.join(",")}`,
+    `INSERT INTO jobs (${JOB_INSERT_COLUMNS.join(",")}) VALUES ${tuples.join(",")}
+     ON CONFLICT (company_id, external_id)
+       WHERE external_id IS NOT NULL AND company_id IS NOT NULL
+       DO NOTHING`,
     values
   )
 }
