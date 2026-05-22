@@ -128,35 +128,34 @@ function buildLogoSources(logoUrl: string | null | undefined, domain: string | n
   const explicitDomain = domain ? normalizeCompanyDomain(domain) : ""
   const logoDomain = domainFromLogoUrl(logoUrl)
 
-  const canonicalDomain = [explicitDomain, logoDomain].find(
+  // Prefer the domain implied by the stored logo URL (e.g. explicit brand override
+  // to petco.com/labcorp.com) before falling back to the raw company domain.
+  const canonicalDomain = [logoDomain, explicitDomain].find(
     (item) => item && !isPlaceholderDomain(item) && !isAtsDomain(item)
   )
 
   const invalidPlaceholderFavicon = isInvalidPlaceholderGoogleFaviconUrl(logoUrl)
   const invalidAtsLogo = isInvalidAtsLogoUrl(logoUrl)
   const isStaticAsset = !!logoUrl?.trim().startsWith("/")
-
-  // 1. Curated local static assets always come first.
-  if (logoUrl && !invalidPlaceholderFavicon && !invalidAtsLogo && isStaticAsset) push(logoUrl)
-
-  if (canonicalDomain) {
-    // logo.dev via server-side proxy — avoids depending on NEXT_PUBLIC_LOGO_DEV_TOKEN
-    // being inlined at build time (Coolify's build-arg passthrough is unreliable).
-    push(`/api/logo?domain=${encodeURIComponent(canonicalDomain)}`)
-    // DuckDuckGo — site favicons, reliable fallback with no token required.
-    push(companyLogoUrlFromDomain(canonicalDomain, "duckduckgo"))
-  }
-
-  // 5. Stored URL as last resort — keep logo.dev URLs too as a safety net when
-  // NEXT_PUBLIC_LOGO_DEV_TOKEN is missing at build time in production.
-  if (
-    logoUrl &&
+  const useStoredLogo =
+    !!logoUrl &&
     !invalidPlaceholderFavicon &&
     !invalidAtsLogo &&
     !isStaticAsset &&
     !isClearbitUrl(logoUrl)
-  ) {
-    push(logoUrl)
+
+  // 1. Curated local static assets always come first.
+  if (logoUrl && !invalidPlaceholderFavicon && !invalidAtsLogo && isStaticAsset) push(logoUrl)
+
+  // 2. Honor an explicit stored URL (logo.dev, CDN, etc.) before heuristics.
+  if (useStoredLogo) push(logoUrl)
+
+  if (canonicalDomain) {
+    // 3. logo.dev via server-side proxy — avoids depending on NEXT_PUBLIC_LOGO_DEV_TOKEN
+    // being inlined at build time (Coolify's build-arg passthrough is unreliable).
+    push(`/api/logo?domain=${encodeURIComponent(canonicalDomain)}`)
+    // 4. DuckDuckGo — site favicons, reliable fallback with no token required.
+    push(companyLogoUrlFromDomain(canonicalDomain, "duckduckgo"))
   }
 
   return out

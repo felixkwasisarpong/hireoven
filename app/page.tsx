@@ -40,7 +40,16 @@ async function getFeaturedCompanies() {
       `SELECT id, name, domain, logo_url FROM companies
        WHERE is_active = true AND job_count > 0 AND domain IS NOT NULL
          AND domain NOT ILIKE '%.uscis-employer' AND domain NOT ILIKE '%.lca-employer'
-       ORDER BY CASE WHEN logo_url IS NULL OR logo_url = '' THEN 1 ELSE 0 END ASC, job_count DESC
+       ORDER BY
+         CASE
+           WHEN logo_url ILIKE '/company-logos/%' THEN 0
+           WHEN logo_url ILIKE 'https://img.logo.dev/%' THEN 0
+           WHEN logo_url IS NULL OR logo_url = '' THEN 1
+           WHEN logo_url ILIKE '%google.com/s2/favicons%' THEN 2
+           WHEN logo_url ILIKE '%gstatic.com/faviconV2%' THEN 2
+           ELSE 1
+         END ASC,
+         job_count DESC
        LIMIT 24`
     )
     return rows

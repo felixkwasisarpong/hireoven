@@ -146,7 +146,6 @@ const LOCAL_LOGO_URL_BY_DOMAIN: Record<string, string> = {
   "homedepot.com": "/company-logos/homedepot.svg",
   "intel.com": "/company-logos/intel.svg",
   "isolve.io": "/company-logos/isolve.svg",
-  "macys.com": "/company-logos/macys.svg",
   "marqeta.com": "/company-logos/marqeta.svg",
   "prisma.io": "/company-logos/prisma.svg",
   "qualcomm.com": "/company-logos/qualcomm.svg",
