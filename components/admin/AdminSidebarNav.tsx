@@ -71,11 +71,11 @@ export default function AdminSidebarNav() {
               className={cn(
                 "flex h-9 w-9 items-center justify-center rounded-xl border transition",
                 active
-                  ? "border-white/10 bg-white/10 text-white"
+                  ? "border-orange-300/40 bg-orange-500/15 text-orange-200"
                   : "border-white/5 bg-white/[0.03] text-gray-400 group-hover:text-white"
               )}
             >
-              <Icon className="h-4 w-4" />
+              <Icon className={cn("h-4 w-4 fill-none", active && "fill-current")} />
             </span>
             {link.label}
           </Link>

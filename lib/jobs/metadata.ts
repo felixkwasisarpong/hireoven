@@ -45,6 +45,11 @@ const AUTH_REQUIRED_PATTERNS = [
   /\bwithout (current|future)?\s*(visa|employment)?\s*sponsorship\b/i,
   /\bno (visa|employment|work) sponsorship\b/i,
   /\bmust be a u\.?s\.?\s+citizen\b/i,
+  /\b(?:u\.?\s?s\.?|united states)\s+citizen(?:ship)?\s+(?:is\s+)?required\b/i,
+  /\brequires?\s+(?:u\.?\s?s\.?|united states)\s+citizen(?:ship)?\b/i,
+  /\bcitizen(?:ship)?\s+(?:is\s+)?required\b/i,
+  /\bu\.?\s?s\.?\s+persons?\s+only\b/i,
+  /\bsecurity\s+clearance\s+required\b/i,
   /\bmust be (currently )?authorized\b/i,
 ]
 

@@ -131,6 +131,7 @@ export const COMPANY_SEED_ROWS: ReadonlyArray<
   ["PagerDuty", "pagerduty.com", "https://careers.pagerduty.com", "Technology", "medium", { sponsors_h1b: true, sponsorship_confidence: 78 }],
 
   // ── Tier 6: Social, gaming, media ─────────────────────────────────────────
+  ["TikTok", "tiktok.com", "https://careers.tiktok.com", "Technology", "enterprise", { sponsors_h1b: true, sponsorship_confidence: 82 }],
   ["Snap", "snap.com", "https://careers.snap.com", "Technology", "large", { sponsors_h1b: true, sponsorship_confidence: 82 }],
   ["Pinterest", "pinterest.com", "https://www.pinterestcareers.com", "Technology", "large", { sponsors_h1b: true, sponsorship_confidence: 85 }],
   ["Reddit", "reddit.com", "https://www.redditinc.com/careers", "Technology", "large", { sponsors_h1b: true, sponsorship_confidence: 82 }],

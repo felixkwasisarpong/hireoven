@@ -87,7 +87,7 @@ export default function ResumeSubNav() {
                       : "border-slate-200/80 bg-slate-50 text-slate-500 group-hover:border-slate-300 group-hover:text-slate-700"
                   )}
                 >
-                  <Icon className="h-3.5 w-3.5" aria-hidden />
+                  <Icon className={cn("h-3.5 w-3.5 fill-none", active && "fill-current")} aria-hidden />
                 </span>
                 {tab.label}
               </Link>

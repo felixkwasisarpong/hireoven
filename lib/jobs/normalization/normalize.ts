@@ -86,7 +86,7 @@ function extractVisaLanguage(description: string | null): string | null {
   if (!description) return null
 
   const contextual = description.match(
-    /([^\n.!?]{0,120}\b(?:visa|sponsor|sponsorship|authorized to work|work authorization|h-?1b|opt)\b[^\n.!?]{0,180})/i
+    /([^\n.!?]{0,120}\b(?:visa|sponsor|sponsorship|authorized to work|work authorization|h-?1b|opt|citizen(?:ship)?|u\.s\.\s*person|export control|security clearance)\b[^\n.!?]{0,180})/i
   )?.[1]
 
   if (contextual?.trim()) return contextual.trim().slice(0, 220)
@@ -94,7 +94,7 @@ function extractVisaLanguage(description: string | null): string | null {
   const fragments = description.split(/[\n.;]+/)
   for (const fragment of fragments) {
     if (
-      /\b(visa|sponsor|sponsorship|authorized to work|work authorization|h-?1b|opt)\b/i.test(
+      /\b(visa|sponsor|sponsorship|authorized to work|work authorization|h-?1b|opt|citizen(?:ship)?|u\.s\.\s*person|export control|security clearance)\b/i.test(
         fragment
       )
     ) {
@@ -115,11 +115,11 @@ const EXPLICIT_SPONSORS_RE =
 // Checked BEFORE the positive regex so negation context ("unable to provide")
 // is never mis-classified as affirmative.
 const EXPLICIT_NO_SPONSORSHIP_RE =
-  /\b(no (visa |work |h-?1b )?sponsorship|sponsorship (is )?not (available|provided|offered)|cannot (provide |offer )?sponsorship|unable to (provide |offer |sponsor)|does not (provide |offer |sponsor)|will not (provide |offer |sponsor)|must (be|have) (an? )?(valid |current |unrestricted )?(work |employment )?authorization|must be (legally )?authorized to work|not eligible for sponsorship|sponsorship not available|no h-?1b|h-?1b not (available|supported|offered|provided))\b/i
+  /\b(no (visa |work |h-?1b )?sponsorship|sponsorship (is )?not (available|provided|offered)|cannot (provide |offer )?sponsorship|unable to (provide |offer |sponsor)|does not (provide |offer |sponsor)|will not (provide |offer |sponsor)|must (be|have) (an? )?(valid |current |unrestricted )?(work |employment )?authorization|must be (legally )?authorized to work|not eligible for sponsorship|sponsorship not available|no h-?1b|h-?1b not (available|supported|offered|provided)|(?:u\.?\s?s\.?|united states)\s+citizen(?:ship)?\s+(?:is\s+)?required|requires?\s+(?:u\.?\s?s\.?|united states)\s+citizen(?:ship)?|citizen(?:ship)?\s+(?:is\s+)?required|u\.?\s?s\.?\s+persons?\s+only|security\s+clearance\s+required)\b/i
 
 // Ambiguous visa mentions — terms present but intent unclear.
 const VISA_MENTION_RE =
-  /\b(visa|sponsorship|work authorization|h-?1b|opt|tn visa|e-?3|green card)\b/i
+  /\b(visa|sponsorship|work authorization|h-?1b|opt|tn visa|e-?3|green card|citizen(?:ship)?|u\.s\.\s*person|security clearance|export control)\b/i
 
 function inferSponsorshipFromText(description: string | null): {
   sponsors_h1b: boolean | null
