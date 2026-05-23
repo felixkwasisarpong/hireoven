@@ -587,10 +587,12 @@ function ResumeSelect({
   resumes,
   selectedId,
   onChange,
+  showScratchOption = false,
 }: {
   resumes: Resume[]
   selectedId: string | null
   onChange: (id: string | null) => void
+  showScratchOption?: boolean
 }) {
   return (
     <div>
@@ -600,6 +602,11 @@ function ResumeSelect({
         onChange={(event) => onChange(event.target.value || null)}
         className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] font-medium text-slate-700 outline-none focus:border-[#5B4DFF] focus:ring-2 focus:ring-[#5B4DFF]/10"
       >
+        {showScratchOption ? (
+          <option value="">
+            Start from scratch (new resume)
+          </option>
+        ) : null}
         {resumes.map((resume) => (
           <option key={resume.id} value={resume.id}>
             {resume.name ?? resume.file_name}
@@ -997,9 +1004,12 @@ export default function ResumeStudioPage() {
   const { pushToast } = useToast()
   const { hasAccess: canUseAiWrite, showUpgradePrompt: showAiWriteUpgrade } = useFeatureAccess("deep_analysis")
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
+  const scratchRequested = searchParams.get("scratch") === "1"
   const [mode, setMode] = useState<StudioMode>("preview")
   const [profile, setProfile] = useState<Profile | null>(null)
-  const [selectedId, setSelectedId] = useState<string | null>(searchParams.get("resumeId") ?? primaryResume?.id ?? null)
+  const [selectedId, setSelectedId] = useState<string | null>(
+    scratchRequested ? null : (searchParams.get("resumeId") ?? primaryResume?.id ?? null)
+  )
   const [jobSource, setJobSource] = useState<JobSource>("paste")
   const [selectedTargetJobId, setSelectedTargetJobId] = useState("paste")
   const [jobTitle, setJobTitle] = useState("")
@@ -1089,10 +1099,13 @@ export default function ResumeStudioPage() {
   }, [])
 
   useEffect(() => {
+    if (scratchRequested) return
     if (!selectedId && primaryResume?.id) setSelectedId(primaryResume.id)
-  }, [primaryResume, selectedId])
+  }, [primaryResume, scratchRequested, selectedId])
 
-  const selectedResume = resumes.find((resume) => resume.id === selectedId) ?? primaryResume ?? null
+  const selectedResume =
+    resumes.find((resume) => resume.id === selectedId) ??
+    (scratchRequested && !selectedId ? null : (primaryResume ?? null))
   const documentName = (selectedResume?.name ?? "").trim() || (selectedResume?.file_name ?? "").trim() || "Untitled resume"
   const selectedTargetJob = hubData.targetJobs.find((job) => job.id === selectedTargetJobId) ?? null
   const orderedSections = useMemo(
@@ -1656,10 +1669,6 @@ export default function ResumeStudioPage() {
 
   async function saveDraft(silent = false, createVersion = false): Promise<boolean> {
     if (isSavingRef.current) return false  // prevent concurrent saves
-    if (!selectedResume?.id) {
-      if (!silent) pushToast({ tone: "info", title: "Select a resume to save." })
-      return false
-    }
     isSavingRef.current = true
     setIsSaving(true)
     // cancel any pending auto-save so it doesn't race with this call
@@ -1728,11 +1737,38 @@ export default function ResumeStudioPage() {
           }),
       }
 
+      let activeResumeId = selectedResume?.id ?? null
+      if (!activeResumeId) {
+        const createRes = await fetch("/api/resume", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ...resumePayload,
+            is_primary: resumes.length === 0,
+          }),
+        })
+        if (!createRes.ok) {
+          const body = (await createRes.json().catch(() => ({}))) as { error?: string }
+          throw new Error(body.error ?? "Could not create a new resume")
+        }
+        const created = (await createRes.json()) as Resume
+        if (!created?.id) {
+          throw new Error("Could not create a new resume")
+        }
+        upsertResume(created)
+        setSelectedId(created.id)
+        activeResumeId = created.id
+      }
+      if (!activeResumeId) {
+        throw new Error("Could not resolve resume id for save")
+      }
+
       // Tailor mode + jobId in URL → save as a new tailored copy (or update
       // the existing tailored copy for this job). Keeps the user's primary
       // resume intact while letting Autofill pick the right per-job copy.
       const tailorJobId = searchParams.get("jobId")
-      const isTailoringIntoCopy = mode === "tailor" && Boolean(tailorJobId)
+      const isTailoringIntoCopy = mode === "tailor" && Boolean(tailorJobId) && Boolean(activeResumeId)
 
       const res = isTailoringIntoCopy
         ? await fetch(`/api/resume/tailor-save`, {
@@ -1740,14 +1776,14 @@ export default function ResumeStudioPage() {
             credentials: "include",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              parentResumeId: selectedResume.id,
+              parentResumeId: activeResumeId,
               jobId: tailorJobId,
               matchScore: liveMatchScore,
               jobDescription: jobDescription.trim(),
               payload: resumePayload,
             }),
           })
-        : await fetch(`/api/resume/${selectedResume.id}`, {
+        : await fetch(`/api/resume/${activeResumeId}`, {
             method: "PATCH",
             credentials: "include",
             headers: { "Content-Type": "application/json" },
@@ -1763,8 +1799,9 @@ export default function ResumeStudioPage() {
       upsertResume(updated)
       // Tailor-save returns a new resumeId — switch the studio's selection
       // so subsequent saves update the same tailored copy.
-      if (isTailoringIntoCopy && updated.id !== selectedResume.id) {
+      if (isTailoringIntoCopy && updated.id !== activeResumeId) {
         setSelectedId(updated.id)
+        activeResumeId = updated.id
       }
       savedOk = true
 
@@ -1772,7 +1809,7 @@ export default function ResumeStudioPage() {
         const snapshot = createResumeSnapshot(livePreviewResume)
         let versionOk = false
         try {
-          const vRes = await fetch(`/api/resume/${selectedResume.id}/versions`, {
+          const vRes = await fetch(`/api/resume/${activeResumeId}/versions`, {
             method: "POST",
             credentials: "include",
             headers: { "Content-Type": "application/json" },
@@ -2095,7 +2132,8 @@ export default function ResumeStudioPage() {
   function handleModeChange(nextMode: StudioMode) {
     setMode(nextMode)
     const resumeParam = selectedId ? `&resumeId=${encodeURIComponent(selectedId)}` : ""
-    router.push(`/dashboard/resume/studio?mode=${nextMode}${resumeParam}`, { scroll: false })
+    const scratchParam = !selectedId ? "&scratch=1" : ""
+    router.push(`/dashboard/resume/studio?mode=${nextMode}${resumeParam}${scratchParam}`, { scroll: false })
   }
 
   async function handleDownloadResume() {
@@ -2675,11 +2713,11 @@ export default function ResumeStudioPage() {
               <button
                 type="button"
                 onClick={() => void saveDraft(false, true)}
-                disabled={!selectedResume?.id || isSaving}
+                disabled={isSaving}
                 className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-orange-500 px-4 text-[12.5px] font-semibold text-white shadow-sm transition hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                {isSaving ? "Saving…" : "Save Version"}
+                {isSaving ? "Saving…" : selectedResume?.id ? "Save Version" : "Create Resume"}
               </button>
             )}
           </div>
@@ -2804,7 +2842,12 @@ export default function ResumeStudioPage() {
         ) : (
           <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(300px,0.8fr)] xl:grid-cols-[minmax(0,0.8fr)_minmax(320px,0.7fr)_minmax(560px,1fr)]">
             <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-              <ResumeSelect resumes={resumes} selectedId={selectedResume?.id ?? null} onChange={setSelectedId} />
+              <ResumeSelect
+                resumes={resumes}
+                selectedId={selectedId}
+                onChange={setSelectedId}
+                showScratchOption
+              />
 
               <div>
                 <FieldLabel>Job source</FieldLabel>

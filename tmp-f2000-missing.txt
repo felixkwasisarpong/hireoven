@@ -1,0 +1,241 @@
+APA Corporation
+APi Group
+AST SpaceMobile
+Air Products and Chemicals
+Albemarle
+Alliant Energy
+Alnylam Pharmaceuticals
+Altria Group
+Ameren
+American Water
+Ameriprise Financial
+Ametek
+Amphenol
+Annaly Capital Management
+Applied Digital
+Applied Optoelectronics
+Ares Capital
+Ares Management
+Arthur J. Gallagher & Co.
+Arxis, Inc.
+Assurant
+Atmos Energy
+Automatic Data Processing
+AvalonBay Communities
+BWX Technologies
+BeOne Medicines
+Blue Owl Capital
+Booking Holdings
+BorgWarner
+BridgeBio Pharma
+Brown & Brown
+Brown Forman
+CF Industries
+CMS Energy
+CSX Corporation
+Cardinal Health
+Carlisle Companies
+Carlyle Group
+Carpenter Technology
+Cboe Global Markets
+Cencora
+CenterPoint Energy
+Cerebras Systems
+Cheniere Energy
+Cheniere Energy Partners
+Chipotle Mexican Grill
+Cincinnati Financial
+Cintas
+Clean Harbors
+Cloudflare
+Coeur Mining
+Cognizant Technology Solutions
+Coherent Corp.
+Comfort Systems USA
+Consolidated Edison
+Corebridge Financial
+Corpay
+Coterra Energy
+Credo Technology
+D. R. Horton
+DT Midstream
+DTE Energy
+Deckers Brands
+Dell
+Devon Energy
+Diamondback Energy
+DraftKings
+Dupont De Nemours
+Dycom Industries
+EOG Resources
+EQT Corporation
+Edison International
+Edwards Lifesciences
+Emcor
+Energy Transfer LP
+Entergy
+Enterprise Products
+Equity LifeStyle Properties
+Equity Residential
+Essex Property Trust
+Estee Lauder
+Evercore
+Evergy
+Expand Energy
+Extra Space Storage
+F5
+FTAI Aviation
+Fervo Energy Company
+Fidelity National Financial
+Fidelity National Information Services
+FirstEnergy
+Forgent Power Solutions
+Formula One Group
+Fortive
+Gaming and Leisure Properties
+Graco
+Grayscale Bitcoin Trust
+HEICO
+HF Sinclair
+Healthpeak Properties
+Hologic
+Host Hotels & Resorts
+Howmet Aerospace
+Hubbell
+IDEX
+IDEXX Laboratories
+IES Holdings
+IQVIA
+ITT
+Incyte
+International Flavors & Fragrances
+Invitation Homes
+Ionis Pharmaceuticals
+Iron Mountain
+Jacobs Engineering
+Jones Lang LaSalle
+KKR & Co.
+Kenvue
+Kimco Realty
+Kinder Morgan
+Lam Research
+Lamar Advertising
+Las Vegas Sands
+Lattice Semiconductor
+Lennar
+Lennox
+Loews Corporation
+LyondellBasell
+MACOM Technology Solutions
+MKS Instruments
+MPLX
+MSCI
+Madison Air Solutions
+Marathon Petroleum
+Markel Group
+Masco
+McCormick & Company
+Mettler Toledo
+Microchip Technology
+Mid-America Apartment Communities
+Modine Manufacturing
+Monolithic Power Systems
+Monster Beverage
+Mueller Industries
+NRG Energy
+NVR
+Nasdaq
+Neurocrine Biosciences
+News Corp
+Nextpower
+NiSource
+Nordson
+Norfolk Southern
+O'Reilly Automotive
+Omega Healthcare Investors
+Oneok
+Onto Innovation
+Ovintiv
+Ozon
+PPL
+PSEG
+Packaging Corporation of America
+Performance Food Group
+Permian Resources
+Pershing Square Inc.
+Philip Morris International
+Pinnacle West Capital
+Plains All American Pipeline
+Progressive
+Public Storage
+PulteGroup
+Pure Storage
+QXO, Inc.
+Qnity Electronics
+RBC Bearings
+RPM International
+RTX
+Rambus
+Regal Rexnord
+Regency Centers
+Reinsurance Group of America
+Reliance
+Republic Services
+Revolution Medicines
+Rollins
+Roper Technologies
+Royal Gold
+Sandisk
+Sempra
+SiTime
+Simon Property Group
+Snap-on
+Solstice Advanced Materials
+Solventum
+Somnigroup International
+Southern Copper
+Sterling Infrastructure
+Strategy
+Sun Communities
+Sunoco
+TD Synnex
+TKO Group Holdings
+TPG Inc.
+TTM Technologies
+Talen Energy
+Targa Resources
+Teledyne Technologies
+Texas Pacific Land Corporation
+Toll Brothers
+TransDigm Group
+UDR Apartments
+UL Solutions
+US Foods
+United Parcel Service
+United Therapeutics
+Unum
+VICI Properties
+Veeva Systems
+Ventas
+Veralto
+Verisk Analytics
+Vertiv Holdings
+Viatris
+Viper Energy
+W. P. Carey
+W. R. Berkley
+WEC Energy Group
+WESCO International
+Wabtec
+Warner Music Group
+Waste Connections
+Waste Management
+Waters Corporation
+Watsco
+Wells Fargo
+Welltower
+West Pharmaceutical Services
+Western Midstream
+Weyerhaeuser
+Woodward
+XPO Logistics
