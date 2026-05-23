@@ -1,0 +1,600 @@
+3M	strict	3M Company	f
+AMD	strict	AMD	t
+AMH	strict	AMH	f
+APA Corporation	missing	\N	\N
+APi Group	missing	\N	\N
+AST SpaceMobile	missing	\N	\N
+AT&T	strict	AT&T	t
+ATI Inc.	strict	Ati Holdings LLC	t
+AbbVie	strict	AbbVie	t
+Abbott Laboratories	strict	Abbott Laboratories	t
+Adobe	strict	Adobe	t
+Advanced Energy	substring	Advanced Software Talent	f
+Affirm	strict	Affirm	t
+Aflac	strict	Aflac	t
+Agilent Technologies	strict	Agilent Technologies	t
+Air Products and Chemicals	missing	\N	\N
+Airbnb	strict	Airbnb	t
+Akamai	core	Akamai Technologies	f
+Albemarle	missing	\N	\N
+Alcoa	strict	Alcoa	t
+Alliant Energy	missing	\N	\N
+Allstate	strict	Allstate	t
+Ally Financial	strict	Ally Financial	t
+Alnylam Pharmaceuticals	missing	\N	\N
+Alphabet	alias	Google	t
+Altria Group	missing	\N	\N
+Amazon	strict	Amazon	t
+Ameren	missing	\N	\N
+American Electric Power	strict	American Electric Power	t
+American Express	substring	AMERICAN EXPRESS TRAVEL RELATED	t
+American International Group	core	American Systems Corporation	f
+American Tower	strict	American Tower	t
+American Water	missing	\N	\N
+Ameriprise Financial	missing	\N	\N
+Ametek	missing	\N	\N
+Amgen	strict	Amgen Inc	f
+Amkor Technology	strict	Amkor Technology	t
+Amphenol	missing	\N	\N
+Analog Devices	strict	Analog Devices	t
+Annaly Capital Management	missing	\N	\N
+Apollo Global Management	substring	Apollo Management Holdings Lp	t
+AppLovin	strict	AppLovin	t
+Apple	strict	Apple, Inc.	f
+Applied Digital	missing	\N	\N
+Applied Materials	substring	Applied Thought Auditors & Consultants Inc.	f
+Applied Optoelectronics	missing	\N	\N
+Aramark	strict	Aramark Corporation	f
+Archer Daniels Midland	strict	Archer Daniels Midland	f
+Ares Capital	missing	\N	\N
+Ares Management	missing	\N	\N
+Arista Networks	strict	Arista Networks	t
+Arthur J. Gallagher & Co.	missing	\N	\N
+Arxis, Inc.	missing	\N	\N
+Assurant	missing	\N	\N
+Astera Labs	strict	Astera Labs Inc.	t
+Atmos Energy	missing	\N	\N
+Aurora Innovation	strict	Aurora Innovation, Inc.	f
+AutoZone	strict	AutoZone	t
+Autodesk	strict	Autodesk Inc.	f
+Automatic Data Processing	missing	\N	\N
+AvalonBay Communities	missing	\N	\N
+Axon Enterprise	strict	Axon Enterprise	t
+BNY Mellon	strict	BNY Mellon	t
+BWX Technologies	missing	\N	\N
+Baker Hughes	strict	Baker Hughes	t
+Ball Corporation	strict	Ball Corporation	t
+Bank of America	strict	Bank of America	t
+BeOne Medicines	missing	\N	\N
+Becton Dickinson	strict	Becton Dickinson	t
+Berkshire Hathaway	core	Berkshire Hathaway Energy	f
+Best Buy	strict	Best Buy	f
+Biogen	strict	Biogen	t
+BlackRock	strict	Black Rock Group	f
+Blackstone Group	strict	The Blackstone Group	t
+Block	strict	Block, Inc	f
+Bloom Energy	strict	Bloom Energy	t
+Blue Owl Capital	missing	\N	\N
+Boeing	strict	Boeing	t
+Booking Holdings	missing	\N	\N
+BorgWarner	missing	\N	\N
+Boston Scientific	strict	Boston Scientific Corporation	f
+BridgeBio Pharma	missing	\N	\N
+Bristol-Myers Squibb	strict	Bristol Myers Squibb	t
+Broadcom	strict	Broadcom Corporation	f
+Broadridge Financial Solutions	core	Broadridge Financial	t
+Brown & Brown	missing	\N	\N
+Brown Forman	missing	\N	\N
+Bunge Global SA	alias	Bunge	t
+Burlington Stores	strict	Burlington Stores	t
+C. H. Robinson	strict	C.H. Robinson	t
+CBRE Group	strict	CBRE	t
+CDW Corporation	strict	Cdw LLC	t
+CF Industries	missing	\N	\N
+CME Group	strict	CME Group	t
+CMS Energy	missing	\N	\N
+CSX Corporation	missing	\N	\N
+CVS Health	strict	CVS Health	t
+Cadence Design Systems	strict	Cadence Design Systems	f
+Capital One	strict	Capital One	t
+Cardinal Health	missing	\N	\N
+Carlisle Companies	missing	\N	\N
+Carlyle Group	missing	\N	\N
+Carnival Corporation	strict	Carnival Corporation	t
+Carpenter Technology	missing	\N	\N
+Carrier Global	core	Carrier Corporation	f
+Carvana	strict	Carvana	f
+Casey's General Stores	strict	Casey's General Stores	t
+Caterpillar	strict	Caterpillar	f
+Cboe Global Markets	missing	\N	\N
+Cencora	missing	\N	\N
+Centene	strict	Centene Corporation	f
+CenterPoint Energy	missing	\N	\N
+Cerebras Systems	missing	\N	\N
+Charles Schwab	strict	Charles Schwab & Company, Inc.	t
+Charter Communications	strict	Charter Communications	t
+Cheniere Energy	missing	\N	\N
+Cheniere Energy Partners	missing	\N	\N
+Chevron	strict	Chevron	t
+Chipotle Mexican Grill	missing	\N	\N
+Church & Dwight	strict	Church & Dwight	t
+Ciena	strict	Ciena	t
+Cincinnati Financial	missing	\N	\N
+Cintas	missing	\N	\N
+Circle Internet Group	core	Circle Internet Financial LLC	t
+Cisco	strict	Cisco	t
+Citigroup	strict	Citigroup	t
+Citizens Financial Group	strict	Citizens Financial Group Inc.	t
+Clean Harbors	missing	\N	\N
+Cloudflare	missing	\N	\N
+CoStar Group	strict	CoStar Group	t
+Coca-Cola	strict	Coca-Cola Company	t
+Coeur Mining	missing	\N	\N
+Cognizant Technology Solutions	missing	\N	\N
+Coherent Corp.	missing	\N	\N
+Coinbase	strict	Coinbase	t
+Colgate-Palmolive	strict	Colgate-Palmolive	t
+Comcast	strict	Comcast Corp	f
+Comfort Systems USA	missing	\N	\N
+ConocoPhillips	strict	ConocoPhillips	t
+Consolidated Edison	missing	\N	\N
+Constellation Brands	strict	Constellation Brands	t
+Constellation Energy	strict	Constellation Energy	t
+Copart	strict	Copart	t
+CoreWeave	strict	CoreWeave	t
+Corebridge Financial	missing	\N	\N
+Corning	strict	Corning	f
+Corpay	missing	\N	\N
+Corteva	strict	Corteva	t
+Costco	substring	Costco Wholesale Corporation	f
+Coterra Energy	missing	\N	\N
+Coupang	core	Coupang Global LLC	t
+Credo Technology	missing	\N	\N
+CrowdStrike	strict	CrowdStrike	t
+Crown Castle	strict	Crown Castle	t
+Cummins	strict	Cummins	f
+Curtiss-Wright	strict	Curtisswright	t
+D. R. Horton	missing	\N	\N
+DT Midstream	missing	\N	\N
+DTE Energy	missing	\N	\N
+DaVita	strict	DaVita	t
+Danaher	strict	Danaher	t
+Darden Restaurants	strict	Darden Restaurants	t
+Datadog	strict	Datadog	t
+Deckers Brands	missing	\N	\N
+Deere	strict	Deere & Company	t
+Dell	missing	\N	\N
+Delta Air Lines	strict	Delta Air Lines	t
+Devon Energy	missing	\N	\N
+DexCom	strict	Dexcom	t
+Diamondback Energy	missing	\N	\N
+Dick's Sporting Goods	strict	Dick's Sporting Goods	t
+Digital Realty	strict	Digital Realty	t
+DigitalOcean	strict	DigitalOcean	t
+Dollar General	strict	Dollar General	t
+Dollar Tree	strict	Dollar Tree	t
+Dominion Energy	strict	Dominion Energy	t
+DoorDash	strict	DoorDash	t
+Dover Corporation	strict	Dover	f
+Dow	strict	Dow	t
+DraftKings	missing	\N	\N
+Duke Energy	strict	Duke Energy	t
+Dupont De Nemours	missing	\N	\N
+Dycom Industries	missing	\N	\N
+EOG Resources	missing	\N	\N
+EQT Corporation	missing	\N	\N
+East West Bancorp	core	East West Bank	f
+EchoStar	strict	EchoStar Corporation	f
+Ecolab	strict	Ecolab	t
+Edison International	missing	\N	\N
+Edwards Lifesciences	missing	\N	\N
+Electronic Arts	strict	Electronic Arts	t
+Elevance Health	strict	Elevance Health	t
+Eli Lilly	strict	Eli Lilly	t
+Emcor	missing	\N	\N
+Emerson	core	Emerson Electric	t
+Energy Transfer LP	missing	\N	\N
+Entegris	strict	Entegris Inc.	t
+Entergy	missing	\N	\N
+Enterprise Products	missing	\N	\N
+Equifax	strict	Equifax	t
+Equinix	strict	Equinix	t
+Equity LifeStyle Properties	missing	\N	\N
+Equity Residential	missing	\N	\N
+Essex Property Trust	missing	\N	\N
+Estee Lauder	missing	\N	\N
+Evercore	missing	\N	\N
+Evergy	missing	\N	\N
+Eversource Energy	core	Eversource	f
+Exact Sciences	strict	Exact Sciences	t
+Exelixis	strict	Exelixis Inc.	t
+Exelon Corporation	strict	Exelon	t
+Expand Energy	missing	\N	\N
+Expedia Group	strict	Expedia Group	t
+Expeditors International	strict	Expeditors International	t
+Extra Space Storage	missing	\N	\N
+Exxon Mobil	strict	ExxonMobil	t
+F5	missing	\N	\N
+FTAI Aviation	missing	\N	\N
+Fair Isaac	strict	Fair Isaac Corporation	t
+Fastenal	strict	Fastenal	f
+FedEx	strict	FedEx	t
+Fervo Energy Company	missing	\N	\N
+Fidelity National Financial	missing	\N	\N
+Fidelity National Information Services	missing	\N	\N
+Fifth Third Bank	strict	Fifth Third Bank	f
+First Citizens BancShares	core	First-Citizens Bank & Trust Company	f
+First Solar	strict	First Solar	t
+FirstEnergy	missing	\N	\N
+Fiserv	strict	Fiserv	t
+Ford	strict	Ford	t
+Forgent Power Solutions	missing	\N	\N
+Formula One Group	missing	\N	\N
+Fortinet	strict	Fortinet	t
+Fortive	missing	\N	\N
+Fox Corporation	strict	Fox Corporation	t
+Franklin Resources	substring	Franklin Templeton	f
+Freeport-McMoRan	strict	Freeport-McMoRan	t
+GE HealthCare Technologies	core	GE HealthCare	t
+GE Vernova	strict	GE Vernova	t
+Gaming and Leisure Properties	missing	\N	\N
+Gen Digital	strict	Gen Digital Inc.	t
+Generac	strict	Generac	t
+General Dynamics	strict	General Dynamics	t
+General Electric	substring	General Motors	f
+General Mills	strict	General Mills	t
+General Motors	strict	General Motors	f
+Genuine Parts Company	strict	Genuine Parts Company	t
+Gilead Sciences	strict	Gilead Sciences	t
+Global Payments	strict	Global Payments	t
+GlobalFoundries	strict	GlobalFoundries	t
+Goldman Sachs	strict	Goldman Sachs & Co.	f
+Graco	missing	\N	\N
+Grayscale Bitcoin Trust	missing	\N	\N
+Guardant Health	strict	Guardant Health	t
+HCA Healthcare	strict	HCA Healthcare	f
+HEICO	missing	\N	\N
+HF Sinclair	missing	\N	\N
+HP	strict	HP Inc.	t
+Halliburton	strict	Halliburton	t
+Hasbro	strict	Hasbro Inc.	f
+Healthpeak Properties	missing	\N	\N
+Hewlett Packard Enterprise	strict	Hewlett Packard Enterprise	t
+Hilton Worldwide	strict	Hilton Worldwide	t
+Hologic	missing	\N	\N
+Home Depot	strict	The Home Depot	t
+Honeywell	strict	Honeywell	t
+Host Hotels & Resorts	missing	\N	\N
+Howmet Aerospace	missing	\N	\N
+Hubbell	missing	\N	\N
+Humana	strict	Humana	t
+Huntington Bancshares	core	Huntington Bank	f
+Huntington Ingalls Industries	strict	Huntington Ingalls Industries	f
+Hyatt Hotels	strict	Hyatt Hotels	t
+IBM	strict	IBM	t
+IDEX	missing	\N	\N
+IDEXX Laboratories	missing	\N	\N
+IES Holdings	missing	\N	\N
+IQVIA	missing	\N	\N
+ITT	missing	\N	\N
+Illinois Tool Works	strict	Illinois Tool Works	t
+Illumina	strict	Illumina	t
+Incyte	missing	\N	\N
+Insmed	strict	Insmed	t
+Intel	strict	Intel	t
+Interactive Brokers	strict	Interactive Brokers	f
+Intercontinental Exchange	strict	Intercontinental Exchange Holdings, Inc.	f
+International Flavors & Fragrances	missing	\N	\N
+International Paper	strict	International Paper	t
+Intuit	strict	Intuit	t
+Intuitive Surgical	strict	Intuitive Surgical	f
+Invitation Homes	missing	\N	\N
+IonQ	strict	IonQ	t
+Ionis Pharmaceuticals	missing	\N	\N
+Iron Mountain	missing	\N	\N
+J. B. Hunt	strict	J.B. Hunt	t
+JPMorgan Chase	strict	JPMorgan Chase & Co.	t
+Jabil	strict	Jabil	t
+Jacobs Engineering	missing	\N	\N
+Johnson & Johnson	strict	Johnson & Johnson	t
+Jones Lang LaSalle	missing	\N	\N
+KKR & Co.	missing	\N	\N
+KLA	strict	KLA Corporation	t
+Kenvue	missing	\N	\N
+Keurig Dr Pepper	strict	Keurig Dr Pepper	t
+KeyCorp	strict	KeyCorp	f
+Keysight	core	Keysight Technologies	t
+Kimberly-Clark	strict	Kimberly-Clark	f
+Kimco Realty	missing	\N	\N
+Kinder Morgan	missing	\N	\N
+Kraft Heinz	strict	Kraft Heinz	t
+Kroger	strict	Kroger	t
+L3Harris Technologies	strict	L3Harris Technologies	t
+LPL Financial	strict	LPL Financial Holdings, Inc.	f
+LabCorp	strict	Labcorp	t
+Lam Research	missing	\N	\N
+Lamar Advertising	missing	\N	\N
+Las Vegas Sands	missing	\N	\N
+Lattice Semiconductor	missing	\N	\N
+Leidos	strict	Leidos	t
+Lennar	missing	\N	\N
+Lennox	missing	\N	\N
+Lincoln Electric	substring	Lincoln Softtech LLC	f
+Live Nation	strict	Livenation	t
+Lockheed Martin	strict	Lockheed Martin	t
+Loews Corporation	missing	\N	\N
+Lowe's Companies	strict	Lowe's	t
+Lumentum	strict	Lumentum	t
+LyondellBasell	missing	\N	\N
+M&T Bank	strict	M&T BANK CORPORATION	f
+MACOM Technology Solutions	missing	\N	\N
+MKS Instruments	missing	\N	\N
+MPLX	missing	\N	\N
+MSCI	missing	\N	\N
+Madison Air Solutions	missing	\N	\N
+Marathon Petroleum	missing	\N	\N
+Markel Group	missing	\N	\N
+Marriott International	strict	Marriott International	t
+Marsh & McLennan Companies	strict	Marsh & McLennan Companies	f
+Martin Marietta Materials	core	Martin Marietta	f
+Marvell Technology	strict	Marvell Technology	t
+MasTec	strict	MasTec	t
+Masco	missing	\N	\N
+Mastercard	strict	Mastercard	t
+McCormick & Company	missing	\N	\N
+McDonald	alias	McDonald's	t
+McKesson	strict	MCKESSON	f
+Medline	substring	Medline Industries, LP	f
+Merck	strict	Merck	t
+MetLife	strict	MetLife	t
+Meta Platforms	alias	Meta	t
+Mettler Toledo	missing	\N	\N
+Microchip Technology	missing	\N	\N
+Micron Technology	strict	Micron Technology, Inc.	f
+Microsoft	strict	Microsoft	t
+Mid-America Apartment Communities	missing	\N	\N
+Moderna	strict	Moderna	t
+Modine Manufacturing	missing	\N	\N
+Mondelez International	strict	Mondelez International	t
+MongoDB	strict	MongoDB	t
+Monolithic Power Systems	missing	\N	\N
+Monster Beverage	missing	\N	\N
+Moody's	strict	Moody's	t
+Morgan Stanley	strict	Morgan Stanley	f
+Motorola Solutions	strict	Motorola Solutions	t
+Mueller Industries	missing	\N	\N
+NRG Energy	missing	\N	\N
+NVIDIA	strict	NVIDIA Corporation	f
+NVR	missing	\N	\N
+Nasdaq	missing	\N	\N
+Natera	strict	Natera, Inc.	t
+NetApp	strict	NetApp	f
+Netflix	strict	Netflix, Inc.	f
+Neurocrine Biosciences	missing	\N	\N
+Newmont	strict	Newmont	t
+News Corp	missing	\N	\N
+Nextera Energy	strict	NextEra Energy	t
+Nextpower	missing	\N	\N
+NiSource	missing	\N	\N
+Nike	strict	Nike	t
+Nordson	missing	\N	\N
+Norfolk Southern	missing	\N	\N
+Northern Trust	strict	Northern Trust	t
+Northrop Grumman	strict	Northrop Grumman	t
+Nucor	strict	Nucor	t
+O'Reilly Automotive	missing	\N	\N
+ON Semiconductor	strict	ON Semiconductor	f
+Occidental Petroleum	strict	Occidental Petroleum	t
+Okta	strict	Okta	t
+Old Dominion Freight Line	strict	Old Dominion Freight Line	t
+Omega Healthcare Investors	missing	\N	\N
+Omnicom Group	strict	Omnicom Group	t
+Oneok	missing	\N	\N
+Onto Innovation	missing	\N	\N
+Oracle	strict	Oracle	t
+Otis Worldwide	strict	Otis Worldwide	t
+Ovintiv	missing	\N	\N
+Ozon	missing	\N	\N
+PG&E Corporation	strict	PG&E	t
+PNC Financial Services	strict	The Pnc Financial Services Group Inc.	t
+PPG Industries	strict	PPG Industries	t
+PPL	missing	\N	\N
+PSEG	missing	\N	\N
+PTC	strict	Ptc Inc.	t
+Paccar	strict	PACCAR	t
+Packaging Corporation of America	missing	\N	\N
+Palantir	strict	Palantir	t
+Palo Alto Networks	strict	Palo Alto Networks	t
+Parker-Hannifin	strict	Parker Hannifin	f
+PayPal	strict	PayPal	t
+Paychex	strict	Paychex	t
+Penumbra	strict	Penumbra Inc.	t
+Pepsico	strict	PepsiCo	t
+Performance Food Group	missing	\N	\N
+Permian Resources	missing	\N	\N
+Pershing Square Inc.	missing	\N	\N
+Pfizer	strict	Pfizer	f
+Philip Morris International	missing	\N	\N
+Phillips 66	strict	Phillips 66	t
+Pinnacle Financial Partners	substring	Pinnacle Technical Resources Inc.	t
+Pinnacle West Capital	missing	\N	\N
+Plains All American Pipeline	missing	\N	\N
+Planet Labs	core	The Planet Group	f
+Principal Financial Group	substring	The Principal Consulting Inc.	t
+Procter & Gamble	strict	Procter & Gamble	t
+Progressive	missing	\N	\N
+Prologis	strict	Prologis	t
+Prudential Financial	strict	Prudential Financial	t
+Public Storage	missing	\N	\N
+PulteGroup	missing	\N	\N
+Pure Storage	missing	\N	\N
+QUALCOMM	strict	Qualcomm	t
+QXO, Inc.	missing	\N	\N
+Qnity Electronics	missing	\N	\N
+Quanta Services	strict	Quanta Services	t
+Quest Diagnostics	strict	Quest Diagnostics Inc.	f
+RBC Bearings	missing	\N	\N
+RPM International	missing	\N	\N
+RTX	missing	\N	\N
+Ralph Lauren	strict	Ralph Lauren	t
+Rambus	missing	\N	\N
+Raymond James Financial	strict	Raymond James Financial Inc	f
+Realty Income	strict	Realtyincome	t
+Reddit	strict	Reddit	t
+Regal Rexnord	missing	\N	\N
+Regency Centers	missing	\N	\N
+Regeneron Pharmaceuticals	core	Regeneron	t
+Regions Financial	core	Regions Bank	t
+Reinsurance Group of America	missing	\N	\N
+Reliance	missing	\N	\N
+Republic Services	missing	\N	\N
+ResMed	strict	ResMed	t
+Revolution Medicines	missing	\N	\N
+Rivian	strict	Rivian	t
+Robinhood	strict	Robinhood	t
+Roblox	strict	Roblox	t
+Rocket Companies	strict	Rocket Companies	t
+Rocket Lab	strict	Rocket Lab Corporation	f
+Rockwell Automation	strict	Rockwell Automation	t
+Roku	strict	Roku	t
+Rollins	missing	\N	\N
+Roper Technologies	missing	\N	\N
+Ross Stores	strict	Ross Stores	t
+Royal Caribbean Group	substring	Royal Caribbean Cruises Ltd	f
+Royal Gold	missing	\N	\N
+Rubrik	strict	Rubrik	t
+S&P Global	strict	S&P Global	t
+SBA Communications	strict	SBA Communications	f
+SLB	strict	SLB	t
+SS&C Technologies	strict	SS&C Technologies Inc	f
+Salesforce	strict	Salesforce	t
+Samsara	strict	Samsara	t
+Sandisk	missing	\N	\N
+Sanmina	strict	Sanmina	f
+Sempra	missing	\N	\N
+Semtech	strict	Semtech	t
+ServiceNow	strict	ServiceNow	f
+SharkNinja	strict	SharkNinja	t
+Sherwin-Williams	strict	Sherwin-Williams	t
+SiTime	missing	\N	\N
+Simon Property Group	missing	\N	\N
+Snap-on	missing	\N	\N
+Snowflake	strict	Snowflake Inc.	f
+SoFi	strict	SoFi	t
+Solstice Advanced Materials	missing	\N	\N
+Solventum	missing	\N	\N
+Somnigroup International	missing	\N	\N
+Southern Company	strict	Southern Company	t
+Southern Copper	missing	\N	\N
+Southwest Airlines	strict	Southwest Airlines	t
+Starbucks	strict	Starbucks	f
+State Street Corporation	strict	State Street	t
+Steel Dynamics	strict	Steel Dynamics, Inc.	f
+Sterling Infrastructure	missing	\N	\N
+Strategy	missing	\N	\N
+Stryker Corporation	strict	Stryker	t
+Sun Communities	missing	\N	\N
+Sunoco	missing	\N	\N
+Supermicro	strict	Supermicro	f
+Symbotic	strict	Symbotic	t
+Synchrony Financial	strict	Synchronyfinancial	t
+Synopsys	strict	Synopsys	t
+Sysco	strict	Sysco Corporation	f
+T-Mobile US	alias	T-Mobile	t
+T. Rowe Price	strict	T. Rowe Price	t
+TD Synnex	missing	\N	\N
+TJX Companies	strict	TJX Companies	t
+TKO Group Holdings	missing	\N	\N
+TPG Inc.	missing	\N	\N
+TTM Technologies	missing	\N	\N
+Take-Two Interactive	strict	Take-Two Interactive	t
+Talen Energy	missing	\N	\N
+Tapestry	strict	Tapestry	t
+Targa Resources	missing	\N	\N
+Target	strict	Target	t
+Teledyne Technologies	missing	\N	\N
+Tenet Healthcare	strict	Tenet Healthcare	t
+Teradyne	strict	Teradyne	f
+Tesla	strict	Tesla	f
+Texas Instruments	strict	Texas Instruments	t
+Texas Pacific Land Corporation	missing	\N	\N
+Textron	strict	Textron	t
+The Cigna Group	strict	Cigna	t
+The Hartford	strict	The Hartford	t
+The Hershey Company	strict	Hershey	t
+The Travelers Companies	strict	Travelers	t
+Thermo Fisher Scientific	strict	Thermo Fisher Scientific	t
+Toast	strict	Toast	t
+Toll Brothers	missing	\N	\N
+Tractor Supply	strict	Tractor Supply	t
+Tradeweb	substring	Tradeweb Markets LLC	t
+TransDigm Group	missing	\N	\N
+TransUnion	strict	TransUnion	t
+Trimble	strict	Trimble	t
+Truist Financial Corporation	alias	Truist	t
+Twilio	substring	Twilio careers	t
+Tyler Technologies	strict	Tyler Technologies	t
+Tyson Foods	strict	Tyson Foods	t
+U.S. Bancorp	alias	U.S. Bank	t
+UDR Apartments	missing	\N	\N
+UL Solutions	missing	\N	\N
+ULTA Beauty	strict	Ulta Beauty	t
+US Foods	missing	\N	\N
+Uber	strict	Uber	t
+Ubiquiti	strict	Ubiquiti	t
+Union Pacific Corporation	strict	Union Pacific	t
+United Airlines Holdings	strict	United Airlines	t
+United Parcel Service	missing	\N	\N
+United Rentals	strict	United Rentals	f
+United Therapeutics	missing	\N	\N
+UnitedHealth	strict	UnitedHealth Group	t
+Unum	missing	\N	\N
+VICI Properties	missing	\N	\N
+Valero Energy	strict	Valero Energy	t
+Veeva Systems	missing	\N	\N
+Ventas	missing	\N	\N
+Venture Global	substring	Usventure	t
+Veralto	missing	\N	\N
+VeriSign	strict	Verisign Inc.	t
+Verisk Analytics	missing	\N	\N
+Verizon	strict	Verizon	t
+Vertex Pharmaceuticals	strict	Vertex Pharmaceuticals	f
+Vertiv Holdings	missing	\N	\N
+Viatris	missing	\N	\N
+Viper Energy	missing	\N	\N
+Visa	strict	Visa Inc.	f
+Vistra	strict	Vistra Corp	f
+Vulcan Materials	strict	Vulcan Materials	t
+W. P. Carey	missing	\N	\N
+W. R. Berkley	missing	\N	\N
+W. W. Grainger	strict	W.W. Grainger	t
+WEC Energy Group	missing	\N	\N
+WESCO International	missing	\N	\N
+Wabtec	missing	\N	\N
+Walmart	strict	Walmart Inc.	f
+Walt Disney	alias	Disney	t
+Warner Bros. Discovery	strict	Warner Bros. Discovery	t
+Warner Music Group	missing	\N	\N
+Waste Connections	missing	\N	\N
+Waste Management	missing	\N	\N
+Waters Corporation	missing	\N	\N
+Watsco	missing	\N	\N
+Wells Fargo	missing	\N	\N
+Welltower	missing	\N	\N
+West Pharmaceutical Services	missing	\N	\N
+Western Digital	strict	Western Digital	t
+Western Midstream	missing	\N	\N
+Weyerhaeuser	missing	\N	\N
+Williams Companies	substring	Sherwin-Williams	t
+Williams-Sonoma	strict	Williams-Sonoma	t
+Woodward	missing	\N	\N
+Workday	strict	Workday	t
+XPO Logistics	missing	\N	\N
+Xcel Energy	strict	Xcel Energy	t
+Xylem	strict	Xylem	t
+Yum! Brands	strict	Yum Brands	t
+Zimmer Biomet	strict	Zimmer Biomet	t
+Zoetis	strict	Zoetis	t
+Zoom	strict	Zoom	t
+Zscaler	strict	Zscaler	t
+eBay	strict	eBay	t

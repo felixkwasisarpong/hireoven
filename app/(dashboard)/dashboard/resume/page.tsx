@@ -264,6 +264,33 @@ function wait(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms))
 }
 
+function buildStudioPreviewUrl(resumeId: string) {
+  return `/dashboard/resume/studio?mode=preview&resumeId=${encodeURIComponent(resumeId)}`
+}
+
+function openPlaceholderTabFromGesture() {
+  const tab = window.open("", "_blank")
+  if (!tab) return null
+  try {
+    tab.opener = null
+  } catch {
+    // Ignore browser restrictions on opener assignment.
+  }
+  return tab
+}
+
+function navigateOrFallback(tab: Window | null, url: string) {
+  if (tab) {
+    tab.location.href = url
+    return
+  }
+
+  const opened = window.open(url, "_blank", "noopener,noreferrer")
+  if (!opened) {
+    window.location.assign(url)
+  }
+}
+
 type UploadStatusResponse = {
   parse_status: Resume["parse_status"]
   parse_error?: string | null
@@ -526,19 +553,40 @@ function ViewResumeAction({
   const [isOpening, setIsOpening] = useState(false)
 
   async function openResume() {
+    const placeholderTab = openPlaceholderTabFromGesture()
     setIsOpening(true)
     try {
-      const response = await fetch(`/api/resume/${resume.id}`, { cache: "no-store" })
+      const response = await fetch(`/api/resume/${resume.id}`, {
+        cache: "no-store",
+        credentials: "include",
+      })
       if (!response.ok) throw new Error("Could not load resume file")
       const data = (await response.json()) as Resume & { download_url?: string }
       const url = data.download_url ?? data.file_url
-      if (!url) throw new Error("This resume does not have a file preview yet")
-      window.open(url, "_blank", "noopener,noreferrer")
+      if (!url) {
+        placeholderTab?.close()
+        const previewUrl = buildStudioPreviewUrl(resume.id)
+        window.location.assign(previewUrl)
+        pushToast({
+          tone: "info",
+          title: "Opening resume in Studio",
+          description: "This resume does not have a direct file preview yet.",
+        })
+        return
+      }
+
+      navigateOrFallback(placeholderTab, url)
     } catch (error) {
+      placeholderTab?.close()
+      const previewUrl = buildStudioPreviewUrl(resume.id)
+      window.location.assign(previewUrl)
       pushToast({
-        tone: "error",
-        title: "Could not open resume",
-        description: error instanceof Error ? error.message : "Please try again.",
+        tone: "info",
+        title: "Opening resume in Studio",
+        description:
+          error instanceof Error
+            ? `Direct file preview failed: ${error.message}`
+            : "Direct file preview failed. Opening Studio instead.",
       })
     } finally {
       setIsOpening(false)
@@ -658,6 +706,13 @@ function CleanOverviewPanel({ onTabChange }: { onTabChange: (tab: TabId) => void
             <Sparkles className="h-4 w-4" />
             Generate with AI
           </button>
+          <Link
+            href="/dashboard/resume/studio?mode=preview&scratch=1"
+            className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-[13px] font-semibold text-slate-700 transition hover:bg-slate-50"
+          >
+            <Pencil className="h-4 w-4 text-[#5B4DFF]" />
+            Create from scratch
+          </Link>
         </div>
       </div>
     )
@@ -1457,10 +1512,27 @@ function LibraryPanel({ onTabChange }: { onTabChange: (tab: TabId) => void }) {
   }
 
   async function handleDownload(resume: Resume) {
-    const res = await fetch(`/api/resume/${resume.id}`, { cache: "no-store" })
-    if (!res.ok) { pushToast({ tone: "error", title: "Could not prepare download" }); return }
-    const data = (await res.json()) as Resume & { download_url?: string }
-    window.open(data.download_url ?? data.file_url, "_blank", "noopener,noreferrer")
+    const placeholderTab = openPlaceholderTabFromGesture()
+    try {
+      const res = await fetch(`/api/resume/${resume.id}`, {
+        cache: "no-store",
+        credentials: "include",
+      })
+      if (!res.ok) throw new Error("Could not prepare download")
+
+      const data = (await res.json()) as Resume & { download_url?: string }
+      const url = data.download_url ?? data.file_url
+      if (!url) throw new Error("This resume does not have a downloadable file yet")
+
+      navigateOrFallback(placeholderTab, url)
+    } catch (error) {
+      placeholderTab?.close()
+      pushToast({
+        tone: "error",
+        title: "Could not prepare download",
+        description: error instanceof Error ? error.message : "Please try again.",
+      })
+    }
   }
 
   const FILTER_TABS: { value: LibraryFilter; label: string }[] = [

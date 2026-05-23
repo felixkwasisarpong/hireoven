@@ -1185,12 +1185,14 @@ export class ScoutBar {
   private pageMode: ExtensionPageMode = "unknown"
 
   // Application-confirmation capture flow. The bar passively detects success
-  // pages and shows "Application submitted — save proof?". Only on explicit
-  // click do we POST to /api/extension/applications/proof.
+  // pages and, on detection, fires POST /api/extension/applications/proof
+  // automatically — no toast, no user click. The endpoint flips the matching
+  // job_applications row to status='applied' so the pipeline tracker reflects
+  // the submission silently. autoProofFired is a per-page guard so the polling
+  // loop and the initial detection don't double-fire.
   private confirmation: ConfirmationDetection | null = null
   private proofStatus: "idle" | "saving" | "saved" | "error" = "idle"
-  private proofError: string | null = null
-  private proofPromptDismissed: boolean = false
+  private autoProofFired: boolean = false
   private confirmationTimer: ReturnType<typeof setInterval> | null = null
   private agentModeRunning: boolean = false
 
@@ -1289,8 +1291,7 @@ export class ScoutBar {
     this.pageMode = "unknown"
     this.confirmation = null
     this.proofStatus = "idle"
-    this.proofError = null
-    this.proofPromptDismissed = false
+    this.autoProofFired = false
 
     let isJob: boolean
     try {
@@ -1312,6 +1313,14 @@ export class ScoutBar {
       confirmation = null
     }
     this.confirmation = confirmation
+
+    // Silently move the application to the "applied" column when we land on
+    // a confirmation page. autoProofFired guards against double-firing if
+    // the polling loop also flips the same confirmation later.
+    if (confirmation?.isConfirmation && confirmation.confidence !== "low" && !this.autoProofFired) {
+      this.autoProofFired = true
+      void this.onSaveProof()
+    }
 
     if (!isJob && !(confirmation?.isConfirmation && confirmation.confidence !== "low")) {
       this.state = "not_job_page"
@@ -1725,65 +1734,15 @@ export class ScoutBar {
   // ── Proof prompt (post-submission capture) ──────────────────────────────────
 
   /**
-   * Floating prompt rendered above the bar when a confirmation page is
-   * detected. Strict opt-in — nothing is sent until the user clicks Save
-   * proof. The prompt is dismissible per page load (proofPromptDismissed).
+   * No visible UI — confirmation detection auto-fires onSaveProof() to move
+   * the matching application into the "applied" column silently. The method
+   * is kept (instead of deleted) because the action dispatcher still wires
+   * "save-proof" / "dismiss-proof" buttons that may be referenced elsewhere
+   * for the error-recovery flow; if the auto-save fails, no UI surfaces it
+   * (intentional — user requested silent behavior).
    */
   private renderProofPrompt(): string {
-    const conf = this.confirmation
-    if (!conf || !conf.isConfirmation) return ""
-    if (conf.confidence === "low") return ""
-    if (this.proofPromptDismissed) return ""
-
-    const status = this.proofStatus
-    if (status === "saved") {
-      return `
-        <div class="proof-prompt proof-prompt-saved" role="status" aria-live="polite">
-          <div class="proof-prompt-body">
-            <span class="proof-icon">✓</span>
-            <div>
-              <div class="proof-title">Application proof saved</div>
-              <div class="proof-sub">Tracked in your Hireoven pipeline.</div>
-            </div>
-          </div>
-          <button class="proof-dismiss" data-action="dismiss-proof" aria-label="Dismiss">×</button>
-        </div>
-      `
-    }
-
-    const subtitle = (() => {
-      if (status === "saving") return "Saving proof…"
-      if (status === "error")  return this.proofError ?? "Save failed — try again."
-      const trimmed = conf.confirmationText
-        ? conf.confirmationText.length > 90
-          ? conf.confirmationText.slice(0, 90) + "…"
-          : conf.confirmationText
-        : "We detected a successful submission."
-      return trimmed
-    })()
-
-    const actionLabel =
-      status === "saving" ? "Saving…" :
-      status === "error"  ? "Retry"  :
-                            "Save proof"
-
-    return `
-      <div class="proof-prompt ${status === "error" ? "proof-prompt-error" : ""}" role="dialog" aria-label="Application submitted">
-        <div class="proof-prompt-body">
-          <span class="proof-icon">✓</span>
-          <div>
-            <div class="proof-title">Application submitted — save proof?</div>
-            <div class="proof-sub">${escapeHtml(subtitle)}</div>
-          </div>
-        </div>
-        <div class="proof-actions">
-          <button class="proof-btn proof-btn-primary"
-                  data-action="save-proof"
-                  ${status === "saving" ? "disabled" : ""}>${actionLabel}</button>
-          <button class="proof-dismiss" data-action="dismiss-proof" aria-label="Dismiss">×</button>
-        </div>
-      </div>
-    `
+    return ""
   }
 
   // ── Detection panel (read-only) ─────────────────────────────────────────────
@@ -3424,7 +3383,12 @@ export class ScoutBar {
         const nowConfirmed = next.isConfirmation && next.confidence !== "low"
         if (nowConfirmed && !wasConfirmed) {
           this.confirmation = next
-          this.proofPromptDismissed = false
+          // Auto-fire silent save; pipeline tracker reflects "applied" status
+          // without any toast or click.
+          if (!this.autoProofFired) {
+            this.autoProofFired = true
+            void this.onSaveProof()
+          }
           this.render()
           this.stopConfirmationPolling()
         }
@@ -3451,7 +3415,6 @@ export class ScoutBar {
     if (!this.confirmation?.isConfirmation) return
 
     this.proofStatus = "saving"
-    this.proofError = null
     this.render()
 
     const jobId =
@@ -3473,13 +3436,16 @@ export class ScoutBar {
       this.proofStatus = "saved"
     } catch (err) {
       this.proofStatus = "error"
-      this.proofError = err instanceof Error ? err.message : "Save failed"
+      // No UI surfaces this; log so dev tools can still surface real
+      // failures during the silent auto-save flow.
+      console.warn("[scout-bar] application proof auto-save failed:", err)
     }
     this.render()
   }
 
   private onDismissProofPrompt(): void {
-    this.proofPromptDismissed = true
-    this.render()
+    // Toast is no longer rendered — auto-save fires silently on detection.
+    // Method preserved so the dispatcher's "dismiss-proof" branch stays
+    // wired without breaking the action enum.
   }
 }
