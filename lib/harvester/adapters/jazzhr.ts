@@ -1,4 +1,5 @@
 import {
+  envConcurrency,
   type AtsAdapter,
   type HarvestResult,
 } from "@/lib/harvester/adapters/_base"
@@ -37,7 +38,7 @@ function detectFromUrl(url: string): { slug: string } | null {
 
 export const jazzhrAdapter: AtsAdapter = {
   name: "jazzhr",
-  concurrency: 6,
+  concurrency: envConcurrency("jazzhr", 6),
   detectFromUrl,
   async fetchJobs({ slug, ctx }): Promise<HarvestResult> {
     const fetchedAt = new Date()

@@ -1,4 +1,5 @@
 import {
+  envConcurrency,
   conditionalFetchJson,
   hashContent,
   type AtsAdapter,
@@ -259,7 +260,7 @@ export const oraclecloudAdapter: AtsAdapter = {
   // The Oracle CE REST API is fast and per-pod-scoped. Many distinct customer
   // sites share a single pod, so cap to keep one noisy customer from starving
   // others on the same host.
-  concurrency: 4,
+  concurrency: envConcurrency("oraclecloud", 4),
   detectFromUrl,
   async fetchJobs({ slug, ctx }): Promise<HarvestResult> {
     const fetchedAt = new Date()

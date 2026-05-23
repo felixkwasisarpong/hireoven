@@ -28,6 +28,7 @@
 
 import { harvesterFetch } from "@/lib/harvester/http-agent"
 import {
+  envConcurrency,
   hashContent,
   type AtsAdapter,
   type HarvestCtx,
@@ -137,7 +138,7 @@ async function fetchListingPage(
 
 export const infosysAdapter: AtsAdapter = {
   name: "infosys",
-  concurrency: 1, // single-tenant, be polite
+  concurrency: envConcurrency("infosys", 1), // single-tenant, be polite
   detectFromUrl(url) {
     if (!INFOSYS_HOST_RE.test(url)) return null
     return { slug: "infosys" }

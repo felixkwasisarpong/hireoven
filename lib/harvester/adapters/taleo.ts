@@ -1,5 +1,6 @@
 import pLimit from "p-limit"
 import {
+  envConcurrency,
   hashContent,
   type AtsAdapter,
   type HarvestCtx,
@@ -338,7 +339,7 @@ export const taleoAdapter: AtsAdapter = {
   name: "taleo",
   // Taleo's legacy SSR is slow; one customer tenant easily takes 10+ seconds
   // for a single page. Keep concurrency low to avoid head-of-line blocking.
-  concurrency: 2,
+  concurrency: envConcurrency("taleo", 2),
   detectFromUrl,
   async fetchJobs({ slug, ctx }): Promise<HarvestResult> {
     const fetchedAt = new Date()

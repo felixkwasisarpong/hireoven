@@ -1,5 +1,6 @@
 import pLimit from "p-limit"
 import {
+  envConcurrency,
   hashContent,
   type AtsAdapter,
   type HarvestCtx,
@@ -500,7 +501,7 @@ export const workdayAdapter: AtsAdapter = {
   // Each tenant is its own host + slow paginated POSTs (30-60s per board).
   // Per-process limit; with N replicas the cluster total is N×this. Halved
   // from 4 → 2 so 2 workers stay at the original 4-concurrent cluster budget.
-  concurrency: 2,
+  concurrency: envConcurrency("workday", 2),
   detectFromUrl,
   async fetchJobs({ slug, ctx }): Promise<HarvestResult> {
     const fetchedAt = new Date()

@@ -1,5 +1,6 @@
 import pLimit from "p-limit"
 import {
+  envConcurrency,
   hashContent,
   type AtsAdapter,
   type HarvestCtx,
@@ -313,7 +314,7 @@ async function enrichWithDetails(links: JobviteLink[], slug: string, ctx: Harves
 export const jobviteAdapter: AtsAdapter = {
   name: "jobvite",
   // Hosted HTML pages are server-rendered and detail pages are per-job.
-  concurrency: 4,
+  concurrency: envConcurrency("jobvite", 4),
   detectFromUrl,
   async fetchJobs({ slug, ctx }): Promise<HarvestResult> {
     const fetchedAt = new Date()

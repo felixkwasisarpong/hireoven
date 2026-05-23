@@ -1,4 +1,5 @@
 import {
+  envConcurrency,
   conditionalFetchJson,
   hashContent,
   type AtsAdapter,
@@ -156,7 +157,7 @@ async function fetchPage(
 
 export const workableAdapter: AtsAdapter = {
   name: "workable",
-  concurrency: 8,
+  concurrency: envConcurrency("workable", 8),
   detectFromUrl,
   async fetchJobs({ slug, ctx }): Promise<HarvestResult> {
     const fetchedAt = new Date()
