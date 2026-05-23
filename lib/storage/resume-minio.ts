@@ -88,12 +88,47 @@ async function ensureResumeBucket(): Promise<void> {
 
 const DEFAULT_PRESIGN_SECONDS = 60 * 60
 
+export type ResumeObjectMinio = {
+  stream: NodeJS.ReadableStream
+  size: number | null
+  etag: string | null
+  lastModified: Date | null
+  contentType: string | null
+}
+
 export async function presignResumeGetMinio(
   key: string,
   expiresInSeconds = DEFAULT_PRESIGN_SECONDS
 ): Promise<string> {
   await ensureResumeBucket()
   return getMinioClient().presignedGetObject(bucketName(), key, expiresInSeconds)
+}
+
+export async function getResumeObjectMinio(
+  key: string
+): Promise<ResumeObjectMinio> {
+  await ensureResumeBucket()
+  const client = getMinioClient()
+  const [stream, stat] = await Promise.all([
+    client.getObject(bucketName(), key),
+    client.statObject(bucketName(), key),
+  ])
+
+  const metadata = stat.metaData ?? {}
+  const contentType =
+    String(
+      metadata["content-type"] ??
+        metadata["Content-Type"] ??
+        ""
+    ).trim() || null
+
+  return {
+    stream,
+    size: Number.isFinite(stat.size) ? stat.size : null,
+    etag: stat.etag || null,
+    lastModified: stat.lastModified ?? null,
+    contentType,
+  }
 }
 
 export async function uploadResumeMinio(

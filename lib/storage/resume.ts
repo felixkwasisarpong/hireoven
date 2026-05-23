@@ -4,8 +4,10 @@ import {
 } from "@/lib/storage/resume-validate"
 import {
   deleteResumeMinio,
+  getResumeObjectMinio,
   isResumeMinioConfigured,
   presignResumeGetMinio,
+  type ResumeObjectMinio,
   uploadResumeMinio,
 } from "@/lib/storage/resume-minio"
 
@@ -45,4 +47,9 @@ export async function deleteResume(path: string): Promise<void> {
 export async function getResumeUrl(path: string): Promise<string> {
   requireResumeStorage()
   return presignResumeGetMinio(path)
+}
+
+export async function getResumeObject(path: string): Promise<ResumeObjectMinio> {
+  requireResumeStorage()
+  return getResumeObjectMinio(path)
 }
