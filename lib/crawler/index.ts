@@ -134,6 +134,22 @@ const IBM_CAREERS_MAX_JOBS = Math.max(
 )
 const IBM_CAREERS_API_BASE =
   "https://www-api.ibm.com/search/api/v2/ibmcom/appid/careers/responseFormat/json"
+const BAIN_ROLE_SEARCH_PAGE_SIZE = Math.max(
+  10,
+  Number.parseInt(process.env.CRAWLER_BAIN_ROLE_SEARCH_PAGE_SIZE ?? "50", 10)
+)
+const BAIN_ROLE_SEARCH_MAX_JOBS = Math.max(
+  BAIN_ROLE_SEARCH_PAGE_SIZE,
+  Number.parseInt(process.env.CRAWLER_BAIN_ROLE_SEARCH_MAX_JOBS ?? "2000", 10)
+)
+const AECOM_SOLR_PAGE_SIZE = Math.max(
+  10,
+  Number.parseInt(process.env.CRAWLER_AECOM_SOLR_PAGE_SIZE ?? "50", 10)
+)
+const AECOM_SOLR_MAX_JOBS = Math.max(
+  AECOM_SOLR_PAGE_SIZE,
+  Number.parseInt(process.env.CRAWLER_AECOM_SOLR_MAX_JOBS ?? "8000", 10)
+)
 const FAST_SECONDARY_MAX_ATTEMPTS = Math.max(
   1,
   Number.parseInt(process.env.CRAWLER_SECONDARY_MAX_ATTEMPTS ?? "1", 10)
@@ -407,6 +423,19 @@ function isIbmCareersUrl(url: URL) {
     return path === "/careers" || path.startsWith("/careers/")
   }
   return false
+}
+
+function isBainCareersUrl(url: URL) {
+  const host = url.hostname.toLowerCase()
+  if (!(host === "bain.com" || host === "www.bain.com" || host.endsWith(".bain.com"))) {
+    return false
+  }
+  return url.pathname.toLowerCase().includes("/careers")
+}
+
+function isAecomJobsUrl(url: URL) {
+  const host = url.hostname.toLowerCase()
+  return host === "aecom.jobs" || host.endsWith(".aecom.jobs")
 }
 
 function isLocaleSegment(part: string) {
@@ -3093,12 +3122,16 @@ function flattenIbmDocAttributes(
   return flattened
 }
 
-function parseIbmPostedAt(value: string | undefined): string | undefined {
+function parseIsoDateToISOString(value: unknown): string | undefined {
   const raw = String(value ?? "").trim()
   if (!raw) return undefined
   const asDate = new Date(raw)
   if (Number.isNaN(asDate.getTime())) return undefined
   return asDate.toISOString()
+}
+
+function parseIbmPostedAt(value: string | undefined): string | undefined {
+  return parseIsoDateToISOString(value)
 }
 
 function normalizeIbmJobDetailUrl(rawValue: string): string | null {
@@ -3228,6 +3261,296 @@ async function crawlIbmCareers(careersUrl: URL): Promise<RawJob[]> {
     if (addedOnPage === 0) break
     startIndex += pageJobs.length
     page += 1
+  }
+
+  return jobs
+}
+
+type BainRoleSearchResultItem = {
+  JobId?: string | number
+  JobTitle?: string
+  JobDescription?: string
+  Link?: string
+  Location?: string | string[]
+  Categories?: string | string[]
+  EmployeeType?: string
+}
+
+type BainRoleSearchResponse = {
+  results?: BainRoleSearchResultItem[]
+  totalResults?: string | number
+}
+
+function bainRoleSearchEndpointCandidates(careersUrl: URL): URL[] {
+  const endpoints: URL[] = []
+  const seen = new Set<string>()
+  const localeCandidates = new Set<string>(["en"])
+
+  const firstPathPart = careersUrl.pathname.split("/").filter(Boolean)[0]
+  if (firstPathPart && isLocaleSegment(firstPathPart)) {
+    localeCandidates.add(firstPathPart.toLowerCase())
+  }
+
+  const origins = new Set<string>([careersUrl.origin, "https://www.bain.com"])
+  for (const origin of origins) {
+    const originUrl = toUrl(origin)
+    if (!originUrl) continue
+
+    for (const locale of localeCandidates) {
+      const withLocale = new URL(`/${locale}/api/jobsearch/keyword/get`, originUrl)
+      const localizedKey = withLocale.toString()
+      if (!seen.has(localizedKey)) {
+        seen.add(localizedKey)
+        endpoints.push(withLocale)
+      }
+    }
+
+    const generic = new URL("/api/jobsearch/keyword/get", originUrl)
+    const genericKey = generic.toString()
+    if (!seen.has(genericKey)) {
+      seen.add(genericKey)
+      endpoints.push(generic)
+    }
+  }
+
+  return endpoints
+}
+
+function formatBainLocation(value: unknown): string | undefined {
+  if (Array.isArray(value)) {
+    const cleaned = value.map((entry) => String(entry ?? "").trim()).filter(Boolean)
+    if (cleaned.length === 0) return undefined
+    if (cleaned.length === 1) return cleaned[0]
+    return `${cleaned[0]} +${cleaned.length - 1} more`
+  }
+
+  const text = String(value ?? "").trim()
+  return text || undefined
+}
+
+async function crawlBainCareers(careersUrl: URL): Promise<RawJob[]> {
+  if (!isBainCareersUrl(careersUrl)) return []
+
+  const endpointCandidates = bainRoleSearchEndpointCandidates(careersUrl)
+  const maxPages = Math.max(
+    1,
+    Math.ceil(BAIN_ROLE_SEARCH_MAX_JOBS / BAIN_ROLE_SEARCH_PAGE_SIZE) + 2
+  )
+
+  for (const endpoint of endpointCandidates) {
+    const jobs: RawJob[] = []
+    const seen = new Set<string>()
+    let start = 0
+    let page = 0
+
+    while (page < maxPages && jobs.length < BAIN_ROLE_SEARCH_MAX_JOBS) {
+      const apiUrl = new URL(endpoint.toString())
+      apiUrl.searchParams.set("searchValue", "")
+      apiUrl.searchParams.set("filters", "")
+      apiUrl.searchParams.set("start", String(start))
+      apiUrl.searchParams.set("results", String(BAIN_ROLE_SEARCH_PAGE_SIZE))
+
+      const response = await fetchCrawlerJson<BainRoleSearchResponse>(apiUrl.toString(), {
+        method: "GET",
+        headers: {
+          accept: "application/json",
+          // Bain's API endpoint is often challenged when using our default
+          // Chromium UA string; Safari UA consistently returns JSON.
+          "user-agent":
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15",
+          "x-requested-with": "XMLHttpRequest",
+          referer: careersUrl.toString(),
+          origin: endpoint.origin,
+        },
+      })
+      if (!response.ok) break
+
+      const pageJobs = response.data?.results ?? []
+      if (pageJobs.length === 0) break
+
+      let addedOnPage = 0
+      for (const item of pageJobs) {
+        const title = String(item.JobTitle ?? "").trim()
+        const detailUrl = toUrl(String(item.Link ?? "").trim(), endpoint)
+        const url = detailUrl ? normalizeJobApplyUrl(detailUrl.toString()) : null
+        if (!title || !url) continue
+
+        const id = String(item.JobId ?? "").trim()
+        const externalId = id ? `bain:${id}` : `bain:${url}`
+        if (seen.has(externalId)) continue
+        seen.add(externalId)
+
+        const description =
+          cleanJobDescription(String(item.JobDescription ?? "").trim()) ?? undefined
+        const location = formatBainLocation(item.Location)
+        const employmentType = String(item.EmployeeType ?? "").trim() || undefined
+
+        jobs.push({
+          externalId,
+          title,
+          url,
+          description,
+          location,
+          employmentType,
+        })
+        addedOnPage += 1
+
+        if (jobs.length >= BAIN_ROLE_SEARCH_MAX_JOBS) break
+      }
+
+      const totalResults = parseFiniteInteger(response.data?.totalResults)
+      start += 1
+      page += 1
+
+      if (addedOnPage === 0) break
+      if (pageJobs.length < BAIN_ROLE_SEARCH_PAGE_SIZE) break
+      if (totalResults !== null && page * BAIN_ROLE_SEARCH_PAGE_SIZE >= totalResults) break
+    }
+
+    if (jobs.length > 0) return jobs
+  }
+
+  return []
+}
+
+type AecomSolrJob = {
+  id?: string
+  guid?: string
+  reqid?: string
+  title_exact?: string
+  title_slug?: string
+  description?: string
+  location_exact?: string
+  all_locations?: unknown[]
+  city_exact?: string
+  country_exact?: string
+  country_short_exact?: string
+  date_updated?: string
+  date_added?: string
+  job_type?: string
+}
+
+type AecomSolrSearchResponse = {
+  jobs?: AecomSolrJob[]
+  pagination?: {
+    has_more_pages?: boolean
+    total?: string | number
+  }
+}
+
+function aecomPrimaryId(job: AecomSolrJob): string {
+  const guid = String(job.guid ?? "").trim()
+  if (guid) return guid
+
+  const id = String(job.id ?? "").trim()
+  const fromId = id.match(/[a-f0-9]{32}/i)?.[0]
+  if (fromId) return fromId
+
+  return String(job.reqid ?? "").trim()
+}
+
+function aecomJobLocation(job: AecomSolrJob): string | undefined {
+  const locationExact = String(job.location_exact ?? "").trim()
+  if (locationExact) return locationExact
+
+  if (Array.isArray(job.all_locations)) {
+    const cleaned = job.all_locations
+      .map((entry) => String(entry ?? "").trim())
+      .filter(Boolean)
+    if (cleaned.length > 0) return cleaned.join(", ")
+  }
+
+  const city = String(job.city_exact ?? "").trim()
+  const country = String(job.country_short_exact ?? job.country_exact ?? "").trim()
+  const combined = [city, country].filter(Boolean).join(", ")
+  return combined || undefined
+}
+
+function buildAecomJobUrl(job: AecomSolrJob, careersUrl: URL): string | null {
+  const primaryId = aecomPrimaryId(job)
+  if (!primaryId) return null
+
+  const titleSource =
+    String(job.title_slug ?? "").trim() || String(job.title_exact ?? "").trim()
+  const titleSlug = normalizeWorkdaySlug(titleSource)
+  if (!titleSlug) return null
+
+  const locationSource =
+    String(job.location_exact ?? "").trim() ||
+    String(job.country_short_exact ?? job.country_exact ?? "").trim() ||
+    "global"
+  const locationSlug = normalizeWorkdaySlug(locationSource)
+  if (!locationSlug) return null
+
+  return normalizeJobApplyUrl(
+    new URL(`/${locationSlug}/${titleSlug}/${primaryId}/job/`, careersUrl.origin).toString()
+  )
+}
+
+async function crawlAecomJobs(careersUrl: URL): Promise<RawJob[]> {
+  if (!isAecomJobsUrl(careersUrl)) return []
+
+  const jobs: RawJob[] = []
+  const seen = new Set<string>()
+  const maxPages = Math.max(
+    1,
+    Math.ceil(AECOM_SOLR_MAX_JOBS / AECOM_SOLR_PAGE_SIZE) + 2
+  )
+  const originHeader = careersUrl.hostname.toLowerCase()
+
+  for (let page = 1; page <= maxPages && jobs.length < AECOM_SOLR_MAX_JOBS; page++) {
+    const apiUrl = new URL("https://prod-search-api.jobsyn.org/api/v1/solr/search")
+    apiUrl.searchParams.set("num_items", String(AECOM_SOLR_PAGE_SIZE))
+    apiUrl.searchParams.set("q", "")
+    apiUrl.searchParams.set("location", "")
+    apiUrl.searchParams.set("sort", "relevance")
+    apiUrl.searchParams.set("page", String(page))
+
+    const response = await fetchCrawlerJson<AecomSolrSearchResponse>(apiUrl.toString(), {
+      method: "GET",
+      headers: {
+        accept: "application/json",
+        "x-origin": originHeader,
+        referer: careersUrl.toString(),
+        origin: careersUrl.origin,
+      },
+    })
+    if (!response.ok) break
+
+    const pageJobs = response.data?.jobs ?? []
+    if (pageJobs.length === 0) break
+
+    let addedOnPage = 0
+    for (const item of pageJobs) {
+      const title = String(item.title_exact ?? "").trim()
+      const url = buildAecomJobUrl(item, careersUrl)
+      if (!title || !url) continue
+
+      const primaryId = aecomPrimaryId(item)
+      const externalId = primaryId ? `aecom:${primaryId}` : `aecom:${url}`
+      if (seen.has(externalId)) continue
+      seen.add(externalId)
+
+      jobs.push({
+        externalId,
+        title,
+        url,
+        description: cleanJobDescription(String(item.description ?? "").trim()) ?? undefined,
+        location: aecomJobLocation(item),
+        postedAt: parseIsoDateToISOString(item.date_updated ?? item.date_added),
+        workMode: String(item.job_type ?? "").trim() || undefined,
+      })
+      addedOnPage += 1
+
+      if (jobs.length >= AECOM_SOLR_MAX_JOBS) break
+    }
+
+    const hasMore = response.data?.pagination?.has_more_pages === true
+    const total = parseFiniteInteger(response.data?.pagination?.total)
+    if (addedOnPage === 0) break
+    if (!hasMore) break
+    if (pageJobs.length < AECOM_SOLR_PAGE_SIZE) break
+    if (total !== null && page * AECOM_SOLR_PAGE_SIZE >= total) break
   }
 
   return jobs
@@ -3440,6 +3763,14 @@ async function crawlByKnownAts(careersUrl: URL): Promise<RawJob[]> {
     return crawlIbmCareers(careersUrl)
   }
 
+  if (isBainCareersUrl(careersUrl)) {
+    return crawlBainCareers(careersUrl)
+  }
+
+  if (isAecomJobsUrl(careersUrl)) {
+    return crawlAecomJobs(careersUrl)
+  }
+
   const greenhouseBoard = parseGreenhouseBoard(careersUrl)
   if (greenhouseBoard) {
     return crawlGreenhouse(careersUrl)
@@ -3612,6 +3943,8 @@ async function discoverAndCrawlFromHtml(careersUrl: URL): Promise<DiscoverAndCra
         isCiscoPhenomPortal(candidate) ||
         isMicrosoftCareersUrl(candidate) ||
         isIbmCareersUrl(candidate) ||
+        isBainCareersUrl(candidate) ||
+        isAecomJobsUrl(candidate) ||
         isGoogleCareersPortal(candidate)
 
       if (!known) continue
