@@ -19,6 +19,7 @@
 
 import type { Browser, Page } from "playwright"
 import {
+  envConcurrency,
   hashContent,
   type AtsAdapter,
   type HarvestCtx,
@@ -131,7 +132,7 @@ export async function extractAppleListPage(page: Page, pageNum: number): Promise
 
 export const appleAdapter: AtsAdapter = {
   name: "apple",
-  concurrency: 1,
+  concurrency: envConcurrency("apple", 1),
   detectFromUrl(url) {
     if (!APPLE_HOST_RE.test(url)) return null
     return { slug: "apple" }

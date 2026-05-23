@@ -1,5 +1,6 @@
 import { extractGreenhouseBoardToken } from "@/lib/companies/greenhouse-url"
 import {
+  envConcurrency,
   conditionalFetchJson,
   hashContent,
   type AtsAdapter,
@@ -82,7 +83,7 @@ function mapRawJob(raw: GreenhouseRawJob): HarvestedJob | null {
 export const greenhouseAdapter: AtsAdapter = {
   name: "greenhouse",
   // Shared CDN-backed JSON API; tolerates high concurrency.
-  concurrency: 16,
+  concurrency: envConcurrency("greenhouse", 16),
 
   detectFromUrl(url) {
     const slug = extractGreenhouseBoardToken(url)

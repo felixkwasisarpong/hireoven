@@ -1,5 +1,6 @@
 import pLimit from "p-limit"
 import {
+  envConcurrency,
   hashContent,
   type AtsAdapter,
   type HarvestCtx,
@@ -398,7 +399,7 @@ export const successfactorsAdapter: AtsAdapter = {
   // SAP SF tenants share a small pool of shard hosts and respond slowly under
   // load; keep concurrency conservative so two tenants on the same shard
   // don't gridlock each other.
-  concurrency: 3,
+  concurrency: envConcurrency("successfactors", 3),
   detectFromUrl,
   async fetchJobs({ slug, ctx }): Promise<HarvestResult> {
     const fetchedAt = new Date()

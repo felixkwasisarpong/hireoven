@@ -1,4 +1,5 @@
 import {
+  envConcurrency,
   hashContent,
   type AtsAdapter,
   type HarvestCtx,
@@ -319,7 +320,7 @@ export const usajobsAdapter: AtsAdapter = {
   // One central API host (data.usajobs.gov) shared by every "tenant" — keep
   // the per-process budget modest so two agencies on the same shard don't
   // hammer the rate limiter.
-  concurrency: 2,
+  concurrency: envConcurrency("usajobs", 2),
   detectFromUrl,
   async fetchJobs({ slug, ctx }): Promise<HarvestResult> {
     const fetchedAt = new Date()

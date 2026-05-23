@@ -1,4 +1,5 @@
 import {
+  envConcurrency,
   conditionalFetchJson,
   hashContent,
   type AtsAdapter,
@@ -182,7 +183,7 @@ function mapRawJob(raw: AshbyRawJob): HarvestedJob | null {
 
 export const ashbyAdapter: AtsAdapter = {
   name: "ashby",
-  concurrency: 8,
+  concurrency: envConcurrency("ashby", 8),
   detectFromUrl,
   async fetchJobs({ slug, ctx }): Promise<HarvestResult> {
     const fetchedAt = new Date()

@@ -1,5 +1,6 @@
 import pLimit from "p-limit"
 import {
+  envConcurrency,
   conditionalFetchJson,
   hashContent,
   type AtsAdapter,
@@ -222,7 +223,7 @@ async function fetchSingle(
 export const smartrecruitersAdapter: AtsAdapter = {
   name: "smartrecruiters",
   // Paginated, ~600ms per page; lower cap to avoid hitting their rate limits.
-  concurrency: 6,
+  concurrency: envConcurrency("smartrecruiters", 6),
   detectFromUrl,
   async fetchJobs({ slug, ctx }): Promise<HarvestResult> {
     const fetchedAt = new Date()

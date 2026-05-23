@@ -1,4 +1,5 @@
 import {
+  envConcurrency,
   hashContent,
   type AtsAdapter,
   type HarvestCtx,
@@ -228,10 +229,11 @@ async function enrichWithDetails(links: JobLink[], ctx: HarvestCtx): Promise<Har
 
 export const icimsAdapter: AtsAdapter = {
   name: "icims",
-  // iCIMS sites are slow + customer-isolated; keep concurrency low.
-  // Per-process limit; with N replicas the cluster total is N×this. Lowered
-  // from 3 → 2 so 2 workers stay near the original cluster budget.
-  concurrency: 2,
+  // iCIMS sites are slow + customer-isolated. Bumped default 2 → 6 because
+  // diagnostic showed only 41/103 icims companies were touched in a day at
+  // cap=2 — the slowest API was starving its own queue. Env-tunable via
+  // HARVESTER_ICIMS_CONCURRENCY if individual instances misbehave.
+  concurrency: envConcurrency("icims", 6),
   detectFromUrl,
   async fetchJobs({ slug, ctx }): Promise<HarvestResult> {
     const fetchedAt = new Date()

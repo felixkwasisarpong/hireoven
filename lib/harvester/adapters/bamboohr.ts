@@ -1,4 +1,5 @@
 import {
+  envConcurrency,
   type AtsAdapter,
   type HarvestResult,
 } from "@/lib/harvester/adapters/_base"
@@ -39,7 +40,7 @@ function detectFromUrl(url: string): { slug: string } | null {
 export const bamboohrAdapter: AtsAdapter = {
   name: "bamboohr",
   // HTML + JSON-LD; per-customer host so contention is naturally low.
-  concurrency: 6,
+  concurrency: envConcurrency("bamboohr", 6),
   detectFromUrl,
   async fetchJobs({ slug, ctx }): Promise<HarvestResult> {
     const fetchedAt = new Date()

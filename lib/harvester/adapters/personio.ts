@@ -1,4 +1,5 @@
 import {
+  envConcurrency,
   hashContent,
   type AtsAdapter,
   type HarvestCtx,
@@ -189,7 +190,7 @@ async function fetchXml(url: string, ctx: HarvestCtx): Promise<{ kind: "ok"; tex
 export const personioAdapter: AtsAdapter = {
   name: "personio",
   // XML feed is ~1s; lower cap reflects parse cost.
-  concurrency: 6,
+  concurrency: envConcurrency("personio", 6),
   detectFromUrl,
   async fetchJobs({ slug, ctx }): Promise<HarvestResult> {
     const fetchedAt = new Date()

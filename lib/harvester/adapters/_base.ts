@@ -83,6 +83,19 @@ const DEFAULT_USER_AGENT =
 const DEFAULT_TIMEOUT_MS = 8_000
 const RETRY_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504])
 
+/**
+ * Resolve a per-adapter concurrency, with env override.
+ * Reads HARVESTER_<NAME>_CONCURRENCY (e.g. HARVESTER_ICIMS_CONCURRENCY) — must
+ * be a positive integer to win, otherwise the fallback is used. Read at module
+ * load only; restart the worker after changing the env.
+ */
+export function envConcurrency(name: AtsName, fallback: number): number {
+  const key = `HARVESTER_${name.toUpperCase()}_CONCURRENCY`
+  const raw = Number.parseInt(process.env[key] ?? "", 10)
+  if (Number.isFinite(raw) && raw >= 1) return raw
+  return fallback
+}
+
 export type ConditionalFetchResult<T> =
   | { kind: "ok"; status: number; data: T; etag: string | null; lastModified: string | null; upstreamLatencyMs: number }
   | { kind: "not_modified"; status: 304; etag: string | null; lastModified: string | null; upstreamLatencyMs: number }
