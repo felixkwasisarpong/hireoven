@@ -77,19 +77,19 @@ function NavItem({
 
   const iconClass = feedSkin
     ? cn(
-        "h-[18px] w-[18px] flex-shrink-0 transition-colors duration-200",
+        "h-[18px] w-[18px] flex-shrink-0 fill-none transition-colors duration-200",
         locked
           ? "text-slate-400"
           : active
-            ? "text-[#2563EB]"
+            ? "text-[#FF5C18] fill-[#FF5C18]"
             : "text-slate-500 group-hover:text-[#2563EB]"
       )
     : cn(
-        "h-4 w-4 flex-shrink-0 transition-colors duration-200",
+        "h-4 w-4 flex-shrink-0 fill-none transition-colors duration-200",
         locked
           ? "text-muted-foreground/60"
           : active
-            ? "text-white"
+            ? "text-white fill-[#FED7AA]"
             : variant === "dark"
               ? "text-slate-400 group-hover:text-primary"
               : "text-muted-foreground group-hover:text-primary"
@@ -113,7 +113,7 @@ function NavItem({
 
   const inner = (
     <>
-      <Icon className={iconClass} strokeWidth={2} aria-hidden />
+      <Icon className={cn(iconClass, active && !locked && "fill-current")} strokeWidth={2} aria-hidden />
       <span className="flex-1 truncate">{item.label}</span>
       {locked ? (
         <span
@@ -198,13 +198,13 @@ function NavGroup({
       )
 
   const iconClass = feedSkin
-    ? cn("h-[18px] w-[18px] flex-shrink-0", hasActive ? "text-[#2563EB]" : "text-slate-500 group-hover:text-[#2563EB]")
-    : cn("h-4 w-4 flex-shrink-0", variant === "dark" ? "text-slate-400" : "text-muted-foreground group-hover:text-primary")
+    ? cn("h-[18px] w-[18px] flex-shrink-0 fill-none", hasActive ? "text-[#FF5C18] fill-[#FF5C18]" : "text-slate-500 group-hover:text-[#2563EB]")
+    : cn("h-4 w-4 flex-shrink-0 fill-none", variant === "dark" ? "text-slate-400" : "text-muted-foreground group-hover:text-primary")
 
   return (
     <div>
       <button type="button" onClick={() => setOpen((o) => !o)} className={headerClass}>
-        <GroupIcon className={iconClass} strokeWidth={2} aria-hidden />
+        <GroupIcon className={cn(iconClass, hasActive && "fill-current")} strokeWidth={2} aria-hidden />
         <span className="flex-1 truncate text-left">{group.label}</span>
         <ChevronRight
           className={cn(

@@ -252,3 +252,35 @@ test("persistJobsBulk: salvages substantive adapter descriptions when strict nor
     "RESPONSIBILITIES\nBuild backend services and operate production APIs across multiple teams with strong ownership and collaboration mindset"
   )
 })
+
+test("persistJobsBulk: sanitizes malformed unicode/control chars before jsonb payload", async () => {
+  const { pool, captured } = makeFakePool([[], []])
+
+  await persistJobsBulk({
+    pool,
+    companyId: "00000000-0000-0000-0000-000000000006",
+    companyMeta: { name: "Acme", domain: null, careersUrl: null },
+    sourceAts: "greenhouse",
+    sourceAtsSlug: "acme",
+    crawledAt: new Date("2026-05-11T00:00:00.000Z"),
+    jobs: [
+      makeJob({
+        externalId: "greenhouse:sanitize-1",
+        title: "Bad\u0000Title",
+        description:
+          "Role with malformed surrogate \uD800 and control byte \u0001 in text for robust payload handling.",
+        contentHash: "7".repeat(32),
+      }),
+    ],
+  })
+
+  const upsert = captured[0]
+  const payload = JSON.parse(upsert.values[4] as string) as Array<Record<string, unknown>>
+  assert.equal(payload.length, 1)
+
+  const title = String(payload[0].title ?? "")
+  const description = String(payload[0].description ?? "")
+  assert.equal(title.includes("\u0000"), false)
+  assert.equal(description.includes("\u0001"), false)
+  assert.equal(/[\uD800-\uDFFF]/u.test(description), false)
+})

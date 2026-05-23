@@ -1,6 +1,15 @@
 import http from "node:http"
 import { getPostgresPool } from "@/lib/postgres/server"
-import { loadWorkerConfig, startWorkerLoop } from "@/lib/harvester/worker"
+import { loadWorkerConfig, startWorkerLoop, type WorkerLogger } from "@/lib/harvester/worker"
+
+// Spawn N worker loops in a single process so one container can saturate the
+// claim queue without needing N Coolify replicas. The DB-side claim uses
+// `FOR UPDATE SKIP LOCKED`, so each loop independently grabs a disjoint batch.
+function instanceCount(env: Record<string, string | undefined> = process.env): number {
+  const parsed = Number.parseInt(env.HARVESTER_INSTANCES ?? "", 10)
+  if (Number.isFinite(parsed) && parsed >= 1) return Math.min(parsed, 16)
+  return 1
+}
 
 /**
  * Tiny HTTP liveness server. Container platforms (Coolify, k8s, etc.)
@@ -51,19 +60,32 @@ async function main() {
     // Don't `process.exit()` — let the tick loop keep going if it can.
   })
 
-  const handle = startWorkerLoop(pool, config)
+  const instances = instanceCount()
+  console.log(`[harvester] spawning ${instances} worker loop(s)`)
+
+  const handles = Array.from({ length: instances }, (_, i) => {
+    const tag = instances > 1 ? `w${i + 1}` : "w"
+    const logger: WorkerLogger = (msg, fields) => {
+      if (fields && Object.keys(fields).length > 0) {
+        console.log(`[harvester:${tag}] ${msg} ${JSON.stringify(fields)}`)
+      } else {
+        console.log(`[harvester:${tag}] ${msg}`)
+      }
+    }
+    return startWorkerLoop(pool, config, { logger })
+  })
 
   let signaled = false
   const onSignal = (sig: NodeJS.Signals) => {
     if (signaled) return
     signaled = true
     console.log(`[harvester] ${sig} received, finishing current tick before exit`)
-    handle.stop()
+    for (const h of handles) h.stop()
   }
   process.on("SIGINT", () => onSignal("SIGINT"))
   process.on("SIGTERM", () => onSignal("SIGTERM"))
 
-  await handle.done
+  await Promise.all(handles.map((h) => h.done))
   await pool.end()
   await new Promise<void>((resolve) => healthServer.close(() => resolve()))
   console.log("[harvester] exited cleanly")

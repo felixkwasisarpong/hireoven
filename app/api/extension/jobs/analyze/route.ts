@@ -115,6 +115,10 @@ const NO_SPONSOR_RE = new RegExp(
     // U.S. Citizenship requirements (federal contractors, defense, etc. — non-US can't be sponsored for these roles)
     /\bU\.?\s?S\.?\s+Citizen(?:ship)?\b/i.source,
     /\bUnited\s+States\s+Citizen(?:ship)?\b/i.source,
+    /\b(?:U\.?\s?S\.?|United\s+States)\s+Citizen(?:ship)?\s+(?:is\s+)?required\b/i.source,
+    /\brequires?\s+(?:U\.?\s?S\.?|United\s+States)\s+Citizen(?:ship)?\b/i.source,
+    /\bcitizen(?:ship)?\s+(?:is\s+)?required\b/i.source,
+    /\bU\.?\s?S\.?\s+persons?\s+only\b/i.source,
     // Top-Secret-level clearance — only US citizens can hold these, so sponsorship is impossible
     /\bTS\s*\/\s*SCI\b/i.source,
     /\b(?:Top\s+)?Secret\s+(?:security\s+)?clearance\b/i.source,

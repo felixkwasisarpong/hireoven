@@ -295,6 +295,41 @@ test("extractSkillsFromText does not treat generic agile prose as a hard skill",
   assert.equal(frameworkSignal.includes("Agile"), true)
 })
 
+test("extractSkillsFromText does not treat recruiting boilerplate as a skill", () => {
+  const boilerplate = extractSkillsFromText(
+    "Software Engineer",
+    "Our inclusive recruiting process welcomes all applicants."
+  )
+  assert.equal(boilerplate.includes("Recruiting"), false)
+
+  const roleSpecific = extractSkillsFromText(
+    "Senior Recruiter",
+    "Own full-cycle recruiting, candidate sourcing, and ATS workflows."
+  )
+  assert.equal(roleSpecific.includes("Recruiting"), true)
+})
+
+test("normalizeCrawlerJobForPersistence flags U.S. citizenship required as no sponsorship", () => {
+  const result = normalizeCrawlerJobForPersistence({
+    rawJob: {
+      externalId: "url:citizenship-required-1",
+      title: "Staff Software Engineer",
+      url: "https://jobs.example.com/openings/staff-software-engineer",
+      description:
+        "Build distributed backend systems across secure environments. Own service reliability, observability, and incident response for critical production workloads. U.S. citizenship required due to federal contract constraints.",
+    },
+    crawledAtIso: "2026-05-23T00:00:00.000Z",
+  })
+
+  assert.equal(result.nextColumns.requires_authorization, true)
+  assert.equal(result.nextColumns.sponsors_h1b, false)
+  assert.equal(result.canonical.visa.explicit_sponsorship_status.value, "no_sponsorship")
+  assert.equal(result.cardView.visa_card_label, "No sponsorship")
+  assert.ok(
+    (result.nextColumns.visa_language_detected ?? "").toLowerCase().includes("citizenship required")
+  )
+})
+
 test("detectSourceAdapter recognizes ats-prefixed external ids", () => {
   assert.equal(detectSourceAdapter({ externalId: "greenhouse-embedded:1234" }), "greenhouse")
   assert.equal(detectSourceAdapter({ externalId: "oracle:abc" }), "oracle")

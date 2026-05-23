@@ -96,6 +96,35 @@ type PersistRow = {
   raw_data: RawDataPayload
 }
 
+function toWellFormedSafe(input: string): string {
+  // Node 20+ supports String#toWellFormed. Keep a regex fallback so the same
+  // sanitization works in older runtimes and in tests.
+  const maybe = (input as string & { toWellFormed?: () => string }).toWellFormed
+  if (typeof maybe === "function") return maybe.call(input)
+  return input.replace(
+    /[\uD800-\uDBFF][\uDC00-\uDFFF]|[\uD800-\uDFFF]/g,
+    (m) => (m.length === 2 ? m : "\uFFFD")
+  )
+}
+
+function sanitizeJsonString(input: string): string {
+  return toWellFormedSafe(input)
+    .replace(/\u0000/g, "")
+    .replace(/[\u0001-\u0008\u000B\u000C\u000E-\u001F]/g, " ")
+}
+
+function sanitizeJsonValue(value: unknown): unknown {
+  if (typeof value === "string") return sanitizeJsonString(value)
+  if (Array.isArray(value)) return value.map((item) => sanitizeJsonValue(item))
+  if (!value || typeof value !== "object") return value
+
+  const out: Record<string, unknown> = {}
+  for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+    out[key] = sanitizeJsonValue(item)
+  }
+  return out
+}
+
 function salvageHarvesterDescription(value: string | null | undefined): string | null {
   if (!value) return null
   const normalized = value
@@ -411,12 +440,13 @@ export async function persistJobsBulk(
   let updated = 0
   for (let i = 0; i < rows.length; i += MAX_JOBS_PER_BATCH) {
     const batch = rows.slice(i, i + MAX_JOBS_PER_BATCH)
+    const payload = JSON.stringify(sanitizeJsonValue(batch))
     const result = await pool.query<{ inserted: boolean }>(UPSERT_SQL, [
       companyId,
       crawledAtIso,
       sourceAts,
       sourceAtsSlug,
-      JSON.stringify(batch),
+      payload,
     ])
     for (const r of result.rows) {
       if (r.inserted) inserted += 1

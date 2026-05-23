@@ -52,6 +52,9 @@ const AGILE_SIGNAL_RE =
 const SALES_SIGNAL_RE =
   /\b(?:b2b\s+sales|enterprise\s+sales|saas\s+sales|inside\s+sales|outbound\s+sales|sales\s+(?:experience|role|team|engineer|representative|manager|director|executive|operations|cycle|funnel|pipeline|quota|account|enablement|methodology|forecasting)|account\s+executive|sales\s+development\s+rep)\b/i
 
+const RECRUITING_SIGNAL_RE =
+  /\b(?:full[\s-]?cycle|end[\s-]?to[\s-]?end|technical|executive|campus|high[\s-]?volume)\s+recruit(?:ing|ment)\b|\btalent\s+acquisition(?:\s+(?:strategy|operations?|specialist|partner|manager|lead|coordinator))?\b|\bcandidate\s+(?:sourcing|pipeline|screening|interview(?:ing)?|experience)\b|\b(?:applicant\s+tracking\s+system|ats)\b|\brecruitment\s+(?:operations?|analytics|marketing|coordinator|specialist)\b/i
+
 
 export const SKILL_DEFINITIONS: SkillDefinition[] = [
   // ─── Languages ────────────────────────────────────────────────────────────
@@ -282,7 +285,12 @@ export const SKILL_DEFINITIONS: SkillDefinition[] = [
   { label: "Inventory Management",  aliases: ["inventory management"] },
 
   // ─── HR & People ─────────────────────────────────────────────────────────
-  { label: "Recruiting",          aliases: ["recruiting", "talent acquisition", "recruitment"] },
+  {
+    label: "Recruiting",
+    aliases: ["recruiting", "talent acquisition", "recruitment"],
+    patterns: [RECRUITING_SIGNAL_RE],
+    requiresPattern: true,
+  },
   { label: "HR",                  aliases: ["human resources", "hr management"] },
   { label: "Performance Management", aliases: ["performance management", "performance reviews"] },
   { label: "Employee Relations",  aliases: ["employee relations"] },
