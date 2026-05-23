@@ -4,11 +4,15 @@ import { buildResumeScoreBreakdown } from "@/lib/resume/hub"
 import { buildResumeRawText } from "@/lib/resume/state"
 import { normalizeSkillsBuckets } from "@/lib/skills/taxonomy"
 import { getPostgresPool } from "@/lib/postgres/server"
-import { deleteResume, getResumeUrl } from "@/lib/supabase/storage"
+import { deleteResume } from "@/lib/supabase/storage"
 import { createClient } from "@/lib/supabase/server"
 import type { Education, Project, Resume, Skills, WorkExperience } from "@/types"
 
 export const runtime = "nodejs"
+
+function buildResumeDownloadUrl(resumeId: string) {
+  return `/api/resume/${encodeURIComponent(resumeId)}/file`
+}
 
 async function getAuthedResume(id: string, userId: string) {
   const pool = getPostgresPool()
@@ -62,16 +66,12 @@ export async function GET(
     return NextResponse.json({ error: "Resume not found" }, { status: 404 })
   }
 
-  try {
-    const signedUrl = await getResumeUrl(resume.storage_path)
-    return NextResponse.json({
-      ...resume,
-      file_url: signedUrl,
-      download_url: signedUrl,
-    })
-  } catch {
-    return NextResponse.json(resume)
-  }
+  const downloadUrl = buildResumeDownloadUrl(resume.id)
+  return NextResponse.json({
+    ...resume,
+    file_url: downloadUrl,
+    download_url: downloadUrl,
+  })
 }
 
 export async function DELETE(
@@ -328,14 +328,10 @@ export async function PATCH(
     }
   }
 
-  try {
-    const signedUrl = await getResumeUrl(data.storage_path)
-    return NextResponse.json({
-      ...data,
-      file_url: signedUrl,
-      download_url: signedUrl,
-    })
-  } catch {
-    return NextResponse.json(data)
-  }
+  const downloadUrl = buildResumeDownloadUrl(data.id)
+  return NextResponse.json({
+    ...data,
+    file_url: downloadUrl,
+    download_url: downloadUrl,
+  })
 }

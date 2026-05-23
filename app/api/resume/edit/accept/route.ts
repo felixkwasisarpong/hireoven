@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server"
 import { applyResumeEditContent } from "@/lib/resume/state"
 import { getPostgresPool } from "@/lib/postgres/server"
-import { getResumeUrl } from "@/lib/supabase/storage"
 import { createClient } from "@/lib/supabase/server"
 import type { Resume, ResumeEdit, ResumeEditContext, ResumeSection } from "@/types"
 
 export const runtime = "nodejs"
+
+function buildResumeDownloadUrl(resumeId: string) {
+  return `/api/resume/${encodeURIComponent(resumeId)}/file`
+}
 
 type AcceptBody = {
   editId?: string
@@ -134,14 +137,10 @@ export async function POST(request: Request) {
     console.error("Failed to mark resume edit accepted", { editId: edit.id, userId: user.id })
   }
 
-  try {
-    const signedUrl = await getResumeUrl(updatedResume.storage_path)
-    return NextResponse.json({
-      ...updatedResume,
-      file_url: signedUrl,
-      download_url: signedUrl,
-    })
-  } catch {
-    return NextResponse.json(updatedResume)
-  }
+  const downloadUrl = buildResumeDownloadUrl(updatedResume.id)
+  return NextResponse.json({
+    ...updatedResume,
+    file_url: downloadUrl,
+    download_url: downloadUrl,
+  })
 }
