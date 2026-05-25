@@ -1,7 +1,7 @@
 "use client"
 
 import type { ReactNode } from "react"
-import { Sparkles } from "lucide-react"
+import { Cpu, Sparkles } from "lucide-react"
 import { ScoutOrb } from "@/components/scout/ScoutOrb"
 import { ScoutSuggestedCommands } from "./ScoutSuggestedCommands"
 
@@ -12,7 +12,6 @@ type Props = {
   hasData: boolean
   isExtensionConnected: boolean
   onSuggestionClick: (query: string) => void
-  /** The shell renders the actual ScoutCommandBar here so all state/handlers stay wired. */
   commandSlot?: ReactNode
 }
 
@@ -44,44 +43,72 @@ export function ScoutWelcomeScene({
       aria-label="Scout welcome"
       className="mx-auto flex w-full max-w-3xl flex-col items-center px-4 pt-10 text-center sm:pt-14 motion-safe:animate-[scoutFadeUp_0.6s_ease-out_both]"
     >
-      {/* Premium animated orb — Scout is alive */}
-      <ScoutOrb size="lg" state="idle" className="mb-4" />
+      {/* Ambient orb glow + orb */}
+      <div className="relative mb-2 flex items-center justify-center">
+        {/* Outer ambient halo */}
+        <div
+          className="pointer-events-none absolute rounded-full"
+          style={{
+            width: 170, height: 170,
+            background: "radial-gradient(circle, rgba(59,130,246,0.26) 0%, rgba(14,165,233,0.16) 42%, rgba(99,102,241,0.08) 70%, transparent 84%)",
+            filter: "blur(20px)",
+            animation: "ovenGlow 3.5s ease-in-out infinite",
+          }}
+        />
+        {/* Mid ring */}
+        <div
+          className="pointer-events-none absolute rounded-full"
+          style={{
+            width: 120, height: 120,
+            border: "1px solid rgba(59,130,246,0.22)",
+            animation: "ovenHeatRing 3.5s ease-out 0.8s infinite",
+          }}
+        />
+        <ScoutOrb size="lg" state="idle" useGif className="h-24 w-24" />
+      </div>
 
       {/* Greeting */}
-      <h1 className="mt-5 text-[2.4rem] font-semibold leading-[1.05] tracking-tight text-slate-900 sm:text-[3rem]">
-        {greeting}, <span className="text-slate-950">{firstName}</span>
-        <span className="text-[#FF5C18]">.</span>
+      <h1 className="mt-6 text-[2.5rem] font-semibold leading-[1.05] tracking-tight sm:text-[3.1rem] motion-safe:animate-[scoutFadeUp_0.6s_ease-out_60ms_both]">
+        <span className="text-slate-800">{greeting},&nbsp;</span>
+        <span className="text-slate-950">{firstName}</span>
+        <span className="text-[#2563EB]">.</span>
       </h1>
-      <p className="mt-3 max-w-xl text-[15px] leading-relaxed text-slate-500">
+
+      <p className="mt-3 max-w-[440px] text-[15px] leading-relaxed text-slate-600 motion-safe:animate-[scoutFadeUp_0.6s_ease-out_100ms_both]">
         Tell Scout what you&apos;re working on. It&apos;ll think it through and open the right workspace.
       </p>
 
-      {/* Hero command input — fed by the shell so all wiring is preserved */}
+      {/* Status badges */}
+      <div className="mt-5 flex flex-wrap items-center justify-center gap-2 motion-safe:animate-[scoutFadeUp_0.6s_ease-out_140ms_both]">
+        {/* Always-on autonomous monitoring badge */}
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-[11.5px] font-semibold text-blue-700 shadow-[0_1px_2px_rgba(37,99,235,0.10)]">
+          <Cpu className="h-3 w-3" />
+          Autonomous monitoring active
+        </span>
+        {hasResume && (
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50/90 px-3 py-1 text-[11.5px] font-semibold text-emerald-700 shadow-[0_1px_2px_rgba(16,185,129,0.10)]">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            Resume ready
+          </span>
+        )}
+        {isExtensionConnected && (
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-sky-200 bg-sky-50/90 px-3 py-1 text-[11.5px] font-semibold text-sky-700 shadow-[0_1px_2px_rgba(14,165,233,0.10)]">
+            <span className="h-1.5 w-1.5 rounded-full bg-sky-500 animate-pulse" />
+            Browser extension live
+          </span>
+        )}
+      </div>
+
+      {/* Hero command input */}
       {commandSlot && (
-        <div className="mt-7 w-full motion-safe:animate-[scoutFadeUp_0.6s_ease-out_120ms_both]">
+        <div className="mt-8 w-full motion-safe:animate-[scoutFadeUp_0.6s_ease-out_180ms_both]">
           {commandSlot}
         </div>
       )}
 
-      {/* Tiny readiness hints */}
-      {(hasResume || isExtensionConnected) && (
-        <div className="mt-4 flex flex-wrap items-center justify-center gap-1.5 text-[11.5px] text-slate-400 motion-safe:animate-[scoutFadeUp_0.6s_ease-out_180ms_both]">
-          {hasResume && (
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-100 bg-emerald-50/60 px-2.5 py-1 font-medium text-emerald-700">
-              <span className="h-1 w-1 rounded-full bg-emerald-500" /> Resume ready
-            </span>
-          )}
-          {isExtensionConnected && (
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-sky-100 bg-sky-50/60 px-2.5 py-1 font-medium text-sky-700">
-              <span className="h-1 w-1 rounded-full bg-sky-500" /> Browser extension live
-            </span>
-          )}
-        </div>
-      )}
-
-      {/* Suggested commands — single row of compact chips, calm */}
-      <div className="mt-7 w-full max-w-2xl motion-safe:animate-[scoutFadeUp_0.6s_ease-out_240ms_both]">
-        <p className="mb-2.5 inline-flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+      {/* Suggested commands */}
+      <div className="mt-7 w-full max-w-2xl motion-safe:animate-[scoutFadeUp_0.6s_ease-out_260ms_both]">
+        <p className="mb-3 inline-flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.2em] text-slate-500">
           <Sparkles className="h-3 w-3" />
           Try asking Scout
         </p>
@@ -91,10 +118,10 @@ export function ScoutWelcomeScene({
         />
       </div>
 
-      {/* Subtle keyboard hint */}
-      <p className="mt-8 text-[11px] text-slate-400 motion-safe:animate-[scoutFadeUp_0.6s_ease-out_320ms_both]">
+      {/* Keyboard hint */}
+      <p className="mt-8 text-[11px] text-slate-500/80 motion-safe:animate-[scoutFadeUp_0.6s_ease-out_360ms_both]">
         Press{" "}
-        <kbd className="rounded border border-slate-200 bg-white px-1.5 py-0.5 font-mono text-[10px] font-semibold text-slate-600 shadow-[0_1px_0_rgba(15,23,42,0.04)]">⌘K</kbd>{" "}
+        <kbd className="rounded border border-slate-200 bg-white px-1.5 py-0.5 font-mono text-[10px] font-semibold text-slate-600 shadow-[0_1px_0_rgba(15,23,42,0.05)]">⌘K</kbd>{" "}
         for the command palette
       </p>
     </section>

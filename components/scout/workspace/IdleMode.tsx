@@ -50,8 +50,8 @@ type Props = {
 function TypingIndicator() {
   return (
     <div className="flex items-start gap-3">
-      <span className="relative mt-0.5 inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-xl bg-[#FF5C18] shadow-[0_4px_14px_rgba(255,92,24,0.35)]">
-        <span className="absolute inset-0 animate-ping rounded-xl bg-[#FF5C18] opacity-20" />
+      <span className="relative mt-0.5 inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-xl bg-[#2563EB] shadow-[0_4px_14px_rgba(37,99,235,0.35)]">
+        <span className="absolute inset-0 animate-ping rounded-xl bg-[#2563EB] opacity-20" />
         <Sparkles className="h-3.5 w-3.5 text-white" />
       </span>
       <div className="flex items-center gap-3 rounded-2xl rounded-tl-sm border border-slate-100 bg-white px-5 py-3.5 shadow-sm">
@@ -60,7 +60,7 @@ function TypingIndicator() {
           {[0, 150, 300].map((delay) => (
             <span
               key={delay}
-              className="h-1.5 w-1.5 rounded-full bg-[#FF5C18]/50 animate-bounce"
+              className="h-1.5 w-1.5 rounded-full bg-[#2563EB]/50 animate-bounce"
               style={{ animationDelay: `${delay}ms` }}
             />
           ))}
@@ -132,8 +132,8 @@ export function IdleMode({
           <>
             {/* Hero greeting */}
             <div className={`mb-10 ${fade} ${mounted ? show : hide}`}>
-              <div className="mb-4 inline-flex items-center gap-1.5 rounded-full border border-[#FFD5C2] bg-[#FFF8F5] px-3 py-1 text-[11px] font-semibold text-[#FF5C18]">
-                <span className="h-1.5 w-1.5 rounded-full bg-[#FF5C18] animate-pulse" />
+              <div className="mb-4 inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-[11px] font-semibold text-blue-700">
+                <span className="h-1.5 w-1.5 rounded-full bg-[#2563EB] animate-pulse" />
                 Scout is ready
               </div>
               <h2 className="text-[2.1rem] font-semibold leading-tight tracking-tight text-slate-900 sm:text-[2.4rem]">
@@ -159,7 +159,7 @@ export function IdleMode({
             {resumeRefreshedNotice && (
               <div className={`mb-5 inline-flex items-center gap-2 text-xs text-slate-500 ${fade} ${mounted ? show : hide}`}
                 style={{ transitionDelay: "60ms" }}>
-                <RefreshCw className="h-3.5 w-3.5 flex-shrink-0 text-[#FF5C18]" />
+                <RefreshCw className="h-3.5 w-3.5 flex-shrink-0 text-[#2563EB]" />
                 Scout refreshed context for your updated resume.
               </div>
             )}
@@ -181,12 +181,12 @@ export function IdleMode({
                 key={action.title}
                 type="button"
                 onClick={() => onTileClick(action.query)}
-                className="group flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-4 text-left shadow-sm transition-all duration-200 hover:border-[#FF5C18]/35 hover:bg-[#FFF9F7] hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF5C18]/30"
+                className="group flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-4 text-left shadow-sm transition-all duration-200 hover:border-[#2563EB]/35 hover:bg-[#EFF6FF] hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]/30"
               >
-                <span className="text-sm font-medium text-slate-700 transition-colors group-hover:text-[#FF5C18]">
+                <span className="text-sm font-medium text-slate-700 transition-colors group-hover:text-[#2563EB]">
                   {action.title}
                 </span>
-                <ArrowRight className="h-4 w-4 flex-shrink-0 text-slate-300 transition-all duration-200 group-hover:translate-x-0.5 group-hover:text-[#FF5C18]" />
+                <ArrowRight className="h-4 w-4 flex-shrink-0 text-slate-300 transition-all duration-200 group-hover:translate-x-0.5 group-hover:text-[#2563EB]" />
               </button>
             ))}
           </div>
@@ -216,9 +216,9 @@ export function IdleMode({
                     key={`${context.type}:${context.id}`}
                     type="button"
                     onClick={() => onContinuationOpen(context)}
-                    className="group w-full text-left transition hover:text-[#FF5C18]"
+                    className="group w-full text-left transition hover:text-[#2563EB]"
                   >
-                    <p className="text-sm font-medium text-slate-700 group-hover:text-[#FF5C18]">{context.title}</p>
+                    <p className="text-sm font-medium text-slate-700 group-hover:text-[#2563EB]">{context.title}</p>
                     <p className="mt-0.5 text-xs text-slate-400 group-hover:text-slate-500">
                       {context.type.replace(/_/g, " ")}
                     </p>
@@ -245,7 +245,7 @@ export function IdleMode({
                     key={cmd}
                     type="button"
                     onClick={() => onTileClick(cmd)}
-                    className="max-w-xs truncate rounded-full border border-slate-200 bg-white px-3 py-1.5 text-left text-xs font-medium text-slate-600 transition hover:border-[#FF5C18]/40 hover:bg-[#FFF8F5] hover:text-[#FF5C18]"
+                    className="max-w-xs truncate rounded-full border border-slate-200 bg-white px-3 py-1.5 text-left text-xs font-medium text-slate-600 transition hover:border-[#2563EB]/40 hover:bg-[#EFF6FF] hover:text-[#2563EB]"
                     title={cmd}
                   >
                     {cmd.length > 60 ? `${cmd.slice(0, 57)}…` : cmd}
@@ -282,7 +282,7 @@ export function IdleMode({
             if (msg.role === "user") {
               return (
                 <div key={msg.id} className="flex items-end justify-end gap-2.5">
-                  <div className="max-w-[80%] rounded-2xl rounded-br-sm bg-slate-900 px-4 py-3 text-sm leading-relaxed text-white shadow-sm">
+                  <div className="max-w-[80%] rounded-2xl rounded-br-sm bg-blue-900 px-4 py-3 text-sm leading-relaxed text-white shadow-sm">
                     {msg.text}
                   </div>
                   {userInitial ? (
@@ -303,12 +303,12 @@ export function IdleMode({
             if (msg.role === "scout_streaming") {
               return (
                 <div key={msg.id} className="flex items-start gap-3">
-                  <span className="relative mt-0.5 flex-shrink-0 inline-flex h-7 w-7 items-center justify-center rounded-xl bg-[#FF5C18] shadow-[0_4px_14px_rgba(255,92,24,0.35)]">
-                    <span className="absolute inset-0 animate-ping rounded-xl bg-[#FF5C18] opacity-20" />
+                  <span className="relative mt-0.5 flex-shrink-0 inline-flex h-7 w-7 items-center justify-center rounded-xl bg-[#2563EB] shadow-[0_4px_14px_rgba(37,99,235,0.35)]">
+                    <span className="absolute inset-0 animate-ping rounded-xl bg-[#2563EB] opacity-20" />
                     <Sparkles className="h-3.5 w-3.5 text-white" />
                   </span>
                   <div className="min-w-0 flex-1 overflow-hidden rounded-2xl rounded-tl-sm border border-slate-100 bg-white px-5 py-4 shadow-sm">
-                    <div className="h-[2px] w-[calc(100%+2.5rem)] bg-[#FF5C18] -mx-5 -mt-4 mb-3" />
+                    <div className="h-[2px] w-[calc(100%+2.5rem)] bg-[#2563EB] -mx-5 -mt-4 mb-3" />
                     {msg.streamText
                       ? <ScoutStreamingText text={msg.streamText} />
                       : <TypingIndicator />

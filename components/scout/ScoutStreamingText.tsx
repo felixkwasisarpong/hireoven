@@ -72,7 +72,7 @@ export function ScoutStreamingText({ text, className }: Props) {
       {renderInlineMarkdown(displayed)}
       {/* Blinking cursor while streaming */}
       {displayed.length < text.length && (
-        <span className="ml-0.5 inline-block h-4 w-[2px] animate-pulse bg-[#FF5C18]/70 align-middle" />
+        <span className="ml-0.5 inline-block h-4 w-[2px] animate-pulse bg-[#2563EB]/70 align-middle" />
       )}
     </p>
   )

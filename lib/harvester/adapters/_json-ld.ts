@@ -121,6 +121,10 @@ type JsonLdJobPosting = {
   baseSalary?: {
     currency?: string
     value?: { minValue?: number; maxValue?: number; unitText?: string }
+    // Flat form: some iCIMS portals (e.g. Liberty Mutual) omit the nested `value` wrapper.
+    minValue?: number
+    maxValue?: number
+    unitText?: string
   }
   jobLocationType?: string
 }
@@ -226,16 +230,21 @@ function pickWorkMode(raw: JsonLdJobPosting): string | undefined {
 function annualSalary(raw: JsonLdJobPosting):
   | { min?: number; max?: number; currency?: string }
   | null {
-  const val = raw.baseSalary?.value
-  if (!val) return null
-  const unit = val.unitText?.toLowerCase() ?? ""
+  // schema.org standard: baseSalary.value.{minValue,maxValue,unitText}
+  // Flat form (e.g. iCIMS / Liberty Mutual): baseSalary.{minValue,maxValue} directly.
+  const nested = raw.baseSalary?.value
+  const bs = raw.baseSalary
+  const minRaw = nested?.minValue ?? bs?.minValue
+  const maxRaw = nested?.maxValue ?? bs?.maxValue
+  const unit = (nested?.unitText ?? bs?.unitText ?? "").toLowerCase()
+  if (minRaw === undefined && maxRaw === undefined) return null
   if (unit && !unit.includes("year") && !unit.includes("annual")) return null
-  const min = typeof val.minValue === "number" ? Math.round(val.minValue) : undefined
-  const max = typeof val.maxValue === "number" ? Math.round(val.maxValue) : undefined
+  const min = typeof minRaw === "number" ? Math.round(minRaw) : undefined
+  const max = typeof maxRaw === "number" ? Math.round(maxRaw) : undefined
   if (min === undefined && max === undefined) return null
   if ((min ?? 0) > 0 && (min ?? 0) < 10_000) return null
   if ((max ?? 0) > 2_000_000) return null
-  return { min, max, currency: raw.baseSalary?.currency }
+  return { min, max, currency: bs?.currency }
 }
 
 export type JsonLdMapOptions = {
