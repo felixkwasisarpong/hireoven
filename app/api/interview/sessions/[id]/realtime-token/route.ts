@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
+import fs from "node:fs"
+import path from "node:path"
 import { createClient } from "@/lib/supabase/server"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { getInterviewSession } from "@/lib/scout/interview/queries"
@@ -14,8 +16,48 @@ import type { InterviewPersona } from "@/lib/scout/interview/queries"
 
 export const runtime = "nodejs"
 
-const OPENAI_REALTIME_SESSIONS_URL = "https://api.openai.com/v1/realtime/sessions"
-const REALTIME_MODEL = "gpt-4o-realtime-preview-2024-12-17"
+const OPENAI_REALTIME_CLIENT_SECRETS_URL = "https://api.openai.com/v1/realtime/client_secrets"
+const REALTIME_MODEL = process.env.OPENAI_REALTIME_MODEL?.trim() || "gpt-realtime"
+const REALTIME_TRANSCRIBE_MODEL = process.env.OPENAI_REALTIME_TRANSCRIBE_MODEL?.trim() || "gpt-4o-mini-transcribe"
+
+function readOpenAIKeyFromEnvLocal(): string | null {
+  // Dev-only fallback: helps when the runtime env is stale and .env.local was edited.
+  if (process.env.NODE_ENV !== "development") return null
+  try {
+    const envPath = path.join(process.cwd(), ".env.local")
+    const text = fs.readFileSync(envPath, "utf8")
+    const line = text
+      .split("\n")
+      .find((l) => l.trimStart().startsWith("OPENAI_API_KEY="))
+    if (!line) return null
+    const raw = line.slice(line.indexOf("=") + 1).trim()
+    const unquoted = raw.replace(/^['"]|['"]$/g, "")
+    return unquoted.length > 0 ? unquoted : null
+  } catch {
+    return null
+  }
+}
+
+function resolveOpenAIKey(): string | null {
+  const fromProcess =
+    process.env.OPENAI_API_KEY?.trim() ||
+    process.env.OPENAI_KEY?.trim() ||
+    process.env.OPENAI_LIVE_API_KEY?.trim() ||
+    null
+  if (fromProcess) return fromProcess
+  return readOpenAIKeyFromEnvLocal()
+}
+
+function parseOpenAIError(body: string): string {
+  const fallback = body.trim() || "Unknown OpenAI error"
+  try {
+    const parsed = JSON.parse(body) as { error?: { message?: string } }
+    const msg = parsed.error?.message?.trim()
+    return msg || fallback
+  } catch {
+    return fallback
+  }
+}
 
 function voiceForPersona(persona: string): string {
   switch (persona as InterviewPersona) {
@@ -37,9 +79,14 @@ export async function POST(
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  if (!process.env.OPENAI_API_KEY) {
+  const openaiApiKey = resolveOpenAIKey()
+  if (!openaiApiKey) {
     return NextResponse.json(
-      { error: "Live interview requires OPENAI_API_KEY. Set it in your .env.local file." },
+      {
+        error:
+          "Live interview requires OPENAI_API_KEY in server runtime. " +
+          "If you just edited .env.local, restart your dev server and retry.",
+      },
       { status: 503 }
     )
   }
@@ -160,27 +207,35 @@ export async function POST(
 
   const voice = voiceForPersona(session.persona)
 
-  // Issue ephemeral token from OpenAI
+  // Issue ephemeral token from OpenAI (GA Realtime API)
   let openaiRes: Response
   try {
-    openaiRes = await fetch(OPENAI_REALTIME_SESSIONS_URL, {
+    openaiRes = await fetch(OPENAI_REALTIME_CLIENT_SECRETS_URL, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        Authorization: `Bearer ${openaiApiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: REALTIME_MODEL,
-        voice,
-        instructions: systemPrompt,
-        input_audio_transcription: { model: "whisper-1" },
-        turn_detection: {
-          type: "server_vad",
-          threshold: 0.5,
-          prefix_padding_ms: 300,
-          silence_duration_ms: 800,
+        session: {
+          type: "realtime",
+          model: REALTIME_MODEL,
+          instructions: systemPrompt,
+          output_modalities: ["audio"],
+          audio: {
+            output: { voice },
+            input: {
+              transcription: { model: REALTIME_TRANSCRIBE_MODEL },
+              turn_detection: {
+                // Semantic VAD is less eager to cut in on short pauses/noise.
+                type: "semantic_vad",
+                eagerness: "low",
+                create_response: true,
+                interrupt_response: false,
+              },
+            },
+          },
         },
-        modalities: ["audio", "text"],
       }),
     })
   } catch (e) {
@@ -192,21 +247,32 @@ export async function POST(
 
   if (!openaiRes.ok) {
     const body = await openaiRes.text()
+    const message = parseOpenAIError(body)
     return NextResponse.json(
-      { error: `OpenAI returned ${openaiRes.status}: ${body.slice(0, 200)}` },
+      { error: `OpenAI returned ${openaiRes.status}: ${message.slice(0, 220)}` },
       { status: 502 }
     )
   }
 
   const data = await openaiRes.json() as {
+    value?: string
+    expires_at?: number
     client_secret?: { value?: string; expires_at?: number }
-    id?: string
-    model?: string
-    voice?: string
+    session?: {
+      model?: string
+      client_secret?: { value?: string; expires_at?: number }
+    }
   }
 
-  const ephemeralToken = data.client_secret?.value
-  const expiresAt = data.client_secret?.expires_at ?? Math.floor(Date.now() / 1000) + 60
+  const ephemeralToken =
+    data.value ??
+    data.client_secret?.value ??
+    data.session?.client_secret?.value
+  const expiresAt =
+    data.expires_at ??
+    data.client_secret?.expires_at ??
+    data.session?.client_secret?.expires_at ??
+    Math.floor(Date.now() / 1000) + 60
 
   if (!ephemeralToken) {
     return NextResponse.json({ error: "No ephemeral token in OpenAI response" }, { status: 502 })
@@ -215,7 +281,7 @@ export async function POST(
   return NextResponse.json({
     ephemeralToken,
     expiresAt,
-    model: REALTIME_MODEL,
+    model: data.session?.model ?? REALTIME_MODEL,
     voice,
     sessionConfig: {
       duration_target_min: session.durationTargetMin,

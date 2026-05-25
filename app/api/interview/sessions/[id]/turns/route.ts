@@ -1,4 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk"
+import fs from "node:fs"
+import path from "node:path"
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getPostgresPool } from "@/lib/postgres/server"
@@ -22,28 +24,64 @@ export const maxDuration = 60
 
 type MessageParam = { role: "user" | "assistant"; content: string }
 
+function pushMessage(messages: MessageParam[], next: MessageParam) {
+  const prev = messages[messages.length - 1]
+  // Anthropic requires alternating roles; merge consecutive same-role turns.
+  if (prev && prev.role === next.role) {
+    prev.content = `${prev.content}\n\n${next.content}`
+    return
+  }
+  messages.push(next)
+}
+
 function buildLLMMessages(existingTurns: InterviewTurn[], newContent: string): MessageParam[] {
   const messages: MessageParam[] = []
 
   // All conversations start with the synthetic BEGIN_INTERVIEW user message so
   // the first assistant turn (opening question) is properly grounded.
-  messages.push({ role: "user", content: "BEGIN_INTERVIEW" })
+  pushMessage(messages, { role: "user", content: "BEGIN_INTERVIEW" })
 
   for (const turn of existingTurns) {
     if (turn.role === "interviewer") {
-      messages.push({ role: "assistant", content: turn.content })
+      pushMessage(messages, { role: "assistant", content: turn.content })
     } else if (turn.role === "candidate") {
-      messages.push({ role: "user", content: turn.content })
+      pushMessage(messages, { role: "user", content: turn.content })
     }
     // system turns (TIME_REMAINING etc.) are not replayed — they were already
     // part of the conversation when they were injected.
   }
 
   if (newContent !== "BEGIN_INTERVIEW") {
-    messages.push({ role: "user", content: newContent })
+    pushMessage(messages, { role: "user", content: newContent })
   }
 
   return messages
+}
+
+function readAnthropicKeyFromEnvLocal(): string | null {
+  if (process.env.NODE_ENV !== "development") return null
+  try {
+    const envPath = path.join(process.cwd(), ".env.local")
+    const text = fs.readFileSync(envPath, "utf8")
+    const line = text
+      .split("\n")
+      .find((l) => l.trimStart().startsWith("ANTHROPIC_API_KEY="))
+    if (!line) return null
+    const raw = line.slice(line.indexOf("=") + 1).trim()
+    const unquoted = raw.replace(/^['"]|['"]$/g, "")
+    return unquoted.length > 0 ? unquoted : null
+  } catch {
+    return null
+  }
+}
+
+function resolveAnthropicKey(): string | null {
+  const fromProcess =
+    process.env.ANTHROPIC_API_KEY?.trim() ||
+    process.env.CLAUDE_API_KEY?.trim() ||
+    null
+  if (fromProcess) return fromProcess
+  return readAnthropicKeyFromEnvLocal()
 }
 
 function stripMetadata(raw: string): { visible: string; metadata: Record<string, unknown> } {
@@ -228,15 +266,47 @@ export async function POST(
   }
 
   // 8. Call LLM
-  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
-  const llmResult = await anthropic.messages.create({
-    model: SONNET_MODEL,
-    max_tokens: 800,
-    system: systemPrompt,
-    messages,
-  })
+  const anthropicApiKey = resolveAnthropicKey()
+  if (!anthropicApiKey) {
+    return NextResponse.json(
+      {
+        error:
+          "Text interview requires ANTHROPIC_API_KEY in server runtime. " +
+          "If you just edited .env.local, restart your dev server and retry.",
+      },
+      { status: 503 }
+    )
+  }
 
-  const rawContent = (llmResult.content[0] as { type: string; text: string }).text
+  let rawContent = ""
+  try {
+    const anthropic = new Anthropic({ apiKey: anthropicApiKey })
+    const llmResult = await anthropic.messages.create({
+      model: SONNET_MODEL,
+      max_tokens: 800,
+      system: systemPrompt,
+      messages,
+    })
+
+    const maybeTextBlock = llmResult.content.find((block) => block.type === "text")
+    const blockText =
+      maybeTextBlock && typeof (maybeTextBlock as { text?: unknown }).text === "string"
+        ? ((maybeTextBlock as { text: string }).text)
+        : ""
+    if (!blockText) {
+      return NextResponse.json(
+        { error: "Interview model returned an empty response. Please retry." },
+        { status: 502 }
+      )
+    }
+    rawContent = blockText
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e)
+    return NextResponse.json(
+      { error: `Interview model request failed: ${message}` },
+      { status: 502 }
+    )
+  }
 
   // 9. Parse metadata + strip from visible content
   const { visible: rawVisible, metadata } = stripMetadata(rawContent)

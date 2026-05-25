@@ -19,7 +19,10 @@ export default function DebriefNextSteps({ steps }: { steps: string[] }) {
   if (steps.length === 0) return null
   return (
     <section>
-      <h2 className="mb-3 text-[13px] font-bold uppercase tracking-wider text-slate-600">What to do next</h2>
+      <div className="mb-3 flex items-center gap-2">
+        <div className="h-4 w-0.5 rounded-full bg-slate-300" />
+        <h2 className="text-[12px] font-bold uppercase tracking-widest text-slate-500">What to do next</h2>
+      </div>
       <ol className="space-y-2">
         {steps.map((step, i) => {
           const href = getLink(step)

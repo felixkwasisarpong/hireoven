@@ -18,7 +18,7 @@ export default function WebcamPreview({ stream, cameraOn }: Props) {
   }, [stream])
 
   return (
-    <div className="relative overflow-hidden rounded-xl bg-slate-900" style={{ aspectRatio: "4/3" }}>
+    <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-[#050507]" style={{ aspectRatio: "4/3" }}>
       {cameraOn && stream ? (
         <video
           ref={videoRef}
@@ -30,7 +30,7 @@ export default function WebcamPreview({ stream, cameraOn }: Props) {
         />
       ) : (
         <div className="flex h-full items-center justify-center">
-          <VideoOff className="h-8 w-8 text-slate-600" />
+          <VideoOff className="h-8 w-8 text-slate-500" />
         </div>
       )}
     </div>

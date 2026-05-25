@@ -196,7 +196,13 @@ export default function LiveCodingWorkspace({ sessionId }: { sessionId: string }
       setPhase("connecting")
 
       const tokenRes = await fetch(`/api/interview/sessions/${sessionId}/realtime-token`, { method: "POST" })
-      const tokenData = await tokenRes.json()
+      const tokenRaw = await tokenRes.text()
+      let tokenData: { ephemeralToken?: string; error?: string } = {}
+      try {
+        tokenData = JSON.parse(tokenRaw) as { ephemeralToken?: string; error?: string }
+      } catch {
+        tokenData = { error: tokenRaw }
+      }
 
       if (!tokenRes.ok) {
         // Voice failed — degrade gracefully to coding-only
@@ -205,7 +211,13 @@ export default function LiveCodingWorkspace({ sessionId }: { sessionId: string }
         return
       }
 
-      const client = new RealtimeClient({ ephemeralToken: tokenData.ephemeralToken, model: tokenData.model })
+      if (!tokenData.ephemeralToken) {
+        setConnectError("Voice token missing — continuing without voice.")
+        setPhase("live")
+        return
+      }
+
+      const client = new RealtimeClient({ ephemeralToken: tokenData.ephemeralToken })
       clientRef.current = client
 
       client.addEventListener("agent.speaking.start", () => setIsAgentSpeaking(true))
@@ -594,7 +606,7 @@ export default function LiveCodingWorkspace({ sessionId }: { sessionId: string }
 
       {/* Voice controls bar */}
       <div className="flex items-center justify-between border-t border-slate-800 bg-slate-900 px-6 py-3">
-        <SessionTimer remainingSec={remainingSec} />
+        <SessionTimer remainingSec={remainingSec} tone="dark" />
 
         <div className="flex items-center gap-3">
           <button

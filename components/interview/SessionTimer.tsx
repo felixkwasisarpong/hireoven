@@ -10,9 +10,10 @@ function formatTime(sec: number) {
 
 type Props = {
   remainingSec: number
+  tone?: "light" | "dark"
 }
 
-export default function SessionTimer({ remainingSec }: Props) {
+export default function SessionTimer({ remainingSec, tone = "light" }: Props) {
   const isWarning = remainingSec <= 120 && remainingSec > 0
   const isExpired = remainingSec <= 0
 
@@ -24,7 +25,9 @@ export default function SessionTimer({ remainingSec }: Props) {
           ? "text-red-500"
           : isWarning
             ? "animate-pulse text-orange-500"
-            : "text-slate-600"
+            : tone === "dark"
+              ? "text-slate-200"
+              : "text-slate-600"
       )}
     >
       {formatTime(remainingSec)}

@@ -21,16 +21,25 @@ type SectionBucket = {
 }
 
 const REQUIREMENT_LIKE_RE =
-  /\b(required|required qualifications|minimum qualifications|minimum requirements|basic qualifications|must have|must be|years of experience|experience with|bachelor|degree|proficiency|strong understanding)\b/i
+  /\b(required|required qualifications|minimum qualifications|minimum requirements|basic qualifications|must have|must be|years of experience|experience with|bachelor|degree|proficiency|strong understanding|candidate should have|ideal candidate should have)\b/i
 
 const PREFERRED_LIKE_RE =
-  /\b(preferred qualifications|preferred|nice to have|bonus|plus|ideal candidate|would be a plus)\b/i
+  /\b(preferred qualifications|preferred|nice to have|bonus|plus|would be a plus)\b/i
 
 const RESPONSIBILITY_LIKE_RE =
   /\b(builds?|building|designs?|designed|develops?|developing|delivers?|collaborates?|partners?|leads?|owns?|creates?|drives?|maintains?|implements?|optimizes?|supports?|performs?|validates?|documents?|manages?)\b/i
 
 const BENEFITS_LIKE_RE =
   /\b(benefits?|perks?|total rewards?|health(?:care|[ -]?insurance)?|dental|vision|medical|401\s?\(k\)|retirement|pension|paid time off|pto|unlimited pto|parental(?: leave)?|maternity|paternity|family leave|wellness|wellbeing|stipend|bonus|equity|stock(?: options?| grants?|[ -]?units?)?|rsu|vesting|profit[ -]?sharing|commuter|gym|fitness|education(?:al)?|tuition|learning|home[ -]?office|life insurance|disability|fsa|hsa|flexible|reimbursement|vacation|holiday|time off|leave|coverage)\b/i
+
+const OFFER_CULTURE_LIKE_RE =
+  /\b(fast[- ]growing|entrepreneurial(?:-minded)?|friendly and laid-back atmosphere|laid-back atmosphere|asynchronous culture|supportive work environment|opportunity to work on|opportunity to make (?:a )?big impact|shape the company and product|hands-off management approach)\b/i
+
+const CANDIDATE_PROFILE_LIKE_RE =
+  /\b(ideal candidate|candidate should have|who you are|you\s+(?:know|work|have|are|can|enjoy)\b)\b/i
+
+const TRAIT_LEADIN_RE =
+  /^[A-Z][A-Za-z/& -]{2,40}\.\s+You\s+(?:know|work|have|are|can|enjoy)\b/
 
 const COMPANY_LIKE_RE =
   /\b(we are|we(?:'|’)re looking|we strive|at [A-Z][A-Za-z0-9&.' -]{1,48},?\s+we|our mission|our values|our culture|founded|part of|customers|global team|across [a-z]+ countries|we offer|about us)\b/i
@@ -112,6 +121,8 @@ const INLINE_SECTION_ALIASES: InlineHeadingAlias[] = [
   { key: "requirements", alias: "Who you are" },
   { key: "requirements", alias: "Qualifications" },
   { key: "requirements", alias: "What you bring" },
+  { key: "requirements", alias: "Ideal candidate should have" },
+  { key: "requirements", alias: "An ideal candidate should have" },
   { key: "preferred_qualifications", alias: "Preferred qualifications" },
   { key: "preferred_qualifications", alias: "Additional qualifications" },
   { key: "preferred_qualifications", alias: "Nice to have" },
@@ -284,7 +295,10 @@ function stripBulletPrefix(value: string): string {
 
 function stripSectionLeadIn(value: string): string {
   return value
+    .replace(/\bYo\s+u(?:'|’)ll\b/gi, "You'll")
+    .replace(/\b([A-Za-z]+)\s+(?:'|’)\s*(ll|re|ve|d|m|s|t)\b/gi, "$1'$2")
     .replace(/^(what you(?:'|’)ll do|what you will do)\b[:\s-]*/i, "")
+    .replace(/^(an\s+)?ideal candidate should have\b[:\s-]*/i, "")
     .replace(/^(position responsibilities|key responsibilities|responsibilities)\b[:\s-]*/i, "")
     .trim()
 }
@@ -701,6 +715,14 @@ function looksLikeRequirementItem(value: string): boolean {
   if (APPLICATION_LIKE_RE.test(value) || LOCATION_META_LIKE_RE.test(value)) return false
   if (COMPENSATION_LIKE_RE.test(value) || BENEFITS_LIKE_RE.test(value)) return false
 
+  const candidateProfileVoice =
+    TRAIT_LEADIN_RE.test(value) ||
+    CANDIDATE_PROFILE_LIKE_RE.test(value)
+  const explicitResponsibilityVoice =
+    /\byou\s+(?:'ll|’ll|will)\b/i.test(value) ||
+    /\byou\s+are\s+responsible\b/i.test(value)
+  if (candidateProfileVoice && !explicitResponsibilityVoice) return true
+
   if (REQUIREMENT_LIKE_RE.test(value)) return true
   if (/\b\d+\+?\s+years?\b/i.test(value)) return true
   if (/\b(experience in|experience with|proven|ability to|track record|expertise|knowledge of)\b/i.test(value)) {
@@ -747,12 +769,50 @@ function rebalanceQualificationBuckets(
 ) {
   const movedFromResponsibilities = [...buckets.responsibilities.items]
   for (const item of movedFromResponsibilities) {
-    if (BENEFITS_LIKE_RE.test(item)) {
+    if (COMPENSATION_LIKE_RE.test(item)) {
+      moveItem(
+        buckets.responsibilities,
+        buckets.compensation,
+        item,
+        0.66,
+        {
+          adapter,
+          method: "heuristic",
+          source_path: "responsibilities.rebalanced",
+          source_excerpt: item.slice(0, 220),
+        }
+      )
+      continue
+    }
+
+    if (BENEFITS_LIKE_RE.test(item) || OFFER_CULTURE_LIKE_RE.test(item)) {
       moveItem(
         buckets.responsibilities,
         buckets.benefits,
         item,
         0.66,
+        {
+          adapter,
+          method: "heuristic",
+          source_path: "responsibilities.rebalanced",
+          source_excerpt: item.slice(0, 220),
+        }
+      )
+      continue
+    }
+
+    const candidateProfileVoice =
+      TRAIT_LEADIN_RE.test(item) ||
+      CANDIDATE_PROFILE_LIKE_RE.test(item)
+    const explicitResponsibilityVoice =
+      /\byou\s+(?:'ll|’ll|will)\b/i.test(item) ||
+      /\byou\s+are\s+responsible\b/i.test(item)
+    if (candidateProfileVoice && !explicitResponsibilityVoice) {
+      moveItem(
+        buckets.responsibilities,
+        buckets.requirements,
+        item,
+        0.62,
         {
           adapter,
           method: "heuristic",
@@ -1032,6 +1092,44 @@ function sanitizeResponsibilitiesBucket(
 
       if (withoutLeadIn.length < 16) continue
 
+      const candidateProfileVoice =
+        TRAIT_LEADIN_RE.test(withoutLeadIn) ||
+        CANDIDATE_PROFILE_LIKE_RE.test(withoutLeadIn)
+      const explicitResponsibilityVoice =
+        /\byou\s+(?:'ll|’ll|will)\b/i.test(withoutLeadIn) ||
+        /\byou\s+are\s+responsible\b/i.test(withoutLeadIn)
+      if (candidateProfileVoice && !explicitResponsibilityVoice) {
+        addItems(
+          buckets.requirements,
+          [withoutLeadIn],
+          0.62,
+          {
+            adapter,
+            method: "heuristic",
+            source_path: "responsibilities.sanitized",
+            source_excerpt: withoutLeadIn.slice(0, 200),
+          },
+          14
+        )
+        continue
+      }
+
+      if (COMPENSATION_LIKE_RE.test(withoutLeadIn)) {
+        addItems(
+          buckets.compensation,
+          [withoutLeadIn],
+          0.6,
+          {
+            adapter,
+            method: "heuristic",
+            source_path: "responsibilities.sanitized",
+            source_excerpt: withoutLeadIn.slice(0, 200),
+          },
+          14
+        )
+        continue
+      }
+
       if (PREFERRED_LIKE_RE.test(withoutLeadIn) || REQUIREMENT_LIKE_RE.test(withoutLeadIn)) {
         addItems(
           PREFERRED_LIKE_RE.test(withoutLeadIn)
@@ -1050,7 +1148,7 @@ function sanitizeResponsibilitiesBucket(
         continue
       }
 
-      if (BENEFITS_LIKE_RE.test(withoutLeadIn)) {
+      if (BENEFITS_LIKE_RE.test(withoutLeadIn) || OFFER_CULTURE_LIKE_RE.test(withoutLeadIn)) {
         addItems(
           buckets.benefits,
           [withoutLeadIn],
@@ -1198,6 +1296,22 @@ function sanitizeBenefitsBucket(
         continue
       }
 
+      if (COMPENSATION_LIKE_RE.test(normalizedCandidate) && !BENEFITS_LIKE_RE.test(normalizedCandidate)) {
+        addItems(
+          buckets.compensation,
+          [normalizedCandidate],
+          0.58,
+          {
+            adapter,
+            method: "heuristic",
+            source_path: "benefits.sanitized",
+            source_excerpt: normalizedCandidate.slice(0, 200),
+          },
+          14
+        )
+        continue
+      }
+
       if (REQUIREMENT_LIKE_RE.test(normalizedCandidate) && !BENEFITS_LIKE_RE.test(normalizedCandidate)) {
         addItems(
           buckets.requirements,
@@ -1214,7 +1328,12 @@ function sanitizeBenefitsBucket(
         continue
       }
 
-      if (RESPONSIBILITY_LIKE_RE.test(normalizedCandidate) && !BENEFITS_LIKE_RE.test(normalizedCandidate)) {
+      if (
+        RESPONSIBILITY_LIKE_RE.test(normalizedCandidate) &&
+        !BENEFITS_LIKE_RE.test(normalizedCandidate) &&
+        !OFFER_CULTURE_LIKE_RE.test(normalizedCandidate) &&
+        !COMPENSATION_LIKE_RE.test(normalizedCandidate)
+      ) {
         addItems(
           buckets.responsibilities,
           [normalizedCandidate],
@@ -1230,7 +1349,10 @@ function sanitizeBenefitsBucket(
         continue
       }
 
-      if (BENEFITS_LIKE_RE.test(normalizedCandidate)) {
+      if (
+        BENEFITS_LIKE_RE.test(normalizedCandidate) ||
+        OFFER_CULTURE_LIKE_RE.test(normalizedCandidate)
+      ) {
         kept.push(normalizedCandidate)
         continue
       }

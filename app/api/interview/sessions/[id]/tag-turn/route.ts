@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk"
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
+import { getPostgresPool } from "@/lib/postgres/server"
 import { HAIKU_MODEL } from "@/lib/ai/anthropic-models"
 import { getInterviewSession } from "@/lib/scout/interview/queries"
 import { deriveSkillList } from "@/lib/scout/interview/context"
@@ -31,7 +32,16 @@ export async function POST(
   if (!content) return NextResponse.json({ skill_tag: null })
 
   try {
-    const skillList = deriveSkillList(session.questionSet)
+    let jobTopSkills: string[] = []
+    if (session.jobId) {
+      const pool = getPostgresPool()
+      const jobRow = await pool.query<{ skills: string[] | null }>(
+        `SELECT skills FROM jobs WHERE id = $1`,
+        [session.jobId]
+      )
+      jobTopSkills = (jobRow.rows[0]?.skills ?? []).filter((s): s is string => typeof s === "string")
+    }
+    const skillList = deriveSkillList(session.questionSet, jobTopSkills)
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
     const res = await anthropic.messages.create({

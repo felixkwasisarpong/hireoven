@@ -251,7 +251,14 @@ export default function NotificationBell({
 
       {/* Panel */}
       {open && (
-        <div className="absolute right-0 top-11 z-50 w-[400px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_8px_40px_-8px_rgba(15,23,42,0.25)]">
+        <>
+          {/* Mobile backdrop — tap outside to close */}
+          <div
+            className="fixed inset-0 z-40 sm:hidden"
+            aria-hidden="true"
+            onClick={() => setOpen(false)}
+          />
+        <div className="fixed left-3 right-3 top-14 z-50 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_8px_40px_-8px_rgba(15,23,42,0.25)] sm:absolute sm:left-auto sm:right-0 sm:top-11 sm:w-[400px]">
 
           {/* Header */}
           <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3.5">
@@ -278,7 +285,7 @@ export default function NotificationBell({
           </div>
 
           {/* List */}
-          <div className="max-h-[480px] divide-y divide-slate-100 overflow-y-auto">
+          <div className="max-h-[60vh] divide-y divide-slate-100 overflow-y-auto sm:max-h-[480px]">
             {notifications.length === 0 ? (
               <div className="px-5 py-12 text-center">
                 <Bell className="mx-auto mb-3 h-8 w-8 text-slate-200" />
@@ -315,6 +322,7 @@ export default function NotificationBell({
             </div>
           )}
         </div>
+        </>
       )}
     </div>
   )

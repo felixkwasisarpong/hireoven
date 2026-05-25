@@ -4,13 +4,19 @@ export default function DebriefStrengths({ strengths }: { strengths: Strength[] 
   if (strengths.length === 0) return null
   return (
     <section>
-      <h2 className="mb-3 text-[13px] font-bold uppercase tracking-wider text-emerald-600">Strengths</h2>
-      <div className="space-y-3">
+      <div className="mb-3 flex items-center gap-2">
+        <div className="h-4 w-0.5 rounded-full bg-emerald-500" />
+        <h2 className="text-[12px] font-bold uppercase tracking-widest text-emerald-600">Strengths</h2>
+      </div>
+      <div className="space-y-2.5">
         {strengths.map((s, i) => (
-          <div key={i} className="rounded-xl border border-emerald-100 bg-emerald-50/50 pl-4 pr-4 py-3 border-l-4 border-l-emerald-500">
-            <p className="text-[14px] font-semibold text-slate-900">✓ {s.observation}</p>
+          <div key={i} className="rounded-xl border border-emerald-100 bg-emerald-50/60 p-4">
+            <p className="flex items-start gap-2.5 text-[13px] font-semibold text-slate-900">
+              <span className="mt-px flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-bold text-white">✓</span>
+              {s.observation}
+            </p>
             {s.quote && (
-              <p className="mt-1.5 text-[12px] italic text-slate-600">
+              <p className="mt-2 pl-7 text-[12px] italic leading-relaxed text-slate-500">
                 &ldquo;{s.quote}&rdquo;
               </p>
             )}
