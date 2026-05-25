@@ -1840,10 +1840,10 @@ export function ScoutWorkspaceShell() {
         : workspaceModeLabel
 
   return (
-    <main className="app-page flex flex-col" style={{ background: "linear-gradient(135deg, #FFF4EE 0%, #F9F8FF 40%, #F3F4FF 100%)" }}>
+    <main className="app-page flex flex-col" style={{ background: "linear-gradient(160deg, #F8FAFC 0%, #F1F5F9 46%, #EEF2FF 100%)" }}>
 
       {/* ── Command bar — sticky ─────────────────────────────────────────── */}
-      <div className="sticky top-0 z-20 border-b border-slate-100 bg-white/95 px-5 backdrop-blur-md sm:px-8">
+      <div className="sticky top-0 z-20 border-b border-slate-200/60 bg-white/97 px-5 shadow-[0_1px_0_rgba(0,0,0,0.04)] backdrop-blur-md sm:px-8">
         <div className="flex items-center justify-between py-3">
           <div className="flex items-center gap-3">
             <ScoutOrb
@@ -1855,35 +1855,35 @@ export function ScoutWorkspaceShell() {
               }
             />
             <div>
-              <p className="text-sm font-semibold leading-none text-slate-900">Scout</p>
-              {/* #6 Subtitle fades in on key change when mode transitions */}
+              <p className="text-[14px] font-bold leading-none tracking-tight text-slate-900">Scout</p>
+              {/* Subtitle fades in on key change when mode transitions */}
               <p
                 key={statusLine}
                 className={cn(
                   "mt-0.5 text-[11px] font-medium motion-safe:animate-[scoutSubtitleIn_0.3s_ease-out_both]",
                   (scoutStream.isStreaming || researchStream.isRunning)
-                    ? "text-[#FF5C18]"
+                    ? "text-[#2563EB]"
                     : workspaceMode === "idle"
                       ? "font-normal text-slate-400"
-                      : "text-orange-500"
+                      : "text-blue-600"
                 )}
               >{statusLine}</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5">
             {/* Streaming stop button */}
             {(scoutStream.isStreaming || researchStream.isRunning) && (
               <button
                 type="button"
                 onClick={researchStream.isRunning ? researchStream.cancel : scoutStream.cancel}
                 title="Stop Scout"
-                className="mr-1 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-[11px] font-semibold text-red-500 transition hover:bg-red-100"
+                className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-[11px] font-semibold text-red-500 transition hover:bg-red-100"
               >
                 Stop
               </button>
             )}
-            {/* Focus mode badge — visible whenever focus mode is active */}
+            {/* Focus mode badge */}
             {isFocusMode && (
               <button
                 type="button"
@@ -1895,7 +1895,7 @@ export function ScoutWorkspaceShell() {
                     window.dispatchEvent(new CustomEvent("scout:focus-mode-changed", { detail: { enabled: false } }))
                   }
                 }}
-                className="mr-1 inline-flex items-center gap-1.5 rounded-full border border-orange-300 bg-orange-50 px-2.5 py-1 text-[11px] font-semibold text-orange-600 transition hover:bg-orange-100"
+                className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700 transition hover:bg-blue-100"
               >
                 <Target className="h-3 w-3" />
                 Focus
@@ -1904,20 +1904,20 @@ export function ScoutWorkspaceShell() {
             )}
             {/* Mode pill */}
             {workspaceMode !== "idle" && !scoutStream.isStreaming && (
-              <span className="mr-1 inline-flex items-center gap-1.5 rounded-full border border-[#FFD5C2] bg-[#FFF8F5] px-3 py-1 text-[11px] font-semibold text-[#FF5C18]">
-                <span className="h-1.5 w-1.5 rounded-full bg-[#FF5C18]" />
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-[11px] font-semibold text-blue-700">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#2563EB]" />
                 {workspaceModeLabel}
               </span>
             )}
-            {/* Single menu button — opens context panel (contains Timeline, Context, Memory, Permissions tabs) */}
+            {/* Menu button */}
             <button
               type="button"
               onClick={() => openContextPanel("context")}
               title="Scout menu"
               className={cn(
-                "inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-[11px] font-medium transition",
+                "inline-flex h-8 w-8 items-center justify-center rounded-lg transition",
                 contextPanelOpen
-                  ? "bg-[#FFF3EC] text-[#FF5C18]"
+                  ? "bg-[#EFF6FF] text-[#2563EB]"
                   : "text-slate-400 hover:bg-slate-100 hover:text-slate-700",
               )}
             >
@@ -1981,8 +1981,8 @@ export function ScoutWorkspaceShell() {
             <div
               className={`group relative mb-4 flex items-center gap-3 overflow-hidden rounded-xl border px-4 py-2.5 transition-colors ${
                 narrativePending
-                  ? "border-[#FFD9C2] bg-gradient-to-r from-[#FFF7F2] via-[#FFF1E8] to-[#FFF7F2]"
-                  : "border-orange-100 bg-orange-50/60"
+                  ? "border-blue-200 bg-gradient-to-r from-[#F8FAFF] via-[#EEF4FF] to-[#F8FAFF]"
+                  : "border-blue-100 bg-blue-50/55"
               }`}
             >
               {narrativePending && (
@@ -1994,10 +1994,10 @@ export function ScoutWorkspaceShell() {
 
               <span className="relative flex h-5 w-5 flex-shrink-0 items-center justify-center">
                 {narrativePending && (
-                  <span className="absolute inset-0 animate-ping rounded-full bg-[#FF5C18]/25" />
+                  <span className="absolute inset-0 animate-ping rounded-full bg-[#2563EB]/25" />
                 )}
                 <Sparkles
-                  className={`relative h-3.5 w-3.5 text-[#FF5C18] ${
+                  className={`relative h-3.5 w-3.5 text-[#2563EB] ${
                     narrativePending ? "animate-[scout-pulse_1.8s_ease-in-out_infinite]" : ""
                   }`}
                 />
@@ -2005,7 +2005,7 @@ export function ScoutWorkspaceShell() {
 
               <p className="relative flex-1 text-sm leading-5 text-slate-700">
                 {narrativePending ? (
-                  <span className="bg-gradient-to-r from-slate-700 via-[#FF5C18] to-slate-700 bg-[length:200%_100%] bg-clip-text text-transparent animate-[scout-text-shimmer_2.4s_linear_infinite]">
+                  <span className="bg-gradient-to-r from-slate-700 via-[#2563EB] to-slate-700 bg-[length:200%_100%] bg-clip-text text-transparent animate-[scout-text-shimmer_2.4s_linear_infinite]">
                     {renderBold(narrative.replace(/…+$/, ""))}
                   </span>
                 ) : (
@@ -2013,9 +2013,9 @@ export function ScoutWorkspaceShell() {
                 )}
                 {narrativePending && (
                   <span className="ml-0.5 inline-flex translate-y-[-1px] gap-0.5 align-middle">
-                    <span className="h-1 w-1 animate-[scout-dot_1.2s_ease-in-out_infinite] rounded-full bg-[#FF5C18]" />
-                    <span className="h-1 w-1 animate-[scout-dot_1.2s_ease-in-out_0.18s_infinite] rounded-full bg-[#FF5C18]" />
-                    <span className="h-1 w-1 animate-[scout-dot_1.2s_ease-in-out_0.36s_infinite] rounded-full bg-[#FF5C18]" />
+                    <span className="h-1 w-1 animate-[scout-dot_1.2s_ease-in-out_infinite] rounded-full bg-[#2563EB]" />
+                    <span className="h-1 w-1 animate-[scout-dot_1.2s_ease-in-out_0.18s_infinite] rounded-full bg-[#2563EB]" />
+                    <span className="h-1 w-1 animate-[scout-dot_1.2s_ease-in-out_0.36s_infinite] rounded-full bg-[#2563EB]" />
                   </span>
                 )}
               </p>

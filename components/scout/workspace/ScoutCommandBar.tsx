@@ -339,16 +339,16 @@ export function ScoutCommandBar({
               ? cn(
                   "bg-white/95 ring-1",
                   isListening
-                    ? "ring-[#FF5C18]/60 shadow-[0_0_0_3px_rgba(255,92,24,0.15)]"
-                    : "ring-white/10 focus-within:ring-2 focus-within:ring-[#FF5C18]/50"
+                    ? "ring-[#2563EB]/60 shadow-[0_0_0_3px_rgba(37,99,235,0.15)]"
+                    : "ring-white/10 focus-within:ring-2 focus-within:ring-[#2563EB]/50"
                 )
               : cn(
-                  "border bg-white",
+                  "border bg-white shadow-[0_2px_8px_rgba(15,23,42,0.06)]",
                   isListening
-                    ? "border-[#FF5C18] shadow-[0_0_0_2px_rgba(255,92,24,0.16)]"
+                    ? "border-[#2563EB] shadow-[0_0_0_3px_rgba(37,99,235,0.12),0_2px_8px_rgba(15,23,42,0.06)]"
                     : isProcessing
-                      ? "border-slate-300 shadow-[0_0_0_2px_rgba(148,163,184,0.14)]"
-                    : "border-[#FFD5C2] focus-within:border-[#FF5C18] focus-within:shadow-[0_0_0_2px_rgba(255,92,24,0.14)]"
+                      ? "border-slate-200 shadow-[0_2px_8px_rgba(15,23,42,0.06)]"
+                    : "border-slate-200 focus-within:border-[#2563EB]/60 focus-within:shadow-[0_0_0_3px_rgba(37,99,235,0.10),0_2px_8px_rgba(15,23,42,0.06)]"
                 )
             )}
         >
@@ -361,10 +361,10 @@ export function ScoutCommandBar({
                 !voiceSupported
                   ? "bg-transparent"
                   : isListening
-                    ? "animate-ping bg-[#FF5C18]/25"
+                    ? "animate-ping bg-[#2563EB]/25"
                     : isProcessing
                       ? "animate-pulse bg-slate-300/35"
-                    : "animate-pulse bg-[#FF5C18]/10"
+                    : "animate-pulse bg-[#2563EB]/10"
               )}
             />
             <button
@@ -380,14 +380,14 @@ export function ScoutCommandBar({
                 !voiceSupported
                   ? "cursor-not-allowed border-slate-200 bg-slate-100 text-gray-400 opacity-50"
                   : isListening
-                    ? "border-[#FF5C18] bg-[#FFF2EB] text-[#FF5C18] shadow-[0_0_0_3px_rgba(255,92,24,0.15)]"
+                    ? "border-[#2563EB] bg-[#EFF6FF] text-[#2563EB] shadow-[0_0_0_3px_rgba(37,99,235,0.15)]"
                     : isProcessing
                       ? "border-slate-300 bg-slate-100 text-slate-500"
                     : voiceState === "error"
                       ? "border-amber-300 bg-amber-50 text-amber-600 hover:border-amber-400"
-                      : isDark
+                    : isDark
                         ? "border-white/20 bg-white/10 text-slate-200 hover:border-white/40"
-                        : "border-[#FFD9C7] bg-white text-[#FF5C18] hover:border-[#FF5C18]/50 hover:bg-[#FFF8F5]"
+                        : "border-blue-200 bg-white text-[#2563EB] hover:border-[#2563EB]/50 hover:bg-[#EFF6FF]"
               )}
             >
               {isProcessing ? (
@@ -413,7 +413,7 @@ export function ScoutCommandBar({
             autoComplete="off"
             className={cn(
               "w-full bg-transparent text-[15px] text-gray-900 outline-none disabled:opacity-50",
-              isListening ? "placeholder:text-[#FF5C18]/60" : "placeholder:text-gray-400"
+              isListening ? "placeholder:text-[#2563EB]/60" : "placeholder:text-gray-400"
             )}
           />
 
@@ -447,7 +447,7 @@ export function ScoutCommandBar({
             type="submit"
             disabled={!query.trim() || isLoading}
             aria-label="Submit"
-            className="inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-[#FF5C18] text-white shadow-[0_2px_8px_rgba(255,92,24,0.3)] transition hover:bg-[#E14F0E] disabled:opacity-40 disabled:shadow-none"
+            className="inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-[#2563EB] text-white shadow-[0_2px_10px_rgba(37,99,235,0.35)] transition-all hover:bg-[#1D4ED8] hover:shadow-[0_4px_14px_rgba(37,99,235,0.45)] disabled:opacity-35 disabled:shadow-none"
           >
             {isLoading ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -463,7 +463,7 @@ export function ScoutCommandBar({
         <p
           className={cn(
             "mt-2 inline-flex items-center gap-1.5 text-[11px] font-medium",
-            voiceState === "listening"  ? "text-[#FF5C18]" :
+            voiceState === "listening"  ? "text-[#2563EB]" :
             voiceState === "processing" ? "text-gray-400" :
             voiceState === "error"      ? "text-amber-600" :
                                           "text-gray-400"
@@ -471,9 +471,9 @@ export function ScoutCommandBar({
         >
           {voiceState === "listening" && (
             <span className="mr-0.5 inline-flex items-center gap-[2px]">
-              <span className="inline-block h-1.5 w-1 rounded-full bg-[#FF5C18] animate-pulse" />
-              <span className="inline-block h-2 w-1 rounded-full bg-[#FF5C18]/80 animate-pulse [animation-delay:120ms]" />
-              <span className="inline-block h-1.5 w-1 rounded-full bg-[#FF5C18] animate-pulse [animation-delay:220ms]" />
+              <span className="inline-block h-1.5 w-1 rounded-full bg-[#2563EB] animate-pulse" />
+              <span className="inline-block h-2 w-1 rounded-full bg-[#2563EB]/80 animate-pulse [animation-delay:120ms]" />
+              <span className="inline-block h-1.5 w-1 rounded-full bg-[#2563EB] animate-pulse [animation-delay:220ms]" />
             </span>
           )}
           {statusText}
@@ -501,7 +501,7 @@ export function ScoutCommandBar({
                   "whitespace-nowrap rounded-full border px-3 py-1 text-xs font-medium transition",
                   isDark
                     ? "border-white/12 text-white/60 hover:border-white/30 hover:bg-white/8 hover:text-white"
-                    : "border-slate-200 bg-transparent text-slate-600 hover:border-[#FF5C18]/40 hover:bg-[#FFF8F5] hover:text-[#FF5C18]"
+                    : "border-slate-200 bg-transparent text-slate-600 hover:border-[#2563EB]/40 hover:bg-[#EFF6FF] hover:text-[#2563EB]"
                 )}
               >
                 {chip}

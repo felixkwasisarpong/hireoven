@@ -41,7 +41,7 @@ export function ScoutProgressSteps({ steps, activeStep, intervalMs = 1100 }: Pro
               className={cn(
                 "flex h-5 w-5 shrink-0 items-center justify-center rounded-full transition-colors duration-300",
                 state === "done"   && "bg-emerald-500 text-white",
-                state === "active" && "bg-[#FF5C18] text-white shadow-[0_0_0_4px_rgba(255,92,24,0.18)]",
+                state === "active" && "bg-[#2563EB] text-white shadow-[0_0_0_4px_rgba(37,99,235,0.18)]",
                 state === "pending" && "bg-slate-100 text-slate-400 ring-1 ring-slate-200",
               )}
             >
