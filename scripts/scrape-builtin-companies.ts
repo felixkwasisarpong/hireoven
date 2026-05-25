@@ -5,12 +5,12 @@
  *
  *   Phase 1 (list pages): For each /companies?page=N from --from to --to,
  *   pull every (name, builtin_profile_path, brief) tuple. Output:
- *   data/builtin-list.jsonl.
+ *   data/<prefix>-list.jsonl.
  *
  *   Phase 2 (profile pages): For each unique entry from phase 1, visit the
  *   profile page and extract the real company website URL plus the
  *   "Open Jobs" / careers link if visible. Output:
- *   data/builtin-enriched.jsonl.
+ *   data/<prefix>-enriched.jsonl.
  *
  * Phase 3 (DB insert) lives in seed-builtin-companies.ts, which reads the
  * enriched JSONL and runs the existing discovery + insert pipeline.
@@ -19,6 +19,9 @@
  *   npx tsx scripts/scrape-builtin-companies.ts --phase=list --from=1 --to=3
  *   npx tsx scripts/scrape-builtin-companies.ts --phase=enrich --concurrency=4 --limit=200
  *   npx tsx scripts/scrape-builtin-companies.ts --phase=list --from=1 --to=500    # full sweep
+ *   # Regional sites (e.g. builtinsf.com):
+ *   npx tsx scripts/scrape-builtin-companies.ts --phase=list --base=https://www.builtinsf.com --out-prefix=builtinsf --from=1 --to=5
+ *   npx tsx scripts/scrape-builtin-companies.ts --phase=enrich --base=https://www.builtinsf.com --out-prefix=builtinsf --concurrency=4
  *
  * Both phases skip entries already present in the output file (resume-safe).
  */
@@ -38,12 +41,22 @@ const limit = Number(args.find((a) => a.startsWith("--limit="))?.split("=")[1]) 
 const concurrency = Math.max(1, Number(args.find((a) => a.startsWith("--concurrency="))?.split("=")[1]) || 1)
 const headed = args.includes("--headed")
 const timeoutMs = Number(args.find((a) => a.startsWith("--timeout="))?.split("=")[1]) || 30_000
+const baseUrl = (args.find((a) => a.startsWith("--base="))?.split("=")[1] ?? "https://builtin.com").replace(/\/+$/, "")
+const outPrefix = args.find((a) => a.startsWith("--out-prefix="))?.split("=")[1] ?? "builtin"
+// Rotate the browser context after this many profile enrichments to dodge
+// Cloudflare bot challenges that kick in after sustained traffic from one session.
+const rotateEvery = Math.max(50, Number(args.find((a) => a.startsWith("--rotate-every="))?.split("=")[1]) || 350)
 
 const DATA_DIR = path.join(process.cwd(), "data")
-const LIST_PATH = path.join(DATA_DIR, "builtin-list.jsonl")
-const ENRICH_PATH = path.join(DATA_DIR, "builtin-enriched.jsonl")
-const UA =
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
+const LIST_PATH = path.join(DATA_DIR, `${outPrefix}-list.jsonl`)
+const ENRICH_PATH = path.join(DATA_DIR, `${outPrefix}-enriched.jsonl`)
+const UA_POOL = [
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+  "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+]
+const UA = UA_POOL[0]
 
 type ListEntry = {
   name: string
@@ -82,9 +95,15 @@ function appendJsonl<T>(filePath: string, items: T[]) {
 
 async function launchBrowser(): Promise<{ browser: Browser; context: BrowserContext }> {
   const browser = await chromium.launch({ headless: !headed })
+  const context = await newRotatedContext(browser)
+  return { browser, context }
+}
+
+async function newRotatedContext(browser: Browser): Promise<BrowserContext> {
+  const ua = UA_POOL[Math.floor(Math.random() * UA_POOL.length)]
   const context = await browser.newContext({
-    userAgent: UA,
-    viewport: { width: 1366, height: 900 },
+    userAgent: ua,
+    viewport: { width: 1280 + Math.floor(Math.random() * 200), height: 800 + Math.floor(Math.random() * 200) },
     locale: "en-US",
   })
   // Block heavy assets to save bandwidth
@@ -93,19 +112,19 @@ async function launchBrowser(): Promise<{ browser: Browser; context: BrowserCont
     if (type === "image" || type === "media" || type === "font") return route.abort()
     return route.continue()
   })
-  return { browser, context }
+  return context
 }
 
 async function scrapeListPages() {
   ensureDataDir()
   const existing = readJsonl<ListEntry>(LIST_PATH)
   const seen = new Set(existing.map((e) => e.profile_path))
-  console.log(`Phase: list. Pages ${fromPage}-${toPage}. Existing entries: ${existing.length}`)
+  console.log(`Phase: list. Base: ${baseUrl}. Pages ${fromPage}-${toPage}. Out: ${LIST_PATH}. Existing entries: ${existing.length}`)
 
   const { browser, context } = await launchBrowser()
   try {
     for (let pageNum = fromPage; pageNum <= toPage; pageNum++) {
-      const url = `https://builtin.com/companies?page=${pageNum}`
+      const url = `${baseUrl}/companies?page=${pageNum}`
       const page = await context.newPage()
       try {
         await page.goto(url, { waitUntil: "domcontentloaded", timeout: timeoutMs })
@@ -168,17 +187,43 @@ async function enrichProfiles() {
   const enriched = readJsonl<EnrichedEntry>(ENRICH_PATH)
   const enrichedSet = new Set(enriched.map((e) => e.profile_path))
   const todo = list.filter((e) => !enrichedSet.has(e.profile_path)).slice(0, limit)
-  console.log(`Phase: enrich. List size: ${list.length}, already enriched: ${enriched.length}, to do: ${todo.length}`)
+  console.log(`Phase: enrich. List size: ${list.length}, already enriched: ${enriched.length}, to do: ${todo.length}, rotateEvery: ${rotateEvery}`)
 
-  const { browser, context } = await launchBrowser()
-  const queue = [...todo]
+  const browser = await chromium.launch({ headless: !headed })
+  let context = await newRotatedContext(browser)
+  let processedInContext = 0
   let done = 0
+  const queue = [...todo]
+  const rotateLock = { busy: false }
+
+  async function rotateContextIfNeeded() {
+    if (processedInContext < rotateEvery) return
+    if (rotateLock.busy) {
+      // Another worker is already rotating; wait for it.
+      while (rotateLock.busy) await new Promise((r) => setTimeout(r, 50))
+      return
+    }
+    rotateLock.busy = true
+    try {
+      const old = context
+      const delay = 1500 + Math.random() * 2500
+      console.log(`  rotating context after ${processedInContext} requests; cooling down ${Math.round(delay)}ms`)
+      await new Promise((r) => setTimeout(r, delay))
+      context = await newRotatedContext(browser)
+      processedInContext = 0
+      await old.close().catch(() => null)
+    } finally {
+      rotateLock.busy = false
+    }
+  }
 
   async function worker() {
     while (queue.length > 0) {
+      await rotateContextIfNeeded()
       const next = queue.shift()
       if (!next) break
-      const url = `https://builtin.com${next.profile_path}`
+      const url = `${baseUrl}${next.profile_path}`
+      processedInContext++
       const page = await context.newPage()
       try {
         await page.goto(url, { waitUntil: "domcontentloaded", timeout: timeoutMs })
@@ -186,7 +231,9 @@ async function enrichProfiles() {
           // Inline helpers — keep this block free of named arrow funcs so the
           // tsx transpiler doesn't inject __name into the browser sandbox.
           const SUB_PREFIXES_RE = /^(?:www|jobs?|careers?|apply|hire|apps?|portal|recruit|join|talent)\./i
-          const SOCIAL_HOSTS_RE = /(?:linkedin|twitter|x\.com|facebook|instagram|youtube|github|crunchbase|glassdoor|angellist|builtin)\.com$/i
+          const SOCIAL_HOSTS_RE = /(?:linkedin|twitter|x\.com|facebook|instagram|youtube|github|crunchbase|glassdoor|angellist)\.com$/i
+          // Exclude any builtin* regional host (builtin.com, builtinsf.com, builtinla.com, ...)
+          const BUILTIN_HOST_RE = /(?:^|\.)builtin[a-z]*\.com$/i
 
           let website: string | null = null
           let external_careers_url: string | null = null
@@ -197,7 +244,7 @@ async function enrichProfiles() {
             if (!/^https?:\/\//i.test(href)) continue
             let h: URL
             try { h = new URL(href) } catch { continue }
-            if (h.hostname.includes("builtin.com")) continue
+            if (BUILTIN_HOST_RE.test(h.hostname)) continue
             if (SOCIAL_HOSTS_RE.test(h.hostname)) continue
             externals.push(h)
             const label = (a.textContent ?? "").trim().toLowerCase()
