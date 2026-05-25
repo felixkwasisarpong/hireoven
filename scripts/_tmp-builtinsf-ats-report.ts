@@ -23,7 +23,7 @@ const probe: DiscoveryProbe = async ({ url }) => fetchHtml(url)
 
 async function main() {
   const rows = fs.readFileSync("data/builtinsf-enriched.jsonl", "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l) as E)
-  const withDomain = rows.filter((r) => r.domain) as Required<E>[]
+  const withDomain = rows.filter((r): r is E & { domain: string } => r.domain !== null)
 
   const out: {
     name: string
@@ -37,7 +37,7 @@ async function main() {
     ats_source: "url" | "html" | null
   }[] = []
   let done = 0
-  async function worker(queue: Required<E>[]) {
+  async function worker(queue: (E & { domain: string })[]) {
     while (queue.length) {
       const r = queue.shift()!
       try {
