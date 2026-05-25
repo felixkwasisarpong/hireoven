@@ -78,6 +78,43 @@ test("extractCanonicalSections keeps about/requirements/preferred boundaries pre
   assert.ok(about.every((item) => !responsibilities.includes(item)))
 })
 
+test("extractCanonicalSections rebalances ideal-candidate and offer bullets from responsibilities", () => {
+  const sections = extractCanonicalSections({
+    adapter: "greenhouse",
+    description: `
+Overview
+We're looking for a Senior Software Engineer to join our Core Experiences Team.
+
+What Yo u’ ll Do
+- Collaborate with Product Teams to scope projects and deliver solutions.
+- Optimize existing functionality and improve our algorithms.
+- Ship cloud functions and lightweight backend services.
+
+An Ideal Candidate Should Have
+- Systems thinking. You know that optimizing a system requires end-to-end design.
+- Speed. You work quickly to generate ideas and options.
+- Focus. You know how and when to engage or be heads down.
+
+What We Offer
+- An entrepreneurial-minded team that supports risk, intuition, and hustle.
+- Competitive salaries, a friendly and laid-back atmosphere, and a commitment to building a great asynchronous culture.
+`,
+  })
+
+  assert.ok(
+    sections.responsibilities.items.some((item) => /collaborate|optimize|ship/i.test(item))
+  )
+  assert.ok(
+    sections.requirements.items.some((item) => /systems thinking|you work quickly|you know how/i.test(item))
+  )
+  assert.ok(
+    sections.benefits.items.some((item) => /entrepreneurial-minded team|competitive salaries/i.test(item))
+  )
+  assert.ok(
+    sections.responsibilities.items.every((item) => !/entrepreneurial-minded team|competitive salaries/i.test(item))
+  )
+})
+
 test("extractCanonicalSections handles run-on inline headings without section leakage", () => {
   const sections = extractCanonicalSections({
     adapter: "generic_html",

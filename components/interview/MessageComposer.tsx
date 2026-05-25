@@ -46,10 +46,10 @@ export default function MessageComposer({ onSend, disabled }: Props) {
     <form onSubmit={handleSubmit}>
       <div
         className={cn(
-          "flex items-end gap-2 rounded-xl border-2 bg-white px-3 py-2 transition",
+          "flex items-end gap-2 rounded-2xl border bg-white px-3.5 py-2.5 shadow-[0_4px_20px_rgba(15,23,42,0.07)] transition-all duration-150",
           disabled
             ? "border-slate-100 opacity-60"
-            : "border-slate-200 focus-within:border-orange-300 focus-within:shadow-[0_0_0_3px_rgba(249,115,22,0.08)]"
+            : "border-[#f0d5c6] focus-within:border-[#f19165] focus-within:shadow-[0_4px_20px_rgba(15,23,42,0.07),0_0_0_3px_rgba(241,145,101,0.14)]"
         )}
       >
         <textarea
@@ -65,7 +65,7 @@ export default function MessageComposer({ onSend, disabled }: Props) {
         <button
           type="submit"
           disabled={!canSend}
-          className="mb-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-orange-500 text-white shadow-sm transition hover:bg-orange-600 disabled:opacity-40 disabled:shadow-none"
+          className="mb-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[#f26c2f] text-white transition-all hover:bg-[#e35b1f] hover:shadow-[0_0_10px_rgba(242,108,47,0.35)] disabled:opacity-35 disabled:shadow-none"
         >
           <Send className="h-3.5 w-3.5" />
         </button>

@@ -146,8 +146,9 @@ export async function buildInterviewContext(input: {
       title: string
       description: string | null
       company_name: string | null
+      skills: string[] | null
     }>(
-      `SELECT j.title, j.description, c.name AS company_name
+      `SELECT j.title, j.description, c.name AS company_name, j.skills
        FROM jobs j
        LEFT JOIN companies c ON c.id = j.company_id
        WHERE j.id = $1`,
@@ -157,6 +158,7 @@ export async function buildInterviewContext(input: {
     if (job) {
       jobTitle = job.title
       companyName = job.company_name ?? "the company"
+      jobTopSkills = (job.skills ?? []).filter((s): s is string => typeof s === "string")
 
       if (job.description && anthropic) {
         try {

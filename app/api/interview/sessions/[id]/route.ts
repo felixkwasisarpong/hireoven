@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { getInterviewSession } from "@/lib/scout/interview/queries"
+import { deriveSkillList } from "@/lib/scout/interview/context"
 
 export const runtime = "nodejs"
 
@@ -17,14 +18,26 @@ export async function GET(
   try {
     const session = await getInterviewSession(id, user.id)
     if (!session) return NextResponse.json({ error: "Not found" }, { status: 404 })
-    // Attach metadata for practice_focus and other per-session annotations
+    // Attach metadata and compute job-specific skill list for the client rail
     const pool = getPostgresPool()
-    const metaResult = await pool.query<{ metadata: Record<string, unknown> }>(
-      `SELECT metadata FROM interview_sessions WHERE id = $1`,
-      [id]
-    )
+    const [metaResult, jobSkillsResult] = await Promise.all([
+      pool.query<{ metadata: Record<string, unknown> }>(
+        `SELECT metadata FROM interview_sessions WHERE id = $1`,
+        [id]
+      ),
+      session.jobId
+        ? pool.query<{ skills: string[] | null }>(
+            `SELECT skills FROM jobs WHERE id = $1`,
+            [session.jobId]
+          )
+        : Promise.resolve({ rows: [] as { skills: string[] | null }[] }),
+    ])
     const metadata = metaResult.rows[0]?.metadata ?? {}
-    return NextResponse.json({ session: { ...session, metadata } })
+    const jobTopSkills = (jobSkillsResult.rows[0]?.skills ?? []).filter(
+      (s): s is string => typeof s === "string"
+    )
+    const skillList = deriveSkillList(session.questionSet, jobTopSkills)
+    return NextResponse.json({ session: { ...session, metadata, skillList } })
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Failed to fetch session" },

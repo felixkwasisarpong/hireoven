@@ -1,7 +1,6 @@
 "use client"
 
-import Link from "next/link"
-import { Menu, MessageSquare } from "lucide-react"
+import { Menu } from "lucide-react"
 import { usePathname } from "next/navigation"
 import DashboardFeedSearch from "@/components/dashboard/DashboardFeedSearch"
 import DashboardUserMenu from "@/components/dashboard/DashboardUserMenu"
@@ -12,7 +11,7 @@ import { useAuth } from "@/lib/hooks/useAuth"
 
 /**
  * Header for all `/dashboard/*` routes. The logo lives in the left rail, so the header
- * is just: search pill + bell + messages + user menu — flat white, slate borders.
+ * is just: search pill + bell + user menu — flat white, slate borders.
  * On the Scout page the search pill is hidden — Scout has its own command bar.
  */
 export default function DashboardHeader() {
@@ -43,13 +42,6 @@ export default function DashboardHeader() {
             badgeVariant="product"
             buttonClassName="h-10 w-10 border-0 bg-transparent text-slate-600 hover:bg-slate-100 hover:text-slate-900"
           />
-          <Link
-            href="/dashboard/notifications"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
-            aria-label="Activity and messages"
-          >
-            <MessageSquare className="h-4 w-4" />
-          </Link>
           <DashboardUserMenu />
         </div>
       </div>

@@ -1,7 +1,7 @@
 /**
  * RealtimeClient — WebRTC wrapper for OpenAI's Realtime API.
  *
- * Manages a single peer connection to api.openai.com/v1/realtime.
+ * Manages a single peer connection to api.openai.com/v1/realtime/calls.
  * Emits typed CustomEvents so UI components can subscribe reactively.
  */
 
@@ -31,11 +31,10 @@ export type VoiceTimings = {
   silenceMs: number
 }
 
-const REALTIME_URL = "https://api.openai.com/v1/realtime"
+const REALTIME_CALLS_URL = "https://api.openai.com/v1/realtime/calls"
 
 export class RealtimeClient extends EventTarget {
   private ephemeralToken: string
-  private model: string
 
   private pc: RTCPeerConnection | null = null
   private dc: RTCDataChannel | null = null
@@ -50,10 +49,9 @@ export class RealtimeClient extends EventTarget {
   private sessionStartMs = 0
   private muted = false
 
-  constructor(opts: { ephemeralToken: string; model: string }) {
+  constructor(opts: { ephemeralToken: string }) {
     super()
     this.ephemeralToken = opts.ephemeralToken
-    this.model = opts.model
   }
 
   private emit<K extends keyof RealtimeEventMap>(
@@ -122,8 +120,8 @@ export class RealtimeClient extends EventTarget {
       setTimeout(resolve, 5000)
     })
 
-    // 7. POST SDP offer to OpenAI
-    const res = await fetch(`${REALTIME_URL}?model=${this.model}`, {
+    // 7. POST SDP offer to OpenAI Realtime Calls endpoint
+    const res = await fetch(REALTIME_CALLS_URL, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${this.ephemeralToken}`,

@@ -21,6 +21,7 @@ type SessionMeta = {
   durationTargetMin: number
   jobId: string | null
   startedAt: string | null
+  skillList?: string[]
 }
 
 type JobInfo = {
@@ -134,7 +135,13 @@ export default function LiveInterviewRoom({ sessionId }: { sessionId: string }) 
 
     // Fetch ephemeral token
     const tokenRes = await fetch(`/api/interview/sessions/${sessionId}/realtime-token`, { method: "POST" })
-    const tokenData = await tokenRes.json()
+    const tokenRaw = await tokenRes.text()
+    let tokenData: { ephemeralToken?: string; error?: string } = {}
+    try {
+      tokenData = JSON.parse(tokenRaw) as { ephemeralToken?: string; error?: string }
+    } catch {
+      tokenData = { error: tokenRaw }
+    }
 
     if (!tokenRes.ok) {
       setConnectError(tokenData.error ?? "Failed to get token")
@@ -144,7 +151,15 @@ export default function LiveInterviewRoom({ sessionId }: { sessionId: string }) 
       return
     }
 
-    const client = new RealtimeClient({ ephemeralToken: tokenData.ephemeralToken, model: tokenData.model })
+    if (!tokenData.ephemeralToken) {
+      setConnectError("Token response was missing an ephemeral token.")
+      stream.getTracks().forEach((track) => track.stop())
+      setLocalStream(null)
+      setPhase("permission")
+      return
+    }
+
+    const client = new RealtimeClient({ ephemeralToken: tokenData.ephemeralToken })
     clientRef.current = client
 
     // Wire events
@@ -351,37 +366,39 @@ export default function LiveInterviewRoom({ sessionId }: { sessionId: string }) 
     await finalizeSession()
   }
 
-  // ── Skill list for rail (derived without LLM for live display) ─────────────
-  const skillList: string[] = session ? (
-    session.questionSet === "behavioral"
-      ? ["ownership", "conflict resolution", "ambiguity", "impact storytelling", "growth/feedback", "leadership/influence"]
-      : session.questionSet === "system_design"
-        ? ["scoping", "data modeling", "API design", "scaling", "tradeoffs", "reliability"]
-        : session.questionSet === "technical_screen"
-          ? ["problem-solving", "coding proficiency", "system design", "collaboration", "code quality", "debugging"]
-          : ["ownership", "impact storytelling", "ambiguity", "problem-solving", "system thinking", "collaboration"]
-  ) : []
+  // ── Skill list for rail — prefer server-computed list (job-specific) ─────────
+  const skillList: string[] = session?.skillList?.length
+    ? session.skillList
+    : session ? (
+        session.questionSet === "behavioral"
+          ? ["ownership", "conflict resolution", "ambiguity", "impact storytelling", "growth/feedback", "leadership/influence"]
+          : session.questionSet === "system_design"
+            ? ["scoping", "data modeling", "API design", "scaling", "tradeoffs", "reliability"]
+            : session.questionSet === "technical_screen"
+              ? ["problem-solving", "coding proficiency", "system design", "collaboration", "code quality", "debugging"]
+              : ["ownership", "impact storytelling", "ambiguity", "problem-solving", "system thinking", "collaboration"]
+      ) : []
 
   // ── Render: interrupted session ────────────────────────────────────────────
   if (phase === "ended" && session?.status !== "active") {
     return (
-      <div className="flex h-full items-center justify-center px-4">
-        <div className="max-w-sm rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
-          <h2 className="text-[15px] font-semibold text-slate-900">This live session was interrupted.</h2>
-          <p className="mt-2 text-[13px] text-slate-500">
+      <div className="flex h-full items-center justify-center bg-[#040407] px-4 text-white">
+        <div className="max-w-sm rounded-3xl border border-white/15 bg-white/[0.04] p-8 text-center shadow-[0_24px_60px_rgba(2,6,23,0.6)] backdrop-blur">
+          <h2 className="text-[15px] font-semibold text-white">This live session was interrupted.</h2>
+          <p className="mt-2 text-[13px] text-slate-300">
             End it to generate your debrief based on what was captured.
           </p>
-          {connectError && <p className="mt-2 text-[12px] text-amber-600">{connectError}</p>}
+          {connectError && <p className="mt-2 text-[12px] text-amber-300">{connectError}</p>}
           <div className="mt-5 flex gap-3">
             <Link
               href="/dashboard/interview"
-              className="flex-1 rounded-lg border border-slate-200 py-2.5 text-center text-[13px] font-medium text-slate-700 hover:bg-slate-50"
+              className="flex-1 rounded-lg border border-white/15 bg-white/5 py-2.5 text-center text-[13px] font-medium text-slate-100 hover:bg-white/10"
             >
               Back to hub
             </Link>
             <Link
               href={`/dashboard/interview/${sessionId}/debrief`}
-              className="flex-1 rounded-lg bg-orange-500 py-2.5 text-center text-[13px] font-semibold text-white hover:bg-orange-600"
+              className="flex-1 rounded-lg bg-white py-2.5 text-center text-[13px] font-semibold text-slate-950 hover:bg-slate-200"
             >
               View debrief
             </Link>
@@ -394,18 +411,18 @@ export default function LiveInterviewRoom({ sessionId }: { sessionId: string }) 
   // ── Render: permission gate ────────────────────────────────────────────────
   if (phase === "permission") {
     return (
-      <div className="flex h-full flex-col">
-        <div className="flex items-center gap-3 border-b border-slate-200 bg-white px-4 py-2.5">
-          <Link href="/dashboard/interview" className="flex h-8 w-8 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100">
+      <div className="flex h-full flex-col bg-[#060609] text-white">
+        <div className="flex items-center gap-3 border-b border-white/10 bg-white/[0.02] px-4 py-2.5 backdrop-blur">
+          <Link href="/dashboard/interview" className="flex h-8 w-8 items-center justify-center rounded-full text-slate-300 hover:bg-white/10">
             <ArrowLeft className="h-4 w-4" />
           </Link>
-          <p className="text-[13px] font-semibold text-slate-800">
+          <p className="text-[13px] font-semibold text-slate-100">
             {PERSONA_LABELS[session?.persona ?? ""] ?? "Live interview"} · Setup
           </p>
         </div>
         {connectError && (
-          <div className="border-b border-red-100 bg-red-50 px-4 py-2 text-center">
-            <p className="text-[12px] text-red-600">{connectError}</p>
+          <div className="border-b border-red-500/40 bg-red-500/10 px-4 py-2 text-center">
+            <p className="text-[12px] text-red-200">{connectError}</p>
           </div>
         )}
         <div className="flex-1">
@@ -424,14 +441,14 @@ export default function LiveInterviewRoom({ sessionId }: { sessionId: string }) 
   // ── Render: connecting ─────────────────────────────────────────────────────
   if (phase === "connecting") {
     return (
-      <div className="flex h-full items-center justify-center bg-slate-950">
+      <div className="flex h-full items-center justify-center bg-[#050507]">
         <div className="text-center">
           <div className="mb-4 flex justify-center gap-2">
             {[0, 160, 320].map((d) => (
-              <span key={d} className="h-2 w-2 rounded-full bg-orange-400 animate-bounce" style={{ animationDelay: `${d}ms` }} />
+              <span key={d} className="h-2 w-2 rounded-full bg-slate-200 animate-bounce" style={{ animationDelay: `${d}ms` }} />
             ))}
           </div>
-          <p className="text-[14px] font-medium text-white">Connecting to interviewer…</p>
+          <p className="text-[14px] font-medium text-slate-100">Connecting to interviewer…</p>
         </div>
       </div>
     )
@@ -439,22 +456,24 @@ export default function LiveInterviewRoom({ sessionId }: { sessionId: string }) 
 
   // ── Render: live ───────────────────────────────────────────────────────────
   return (
-    <div className="flex h-full flex-col bg-slate-950 text-white">
+    <div className="relative flex h-full flex-col overflow-hidden bg-[#040407] text-white">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_14%_-6%,rgba(248,250,252,0.12),transparent_38%)]" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_88%_0%,rgba(148,163,184,0.15),transparent_34%)]" />
       {/* Top bar */}
-      <div className="flex items-center gap-3 border-b border-slate-800 px-4 py-2.5">
-        <Link href="/dashboard/interview" className="flex h-8 w-8 items-center justify-center rounded-full text-slate-400 hover:bg-slate-800">
+      <div className="relative z-[1] flex items-center gap-3 border-b border-white/10 bg-white/[0.02] px-4 py-2.5 backdrop-blur">
+        <Link href="/dashboard/interview" className="flex h-8 w-8 items-center justify-center rounded-full text-slate-300 hover:bg-white/10">
           <ArrowLeft className="h-4 w-4" />
         </Link>
-        <p className="text-[13px] font-semibold text-white">
+        <p className="text-[13px] font-semibold text-slate-100">
           {PERSONA_LABELS[session?.persona ?? ""] ?? "Interviewer"}
           {jobInfo ? ` · ${jobInfo.title}${jobInfo.company ? ` @ ${jobInfo.company}` : ""}` : ""}
         </p>
       </div>
 
       {/* Body */}
-      <div className="flex min-h-0 flex-1 overflow-hidden">
+      <div className="relative z-[1] flex min-h-0 flex-1 overflow-hidden p-4">
         {/* Center: waveform + webcam */}
-        <div className="flex flex-1 flex-col gap-4 overflow-hidden p-4">
+        <div className="flex flex-1 flex-col gap-4 overflow-hidden xl:pr-3">
           <div className="flex-1">
             <InterviewerWaveform
               agentStream={agentStream}
@@ -466,11 +485,11 @@ export default function LiveInterviewRoom({ sessionId }: { sessionId: string }) 
         </div>
 
         {/* Right: skill rail + captions */}
-        <div className="hidden w-56 shrink-0 flex-col gap-4 overflow-y-auto border-l border-slate-800 p-4 xl:flex">
-          <SkillCoverageRail skillList={skillList} skillsCovered={skillsCovered} />
-          <div className="flex-1 overflow-y-auto">
+        <div className="hidden w-72 shrink-0 flex-col gap-4 overflow-y-auto rounded-3xl border border-white/10 bg-white/[0.03] p-4 backdrop-blur xl:flex">
+          <SkillCoverageRail skillList={skillList} skillsCovered={skillsCovered} tone="dark" />
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-white/10 bg-black/30 p-3">
             <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Live captions</p>
-            <LiveCaptions captions={captions} />
+            <LiveCaptions captions={captions} tone="dark" />
           </div>
         </div>
       </div>
@@ -488,18 +507,18 @@ export default function LiveInterviewRoom({ sessionId }: { sessionId: string }) 
       {/* End confirm */}
       {showEndConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-          <div className="mx-4 w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
-            <h3 className="text-[15px] font-semibold text-slate-900">End the interview now?</h3>
-            <p className="mt-1.5 text-[13px] text-slate-500">
+          <div className="mx-4 w-full max-w-sm rounded-3xl border border-white/15 bg-[#0b0b0f] p-6 shadow-xl">
+            <h3 className="text-[15px] font-semibold text-white">End the interview now?</h3>
+            <p className="mt-1.5 text-[13px] text-slate-400">
               You&apos;ll get a debrief based on what we covered so far.
             </p>
             <div className="mt-5 flex gap-3">
               <button type="button" onClick={() => setShowEndConfirm(false)}
-                className="flex-1 rounded-lg border border-slate-200 py-2.5 text-[13px] font-medium text-slate-700 hover:bg-slate-50">
+                className="flex-1 rounded-lg border border-white/15 bg-white/5 py-2.5 text-[13px] font-medium text-slate-100 hover:bg-white/10">
                 Keep going
               </button>
               <button type="button" onClick={() => void handleEnd()}
-                className="flex-1 rounded-lg bg-orange-500 py-2.5 text-[13px] font-semibold text-white hover:bg-orange-600">
+                className="flex-1 rounded-lg bg-white py-2.5 text-[13px] font-semibold text-slate-950 hover:bg-slate-200">
                 End &amp; get debrief
               </button>
             </div>

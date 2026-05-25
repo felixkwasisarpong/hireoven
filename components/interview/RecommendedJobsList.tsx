@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
-import { ArrowRight, Zap } from "lucide-react"
+import { Zap } from "lucide-react"
 
 type RecommendedJob = {
   id: string
@@ -33,7 +33,7 @@ function CompanyInitial({ name }: { name: string }) {
   ]
   const color = colors[letter.charCodeAt(0) % colors.length]
   return (
-    <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-[13px] font-bold ${color}`}>
+    <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-[13px] font-bold shadow-sm ${color}`}>
       {letter}
     </div>
   )
@@ -54,7 +54,7 @@ export default function RecommendedJobsList() {
   if (loading) {
     return (
       <section className="mt-10">
-        <div className="h-4 w-48 animate-pulse rounded bg-slate-100" />
+        <div className="h-3.5 w-48 animate-pulse rounded-full bg-slate-100" />
         <div className="mt-3 space-y-2">
           {[0, 1].map((i) => (
             <div key={i} className="h-16 animate-pulse rounded-xl bg-slate-100" />
@@ -68,15 +68,18 @@ export default function RecommendedJobsList() {
 
   return (
     <section className="mt-10">
-      <h2 className="text-[13px] font-semibold uppercase tracking-wide text-slate-400">
-        Practice for your pipeline
-      </h2>
+      <div className="mb-3 flex items-center gap-2">
+        <div className="h-4 w-0.5 rounded-full bg-orange-400" />
+        <h2 className="text-[12px] font-bold uppercase tracking-widest text-slate-400">
+          Practice for your pipeline
+        </h2>
+      </div>
 
-      <div className="mt-3 space-y-2">
+      <div className="space-y-2">
         {jobs.map((job) => (
           <div
             key={job.id}
-            className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 transition hover:border-slate-300 hover:shadow-sm"
+            className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-[0_1px_6px_rgba(15,23,42,0.05)] transition hover:border-slate-300 hover:shadow-[0_4px_12px_rgba(15,23,42,0.08)]"
           >
             <CompanyInitial name={job.company} />
 
@@ -91,7 +94,7 @@ export default function RecommendedJobsList() {
 
             <Link
               href={`/dashboard/interview/setup?jobId=${job.id}`}
-              className="flex shrink-0 items-center gap-1.5 rounded-lg border border-[#FFD5C2] bg-[#FFF8F5] px-3 py-1.5 text-[12px] font-semibold text-[#FF5C18] transition hover:bg-orange-100"
+              className="flex shrink-0 items-center gap-1.5 rounded-lg border border-orange-200 bg-orange-50 px-3 py-1.5 text-[12px] font-semibold text-orange-600 transition hover:bg-orange-100"
             >
               <Zap className="h-3 w-3" />
               Practice

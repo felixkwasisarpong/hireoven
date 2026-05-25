@@ -50,7 +50,7 @@ function computeRemaining(startedAt: string | null, durationMin: number): number
 function TypingIndicator() {
   return (
     <div className="flex justify-start">
-      <div className="flex items-center gap-1.5 rounded-2xl rounded-tl-sm border border-slate-100 bg-white px-4 py-3 shadow-sm">
+      <div className="flex items-center gap-1.5 rounded-2xl rounded-tl-sm border border-[#efe6df] bg-[#fffdfa] px-4 py-3 shadow-[0_6px_16px_rgba(15,23,42,0.06)]">
         {[0, 160, 320].map((delay) => (
           <span
             key={delay}
@@ -195,10 +195,19 @@ export default function TextInterviewChat({ sessionId }: { sessionId: string }) 
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ content }),
         })
-        const data = await res.json()
+
+        let data: Record<string, unknown> = {}
+        const raw = await res.text()
+        if (raw) {
+          try {
+            data = JSON.parse(raw) as Record<string, unknown>
+          } catch {
+            data = { error: raw }
+          }
+        }
 
         if (!res.ok) {
-          setSendError(data.error ?? "Couldn't send. Retry?")
+          setSendError((data.error as string) ?? "Couldn't send. Retry?")
           if (!isBeginInterview) {
             setTurns((prev) => prev.filter((t) => t.id !== optimisticId))
           }
@@ -208,6 +217,7 @@ export default function TextInterviewChat({ sessionId }: { sessionId: string }) 
         // Replace optimistic with confirmed (for non-BEGIN_INTERVIEW)
         // and append interviewer turn
         setTurns((prev) => {
+          const turnData = (data.turn ?? {}) as Record<string, unknown>
           const withoutOpt = isBeginInterview
             ? prev
             : prev.map((t) =>
@@ -218,17 +228,17 @@ export default function TextInterviewChat({ sessionId }: { sessionId: string }) 
           return [
             ...withoutOpt,
             {
-              id: data.turn.id,
+              id: (turnData.id as string) ?? `interviewer-${Date.now()}`,
               role: "interviewer" as const,
-              content: data.turn.content,
-              turnIndex: data.turn.turn_index,
-              skillTag: data.turn.skill_tag,
+              content: (turnData.content as string) ?? "",
+              turnIndex: (turnData.turn_index as number) ?? -1,
+              skillTag: ((turnData.skill_tag as string) ?? null),
             },
           ]
         })
 
         // Update skills covered
-        if (data.skillsCovered) setSkillsCovered(data.skillsCovered)
+        if (Array.isArray(data.skillsCovered)) setSkillsCovered(data.skillsCovered as string[])
 
         // Session status
         if (data.sessionStatus === "completed") {
@@ -282,7 +292,7 @@ export default function TextInterviewChat({ sessionId }: { sessionId: string }) 
   // ── Loading skeleton ───────────────────────────────────────────────────────
   if (isInitializing) {
     return (
-      <div className="flex h-full items-center justify-center">
+      <div className="flex h-full items-center justify-center bg-[#fff8f4]">
         <div className="space-y-3 w-64">
           {[0, 1, 2].map((i) => (
             <div key={i} className="h-8 animate-pulse rounded-lg bg-slate-100" />
@@ -295,7 +305,9 @@ export default function TextInterviewChat({ sessionId }: { sessionId: string }) 
   const isEnded = sessionStatus === "completed" || sessionStatus === "abandoned"
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="relative flex h-full flex-col overflow-hidden bg-[linear-gradient(180deg,#fffaf6_0%,#fff3ec_100%)]">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_6%_8%,rgba(255,198,165,0.28),transparent_42%)]" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_96%_8%,rgba(255,228,205,0.52),transparent_36%)]" />
       {/* Top bar */}
       {session && (
         <InterviewTopBar
@@ -310,11 +322,11 @@ export default function TextInterviewChat({ sessionId }: { sessionId: string }) 
       )}
 
       {/* Body */}
-      <div className="flex min-h-0 flex-1 overflow-hidden">
+      <div className="relative z-[1] flex min-h-0 flex-1 overflow-hidden p-3 sm:p-4">
         {/* Chat thread */}
-        <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex min-w-0 flex-1 flex-col xl:pr-2">
           <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-6">
-            <div className="mx-auto max-w-2xl space-y-3">
+            <div className="mx-auto max-w-2xl space-y-3 rounded-3xl border border-[#f0dfd3] bg-white/88 p-4 shadow-[0_20px_45px_rgba(15,23,42,0.08)] backdrop-blur sm:p-5">
               {turns.map((turn) => (
                 <MessageBubble key={turn.id} role={turn.role} content={turn.content} />
               ))}
@@ -325,7 +337,7 @@ export default function TextInterviewChat({ sessionId }: { sessionId: string }) 
 
           {/* Completed banner */}
           {isEnded && (
-            <div className="border-t border-emerald-100 bg-emerald-50 px-4 py-3 text-center">
+            <div className="border-t border-emerald-100 bg-emerald-50/90 px-4 py-3 text-center">
               <p className="text-[13px] font-semibold text-emerald-700">
                 Interview complete.{" "}
                 <Link
@@ -340,7 +352,7 @@ export default function TextInterviewChat({ sessionId }: { sessionId: string }) 
 
           {/* Error */}
           {sendError && (
-            <div className="border-t border-red-100 bg-red-50 px-4 py-2 text-center">
+            <div className="border-t border-red-100 bg-red-50/90 px-4 py-2 text-center">
               <span className="text-[12px] text-red-600">{sendError}</span>
               <button
                 type="button"
@@ -354,7 +366,7 @@ export default function TextInterviewChat({ sessionId }: { sessionId: string }) 
 
           {/* Composer */}
           {!isEnded && (
-            <div className="border-t border-slate-200 px-4 py-3 sm:px-6">
+            <div className="border-t border-[#f0dfd3] bg-white/70 px-4 py-3 sm:px-6">
               <div className="mx-auto max-w-2xl">
                 <MessageComposer
                   onSend={(content) => void sendTurn(content)}
@@ -366,7 +378,7 @@ export default function TextInterviewChat({ sessionId }: { sessionId: string }) 
         </div>
 
         {/* Skill coverage rail */}
-        <div className="hidden w-52 shrink-0 overflow-y-auto border-l border-slate-100 bg-slate-50 px-3 py-4 xl:block">
+        <div className="hidden w-60 shrink-0 overflow-y-auto rounded-3xl border border-[#f0dfd3] bg-white/75 px-4 py-5 shadow-[0_16px_40px_rgba(15,23,42,0.08)] backdrop-blur xl:block">
           <SkillCoverageRail skillList={skillList} skillsCovered={skillsCovered} />
         </div>
       </div>
@@ -374,7 +386,7 @@ export default function TextInterviewChat({ sessionId }: { sessionId: string }) 
       {/* End confirm dialog */}
       {showEndConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="mx-4 w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+          <div className="mx-4 w-full max-w-sm rounded-3xl border border-[#f0dfd3] bg-white p-6 shadow-xl">
             <h3 className="text-[15px] font-semibold text-slate-900">End the interview now?</h3>
             <p className="mt-1.5 text-[13px] text-slate-500">
               You&apos;ll get a debrief based on the answers so far.

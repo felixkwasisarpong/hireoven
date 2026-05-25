@@ -444,30 +444,33 @@ export default function DashboardFeedToolbar({
       <div className="flex flex-wrap items-center justify-end gap-3">
         <div className="flex items-center gap-2">
           <span className="shrink-0 text-sm text-slate-500">Sort by:</span>
-          <select
-            value={sortValue}
-            onChange={(e) =>
-              replaceFilters({
-                ...filters,
-                sort: e.target.value as JobFilters["sort"],
-              })
-            }
-            className="h-9 min-w-[10.5rem] rounded-md border border-[#E5E7EB] bg-white px-3 text-sm font-medium text-slate-800 outline-none focus:border-[#0052CC] focus:ring-1 focus:ring-[#0052CC]/20"
-            aria-label="Sort jobs"
-          >
-            {SORT_OPTIONS.map((opt) => {
-              // "Most relevant" without a search query collapses to
-              // freshest-within-24h — disable it so users don't pick a
-              // sort that promises something it can't deliver until they
-              // type a query.
-              const disabled = opt.value === "relevant" && !searchQuery.trim()
-              return (
-                <option key={opt.value} value={opt.value} disabled={disabled}>
-                  {disabled ? `${opt.label} — search first` : opt.label}
-                </option>
-              )
-            })}
-          </select>
+          <div className="relative">
+            <select
+              value={sortValue}
+              onChange={(e) =>
+                replaceFilters({
+                  ...filters,
+                  sort: e.target.value as JobFilters["sort"],
+                })
+              }
+              className="h-10 min-w-[10.5rem] appearance-none rounded-md border border-[#E5E7EB] bg-white py-1.5 pl-3 pr-9 text-[15px] font-semibold leading-6 text-slate-800 [font-feature-settings:normal] [text-rendering:auto] outline-none focus:border-[#0052CC] focus:ring-1 focus:ring-[#0052CC]/20"
+              aria-label="Sort jobs"
+            >
+              {SORT_OPTIONS.map((opt) => {
+                // "Most relevant" without a search query collapses to
+                // freshest-within-24h — disable it so users don't pick a
+                // sort that promises something it can't deliver until they
+                // type a query.
+                const disabled = opt.value === "relevant" && !searchQuery.trim()
+                return (
+                  <option key={opt.value} value={opt.value} disabled={disabled}>
+                    {disabled ? `${opt.label} — search first` : opt.label}
+                  </option>
+                )
+              })}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+          </div>
         </div>
       </div>
 
@@ -825,7 +828,7 @@ export default function DashboardFeedToolbar({
             <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-400" />
           </button>
           {filterDropdown === "skills" && (
-            <div className="absolute left-0 top-full z-50 mt-1.5 w-72 rounded-xl border border-slate-200 bg-white p-3 shadow-lg">
+            <div className="absolute right-0 top-full z-50 mt-1.5 w-72 rounded-xl border border-slate-200 bg-white p-3 shadow-lg">
               <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
                 Skills (comma-separated)
               </p>
@@ -869,7 +872,7 @@ export default function DashboardFeedToolbar({
             <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-400" />
           </button>
           {filterDropdown === "industry" && (
-            <div className="absolute left-0 top-full z-50 mt-1.5 w-72 rounded-xl border border-slate-200 bg-white p-3 shadow-lg">
+            <div className="absolute right-0 top-full z-50 mt-1.5 w-72 rounded-xl border border-slate-200 bg-white p-3 shadow-lg">
               <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
                 Industry contains
               </p>
