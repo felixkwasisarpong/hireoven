@@ -33,9 +33,8 @@ test("icims: detectFromUrl rejects bare apex + asset / community subdomains", ()
   }
 })
 
-test("icims: detectFromUrl rejects internal / employee / region-scoped portals", () => {
+test("icims: detectFromUrl rejects employee / auth portals", () => {
   for (const url of [
-    "https://internal-tuftscareers.icims.com/",
     "https://mxemployees-napanasonic.icims.com/",
     "https://caemployees-napanasonic.icims.com/",
     "https://faculty-saintmarysuniversity.icims.com/",
@@ -43,6 +42,17 @@ test("icims: detectFromUrl rejects internal / employee / region-scoped portals",
   ]) {
     assert.equal(icimsAdapter.detectFromUrl(url), null, url)
   }
+})
+
+test("icims: detectFromUrl accepts internal-* portals (e.g. Liberty Mutual's public board)", () => {
+  assert.deepEqual(
+    icimsAdapter.detectFromUrl("https://internal-libertymutual.icims.com/jobs/search"),
+    { slug: "internal-libertymutual.icims.com" }
+  )
+  assert.deepEqual(
+    icimsAdapter.detectFromUrl("https://internal-tuftscareers.icims.com/"),
+    { slug: "internal-tuftscareers.icims.com" }
+  )
 })
 
 test("icims: extractJobLinks parses iCIMS_Anchor tags regardless of attribute order", () => {

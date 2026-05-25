@@ -61,10 +61,13 @@ function detectFromUrl(url: string): { slug: string } | null {
     )
   )
     return null
-  // Reject internal/employee/region-scoped portals (auth required).
+  // Reject authentication portals and employee-only subdomains that are not
+  // public job boards. `internal-*` is intentionally kept: companies like
+  // Liberty Mutual expose their public board as internal-{tenant}.icims.com.
+  // Auth-gated portals will fail gracefully on first harvest attempt.
   const sub = host.replace(/\.icims\.com$/, "")
   if (
-    /^(internal|faculty|facultycareers|alumni|retiree|login|signin)-/.test(sub)
+    /^(faculty|facultycareers|alumni|retiree|login|signin)-/.test(sub)
   )
     return null
   if (/employee/.test(sub)) return null
