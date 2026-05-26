@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import {
+  AlertTriangle,
   ArrowUpRight,
   BadgeCheck,
   Banknote,
@@ -10,6 +11,7 @@ import {
   Building2,
   Linkedin,
   MapPin,
+  Repeat2,
   ShieldCheck,
   ShieldX,
   Sparkles,
@@ -36,8 +38,14 @@ import {
   type SponsorshipVisaCardLabel,
 } from "@/lib/jobs/sponsorship-employer-signal"
 import {
+  isStaffingIntermediaryListing,
+  readHiringEntitySignalFromRawData,
+  resolveDisplayCompanyName,
+} from "@/lib/jobs/hiring-entity"
+import {
   getMatchCardLabel,
   getMatchVerdict,
+  hasUsableMatchScore,
   resolveOverallMatchScore,
 } from "@/lib/jobs/match-score-display"
 import { buildTopApplicantOpportunityBadgeTitle } from "@/lib/jobs/job-card-badges"
@@ -47,6 +55,11 @@ import {
   saveJobToPipeline,
 } from "@/lib/applications/save-job-client"
 import { getApplyVariant, getApplyVariantLabel } from "@/lib/jobs/apply-cta"
+import {
+  readJobRepostCount,
+  resolveGhostRepostSignals,
+  type GhostRepostSignal,
+} from "@/lib/jobs/ghost-repost-flags"
 import { jobSourceFallbackLogo } from "@/lib/jobs/source-fallback-logo"
 import { useToast } from "@/components/ui/ToastProvider"
 import { MatchScoreBreakdownPopover } from "@/components/matching/MatchScoreBreakdownPopover"
@@ -79,6 +92,11 @@ function pickRawBoolean(raw: RawRecord, keys: string[]) {
     }
   }
   return null
+}
+
+function equalsIgnoreCase(a: string | null | undefined, b: string | null | undefined): boolean {
+  if (!a || !b) return false
+  return a.trim().toLowerCase() === b.trim().toLowerCase()
 }
 
 function formatWorkMode(job: JobWithCompany | JobWithMatchScore) {
@@ -213,6 +231,11 @@ function seniorityPillStyle(label: string | null): string {
   return "bg-purple-600 text-white"
 }
 
+function ghostSignalPillClass(tone: GhostRepostSignal["tone"]): string {
+  if (tone === "critical") return "bg-rose-50 text-rose-700 ring-rose-200"
+  return "bg-amber-50 text-amber-700 ring-amber-200"
+}
+
 // ---------------------------------------------------------------------------
 // Match ring
 // ---------------------------------------------------------------------------
@@ -345,12 +368,13 @@ export default function JobCardV2({
   void isBestMatch
 
   const raw = useMemo(() => readRawRecord(job), [job])
-  const resolvedMatchScore = matchScoreProp ?? ("match_score" in job ? (job.match_score ?? null) : null)
+  const rawMatchScore = matchScoreProp ?? ("match_score" in job ? (job.match_score ?? null) : null)
+  const resolvedMatchScore = hasUsableMatchScore(rawMatchScore) ? rawMatchScore : null
   const score = resolveOverallMatchScore({
     preferredScore: resolvedMatchScore,
-    rawData: raw,
   })
   const matchLabel = getMatchCardLabel(score)
+  const showMatchReasoning = score !== null
 
   // Use server-precomputed card view. Never call resolveJobCardView() on the client —
   // it chains into normalize.ts which imports @anthropic-ai/sdk and crashes the browser.
@@ -374,13 +398,27 @@ export default function JobCardV2({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [job.id])
   const displayTitle = cardView.title
-  const companyName = job.company?.name ?? "Unknown company"
+  const hiringEntitySignal = useMemo(
+    () => readHiringEntitySignalFromRawData(raw),
+    [raw]
+  )
+  const staffingIntermediary = isStaffingIntermediaryListing({ rawData: raw })
+  const companyName = resolveDisplayCompanyName({
+    companyName: job.company?.name ?? null,
+    rawData: raw,
+  })
+  const staffingCompanyName = hiringEntitySignal?.staffing_company_name ?? job.company?.name ?? null
+  const showingEndClientName =
+    staffingIntermediary &&
+    Boolean(hiringEntitySignal?.end_client_name) &&
+    !equalsIgnoreCase(companyName, staffingCompanyName)
   const rawCompanyDomain = job.company?.domain ?? null
   const rawCompanyLogoUrl = job.company?.logo_url ?? pickRawString(raw, ["companyLogo", "company_logo"]) ?? null
   const sourceFallback = jobSourceFallbackLogo(job, rawCompanyDomain, rawCompanyLogoUrl)
   const companyDomain = sourceFallback?.domain ?? rawCompanyDomain
   const companyLogoUrl = sourceFallback?.logoUrl ?? rawCompanyLogoUrl
-  const companyProfileHref = job.company?.id ? `/companies/${job.company.id}` : null
+  const companyProfileHref =
+    job.company?.id && !showingEndClientName ? `/companies/${job.company.id}` : null
 
   const workMode = formatWorkMode(job)
   const employmentType =
@@ -423,13 +461,18 @@ export default function JobCardV2({
   const companyVerified = pickRawBoolean(raw, ["companyVerified", "company_verified"]) === true
 
   // H1B / company sponsorship data — Company type has these as direct fields
-  const h1bCount1yr = job.company?.h1b_sponsor_count_1yr ?? 0
-  const h1bCount3yr = job.company?.h1b_sponsor_count_3yr ?? 0
-  const sponsorConfidence = job.company?.sponsorship_confidence ?? 0
-  const companySponsorsH1b = job.company?.sponsors_h1b === true
+  const h1bCount1yr = staffingIntermediary ? 0 : job.company?.h1b_sponsor_count_1yr ?? 0
+  const h1bCount3yr = staffingIntermediary ? 0 : job.company?.h1b_sponsor_count_3yr ?? 0
+  const sponsorConfidence = staffingIntermediary ? 0 : job.company?.sponsorship_confidence ?? 0
+  const companySponsorsH1b = !staffingIntermediary && job.company?.sponsors_h1b === true
   const hasH1bData = companySponsorsH1b || h1bCount1yr > 0 || job.sponsors_h1b === true
 
   const easyApply = pickRawBoolean(raw, ["easyApply", "easy_apply"]) ?? false
+  const repostCount = readJobRepostCount(job)
+  const ghostRepostSignals = useMemo(
+    () => resolveGhostRepostSignals({ freshnessDays, repostCount }),
+    [freshnessDays, repostCount]
+  )
 
   // Actively recruiting: raw crawler boolean OR detected from title/description text
   const activelyHiring = useMemo(() => {
@@ -650,6 +693,11 @@ export default function JobCardV2({
                         in
                       </span>
                     )}
+                    {showingEndClientName && (
+                      <span className="rounded-full border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">
+                        via staffing intermediary
+                      </span>
+                    )}
                   </div>
 
                   {/* Location · mode · seniority · type · salary */}
@@ -706,7 +754,7 @@ export default function JobCardV2({
               </div>
 
               {/* Status badges */}
-              {(activelyHiring || easyApply || topApplicantSignal) && (
+              {(activelyHiring || easyApply || topApplicantSignal || ghostRepostSignals.length > 0) && (
                 <div className="mt-2.5 flex flex-wrap gap-1.5">
                   {activelyHiring && (
                     <span className="inline-flex items-center gap-1.5 rounded-full bg-violet-600 px-2.5 py-1 text-[11px] font-semibold text-white">
@@ -726,6 +774,22 @@ export default function JobCardV2({
                       Top Applicant
                     </span>
                   )}
+                  {ghostRepostSignals.map((signal) => (
+                    <span
+                      key={`${signal.kind}:${signal.label}`}
+                      title={signal.detail}
+                      className={cn(
+                        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1",
+                        ghostSignalPillClass(signal.tone)
+                      )}
+                    >
+                      {signal.kind === "stale"
+                        ? <AlertTriangle className="h-3 w-3" aria-hidden />
+                        : <Repeat2 className="h-3 w-3" aria-hidden />
+                      }
+                      {signal.label}
+                    </span>
+                  ))}
                 </div>
               )}
 
@@ -818,10 +882,15 @@ export default function JobCardV2({
               {/* Info tiles */}
               <div className={cn(
                 "grid gap-3",
-                hasH1bData && showCompanySnippet ? "lg:grid-cols-[140px_200px_1fr_160px]"
-                : hasH1bData                     ? "lg:grid-cols-[140px_200px_1fr]"
-                : showCompanySnippet              ? "lg:grid-cols-[140px_1fr_160px]"
-                :                                  "lg:grid-cols-[140px_1fr]"
+                showMatchReasoning
+                  ? hasH1bData && showCompanySnippet ? "lg:grid-cols-[140px_200px_1fr_160px]"
+                  : hasH1bData                       ? "lg:grid-cols-[140px_200px_1fr]"
+                  : showCompanySnippet               ? "lg:grid-cols-[140px_1fr_160px]"
+                  :                                    "lg:grid-cols-[140px_1fr]"
+                  : hasH1bData && showCompanySnippet ? "lg:grid-cols-[140px_200px_160px]"
+                  : hasH1bData                       ? "lg:grid-cols-[140px_200px]"
+                  : showCompanySnippet               ? "lg:grid-cols-[140px_160px]"
+                  :                                    "lg:grid-cols-[140px]"
               )}>
 
                 {/* Col 1: Quick stats */}
@@ -908,31 +977,33 @@ export default function JobCardV2({
                   </div>
                 )}
 
-                {/* Col 2: Why it's a match */}
-                <div className="rounded-xl bg-white/5 p-3">
-                  <p className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-white">
-                    <Sparkles className="h-3.5 w-3.5 text-indigo-400" aria-hidden />
-                    Why it&apos;s a match
-                  </p>
-                  <div className="mt-2 space-y-1.5">
-                    {whyBullets.map((bullet, i) => (
-                      <p key={`${job.id}-b-${i}`} className="flex items-start gap-2 text-[12px] leading-5 text-slate-300">
-                        <span className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-indigo-500" aria-hidden />
-                        {bullet}
-                      </p>
-                    ))}
-                  </div>
+                {/* Col 2: Why it's a match (only when score is available) */}
+                {showMatchReasoning && (
+                  <div className="rounded-xl bg-white/5 p-3">
+                    <p className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-white">
+                      <Sparkles className="h-3.5 w-3.5 text-indigo-400" aria-hidden />
+                      Why it&apos;s a match
+                    </p>
+                    <div className="mt-2 space-y-1.5">
+                      {whyBullets.map((bullet, i) => (
+                        <p key={`${job.id}-b-${i}`} className="flex items-start gap-2 text-[12px] leading-5 text-slate-300">
+                          <span className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-indigo-500" aria-hidden />
+                          {bullet}
+                        </p>
+                      ))}
+                    </div>
 
-                  {/* Tailor CTA */}
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/resume/analyze/${job.id}`) }}
-                    className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-indigo-500 to-violet-600 px-3 py-1.5 text-[12px] font-semibold text-white transition hover:from-indigo-600 hover:to-violet-700"
-                  >
-                    <Sparkles className="h-3 w-3" aria-hidden />
-                    Tailor Resume
-                  </button>
-                </div>
+                    {/* Tailor CTA */}
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/resume/analyze/${job.id}`) }}
+                      className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-indigo-500 to-violet-600 px-3 py-1.5 text-[12px] font-semibold text-white transition hover:from-indigo-600 hover:to-violet-700"
+                    >
+                      <Sparkles className="h-3 w-3" aria-hidden />
+                      Tailor Resume
+                    </button>
+                  </div>
+                )}
 
                 {/* Col 3: Company snapshot (when available) */}
                 {showCompanySnippet && (

@@ -152,6 +152,7 @@ const LOCAL_LOGO_URL_BY_DOMAIN: Record<string, string> = {
   "quicken.com": "/company-logos/quicken.svg",
   "twitch.tv": "/company-logos/twitch.svg",
   "westvirginiauniversity.com": "/company-logos/west-virginia-university.svg",
+  "anthropic.com": "/company-logos/anthropic.svg",
 
   // Placeholder USCIS employer domains that should still render the same mark.
   "edwards-lifesciences-llc.uscis-employer": "/company-logos/edwards.svg",

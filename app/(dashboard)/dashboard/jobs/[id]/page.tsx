@@ -46,6 +46,7 @@ import {
   normalizeSkillList,
   skillMatches,
 } from "@/lib/skills/taxonomy"
+import { isScoreFreshForResume } from "@/lib/matching/score-freshness"
 import { cn } from "@/lib/utils"
 import type { Company, Job, JobMatchScore, Skills } from "@/types"
 
@@ -376,9 +377,6 @@ export default async function DashboardJobDetailPage({ params }: Props) {
      LEFT JOIN companies c ON c.id = j.company_id
      WHERE j.is_active = true AND ${sqlJobLocatedInUsa("j")}`
 
-  // Score algorithm version stamp — bump when scoring logic changes to bust the cache.
-  const SCORE_ALGORITHM_VERSION = new Date("2026-05-15T02:10:00.000Z").getTime()
-
   const [cachedScoreResult, resumeSkillResult, similarByTitleResult, similarByCompanyResult] = await Promise.all([
     // Lightweight cache check — joins match score with resume updated_at in one query.
     // Avoids loading the full resume/profile on cache hits.
@@ -429,8 +427,12 @@ export default async function DashboardJobDetailPage({ params }: Props) {
 
     const isCacheFresh = cached && resumeRow && (() => {
       const resumeVersion = Math.floor(new Date(resumeRow.updated_at).getTime() / 1000)
-      const computedAt = new Date(cached.computed_at).getTime()
-      return cached.resume_version === resumeVersion && computedAt >= SCORE_ALGORITHM_VERSION
+      return isScoreFreshForResume({
+        computedAt: cached.computed_at,
+        resumeUpdatedAt: cached.resume_updated_at,
+        scoreResumeVersion: cached.resume_version,
+        currentResumeVersion: resumeVersion,
+      })
     })()
 
     if (isCacheFresh && cached) {

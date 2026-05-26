@@ -38,6 +38,22 @@ type AnswerQuestionRequest = {
   jobTitle?: string
   company?: string
 }
+type AutofillTelemetryRequest = {
+  type: "EXT_MVP_TRACK_AUTOFILL"
+  payload: {
+    jobId?: string
+    companyName?: string
+    jobTitle?: string
+    atsType?: string
+    stage: "preview" | "attempt" | "success" | "partial" | "error"
+    fieldsFilled?: number
+    fieldsTotal?: number
+    manualReviewCount?: number
+    errorMessage?: string
+    pageUrl?: string
+    fallbackUsed?: boolean
+  }
+}
 type ProofRequest       = {
   type: "EXT_MVP_SAVE_APPLICATION_PROOF"
   jobId?: string
@@ -64,7 +80,8 @@ function send<T>(
     | CoverUpdateRequest
     | CoverDocxRequest
     | ProofRequest
-    | AnswerQuestionRequest,
+    | AnswerQuestionRequest
+    | AutofillTelemetryRequest,
 ): Promise<T> {
   return new Promise((resolve, reject) => {
     if (!chrome.runtime?.id) {
@@ -245,6 +262,28 @@ export function answerQuestion(args: {
 }
 
 /**
+ * Best-effort autofill run telemetry for extension E2E reliability metrics.
+ */
+export function trackAutofillTelemetry(payload: {
+  jobId?: string
+  companyName?: string
+  jobTitle?: string
+  atsType?: string
+  stage: "preview" | "attempt" | "success" | "partial" | "error"
+  fieldsFilled?: number
+  fieldsTotal?: number
+  manualReviewCount?: number
+  errorMessage?: string
+  pageUrl?: string
+  fallbackUsed?: boolean
+}): Promise<{ ok: true }> {
+  return send<{ ok: true }>({
+    type: "EXT_MVP_TRACK_AUTOFILL",
+    payload,
+  })
+}
+
+/**
  * Silently sync scraped LinkedIn profile data to Hireoven.
  * Fire-and-forget — no response handling needed.
  * Only called when isOwnLinkedInProfile() returns true.
@@ -268,4 +307,3 @@ export function syncLinkedInBrandProfile(profile: LinkedInProfileData): void {
     void chrome.runtime.lastError
   })
 }
-

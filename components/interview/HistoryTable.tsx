@@ -20,6 +20,11 @@ type Session = {
   debrief: { overallScore: number | null } | null
 }
 
+type HistoryTableProps = {
+  initialSessions?: Session[]
+  initialLoaded?: boolean
+}
+
 const TYPE_LABELS: Record<string, string> = { text: "Text", live: "Live", coding: "Coding" }
 const TYPE_COLORS: Record<string, string> = {
   text:   "bg-blue-50 text-blue-700",
@@ -40,9 +45,12 @@ function formatDate(iso: string) {
   })
 }
 
-export default function HistoryTable() {
-  const [sessions, setSessions] = useState<Session[]>([])
-  const [loading, setLoading] = useState(true)
+export default function HistoryTable({
+  initialSessions = [],
+  initialLoaded = false,
+}: HistoryTableProps) {
+  const [sessions, setSessions] = useState<Session[]>(initialSessions)
+  const [loading, setLoading] = useState(!initialLoaded)
   const [page, setPage] = useState(1)
   const PAGE_SIZE = 50
 
@@ -55,12 +63,14 @@ export default function HistoryTable() {
   const [discardId, setDiscardId] = useState<string | null>(null)
 
   useEffect(() => {
+    if (initialLoaded) return
+
     fetch("/api/interview/sessions?limit=200")
       .then((r) => r.json())
       .then((d) => setSessions(d.sessions ?? []))
       .catch(() => {})
       .finally(() => setLoading(false))
-  }, [])
+  }, [initialLoaded])
 
   // Build unique jobs from sessions for the job filter dropdown
   const jobOptions = useMemo(() => {

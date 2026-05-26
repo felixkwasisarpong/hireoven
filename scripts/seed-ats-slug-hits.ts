@@ -48,6 +48,40 @@ type Hit = {
   probed_at: string
 }
 
+// Curated fixes for boards that don't expose a public company_url domain.
+// Key format: `${ats_type}:${ats_identifier}` (lowercase).
+const KNOWN_DOMAIN_OVERRIDES_BY_ATS: Record<string, string> = {
+  "greenhouse:rocketlab": "rocketlabusa.com",
+  "greenhouse:testlio": "testlio.com",
+  "greenhouse:tecovas": "tecovas.com",
+  "smartrecruiters:intuitive": "intuitiveautonomy.com",
+  "smartrecruiters:redbull": "redbull.com",
+  "smartrecruiters:devexperts": "devexperts.com",
+  "smartrecruiters:uncommonschools": "uncommonschools.org",
+  "greenhouse:formic": "formiclabs.io",
+  "greenhouse:toast": "toastent.com",
+  "ashby:constructor": "constructor.io",
+  "workday:usnh:wd5:careers": "usnh.edu",
+  "workday:abb:wd3:external_career_page": "abb.com",
+}
+
+// Name fallback when ATS identifiers drift or change case.
+const KNOWN_DOMAIN_OVERRIDES_BY_NAME: Record<string, string> = {
+  rocketlab: "rocketlabusa.com",
+  testlio: "testlio.com",
+  tecovas: "tecovas.com",
+  devexperts: "devexperts.com",
+  uncommonschools: "uncommonschools.org",
+  pelotontechnology: "peloton-tech.com",
+  intuitiveautonomy: "intuitiveautonomy.com",
+  usnh: "usnh.edu",
+  redbull: "redbull.com",
+  abb: "abb.com",
+  formiclabs: "formiclabs.io",
+  toastentertainment: "toastent.com",
+  constructor: "constructor.io",
+}
+
 function readJsonl<T>(p: string): T[] {
   if (!fs.existsSync(p)) {
     console.error(`Missing input: ${p}`)
@@ -73,6 +107,29 @@ function cleanName(name: string): string {
 
 function normalizeName(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]/g, "")
+}
+
+function normalizeDomain(value: string | null | undefined): string {
+  return (value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, "")
+    .replace(/^www\./, "")
+    .split("/")[0]!
+}
+
+function preferredDomain(hit: Hit): string | null {
+  const explicit = normalizeDomain(hit.domain)
+  if (explicit) return explicit
+
+  const atsKey = `${hit.ats_type}:${hit.ats_identifier}`.toLowerCase()
+  const byAts = normalizeDomain(KNOWN_DOMAIN_OVERRIDES_BY_ATS[atsKey] ?? null)
+  if (byAts) return byAts
+
+  const byName = normalizeDomain(
+    KNOWN_DOMAIN_OVERRIDES_BY_NAME[normalizeName(cleanName(hit.name))] ?? null
+  )
+  return byName || null
 }
 
 async function main() {
@@ -102,7 +159,9 @@ async function main() {
   //  - by normalized name → if a company is already in the DB under its real
   //    domain (e.g. cloudflare.com), we UPDATE that row with the ATS instead
   //    of inserting a new placeholder.
-  const candidateDomains = unique.map((h) => h.domain).filter((d): d is string => !!d)
+  const candidateDomains = unique
+    .map((h) => preferredDomain(h))
+    .filter((d): d is string => !!d)
   const candidatePlaceholders = unique.map((h) => placeholderDomain(h))
   const candidateNames = [...new Set(unique.map((h) => normalizeName(cleanName(h.name))))].filter(Boolean)
 
@@ -131,15 +190,19 @@ async function main() {
   type Plan = { hit: Hit; action: "skip-ats" | "skip-domain" | "update-by-name" | "insert" ; existing?: { id: string; name: string; domain: string; ats_type: string | null } ; domain: string }
   const plans: Plan[] = []
   for (const h of unique) {
+    const resolvedDomain = preferredDomain(h)
     const atsKey = `${h.ats_type}:${h.ats_identifier}`
-    if (atsTaken.has(atsKey)) { plans.push({ hit: h, action: "skip-ats", domain: h.domain ?? placeholderDomain(h) }); continue }
+    if (atsTaken.has(atsKey)) {
+      plans.push({ hit: h, action: "skip-ats", domain: resolvedDomain ?? placeholderDomain(h) })
+      continue
+    }
     const nameKey = normalizeName(cleanName(h.name))
     const byName = nameKey ? nameToExisting.get(nameKey) : undefined
     if (byName && !byName.ats_type) {
       plans.push({ hit: h, action: "update-by-name", existing: byName, domain: byName.domain })
       continue
     }
-    const d = h.domain ?? placeholderDomain(h)
+    const d = resolvedDomain ?? placeholderDomain(h)
     if (domainTaken.has(d)) { plans.push({ hit: h, action: "skip-domain", domain: d }); continue }
     plans.push({ hit: h, action: "insert", domain: d })
   }
@@ -158,7 +221,7 @@ async function main() {
       const h = p.hit
       const tag = p.action === "update-by-name"
         ? `UPDATE existing (${p.existing!.domain})`
-        : h.domain ? "INSERT (real)" : "INSERT (placeholder)"
+        : p.domain.endsWith(".ats-placeholder") ? "INSERT (placeholder)" : "INSERT (real)"
       console.log(`  [${h.ats_type.padEnd(15)}] ${cleanName(h.name).padEnd(28)} ${tag.padEnd(38)} jobs=${h.jobs_count}`)
     }
     console.log(`\nDry run only. Re-run with --execute to write.`)
@@ -170,21 +233,24 @@ async function main() {
   let updated = 0
   for (const p of todo) {
     const h = p.hit
+    const resolvedDomain = preferredDomain(h)
+    const resolvedLogo = resolvedDomain ? companyLogoUrlFromDomain(resolvedDomain) : null
     if (p.action === "update-by-name") {
       const res = await pool.query(
         `UPDATE companies
             SET ats_type       = $1,
                 ats_identifier = $2,
                 careers_url    = COALESCE(careers_url, $3),
+                logo_url       = COALESCE(logo_url, $4),
                 is_active      = true
-          WHERE id = $4
+          WHERE id = $5
             AND (ats_type IS NULL OR ats_type = 'custom')`,
-        [h.ats_type, h.ats_identifier, h.board_url, p.existing!.id]
+        [h.ats_type, h.ats_identifier, h.board_url, resolvedLogo, p.existing!.id]
       )
       if (res.rowCount && res.rowCount > 0) updated++
     } else {
       const domain = p.domain
-      const logo = h.domain ? companyLogoUrlFromDomain(h.domain, "google-favicon") : null
+      const logo = resolvedLogo
       const res = await pool.query(
         `INSERT INTO companies
            (name, domain, careers_url, logo_url, ats_type, ats_identifier,

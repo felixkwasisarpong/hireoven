@@ -5,6 +5,7 @@ import { createPortal } from "react-dom"
 import { AlertTriangle, Check, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { getMatchVerdict } from "@/lib/jobs/match-score-display"
+import { resolveSkillsFactorValue, type ScoreFactorComputationState } from "@/lib/matching/score-factor-state"
 import type { JobMatchScore } from "@/types"
 
 type Dimension = {
@@ -12,6 +13,7 @@ type Dimension = {
   value: number | null
   weight: number
   hint?: string
+  state?: ScoreFactorComputationState
 }
 
 function clamp(value: number, lo: number, hi: number) {
@@ -48,12 +50,13 @@ function ConfidenceTag({ confidence }: { confidence: string | null }) {
 
 function DimensionBar({ dim }: { dim: Dimension }) {
   const pct = dim.value == null ? 0 : clamp(dim.value, 0, 100)
+  const notComputed = (dim.state ?? (dim.value == null ? "not_computed" : "computed")) === "not_computed"
   return (
     <div className="space-y-1">
       <div className="flex items-baseline justify-between text-[11px]">
         <span className="font-semibold text-slate-700">{dim.label}</span>
         <span className="tabular-nums text-slate-500">
-          {dim.value == null ? "—" : `${pct}`}
+          {notComputed ? "Not computed" : `${pct}`}
           <span className="ml-1 text-slate-400">· {Math.round(dim.weight * 100)}%</span>
         </span>
       </div>
@@ -93,9 +96,10 @@ function BreakdownPanel({ score, onClose, onSeeFullAnalysis }: BreakdownPanelPro
   const breakdown = score.score_breakdown ?? null
   const overall = score.overall_score
   const verdict = getMatchVerdict(overall)
+  const skillsFactor = resolveSkillsFactorValue({ fastScore: score })
 
   const dimensions: Dimension[] = [
-    { label: "Skills", value: score.skills_score, weight: 0.45 },
+    { label: "Skills", value: skillsFactor.value, weight: 0.45, state: skillsFactor.state },
     { label: "Experience", value: score.seniority_score, weight: 0.22 },
     { label: "Title fit", value: score.role_fit_score, weight: 0.1 },
     { label: "Education", value: score.education_score, weight: 0.1 },

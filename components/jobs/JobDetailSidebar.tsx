@@ -5,6 +5,7 @@ import Link from "next/link"
 import { ArrowRight, CheckCircle2, Info } from "lucide-react"
 import { useResumeContext } from "@/components/resume/ResumeProvider"
 import { useResumeAnalysis } from "@/lib/hooks/useResumeAnalysis"
+import { resolveSkillsFactorValue, type ScoreFactorComputationState } from "@/lib/matching/score-factor-state"
 import type { JobMatchScore } from "@/types"
 
 type Props = {
@@ -85,12 +86,23 @@ function verdictLabel(score: number | null): string {
   return "Low match"
 }
 
-function FactorRow({ label, description, value }: { label: string; description: string; value: number | null }) {
+function FactorRow({
+  label,
+  description,
+  value,
+  state,
+}: {
+  label: string
+  description: string
+  value: number | null
+  state: ScoreFactorComputationState
+}) {
   const pct = value == null ? null : clamp(value)
+  const notComputed = state === "not_computed"
   return (
     <li className="flex items-start gap-3">
       <CheckCircle2
-        className={`mt-0.5 h-[18px] w-[18px] shrink-0 ${pct == null ? "text-slate-300" : "text-emerald-500"}`}
+        className={`mt-0.5 h-[18px] w-[18px] shrink-0 ${notComputed ? "text-slate-300" : "text-emerald-500"}`}
         strokeWidth={2}
         aria-hidden
       />
@@ -98,7 +110,7 @@ function FactorRow({ label, description, value }: { label: string; description: 
         <div className="flex items-baseline justify-between gap-2">
           <span className="text-[13px] font-semibold text-slate-900">{label}</span>
           <span className="shrink-0 text-[13px] font-semibold text-slate-700 tabular-nums">
-            {pct == null ? "—" : `${pct}%`}
+            {notComputed ? "Not computed" : pct == null ? "—" : `${pct}%`}
           </span>
         </div>
         <p className="mt-0.5 text-[12px] leading-snug text-slate-500">{description}</p>
@@ -141,23 +153,33 @@ export default function JobDetailSidebar({ jobId, initialMatchScore }: Props) {
 
   const overall = analysis?.overall_score ?? fastScore?.overall_score ?? null
   const hasDeepRoleFit = analysis?.keywords_score != null
+  const skillsFactor = resolveSkillsFactorValue({
+    analysis: analysis ?? null,
+    fastScore: fastScore ?? null,
+  })
 
   const factors = useMemo(() => {
     return [
       {
         label: "Skills match",
         description: "Your top skills align strongly with this job.",
-        value: analysis?.skills_score ?? fastScore?.skills_score ?? null,
+        value: skillsFactor.value,
+        state: skillsFactor.state as ScoreFactorComputationState,
       },
       {
         label: "Experience",
         description: "Your experience level matches what they're looking for.",
         value: analysis?.experience_score ?? fastScore?.seniority_score ?? null,
+        state:
+          (analysis?.experience_score ?? fastScore?.seniority_score) == null
+            ? ("not_computed" as const)
+            : ("computed" as const),
       },
       {
         label: "Education",
         description: "Your education matches the job requirements.",
         value: analysis?.education_score ?? null,
+        state: analysis?.education_score == null ? ("not_computed" as const) : ("computed" as const),
       },
       {
         label: hasDeepRoleFit ? "Job role fit" : "Authorization fit",
@@ -165,9 +187,13 @@ export default function JobDetailSidebar({ jobId, initialMatchScore }: Props) {
           ? "Your profile keywords align with this role."
           : "This reflects sponsorship and work authorization compatibility.",
         value: hasDeepRoleFit ? (analysis?.keywords_score ?? null) : (fastScore?.sponsorship_score ?? null),
+        state:
+          (hasDeepRoleFit ? analysis?.keywords_score : fastScore?.sponsorship_score) == null
+            ? ("not_computed" as const)
+            : ("computed" as const),
       },
     ]
-  }, [analysis, fastScore, hasDeepRoleFit])
+  }, [analysis, fastScore, hasDeepRoleFit, skillsFactor.state, skillsFactor.value])
 
   return (
     <aside className="rounded-2xl bg-white p-5 shadow-[0_1px_3px_rgba(15,23,42,0.06)] sm:p-6">

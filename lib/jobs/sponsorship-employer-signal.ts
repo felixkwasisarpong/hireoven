@@ -1,4 +1,5 @@
 import type { Company, Job } from "@/types"
+import { isStaffingIntermediaryListing } from "@/lib/jobs/hiring-entity"
 
 /** Job row plus joined company (nullable when join missing). */
 export type EmployerSponsorshipJobInput = Job & { company?: Company | null }
@@ -29,14 +30,17 @@ export function coercedSponsorshipPercent(value: unknown): number {
 }
 
 export function effectiveEmployerSponsorshipScore(job: EmployerSponsorshipJobInput): number {
+  const staffingIntermediary = isStaffingIntermediaryListing({ rawData: job.raw_data })
   const jobScore = coercedSponsorshipPercent(job.sponsorship_score)
-  const companyConf = job.company
+  const companyConf = !staffingIntermediary && job.company
     ? coercedSponsorshipPercent(job.company.sponsorship_confidence)
     : 0
   return Math.max(jobScore, companyConf)
 }
 
 export function employerLikelySponsorsH1b(job: EmployerSponsorshipJobInput): boolean {
+  const staffingIntermediary = isStaffingIntermediaryListing({ rawData: job.raw_data })
+  if (staffingIntermediary) return Boolean(job.sponsors_h1b)
   return Boolean(job.sponsors_h1b) || Boolean(job.company?.sponsors_h1b)
 }
 
@@ -83,6 +87,7 @@ export function resolveH1BSponsorshipDisplay(
   job: EmployerSponsorshipJobInput,
   options?: { visaCardLabel?: SponsorshipVisaCardLabel }
 ): H1BSponsorshipDisplay | null {
+  const staffingIntermediary = isStaffingIntermediaryListing({ rawData: job.raw_data })
   const resolvedVisaLabel = options?.visaCardLabel ?? deriveVisaCardLabel(job)
   const blockedByPosting = resolvedVisaLabel === "No sponsorship" || job.requires_authorization === true
   if (blockedByPosting) {
@@ -95,8 +100,12 @@ export function resolveH1BSponsorshipDisplay(
     }
   }
 
-  const count1yr = Math.max(0, Number(job.company?.h1b_sponsor_count_1yr ?? 0))
-  const count3yr = Math.max(0, Number(job.company?.h1b_sponsor_count_3yr ?? 0))
+  const count1yr = staffingIntermediary
+    ? 0
+    : Math.max(0, Number(job.company?.h1b_sponsor_count_1yr ?? 0))
+  const count3yr = staffingIntermediary
+    ? 0
+    : Math.max(0, Number(job.company?.h1b_sponsor_count_3yr ?? 0))
   const score = effectiveEmployerSponsorshipScore(job)
   const hasJobTextSignal = resolvedVisaLabel === "Sponsors" || resolvedVisaLabel === "Historical sponsorship signal"
   const hasSponsorSignal = employerLikelySponsorsH1b(job) || hasJobTextSignal || count1yr > 0 || count3yr > 0 || score >= 50
@@ -117,6 +126,8 @@ export function resolveH1BSponsorshipDisplay(
   const sourceLabel =
     count1yr > 0
       ? formatH1bPetitionCount(count1yr)
+      : staffingIntermediary && hasJobTextSignal
+        ? "from job description"
       : score > 0
         ? `${score}% confidence`
         : hasJobTextSignal

@@ -8,7 +8,12 @@ import BillingToggle from "@/components/pricing/BillingToggle"
 import PricingCard from "@/components/pricing/PricingCard"
 import FeatureRow from "@/components/pricing/FeatureRow"
 import TestimonialCard from "@/components/pricing/TestimonialCard"
-import { getSignupUrl, type BillingInterval, type PlanKey } from "@/lib/pricing"
+import {
+  PLAN_COMPARISON_ROWS,
+  getSignupUrl,
+  type BillingInterval,
+  type PlanKey,
+} from "@/lib/pricing"
 import { useAuth } from "@/lib/hooks/useAuth"
 import { useSubscription } from "@/lib/hooks/useSubscription"
 import { useFeatureFlags } from "@/lib/hooks/useFeatureFlags"
@@ -48,55 +53,6 @@ const FAQ_ITEMS = [
     q: "How do you get job listings so fast?",
     a: "We monitor thousands of company career pages every 30 minutes and detect new postings within minutes. Most jobs appear on Hireoven hours or days before they show up on LinkedIn or Indeed.",
   },
-]
-
-// ─── Comparison table data ────────────────────────────────────────────────────
-
-const COMPARISON_ROWS: Array<{
-  feature: string
-  free: boolean | string | number
-  pro: boolean | string | number
-  proMax: boolean | string | number
-  tooltip?: string
-  isGroupHeader?: boolean
-}> = [
-  { feature: "Job discovery", free: "", pro: "", proMax: "", isGroupHeader: true },
-  { feature: "Real-time feed + freshness scores", free: true, pro: true, proMax: true },
-  { feature: "H1B badge on every listing", free: true, pro: true, proMax: true },
-  { feature: "Match scores", free: "Requires resume", pro: true, proMax: true, tooltip: "AI-powered match score based on your resume and preferences" },
-  { feature: "Company watchlist", free: "5 max", pro: "Unlimited", proMax: "Unlimited" },
-  { feature: "Job alerts", free: "3 max", pro: "Unlimited", proMax: "Unlimited" },
-
-  { feature: "Resume tools", free: "", pro: "", proMax: "", isGroupHeader: true },
-  { feature: "Resume upload", free: "3 resumes", pro: "Unlimited", proMax: "Unlimited" },
-  { feature: "Gap analysis", free: false, pro: "20/mo", proMax: "Unlimited" },
-  { feature: "AI resume editor", free: false, pro: true, proMax: true },
-  { feature: "Cover letters", free: false, pro: "25/mo", proMax: "Unlimited" },
-  { feature: "Application autofill", free: "10/mo", pro: "50/mo", proMax: "Unlimited", tooltip: "Fill Greenhouse, Lever, and Ashby forms with one click" },
-
-  { feature: "International (profile-gated on Free)", free: "", pro: "", proMax: "", isGroupHeader: true },
-  { feature: "Sponsorship profiles + H1B badges", free: true, pro: true, proMax: true },
-  { feature: "Sponsorship likelihood score", free: true, pro: true, proMax: true },
-  { feature: "Visa language detection on every JD", free: true, pro: true, proMax: true },
-  { feature: "H1B petition history (3yr)", free: true, pro: true, proMax: true },
-  { feature: "OPT countdown + offer risk analyzer", free: "Intl. profile", pro: true, proMax: true },
-  { feature: "OPT urgency routing", free: "Intl. profile", pro: true, proMax: true, tooltip: "Jobs sorted by sponsorship speed when your OPT deadline is close" },
-  { feature: "Priority alerts from sponsoring companies", free: "Intl. profile", pro: true, proMax: true },
-
-  { feature: "Scout AI", free: "", pro: "", proMax: "", isGroupHeader: true },
-  { feature: "Scout chat", free: "5/day", pro: "30/day", proMax: "60/day" },
-  { feature: "Resume tailoring & actions", free: false, pro: true, proMax: true },
-  { feature: "Deep resume analysis", free: false, pro: "20/mo", proMax: "Unlimited" },
-  { feature: "Scout strategy & cohort insights", free: false, pro: false, proMax: true },
-
-  { feature: "Interviews", free: "", pro: "", proMax: "", isGroupHeader: true },
-  { feature: "Text + coding interviews", free: false, pro: true, proMax: true },
-  { feature: "Interview debrief with AI feedback", free: false, pro: true, proMax: true },
-  { feature: "Live voice + webcam interview", free: false, pro: false, proMax: "2 sessions/mo", tooltip: "$12 / 30-min · $20 / 60-min. Buy extra session packs anytime." },
-
-  { feature: "Applications", free: "", pro: "", proMax: "", isGroupHeader: true },
-  { feature: "Application tracker + kanban", free: true, pro: true, proMax: true },
-  { feature: "AI interview prep", free: false, pro: true, proMax: true },
 ]
 
 // ─── FAQ accordion item ───────────────────────────────────────────────────────
@@ -277,7 +233,7 @@ export default function PricingPage() {
                 </tr>
               </thead>
               <tbody>
-                {COMPARISON_ROWS.map((row, i) => (
+                {PLAN_COMPARISON_ROWS.map((row, i) => (
                   <FeatureRow key={i} {...row} />
                 ))}
               </tbody>

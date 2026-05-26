@@ -254,7 +254,7 @@ function ModeCard({
   )
 }
 
-function LiveCard({ credits }: { credits: CreditInfo }) {
+function LiveCard({ credits, isProMax }: { credits: CreditInfo; isProMax: boolean }) {
   const s = MODE_STYLES.live
   const balance = credits?.balance ?? 0
   const hasSessions = balance >= 1
@@ -291,7 +291,9 @@ function LiveCard({ credits }: { credits: CreditInfo }) {
       )}
 
       <p className="mt-2 text-center text-[10px] text-slate-500">
-        $12 / 30-min · $20 / 60-min
+        {isProMax
+          ? "Pro Max includes 1 free credit every 28 days · extras: $12 / 30-min · $20 / 60-min"
+          : "$12 / 30-min · $20 / 60-min"}
       </p>
     </ModeCard>
   )
@@ -352,18 +354,7 @@ export default function InterviewHubCards() {
         />
       )}
 
-      {isProMax ? (
-        <LiveCard credits={credits} />
-      ) : (
-        <LockedCard
-          icon={Video}
-          mode="live"
-          label="Live Interview"
-          tagline="Voice + webcam. Real pressure"
-          description="Speak your answers, hold eye contact, and train in a room that feels close to the real panel."
-          requiredPlan="pro_max"
-        />
-      )}
+      <LiveCard credits={credits} isProMax={isProMax} />
 
       {isPro ? (
         <ModeCard

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getPostgresPool } from "@/lib/postgres/server"
 import type { WatchlistWithCompany } from "@/types"
+import { listWatchlistWithCompany } from "@/lib/watchlist/store"
 
 export const runtime = "nodejs"
 
@@ -11,16 +12,8 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const pool = getPostgresPool()
-  const result = await pool.query<WatchlistWithCompany>(
-    `SELECT w.*, to_jsonb(c.*) AS company
-     FROM watchlist w
-     LEFT JOIN companies c ON c.id = w.company_id
-     WHERE w.user_id = $1
-     ORDER BY w.created_at DESC`,
-    [user.id]
-  )
-
-  return NextResponse.json({ watchlist: result.rows })
+  const { rows } = await listWatchlistWithCompany({ db: pool, userId: user.id })
+  return NextResponse.json({ watchlist: rows })
 }
 
 export async function POST(request: NextRequest) {

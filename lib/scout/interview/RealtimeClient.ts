@@ -32,6 +32,7 @@ export type VoiceTimings = {
 }
 
 const REALTIME_CALLS_URL = "https://api.openai.com/v1/realtime/calls"
+const DISCONNECTED_GRACE_MS = 8_000
 
 export class RealtimeClient extends EventTarget {
   private ephemeralToken: string
@@ -39,6 +40,8 @@ export class RealtimeClient extends EventTarget {
   private pc: RTCPeerConnection | null = null
   private dc: RTCDataChannel | null = null
   private agentAudioEl: HTMLAudioElement | null = null
+  private disconnectedTimer: ReturnType<typeof setTimeout> | null = null
+  private closedEmitted = false
 
   // Transcript accumulation
   readonly events: TranscriptEvent[] = []
@@ -62,8 +65,33 @@ export class RealtimeClient extends EventTarget {
     this.dispatchEvent(new CustomEvent(type, { detail } as any))
   }
 
+  private clearDisconnectedTimer() {
+    if (this.disconnectedTimer) {
+      clearTimeout(this.disconnectedTimer)
+      this.disconnectedTimer = null
+    }
+  }
+
+  private emitClosedOnce() {
+    if (this.closedEmitted) return
+    this.closedEmitted = true
+    this.emit("connection.closed")
+  }
+
+  private scheduleDisconnectedClose() {
+    this.clearDisconnectedTimer()
+    this.disconnectedTimer = setTimeout(() => {
+      const state = this.pc?.connectionState
+      if (state === "connected" || state === "connecting") return
+      this.emit("connection.error", { error: "WebRTC connection disconnected" })
+      this.emitClosedOnce()
+    }, DISCONNECTED_GRACE_MS)
+  }
+
   async connect(localStream: MediaStream): Promise<void> {
     this.sessionStartMs = Date.now()
+    this.closedEmitted = false
+    this.clearDisconnectedTimer()
 
     // 1. Create peer connection
     this.pc = new RTCPeerConnection()
@@ -77,12 +105,22 @@ export class RealtimeClient extends EventTarget {
     // 3. Create data channel
     this.dc = this.pc.createDataChannel("oai-events")
     this.dc.onmessage = (e) => this.handleDataMessage(e.data)
-    this.dc.onopen = () => this.emit("connection.ready")
+    this.dc.onopen = () => {
+      this.clearDisconnectedTimer()
+      this.emit("connection.ready")
+    }
     this.dc.onerror = (e) => {
       const msg = (e as RTCErrorEvent).error?.message ?? "Data channel error"
       this.emit("connection.error", { error: msg })
     }
-    this.dc.onclose = () => this.emit("connection.closed")
+    this.dc.onclose = () => {
+      const state = this.pc?.connectionState
+      if (state === "disconnected") {
+        this.scheduleDisconnectedClose()
+        return
+      }
+      this.emitClosedOnce()
+    }
 
     // 4. Handle incoming agent audio
     this.pc.ontrack = (event) => {
@@ -98,8 +136,26 @@ export class RealtimeClient extends EventTarget {
     }
 
     this.pc.onconnectionstatechange = () => {
-      if (this.pc?.connectionState === "failed" || this.pc?.connectionState === "disconnected") {
-        this.emit("connection.error", { error: `WebRTC connection ${this.pc.connectionState}` })
+      const state = this.pc?.connectionState
+      if (state === "connected" || state === "connecting") {
+        this.clearDisconnectedTimer()
+        return
+      }
+      if (state === "disconnected") {
+        // `disconnected` is often transient on unstable networks; allow a grace
+        // window before surfacing an end-of-call error.
+        this.scheduleDisconnectedClose()
+        return
+      }
+      if (state === "failed") {
+        this.clearDisconnectedTimer()
+        this.emit("connection.error", { error: "WebRTC connection failed" })
+        this.emitClosedOnce()
+        return
+      }
+      if (state === "closed") {
+        this.clearDisconnectedTimer()
+        this.emitClosedOnce()
       }
     }
 
@@ -267,6 +323,7 @@ export class RealtimeClient extends EventTarget {
   }
 
   async disconnect(): Promise<void> {
+    this.clearDisconnectedTimer()
     try { this.dc?.close() } catch { /* ignore */ }
     try {
       this.pc?.getSenders().forEach((s) => { try { s.track?.stop() } catch { /* ignore */ } })
@@ -281,6 +338,6 @@ export class RealtimeClient extends EventTarget {
     } catch { /* ignore */ }
     this.dc = null
     this.pc = null
-    this.emit("connection.closed")
+    this.emitClosedOnce()
   }
 }

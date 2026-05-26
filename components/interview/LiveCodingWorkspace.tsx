@@ -37,16 +37,28 @@ type PublicProblem = {
   tags: string[]
 }
 
-type SessionMeta = {
+export type SessionMeta = {
   persona: string
   questionSet: string
   status: string
   durationTargetMin: number
   jobId: string | null
   startedAt: string | null
+  metadata?: { practice_focus?: { observation: string } | null }
+}
+
+export type JobInfo = { title: string; company: string | null }
+
+export type LiveCodingWorkspaceProps = {
+  sessionId: string
+  initialLoaded?: boolean
+  initialSession?: SessionMeta | null
+  initialJobInfo?: JobInfo | null
 }
 
 type Phase = "permission" | "loading" | "connecting" | "live" | "ended"
+const MAX_AUTO_RECONNECTS = 1
+const RECONNECT_DELAY_MS = 2500
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -58,12 +70,19 @@ function computeRemaining(startedAt: string | null, targetMin: number): number {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function LiveCodingWorkspace({ sessionId }: { sessionId: string }) {
+export default function LiveCodingWorkspace({
+  sessionId,
+  initialLoaded = false,
+  initialSession = null,
+  initialJobInfo = null,
+}: LiveCodingWorkspaceProps) {
   const router = useRouter()
 
   // Phase
   const [phase, setPhase] = useState<Phase>("permission")
   const [connectError, setConnectError] = useState<string | null>(null)
+  const [reconnectCountdownSec, setReconnectCountdownSec] = useState<number | null>(null)
+  const [reconnectAttemptUi, setReconnectAttemptUi] = useState(0)
 
   // Voice
   const [localStream, setLocalStream] = useState<MediaStream | null>(null)
@@ -73,14 +92,20 @@ export default function LiveCodingWorkspace({ sessionId }: { sessionId: string }
   const clientRef = useRef<RealtimeClient | null>(null)
   const partialAgentIdRef = useRef<string | null>(null)
   const recoveryKeyRef = useRef(`interview-recovery-${sessionId}`)
+  const reconnectAttemptsRef = useRef(0)
+  const reconnectInFlightRef = useRef(false)
+  const sessionEndingRef = useRef(false)
+  const reconnectDelayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const reconnectCountdownTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // Coding state
-  const [session, setSession] = useState<SessionMeta | null>(null)
+  const [session, setSession] = useState<SessionMeta | null>(initialSession)
   const [problem, setProblem] = useState<PublicProblem | null>(null)
-  const [jobInfo, setJobInfo] = useState<{ title: string; company: string | null } | null>(null)
+  const [jobInfo, setJobInfo] = useState<JobInfo | null>(initialJobInfo)
   const [code, setCode] = useState("")
   const [language, setLanguage] = useState<"python" | "javascript">("python")
-  const [sessionStatus, setSessionStatus] = useState("setup")
+  const [sessionStatus, setSessionStatus] = useState(initialSession?.status ?? "setup")
+  const sessionStatusRef = useRef(initialSession?.status ?? "setup")
   const [hiddenTests, setHiddenTests] = useState<{ input: unknown[]; expected: unknown; weight: number }[]>([])
   const [fnNames, setFnNames] = useState({ python: "solution", javascript: "solution" })
   const [slug, setSlug] = useState("")
@@ -94,7 +119,9 @@ export default function LiveCodingWorkspace({ sessionId }: { sessionId: string }
   const runnerRef = useRef<CodingRunner | null>(null)
 
   // Timer
-  const [remainingSec, setRemainingSec] = useState(0)
+  const [remainingSec, setRemainingSec] = useState(
+    initialSession ? computeRemaining(initialSession.startedAt, initialSession.durationTargetMin) : 0
+  )
 
   // Flags
   const autoEndFiredRef = useRef(false)
@@ -108,6 +135,18 @@ export default function LiveCodingWorkspace({ sessionId }: { sessionId: string }
   const [showEndConfirm, setShowEndConfirm] = useState(false)
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const isSubmittingRef = useRef(false)
+
+  const clearReconnectTimers = useCallback(() => {
+    if (reconnectDelayTimerRef.current) {
+      clearTimeout(reconnectDelayTimerRef.current)
+      reconnectDelayTimerRef.current = null
+    }
+    if (reconnectCountdownTimerRef.current) {
+      clearInterval(reconnectCountdownTimerRef.current)
+      reconnectCountdownTimerRef.current = null
+    }
+  }, [])
 
   // ── Init runner ────────────────────────────────────────────────────────────
   const initRunner = useCallback(async (lang: CodingLanguage) => {
@@ -125,12 +164,200 @@ export default function LiveCodingWorkspace({ sessionId }: { sessionId: string }
       runnerRef.current?.terminate()
       if (snapshotIntervalRef.current) clearInterval(snapshotIntervalRef.current)
       if (codeVoiceSyncRef.current) clearInterval(codeVoiceSyncRef.current)
+      clearReconnectTimers()
     }
-  }, [])
+  }, [clearReconnectTimers])
+
+  useEffect(() => {
+    sessionStatusRef.current = sessionStatus
+  }, [sessionStatus])
+
+  useEffect(() => {
+    isSubmittingRef.current = isSubmitting
+  }, [isSubmitting])
+
+  // ── Load session metadata (fallback when server preload is unavailable) ───
+  useEffect(() => {
+    if (initialLoaded) return
+
+    async function loadSession() {
+      const res = await fetch(`/api/interview/sessions/${sessionId}`)
+      if (!res.ok) return
+      const data = await res.json()
+      if (!data.session) return
+
+      const s = data.session as SessionMeta
+      setSession(s)
+      setSessionStatus(s.status)
+      if (data.session?.jobTitle) {
+        setJobInfo({ title: data.session.jobTitle, company: data.session.jobCompany })
+      }
+    }
+
+    void loadSession()
+  }, [initialLoaded, sessionId])
+
+  const fetchRealtimeToken = useCallback(async (): Promise<{ token: string | null; error: string | null }> => {
+    const tokenRes = await fetch(`/api/interview/sessions/${sessionId}/realtime-token`, { method: "POST" })
+    const tokenRaw = await tokenRes.text()
+    let tokenData: { ephemeralToken?: string; error?: string } = {}
+    try {
+      tokenData = JSON.parse(tokenRaw) as { ephemeralToken?: string; error?: string }
+    } catch {
+      tokenData = { error: tokenRaw }
+    }
+    if (!tokenRes.ok) return { token: null, error: tokenData.error ?? "Voice connection failed" }
+    if (!tokenData.ephemeralToken) return { token: null, error: "Voice token missing." }
+    return { token: tokenData.ephemeralToken, error: null }
+  }, [sessionId])
+
+  const connectVoiceClient = useCallback(async (
+    stream: MediaStream,
+    opts?: { reconnect?: boolean }
+  ): Promise<void> => {
+    const reconnect = opts?.reconnect === true
+    if (reconnect && reconnectInFlightRef.current) return
+    if (reconnect) {
+      reconnectInFlightRef.current = true
+      setConnectError("Voice disconnected. Reconnecting…")
+      setPhase("connecting")
+    } else {
+      clearReconnectTimers()
+      reconnectAttemptsRef.current = 0
+      reconnectInFlightRef.current = false
+      setReconnectAttemptUi(0)
+      setReconnectCountdownSec(null)
+    }
+
+    const token = await fetchRealtimeToken()
+    if (!token.token) {
+      reconnectInFlightRef.current = false
+      clearReconnectTimers()
+      setReconnectCountdownSec(null)
+      setConnectError(
+        reconnect
+          ? `Voice reconnect failed: ${token.error ?? "Unknown error"}. Continuing without voice.`
+          : token.error ?? "Voice connection failed — coding without voice"
+      )
+      setPhase("live")
+      return
+    }
+
+    const client = new RealtimeClient({ ephemeralToken: token.token })
+    clientRef.current = client
+    const isCurrentClient = () => clientRef.current === client
+
+    client.addEventListener("agent.speaking.start", () => {
+      if (!isCurrentClient()) return
+      setIsAgentSpeaking(true)
+    })
+    client.addEventListener("agent.speaking.end", () => {
+      if (!isCurrentClient()) return
+      setIsAgentSpeaking(false)
+    })
+
+    client.addEventListener("agent.transcript.delta", (e) => {
+      if (!isCurrentClient()) return
+      const { text } = (e as CustomEvent<{ text: string }>).detail
+      setCaptions((prev) => {
+        const pid = partialAgentIdRef.current
+        if (pid) return prev.map((c) => c.id === pid ? { ...c, content: c.content + text } : c)
+        const newId = `agent-${Date.now()}`
+        partialAgentIdRef.current = newId
+        return [...prev, { id: newId, role: "interviewer", content: text, partial: true }]
+      })
+    })
+
+    client.addEventListener("agent.transcript.completed", (e) => {
+      if (!isCurrentClient()) return
+      const { text } = (e as CustomEvent<{ text: string; startMs: number; endMs: number }>).detail
+      const pid = partialAgentIdRef.current
+      setCaptions((prev) => {
+        if (pid) {
+          partialAgentIdRef.current = null
+          return prev.map((c) => c.id === pid ? { ...c, content: text, partial: false } : c)
+        }
+        return [...prev, { id: `agent-${Date.now()}`, role: "interviewer", content: text }]
+      })
+    })
+
+    client.addEventListener("user.transcript.completed", (e) => {
+      if (!isCurrentClient()) return
+      const { text } = (e as CustomEvent<{ text: string }>).detail
+      setCaptions((prev) => [...prev, { id: `user-${Date.now()}`, role: "candidate", content: text }])
+    })
+
+    client.addEventListener("connection.ready", () => {
+      if (!isCurrentClient()) return
+      reconnectInFlightRef.current = false
+      clearReconnectTimers()
+      setReconnectCountdownSec(null)
+      setConnectError(null)
+      setPhase("live")
+      if (!reconnect) {
+        void client.sendSystemNote("BEGIN_CODING_INTERVIEW")
+      }
+    })
+
+    client.addEventListener("connection.error", (e) => {
+      if (!isCurrentClient()) return
+      const { error } = (e as CustomEvent<{ error: string }>).detail
+      setConnectError(error)
+    })
+
+    client.addEventListener("connection.closed", () => {
+      if (!isCurrentClient()) return
+      if (sessionEndingRef.current || isSubmittingRef.current) return
+      const status = sessionStatusRef.current
+      if (status === "completed" || status === "abandoned") return
+      if (reconnectAttemptsRef.current < MAX_AUTO_RECONNECTS && !reconnectInFlightRef.current) {
+        reconnectAttemptsRef.current += 1
+        setReconnectAttemptUi(reconnectAttemptsRef.current)
+        setReconnectCountdownSec(Math.ceil(RECONNECT_DELAY_MS / 1000))
+        setConnectError("Voice disconnected. Attempting to reconnect…")
+        clearReconnectTimers()
+        reconnectCountdownTimerRef.current = setInterval(() => {
+          setReconnectCountdownSec((prev) => {
+            if (prev === null) return null
+            return prev > 1 ? prev - 1 : 1
+          })
+        }, 1000)
+        reconnectDelayTimerRef.current = setTimeout(() => {
+          clearReconnectTimers()
+          setReconnectCountdownSec(null)
+          void connectVoiceClient(stream, { reconnect: true })
+        }, RECONNECT_DELAY_MS)
+        return
+      }
+      reconnectInFlightRef.current = false
+      clearReconnectTimers()
+      setReconnectCountdownSec(null)
+      setConnectError("Voice disconnected and couldn't recover. You can continue coding and submit normally.")
+    })
+
+    try {
+      await client.connect(stream)
+    } catch (e) {
+      reconnectInFlightRef.current = false
+      clearReconnectTimers()
+      setReconnectCountdownSec(null)
+      const msg = e instanceof Error ? e.message : String(e)
+      setConnectError(
+        reconnect
+          ? `Voice reconnect failed: ${msg}. Continuing without voice.`
+          : `${msg}. Continuing coding without voice.`
+      )
+      setPhase("live")
+    }
+  }, [clearReconnectTimers, fetchRealtimeToken])
 
   // ── Start session (called after mic granted) ───────────────────────────────
   const startSession = useCallback(async (stream: MediaStream) => {
     setLocalStream(stream)
+    clearReconnectTimers()
+    sessionEndingRef.current = false
+    setReconnectAttemptUi(0)
+    setReconnectCountdownSec(null)
     setPhase("loading")
     setConnectError(null)
 
@@ -155,6 +382,20 @@ export default function LiveCodingWorkspace({ sessionId }: { sessionId: string }
       setSlug(p.slug)
       setHintsUsed(attempt.hintsUsed ?? 0)
       setRemainingSec(timeRemainingSec)
+      setSessionStatus("active")
+
+      // Keep session timer aligned without an extra metadata fetch.
+      setSession((prev) => {
+        if (!prev) return prev
+        const totalSec = prev.durationTargetMin * 60
+        const elapsedSec = Math.max(0, totalSec - Number(timeRemainingSec ?? totalSec))
+        const derivedStartedAt = new Date(Date.now() - elapsedSec * 1000).toISOString()
+        return {
+          ...prev,
+          status: "active",
+          startedAt: prev.startedAt ?? derivedStartedAt,
+        }
+      })
 
       const langRaw = (attempt.languageUsed as string) ?? "python"
       const lang: "python" | "javascript" = langRaw === "javascript" ? "javascript" : "python"
@@ -170,14 +411,15 @@ export default function LiveCodingWorkspace({ sessionId }: { sessionId: string }
       lastSnapshotCodeRef.current = savedCode
       lastVoiceCodeRef.current = savedCode
 
-      // Session metadata
-      const sessRes = await fetch(`/api/interview/sessions/${sessionId}`)
-      if (sessRes.ok) {
-        const sessData = await sessRes.json()
-        setSession(sessData.session)
-        setSessionStatus(sessData.session.status)
-        if (sessData.session.jobTitle) {
-          setJobInfo({ title: sessData.session.jobTitle, company: sessData.session.jobCompany })
+      // Fallback metadata fetch when not preloaded yet.
+      if (!session) {
+        const sessRes = await fetch(`/api/interview/sessions/${sessionId}`)
+        if (sessRes.ok) {
+          const sessData = await sessRes.json()
+          setSession(sessData.session)
+          if (sessData.session?.jobTitle) {
+            setJobInfo({ title: sessData.session.jobTitle, company: sessData.session.jobCompany })
+          }
         }
       }
 
@@ -194,74 +436,7 @@ export default function LiveCodingWorkspace({ sessionId }: { sessionId: string }
 
       // 2. Connect to Realtime API
       setPhase("connecting")
-
-      const tokenRes = await fetch(`/api/interview/sessions/${sessionId}/realtime-token`, { method: "POST" })
-      const tokenRaw = await tokenRes.text()
-      let tokenData: { ephemeralToken?: string; error?: string } = {}
-      try {
-        tokenData = JSON.parse(tokenRaw) as { ephemeralToken?: string; error?: string }
-      } catch {
-        tokenData = { error: tokenRaw }
-      }
-
-      if (!tokenRes.ok) {
-        // Voice failed — degrade gracefully to coding-only
-        setConnectError(tokenData.error ?? "Voice connection failed — coding without voice")
-        setPhase("live")
-        return
-      }
-
-      if (!tokenData.ephemeralToken) {
-        setConnectError("Voice token missing — continuing without voice.")
-        setPhase("live")
-        return
-      }
-
-      const client = new RealtimeClient({ ephemeralToken: tokenData.ephemeralToken })
-      clientRef.current = client
-
-      client.addEventListener("agent.speaking.start", () => setIsAgentSpeaking(true))
-      client.addEventListener("agent.speaking.end", () => setIsAgentSpeaking(false))
-
-      client.addEventListener("agent.transcript.delta", (e) => {
-        const { text } = (e as CustomEvent<{ text: string }>).detail
-        setCaptions((prev) => {
-          const pid = partialAgentIdRef.current
-          if (pid) return prev.map((c) => c.id === pid ? { ...c, content: c.content + text } : c)
-          const newId = `agent-${Date.now()}`
-          partialAgentIdRef.current = newId
-          return [...prev, { id: newId, role: "interviewer", content: text, partial: true }]
-        })
-      })
-
-      client.addEventListener("agent.transcript.completed", (e) => {
-        const { text } = (e as CustomEvent<{ text: string; startMs: number; endMs: number }>).detail
-        const pid = partialAgentIdRef.current
-        setCaptions((prev) => {
-          if (pid) {
-            partialAgentIdRef.current = null
-            return prev.map((c) => c.id === pid ? { ...c, content: text, partial: false } : c)
-          }
-          return [...prev, { id: `agent-${Date.now()}`, role: "interviewer", content: text }]
-        })
-      })
-
-      client.addEventListener("user.transcript.completed", (e) => {
-        const { text } = (e as CustomEvent<{ text: string }>).detail
-        setCaptions((prev) => [...prev, { id: `user-${Date.now()}`, role: "candidate", content: text }])
-      })
-
-      client.addEventListener("connection.ready", () => {
-        setPhase("live")
-        void client.sendSystemNote("BEGIN_CODING_INTERVIEW")
-      })
-
-      client.addEventListener("connection.error", (e) => {
-        const { error } = (e as CustomEvent<{ error: string }>).detail
-        setConnectError(error)
-      })
-
-      await client.connect(stream)
+      await connectVoiceClient(stream)
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
       setConnectError(msg)
@@ -269,7 +444,7 @@ export default function LiveCodingWorkspace({ sessionId }: { sessionId: string }
       setLocalStream(null)
       setPhase("permission")
     }
-  }, [sessionId, initRunner])
+  }, [clearReconnectTimers, connectVoiceClient, initRunner, session, sessionId])
 
   // ── Timer ──────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -390,6 +565,9 @@ export default function LiveCodingWorkspace({ sessionId }: { sessionId: string }
       const data = await res.json()
 
       if (res.ok) {
+        sessionEndingRef.current = true
+        clearReconnectTimers()
+        setReconnectCountdownSec(null)
         setSessionStatus("completed")
 
         // Notify AI of submission, give a moment for walkthrough
@@ -425,6 +603,9 @@ export default function LiveCodingWorkspace({ sessionId }: { sessionId: string }
   // ── Force end ──────────────────────────────────────────────────────────────
   async function handleForceEnd() {
     setShowEndConfirm(false)
+    sessionEndingRef.current = true
+    clearReconnectTimers()
+    setReconnectCountdownSec(null)
     const client = clientRef.current
 
     if (client) {
@@ -503,7 +684,9 @@ export default function LiveCodingWorkspace({ sessionId }: { sessionId: string }
               <span key={d} className="h-2 w-2 rounded-full bg-orange-400 animate-bounce" style={{ animationDelay: `${d}ms` }} />
             ))}
           </div>
-          <p className="text-[14px] font-medium text-white">Connecting your interviewer…</p>
+          <p className="text-[14px] font-medium text-white">
+            {reconnectAttemptUi > 0 ? `Reconnecting voice (attempt ${reconnectAttemptUi}/${MAX_AUTO_RECONNECTS})…` : "Connecting your interviewer…"}
+          </p>
         </div>
       </div>
     )
@@ -525,6 +708,13 @@ export default function LiveCodingWorkspace({ sessionId }: { sessionId: string }
         onEnd={() => setShowEndConfirm(true)}
         sessionCompleted={isCompleted}
       />
+      {reconnectCountdownSec !== null && (
+        <div className="border-b border-amber-100 bg-amber-50 px-4 py-2 text-center">
+          <p className="text-[12px] font-semibold text-amber-700">
+            Voice reconnecting in {reconnectCountdownSec}s…
+          </p>
+        </div>
+      )}
 
       {/* Completed banner */}
       {isCompleted && (

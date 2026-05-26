@@ -37,6 +37,7 @@ test("persistJobsBulk: single ON CONFLICT upsert with content_hash short-circuit
   const { pool, captured } = makeFakePool([
     [{ inserted: true }, { inserted: false }],
     [],
+    [],
   ])
 
   const outcome = await persistJobsBulk({
@@ -63,7 +64,7 @@ test("persistJobsBulk: single ON CONFLICT upsert with content_hash short-circuit
     ],
   })
 
-  assert.equal(captured.length, 2, "expected one upsert + one company-count update")
+  assert.equal(captured.length, 3, "expected upsert + stale-scan + company-count update")
   const upsert = captured[0]
   assert.match(upsert.text, /INSERT INTO jobs/)
   assert.match(upsert.text, /ON CONFLICT \(company_id, external_id\)/)
@@ -92,14 +93,19 @@ test("persistJobsBulk: single ON CONFLICT upsert with content_hash short-circuit
   assert.equal(outcome.inputCount, 3)
   assert.equal(outcome.filteredOut, 0)
 
-  const companyUpdate = captured[1]
+  const staleScan = captured[1]
+  assert.match(staleScan.text, /SELECT id, external_id, last_seen_at/)
+  assert.match(staleScan.text, /source_ats = \$2/)
+  assert.match(staleScan.text, /source_ats_slug = \$3/)
+
+  const companyUpdate = captured[2]
   assert.match(companyUpdate.text, /UPDATE companies/)
   assert.match(companyUpdate.text, /job_count/)
   assert.match(companyUpdate.text, /last_crawled_at/)
 })
 
 test("persistJobsBulk: filters blocked titles and dedupes by externalId", async () => {
-  const { pool, captured } = makeFakePool([[], []])
+  const { pool, captured } = makeFakePool([[], [], []])
 
   const outcome = await persistJobsBulk({
     pool,
@@ -137,6 +143,7 @@ test("persistJobsBulk: splits large payloads into batches of HARVESTER_PERSIST_B
     Array.from({ length: 400 }, () => ({ inserted: true })),
     Array.from({ length: 150 }, () => ({ inserted: true })),
     [],
+    [],
   ]
   const { pool, captured } = makeFakePool(upsertResponses)
 
@@ -159,8 +166,8 @@ test("persistJobsBulk: splits large payloads into batches of HARVESTER_PERSIST_B
     jobs,
   })
 
-  // 3 upsert chunks + 1 company-count update.
-  assert.equal(captured.length, 4, `expected 4 calls, got ${captured.length}`)
+  // 3 upsert chunks + stale scan + 1 company-count update.
+  assert.equal(captured.length, 5, `expected 5 calls, got ${captured.length}`)
   const sizes = captured.slice(0, 3).map((c) => JSON.parse(c.values[4] as string).length)
   assert.deepEqual(sizes, [400, 400, 150])
   assert.equal(outcome.inserted, 950)
@@ -193,7 +200,7 @@ test("persistJobsBulk: empty input still updates company job_count", async () =>
 })
 
 test("persistJobsBulk: normalizes relative postedAt and drops unparseable values", async () => {
-  const { pool, captured } = makeFakePool([[], []])
+  const { pool, captured } = makeFakePool([[], [], []])
   const crawledAt = new Date("2026-05-11T00:00:00.000Z")
 
   await persistJobsBulk({
@@ -225,7 +232,7 @@ test("persistJobsBulk: normalizes relative postedAt and drops unparseable values
 })
 
 test("persistJobsBulk: salvages substantive adapter descriptions when strict normalizer drops them", async () => {
-  const { pool, captured } = makeFakePool([[], []])
+  const { pool, captured } = makeFakePool([[], [], []])
 
   await persistJobsBulk({
     pool,
@@ -254,7 +261,7 @@ test("persistJobsBulk: salvages substantive adapter descriptions when strict nor
 })
 
 test("persistJobsBulk: sanitizes malformed unicode/control chars before jsonb payload", async () => {
-  const { pool, captured } = makeFakePool([[], []])
+  const { pool, captured } = makeFakePool([[], [], []])
 
   await persistJobsBulk({
     pool,
@@ -283,4 +290,41 @@ test("persistJobsBulk: sanitizes malformed unicode/control chars before jsonb pa
   assert.equal(title.includes("\u0000"), false)
   assert.equal(description.includes("\u0001"), false)
   assert.equal(/[\uD800-\uDFFF]/u.test(description), false)
+})
+
+test("persistJobsBulk: deactivates stale jobs from the same ATS lane", async () => {
+  const { pool, captured } = makeFakePool([
+    [],
+    [
+      {
+        id: "11111111-1111-1111-1111-111111111111",
+        external_id: "greenhouse:stale",
+        last_seen_at: "2026-05-05T00:00:00.000Z",
+      },
+      {
+        id: "22222222-2222-2222-2222-222222222222",
+        external_id: "greenhouse:1",
+        last_seen_at: "2026-05-10T00:00:00.000Z",
+      },
+    ],
+    [],
+    [],
+  ])
+
+  await persistJobsBulk({
+    pool,
+    companyId: "00000000-0000-0000-0000-000000000007",
+    companyMeta: { name: "Acme", domain: "acme.com", careersUrl: null },
+    sourceAts: "greenhouse",
+    sourceAtsSlug: "acme",
+    crawledAt: new Date("2026-05-20T00:00:00.000Z"),
+    jobs: [makeJob({ externalId: "greenhouse:1", contentHash: "8".repeat(32) })],
+  })
+
+  assert.equal(captured.length, 4, "expected upsert + stale-scan + deactivate + company-update")
+  const deactivate = captured[2]
+  assert.match(deactivate.text, /UPDATE jobs/)
+  assert.match(deactivate.text, /SET is_active = false/)
+  const staleIds = deactivate.values[1] as string[]
+  assert.deepEqual(staleIds, ["11111111-1111-1111-1111-111111111111"])
 })

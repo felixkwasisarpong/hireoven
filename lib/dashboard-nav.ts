@@ -52,6 +52,10 @@ export const DASHBOARD_NAV_ITEMS: DashboardNavItem[] = [
   { label: "Interview",      href: "/dashboard/interview",                icon: Mic },
   { label: "Watchlist",      href: "/dashboard/watchlist",                icon: BookmarkCheck },
   { label: "Alerts",         href: "/dashboard/alerts",                   icon: Bell },
+  { label: "H-1B Intel",     href: "/dashboard/international/h1b-explorer", icon: Plane },
+  { label: "Cohorts",        href: "/dashboard/cohorts",                  icon: Users,      gate: "scout_strategy" },
+  { label: "Fair Chance",    href: "/dashboard/background-check",         icon: ShieldCheck, gate: "scout_strategy" },
+  { label: "Brand",          href: "/dashboard/brand",                    icon: TrendingUp, gate: "scout_strategy" },
 
   // ── My Career ───────────────────────────────────────────────────────────────
   { label: "Applications",   href: "/dashboard/applications",             icon: ClipboardList,  group: "My Career" },
@@ -63,13 +67,6 @@ export const DASHBOARD_NAV_ITEMS: DashboardNavItem[] = [
   // No gate — pages enforce the profile check (is_international / visa_status)
   { label: "International",  href: "/dashboard/international",            icon: Plane,           group: "International" },
   { label: "Offer Risk",     href: "/dashboard/international/offer-risk", icon: ShieldAlert,     group: "International" },
-
-  // ── Insights ─────────────────────────────────────────────────────────────────
-  { label: "Cohorts",        href: "/dashboard/cohorts",                  icon: Users,           group: "Insights", gate: "scout_strategy" },
-  { label: "Brand",          href: "/dashboard/brand",                    icon: TrendingUp,      group: "Insights", gate: "scout_strategy" },
-  { label: "Fair Chance",    href: "/dashboard/background-check",         icon: ShieldCheck,     group: "Insights", gate: "scout_strategy" },
-  // interview_live gate for Pro Max — nav entry for live mode only (text/coding live in Interview hub)
-  // Note: Interview hub itself is gated at "pro" via the main Interview nav item
 
   // ── Footer ───────────────────────────────────────────────────────────────────
   { label: "Settings",       href: "/dashboard/billing",                  icon: Settings,   footer: true },

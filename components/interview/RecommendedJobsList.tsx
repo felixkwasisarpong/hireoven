@@ -11,6 +11,11 @@ type RecommendedJob = {
   savedAt: string
 }
 
+type RecommendedJobsListProps = {
+  initialJobs?: RecommendedJob[]
+  initialLoaded?: boolean
+}
+
 function formatDate(iso: string) {
   const d = new Date(iso)
   const days = Math.floor((Date.now() - d.getTime()) / 86_400_000)
@@ -39,17 +44,22 @@ function CompanyInitial({ name }: { name: string }) {
   )
 }
 
-export default function RecommendedJobsList() {
-  const [jobs, setJobs] = useState<RecommendedJob[]>([])
-  const [loading, setLoading] = useState(true)
+export default function RecommendedJobsList({
+  initialJobs = [],
+  initialLoaded = false,
+}: RecommendedJobsListProps) {
+  const [jobs, setJobs] = useState<RecommendedJob[]>(initialJobs)
+  const [loading, setLoading] = useState(!initialLoaded)
 
   useEffect(() => {
+    if (initialLoaded) return
+
     fetch("/api/interview/recommendations")
       .then((r) => r.json())
       .then((d) => setJobs(d.jobs ?? []))
       .catch(() => {})
       .finally(() => setLoading(false))
-  }, [])
+  }, [initialLoaded])
 
   if (loading) {
     return (

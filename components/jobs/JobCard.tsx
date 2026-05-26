@@ -15,6 +15,11 @@ import {
   employerLikelySponsorsH1b,
   employerSponsorshipCardCopy,
 } from "@/lib/jobs/sponsorship-employer-signal"
+import {
+  isStaffingIntermediaryListing,
+  readHiringEntitySignalFromRawData,
+  resolveDisplayCompanyName,
+} from "@/lib/jobs/hiring-entity"
 import { SponsorshipTruthBadge } from "@/components/employers/SponsorshipTruthBadge"
 import {
   JOB_APPLICATION_SAVED_EVENT,
@@ -33,6 +38,18 @@ import { buildJobCardFactList, buildJobEvidenceFacts } from "@/lib/jobs/job-evid
 import { jobSourceFallbackLogo } from "@/lib/jobs/source-fallback-logo"
 import { cn } from "@/lib/utils"
 import type { JobMatchScore, JobWithCompany, JobWithMatchScore } from "@/types"
+
+type RawRecord = Record<string, unknown>
+
+function readRawRecord(job: JobWithCompany | JobWithMatchScore): RawRecord {
+  if (job.raw_data && typeof job.raw_data === "object") return job.raw_data as RawRecord
+  return {}
+}
+
+function equalsIgnoreCase(a: string | null | undefined, b: string | null | undefined): boolean {
+  if (!a || !b) return false
+  return a.trim().toLowerCase() === b.trim().toLowerCase()
+}
 
 const QuickAnalysisDrawer = dynamic(
   () => import("@/components/resume/QuickAnalysisDrawer"),
@@ -132,14 +149,29 @@ export default function JobCard({
   const resolvedMatchScore = matchScoreProp ?? ("match_score" in job ? (job.match_score ?? null) : null)
   const score = resolvedMatchScore?.overall_score ?? null
 
-  const companyName = job.company?.name ?? "Unknown company"
+  const raw = useMemo(() => readRawRecord(job), [job])
+  const hiringEntitySignal = useMemo(
+    () => readHiringEntitySignalFromRawData(raw),
+    [raw]
+  )
+  const staffingIntermediary = isStaffingIntermediaryListing({ rawData: raw })
+  const companyName = resolveDisplayCompanyName({
+    companyName: job.company?.name ?? null,
+    rawData: raw,
+  })
+  const staffingCompanyName = hiringEntitySignal?.staffing_company_name ?? job.company?.name ?? null
+  const showingEndClientName =
+    staffingIntermediary &&
+    Boolean(hiringEntitySignal?.end_client_name) &&
+    !equalsIgnoreCase(companyName, staffingCompanyName)
   const rawCompanyDomain = job.company?.domain ?? null
   const rawCompanyLogoUrl = job.company?.logo_url ?? null
   const sourceFallback = jobSourceFallbackLogo(job, rawCompanyDomain, rawCompanyLogoUrl)
   const companyDomain = sourceFallback?.domain ?? rawCompanyDomain
   const companyLogoUrl = sourceFallback?.logoUrl ?? rawCompanyLogoUrl
-  const companyProfileHref = job.company?.id ? `/companies/${job.company.id}` : null
-  const companyConf = job.company?.sponsorship_confidence ?? 0
+  const companyProfileHref =
+    job.company?.id && !showingEndClientName ? `/companies/${job.company.id}` : null
+  const companyConf = staffingIntermediary ? 0 : (job.company?.sponsorship_confidence ?? 0)
 
   const cardView: JobCardViewModel = ("card_view" in job && job.card_view)
     ? (job.card_view as JobCardViewModel)
@@ -150,7 +182,7 @@ export default function JobCard({
   const applyCtaLabel = getApplyVariantLabel(applyVariant)
 
   const showVerified =
-    employerLikelySponsorsH1b(job) || companyConf >= 35 || Boolean(job.company?.sponsors_h1b)
+    employerLikelySponsorsH1b(job) || companyConf >= 35 || (!staffingIntermediary && Boolean(job.company?.sponsors_h1b))
 
   const sponsorScore = effectiveEmployerSponsorshipScore(job)
   const showSponsorshipBanner =
@@ -294,6 +326,11 @@ export default function JobCard({
                     aria-label="Verified employer signal"
                   />
                 )}
+                {showingEndClientName && (
+                  <span className="rounded-full border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">
+                    via staffing intermediary
+                  </span>
+                )}
                 <span aria-hidden className="text-slate-300">·</span>
                 <span className="inline-flex items-center gap-1 text-[13px] font-semibold text-slate-700">
                   <Clock className="h-3.5 w-3.5 shrink-0 text-slate-500" aria-hidden />
@@ -322,7 +359,7 @@ export default function JobCard({
                 </div>
               )}
 
-              {job.company?.id && (
+              {job.company?.id && !showingEndClientName && (
                 <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1" onClick={(e) => e.stopPropagation()}>
                   <RejectionBadge companyId={job.company.id} jobTitle={job.title} />
                   <EmployerHealthBadge companyId={job.company.id} />
@@ -410,7 +447,7 @@ export default function JobCard({
                       </p>
                     </div>
                   </div>
-                  {job.company?.id && (
+                  {job.company?.id && !showingEndClientName && (
                     <SponsorshipTruthBadge
                       companyId={job.company.id}
                       className="flex-shrink-0 mt-0.5"

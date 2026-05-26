@@ -3,6 +3,10 @@ import {
   buildFastScoreResumeContext,
   computeFastScore,
 } from "@/lib/matching/fast-scorer"
+import {
+  FAST_SCORE_CACHE_EPOCH_ISO,
+  isScoreFreshForResume,
+} from "@/lib/matching/score-freshness"
 import { getPostgresPool } from "@/lib/postgres/server"
 import type {
   Job,
@@ -15,9 +19,6 @@ import type {
 const BACKGROUND_USER_LIMIT = 10_000
 const UPSERT_CHUNK_SIZE = 250
 const BACKGROUND_CONCURRENCY = 50
-// Bump this when the scoring algorithm changes to invalidate stale cached rows.
-const FAST_SCORE_ALGORITHM_UPDATED_AT = new Date("2026-05-15T02:10:00.000Z").getTime()
-const FAST_SCORE_ALGORITHM_UPDATED_AT_ISO = new Date(FAST_SCORE_ALGORITHM_UPDATED_AT).toISOString()
 
 function chunkArray<T>(items: T[], size: number) {
   const chunks: T[][] = []
@@ -231,13 +232,14 @@ export async function getCachedScoresForUser(userId: string, jobIds: string[]) {
      WHERE jms.user_id = $1
        AND jms.job_id = ANY($2::uuid[])
        AND jms.computed_at >= $3::timestamptz`,
-    [userId, uniqueJobIds, FAST_SCORE_ALGORITHM_UPDATED_AT_ISO]
+    [userId, uniqueJobIds, FAST_SCORE_CACHE_EPOCH_ISO]
   )
 
   const fresh = result.rows.filter((row) => {
-    const computedAtMs = new Date(row.computed_at).getTime()
-    const resumeUpdatedAtMs = new Date(row.resume_updated_at).getTime()
-    return Number.isFinite(computedAtMs) && computedAtMs >= resumeUpdatedAtMs
+    return isScoreFreshForResume({
+      computedAt: row.computed_at,
+      resumeUpdatedAt: row.resume_updated_at,
+    })
   })
   return new Map<string, JobMatchScore>(fresh.map((row) => [row.job_id, row]))
 }
@@ -261,13 +263,14 @@ export async function scoreJobsForUser(userId: string, jobIds: string[]) {
      WHERE jms.user_id = $1
        AND jms.job_id = ANY($2::uuid[])
        AND jms.computed_at >= $3::timestamptz`,
-    [userId, uniqueJobIds, FAST_SCORE_ALGORITHM_UPDATED_AT_ISO]
+    [userId, uniqueJobIds, FAST_SCORE_CACHE_EPOCH_ISO]
   )
 
   const existingFreshScores = existingResult.rows.filter((row) => {
-    const computedAtMs = new Date(row.computed_at).getTime()
-    const resumeUpdatedAtMs = new Date(row.resume_updated_at).getTime()
-    return Number.isFinite(computedAtMs) && computedAtMs >= resumeUpdatedAtMs
+    return isScoreFreshForResume({
+      computedAt: row.computed_at,
+      resumeUpdatedAt: row.resume_updated_at,
+    })
   })
 
   const existingMap = new Map<string, JobMatchScore>(existingFreshScores.map((row) => [row.job_id, row]))

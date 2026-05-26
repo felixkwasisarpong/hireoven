@@ -1,4 +1,6 @@
-import { builtinModules, createRequire } from "node:module"
+import * as fsBuiltin from "node:fs"
+import * as moduleBuiltin from "node:module"
+import * as urlBuiltin from "node:url"
 import Anthropic from "@anthropic-ai/sdk"
 import { logApiUsage } from "@/lib/admin/usage"
 import { ANTHROPIC_TIER_PRICING, HAIKU_MODEL } from "@/lib/ai/anthropic-models"
@@ -19,7 +21,15 @@ import type {
 const anthropic = process.env.ANTHROPIC_API_KEY
   ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
   : null
-const nodeRequire = createRequire(import.meta.url)
+
+const BUILTIN_MODULES: Record<string, object> = {
+  module: moduleBuiltin,
+  "node:module": moduleBuiltin,
+  fs: fsBuiltin,
+  "node:fs": fsBuiltin,
+  url: urlBuiltin,
+  "node:url": urlBuiltin,
+}
 
 // Resume parsing is structured extraction; Haiku is the default fast/cost-efficient tier.
 const MODEL = HAIKU_MODEL
@@ -364,36 +374,55 @@ function normalizeParsedResume(raw: unknown, extractedText: string): ParsedResum
   }
 }
 
+function cleanPDFText(raw: string): string {
+  return raw
+    // Unicode ligatures → ASCII equivalents (common in professionally typeset PDFs)
+    .replace(/ﬁ/g, "fi").replace(/ﬂ/g, "fl").replace(/ﬀ/g, "ff")
+    .replace(/ﬃ/g, "ffi").replace(/ﬄ/g, "ffl").replace(/[ﬅﬆ]/g, "st")
+    // Smart quotes → ASCII
+    .replace(/[‘’]/g, "'").replace(/[“”]/g, '"')
+    // Unicode dashes → hyphen
+    .replace(/[–—―]/g, "-")
+    // Non-breaking and other decorative spaces → regular space
+    .replace(/[       　]/g, " ")
+    // Zero-width / invisible characters
+    .replace(/[​‌‍﻿]/g, "")
+    // Strip any leftover pdf-parse page markers (e.g. "-- 1 of 3 --")
+    .replace(/\n--\s*\d+\s*of\s*\d+\s*--\n?/g, "\n\n")
+    // Collapse tabs and runs of spaces → single space
+    .replace(/[ \t]+/g, " ")
+    // Normalize line endings
+    .replace(/\r\n/g, "\n").replace(/\r/g, "\n")
+    // Collapse 3+ blank lines → two newlines
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+}
+
 export async function extractTextFromPDF(buffer: Buffer): Promise<string> {
   const processWithBuiltinModule = process as typeof process & {
     getBuiltinModule?: (id: string) => unknown
   }
 
   if (typeof processWithBuiltinModule.getBuiltinModule !== "function") {
-    processWithBuiltinModule.getBuiltinModule = (id: string) => {
-      const normalized = id.startsWith("node:") ? id : `node:${id}`
-
-      if (
-        !builtinModules.includes(id) &&
-        !builtinModules.includes(normalized)
-      ) {
-        return undefined
-      }
-
-      try {
-        return nodeRequire(normalized)
-      } catch {
-        return undefined
-      }
-    }
+    processWithBuiltinModule.getBuiltinModule = (id: string): object | undefined =>
+      BUILTIN_MODULES[id] ??
+      BUILTIN_MODULES[id.startsWith("node:") ? id.slice(5) : `node:${id}`]
   }
 
-  await import("pdf-parse/worker")
   const { PDFParse } = await import("pdf-parse")
-  const parser = new PDFParse({ data: new Uint8Array(buffer) })
+  // verbosity:0 suppresses pdfjs console noise; data accepts Buffer → Uint8Array
+  const parser = new PDFParse({ data: new Uint8Array(buffer), verbosity: 0 })
   try {
-    const result = await parser.getText()
-    return result.text.trim()
+    const result = await parser.getText({
+      // Use a clean newline instead of the default "-- N of M --" page markers
+      pageJoiner: "\n\n",
+      // Use space instead of the default tab as the column separator so
+      // two-column resume layouts don't produce tab-separated garbage
+      cellSeparator: " ",
+    })
+    const text = cleanPDFText(result.text)
+    if (!text) throw new Error("PDF appears to be image-only — no selectable text found.")
+    return text
   } finally {
     await parser.destroy()
   }

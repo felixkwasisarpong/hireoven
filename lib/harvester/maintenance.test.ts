@@ -100,7 +100,10 @@ test("assignTiers: dryRun rolls back instead of committing", async () => {
   assert.equal(summary.dryRun, true)
   assert.equal(getCommitted(), false, "dry-run must ROLLBACK")
   const sqlCalls = captured.map((c) => c.text.trim().toUpperCase().split(/\s+/)[0])
-  assert.deepEqual(sqlCalls, ["BEGIN", "WITH", "ROLLBACK"])
+  assert.equal(sqlCalls[0], "BEGIN")
+  assert.equal(sqlCalls[1], "SET")
+  assert.equal(sqlCalls[2], "WITH")
+  assert.equal(sqlCalls.at(-1), "ROLLBACK")
 })
 
 test("updateStatus: returns markedDead from RETURNING ids", async () => {

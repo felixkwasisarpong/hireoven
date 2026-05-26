@@ -18,6 +18,7 @@ import { domainFromApplyUrl } from "@/lib/applications/company-domain"
 import { fetchEmbeddedGreenhouseJobDetails } from "@/lib/extension/embedded-greenhouse"
 import { isPlaceholderJobTitle } from "@/lib/extension/job-fingerprint"
 import { enrichJobWithNormalization } from "@/lib/jobs/enrich-job-with-normalization"
+import { isBlockedApplyUrl, isBlockedCrawlTitle } from "@/lib/jobs/filters"
 import { getPostgresPool } from "@/lib/postgres/server"
 import {
   extensionError,
@@ -266,6 +267,14 @@ export async function POST(request: Request) {
     descriptionText,
     body.workMode
   )
+
+  if (isBlockedCrawlTitle(jobTitle) || isPlaceholderJobTitle(jobTitle)) {
+    return extensionError(request, 422, "Captured page is not a valid job posting (title).", { headers })
+  }
+  if (isBlockedApplyUrl(jobUrl)) {
+    return extensionError(request, 422, "Captured page is not a valid job posting (URL).", { headers })
+  }
+
   const { min: salaryMin, max: salaryMax } = parseSalary(salaryInput)
   const companyLogo = toOptionalString(body.companyLogo, 1200)
   const companySummary = toOptionalString(body.companySummary, 2000)

@@ -378,11 +378,14 @@ export async function runTick(
   let newJobs = 0
   const failedByAdapter: Record<string, number> = {}
   const failedByReason: Record<string, number> = {}
+  const mismatchedIds: string[] = []
 
-  for (const { outcome } of results) {
+  for (const { companyId, outcome } of results) {
     const r = outcome
     if (!r.matched) {
-      // claimed by tier filter but adapter didn't match — treat as failed so the lease expires naturally
+      // claimed by tier filter but adapter didn't match — push next_harvest_at
+      // out so the company isn't immediately re-claimed on the next tick.
+      mismatchedIds.push(companyId)
       failed += 1
       incrementCount(failedByAdapter, "adapter_mismatch")
       incrementCount(failedByReason, "adapter_mismatch")
@@ -397,6 +400,15 @@ export async function runTick(
     }
     if (r.notModified) notModified += 1
     newJobs += r.newJobs
+  }
+
+  if (mismatchedIds.length > 0) {
+    await pool
+      .query(
+        `UPDATE companies SET next_harvest_at = now() + interval '6 hours' WHERE id = ANY($1::uuid[])`,
+        [mismatchedIds]
+      )
+      .catch(() => {})
   }
 
   await insertTickCrawlLogsSafe(pool, results)

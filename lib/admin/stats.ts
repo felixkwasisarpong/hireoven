@@ -1,4 +1,8 @@
 import { startOfDay, startOfWeek, subHours } from "@/lib/admin/time"
+import {
+  getAdminReliabilityMetrics,
+  type AdminReliabilityMetrics,
+} from "@/lib/admin/reliability-metrics"
 import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
 import { getPostgresPool } from "@/lib/postgres/server"
 import type {
@@ -57,6 +61,7 @@ export type AdminOverviewPayload = {
   stats: AdminStats
   crawlHealth: CrawlHealth
   apiUsage: APIUsage
+  reliability: AdminReliabilityMetrics
   realtime: AdminRealtimePayload
 }
 
@@ -286,10 +291,11 @@ export async function getAPIUsage(): Promise<APIUsage> {
 
 export async function getAdminOverviewPayload(): Promise<AdminOverviewPayload> {
   const pool = getPostgresPool()
-  const [stats, crawlHealth, apiUsage, crawlLogs, recentJobs, settingsRows] = await Promise.all([
+  const [stats, crawlHealth, apiUsage, reliability, crawlLogs, recentJobs, settingsRows] = await Promise.all([
     getDashboardStats(),
     getCrawlHealth(),
     getAPIUsage(),
+    getAdminReliabilityMetrics(),
     pool.query<
       CrawlLog & {
         company: Pick<Company, "id" | "name" | "ats_type"> | null
@@ -333,6 +339,7 @@ export async function getAdminOverviewPayload(): Promise<AdminOverviewPayload> {
     stats,
     crawlHealth,
     apiUsage,
+    reliability,
     realtime: {
       recentCrawlLogs: crawlLogs.rows as AdminRealtimePayload["recentCrawlLogs"],
       recentJobs: recentJobs.rows as AdminRealtimePayload["recentJobs"],

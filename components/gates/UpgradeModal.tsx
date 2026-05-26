@@ -32,7 +32,7 @@ const PLANS = [
   },
   {
     key: "pro_max" as PlanKey,
-    name: "Max",
+    name: "Pro Max",
     monthly: 29,
     yearly: 19,
     yearlyBilled: 229,
@@ -44,7 +44,7 @@ const PLANS = [
       "Resume tailoring — unlimited",
       "Cover letters — unlimited",
       "Deep analysis — unlimited",
-      "Live interviews + credits",
+      "Live interviews (1 credit / 28d + top-ups)",
       "Scout strategy insights",
       "Everything in Pro",
     ],

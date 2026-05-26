@@ -38,6 +38,7 @@ import {
   getAutofillProfile,
   saveApplicationProof,
   saveExtractedJob,
+  trackAutofillTelemetry,
   updateCoverLetter,
 } from "../api-client"
 import type { ExtensionJobAnalysis, ExtensionSaveResult } from "../api-types"
@@ -2410,6 +2411,81 @@ export class ScoutBar {
     }
   }
 
+  private currentAutofillJobId(): string | undefined {
+    return this.knownJobId ?? this.analysis?.jobId ?? this.saveResult?.jobId ?? undefined
+  }
+
+  private summarizeAutofillRows(rows: AutofillFieldResult[] | null): {
+    fillableCount: number
+    filledCount: number
+    manualReviewCount: number
+  } {
+    const list = rows ?? []
+    const fillableCount = list.filter(
+      (row) => !row.skippedReason && row.source !== "manual_required" && row.source !== "cover_letter",
+    ).length
+    const filledCount = list.filter((row) => row.filled).length
+    const manualReviewCount = list.filter((row) => Boolean(row.skippedReason)).length
+    return { fillableCount, filledCount, manualReviewCount }
+  }
+
+  private async logAutofillTelemetry(args: {
+    stage: "preview" | "attempt" | "success" | "partial" | "error"
+    fieldsFilled?: number
+    fieldsTotal?: number
+    manualReviewCount?: number
+    errorMessage?: string
+    fallbackUsed?: boolean
+  }): Promise<void> {
+    try {
+      await trackAutofillTelemetry({
+        jobId: this.currentAutofillJobId(),
+        companyName: this.job?.company ?? undefined,
+        jobTitle: this.job?.title ?? undefined,
+        atsType: this.toAutofillSource(),
+        stage: args.stage,
+        fieldsFilled: args.fieldsFilled,
+        fieldsTotal: args.fieldsTotal,
+        manualReviewCount: args.manualReviewCount,
+        errorMessage: args.errorMessage,
+        pageUrl: location.href,
+        fallbackUsed: args.fallbackUsed,
+      })
+    } catch {
+      // telemetry is best-effort only
+    }
+  }
+
+  private async tryWorkdayGenericFallback(): Promise<{
+    rows: AutofillFieldResult[]
+    fillableCount: number
+    filledCount: number
+    manualReviewCount: number
+  } | null> {
+    if (!this.autofillProfile) return null
+
+    const preview = buildAutofillPreview("workday", this.autofillProfile, document)
+    const needsResume = preview.some((f) => f.source === "resume" && !f.skippedReason)
+
+    let resumeBytes: { base64: string; filename: string } | null = null
+    if (needsResume) {
+      try {
+        resumeBytes = await fetchPrimaryResume({ jobId: this.currentAutofillJobId() })
+      } catch {
+        resumeBytes = null
+      }
+    }
+
+    const rows = await applySafeFills("workday", this.autofillProfile, resumeBytes, document)
+    const summary = this.summarizeAutofillRows(rows)
+    return {
+      rows,
+      fillableCount: summary.fillableCount,
+      filledCount: summary.filledCount,
+      manualReviewCount: summary.manualReviewCount,
+    }
+  }
+
   private isConfirmationPage(): boolean {
     const conf = detectConfirmation(document)
     this.confirmation = conf
@@ -2911,6 +2987,13 @@ export class ScoutBar {
             },
           ]
           this.autofillStatus = "preview"
+          void this.logAutofillTelemetry({
+            stage: "preview",
+            fieldsFilled: 0,
+            fieldsTotal: 1,
+            manualReviewCount: 1,
+            errorMessage: profileMissing || !profile ? "profile_missing" : "workday_step_not_detected",
+          })
           this.render()
           return
         }
@@ -2963,6 +3046,12 @@ export class ScoutBar {
           },
         ]
         this.autofillStatus = "preview"
+        void this.logAutofillTelemetry({
+          stage: "preview",
+          fieldsFilled: 0,
+          fieldsTotal: est.total,
+          manualReviewCount: 0,
+        })
         this.render()
         return
       }
@@ -2984,9 +3073,23 @@ export class ScoutBar {
       }
 
       this.autofillStatus = "preview"
+      const previewSummary = this.summarizeAutofillRows(this.autofillPreview)
+      void this.logAutofillTelemetry({
+        stage: "preview",
+        fieldsFilled: 0,
+        fieldsTotal: previewSummary.fillableCount,
+        manualReviewCount: previewSummary.manualReviewCount,
+      })
     } catch (err) {
       this.autofillStatus = "error"
       this.autofillError = err instanceof Error ? err.message : "Autofill preview failed"
+      void this.logAutofillTelemetry({
+        stage: "error",
+        fieldsFilled: 0,
+        fieldsTotal: 1,
+        manualReviewCount: 0,
+        errorMessage: this.autofillError,
+      })
     }
     this.render()
   }
@@ -3010,6 +3113,13 @@ export class ScoutBar {
     if (!this.autofillSiteSupported()) return
 
     this.autofillStatus = "filling"
+    const previewSummary = this.summarizeAutofillRows(this.autofillPreview)
+    void this.logAutofillTelemetry({
+      stage: "attempt",
+      fieldsFilled: 0,
+      fieldsTotal: Math.max(previewSummary.fillableCount, 1),
+      manualReviewCount: previewSummary.manualReviewCount,
+    })
     this.render()
 
     try {
@@ -3050,6 +3160,10 @@ export class ScoutBar {
         } satisfies Parameters<typeof runWorkdayAutofillInExistingBar>[0]
 
         let result = await runWorkdayAutofillInExistingBar(runOptions)
+        let fallbackUsed = false
+        let fallbackFilledCount = 0
+        let fallbackFillableCount = 0
+        let fallbackManualReviewCount = 0
         let autoAdvancedResumeStep = false
         if (
           result.stepId === "resume_upload" &&
@@ -3068,16 +3182,48 @@ export class ScoutBar {
           }
         }
 
-        this.autofillResults = result.rows
+        // Fallback: when Workday's step-aware automation hits tenant-specific
+        // DOM/API breakage, try the generic safe-field fill on the same step so
+        // contact/location fields still get populated.
+        if (
+          result.phase === "error" ||
+          (
+            result.fieldsFilledCount === 0 &&
+            !result.blockedReason &&
+            !result.eeoPaused &&
+            !result.reachedReview
+          )
+        ) {
+          try {
+            const fallback = await this.tryWorkdayGenericFallback()
+            if (fallback && fallback.filledCount > 0) {
+              fallbackUsed = true
+              fallbackFilledCount = fallback.filledCount
+              fallbackFillableCount = fallback.fillableCount
+              fallbackManualReviewCount = fallback.manualReviewCount
+              this.autofillResults = fallback.rows
+            }
+          } catch {
+            // best-effort fallback only
+          }
+        }
+
+        if (!fallbackUsed) {
+          this.autofillResults = result.rows
+        }
         const hint = summarizeWorkdayDebug(result.debugTail)
         const filledMsg = `${result.fieldsFilledCount} fields filled on this step.`
         const nextStepHint = "Review, fix anything needed, then click Save and Continue on the page. I'll re-arm Autofill when the next step loads."
 
-        if (result.phase === "error") {
+        if (result.phase === "error" && !fallbackUsed) {
           this.autofillStatus = "error"
           this.autofillError = hint
             ? `Workday autofill stopped: ${hint}`
             : "Workday autofill could not complete. In DevTools Console run: window.__hoWorkdayAutofillDebug?.slice(-120)"
+        } else if (fallbackUsed && result.phase === "error") {
+          this.autofillStatus = "done"
+          this.autofillError =
+            `Workday fallback filled ${fallbackFilledCount}/${Math.max(fallbackFillableCount, 1)} basic fields. Review and continue manually.`
         } else if (result.blockedReason === "account_required") {
           this.autofillStatus = "done"
           this.autofillError =
@@ -3109,6 +3255,39 @@ export class ScoutBar {
             ? `${filledMsg} Step 1 resume upload was completed and advanced automatically. ${nextStepHint}`
             : `${filledMsg} ${nextStepHint}`
         }
+        const effectiveFieldsFilled = fallbackUsed
+          ? Math.max(result.fieldsFilledCount, fallbackFilledCount)
+          : result.fieldsFilledCount
+        const effectiveFieldsTotal = Math.max(
+          1,
+          result.totalExpectedFields,
+          fallbackFillableCount,
+        )
+        const effectiveManualReview = Math.max(
+          result.manualReviewCount,
+          fallbackManualReviewCount,
+        )
+        const stage: "success" | "partial" | "error" =
+          this.autofillStatus === "error"
+            ? "error"
+            : (
+              result.blockedReason ||
+              result.eeoPaused ||
+              result.reachedReview ||
+              effectiveManualReview > 0 ||
+              effectiveFieldsFilled === 0 ||
+              fallbackUsed
+            )
+              ? "partial"
+              : "success"
+        void this.logAutofillTelemetry({
+          stage,
+          fieldsFilled: effectiveFieldsFilled,
+          fieldsTotal: effectiveFieldsTotal,
+          manualReviewCount: effectiveManualReview,
+          errorMessage: this.autofillStatus === "error" ? this.autofillError ?? undefined : undefined,
+          fallbackUsed,
+        })
         this.render()
         return
       }
@@ -3145,6 +3324,25 @@ export class ScoutBar {
         document,
       )
       this.autofillStatus = "done"
+      const resultSummary = this.summarizeAutofillRows(this.autofillResults)
+      if (resultSummary.fillableCount > 0 && resultSummary.filledCount === 0) {
+        this.autofillError = "No fields were changed. Review the form and fill required fields manually."
+      } else {
+        this.autofillError = null
+      }
+      const genericStage: "success" | "partial" | "error" =
+        resultSummary.fillableCount > 0 && resultSummary.filledCount === 0
+          ? "error"
+          : resultSummary.manualReviewCount > 0 || resultSummary.filledCount < resultSummary.fillableCount
+            ? "partial"
+            : "success"
+      void this.logAutofillTelemetry({
+        stage: genericStage,
+        fieldsFilled: resultSummary.filledCount,
+        fieldsTotal: Math.max(resultSummary.fillableCount, 1),
+        manualReviewCount: resultSummary.manualReviewCount,
+        errorMessage: genericStage === "error" ? this.autofillError ?? undefined : undefined,
+      })
 
       // If the form has a cover-letter slot, capture its selector and kick off
       // generation in the background. The user reviews + clicks Attach later.
@@ -3161,6 +3359,13 @@ export class ScoutBar {
       this.autofillError = this.site === "workday"
         ? `${base}. In DevTools Console run: window.__hoWorkdayAutofillDebug?.slice(-120)`
         : base
+      void this.logAutofillTelemetry({
+        stage: "error",
+        fieldsFilled: 0,
+        fieldsTotal: Math.max(previewSummary.fillableCount, 1),
+        manualReviewCount: previewSummary.manualReviewCount,
+        errorMessage: this.autofillError,
+      })
     }
     this.render()
   }

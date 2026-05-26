@@ -83,7 +83,7 @@ export function matchesSearchQuery(
   // hits for queries like "senior backend engineer Java Spring Boot Python"
   // because the words live in different fields (title vs. skills array).
   const tokens = needle.split(" ").filter(Boolean)
-  return tokens.every((token) => haystack.includes(token))
+  return tokens.every((token) => new RegExp(`\\b${escapeRegex(token)}\\b`).test(haystack))
 }
 
 export function matchesLocationFilter(

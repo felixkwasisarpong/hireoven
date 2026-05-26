@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { createClient } from "@/lib/supabase/server"
-import type { Plan } from "@/lib/gates"
+import { buildSubscriptionSnapshot } from "@/lib/subscription/snapshot"
 
 export async function GET() {
   const supabase = await createClient()
@@ -21,34 +21,21 @@ export async function GET() {
     `SELECT plan, status, current_period_end, billing_interval, amount_cents, cancel_at_period_end, trial_end
      FROM subscriptions
      WHERE user_id = $1
-       AND status IN ('active', 'trialing', 'past_due', 'unpaid')
+       AND status IN ('active', 'trialing', 'past_due', 'unpaid', 'canceled')
      ORDER BY updated_at DESC NULLS LAST, created_at DESC
      LIMIT 1`,
     [user.id]
   )
-  const sub = result.rows[0]
-
-  const rawPlan = sub?.plan ?? "free"
-  const plan: Plan =
-    rawPlan === "pro_international"
-      ? "pro_max"
-      : rawPlan === "pro" || rawPlan === "pro_max"
-        ? rawPlan
-        : "free"
-  const trialEnd = sub?.trial_end ?? sub?.current_period_end ?? null
-  const trialDaysRemaining =
-    sub?.status === "trialing" && trialEnd
-      ? Math.max(0, Math.ceil((new Date(trialEnd).getTime() - Date.now()) / 86_400_000))
-      : null
+  const snapshot = buildSubscriptionSnapshot(result.rows[0])
 
   return NextResponse.json({
-    plan,
-    status: sub?.status ?? "free",
-    currentPeriodEnd: sub?.current_period_end ?? null,
-    billingInterval: sub?.billing_interval ?? null,
-    amountCents: sub?.amount_cents ?? null,
-    cancelAtPeriodEnd: Boolean(sub?.cancel_at_period_end),
-    trialEnd,
-    trialDaysRemaining,
+    plan: snapshot.plan,
+    status: snapshot.status,
+    currentPeriodEnd: snapshot.currentPeriodEnd,
+    billingInterval: snapshot.billingInterval,
+    amountCents: snapshot.amountCents,
+    cancelAtPeriodEnd: snapshot.cancelAtPeriodEnd,
+    trialEnd: snapshot.trialEnd,
+    trialDaysRemaining: snapshot.trialDaysRemaining,
   })
 }

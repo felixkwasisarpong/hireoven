@@ -21,7 +21,7 @@ export function useFeatureAccess(feature: FeatureKey): FeatureAccess {
   const required = FEATURE_GATES[feature]
   const hasAccess =
     required === "public"
-      ? Boolean(user)
+      ? true
       : required === "auth"
         ? Boolean(user)
         : canAccess(plan, feature)

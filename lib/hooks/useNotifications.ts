@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import type { AlertNotificationWithDetails } from "@/types"
 
 export type NotificationFilter = "all" | "unread" | "alerts" | "watchlist"
@@ -40,6 +40,13 @@ export type LocalAppNotification = {
   clicked_at: string | null
 }
 export type AppNotification = AlertNotificationWithDetails | LocalAppNotification
+
+type UseNotificationsOptions = {
+  initialServerNotifications?: AlertNotificationWithDetails[]
+  initialUnreadCount?: number
+  initialLoaded?: boolean
+  initialFilter?: NotificationFilter
+}
 
 const LOCAL_NOTIFICATION_EVENT = "hireoven:local-notification"
 const LOCAL_NOTIFICATION_STORAGE_KEY = "hireoven:local-notifications"
@@ -219,14 +226,24 @@ export function publishLocalNotificationOnce(input: {
 export function useNotifications(
   userId?: string,
   filter: NotificationFilter = "all",
-  pageSize = 20
+  pageSize = 20,
+  options: UseNotificationsOptions = {}
 ) {
-  const [serverNotifications, setServerNotifications] = useState<AlertNotificationWithDetails[]>([])
+  const initialFilter = options.initialFilter ?? "all"
+  const canUseInitial = options.initialLoaded === true && filter === initialFilter
+  const [serverNotifications, setServerNotifications] = useState<AlertNotificationWithDetails[]>(
+    canUseInitial ? options.initialServerNotifications ?? [] : []
+  )
   const [localNotifications, setLocalNotifications] = useState<LocalAppNotification[]>([])
-  const [serverUnreadCount, setServerUnreadCount] = useState(0)
+  const [serverUnreadCount, setServerUnreadCount] = useState(
+    canUseInitial ? options.initialUnreadCount ?? 0 : 0
+  )
   const [isLoading, setIsLoading] = useState(false)
-  const [hasMore, setHasMore] = useState(false)
-  const [offset, setOffset] = useState(0)
+  const [hasMore, setHasMore] = useState(
+    canUseInitial ? (options.initialServerNotifications?.length ?? 0) === pageSize : false
+  )
+  const [offset, setOffset] = useState(canUseInitial ? options.initialServerNotifications?.length ?? 0 : 0)
+  const skipInitialRefreshRef = useRef(canUseInitial)
 
   const filteredLocalNotifications = localNotifications.filter((notification) => {
     if (filter === "unread") return notification.opened_at == null
@@ -347,6 +364,10 @@ export function useNotifications(
   }, [unreadCount, userId])
 
   useEffect(() => {
+    if (skipInitialRefreshRef.current) {
+      skipInitialRefreshRef.current = false
+      return
+    }
     void refresh()
   }, [refresh])
 

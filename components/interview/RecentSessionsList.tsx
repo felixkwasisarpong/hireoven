@@ -16,6 +16,11 @@ type Session = {
   debrief: { overallScore: number | null } | null
 }
 
+type RecentSessionsListProps = {
+  initialSessions?: Session[]
+  initialLoaded?: boolean
+}
+
 const TYPE_LABELS: Record<string, string> = {
   text:   "Text",
   live:   "Live",
@@ -54,17 +59,22 @@ function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" })
 }
 
-export default function RecentSessionsList() {
-  const [sessions, setSessions] = useState<Session[]>([])
-  const [loading, setLoading] = useState(true)
+export default function RecentSessionsList({
+  initialSessions = [],
+  initialLoaded = false,
+}: RecentSessionsListProps) {
+  const [sessions, setSessions] = useState<Session[]>(initialSessions)
+  const [loading, setLoading] = useState(!initialLoaded)
 
   useEffect(() => {
+    if (initialLoaded) return
+
     fetch("/api/interview/sessions?limit=5")
       .then((r) => r.json())
       .then((d) => setSessions(d.sessions ?? []))
       .catch(() => {})
       .finally(() => setLoading(false))
-  }, [])
+  }, [initialLoaded])
 
   if (loading) {
     return (

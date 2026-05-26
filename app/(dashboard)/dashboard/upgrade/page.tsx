@@ -1,240 +1,169 @@
-"use client"
+import { getSessionUser } from "@/lib/auth/session-user"
+import { getPostgresPool } from "@/lib/postgres/server"
+import { buildSubscriptionSnapshot } from "@/lib/subscription/snapshot"
+import type { BillingInterval, PlanKey } from "@/lib/pricing"
+import type { VisaStatus } from "@/types"
+import UpgradePageClient from "./UpgradePageClient"
 
 export const dynamic = "force-dynamic"
 
-import { useEffect, useRef, useState } from "react"
-import Link from "next/link"
-import { useSearchParams } from "next/navigation"
-import { ArrowLeft, Loader2 } from "lucide-react"
-import BillingToggle from "@/components/pricing/BillingToggle"
-import PricingCard from "@/components/pricing/PricingCard"
-import FeatureRow from "@/components/pricing/FeatureRow"
-import { useAuth } from "@/lib/hooks/useAuth"
-import { useSubscription } from "@/lib/hooks/useSubscription"
-import { useFeatureFlags } from "@/lib/hooks/useFeatureFlags"
-import { type BillingInterval, type PlanKey } from "@/lib/pricing"
-
-const COMPARISON_ROWS: Array<{
-  feature: string; free: boolean | string | number; pro: boolean | string | number; proMax: boolean | string | number; tooltip?: string; isGroupHeader?: boolean
-}> = [
-  { feature: "Job discovery", free: "", pro: "", proMax: "", isGroupHeader: true },
-  { feature: "Real-time feed + freshness scores", free: true, pro: true, proMax: true },
-  { feature: "H1B badge on every listing", free: true, pro: true, proMax: true },
-  { feature: "Match scores", free: "Requires resume", pro: true, proMax: true },
-  { feature: "Company watchlist", free: "5 max", pro: "Unlimited", proMax: "Unlimited" },
-  { feature: "Job alerts", free: "3 max", pro: "Unlimited", proMax: "Unlimited" },
-
-  { feature: "Resume tools", free: "", pro: "", proMax: "", isGroupHeader: true },
-  { feature: "Resume upload", free: "3 resumes", pro: "Unlimited", proMax: "Unlimited" },
-  { feature: "Gap analysis", free: false, pro: "20/mo", proMax: "Unlimited" },
-  { feature: "AI resume editor", free: false, pro: true, proMax: true },
-  { feature: "Cover letters", free: false, pro: "25/mo", proMax: "Unlimited" },
-  { feature: "Application autofill", free: "10/mo", pro: "50/mo", proMax: "Unlimited", tooltip: "Fill Greenhouse, Lever, and Ashby forms with one click" },
-
-  { feature: "International (profile-gated on Free)", free: "", pro: "", proMax: "", isGroupHeader: true },
-  { feature: "Sponsorship profiles + H1B badges", free: true, pro: true, proMax: true },
-  { feature: "Sponsorship likelihood score", free: true, pro: true, proMax: true },
-  { feature: "Visa language detection", free: true, pro: true, proMax: true },
-  { feature: "H1B petition history (3yr)", free: true, pro: true, proMax: true },
-  { feature: "OPT countdown, offer risk & urgency routing", free: "Intl. profile", pro: true, proMax: true },
-  { feature: "Priority alerts from sponsoring companies", free: "Intl. profile", pro: true, proMax: true },
-
-  { feature: "Scout AI", free: "", pro: "", proMax: "", isGroupHeader: true },
-  { feature: "Scout chat", free: "5/day", pro: "30/day", proMax: "60/day" },
-  { feature: "Resume tailoring & actions", free: false, pro: true, proMax: true },
-  { feature: "Deep analysis", free: false, pro: "20/mo", proMax: "Unlimited" },
-  { feature: "Strategy & cohort insights", free: false, pro: false, proMax: true },
-
-  { feature: "Interviews", free: "", pro: "", proMax: "", isGroupHeader: true },
-  { feature: "Text + coding interviews", free: false, pro: true, proMax: true },
-  { feature: "Interview debrief", free: false, pro: true, proMax: true },
-  { feature: "Live voice + webcam interview", free: false, pro: false, proMax: "2 sessions/mo" },
-]
+type SearchParams = Record<string, string | string[] | undefined>
 
 type UsageData = {
   cover_letters_used: number
   analyses_used: number
 }
 
-export default function UpgradePage() {
-  const searchParams = useSearchParams()
-  const initialInterval: BillingInterval = searchParams.get("interval") === "yearly" ? "yearly" : "monthly"
-  const [interval, setInterval] = useState<BillingInterval>(initialInterval)
-  const [usage, setUsage] = useState<UsageData | null>(null)
-  const [checkoutLoading, setCheckoutLoading] = useState<PlanKey | null>(null)
-  const [checkoutError, setCheckoutError] = useState<string | null>(null)
-  const autoCheckoutStarted = useRef(false)
-  const { user, profile } = useAuth()
-  const { plan: currentPlan, isLoading } = useSubscription()
-  const { paymentsDisabled } = useFeatureFlags()
+type SubscriptionRow = {
+  plan: string | null
+  status: string | null
+  current_period_end: string | null
+  billing_interval: string | null
+  amount_cents: number | null
+  cancel_at_period_end: boolean | null
+  trial_end: string | null
+}
 
-  const isIntlUser = profile?.is_international || profile?.visa_status || profile?.needs_sponsorship
+type ProfileIntlRow = {
+  is_international: boolean
+  visa_status: VisaStatus | null
+  needs_sponsorship: boolean
+}
 
-  useEffect(() => {
-    if (!user) return
+type UpgradeInitialData = {
+  initialUsage: UsageData | null
+  initialUsageLoaded: boolean
+  initialPlan: PlanKey | null
+  initialPlanLoaded: boolean
+  initialIsIntlUser: boolean
+}
 
-    fetch("/api/billing/usage", { cache: "no-store" })
-      .then((response) => (response.ok ? response.json() : null))
-      .then((data) => {
-        if (data) setUsage(data)
-      })
-      .catch(() => {})
-  }, [user])
+function firstValue(value: string | string[] | undefined): string | undefined {
+  if (Array.isArray(value)) return value[0]
+  return value
+}
 
-  useEffect(() => {
-    if (!user || isLoading || autoCheckoutStarted.current) return
-    if (searchParams.get("checkout") !== "1") return
+function normalizeInterval(value: string | undefined): BillingInterval {
+  return value === "yearly" ? "yearly" : "monthly"
+}
 
-    const requestedPlan = searchParams.get("plan") as PlanKey | null
-    if (requestedPlan !== "pro" && requestedPlan !== "pro_max") return
+function normalizePlan(value: string | undefined): PlanKey | null {
+  if (value === "free" || value === "pro" || value === "pro_max") return value
+  return null
+}
 
-    autoCheckoutStarted.current = true
-    void handleUpgrade(requestedPlan, initialInterval)
-  }, [initialInterval, isLoading, searchParams, user])
+async function fetchInitialUsage(userId: string): Promise<UsageData> {
+  const monthStart = new Date()
+  monthStart.setUTCDate(1)
+  monthStart.setUTCHours(0, 0, 0, 0)
 
-  async function handleUpgrade(plan: PlanKey, bil: BillingInterval) {
-    if (plan === "free") return
-    setCheckoutLoading(plan)
-    setCheckoutError(null)
+  const pool = getPostgresPool()
+  const [coverLetters, analyses] = await Promise.all([
+    pool.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count
+       FROM cover_letters
+       WHERE user_id = $1::uuid
+         AND created_at >= $2`,
+      [userId, monthStart.toISOString()],
+    ),
+    pool.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count
+       FROM resume_analyses
+       WHERE user_id = $1::uuid
+         AND created_at >= $2`,
+      [userId, monthStart.toISOString()],
+    ),
+  ])
 
-    const res = await fetch("/api/stripe/checkout", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ plan, interval: bil }),
-    })
-    const data = await res.json().catch(() => ({}))
-    if (data.url) window.location.href = data.url
-    else {
-      setCheckoutError(data.error ?? "Could not start checkout. Please try again.")
-      setCheckoutLoading(null)
+  return {
+    cover_letters_used: Number(coverLetters.rows[0]?.count ?? 0),
+    analyses_used: Number(analyses.rows[0]?.count ?? 0),
+  }
+}
+
+async function fetchInitialPlan(userId: string): Promise<PlanKey> {
+  const pool = getPostgresPool()
+  const result = await pool.query<SubscriptionRow>(
+    `SELECT plan, status, current_period_end, billing_interval, amount_cents, cancel_at_period_end, trial_end
+     FROM subscriptions
+     WHERE user_id = $1::uuid
+       AND status IN ('active', 'trialing', 'past_due', 'unpaid', 'canceled')
+     ORDER BY updated_at DESC NULLS LAST, created_at DESC
+     LIMIT 1`,
+    [userId],
+  )
+
+  const snapshot = buildSubscriptionSnapshot(result.rows[0])
+  return snapshot.plan
+}
+
+async function fetchInitialIntlSignal(userId: string): Promise<boolean> {
+  const pool = getPostgresPool()
+  const result = await pool.query<ProfileIntlRow>(
+    `SELECT is_international, visa_status, needs_sponsorship
+     FROM profiles
+     WHERE id = $1::uuid
+     LIMIT 1`,
+    [userId],
+  )
+  const row = result.rows[0]
+  if (!row) return false
+  return Boolean(row.is_international || row.visa_status || row.needs_sponsorship)
+}
+
+async function getUpgradeInitialData(userId: string | null): Promise<UpgradeInitialData> {
+  const fallback: UpgradeInitialData = {
+    initialUsage: null,
+    initialUsageLoaded: false,
+    initialPlan: null,
+    initialPlanLoaded: false,
+    initialIsIntlUser: false,
+  }
+
+  if (!userId) return fallback
+
+  try {
+    const [usageResult, planResult, intlResult] = await Promise.allSettled([
+      fetchInitialUsage(userId),
+      fetchInitialPlan(userId),
+      fetchInitialIntlSignal(userId),
+    ])
+
+    return {
+      initialUsage: usageResult.status === "fulfilled" ? usageResult.value : null,
+      initialUsageLoaded: usageResult.status === "fulfilled",
+      initialPlan: planResult.status === "fulfilled" ? planResult.value : null,
+      initialPlanLoaded: planResult.status === "fulfilled",
+      initialIsIntlUser: intlResult.status === "fulfilled" ? intlResult.value : false,
     }
+  } catch {
+    return fallback
   }
+}
 
-  if (paymentsDisabled) {
-    return (
-      <div className="app-page">
-        <div className="app-shell max-w-2xl">
-          <div className="mb-6">
-            <Link href="/dashboard" className="subpage-back">
-              <ArrowLeft className="h-3.5 w-3.5" />
-              Back to dashboard
-            </Link>
-          </div>
-          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-8 text-amber-900">
-            <h1 className="text-xl font-semibold">Payments are temporarily paused</h1>
-            <p className="mt-2 text-sm leading-relaxed">
-              We&apos;re not accepting new upgrades right now. Your existing
-              access is unaffected — check back soon.
-            </p>
-          </div>
-        </div>
-      </div>
-    )
-  }
+export default async function UpgradePage({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>
+}) {
+  const params = await searchParams
+  const sessionUser = await getSessionUser()
+  const initialData = await getUpgradeInitialData(sessionUser?.sub ?? null)
+
+  const initialInterval = normalizeInterval(firstValue(params.interval))
+  const initialShouldAutoCheckout = firstValue(params.checkout) === "1"
+  const initialAutoCheckoutPlan = normalizePlan(firstValue(params.plan))
 
   return (
-    <div className="app-page">
-      <div className="app-shell max-w-4xl">
-        <div className="mb-6">
-          <Link href="/dashboard" className="subpage-back">
-            <ArrowLeft className="h-3.5 w-3.5" />
-            Back to dashboard
-          </Link>
-        </div>
-
-        {/* Hero */}
-        <div className="mb-10 text-center">
-          <p className="section-kicker mb-2">Plans & pricing</p>
-          <h1 className="section-title">
-            {isIntlUser
-              ? "Unlock everything built for international candidates"
-              : "Unlock the full Hireoven experience"}
-          </h1>
-          {currentPlan && currentPlan !== "free" && (
-            <p className="mt-2 text-sm text-slate-500">
-              You&apos;re on{" "}
-              <span className="font-semibold">
-                {currentPlan === "pro_max" ? "Pro Max" : currentPlan === "pro" ? "Pro" : currentPlan}
-              </span>. Upgrade for more.
-            </p>
-          )}
-        </div>
-
-        <div className="mb-8">
-          <BillingToggle value={interval} onChange={setInterval} />
-        </div>
-
-        {checkoutError && (
-          <div className="mx-auto mb-6 max-w-2xl rounded-[14px] border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {checkoutError}
-          </div>
-        )}
-
-        {checkoutLoading && (
-          <div className="mx-auto mb-6 flex max-w-2xl items-center justify-center gap-2 rounded-[14px] border border-[#FFD2B8] bg-[#FFF7F2] px-4 py-3 text-sm font-medium text-[#9A3412]">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Opening secure checkout…
-          </div>
-        )}
-
-        {usage && (
-          <div className="mb-8 grid gap-3 md:grid-cols-2">
-            <div className="rounded-[16px] border border-slate-200 bg-white px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Usage this month</p>
-              <p className="mt-1 text-sm text-slate-600">
-                You&apos;ve used <span className="font-semibold text-slate-900">{usage.cover_letters_used}</span> of 25 cover letters this month.
-                <span className="font-medium text-[#FF5C18]"> Upgrade to Pro Max for unlimited.</span>
-              </p>
-            </div>
-            <div className="rounded-[16px] border border-slate-200 bg-white px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Deep analysis</p>
-              <p className="mt-1 text-sm text-slate-600">
-                You&apos;ve used <span className="font-semibold text-slate-900">{usage.analyses_used}</span> of 20 deep analyses.
-                <span className="font-medium text-[#FF5C18]"> Upgrade for more.</span>
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* Cards */}
-        {!isLoading && (
-          <div className="grid gap-6 md:grid-cols-3 mb-16">
-            {(["free", "pro", "pro_max"] as PlanKey[]).map((plan) => (
-              <PricingCard
-                key={plan}
-                plan={plan}
-                interval={interval}
-                isCurrentPlan={currentPlan === plan || (plan === "free" && !currentPlan)}
-                onUpgrade={handleUpgrade}
-                isLoggedIn={!!user}
-                userPlan={currentPlan ?? "free"}
-              />
-            ))}
-          </div>
-        )}
-
-        {/* Comparison table */}
-        <div className="surface-card overflow-hidden">
-          <div className="px-6 py-4 border-b border-slate-100">
-            <h2 className="text-base font-semibold text-slate-900">Feature comparison</h2>
-          </div>
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-slate-100">
-                <th className="px-4 py-3.5 text-left text-sm font-semibold text-slate-700 w-1/2">Feature</th>
-                <th className="px-4 py-3.5 text-center text-sm font-semibold text-slate-700">Free</th>
-                <th className="px-4 py-3.5 text-center text-sm font-semibold text-[#0369A1] bg-[#F0FDFA]/60">Pro</th>
-                <th className="px-4 py-3.5 text-center text-sm font-semibold text-[#ea580c]">Pro Max</th>
-              </tr>
-            </thead>
-            <tbody>
-              {COMPARISON_ROWS.map((row, i) => (
-                <FeatureRow key={i} {...row} />
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
+    <UpgradePageClient
+      initialInterval={initialInterval}
+      initialUsage={initialData.initialUsage}
+      initialUsageLoaded={initialData.initialUsageLoaded}
+      initialPlan={initialData.initialPlan}
+      initialPlanLoaded={initialData.initialPlanLoaded}
+      initialIsIntlUser={initialData.initialIsIntlUser}
+      initialAutoCheckoutPlan={initialAutoCheckoutPlan}
+      initialShouldAutoCheckout={initialShouldAutoCheckout}
+    />
   )
 }

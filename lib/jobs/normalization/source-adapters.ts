@@ -28,6 +28,66 @@ function toStringOrNull(value: unknown): string | null {
   return normalized.length > 0 ? normalized : null
 }
 
+function readRawCompanyName(rawData: Record<string, unknown> | null): string | null {
+  if (!rawData) return null
+
+  const direct =
+    toStringOrNull(rawData.company_name) ??
+    toStringOrNull(rawData.companyName)
+  if (direct) return direct
+
+  const hiringEntity =
+    rawData.hiring_entity && typeof rawData.hiring_entity === "object"
+      ? (rawData.hiring_entity as Record<string, unknown>)
+      : null
+  if (hiringEntity) {
+    const display =
+      toStringOrNull(hiringEntity.display_name) ??
+      toStringOrNull(hiringEntity.end_client_name) ??
+      toStringOrNull(hiringEntity.staffing_company_name)
+    if (display) return display
+  }
+
+  const normalized =
+    rawData.normalized && typeof rawData.normalized === "object"
+      ? (rawData.normalized as Record<string, unknown>)
+      : null
+  if (normalized) {
+    const company =
+      normalized.company && typeof normalized.company === "object"
+        ? (normalized.company as Record<string, unknown>)
+        : null
+    const name = toStringOrNull(company?.name)
+    if (name) return name
+  }
+
+  return null
+}
+
+function readRawCompanyDomain(rawData: Record<string, unknown> | null): string | null {
+  if (!rawData) return null
+
+  const direct =
+    toStringOrNull(rawData.company_domain) ??
+    toStringOrNull(rawData.companyDomain)
+  if (direct) return direct
+
+  const normalized =
+    rawData.normalized && typeof rawData.normalized === "object"
+      ? (rawData.normalized as Record<string, unknown>)
+      : null
+  if (normalized) {
+    const company =
+      normalized.company && typeof normalized.company === "object"
+        ? (normalized.company as Record<string, unknown>)
+        : null
+    const domain = toStringOrNull(company?.domain)
+    if (domain) return domain
+  }
+
+  return null
+}
+
 function looksLikeLocation(value: string): boolean {
   if (!value) return false
   if (value.length < 2 || value.length > 80) return false
@@ -159,8 +219,8 @@ export function adaptPersistedJob(job: PersistedJobForNormalization): AdaptedJob
     description: cleanedDescription,
     location: sanitizeLocation(job.location),
     postedAt: job.first_detected_at ?? null,
-    company: null,
-    companyDomain: null,
+    company: readRawCompanyName(rawData),
+    companyDomain: readRawCompanyDomain(rawData),
     structuredSections: structured.sections,
     structuredCompensationText: structured.compensationText,
     structuredVisaText: structured.visaText,

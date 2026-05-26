@@ -3,8 +3,10 @@ import {
   matchesLocationFilter,
   matchesSearchQuery,
 } from "@/lib/jobs/search-match"
+import { dedupeFeedJobsBySignature } from "@/lib/jobs/feed-dedupe"
 import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
 import { getCachedScoresForUser, scoreJobsForUser } from "@/lib/matching/batch-scorer"
+import { hasUsableMatchScore } from "@/lib/jobs/match-score-display"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { createClient } from "@/lib/supabase/server"
 import { formatEmploymentLabel, formatSalaryLabel } from "@/lib/jobs/normalization/view-model"
@@ -150,6 +152,9 @@ export async function GET(request: NextRequest) {
   // up in the main feed regardless of the JD's age.
   const sql = isBestMatch
     ? `SELECT jobs.*, to_jsonb(companies.*) AS company,
+              gjs.risk_score AS ghost_risk_score,
+              gjs.risk_level AS ghost_risk_level,
+              gjs.repost_count AS ghost_repost_count,
               EXISTS (
                 SELECT 1 FROM job_applications ja
                 WHERE ja.user_id = ${userIdParam}::uuid
@@ -158,11 +163,15 @@ export async function GET(request: NextRequest) {
               ) AS is_user_saved
        FROM jobs
        LEFT JOIN companies ON companies.id = jobs.company_id
+       LEFT JOIN ghost_job_scores gjs ON gjs.job_id = jobs.id
        WHERE ${where.join(" AND ")}
        ORDER BY jobs.first_detected_at DESC NULLS LAST
        LIMIT ${limitParam}`
     : `WITH base AS (
          SELECT jobs.*, to_jsonb(companies.*) AS company,
+                gjs.risk_score AS ghost_risk_score,
+                gjs.risk_level AS ghost_risk_level,
+                gjs.repost_count AS ghost_repost_count,
                 EXISTS (
                   SELECT 1 FROM job_applications ja
                   WHERE ja.user_id = ${userIdParam}::uuid
@@ -171,14 +180,20 @@ export async function GET(request: NextRequest) {
                 ) AS is_user_saved
          FROM jobs
          LEFT JOIN companies ON companies.id = jobs.company_id
+         LEFT JOIN ghost_job_scores gjs ON gjs.job_id = jobs.id
          WHERE ${where.join(" AND ")}
          ORDER BY jobs.first_detected_at DESC NULLS LAST
          LIMIT ${limitParam}
        ),
        saved AS (
-         SELECT jobs.*, to_jsonb(companies.*) AS company, true AS is_user_saved
+         SELECT jobs.*, to_jsonb(companies.*) AS company,
+                gjs.risk_score AS ghost_risk_score,
+                gjs.risk_level AS ghost_risk_level,
+                gjs.repost_count AS ghost_repost_count,
+                true AS is_user_saved
          FROM jobs
          LEFT JOIN companies ON companies.id = jobs.company_id
+         LEFT JOIN ghost_job_scores gjs ON gjs.job_id = jobs.id
          JOIN job_applications ja
            ON ja.job_id = jobs.id
           AND ja.user_id = ${userIdParam}::uuid
@@ -203,7 +218,7 @@ export async function GET(request: NextRequest) {
     )
   }
 
-  const jobs = data.filter((job) => {
+  const filteredJobs = data.filter((job) => {
     if (remote || hybrid || onsite) {
       const matchesWorkMode =
         (remote && job.is_remote) ||
@@ -249,6 +264,7 @@ export async function GET(request: NextRequest) {
     }
     return true
   })
+  const jobs = dedupeFeedJobsBySignature(filteredJobs)
   let scoreMap = new Map<string, JobMatchScore>()
 
   // Best Match pays the full scoring cost (compute on cache miss). Every
@@ -276,7 +292,8 @@ export async function GET(request: NextRequest) {
   const ranked = jobs
     .map((job) => {
       const matchScore = scoreMap.get(job.id) ?? null
-      return { ...job, match_score: matchScore }
+      const sanitizedMatchScore = hasUsableMatchScore(matchScore) ? matchScore : null
+      return { ...job, match_score: sanitizedMatchScore }
     })
     // User-saved jobs bypass the minScore gate — the user has signalled intent.
     .filter((job) =>
@@ -302,6 +319,7 @@ export async function GET(request: NextRequest) {
 
   const paginated = ranked.slice(offset, offset + limit).map(job => ({
     ...job,
+    match_score: hasUsableMatchScore(job.match_score ?? null) ? job.match_score : null,
     card_view: {
       title: job.title,
       location: job.location ?? null,
