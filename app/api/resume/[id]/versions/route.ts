@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getSessionUser } from "@/lib/auth/session-user"
 import { getPostgresPool } from "@/lib/postgres/server"
+import { fetchResumeVersionsWithOutcomeStats } from "@/lib/resume/version-outcomes"
 import { createResumeSnapshot, isUuid } from "@/lib/resume/hub"
 import type { Resume, ResumeSnapshot, ResumeVersion } from "@/types"
 
@@ -46,15 +47,12 @@ export async function GET(
     return NextResponse.json({ error: "Not found" }, { status: 404 })
   }
 
-  const result = await pool.query<ResumeVersion>(
-    `SELECT rv.*
-     FROM resume_versions rv
-     INNER JOIN resumes r ON r.id = rv.resume_id
-     WHERE rv.resume_id = $1 AND r.user_id = $2
-     ORDER BY rv.created_at DESC`,
-    [resumeId, user.sub]
-  )
-  return NextResponse.json({ versions: result.rows })
+  const versions = await fetchResumeVersionsWithOutcomeStats({
+    pool,
+    resumeId,
+    userId: user.sub,
+  })
+  return NextResponse.json({ versions })
 }
 
 export async function POST(

@@ -1,5 +1,6 @@
 import { analyzeResumeForJob } from "@/lib/resume/analyzer"
 import { getResumeVersion } from "@/lib/matching/fast-scorer"
+import { resolveSkillsFactorValue } from "@/lib/matching/score-factor-state"
 import type {
   Company,
   Job,
@@ -15,12 +16,24 @@ export function mapAnalysisToDeepScore(
   fastScore: JobMatchScore | JobMatchScoreInsert,
   analysis: ResumeAnalysis
 ): JobMatchScoreInsert {
+  const totalRequiredSkills = fastScore.total_required_skills ?? job.skills?.length ?? 0
+  const skillsFactor = resolveSkillsFactorValue({
+    analysis,
+    fastScore: {
+      skills_score: fastScore.skills_score ?? null,
+      total_required_skills: totalRequiredSkills,
+      score_breakdown: fastScore.score_breakdown ?? null,
+    },
+  })
+  const matchingSkillsCount =
+    analysis.matching_skills?.length ?? fastScore.matching_skills_count ?? 0
+
   return {
     user_id: resume.user_id,
     resume_id: resume.id,
     job_id: job.id,
     overall_score: analysis.overall_score ?? fastScore.overall_score,
-    skills_score: analysis.skills_score ?? fastScore.skills_score ?? null,
+    skills_score: skillsFactor.state === "computed" ? skillsFactor.value : null,
     seniority_score: fastScore.seniority_score ?? null,
     education_score: analysis.education_score ?? fastScore.education_score ?? null,
     role_fit_score: fastScore.role_fit_score ?? null,
@@ -34,13 +47,11 @@ export function mapAnalysisToDeepScore(
     is_location_match: fastScore.is_location_match ?? null,
     is_employment_type_match: fastScore.is_employment_type_match ?? null,
     is_sponsorship_compatible: fastScore.is_sponsorship_compatible ?? null,
-    matching_skills_count:
-      analysis.matching_skills?.length ?? fastScore.matching_skills_count ?? 0,
-    total_required_skills:
-      job.skills?.length ?? fastScore.total_required_skills ?? 0,
+    matching_skills_count: matchingSkillsCount,
+    total_required_skills: totalRequiredSkills,
     skills_match_rate:
-      job.skills?.length && analysis.matching_skills
-        ? Number((analysis.matching_skills.length / job.skills.length).toFixed(3))
+      totalRequiredSkills > 0
+        ? Number((matchingSkillsCount / totalRequiredSkills).toFixed(3))
         : fastScore.skills_match_rate ?? null,
     score_method: "deep",
     computed_at: new Date().toISOString(),

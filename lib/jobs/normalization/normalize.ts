@@ -4,6 +4,7 @@ import {
   extractSkillsFromText,
   normalizeJobTitle,
 } from "@/lib/jobs/text-normalizer"
+import { resolveHiringEntitySignal } from "@/lib/jobs/hiring-entity"
 import { categorizeSkills, emptyCategorizedSkills, normalizeSkillList } from "@/lib/skills/taxonomy"
 import {
   extractSalaryRange,
@@ -14,6 +15,7 @@ import { HAIKU_MODEL } from "@/lib/ai/anthropic-models"
 import { extractCanonicalSections } from "@/lib/jobs/normalization/sections"
 import { validateCanonicalJob } from "@/lib/jobs/normalization/validator"
 import { adaptPersistedJob, adaptRawCrawlerJob } from "@/lib/jobs/normalization/source-adapters"
+import { isExplicitlyForeign } from "@/lib/jobs/location-filter"
 import {
   formatSalaryLabel,
   mapCanonicalToJobCardView,
@@ -260,6 +262,72 @@ function normalizeCurrency(value: unknown): string | null {
   return normalized.length <= 8 ? normalized : normalized.slice(0, 8)
 }
 
+const REMOTE_LOCATION_RE = /\b(remote|work from home|wfh|work remotely|distributed|anywhere)\b/i
+const BROAD_REGION_ONLY_RE =
+  /^(united states(?: of america)?|u\.?\s*s\.?\s*a?\.?|usa|canada|north america|amer|emea|apac|global|worldwide)$/i
+const HYBRID_HINT_RE =
+  /\b(hybrid|partially remote|2\s*days in (?:the )?office|3\s*days in (?:the )?office|2-?3 days (?:a week )?on-?site)\b/i
+const ONSITE_HINT_RE =
+  /\b(onsite|on-?site|in[-\s]?office|in person|office[-\s]based|relocation required|must be located in|report(?:s|ing)? to (?:the )?office)\b/i
+const REMOTE_NEGATIVE_RE = /\b(onsite|on[\s-]?site)\s+only\b|\bno remote\b|\bnot remote\b|\bnon[\s-]?remote\b/i
+
+function hasRemoteLocationHint(location: string | null): boolean {
+  if (!location) return false
+  return REMOTE_LOCATION_RE.test(location)
+}
+
+function locationLooksSpecificWorksite(location: string | null): boolean {
+  if (!location) return false
+  const normalized = location.trim()
+  if (!normalized) return false
+  if (hasRemoteLocationHint(normalized)) return false
+  if (BROAD_REGION_ONLY_RE.test(normalized)) return false
+  return true
+}
+
+function reconcileWorkModeWithLocation(input: {
+  location: string | null
+  description: string | null
+  isRemote: boolean | null
+  isHybrid: boolean | null
+}): { isRemote: boolean | null; isHybrid: boolean | null } {
+  let isRemote = input.isRemote
+  let isHybrid = input.isHybrid
+  const blob = [input.location, input.description].filter(Boolean).join("\n")
+  const hasHybridHint = HYBRID_HINT_RE.test(blob)
+  const hasOnsiteHint = ONSITE_HINT_RE.test(blob)
+  const hasRemoteNegative = REMOTE_NEGATIVE_RE.test(blob)
+  const hasRemoteLocHint = hasRemoteLocationHint(input.location)
+  const hasSpecificWorksite = locationLooksSpecificWorksite(input.location)
+  const locationIsForeign = isExplicitlyForeign({ location: input.location })
+
+  if (isRemote && isHybrid) {
+    isRemote = false
+    isHybrid = true
+  }
+
+  if (hasRemoteNegative) {
+    isRemote = false
+    isHybrid = hasHybridHint ? true : false
+  }
+
+  if (isRemote && locationIsForeign) {
+    isRemote = false
+    isHybrid = false
+  }
+
+  if (isRemote && hasSpecificWorksite && !hasRemoteLocHint) {
+    isRemote = false
+    isHybrid = true
+  }
+
+  if (isHybrid && hasOnsiteHint && !hasRemoteLocHint && !hasHybridHint) {
+    isHybrid = false
+  }
+
+  return { isRemote, isHybrid }
+}
+
 type HaikuNormalizationPayload = {
   cleanDescription?: unknown
   shortSummary?: unknown
@@ -280,6 +348,12 @@ function toStructuredJobData(input: {
   salaryCurrency: string
   payText: string | null
   shortSummary?: string | null
+  hiringEntity?: {
+    displayName: string | null
+    staffingCompanyName: string | null
+    isStaffingIntermediary: boolean
+    confidence: number
+  } | null
 }): Record<string, unknown> {
   const job = input.canonical
   const sections = job.sections
@@ -296,6 +370,15 @@ function toStructuredJobData(input: {
     title: job.header.title.value,
     company: job.company.name,
     companyDomain: job.company.domain,
+    hiringCompany:
+      input.hiringEntity?.displayName ??
+      job.company.name,
+    staffingCompany:
+      input.hiringEntity?.staffingCompanyName ?? null,
+    staffingIntermediary:
+      input.hiringEntity?.isStaffingIntermediary ?? false,
+    hiringEntityConfidence:
+      input.hiringEntity?.confidence ?? null,
     location: job.header.location.value,
     workMode:
       job.header.is_remote.value === true
@@ -586,6 +669,15 @@ function applyHaikuEnrichment(
     nextColumns.is_hybrid = false
   }
 
+  const reconciledWorkMode = reconcileWorkModeWithLocation({
+    location: nextColumns.location,
+    description: nextColumns.description,
+    isRemote: nextColumns.is_remote,
+    isHybrid: nextColumns.is_hybrid,
+  })
+  nextColumns.is_remote = reconciledWorkMode.isRemote ?? false
+  nextColumns.is_hybrid = reconciledWorkMode.isHybrid ?? false
+
   canonical.header.is_remote.value = nextColumns.is_remote
   canonical.header.is_hybrid.value = nextColumns.is_hybrid
   canonical.header.is_remote.confidence = 0.76
@@ -658,6 +750,13 @@ function normalizeFromCoreInput(input: {
   existing: ExistingJobState
   nowIso: string
 }): NormalizationResult {
+  const hiringEntitySignal = resolveHiringEntitySignal({
+    companyName: input.company,
+    description: input.description,
+  })
+  const resolvedCompanyName =
+    hiringEntitySignal?.display_name ?? input.company
+
   const cleanedTitle = cleanJobTitle(input.title)
   const normalizedTitle = normalizeJobTitle(cleanedTitle)
   const metadata = inferJobMetadata({
@@ -730,6 +829,15 @@ function normalizeFromCoreInput(input: {
     visa_language_detected: visaLanguage,
     skills: [] as string[],
   }
+
+  const reconciledWorkMode = reconcileWorkModeWithLocation({
+    location: nextColumns.location,
+    description: nextColumns.description,
+    isRemote: nextColumns.is_remote,
+    isHybrid: nextColumns.is_hybrid,
+  })
+  nextColumns.is_remote = reconciledWorkMode.isRemote ?? false
+  nextColumns.is_hybrid = reconciledWorkMode.isHybrid ?? false
 
   const sections = extractCanonicalSections({
     adapter: input.adapter,
@@ -822,7 +930,7 @@ function normalizeFromCoreInput(input: {
       crawl_url: input.applyUrl,
     },
     company: {
-      name: input.company,
+      name: resolvedCompanyName,
       domain: input.companyDomain,
     },
     descriptions: {
@@ -949,11 +1057,29 @@ function normalizeFromCoreInput(input: {
       source_external_id: input.externalId,
       crawled_url: input.applyUrl,
       normalized_at: input.nowIso,
+      hiring_entity: hiringEntitySignal
+        ? {
+            display_name: hiringEntitySignal.display_name,
+            end_client_name: hiringEntitySignal.end_client_name,
+            staffing_company_name: hiringEntitySignal.staffing_company_name,
+            is_staffing_intermediary: hiringEntitySignal.is_staffing_intermediary,
+            confidence: hiringEntitySignal.confidence,
+            source: hiringEntitySignal.source,
+          }
+        : null,
     },
     structuredData: toStructuredJobData({
       canonical,
       salaryCurrency,
       payText,
+      hiringEntity: hiringEntitySignal
+        ? {
+            displayName: hiringEntitySignal.display_name,
+            staffingCompanyName: hiringEntitySignal.staffing_company_name,
+            isStaffingIntermediary: hiringEntitySignal.is_staffing_intermediary,
+            confidence: hiringEntitySignal.confidence,
+          }
+        : null,
     }),
   }
 }

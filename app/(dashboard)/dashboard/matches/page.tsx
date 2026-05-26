@@ -1,405 +1,138 @@
-"use client"
+import { headers } from "next/headers"
+import { getPostgresPool } from "@/lib/postgres/server"
+import { createClient } from "@/lib/supabase/server"
+import type { JobWithMatchScore } from "@/types"
+import MatchesPageClient from "./MatchesPageClient"
 
 export const dynamic = "force-dynamic"
 
-import { useEffect, useMemo, useState } from "react"
-import Link from "next/link"
-import { BellRing, ExternalLink } from "lucide-react"
-import { MatchScorePill } from "@/components/matching/MatchScorePill"
-import { useResumeContext } from "@/components/resume/ResumeProvider"
-import DashboardPageHeader from "@/components/layout/DashboardPageHeader"
-import { explainScore } from "@/lib/matching/score-explainer"
-import { devWarn } from "@/lib/client-dev-log"
-import { fetchSessionUser } from "@/lib/supabase/client"
-import type { JobWithMatchScore } from "@/types"
-
 const SYSTEM_ALERT_NAME = "System: strong matches"
+const INITIAL_THRESHOLD = 70
 
-function BreakdownBar({
-  label,
-  value,
-}: {
-  label: string
-  value: number | null | undefined
-}) {
-  const safeValue = Math.max(0, Math.min(100, value ?? 0))
-
-  return (
-    <div className="space-y-1">
-      <div className="flex items-center justify-between text-[11px] font-medium uppercase tracking-[0.18em] text-slate-400">
-        <span>{label}</span>
-        <span className="tracking-normal text-slate-600">{safeValue}</span>
-      </div>
-      <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
-        <div
-          className="h-full rounded-full bg-[#FF5C18]"
-          style={{ width: `${safeValue}%` }}
-        />
-      </div>
-    </div>
-  )
+type MatchFeedPayload = {
+  jobs?: JobWithMatchScore[]
 }
 
-export default function MatchesPage() {
-  const { primaryResume } = useResumeContext()
-  const [userId, setUserId] = useState<string | null>(null)
-  const [threshold, setThreshold] = useState(70)
-  const [jobs, setJobs] = useState<JobWithMatchScore[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [notifyEnabled, setNotifyEnabled] = useState(false)
-  const [isSavingNotify, setIsSavingNotify] = useState(false)
+type ResumeGateRow = {
+  id: string
+}
 
-  useEffect(() => {
-    let cancelled = false
-    fetchSessionUser()
-      .then((u) => {
-        if (cancelled) return
-        setUserId(u?.id ?? null)
-      })
-      .catch((error) => {
-        devWarn("Failed to load matches user", error)
-        if (!cancelled) setUserId(null)
-      })
+type AlertStateRow = {
+  is_active: boolean
+}
 
-    return () => {
-      cancelled = true
-    }
-  }, [])
+type MatchesInitialData = {
+  initialThreshold: number
+  initialHasParsedResume: boolean
+  initialJobs: JobWithMatchScore[]
+  initialJobsLoaded: boolean
+  initialNotifyEnabled: boolean
+  initialNotifyLoaded: boolean
+}
 
-  useEffect(() => {
-    if (!primaryResume || primaryResume.parse_status !== "complete") {
-      setJobs([])
-      setIsLoading(false)
-      return
-    }
+function resolveOrigin(requestHeaders: Headers): string {
+  const forwardedHost = requestHeaders.get("x-forwarded-host")
+  const host = forwardedHost ?? requestHeaders.get("host")
+  const forwardedProto = requestHeaders.get("x-forwarded-proto")
 
-    let cancelled = false
-    setIsLoading(true)
-
-    fetch(`/api/match/feed?limit=120&within=24h&sort=match&minScore=${threshold}`, {
-      cache: "no-store",
-    })
-      .then(async (response) => {
-        if (!response.ok) return []
-        const payload = (await response.json()) as { jobs?: JobWithMatchScore[] }
-        return payload.jobs ?? []
-      })
-      .then((data) => {
-        if (cancelled) return
-        setJobs(data)
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoading(false)
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [primaryResume, threshold])
-
-  useEffect(() => {
-    if (!userId) return
-
-    let cancelled = false
-
-    fetch("/api/alerts")
-      .then((res) => (res.ok ? res.json() : { alerts: [] }))
-      .then(({ alerts }: { alerts: Array<{ name: string | null; is_active: boolean }> }) => {
-        if (cancelled) return
-        const sys = alerts.find((a) => a.name === SYSTEM_ALERT_NAME)
-        setNotifyEnabled(Boolean(sys?.is_active))
-      })
-      .catch(() => {})
-
-    return () => {
-      cancelled = true
-    }
-  }, [userId])
-
-  const grouped = useMemo(() => {
-    const strong = jobs.filter((job) => (job.match_score?.overall_score ?? 0) >= 85)
-    const good = jobs.filter((job) => {
-      const score = job.match_score?.overall_score ?? 0
-      return score >= 70 && score < 85
-    })
-    const potential = jobs.filter((job) => {
-      const score = job.match_score?.overall_score ?? 0
-      return score >= 60 && score < 70
-    })
-
-    return { strong, good, potential }
-  }, [jobs])
-
-  async function toggleNotifications(nextValue: boolean) {
-    if (!userId) return
-
-    setIsSavingNotify(true)
-
-    const listRes = await fetch("/api/alerts")
-    const { alerts } = listRes.ok
-      ? ((await listRes.json()) as { alerts: Array<{ id: string; name: string | null }> })
-      : { alerts: [] }
-
-    const existing = alerts.find((a) => a.name === SYSTEM_ALERT_NAME)
-
-    if (existing?.id) {
-      await fetch(`/api/alerts/${existing.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ is_active: nextValue }),
-      })
-    } else if (nextValue) {
-      await fetch("/api/alerts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: SYSTEM_ALERT_NAME,
-          keywords: [],
-          locations: [],
-          seniority_levels: [],
-          employment_types: [],
-          remote_only: false,
-          sponsorship_required: false,
-          company_ids: [],
-          is_active: true,
-        }),
-      })
-    }
-
-    setNotifyEnabled(nextValue)
-    setIsSavingNotify(false)
+  if (host) {
+    const proto = forwardedProto ?? (host.includes("localhost") || host.startsWith("127.0.0.1") ? "http" : "https")
+    return `${proto}://${host}`
   }
 
-  if (!primaryResume || primaryResume.parse_status !== "complete") {
-    return (
-      <div className="space-y-6">
-        <DashboardPageHeader
-          kicker="Personalized matches"
-          title="Upload a resume to unlock ranked matches"
-          description="Once your primary resume is parsed, Hireoven will score the feed for you automatically."
-        />
+  const envOrigin = process.env.NEXT_PUBLIC_APP_URL?.trim()
+  if (envOrigin) return envOrigin.replace(/\/$/, "")
+  return "http://localhost:3000"
+}
 
-        <section className="rounded-[20px] border border-dashed border-slate-300 bg-white px-8 py-14 text-center">
-          <p className="text-lg font-semibold text-slate-900">No resume available for matching</p>
-          <p className="mt-2 text-sm text-slate-500">
-            Upload a parsed primary resume first, then come back here for your ranked opportunities.
-          </p>
-          <Link
-            href="/dashboard/resume"
-            className="mt-5 inline-flex rounded-[14px] bg-[#FF5C18] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#E14F0E]"
-          >
-            Go to resume
-          </Link>
-        </section>
-      </div>
-    )
-  }
-
-  const totalStrongMatches = jobs.filter((job) => (job.match_score?.overall_score ?? 0) >= 70).length
-
-  return (
-    <div className="space-y-6">
-      <DashboardPageHeader
-        kicker="Personalized matches"
-        title={`${totalStrongMatches} strong matches for you`}
-        description="Jobs where your resume scores 70% or higher, sorted by match quality and freshness."
-        meta={
-          <span className="rounded-full border border-[#FFD2B8] bg-[#FFF8F4] px-3 py-1.5 text-xs font-semibold text-[#9A3412]">
-            Threshold {threshold}%+
-          </span>
-        }
-        actions={
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setThreshold(70)}
-              className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
-                threshold === 70
-                  ? "bg-[#FF5C18] text-white"
-                  : "border border-slate-200 bg-white text-slate-600 hover:border-slate-300"
-              }`}
-            >
-              Strong only
-            </button>
-            <button
-              type="button"
-              onClick={() => setThreshold(60)}
-              className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
-                threshold === 60
-                  ? "bg-[#FF5C18] text-white"
-                  : "border border-slate-200 bg-white text-slate-600 hover:border-slate-300"
-              }`}
-            >
-              Include 60%+
-            </button>
-          </div>
-        }
-      />
-
-      <section className="rounded-[20px] border border-slate-200/80 bg-white p-5 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <p className="text-sm font-semibold text-slate-900">
-              Get notified when strong matches drop
-            </p>
-            <p className="mt-1 text-sm text-slate-500">
-              We’ll keep watch for jobs scoring 70% or higher against your primary resume.
-            </p>
-          </div>
-
-          <button
-            type="button"
-            disabled={isSavingNotify}
-            onClick={() => void toggleNotifications(!notifyEnabled)}
-            className={`inline-flex items-center gap-2 rounded-[14px] px-4 py-2.5 text-sm font-semibold transition ${
-              notifyEnabled
-                ? "bg-[#ea580c] text-white"
-                : "border border-slate-200 bg-white text-slate-700 hover:border-slate-300"
-            }`}
-          >
-            <BellRing className="h-4 w-4" />
-            {notifyEnabled ? "Alerts enabled" : "Alert me on new strong matches"}
-          </button>
-        </div>
-      </section>
-
-      {isLoading ? (
-        <section className="rounded-[20px] border border-slate-200/80 bg-white p-6 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
-          <div className="space-y-4">
-            <div className="h-6 w-48 animate-pulse rounded-full bg-slate-100" />
-            <div className="h-28 animate-pulse rounded-[18px] bg-slate-100" />
-            <div className="h-28 animate-pulse rounded-[18px] bg-slate-100" />
-          </div>
-        </section>
-      ) : jobs.length === 0 ? (
-        <section className="rounded-[20px] border border-dashed border-slate-300 bg-white px-8 py-14 text-center">
-          <p className="text-lg font-semibold text-slate-900">No strong matches yet</p>
-          <p className="mt-2 text-sm text-slate-500">
-            We’ll surface the moment a new role clears your current threshold.
-          </p>
-          {threshold > 60 && (
-            <button
-              type="button"
-              onClick={() => setThreshold(60)}
-              className="mt-5 inline-flex rounded-[14px] border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
-            >
-              Lower threshold to 60%
-            </button>
-          )}
-        </section>
-      ) : (
-        <div className="space-y-6">
-          {[
-            { label: "Strong matches (85%+)", jobs: grouped.strong },
-            { label: "Good matches (70-84%)", jobs: grouped.good },
-            ...(threshold <= 60 ? [{ label: "Potential matches (60-69%)", jobs: grouped.potential }] : []),
-          ]
-            .filter((section) => section.jobs.length > 0)
-            .map((section) => (
-              <section key={section.label} className="space-y-3">
-                <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-400">
-                  {section.label}
-                </h2>
-
-                <div className="space-y-3">
-                  {section.jobs.map((job) => {
-                    const score = job.match_score
-                    if (!score) return null
-
-                    const explanation = explainScore(score, primaryResume, job)
-
-                    return (
-                      <article
-                        key={job.id}
-                        className="rounded-[20px] border border-slate-200/80 bg-white p-5 shadow-[0_10px_24px_rgba(15,23,42,0.04)]"
-                      >
-                        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                          <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-3">
-                              <h3 className="text-xl font-semibold text-slate-950">
-                                {job.title}
-                              </h3>
-                              <MatchScorePill
-                                score={score.overall_score}
-                                method={score.score_method}
-                                isLoading={false}
-                                size="md"
-                                showDisqualifiers
-                                isSponsorshipCompatible={score.is_sponsorship_compatible}
-                              />
-                            </div>
-                            <p className="mt-1 text-sm text-slate-500">
-                              {job.company.name}
-                              {job.location ? ` · ${job.location}` : ""}
-                            </p>
-                            <p className="mt-3 text-sm leading-6 text-slate-600">
-                              {explanation.headline}
-                            </p>
-                          </div>
-
-                          <Link
-                            href={job.apply_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-2 rounded-[14px] bg-[#FF5C18] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#E14F0E]"
-                          >
-                            Apply
-                            <ExternalLink className="h-4 w-4" />
-                          </Link>
-                        </div>
-
-                        <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(280px,0.9fr)]">
-                          <div className="space-y-3 rounded-[18px] border border-slate-200/70 bg-slate-50/70 p-4">
-                            <BreakdownBar label="Skills" value={score.skills_score} />
-                            <BreakdownBar label="Seniority" value={score.seniority_score} />
-                            <BreakdownBar
-                              label="Sponsorship"
-                              value={score.sponsorship_score}
-                            />
-                          </div>
-
-                          <div className="rounded-[18px] border border-slate-200/70 bg-white p-4">
-                            {explanation.strengths.length > 0 && (
-                              <div>
-                                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                                  Strengths
-                                </p>
-                                <ul className="mt-2 space-y-1.5 text-sm text-slate-600">
-                                  {explanation.strengths.map((item) => (
-                                    <li key={item}>• {item}</li>
-                                  ))}
-                                </ul>
-                              </div>
-                            )}
-
-                            {explanation.concerns.length > 0 && (
-                              <div className="mt-4">
-                                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                                  Watchouts
-                                </p>
-                                <ul className="mt-2 space-y-1.5 text-sm text-slate-600">
-                                  {explanation.concerns.map((item) => (
-                                    <li key={item}>• {item}</li>
-                                  ))}
-                                </ul>
-                              </div>
-                            )}
-
-                            {explanation.sponsorship_note && (
-                              <p className="mt-4 rounded-[14px] border border-[#FFD2B8] bg-[#FFF8F4] px-3 py-2 text-sm text-[#9A3412]">
-                                {explanation.sponsorship_note}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      </article>
-                    )
-                  })}
-                </div>
-              </section>
-            ))}
-        </div>
-      )}
-    </div>
+async function fetchHasParsedResume(userId: string): Promise<boolean> {
+  const pool = getPostgresPool()
+  const result = await pool.query<ResumeGateRow>(
+    `SELECT id
+     FROM resumes
+     WHERE user_id = $1::uuid
+       AND parse_status = 'complete'
+     ORDER BY is_primary DESC, updated_at DESC
+     LIMIT 1`,
+    [userId],
   )
+  return result.rows.length > 0
+}
+
+async function fetchInitialNotifyEnabled(userId: string): Promise<boolean> {
+  const pool = getPostgresPool()
+  const result = await pool.query<AlertStateRow>(
+    `SELECT is_active
+     FROM job_alerts
+     WHERE user_id = $1::uuid
+       AND name = $2
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    [userId, SYSTEM_ALERT_NAME],
+  )
+  return Boolean(result.rows[0]?.is_active)
+}
+
+async function fetchInitialMatchJobs(requestHeaders: Headers): Promise<JobWithMatchScore[]> {
+  const origin = resolveOrigin(requestHeaders)
+  const cookieHeader = requestHeaders.get("cookie") ?? ""
+  const params = new URLSearchParams({
+    limit: "120",
+    within: "24h",
+    sort: "match",
+    minScore: String(INITIAL_THRESHOLD),
+  })
+
+  const response = await fetch(`${origin}/api/match/feed?${params.toString()}`, {
+    cache: "no-store",
+    headers: cookieHeader ? { cookie: cookieHeader } : undefined,
+  })
+
+  if (!response.ok) return []
+  const payload = (await response.json()) as MatchFeedPayload
+  return Array.isArray(payload.jobs) ? payload.jobs : []
+}
+
+async function getInitialData(): Promise<MatchesInitialData> {
+  const fallback: MatchesInitialData = {
+    initialThreshold: INITIAL_THRESHOLD,
+    initialHasParsedResume: false,
+    initialJobs: [],
+    initialJobsLoaded: false,
+    initialNotifyEnabled: false,
+    initialNotifyLoaded: false,
+  }
+
+  try {
+    const supabase = await createClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) return fallback
+
+    const requestHeaders = await headers()
+    const hasParsedResume = await fetchHasParsedResume(user.id)
+
+    const [jobsResult, notifyResult] = await Promise.allSettled([
+      hasParsedResume ? fetchInitialMatchJobs(requestHeaders) : Promise.resolve([]),
+      fetchInitialNotifyEnabled(user.id),
+    ])
+
+    return {
+      initialThreshold: INITIAL_THRESHOLD,
+      initialHasParsedResume: hasParsedResume,
+      initialJobs: jobsResult.status === "fulfilled" ? jobsResult.value : [],
+      initialJobsLoaded: jobsResult.status === "fulfilled",
+      initialNotifyEnabled: notifyResult.status === "fulfilled" ? notifyResult.value : false,
+      initialNotifyLoaded: notifyResult.status === "fulfilled",
+    }
+  } catch {
+    return fallback
+  }
+}
+
+export default async function MatchesPage() {
+  const initialData = await getInitialData()
+  return <MatchesPageClient {...initialData} />
 }

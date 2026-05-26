@@ -650,6 +650,7 @@ export async function persistCrawlJobs({
         posted_at: job.postedAt ?? null,
         posted_at_normalized: normalizedPostedAt,
         description_captured: Boolean(normalization.nextColumns.description),
+        ...normalization.rawSnapshot,
         ...cardSignals,
         raw: {
           title: job.title,

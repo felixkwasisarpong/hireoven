@@ -1,6 +1,7 @@
 "use client"
 
-import { useRouter, usePathname, useSearchParams } from "next/navigation"
+import { useMemo } from "react"
+import { useRouter, usePathname } from "next/navigation"
 import { Focus, RefreshCw, SlidersHorizontal, User, X } from "lucide-react"
 import { useResumeContext } from "@/components/resume/ResumeProvider"
 import { detectScoutMode, getScoutModeLabel } from "@/lib/scout/mode"
@@ -15,8 +16,11 @@ type ScoutContextChipProps = {
 export function ScoutContextChip({ onReset, jobTitle, companyName }: ScoutContextChipProps) {
   const router = useRouter()
   const pathname = usePathname()
-  const searchParams = useSearchParams()
   const { primaryResume } = useResumeContext()
+  const searchParams = useMemo(() => {
+    if (typeof window === "undefined") return new URLSearchParams()
+    return new URLSearchParams(window.location.search)
+  }, [pathname])
 
   const mode = detectScoutMode(pathname ?? "")
   const modeLabel = getScoutModeLabel(mode)

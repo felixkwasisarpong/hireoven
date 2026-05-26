@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { devWarn } from "@/lib/client-dev-log"
+import { dedupeFeedJobsBySignature } from "@/lib/jobs/feed-dedupe"
 import {
   matchesLocationFilter,
   matchesSearchQuery,
@@ -472,10 +473,7 @@ export function useJobs(
             nextOffset += rawCount
             if (rawCount < chunkSize) exhausted = true
 
-            const merged = [...nextRows, ...rows].filter(
-              (job, index, collection) =>
-                collection.findIndex((item) => item.id === job.id) === index
-            )
+            const merged = dedupeFeedJobsBySignature([...nextRows, ...rows])
 
             // Client-side sorting is applied in the `jobs` memo, so the merged
             // list here can stay unsorted — pagination order is reapplied

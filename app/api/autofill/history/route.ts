@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { getPostgresPool } from "@/lib/postgres/server"
+import { fetchAutofillHistoryForUser } from "@/lib/autofill/history"
 import { createClient } from "@/lib/supabase/server"
 
 export const runtime = "nodejs"
@@ -9,29 +10,12 @@ export async function GET() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  const pool = getPostgresPool()
-  const result = await pool.query<Record<string, unknown>>(
-    `SELECT *
-     FROM autofill_history
-     WHERE user_id = $1
-     ORDER BY applied_at DESC
-     LIMIT 100`,
-    [user.id]
-  )
-  const history = result.rows
-  const totalApplications = history.length
-  const avgFillRate =
-    totalApplications > 0
-      ? Math.round(
-          history.reduce((acc: number, h: any) => acc + (h.fill_rate ?? 0), 0) /
-            totalApplications
-        )
-      : 0
-
-  // Rough time saved: ~12 min per application on average
-  const minutesSaved = totalApplications * 12
-
-  return NextResponse.json({ history, totalApplications, avgFillRate, minutesSaved })
+  try {
+    const summary = await fetchAutofillHistoryForUser(user.id)
+    return NextResponse.json(summary)
+  } catch {
+    return NextResponse.json({ error: "Failed to load autofill history" }, { status: 500 })
+  }
 }
 
 export async function POST(request: Request) {

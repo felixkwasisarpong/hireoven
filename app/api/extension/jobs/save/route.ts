@@ -21,6 +21,7 @@ import {
   normalizeExtensionJobUrl,
 } from "@/lib/extension/job-fingerprint"
 import { enrichJobWithNormalization } from "@/lib/jobs/enrich-job-with-normalization"
+import { isBlockedApplyUrl, isBlockedCrawlTitle } from "@/lib/jobs/filters"
 import { getPostgresPool } from "@/lib/postgres/server"
 import {
   extensionCorsHeaders,
@@ -192,6 +193,17 @@ export async function POST(request: Request) {
   const extractedCompany = rawCompany ?? embeddedDetails?.company?.trim() ?? null
   const description = rawDescription ?? embeddedDetails?.descriptionText?.trim() ?? null
   const extractedLocation = body.location?.trim() || embeddedDetails?.location?.trim() || null
+
+  if (isBlockedCrawlTitle(title) || isPlaceholderJobTitle(title)) {
+    return extensionError(request, 422, "Captured page is not a valid job posting (title).", {
+      headers: corsHeaders,
+    })
+  }
+  if (isBlockedApplyUrl(applyUrl)) {
+    return extensionError(request, 422, "Captured page is not a valid job posting (URL).", {
+      headers: corsHeaders,
+    })
+  }
 
   // Resolve location, is_remote, is_hybrid using the same heuristics as
   // /import. Critical for the feed's US-only filter — a job with NULL

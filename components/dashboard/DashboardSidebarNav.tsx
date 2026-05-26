@@ -10,7 +10,7 @@ import {
   isDashboardNavActive,
   type DashboardNavItem,
 } from "@/lib/dashboard-nav"
-import { canAccess } from "@/lib/gates"
+import { PLAN_NAMES, canAccess, requiredPlanFor } from "@/lib/gates"
 import { useSubscription } from "@/lib/hooks/useSubscription"
 import { useUpgradeModal } from "@/lib/context/UpgradeModalContext"
 import { cn } from "@/lib/utils"
@@ -50,6 +50,8 @@ function NavItem({
   const active = isDashboardNavActive(pathname, item.href)
   const external = isExternalNavHref(item.href)
   const locked = subLoading ? false : item.gate ? !canAccess(plan, item.gate) : false
+  const requiredPlan = item.gate ? requiredPlanFor(item.gate) : null
+  const lockLabel = requiredPlan ? PLAN_NAMES[requiredPlan] : "Pro"
   const feedSkin = navSkin === "feed" && variant === "light"
 
   const badge =
@@ -125,7 +127,7 @@ function NavItem({
           }}
         >
           <Lock className="h-2.5 w-2.5" />
-          Pro
+          {lockLabel}
         </span>
       ) : badge && !active ? (
         <span className={cn(
@@ -144,7 +146,7 @@ function NavItem({
     return (
       <button type="button" onClick={() => showUpgrade(item.gate!)}
         className={cn(linkClass, "w-full text-left")}
-        title={`Upgrade to unlock ${item.label}`}
+        title={`Upgrade to ${lockLabel} to unlock ${item.label}`}
       >
         {inner}
       </button>

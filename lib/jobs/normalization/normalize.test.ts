@@ -511,6 +511,44 @@ test("adaptRawCrawlerJob trims crawler CTA noise from location", () => {
   assert.equal(adapted.location, "U.S(Remote)")
 })
 
+test("normalizeCrawlerJobForPersistence downgrades remote to hybrid when location is a specific city", () => {
+  const result = normalizeCrawlerJobForPersistence({
+    rawJob: {
+      externalId: "url:remote-city-conflict-1",
+      title: "Senior Backend Engineer",
+      url: "https://jobs.example.com/openings/backend-engineer",
+      location: "Austin, TX",
+      description:
+        "This role is listed as remote and you will collaborate with teams across time zones. You will own API reliability, platform observability, and production operations with engineering leadership and product stakeholders.",
+    },
+    crawledAtIso: "2026-05-25T00:00:00.000Z",
+  })
+
+  assert.equal(result.nextColumns.is_remote, false)
+  assert.equal(result.nextColumns.is_hybrid, true)
+  assert.equal(result.canonical.header.is_remote.value, false)
+  assert.equal(result.canonical.header.is_hybrid.value, true)
+})
+
+test("normalizeCrawlerJobForPersistence clears remote flags for explicit foreign remote locations", () => {
+  const result = normalizeCrawlerJobForPersistence({
+    rawJob: {
+      externalId: "url:remote-foreign-conflict-1",
+      title: "Platform Engineer",
+      url: "https://jobs.example.com/openings/platform-engineer",
+      location: "Remote - Bangalore, India",
+      description:
+        "This remote role supports globally distributed teams and requires strong distributed systems experience, ownership of incident response, and collaboration with product and security partners.",
+    },
+    crawledAtIso: "2026-05-25T00:00:00.000Z",
+  })
+
+  assert.equal(result.nextColumns.is_remote, false)
+  assert.equal(result.nextColumns.is_hybrid, false)
+  assert.equal(result.canonical.header.is_remote.value, false)
+  assert.equal(result.canonical.header.is_hybrid.value, false)
+})
+
 // ---------------------------------------------------------------------------
 // Visa / sponsorship detection — Phase 5
 // ---------------------------------------------------------------------------

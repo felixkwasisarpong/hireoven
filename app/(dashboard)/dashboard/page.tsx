@@ -3,6 +3,7 @@ import { redirect } from "next/navigation"
 import { getSessionUser } from "@/lib/auth/session-user"
 import { getPostgresPool } from "@/lib/postgres/server"
 import type { WatchlistWithCompany } from "@/types"
+import { listWatchlistWithCompany } from "@/lib/watchlist/store"
 import DashboardHomeClient from "./DashboardHomeClient"
 
 function DashboardHomeFallback() {
@@ -44,7 +45,7 @@ async function getDashboardInitialData(): Promise<DashboardInitialData> {
 
   try {
     const pool = getPostgresPool()
-    const [resumeResult, watchlistResult] = await Promise.all([
+    const [resumeResult, watchlist] = await Promise.all([
       pool.query<{ exists: boolean }>(
         `SELECT EXISTS (
            SELECT 1 FROM resumes
@@ -54,18 +55,10 @@ async function getDashboardInitialData(): Promise<DashboardInitialData> {
          ) AS exists`,
         [session.sub]
       ),
-      pool.query<WatchlistWithCompany & { total_count: string }>(
-        `SELECT w.*, to_jsonb(c.*) AS company, COUNT(*) OVER() AS total_count
-         FROM watchlist w
-         JOIN companies c ON c.id = w.company_id
-         WHERE w.user_id = $1
-         ORDER BY w.created_at DESC
-         LIMIT 5`,
-        [session.sub]
-      ),
+      listWatchlistWithCompany({ db: pool, userId: session.sub, limit: 5 }),
     ])
 
-    const initialWatchlist = watchlistResult.rows.map(({ total_count, ...item }) => item)
+    const initialWatchlist = watchlist.rows
     const companyIds = [
       ...new Set(
         initialWatchlist.map((w) => w.company?.id).filter((id): id is string => Boolean(id)),
@@ -95,7 +88,7 @@ async function getDashboardInitialData(): Promise<DashboardInitialData> {
     return {
       initialPrimaryResumeReady: Boolean(resumeResult.rows[0]?.exists),
       initialWatchlist,
-      initialWatchlistCount: Number(watchlistResult.rows[0]?.total_count ?? initialWatchlist.length),
+      initialWatchlistCount: watchlist.totalCount,
       initialJobsTodayByCompanyId,
     }
   } catch {

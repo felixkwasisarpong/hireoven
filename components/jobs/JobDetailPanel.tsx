@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import VisaIntelTrigger from "@/components/jobs/VisaIntelTrigger"
 import RecruiterMessageDrawer from "@/components/jobs/RecruiterMessageDrawer"
+import JobNetworkingContacts from "@/components/jobs/JobNetworkingContacts"
 import {
   AlertTriangle,
   ArrowRight,
@@ -32,6 +33,7 @@ import {
   getMatchVerdict,
   resolveOverallMatchScore,
 } from "@/lib/jobs/match-score-display"
+import { resolveSkillsFactorValue, type ScoreFactorComputationState } from "@/lib/matching/score-factor-state"
 import { resolveH1BSponsorshipDisplay } from "@/lib/jobs/sponsorship-employer-signal"
 import {
   JOB_APPLICATION_SAVED_EVENT,
@@ -112,9 +114,24 @@ function CircleScore({ value }: { value: number | null }) {
   )
 }
 
-function FactorBar({ label, value }: { label: string; value: number }) {
-  const pct = clamp(value)
-  const barColor = pct >= 70 ? "bg-emerald-400" : pct >= 45 ? "bg-orange-400" : "bg-red-400"
+function FactorBar({
+  label,
+  value,
+  state,
+}: {
+  label: string
+  value: number | null
+  state: ScoreFactorComputationState
+}) {
+  const pct = value == null ? 0 : clamp(value)
+  const barColor =
+    state === "not_computed"
+      ? "bg-slate-300"
+      : pct >= 70
+        ? "bg-emerald-400"
+        : pct >= 45
+          ? "bg-orange-400"
+          : "bg-red-400"
   return (
     <div className="grid grid-cols-[110px_1fr_24px] items-center gap-2">
       <span className="truncate text-[11.5px] text-slate-500">{label}</span>
@@ -124,9 +141,17 @@ function FactorBar({ label, value }: { label: string; value: number }) {
           style={{ width: `${pct}%` }}
         />
       </div>
-      <span className="text-right text-[11px] font-semibold tabular-nums text-slate-500">{pct}</span>
+      <span className="text-right text-[11px] font-semibold tabular-nums text-slate-500">
+        {state === "not_computed" ? "N/A" : pct}
+      </span>
     </div>
   )
+}
+
+type MatchFactor = {
+  label: string
+  value: number | null
+  state: ScoreFactorComputationState
 }
 
 // ─── Visa / salary config ───────────────────────────────────────────────────
@@ -265,12 +290,28 @@ export default function JobDetailPanel({
   })
   const verdict = getMatchVerdict(overall)
 
-  const allFactors = [
-    { label: "Experience Level", value: fastScore?.seniority_score ?? null },
-    { label: "Skill",            value: fastScore?.skills_score    ?? null },
-    { label: "Industry Exp.",    value: fastScore?.domain_score    ?? null },
+  const skillsFactor = resolveSkillsFactorValue({
+    analysis: analysis ?? null,
+    fastScore: fastScore ?? null,
+  })
+  const allFactors: MatchFactor[] = [
+    {
+      label: "Experience Level",
+      value: analysis?.experience_score ?? fastScore?.seniority_score ?? null,
+      state: (analysis?.experience_score ?? fastScore?.seniority_score) == null ? "not_computed" : ("computed" as const),
+    },
+    {
+      label: "Skill",
+      value: skillsFactor.value,
+      state: skillsFactor.state,
+    },
+    {
+      label: "Industry Exp.",
+      value: fastScore?.domain_score ?? null,
+      state: fastScore?.domain_score == null ? "not_computed" : ("computed" as const),
+    },
   ]
-  const activeFactors = allFactors.filter((f): f is { label: string; value: number } => f.value != null)
+  const analyzedFactors = allFactors.filter((f) => f.state === "computed")
 
   const missingSkills = useMemo(() => normalizeSkillList([
     ...(analysis?.missing_skills ?? []),
@@ -433,6 +474,15 @@ export default function JobDetailPanel({
           ) : null}
         </div>
 
+        {/* ── Networking Finder ── */}
+        <div className={sectionCls}>
+          <IntelLabel>Networking finder</IntelLabel>
+          <JobNetworkingContacts
+            jobId={job.id}
+            companyName={job.company?.name ?? null}
+          />
+        </div>
+
         {/* ── Match Score ── */}
         <div className={sectionCls}>
           {resumeId === null ? (
@@ -461,19 +511,19 @@ export default function JobDetailPanel({
                   <p className={cn("text-[16px] font-bold leading-tight", verdict.colorClass)}>
                     {verdict.label}
                   </p>
-                  {activeFactors.length > 0 && (
+                  {analyzedFactors.length > 0 && (
                     <p className="mt-0.5 text-[11.5px] text-slate-400">
-                      {activeFactors.length} factor{activeFactors.length !== 1 ? "s" : ""} analyzed
+                      {analyzedFactors.length} factor{analyzedFactors.length !== 1 ? "s" : ""} analyzed
                     </p>
                   )}
                 </div>
               </div>
 
               {/* Factor bars */}
-              {activeFactors.length > 0 && (
+              {allFactors.length > 0 && (
                 <div className="mt-4 space-y-2.5">
-                  {activeFactors.map((f) => (
-                    <FactorBar key={f.label} label={f.label} value={f.value} />
+                  {allFactors.map((f) => (
+                    <FactorBar key={f.label} label={f.label} value={f.value} state={f.state} />
                   ))}
                 </div>
               )}

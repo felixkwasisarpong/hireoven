@@ -10,6 +10,15 @@ type State = {
   error: string | null
 }
 
+type UseResumeAnalysisOptions = {
+  initialAnalysis?: ResumeAnalysis | null
+  /**
+   * The cache key ("resumeId:jobId") the server already resolved.
+   * When it matches the current hook key, we can skip the first GET round-trip.
+   */
+  initialResolvedKey?: string | null
+}
+
 // Module-level cache so analyses persist across component mounts within a session
 const sessionCache = new Map<string, ResumeAnalysis>()
 
@@ -17,13 +26,24 @@ function cacheKey(resumeId: string, jobId: string) {
   return `${resumeId}:${jobId}`
 }
 
-export function useResumeAnalysis(resumeId: string | null, jobId: string | null) {
+export function useResumeAnalysis(
+  resumeId: string | null,
+  jobId: string | null,
+  options: UseResumeAnalysisOptions = {},
+) {
+  const initialResolvedKey = options.initialResolvedKey ?? null
+  const initialAnalysis = options.initialAnalysis ?? null
+
   const [state, setState] = useState<State>(() => {
     const key = resumeId && jobId ? cacheKey(resumeId, jobId) : null
-    const cached = key ? sessionCache.get(key) ?? null : null
+    const applies = Boolean(key && initialResolvedKey && key === initialResolvedKey)
+    if (key && applies && initialAnalysis) {
+      sessionCache.set(key, initialAnalysis)
+    }
+    const cached = key ? sessionCache.get(key) ?? (applies ? initialAnalysis : null) : null
     return {
       analysis: cached,
-      isLoading: !cached && Boolean(resumeId && jobId),
+      isLoading: applies ? false : (!cached && Boolean(resumeId && jobId)),
       isAnalyzing: false,
       error: null,
     }
@@ -117,9 +137,22 @@ export function useResumeAnalysis(resumeId: string | null, jobId: string | null)
     }
 
     const key = cacheKey(resumeId, jobId)
+    const applies = Boolean(initialResolvedKey && key === initialResolvedKey)
+    if (applies && initialAnalysis) {
+      sessionCache.set(key, initialAnalysis)
+    }
     if (sessionCache.has(key)) {
       setState({
         analysis: sessionCache.get(key)!,
+        isLoading: false,
+        isAnalyzing: false,
+        error: null,
+      })
+      return
+    }
+    if (applies) {
+      setState({
+        analysis: initialAnalysis,
         isLoading: false,
         isAnalyzing: false,
         error: null,
@@ -134,7 +167,7 @@ export function useResumeAnalysis(resumeId: string | null, jobId: string | null)
     })
 
     return () => { cancelled = true }
-  }, [resumeId, jobId, fetchExisting])
+  }, [resumeId, jobId, fetchExisting, initialResolvedKey, initialAnalysis])
 
   return {
     analysis: state.analysis,

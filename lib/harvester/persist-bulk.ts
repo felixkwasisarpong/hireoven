@@ -22,6 +22,17 @@ const MAX_JOBS_PER_BATCH = (() => {
   return Number.isFinite(raw) && raw >= 1 ? raw : 400
 })()
 
+const DEACTIVATION_GRACE_HOURS = Math.max(
+  0,
+  Number.parseInt(process.env.HARVESTER_DEACTIVATION_GRACE_HOURS ?? "72", 10)
+)
+const ALLOW_DEACTIVATE_ON_EMPTY_RESULTS =
+  process.env.HARVESTER_ALLOW_DEACTIVATE_ON_EMPTY_RESULTS === "true"
+const JOB_DEACTIVATE_BATCH_SIZE = Math.max(
+  25,
+  Number.parseInt(process.env.HARVESTER_JOB_DEACTIVATE_BATCH_SIZE ?? "250", 10)
+)
+
 export type BulkPersistInput = {
   pool: DbExecutor
   companyId: string
@@ -94,6 +105,21 @@ type PersistRow = {
   posted_at: string | null
   content_hash: string
   raw_data: RawDataPayload
+}
+
+type ActiveJobRow = {
+  id: string
+  external_id: string | null
+  last_seen_at: string | null
+}
+
+function chunkValues<T>(items: T[], chunkSize: number): T[][] {
+  if (items.length === 0) return []
+  const out: T[][] = []
+  for (let i = 0; i < items.length; i += chunkSize) {
+    out.push(items.slice(i, i + chunkSize))
+  }
+  return out
 }
 
 function toWellFormedSafe(input: string): string {
@@ -321,6 +347,7 @@ function buildPersistRow(args: {
   const rawData: RawDataPayload = {
     source: "harvester",
     adapter: normalization.canonical.source.adapter,
+    ...normalization.rawSnapshot,
     raw: {
       title: job.title,
       url: job.applyUrl,
@@ -390,6 +417,61 @@ async function updateCompanyJobCount(
   )
 }
 
+async function deactivateMissingJobs(args: {
+  pool: DbExecutor
+  companyId: string
+  sourceAts: string
+  sourceAtsSlug: string
+  crawledAtIso: string
+  currentExternalIds: ReadonlySet<string>
+}): Promise<number> {
+  const { pool, companyId, sourceAts, sourceAtsSlug, crawledAtIso, currentExternalIds } = args
+
+  const canDeactivateOnThisRun =
+    currentExternalIds.size > 0 || ALLOW_DEACTIVATE_ON_EMPTY_RESULTS
+  if (!canDeactivateOnThisRun) return 0
+
+  const activeResult = await pool.query<ActiveJobRow>(
+    `SELECT id, external_id, last_seen_at
+     FROM jobs
+     WHERE company_id = $1
+       AND is_active = true
+       AND source_ats = $2
+       AND source_ats_slug = $3
+       AND external_id IS NOT NULL`,
+    [companyId, sourceAts, sourceAtsSlug]
+  )
+
+  const staleRows = activeResult.rows.filter(
+    (row) => row.external_id && !currentExternalIds.has(row.external_id)
+  )
+  if (staleRows.length === 0) return 0
+
+  const cutoffTs = Date.parse(crawledAtIso) - DEACTIVATION_GRACE_HOURS * 60 * 60 * 1000
+  const staleIds = staleRows
+    .filter((row) => {
+      if (DEACTIVATION_GRACE_HOURS === 0) return true
+      const seenTs = row.last_seen_at ? Date.parse(row.last_seen_at) : NaN
+      if (!Number.isFinite(seenTs)) return true
+      return seenTs <= cutoffTs
+    })
+    .map((row) => row.id)
+  if (staleIds.length === 0) return 0
+
+  for (const staleChunk of chunkValues(staleIds, JOB_DEACTIVATE_BATCH_SIZE)) {
+    await pool.query(
+      `UPDATE jobs
+       SET is_active = false,
+           updated_at = $1::timestamptz,
+           closed_at = COALESCE(closed_at, $1::timestamptz)
+       WHERE id = ANY($2::uuid[])`,
+      [crawledAtIso, staleChunk]
+    )
+  }
+
+  return staleIds.length
+}
+
 export async function persistJobsBulk(
   input: BulkPersistInput
 ): Promise<BulkPersistOutcome> {
@@ -411,8 +493,17 @@ export async function persistJobsBulk(
     dedupedMap.set(job.externalId, job)
   }
   const deduped = [...dedupedMap.values()]
+  const currentExternalIds = new Set(deduped.map((job) => job.externalId))
 
   if (deduped.length === 0) {
+    await deactivateMissingJobs({
+      pool,
+      companyId,
+      sourceAts,
+      sourceAtsSlug,
+      crawledAtIso,
+      currentExternalIds,
+    })
     await updateCompanyJobCount(pool, companyId, crawledAtIso)
     return {
       inserted: 0,
@@ -455,6 +546,15 @@ export async function persistJobsBulk(
   }
   const written = inserted + updated
   const unchanged = deduped.length - written
+
+  await deactivateMissingJobs({
+    pool,
+    companyId,
+    sourceAts,
+    sourceAtsSlug,
+    crawledAtIso,
+    currentExternalIds,
+  })
 
   await updateCompanyJobCount(pool, companyId, crawledAtIso)
 

@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
+import { dedupeFeedJobsBySignature } from "@/lib/jobs/feed-dedupe"
 import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
+import { scoreJobsForUser } from "@/lib/matching/batch-scorer"
+import { hasUsableMatchScore } from "@/lib/jobs/match-score-display"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { createClient } from "@/lib/supabase/server"
 import { formatEmploymentLabel, formatSalaryLabel } from "@/lib/jobs/normalization/view-model"
-import type { Job, JobMatchScore } from "@/types"
-
-const FAST_SCORE_ALGORITHM_UPDATED_AT = "2026-05-15T02:00:00.000Z"
+import type { JobWithCompany, JobWithMatchScore } from "@/types"
 
 const WITHIN_MS: Record<string, number> = {
   "1h": 3_600_000,
@@ -13,6 +14,10 @@ const WITHIN_MS: Record<string, number> = {
   "24h": 86_400_000,
   "3d": 259_200_000,
   "7d": 604_800_000,
+}
+
+type JobWithOptionalCompany = Omit<JobWithCompany, "company"> & {
+  company: JobWithCompany["company"] | null
 }
 
 export async function GET(request: NextRequest) {
@@ -51,12 +56,12 @@ export async function GET(request: NextRequest) {
     // field group: AND across tokens, OR across fields.
     const tokens = q.trim().split(/\s+/).filter(Boolean)
     for (const token of tokens) {
-      const p = addParam(`%${token}%`)
+      const p = addParam(`\\m${token}\\M`)
       where.push(`(
-        jobs.title ILIKE ${p}
-        OR jobs.normalized_title ILIKE ${p}
-        OR companies.name ILIKE ${p}
-        OR EXISTS (SELECT 1 FROM unnest(jobs.skills) s WHERE s ILIKE ${p})
+        jobs.title ~* ${p}
+        OR jobs.normalized_title ~* ${p}
+        OR companies.name ~* ${p}
+        OR EXISTS (SELECT 1 FROM unnest(jobs.skills) s WHERE s ~* ${p})
       )`)
     }
   }
@@ -113,11 +118,12 @@ export async function GET(request: NextRequest) {
     // (~2.5s on 113K matching rows). With idx_jobs_us_ca_active_freshest the
     // separate COUNT is index-only and effectively free.
     const [jobsResult, totalCountResult, newInLastHourResult] = await Promise.all([
-      pool.query<Record<string, unknown> & { company: unknown }>(
+      pool.query<JobWithOptionalCompany>(
         `SELECT jobs.*,
                 to_jsonb(companies.*) AS company,
                 gjs.risk_score AS ghost_risk_score,
-                gjs.risk_level AS ghost_risk_level
+                gjs.risk_level AS ghost_risk_level,
+                gjs.repost_count AS ghost_repost_count
          FROM jobs
          LEFT JOIN companies ON companies.id = jobs.company_id
          LEFT JOIN ghost_job_scores gjs ON gjs.job_id = jobs.id
@@ -147,7 +153,7 @@ export async function GET(request: NextRequest) {
       ),
     ])
 
-    const jobs = jobsResult.rows
+    const jobs = dedupeFeedJobsBySignature(jobsResult.rows)
     const total = Number(totalCountResult.rows[0]?.count ?? 0)
     const newInLastHour = Number(newInLastHourResult.rows[0]?.count ?? 0)
 
@@ -158,30 +164,12 @@ export async function GET(request: NextRequest) {
           data: { user },
         } = await supabase.auth.getUser()
         if (user) {
-          const jobIds = jobs.map((j) => j.id as string)
-          const scoresResult = await pool.query<JobMatchScore & { user_id: string }>(
-            `SELECT s.*
-               FROM job_match_scores s
-               INNER JOIN resumes r
-                 ON r.id = s.resume_id
-                AND r.user_id = s.user_id
-                AND r.is_primary = true
-                AND r.parse_status = 'complete'
-              WHERE s.user_id = $1
-                AND s.job_id = ANY($2::uuid[])
-                AND s.computed_at >= r.updated_at
-                AND s.computed_at >= $3::timestamptz`,
-            [user.id, jobIds, FAST_SCORE_ALGORITHM_UPDATED_AT]
-          )
-          const byJobId = new Map<string, JobMatchScore>()
-          for (const row of scoresResult.rows) {
-            byJobId.set(row.job_id, row)
-          }
+          const jobIds = jobs.map((j) => String(j.id))
+          const byJobId = await scoreJobsForUser(user.id, jobIds)
           for (const job of jobs) {
-            const existing = byJobId.get(job.id as string)
-            if (existing) {
-              ;(job as Record<string, unknown>).match_score = existing
-            }
+            const existing = byJobId.get(String(job.id))
+            ;(job as Record<string, unknown>).match_score =
+              hasUsableMatchScore(existing ?? null) ? existing : null
           }
         }
       } catch (scoreErr) {
@@ -189,10 +177,12 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const jobsWithCardView = jobs.map((job: unknown) => {
-      const j = job as Job
+    const jobsWithCardView = jobs.map((j: JobWithOptionalCompany) => {
+      const maybeMatchScore = (j as JobWithMatchScore).match_score ?? null
+      const matchScore = hasUsableMatchScore(maybeMatchScore) ? maybeMatchScore : null
       return {
         ...j,
+        match_score: matchScore,
         card_view: {
           title: j.title,
           location: j.location ?? null,

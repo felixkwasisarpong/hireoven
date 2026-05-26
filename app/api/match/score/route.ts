@@ -2,14 +2,14 @@ import { NextRequest, NextResponse } from "next/server"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { computeFastScore, getResumeVersion } from "@/lib/matching/fast-scorer"
 import { getScoringContextForUser, upsertMatchScores } from "@/lib/matching/batch-scorer"
+import { isScoreFreshForResume } from "@/lib/matching/score-freshness"
 import { createClient } from "@/lib/supabase/server"
 import type { Job, JobMatchScore } from "@/types"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-// Bump when the scoring algorithm changes so stale cached rows get recomputed.
-const SCORE_ALGORITHM_VERSION = new Date("2026-05-15T02:10:00.000Z").getTime()
+type ExistingScoreRow = JobMatchScore & { resume_updated_at: string }
 
 export async function GET(request: NextRequest) {
   try {
@@ -29,9 +29,13 @@ export async function GET(request: NextRequest) {
     // Fetch job and existing cached score in parallel
     const [jobResult, existingResult] = await Promise.all([
       pool.query<Job>("SELECT * FROM jobs WHERE id = $1 LIMIT 1", [jobId]),
-      pool.query<JobMatchScore>(
-        `SELECT * FROM job_match_scores
-         WHERE user_id = $1 AND resume_id = $2 AND job_id = $3
+      pool.query<ExistingScoreRow>(
+        `SELECT jms.*, r.updated_at AS resume_updated_at
+         FROM job_match_scores jms
+         JOIN resumes r
+           ON r.id = jms.resume_id
+          AND r.user_id = jms.user_id
+         WHERE jms.user_id = $1 AND jms.resume_id = $2 AND jms.job_id = $3
          LIMIT 1`,
         [user.id, context.resume.id, jobId]
       ),
@@ -41,14 +45,14 @@ export async function GET(request: NextRequest) {
     if (!job) return NextResponse.json({ score: null })
 
     const existing = existingResult.rows[0]
-    const existingMs = existing ? new Date(existing.computed_at).getTime() : 0
 
     // Return cached score if it's still fresh (same resume version + after algorithm bump)
-    if (
-      existing &&
-      existing.resume_version === currentVersion &&
-      existingMs >= SCORE_ALGORITHM_VERSION
-    ) {
+    if (existing && isScoreFreshForResume({
+      computedAt: existing.computed_at,
+      resumeUpdatedAt: existing.resume_updated_at,
+      scoreResumeVersion: existing.resume_version,
+      currentResumeVersion: currentVersion,
+    })) {
       return NextResponse.json({ score: existing })
     }
 

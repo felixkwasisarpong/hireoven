@@ -8,6 +8,7 @@ import { SubscriptionProvider } from "@/lib/context/SubscriptionContext"
 import { UpgradeModalProvider } from "@/lib/context/UpgradeModalContext"
 import UpgradeModal from "@/components/gates/UpgradeModal"
 import WaitlistFeedback from "@/components/waitlist/WaitlistFeedback"
+import { getSessionUser } from "@/lib/auth/session-user"
 import "./globals.css"
 
 const WAITLIST_MODE = process.env.NEXT_PUBLIC_WAITLIST_MODE === "true"
@@ -49,28 +50,33 @@ export const viewport: Viewport = {
   themeColor: "#FF5C18",
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  const session = await getSessionUser()
+  const initialUser = session
+    ? { id: session.sub, email: session.email }
+    : null
+
   return (
     <html lang="en">
       <body className={`${jakarta.variable} site-chroma`}>
-        <AuthProvider>
-        <UpgradeModalProvider>
-          <SubscriptionProvider>
-            <ToastProvider>
-              <Suspense fallback={null}>
-                <RouteToastBridge />
-              </Suspense>
-              {children}
-              <UpgradeModal />
-              {WAITLIST_MODE ? <WaitlistFeedback /> : null}
-              <ServiceWorkerRegistration />
-            </ToastProvider>
-          </SubscriptionProvider>
-        </UpgradeModalProvider>
+        <AuthProvider initialUser={initialUser}>
+          <UpgradeModalProvider>
+            <SubscriptionProvider>
+              <ToastProvider>
+                <Suspense fallback={null}>
+                  <RouteToastBridge />
+                </Suspense>
+                {children}
+                <UpgradeModal />
+                {WAITLIST_MODE ? <WaitlistFeedback /> : null}
+                <ServiceWorkerRegistration />
+              </ToastProvider>
+            </SubscriptionProvider>
+          </UpgradeModalProvider>
         </AuthProvider>
       </body>
     </html>

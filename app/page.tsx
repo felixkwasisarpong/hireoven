@@ -1,6 +1,6 @@
 import type { Metadata } from "next"
 import Link from "next/link"
-import { ArrowRight, Check, CheckCircle2, Sparkles, Users, Zap } from "lucide-react"
+import { ArrowRight, Check, CheckCircle2, Globe2, ShieldCheck, Sparkles, Users, Zap } from "lucide-react"
 import Navbar from "@/components/layout/Navbar"
 import LogoWall from "@/components/marketing/LogoWall"
 import { WaitlistInlineForm } from "@/components/marketing/WaitlistInlineForm"
@@ -380,6 +380,49 @@ export default async function HomePage() {
             <FeatureCard icon="✍️" title="Resume tailoring" body="Scout adapts your CV to the job description. Keyword gaps flagged. Every edit needs your approval." color="#10B981" />
             <FeatureCard icon="📄" title="Cover letter AI" body="Generates a tailored, ATS-aware letter in seconds. Role-specific, honest, ready to personalise." color="#F59E0B" />
             <FeatureCard icon="🛡️" title="Ghost job detector" body="Signals whether a role is actively hiring or just collecting CVs — before you spend time on it." color="#EF4444" />
+          </div>
+        </div>
+      </section>
+
+      {/* ── Differentiators ────────────────────────────────────────────── */}
+      <section className="border-y border-slate-100 bg-white px-6 py-20">
+        <div className="mx-auto max-w-5xl">
+          <div className="mx-auto mb-12 max-w-2xl text-center">
+            <p className="mb-3 text-[10.5px] font-bold uppercase tracking-[0.2em] text-[#FF5C18]">
+              Why Hireoven
+            </p>
+            <h2 className="text-3xl font-black tracking-tight text-slate-900 sm:text-4xl">
+              Differentiators built into the core flow
+            </h2>
+          </div>
+          <div className="grid gap-4 md:grid-cols-3">
+            <div className="rounded-2xl border border-[#D8E8FF] bg-[#F5FAFF] p-5 shadow-[0_2px_12px_rgba(37,99,235,0.08)]">
+              <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-white text-[#2563EB]">
+                <Globe2 className="h-4.5 w-4.5" />
+              </div>
+              <p className="mt-3 text-[15px] font-bold text-slate-900">H-1B Intel</p>
+              <p className="mt-1.5 text-[13px] leading-relaxed text-slate-600">
+                Petition history, sponsorship likelihood, and visa-language signals on each matching role.
+              </p>
+            </div>
+            <div className="rounded-2xl border border-[#E8DBFF] bg-[#FAF7FF] p-5 shadow-[0_2px_12px_rgba(124,58,237,0.09)]">
+              <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-white text-[#7C3AED]">
+                <Users className="h-4.5 w-4.5" />
+              </div>
+              <p className="mt-3 text-[15px] font-bold text-slate-900">Cohorts</p>
+              <p className="mt-1.5 text-[13px] leading-relaxed text-slate-600">
+                See how people with similar background are performing and adjust your weekly job search strategy.
+              </p>
+            </div>
+            <div className="rounded-2xl border border-[#D7F2E2] bg-[#F3FBF6] p-5 shadow-[0_2px_12px_rgba(4,120,87,0.09)]">
+              <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-white text-[#047857]">
+                <ShieldCheck className="h-4.5 w-4.5" />
+              </div>
+              <p className="mt-3 text-[15px] font-bold text-slate-900">Fair Chance</p>
+              <p className="mt-1.5 text-[13px] leading-relaxed text-slate-600">
+                Find fair-chance friendly employers and get preparation guidance before you apply.
+              </p>
+            </div>
           </div>
         </div>
       </section>

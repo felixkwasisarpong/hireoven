@@ -20,16 +20,24 @@ interface AuthState {
 
 const AuthContext = createContext<AuthState | null>(null)
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+interface AuthProviderProps {
+  children: React.ReactNode
+  initialUser?: SessionUserLite | null
+}
+
+export function AuthProvider({ children, initialUser = null }: AuthProviderProps) {
   const [state, setState] = useState<Omit<AuthState, "signOut" | "refetchProfile">>({
-    user: null,
+    user: initialUser,
     profile: null,
-    isLoading: true,
+    isLoading: false,
   })
 
   // Track the last known user id so visibility re-checks only re-fetch the profile
   // when the session identity actually changes (avoids redundant profile fetches).
-  const lastUserIdRef = useRef<string | null>(null)
+  const lastUserIdRef = useRef<string | null>(initialUser?.id ?? null)
+  // If we received an initial server-side user, fetch the profile once on mount
+  // so profile-driven UI can hydrate without waiting for an identity change.
+  const needsInitialProfileFetchRef = useRef(Boolean(initialUser))
 
   const fetchProfile = useCallback(async (user: SessionUserLite) => {
     try {
@@ -70,8 +78,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (sessionUser) {
         const userId = sessionUser.id
         // Only refetch profile when the user identity changes.
-        if (userId !== lastUserIdRef.current) {
+        if (userId !== lastUserIdRef.current || needsInitialProfileFetchRef.current) {
           lastUserIdRef.current = userId
+          needsInitialProfileFetchRef.current = false
           await fetchProfile({
             id: userId,
             email: sessionUser.email ?? null,

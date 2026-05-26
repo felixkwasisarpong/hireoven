@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type TurnData = {
+export type TurnData = {
   id: string
   role: "interviewer" | "candidate"
   content: string
@@ -19,7 +19,7 @@ type TurnData = {
   skillTag?: string | null
 }
 
-type SessionData = {
+export type SessionData = {
   id: string
   type: string
   persona: string
@@ -32,9 +32,19 @@ type SessionData = {
   metadata?: { practice_focus?: { observation: string } | null }
 }
 
-type JobData = {
+export type JobData = {
   title: string
   company: string | null
+}
+
+export type TextInterviewChatProps = {
+  sessionId: string
+  initialLoaded?: boolean
+  initialSession?: SessionData | null
+  initialJob?: JobData | null
+  initialTurns?: TurnData[]
+  initialSkillList?: string[]
+  initialSkillsCovered?: string[]
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -65,23 +75,34 @@ function TypingIndicator() {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function TextInterviewChat({ sessionId }: { sessionId: string }) {
+export default function TextInterviewChat({
+  sessionId,
+  initialLoaded = false,
+  initialSession = null,
+  initialJob = null,
+  initialTurns = [],
+  initialSkillList = [],
+  initialSkillsCovered = [],
+}: TextInterviewChatProps) {
   const router = useRouter()
 
-  const [session, setSession] = useState<SessionData | null>(null)
-  const [job, setJob] = useState<JobData | null>(null)
-  const [turns, setTurns] = useState<TurnData[]>([])
-  const [skillList, setSkillList] = useState<string[]>([])
-  const [skillsCovered, setSkillsCovered] = useState<string[]>([])
-  const [sessionStatus, setSessionStatus] = useState("setup")
+  const [session, setSession] = useState<SessionData | null>(initialSession)
+  const [job, setJob] = useState<JobData | null>(initialJob)
+  const [turns, setTurns] = useState<TurnData[]>(initialTurns)
+  const [skillList, setSkillList] = useState<string[]>(initialSkillList)
+  const [skillsCovered, setSkillsCovered] = useState<string[]>(initialSkillsCovered)
+  const [sessionStatus, setSessionStatus] = useState(initialSession?.status ?? "setup")
   const [isLoading, setIsLoading] = useState(false)
   const [sendError, setSendError] = useState<string | null>(null)
-  const [isInitializing, setIsInitializing] = useState(true)
+  const [isInitializing, setIsInitializing] = useState(!initialLoaded)
   const [showEndConfirm, setShowEndConfirm] = useState(false)
-  const [remainingSec, setRemainingSec] = useState(0)
+  const [remainingSec, setRemainingSec] = useState(
+    initialSession ? computeRemaining(initialSession.startedAt, initialSession.durationTargetMin) : 0
+  )
 
   const chatEndRef = useRef<HTMLDivElement>(null)
   const autoEndFiredRef = useRef(false)
+  const beginInterviewFiredRef = useRef(false)
 
   // ── Scroll ─────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -111,6 +132,8 @@ export default function TextInterviewChat({ sessionId }: { sessionId: string }) 
 
   // ── Fetch initial state ───────────────────────────────────────────────────
   useEffect(() => {
+    if (initialLoaded) return
+
     async function init() {
       try {
         const res = await fetch(`/api/interview/sessions/${sessionId}/turns`)
@@ -130,11 +153,14 @@ export default function TextInterviewChat({ sessionId }: { sessionId: string }) 
           role: t.role as "interviewer" | "candidate",
           content: t.content as string,
           turnIndex: t.turnIndex as number,
-          skillTag: ((t.metadata as Record<string, unknown>)?.skill_tag as string) ?? null,
+          skillTag:
+            (t.skillTag as string | null | undefined) ??
+            ((t.metadata as Record<string, unknown>)?.skill_tag as string) ??
+            null,
         }))
         setTurns(visibleTurns)
 
-        // Fetch session metadata (practice_focus etc.) from session endpoint
+        // Fetch session metadata + job context from session endpoint
         try {
           const sessRes = await fetch(`/api/interview/sessions/${sessionId}`)
           if (sessRes.ok) {
@@ -142,29 +168,17 @@ export default function TextInterviewChat({ sessionId }: { sessionId: string }) 
             if (sessData.session?.metadata) {
               setSession((prev) => prev ? { ...prev, metadata: sessData.session.metadata } : prev)
             }
+            if (sessData.session?.jobTitle) {
+              setJob({ title: sessData.session.jobTitle, company: sessData.session.jobCompany })
+            }
           }
         } catch { /* non-critical */ }
-
-        // If session has a job, fetch job metadata
-        if (s.jobId) {
-          const jobRes = await fetch(`/api/interview/sessions/${sessionId}`)
-          const jobData = await jobRes.json()
-          if (jobData.session?.jobTitle) {
-            setJob({ title: jobData.session.jobTitle, company: jobData.session.jobCompany })
-          }
-        }
-
-        // If no turns yet and session is not completed, open the interview
-        if (visibleTurns.length === 0 && s.status !== "completed" && s.status !== "abandoned") {
-          await sendTurn("BEGIN_INTERVIEW", s)
-        }
       } finally {
         setIsInitializing(false)
       }
     }
     void init()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId])
+  }, [initialLoaded, sessionId])
 
   // ── Send a turn ────────────────────────────────────────────────────────────
   const sendTurn = useCallback(
@@ -261,6 +275,15 @@ export default function TextInterviewChat({ sessionId }: { sessionId: string }) 
     },
     [session, sessionId, router]
   )
+
+  // Open interview automatically on first load when there are no visible turns.
+  useEffect(() => {
+    if (beginInterviewFiredRef.current || isInitializing || !session) return
+    if (turns.length > 0) return
+    if (sessionStatus === "completed" || sessionStatus === "abandoned") return
+    beginInterviewFiredRef.current = true
+    void sendTurn("BEGIN_INTERVIEW", session)
+  }, [isInitializing, turns.length, session, sessionStatus, sendTurn])
 
   // ── End interview ──────────────────────────────────────────────────────────
   async function handleEndInterview() {

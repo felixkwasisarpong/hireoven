@@ -14,7 +14,7 @@ import { RealtimeClient } from "@/lib/scout/interview/RealtimeClient"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type SessionMeta = {
+export type SessionMeta = {
   persona: string
   questionSet: string
   status: string
@@ -22,11 +22,20 @@ type SessionMeta = {
   jobId: string | null
   startedAt: string | null
   skillList?: string[]
+  metadata?: { practice_focus?: { observation: string } | null }
 }
 
-type JobInfo = {
+export type JobInfo = {
   title: string
   company: string | null
+}
+
+export type LiveInterviewRoomProps = {
+  sessionId: string
+  initialLoaded?: boolean
+  initialSession?: SessionMeta | null
+  initialJobInfo?: JobInfo | null
+  initialSkillsCovered?: string[]
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -44,19 +53,33 @@ const PERSONA_LABELS: Record<string, string> = {
   founder: "Founder",
   panel: "Panel",
 }
+const MAX_AUTO_RECONNECTS = 1
+const RECONNECT_DELAY_MS = 2500
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function LiveInterviewRoom({ sessionId }: { sessionId: string }) {
+export default function LiveInterviewRoom({
+  sessionId,
+  initialLoaded = false,
+  initialSession = null,
+  initialJobInfo = null,
+  initialSkillsCovered = [],
+}: LiveInterviewRoomProps) {
   const router = useRouter()
 
   // Phases
-  const [phase, setPhase] = useState<"permission" | "connecting" | "live" | "ended">("permission")
+  const [phase, setPhase] = useState<"permission" | "connecting" | "live" | "ended">(
+    initialSession?.status === "completed" || initialSession?.status === "abandoned"
+      ? "ended"
+      : "permission"
+  )
   const [connectError, setConnectError] = useState<string | null>(null)
+  const [reconnectCountdownSec, setReconnectCountdownSec] = useState<number | null>(null)
+  const [reconnectAttemptUi, setReconnectAttemptUi] = useState(0)
 
   // Session
-  const [session, setSession] = useState<SessionMeta | null>(null)
-  const [jobInfo, setJobInfo] = useState<JobInfo | null>(null)
+  const [session, setSession] = useState<SessionMeta | null>(initialSession)
+  const [jobInfo, setJobInfo] = useState<JobInfo | null>(initialJobInfo)
   const [localStream, setLocalStream] = useState<MediaStream | null>(null)
   const [agentStream, setAgentStream] = useState<MediaStream | null>(null)
 
@@ -65,14 +88,16 @@ export default function LiveInterviewRoom({ sessionId }: { sessionId: string }) 
   const [isCameraOn, setIsCameraOn] = useState(true)
 
   // Timer
-  const [remainingSec, setRemainingSec] = useState(0)
+  const [remainingSec, setRemainingSec] = useState(
+    initialSession ? computeRemaining(initialSession.startedAt, initialSession.durationTargetMin) : 0
+  )
   const timeWarningSentRef = useRef(false)
   const autoEndFiredRef = useRef(false)
 
   // Captions + skills
   const [captions, setCaptions] = useState<CaptionItem[]>([])
   const [isAgentSpeaking, setIsAgentSpeaking] = useState(false)
-  const [skillsCovered, setSkillsCovered] = useState<string[]>([])
+  const [skillsCovered, setSkillsCovered] = useState<string[]>(initialSkillsCovered)
 
   // Confirm dialog
   const [showEndConfirm, setShowEndConfirm] = useState(false)
@@ -82,9 +107,45 @@ export default function LiveInterviewRoom({ sessionId }: { sessionId: string }) 
   const snapshotIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const partialAgentIdRef = useRef<string | null>(null)
   const recoveryKeyRef = useRef(`interview-recovery-${sessionId}`)
+  const reconnectAttemptsRef = useRef(0)
+  const reconnectInFlightRef = useRef(false)
+  const sessionEndingRef = useRef(false)
+  const reconnectDelayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const reconnectCountdownTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const clearReconnectTimers = useCallback(() => {
+    if (reconnectDelayTimerRef.current) {
+      clearTimeout(reconnectDelayTimerRef.current)
+      reconnectDelayTimerRef.current = null
+    }
+    if (reconnectCountdownTimerRef.current) {
+      clearInterval(reconnectCountdownTimerRef.current)
+      reconnectCountdownTimerRef.current = null
+    }
+  }, [])
+
+  useEffect(() => {
+    return () => clearReconnectTimers()
+  }, [clearReconnectTimers])
+
+  const fetchRealtimeToken = useCallback(async (): Promise<{ token: string | null; error: string | null }> => {
+    const tokenRes = await fetch(`/api/interview/sessions/${sessionId}/realtime-token`, { method: "POST" })
+    const tokenRaw = await tokenRes.text()
+    let tokenData: { ephemeralToken?: string; error?: string } = {}
+    try {
+      tokenData = JSON.parse(tokenRaw) as { ephemeralToken?: string; error?: string }
+    } catch {
+      tokenData = { error: tokenRaw }
+    }
+    if (!tokenRes.ok) return { token: null, error: tokenData.error ?? "Failed to get token" }
+    if (!tokenData.ephemeralToken) return { token: null, error: "Token response was missing an ephemeral token." }
+    return { token: tokenData.ephemeralToken, error: null }
+  }, [sessionId])
 
   // ── Load session metadata ──────────────────────────────────────────────────
   useEffect(() => {
+    if (initialLoaded) return
+
     async function loadSession() {
       const res = await fetch(`/api/interview/sessions/${sessionId}`)
       if (!res.ok) return
@@ -99,7 +160,7 @@ export default function LiveInterviewRoom({ sessionId }: { sessionId: string }) 
       }
     }
     void loadSession()
-  }, [sessionId])
+  }, [initialLoaded, sessionId])
 
   // ── Timer ──────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -128,48 +189,64 @@ export default function LiveInterviewRoom({ sessionId }: { sessionId: string }) 
   }, [remainingSec, phase])
 
   // ── Connect to Realtime ────────────────────────────────────────────────────
-  const startLive = useCallback(async (stream: MediaStream) => {
-    setLocalStream(stream)
+  const startLive = useCallback(async (
+    stream: MediaStream,
+    opts?: { reconnect?: boolean }
+  ) => {
+    const reconnect = opts?.reconnect === true
+    if (reconnect && reconnectInFlightRef.current) return
+
+    if (!reconnect) {
+      clearReconnectTimers()
+      reconnectAttemptsRef.current = 0
+      sessionEndingRef.current = false
+      setReconnectAttemptUi(0)
+      setReconnectCountdownSec(null)
+      setLocalStream(stream)
+    } else {
+      reconnectInFlightRef.current = true
+    }
+
     setPhase("connecting")
-    setConnectError(null)
+    setConnectError(reconnect ? "Connection dropped. Reconnecting…" : null)
 
-    // Fetch ephemeral token
-    const tokenRes = await fetch(`/api/interview/sessions/${sessionId}/realtime-token`, { method: "POST" })
-    const tokenRaw = await tokenRes.text()
-    let tokenData: { ephemeralToken?: string; error?: string } = {}
-    try {
-      tokenData = JSON.parse(tokenRaw) as { ephemeralToken?: string; error?: string }
-    } catch {
-      tokenData = { error: tokenRaw }
-    }
-
-    if (!tokenRes.ok) {
-      setConnectError(tokenData.error ?? "Failed to get token")
+    const token = await fetchRealtimeToken()
+    if (!token.token) {
+      reconnectInFlightRef.current = false
+      clearReconnectTimers()
+      setReconnectCountdownSec(null)
+      if (reconnect) {
+        setConnectError(token.error ?? "Reconnect failed.")
+        setPhase("ended")
+        return
+      }
+      setConnectError(token.error ?? "Failed to get token")
       stream.getTracks().forEach((track) => track.stop())
       setLocalStream(null)
       setPhase("permission")
       return
     }
 
-    if (!tokenData.ephemeralToken) {
-      setConnectError("Token response was missing an ephemeral token.")
-      stream.getTracks().forEach((track) => track.stop())
-      setLocalStream(null)
-      setPhase("permission")
-      return
-    }
-
-    const client = new RealtimeClient({ ephemeralToken: tokenData.ephemeralToken })
+    const client = new RealtimeClient({ ephemeralToken: token.token })
     clientRef.current = client
+    const isCurrentClient = () => clientRef.current === client
 
     // Wire events
     client.addEventListener("agent.audio.stream", (e) => {
+      if (!isCurrentClient()) return
       setAgentStream((e as CustomEvent<{ stream: MediaStream }>).detail.stream)
     })
-    client.addEventListener("agent.speaking.start", () => setIsAgentSpeaking(true))
-    client.addEventListener("agent.speaking.end", () => setIsAgentSpeaking(false))
+    client.addEventListener("agent.speaking.start", () => {
+      if (!isCurrentClient()) return
+      setIsAgentSpeaking(true)
+    })
+    client.addEventListener("agent.speaking.end", () => {
+      if (!isCurrentClient()) return
+      setIsAgentSpeaking(false)
+    })
 
     client.addEventListener("agent.transcript.delta", (e) => {
+      if (!isCurrentClient()) return
       const { text } = (e as CustomEvent<{ text: string }>).detail
       setCaptions((prev) => {
         const partialId = partialAgentIdRef.current
@@ -183,6 +260,7 @@ export default function LiveInterviewRoom({ sessionId }: { sessionId: string }) 
     })
 
     client.addEventListener("agent.transcript.completed", (e) => {
+      if (!isCurrentClient()) return
       const { text } = (e as CustomEvent<{ text: string; startMs: number; endMs: number }>).detail
       const partialId = partialAgentIdRef.current
       setCaptions((prev) => {
@@ -205,39 +283,84 @@ export default function LiveInterviewRoom({ sessionId }: { sessionId: string }) 
     })
 
     client.addEventListener("user.transcript.completed", (e) => {
+      if (!isCurrentClient()) return
       const { text } = (e as CustomEvent<{ text: string; startMs: number; endMs: number }>).detail
       setCaptions((prev) => [...prev, { id: `user-${Date.now()}`, role: "candidate", content: text }])
     })
 
     client.addEventListener("connection.ready", () => {
+      if (!isCurrentClient()) return
+      reconnectInFlightRef.current = false
+      clearReconnectTimers()
+      setReconnectCountdownSec(null)
       setPhase("live")
+      setConnectError(null)
       // Update started_at if not already set
       if (session && !session.startedAt) {
         setSession(s => s ? { ...s, startedAt: new Date().toISOString() } : s)
       }
-      // Send BEGIN_INTERVIEW trigger
-      void client.sendSystemNote("BEGIN_INTERVIEW")
+      // Send trigger once at session start; reconnects should preserve flow.
+      if (!reconnect) {
+        void client.sendSystemNote("BEGIN_INTERVIEW")
+      }
     })
 
     client.addEventListener("connection.error", (e) => {
+      if (!isCurrentClient()) return
       const { error } = (e as CustomEvent<{ error: string }>).detail
       setConnectError(error)
     })
 
     client.addEventListener("connection.closed", () => {
-      if (phase !== "ended") setPhase("ended")
+      if (!isCurrentClient()) return
+      if (sessionEndingRef.current || autoEndFiredRef.current) {
+        setPhase((prev) => (prev === "ended" ? prev : "ended"))
+        return
+      }
+      if (reconnectAttemptsRef.current < MAX_AUTO_RECONNECTS && !reconnectInFlightRef.current) {
+        reconnectAttemptsRef.current += 1
+        setReconnectAttemptUi(reconnectAttemptsRef.current)
+        setReconnectCountdownSec(Math.ceil(RECONNECT_DELAY_MS / 1000))
+        setConnectError("Connection dropped. Attempting to reconnect…")
+        clearReconnectTimers()
+        reconnectCountdownTimerRef.current = setInterval(() => {
+          setReconnectCountdownSec((prev) => {
+            if (prev === null) return null
+            return prev > 1 ? prev - 1 : 1
+          })
+        }, 1000)
+        reconnectDelayTimerRef.current = setTimeout(() => {
+          clearReconnectTimers()
+          setReconnectCountdownSec(null)
+          void startLive(stream, { reconnect: true })
+        }, RECONNECT_DELAY_MS)
+        return
+      }
+      reconnectInFlightRef.current = false
+      clearReconnectTimers()
+      setReconnectCountdownSec(null)
+      setConnectError("Connection dropped and couldn't recover. End the session to generate your debrief.")
+      setPhase((prev) => (prev === "ended" ? prev : "ended"))
     })
 
     try {
       await client.connect(stream)
     } catch (e) {
+      reconnectInFlightRef.current = false
+      clearReconnectTimers()
+      setReconnectCountdownSec(null)
       const msg = e instanceof Error ? e.message : String(e)
-      setConnectError(msg)
-      stream.getTracks().forEach((track) => track.stop())
-      setLocalStream(null)
-      setPhase("permission")
+      if (reconnect) {
+        setConnectError(`Reconnect failed: ${msg}`)
+        setPhase("ended")
+      } else {
+        setConnectError(msg)
+        stream.getTracks().forEach((track) => track.stop())
+        setLocalStream(null)
+        setPhase("permission")
+      }
     }
-  }, [sessionId, session, phase])
+  }, [clearReconnectTimers, fetchRealtimeToken, session, sessionId])
 
   // ── Webcam snapshots ───────────────────────────────────────────────────────
   useEffect(() => {
@@ -315,6 +438,9 @@ export default function LiveInterviewRoom({ sessionId }: { sessionId: string }) 
     const client = clientRef.current
     if (!client) return
 
+    sessionEndingRef.current = true
+    clearReconnectTimers()
+    setReconnectCountdownSec(null)
     setPhase("ended")
     setIsAgentSpeaking(false)
 
@@ -346,7 +472,7 @@ export default function LiveInterviewRoom({ sessionId }: { sessionId: string }) 
       localStorage.setItem(recoveryKeyRef.current, JSON.stringify({ events, voiceTimings }))
       setConnectError("Couldn't save your transcript right now. We've kept it locally — try refreshing.")
     }
-  }, [sessionId, localStream, router])
+  }, [clearReconnectTimers, sessionId, localStream, router])
 
   // ── Controls ───────────────────────────────────────────────────────────────
   function handleToggleMute() {
@@ -448,7 +574,9 @@ export default function LiveInterviewRoom({ sessionId }: { sessionId: string }) 
               <span key={d} className="h-2 w-2 rounded-full bg-slate-200 animate-bounce" style={{ animationDelay: `${d}ms` }} />
             ))}
           </div>
-          <p className="text-[14px] font-medium text-slate-100">Connecting to interviewer…</p>
+          <p className="text-[14px] font-medium text-slate-100">
+            {reconnectAttemptUi > 0 ? `Reconnecting (attempt ${reconnectAttemptUi}/${MAX_AUTO_RECONNECTS})…` : "Connecting to interviewer…"}
+          </p>
         </div>
       </div>
     )
@@ -468,6 +596,11 @@ export default function LiveInterviewRoom({ sessionId }: { sessionId: string }) 
           {PERSONA_LABELS[session?.persona ?? ""] ?? "Interviewer"}
           {jobInfo ? ` · ${jobInfo.title}${jobInfo.company ? ` @ ${jobInfo.company}` : ""}` : ""}
         </p>
+        {reconnectCountdownSec !== null && (
+          <div className="ml-auto rounded-full border border-amber-400/30 bg-amber-400/10 px-3 py-1 text-[11px] font-semibold text-amber-200">
+            Reconnecting in {reconnectCountdownSec}s…
+          </div>
+        )}
       </div>
 
       {/* Body */}

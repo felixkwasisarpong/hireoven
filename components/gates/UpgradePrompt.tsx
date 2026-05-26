@@ -2,7 +2,7 @@
 
 import { Lock, Sparkles, Zap } from "lucide-react"
 import { useUpgradeModal } from "@/lib/context/UpgradeModalContext"
-import { FEATURE_DESCRIPTIONS, requiredPlanFor, type FeatureKey } from "@/lib/gates"
+import { FEATURE_DESCRIPTIONS, PLAN_NAMES, requiredPlanFor, type FeatureKey } from "@/lib/gates"
 
 interface UpgradePromptProps {
   feature: FeatureKey
@@ -11,17 +11,12 @@ interface UpgradePromptProps {
   className?: string
 }
 
-const PLAN_LABEL: Record<string, string> = {
-  pro: "Pro",
-  pro_max: "Pro Max",
-}
-
 // ── Inline ────────────────────────────────────────────────────────────────────
 
 function InlinePrompt({ feature }: { feature: FeatureKey }) {
   const { showUpgrade } = useUpgradeModal()
   const plan = requiredPlanFor(feature)
-  const planLabel = plan ? (PLAN_LABEL[plan] ?? "Pro") : "Pro"
+  const planLabel = plan ? PLAN_NAMES[plan] : "Pro"
 
   return (
     <div className="group relative overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_2px_12px_rgba(15,23,42,0.06)]">
@@ -62,7 +57,7 @@ function InlinePrompt({ feature }: { feature: FeatureKey }) {
 function BannerPrompt({ feature }: { feature: FeatureKey }) {
   const { showUpgrade } = useUpgradeModal()
   const plan = requiredPlanFor(feature)
-  const planLabel = plan ? (PLAN_LABEL[plan] ?? "Pro") : "Pro"
+  const planLabel = plan ? PLAN_NAMES[plan] : "Pro"
 
   return (
     <div className="relative overflow-hidden rounded-xl border border-[#FF5C18]/20 bg-gradient-to-r from-[#FFF4EE] to-[#FFF8F5] px-4 py-2.5">
@@ -92,7 +87,7 @@ function BannerPrompt({ feature }: { feature: FeatureKey }) {
 function OverlayPrompt({ feature, children }: { feature: FeatureKey; children?: React.ReactNode }) {
   const { showUpgrade } = useUpgradeModal()
   const plan = requiredPlanFor(feature)
-  const planLabel = plan ? (PLAN_LABEL[plan] ?? "Pro") : "Pro"
+  const planLabel = plan ? PLAN_NAMES[plan] : "Pro"
 
   return (
     <div className="relative isolate overflow-hidden rounded-2xl">

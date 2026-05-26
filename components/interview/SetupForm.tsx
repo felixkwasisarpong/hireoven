@@ -39,13 +39,24 @@ const DURATION_OPTIONS: Duration[] = [15, 30]
 type Props = {
   initialType?: InterviewType
   initialJobId?: string
+  initialJobs?: SavedJob[]
+  initialJobsLoaded?: boolean
+  initialCredits?: { balance: number; costs: { short: number } } | null
+  initialCreditsLoaded?: boolean
 }
 
-export default function SetupForm({ initialType, initialJobId }: Props) {
+export default function SetupForm({
+  initialType,
+  initialJobId,
+  initialJobs = [],
+  initialJobsLoaded = false,
+  initialCredits = null,
+  initialCreditsLoaded = false,
+}: Props) {
   const router = useRouter()
   const { pushToast } = useToast()
 
-  const { isPro, isProMax, isLoading: subLoading } = useSubscription()
+  const { isPro, isLoading: subLoading } = useSubscription()
 
   const [type, setType] = useState<InterviewType>(initialType ?? "text")
   const [jobId, setJobId] = useState<string>(initialJobId ?? "")
@@ -54,19 +65,42 @@ export default function SetupForm({ initialType, initialJobId }: Props) {
   const [duration, setDuration] = useState<Duration>(30)
   const [useResume, setUseResume] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [jobs, setJobs] = useState<SavedJob[]>([])
+  const [jobs, setJobs] = useState<SavedJob[]>(initialJobs)
+  const [jobsLoaded, setJobsLoaded] = useState(initialJobsLoaded)
 
-  // Credits — only fetched when Pro Max and live mode selected
-  const [credits, setCredits] = useState<{ balance: number; costs: { short: number } } | null>(null)
+  // Credits — fetched when live mode is selected (all plans can purchase packs)
+  const [credits, setCredits] = useState<{ balance: number; costs: { short: number } } | null>(initialCredits)
+  const [creditsLoaded, setCreditsLoaded] = useState(initialCreditsLoaded)
   const [buyingCredits, setBuyingCredits] = useState(false)
 
   useEffect(() => {
-    if (type !== "live") return
+    if (type !== "live" || creditsLoaded) return
+
     fetch("/api/interview/credits/balance")
       .then((r) => r.json())
       .then((d) => setCredits({ balance: d.balance ?? 0, costs: d.costs ?? { short: 1 } }))
       .catch(() => {})
-  }, [type])
+      .finally(() => setCreditsLoaded(true))
+  }, [type, creditsLoaded])
+
+  useEffect(() => {
+    if (jobsLoaded) return
+
+    fetch("/api/applications")
+      .then((r) => r.json())
+      .then((d) => {
+        const all = (d.applications ?? []) as SavedJob[]
+        setJobs(
+          all.filter(
+            (j) =>
+              j.job_id &&
+              !["rejected", "withdrawn"].includes(j.status)
+          )
+        )
+      })
+      .catch(() => {})
+      .finally(() => setJobsLoaded(true))
+  }, [jobsLoaded])
 
   async function buyCredits(pack: string) {
     setBuyingCredits(true)
@@ -82,22 +116,6 @@ export default function SetupForm({ initialType, initialJobId }: Props) {
       setBuyingCredits(false)
     }
   }
-
-  useEffect(() => {
-    fetch("/api/applications")
-      .then((r) => r.json())
-      .then((d) => {
-        const all = (d.applications ?? []) as SavedJob[]
-        setJobs(
-          all.filter(
-            (j) =>
-              j.job_id &&
-              !["rejected", "withdrawn"].includes(j.status)
-          )
-        )
-      })
-      .catch(() => {})
-  }, [])
 
   // Reset persona away from panel when switching to non-live mode
   useEffect(() => {

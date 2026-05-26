@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import {
+  AlertTriangle,
   ArrowUpRight,
   Banknote,
   Bookmark,
@@ -9,6 +10,7 @@ import {
   Building2,
   Linkedin,
   MapPin,
+  Repeat2,
   ShieldCheck,
   ShieldX,
   Wifi,
@@ -29,7 +31,13 @@ import {
   type SponsorshipVisaCardLabel,
 } from "@/lib/jobs/sponsorship-employer-signal"
 import {
+  isStaffingIntermediaryListing,
+  readHiringEntitySignalFromRawData,
+  resolveDisplayCompanyName,
+} from "@/lib/jobs/hiring-entity"
+import {
   getMatchCardLabel,
+  hasUsableMatchScore,
   resolveOverallMatchScore,
 } from "@/lib/jobs/match-score-display"
 import {
@@ -38,6 +46,11 @@ import {
   saveJobToPipeline,
 } from "@/lib/applications/save-job-client"
 import { getApplyVariant, getApplyVariantLabel } from "@/lib/jobs/apply-cta"
+import {
+  readJobRepostCount,
+  resolveGhostRepostSignals,
+  type GhostRepostSignal,
+} from "@/lib/jobs/ghost-repost-flags"
 import { jobSourceFallbackLogo } from "@/lib/jobs/source-fallback-logo"
 import { cn } from "@/lib/utils"
 import type { JobMatchScore, JobWithCompany, JobWithMatchScore } from "@/types"
@@ -73,6 +86,16 @@ function scoreColor(score: number | null): string {
   return "text-slate-600 ring-slate-200 bg-slate-50"
 }
 
+function equalsIgnoreCase(a: string | null | undefined, b: string | null | undefined): boolean {
+  if (!a || !b) return false
+  return a.trim().toLowerCase() === b.trim().toLowerCase()
+}
+
+function ghostSignalPillClass(tone: GhostRepostSignal["tone"]): string {
+  if (tone === "critical") return "bg-rose-50 text-rose-700 ring-rose-200"
+  return "bg-amber-50 text-amber-700 ring-amber-200"
+}
+
 type JobListRowProps = {
   job: JobWithCompany | JobWithMatchScore
   enableHoverEffects?: boolean
@@ -101,21 +124,36 @@ export default function JobListRow({
   const detailHref = `/dashboard/jobs/${job.id}`
 
   const raw = useMemo(() => readRawRecord(job), [job])
-  const resolvedMatchScore = matchScoreProp ?? ("match_score" in job ? (job.match_score ?? null) : null)
-  const score = resolveOverallMatchScore({ preferredScore: resolvedMatchScore, rawData: raw })
+  const rawMatchScore = matchScoreProp ?? ("match_score" in job ? (job.match_score ?? null) : null)
+  const resolvedMatchScore = hasUsableMatchScore(rawMatchScore) ? rawMatchScore : null
+  const score = resolveOverallMatchScore({ preferredScore: resolvedMatchScore })
   const matchLabel = getMatchCardLabel(score)
 
   const cardView: JobCardViewModel = ("card_view" in job && job.card_view)
     ? (job.card_view as JobCardViewModel)
     : { title: job.title, location: job.location ?? null, salary_label: null, employment_label: null, seniority_label: null, preview_description: null, skills: [], skill_groups: { programmingLanguages:[], frameworks:[], cloud:[], databases:[], devops:[], aiMl:[], data:[], security:[], engineering:[], testing:[], networking:[], media:[], healthcare:[], science:[], softSkills:[] }, sponsorship_badge: null, visa_card_label: null, show_visa_drawer: false }
   const displayTitle = cardView.title
-  const companyName = job.company?.name ?? "Unknown company"
+  const hiringEntitySignal = useMemo(
+    () => readHiringEntitySignalFromRawData(raw),
+    [raw]
+  )
+  const staffingIntermediary = isStaffingIntermediaryListing({ rawData: raw })
+  const companyName = resolveDisplayCompanyName({
+    companyName: job.company?.name ?? null,
+    rawData: raw,
+  })
+  const staffingCompanyName = hiringEntitySignal?.staffing_company_name ?? job.company?.name ?? null
+  const showingEndClientName =
+    staffingIntermediary &&
+    Boolean(hiringEntitySignal?.end_client_name) &&
+    !equalsIgnoreCase(companyName, staffingCompanyName)
   const rawCompanyDomain = job.company?.domain ?? null
   const rawCompanyLogoUrl = job.company?.logo_url ?? null
   const sourceFallback = jobSourceFallbackLogo(job, rawCompanyDomain, rawCompanyLogoUrl)
   const companyDomain = sourceFallback?.domain ?? rawCompanyDomain
   const companyLogoUrl = sourceFallback?.logoUrl ?? rawCompanyLogoUrl
-  const companyHref = job.company?.id ? `/companies/${job.company.id}` : null
+  const companyHref =
+    job.company?.id && !showingEndClientName ? `/companies/${job.company.id}` : null
 
   const workMode = formatWorkMode(job)
   const employmentType = cardView.employment_label ?? formatEmploymentLabel(job.employment_type) ?? "Full-time"
@@ -126,6 +164,13 @@ export default function JobListRow({
 
   const postedSource = (raw["posted_at_normalized"] as string | undefined) ?? job.first_detected_at
   const postedAt = formatPostedLabel(postedSource, now)
+  const postedTs = postedSource ? Date.parse(postedSource) : NaN
+  const freshnessDays = Number.isFinite(postedTs) ? Math.floor((now - postedTs) / 86_400_000) : null
+  const repostCount = readJobRepostCount(job)
+  const ghostRepostSignals = useMemo(
+    () => resolveGhostRepostSignals({ freshnessDays, repostCount }),
+    [freshnessDays, repostCount]
+  )
   const applyVariant = getApplyVariant(job.apply_url)
   const applyCtaLabel = getApplyVariantLabel(applyVariant)
 
@@ -232,6 +277,14 @@ export default function JobListRow({
           ) : (
             <span className="truncate font-medium text-slate-600">{companyName}</span>
           )}
+          {showingEndClientName && (
+            <>
+              <span className="text-slate-300">·</span>
+              <span className="rounded-full border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">
+                via staffing intermediary
+              </span>
+            </>
+          )}
           {job.location?.trim() && (
             <>
               <span className="text-slate-300">·</span>
@@ -242,6 +295,26 @@ export default function JobListRow({
             </>
           )}
         </div>
+        {ghostRepostSignals.length > 0 && (
+          <div className="mt-1 flex flex-wrap items-center gap-1">
+            {ghostRepostSignals.map((signal) => (
+              <span
+                key={`${signal.kind}:${signal.label}`}
+                title={signal.detail}
+                className={cn(
+                  "inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ring-1",
+                  ghostSignalPillClass(signal.tone)
+                )}
+              >
+                {signal.kind === "stale"
+                  ? <AlertTriangle className="h-3 w-3" aria-hidden />
+                  : <Repeat2 className="h-3 w-3" aria-hidden />
+                }
+                {signal.label}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="hidden items-center gap-1.5 md:flex">

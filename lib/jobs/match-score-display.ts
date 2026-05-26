@@ -25,6 +25,10 @@ export function normalizeMatchScore(value: unknown): number | null {
   return Math.max(0, Math.min(100, Math.round(numeric)))
 }
 
+export function hasUsableMatchScore(score: MatchScoreLike): score is Pick<JobMatchScore, "overall_score"> {
+  return normalizeMatchScore(score?.overall_score) !== null
+}
+
 function readRawMatchScore(rawData: unknown): number | null {
   if (!rawData || typeof rawData !== "object") return null
   const raw = rawData as RawRecord

@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useEffect, useRef, useState } from "react"
-import { usePathname, useSearchParams } from "next/navigation"
+import { usePathname } from "next/navigation"
 import { Loader2, RefreshCw, Send, Sparkles, X, SlidersHorizontal, Star, MessageSquare } from "lucide-react"
 import Image from "next/image"
 
@@ -90,7 +90,6 @@ export function ScoutMiniPanel({
   suggestionChips,
 }: ScoutMiniPanelProps) {
   const pathname = usePathname()
-  const searchParams = useSearchParams()
   const { primaryResume } = useResumeContext()
   const { executeAction } = useScoutActionExecutor()
 
@@ -106,13 +105,8 @@ export function ScoutMiniPanel({
 
   const resolvedPagePath = pagePath ?? pathname ?? "/dashboard"
   const contextIds = useMemo(
-    () => ({
-      jobId: jobId ?? searchParams.get("jobId") ?? undefined,
-      companyId: companyId ?? searchParams.get("companyId") ?? undefined,
-      resumeId: resumeId ?? searchParams.get("resumeId") ?? undefined,
-      applicationId: applicationId ?? searchParams.get("applicationId") ?? undefined,
-    }),
-    [applicationId, companyId, jobId, resumeId, searchParams]
+    () => ({ jobId, companyId, resumeId, applicationId }),
+    [applicationId, companyId, jobId, resumeId]
   )
 
   useEffect(() => {
@@ -170,18 +164,32 @@ export function ScoutMiniPanel({
         method: "POST",
         headers: { Accept: "application/json", "Content-Type": "application/json" },
         signal: controller.signal,
+        // Read URL filters at send-time so the panel stays in sync without useSearchParams.
+        // This avoids route-level CSR deopts from client search param hooks.
         body: JSON.stringify({
+          ...(function resolveRequestContext() {
+            const params =
+              typeof window === "undefined"
+                ? new URLSearchParams()
+                : new URLSearchParams(window.location.search)
+
+            return {
+              focusMode: params.get("focus") === "1",
+              activeFilters: {
+                q: params.get("q") ?? undefined,
+                location: params.get("location") ?? undefined,
+                sponsorship: params.get("sponsorship") ?? undefined,
+                workMode: params.get("workMode") ?? undefined,
+              },
+              jobId: contextIds.jobId ?? params.get("jobId") ?? undefined,
+              companyId: contextIds.companyId ?? params.get("companyId") ?? undefined,
+              resumeId: contextIds.resumeId ?? params.get("resumeId") ?? undefined,
+              applicationId: contextIds.applicationId ?? params.get("applicationId") ?? undefined,
+            }
+          })(),
           message: trimmed,
           pagePath: resolvedPagePath,
           source: "mini",
-          focusMode: searchParams.get("focus") === "1",
-          activeFilters: {
-            q: searchParams.get("q") ?? undefined,
-            location: searchParams.get("location") ?? undefined,
-            sponsorship: searchParams.get("sponsorship") ?? undefined,
-            workMode: searchParams.get("workMode") ?? undefined,
-          },
-          ...contextIds,
         }),
       })
 

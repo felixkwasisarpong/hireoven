@@ -4,6 +4,11 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import type { ApplicationStatus, JobApplication, PipelineStats, TimelineEntry } from "@/types"
 
 type ApplicationsGrouped = Record<ApplicationStatus, JobApplication[]>
+type UseApplicationsOptions = {
+  initialApplications?: JobApplication[]
+  initialStats?: PipelineStats | null
+  initialLoaded?: boolean
+}
 
 const STATUSES: ApplicationStatus[] = [
   "saved", "applied", "phone_screen", "interview", "final_round", "offer", "rejected", "withdrawn",
@@ -14,10 +19,16 @@ function emptyGrouped(): ApplicationsGrouped {
   return Object.fromEntries(entries) as ApplicationsGrouped
 }
 
-export function useApplications() {
-  const [applications, setApplications] = useState<JobApplication[]>([])
-  const [stats, setStats] = useState<PipelineStats | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+export function useApplications(options: UseApplicationsOptions = {}) {
+  const {
+    initialApplications = [],
+    initialStats = null,
+    initialLoaded = false,
+  } = options
+
+  const [applications, setApplications] = useState<JobApplication[]>(initialApplications)
+  const [stats, setStats] = useState<PipelineStats | null>(initialStats)
+  const [isLoading, setIsLoading] = useState(!initialLoaded)
   const [error, setError] = useState<string | null>(null)
 
   const grouped = useMemo(() => {
@@ -51,7 +62,10 @@ export function useApplications() {
     }
   }, [])
 
-  useEffect(() => { fetchAll() }, [fetchAll])
+  useEffect(() => {
+    if (initialLoaded) return
+    void fetchAll()
+  }, [fetchAll, initialLoaded])
 
   const moveApplication = useCallback(async (id: string, newStatus: ApplicationStatus) => {
     // Optimistic update

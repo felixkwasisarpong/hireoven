@@ -540,6 +540,7 @@ export type Job = {
   job_intelligence?: JobIntelligence | null;
   ghost_risk_score?: number | null;
   ghost_risk_level?: string | null;
+  ghost_repost_count?: number | null;
   created_at: string;
   updated_at: string;
 };
@@ -1182,6 +1183,16 @@ export type ResumeSnapshot = Pick<
   | 'raw_text'
 >;
 
+export type ResumeVersionOutcomeStats = {
+  applications_count: number;
+  responses_count: number;
+  interviews_count: number;
+  offers_count: number;
+  response_rate: number;
+  interview_rate: number;
+  offer_rate: number;
+};
+
 export type ResumeVersion = {
   id: string;
   resume_id: string;
@@ -1191,6 +1202,7 @@ export type ResumeVersion = {
   file_url: string | null;
   snapshot: ResumeSnapshot | null;
   changes_summary: string | null;
+  outcome_stats?: ResumeVersionOutcomeStats | null;
   created_at: string;
 };
 

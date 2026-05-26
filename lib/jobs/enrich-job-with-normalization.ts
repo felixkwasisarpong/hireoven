@@ -91,6 +91,7 @@ export async function enrichJobWithNormalization(
     ...normalization.nextColumns,
     raw_data: {
       ...existingRawData,
+      ...normalization.rawSnapshot,
       normalization: {
         version: normalization.canonical.schema_version,
         normalized_at: normalization.canonical.normalized_at,

@@ -106,7 +106,7 @@ export default function AdminOverviewPage() {
 
   if (!payload) return null
 
-  const { stats, crawlHealth, apiUsage, realtime } = payload
+  const { stats, crawlHealth, apiUsage, reliability, realtime } = payload
   const crawlSettings = (realtime.settings.crawl ?? {}) as Record<string, unknown>
   const paused = Boolean(crawlSettings.paused)
   const intervalMinutes =
@@ -179,6 +179,74 @@ export default function AdminOverviewPage() {
           }
         />
       </div>
+
+      <AdminPanel
+        title="Reliability guardrails"
+        description="Track quality regressions that directly break user trust in the feed and billing surfaces."
+        actions={
+          <AdminBadge tone="neutral">
+            Updated {formatRelativeTime(reliability.computedAt, now)}
+          </AdminBadge>
+        }
+      >
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+          <AdminStatCard
+            label="Feed duplicate rate"
+            value={formatPercent(reliability.duplicateRate.ratePercent)}
+            hint={`${formatNumber(reliability.duplicateRate.duplicateRows)} duplicate rows / ${formatNumber(reliability.duplicateRate.totalTitledRows)} titled jobs`}
+            tone={reliability.duplicateRate.ratePercent > 1 ? "danger" : "success"}
+          />
+          <AdminStatCard
+            label="Null title rate"
+            value={formatPercent(reliability.nullTitleRate.ratePercent)}
+            hint={`${formatNumber(reliability.nullTitleRate.nullTitleRows)} null-title rows / ${formatNumber(reliability.nullTitleRate.totalRows)} active jobs`}
+            tone={reliability.nullTitleRate.ratePercent > 0 ? "danger" : "success"}
+          />
+          <AdminStatCard
+            label="Match score missing rate"
+            value={formatPercent(reliability.matchScoreMissingRate.ratePercent)}
+            hint={`${formatNumber(reliability.matchScoreMissingRate.missingRows)} missing pairs / ${formatNumber(reliability.matchScoreMissingRate.totalRows)} pairs (${formatNumber(reliability.matchScoreMissingRate.sampledUsers)} users x ${formatNumber(reliability.matchScoreMissingRate.sampledJobs)} jobs)`}
+            tone={reliability.matchScoreMissingRate.ratePercent > 2 ? "danger" : "success"}
+          />
+          <AdminStatCard
+            label="Watchlist mismatch rate"
+            value={formatPercent(reliability.watchlistMismatchRate.ratePercent)}
+            hint={`${formatNumber(reliability.watchlistMismatchRate.mismatchedUsers)} mismatched users / ${formatNumber(reliability.watchlistMismatchRate.trackedUsers)} tracked users`}
+            tone={reliability.watchlistMismatchRate.ratePercent > 0 ? "danger" : "success"}
+          />
+          <AdminStatCard
+            label="Scraper artifact rate"
+            value={formatPercent(reliability.scraperArtifactRate.ratePercent)}
+            hint={`${formatNumber(reliability.scraperArtifactRate.artifactRows)} artifact rows / ${formatNumber(reliability.scraperArtifactRate.totalRows)} active jobs`}
+            tone={reliability.scraperArtifactRate.ratePercent > 0 ? "danger" : "success"}
+          />
+          <AdminStatCard
+            label="Subscription mismatch rate"
+            value={formatPercent(reliability.subscriptionMismatchRate.ratePercent)}
+            hint={`${formatNumber(reliability.subscriptionMismatchRate.mismatchedSnapshots)} mismatched snapshots / ${formatNumber(reliability.subscriptionMismatchRate.trackedSnapshots)} tracked snapshots`}
+            tone={reliability.subscriptionMismatchRate.ratePercent > 0 ? "danger" : "success"}
+          />
+        </div>
+        <div className="mt-4 rounded-2xl border border-gray-200 bg-white/80 p-4">
+          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-gray-500">
+            24h Trend vs Previous 24h
+          </p>
+          <div className="mt-3 grid gap-3 md:grid-cols-3">
+            <ReliabilityTrendCard
+              label="Duplicate rate"
+              trend={reliability.trends24h.duplicateRate}
+            />
+            <ReliabilityTrendCard
+              label="Null title rate"
+              trend={reliability.trends24h.nullTitleRate}
+            />
+            <ReliabilityTrendCard
+              label="Scraper artifact rate"
+              trend={reliability.trends24h.scraperArtifactRate}
+            />
+          </div>
+        </div>
+      </AdminPanel>
 
       <div className="grid gap-6 xl:grid-cols-[1.2fr_1fr_0.9fr]">
         <AdminPanel
@@ -325,6 +393,45 @@ export default function AdminOverviewPage() {
           </div>
         </AdminPanel>
       </div>
+    </div>
+  )
+}
+
+function formatPercent(value: number): string {
+  return `${(Number.isFinite(value) ? value : 0).toFixed(2)}%`
+}
+
+function formatTrendDelta(value: number): string {
+  if (!Number.isFinite(value) || Math.abs(value) < 0.01) return "0.00 pp"
+  return `${value > 0 ? "+" : ""}${value.toFixed(2)} pp`
+}
+
+function ReliabilityTrendCard({
+  label,
+  trend,
+}: {
+  label: string
+  trend: AdminOverviewPayload["reliability"]["trends24h"]["duplicateRate"]
+}) {
+  const delta = trend.deltaPercentPoints
+  const tone =
+    delta > 0.01
+      ? "danger"
+      : delta < -0.01
+        ? "success"
+        : "neutral"
+
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white px-3 py-3 shadow-sm">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-semibold text-gray-900">{label}</p>
+        <AdminBadge tone={tone}>
+          {formatTrendDelta(delta)}
+        </AdminBadge>
+      </div>
+      <p className="mt-2 text-xs text-gray-500">
+        Current {formatPercent(trend.current.ratePercent)} · Previous {formatPercent(trend.previous.ratePercent)}
+      </p>
     </div>
   )
 }

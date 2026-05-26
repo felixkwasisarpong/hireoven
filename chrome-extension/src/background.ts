@@ -1500,6 +1500,11 @@ const MVP_ROUTES: Record<string, MvpRoute> = {
       company:  msg.company,
     }),
   },
+  EXT_MVP_TRACK_AUTOFILL: {
+    method: "POST",
+    path: "/api/extension/autofill/telemetry",
+    buildBody: (msg) => msg.payload,
+  },
 }
 
 /**

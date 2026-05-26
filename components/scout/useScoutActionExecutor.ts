@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { usePathname, useSearchParams } from "next/navigation"
+import { usePathname } from "next/navigation"
 import { useRouter } from "next/navigation"
 import type { ScoutAction } from "@/lib/scout/types"
 import {
@@ -151,7 +151,6 @@ function buildStateSummaries(
 export function useScoutActionExecutor() {
   const router = useRouter()
   const pathname = usePathname()
-  const searchParams = useSearchParams()
 
   const [highlightedJobs, setHighlightedJobs] = useState<string[]>([])
   const [feedback, setFeedback] = useState<string | null>(null)
@@ -389,6 +388,11 @@ export function useScoutActionExecutor() {
   function runAction(action: ScoutAction, options?: ExecutorOptions) {
     try {
       const { source, reason } = options ?? {}
+      const currentSearchParams =
+        typeof window === "undefined"
+          ? new URLSearchParams()
+          : new URLSearchParams(window.location.search)
+      const currentSearchParamsString = currentSearchParams.toString()
 
       switch (action.type) {
         case "OPEN_JOB":
@@ -397,7 +401,7 @@ export function useScoutActionExecutor() {
           break
 
         case "APPLY_FILTERS": {
-          const previousSearchParams = searchParams.toString()
+          const previousSearchParams = currentSearchParamsString
           const previousUrl = `${pathname}${previousSearchParams ? `?${previousSearchParams}` : ""}`
 
           const params = new URLSearchParams()
@@ -446,7 +450,7 @@ export function useScoutActionExecutor() {
           const label = action.label ?? (applied.length > 0 ? applied.join(" · ") : "Filters")
           const { previousStateSummary, newStateSummary } = buildStateSummaries(
             action,
-            new URLSearchParams(searchParams.toString())
+            new URLSearchParams(currentSearchParamsString)
           )
           const ts = Date.now()
           const auditEntry: ScoutAuditEntry = {
@@ -514,7 +518,7 @@ export function useScoutActionExecutor() {
 
           const { previousStateSummary: prevSum, newStateSummary: newSum } = buildStateSummaries(
             action,
-            new URLSearchParams(searchParams.toString())
+            new URLSearchParams(currentSearchParamsString)
           )
           const ts = Date.now()
           const auditEntry: ScoutAuditEntry = {
@@ -654,11 +658,11 @@ export function useScoutActionExecutor() {
         }
 
         case "SET_FOCUS_MODE": {
-          const previousSearchParams = searchParams.toString()
+          const previousSearchParams = currentSearchParamsString
           const previousUrl = `${pathname}${previousSearchParams ? `?${previousSearchParams}` : ""}`
 
           if (action.payload.enabled) {
-            const params = new URLSearchParams(searchParams.toString())
+            const params = new URLSearchParams(currentSearchParamsString)
             params.set("focus", "1")
             params.set("sort", "match")
             // Persist so Scout workspace survives navigation back from /dashboard
@@ -667,7 +671,7 @@ export function useScoutActionExecutor() {
 
             const { previousStateSummary, newStateSummary } = buildStateSummaries(
               action,
-              new URLSearchParams(searchParams.toString())
+              new URLSearchParams(currentSearchParamsString)
             )
             const ts = Date.now()
             const auditEntry: ScoutAuditEntry = {
@@ -724,7 +728,7 @@ export function useScoutActionExecutor() {
               () => router.push(previousUrl)
             )
           } else {
-            const params = new URLSearchParams(searchParams.toString())
+            const params = new URLSearchParams(currentSearchParamsString)
             params.delete("focus")
             params.delete("sort")
             const qs = params.toString()

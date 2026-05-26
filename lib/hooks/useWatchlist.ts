@@ -1,15 +1,29 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import type { WatchlistWithCompany } from "@/types"
 
-export function useWatchlist(userId?: string) {
-  const [watchlist, setWatchlist] = useState<WatchlistWithCompany[]>([])
-  const [isLoading, setIsLoading] = useState(false)
+type UseWatchlistOptions = {
+  authLoading?: boolean
+  initialWatchlist?: WatchlistWithCompany[]
+  initialLoaded?: boolean
+}
+
+export function useWatchlist(userId?: string, options: UseWatchlistOptions = {}) {
+  const authLoading = options.authLoading === true
+  const hasInitial = options.initialLoaded === true
+  const [watchlist, setWatchlist] = useState<WatchlistWithCompany[]>(options.initialWatchlist ?? [])
+  const [isLoading, setIsLoading] = useState(hasInitial ? false : authLoading)
+  const skipInitialRefreshRef = useRef(hasInitial)
 
   const refresh = useCallback(async () => {
     if (!userId) {
+      if (authLoading) {
+        setIsLoading(true)
+        return
+      }
       setWatchlist([])
+      setIsLoading(false)
       return
     }
 
@@ -23,11 +37,16 @@ export function useWatchlist(userId?: string) {
     } finally {
       setIsLoading(false)
     }
-  }, [userId])
+  }, [userId, authLoading])
 
   useEffect(() => {
+    if (skipInitialRefreshRef.current) {
+      skipInitialRefreshRef.current = false
+      if (!authLoading) setIsLoading(false)
+      return
+    }
     void refresh()
-  }, [refresh])
+  }, [refresh, authLoading])
 
   const isWatching = useCallback(
     (companyId: string) => watchlist.some((item) => item.company_id === companyId),
