@@ -57,6 +57,7 @@ type OracleRequisition = {
   Title?: string
   PostedDate?: string
   PostingStartDate?: string
+  ShortDescriptionStr?: string
   ExternalDescriptionStr?: string
   ExternalResponsibilitiesStr?: string
   ExternalQualificationsStr?: string
@@ -84,6 +85,8 @@ type OracleRequisitionsResponse = {
 
 const POD_HOST_RE = /^([a-z0-9][a-z0-9._-]*)\.oraclecloud\.com$/i
 const SITE_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/
+// Prefix for slugs backed by a custom (non-oraclecloud.com) hostname.
+const CUSTOM_HOST_PREFIX = "custom:"
 
 function parsePod(host: string): string | null {
   const m = host.toLowerCase().match(POD_HOST_RE)
@@ -104,7 +107,25 @@ function encodeSlug(pod: string, site: string): string {
   return `${pod}:${site}`
 }
 
-function decodeSlug(slug: string): { pod: string; site: string } | null {
+/** Encodes a custom-domain Oracle board into a slug (e.g. careers.autozone.com + jobsearch). */
+function encodeCustomSlug(host: string, site: string): string {
+  return `${CUSTOM_HOST_PREFIX}${host}:${site}`
+}
+
+type DecodedSlug = { identifier: string; site: string; origin: string }
+
+function decodeSlug(slug: string): DecodedSlug | null {
+  // Custom-domain slug: "custom:{host}:{site}"
+  if (slug.startsWith(CUSTOM_HOST_PREFIX)) {
+    const rest = slug.slice(CUSTOM_HOST_PREFIX.length)
+    const idx = rest.lastIndexOf(":")
+    if (idx <= 0) return null
+    const host = rest.slice(0, idx).trim()
+    const site = cleanSite(rest.slice(idx + 1))
+    if (!site || !host || !host.includes(".")) return null
+    return { identifier: host, site, origin: `https://${host}` }
+  }
+  // Standard pod slug: "{pod}:{site}"
   const idx = slug.lastIndexOf(":")
   if (idx <= 0) return null
   const pod = slug.slice(0, idx)
@@ -112,7 +133,7 @@ function decodeSlug(slug: string): { pod: string; site: string } | null {
   if (!parsePod(`${pod}.oraclecloud.com`)) return null
   const cleanedSite = cleanSite(site)
   if (!cleanedSite) return null
-  return { pod, site: cleanedSite }
+  return { identifier: pod, site: cleanedSite, origin: `https://${pod}.oraclecloud.com` }
 }
 
 function detectFromUrl(url: string): { slug: string } | null {
@@ -122,32 +143,33 @@ function detectFromUrl(url: string): { slug: string } | null {
   } catch {
     return null
   }
-  const pod = parsePod(parsed.hostname)
-  if (!pod) return null
   // Path looks like /hcmUI/CandidateExperience/{locale}/sites/{site}[/...]
+  // or the shorter /en/sites/{site}/job/{id} form used on both *.oraclecloud.com
+  // and custom-branded Oracle CE portals.
   const parts = parsed.pathname.split("/").filter(Boolean)
   const sitesIdx = parts.findIndex((p) => p.toLowerCase() === "sites")
   if (sitesIdx === -1) return null
   const site = cleanSite(parts[sitesIdx + 1])
   if (!site) return null
-  return { slug: encodeSlug(pod, site) }
+  const pod = parsePod(parsed.hostname)
+  if (pod) return { slug: encodeSlug(pod, site) }
+  // Reject other *.oraclecloud.com subdomains that aren't valid pods (docs, www, etc.)
+  if (parsed.hostname.toLowerCase().endsWith(".oraclecloud.com")) return null
+  // Custom-branded Oracle portal (careers.autozone.com, www.macysjobs.com, etc.)
+  return { slug: encodeCustomSlug(parsed.hostname, site) }
 }
 
-function originFor(pod: string): string {
-  return `https://${pod}.oraclecloud.com`
-}
-
-function requisitionsUrl(pod: string, site: string, offset: number): string {
+function requisitionsUrl(origin: string, site: string, offset: number): string {
   const params = new URLSearchParams({
     onlyData: "true",
     expand: EXPAND_PARAM,
     finder: `findReqs;siteNumber=${site},facetsList=LOCATIONS;TITLES;CATEGORIES,limit=${PAGE_LIMIT},offset=${offset},sortBy=POSTING_DATES_DESC`,
   })
-  return `${originFor(pod)}/hcmRestApi/resources/latest/recruitingCEJobRequisitions?${params.toString()}`
+  return `${origin}/hcmRestApi/resources/latest/recruitingCEJobRequisitions?${params.toString()}`
 }
 
-function applyUrl(pod: string, site: string, requisitionId: string): string {
-  return `${originFor(pod)}/hcmUI/CandidateExperience/en/sites/${encodeURIComponent(site)}/job/${encodeURIComponent(requisitionId)}`
+function applyUrl(origin: string, site: string, requisitionId: string): string {
+  return `${origin}/hcmUI/CandidateExperience/en/sites/${encodeURIComponent(site)}/job/${encodeURIComponent(requisitionId)}`
 }
 
 function stripHtml(value: string | undefined | null): string | undefined {
@@ -197,17 +219,24 @@ function pickDescription(req: OracleRequisition): string | undefined {
   ]
     .map((p) => stripHtml(p))
     .filter((p): p is string => Boolean(p))
-  if (parts.length === 0) return undefined
-  return parts.join("\n\n")
+  if (parts.length > 0) return parts.join("\n\n")
+  // Fall back to ShortDescriptionStr when the full description fields are absent.
+  // Many Oracle CE tenants only populate this shorter summary field.
+  return stripHtml(req.ShortDescriptionStr)
 }
 
-function mapRequisitionToJob(req: OracleRequisition, pod: string, site: string): HarvestedJob | null {
+function mapRequisitionToJob(
+  req: OracleRequisition,
+  identifier: string,
+  site: string,
+  origin: string
+): HarvestedJob | null {
   const id =
     typeof req.Id === "string" ? req.Id : typeof req.Id === "number" ? String(req.Id) : req.RequisitionNumber
   if (!id) return null
   const title = req.Title?.trim()
   if (!title) return null
-  const url = req.ExternalURL?.trim() || applyUrl(pod, site, id)
+  const url = req.ExternalURL?.trim() || applyUrl(origin, site, id)
   const description = pickDescription(req)
   const location = flattenLocation(req)
   const postedAt =
@@ -218,7 +247,7 @@ function mapRequisitionToJob(req: OracleRequisition, pod: string, site: string):
         : undefined
   const workMode = mapWorkMode(req.WorkplaceTypeCode)
   return {
-    externalId: `oraclecloud:${pod}:${site}:${id}`,
+    externalId: `oraclecloud:${identifier}:${site}:${id}`,
     title,
     applyUrl: url,
     description,
@@ -238,8 +267,9 @@ function mapRequisitionToJob(req: OracleRequisition, pod: string, site: string):
 
 export function mapResponseToJobs(
   response: OracleRequisitionsResponse,
-  pod: string,
-  site: string
+  identifier: string,
+  site: string,
+  origin: string
 ): HarvestedJob[] {
   // Oracle CE wraps the page in a singleton outer item that holds
   // `requisitionList`. Older pods return a flat array — accept both.
@@ -248,7 +278,7 @@ export function mapResponseToJobs(
   for (const item of items) {
     const list = Array.isArray(item.requisitionList) ? item.requisitionList : []
     for (const req of list) {
-      const job = mapRequisitionToJob(req, pod, site)
+      const job = mapRequisitionToJob(req, identifier, site, origin)
       if (job) jobs.push(job)
     }
   }
@@ -267,7 +297,7 @@ export const oraclecloudAdapter: AtsAdapter = {
     const startedAt = Date.now()
     const decoded = decodeSlug(slug)
     if (!decoded) throw new Error(`oraclecloud malformed slug: ${slug}`)
-    const { pod, site } = decoded
+    const { identifier, site, origin } = decoded
 
     const all = new Map<string, HarvestedJob>()
     let latencyMs = 0
@@ -277,7 +307,7 @@ export const oraclecloudAdapter: AtsAdapter = {
 
     for (let page = 0; page < MAX_PAGES; page++) {
       const offset = page * PAGE_LIMIT
-      const url = requisitionsUrl(pod, site, offset)
+      const url = requisitionsUrl(origin, site, offset)
       const result = await conditionalFetchJson<OracleRequisitionsResponse>(url, {
         ...ctx,
         etag: null,
@@ -313,7 +343,7 @@ export const oraclecloudAdapter: AtsAdapter = {
       etag ??= result.etag
       lastModified ??= result.lastModified
 
-      const pageJobs = mapResponseToJobs(result.data, pod, site)
+      const pageJobs = mapResponseToJobs(result.data, identifier, site, origin)
       let added = 0
       for (const job of pageJobs) {
         if (all.has(job.externalId)) continue
@@ -347,4 +377,4 @@ export const oraclecloudAdapter: AtsAdapter = {
   },
 }
 
-export { decodeSlug, encodeSlug, parsePod, mapRequisitionToJob }
+export { CUSTOM_HOST_PREFIX, decodeSlug, encodeSlug, encodeCustomSlug, parsePod, mapRequisitionToJob }

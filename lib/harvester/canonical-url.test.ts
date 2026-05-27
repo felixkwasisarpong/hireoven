@@ -70,6 +70,14 @@ test("canonicalCareersUrl: assembles oraclecloud URL from pod:site slug (multi-d
   assert.equal(canonicalCareersUrl("oraclecloud", "eeho.fa.us2"), null)
 })
 
+test("canonicalCareersUrl: assembles oraclecloud URL from custom-domain slug", () => {
+  assert.equal(
+    canonicalCareersUrl("oraclecloud", "custom:careers.autozone.com:jobsearch"),
+    "https://careers.autozone.com/hcmUI/CandidateExperience/en/sites/jobsearch/"
+  )
+  assert.equal(canonicalCareersUrl("oraclecloud", "custom:careers.autozone.com"), null)
+})
+
 test("canonicalCareersUrl: assembles usajobs URL with URL-encoded slug", () => {
   assert.equal(
     canonicalCareersUrl("usajobs", "Department of Veterans Affairs"),
@@ -92,6 +100,7 @@ test("canonicalCareersUrl: round-trips through detectFromUrl", async () => {
     ["successfactors", "career4.com:novartis"],
     ["taleo", "marriott:2"],
     ["oraclecloud", "eeho.fa.us2:CX_1"],
+    ["oraclecloud", "custom:careers.autozone.com:jobsearch"],
     ["usajobs", "Department of Veterans Affairs"],
   ]
   for (const [atsType, slug] of pairs) {
