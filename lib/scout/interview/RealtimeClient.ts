@@ -32,7 +32,7 @@ export type VoiceTimings = {
 }
 
 const REALTIME_CALLS_URL = "https://api.openai.com/v1/realtime/calls"
-const DISCONNECTED_GRACE_MS = 8_000
+const DISCONNECTED_GRACE_MS = 20_000
 
 export class RealtimeClient extends EventTarget {
   private ephemeralToken: string
@@ -61,7 +61,6 @@ export class RealtimeClient extends EventTarget {
     type: K,
     detail?: RealtimeEventMap[K] extends CustomEvent<infer D> ? D : never
   ) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     this.dispatchEvent(new CustomEvent(type, { detail } as any))
   }
 
@@ -82,7 +81,8 @@ export class RealtimeClient extends EventTarget {
     this.clearDisconnectedTimer()
     this.disconnectedTimer = setTimeout(() => {
       const state = this.pc?.connectionState
-      if (state === "connected" || state === "connecting") return
+      const dataChannelOpen = this.dc?.readyState === "open"
+      if ((state === "connected" || state === "connecting") && dataChannelOpen) return
       this.emit("connection.error", { error: "WebRTC connection disconnected" })
       this.emitClosedOnce()
     }, DISCONNECTED_GRACE_MS)
@@ -115,7 +115,7 @@ export class RealtimeClient extends EventTarget {
     }
     this.dc.onclose = () => {
       const state = this.pc?.connectionState
-      if (state === "disconnected") {
+      if (state === "connected" || state === "connecting" || state === "disconnected" || state === "new") {
         this.scheduleDisconnectedClose()
         return
       }
@@ -176,14 +176,20 @@ export class RealtimeClient extends EventTarget {
       setTimeout(resolve, 5000)
     })
 
-    // 7. POST SDP offer to OpenAI Realtime Calls endpoint
+    // 7. POST SDP offer to OpenAI Realtime Calls endpoint.
+    // Use multipart form-data (GA contract) to avoid legacy beta-SHA negotiation.
+    const offerSdp = this.pc.localDescription?.sdp
+    if (!offerSdp) {
+      throw new Error("Missing local SDP offer")
+    }
+    const formData = new FormData()
+    formData.set("sdp", offerSdp)
     const res = await fetch(REALTIME_CALLS_URL, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${this.ephemeralToken}`,
-        "Content-Type": "application/sdp",
       },
-      body: this.pc.localDescription!.sdp,
+      body: formData,
     })
 
     if (!res.ok) {

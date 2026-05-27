@@ -94,6 +94,7 @@ export default function TextInterviewChat({
   const [sessionStatus, setSessionStatus] = useState(initialSession?.status ?? "setup")
   const [isLoading, setIsLoading] = useState(false)
   const [sendError, setSendError] = useState<string | null>(null)
+  const [retryContent, setRetryContent] = useState<string | null>(null)
   const [isInitializing, setIsInitializing] = useState(!initialLoaded)
   const [showEndConfirm, setShowEndConfirm] = useState(false)
   const [remainingSec, setRemainingSec] = useState(
@@ -186,6 +187,7 @@ export default function TextInterviewChat({
       const currentSession = sessionOverride ?? session
       if (!currentSession) return
       setSendError(null)
+      setRetryContent(null)
       setIsLoading(true)
 
       // Optimistically add candidate message (skip for BEGIN_INTERVIEW)
@@ -222,6 +224,7 @@ export default function TextInterviewChat({
 
         if (!res.ok) {
           setSendError((data.error as string) ?? "Couldn't send. Retry?")
+          if (!isBeginInterview) setRetryContent(content)
           if (!isBeginInterview) {
             setTurns((prev) => prev.filter((t) => t.id !== optimisticId))
           }
@@ -253,6 +256,7 @@ export default function TextInterviewChat({
 
         // Update skills covered
         if (Array.isArray(data.skillsCovered)) setSkillsCovered(data.skillsCovered as string[])
+        setRetryContent(null)
 
         // Session status
         if (data.sessionStatus === "completed") {
@@ -266,6 +270,7 @@ export default function TextInterviewChat({
         }
       } catch {
         setSendError("Network error — couldn't send. Retry?")
+        if (!isBeginInterview) setRetryContent(content)
         if (!isBeginInterview) {
           setTurns((prev) => prev.filter((t) => t.id !== optimisticId))
         }
@@ -377,9 +382,22 @@ export default function TextInterviewChat({
           {sendError && (
             <div className="border-t border-red-100 bg-red-50/90 px-4 py-2 text-center">
               <span className="text-[12px] text-red-600">{sendError}</span>
+              {retryContent && (
+                <button
+                  type="button"
+                  onClick={() => void sendTurn(retryContent)}
+                  disabled={isLoading}
+                  className="ml-2 text-[12px] font-semibold text-red-700 underline disabled:opacity-50"
+                >
+                  Retry
+                </button>
+              )}
               <button
                 type="button"
-                onClick={() => setSendError(null)}
+                onClick={() => {
+                  setSendError(null)
+                  setRetryContent(null)
+                }}
                 className="ml-2 text-[12px] font-medium text-red-700 underline"
               >
                 Dismiss

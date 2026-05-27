@@ -53,8 +53,8 @@ const PERSONA_LABELS: Record<string, string> = {
   founder: "Founder",
   panel: "Panel",
 }
-const MAX_AUTO_RECONNECTS = 1
-const RECONNECT_DELAY_MS = 2500
+const MAX_AUTO_RECONNECTS = 3
+const RECONNECT_DELAY_MS = 3000
 
 // ── Main component ────────────────────────────────────────────────────────────
 
@@ -209,6 +209,27 @@ export default function LiveInterviewRoom({
 
     setPhase("connecting")
     setConnectError(reconnect ? "Connection dropped. Reconnecting…" : null)
+    const queueReconnect = (reason: string): boolean => {
+      if (sessionEndingRef.current || autoEndFiredRef.current) return false
+      if (reconnectAttemptsRef.current >= MAX_AUTO_RECONNECTS || reconnectInFlightRef.current) return false
+      reconnectAttemptsRef.current += 1
+      setReconnectAttemptUi(reconnectAttemptsRef.current)
+      setReconnectCountdownSec(Math.ceil(RECONNECT_DELAY_MS / 1000))
+      setConnectError(reason)
+      clearReconnectTimers()
+      reconnectCountdownTimerRef.current = setInterval(() => {
+        setReconnectCountdownSec((prev) => {
+          if (prev === null) return null
+          return prev > 1 ? prev - 1 : 1
+        })
+      }, 1000)
+      reconnectDelayTimerRef.current = setTimeout(() => {
+        clearReconnectTimers()
+        setReconnectCountdownSec(null)
+        void startLive(stream, { reconnect: true })
+      }, RECONNECT_DELAY_MS)
+      return true
+    }
 
     const token = await fetchRealtimeToken()
     if (!token.token) {
@@ -216,8 +237,10 @@ export default function LiveInterviewRoom({
       clearReconnectTimers()
       setReconnectCountdownSec(null)
       if (reconnect) {
-        setConnectError(token.error ?? "Reconnect failed.")
-        setPhase("ended")
+        const reason = token.error ?? "Reconnect failed."
+        if (queueReconnect(`Reconnect failed: ${reason}`)) return
+        setConnectError(reason)
+        setPhase((prev) => (prev === "ended" ? prev : "ended"))
         return
       }
       setConnectError(token.error ?? "Failed to get token")
@@ -317,25 +340,7 @@ export default function LiveInterviewRoom({
         setPhase((prev) => (prev === "ended" ? prev : "ended"))
         return
       }
-      if (reconnectAttemptsRef.current < MAX_AUTO_RECONNECTS && !reconnectInFlightRef.current) {
-        reconnectAttemptsRef.current += 1
-        setReconnectAttemptUi(reconnectAttemptsRef.current)
-        setReconnectCountdownSec(Math.ceil(RECONNECT_DELAY_MS / 1000))
-        setConnectError("Connection dropped. Attempting to reconnect…")
-        clearReconnectTimers()
-        reconnectCountdownTimerRef.current = setInterval(() => {
-          setReconnectCountdownSec((prev) => {
-            if (prev === null) return null
-            return prev > 1 ? prev - 1 : 1
-          })
-        }, 1000)
-        reconnectDelayTimerRef.current = setTimeout(() => {
-          clearReconnectTimers()
-          setReconnectCountdownSec(null)
-          void startLive(stream, { reconnect: true })
-        }, RECONNECT_DELAY_MS)
-        return
-      }
+      if (queueReconnect("Connection dropped. Attempting to reconnect…")) return
       reconnectInFlightRef.current = false
       clearReconnectTimers()
       setReconnectCountdownSec(null)
@@ -351,8 +356,9 @@ export default function LiveInterviewRoom({
       setReconnectCountdownSec(null)
       const msg = e instanceof Error ? e.message : String(e)
       if (reconnect) {
+        if (queueReconnect(`Reconnect failed: ${msg}`)) return
         setConnectError(`Reconnect failed: ${msg}`)
-        setPhase("ended")
+        setPhase((prev) => (prev === "ended" ? prev : "ended"))
       } else {
         setConnectError(msg)
         stream.getTracks().forEach((track) => track.stop())
