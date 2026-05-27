@@ -57,6 +57,7 @@ type OracleRequisition = {
   Title?: string
   PostedDate?: string
   PostingStartDate?: string
+  ShortDescriptionStr?: string
   ExternalDescriptionStr?: string
   ExternalResponsibilitiesStr?: string
   ExternalQualificationsStr?: string
@@ -218,8 +219,10 @@ function pickDescription(req: OracleRequisition): string | undefined {
   ]
     .map((p) => stripHtml(p))
     .filter((p): p is string => Boolean(p))
-  if (parts.length === 0) return undefined
-  return parts.join("\n\n")
+  if (parts.length > 0) return parts.join("\n\n")
+  // Fall back to ShortDescriptionStr when the full description fields are absent.
+  // Many Oracle CE tenants only populate this shorter summary field.
+  return stripHtml(req.ShortDescriptionStr)
 }
 
 function mapRequisitionToJob(
