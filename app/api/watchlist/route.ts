@@ -13,7 +13,10 @@ export async function GET() {
 
   const pool = getPostgresPool()
   const { rows } = await listWatchlistWithCompany({ db: pool, userId: user.id })
-  return NextResponse.json({ watchlist: rows })
+  return NextResponse.json(
+    { watchlist: rows },
+    { headers: { "Cache-Control": "no-store, max-age=0" } }
+  )
 }
 
 export async function POST(request: NextRequest) {

@@ -1129,6 +1129,7 @@ export async function POST(request: NextRequest) {
       { status: 503 }
     )
   }
+  const anthropicClient = anthropic
 
   // Daily AI spend ceiling. When today's total Anthropic cost crosses the
   // configured cap (AI_DAILY_BUDGET_USD), Scout pauses gracefully instead
@@ -1984,7 +1985,7 @@ User Input: ${userMessage}`
       void (async () => {
         const streamStart = Date.now()
         try {
-          const rawStream = anthropic.messages.stream(msgParams)
+          const rawStream = anthropicClient.messages.stream(msgParams)
           const { stream, abort: abortStream } = streamWithTimeout(rawStream, AI_TIMEOUTS.scout_chat_stream)
           stream.on("text", (text) => emit({ type: "text_delta", text }))
           let msg: Awaited<ReturnType<typeof stream.finalMessage>>
@@ -2117,8 +2118,6 @@ User Input: ${userMessage}`
     const chatStart = Date.now()
     const chatAbort = new AbortController()
     const chatTimer = setTimeout(() => chatAbort.abort(), AI_TIMEOUTS.scout_chat)
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    const anthropicClient = anthropic!
     let message: Anthropic.Message
     try {
       const createParams = {

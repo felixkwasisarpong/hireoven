@@ -124,7 +124,6 @@ export function ScoutLeftPanel({ isActive, recentEvents, onCommand }: Props) {
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (data?.watchlist) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           setWatchlist(data.watchlist.map((w: any) => ({
             id: w.company?.id ?? w.companyId ?? String(Math.random()),
             name: w.company?.name ?? "Company",

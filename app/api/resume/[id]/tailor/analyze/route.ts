@@ -23,8 +23,7 @@ const anthropic = process.env.ANTHROPIC_API_KEY
 // Tailoring analysis needs consistent reasoning and structured output quality.
 const MODEL = SONNET_MODEL
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- allow runtime JSON from LLM
-function extractJsonObject(text: string): any {
+function extractJsonObject(text: string): unknown {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i)
   if (fenced?.[1]) {
     return JSON.parse(fenced[1].trim().replace(/,\s*([}\]])/g, "$1"))
