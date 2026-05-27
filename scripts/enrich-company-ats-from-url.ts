@@ -83,7 +83,7 @@ async function detectAts(careersUrl: string): Promise<AtsResult | null> {
   if (!html) return null
   const fromHtml = detectAtsFromHtml({ url: careersUrl, html })
   if (fromHtml && fromHtml.confidence !== "low") {
-    return { ats_type: fromHtml.atsType, ats_identifier: fromHtml.atsIdentifier ?? null, source: "html" }
+    return { ats_type: fromHtml.atsType, ats_identifier: null, source: "html" }
   }
 
   return null
