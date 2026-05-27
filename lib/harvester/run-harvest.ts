@@ -19,6 +19,14 @@ const TIER_INTERVAL_ENV: Record<string, string> = {
 
 const DEFAULT_FAILURE_COOLDOWN_SEC = 1_800
 const DEFAULT_HTTP_403_COOLDOWN_SEC = 21_600
+const ADAPTER_REQUEST_TIMEOUT_MS: Partial<Record<AtsName, number>> = {
+  // Slower APIs and large boards often breach the generic 8s transport timeout.
+  workday: 20_000,
+  smartrecruiters: 12_000,
+  ashby: 12_000,
+  usajobs: 20_000,
+  icims: 15_000,
+}
 
 function tierIntervalSeconds(
   tier: string | null,
@@ -46,6 +54,16 @@ function http403CooldownSeconds(env: Record<string, string | undefined> = proces
 function isHttp403Error(message: string): boolean {
   const lower = message.toLowerCase()
   return lower.includes("http_403") || lower.includes("http 403") || lower.includes("forbidden")
+}
+
+function adapterRequestTimeoutMs(
+  adapter: AtsName,
+  env: Record<string, string | undefined> = process.env
+): number | undefined {
+  const envKey = `HARVESTER_${adapter.toUpperCase()}_REQUEST_TIMEOUT_MS`
+  const envRaw = Number.parseInt(env[envKey] ?? "", 10)
+  if (Number.isFinite(envRaw) && envRaw >= 1_000) return envRaw
+  return ADAPTER_REQUEST_TIMEOUT_MS[adapter]
 }
 
 export type AtsHarvestCompany = {
@@ -178,6 +196,7 @@ export async function runAtsHarvest(input: {
         etag: company.etag,
         lastModified: company.last_modified,
         alreadyDescribedIds,
+        timeoutMs: adapterRequestTimeoutMs(adapterName as AtsName),
       },
     })
     const crawledAtIso = result.fetchedAt.toISOString()
