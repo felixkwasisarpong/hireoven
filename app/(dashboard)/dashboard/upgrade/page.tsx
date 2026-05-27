@@ -48,6 +48,7 @@ function normalizeInterval(value: string | undefined): BillingInterval {
 }
 
 function normalizePlan(value: string | undefined): PlanKey | null {
+  if (value === "pro_international") return "pro_max"
   if (value === "free" || value === "pro" || value === "pro_max") return value
   return null
 }

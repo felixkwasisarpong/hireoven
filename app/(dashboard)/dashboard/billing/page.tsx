@@ -1,8 +1,9 @@
 import { getSessionUser } from "@/lib/auth/session-user"
+import { getBillingHistoryByUserId } from "@/lib/billing/history"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { buildSubscriptionSnapshot } from "@/lib/subscription/snapshot"
 import type { BillingInterval } from "@/lib/pricing"
-import BillingPageClient, { type BillingInfo, type UsageData } from "./BillingPageClient"
+import BillingPageClient, { type BillingHistoryData, type BillingInfo, type UsageData } from "./BillingPageClient"
 
 export const dynamic = "force-dynamic"
 
@@ -23,6 +24,8 @@ type BillingInitialData = {
   initialBillingLoaded: boolean
   initialUsage: UsageData | null
   initialUsageLoaded: boolean
+  initialHistory: BillingHistoryData | null
+  initialHistoryLoaded: boolean
 }
 
 function firstValue(value: string | string[] | undefined): string | undefined {
@@ -88,14 +91,17 @@ async function getBillingInitialData(userId: string | null): Promise<BillingInit
     initialBillingLoaded: false,
     initialUsage: null,
     initialUsageLoaded: false,
+    initialHistory: null,
+    initialHistoryLoaded: false,
   }
 
   if (!userId) return fallback
 
   try {
-    const [billingResult, usageResult] = await Promise.allSettled([
+    const [billingResult, usageResult, historyResult] = await Promise.allSettled([
       fetchInitialBilling(userId),
       fetchInitialUsage(userId),
+      getBillingHistoryByUserId(userId),
     ])
 
     return {
@@ -103,6 +109,8 @@ async function getBillingInitialData(userId: string | null): Promise<BillingInit
       initialBillingLoaded: billingResult.status === "fulfilled",
       initialUsage: usageResult.status === "fulfilled" ? usageResult.value : null,
       initialUsageLoaded: usageResult.status === "fulfilled",
+      initialHistory: historyResult.status === "fulfilled" ? historyResult.value : null,
+      initialHistoryLoaded: historyResult.status === "fulfilled",
     }
   } catch {
     return fallback
@@ -125,6 +133,8 @@ export default async function BillingPage({
       initialBillingLoaded={initialData.initialBillingLoaded}
       initialUsage={initialData.initialUsage}
       initialUsageLoaded={initialData.initialUsageLoaded}
+      initialHistory={initialData.initialHistory}
+      initialHistoryLoaded={initialData.initialHistoryLoaded}
       returnedFromPortal={returnedFromPortal}
     />
   )

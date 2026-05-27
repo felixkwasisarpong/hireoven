@@ -18,7 +18,7 @@ import {
 import { useSubscription } from "@/lib/hooks/useSubscription"
 import FeatureRow from "@/components/pricing/FeatureRow"
 import { cn } from "@/lib/utils"
-import { PLAN_COMPARISON_ROWS, type BillingInterval, type PlanKey } from "@/lib/pricing"
+import { getPlanAmountCents, PLAN_COMPARISON_ROWS, type BillingInterval, type PlanKey } from "@/lib/pricing"
 
 export interface UsageData {
   cover_letters_used: number
@@ -34,15 +34,59 @@ export interface BillingInfo {
   cancelAtPeriodEnd: boolean
 }
 
+export interface BillingHistoryItem {
+  id: string
+  createdAt: string | null
+  description: string
+  amountCents: number
+  currency: string
+  status: string
+  hostedInvoiceUrl: string | null
+  invoicePdfUrl: string | null
+}
+
+export interface BillingHistoryData {
+  history: BillingHistoryItem[]
+  summary: {
+    nextRenewalAt: string | null
+    nextAmountCents: number | null
+    currency: string | null
+  }
+}
+
+function normalizeUiPlan(plan: string | null | undefined): PlanKey | "free" {
+  if (plan === "pro_international") return "pro_max"
+  if (plan === "pro" || plan === "pro_max") return plan
+  return "free"
+}
+
+function formatMoney(cents: number, currency = "USD"): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(cents / 100)
+}
+
+function invoiceStatusTone(status: string): string {
+  if (status === "paid") return "bg-emerald-50 text-emerald-700"
+  if (status === "open" || status === "draft") return "bg-amber-50 text-amber-700"
+  if (status === "void" || status === "uncollectible") return "bg-rose-50 text-rose-700"
+  return "bg-slate-100 text-slate-600"
+}
+
 const PLAN_LABELS: Record<string, string> = {
   free: "Free",
   pro: "Pro",
+  pro_international: "Pro Max",
   pro_max: "Pro Max",
 }
 
 const PLAN_TAGLINES: Record<string, string> = {
   free: "Browse the live job feed and track applications.",
   pro: "AI tools, unlimited alerts, autofill, and deep analyses.",
+  pro_international: "Everything in Pro plus Scout strategy and unlimited AI tools.",
   pro_max: "Everything in Pro plus Scout strategy and unlimited AI tools.",
 }
 
@@ -52,10 +96,11 @@ const STATUS_LABELS: Record<string, { label: string; color: string; dot: string 
   trialing:  { label: "Trial",    color: "bg-amber-50 text-amber-700",        dot: "bg-amber-500" },
   canceled:  { label: "Canceled", color: "bg-rose-50 text-rose-700",          dot: "bg-rose-500" },
   past_due:  { label: "Past due", color: "bg-rose-50 text-rose-700",          dot: "bg-rose-500" },
+  unpaid:    { label: "Unpaid",   color: "bg-rose-50 text-rose-700",          dot: "bg-rose-500" },
 }
 
 function planAccent(plan: string) {
-  if (plan === "pro_max") {
+  if (plan === "pro_max" || plan === "pro_international") {
     return {
       gradient: "from-orange-500 via-rose-500 to-pink-500",
       ring: "ring-orange-200",
@@ -87,6 +132,8 @@ type BillingPageClientProps = {
   initialBillingLoaded?: boolean
   initialUsage?: UsageData | null
   initialUsageLoaded?: boolean
+  initialHistory?: BillingHistoryData | null
+  initialHistoryLoaded?: boolean
   returnedFromPortal?: boolean
 }
 
@@ -95,6 +142,8 @@ export default function BillingPageClient({
   initialBillingLoaded = false,
   initialUsage = null,
   initialUsageLoaded = false,
+  initialHistory = null,
+  initialHistoryLoaded = false,
   returnedFromPortal = false,
 }: BillingPageClientProps) {
   const {
@@ -110,11 +159,15 @@ export default function BillingPageClient({
   const [usage, setUsage] = useState<UsageData | null>(initialUsage)
   const [billingLoaded, setBillingLoaded] = useState(initialBillingLoaded)
   const [usageLoaded, setUsageLoaded] = useState(initialUsageLoaded)
+  const [historyData, setHistoryData] = useState<BillingHistoryData | null>(initialHistory)
+  const [historyLoaded, setHistoryLoaded] = useState(initialHistoryLoaded)
   const [portalLoading, setPortalLoading] = useState(false)
   const [compareOpen, setCompareOpen] = useState(false)
   const [feedbackReason, setFeedbackReason] = useState("")
   const [feedbackDetails, setFeedbackDetails] = useState("")
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false)
+  const currentPlanForHistory = normalizeUiPlan(billing?.plan ?? plan ?? "free")
+  const shouldLoadHistory = currentPlanForHistory === "pro" || currentPlanForHistory === "pro_max"
 
   useEffect(() => {
     if (!billingLoaded) {
@@ -136,6 +189,18 @@ export default function BillingPageClient({
         .finally(() => setUsageLoaded(true))
     }
   }, [billingLoaded, usageLoaded])
+
+  useEffect(() => {
+    if (historyLoaded || !shouldLoadHistory) return
+    fetch("/api/billing/history")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!data) return
+        setHistoryData(data as BillingHistoryData)
+      })
+      .catch(() => {})
+      .finally(() => setHistoryLoaded(true))
+  }, [historyLoaded, shouldLoadHistory])
 
   async function openPortal() {
     setPortalLoading(true)
@@ -172,24 +237,39 @@ export default function BillingPageClient({
     )
   }
 
-  const currentPlan = billing?.plan ?? plan ?? "free"
+  const currentPlan = normalizeUiPlan(billing?.plan ?? plan ?? "free")
   const status = billing?.status ?? subscriptionStatus ?? "free"
   const resolvedInterval = billing?.billingInterval ?? billingInterval ?? "monthly"
   const resolvedAmountCents = billing?.amountCents ?? amountCents
   const resolvedCancelAtPeriodEnd = billing?.cancelAtPeriodEnd ?? cancelAtPeriodEnd
   const isPro = currentPlan === "pro" || currentPlan === "pro_max"
-  const periodEndSource = billing?.currentPeriodEnd ?? currentPeriodEnd
+  const historySummary = historyData?.summary
+  const historyEntries = historyData?.history ?? []
+  const effectiveAmountCents =
+    typeof resolvedAmountCents === "number" && resolvedAmountCents > 0
+      ? resolvedAmountCents
+      : typeof historySummary?.nextAmountCents === "number" && historySummary.nextAmountCents > 0
+        ? historySummary.nextAmountCents
+        : isPro
+          ? getPlanAmountCents(currentPlan as PlanKey, resolvedInterval)
+          : 0
+  const periodEndSource = billing?.currentPeriodEnd ?? currentPeriodEnd ?? historySummary?.nextRenewalAt ?? null
   const periodEnd = periodEndSource
     ? new Date(periodEndSource).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })
     : null
+  const fallbackRenewValue = resolvedInterval === "yearly" ? "Every year" : "Every month"
+  const renewValue = periodEnd ?? (isPro ? fallbackRenewValue : "Never")
+  const renewHint = periodEnd
+    ? (resolvedCancelAtPeriodEnd ? "Plan ends after this date" : "Auto-renews")
+    : isPro
+      ? "Next renewal date syncs after Stripe confirms cycle."
+      : "Free plan never expires"
 
   const statusMeta = STATUS_LABELS[status] ?? STATUS_LABELS["free"]
   const accent = planAccent(currentPlan)
   const PlanIcon = accent.icon
-  const amountLabel =
-    typeof resolvedAmountCents === "number" && resolvedAmountCents > 0
-      ? `$${(resolvedAmountCents / 100).toFixed(0)}`
-      : "$0"
+  const effectiveCurrency = historySummary?.currency ?? "USD"
+  const amountLabel = isPro ? formatMoney(effectiveAmountCents, effectiveCurrency) : "$0"
   const renewLabel =
     status === "trialing"
       ? "Trial ends"
@@ -263,8 +343,8 @@ export default function BillingPageClient({
               <Stat
                 icon={CalendarDays}
                 label={renewLabel}
-                value={periodEnd ?? "—"}
-                hint={periodEnd ? (resolvedCancelAtPeriodEnd ? "Plan ends after this date" : "Auto-renews") : "Free plan never expires"}
+                value={renewValue}
+                hint={renewHint}
               />
               <Stat
                 icon={Receipt}
@@ -328,6 +408,78 @@ export default function BillingPageClient({
                 {resolvedInterval === "yearly" ? "Switch to monthly" : "Save 35% with yearly"}
               </button>
             </div>
+          </section>
+        )}
+
+        {/* ── Billing history ── */}
+        {isPro && (
+          <section className="mb-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_2px_12px_rgba(15,23,42,0.04)]">
+            <div className="flex items-center gap-2 border-b border-slate-100 px-6 py-4">
+              <Receipt className="h-4 w-4 text-slate-500" aria-hidden />
+              <h2 className="text-sm font-semibold text-slate-900">Billing history</h2>
+            </div>
+
+            {!historyLoaded ? (
+              <div className="flex items-center gap-2 px-6 py-6 text-sm text-slate-500">
+                <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
+                Loading invoice history…
+              </div>
+            ) : historyEntries.length === 0 ? (
+              <div className="px-6 py-6 text-sm text-slate-500">
+                No invoices yet. Charges will appear here once Stripe finalizes your first billing cycle.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[620px]">
+                  <thead>
+                    <tr className="border-b border-slate-100 bg-slate-50/60">
+                      <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-widest text-slate-500">Date</th>
+                      <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-widest text-slate-500">Description</th>
+                      <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-widest text-slate-500">Amount</th>
+                      <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-widest text-slate-500">Status</th>
+                      <th className="px-6 py-3 text-right text-[11px] font-semibold uppercase tracking-widest text-slate-500">Receipt</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {historyEntries.map((entry) => {
+                      const statusTone = invoiceStatusTone(entry.status)
+                      return (
+                        <tr key={entry.id} className="border-b border-slate-100 last:border-b-0">
+                          <td className="px-6 py-3 text-sm text-slate-700">
+                            {entry.createdAt
+                              ? new Date(entry.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                              : "—"}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-slate-700">{entry.description}</td>
+                          <td className="px-4 py-3 text-sm font-semibold text-slate-900">
+                            {formatMoney(entry.amountCents, entry.currency || "USD")}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className={cn("inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold", statusTone)}>
+                              {entry.status.replaceAll("_", " ")}
+                            </span>
+                          </td>
+                          <td className="px-6 py-3 text-right">
+                            {(entry.invoicePdfUrl || entry.hostedInvoiceUrl) ? (
+                              <a
+                                href={entry.invoicePdfUrl ?? entry.hostedInvoiceUrl ?? "#"}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-sm font-medium text-slate-700 underline-offset-4 hover:text-slate-900 hover:underline"
+                              >
+                                View
+                              </a>
+                            ) : (
+                              <span className="text-sm text-slate-400">—</span>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </section>
         )}
 
