@@ -15,12 +15,24 @@ type UserRow = {
   watchlistCount: number
   alertCount: number
   pushEnabled: boolean
-  plan: string          // "free" | "pro" | "pro_international"
+  plan: string          // "free" | "pro" | "pro_max" (normalized for UI/API)
   planStatus: string    // "active" | "trialing" | "canceled" | "free"
 }
 
 type UserIdRow = { user_id: string }
 type SubRow = { user_id: string; plan: string; status: string }
+type AdminPlan = "free" | "pro" | "pro_max" | "pro_international"
+
+function normalizePlanForResponse(plan: string | null | undefined): "free" | "pro" | "pro_max" {
+  if (plan === "pro_international") return "pro_max"
+  if (plan === "pro" || plan === "pro_max") return plan
+  return "free"
+}
+
+function normalizePlanForStorage(plan: AdminPlan): "free" | "pro" | "pro_international" {
+  if (plan === "free" || plan === "pro") return plan
+  return "pro_international"
+}
 
 async function listUsers() {
   const pool = getPostgresPool()
@@ -61,7 +73,7 @@ async function listUsers() {
       watchlistCount: watchlistCount.get(p.id) ?? 0,
       alertCount: alertCount.get(p.id) ?? 0,
       pushEnabled: pushUsers.has(p.id),
-      plan: sub?.plan ?? "free",
+      plan: normalizePlanForResponse(sub?.plan),
       planStatus: sub?.status ?? "free",
     } satisfies UserRow
   })
@@ -85,7 +97,7 @@ export async function PATCH(request: NextRequest) {
   const body = (await request.json()) as
     | { action: "toggle-admin"; userId: string; isAdmin: boolean }
     | { action: "suspend"; userId: string }
-    | { action: "set-plan"; userId: string; plan: "free" | "pro" | "pro_international" }
+    | { action: "set-plan"; userId: string; plan: AdminPlan }
 
   const pool = getPostgresPool()
 
@@ -107,7 +119,8 @@ export async function PATCH(request: NextRequest) {
     }
 
     if (body.action === "set-plan") {
-      if (body.plan === "free") {
+      const normalizedPlan = normalizePlanForStorage(body.plan)
+      if (normalizedPlan === "free") {
         // Cancel all active subscriptions for this user
         await pool.query(
           `UPDATE subscriptions
@@ -124,7 +137,7 @@ export async function PATCH(request: NextRequest) {
              SET plan = EXCLUDED.plan,
                  status = 'active',
                  updated_at = now()`,
-          [body.userId, body.plan]
+          [body.userId, normalizedPlan]
         ).catch(async () => {
           // No unique constraint on user_id — cancel existing and insert fresh
           await pool.query(
@@ -135,7 +148,7 @@ export async function PATCH(request: NextRequest) {
           await pool.query(
             `INSERT INTO subscriptions (user_id, plan, status, billing_interval, created_at, updated_at)
              VALUES ($1, $2, 'active', 'monthly', now(), now())`,
-            [body.userId, body.plan]
+            [body.userId, normalizedPlan]
           )
         })
       }

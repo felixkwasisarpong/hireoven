@@ -32,12 +32,14 @@ type UserRow = {
 const PLAN_LABELS: Record<string, string> = {
   free: "Free",
   pro: "Pro",
-  pro_international: "Max",
+  pro_max: "Pro Max",
+  pro_international: "Pro Max",
 }
 
 const PLAN_STYLES: Record<string, string> = {
   free:              "bg-slate-100 text-slate-600",
   pro:               "bg-orange-100 text-orange-700",
+  pro_max:           "bg-violet-100 text-violet-700",
   pro_international: "bg-violet-100 text-violet-700",
 }
 
@@ -65,7 +67,7 @@ function PlanSelector({
   const plans = [
     { value: "free",              label: "Free",    style: "text-slate-700 hover:bg-slate-50" },
     { value: "pro",               label: "Pro",     style: "text-orange-700 hover:bg-orange-50" },
-    { value: "pro_international", label: "Max",     style: "text-violet-700 hover:bg-violet-50" },
+    { value: "pro_max",           label: "Pro Max", style: "text-violet-700 hover:bg-violet-50" },
   ]
 
   async function setPlan(plan: string) {
@@ -165,7 +167,7 @@ export default function AdminUsersPage() {
   const stats = useMemo(() => ({
     total: users.length,
     intl: users.filter((u) => u.isInternational).length,
-    pro: users.filter((u) => u.plan === "pro" || u.plan === "pro_international").length,
+    pro: users.filter((u) => u.plan === "pro" || u.plan === "pro_max" || u.plan === "pro_international").length,
     active7d: users.filter((u) => u.lastActiveAt && Date.now() - new Date(u.lastActiveAt).getTime() <= 7 * 86_400_000).length,
   }), [users])
 
