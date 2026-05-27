@@ -6,6 +6,7 @@ import {
   buildAdapterLimits,
   claimEligibleCompanies,
   loadWorkerConfig,
+  resolvePerCompanyTimeoutMs,
 } from "./worker"
 
 test("loadWorkerConfig: defaults when env is empty", () => {
@@ -40,6 +41,28 @@ test("loadWorkerConfig: falls back on garbage env", () => {
   assert.equal(config.claimBatchSize, 20)
   assert.equal(config.leaseSeconds, 240)
   assert.equal(config.concurrency, 8)
+})
+
+test("resolvePerCompanyTimeoutMs: uses ATS-specific defaults for slow adapters", () => {
+  assert.equal(resolvePerCompanyTimeoutMs("workday", {}), 120_000)
+  assert.equal(resolvePerCompanyTimeoutMs("smartrecruiters", {}), 90_000)
+  assert.equal(resolvePerCompanyTimeoutMs("greenhouse", {}), 60_000)
+})
+
+test("resolvePerCompanyTimeoutMs: global override raises all adapters", () => {
+  const env = { HARVESTER_PER_COMPANY_TIMEOUT_MS: "150000" }
+  assert.equal(resolvePerCompanyTimeoutMs("workday", env), 150_000)
+  assert.equal(resolvePerCompanyTimeoutMs("smartrecruiters", env), 150_000)
+  assert.equal(resolvePerCompanyTimeoutMs(null, env), 150_000)
+})
+
+test("resolvePerCompanyTimeoutMs: adapter override wins for that adapter only", () => {
+  const env = {
+    HARVESTER_PER_COMPANY_TIMEOUT_MS: "60000",
+    HARVESTER_PER_COMPANY_TIMEOUT_WORKDAY_MS: "180000",
+  }
+  assert.equal(resolvePerCompanyTimeoutMs("workday", env), 180_000)
+  assert.equal(resolvePerCompanyTimeoutMs("greenhouse", env), 60_000)
 })
 
 test("claimEligibleCompanies: issues SKIP LOCKED claim with lease params and shapes rows", async () => {

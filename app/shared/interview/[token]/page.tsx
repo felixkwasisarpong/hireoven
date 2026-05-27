@@ -80,7 +80,6 @@ export default function SharedDebriefPage() {
 
         {s.type === "coding" && Boolean(d.codingFeedback) && (
           <DebriefCodingPanel
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             feedback={d.codingFeedback as any}
             sessionId=""
             snapshotCount={0}

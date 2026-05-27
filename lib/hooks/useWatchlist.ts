@@ -9,6 +9,19 @@ type UseWatchlistOptions = {
   initialLoaded?: boolean
 }
 
+const WATCHLIST_UPDATED_EVENT = "hireoven:watchlist-updated"
+
+type WatchlistUpdatedDetail = { userId: string }
+
+function emitWatchlistUpdated(userId: string) {
+  if (typeof window === "undefined") return
+  window.dispatchEvent(
+    new CustomEvent<WatchlistUpdatedDetail>(WATCHLIST_UPDATED_EVENT, {
+      detail: { userId },
+    })
+  )
+}
+
 export function useWatchlist(userId?: string, options: UseWatchlistOptions = {}) {
   const authLoading = options.authLoading === true
   const hasInitial = options.initialLoaded === true
@@ -29,7 +42,7 @@ export function useWatchlist(userId?: string, options: UseWatchlistOptions = {})
 
     setIsLoading(true)
     try {
-      const res = await fetch("/api/watchlist")
+      const res = await fetch("/api/watchlist", { cache: "no-store" })
       if (res.ok) {
         const { watchlist: rows } = (await res.json()) as { watchlist: WatchlistWithCompany[] }
         setWatchlist(rows)
@@ -48,6 +61,19 @@ export function useWatchlist(userId?: string, options: UseWatchlistOptions = {})
     void refresh()
   }, [refresh, authLoading])
 
+  useEffect(() => {
+    if (!userId) return
+    const onUpdated = (event: Event) => {
+      const detail = (event as CustomEvent<WatchlistUpdatedDetail>).detail
+      if (!detail || detail.userId !== userId) return
+      void refresh()
+    }
+    window.addEventListener(WATCHLIST_UPDATED_EVENT, onUpdated as EventListener)
+    return () => {
+      window.removeEventListener(WATCHLIST_UPDATED_EVENT, onUpdated as EventListener)
+    }
+  }, [refresh, userId])
+
   const isWatching = useCallback(
     (companyId: string) => watchlist.some((item) => item.company_id === companyId),
     [watchlist]
@@ -64,6 +90,7 @@ export function useWatchlist(userId?: string, options: UseWatchlistOptions = {})
       })
 
       if (res.ok) {
+        emitWatchlistUpdated(userId)
         await refresh()
       }
     },
@@ -83,7 +110,11 @@ export function useWatchlist(userId?: string, options: UseWatchlistOptions = {})
         method: "DELETE",
       })
 
-      if (!res.ok) setWatchlist(snapshot)
+      if (!res.ok) {
+        setWatchlist(snapshot)
+      } else {
+        emitWatchlistUpdated(userId)
+      }
     },
     [userId, watchlist]
   )

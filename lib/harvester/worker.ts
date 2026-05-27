@@ -84,6 +84,43 @@ export type TickSummary = {
   failedByReason?: Record<string, number>
 }
 
+const DEFAULT_PER_COMPANY_TIMEOUT_MS = 60_000
+const PER_COMPANY_TIMEOUT_MIN_MS = 5_000
+const PER_COMPANY_TIMEOUT_BY_ADAPTER: Partial<Record<AtsName, number>> = {
+  // These adapters perform many paginated/detail calls per company and can
+  // legitimately exceed the generic 60s budget.
+  workday: 120_000,
+  smartrecruiters: 90_000,
+  ashby: 90_000,
+  usajobs: 90_000,
+  icims: 90_000,
+}
+
+function parseTimeoutMs(raw: string | undefined, fallback: number): number {
+  const parsed = Number.parseInt(raw ?? "", 10)
+  if (Number.isFinite(parsed) && parsed >= PER_COMPANY_TIMEOUT_MIN_MS) return parsed
+  return fallback
+}
+
+export function resolvePerCompanyTimeoutMs(
+  adapterName: AtsName | null,
+  env: Record<string, string | undefined> = process.env
+): number {
+  const globalTimeoutMs = parseTimeoutMs(
+    env.HARVESTER_PER_COMPANY_TIMEOUT_MS,
+    DEFAULT_PER_COMPANY_TIMEOUT_MS
+  )
+  if (!adapterName) return globalTimeoutMs
+
+  const adapterEnvKey = `HARVESTER_PER_COMPANY_TIMEOUT_${adapterName.toUpperCase()}_MS`
+  const adapterEnvRaw = env[adapterEnvKey]
+  if (adapterEnvRaw) return parseTimeoutMs(adapterEnvRaw, globalTimeoutMs)
+
+  const adapterDefault = PER_COMPANY_TIMEOUT_BY_ADAPTER[adapterName]
+  if (!adapterDefault) return globalTimeoutMs
+  return Math.max(globalTimeoutMs, adapterDefault)
+}
+
 const CLAIM_QUERY = `
 UPDATE companies
 SET next_harvest_at = now() + ($2 || ' seconds')::interval
@@ -316,14 +353,10 @@ export async function runTick(
   // "failed" outcome so the rest of the batch completes normally, the
   // crawl_logs row records the timeout, and we get a `company_hang` log line
   // that names the culprit for later adapter fixes.
-  const perCompanyTimeoutMs = Math.max(
-    5_000,
-    Number.parseInt(process.env.HARVESTER_PER_COMPANY_TIMEOUT_MS ?? "60000", 10)
-  )
-
   const results: TickCompanyOutcome[] = await Promise.all(
     companies.map((company) => {
       const adapterName = adapterNameFor(company)
+      const perCompanyTimeoutMs = resolvePerCompanyTimeoutMs(adapterName)
       const limit = adapterName ? limits.byAdapter.get(adapterName) ?? limits.fallback : limits.fallback
       return limit(async () => {
         let timeoutHandle: ReturnType<typeof setTimeout> | undefined

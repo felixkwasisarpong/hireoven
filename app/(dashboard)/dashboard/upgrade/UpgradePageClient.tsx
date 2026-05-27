@@ -27,6 +27,12 @@ type UpgradePageClientProps = {
   initialShouldAutoCheckout?: boolean
 }
 
+function normalizeUiPlan(plan: string | null | undefined): PlanKey | "free" {
+  if (plan === "pro_international") return "pro_max"
+  if (plan === "pro" || plan === "pro_max") return plan
+  return "free"
+}
+
 export default function UpgradePageClient({
   initialInterval = "monthly",
   initialUsage = null,
@@ -52,7 +58,7 @@ export default function UpgradePageClient({
     profile?.visa_status ||
     profile?.needs_sponsorship ||
     initialIsIntlUser
-  const resolvedPlan = (currentPlan ?? initialPlan ?? "free") as PlanKey
+  const resolvedPlan = normalizeUiPlan(currentPlan ?? initialPlan ?? "free")
 
   useEffect(() => {
     if (!user || usageLoaded) return

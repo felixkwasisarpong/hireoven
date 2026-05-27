@@ -57,8 +57,8 @@ export type LiveCodingWorkspaceProps = {
 }
 
 type Phase = "permission" | "loading" | "connecting" | "live" | "ended"
-const MAX_AUTO_RECONNECTS = 1
-const RECONNECT_DELAY_MS = 2500
+const MAX_AUTO_RECONNECTS = 3
+const RECONNECT_DELAY_MS = 3000
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -228,12 +228,38 @@ export default function LiveCodingWorkspace({
       setReconnectAttemptUi(0)
       setReconnectCountdownSec(null)
     }
+    const queueReconnect = (reason: string): boolean => {
+      if (sessionEndingRef.current || isSubmittingRef.current) return false
+      const status = sessionStatusRef.current
+      if (status === "completed" || status === "abandoned") return false
+      if (reconnectAttemptsRef.current >= MAX_AUTO_RECONNECTS || reconnectInFlightRef.current) return false
+      reconnectAttemptsRef.current += 1
+      setReconnectAttemptUi(reconnectAttemptsRef.current)
+      setReconnectCountdownSec(Math.ceil(RECONNECT_DELAY_MS / 1000))
+      setConnectError(reason)
+      clearReconnectTimers()
+      reconnectCountdownTimerRef.current = setInterval(() => {
+        setReconnectCountdownSec((prev) => {
+          if (prev === null) return null
+          return prev > 1 ? prev - 1 : 1
+        })
+      }, 1000)
+      reconnectDelayTimerRef.current = setTimeout(() => {
+        clearReconnectTimers()
+        setReconnectCountdownSec(null)
+        void connectVoiceClient(stream, { reconnect: true })
+      }, RECONNECT_DELAY_MS)
+      return true
+    }
 
     const token = await fetchRealtimeToken()
     if (!token.token) {
       reconnectInFlightRef.current = false
       clearReconnectTimers()
       setReconnectCountdownSec(null)
+      if (reconnect && queueReconnect(`Voice reconnect failed: ${token.error ?? "Unknown error"}. Retrying…`)) {
+        return
+      }
       setConnectError(
         reconnect
           ? `Voice reconnect failed: ${token.error ?? "Unknown error"}. Continuing without voice.`
@@ -310,25 +336,7 @@ export default function LiveCodingWorkspace({
       if (sessionEndingRef.current || isSubmittingRef.current) return
       const status = sessionStatusRef.current
       if (status === "completed" || status === "abandoned") return
-      if (reconnectAttemptsRef.current < MAX_AUTO_RECONNECTS && !reconnectInFlightRef.current) {
-        reconnectAttemptsRef.current += 1
-        setReconnectAttemptUi(reconnectAttemptsRef.current)
-        setReconnectCountdownSec(Math.ceil(RECONNECT_DELAY_MS / 1000))
-        setConnectError("Voice disconnected. Attempting to reconnect…")
-        clearReconnectTimers()
-        reconnectCountdownTimerRef.current = setInterval(() => {
-          setReconnectCountdownSec((prev) => {
-            if (prev === null) return null
-            return prev > 1 ? prev - 1 : 1
-          })
-        }, 1000)
-        reconnectDelayTimerRef.current = setTimeout(() => {
-          clearReconnectTimers()
-          setReconnectCountdownSec(null)
-          void connectVoiceClient(stream, { reconnect: true })
-        }, RECONNECT_DELAY_MS)
-        return
-      }
+      if (queueReconnect("Voice disconnected. Attempting to reconnect…")) return
       reconnectInFlightRef.current = false
       clearReconnectTimers()
       setReconnectCountdownSec(null)
@@ -342,6 +350,9 @@ export default function LiveCodingWorkspace({
       clearReconnectTimers()
       setReconnectCountdownSec(null)
       const msg = e instanceof Error ? e.message : String(e)
+      if (reconnect && queueReconnect(`Voice reconnect failed: ${msg}. Retrying…`)) {
+        return
+      }
       setConnectError(
         reconnect
           ? `Voice reconnect failed: ${msg}. Continuing without voice.`
