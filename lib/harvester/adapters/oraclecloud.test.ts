@@ -1,8 +1,10 @@
 import { strict as assert } from "node:assert"
 import { test } from "node:test"
 import {
+  CUSTOM_HOST_PREFIX,
   decodeSlug,
   encodeSlug,
+  encodeCustomSlug,
   mapRequisitionToJob,
   oraclecloudAdapter,
   parsePod,
@@ -49,9 +51,27 @@ test("oraclecloud: slug encode / decode round-trips for multi-dot pods", () => {
   const slug = encodeSlug("eeho.fa.us2", "CX_1")
   assert.equal(slug, "eeho.fa.us2:CX_1")
   const decoded = decodeSlug(slug)
-  assert.deepEqual(decoded, { pod: "eeho.fa.us2", site: "CX_1" })
+  assert.deepEqual(decoded, { identifier: "eeho.fa.us2", site: "CX_1", origin: "https://eeho.fa.us2.oraclecloud.com" })
   assert.equal(decodeSlug("eeho.fa.us2"), null)
   assert.equal(decodeSlug("eeho.fa.us2:bad site"), null)
+})
+
+test("oraclecloud: custom-domain slug encode / decode round-trips", () => {
+  const slug = encodeCustomSlug("careers.autozone.com", "jobsearch")
+  assert.equal(slug, `${CUSTOM_HOST_PREFIX}careers.autozone.com:jobsearch`)
+  const decoded = decodeSlug(slug)
+  assert.deepEqual(decoded, { identifier: "careers.autozone.com", site: "jobsearch", origin: "https://careers.autozone.com" })
+})
+
+test("oraclecloud: detectFromUrl detects custom-domain Oracle CE portals", () => {
+  assert.deepEqual(
+    oraclecloudAdapter.detectFromUrl("https://careers.autozone.com/en/sites/jobsearch/job/101159"),
+    { slug: `${CUSTOM_HOST_PREFIX}careers.autozone.com:jobsearch` }
+  )
+  assert.deepEqual(
+    oraclecloudAdapter.detectFromUrl("https://www.macysjobs.com/en/sites/jobsearch/job/REQ_773680"),
+    { slug: `${CUSTOM_HOST_PREFIX}www.macysjobs.com:jobsearch` }
+  )
 })
 
 test("oraclecloud: mapRequisitionToJob produces a HarvestedJob with location + description", () => {
@@ -67,7 +87,8 @@ test("oraclecloud: mapRequisitionToJob produces a HarvestedJob with location + d
       workLocation: { Name: "Austin", StateProvince: "TX", CountryName: "United States" },
     },
     "eeho.fa.us2",
-    "CX_1"
+    "CX_1",
+    "https://eeho.fa.us2.oraclecloud.com"
   )
   assert.ok(job)
   assert.equal(job!.externalId, "oraclecloud:eeho.fa.us2:CX_1:12345")
@@ -84,8 +105,8 @@ test("oraclecloud: mapRequisitionToJob produces a HarvestedJob with location + d
 })
 
 test("oraclecloud: mapRequisitionToJob skips records missing title or id", () => {
-  assert.equal(mapRequisitionToJob({ Id: 1 }, "x", "S"), null)
-  assert.equal(mapRequisitionToJob({ Title: "No ID" }, "x", "S"), null)
+  assert.equal(mapRequisitionToJob({ Id: 1 }, "x", "S", "https://x.oraclecloud.com"), null)
+  assert.equal(mapRequisitionToJob({ Title: "No ID" }, "x", "S", "https://x.oraclecloud.com"), null)
 })
 
 test("oraclecloud: fetchJobs paginates until hasMore=false", async () => {
