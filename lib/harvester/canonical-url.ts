@@ -1,4 +1,5 @@
 import type { AtsName } from "@/lib/harvester/adapters"
+import { CUSTOM_HOST_PREFIX } from "@/lib/harvester/adapters/oraclecloud"
 
 /**
  * Canonical careers URL for an adapter slug — the inverse of
@@ -60,7 +61,17 @@ export function canonicalCareersUrl(atsType: AtsName, slug: string): string | nu
       return `https://${tenant}.taleo.net/careersection/${encodeURIComponent(section)}/jobsearch.ftl?lang=en`
     }
     case "oraclecloud": {
-      // Slug shape: `{pod}:{siteCode}` where pod can contain dots
+      // Custom-domain slug: `custom:{host}:{site}` (e.g. `custom:careers.autozone.com:jobsearch`)
+      if (slug.startsWith(CUSTOM_HOST_PREFIX)) {
+        const rest = slug.slice(CUSTOM_HOST_PREFIX.length)
+        const idx = rest.lastIndexOf(":")
+        if (idx <= 0) return null
+        const host = rest.slice(0, idx)
+        const site = rest.slice(idx + 1)
+        if (!host || !site) return null
+        return `https://${host}/hcmUI/CandidateExperience/en/sites/${encodeURIComponent(site)}/`
+      }
+      // Standard pod slug: `{pod}:{siteCode}` where pod can contain dots
       // (e.g. `eeho.fa.us2:CX_1`).
       const idx = slug.lastIndexOf(":")
       if (idx <= 0) return null
