@@ -210,7 +210,7 @@ async function main() {
          VALUES ($1, $2, $3, $4, $5, $6, 'active', 'tier_3', $7, true, $8::jsonb)
          ON CONFLICT DO NOTHING`,
         (() => {
-          const inferredDomain = inferSeedDomain(candidate)
+          const inferredDomain = inferSeedDomain(candidate) ?? placeholderDomain(candidate)
           const logoUrl =
             inferredDomain && !isAtsDomain(inferredDomain)
               ? companyLogoUrlFromDomain(inferredDomain) || null
@@ -236,6 +236,7 @@ async function main() {
       inserted += 1
     } catch (error) {
       errors += 1
+      console.error(`[discover-github-seeds] insert error for ${candidate.slug}:`, error instanceof Error ? error.message : error)
       if (errors >= 5) {
         console.error(`[discover-github-seeds] giving up after ${errors} consecutive insert errors`)
         break
