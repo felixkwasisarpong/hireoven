@@ -10,9 +10,9 @@ type Props = {
 }
 
 const PERSONA_LABELS: Record<string, string> = {
-  friendly_recruiter: "Friendly Recruiter",
+  friendly_recruiter: "Recruiter",
   skeptical_hm: "Skeptical HM",
-  senior_staff: "Senior Staff Engineer",
+  senior_staff: "Senior Peer",
   founder: "Founder",
   panel: "Panel",
 }

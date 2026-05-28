@@ -32,9 +32,9 @@ const TYPE_COLORS: Record<string, string> = {
   coding: "bg-amber-50 text-amber-700",
 }
 const PERSONA_LABELS: Record<string, string> = {
-  friendly_recruiter: "Friendly Recruiter",
+  friendly_recruiter: "Recruiter",
   skeptical_hm:       "Skeptical HM",
-  senior_staff:       "Senior Staff",
+  senior_staff:       "Senior Peer",
   founder:            "Founder",
   panel:              "Panel",
 }

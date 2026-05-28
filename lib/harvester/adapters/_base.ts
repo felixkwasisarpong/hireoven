@@ -21,6 +21,7 @@ export type AtsName =
   | "usajobs"
   | "infosys"
   | "apple"
+  | "rippling"
 
 export type HarvestCtx = {
   etag: string | null

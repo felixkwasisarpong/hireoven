@@ -47,9 +47,9 @@ function computeRemaining(startedAt: string | null, durationMin: number): number
 }
 
 const PERSONA_LABELS: Record<string, string> = {
-  friendly_recruiter: "Friendly Recruiter",
+  friendly_recruiter: "Recruiter",
   skeptical_hm: "Skeptical HM",
-  senior_staff: "Senior Staff",
+  senior_staff: "Senior Peer",
   founder: "Founder",
   panel: "Panel",
 }
@@ -502,13 +502,15 @@ export default function LiveInterviewRoom({
   const skillList: string[] = session?.skillList?.length
     ? session.skillList
     : session ? (
-        session.questionSet === "behavioral"
-          ? ["ownership", "conflict resolution", "ambiguity", "impact storytelling", "growth/feedback", "leadership/influence"]
-          : session.questionSet === "system_design"
-            ? ["scoping", "data modeling", "API design", "scaling", "tradeoffs", "reliability"]
-            : session.questionSet === "technical_screen"
-              ? ["problem-solving", "coding proficiency", "system design", "collaboration", "code quality", "debugging"]
-              : ["ownership", "impact storytelling", "ambiguity", "problem-solving", "system thinking", "collaboration"]
+        session.questionSet === "recruiter_screen"
+          ? ["career narrative", "motivation / why this role", "what they're looking for", "timeline & availability", "team & culture fit", "communication"]
+          : session.questionSet === "behavioral"
+            ? ["ownership", "conflict resolution", "ambiguity", "impact storytelling", "growth/feedback", "leadership/influence"]
+            : session.questionSet === "system_design"
+              ? ["scoping", "data modeling", "API design", "scaling", "tradeoffs", "reliability"]
+              : session.questionSet === "technical_screen"
+                ? ["role-specific craft", "problem-solving", "decision-making", "collaboration", "quality bar", "judgment under tradeoffs"]
+                : ["ownership", "impact storytelling", "ambiguity", "problem-solving", "judgment", "collaboration"]
       ) : []
 
   // ── Render: interrupted session ────────────────────────────────────────────

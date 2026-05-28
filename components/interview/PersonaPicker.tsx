@@ -19,8 +19,8 @@ type PersonaOption = {
 const PERSONAS: PersonaOption[] = [
   {
     id: "friendly_recruiter",
-    label: "Friendly Recruiter",
-    description: "Warm, encouraging, surface-level depth.",
+    label: "Recruiter",
+    description: '"Tell me about yourself." Career story, motivation, fit — no tech.',
   },
   {
     id: "skeptical_hm",
@@ -29,8 +29,8 @@ const PERSONAS: PersonaOption[] = [
   },
   {
     id: "senior_staff",
-    label: "Senior Staff Engineer",
-    description: "Calm, technical, follows up on architecture choices.",
+    label: "Senior Peer",
+    description: "Domain expert in your field. Probes craft, tradeoffs, judgment.",
   },
   {
     id: "founder",
@@ -40,7 +40,7 @@ const PERSONAS: PersonaOption[] = [
   {
     id: "panel",
     label: "Panel",
-    description: "Two voices alternating. Higher pressure.",
+    description: "Recruiter + Hiring Manager alternating. Higher pressure.",
     liveOnly: true,
   },
 ]

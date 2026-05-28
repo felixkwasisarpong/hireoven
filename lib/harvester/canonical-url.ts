@@ -84,6 +84,8 @@ export function canonicalCareersUrl(atsType: AtsName, slug: string): string | nu
       // Slug shape: USAJOBS Organization filter (typically a department name).
       // Synthesize a URL the adapter's detectFromUrl round-trips on.
       return `https://www.usajobs.gov/Search/Results?d=${encodeURIComponent(slug)}`
+    case "rippling":
+      return `https://ats.rippling.com/${encodeURIComponent(slug)}/jobs`
     default:
       return null
   }

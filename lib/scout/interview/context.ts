@@ -36,6 +36,15 @@ function deriveSkillList(
   jobTopSkills?: string[]
 ): string[] {
   switch (questionSet) {
+    case "recruiter_screen":
+      return [
+        "career narrative",
+        "motivation / why this role",
+        "what they're looking for",
+        "timeline & availability",
+        "team & culture fit",
+        "communication",
+      ]
     case "behavioral":
       return ["ownership", "conflict resolution", "ambiguity", "impact storytelling", "growth/feedback", "leadership/influence"]
     case "system_design":
@@ -43,11 +52,11 @@ function deriveSkillList(
     case "technical_screen":
       return jobTopSkills?.slice(0, 6).length
         ? jobTopSkills.slice(0, 6)
-        : ["problem-solving", "coding proficiency", "system design", "collaboration", "code quality", "debugging"]
+        : ["role-specific craft", "problem-solving", "decision-making", "collaboration", "quality bar", "judgment under tradeoffs"]
     case "coding":
       return ["problem decomposition", "code correctness", "edge cases", "optimization", "communication", "test coverage"]
     case "mixed":
-      return ["ownership", "impact storytelling", "ambiguity", "problem-solving", "system thinking", "collaboration"]
+      return ["ownership", "impact storytelling", "ambiguity", "problem-solving", "judgment", "collaboration"]
     default:
       return []
   }

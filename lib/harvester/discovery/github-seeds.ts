@@ -140,4 +140,8 @@ export const DEFAULT_SEED_SOURCES: SeedSource[] = [
     name: "SimplifyJobs/Summer2025-Internships",
     url: "https://raw.githubusercontent.com/SimplifyJobs/Summer2025-Internships/dev/README.md",
   },
+  {
+    name: "SimplifyJobs/Summer2026-Internships",
+    url: "https://raw.githubusercontent.com/SimplifyJobs/Summer2026-Internships/dev/README.md",
+  },
 ]

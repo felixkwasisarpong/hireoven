@@ -85,6 +85,13 @@ test("canonicalCareersUrl: assembles usajobs URL with URL-encoded slug", () => {
   )
 })
 
+test("canonicalCareersUrl: assembles rippling URL from board slug", () => {
+  assert.equal(
+    canonicalCareersUrl("rippling", "theguarantors-open-positions"),
+    "https://ats.rippling.com/theguarantors-open-positions/jobs"
+  )
+})
+
 test("canonicalCareersUrl: round-trips through detectFromUrl", async () => {
   const { detectAdapter } = await import("@/lib/harvester/adapters")
   const pairs: Array<[Parameters<typeof canonicalCareersUrl>[0], string]> = [
@@ -102,6 +109,7 @@ test("canonicalCareersUrl: round-trips through detectFromUrl", async () => {
     ["oraclecloud", "eeho.fa.us2:CX_1"],
     ["oraclecloud", "custom:careers.autozone.com:jobsearch"],
     ["usajobs", "Department of Veterans Affairs"],
+    ["rippling", "theguarantors-open-positions"],
   ]
   for (const [atsType, slug] of pairs) {
     const url = canonicalCareersUrl(atsType, slug)
