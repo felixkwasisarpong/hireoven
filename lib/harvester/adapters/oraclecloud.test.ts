@@ -72,6 +72,26 @@ test("oraclecloud: detectFromUrl detects custom-domain Oracle CE portals", () =>
     oraclecloudAdapter.detectFromUrl("https://www.macysjobs.com/en/sites/jobsearch/job/REQ_773680"),
     { slug: `${CUSTOM_HOST_PREFIX}www.macysjobs.com:jobsearch` }
   )
+  // hcmUI prefix is also a valid CE marker (no /job/ segment required)
+  assert.deepEqual(
+    oraclecloudAdapter.detectFromUrl(
+      "https://careers.autozone.com/hcmUI/CandidateExperience/en/sites/jobsearch/"
+    ),
+    { slug: `${CUSTOM_HOST_PREFIX}careers.autozone.com:jobsearch` }
+  )
+})
+
+test("oraclecloud: detectFromUrl rejects non-Oracle `/sites/{slug}` URLs (Forbes, Bloomberg, etc.)", () => {
+  // Forbes contributor pages: forbes.com/sites/{author}/...
+  assert.equal(
+    oraclecloudAdapter.detectFromUrl("https://www.forbes.com/sites/emmylucas/2026/05/27/example"),
+    null
+  )
+  // Bloomberg-style /sites/{section}
+  assert.equal(
+    oraclecloudAdapter.detectFromUrl("https://www.bloomberg.com/sites/something/article"),
+    null
+  )
 })
 
 test("oraclecloud: mapRequisitionToJob produces a HarvestedJob with location + description", () => {

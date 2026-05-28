@@ -155,7 +155,19 @@ function detectFromUrl(url: string): { slug: string } | null {
   if (pod) return { slug: encodeSlug(pod, site) }
   // Reject other *.oraclecloud.com subdomains that aren't valid pods (docs, www, etc.)
   if (parsed.hostname.toLowerCase().endsWith(".oraclecloud.com")) return null
-  // Custom-branded Oracle portal (careers.autozone.com, www.macysjobs.com, etc.)
+  // Custom-branded Oracle portal — require an unambiguous Oracle CE marker so
+  // we don't pick up unrelated `/sites/{slug}` paths (e.g. forbes.com/sites/{author}).
+  // Valid Oracle CE URLs always carry one of:
+  //   - /hcmUI/CandidateExperience/... in the path
+  //   - a Candidate-Experience locale segment before /sites/{site}
+  //   - a /job/{requisitionId} segment after /sites/{site}
+  const lowerPath = parsed.pathname.toLowerCase()
+  const hasHcmUi = lowerPath.includes("/hcmui/candidateexperience/")
+  const localeBeforeSites =
+    sitesIdx > 0 && /^[a-z]{2}(?:[-_][a-z]{2})?$/i.test(parts[sitesIdx - 1])
+  const hasJobAfter =
+    parts[sitesIdx + 2]?.toLowerCase() === "job" && Boolean(parts[sitesIdx + 3])
+  if (!hasHcmUi && !localeBeforeSites && !hasJobAfter) return null
   return { slug: encodeCustomSlug(parsed.hostname, site) }
 }
 
