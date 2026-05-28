@@ -10,6 +10,7 @@ export type InterviewPersona =
   | 'panel'
 
 export type InterviewQuestionSet =
+  | 'recruiter_screen'
   | 'behavioral'
   | 'technical_screen'
   | 'system_design'

@@ -4,7 +4,7 @@
 
 - [x] `npm test` passed (`371 pass, 0 fail, 15 skipped`).
 - [x] `npm run build` passed (Next.js production build successful).
-- [ ] `npm run lint` (blocked: repository has no ESLint config yet; `next lint` opens setup prompt).
+- [x] `npm run lint` passed (warnings only; no lint errors).
 
 ## Manual Product QA (Prod-like Data)
 

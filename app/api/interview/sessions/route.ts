@@ -22,6 +22,7 @@ const VALID_PERSONAS: InterviewPersona[] = [
   "panel",
 ]
 const VALID_QUESTION_SETS: InterviewQuestionSet[] = [
+  "recruiter_screen",
   "behavioral",
   "technical_screen",
   "system_design",

@@ -10,7 +10,7 @@ import { useSubscription } from "@/lib/context/SubscriptionContext"
 import { cn } from "@/lib/utils"
 
 type InterviewType = "text" | "live" | "coding"
-type QuestionSet = "behavioral" | "technical_screen" | "system_design" | "mixed"
+type QuestionSet = "recruiter_screen" | "behavioral" | "technical_screen" | "system_design" | "mixed"
 type Duration = 15 | 30
 
 type SavedJob = {
@@ -21,17 +21,18 @@ type SavedJob = {
   status: string
 }
 
-const TYPE_OPTIONS: { id: InterviewType; label: string }[] = [
+const TYPE_OPTIONS: { id: InterviewType; label: string; hint?: string }[] = [
   { id: "text",   label: "Text" },
   { id: "live",   label: "Live" },
-  { id: "coding", label: "Coding" },
+  { id: "coding", label: "Coding", hint: "Devs only" },
 ]
 
-const QUESTION_SET_OPTIONS: { id: QuestionSet; label: string }[] = [
-  { id: "behavioral",      label: "Behavioral" },
-  { id: "technical_screen", label: "Technical screen" },
-  { id: "system_design",   label: "System design" },
-  { id: "mixed",           label: "Mixed" },
+const QUESTION_SET_OPTIONS: { id: QuestionSet; label: string; devOnly?: boolean }[] = [
+  { id: "recruiter_screen", label: "Recruiter screen" },
+  { id: "behavioral",       label: "Behavioral" },
+  { id: "technical_screen", label: "Role deep-dive" },
+  { id: "system_design",    label: "System design", devOnly: true },
+  { id: "mixed",            label: "Mixed" },
 ]
 
 const DURATION_OPTIONS: Duration[] = [15, 30]
@@ -61,7 +62,7 @@ export default function SetupForm({
   const [type, setType] = useState<InterviewType>(initialType ?? "text")
   const [jobId, setJobId] = useState<string>(initialJobId ?? "")
   const [persona, setPersona] = useState<PersonaId>("friendly_recruiter")
-  const [questionSet, setQuestionSet] = useState<QuestionSet>("behavioral")
+  const [questionSet, setQuestionSet] = useState<QuestionSet>("recruiter_screen")
   const [duration, setDuration] = useState<Duration>(30)
   const [useResume, setUseResume] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -121,6 +122,17 @@ export default function SetupForm({
   useEffect(() => {
     if (type !== "live" && persona === "panel") setPersona("friendly_recruiter")
   }, [type, persona])
+
+  // Keep persona ↔ question set consistent:
+  // - Recruiter persona implies the recruiter_screen set (no tech).
+  // - Any other persona leaving the recruiter_screen set defaults to behavioral.
+  useEffect(() => {
+    if (persona === "friendly_recruiter" && questionSet !== "recruiter_screen") {
+      setQuestionSet("recruiter_screen")
+    } else if (persona !== "friendly_recruiter" && questionSet === "recruiter_screen") {
+      setQuestionSet("behavioral")
+    }
+  }, [persona, questionSet])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -283,13 +295,18 @@ export default function SetupForm({
                 type="button"
                 onClick={() => setType(opt.id)}
                 className={cn(
-                  "rounded-lg border px-4 py-2 text-[13px] font-medium transition",
+                  "flex flex-col items-start rounded-lg border px-4 py-2 text-[13px] font-medium transition",
                   type === opt.id
                     ? "border-orange-300 bg-orange-50 text-orange-700 ring-1 ring-orange-300"
                     : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
                 )}
               >
                 {opt.label}
+                {opt.hint && (
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                    {opt.hint}
+                  </span>
+                )}
               </button>
             ))}
           </div>
@@ -328,7 +345,14 @@ export default function SetupForm({
                   onChange={() => setQuestionSet(opt.id)}
                   className="accent-orange-500"
                 />
-                <span className="text-[13px] text-slate-700">{opt.label}</span>
+                <span className="text-[13px] text-slate-700">
+                  {opt.label}
+                  {opt.devOnly && (
+                    <span className="ml-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                      devs
+                    </span>
+                  )}
+                </span>
               </label>
             ))}
           </div>
