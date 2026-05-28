@@ -110,6 +110,34 @@ const TARGETS: AtsTarget[] = [
     // JazzHR public boards are {slug}.applytojob.com/
     toCareersUrl: ({ host }) => `https://${host}/`,
   },
+  {
+    ats: "icims",
+    apex: "icims.com",
+    // iCIMS customers get subdomains like careers-{tenant}.icims.com,
+    // uscareers-{tenant}.icims.com, or {tenant}.icims.com. The slug IS
+    // the full hostname — detectFromUrl returns it that way.
+    toCareersUrl: ({ host }) => {
+      // Reject vendor infra and non-public-board subdomains up front.
+      // The iCIMS adapter's detectFromUrl has the authoritative list;
+      // we pre-filter the most obvious noise here to avoid live probes.
+      if (/^(cdn\d*|www|api|developer|images?|community|partners|trust|legal|cookie-policy-scripts)\.icims\.com$/.test(host)) return null
+      if (/^(faculty|facultycareers|alumni|retiree|login|signin|employee)/.test(host.split(".")[0])) return null
+      return `https://${host}/`
+    },
+  },
+  {
+    ats: "taleo",
+    apex: "taleo.net",
+    // Taleo (Oracle legacy) customers get {tenant}.taleo.net. The harvester
+    // slug requires a section code ({tenant}:{section}) that we discover via
+    // a live probe. We store the root domain as careers_url and let the
+    // adapter resolve the section on first harvest.
+    toCareersUrl: ({ host, slug }) => {
+      // Reject Taleo's own infra subdomains.
+      if (/^(www|secure|erecruit|app|api|status|admin|help|support|preview|uat|uat1|uat2|qa|staging|sandbox|dev\d*)$/.test(slug)) return null
+      return `https://${host}/careersection/`
+    },
+  },
   // Workday intentionally excluded. Workday issues a single wildcard cert
   // per cluster (`*.wdN.myworkdayjobs.com`), so customer-tenant hostnames
   // (`acme.wd5.…`) never appear in CT logs. crt.sh only returns Workday's
@@ -400,6 +428,30 @@ async function liveProbeHasJobs(input: {
       return jobsFound > 0
         ? { admitted: true, jobsFound, reason: "live_jobs" }
         : { admitted: false, jobsFound: 0, reason: "no_jobposting_jsonld" }
+    }
+    case "icims": {
+      // Fetch the iCIMS job search page; presence of iCIMS_Anchor class links
+      // indicates an active public board with jobs.
+      const searchUrl = careersUrl.replace(/\/?$/, "") + "/jobs/search?pr=1&in_iframe=1"
+      const result = await fetchTextWithRetry(searchUrl, {
+        accept: "text/html,application/xhtml+xml,*/*;q=0.8",
+      })
+      if (!result.ok) return { admitted: false, jobsFound: 0, reason: result.reason }
+      const jobsFound = result.body.includes("iCIMS_Anchor") ? 1 : 0
+      return jobsFound > 0
+        ? { admitted: true, jobsFound, reason: "live_jobs" }
+        : { admitted: false, jobsFound: 0, reason: "no_icims_anchors" }
+    }
+    case "taleo": {
+      // Fetch the Taleo career section list page. Active sections have a
+      // /careersection/{section}/jobsearch.ftl link in the HTML.
+      const result = await fetchTextWithRetry(careersUrl, {
+        accept: "text/html,application/xhtml+xml,*/*;q=0.8",
+      })
+      if (!result.ok) return { admitted: false, jobsFound: 0, reason: result.reason }
+      const sectionMatch = result.body.match(/careersection\/([^/'"]+)\/jobsearch\.ftl/)
+      if (!sectionMatch) return { admitted: false, jobsFound: 0, reason: "no_taleo_section" }
+      return { admitted: true, jobsFound: 1, reason: "live_section" }
     }
     default:
       // Shouldn't happen with current TARGETS, but keep future-safe.
