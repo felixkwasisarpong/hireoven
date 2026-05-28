@@ -43,6 +43,7 @@ run() {
 # blog-generate      0 8 * * 1-5       run api/cron/blog-generate
 # dice-ingest        0 */6 * * *       run api/cron/dice-ingest
 # waas-ingest        15 */6 * * *      run api/cron/waas-ingest
+# discover-companies 0 5 * * *         run api/cron/discover-companies
 # ──────────────────────────────────────────────────────────────────────────────
 
 case "${1:-}" in
@@ -66,6 +67,7 @@ case "${1:-}" in
   blog-generate)     run api/cron/blog-generate ;;
   dice-ingest)       run api/cron/dice-ingest ;;
   waas-ingest)       run api/cron/waas-ingest ;;
+  discover-companies) run api/cron/discover-companies ;;
   all)
     run 'api/alerts/recent-jobs?segment=with-resume'
     run api/crawl
