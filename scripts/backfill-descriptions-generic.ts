@@ -8,7 +8,11 @@
  *   npx tsx scripts/backfill-descriptions-generic.ts                              # dry-run, all sources
  *   npx tsx scripts/backfill-descriptions-generic.ts --execute --limit=20000      # run 20K
  *   npx tsx scripts/backfill-descriptions-generic.ts --execute --source=crawler   # only crawler-tagged
- *   npx tsx scripts/backfill-descriptions-generic.ts --execute --ats=icims        # only iCIMS adapter
+ *   npx tsx scripts/backfill-descriptions-generic.ts --execute --ats=icims        # only iCIMS adapter (source_ats)
+ *   npx tsx scripts/backfill-descriptions-generic.ts --execute --company-ats=workday  # crawler jobs for workday companies
+ *
+ * --company-ats filters by companies.ats_type (useful for crawler jobs where source_ats IS NULL
+ * but the company has a known ATS). Unlike --ats which filters source_ats.
  *
  * Idempotent — only touches rows whose description is < min-length.
  */
@@ -32,6 +36,7 @@ const concurrency = Math.max(1, Number.parseInt(getArg("--concurrency=") ?? "8",
 const minLength = Math.max(0, Number.parseInt(getArg("--min-length=") ?? "300", 10))
 const sourceFilter = getArg("--source=") ?? null      // 'crawler' | 'harvester' | 'dice' | ...
 const atsFilter = getArg("--ats=") ?? null            // 'icims' | 'smartrecruiters' | 'workday' | ...
+const companyAtsFilter = getArg("--company-ats=") ?? null  // filter by companies.ats_type for crawler jobs
 const timeoutMs = Math.max(2000, Number.parseInt(getArg("--timeout-ms=") ?? "12000", 10))
 
 type Row = {
@@ -42,6 +47,26 @@ type Row = {
 
 async function loadCandidates(): Promise<Row[]> {
   const pool = getPostgresPool()
+
+  if (companyAtsFilter) {
+    // For crawler jobs (source_ats IS NULL) from companies with a known ats_type.
+    const { rows } = await pool.query<Row>(
+      `SELECT j.id, j.apply_url, j.description
+         FROM jobs j
+         JOIN companies c ON c.id = j.company_id
+        WHERE j.is_active = true
+          AND j.closed_at IS NULL
+          AND j.apply_url IS NOT NULL
+          AND (j.description IS NULL OR length(j.description) < $1)
+          AND j.source_ats IS NULL
+          AND c.ats_type = $2
+        ORDER BY j.first_detected_at DESC NULLS LAST
+        LIMIT $3`,
+      [minLength, companyAtsFilter, limit]
+    )
+    return rows
+  }
+
   const where: string[] = [
     "is_active = true",
     "closed_at IS NULL",
@@ -114,7 +139,8 @@ async function main() {
   console.log(
     `[backfill-descriptions] mode=${execute ? "execute" : "dry-run"} limit=${limit} concurrency=${concurrency} min-length=${minLength}` +
       (sourceFilter ? ` source=${sourceFilter}` : "") +
-      (atsFilter ? ` ats=${atsFilter}` : "")
+      (atsFilter ? ` ats=${atsFilter}` : "") +
+      (companyAtsFilter ? ` company-ats=${companyAtsFilter}` : "")
   )
 
   process.on("unhandledRejection", (reason) => {
