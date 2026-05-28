@@ -116,7 +116,7 @@ function BreakdownPanel({ score, onClose, onSeeFullAnalysis }: BreakdownPanelPro
     <div
       role="dialog"
       aria-label="Match score breakdown"
-      className="w-[340px] max-w-[calc(100vw-24px)] rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_18px_40px_rgba(15,23,42,0.18)]"
+      className="popover-panel w-[340px] max-w-[calc(100vw-24px)] rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_18px_40px_rgba(15,23,42,0.18)]"
       onClick={(e) => e.stopPropagation()}
     >
       <header className="flex items-start justify-between gap-3">

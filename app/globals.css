@@ -111,7 +111,9 @@
   body.site-chroma .app-drawer,
   body.site-chroma .app-drawer .bg-white,
   body.site-chroma .notification-panel,
-  body.site-chroma .notification-panel .bg-white {
+  body.site-chroma .notification-panel .bg-white,
+  body.site-chroma .popover-panel,
+  body.site-chroma .popover-panel .bg-white {
     background-color: #ffffff !important;
   }
   body.site-chroma .app-drawer .bg-slate-50,
