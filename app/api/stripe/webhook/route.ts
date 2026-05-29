@@ -54,6 +54,25 @@ export async function POST(request: NextRequest) {
         break
       }
 
+      // ── Feature credit pack purchase ────────────────────────────────────
+      if (session.metadata?.type === "feature_credit_pack") {
+        const { isPackKey, FEATURE_PACKS } = await import("@/lib/billing/packs")
+        const { grantPackCredits } = await import("@/lib/billing/packs-server")
+        const packKey = session.metadata?.pack
+        if (isPackKey(packKey)) {
+          const pack = FEATURE_PACKS[packKey]
+          await grantPackCredits({
+            userId,
+            feature: pack.feature,
+            packKey,
+            credits: pack.credits,
+            amountCents: pack.amountCents,
+            stripePaymentIntentId: session.payment_intent as string | undefined,
+          })
+        }
+        break
+      }
+
       // ── Subscription checkout ───────────────────────────────────────────
       const plan = session.metadata?.plan
       const interval = session.metadata?.interval ?? "monthly"

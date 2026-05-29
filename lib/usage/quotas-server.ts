@@ -3,6 +3,7 @@
 // or lib/hooks/useQuotas (client) on the client side.
 import { getPostgresPool } from "@/lib/postgres/server"
 import type { Plan } from "@/lib/gates"
+import { tryConsumePackCredit } from "@/lib/billing/packs-server"
 import {
   FEATURE_QUOTAS,
   METERED_FEATURE_KEYS,
@@ -26,6 +27,11 @@ function limitFor(feature: MeteredFeature, plan: Plan | null): number {
  * returns the post-increment state. Always increments — callers decide whether
  * to fulfil or 429 based on `exceeded`. We count attempts, not successes, so
  * retries cannot bypass the cap.
+ *
+ * If the user is over their base quota, we attempt to consume one credit from
+ * the oldest non-empty top-up pack instead of marking the call as exceeded.
+ * The `used` count still increments — pack usage is tracked separately in
+ * feature_credit_pack_consumption.
  */
 export async function bumpUsage(
   userId: string,
@@ -44,13 +50,33 @@ export async function bumpUsage(
   )
   const used = rows[0]?.count ?? 1
   const limit = limitFor(feature, plan)
+  const overBase = used > limit
+
+  // Over base quota → try to consume a pack credit. If a pack credit is
+  // available, the call is allowed and we return exceeded=false.
+  if (overBase) {
+    const consumed = await tryConsumePackCredit(userId, feature)
+    if (consumed) {
+      return {
+        feature,
+        period: config.period,
+        used,
+        limit,
+        remaining: 0,
+        exceeded: false,
+        paidWithPack: true,
+      }
+    }
+  }
+
   return {
     feature,
     period: config.period,
     used,
     limit,
     remaining: Math.max(0, limit - used),
-    exceeded: used > limit,
+    exceeded: overBase,
+    paidWithPack: false,
   }
 }
 
