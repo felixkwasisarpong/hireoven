@@ -4,10 +4,15 @@ import { canonicalCareersUrl } from "@/lib/harvester/canonical-url"
 import { persistJobsBulk } from "@/lib/harvester/persist-bulk"
 
 const TIER_INTERVAL_DEFAULTS: Record<string, number> = {
-  tier_1: 180,
-  tier_2: 1_800,
-  tier_3: 21_600,
-  tier_dead: 604_800,
+  tier_1: 180,        // 3 min — active sponsors / always-fresh boards
+  // tier_2 was 30 min. With 968 quiet greenhouse companies in tier_2 we were
+  // hammering them ~2x/hr just to receive a 304-unchanged each time (3,432
+  // wasted ETag checks observed in a single 78-minute window). 1 hr cuts that
+  // in half without measurably delaying new-job pickup. Override per env
+  // (HARVESTER_TIER_2_INTERVAL_SEC) if you need to tighten back temporarily.
+  tier_2: 3_600,      // 1 hr
+  tier_3: 21_600,     // 6 hr
+  tier_dead: 604_800, // 7 days
 }
 
 const TIER_INTERVAL_ENV: Record<string, string> = {
@@ -24,7 +29,12 @@ const ADAPTER_REQUEST_TIMEOUT_MS: Partial<Record<AtsName, number>> = {
   // Slower APIs and large boards often breach the generic 8s transport timeout.
   workday: 20_000,
   smartrecruiters: 12_000,
-  ashby: 12_000,
+  // Ashby returns ?includeCompensation=true bodies that frequently take 15-20s
+  // for moderate boards; with the prior 12s budget ~48% of crawls timed out
+  // and burned 3 retries (36s instance time per dead crawl). Bumping covers
+  // the slow-but-legitimate responses while the ashby adapter itself drops
+  // retries (one shot — retrying a slow server doesn't speed it up).
+  ashby: 25_000,
   usajobs: 20_000,
   icims: 15_000,
 }
@@ -168,19 +178,53 @@ async function updateCompanyHarvestState(
     intervalSec: number
     crawledAtIso: string
     bumpLastCrawled: boolean
+    newFreshnessTier?: string | null
   }
 ) {
-  await pool.query(
-    `UPDATE companies
-     SET etag = $2,
-         last_modified = $3,
-         next_harvest_at = now() + ($4 || ' seconds')::interval
-         ${args.bumpLastCrawled ? ", last_crawled_at = $5::timestamptz" : ""}
-     WHERE id = $1`,
-    args.bumpLastCrawled
-      ? [companyId, args.etag, args.lastModified, args.intervalSec, args.crawledAtIso]
-      : [companyId, args.etag, args.lastModified, args.intervalSec]
+  const setTier = args.newFreshnessTier ? ", freshness_tier = $tier" : ""
+  const bumpCrawl = args.bumpLastCrawled ? ", last_crawled_at = $crawl::timestamptz" : ""
+  const params: unknown[] = [companyId, args.etag, args.lastModified, args.intervalSec]
+  let sql = `UPDATE companies
+             SET etag = $2,
+                 last_modified = $3,
+                 next_harvest_at = now() + ($4 || ' seconds')::interval`
+  if (args.bumpLastCrawled) {
+    params.push(args.crawledAtIso)
+    sql += bumpCrawl.replace("$crawl", `$${params.length}`)
+  }
+  if (args.newFreshnessTier) {
+    params.push(args.newFreshnessTier)
+    sql += setTier.replace("$tier", `$${params.length}`)
+  }
+  sql += ` WHERE id = $1`
+  await pool.query(sql, params)
+}
+
+/** Demote one notch in the freshness tier chain. tier_dead is terminal. */
+function demoteFreshnessTier(tier: string | null): string {
+  switch (tier) {
+    case "tier_1":    return "tier_2"
+    case "tier_2":    return "tier_3"
+    case "tier_3":    return "tier_dead"
+    case "tier_dead": return "tier_dead"
+    default:          return "tier_2"
+  }
+}
+
+/** Count how many of the most recent N harvest attempts failed. */
+async function recentFailureCount(
+  pool: Pool,
+  companyId: string,
+  windowCount = 3
+): Promise<number> {
+  const { rows } = await pool.query<{ status: string }>(
+    `SELECT status FROM crawl_logs
+      WHERE company_id = $1
+      ORDER BY crawled_at DESC
+      LIMIT $2`,
+    [companyId, windowCount]
   )
+  return rows.filter((r) => r.status === "failed").length
 }
 
 export async function runAtsHarvest(input: {
@@ -281,6 +325,21 @@ export async function runAtsHarvest(input: {
         ? Math.max(baseCooldownSec, http403CooldownSeconds())
         : baseCooldownSec
     )
+    // After 3+ consecutive failures (this attempt counts as the 3rd) demote
+    // the company one freshness tier. Stops always-broken tenants from
+    // burning tier_1 polling cycles forever. Healthy crawls reset the
+    // window naturally since we count by status, and the maintenance.ts
+    // job re-promotes anything that starts producing jobs again.
+    let newTier: string | null = null
+    try {
+      const recentFails = await recentFailureCount(pool, company.id, 2)
+      if (recentFails >= 2) {
+        newTier = demoteFreshnessTier(company.freshness_tier)
+        if (newTier === company.freshness_tier) newTier = null
+      }
+    } catch {
+      // Demote-on-failure is best-effort; never let it mask the real error.
+    }
     try {
       await updateCompanyHarvestState(pool, company.id, {
         etag: company.etag,
@@ -288,6 +347,7 @@ export async function runAtsHarvest(input: {
         intervalSec: cooldownSec,
         crawledAtIso,
         bumpLastCrawled: false,
+        newFreshnessTier: newTier,
       })
     } catch {
       // Secondary DB failures should not mask the original adapter error.

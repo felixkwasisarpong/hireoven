@@ -187,7 +187,10 @@ export const ashbyAdapter: AtsAdapter = {
   detectFromUrl,
   async fetchJobs({ slug, ctx }): Promise<HarvestResult> {
     const fetchedAt = new Date()
-    const result = await conditionalFetchJson<AshbyResponse>(endpointFor(slug), ctx)
+    // Single attempt — Ashby timeouts are server-slowness, not transient
+    // network blips. Retrying a slow API call just multiplies wasted time
+    // by the retry count (was burning 3 × 12s ≈ 36s per dead Ashby crawl).
+    const result = await conditionalFetchJson<AshbyResponse>(endpointFor(slug), ctx, { maxAttempts: 1 })
 
     if (result.kind === "not_modified") {
       return {
