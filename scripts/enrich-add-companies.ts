@@ -21,6 +21,7 @@ import { loadEnvConfig } from "@next/env"
 loadEnvConfig(process.cwd())
 import { Pool } from "pg"
 import { companyLogoUrlFromDomain } from "../lib/companies/logo-url"
+import { guessPublicDomain } from "../lib/companies/placeholder-from-employer"
 
 // ─── CLI ─────────────────────────────────────────────────────────────────────
 
@@ -219,14 +220,6 @@ function normalizeKey(name: string): string {
     .replace(/[^A-Z0-9 ]+/g, " ")
     .split(/\s+/).filter(Boolean).filter((t) => !LEGAL.has(t))
     .join(" ").trim()
-}
-
-function guessPublicDomain(name: string): string | null {
-  const stripped = name.toLowerCase()
-    .replace(/\b(incorporated|inc|l\.?l\.?c\.?|llp|corp|corporation|ltd|limited|co|company|plc|holdings|group|technologies|technology|solutions|services|systems|us|usa|america|americas|north\s+america|d\.?b\.?a\.?.*)/g, " ")
-    .replace(/[^a-z0-9]+/g, "").trim()
-  if (!stripped || stripped.length < 3) return null
-  return `${stripped}.com`
 }
 
 function toDisplayName(raw: string): string {

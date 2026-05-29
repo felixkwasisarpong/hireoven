@@ -29,8 +29,11 @@ const PREFERRED_LIKE_RE =
 const RESPONSIBILITY_LIKE_RE =
   /\b(builds?|building|designs?|designed|develops?|developing|delivers?|collaborates?|partners?|leads?|owns?|creates?|drives?|maintains?|implements?|optimizes?|supports?|performs?|validates?|documents?|manages?)\b/i
 
+// `equity` is bare-matched but guarded against industry terms ("private equity",
+// "home equity", "brand equity", "real estate equity", "venture equity") that
+// otherwise leak requirement/responsibility bullets into the benefits section.
 const BENEFITS_LIKE_RE =
-  /\b(benefits?|perks?|total rewards?|health(?:care|[ -]?insurance)?|dental|vision|medical|401\s?\(k\)|retirement|pension|paid time off|pto|unlimited pto|parental(?: leave)?|maternity|paternity|family leave|wellness|wellbeing|stipend|bonus|equity|stock(?: options?| grants?|[ -]?units?)?|rsu|vesting|profit[ -]?sharing|commuter|gym|fitness|education(?:al)?|tuition|learning|home[ -]?office|life insurance|disability|fsa|hsa|flexible|reimbursement|vacation|holiday|time off|leave|coverage)\b/i
+  /\b(benefits?|perks?|total rewards?|health(?:care|[ -]?insurance)?|dental|vision|medical|401\s?\(k\)|retirement|pension|paid time off|pto|unlimited pto|parental(?: leave)?|maternity|paternity|family leave|wellness|wellbeing|stipend|bonus|(?<!(?:private|home|brand|real\s+estate|venture)\s)equity|stock(?: options?| grants?|[ -]?units?)?|rsu|vesting|profit[ -]?sharing|commuter|gym|fitness|education(?:al)?|tuition|learning|home[ -]?office|life insurance|disability|fsa|hsa|flexible|reimbursement|vacation|holiday|time off|leave|coverage)\b/i
 
 const OFFER_CULTURE_LIKE_RE =
   /\b(fast[- ]growing|entrepreneurial(?:-minded)?|friendly and laid-back atmosphere|laid-back atmosphere|asynchronous culture|supportive work environment|opportunity to work on|opportunity to make (?:a )?big impact|shape the company and product|hands-off management approach)\b/i

@@ -116,6 +116,13 @@
   body.site-chroma .popover-panel .bg-white {
     background-color: #ffffff !important;
   }
+
+  /* Popover panels are portaled to body and may overlay any surface (including
+     dark JobCardV2 expanded sections). Force fully opaque white with a
+     bumped-specificity rule so the chroma .bg-white override can never win. */
+  html body .popover-panel.popover-panel {
+    background-color: #ffffff !important;
+  }
   body.site-chroma .app-drawer .bg-slate-50,
   body.site-chroma .app-drawer .bg-slate-50\/40,
   body.site-chroma .app-drawer .bg-slate-50\/60 {

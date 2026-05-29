@@ -122,8 +122,11 @@ const CONTENT_RULES: Rule[] = [
   },
   {
     key: "benefits",
+    // `equity` is guarded against industry false-friends ("private equity",
+    // "home equity", "brand equity", etc.) which otherwise mis-route financial
+    // and real-estate JD content into the benefits section.
     pattern:
-      /\b(health|dental|vision|401\s?\(k\)|retirement|pto|paid time off|parental leave|equity|bonus|wellness|stipend)\b/i,
+      /\b(health|dental|vision|401\s?\(k\)|retirement|pto|paid time off|parental leave|(?<!(?:private|home|brand|real\s+estate|venture)\s)equity|bonus|wellness|stipend)\b/i,
   },
   {
     key: "compensation",

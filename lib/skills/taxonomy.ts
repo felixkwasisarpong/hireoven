@@ -298,8 +298,10 @@ export const SKILL_DEFINITIONS: SkillDefinition[] = [
   { label: "Onboarding",          aliases: ["onboarding"] },
   // Bare "compensation" matches the salary boilerplate ("Compensation: $80k–$120k")
   // present in most US JDs, so we only count phrases that clearly mean the HR
-  // discipline, not the pay disclosure.
-  { label: "Compensation",        aliases: ["compensation design", "compensation planning", "compensation analyst", "compensation strategy", "compensation management", "total rewards", "comp & benefits", "comp and benefits"] },
+  // discipline, not the pay disclosure. Bare "total rewards" is also excluded
+  // because enterprise JDs ("visit Total Rewards resources") use it as the
+  // name of a benefits portal, not the HR function.
+  { label: "Compensation",        aliases: ["compensation design", "compensation planning", "compensation analyst", "compensation strategy", "compensation management", "total rewards strategy", "total rewards philosophy", "total rewards design", "total rewards analyst", "comp & benefits", "comp and benefits"] },
 
   // ─── Legal ────────────────────────────────────────────────────────────────
   { label: "Contract Management", aliases: ["contract management", "contract drafting", "contract review"] },
@@ -762,7 +764,7 @@ const BOILERPLATE_SENTENCE_PATTERNS: RegExp[] = [
 
   // Benefits / total-rewards marketing
   /\bcomprehensive\s+benefits?\s+package/i,
-  /\btotal\s+rewards?\s+(?:package|program|statement|philosophy)/i,
+  /\btotal\s+rewards?\s+(?:package|program|statement|resources?|site|page|portal|hub|center)/i,
   /\blearn\s+more\s+about\s+our\s+(?:total\s+rewards|benefits|culture|values|mission)/i,
   /\b(?:competitive|generous|robust)\s+(?:salary|compensation|pay|benefits)/i,
   /\b(?:medical|dental|vision)(?:,\s+(?:medical|dental|vision))+/i,
