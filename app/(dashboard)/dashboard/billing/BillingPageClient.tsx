@@ -456,6 +456,143 @@ export default function BillingPageClient({
           </p>
         </header>
 
+        {/* ── Student verification (lifted above plan card so it's the first
+              call-to-action for free / pro users arriving from a discount banner) ── */}
+        {currentPlan !== "pro_max" && (
+          <section
+            id="student-verify"
+            className="mb-5 overflow-hidden rounded-2xl border-2 border-indigo-200 bg-indigo-50/40 shadow-[0_2px_12px_rgba(15,23,42,0.04)]"
+          >
+            <div className="flex items-center gap-2 border-b border-indigo-100 px-6 py-4">
+              <GraduationCap className="h-4 w-4 text-indigo-500" aria-hidden />
+              <h2 className="text-sm font-semibold text-slate-900">Student discount — 30% off Pro</h2>
+            </div>
+            <div className="p-6">
+              {studentStep === "verified" && studentStatus?.isStudent ? (
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-indigo-700">
+                      Student status verified
+                    </p>
+                    <p className="mt-0.5 text-[13px] text-slate-500">
+                      {studentStatus.email ? `Verified for ${studentStatus.email}. ` : ""}
+                      30% off Pro is locked in. Click below to finish at Stripe.
+                    </p>
+                  </div>
+                  {currentPlan === "free" && (
+                    <button
+                      type="button"
+                      onClick={() => startCheckout("pro")}
+                      className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-700"
+                    >
+                      Continue to checkout
+                      <ChevronDown className="h-4 w-4 -rotate-90" aria-hidden />
+                    </button>
+                  )}
+                  {currentPlan === "pro" && (
+                    <button
+                      type="button"
+                      onClick={() => startCheckout("pro_max", resolvedInterval)}
+                      className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-700"
+                    >
+                      Upgrade to Pro Max
+                      <ChevronDown className="h-4 w-4 -rotate-90" aria-hidden />
+                    </button>
+                  )}
+                </div>
+              ) : studentStep === "email" ? (
+                <div>
+                  <p className="mb-3 text-[13px] text-slate-700">
+                    Use your school&apos;s <span className="font-mono">.edu</span> email. We&apos;ll send a 6-digit code to confirm it&apos;s yours.
+                  </p>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
+                    <input
+                      type="email"
+                      value={studentEmailInput}
+                      onChange={(event) => {
+                        setStudentEmailInput(event.target.value)
+                        if (studentError) setStudentError(null)
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault()
+                          void sendStudentCode()
+                        }
+                      }}
+                      placeholder="you@school.edu"
+                      className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                      autoCorrect="off"
+                      spellCheck={false}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void sendStudentCode()}
+                      disabled={studentBusy || !studentEmailInput.trim()}
+                      className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:opacity-50"
+                    >
+                      {studentBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Send code"}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <p className="mb-3 text-[13px] text-slate-700">
+                    We sent a code to <span className="font-mono">{studentEmailInput || "your school email"}</span>. It expires in 15 minutes.
+                  </p>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={6}
+                      value={studentCodeInput}
+                      onChange={(event) => {
+                        setStudentCodeInput(event.target.value.replace(/\D/g, ""))
+                        if (studentError) setStudentError(null)
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault()
+                          void confirmStudentCode()
+                        }
+                      }}
+                      placeholder="123456"
+                      className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2.5 font-mono text-lg tracking-[0.4em] text-slate-800 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void confirmStudentCode()}
+                      disabled={studentBusy || studentCodeInput.length !== 6}
+                      className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:opacity-50"
+                    >
+                      {studentBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Verify"}
+                    </button>
+                  </div>
+                  <div className="mt-2 flex gap-3 text-[12px]">
+                    <button
+                      type="button"
+                      onClick={restartStudentFlow}
+                      className="text-slate-500 underline-offset-4 hover:text-slate-700 hover:underline"
+                    >
+                      Use a different email
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void sendStudentCode()}
+                      disabled={studentBusy}
+                      className="text-slate-500 underline-offset-4 hover:text-slate-700 hover:underline disabled:opacity-50"
+                    >
+                      Resend code
+                    </button>
+                  </div>
+                </div>
+              )}
+              {studentError && (
+                <p className="mt-2 text-[12.5px] font-medium text-rose-600">{studentError}</p>
+              )}
+            </div>
+          </section>
+        )}
+
         {/* ── Hero plan card ── */}
         <section className="relative mb-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_2px_12px_rgba(15,23,42,0.04)]">
           <div className={cn("h-1 w-full bg-gradient-to-r", accent.gradient)} />
@@ -764,121 +901,6 @@ export default function BillingPageClient({
                 <p className="mt-5 rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
                   Feedback recorded. Your plan remains active until {periodEnd ?? "the end of the billing period"}.
                 </p>
-              )}
-            </div>
-          </section>
-        )}
-
-        {/* ── Student verification ── */}
-        {!isPro && (
-          <section className="mb-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_2px_12px_rgba(15,23,42,0.04)]">
-            <div className="flex items-center gap-2 border-b border-slate-100 px-6 py-4">
-              <GraduationCap className="h-4 w-4 text-indigo-500" aria-hidden />
-              <h2 className="text-sm font-semibold text-slate-900">Student discount — 30% off Pro</h2>
-            </div>
-            <div className="p-6">
-              {studentStep === "verified" && studentStatus?.isStudent ? (
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-indigo-700">
-                      Student status verified
-                    </p>
-                    <p className="mt-0.5 text-[13px] text-slate-500">
-                      {studentStatus.email
-                        ? `Verified for ${studentStatus.email}. `
-                        : ""}
-                      30% off Pro will be applied automatically at checkout.
-                    </p>
-                  </div>
-                </div>
-              ) : studentStep === "email" ? (
-                <div>
-                  <p className="mb-3 text-[13px] text-slate-500">
-                    Use your school&apos;s <span className="font-mono">.edu</span> email. We&apos;ll send a 6-digit code to confirm it&apos;s yours.
-                  </p>
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
-                    <input
-                      type="email"
-                      value={studentEmailInput}
-                      onChange={(event) => {
-                        setStudentEmailInput(event.target.value)
-                        if (studentError) setStudentError(null)
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") {
-                          event.preventDefault()
-                          void sendStudentCode()
-                        }
-                      }}
-                      placeholder="you@school.edu"
-                      className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
-                      autoCorrect="off"
-                      spellCheck={false}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => void sendStudentCode()}
-                      disabled={studentBusy || !studentEmailInput.trim()}
-                      className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:opacity-50"
-                    >
-                      {studentBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Send code"}
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div>
-                  <p className="mb-3 text-[13px] text-slate-500">
-                    We sent a code to <span className="font-mono">{studentEmailInput || "your school email"}</span>. It expires in 15 minutes.
-                  </p>
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      maxLength={6}
-                      value={studentCodeInput}
-                      onChange={(event) => {
-                        setStudentCodeInput(event.target.value.replace(/\D/g, ""))
-                        if (studentError) setStudentError(null)
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") {
-                          event.preventDefault()
-                          void confirmStudentCode()
-                        }
-                      }}
-                      placeholder="123456"
-                      className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2.5 font-mono text-lg tracking-[0.4em] text-slate-800 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => void confirmStudentCode()}
-                      disabled={studentBusy || studentCodeInput.length !== 6}
-                      className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:opacity-50"
-                    >
-                      {studentBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Verify"}
-                    </button>
-                  </div>
-                  <div className="mt-2 flex gap-3 text-[12px]">
-                    <button
-                      type="button"
-                      onClick={restartStudentFlow}
-                      className="text-slate-500 underline-offset-4 hover:text-slate-700 hover:underline"
-                    >
-                      Use a different email
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void sendStudentCode()}
-                      disabled={studentBusy}
-                      className="text-slate-500 underline-offset-4 hover:text-slate-700 hover:underline disabled:opacity-50"
-                    >
-                      Resend code
-                    </button>
-                  </div>
-                </div>
-              )}
-              {studentError && (
-                <p className="mt-2 text-[12.5px] font-medium text-rose-600">{studentError}</p>
               )}
             </div>
           </section>
