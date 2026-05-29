@@ -195,6 +195,9 @@ export default function BillingPageClient({
   const [studentStep, setStudentStep] = useState<"email" | "code" | "verified">("email")
   const [studentError, setStudentError] = useState<string | null>(null)
   const [studentBusy, setStudentBusy] = useState(false)
+  const [creditsModalOpen, setCreditsModalOpen] = useState(false)
+  const [creditsBusy, setCreditsBusy] = useState<string | null>(null)
+  const [creditsError, setCreditsError] = useState<string | null>(null)
   const currentPlanForHistory = normalizeUiPlan(billing?.plan ?? plan ?? "free")
   const shouldLoadHistory = currentPlanForHistory === "pro" || currentPlanForHistory === "pro_max"
 
@@ -369,6 +372,28 @@ export default function BillingPageClient({
     setStudentStep("email")
     setStudentCodeInput("")
     setStudentError(null)
+  }
+
+  async function buyInterviewCredits(packKey: InterviewCreditPackKey) {
+    setCreditsBusy(packKey)
+    setCreditsError(null)
+    try {
+      const res = await fetch("/api/interview/credits/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pack: packKey }),
+      })
+      const data = await res.json()
+      if (data.url) {
+        window.location.href = data.url
+        return
+      }
+      setCreditsError(data.error ?? "Couldn't start checkout.")
+    } catch {
+      setCreditsError("Couldn't reach the server. Try again.")
+    } finally {
+      setCreditsBusy(null)
+    }
   }
 
   async function buyPack(packKey: PackKey) {
@@ -700,13 +725,17 @@ export default function BillingPageClient({
                   {currentPlan === "pro_max" && " You get 1 free credit every 28 days."}
                 </p>
               </div>
-              <Link
-                href="/dashboard/interview"
+              <button
+                type="button"
+                onClick={() => {
+                  setCreditsError(null)
+                  setCreditsModalOpen(true)
+                }}
                 className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
               >
                 <Plus className="h-3.5 w-3.5" aria-hidden />
                 Buy interview credits
-              </Link>
+              </button>
             </div>
           </section>
         )}
@@ -1050,6 +1079,15 @@ export default function BillingPageClient({
           </a>
         </p>
       </div>
+
+      {creditsModalOpen && (
+        <InterviewCreditsModal
+          busyPackKey={creditsBusy}
+          error={creditsError}
+          onClose={() => setCreditsModalOpen(false)}
+          onBuy={buyInterviewCredits}
+        />
+      )}
     </div>
   )
 }
@@ -1235,6 +1273,144 @@ function UsageMeter({
             : "Cap reached — buy a top-up pack below to keep going."}
         </p>
       )}
+    </div>
+  )
+}
+
+// ── Live interview credit packs ────────────────────────────────────────────
+// Mirrors app/api/interview/credits/checkout/route.ts. Keep in sync; server
+// validates against its own copy so a stale client can't fake a pack price.
+type InterviewCreditPackKey =
+  | "session_short_1"
+  | "session_long_1"
+  | "session_short_3"
+  | "session_short_5"
+
+const INTERVIEW_CREDIT_PACKS: Record<
+  InterviewCreditPackKey,
+  { credits: number; amountCents: number; label: string; subtitle: string; recommended?: boolean }
+> = {
+  session_short_1: {
+    credits: 1,
+    amountCents: 1200,
+    label: "1 session",
+    subtitle: "Up to 30 min",
+  },
+  session_long_1: {
+    credits: 1,
+    amountCents: 2000,
+    label: "1 long session",
+    subtitle: "Up to 60 min",
+  },
+  session_short_3: {
+    credits: 3,
+    amountCents: 3000,
+    label: "3 sessions",
+    subtitle: "Up to 30 min each",
+    recommended: true,
+  },
+  session_short_5: {
+    credits: 5,
+    amountCents: 4500,
+    label: "5 sessions",
+    subtitle: "Up to 30 min each",
+  },
+}
+
+function InterviewCreditsModal({
+  busyPackKey,
+  error,
+  onClose,
+  onBuy,
+}: {
+  busyPackKey: string | null
+  error: string | null
+  onClose: () => void
+  onBuy: (key: InterviewCreditPackKey) => void
+}) {
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Buy live interview credits"
+      className="fixed inset-0 z-[80] flex items-end justify-center bg-slate-900/50 backdrop-blur-[2px] sm:items-center"
+      onClick={onClose}
+    >
+      <div
+        className="relative w-full max-w-md overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:rounded-2xl"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-6 py-4">
+          <div>
+            <h3 className="text-base font-bold text-slate-900">Buy live interview credits</h3>
+            <p className="mt-0.5 text-[13px] text-slate-500">
+              1 credit = 1 live voice + webcam session. Credits never expire.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="-mr-1 -mt-1 rounded-full p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <path d="M3 3l10 10M13 3l-10 10" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="grid gap-2 p-6">
+          {(Object.entries(INTERVIEW_CREDIT_PACKS) as [InterviewCreditPackKey, typeof INTERVIEW_CREDIT_PACKS[InterviewCreditPackKey]][]).map(
+            ([key, pack]) => {
+              const busy = busyPackKey === key
+              const perCredit = pack.amountCents / pack.credits
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => onBuy(key)}
+                  disabled={busyPackKey !== null}
+                  className={cn(
+                    "relative flex items-center justify-between gap-3 rounded-xl border bg-white p-4 text-left transition disabled:opacity-60",
+                    pack.recommended
+                      ? "border-orange-200 bg-orange-50/40 hover:border-orange-300"
+                      : "border-slate-200 hover:border-slate-300"
+                  )}
+                >
+                  {pack.recommended && (
+                    <span className="absolute -top-2 left-4 rounded-full bg-orange-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
+                      Best value
+                    </span>
+                  )}
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-slate-900">{pack.label}</p>
+                    <p className="mt-0.5 text-[12px] text-slate-500">{pack.subtitle}</p>
+                    {pack.credits > 1 && (
+                      <p className="mt-0.5 text-[11px] text-slate-400">
+                        ${(perCredit / 100).toFixed(2)} / credit
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <span className="text-[18px] font-bold tabular-nums text-slate-900">
+                      ${(pack.amountCents / 100).toFixed(0)}
+                    </span>
+                    {busy && <Loader2 className="h-4 w-4 animate-spin text-slate-500" />}
+                  </div>
+                </button>
+              )
+            }
+          )}
+        </div>
+
+        {error && (
+          <p className="px-6 pb-4 text-[12.5px] font-medium text-rose-600">{error}</p>
+        )}
+
+        <div className="border-t border-slate-100 bg-slate-50/60 px-6 py-3 text-[11.5px] text-slate-500">
+          Payment processed by Stripe. You'll be redirected to complete checkout.
+        </div>
+      </div>
     </div>
   )
 }
