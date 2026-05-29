@@ -6,7 +6,6 @@ import { usePathname } from "next/navigation"
 import Link from "next/link"
 import { X } from "lucide-react"
 import DashboardSidebarNav from "@/components/dashboard/DashboardSidebarNav"
-import DashboardSidebarPremiumCard from "@/components/dashboard/DashboardSidebarPremiumCard"
 import HireovenLogo from "@/components/ui/HireovenLogo"
 import { cn } from "@/lib/utils"
 
@@ -126,8 +125,6 @@ function DashboardMobileNavDrawer() {
         <div className="soft-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto [-webkit-overflow-scrolling:touch]">
           <DashboardSidebarNav variant="light" navSkin="feed" />
         </div>
-
-        <DashboardSidebarPremiumCard variant="light" />
       </aside>
     </div>
     </div>

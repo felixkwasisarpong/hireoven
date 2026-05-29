@@ -9,7 +9,6 @@ import DashboardFeedToolbar, {
   type FeedToolbarDropdown,
 } from "@/components/dashboard/DashboardFeedToolbar"
 import DashboardSidebarNav from "@/components/dashboard/DashboardSidebarNav"
-import DashboardSidebarPremiumCard from "@/components/dashboard/DashboardSidebarPremiumCard"
 import DashboardSpotlightColumn from "@/components/dashboard/DashboardSpotlightColumn"
 import JobFeed from "@/components/jobs/JobFeed"
 import PushNotificationSetup from "@/components/notifications/PushNotificationSetup"
@@ -199,8 +198,6 @@ export default function DashboardHomeClient({
         <div className="soft-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto [-webkit-overflow-scrolling:touch]">
           <DashboardSidebarNav variant="light" navSkin="feed" />
         </div>
-
-        <DashboardSidebarPremiumCard variant="light" />
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col xl:h-full xl:overflow-hidden">

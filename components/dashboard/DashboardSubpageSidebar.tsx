@@ -2,7 +2,6 @@
 
 import Link from "next/link"
 import DashboardSidebarNav from "@/components/dashboard/DashboardSidebarNav"
-import DashboardSidebarPremiumCard from "@/components/dashboard/DashboardSidebarPremiumCard"
 import HireovenLogo from "@/components/ui/HireovenLogo"
 
 /**
@@ -25,8 +24,6 @@ export default function DashboardSubpageSidebar() {
       <div className="soft-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto [-webkit-overflow-scrolling:touch]">
         <DashboardSidebarNav variant="light" navSkin="feed" />
       </div>
-
-      <DashboardSidebarPremiumCard variant="light" />
     </aside>
   )
 }
