@@ -81,8 +81,10 @@ export default function WaitlistFeedback() {
         type="button"
         onClick={() => setOpen(true)}
         aria-label="Send feedback"
-        style={{ left: "1.25rem", bottom: "1.25rem", right: "auto", top: "auto", position: "fixed" }}
-        className="fixed z-[80] inline-flex h-12 items-center gap-2 rounded-full bg-teal-600 px-4 text-sm font-semibold text-white shadow-lg shadow-teal-900/20 transition hover:bg-teal-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400 focus-visible:ring-offset-2"
+        // Bottom-right keeps it clear of the dashboard sidebar's premium card
+        // (which lives bottom-left). Hidden on small screens because a fixed
+        // pill plus mobile nav fights for the same real estate.
+        className="fixed bottom-5 right-5 z-[80] hidden h-12 items-center gap-2 rounded-full bg-teal-600 px-4 text-sm font-semibold text-white shadow-lg shadow-teal-900/20 transition hover:bg-teal-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400 focus-visible:ring-offset-2 sm:inline-flex"
       >
         <MessageCircle className="h-4 w-4" aria-hidden />
         Feedback
