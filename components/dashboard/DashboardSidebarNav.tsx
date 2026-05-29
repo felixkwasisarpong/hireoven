@@ -13,6 +13,7 @@ import {
 import { PLAN_NAMES, canAccess, requiredPlanFor } from "@/lib/gates"
 import { useSubscription } from "@/lib/hooks/useSubscription"
 import { useUpgradeModal } from "@/lib/context/UpgradeModalContext"
+import { useFeedbackModal } from "@/lib/context/FeedbackModalContext"
 import { cn } from "@/lib/utils"
 
 function formatNavBadge(n: number) {
@@ -45,6 +46,7 @@ function NavItem({
   const pathname = usePathname()
   const { plan, isLoading: subLoading } = useSubscription()
   const { showUpgrade } = useUpgradeModal()
+  const { open: openFeedback } = useFeedbackModal()
 
   const Icon = item.icon
   const active = isDashboardNavActive(pathname, item.href)
@@ -147,6 +149,17 @@ function NavItem({
       <button type="button" onClick={() => showUpgrade(item.gate!)}
         className={cn(linkClass, "w-full text-left")}
         title={`Upgrade to ${lockLabel} to unlock ${item.label}`}
+      >
+        {inner}
+      </button>
+    )
+  }
+  if (item.action === "feedback") {
+    return (
+      <button
+        type="button"
+        onClick={openFeedback}
+        className={cn(linkClass, "w-full text-left")}
       >
         {inner}
       </button>

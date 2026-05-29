@@ -10,6 +10,7 @@ import {
   LayoutGrid,
   LifeBuoy,
   Mails,
+  MessageCircle,
   Mic,
   Plane,
   Settings,
@@ -22,6 +23,10 @@ import {
 } from "lucide-react"
 import type { FeatureKey } from "@/lib/gates"
 
+/** Named actions that NavItem renders as a button instead of a link.
+ *  When `action` is set, `href` is ignored (use "#" as a placeholder). */
+export type DashboardNavAction = "feedback"
+
 export type DashboardNavItem = {
   label: string
   href: string
@@ -31,6 +36,9 @@ export type DashboardNavItem = {
   footer?: boolean
   /** Group key — items sharing a key are rendered under a collapsible section. */
   group?: string
+  /** If set, clicking the item triggers a named in-app action instead of
+   *  navigating. The sidebar maps these to the right context handler. */
+  action?: DashboardNavAction
 }
 
 export type DashboardNavGroup = {
@@ -69,8 +77,9 @@ export const DASHBOARD_NAV_ITEMS: DashboardNavItem[] = [
   { label: "Offer Risk",     href: "/dashboard/international/offer-risk", icon: ShieldAlert,     group: "International" },
 
   // ── Footer ───────────────────────────────────────────────────────────────────
-  { label: "Settings",       href: "/dashboard/billing",                  icon: Settings,   footer: true },
-  { label: "Help & support", href: "mailto:support@hireoven.com",         icon: LifeBuoy,   footer: true },
+  { label: "Settings",       href: "/dashboard/billing",                  icon: Settings,      footer: true },
+  { label: "Feedback",       href: "#feedback",                           icon: MessageCircle, footer: true, action: "feedback" },
+  { label: "Help & support", href: "mailto:support@hireoven.com",         icon: LifeBuoy,      footer: true },
 ]
 
 export function isDashboardNavActive(pathname: string, href: string): boolean {
