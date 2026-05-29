@@ -9,20 +9,38 @@ import {
   CreditCard,
   ExternalLink,
   Globe2,
+  GraduationCap,
+  Headphones,
   Loader2,
+  Plus,
   Receipt,
   ShieldCheck,
   Sparkles,
   TrendingUp,
+  Zap,
 } from "lucide-react"
 import { useSubscription } from "@/lib/hooks/useSubscription"
 import FeatureRow from "@/components/pricing/FeatureRow"
 import { cn } from "@/lib/utils"
 import { getPlanAmountCents, PLAN_COMPARISON_ROWS, type BillingInterval, type PlanKey } from "@/lib/pricing"
+import {
+  FEATURE_QUOTAS,
+  METERED_FEATURE_KEYS,
+  type MeteredFeature,
+  type QuotaConfig,
+  type QuotaState,
+} from "@/lib/usage/quotas"
+import { FEATURE_PACKS, type PackKey } from "@/lib/billing/packs"
 
 export interface UsageData {
-  cover_letters_used: number
-  analyses_used: number
+  plan: string
+  quotas: Record<MeteredFeature, QuotaState>
+  config: Record<MeteredFeature, QuotaConfig>
+  packBalances: Record<MeteredFeature, number>
+  interviewCredits: {
+    balance: number
+    pendingProMaxGrant: number
+  }
 }
 
 export interface BillingInfo {
@@ -166,6 +184,17 @@ export default function BillingPageClient({
   const [feedbackReason, setFeedbackReason] = useState("")
   const [feedbackDetails, setFeedbackDetails] = useState("")
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false)
+  const [promoInput, setPromoInput] = useState("")
+  const [promoCode, setPromoCode] = useState<string | null>(null)
+  const [promoLabel, setPromoLabel] = useState<string | null>(null)
+  const [promoError, setPromoError] = useState<string | null>(null)
+  const [promoChecking, setPromoChecking] = useState(false)
+  const [studentStatus, setStudentStatus] = useState<{ isStudent: boolean; email: string | null } | null>(null)
+  const [studentEmailInput, setStudentEmailInput] = useState("")
+  const [studentCodeInput, setStudentCodeInput] = useState("")
+  const [studentStep, setStudentStep] = useState<"email" | "code" | "verified">("email")
+  const [studentError, setStudentError] = useState<string | null>(null)
+  const [studentBusy, setStudentBusy] = useState(false)
   const currentPlanForHistory = normalizeUiPlan(billing?.plan ?? plan ?? "free")
   const shouldLoadHistory = currentPlanForHistory === "pro" || currentPlanForHistory === "pro_max"
 
@@ -202,6 +231,18 @@ export default function BillingPageClient({
       .finally(() => setHistoryLoaded(true))
   }, [historyLoaded, shouldLoadHistory])
 
+  useEffect(() => {
+    fetch("/api/student/verify")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { isStudent?: boolean; email?: string | null } | null) => {
+        if (!data) return
+        const next = { isStudent: Boolean(data.isStudent), email: data.email ?? null }
+        setStudentStatus(next)
+        if (next.isStudent) setStudentStep("verified")
+      })
+      .catch(() => {})
+  }, [])
+
   async function openPortal() {
     setPortalLoading(true)
     const res = await fetch("/api/stripe/portal", { method: "POST" })
@@ -214,7 +255,127 @@ export default function BillingPageClient({
     const res = await fetch("/api/stripe/checkout", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ plan: targetPlan, interval: targetInterval }),
+      body: JSON.stringify({
+        plan: targetPlan,
+        interval: targetInterval,
+        ...(promoCode ? { promoCode } : {}),
+      }),
+    })
+    const data = await res.json()
+    if (data.url) {
+      window.location.href = data.url
+      return
+    }
+    if (data.error) setPromoError(data.error)
+  }
+
+  async function validatePromo() {
+    const raw = promoInput.trim()
+    if (!raw) {
+      setPromoError("Enter a code.")
+      return
+    }
+    setPromoChecking(true)
+    setPromoError(null)
+    try {
+      const res = await fetch("/api/stripe/promo/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: raw }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setPromoCode(null)
+        setPromoLabel(null)
+        setPromoError(data.error ?? "Couldn't validate that code.")
+        return
+      }
+      setPromoCode(data.code)
+      setPromoLabel(data.label)
+      setPromoError(null)
+    } catch {
+      setPromoError("Couldn't reach the server. Try again.")
+    } finally {
+      setPromoChecking(false)
+    }
+  }
+
+  function clearPromo() {
+    setPromoInput("")
+    setPromoCode(null)
+    setPromoLabel(null)
+    setPromoError(null)
+  }
+
+  async function sendStudentCode() {
+    const email = studentEmailInput.trim().toLowerCase()
+    if (!email) {
+      setStudentError("Enter your school email.")
+      return
+    }
+    setStudentBusy(true)
+    setStudentError(null)
+    try {
+      const res = await fetch("/api/student/verify/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setStudentError(data.error ?? "Couldn't send the code.")
+        return
+      }
+      setStudentStep("code")
+      setStudentError(null)
+    } catch {
+      setStudentError("Couldn't reach the server. Try again.")
+    } finally {
+      setStudentBusy(false)
+    }
+  }
+
+  async function confirmStudentCode() {
+    const code = studentCodeInput.trim()
+    if (!code) {
+      setStudentError("Enter the code from your email.")
+      return
+    }
+    setStudentBusy(true)
+    setStudentError(null)
+    try {
+      const res = await fetch("/api/student/verify/confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setStudentError(data.error ?? "Couldn't verify that code.")
+        return
+      }
+      setStudentStatus({ isStudent: true, email: data.email ?? studentEmailInput.trim().toLowerCase() })
+      setStudentStep("verified")
+      setStudentCodeInput("")
+      setStudentError(null)
+    } catch {
+      setStudentError("Couldn't reach the server. Try again.")
+    } finally {
+      setStudentBusy(false)
+    }
+  }
+
+  function restartStudentFlow() {
+    setStudentStep("email")
+    setStudentCodeInput("")
+    setStudentError(null)
+  }
+
+  async function buyPack(packKey: PackKey) {
+    const res = await fetch("/api/billing/packs/checkout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pack: packKey, returnUrl: "/dashboard/billing" }),
     })
     const data = await res.json()
     if (data.url) window.location.href = data.url
@@ -356,24 +517,88 @@ export default function BillingPageClient({
           </div>
         </section>
 
-        {/* ── Usage ── */}
-        {isPro && usage && (
+        {/* ── Usage meters ── */}
+        {usage && usage.quotas && (
           <section className="mb-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_2px_12px_rgba(15,23,42,0.04)]">
             <div className="flex items-center gap-2 border-b border-slate-100 px-6 py-4">
               <TrendingUp className="h-4 w-4 text-slate-500" aria-hidden />
-              <h2 className="text-sm font-semibold text-slate-900">This billing period</h2>
+              <h2 className="text-sm font-semibold text-slate-900">This month&apos;s usage</h2>
             </div>
-            <div className="grid gap-4 p-6 sm:grid-cols-2">
-              <UsageMeter
-                label="Cover letters"
-                used={usage.cover_letters_used}
-                limit={currentPlan === "pro_max" ? null : 25}
-              />
-              <UsageMeter
-                label="Deep analyses"
-                used={usage.analyses_used}
-                limit={currentPlan === "pro_max" ? null : 20}
-              />
+            <div className="grid gap-3 p-6 sm:grid-cols-2">
+              {METERED_FEATURE_KEYS.map((feature) => {
+                const config = FEATURE_QUOTAS[feature]
+                const quota = usage.quotas[feature]
+                return (
+                  <UsageMeter
+                    key={feature}
+                    label={config.label}
+                    period={config.period}
+                    used={quota?.used ?? 0}
+                    limit={quota?.limit ?? 0}
+                    packRemaining={usage.packBalances?.[feature] ?? 0}
+                  />
+                )
+              })}
+            </div>
+          </section>
+        )}
+
+        {/* ── Interview credits ── */}
+        {usage && usage.interviewCredits && (
+          <section className="mb-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_2px_12px_rgba(15,23,42,0.04)]">
+            <div className="flex items-center gap-2 border-b border-slate-100 px-6 py-4">
+              <Headphones className="h-4 w-4 text-slate-500" aria-hidden />
+              <h2 className="text-sm font-semibold text-slate-900">Live interview credits</h2>
+            </div>
+            <div className="flex flex-col gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-[28px] font-bold tabular-nums text-slate-900">
+                  {(usage.interviewCredits.balance ?? 0).toLocaleString()}
+                  <span className="ml-1 text-sm font-medium text-slate-500">
+                    {usage.interviewCredits.balance === 1 ? "credit" : "credits"}
+                  </span>
+                </p>
+                <p className="mt-1 text-[13px] text-slate-500">
+                  1 credit = 1 live voice + webcam interview session.
+                  {currentPlan === "pro_max" && " You get 1 free credit every 28 days."}
+                </p>
+              </div>
+              <Link
+                href="/dashboard/interview"
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+              >
+                <Plus className="h-3.5 w-3.5" aria-hidden />
+                Buy interview credits
+              </Link>
+            </div>
+          </section>
+        )}
+
+        {/* ── Top-up packs ── */}
+        {usage && (
+          <section className="mb-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_2px_12px_rgba(15,23,42,0.04)]">
+            <div className="flex items-center gap-2 border-b border-slate-100 px-6 py-4">
+              <Zap className="h-4 w-4 text-amber-500" aria-hidden />
+              <h2 className="text-sm font-semibold text-slate-900">Top-up packs</h2>
+            </div>
+            <div className="px-6 py-4">
+              <p className="text-[13px] text-slate-500">
+                Hitting your monthly cap? Buy extra credits à la carte. Packs never expire and stack on top of your plan&apos;s monthly allowance.
+              </p>
+            </div>
+            <div className="grid gap-2 px-6 pb-6 sm:grid-cols-2">
+              {(Object.entries(FEATURE_PACKS) as [PackKey, typeof FEATURE_PACKS[PackKey]][]).map(
+                ([packKey, pack]) => (
+                  <PackCard
+                    key={packKey}
+                    packKey={packKey}
+                    label={pack.label}
+                    description={pack.description}
+                    amountCents={pack.amountCents}
+                    onBuy={buyPack}
+                  />
+                )
+              )}
             </div>
           </section>
         )}
@@ -544,13 +769,201 @@ export default function BillingPageClient({
           </section>
         )}
 
+        {/* ── Student verification ── */}
+        {!isPro && (
+          <section className="mb-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_2px_12px_rgba(15,23,42,0.04)]">
+            <div className="flex items-center gap-2 border-b border-slate-100 px-6 py-4">
+              <GraduationCap className="h-4 w-4 text-indigo-500" aria-hidden />
+              <h2 className="text-sm font-semibold text-slate-900">Student discount — 30% off Pro</h2>
+            </div>
+            <div className="p-6">
+              {studentStep === "verified" && studentStatus?.isStudent ? (
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-indigo-700">
+                      Student status verified
+                    </p>
+                    <p className="mt-0.5 text-[13px] text-slate-500">
+                      {studentStatus.email
+                        ? `Verified for ${studentStatus.email}. `
+                        : ""}
+                      30% off Pro will be applied automatically at checkout.
+                    </p>
+                  </div>
+                </div>
+              ) : studentStep === "email" ? (
+                <div>
+                  <p className="mb-3 text-[13px] text-slate-500">
+                    Use your school&apos;s <span className="font-mono">.edu</span> email. We&apos;ll send a 6-digit code to confirm it&apos;s yours.
+                  </p>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
+                    <input
+                      type="email"
+                      value={studentEmailInput}
+                      onChange={(event) => {
+                        setStudentEmailInput(event.target.value)
+                        if (studentError) setStudentError(null)
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault()
+                          void sendStudentCode()
+                        }
+                      }}
+                      placeholder="you@school.edu"
+                      className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                      autoCorrect="off"
+                      spellCheck={false}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void sendStudentCode()}
+                      disabled={studentBusy || !studentEmailInput.trim()}
+                      className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:opacity-50"
+                    >
+                      {studentBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Send code"}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <p className="mb-3 text-[13px] text-slate-500">
+                    We sent a code to <span className="font-mono">{studentEmailInput || "your school email"}</span>. It expires in 15 minutes.
+                  </p>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={6}
+                      value={studentCodeInput}
+                      onChange={(event) => {
+                        setStudentCodeInput(event.target.value.replace(/\D/g, ""))
+                        if (studentError) setStudentError(null)
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault()
+                          void confirmStudentCode()
+                        }
+                      }}
+                      placeholder="123456"
+                      className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2.5 font-mono text-lg tracking-[0.4em] text-slate-800 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void confirmStudentCode()}
+                      disabled={studentBusy || studentCodeInput.length !== 6}
+                      className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:opacity-50"
+                    >
+                      {studentBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Verify"}
+                    </button>
+                  </div>
+                  <div className="mt-2 flex gap-3 text-[12px]">
+                    <button
+                      type="button"
+                      onClick={restartStudentFlow}
+                      className="text-slate-500 underline-offset-4 hover:text-slate-700 hover:underline"
+                    >
+                      Use a different email
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void sendStudentCode()}
+                      disabled={studentBusy}
+                      className="text-slate-500 underline-offset-4 hover:text-slate-700 hover:underline disabled:opacity-50"
+                    >
+                      Resend code
+                    </button>
+                  </div>
+                </div>
+              )}
+              {studentError && (
+                <p className="mt-2 text-[12.5px] font-medium text-rose-600">{studentError}</p>
+              )}
+            </div>
+          </section>
+        )}
+
+        {/* ── Promo code ── */}
+        {!isPro && (
+          <section className="mb-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_2px_12px_rgba(15,23,42,0.04)]">
+            <div className="flex items-center gap-2 border-b border-slate-100 px-6 py-4">
+              <Sparkles className="h-4 w-4 text-emerald-500" aria-hidden />
+              <h2 className="text-sm font-semibold text-slate-900">Have a promo code?</h2>
+            </div>
+            <div className="p-6">
+              {promoCode && promoLabel ? (
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-emerald-700">
+                      Code <span className="rounded bg-emerald-50 px-1.5 py-0.5 font-mono">{promoCode}</span> applied
+                    </p>
+                    <p className="mt-0.5 text-[13px] text-slate-500">{promoLabel}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={clearPromo}
+                    className="self-start rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-[12.5px] font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 sm:self-auto"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
+                  <input
+                    type="text"
+                    value={promoInput}
+                    onChange={(event) => {
+                      setPromoInput(event.target.value)
+                      if (promoError) setPromoError(null)
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault()
+                        void validatePromo()
+                      }
+                    }}
+                    placeholder="LAUNCH50"
+                    className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2.5 font-mono text-sm uppercase tracking-wider text-slate-800 outline-none transition focus:border-[#FF5C18] focus:ring-2 focus:ring-[#FFD2B8]"
+                    autoCapitalize="characters"
+                    autoCorrect="off"
+                    spellCheck={false}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void validatePromo()}
+                    disabled={promoChecking || !promoInput.trim()}
+                    className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:opacity-50"
+                  >
+                    {promoChecking ? <Loader2 className="h-4 w-4 animate-spin" /> : "Apply"}
+                  </button>
+                </div>
+              )}
+              {promoError && (
+                <p className="mt-2 text-[12.5px] font-medium text-rose-600">{promoError}</p>
+              )}
+              {!promoCode && (
+                <p className="mt-2 text-[11.5px] text-slate-400">
+                  Codes apply at checkout and stack on top of trial/yearly discounts where Stripe allows it.
+                </p>
+              )}
+            </div>
+          </section>
+        )}
+
         {/* ── Upgrade CTAs ── */}
         {currentPlan === "free" && (
           <UpgradeCard
             tone="sky"
             kicker="Recommended"
             title="Upgrade to Pro"
-            description="Unlock AI resume tools, autofill, deep analyses, and unlimited alerts."
+            description={
+              promoCode
+                ? `Promo ${promoCode} will be applied at checkout. ${promoLabel ?? ""}`
+                : studentStatus?.isStudent
+                  ? "Student discount (30% off) will be applied automatically at checkout."
+                  : "Unlock AI resume tools, autofill, deep analyses, and unlimited alerts."
+            }
             ctaLabel="Start Pro trial"
             onClick={() => startCheckout("pro")}
           />
@@ -561,7 +974,13 @@ export default function BillingPageClient({
             tone="orange"
             kicker="For advanced preparation"
             title="Upgrade to Pro Max"
-            description="Live voice interviews, Scout strategy, and unlimited AI usage."
+            description={
+              promoCode
+                ? `Promo ${promoCode} will be applied at checkout. ${promoLabel ?? ""}`
+                : studentStatus?.isStudent
+                  ? "Student discount (30% off) will be applied automatically at checkout."
+                  : "Live voice interviews, Scout strategy, and unlimited AI usage."
+            }
             ctaLabel="Upgrade"
             onClick={() => startCheckout("pro_max", resolvedInterval)}
           />
@@ -700,47 +1119,100 @@ function UpgradeCard({
   )
 }
 
-function UsageMeter({ label, used, limit }: { label: string; used: number; limit: number | null }) {
-  const pct = limit ? Math.min(100, Math.round((used / limit) * 100)) : 100
-  const isUnlimited = limit === null
-  const isNearLimit = !isUnlimited && pct >= 80
-  const isAtLimit = !isUnlimited && pct >= 100
+function formatPackAmount(cents: number): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(cents / 100)
+}
 
-  const barColor = isUnlimited
-    ? "bg-emerald-500"
-    : isAtLimit
-      ? "bg-rose-500"
-      : isNearLimit
-        ? "bg-amber-500"
-        : "bg-[#0369A1]"
+function PackCard({
+  packKey,
+  label,
+  description,
+  amountCents,
+  onBuy,
+}: {
+  packKey: PackKey
+  label: string
+  description: string
+  amountCents: number
+  onBuy: (key: PackKey) => void
+}) {
+  return (
+    <div className="flex items-start justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3 transition hover:border-slate-300">
+      <div className="min-w-0">
+        <p className="text-[13.5px] font-semibold text-slate-900">{label}</p>
+        <p className="mt-0.5 text-[12px] text-slate-500">{description}</p>
+      </div>
+      <button
+        type="button"
+        onClick={() => onBuy(packKey)}
+        className="shrink-0 rounded-lg bg-slate-900 px-3 py-1.5 text-[12.5px] font-semibold text-white transition hover:bg-slate-800"
+      >
+        {formatPackAmount(amountCents)}
+      </button>
+    </div>
+  )
+}
+
+function UsageMeter({
+  label,
+  period,
+  used,
+  limit,
+  packRemaining = 0,
+}: {
+  label: string
+  period: "day" | "month"
+  used: number
+  limit: number
+  packRemaining?: number
+}) {
+  const isZero = limit === 0 && packRemaining === 0
+  const pct = limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0
+  const isNearLimit = limit > 0 && pct >= 80
+  const isAtLimit = limit > 0 && pct >= 100
+  const periodWord = period === "day" ? "Today" : "This month"
+
+  const barColor = isAtLimit
+    ? packRemaining > 0
+      ? "bg-amber-500"
+      : "bg-rose-500"
+    : isNearLimit
+      ? "bg-amber-500"
+      : "bg-[#0369A1]"
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4 transition hover:border-slate-300">
-      <div className="flex items-baseline justify-between">
+      <div className="flex items-baseline justify-between gap-2">
         <p className="text-[12px] font-semibold uppercase tracking-widest text-slate-500">{label}</p>
-        {isUnlimited ? (
-          <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">Unlimited</span>
-        ) : (
-          <span className={cn(
-            "text-[11px] font-semibold tabular-nums",
-            isAtLimit ? "text-rose-600" : isNearLimit ? "text-amber-600" : "text-slate-500"
-          )}>
-            {pct}%
-          </span>
-        )}
+        <span className="text-[11px] text-slate-400">{periodWord}</span>
       </div>
       <p className="mt-1 text-[20px] font-bold tabular-nums text-slate-900">
         {used.toLocaleString()}
-        {!isUnlimited && (
-          <span className="text-[14px] font-medium text-slate-400"> / {limit?.toLocaleString()}</span>
+        <span className="text-[14px] font-medium text-slate-400"> / {limit.toLocaleString()}</span>
+        {packRemaining > 0 && (
+          <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10.5px] font-semibold text-amber-700">
+            <Zap className="h-2.5 w-2.5" aria-hidden /> +{packRemaining} pack
+          </span>
         )}
       </p>
       <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100">
         <div
-          className={cn("h-full rounded-full transition-all", barColor)}
-          style={{ width: `${isUnlimited ? 100 : pct}%` }}
+          className={cn("h-full rounded-full transition-all", isZero ? "bg-slate-300" : barColor)}
+          style={{ width: `${pct}%` }}
         />
       </div>
+      {isAtLimit && (
+        <p className="mt-2 text-[11.5px] font-medium text-rose-600">
+          {packRemaining > 0
+            ? `Cap reached — next call uses 1 pack credit (${packRemaining} left).`
+            : "Cap reached — buy a top-up pack below to keep going."}
+        </p>
+      )}
     </div>
   )
 }

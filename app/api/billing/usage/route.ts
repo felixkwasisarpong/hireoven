@@ -1,44 +1,54 @@
 import { NextResponse } from "next/server"
+import { getUserPlan } from "@/lib/gates/server-gate"
 import { getPostgresPool } from "@/lib/postgres/server"
-import { createClient } from "@/lib/supabase/server"
+import { getBalance } from "@/lib/scout/interview/credits"
+import { FEATURE_QUOTAS, METERED_FEATURE_KEYS, type MeteredFeature } from "@/lib/usage/quotas"
+import { getAllQuotas } from "@/lib/usage/quotas-server"
 
+export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 export async function GET() {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
+  const { userId, plan } = await getUserPlan()
+  if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  const monthStart = new Date()
-  monthStart.setUTCDate(1)
-  monthStart.setUTCHours(0, 0, 0, 0)
-
-  const pool = getPostgresPool()
-
-  const [coverLetters, analyses] = await Promise.all([
-    pool.query<{ count: string }>(
-      `SELECT COUNT(*)::text AS count
-       FROM cover_letters
+  const [quotas, packRows, interviewBalance] = await Promise.all([
+    getAllQuotas(userId, plan),
+    getPostgresPool().query<{ feature: string; remaining: string }>(
+      `SELECT feature, COALESCE(SUM(credits_remaining), 0)::text AS remaining
+       FROM feature_credit_packs
        WHERE user_id = $1
-         AND created_at >= $2`,
-      [user.id, monthStart.toISOString()]
+         AND credits_remaining > 0
+         AND (expires_at IS NULL OR expires_at > NOW())
+       GROUP BY feature`,
+      [userId]
     ),
-    pool.query<{ count: string }>(
-      `SELECT COUNT(*)::text AS count
-       FROM resume_analyses
-       WHERE user_id = $1
-         AND created_at >= $2`,
-      [user.id, monthStart.toISOString()]
-    ),
+    getBalance(userId, plan),
   ])
 
+  const packBalances = METERED_FEATURE_KEYS.reduce<Record<MeteredFeature, number>>(
+    (acc, feature) => {
+      acc[feature] = 0
+      return acc
+    },
+    {} as Record<MeteredFeature, number>
+  )
+  for (const row of packRows.rows) {
+    if ((METERED_FEATURE_KEYS as string[]).includes(row.feature)) {
+      packBalances[row.feature as MeteredFeature] = Number(row.remaining)
+    }
+  }
+
   return NextResponse.json({
-    cover_letters_used: Number(coverLetters.rows[0]?.count ?? 0),
-    analyses_used: Number(analyses.rows[0]?.count ?? 0),
+    plan: plan ?? "free",
+    quotas,
+    config: FEATURE_QUOTAS,
+    packBalances,
+    interviewCredits: {
+      balance: interviewBalance.balance,
+      pendingProMaxGrant: interviewBalance.pendingProMaxGrant,
+    },
   })
 }
