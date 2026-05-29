@@ -90,9 +90,39 @@ export function buildSubscriptionSnapshot(
 ): SubscriptionSnapshot {
   const status = normalizeSubscriptionStatus(row?.status)
   const trialEnd = row?.trial_end ?? row?.current_period_end ?? null
+  const rawPlan = normalizeSubscriptionPlan(row?.plan)
+
+  // If a subscription is canceled and the paid period has ended, the user has
+  // no entitlements left. Demote to free so the client (and any
+  // useSubscription().isPro check) treats them correctly. We keep the raw
+  // status/dates on the snapshot so the billing UI can still show "your
+  // Pro Max plan ended on May 27" if it wants.
+  const periodEndMs = row?.current_period_end
+    ? new Date(row.current_period_end).getTime()
+    : null
+  const periodExpired = typeof periodEndMs === "number"
+    && Number.isFinite(periodEndMs)
+    && periodEndMs < nowMs
+  const fullyExpired = status === "canceled" && periodExpired
+
+  if (fullyExpired) {
+    // The paid window is over. Treat the user as truly free: empty interval,
+    // no amount, no period end. Keeps the billing UI from showing "Access
+    // until [past date]" + "Auto-renews" on the same card.
+    return {
+      plan: "free",
+      status: "free",
+      currentPeriodEnd: null,
+      billingInterval: null,
+      amountCents: null,
+      cancelAtPeriodEnd: false,
+      trialEnd: null,
+      trialDaysRemaining: null,
+    }
+  }
 
   return {
-    plan: normalizeSubscriptionPlan(row?.plan),
+    plan: rawPlan,
     status,
     currentPeriodEnd: row?.current_period_end ?? null,
     billingInterval: normalizeBillingInterval(row?.billing_interval),

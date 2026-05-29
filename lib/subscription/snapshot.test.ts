@@ -95,3 +95,48 @@ test("evaluateSubscriptionSnapshotConsistency flags free status with cancel flag
   assert.equal(result.ok, false)
   assert.equal(result.issues.some((issue) => issue.code === "free_status_with_cancel_flag"), true)
 })
+
+test("buildSubscriptionSnapshot demotes canceled+expired to fully free", () => {
+  const now = Date.parse("2026-05-29T00:00:00.000Z")
+  const snapshot = buildSubscriptionSnapshot(
+    {
+      plan: "pro_international",
+      status: "canceled",
+      current_period_end: "2026-05-27T15:54:22.158Z",
+      billing_interval: "monthly",
+      amount_cents: 2900,
+      cancel_at_period_end: true,
+      trial_end: null,
+    },
+    now
+  )
+
+  assert.equal(snapshot.plan, "free")
+  assert.equal(snapshot.status, "free")
+  assert.equal(snapshot.currentPeriodEnd, null)
+  assert.equal(snapshot.amountCents, null)
+  assert.equal(snapshot.billingInterval, null)
+  assert.equal(snapshot.cancelAtPeriodEnd, false)
+})
+
+test("buildSubscriptionSnapshot preserves canceled subscription with future period_end", () => {
+  // User canceled but still has paid time remaining.
+  const now = Date.parse("2026-05-29T00:00:00.000Z")
+  const snapshot = buildSubscriptionSnapshot(
+    {
+      plan: "pro",
+      status: "canceled",
+      current_period_end: "2026-06-15T00:00:00.000Z",
+      billing_interval: "monthly",
+      amount_cents: 1900,
+      cancel_at_period_end: true,
+      trial_end: null,
+    },
+    now
+  )
+
+  // Still has Pro until June 15 — don't demote yet.
+  assert.equal(snapshot.plan, "pro")
+  assert.equal(snapshot.status, "canceled")
+  assert.equal(snapshot.currentPeriodEnd, "2026-06-15T00:00:00.000Z")
+})

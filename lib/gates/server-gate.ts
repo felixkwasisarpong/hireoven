@@ -18,11 +18,17 @@ function normalisePlan(raw: string | null | undefined): Plan {
 export async function getPlanForUserId(userId: string): Promise<Plan> {
   const pool = getPostgresPool()
   try {
+    // Only consider subscriptions whose paid window hasn't expired. A row in
+    // past_due / unpaid whose current_period_end is in the past has no
+    // active entitlements left — Stripe will have moved it to canceled
+    // shortly via the webhook, but we don't want to trust the row in the
+    // gap.
     const result = await pool.query<{ plan: string | null }>(
       `SELECT plan
        FROM subscriptions
        WHERE user_id = $1
          AND status IN ('active', 'trialing', 'past_due', 'unpaid')
+         AND (current_period_end IS NULL OR current_period_end > now())
        ORDER BY updated_at DESC NULLS LAST, created_at DESC
        LIMIT 1`,
       [userId]
