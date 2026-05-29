@@ -74,31 +74,40 @@ export async function POST(request: Request) {
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
 
-  const session = await stripe.checkout.sessions.create({
-    customer: customerId,
-    mode: "payment",
-    payment_method_types: ["card"],
-    line_items: [{
-      quantity: 1,
-      price_data: {
-        currency: process.env.STRIPE_CURRENCY ?? "usd",
-        unit_amount: pack.amountCents,
-        product_data: {
-          name: `Hireoven Live Interview Credits`,
-          description: pack.label,
-          metadata: { credits: String(pack.credits) },
+  try {
+    const session = await stripe.checkout.sessions.create({
+      customer: customerId,
+      mode: "payment",
+      payment_method_types: ["card"],
+      line_items: [{
+        quantity: 1,
+        price_data: {
+          currency: process.env.STRIPE_CURRENCY ?? "usd",
+          unit_amount: pack.amountCents,
+          product_data: {
+            name: `Hireoven Live Interview Credits`,
+            description: pack.label,
+            metadata: { credits: String(pack.credits) },
+          },
         },
+      }],
+      metadata: {
+        userId,
+        type: "live_interview_credits",
+        credits: String(pack.credits),
+        pack: packKey!,
       },
-    }],
-    metadata: {
-      userId,
-      type: "live_interview_credits",
-      credits: String(pack.credits),
-      pack: packKey!,
-    },
-    success_url: `${appUrl}/dashboard/interview?credits=purchased&amount=${pack.credits}`,
-    cancel_url:  `${appUrl}/dashboard/interview`,
-  })
+      success_url: `${appUrl}/dashboard/interview?credits=purchased&amount=${pack.credits}`,
+      cancel_url:  `${appUrl}/dashboard/interview`,
+    })
 
-  return NextResponse.json({ url: session.url, credits: pack.credits, amountCents: pack.amountCents })
+    return NextResponse.json({ url: session.url, credits: pack.credits, amountCents: pack.amountCents })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown Stripe error"
+    console.error("[interview/credits/checkout] session create failed:", err)
+    return NextResponse.json(
+      { error: `Couldn't start checkout: ${message}`, code: "STRIPE_SESSION_FAILED" },
+      { status: 502 }
+    )
+  }
 }

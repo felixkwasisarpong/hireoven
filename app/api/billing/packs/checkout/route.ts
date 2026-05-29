@@ -67,41 +67,50 @@ export async function POST(request: Request) {
     ? body.returnUrl
     : "/dashboard/billing"
 
-  const session = await stripe.checkout.sessions.create({
-    customer: customerId,
-    mode: "payment",
-    payment_method_types: ["card"],
-    line_items: [{
-      quantity: 1,
-      price_data: {
-        currency: process.env.STRIPE_CURRENCY ?? "usd",
-        unit_amount: pack.amountCents,
-        product_data: {
-          name: pack.label,
-          description: pack.description,
-          metadata: {
-            feature: pack.feature,
-            credits: String(pack.credits),
+  try {
+    const session = await stripe.checkout.sessions.create({
+      customer: customerId,
+      mode: "payment",
+      payment_method_types: ["card"],
+      line_items: [{
+        quantity: 1,
+        price_data: {
+          currency: process.env.STRIPE_CURRENCY ?? "usd",
+          unit_amount: pack.amountCents,
+          product_data: {
+            name: pack.label,
+            description: pack.description,
+            metadata: {
+              feature: pack.feature,
+              credits: String(pack.credits),
+            },
           },
         },
+      }],
+      metadata: {
+        userId,
+        type: "feature_credit_pack",
+        pack: body.pack,
+        feature: pack.feature,
+        credits: String(pack.credits),
+        amountCents: String(pack.amountCents),
       },
-    }],
-    metadata: {
-      userId,
-      type: "feature_credit_pack",
-      pack: body.pack,
-      feature: pack.feature,
-      credits: String(pack.credits),
-      amountCents: String(pack.amountCents),
-    },
-    success_url: `${appUrl}${returnUrl}?pack=purchased&feature=${pack.feature}&credits=${pack.credits}`,
-    cancel_url: `${appUrl}${returnUrl}`,
-  })
+      success_url: `${appUrl}${returnUrl}?pack=purchased&feature=${pack.feature}&credits=${pack.credits}`,
+      cancel_url: `${appUrl}${returnUrl}`,
+    })
 
-  return NextResponse.json({
-    url: session.url,
-    pack: body.pack,
-    credits: pack.credits,
-    amountCents: pack.amountCents,
-  })
+    return NextResponse.json({
+      url: session.url,
+      pack: body.pack,
+      credits: pack.credits,
+      amountCents: pack.amountCents,
+    })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown Stripe error"
+    console.error("[billing/packs/checkout] session create failed:", err)
+    return NextResponse.json(
+      { error: `Couldn't start checkout: ${message}`, code: "STRIPE_SESSION_FAILED" },
+      { status: 502 }
+    )
+  }
 }

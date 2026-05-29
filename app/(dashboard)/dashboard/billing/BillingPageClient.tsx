@@ -273,21 +273,31 @@ export default function BillingPageClient({
   }
 
   async function startCheckout(targetPlan: PlanKey, targetInterval: BillingInterval = "monthly") {
-    const res = await fetch("/api/stripe/checkout", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        plan: targetPlan,
-        interval: targetInterval,
-        ...(promoCode ? { promoCode } : {}),
-      }),
-    })
-    const data = await res.json()
-    if (data.url) {
-      window.location.href = data.url
-      return
+    setPromoError(null)
+    try {
+      const res = await fetch("/api/stripe/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          plan: targetPlan,
+          interval: targetInterval,
+          ...(promoCode ? { promoCode } : {}),
+        }),
+      })
+      const data = await res.json().catch(() => null) as { url?: string; error?: string } | null
+      if (data?.url) {
+        window.location.href = data.url
+        return
+      }
+      setPromoError(
+        data?.error
+          ?? (res.status >= 500
+            ? "Stripe is having issues — try again in a moment."
+            : "Couldn't start checkout. Try again.")
+      )
+    } catch {
+      setPromoError("Couldn't reach the server. Try again.")
     }
-    if (data.error) setPromoError(data.error)
   }
 
   async function validatePromo() {
@@ -401,12 +411,17 @@ export default function BillingPageClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ pack: packKey }),
       })
-      const data = await res.json()
-      if (data.url) {
+      const data = await res.json().catch(() => null) as { url?: string; error?: string } | null
+      if (data?.url) {
         window.location.href = data.url
         return
       }
-      setCreditsError(data.error ?? "Couldn't start checkout.")
+      setCreditsError(
+        data?.error
+          ?? (res.status >= 500
+            ? "Stripe is having issues — try again in a moment."
+            : "Couldn't start checkout. Try again.")
+      )
     } catch {
       setCreditsError("Couldn't reach the server. Try again.")
     } finally {
@@ -415,13 +430,17 @@ export default function BillingPageClient({
   }
 
   async function buyPack(packKey: PackKey) {
-    const res = await fetch("/api/billing/packs/checkout", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pack: packKey, returnUrl: "/dashboard/billing" }),
-    })
-    const data = await res.json()
-    if (data.url) window.location.href = data.url
+    try {
+      const res = await fetch("/api/billing/packs/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pack: packKey, returnUrl: "/dashboard/billing" }),
+      })
+      const data = await res.json().catch(() => null) as { url?: string; error?: string } | null
+      if (data?.url) window.location.href = data.url
+    } catch (err) {
+      console.warn("[billing] pack checkout failed:", err)
+    }
   }
 
   async function submitCancellationFeedback() {

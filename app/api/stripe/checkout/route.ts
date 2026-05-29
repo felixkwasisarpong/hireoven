@@ -174,7 +174,24 @@ export async function POST(request: Request) {
     sessionParams.allow_promotion_codes = true
   }
 
-  const session = await stripe.checkout.sessions.create(sessionParams)
-
-  return NextResponse.json({ url: session.url })
+  try {
+    const session = await stripe.checkout.sessions.create(sessionParams)
+    if (!session.url) {
+      return NextResponse.json(
+        { error: "Stripe didn't return a checkout URL. Try again." },
+        { status: 502 }
+      )
+    }
+    return NextResponse.json({ url: session.url })
+  } catch (err) {
+    // Stripe SDK throws on bad price IDs, expired promotion codes, customer
+    // mismatches, etc. Surface a JSON error instead of letting Next.js render
+    // a 500 HTML page that the client can't parse.
+    const message = err instanceof Error ? err.message : "Unknown Stripe error"
+    console.error("[stripe/checkout] session create failed:", err)
+    return NextResponse.json(
+      { error: `Couldn't start checkout: ${message}`, code: "STRIPE_SESSION_FAILED" },
+      { status: 502 }
+    )
+  }
 }
