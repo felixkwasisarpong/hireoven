@@ -127,7 +127,14 @@ export async function POST(request: Request) {
   const profile = profileResult.rows[0]
   const existingSub = existingSubResult.rows[0]
 
-  let customerId = existingSub?.stripe_customer_id as string | undefined
+  // Only trust customer IDs that look like real Stripe customers (cus_*).
+  // Legacy seed/test rows used "manual_<uuid>" placeholders that Stripe
+  // rightfully rejects; treat those as missing so we create a real customer.
+  const rawCustomerId = existingSub?.stripe_customer_id as string | null | undefined
+  let customerId =
+    typeof rawCustomerId === "string" && rawCustomerId.startsWith("cus_")
+      ? rawCustomerId
+      : undefined
 
   if (!customerId) {
     const customer = await stripe.customers.create({

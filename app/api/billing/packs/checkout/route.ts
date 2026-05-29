@@ -46,7 +46,11 @@ export async function POST(request: Request) {
      ORDER BY created_at DESC LIMIT 1`,
     [userId]
   )
-  let customerId = subResult.rows[0]?.stripe_customer_id as string | undefined
+  const rawCustomerId = subResult.rows[0]?.stripe_customer_id as string | null | undefined
+  let customerId =
+    typeof rawCustomerId === "string" && rawCustomerId.startsWith("cus_")
+      ? rawCustomerId
+      : undefined
 
   if (!customerId) {
     const profileResult = await pool.query<{ email: string | null; full_name: string | null }>(
