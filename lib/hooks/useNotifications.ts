@@ -271,8 +271,23 @@ export function useNotifications(
           limit: String(pageSize),
           offset: String(nextOffset),
         })
-        const res = await fetch(`/api/notifications?${params}`)
-        if (!res.ok) throw new Error("Failed to fetch notifications")
+        const res = await fetch(`/api/notifications?${params}`, {
+          credentials: "include",
+        })
+        if (!res.ok) {
+          // Don't throw — bubbles up as an unhandled rejection and crashes the
+          // page. Common cases (401 after session expiry, transient 5xx) are
+          // recoverable; just log and leave state untouched so the next refresh
+          // can retry.
+          console.warn(`[useNotifications] fetch failed: ${res.status}`)
+          if (!append) {
+            setServerNotifications([])
+            setServerUnreadCount(0)
+            setHasMore(false)
+            setOffset(0)
+          }
+          return
+        }
 
         const { notifications: rows, unreadCount: count } = (await res.json()) as {
           notifications: AlertNotificationWithDetails[]
@@ -283,6 +298,8 @@ export function useNotifications(
         setOffset(nextOffset + rows.length)
         setHasMore(rows.length === pageSize)
         setServerUnreadCount(count)
+      } catch (err) {
+        console.warn("[useNotifications] fetch error:", err)
       } finally {
         setIsLoading(false)
       }
