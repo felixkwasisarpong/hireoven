@@ -20,6 +20,7 @@ import { getPostgresPool } from "@/lib/postgres/server"
 import { logApiUsage } from "@/lib/admin/usage"
 import { HAIKU_MODEL, ANTHROPIC_TIER_PRICING } from "@/lib/ai/anthropic-models"
 import { requireFeature } from "@/lib/gates/server-gate"
+import { requireQuota } from "@/lib/usage/server-quota"
 import { sanitizeGeneratedText, replaceEmDash } from "@/lib/text/sanitize-generated-text"
 
 export const runtime = "nodejs"
@@ -74,6 +75,9 @@ export async function POST(request: Request) {
   if (!resume) {
     return NextResponse.json({ error: "No resume found — upload one in Hireoven first." }, { status: 404 })
   }
+
+  const quota = await requireQuota(gate.userId, "autofill", gate.plan)
+  if (quota instanceof NextResponse) return quota
 
   // Build a compact resume context — prefer structured data over raw text
   const resumeContext = buildResumeContext(resume)

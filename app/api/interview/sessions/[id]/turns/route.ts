@@ -7,6 +7,7 @@ import { getPostgresPool } from "@/lib/postgres/server"
 import { SONNET_MODEL } from "@/lib/ai/anthropic-models"
 import { canAccess, requiredPlanFor } from "@/lib/gates"
 import { gateResponse, getPlanForUserId } from "@/lib/gates/server-gate"
+import { requireQuota } from "@/lib/usage/server-quota"
 import {
   getInterviewSession,
   appendTurn,
@@ -195,6 +196,10 @@ export async function POST(
     session.status = "active"
     session.startedAt = new Date()
   }
+
+  // Each text interview turn burns one interview_prep_turn credit.
+  const quota = await requireQuota(user.id, "interview_prep_turn", plan)
+  if (quota instanceof NextResponse) return quota
 
   // 4. Load existing turns
   const existingTurns = await getTurns(id)

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getUserPlan } from "@/lib/gates/server-gate"
 import { canAccess } from "@/lib/gates"
+import { requireQuota } from "@/lib/usage/server-quota"
 import { getScoutContext } from "@/lib/scout/context"
 import {
   MOCK_INTERVIEW_SYSTEM_PROMPT,
@@ -81,6 +82,13 @@ export async function POST(request: NextRequest) {
       },
       { status: 200 }
     )
+  }
+
+  // Free users get one Q1 preview without burning a credit; all other
+  // requests count against the monthly interview_prep_turn quota.
+  if (isPro || currentAnswer || questionIndex > 1) {
+    const quota = await requireQuota(user.id, "interview_prep_turn", plan)
+    if (quota instanceof NextResponse) return quota
   }
 
   // ── Build context ─────────────────────────────────────────────────────────

@@ -15,6 +15,7 @@ import { AI_TIMEOUTS } from "@/lib/scout/budget/router"
 import type { ScoutAIStrategy, ScoutAIStrategyGated } from "@/lib/scout/types"
 import { getUserPlan } from "@/lib/gates/server-gate"
 import { canAccess } from "@/lib/gates"
+import { requireQuota } from "@/lib/usage/server-quota"
 import { sanitizeGeneratedText } from "@/lib/text/sanitize-generated-text"
 
 export const runtime = "nodejs"
@@ -94,6 +95,10 @@ export async function POST(request: NextRequest) {
       }
       return NextResponse.json(sanitizeGeneratedText({ strategy, gated: null, isPremium: true, cached: true }))
     }
+
+    // Cache miss → this call will hit the LLM. Charge a strategy credit.
+    const quota = await requireQuota(user.id, "scout_strategy", plan)
+    if (quota instanceof NextResponse) return quota
 
     // Build Scout context + strategy board data in parallel
     const [context, board] = await Promise.all([

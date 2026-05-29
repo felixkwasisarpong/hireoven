@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { requireFeature } from "@/lib/gates/server-gate"
+import { requireQuota } from "@/lib/usage/server-quota"
 import { runCareerEngine } from "@/lib/scout/career/engine"
 import { logApiUsage } from "@/lib/admin/usage"
 import { sanitizeGeneratedText } from "@/lib/text/sanitize-generated-text"
@@ -18,6 +19,9 @@ export async function POST(request: NextRequest) {
   const objective = body.message?.trim()
 
   if (!objective) return NextResponse.json({ error: "message is required" }, { status: 400 })
+
+  const quota = await requireQuota(userId, "scout_strategy", gate.plan)
+  if (quota instanceof NextResponse) return quota
 
   try {
     const { getPostgresPool } = await import("@/lib/postgres/server")

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getUserPlan } from "@/lib/gates/server-gate"
 import { canAccess } from "@/lib/gates"
+import { requireQuota } from "@/lib/usage/server-quota"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { analyzeFollowUp } from "@/lib/scout/follow-up"
 import { HAIKU_MODEL } from "@/lib/ai/anthropic-models"
@@ -147,6 +148,9 @@ export async function POST(request: NextRequest) {
 
   if (analysis.status === "ready") {
     if (isPro) {
+      // Draft generation burns one Scout message against the daily quota.
+      const quota = await requireQuota(user.id, "scout_message", plan)
+      if (quota instanceof NextResponse) return quota
       draft = await generateDraft(app, user.id)
     } else {
       gated = true

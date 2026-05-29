@@ -4,6 +4,7 @@ import { logApiUsage } from "@/lib/admin/usage"
 import { ANTHROPIC_TIER_PRICING, SONNET_MODEL } from "@/lib/ai/anthropic-models"
 import { createClient } from "@/lib/supabase/server"
 import { requireFeature } from "@/lib/gates/server-gate"
+import { requireQuota } from "@/lib/usage/server-quota"
 import { replaceEmDash, sanitizeGeneratedText } from "@/lib/text/sanitize-generated-text"
 
 export const runtime = "nodejs"
@@ -29,6 +30,9 @@ export async function POST(request: Request) {
   if (!statement?.trim()) {
     return NextResponse.json({ error: "statement is required" }, { status: 400 })
   }
+
+  const quota = await requireQuota(gate.userId, "autofill", gate.plan)
+  if (quota instanceof NextResponse) return quota
 
   const message = await anthropic.messages.create({
     // This is user-facing copy with legal/immigration nuance; Sonnet is safer than Haiku.

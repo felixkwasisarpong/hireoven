@@ -72,7 +72,8 @@ export const FREE_FEATURES = [
   "Basic application tracker",
   "Resume upload (3 resumes)",
   "Match scores (requires resume)",
-  "Autofill (10/month)",
+  "Scout chat (15/month)",
+  "Autofill (5/month)",
   "No sponsored listings ever",
 ]
 
@@ -82,22 +83,28 @@ export const PRO_FEATURES = [
   "Unlimited resumes",
   "AI match scores on every job",
   "AI resume editor",
-  "Gap analysis against any job",
-  "Cover letters (25/month)",
-  "Deep resume analysis (20/month)",
-  "Autofill (50/month)",
+  "Scout chat (150/month)",
+  "Cover letters (15/month)",
+  "Deep resume analysis (8/month)",
+  "Resume tailors (20/month)",
+  "Autofill (75/month)",
+  "Interview prep turns (50/month)",
   "Full application tracker",
-  "AI interview prep",
   "Text + coding interviews with debrief",
   "Scout AI: actions, tailoring, deep analysis",
 ]
 
 export const PRO_MAX_FEATURES = [
   "Everything in Pro, plus:",
-  "Unlimited cover letters",
-  "Unlimited deep resume analyses",
-  "Unlimited autofill",
-  "Scout strategy plans + cohort insights",
+  "Scout chat (300/month)",
+  "Cover letters (40/month)",
+  "Deep resume analyses (20/month)",
+  "Resume tailors (50/month)",
+  "Autofill (250/month)",
+  "Interview prep turns (120/month)",
+  "Scout strategy plans (12/month) + cohort insights",
+  "1 free live voice interview every 28 days",
+  "Top-up packs available when you hit any cap",
 ]
 
 export type PlanComparisonRow = {
@@ -123,14 +130,15 @@ export const PLAN_COMPARISON_ROWS: PlanComparisonRow[] = [
 
   { feature: "Resume tools", free: "", pro: "", proMax: "", isGroupHeader: true },
   { feature: "Resume upload", free: "3 resumes", pro: "Unlimited", proMax: "Unlimited" },
-  { feature: "Gap analysis", free: false, pro: "20/mo", proMax: "Unlimited" },
+  { feature: "Deep resume analysis", free: false, pro: "8/mo", proMax: "20/mo" },
+  { feature: "Resume tailors", free: "1/mo", pro: "20/mo", proMax: "50/mo" },
   { feature: "AI resume editor", free: false, pro: true, proMax: true },
-  { feature: "Cover letters", free: false, pro: "25/mo", proMax: "Unlimited" },
+  { feature: "Cover letters", free: false, pro: "15/mo", proMax: "40/mo" },
   {
     feature: "Application autofill",
-    free: "10/mo",
-    pro: "50/mo",
-    proMax: "Unlimited",
+    free: "5/mo",
+    pro: "75/mo",
+    proMax: "250/mo",
     tooltip: "Fill Greenhouse, Lever, and Ashby forms with one click",
   },
 
@@ -148,13 +156,12 @@ export const PLAN_COMPARISON_ROWS: PlanComparisonRow[] = [
   },
 
   { feature: "Scout AI", free: "", pro: "", proMax: "", isGroupHeader: true },
-  { feature: "Scout chat", free: "5/day", pro: "30/day", proMax: "60/day" },
+  { feature: "Scout chat", free: "15/mo", pro: "150/mo", proMax: "300/mo" },
   { feature: "Resume tailoring & actions", free: false, pro: true, proMax: true },
-  { feature: "Deep resume analysis", free: false, pro: "20/mo", proMax: "Unlimited" },
-  { feature: "Strategy & cohort insights", free: false, pro: false, proMax: true },
+  { feature: "Strategy & cohort insights", free: false, pro: "3/mo", proMax: "12/mo" },
 
   { feature: "Interviews", free: "", pro: "", proMax: "", isGroupHeader: true },
-  { feature: "Text + coding interviews", free: false, pro: true, proMax: true },
+  { feature: "Text + coding interview turns", free: false, pro: "50/mo", proMax: "120/mo" },
   { feature: "Interview debrief", free: false, pro: true, proMax: true },
   {
     feature: "Live voice + webcam interview",
@@ -162,5 +169,14 @@ export const PLAN_COMPARISON_ROWS: PlanComparisonRow[] = [
     pro: "Credits (pay-as-you-go)",
     proMax: "1 free credit / 28d + top-ups",
     tooltip: "1 session credit per 28 days on Pro Max, with optional paid credit packs on all plans.",
+  },
+
+  { feature: "Top-up packs", free: "", pro: "", proMax: "", isGroupHeader: true },
+  {
+    feature: "Buy extra credits when you hit a cap",
+    free: false,
+    pro: true,
+    proMax: true,
+    tooltip: "Scout, interview turns, deep analysis, and autofill credit packs available à la carte.",
   },
 ]

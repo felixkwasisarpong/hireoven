@@ -5,6 +5,7 @@ import { getPostgresPool } from "@/lib/postgres/server"
 import { SONNET_MODEL } from "@/lib/ai/anthropic-models"
 import { canAccess, requiredPlanFor } from "@/lib/gates"
 import { gateResponse, getPlanForUserId } from "@/lib/gates/server-gate"
+import { requireQuota } from "@/lib/usage/server-quota"
 import {
   getInterviewSession,
   appendTurn,
@@ -104,6 +105,11 @@ export async function POST(
       hintsRemaining: Math.max(0, hints.length - hintsUsed - 1),
     }))
   }
+
+  // Burn a turn-quota credit only for triggers that actually call the LLM
+  // (hint_request returned above without hitting Claude).
+  const quota = await requireQuota(user.id, "interview_prep_turn", plan)
+  if (quota instanceof NextResponse) return quota
 
   // Build LLM context
   const context = await buildInterviewContext({

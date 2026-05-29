@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server"
 import Anthropic from "@anthropic-ai/sdk"
 import { SONNET_MODEL } from "@/lib/ai/anthropic-models"
 import { requireFeature } from "@/lib/gates/server-gate"
+import { requireQuota } from "@/lib/usage/server-quota"
 import { replaceEmDash, sanitizeGeneratedText } from "@/lib/text/sanitize-generated-text"
 
 export const runtime = "nodejs"
@@ -51,6 +52,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "answer and question required for evaluate mode" }, { status: 400 })
     }
 
+    const quota = await requireQuota(gate.userId, "interview_prep_turn", gate.plan)
+    if (quota instanceof NextResponse) return quota
+
     const message = await anthropic.messages.create({
       // Interview coaching needs high-quality reasoning, but Sonnet is the default tier for this workload.
       model: SONNET_MODEL,
@@ -80,6 +84,9 @@ Respond in JSON: { "score": 1-10, "strengths": ["..."], "improvements": ["..."],
   }
 
   // Default: generate questions
+  const quota = await requireQuota(gate.userId, "interview_prep_turn", gate.plan)
+  if (quota instanceof NextResponse) return quota
+
   const interviewContext = app.interviews?.length
     ? `Previous rounds: ${app.interviews.map((i: any) => i.round_name).join(", ")}`
     : "No prior rounds"
