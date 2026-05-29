@@ -180,6 +180,7 @@ export default function BillingPageClient({
   const [historyData, setHistoryData] = useState<BillingHistoryData | null>(initialHistory)
   const [historyLoaded, setHistoryLoaded] = useState(initialHistoryLoaded)
   const [portalLoading, setPortalLoading] = useState(false)
+  const [portalError, setPortalError] = useState<string | null>(null)
   const [compareOpen, setCompareOpen] = useState(false)
   const [feedbackReason, setFeedbackReason] = useState("")
   const [feedbackDetails, setFeedbackDetails] = useState("")
@@ -248,10 +249,27 @@ export default function BillingPageClient({
 
   async function openPortal() {
     setPortalLoading(true)
-    const res = await fetch("/api/stripe/portal", { method: "POST" })
-    const data = await res.json()
-    if (data.url) window.location.href = data.url
-    else setPortalLoading(false)
+    setPortalError(null)
+    try {
+      const res = await fetch("/api/stripe/portal", { method: "POST" })
+      const data = await res.json().catch(() => ({}))
+      if (data.url) {
+        window.location.href = data.url
+        return
+      }
+      // 404 = stale subscription row with no Stripe customer; 503 = Stripe not
+      // configured; etc. Surface the message so the user isn't stuck on a dead
+      // spinner.
+      setPortalError(
+        res.status === 404
+          ? "We don't have a Stripe billing account on file for you yet. Start a Pro trial below."
+          : data.error ?? "Couldn't open the billing portal. Try again in a moment."
+      )
+    } catch {
+      setPortalError("Couldn't reach the server. Try again.")
+    } finally {
+      setPortalLoading(false)
+    }
   }
 
   async function startCheckout(targetPlan: PlanKey, targetInterval: BillingInterval = "monthly") {
@@ -644,15 +662,22 @@ export default function BillingPageClient({
               </div>
 
               {isPro && (
-                <button
-                  type="button"
-                  onClick={openPortal}
-                  disabled={portalLoading}
-                  className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-[0_1px_0_rgba(15,23,42,0.04)] transition hover:border-slate-300 hover:bg-slate-50 disabled:opacity-50"
-                >
-                  {portalLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-3.5 w-3.5" />}
-                  Manage billing
-                </button>
+                <div className="flex shrink-0 flex-col items-end gap-1.5">
+                  <button
+                    type="button"
+                    onClick={openPortal}
+                    disabled={portalLoading}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-[0_1px_0_rgba(15,23,42,0.04)] transition hover:border-slate-300 hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    {portalLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-3.5 w-3.5" />}
+                    Manage billing
+                  </button>
+                  {portalError && (
+                    <p className="max-w-[260px] text-right text-[11.5px] font-medium text-rose-600">
+                      {portalError}
+                    </p>
+                  )}
+                </div>
               )}
             </div>
 
