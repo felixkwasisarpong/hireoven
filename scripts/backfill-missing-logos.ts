@@ -37,6 +37,8 @@ import { Pool } from "pg"
 
 const args = process.argv.slice(2)
 const dryRun = args.includes("--dry-run")
+const targetArg = args.find((a) => a.startsWith("--target="))?.split("=")[1] ?? "missing"
+const TARGET: "missing" | "favicons" = targetArg === "favicons" ? "favicons" : "missing"
 const limitArg = args.find((a) => a.startsWith("--limit="))?.split("=")[1]
 const MAX_CANDIDATES_TO_PROBE = limitArg ? Number(limitArg) : Infinity
 
@@ -208,16 +210,20 @@ function logoUrlFor(brand: string): string {
 async function main() {
   const pool = new Pool({ connectionString: DATABASE_URL })
 
+  const whereClause = TARGET === "favicons"
+    ? `(logo_url ILIKE '%google.com/s2/favicons%' OR logo_url ILIKE '%duckduckgo.com%')`
+    : `(logo_url IS NULL OR logo_url = '')`
+
   const { rows } = await pool.query<Row>(
     `SELECT id, name, domain, careers_url, ats_type, ats_identifier
        FROM companies
       WHERE is_active = true
         AND duplicate_of_company_id IS NULL
-        AND (logo_url IS NULL OR logo_url = '')
+        AND ${whereClause}
       ORDER BY job_count DESC NULLS LAST, name`
   )
 
-  console.log(`[backfill-missing-logos] mode=${dryRun ? "dry-run" : "execute"} candidates=${rows.length}`)
+  console.log(`[backfill-missing-logos] target=${TARGET} mode=${dryRun ? "dry-run" : "execute"} candidates=${rows.length}`)
 
   const limiter = pLimit(12)
   let hits = 0
