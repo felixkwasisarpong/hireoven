@@ -183,7 +183,11 @@ function mapRawJob(raw: AshbyRawJob): HarvestedJob | null {
 
 export const ashbyAdapter: AtsAdapter = {
   name: "ashby",
-  concurrency: envConcurrency("ashby", 8),
+  // Ashby boards are large (3-11 MB JSON). At concurrency 8 the simultaneous
+  // gzip-decompress + JSON.parse of several multi-MB bodies is CPU-bound and
+  // pushes body-read past the request timeout under load — the dominant source
+  // of harvester timeouts (7k+/3d). 4 keeps throughput while cutting contention.
+  concurrency: envConcurrency("ashby", 4),
   detectFromUrl,
   async fetchJobs({ slug, ctx }): Promise<HarvestResult> {
     const fetchedAt = new Date()

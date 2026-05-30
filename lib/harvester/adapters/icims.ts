@@ -234,9 +234,10 @@ export const icimsAdapter: AtsAdapter = {
   name: "icims",
   // iCIMS sites are slow + customer-isolated. Bumped default 2 → 6 because
   // diagnostic showed only 41/103 icims companies were touched in a day at
-  // cap=2 — the slowest API was starving its own queue. Env-tunable via
+  // iCIMS rate-limits aggressively — concurrency 6 produced ~1k 429s/3d.
+  // Dropped to 3 to stay under its per-IP ceiling. Env-tunable via
   // HARVESTER_ICIMS_CONCURRENCY if individual instances misbehave.
-  concurrency: envConcurrency("icims", 6),
+  concurrency: envConcurrency("icims", 3),
   detectFromUrl,
   async fetchJobs({ slug, ctx }): Promise<HarvestResult> {
     const fetchedAt = new Date()

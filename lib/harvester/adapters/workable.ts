@@ -44,13 +44,14 @@ type WorkableRawJob = {
 type WorkableResponse = {
   results?: WorkableRawJob[]
   total?: number
+  // Workable returns a pagination token under `nextPage` on the POST API.
+  // We also accept `next_page` defensively in case the field name varies.
+  nextPage?: string | null
   next_page?: string | null
 }
 
-function listingUrl(slug: string, page: number): string {
-  const safe = encodeURIComponent(slug)
-  const query = page > 1 ? `?page=${page}` : ""
-  return `https://apply.workable.com/api/v3/accounts/${safe}/jobs${query}`
+function listingUrl(slug: string): string {
+  return `https://apply.workable.com/api/v3/accounts/${encodeURIComponent(slug)}/jobs`
 }
 
 function detectFromUrl(url: string): { slug: string } | null {
@@ -149,10 +150,16 @@ function mapRawJob(slug: string, raw: WorkableRawJob): HarvestedJob | null {
 
 async function fetchPage(
   slug: string,
-  page: number,
+  token: string | null,
   ctx: HarvestCtx
 ): ReturnType<typeof conditionalFetchJson<WorkableResponse>> {
-  return conditionalFetchJson<WorkableResponse>(listingUrl(slug, page), ctx)
+  // Workable flipped this endpoint to POST-only — GET now 404s, and 403s under
+  // the harvester's concurrent load. The pagination token rides in the body;
+  // an empty body returns page 1.
+  return conditionalFetchJson<WorkableResponse>(listingUrl(slug), ctx, {
+    method: "POST",
+    body: JSON.stringify(token ? { token } : {}),
+  })
 }
 
 export const workableAdapter: AtsAdapter = {
@@ -162,7 +169,7 @@ export const workableAdapter: AtsAdapter = {
   async fetchJobs({ slug, ctx }): Promise<HarvestResult> {
     const fetchedAt = new Date()
 
-    const first = await fetchPage(slug, 1, ctx)
+    const first = await fetchPage(slug, null, ctx)
 
     if (first.kind === "not_modified") {
       return {
@@ -192,18 +199,20 @@ export const workableAdapter: AtsAdapter = {
 
     collect(first.data?.results)
     let upstreamLatency = first.upstreamLatencyMs
-    const firstCount = first.data?.results?.length ?? 0
 
-    if (firstCount > 0) {
-      for (let page = 2; page <= MAX_PAGES; page += 1) {
-        const next = await fetchPage(slug, page, { ...ctx, etag: null, lastModified: null })
-        if (next.kind !== "ok") break
-        const pageCount = next.data?.results?.length ?? 0
-        if (pageCount === 0) break
-        collect(next.data?.results)
-        upstreamLatency += next.upstreamLatencyMs
-        if (pageCount < firstCount) break
-      }
+    // Follow the pagination token until it's absent, a page is empty, or we hit
+    // the page cap. Small boards return everything on page 1 with no token.
+    let token = first.data?.nextPage ?? first.data?.next_page ?? null
+    let pages = 1
+    while (token && pages < MAX_PAGES) {
+      const next = await fetchPage(slug, token, { ...ctx, etag: null, lastModified: null })
+      if (next.kind !== "ok") break
+      const pageResults = next.data?.results ?? []
+      if (pageResults.length === 0) break
+      collect(pageResults)
+      upstreamLatency += next.upstreamLatencyMs
+      token = next.data?.nextPage ?? next.data?.next_page ?? null
+      pages += 1
     }
 
     return {

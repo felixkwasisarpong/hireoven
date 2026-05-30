@@ -29,12 +29,13 @@ const ADAPTER_REQUEST_TIMEOUT_MS: Partial<Record<AtsName, number>> = {
   // Slower APIs and large boards often breach the generic 8s transport timeout.
   workday: 20_000,
   smartrecruiters: 12_000,
-  // Ashby returns ?includeCompensation=true bodies that frequently take 15-20s
-  // for moderate boards; with the prior 12s budget ~48% of crawls timed out
-  // and burned 3 retries (36s instance time per dead crawl). Bumping covers
-  // the slow-but-legitimate responses while the ashby adapter itself drops
-  // retries (one shot — retrying a slow server doesn't speed it up).
-  ashby: 25_000,
+  // Ashby boards are large (3-11 MB JSON). The request timeout also gates the
+  // body read (the abort timer clears only after json() resolves), so big
+  // boards need headroom — measured single fetches run 0.5-5s, but gzip-decode
+  // + parse of an 11 MB body under load stretches well past 25s. 40s + the
+  // lowered concurrency (4) clears the 7k+/3d timeout backlog. One-shot, no
+  // retries (retrying a slow server doesn't speed it up).
+  ashby: 40_000,
   usajobs: 20_000,
   icims: 15_000,
 }
@@ -97,6 +98,16 @@ function isHttp403Error(message: string): boolean {
 function isHttp404Error(message: string): boolean {
   const lower = message.toLowerCase()
   return lower.includes("http_404") || lower.includes("http 404") || lower.includes("not found")
+}
+
+// 422 from Workday CXS means the {tenant}:{wd}:{site} slug no longer maps to a
+// servable board — the tenant gated/moved/renamed its site and no shard or
+// candidate site resolves (verified: resolveWorkdaySite returns null and every
+// shard 422s). It's not transient, so treat it like 404 "gone" and park it on
+// the long cooldown instead of retrying every failure-cooldown window.
+function isHttp422Error(message: string): boolean {
+  const lower = message.toLowerCase()
+  return lower.includes("http_422") || lower.includes("http 422") || lower.includes("unprocessable")
 }
 
 function adapterRequestTimeoutMs(
@@ -355,7 +366,7 @@ export async function runAtsHarvest(input: {
     const baseCooldownSec = failureCooldownSeconds()
     const cooldownSec = Math.max(
       intervalSec,
-      isHttp404Error(message)
+      isHttp404Error(message) || isHttp422Error(message)
         ? Math.max(baseCooldownSec, http404CooldownSeconds())
         : isHttp403Error(message)
         ? Math.max(baseCooldownSec, http403CooldownSeconds())

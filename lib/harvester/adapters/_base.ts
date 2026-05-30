@@ -105,9 +105,10 @@ export type ConditionalFetchResult<T> =
 export async function conditionalFetchJson<T>(
   url: string,
   ctx: HarvestCtx,
-  options: { maxAttempts?: number } = {}
+  options: { maxAttempts?: number; method?: "GET" | "POST"; body?: string } = {}
 ): Promise<ConditionalFetchResult<T>> {
   const maxAttempts = Math.max(1, options.maxAttempts ?? 3)
+  const method = options.method ?? "GET"
   const userAgent = ctx.userAgent ?? DEFAULT_USER_AGENT
   const timeoutMs = Math.max(1_000, ctx.timeoutMs ?? DEFAULT_TIMEOUT_MS)
   const doFetch = ctx.fetchImpl ?? harvesterFetch
@@ -117,8 +118,11 @@ export async function conditionalFetchJson<T>(
     accept: "application/json",
     "accept-encoding": "gzip, deflate, br",
   }
-  if (ctx.etag) headers["if-none-match"] = ctx.etag
-  if (ctx.lastModified) headers["if-modified-since"] = ctx.lastModified
+  if (method === "POST" && options.body != null) headers["content-type"] = "application/json"
+  // Conditional caching only applies to GET. POST job-board APIs (Workable)
+  // don't honor If-None-Match / If-Modified-Since, so we never send them there.
+  if (method === "GET" && ctx.etag) headers["if-none-match"] = ctx.etag
+  if (method === "GET" && ctx.lastModified) headers["if-modified-since"] = ctx.lastModified
 
   let attempt = 0
   let lastReason = "unknown"
@@ -132,8 +136,9 @@ export async function conditionalFetchJson<T>(
 
     try {
       const response = await doFetch(url, {
-        method: "GET",
+        method,
         headers,
+        ...(options.body != null ? { body: options.body } : {}),
         signal: controller.signal,
       })
       const upstreamLatencyMs = Date.now() - startedAt

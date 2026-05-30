@@ -1,6 +1,7 @@
 import { strict as assert } from "node:assert"
 import { test } from "node:test"
 import { workableAdapter } from "./workable"
+import type { HarvestCtx } from "./_base"
 
 test("workable: detectFromUrl resolves an apply.workable.com URL", () => {
   assert.deepEqual(
@@ -23,6 +24,48 @@ test("workable: detectFromUrl returns null for non-Workable hosts", () => {
 test("workable: detectFromUrl returns null when slug is missing or malformed", () => {
   assert.equal(workableAdapter.detectFromUrl("https://apply.workable.com/"), null)
   assert.equal(workableAdapter.detectFromUrl("https://apply.workable.com/!!"), null)
+})
+
+function fakeJsonResponse(body: unknown): Response {
+  return {
+    ok: true,
+    status: 200,
+    headers: { get: () => null },
+    json: async () => body,
+  } as unknown as Response
+}
+
+test("workable: POSTs the jobs API and follows the nextPage token", async () => {
+  const calls: Array<{ method?: string; body?: string }> = []
+  const fetchImpl = (async (_url: string, init: RequestInit) => {
+    calls.push({ method: init.method, body: init.body as string })
+    if (calls.length === 1) {
+      return fakeJsonResponse({
+        total: 2,
+        results: [{ id: "1", title: "Engineer", shortcode: "AAA", city: "Austin", region: "TX", country: "United States" }],
+        nextPage: "TOK2",
+      })
+    }
+    return fakeJsonResponse({
+      total: 2,
+      results: [{ id: "2", title: "Product Manager", shortcode: "BBB", city: "Remote" }],
+      nextPage: null,
+    })
+  }) as unknown as HarvestCtx["fetchImpl"]
+
+  const result = await workableAdapter.fetchJobs({
+    slug: "acme",
+    ctx: { etag: null, lastModified: null, fetchImpl },
+  })
+
+  assert.equal(calls.length, 2, "should fetch two pages")
+  assert.equal(calls[0].method, "POST")
+  assert.equal(calls[0].body, "{}", "page 1 sends an empty body")
+  assert.equal(calls[1].method, "POST")
+  assert.deepEqual(JSON.parse(calls[1].body ?? "{}"), { token: "TOK2" }, "page 2 carries the token")
+  assert.equal(result.jobs.length, 2)
+  assert.equal(result.notModified, false)
+  assert.match(result.jobs[0].externalId, /^workable:/)
 })
 
 const LIVE = process.env.HARVESTER_LIVE_TESTS === "1"
