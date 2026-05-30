@@ -100,6 +100,16 @@ function isHttp404Error(message: string): boolean {
   return lower.includes("http_404") || lower.includes("http 404") || lower.includes("not found")
 }
 
+// 422 from Workday CXS means the {tenant}:{wd}:{site} slug no longer maps to a
+// servable board — the tenant gated/moved/renamed its site and no shard or
+// candidate site resolves (verified: resolveWorkdaySite returns null and every
+// shard 422s). It's not transient, so treat it like 404 "gone" and park it on
+// the long cooldown instead of retrying every failure-cooldown window.
+function isHttp422Error(message: string): boolean {
+  const lower = message.toLowerCase()
+  return lower.includes("http_422") || lower.includes("http 422") || lower.includes("unprocessable")
+}
+
 function adapterRequestTimeoutMs(
   adapter: AtsName,
   env: Record<string, string | undefined> = process.env
@@ -356,7 +366,7 @@ export async function runAtsHarvest(input: {
     const baseCooldownSec = failureCooldownSeconds()
     const cooldownSec = Math.max(
       intervalSec,
-      isHttp404Error(message)
+      isHttp404Error(message) || isHttp422Error(message)
         ? Math.max(baseCooldownSec, http404CooldownSeconds())
         : isHttp403Error(message)
         ? Math.max(baseCooldownSec, http403CooldownSeconds())
