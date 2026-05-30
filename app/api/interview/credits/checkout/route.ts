@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { resolveAppOrigin } from "@/lib/app-url"
 import { isPaymentsDisabled } from "@/lib/admin/feature-flags"
 import { createClient } from "@/lib/supabase/server"
 import { getPostgresPool } from "@/lib/postgres/server"
@@ -76,7 +77,7 @@ export async function POST(request: Request) {
     customerId = customer.id
   }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
+  const appUrl = resolveAppOrigin(request)
 
   try {
     const session = await stripe.checkout.sessions.create({

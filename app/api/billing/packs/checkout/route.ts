@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { resolveAppOrigin } from "@/lib/app-url"
 import { isPaymentsDisabled } from "@/lib/admin/feature-flags"
 import { getUserPlan } from "@/lib/gates/server-gate"
 import { getPostgresPool } from "@/lib/postgres/server"
@@ -66,7 +67,7 @@ export async function POST(request: Request) {
     customerId = customer.id
   }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
+  const appUrl = resolveAppOrigin(request)
   const returnUrl = typeof body.returnUrl === "string" && body.returnUrl.startsWith("/")
     ? body.returnUrl
     : "/dashboard/billing"
