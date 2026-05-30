@@ -50,6 +50,27 @@ function tierIntervalSeconds(
   return TIER_INTERVAL_DEFAULTS[key]
 }
 
+// Hard ceiling so a runaway empty streak can't push next_harvest_at out past
+// the dead-tier cadence (7 days).
+const YIELD_MAX_INTERVAL_SEC = 604_800
+
+/**
+ * Stretch a board's base interval when it keeps coming back empty. This is the
+ * compute-waste guard the `consecutive_empty_crawls` column was added for:
+ * quiet ETag boards that return 304/empty every poll back off geometrically
+ * instead of burning a tier_1 slot every 3 minutes forever. A single non-empty
+ * crawl resets the streak (see updateCompanyHarvestState), so a board that
+ * starts posting again snaps right back to its tier cadence.
+ */
+export function yieldAdjustedInterval(baseSec: number, consecutiveEmptyCrawls: number): number {
+  const empties = Math.max(0, consecutiveEmptyCrawls)
+  let multiplier = 1
+  if (empties >= 20) multiplier = 8
+  else if (empties >= 10) multiplier = 4
+  else if (empties >= 5) multiplier = 2
+  return Math.min(baseSec * multiplier, YIELD_MAX_INTERVAL_SEC)
+}
+
 function failureCooldownSeconds(env: Record<string, string | undefined> = process.env): number {
   const raw = Number.parseInt(env.HARVESTER_FAILURE_COOLDOWN_SECONDS ?? "", 10)
   if (Number.isFinite(raw) && raw >= 60) return raw
@@ -100,6 +121,7 @@ export type AtsHarvestCompany = {
   etag: string | null
   last_modified: string | null
   freshness_tier: string | null
+  consecutive_empty_crawls?: number | null
 }
 
 function detectCompanyAdapter(
@@ -179,6 +201,10 @@ async function updateCompanyHarvestState(
     crawledAtIso: string
     bumpLastCrawled: boolean
     newFreshnessTier?: string | null
+    // Yield bookkeeping. "reset" → board produced jobs this crawl; "increment"
+    // → empty/304 crawl. Omitted on failures so a broken board's streak isn't
+    // conflated with a quiet one (failures have their own cooldown path).
+    emptyCrawl?: "reset" | "increment"
   }
 ) {
   const setTier = args.newFreshnessTier ? ", freshness_tier = $tier" : ""
@@ -195,6 +221,11 @@ async function updateCompanyHarvestState(
   if (args.newFreshnessTier) {
     params.push(args.newFreshnessTier)
     sql += setTier.replace("$tier", `$${params.length}`)
+  }
+  if (args.emptyCrawl === "reset") {
+    sql += `, consecutive_empty_crawls = 0, last_job_seen_at = now()`
+  } else if (args.emptyCrawl === "increment") {
+    sql += `, consecutive_empty_crawls = consecutive_empty_crawls + 1`
   }
   sql += ` WHERE id = $1`
   await pool.query(sql, params)
@@ -236,7 +267,10 @@ export async function runAtsHarvest(input: {
   if (!detection) return { matched: false }
 
   const startedAt = Date.now()
-  const intervalSec = tierIntervalSeconds(company.freshness_tier)
+  const intervalSec = yieldAdjustedInterval(
+    tierIntervalSeconds(company.freshness_tier),
+    company.consecutive_empty_crawls ?? 0
+  )
   const adapterName = detection.adapter.name
 
   // Pre-load externalIds of jobs that already have a real description in the
@@ -264,6 +298,7 @@ export async function runAtsHarvest(input: {
         intervalSec,
         crawledAtIso,
         bumpLastCrawled: true,
+        emptyCrawl: "increment",
       })
       return {
         matched: true,
@@ -299,6 +334,7 @@ export async function runAtsHarvest(input: {
       intervalSec,
       crawledAtIso,
       bumpLastCrawled: false,
+      emptyCrawl: result.jobs.length > 0 ? "reset" : "increment",
     })
 
     return {

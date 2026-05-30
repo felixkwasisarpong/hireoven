@@ -19,6 +19,7 @@ import { NextRequest, NextResponse } from "next/server"
 import pLimit from "p-limit"
 import { requireCronAuth } from "@/lib/env"
 import { getPostgresPool } from "@/lib/postgres/server"
+import { bumpHarvestForActiveCompanies } from "@/lib/harvester/freshness-signal"
 import {
   WAAS_ROLE_SLUGS,
   fetchWaasJobDetail,
@@ -338,6 +339,14 @@ export async function GET(request: NextRequest) {
        WHERE c.id = ANY($1::uuid[])`,
       [[...companyIdMap.values()]]
     )
+  }
+
+  // Freshness loop: pull the real ATS board's next harvest forward for any
+  // already-tracked company that just showed fresh WAAS activity.
+  try {
+    stats.harvestBumped = await bumpHarvestForActiveCompanies(pool, [...companyIdMap.values()])
+  } catch (err) {
+    console.error("[waas-ingest] harvest bump failed:", err)
   }
 
   return NextResponse.json({ ok: true, ...stats })

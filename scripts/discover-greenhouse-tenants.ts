@@ -25,6 +25,8 @@ import { appendFileSync, writeFileSync, existsSync, readFileSync } from "node:fs
 loadEnvConfig(process.cwd())
 
 import { Pool } from "pg"
+import { computeConfidence } from "@/lib/discovery/confidence-score"
+import { isUsaLocation } from "@/lib/discovery/usa-confirm"
 
 const args = process.argv.slice(2)
 const execute = args.includes("--execute")
@@ -88,7 +90,13 @@ function generateCandidates(name: string): string[] {
   return Array.from(variants).filter((s) => s.length >= 2 && s.length <= 60)
 }
 
-async function probeGreenhouse(slug: string): Promise<{ ok: boolean; status: number } > {
+type GHJob = { location?: { name?: string } }
+type GHProbeResult =
+  | { ok: true;  status: number; jobs: GHJob[] }
+  | { ok: false; status: number }
+
+async function probeGreenhouse(slug: string): Promise<GHProbeResult> {
+  // ?content=false keeps responses tiny; we only need location fields.
   const url = `https://boards-api.greenhouse.io/v1/boards/${encodeURIComponent(slug)}/jobs?content=false`
   try {
     const ctrl = new AbortController()
@@ -101,9 +109,13 @@ async function probeGreenhouse(slug: string): Promise<{ ok: boolean; status: num
         accept: "application/json",
       },
     })
-    try { await res.arrayBuffer() } catch { /* drain */ }
     clearTimeout(t)
-    return { ok: res.status === 200, status: res.status }
+    if (res.status !== 200) {
+      try { await res.arrayBuffer() } catch { /* drain */ }
+      return { ok: false, status: res.status }
+    }
+    const data = (await res.json()) as { jobs?: GHJob[] }
+    return { ok: true, status: 200, jobs: (data.jobs ?? []).slice(0, 5) }
   } catch {
     return { ok: false, status: 0 }
   }
@@ -204,12 +216,13 @@ async function main() {
   let hits = previouslyFound.size
   let inserted = 0
   let blocked403 = 0
-  const newSlugs: Array<{ slug: string; name: string }> = []
+  type HitRecord = { slug: string; name: string; usaConfirmed: boolean; usaJobCount: number; jobCount: number }
+  const newSlugs: Array<HitRecord> = []
 
   // Pre-load already-discovered hits from checkpoint so we can insert them
   // even if the network later blocks us mid-run.
   for (const slug of previouslyFound) {
-    newSlugs.push({ slug, name: slugToName.get(slug) ?? slug })
+    newSlugs.push({ slug, name: slugToName.get(slug) ?? slug, usaConfirmed: false, usaJobCount: 0, jobCount: 0 })
   }
 
   await Promise.all(
@@ -219,9 +232,9 @@ async function main() {
         if (stagger > 0) await sleep(stagger)
 
         processed += 1
-        const { ok, status } = await probeGreenhouse(slug)
-        if (!ok) {
-          if (status === 403 || status === 406 || status === 429) blocked403 += 1
+        const result = await probeGreenhouse(slug)
+        if (!result.ok) {
+          if (result.status === 403 || result.status === 406 || result.status === 429) blocked403 += 1
           if (processed % 250 === 0) {
             console.log(
               `  progress: ${processed}/${candidates.length} hits=${hits} blocked=${blocked403}`
@@ -231,7 +244,11 @@ async function main() {
         }
         hits += 1
         const name = slugToName.get(slug) ?? slug
-        newSlugs.push({ slug, name })
+        let usaJobCount = 0
+        for (const job of result.jobs) {
+          if (isUsaLocation(job.location?.name)) usaJobCount++
+        }
+        newSlugs.push({ slug, name, usaConfirmed: usaJobCount > 0, usaJobCount, jobCount: result.jobs.length })
         appendFileSync(
           CHECKPOINT,
           `${slug},${name.replace(/"/g, "'").replace(/,/g, ";")}\n`
@@ -262,30 +279,71 @@ async function main() {
     return
   }
 
-  // Bulk insert. Skip rows whose careers_url would collide with an existing
-  // company (rare since we already filtered known greenhouse slugs).
-  for (const { slug, name } of newSlugs) {
+  // Insert through the confidence gate. Strong hits (score ≥ 60) go directly
+  // into companies; weaker hits land in discovered_candidates for later retry.
+  let held = 0
+  let rejected = 0
+  for (const { slug, name, usaConfirmed, usaJobCount, jobCount } of newSlugs) {
+    const fromSeedFile = slugToName.has(slug)
+    const { score, factors, decision, rejectedReason } = computeConfidence({
+      atsMatch:            true,
+      apiHttp200:          true,
+      jobsFound:           jobCount,
+      usaConfirmed,
+      usaJobCount,
+      fromCuratedSeed:     fromSeedFile,
+      fromCommonCrawl:     false,
+      isJobDetailPageOnly: false,
+      isDnsFailure:        false,
+      isLoginRedirect:     false,
+      isLikelyTrial:       false,
+      isHttpError:         false,
+      priorRejections:     0,
+    })
+
     const careersUrl = `https://boards.greenhouse.io/${slug}`
-    const domain = `${slug}.greenhouse-discovered`  // placeholder; harvester will refine later via job posting metadata
+    const domain = `${slug}.greenhouse-discovered`
+
     try {
-      const r = await pool.query<{ id: string }>(
-        `INSERT INTO companies
-           (name, domain, careers_url, ats_type, ats_identifier,
-            is_active, status, freshness_tier, discovered_via, next_harvest_at)
-         VALUES ($1, $2, $3, 'greenhouse', $4, true, 'active', 'tier_2',
-                 'greenhouse-job-board-probe', now())
-         ON CONFLICT (domain) DO NOTHING
-         RETURNING id`,
-        [name, domain, careersUrl, slug]
-      )
-      if (r.rowCount && r.rowCount > 0) inserted += 1
+      if (decision === "enroll") {
+        const r = await pool.query<{ id: string }>(
+          `INSERT INTO companies
+             (name, domain, careers_url, ats_type, ats_identifier,
+              is_active, status, freshness_tier, discovered_via, next_harvest_at)
+           VALUES ($1, $2, $3, 'greenhouse', $4, true, 'active', 'tier_2',
+                   'greenhouse-job-board-probe', now())
+           ON CONFLICT (domain) DO NOTHING
+           RETURNING id`,
+          [name, domain, careersUrl, slug]
+        )
+        if (r.rowCount && r.rowCount > 0) inserted += 1
+      } else {
+        const nextRetry = decision === "hold"
+          ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+          : null
+        await pool.query(
+          `INSERT INTO discovered_candidates
+             (raw_url, ats_type, ats_identifier, normalized_url, source,
+              confidence_score, confidence_factors, rejected_reason, next_retry_at)
+           VALUES ($1,'greenhouse',$2,$3,'greenhouse-probe',$4,$5,$6,$7)
+           ON CONFLICT (ats_type, ats_identifier) DO NOTHING`,
+          [careersUrl, slug, careersUrl, score, JSON.stringify(factors), rejectedReason, nextRetry]
+        )
+        if (decision === "hold") held += 1; else rejected += 1
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       console.warn(`[discover-greenhouse] insert failed for ${slug} (${name}): ${msg}`)
     }
   }
 
-  console.log(`\n[discover-greenhouse] inserted=${inserted}/${hits}`)
+  await pool.query(
+    `INSERT INTO discovery_runs (channel, candidates_found, candidates_enrolled, candidates_held, candidates_rejected)
+     VALUES ('greenhouse-probe',$1,$2,$3,$4)`,
+    [newSlugs.length, inserted, held, rejected]
+  ).catch(() => { /* non-fatal */ })
+
+  console.log(`\n[discover-greenhouse] enrolled=${inserted} held=${held} rejected=${rejected} (total hits=${hits})`)
   await pool.end()
 }
 

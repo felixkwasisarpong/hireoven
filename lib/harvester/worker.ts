@@ -175,7 +175,7 @@ WHERE id IN (
   LIMIT $1
   FOR UPDATE SKIP LOCKED
 )
-RETURNING id, name, careers_url, direct_ats_url, domain, ats_type, ats_identifier, raw_ats_config, etag, last_modified, freshness_tier
+RETURNING id, name, careers_url, direct_ats_url, domain, ats_type, ats_identifier, raw_ats_config, etag, last_modified, freshness_tier, consecutive_empty_crawls
 `
 
 const SUPPORTED_ATS_TYPES = [
@@ -212,6 +212,7 @@ type ClaimedRow = {
   etag: string | null
   last_modified: string | null
   freshness_tier: string | null
+  consecutive_empty_crawls: number | null
 }
 
 type TickCompanyOutcome = {
@@ -321,6 +322,7 @@ export async function claimEligibleCompanies(
     etag: row.etag,
     last_modified: row.last_modified,
     freshness_tier: row.freshness_tier,
+    consecutive_empty_crawls: row.consecutive_empty_crawls,
   }))
 }
 
