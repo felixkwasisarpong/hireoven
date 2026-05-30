@@ -328,7 +328,10 @@ export async function fetchCrtShEntries(
   apex: string,
   options: CrtShFetchOptions = {}
 ): Promise<CrtShEntry[]> {
-  const url = `https://crt.sh/?q=%25.${encodeURIComponent(apex)}&output=json`
+  // deduplicate=Y collapses duplicate name_value rows server-side, dramatically
+  // reducing response size for high-volume domains (bamboohr, teamtailor, icims)
+  // that would otherwise 502 under the full result set.
+  const url = `https://crt.sh/?q=%25.${encodeURIComponent(apex)}&output=json&deduplicate=Y`
   const doFetch = options.fetchImpl ?? fetch
   const timeoutMs = Math.max(5_000, options.timeoutMs ?? DEFAULT_TIMEOUT_MS)
   const maxAttempts = Math.max(1, options.maxAttempts ?? DEFAULT_MAX_ATTEMPTS)

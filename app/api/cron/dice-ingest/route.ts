@@ -15,6 +15,7 @@ import { NextRequest, NextResponse } from "next/server"
 import pLimit from "p-limit"
 import { requireCronAuth } from "@/lib/env"
 import { getPostgresPool } from "@/lib/postgres/server"
+import { bumpHarvestForActiveCompanies } from "@/lib/harvester/freshness-signal"
 import {
   searchDiceAllPages,
   parseDiceSalary,
@@ -281,6 +282,14 @@ export async function GET(request: NextRequest) {
      WHERE c.id = ANY($1)`,
     [[...companyIdMap.values()]]
   )
+
+  // Freshness loop: a company on Dice today is actively hiring — pull its real
+  // ATS board's next harvest forward so we catch the original posting fast.
+  try {
+    stats.harvestBumped = await bumpHarvestForActiveCompanies(pool, [...companyIdMap.values()])
+  } catch (err) {
+    console.error("[dice-ingest] harvest bump failed:", err)
+  }
 
   return NextResponse.json({ ok: true, ...stats })
 }

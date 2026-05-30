@@ -84,7 +84,7 @@ Return ONLY valid JSON.`,
     const parsed = JSON.parse(text)
     return {
       sponsors_h1b: parsed.sponsors_h1b ?? null,
-      requires_authorization: Boolean(parsed.requires_authorization),
+      requires_authorization: parsed.requires_authorization ?? null,
       visa_language_detected: parsed.visa_language_detected ?? null,
       sponsorship_score: typeof parsed.sponsorship_score === 'number'
         ? Math.min(100, Math.max(0, parsed.sponsorship_score))

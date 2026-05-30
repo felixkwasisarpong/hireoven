@@ -549,6 +549,10 @@ export function cleanJobDescription(input: string | null | undefined): string | 
   const decoded = decodeHtmlEntities(input)
     .replace(/\r\n?/g, "\n")
     .replace(/\u00a0/g, " ")
+    // Normalize curly quotes/apostrophes to ASCII so heading patterns
+    // ("What we're looking for", "What you'll do") match regardless of source.
+    .replace(/[\u2018\u2019\u02bc\u2032]/g, "'")
+    .replace(/[\u201c\u201d]/g, '"')
     .trim()
 
   // For non-HTML inputs the noise stripper that normally runs inside
