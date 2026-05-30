@@ -40,7 +40,7 @@ loadEnvConfig(process.cwd())
 import { Pool } from "pg"
 import { computeConfidence } from "@/lib/discovery/confidence-score"
 import { isUsaLocation } from "@/lib/discovery/usa-confirm"
-import { humanizeSeedSlug } from "@/app/api/cron/discover-companies/route"
+import { humanizeSeedSlug } from "@/lib/discovery/seed-slug"
 
 // ─── CLI args ─────────────────────────────────────────────────────────────────
 

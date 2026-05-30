@@ -31,7 +31,7 @@ import { canonicalCareersUrl } from "@/lib/harvester/canonical-url"
 import type { AtsName } from "@/lib/harvester/adapters"
 import { queryCdxForApex, normalizeCdxUrlToBoard, DEFAULT_CC_INDEX } from "@/lib/discovery/commoncrawl-cdx"
 import { computeConfidence } from "@/lib/discovery/confidence-score"
-import { humanizeSeedSlug } from "@/app/api/cron/discover-companies/route"
+import { humanizeSeedSlug } from "@/lib/discovery/seed-slug"
 
 // ─── ATS target list ──────────────────────────────────────────────────────────
 

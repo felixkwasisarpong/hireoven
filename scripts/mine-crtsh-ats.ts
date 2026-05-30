@@ -29,7 +29,7 @@ import { Pool } from "pg"
 import { detectAdapter } from "@/lib/harvester/adapters"
 import { canonicalCareersUrl } from "@/lib/harvester/canonical-url"
 import { discoverHostsForApex } from "@/lib/harvester/discovery/crtsh"
-import { humanizeSeedSlug } from "@/app/api/cron/discover-companies/route"
+import { humanizeSeedSlug } from "@/lib/discovery/seed-slug"
 import type { AtsName } from "@/lib/harvester/adapters"
 
 // ─── Targets ─────────────────────────────────────────────────────────────────

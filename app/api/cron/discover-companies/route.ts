@@ -33,6 +33,7 @@ import { canonicalCareersUrl } from "@/lib/harvester/canonical-url"
 import { discoverHostsForApex } from "@/lib/harvester/discovery/crtsh"
 import { resolveWorkdaySite } from "@/lib/harvester/discovery/workday-resolver"
 import { fetchAndExtract, DEFAULT_SEED_SOURCES } from "@/lib/harvester/discovery/github-seeds"
+import { humanizeSeedSlug } from "@/lib/discovery/seed-slug"
 import type { AtsName } from "@/lib/harvester/adapters"
 import type { Pool } from "pg"
 
@@ -48,43 +49,6 @@ const AGGREGATOR_DOMAINS = new Set([
 
 function isAggregator(url: string): boolean {
   try { return AGGREGATOR_DOMAINS.has(new URL(url).hostname.toLowerCase()) } catch { return false }
-}
-
-// Generic Workday site segments that aren't a real company name on their own
-// (e.g. /External, /Careers). When the site is generic we fall back to the
-// tenant. When the site is descriptive we strip those words off it instead.
-const WORKDAY_GENERIC_SITE_WORD =
-  /(external_site|external|careers?|jobs?|search|global|portal|public|main|ext|site)/gi
-
-function titleCase(value: string): string {
-  return value
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((w) => (w.length <= 3 ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()))
-    .join(" ")
-}
-
-/**
- * Best-effort human name from an `(atsType, slug)` discovered via GitHub
- * READMEs or crt.sh — the harvest later overrides `name` from real job
- * `raw_data.company`, this is just to avoid storing literals like
- * "ag:wd3:Airbus" in the meantime.
- *
- * Workday slugs are `tenant:wd:site`; everything else is a single segment.
- */
-export function humanizeSeedSlug(atsType: string, slug: string): string {
-  if (atsType === "workday") {
-    const parts = slug.split(":")
-    const tenant = (parts[0] ?? "").trim()
-    const site = (parts[2] ?? "").trim()
-
-    const fromSite = titleCase(
-      site.replace(WORKDAY_GENERIC_SITE_WORD, " ").replace(/[_\-]+/g, " ").trim()
-    )
-    if (fromSite.length >= 2) return fromSite
-    return titleCase(tenant.replace(/[_\-]+/g, " ")) || slug
-  }
-  return titleCase(slug.replace(/[_\-]+/g, " ")) || slug
 }
 
 // ─── Stage 1: apply_url ATS detection ────────────────────────────────────────

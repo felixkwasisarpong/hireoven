@@ -24,7 +24,7 @@ loadEnvConfig(process.cwd())
 
 import { Pool } from "pg"
 import { computeConfidence } from "@/lib/discovery/confidence-score"
-import { humanizeSeedSlug } from "@/app/api/cron/discover-companies/route"
+import { humanizeSeedSlug } from "@/lib/discovery/seed-slug"
 
 const args        = process.argv.slice(2)
 const execute     = args.includes("--execute")
