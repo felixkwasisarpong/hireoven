@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server"
+import { resolveAppOrigin } from "@/lib/app-url"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { createClient } from "@/lib/supabase/server"
 
 export const runtime = "nodejs"
 
-export async function POST() {
+export async function POST(request: Request) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -31,7 +32,7 @@ export async function POST() {
     return NextResponse.json({ error: "No billing account found" }, { status: 404 })
   }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
+  const appUrl = resolveAppOrigin(request)
 
   const session = await stripe.billingPortal.sessions.create({
     customer: sub.stripe_customer_id,

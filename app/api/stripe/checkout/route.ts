@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { resolveAppOrigin } from "@/lib/app-url"
 import { isPaymentsDisabled } from "@/lib/admin/feature-flags"
 import { getPlanAmountCents, type BillingInterval, type PlanKey } from "@/lib/pricing"
 import { getPostgresPool } from "@/lib/postgres/server"
@@ -145,7 +146,7 @@ export async function POST(request: Request) {
     customerId = customer.id
   }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
+  const appUrl = resolveAppOrigin(request)
 
   const sessionParams: import("stripe").default.Checkout.SessionCreateParams = {
     customer: customerId,
