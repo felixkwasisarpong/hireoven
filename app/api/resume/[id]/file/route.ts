@@ -9,6 +9,20 @@ import type { Resume } from "@/types"
 export const runtime = "nodejs"
 export const maxDuration = 60
 
+/** Return a valid MIME string, or null if the value is a bare token / empty. */
+function normalizeMime(value: string | null | undefined): string | null {
+  if (!value) return null
+  const v = value.toLowerCase().trim()
+  // Generic/binary types tell us nothing and cause the browser to download —
+  // treat them as "unknown" so callers fall through to extension detection.
+  if (v === "application/octet-stream" || v === "binary/octet-stream") return null
+  if (v.includes("/")) return v          // already a specific MIME type
+  if (v === "pdf") return "application/pdf"
+  if (v === "docx") return "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+  if (v === "doc") return "application/msword"
+  return null
+}
+
 function sanitizeDownloadName(name: string | null | undefined, fallback = "resume.docx") {
   const cleaned = String(name ?? "")
     .replace(/[\\/:*?"<>|]+/g, " ")
@@ -17,19 +31,23 @@ function sanitizeDownloadName(name: string | null | undefined, fallback = "resum
   return cleaned || fallback
 }
 
-function contentDispositionFor(resume: Resume) {
+function contentDispositionFor(resume: Resume, forceDownload: boolean) {
   const fallbackName = sanitizeDownloadName(resume.file_name, "resume.docx")
   const preferredName = sanitizeDownloadName(
     resume.name ? `${resume.name}` : resume.file_name,
     fallbackName
   )
-  return `inline; filename="${preferredName}"`
+  const disposition = forceDownload ? "attachment" : "inline"
+  return `${disposition}; filename="${preferredName}"`
 }
 
 export async function GET(
   _request: Request,
   { params }: { params: { id: string } }
 ) {
+  // Only force a file download when explicitly requested (?download=1).
+  // Default is inline so iframe/tab previews don't trigger auto-downloads.
+  const forceDownload = new URL(_request.url).searchParams.get("download") === "1"
   const supabase = await createClient()
   const {
     data: { user },
@@ -56,9 +74,21 @@ export async function GET(
   if (resume.storage_path) {
     try {
       const object = await getResumeObject(resume.storage_path)
+      // Resolve a real MIME type. MinIO stores uploads as application/octet-stream
+      // by default, and `resume.file_type` is sometimes a bare token ("pdf").
+      // Either makes the browser DOWNLOAD even with inline disposition. So we
+      // detect the real type by extension FIRST and only trust the stored
+      // content-type when it's a specific, non-generic MIME.
+      const name = `${resume.file_name ?? ""} ${resume.file_type ?? ""} ${resume.storage_path ?? ""}`.toLowerCase()
+      const byExtension =
+        /\.pdf\b|\bpdf\b/.test(name) ? "application/pdf"
+        : /\.docx\b|\bdocx\b/.test(name) ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        : /\.doc\b/.test(name) ? "application/msword"
+        : null
       const contentType =
-        object.contentType ||
-        resume.file_type ||
+        byExtension ||
+        normalizeMime(object.contentType) ||
+        normalizeMime(resume.file_type) ||
         "application/octet-stream"
 
       const webStream = Readable.toWeb(object.stream as Readable) as ReadableStream
@@ -66,7 +96,7 @@ export async function GET(
       return new NextResponse(webStream, {
         headers: {
           "Content-Type": contentType,
-          "Content-Disposition": contentDispositionFor(resume),
+          "Content-Disposition": contentDispositionFor(resume, forceDownload),
           "Cache-Control": "private, no-store",
           ...(object.etag ? { ETag: object.etag } : {}),
           ...(object.lastModified
@@ -90,7 +120,7 @@ export async function GET(
       headers: {
         "Content-Type":
           "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "Content-Disposition": `attachment; filename="${sanitizeDownloadName(resume.name ?? resume.file_name, "resume")}.docx"`,
+        "Content-Disposition": `${forceDownload ? "attachment" : "inline"}; filename="${sanitizeDownloadName(resume.name ?? resume.file_name, "resume")}.docx"`,
         "Cache-Control": "no-store",
       },
     })

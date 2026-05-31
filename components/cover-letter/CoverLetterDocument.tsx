@@ -74,11 +74,10 @@ export default function CoverLetterDocument({
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const paragraphs = body.split("\n\n").filter(Boolean)
-  const today = new Date().toLocaleDateString("en-US", {
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  })
+  const [today, setToday] = useState("")
+  useEffect(() => {
+    setToday(new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }))
+  }, [])
 
   // Sync contenteditable with body prop when not editing
   useEffect(() => {

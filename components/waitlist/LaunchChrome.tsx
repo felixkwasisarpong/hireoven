@@ -24,7 +24,7 @@ export function LaunchFooter() {
     <footer className="border-t border-border py-10 text-center">
       <div className="mx-auto max-w-6xl px-4 text-sm text-muted-foreground">
         <p>
-          © {new Date().getFullYear()} Hireoven ·{" "}
+          © <span suppressHydrationWarning>{new Date().getFullYear()}</span> Hireoven ·{" "}
           <Link href="/privacy" className="font-medium underline-offset-4 hover:underline">
             Privacy
           </Link>{" "}
