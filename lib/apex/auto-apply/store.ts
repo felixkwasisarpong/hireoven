@@ -1,79 +1,99 @@
-import { createClient } from "@/lib/supabase/server"
-import type { AutoApplyPreferences, AutoApplyRecord, AutoApplyCriteria } from "./types"
+import { getPostgresPool } from "@/lib/postgres/server"
+import type { AutoApplyPreferences, AutoApplyRecord } from "./types"
 import { AUTO_APPLY_DEFAULTS } from "./types"
 
-const PREFS_KEY = "auto_apply_preferences"
+/**
+ * Server-side persistence for auto-apply prefs/log.
+ *
+ * NOTE: the client panel persists prefs in localStorage; these server helpers
+ * are best-effort and degrade gracefully when the optional
+ * `profiles.auto_apply_prefs` column or `apex_auto_apply_log` table are absent.
+ */
 
 export async function getAutoApplyPrefs(userId: string): Promise<AutoApplyPreferences> {
-  const supabase = await createClient()
-  const { data } = await supabase
-    .from("profiles")
-    .select("auto_apply_prefs")
-    .eq("id", userId)
-    .single()
-
-  const raw = (data as any)?.auto_apply_prefs
-  if (!raw) {
-    return { enabled: false, criteria: AUTO_APPLY_DEFAULTS, enabledAt: null }
+  try {
+    const pool = getPostgresPool()
+    const { rows } = await pool.query<{ auto_apply_prefs: AutoApplyPreferences | null }>(
+      `SELECT auto_apply_prefs FROM profiles WHERE id = $1 LIMIT 1`,
+      [userId],
+    )
+    const raw = rows[0]?.auto_apply_prefs
+    if (raw) return raw
+  } catch {
+    // column/table missing — fall through to defaults
   }
-  return raw as AutoApplyPreferences
+  return { enabled: false, criteria: AUTO_APPLY_DEFAULTS, enabledAt: null }
 }
 
 export async function saveAutoApplyPrefs(
   userId: string,
   prefs: AutoApplyPreferences,
 ): Promise<void> {
-  const supabase = await createClient()
-  await supabase
-    .from("profiles")
-    .update({ auto_apply_prefs: prefs })
-    .eq("id", userId)
+  try {
+    const pool = getPostgresPool()
+    await pool.query(
+      `UPDATE profiles SET auto_apply_prefs = $1::jsonb WHERE id = $2`,
+      [JSON.stringify(prefs), userId],
+    )
+  } catch {
+    // best-effort — client keeps prefs in localStorage regardless
+  }
 }
 
 export async function getAutoApplyLog(
   userId: string,
   limit = 20,
 ): Promise<AutoApplyRecord[]> {
-  const supabase = await createClient()
-  const { data } = await supabase
-    .from("apex_auto_apply_log")
-    .select("*")
-    .eq("user_id", userId)
-    .order("applied_at", { ascending: false })
-    .limit(limit)
-  return (data ?? []) as AutoApplyRecord[]
+  try {
+    const pool = getPostgresPool()
+    const { rows } = await pool.query<AutoApplyRecord>(
+      `SELECT * FROM apex_auto_apply_log
+       WHERE user_id = $1
+       ORDER BY applied_at DESC
+       LIMIT $2`,
+      [userId, limit],
+    )
+    return rows
+  } catch {
+    return []
+  }
 }
 
 export async function logAutoApply(
   userId: string,
   record: Omit<AutoApplyRecord, "id">,
 ): Promise<void> {
-  const supabase = await createClient()
-  await supabase.from("apex_auto_apply_log").insert({
-    user_id: userId,
-    job_id: record.jobId,
-    job_title: record.jobTitle,
-    company: record.company,
-    match_score: record.matchScore,
-    applied_at: record.appliedAt,
-    qualified_by: record.qualifiedBy,
-    cover_letter_id: record.coverLetterId,
-    tailored_resume_id: record.tailoredResumeId,
-    status: record.status,
-    error: record.error,
-  })
+  try {
+    const pool = getPostgresPool()
+    await pool.query(
+      `INSERT INTO apex_auto_apply_log
+         (user_id, job_id, job_title, company, match_score, applied_at,
+          qualified_by, cover_letter_id, tailored_resume_id, status, error)
+       VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9,$10,$11)`,
+      [
+        userId, record.jobId, record.jobTitle, record.company, record.matchScore,
+        record.appliedAt, JSON.stringify(record.qualifiedBy ?? {}),
+        record.coverLetterId, record.tailoredResumeId, record.status, record.error,
+      ],
+    )
+  } catch {
+    // best-effort
+  }
 }
 
 /** How many auto-applies have fired today for this user */
 export async function getTodayAutoApplyCount(userId: string): Promise<number> {
-  const supabase = await createClient()
-  const startOfDay = new Date()
-  startOfDay.setHours(0, 0, 0, 0)
-  const { count } = await supabase
-    .from("apex_auto_apply_log")
-    .select("*", { count: "exact", head: true })
-    .eq("user_id", userId)
-    .eq("status", "applied")
-    .gte("applied_at", startOfDay.toISOString())
-  return count ?? 0
+  try {
+    const pool = getPostgresPool()
+    const startOfDay = new Date()
+    startOfDay.setHours(0, 0, 0, 0)
+    const { rows } = await pool.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count FROM apex_auto_apply_log
+       WHERE user_id = $1 AND status = 'applied' AND applied_at >= $2`,
+      [userId, startOfDay.toISOString()],
+    )
+    return parseInt(rows[0]?.count ?? "0", 10)
+  } catch {
+    return 0
+  }
 }

@@ -130,10 +130,10 @@ export async function POST(request: Request) {
       meta.sponsorshipRelated ?? false, meta.workMode ?? null,
       source, now,
     ],
-  ).then(() => ({ ok: true }))
+  ).then(() => ({ ok: true as const, error: undefined }))
    .catch((err) => {
     console.error("[apex/outcomes/record] insert failed", err)
-    return { ok: false, error: err instanceof Error ? err.message : "insert failed" }
+    return { ok: false as const, error: err instanceof Error ? err.message : "insert failed" }
   })
 
   if (!insertResult.ok) {

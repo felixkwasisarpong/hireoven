@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
+import { getPostgresPool } from "@/lib/postgres/server"
 import { rankConnections, type ShadowConnection } from "@/lib/apex/shadow-network/scorer"
 import { generateDM } from "@/lib/apex/shadow-network/outreach"
 
@@ -43,17 +44,17 @@ export async function PUT(req: NextRequest) {
   const body = await req.json().catch(() => null)
   if (!body?.connection) return err(400, "connection is required")
 
-  // Get candidate profile for personalization. Column set varies across
-  // environments, so select * and read defensively — never let this 500 the route.
+  // Get candidate profile for personalization. Read defensively via the
+  // postgres pool (the server supabase client is auth-only in this codebase).
   let candidateName = "there"
   let candidateHeadline = "software engineer"
   try {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", user.id)
-      .single()
-    const p = profile as Record<string, unknown> | null
+    const pool = getPostgresPool()
+    const { rows } = await pool.query<Record<string, unknown>>(
+      `SELECT * FROM profiles WHERE id = $1 LIMIT 1`,
+      [user.id],
+    )
+    const p = rows[0]
     candidateName     = (p?.full_name as string) || (p?.name as string) || "there"
     candidateHeadline = (p?.headline as string) || (p?.current_title as string) || "software engineer"
   } catch {

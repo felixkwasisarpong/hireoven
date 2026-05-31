@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
+import { getPostgresPool } from "@/lib/postgres/server"
 import { runPipelineSimulation, type FunnelMetrics } from "@/lib/apex/pipeline-sim/simulator"
 
 function err(status: number, msg: string) {
@@ -36,13 +37,19 @@ export async function GET() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return err(401, "Unauthorized")
 
-  // Derive funnel metrics from real application data
-  const { data: apps } = await supabase
-    .from("applications")
-    .select("status, created_at")
-    .eq("user_id", user.id)
-
-  const all = apps ?? []
+  // Derive funnel metrics from real application data (via postgres pool —
+  // the server supabase client is auth-only in this codebase).
+  let all: Array<{ status: string; created_at: string }> = []
+  try {
+    const pool = getPostgresPool()
+    const { rows } = await pool.query<{ status: string; created_at: string }>(
+      `SELECT status, created_at FROM job_applications WHERE user_id = $1`,
+      [user.id],
+    )
+    all = rows
+  } catch {
+    all = []
+  }
   const now  = new Date()
   const oldest = all.length > 0 ? new Date(all.reduce((min, a) => a.created_at < min ? a.created_at : min, all[0].created_at)) : now
   const weeksElapsed = Math.max(1, Math.round((now.getTime() - oldest.getTime()) / (7 * 24 * 3600 * 1000)))
