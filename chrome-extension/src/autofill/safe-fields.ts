@@ -1,5 +1,5 @@
 /**
- * Scout MVP — Safe-fields autofill detector for ATS application forms.
+ * Apex MVP — Safe-fields autofill detector for ATS application forms.
  *
  * Hard constraints (do NOT relax without owner review):
  *   - Best-effort profile autofill across ATSes. Workday has its own step-aware runner.
@@ -697,9 +697,9 @@ export function buildAutofillPreview(
       })
       continue
     }
-    // Cover letter upload: detected here so scout-bar knows the selector.
+    // Cover letter upload: detected here so apex-bar knows the selector.
     // The actual generate/review/attach flow runs in a separate phase after
-    // the regular profile fill (see scout-bar's CoverLetter section), so
+    // the regular profile fill (see apex-bar's CoverLetter section), so
     // applySafeFills() must skip these rows. We surface them with
     // source: "cover_letter" as the signal.
     if (f.safeKey === "cover_letter_upload") {
@@ -828,7 +828,7 @@ export async function applySafeFills(
       out.push(item)
       continue
     }
-    // Cover letter rows are owned by the cover-letter review flow in scout-bar.
+    // Cover letter rows are owned by the cover-letter review flow in apex-bar.
     // Pass them through unchanged so the bar can attach later.
     if (item.source === "cover_letter") {
       out.push(item)
@@ -894,7 +894,7 @@ export async function applySafeFills(
 
 /**
  * Attach a generated DOCX (resume or cover letter) to a file input via the
- * same DataTransfer pattern used by JobRight / FrogHire. Exported so scout-bar
+ * same DataTransfer pattern used by JobRight / FrogHire. Exported so apex-bar
  * can call it directly for the cover-letter Attach step.
  */
 export function injectDocxFile(target: HTMLInputElement, bytes: ResumeBytes): boolean {

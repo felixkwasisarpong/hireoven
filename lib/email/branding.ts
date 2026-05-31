@@ -31,9 +31,9 @@ export function getHireovenEmailLogoUrl(variant: "wordmark" | "icon" = "wordmark
   return `${base}${path}`
 }
 
-/** Canonical Chrome Web Store URL for the Hireoven Scout Bridge extension. */
+/** Canonical Chrome Web Store URL for the Hireoven Apex Bridge extension. */
 const CHROME_STORE_URL =
-  "https://chromewebstore.google.com/detail/hireoven-scout-bridge/mkmfffcaimjnaecoelnanifookmdbfok"
+  "https://chromewebstore.google.com/detail/hireoven-apex-bridge/mkmfffcaimjnaecoelnanifookmdbfok"
 
 /**
  * Light, tasteful Chrome-extension promo block rendered just above the
@@ -81,7 +81,7 @@ export function renderEmailExtensionFooter(): string {
 /**
  * Returns the Hireoven job-detail URL for an email link target. We route
  * email + push notifications through the in-app detail page (not the raw
- * apply_url) so users land in the Hireoven workspace where Scout, match
+ * apply_url) so users land in the Hireoven workspace where Apex, match
  * scores, and save/apply controls live.
  */
 export function getHireovenJobDetailUrl(jobId: string): string {

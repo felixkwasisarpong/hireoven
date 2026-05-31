@@ -104,8 +104,8 @@ const PLAN_LABELS: Record<string, string> = {
 const PLAN_TAGLINES: Record<string, string> = {
   free: "Browse the live job feed and track applications.",
   pro: "AI tools, unlimited alerts, autofill, and deep analyses.",
-  pro_international: "Everything in Pro plus Scout strategy and unlimited AI tools.",
-  pro_max: "Everything in Pro plus Scout strategy and unlimited AI tools.",
+  pro_international: "Everything in Pro plus Apex strategy and unlimited AI tools.",
+  pro_max: "Everything in Pro plus Apex strategy and unlimited AI tools.",
 }
 
 const STATUS_LABELS: Record<string, { label: string; color: string; dot: string }> = {
@@ -1074,7 +1074,7 @@ export default function BillingPageClient({
                 ? `Promo ${promoCode} will be applied at checkout. ${promoLabel ?? ""}`
                 : studentStatus?.isStudent
                   ? "Student discount (30% off) will be applied automatically at checkout."
-                  : "Live voice interviews, Scout strategy, and unlimited AI usage."
+                  : "Live voice interviews, Apex strategy, and unlimited AI usage."
             }
             ctaLabel="Upgrade"
             onClick={() => startCheckout("pro_max", resolvedInterval)}

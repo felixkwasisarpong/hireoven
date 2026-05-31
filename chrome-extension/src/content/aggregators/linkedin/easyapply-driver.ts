@@ -304,7 +304,7 @@ async function gateStep(stepName: string, payload: Record<string, unknown>): Pro
       resolve({ approved: false, reason: "no_runtime" })
       return
     }
-    chrome.runtime.sendMessage({ type: "SCOUT_GATE_STEP", driver: "linkedin", stepName, ...payload }, (response) => {
+    chrome.runtime.sendMessage({ type: "APEX_GATE_STEP", driver: "linkedin", stepName, ...payload }, (response) => {
       clearTimeout(timer)
       if (chrome.runtime.lastError) {
         resolve({ approved: false, reason: chrome.runtime.lastError.message })
@@ -324,7 +324,7 @@ async function askForAnswer(question: string): Promise<string | null> {
       resolve(null)
       return
     }
-    chrome.runtime.sendMessage({ type: "SCOUT_NEEDS_ANSWER", driver: "linkedin", question }, (response) => {
+    chrome.runtime.sendMessage({ type: "APEX_NEEDS_ANSWER", driver: "linkedin", question }, (response) => {
       clearTimeout(timer)
       if (chrome.runtime.lastError) {
         resolve(null)

@@ -17,6 +17,7 @@ import {
   ShieldAlert,
   ShieldCheck,
   Sparkles,
+  Triangle,
   TrendingUp,
   Users,
   Wand2,
@@ -56,14 +57,14 @@ export const NAV_GROUPS: Record<string, DashboardNavGroup> = {
 export const DASHBOARD_NAV_ITEMS: DashboardNavItem[] = [
   // ── Top level ───────────────────────────────────────────────────────────────
   { label: "Feed",           href: "/dashboard",                          icon: LayoutGrid },
-  { label: "Scout",          href: "/dashboard/scout",                    icon: Sparkles,   gate: "scout_actions" },
+  { label: "Apex",          href: "/dashboard/apex",                    icon: Triangle,   gate: "apex_actions" },
   { label: "Interview",      href: "/dashboard/interview",                icon: Mic },
   { label: "Watchlist",      href: "/dashboard/watchlist",                icon: BookmarkCheck },
   { label: "Alerts",         href: "/dashboard/alerts",                   icon: Bell },
   { label: "H-1B Intel",     href: "/dashboard/international/h1b-explorer", icon: Plane },
-  { label: "Cohorts",        href: "/dashboard/cohorts",                  icon: Users,      gate: "scout_strategy" },
-  { label: "Fair Chance",    href: "/dashboard/background-check",         icon: ShieldCheck, gate: "scout_strategy" },
-  { label: "Brand",          href: "/dashboard/brand",                    icon: TrendingUp, gate: "scout_strategy" },
+  { label: "Cohorts",        href: "/dashboard/cohorts",                  icon: Users,      gate: "apex_strategy" },
+  { label: "Fair Chance",    href: "/dashboard/background-check",         icon: ShieldCheck, gate: "apex_strategy" },
+  { label: "Brand",          href: "/dashboard/brand",                    icon: TrendingUp, gate: "apex_strategy" },
 
   // ── My Career ───────────────────────────────────────────────────────────────
   { label: "Applications",   href: "/dashboard/applications",             icon: ClipboardList,  group: "My Career" },

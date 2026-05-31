@@ -9,8 +9,8 @@ import ProblemStatement from "@/components/interview/ProblemStatement"
 import LanguageToggle from "@/components/interview/LanguageToggle"
 import TestConsole from "@/components/interview/TestConsole"
 import CodingInterviewerPanel from "@/components/interview/CodingInterviewerPanel"
-import { CodingRunner, isServerSideLanguage, type TestRunResult, type CodingLanguage, type RunnerStatus } from "@/lib/scout/interview/codingRunner"
-import { parsePythonSignature, generateGoStarter, generateJavaStarter } from "@/lib/scout/interview/languageUtils"
+import { CodingRunner, isServerSideLanguage, type TestRunResult, type CodingLanguage, type RunnerStatus } from "@/lib/apex/interview/codingRunner"
+import { parsePythonSignature, generateGoStarter, generateJavaStarter } from "@/lib/apex/interview/languageUtils"
 
 // Monaco must be client-only and lazy
 const MonacoEditor = dynamic(() => import("@/components/interview/MonacoEditor"), { ssr: false })

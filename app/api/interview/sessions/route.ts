@@ -9,7 +9,7 @@ import {
   listSessionsForJob,
   type InterviewPersona,
   type InterviewQuestionSet,
-} from "@/lib/scout/interview/queries"
+} from "@/lib/apex/interview/queries"
 
 export const runtime = "nodejs"
 

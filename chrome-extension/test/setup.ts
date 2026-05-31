@@ -13,7 +13,7 @@ const sentMessages: Array<{ type?: string; payload: Record<string, unknown> }> =
 
 const chromeStub = {
   runtime: {
-    id: "scout-test-extension",
+    id: "apex-test-extension",
     lastError: undefined as { message: string } | undefined,
     onMessage: {
       addListener: (fn: StubMessageListener) => {

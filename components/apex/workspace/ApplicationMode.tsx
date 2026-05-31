@@ -1,0 +1,178 @@
+"use client"
+
+import { useEffect, useState } from "react"
+import { CheckCircle2, TrendingUp, Zap } from "lucide-react"
+import { ApexWorkflowRenderer } from "@/components/apex/ApexWorkflowRenderer"
+import { ApexActionRenderer } from "@/components/apex/ApexActionRenderer"
+import { ApexInterviewPrepRenderer } from "@/components/apex/ApexInterviewPrepRenderer"
+import { ApexFeedbackPrompt } from "@/components/apex/ApexFeedbackPrompt"
+import { isOutcomeLearningDisabled } from "@/lib/apex/outcomes/store"
+import type { ApexResponse } from "@/lib/apex/types"
+import type { ActiveEntities } from "./ApexWorkspaceShell"
+import type { OutcomeLearningResult, ApplicationOutcome } from "@/lib/apex/outcomes/types"
+import { getApexDisplayText as getReadableAnswer } from "@/lib/apex/display-text"
+
+type Props = {
+  response:      ApexResponse
+  onFollowUp:    (query: string) => void
+  activeEntities?: ActiveEntities
+}
+
+export function ApplicationMode({ response, onFollowUp, activeEntities }: Props) {
+  const answerText       = getReadableAnswer(response.answer)
+  const hasWorkflow      = Boolean(response.workflow)
+  const hasInterviewPrep = Boolean(response.interviewPrep)
+  const hasActions       = (response.actions?.length ?? 0) > 0
+  const isInterviewFocused = hasInterviewPrep || response.intent === "interview_prep"
+
+  const [outcomeLearning, setOutcomeLearning] = useState<OutcomeLearningResult | null>(null)
+  const [learningDisabled] = useState(() => isOutcomeLearningDisabled())
+
+  // Fetch outcome learning data when in applications mode
+  useEffect(() => {
+    if (learningDisabled) return
+    fetch("/api/apex/outcomes")
+      .then(async (res) => {
+        if (!res.ok) return
+        const data = (await res.json().catch(() => null)) as OutcomeLearningResult | null
+        if (data) setOutcomeLearning(data)
+      })
+      .catch(() => {})
+  }, [learningDisabled])
+
+  const followUpChips = isInterviewFocused
+    ? ["Give me a practice question", "What should I research?", "How should I answer compensation?"]
+    : ["What's my next action?", "Which application needs attention?", "Draft a follow-up email"]
+
+  const hasOutcomeSignals = (outcomeLearning?.signals?.length ?? 0) > 0
+  const hasFeedbackNeeded = (outcomeLearning?.feedbackNeeded?.length ?? 0) > 0
+
+  return (
+    <div className="grid gap-5 lg:grid-cols-[1fr_240px]">
+
+      {/* ── Left: main workflow ───────────────────────────────────────── */}
+      <div className="space-y-5">
+        {/* Mode header */}
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-slate-950">
+            {isInterviewFocused
+              ? <CheckCircle2 className="h-3.5 w-3.5 text-white" />
+              : <Zap className="h-3.5 w-3.5 text-white" />}
+          </div>
+          <p className="text-sm font-semibold text-gray-900">
+            {isInterviewFocused ? "Interview preparation" : "Application workflow"}
+          </p>
+        </div>
+
+        {hasWorkflow && response.workflow && (
+          <ApexWorkflowRenderer workflow={response.workflow} />
+        )}
+
+        {hasInterviewPrep && response.interviewPrep && (
+          <ApexInterviewPrepRenderer interviewPrep={response.interviewPrep} />
+        )}
+
+        {hasActions && !hasWorkflow && (
+          <ApexActionRenderer actions={response.actions} source="chat" />
+        )}
+
+        {/* Outcome feedback prompts — subtle, max 2, not nagging */}
+        {!learningDisabled && hasFeedbackNeeded && (
+          <ApexFeedbackPrompt
+            items={outcomeLearning!.feedbackNeeded}
+            outcomeLearningDisabled={learningDisabled}
+          />
+        )}
+
+        <div className="flex flex-wrap gap-2">
+          {followUpChips.map((chip) => (
+            <button
+              key={chip}
+              type="button"
+              onClick={() => onFollowUp(chip)}
+              className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-500 transition hover:border-slate-950 hover:bg-slate-950 hover:text-white"
+            >
+              {chip}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Right: intelligence pane ───────────────────────────────────── */}
+      <div className="hidden space-y-4 lg:block">
+        {answerText && (
+          <div>
+            <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-gray-400">
+              Apex context
+            </p>
+            <p className="text-xs leading-5 text-gray-600">{answerText}</p>
+          </div>
+        )}
+
+        {(activeEntities?.jobTitle || activeEntities?.companyName) && (
+          <div className={answerText ? "border-t border-gray-100 pt-4" : ""}>
+            <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-gray-400">
+              Active role
+            </p>
+            {activeEntities?.jobTitle && (
+              <p className="text-sm font-semibold text-gray-800">{activeEntities.jobTitle}</p>
+            )}
+            {activeEntities?.companyName && (
+              <p className="mt-0.5 text-xs text-gray-500">{activeEntities.companyName}</p>
+            )}
+          </div>
+        )}
+
+        {/* Outcome learning signals — compact right rail */}
+        {!learningDisabled && hasOutcomeSignals && outcomeLearning && (
+          <div className="border-t border-gray-100 pt-4">
+            <div className="flex items-center gap-1.5 mb-2">
+              <TrendingUp className="h-3 w-3 text-[#6366F1]" />
+              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-gray-400">
+                What&apos;s working
+              </p>
+            </div>
+            <ul className="space-y-2">
+              {outcomeLearning.signals.slice(0, 2).map((sig) => (
+                <li key={sig.id} className="text-[11px] leading-5 text-gray-500">
+                  {sig.signal}
+                </li>
+              ))}
+            </ul>
+            <div className="mt-3 grid grid-cols-3 gap-1 rounded-lg bg-gray-50 p-2.5">
+              <div className="text-center">
+                <p className="text-base font-bold text-gray-800">{outcomeLearning.stats.responseRate}%</p>
+                <p className="text-[9px] text-gray-400">Response</p>
+              </div>
+              <div className="text-center">
+                <p className="text-base font-bold text-gray-800">{outcomeLearning.stats.interviewRate}%</p>
+                <p className="text-[9px] text-gray-400">Interview</p>
+              </div>
+              <div className="text-center">
+                <p className="text-base font-bold text-gray-800">{outcomeLearning.stats.totalApplications}</p>
+                <p className="text-[9px] text-gray-400">Applied</p>
+              </div>
+            </div>
+            <p className="mt-2 text-[9px] text-gray-300">Based on recorded outcomes only</p>
+          </div>
+        )}
+
+        {isInterviewFocused && (
+          <div className="border-t border-gray-100 pt-4">
+            <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-gray-400">
+              Prep checklist
+            </p>
+            <ul className="space-y-1.5 text-xs text-gray-500">
+              {["Review the job requirements", "Practice 3–5 questions", "Prepare your story", "Research the company"].map((item) => (
+                <li key={item} className="flex items-center gap-2">
+                  <span className="h-1 w-1 flex-shrink-0 rounded-full bg-gray-300" />
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}

@@ -2,7 +2,7 @@ import SetupForm from "@/components/interview/SetupForm"
 import { getSessionUser } from "@/lib/auth/session-user"
 import { getPlanForUserId } from "@/lib/gates/server-gate"
 import { getPostgresPool } from "@/lib/postgres/server"
-import { creditsForDuration, getBalance } from "@/lib/scout/interview/credits"
+import { creditsForDuration, getBalance } from "@/lib/apex/interview/credits"
 
 export const dynamic = "force-dynamic"
 

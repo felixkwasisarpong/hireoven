@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { generateDigestForAllActiveUsers } from "@/lib/scout/salary/weekly-digest"
+import { generateDigestForAllActiveUsers } from "@/lib/apex/salary/weekly-digest"
 
 export const dynamic = "force-dynamic"
 export const maxDuration = 300

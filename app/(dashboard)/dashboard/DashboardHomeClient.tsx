@@ -13,8 +13,8 @@ import DashboardSpotlightColumn from "@/components/dashboard/DashboardSpotlightC
 import JobFeed from "@/components/jobs/JobFeed"
 import PushNotificationSetup from "@/components/notifications/PushNotificationSetup"
 import dynamic from "next/dynamic"
-const ScoutMiniPanel  = dynamic(() => import("@/components/scout/ScoutMiniPanel").then(m => ({ default: m.ScoutMiniPanel })), { ssr: false })
-const ScoutFocusBanner = dynamic(() => import("@/components/scout/ScoutFocusBanner").then(m => ({ default: m.ScoutFocusBanner })), { ssr: false })
+const ApexMiniPanel  = dynamic(() => import("@/components/apex/ApexMiniPanel").then(m => ({ default: m.ApexMiniPanel })), { ssr: false })
+const ApexFocusBanner = dynamic(() => import("@/components/apex/ApexFocusBanner").then(m => ({ default: m.ApexFocusBanner })), { ssr: false })
 import { useResumeContext } from "@/components/resume/ResumeProvider"
 import { parseJobFilters } from "@/components/jobs/JobFilters"
 import { getSearchQuery } from "@/components/jobs/JobSearch"
@@ -64,12 +64,12 @@ export default function DashboardHomeClient({
   useEffect(() => {
     if (typeof window === "undefined") return
     if (searchParams.get("focus") === "1") {
-      try { localStorage.setItem("hireoven:scout-focus-mode:v1", "1") } catch {}
+      try { localStorage.setItem("hireoven:apex-focus-mode:v1", "1") } catch {}
       setLocalFocusMode(true)
       return
     }
     try {
-      setLocalFocusMode(localStorage.getItem("hireoven:scout-focus-mode:v1") === "1")
+      setLocalFocusMode(localStorage.getItem("hireoven:apex-focus-mode:v1") === "1")
     } catch {
       setLocalFocusMode(false)
     }
@@ -81,14 +81,14 @@ export default function DashboardHomeClient({
       setLocalFocusMode(Boolean(detail?.enabled))
     }
     function onStorage(e: StorageEvent) {
-      if (e.key === "hireoven:scout-focus-mode:v1") {
+      if (e.key === "hireoven:apex-focus-mode:v1") {
         setLocalFocusMode(e.newValue === "1")
       }
     }
-    window.addEventListener("scout:focus-mode-changed", onFocusChanged)
+    window.addEventListener("apex:focus-mode-changed", onFocusChanged)
     window.addEventListener("storage", onStorage)
     return () => {
-      window.removeEventListener("scout:focus-mode-changed", onFocusChanged)
+      window.removeEventListener("apex:focus-mode-changed", onFocusChanged)
       window.removeEventListener("storage", onStorage)
     }
   }, [])
@@ -104,12 +104,12 @@ export default function DashboardHomeClient({
 
   const [feedMeta, setFeedMeta] = useState({ totalCount: 0 })
 
-  // Notify Scout components (e.g. confirmation banner) whenever the feed count
+  // Notify Apex components (e.g. confirmation banner) whenever the feed count
   // updates — no new AI call required, purely client-side piggyback
   useEffect(() => {
     if (feedMeta.totalCount > 0 && typeof window !== "undefined") {
       window.dispatchEvent(
-        new CustomEvent("scout:feed-updated", {
+        new CustomEvent("apex:feed-updated", {
           detail: { totalCount: feedMeta.totalCount },
         })
       )
@@ -162,7 +162,7 @@ export default function DashboardHomeClient({
             </h2>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">
               {upgradeModal.plan === "pro_max"
-                ? "You now have live interviews, Scout strategy insights, and unlimited AI tools unlocked."
+                ? "You now have live interviews, Apex strategy insights, and unlimited AI tools unlocked."
                 : "You now have AI match scores, resume tools, cover letters, autofill, and deeper job intelligence unlocked."}
             </p>
             <div className="mt-4 rounded-lg border border-[hsl(var(--accent-soft-border))] bg-[hsl(var(--accent-soft))] p-4">
@@ -217,7 +217,7 @@ export default function DashboardHomeClient({
                   filtersBarRef={filtersBarRef}
                 />
 
-                {focusMode && <ScoutFocusBanner />}
+                {focusMode && <ApexFocusBanner />}
 
                 <JobFeed
                   filters={filters}
@@ -238,7 +238,7 @@ export default function DashboardHomeClient({
           </div>
         </div>
       </div>
-      <ScoutMiniPanel
+      <ApexMiniPanel
         pagePath="/dashboard"
         suggestionChips={[
           "Show jobs worth my time",

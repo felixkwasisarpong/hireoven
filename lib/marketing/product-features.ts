@@ -168,8 +168,8 @@ export const JOB_INTEL_FEATURES: {
   },
 ]
 
-/** Scout AI — career intelligence layer */
-export const SCOUT_FEATURES: {
+/** Apex AI — career intelligence layer */
+export const APEX_FEATURES: {
   icon: LucideIcon
   title: string
   body: string
@@ -178,8 +178,8 @@ export const SCOUT_FEATURES: {
 }[] = [
   {
     icon: BrainCircuit,
-    title: "Scout chat: your AI career coach",
-    body: "Ask Scout anything about your search: which roles fit your profile, what companies to target, how to position your experience. Conversational, context-aware, and grounded in your resume.",
+    title: "Apex chat: your AI career coach",
+    body: "Ask Apex anything about your search: which roles fit your profile, what companies to target, how to position your experience. Conversational, context-aware, and grounded in your resume.",
     accent: "text-indigo-700",
     ring: "border-indigo-200 bg-indigo-50",
   },
@@ -200,14 +200,14 @@ export const SCOUT_FEATURES: {
   {
     icon: BarChart4,
     title: "Strategy plans + cohort insights",
-    body: "Scout maps your profile against an anonymised cohort of candidates in the same search. See where you rank, where the gaps are, and where to focus next.",
+    body: "Apex maps your profile against an anonymised cohort of candidates in the same search. See where you rank, where the gaps are, and where to focus next.",
     accent: "text-violet-700",
     ring: "border-violet-200 bg-violet-50",
   },
   {
     icon: Users,
     title: "Bulk job analysis",
-    body: "Drop in a list of jobs and Scout ranks them by fit, flags the ones with the best visa signal, and tells you which to prioritise, without opening 30 tabs.",
+    body: "Drop in a list of jobs and Apex ranks them by fit, flags the ones with the best visa signal, and tells you which to prioritise, without opening 30 tabs.",
     accent: "text-sky-700",
     ring: "border-sky-200 bg-sky-50",
   },
@@ -266,7 +266,7 @@ export const INTERVIEW_FEATURES: {
   {
     icon: Flame,
     title: "Skill coverage tracking",
-    body: "After each session, Scout tracks which skills the interviewer covered. Over multiple practice rounds you see which competencies you've drilled and which still need reps.",
+    body: "After each session, Apex tracks which skills the interviewer covered. Over multiple practice rounds you see which competencies you've drilled and which still need reps.",
     accent: "text-indigo-700",
     ring: "border-indigo-200 bg-indigo-50",
   },

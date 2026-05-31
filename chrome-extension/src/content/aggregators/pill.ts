@@ -1,6 +1,6 @@
 /**
  * Vanilla-DOM CTA pill injected by aggregator handlers next to the
- * native apply button. Stands in for the brief's React `scout-pill.tsx`
+ * native apply button. Stands in for the brief's React `apex-pill.tsx`
  * since the extension is vanilla TS.
  *
  * Variants will be extended in Deliverable 6 (CTA fatigue suppression,
@@ -22,12 +22,12 @@ export interface PillOptions {
   onDismiss?: () => void
 }
 
-const SCOUT_PILL_DATA_ATTR = "data-scout-pill"
+const APEX_PILL_DATA_ATTR = "data-apex-pill"
 
 export function createPill(opts: PillOptions): HTMLButtonElement {
   const btn = document.createElement("button")
   btn.type = "button"
-  btn.setAttribute(SCOUT_PILL_DATA_ATTR, "1")
+  btn.setAttribute(APEX_PILL_DATA_ATTR, "1")
   if (opts.testId) btn.setAttribute("data-testid", opts.testId)
 
   const palette = paletteFor(opts.variant)
@@ -77,7 +77,7 @@ export function createPill(opts: PillOptions): HTMLButtonElement {
     const dismiss = document.createElement("span")
     dismiss.textContent = "✕"
     dismiss.setAttribute("role", "button")
-    dismiss.setAttribute("aria-label", "Dismiss Scout pill")
+    dismiss.setAttribute("aria-label", "Dismiss Apex pill")
     dismiss.style.cssText = [
       "display: inline-flex",
       "align-items: center",
@@ -110,8 +110,8 @@ export function injectPillAfter(anchor: Element, pill: HTMLButtonElement): void 
 export function injectPillsAfter(anchor: Element, pills: HTMLButtonElement[]): void {
   const parent = anchor.parentElement
   if (!parent) return
-  // Remove any prior scout pill the handler injected, so route changes don't stack pills.
-  parent.querySelectorAll<HTMLElement>(`[${SCOUT_PILL_DATA_ATTR}]`).forEach((node) => node.remove())
+  // Remove any prior apex pill the handler injected, so route changes don't stack pills.
+  parent.querySelectorAll<HTMLElement>(`[${APEX_PILL_DATA_ATTR}]`).forEach((node) => node.remove())
   let cursor: Element = anchor
   for (const pill of pills) {
     cursor.insertAdjacentElement("afterend", pill)

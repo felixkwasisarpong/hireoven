@@ -142,7 +142,7 @@ function isPlaceholderDomain(d: string | null | undefined): boolean {
   return (
     n.endsWith(".lca-employer") ||
     n.endsWith(".uscis-employer") ||
-    n.endsWith(".scout-placeholder") ||
+    n.endsWith(".apex-placeholder") ||
     !n
   )
 }

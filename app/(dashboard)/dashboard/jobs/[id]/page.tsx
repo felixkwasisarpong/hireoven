@@ -18,7 +18,7 @@ import {
 } from "lucide-react"
 import JobDetailPanel from "@/components/jobs/JobDetailPanel"
 import JobShareRow from "@/components/jobs/JobShareRow"
-import { ScoutMiniPanel } from "@/components/scout/ScoutMiniPanel"
+import { ApexMiniPanel } from "@/components/apex/ApexMiniPanel"
 import CompanyLogo from "@/components/ui/CompanyLogo"
 import { jobSourceFallbackLogo } from "@/lib/jobs/source-fallback-logo"
 import {
@@ -896,7 +896,7 @@ export default async function DashboardJobDetailPage({ params }: Props) {
         </div>
       </div>
 
-      <ScoutMiniPanel
+      <ApexMiniPanel
         pagePath={`/dashboard/jobs/${id}`}
         jobId={id}
         companyId={company?.id ?? undefined}

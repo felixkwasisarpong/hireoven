@@ -5,7 +5,7 @@
  * Hard rules:
  *   - Never auto-clicks the final submit button on review.
  *   - BEFORE filling screeners, scans for hard-disqualifier yes/no questions and
- *     pauses for user decision (SCOUT_DISQUALIFY_WARNING) when a saved answer
+ *     pauses for user decision (APEX_DISQUALIFY_WARNING) when a saved answer
  *     would end the flow.
  *   - Never polls Indeed; never re-fetches from background. Indeed rate-limits
  *     aggressively, so all DOM observation is event-driven.
@@ -324,7 +324,7 @@ async function gateStep(stepName: string, payload: Record<string, unknown>): Pro
       resolve({ approved: false, reason: "no_runtime" })
       return
     }
-    chrome.runtime.sendMessage({ type: "SCOUT_GATE_STEP", driver: "indeed", stepName, ...payload }, (response) => {
+    chrome.runtime.sendMessage({ type: "APEX_GATE_STEP", driver: "indeed", stepName, ...payload }, (response) => {
       clearTimeout(timer)
       if (chrome.runtime.lastError) {
         resolve({ approved: false, reason: chrome.runtime.lastError.message })
@@ -344,7 +344,7 @@ async function askForAnswer(question: string): Promise<string | null> {
       resolve(null)
       return
     }
-    chrome.runtime.sendMessage({ type: "SCOUT_NEEDS_ANSWER", driver: "indeed", question }, (response) => {
+    chrome.runtime.sendMessage({ type: "APEX_NEEDS_ANSWER", driver: "indeed", question }, (response) => {
       clearTimeout(timer)
       if (chrome.runtime.lastError) {
         resolve(null)
@@ -366,7 +366,7 @@ async function disqualifyWarning(question: string, savedAnswer: string): Promise
       return
     }
     chrome.runtime.sendMessage(
-      { type: "SCOUT_DISQUALIFY_WARNING", driver: "indeed", question, savedAnswer },
+      { type: "APEX_DISQUALIFY_WARNING", driver: "indeed", question, savedAnswer },
       (response) => {
         clearTimeout(timer)
         if (chrome.runtime.lastError) {

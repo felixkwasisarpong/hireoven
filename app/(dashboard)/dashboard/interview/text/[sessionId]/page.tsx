@@ -8,13 +8,13 @@ import { getSessionUser } from "@/lib/auth/session-user"
 import { canAccess } from "@/lib/gates"
 import { getPlanForUserId } from "@/lib/gates/server-gate"
 import { getPostgresPool } from "@/lib/postgres/server"
-import { deriveSkillList } from "@/lib/scout/interview/context"
+import { deriveSkillList } from "@/lib/apex/interview/context"
 import {
   getInterviewSession,
   getTurns,
   type InterviewSession,
   type InterviewTurn,
-} from "@/lib/scout/interview/queries"
+} from "@/lib/apex/interview/queries"
 
 export const dynamic = "force-dynamic"
 

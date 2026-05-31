@@ -49,13 +49,13 @@ if (!TOKEN) {
 type Row = { id: string; name: string; domain: string }
 
 /**
- * Some rows carry a "scout-placeholder" suffix (e.g. "warnerbros.scout-placeholder")
+ * Some rows carry a "apex-placeholder" suffix (e.g. "warnerbros.apex-placeholder")
  * meaning we discovered the company but never resolved the real domain. Strip the
  * suffix and assume `.com` so logo.dev has a fighting chance.
  */
 function probeDomainFor(rawDomain: string): string {
   const d = rawDomain.toLowerCase().trim()
-  if (d.endsWith(".scout-placeholder")) return d.replace(/\.scout-placeholder$/, ".com")
+  if (d.endsWith(".apex-placeholder")) return d.replace(/\.apex-placeholder$/, ".com")
   return d
 }
 

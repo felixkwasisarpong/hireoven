@@ -1,7 +1,7 @@
 import { ClipboardList } from "lucide-react"
 import HistoryTable from "@/components/interview/HistoryTable"
 import { getSessionUser } from "@/lib/auth/session-user"
-import { listRecentSessions } from "@/lib/scout/interview/queries"
+import { listRecentSessions } from "@/lib/apex/interview/queries"
 
 export const dynamic = "force-dynamic"
 

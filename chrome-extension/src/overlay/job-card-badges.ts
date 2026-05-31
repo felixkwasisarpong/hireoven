@@ -19,7 +19,7 @@
 
 import { analyzeExtractedJob, saveExtractedJob } from "../api-client"
 import type { ExtensionJobAnalysis } from "../api-types"
-import type { ExtractedJob } from "../extractors/scout-extractor"
+import type { ExtractedJob } from "../extractors/apex-extractor"
 import type { SupportedSite } from "../detectors/site"
 import {
   registerCardForFiltering,
@@ -610,7 +610,7 @@ function renderBadgeHtml(
   if (analysis) {
     // Priority: match → H1B → E-Verify → Ghost → Salary → Remote → top skill.
     // Cards intentionally hide "unknown" sponsorship/ghost so the row stays
-    // clean — those are surfaced (with explanation) in the Detail Scout panel
+    // clean — those are surfaced (with explanation) in the Detail Apex panel
     // instead. No fake values.
 
     // 1. Match score (real number only)

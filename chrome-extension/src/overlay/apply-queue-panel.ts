@@ -144,7 +144,7 @@ function buildPanelHTML(queue: ApplyQueueState): string {
 
       <!-- Safety notice -->
       <div style="margin:8px 16px 0;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px 10px;font-size:10px;color:#64748b;line-height:1.5;flex-shrink:0">
-        🚫 Scout prepares and fills fields — <strong>you submit manually</strong>. No application ever auto-submits.
+        🚫 Apex prepares and fills fields — <strong>you submit manually</strong>. No application ever auto-submits.
       </div>
 
       <!-- Job list -->

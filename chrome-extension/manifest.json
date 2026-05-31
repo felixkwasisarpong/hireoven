@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Hireoven Scout Bridge",
+  "name": "Hireoven Apex Bridge",
   "version": "0.1.0",
   "description": "Detect and save job listings to Hireoven from any ATS.",
   "permissions": [
@@ -34,7 +34,7 @@
   },
   "action": {
     "default_popup": "popup/popup.html",
-    "default_title": "Hireoven Scout Bridge",
+    "default_title": "Hireoven Apex Bridge",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",

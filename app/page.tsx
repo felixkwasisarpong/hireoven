@@ -13,7 +13,7 @@ import MaintenanceBanner from "@/components/marketing/MaintenanceBanner"
 export const metadata: Metadata = {
   title: "Hireoven — Jobs served fresh. Be an early bird applicant.",
   description:
-    "Real-time job alerts, AI match scores, one-click apply, and Scout AI for your entire job search. Built for people who want interviews, not just applications.",
+    "Real-time job alerts, AI match scores, one-click apply, and Apex AI for your entire job search. Built for people who want interviews, not just applications.",
 }
 
 export const dynamic = "force-dynamic"
@@ -203,7 +203,7 @@ export default async function HomePage() {
 
             <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-white/60 md:text-xl">
               Real-time alerts the moment a role posts. AI match scores on every listing. One-click autofill.
-              Scout AI that researches, tailors, and prepares — while you stay in control.
+              Apex AI that researches, tailors, and prepares — while you stay in control.
             </p>
 
             <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
@@ -377,7 +377,7 @@ export default async function HomePage() {
             <FeatureCard icon="⚡" title="Real-time job feed" body="New roles appear within minutes of posting — before most job boards index them." accent="No sponsored listings" color="#FF5C18" />
             <FeatureCard icon="🎯" title="AI match scores" body="Every job gets a match score against your profile, skills, and target role. Algorithmic, instant." color="#7C3AED" />
             <FeatureCard icon="🤖" title="One-click autofill" body="The extension detects fields and pre-fills them from your profile. You review before it goes in." accent="Chrome extension" color="#0EA5E9" />
-            <FeatureCard icon="✍️" title="Resume tailoring" body="Scout adapts your CV to the job description. Keyword gaps flagged. Every edit needs your approval." color="#10B981" />
+            <FeatureCard icon="✍️" title="Resume tailoring" body="Apex adapts your CV to the job description. Keyword gaps flagged. Every edit needs your approval." color="#10B981" />
             <FeatureCard icon="📄" title="Cover letter AI" body="Generates a tailored, ATS-aware letter in seconds. Role-specific, honest, ready to personalise." color="#F59E0B" />
             <FeatureCard icon="🛡️" title="Ghost job detector" body="Signals whether a role is actively hiring or just collecting CVs — before you spend time on it." color="#EF4444" />
           </div>
@@ -427,7 +427,7 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* ── Scout AI ────────────────────────────────────────────────────── */}
+      {/* ── Apex AI ────────────────────────────────────────────────────── */}
       <section className="overflow-hidden px-6 py-24"
         style={{ background: "linear-gradient(150deg,#0f0a1e 0%,#1c0e00 50%,#080614 100%)" }}>
         <div className="mx-auto max-w-6xl">
@@ -436,13 +436,13 @@ export default async function HomePage() {
               style={{ background: "linear-gradient(135deg,#FF5C18,#FF9A3C)" }}>
               <Sparkles className="h-3.5 w-3.5 text-white" />
             </span>
-            <span className="text-xs font-bold uppercase tracking-[0.25em] text-[#FF9A3C]">Scout AI</span>
+            <span className="text-xs font-bold uppercase tracking-[0.25em] text-[#FF9A3C]">Apex AI</span>
           </div>
           <h2 className="text-center text-3xl font-black tracking-tight text-white sm:text-4xl">
             Your AI job search operating system.
           </h2>
           <p className="mx-auto mt-4 max-w-xl text-center text-lg text-white/55">
-            Ask Scout anything. It handles the research, tailoring, and workflows — you make the calls.
+            Ask Apex anything. It handles the research, tailoring, and workflows — you make the calls.
           </p>
 
           <div className="mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -452,7 +452,7 @@ export default async function HomePage() {
               { emoji: "📋", title: "Application workflows", body: "Tailor → cover letter → autofill — step by step, with your sign-off at each stage." },
               { emoji: "🤖", title: "Autofills with context", body: "Detects fields, suggests values from your profile, waits for your review." },
               { emoji: "🎤", title: "Interview prep", body: "Role-specific questions with AI feedback on your answers before the real thing." },
-              { emoji: "🛡️", title: "Always in control", body: "Scout never submits. Every sensitive action requires your explicit OK." },
+              { emoji: "🛡️", title: "Always in control", body: "Apex never submits. Every sensitive action requires your explicit OK." },
             ].map(({ emoji, title, body }) => (
               <div key={title}
                 className="rounded-2xl border border-white/8 bg-white/5 p-5 backdrop-blur-sm transition hover:border-[#FF5C18]/30 hover:bg-white/8">
@@ -530,13 +530,13 @@ export default async function HomePage() {
               note="per month · $149/yr"
               badge="Most popular"
               highlight
-              features={["Scout AI — 30 msg/day", "Resume tailoring", "Cover letter generator", "Deep analysis", "Interview prep", "Unlimited watchlist"]}
+              features={["Apex AI — 30 msg/day", "Resume tailoring", "Cover letter generator", "Deep analysis", "Interview prep", "Unlimited watchlist"]}
             />
             <PlanCard
               name="Max"
               price="$29"
               note="per month · $229/yr"
-              features={["Scout AI — 60 msg/day", "Live voice interviews", "Unlimited AI tools", "Scout strategy insights", "Everything in Pro"]}
+              features={["Apex AI — 60 msg/day", "Live voice interviews", "Unlimited AI tools", "Apex strategy insights", "Everything in Pro"]}
             />
           </div>
           <p className="mt-8 text-center text-sm text-slate-400">

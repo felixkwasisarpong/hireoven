@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { processPendingCrawlerEnrichmentBatch } from "@/lib/crawler/enrichment"
 import { getCrawlerAiEnrichmentMode } from "@/lib/crawler/enrichment-mode"
-import { isAiBudgetExceeded, getTodaysAiSpendUsd, getDailyAiBudgetCapUsd } from "@/lib/scout/budget/cap"
+import { isAiBudgetExceeded, getTodaysAiSpendUsd, getDailyAiBudgetCapUsd } from "@/lib/apex/budget/cap"
 import { requireCronAuth } from "@/lib/env"
 
 export async function GET(request: NextRequest) {

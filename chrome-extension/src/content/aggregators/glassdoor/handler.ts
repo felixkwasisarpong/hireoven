@@ -118,15 +118,15 @@ export class GlassdoorHandler extends AggregatorHandler {
       if (suppressed) return
       const primary = createPill({
         variant: "green",
-        copy: "Apply with Scout",
-        testId: "scout-pill-glassdoor-primary",
+        copy: "Apply with Apex",
+        testId: "apex-pill-glassdoor-primary",
         dismissible: true,
         onDismiss: () => void recordDismiss(this.site),
         onClick: (event) => {
           event.preventDefault()
           event.stopPropagation()
           chrome.runtime.sendMessage(
-            { type: "SCOUT_OPEN_APPLY_FLOW", site: this.site, jobId: job.sourceId, scrapedJob: job },
+            { type: "APEX_OPEN_APPLY_FLOW", site: this.site, jobId: job.sourceId, scrapedJob: job },
             () => {
               void chrome.runtime.lastError
             },
@@ -136,8 +136,8 @@ export class GlassdoorHandler extends AggregatorHandler {
 
       const secondary = createPill({
         variant: "secondary",
-        copy: "Save company to Scout",
-        testId: "scout-pill-glassdoor-secondary",
+        copy: "Save company to Apex",
+        testId: "apex-pill-glassdoor-secondary",
         onClick: (event) => {
           event.preventDefault()
           event.stopPropagation()
@@ -223,7 +223,7 @@ export class GlassdoorHandler extends AggregatorHandler {
     if (!chrome.runtime?.id) return
     chrome.runtime.sendMessage(
       {
-        type: "SCOUT_ENRICH_COMPANY",
+        type: "APEX_ENRICH_COMPANY",
         source: "glassdoor",
         companyName,
         explicit: !!options?.explicit,

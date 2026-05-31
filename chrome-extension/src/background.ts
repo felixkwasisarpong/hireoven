@@ -1,5 +1,5 @@
 /**
- * Hireoven Scout Bridge — Background Service Worker (MV3)
+ * Hireoven Apex Bridge — Background Service Worker (MV3)
  *
  * Mediates between the popup and content scripts.
  * Makes authenticated API calls to hireoven.com using the session cookie.
@@ -25,7 +25,7 @@ import type {
   QueueItemStatus,
   QueueJobEntry,
   QueueStateResult,
-  RelayScoutCommandResult,
+  RelayApexCommandResult,
   SessionResult,
   ResolveJobResult,
   SaveResult,
@@ -39,8 +39,8 @@ import type {
   ExtensionTailorPreviewResponse,
   ExtensionTailorApproveResponse,
   ExtensionCoverLetterResponse,
-  ScoutOverlayResult,
-  ScoutOverlayInsightsPayload,
+  ApexOverlayResult,
+  ApexOverlayInsightsPayload,
   ExtensionJobFingerprint,
   ExtensionJobResolveResponse,
   ListResumesResult,
@@ -62,14 +62,14 @@ const SESSION_COOKIE_NAME = "ho_session"
 
 // ── Active browser context ─────────────────────────────────────────────────────
 // Lightweight tab context built from page detection and pushed to hireoven.com
-// tabs so Scout can adapt its UI to the user's current browsing state.
+// tabs so Apex can adapt its UI to the user's current browsing state.
 
 let activeContextCache: ActiveBrowserContext | null = null
 let contextRefreshTimer: ReturnType<typeof setTimeout> | null = null
 
 /**
  * Most recently active tab that was a supported JOB page (not hireoven itself).
- * Used to relay Scout→Extension commands to the right destination tab.
+ * Used to relay Apex→Extension commands to the right destination tab.
  */
 let lastJobTabId: number | null = null
 
@@ -98,8 +98,8 @@ function mapPageType(
 
 async function buildContextFromTab(tabId: number, tabUrl: string): Promise<ActiveBrowserContext | null> {
   if (!/^https?:/.test(tabUrl)) return null
-  // Skip hireoven itself — that's the Scout dashboard, not an external job page
-  if (isScoutDashboardUrl(tabUrl)) return null
+  // Skip hireoven itself — that's the Apex dashboard, not an external job page
+  if (isApexDashboardUrl(tabUrl)) return null
 
   try {
     const pageResp = await queryContentScript(tabId, { type: "DETECT_PAGE" })
@@ -188,7 +188,7 @@ function scheduleContextRefresh(tabId: number, tabUrl: string, delayMs = 700): v
       .then((context) => {
         const prev = activeContextCache
         activeContextCache = context
-        // Track which tab most recently had a job page so we can relay Scout commands to it
+        // Track which tab most recently had a job page so we can relay Apex commands to it
         if (context && context.pageType !== "unknown") {
           lastJobTabId = tabId
         }
@@ -267,7 +267,7 @@ function isUnpackedInstall(): boolean {
   return !chrome.runtime.getManifest().update_url
 }
 
-function isScoutDashboardUrl(rawUrl: string): boolean {
+function isApexDashboardUrl(rawUrl: string): boolean {
   try {
     const parsed = new URL(rawUrl)
     const host = parsed.hostname.toLowerCase()
@@ -419,13 +419,15 @@ async function queryContentScript(
 
 // ── Message handler ────────────────────────────────────────────────────────────
 
-import { dispatchScoutMessage } from "./scout-dispatcher"
+import { dispatchApexMessage } from "./apex-dispatcher"
+import { buildLinkedInSearchUrl } from "./apex-connection-scanner"
+import type { ScanLinkedInConnectionsResult, ScannedConnection } from "./types"
 
 // Aggregator handler messages (linkedin/glassdoor/indeed/handshake) flow
 // through a dedicated dispatcher; register before the main listener so its
 // `return true` keeps the channel open for async responses.
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  return dispatchScoutMessage(message, sender, sendResponse)
+  return dispatchApexMessage(message, sender, sendResponse)
 })
 
 chrome.runtime.onMessage.addListener(
@@ -434,16 +436,16 @@ chrome.runtime.onMessage.addListener(
     sender,
     sendResponse: (response: BackgroundResponse) => void,
   ) => {
-    // Don't claim Scout MVP messages — they have a dedicated listener below.
+    // Don't claim Apex MVP messages — they have a dedicated listener below.
     // Without this guard, the default case here resolves first and overrides
     // the MVP listener's async response (Chrome's first-sendResponse-wins rule).
     const t = (message as { type?: unknown })?.type
     if (typeof t === "string" && t.startsWith("EXT_MVP_")) {
       return false
     }
-    // Same exclusion for the aggregator dispatcher — its messages start with SCOUT_
+    // Same exclusion for the aggregator dispatcher — its messages start with APEX_
     // and are handled by the listener above.
-    if (typeof t === "string" && t.startsWith("SCOUT_")) {
+    if (typeof t === "string" && t.startsWith("APEX_")) {
       return false
     }
     handleMessage(message, sender).then(sendResponse).catch(() => {
@@ -488,8 +490,8 @@ async function handleMessage(
     case "FILL_COVER_LETTER":
       return handleFillCoverLetter(message.elementRef, message.text)
 
-    case "GET_SCOUT_OVERLAY":
-      return handleGetScoutOverlay(message.jobId)
+    case "GET_APEX_OVERLAY":
+      return handleGetApexOverlay(message.jobId)
 
     case "LIST_RESUMES":
       return handleListResumes()
@@ -497,8 +499,8 @@ async function handleMessage(
     case "GET_ACTIVE_CONTEXT":
       return handleGetActiveContext()
 
-    case "RELAY_SCOUT_COMMAND":
-      return handleRelayScoutCommand(message.command, message.payload)
+    case "RELAY_APEX_COMMAND":
+      return handleRelayApexCommand(message.command, message.payload)
 
     case "FETCH_RESUME_FILE":
       return handleFetchResumeFile(message.resumeId as string)
@@ -548,6 +550,9 @@ async function handleMessage(
         message.atsProvider,
       )
 
+    case "SCAN_LINKEDIN_CONNECTIONS":
+      return handleScanLinkedInConnections(message.companyName)
+
     case "GET_WORKFLOW_STATE":
       return { type: "WORKFLOW_STATE_RESULT", state: null } as WorkflowStateResult
 
@@ -586,16 +591,16 @@ async function handleMessage(
   }
 }
 
-async function handleGetScoutOverlay(jobId: string): Promise<ScoutOverlayResult> {
+async function handleGetApexOverlay(jobId: string): Promise<ApexOverlayResult> {
   const origin = await resolveOrigin()
   const token = await getSessionToken(origin)
   if (!token) {
-    return { type: "SCOUT_OVERLAY_RESULT", ok: false, error: "no_session" }
+    return { type: "APEX_OVERLAY_RESULT", ok: false, error: "no_session" }
   }
 
   try {
     const res = await fetch(
-      `${origin}/api/extension/jobs/${encodeURIComponent(jobId)}/scout-overlay`,
+      `${origin}/api/extension/jobs/${encodeURIComponent(jobId)}/apex-overlay`,
       {
         method: "GET",
         headers: {
@@ -607,12 +612,12 @@ async function handleGetScoutOverlay(jobId: string): Promise<ScoutOverlayResult>
     )
     const payload = (await res.json().catch(() => null)) as Record<string, unknown> | null
     if (!payload || typeof payload !== "object") {
-      return { type: "SCOUT_OVERLAY_RESULT", ok: false, error: "parse" }
+      return { type: "APEX_OVERLAY_RESULT", ok: false, error: "parse" }
     }
 
     if (payload.ok === false) {
       return {
-        type: "SCOUT_OVERLAY_RESULT",
+        type: "APEX_OVERLAY_RESULT",
         ok: false,
         error: typeof payload.error === "string" ? payload.error : "not_ready",
         message: typeof payload.message === "string" ? payload.message : undefined,
@@ -620,9 +625,9 @@ async function handleGetScoutOverlay(jobId: string): Promise<ScoutOverlayResult>
     }
 
     if (payload.ok === true) {
-      const p = payload as unknown as ScoutOverlayInsightsPayload
+      const p = payload as unknown as ApexOverlayInsightsPayload
       return {
-        type: "SCOUT_OVERLAY_RESULT",
+        type: "APEX_OVERLAY_RESULT",
         ok: true,
         matchPercent: p.matchPercent,
         sponsorshipLikely: p.sponsorshipLikely,
@@ -638,7 +643,7 @@ async function handleGetScoutOverlay(jobId: string): Promise<ScoutOverlayResult>
     /* ignore */
   }
 
-  return { type: "SCOUT_OVERLAY_RESULT", ok: false, error: "unreachable" }
+  return { type: "APEX_OVERLAY_RESULT", ok: false, error: "unreachable" }
 }
 
 async function handleGetSession(): Promise<SessionResult> {
@@ -986,23 +991,23 @@ async function handleAgentApplicationSubmitted(
   }
 }
 
-async function handleRelayScoutCommand(
+async function handleRelayApexCommand(
   command: string,
   payload?: Record<string, unknown>,
-): Promise<RelayScoutCommandResult> {
+): Promise<RelayApexCommandResult> {
   if (!lastJobTabId) {
-    return { type: "RELAY_SCOUT_COMMAND_RESULT", delivered: false }
+    return { type: "RELAY_APEX_COMMAND_RESULT", delivered: false }
   }
   try {
     await chrome.tabs.sendMessage(lastJobTabId, {
-      type: "EXECUTE_SCOUT_COMMAND",
+      type: "EXECUTE_APEX_COMMAND",
       command,
       payload: payload ?? {},
     })
-    return { type: "RELAY_SCOUT_COMMAND_RESULT", delivered: true }
+    return { type: "RELAY_APEX_COMMAND_RESULT", delivered: true }
   } catch {
     lastJobTabId = null // tab was closed or unresponsive
-    return { type: "RELAY_SCOUT_COMMAND_RESULT", delivered: false }
+    return { type: "RELAY_APEX_COMMAND_RESULT", delivered: false }
   }
 }
 
@@ -1133,7 +1138,7 @@ async function tryDispatchAgentAutofill(tabId: number): Promise<void> {
 
   try {
     const response = await chrome.tabs.sendMessage(tabId, {
-      type: "EXECUTE_SCOUT_COMMAND",
+      type: "EXECUTE_APEX_COMMAND",
       command: "AGENT_AUTOFILL",
       payload: {
         jobId: ctx.jobId,
@@ -1143,7 +1148,7 @@ async function tryDispatchAgentAutofill(tabId: number): Promise<void> {
       },
     }) as { type?: string; accepted?: boolean } | undefined
 
-    const accepted = response?.type === "SCOUT_COMMAND_EXECUTED" && response.accepted === true
+    const accepted = response?.type === "APEX_COMMAND_EXECUTED" && response.accepted === true
     if (accepted) {
       pendingAgentTabs.delete(tabId)
       return
@@ -1272,7 +1277,7 @@ async function prepareBulkJob(
       autofillStatus?: string
       warnings?: Array<{ code: string; message: string; severity: "info" | "warning" | "error" }>
       failReason?: string
-    }>("POST", "/api/scout/bulk-prepare", {
+    }>("POST", "/api/apex/bulk-prepare", {
       jobId: jobId ?? undefined,
       jobTitle: jobInput.jobTitle,
       company: jobInput.company ?? undefined,
@@ -1352,7 +1357,7 @@ async function handleQueueMarkSubmitted(queueItemId: string): Promise<QueueActio
   await writeQueue(queue)
 
   // Fire-and-forget: record in web app
-  void apiRequest("POST", "/api/scout/mark-submitted", {
+  void apiRequest("POST", "/api/apex/mark-submitted", {
     jobId: job.jobId ?? undefined,
     jobTitle: job.jobTitle,
     companyName: job.company ?? undefined,
@@ -1411,9 +1416,9 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   scheduleContextRefresh(tabId, tab.url, 400)
 })
 
-// ── Scout MVP message channel ─────────────────────────────────────────────────
+// ── Apex MVP message channel ─────────────────────────────────────────────────
 // Parallel to the typed BackgroundMessage channel above. Receives requests from
-// the Scout Bar via api-client.ts and forwards them to the extension API,
+// the Apex Bar via api-client.ts and forwards them to the extension API,
 // reusing the existing apiRequest() helper for auth.
 
 type MvpApiResponse =
@@ -1564,7 +1569,7 @@ async function fetchBinaryDocx(opts: {
   try {
     const origin = await resolveOrigin()
     const token = await getSessionToken(origin)
-    if (!token) return { ok: false, error: "Sign in to Hireoven to use Scout." }
+    if (!token) return { ok: false, error: "Sign in to Hireoven to use Apex." }
 
     const url = `${origin}${opts.path}${opts.query ? `?${opts.query}` : ""}`
     const res = await fetch(url, {
@@ -1629,7 +1634,7 @@ chrome.runtime.onMessage.addListener(
     void apiRequest<unknown>(route.method, path, body)
       .then((data) => {
         if (data === null) {
-          sendResponse({ ok: false, error: "Sign in to Hireoven to use Scout." })
+          sendResponse({ ok: false, error: "Sign in to Hireoven to use Apex." })
           return
         }
         sendResponse({ ok: true, data })
@@ -1650,3 +1655,106 @@ chrome.runtime.onInstalled.addListener(({ reason }) => {
     })
   }
 })
+
+// ── Shadow Network: scan LinkedIn connections at a company ────────────────────
+
+/**
+ * Runs the LinkedIn connection scan and PUSHES the result back to the Apex tab
+ * rather than returning it through the original message port.
+ *
+ * Why: chrome.runtime.sendMessage ports in MV3 close after ~5s of service-worker
+ * inactivity. The scan takes 15s, so the port is gone before we can respond.
+ * Instead we fire-and-forget from the content script and push the result back
+ * via chrome.tabs.sendMessage to the Apex tab when done.
+ */
+async function runScanAndPushResult(companyName: string): Promise<void> {
+  const origin = await resolveOrigin()
+  const searchUrl = buildLinkedInSearchUrl(companyName)
+
+  async function pushToApexTabs(payload: { ok: boolean; connections?: ScannedConnection[]; error?: string }) {
+    // Use broad localhost pattern (any port) so dev servers on :3001, :3002 etc. are found.
+    const patterns = origin === PROD_APP_ORIGIN
+      ? ["https://hireoven.com/*", "https://www.hireoven.com/*"]
+      : ["http://localhost/*", "http://127.0.0.1/*"]
+    for (const pattern of patterns) {
+      const tabs = await chrome.tabs.query({ url: pattern }).catch(() => [])
+      for (const tab of tabs) {
+        if (!tab.id || !tab.url) continue
+        // Skip non-Apex pages (e.g. LinkedIn which also runs on localhost in some setups)
+        if (!isApexDashboardUrl(tab.url)) continue
+        chrome.tabs.sendMessage(tab.id, { type: "PUSH_SCAN_RESULT", ...payload }).catch(() => {})
+      }
+    }
+  }
+
+  // Open active so LinkedIn fully renders — background tabs get JS throttled
+  const tab = await chrome.tabs.create({ url: searchUrl, active: true })
+  const tabId = tab.id
+  if (!tabId) {
+    await pushToApexTabs({ ok: false, error: "Could not open LinkedIn tab" })
+    return
+  }
+
+  // Wait for page load (up to 15s)
+  await new Promise<void>((resolve) => {
+    const listener = (id: number, info: chrome.tabs.TabChangeInfo) => {
+      if (id === tabId && info.status === "complete") {
+        chrome.tabs.onUpdated.removeListener(listener)
+        resolve()
+      }
+    }
+    chrome.tabs.onUpdated.addListener(listener)
+    setTimeout(resolve, 15_000)
+  })
+
+  // Switch back to the Apex tab immediately after load so the user isn't stuck on LinkedIn
+  const apexPatterns = origin === PROD_APP_ORIGIN
+    ? ["https://hireoven.com/*", "https://www.hireoven.com/*"]
+    : ["http://localhost/*", "http://127.0.0.1/*"]
+  for (const pattern of apexPatterns) {
+    const apexTabs = await chrome.tabs.query({ url: pattern }).catch(() => [])
+    const apex = apexTabs.find((t) => t.id && t.url && isApexDashboardUrl(t.url))
+    if (apex?.id) {
+      await chrome.tabs.update(apex.id, { active: true }).catch(() => {})
+      break
+    }
+  }
+
+  // Ask the LinkedIn tab's content script to scrape
+  const scrapeResult = await new Promise<ScannedConnection[] | null>((resolve) => {
+    chrome.tabs.sendMessage(
+      tabId,
+      { type: "SCRAPE_LINKEDIN_CONNECTIONS" },
+      (response: unknown) => {
+        if (chrome.runtime.lastError) {
+          resolve(null); return
+        }
+        if (!response) {
+          resolve(null); return
+        }
+        const conns = (response as any)?.connections ?? []
+        resolve(conns)
+      }
+    )
+    setTimeout(() => {
+      resolve(null)
+    }, 12_000)
+  })
+
+  await chrome.tabs.remove(tabId).catch(() => {})
+
+  if (scrapeResult === null) {
+    await pushToApexTabs({ ok: false, error: "Could not read LinkedIn. Make sure you are logged in." })
+  } else {
+    await pushToApexTabs({ ok: true, connections: scrapeResult })
+  }
+}
+
+async function handleScanLinkedInConnections(
+  companyName: string,
+): Promise<ScanLinkedInConnectionsResult> {
+  // Start scan asynchronously — result is pushed back to the Apex tab
+  // so we don't block this message port (which would time out in MV3)
+  void runScanAndPushResult(companyName)
+  return { type: "SCAN_LINKEDIN_CONNECTIONS_RESULT", ok: true }
+}

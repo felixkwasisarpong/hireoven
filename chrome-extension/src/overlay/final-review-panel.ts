@@ -213,7 +213,7 @@ function buildPanelHTML(state: ReviewPanelState, appOrigin: string): string {
       <span style="font-size:13px;flex-shrink:0;">🚫</span>
       <div style="font-size:11px;color:#64748b;line-height:1.5;">
         Review the form carefully, then <strong style="color:#1e293b;">submit manually on this page</strong>.
-        Scout will never click submit for you.
+        Apex will never click submit for you.
       </div>
     </div>
 

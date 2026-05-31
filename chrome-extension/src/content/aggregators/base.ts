@@ -105,7 +105,7 @@ export abstract class AggregatorHandler {
       try {
         callback()
       } catch (err) {
-        console.warn(`[scout:${this.site}] route handler threw`, err)
+        console.warn(`[apex:${this.site}] route handler threw`, err)
       }
     }
 
@@ -113,26 +113,26 @@ export abstract class AggregatorHandler {
       const original = history[method]
       history[method] = function patched(this: History, data: unknown, unused: string, url?: string | URL | null) {
         const result = original.call(this, data, unused, url)
-        window.dispatchEvent(new Event(`scout:${method}`))
+        window.dispatchEvent(new Event(`apex:${method}`))
         return result
       }
     }
     wrap("pushState")
     wrap("replaceState")
 
-    window.addEventListener("scout:pushState", fire)
-    window.addEventListener("scout:replaceState", fire)
+    window.addEventListener("apex:pushState", fire)
+    window.addEventListener("apex:replaceState", fire)
     window.addEventListener("popstate", fire)
   }
 
   /**
-   * POSTs the scraped job to /api/scout/jobs/ingest, routed through the
+   * POSTs the scraped job to /api/apex/jobs/ingest, routed through the
    * background service worker (only context with cookie/JWT access).
    * Cache eviction is the caller's responsibility.
    */
   protected ingest(job: ScrapedJob): void {
     if (!chrome.runtime?.id) return
-    chrome.runtime.sendMessage({ type: "SCOUT_INGEST_JOB", site: this.site, job }, () => {
+    chrome.runtime.sendMessage({ type: "APEX_INGEST_JOB", site: this.site, job }, () => {
       void chrome.runtime.lastError
     })
   }
@@ -140,7 +140,7 @@ export abstract class AggregatorHandler {
   /** Tell the dispatcher this site has an active scraper so the web app can clear its "extension not connected" prompt. */
   signalConnected(): void {
     if (!chrome.runtime?.id) return
-    chrome.runtime.sendMessage({ type: "SCOUT_CONNECTED", site: this.site }, () => {
+    chrome.runtime.sendMessage({ type: "APEX_CONNECTED", site: this.site }, () => {
       void chrome.runtime.lastError
     })
   }
@@ -148,7 +148,7 @@ export abstract class AggregatorHandler {
 
 /**
  * Common bootstrap for aggregator content scripts: initial run, route-change
- * subscription, and SCOUT_PING responder. Each handler module calls this once
+ * subscription, and APEX_PING responder. Each handler module calls this once
  * after construction; driver runners are still registered per-handler since
  * they're driver-typed.
  */
@@ -167,7 +167,7 @@ function registerPingResponder(handler: AggregatorHandler): void {
   if (!chrome.runtime?.onMessage) return
   chrome.runtime.onMessage.addListener((msg: unknown, _sender, sendResponse) => {
     if (typeof msg !== "object" || msg === null) return false
-    if ((msg as Record<string, unknown>).type !== "SCOUT_PING") return false
+    if ((msg as Record<string, unknown>).type !== "APEX_PING") return false
     // Only respond when this content script is on a real job page; otherwise
     // we don't claim "connected" to the dispatcher.
     if (!handler.isJobPage()) return false

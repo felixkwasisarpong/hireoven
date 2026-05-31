@@ -67,7 +67,7 @@ function NavItem({
         locked
           ? "cursor-pointer opacity-60 hover:opacity-80"
           : active
-            ? "bg-sky-50 font-semibold text-[#2563EB]"
+            ? "bg-indigo-50 font-semibold text-indigo-600"
             : "font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900"
       )
     : cn(
@@ -86,7 +86,7 @@ function NavItem({
           ? "text-slate-400"
           : active
             ? "text-[#FF5C18] fill-[#FF5C18]"
-            : "text-slate-500 group-hover:text-[#2563EB]"
+            : "text-slate-500 group-hover:text-indigo-600"
       )
     : cn(
         "h-4 w-4 flex-shrink-0 fill-none transition-colors duration-200",
@@ -204,7 +204,7 @@ function NavGroup({
     ? cn(
         "group flex w-full items-center gap-3 rounded-lg px-3 py-2 text-[14px] font-medium transition-colors",
         hasActive
-          ? "text-[#2563EB]"
+          ? "text-indigo-600"
           : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
       )
     : cn(
@@ -213,7 +213,7 @@ function NavGroup({
       )
 
   const iconClass = feedSkin
-    ? cn("h-[18px] w-[18px] flex-shrink-0 fill-none", hasActive ? "text-[#FF5C18] fill-[#FF5C18]" : "text-slate-500 group-hover:text-[#2563EB]")
+    ? cn("h-[18px] w-[18px] flex-shrink-0 fill-none", hasActive ? "text-[#FF5C18] fill-[#FF5C18]" : "text-slate-500 group-hover:text-indigo-600")
     : cn("h-4 w-4 flex-shrink-0 fill-none", variant === "dark" ? "text-slate-400" : "text-muted-foreground group-hover:text-primary")
 
   return (

@@ -896,7 +896,7 @@ class WorkdayAutofillRunner {
 
     if (this.showToolbar) this.mountToolbar()
     this.phase = "running"
-    this.setToolbarState("WAITING", "Loading Scout CV memory for Workday…")
+    this.setToolbarState("WAITING", "Loading Apex CV memory for Workday…")
 
     const ok = await this.initializeContext()
     if (!ok) return
@@ -915,10 +915,10 @@ class WorkdayAutofillRunner {
       : await getAutofillProfile().catch(() => ({ profile: null, profileMissing: true }))
     if (!profilePayload.profile) {
       this.phase = "error"
-      this.setToolbarState("NEEDS_REVIEW", "Scout profile missing. Complete autofill profile in Hireoven.")
-      this.logWarning("Manual review needed: no autofill profile found in Scout memory.")
+      this.setToolbarState("NEEDS_REVIEW", "Apex profile missing. Complete autofill profile in Hireoven.")
+      this.logWarning("Manual review needed: no autofill profile found in Apex memory.")
       this.debug("error", "context.initialize.profile_missing")
-      window[GLOBAL_LAST_ERROR_KEY] = "Scout profile missing."
+      window[GLOBAL_LAST_ERROR_KEY] = "Apex profile missing."
       return false
     }
 
@@ -999,7 +999,7 @@ class WorkdayAutofillRunner {
    * Fill the currently-visible Workday step and stop. The runner deliberately
    * does NOT auto-advance through the wizard — the user reviews, fixes any
    * misses, and clicks Save and Continue themselves. When the next step's DOM
-   * appears, the scout-bar's MutationObserver re-detects it and re-enables
+   * appears, the apex-bar's MutationObserver re-detects it and re-enables
    * the Autofill button so the user can click it again for the next step.
    *
    * `maxCycles` is kept on the signature for backwards-compat but ignored.
@@ -1251,7 +1251,7 @@ class WorkdayAutofillRunner {
         this.eeoPaused = true
         this.setToolbarState(
           "PAUSED",
-          "Self-Identify step reached. Scout will not fill optional legal disclosures.",
+          "Self-Identify step reached. Apex will not fill optional legal disclosures.",
         )
         this.showResumeButton(true)
         this.logWarning("Manual review needed: Self-Identify (EEO) fields must be completed by user.")
@@ -1264,9 +1264,9 @@ class WorkdayAutofillRunner {
       if (step.id === "review") {
         this.setToolbarState(
           "DONE",
-          `Scout filled ${this.fieldsFilledCount} fields across completed Workday steps.`,
+          `Apex filled ${this.fieldsFilledCount} fields across completed Workday steps.`,
         )
-        this.setToolbarNote("Scout will NOT auto-submit. Review and submit yourself.")
+        this.setToolbarNote("Apex will NOT auto-submit. Review and submit yourself.")
         this.paused = true
         this.debug("info", "run.reached_review")
         return
@@ -2352,7 +2352,7 @@ class WorkdayAutofillRunner {
     if (el.getAttribute(MANUAL_REVIEW_ATTR) === "1") return
     el.setAttribute(MANUAL_REVIEW_ATTR, "1")
     el.style.outline = "2px solid #f59e0b"
-    el.title = "Scout couldn't fill this — please review"
+    el.title = "Apex couldn't fill this — please review"
     this.manualReviewCount += 1
     this.setToolbarState("NEEDS_REVIEW", "⚠️ Review required: some questions need manual input.")
     this.logWarning(`⚠️ Manual review needed: ${question || "Question"}`)
@@ -3451,7 +3451,7 @@ export function isWorkdayApplicationPage(): boolean {
 
 /**
  * Lightweight estimate of how many Workday fields the runner will attempt to
- * fill for this profile, broken down by section. Used by the scout-bar
+ * fill for this profile, broken down by section. Used by the apex-bar
  * preview so users see "≈48 fields across 4 sections" instead of the
  * misleading "1 ready to fill" placeholder.
  *

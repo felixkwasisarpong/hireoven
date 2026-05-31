@@ -1,11 +1,11 @@
 "use client"
 
 import { useCallback, useRef, useState } from "react"
-import { parseResearchSSELine } from "@/lib/scout/research/types"
-import type { ScoutResearchTask, ResearchSSEEvent } from "@/lib/scout/research/types"
+import { parseResearchSSELine } from "@/lib/apex/research/types"
+import type { ApexResearchTask, ResearchSSEEvent } from "@/lib/apex/research/types"
 
 export type ResearchStreamState = {
-  task:      ScoutResearchTask | null
+  task:      ApexResearchTask | null
   isRunning: boolean
   error:     string | null
 }

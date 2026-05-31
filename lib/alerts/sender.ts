@@ -138,7 +138,7 @@ function renderJobRow(job: JobWithCompanyContext, index: number) {
 // ── Full email shell ──────────────────────────────────────────────────────────
 
 const CHROME_STORE_URL =
-  "https://chromewebstore.google.com/detail/hireoven-scout-bridge/mkmfffcaimjnaecoelnanifookmdbfok"
+  "https://chromewebstore.google.com/detail/hireoven-apex-bridge/mkmfffcaimjnaecoelnanifookmdbfok"
 
 /**
  * Email-safe promo block for the Chrome extension. Rendered between the

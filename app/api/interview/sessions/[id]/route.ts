@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getPostgresPool } from "@/lib/postgres/server"
-import { getInterviewSession } from "@/lib/scout/interview/queries"
-import { deriveSkillList } from "@/lib/scout/interview/context"
+import { getInterviewSession } from "@/lib/apex/interview/queries"
+import { deriveSkillList } from "@/lib/apex/interview/context"
 
 export const runtime = "nodejs"
 

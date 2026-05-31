@@ -53,10 +53,10 @@ describe("GlassdoorHandler", () => {
       const job = h.scrapeJob()!
       h.injectPill(document.querySelector("button")!, job)
       await new Promise((r) => setTimeout(r, 0))
-      const pills = document.querySelectorAll("[data-scout-pill]")
+      const pills = document.querySelectorAll("[data-apex-pill]")
       expect(pills).toHaveLength(2)
-      expect(pills[0].getAttribute("data-testid")).toBe("scout-pill-glassdoor-primary")
-      expect(pills[1].getAttribute("data-testid")).toBe("scout-pill-glassdoor-secondary")
+      expect(pills[0].getAttribute("data-testid")).toBe("apex-pill-glassdoor-primary")
+      expect(pills[1].getAttribute("data-testid")).toBe("apex-pill-glassdoor-secondary")
     })
   })
 

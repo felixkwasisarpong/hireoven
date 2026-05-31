@@ -1,8 +1,8 @@
 {
-  "name": "hireoven-scout-bridge",
+  "name": "hireoven-apex-bridge",
   "version": "0.1.0",
   "private": true,
-  "description": "Hireoven Scout Bridge Chrome Extension",
+  "description": "Hireoven Apex Bridge Chrome Extension",
   "scripts": {
     "build": "webpack --mode production",
     "dev": "webpack --mode development --watch",

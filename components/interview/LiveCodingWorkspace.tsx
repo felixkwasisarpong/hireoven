@@ -12,13 +12,13 @@ import TestConsole from "@/components/interview/TestConsole"
 import LiveCaptions, { type CaptionItem } from "@/components/interview/LiveCaptions"
 import SessionTimer from "@/components/interview/SessionTimer"
 import PermissionGate from "@/components/interview/PermissionGate"
-import { RealtimeClient } from "@/lib/scout/interview/RealtimeClient"
+import { RealtimeClient } from "@/lib/apex/interview/RealtimeClient"
 import {
   CodingRunner,
   type TestRunResult,
   type CodingLanguage,
   type RunnerStatus,
-} from "@/lib/scout/interview/codingRunner"
+} from "@/lib/apex/interview/codingRunner"
 import { cn } from "@/lib/utils"
 
 const MonacoEditor = dynamic(() => import("@/components/interview/MonacoEditor"), { ssr: false })
@@ -644,7 +644,7 @@ export default function LiveCodingWorkspace({
   }
 
   // ── Language toggle ────────────────────────────────────────────────────────
-  async function handleLanguageChange(newLang: import("@/lib/scout/interview/codingRunner").CodingLanguage) {
+  async function handleLanguageChange(newLang: import("@/lib/apex/interview/codingRunner").CodingLanguage) {
     if (newLang !== "python" && newLang !== "javascript") return
     if (newLang === language) return
     const hasCode = code.trim() !== "" && code !== (problem?.functionSignature?.[language] ?? "")

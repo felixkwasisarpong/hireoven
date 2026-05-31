@@ -35,7 +35,7 @@ const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 C
 
 // ── Source 0: Extension scout_enrichment (most reliable) ─────────────────────
 
-async function tryScoutEnrichment(companyId: string): Promise<GlassdoorResult | null> {
+async function tryApexEnrichment(companyId: string): Promise<GlassdoorResult | null> {
   try {
     const pool = getPostgresPool()
     const { rows } = await pool.query<{ gd: Record<string, unknown> | null }>(
@@ -202,7 +202,7 @@ export async function importGlassdoorData(
   companyName: string
 ): Promise<GlassdoorResult> {
   return (
-    await tryScoutEnrichment(companyId) ??
+    await tryApexEnrichment(companyId) ??
     await tryDdgInstant(companyName) ??
     await tryDdgHtml(companyName) ??
     await tryGlassdoorDirect(companyName) ??

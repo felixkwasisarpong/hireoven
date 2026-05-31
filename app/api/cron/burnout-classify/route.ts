@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { classifyAllActiveUsers } from "@/lib/scout/burnout/classifier"
+import { classifyAllActiveUsers } from "@/lib/apex/burnout/classifier"
 
 export const dynamic = "force-dynamic"
 export const maxDuration = 300

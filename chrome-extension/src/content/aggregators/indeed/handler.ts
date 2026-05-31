@@ -126,15 +126,15 @@ export class IndeedHandler extends AggregatorHandler {
       const pill = createPill({
         variant: "green",
         size: compact ? "compact" : "default",
-        copy: "Apply with Scout",
-        testId: "scout-pill-indeed",
+        copy: "Apply with Apex",
+        testId: "apex-pill-indeed",
         dismissible: true,
         onDismiss: () => void recordDismiss(this.site),
         onClick: (event) => {
           event.preventDefault()
           event.stopPropagation()
           chrome.runtime.sendMessage(
-            { type: "SCOUT_OPEN_APPLY_FLOW", site: this.site, jobId: job.sourceId, scrapedJob: job },
+            { type: "APEX_OPEN_APPLY_FLOW", site: this.site, jobId: job.sourceId, scrapedJob: job },
             () => {
               void chrome.runtime.lastError
             },
@@ -239,7 +239,7 @@ bootstrapAggregator(handler)
 chrome.runtime?.onMessage.addListener((msg: unknown, _sender, sendResponse) => {
   if (typeof msg !== "object" || msg === null) return false
   const m = msg as Record<string, unknown>
-  if (m.type !== "SCOUT_RUN_DRIVER" || m.driver !== "indeed") return false
+  if (m.type !== "APEX_RUN_DRIVER" || m.driver !== "indeed") return false
 
   const job = m.job as ScrapedJob | undefined
   const prefs = m.prefs as IndeedApplyPrefs | undefined

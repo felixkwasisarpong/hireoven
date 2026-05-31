@@ -107,7 +107,7 @@ export async function PATCH(
       ghostStatuses.has(current.status)
     ) {
       const gotResponse = body.status !== "withdrawn"
-      const { recordApplicationOutcome } = await import("@/lib/scout/timing/signal-learner")
+      const { recordApplicationOutcome } = await import("@/lib/apex/timing/signal-learner")
       recordApplicationOutcome(id, gotResponse).catch((err) =>
         console.error("[applications/PATCH] timing signal failed:", err instanceof Error ? err.message : err)
       )

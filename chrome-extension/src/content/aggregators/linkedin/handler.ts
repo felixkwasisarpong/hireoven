@@ -200,7 +200,7 @@ bootstrapAggregator(handler)
 chrome.runtime?.onMessage.addListener((msg: unknown, _sender, sendResponse) => {
   if (typeof msg !== "object" || msg === null) return false
   const m = msg as Record<string, unknown>
-  if (m.type !== "SCOUT_RUN_DRIVER" || m.driver !== "linkedin") return false
+  if (m.type !== "APEX_RUN_DRIVER" || m.driver !== "linkedin") return false
 
   const job = m.job as ScrapedJob | undefined
   const prefs = m.prefs as LinkedInEasyApplyPrefs | undefined

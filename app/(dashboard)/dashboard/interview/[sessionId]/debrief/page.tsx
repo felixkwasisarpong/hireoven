@@ -2,7 +2,7 @@ import { getSessionUser } from "@/lib/auth/session-user"
 import { canAccess, requiredPlanFor } from "@/lib/gates"
 import { getPlanForUserId } from "@/lib/gates/server-gate"
 import { getPostgresPool } from "@/lib/postgres/server"
-import { generateDebrief } from "@/lib/scout/interview/debriefGenerator"
+import { generateDebrief } from "@/lib/apex/interview/debriefGenerator"
 import {
   getDebrief,
   getInterviewSession,
@@ -10,7 +10,7 @@ import {
   type InterviewDebrief,
   type InterviewSession,
   type InterviewTurn,
-} from "@/lib/scout/interview/queries"
+} from "@/lib/apex/interview/queries"
 import DebriefPageClient, {
   type DebriefData,
   type DebriefPageClientProps,

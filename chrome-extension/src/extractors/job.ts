@@ -679,7 +679,7 @@ export function extractJobWithMeta(ats: ATSProvider): {
   }
 }
 
-export function shouldShowScoutBar(j: ExtractedJob, foundJsonLdJobPosting: boolean): boolean {
+export function shouldShowApexBar(j: ExtractedJob, foundJsonLdJobPosting: boolean): boolean {
   if (foundJsonLdJobPosting) return true
   return Boolean(
     j.title?.trim() ||

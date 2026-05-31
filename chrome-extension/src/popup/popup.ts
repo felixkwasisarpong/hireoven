@@ -1,5 +1,5 @@
 /**
- * Hireoven Scout Bridge — Popup Script
+ * Hireoven Apex Bridge — Popup Script
  *
  * Phase 3: Tailor resume before autofill.
  * - Job listing page: scan + save flow (Phase 1)
@@ -373,7 +373,7 @@ function renderChangeRow(change: TailorChangePreview): HTMLElement {
 
 function renderIdle() {
   hide(content)
-  setBarLabel("Hireoven Scout", "click to scan")
+  setBarLabel("Hireoven Apex", "click to scan")
   hide(signinBtn, saveBtn, openBtn, tailorBtn, approveTailorBtn, previewAutofillBtn, autofillBtn)
   show(scanBtn)
   scanBtn.disabled = false
@@ -384,9 +384,9 @@ function renderUnauthenticated() {
   show(content)
   hide(loading, pillRow, jobCard, savedBanner, saveBtn, scanBtn, openBtn,
     autofillSection, tailorBtn, approveTailorBtn, previewAutofillBtn, autofillBtn)
-  infoText.textContent = "Sign in to Hireoven to use Scout."
+  infoText.textContent = "Sign in to Hireoven to use Apex."
   show(infoText)
-  setBarLabel("Hireoven Scout", "not signed in")
+  setBarLabel("Hireoven Apex", "not signed in")
   show(signinBtn)
 }
 
@@ -394,7 +394,7 @@ function renderScanning(message = "Scanning page…") {
   show(content, loading)
   loadingText.textContent = message
   hide(pillRow, jobCard, savedBanner, infoText, autofillSection)
-  setBarLabel("Hireoven Scout", "scanning…")
+  setBarLabel("Hireoven Apex", "scanning…")
   hide(scanBtn, saveBtn, openBtn, signinBtn, tailorBtn, approveTailorBtn, previewAutofillBtn, autofillBtn)
 }
 

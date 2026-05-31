@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getPostgresPool } from "@/lib/postgres/server"
-import { appendTurn, getTurns, upsertDebrief } from "@/lib/scout/interview/queries"
+import { appendTurn, getTurns, upsertDebrief } from "@/lib/apex/interview/queries"
 
 export const runtime = "nodejs"
 

@@ -1,5 +1,5 @@
 /**
- * Shared API contract for the Hireoven Scout MVP.
+ * Shared API contract for the Hireoven Apex MVP.
  *
  * Mirrored intentionally on the server side (in app/api/extension/jobs/*).
  * Keep the two in sync when changing fields. Both are intentionally minimal.

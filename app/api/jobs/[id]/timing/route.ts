@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getPostgresPool } from "@/lib/postgres/server"
-import { computeJobTiming } from "@/lib/scout/timing/timing-engine"
+import { computeJobTiming } from "@/lib/apex/timing/timing-engine"
 
 export const runtime = "nodejs"
 export const maxDuration = 30

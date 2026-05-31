@@ -8,8 +8,8 @@ import {
   getTurns,
   upsertDebrief,
   getInterviewSession,
-} from "@/lib/scout/interview/queries"
-import { deriveSkillList } from "@/lib/scout/interview/context"
+} from "@/lib/apex/interview/queries"
+import { deriveSkillList } from "@/lib/apex/interview/context"
 import { canAccess, requiredPlanFor } from "@/lib/gates"
 import { gateResponse, getPlanForUserId } from "@/lib/gates/server-gate"
 

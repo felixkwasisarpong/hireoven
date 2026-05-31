@@ -1,5 +1,5 @@
 /**
- * Hireoven Scout Bridge — Content Script
+ * Hireoven Apex Bridge — Content Script
  *
  * Boots the page-aware overlay on supported job sites and proxies
  * messages from background/popup to detection/extraction/fill helpers.
@@ -10,16 +10,17 @@
 
 import { detectFormFields } from "./autofill/form-detector"
 import { extractLinkedInProfile, isOwnLinkedInProfile } from "./extractors/linkedin-profile"
+import { scrapeConnectionResults } from "./apex-connection-scanner"
 import { syncLinkedInBrandProfile } from "./api-client"
 import { detectPage } from "./detectors/ats"
 import { extractJobWithMeta } from "./extractors/job"
-import { ScoutBar } from "./overlay/scout-bar"
+import { ApexBar } from "./overlay/apex-bar"
 import { JobCardBadgeEngine } from "./overlay/job-card-badges"
 import { unmountScreenerBar } from "./overlay/job-screener"
 import {
-  mountDetailScoutPanel,
-  unmountDetailScoutPanel,
-} from "./overlay/job-detail-scout"
+  mountDetailApexPanel,
+  unmountDetailApexPanel,
+} from "./overlay/job-detail-apex"
 import {
   detectExtensionPageMode,
   isJobBoardSite,
@@ -36,9 +37,9 @@ type HireovenContentWindow = Window & {
   __hoContentBootstrapped?: boolean
 }
 
-let scoutBarInstance: ScoutBar | null = null
+let apexBarInstance: ApexBar | null = null
 
-// Sites where the Scout Bar is allowed to mount.
+// Sites where the Apex Bar is allowed to mount.
 //
 // Intentionally EXCLUDED (job-board aggregators):
 //   - linkedin.com   — external apply URLs hidden behind voyager API; extraction unreliable
@@ -78,7 +79,7 @@ function isTopFrame(): boolean {
   }
 }
 
-// Job-board aggregators where Scout intentionally does NOT mount the bar.
+// Job-board aggregators where Apex intentionally does NOT mount the bar.
 // These sites' /jobs/ paths would otherwise match CAREER_PATH_PATTERN and
 // trigger the overlay even though we've removed them from the allowlist.
 // Save flow on these sites is unreliable (apply URL hidden behind their API)
@@ -284,29 +285,76 @@ function registerMessageBridge(): void {
           sendResponse(result)
           break
         }
-        case "EXECUTE_SCOUT_COMMAND": {
+        case "EXECUTE_APEX_COMMAND": {
           void (async () => {
-            if (!scoutBarInstance) {
-              await mountScoutBarWhenReady()
+            if (!apexBarInstance) {
+              await mountApexBarWhenReady()
             }
-            if (!scoutBarInstance) {
+            if (!apexBarInstance) {
               sendResponse({
-                type: "SCOUT_COMMAND_EXECUTED",
+                type: "APEX_COMMAND_EXECUTED",
                 accepted: false,
-                message: "Scout Bar is not mounted on this page.",
+                message: "Apex Bar is not mounted on this page.",
               })
               return
             }
-            await scoutBarInstance.executeScoutCommand(message.command, message.payload)
-            sendResponse({ type: "SCOUT_COMMAND_EXECUTED", accepted: true })
+            await apexBarInstance.executeApexCommand(message.command, message.payload)
+            sendResponse({ type: "APEX_COMMAND_EXECUTED", accepted: true })
           })().catch((err) => {
             sendResponse({
-              type: "SCOUT_COMMAND_EXECUTED",
+              type: "APEX_COMMAND_EXECUTED",
               accepted: false,
               message: err instanceof Error ? err.message : "Command execution failed.",
             })
           })
           return true
+        }
+        case "SCRAPE_LINKEDIN_CONNECTIONS": {
+          // LinkedIn renders results async via React — poll until profile links
+          // appear, scrolling to trigger lazy-loading, or give up after ~12s.
+          ;(async () => {
+            // Count profile links in the main results area (exclude the few in nav/sidebar)
+            const countProfileLinks = () =>
+              document.querySelectorAll("a[href*='/in/']").length
+
+            await new Promise<void>((resolve) => {
+              const start = Date.now()
+              let lastScroll = 0
+              function check() {
+                const links = countProfileLinks()
+                const elapsed = Date.now() - start
+                // Enough results, or timed out
+                if (links >= 5 || elapsed > 12_000) {
+                  resolve()
+                  return
+                }
+                // Nudge lazy-loading by scrolling every ~1.2s
+                if (elapsed - lastScroll > 1200) {
+                  lastScroll = elapsed
+                  window.scrollTo(0, document.body.scrollHeight * 0.6)
+                }
+                setTimeout(check, 400)
+              }
+              check()
+            })
+
+            const connections = scrapeConnectionResults()
+            sendResponse({ type: "PAGE_DETECTED", page: { ats: "linkedin" }, connections } as never)
+          })()
+          return true  // keep message port open for async sendResponse
+        }
+        case "PUSH_SCAN_RESULT": {
+          // Background finished the LinkedIn scan and is pushing the result to this Apex tab.
+          // Relay it to the web app via window.postMessage.
+          const msg = message as unknown as { ok: boolean; connections?: unknown[]; error?: string }
+          window.postMessage({
+            type: "APEX_SCAN_CONNECTIONS_RESULT",
+            ok: msg.ok,
+            connections: msg.connections,
+            error: msg.error,
+          }, window.location.origin)
+          sendResponse({ type: "PAGE_DETECTED", page: { ats: "other" } } as never)
+          break
         }
         default:
           sendResponse({ type: "ERROR", message: "Unknown message type" })
@@ -397,7 +445,7 @@ function injectResumeFile(base64: string, filename: string): { type: "INJECT_RES
   }
 }
 
-async function mountScoutBarWhenReady(): Promise<void> {
+async function mountApexBarWhenReady(): Promise<void> {
   if (!isTopFrame()) return
   if (!shouldOverlayThisHost()) return
 
@@ -411,17 +459,17 @@ async function mountScoutBarWhenReady(): Promise<void> {
     })
   }
 
-  // ScoutBar manages its own lifecycle (SPA URL observer, mount/teardown).
-  if (!scoutBarInstance) {
-    scoutBarInstance = new ScoutBar()
+  // ApexBar manages its own lifecycle (SPA URL observer, mount/teardown).
+  if (!apexBarInstance) {
+    apexBarInstance = new ApexBar()
   }
-  await scoutBarInstance.mount()
+  await apexBarInstance.mount()
 }
 
 /**
  * Mount the job-card badge overlay on supported job-board sites
  * (LinkedIn / Indeed / Glassdoor / Handshake). This intentionally runs even
- * on hosts that ScoutBar's denylist excludes — the badges ARE the Hireoven
+ * on hosts that ApexBar's denylist excludes — the badges ARE the Hireoven
  * surface for those sites.
  *
  * Re-checks the page mode whenever the URL changes (LinkedIn search → detail
@@ -450,7 +498,7 @@ async function mountJobCardBadgesWhenReady(): Promise<void> {
       engine = null
       lastSite = null
       unmountScreenerBar()
-      unmountDetailScoutPanel()
+      unmountDetailApexPanel()
       return
     }
     if (site === "linkedin") {
@@ -460,7 +508,7 @@ async function mountJobCardBadgesWhenReady(): Promise<void> {
       engine = null
       lastSite = null
       unmountScreenerBar()
-      unmountDetailScoutPanel()
+      unmountDetailApexPanel()
       return
     }
     const mode = detectExtensionPageMode(window.location.href, document)
@@ -469,17 +517,17 @@ async function mountJobCardBadgesWhenReady(): Promise<void> {
       engine = null
       lastSite = null
       unmountScreenerBar()
-      unmountDetailScoutPanel()
+      unmountDetailApexPanel()
       return
     }
 
     // Screener bar disabled — replaced by per-handler aggregator pills.
-    // The Detail Scout panel still renders on job-detail pages.
+    // The Detail Apex panel still renders on job-detail pages.
     unmountScreenerBar()
     if (mode === "job_board_detail") {
-      void mountDetailScoutPanel(site)
+      void mountDetailApexPanel(site)
     } else {
-      unmountDetailScoutPanel()
+      unmountDetailApexPanel()
     }
 
     if (engine && lastSite === site) {
@@ -494,7 +542,7 @@ async function mountJobCardBadgesWhenReady(): Promise<void> {
 
   refresh()
 
-  // Cheap URL poll — same approach the Scout Bar uses for SPA navigation.
+  // Cheap URL poll — same approach the Apex Bar uses for SPA navigation.
   let lastUrl = window.location.href
   setInterval(() => {
     if (window.location.href === lastUrl) return
@@ -506,17 +554,17 @@ async function mountJobCardBadgesWhenReady(): Promise<void> {
 // ── Hireoven dashboard ↔ extension bridge ─────────────────────────────────────
 //
 // This bridge runs ONLY on hireoven.com / localhost:3000 (the app itself).
-// It relays lightweight context between the Scout dashboard page and the
+// It relays lightweight context between the Apex dashboard page and the
 // background service worker using window.postMessage as the page-facing
 // protocol and chrome.runtime.sendMessage as the extension-facing protocol.
 //
 // Protocol (page → extension):
-//   window.postMessage({ source: "hireoven-scout", type: "GET_ACTIVE_CONTEXT" })
+//   window.postMessage({ source: "hireoven-apex", type: "GET_ACTIVE_CONTEXT" })
 //
 // Protocol (extension → page):
 //   window.postMessage({ source: "hireoven-ext", type: "ACTIVE_CONTEXT_RESULT" | "ACTIVE_CONTEXT_PUSH", context })
 
-const SCOUT_SOURCE = "hireoven-scout"
+const APEX_SOURCE = "hireoven-apex"
 const EXT_SOURCE = "hireoven-ext"
 
 function isLocalAppHost(host: string): boolean {
@@ -539,9 +587,9 @@ function isHireovenPage(): boolean {
 function registerPageBridge(): void {
   if (!isHireovenPage()) return
 
-  // Page → extension: Scout dashboard requests current context
-  // ── Page → Extension: Scout dashboard sends requests and commands ────────────
-  const SCOUT_RELAY_COMMANDS = new Set([
+  // Page → extension: Apex dashboard requests current context
+  // ── Page → Extension: Apex dashboard sends requests and commands ────────────
+  const APEX_RELAY_COMMANDS = new Set([
     "OPEN_AUTOFILL",
     "START_TAILOR",
     "START_COMPARE",
@@ -553,7 +601,21 @@ function registerPageBridge(): void {
     if (event.source !== window) return
     if (typeof event.data !== "object" || event.data === null) return
     const msg = event.data as Record<string, unknown>
-    if (msg.source !== SCOUT_SOURCE) return
+    if (msg.source !== APEX_SOURCE) return
+
+    // If the extension was reloaded, this content script is orphaned —
+    // chrome.runtime.sendMessage would throw "Extension context invalidated".
+    // Bail gracefully and, for scan requests, tell the page to refresh.
+    if (!chrome.runtime?.id) {
+      if (msg.type === "APEX_SCAN_CONNECTIONS") {
+        window.postMessage({
+          type: "APEX_SCAN_CONNECTIONS_RESULT",
+          ok: false,
+          error: "Extension was updated — please refresh this page (⌘⇧R) and try again.",
+        }, window.location.origin)
+      }
+      return
+    }
 
     if (msg.type === "GET_ACTIVE_CONTEXT") {
       // Pull: request stored context from background and echo back as ACTIVE_CONTEXT_CHANGED
@@ -582,10 +644,20 @@ function registerPageBridge(): void {
       return
     }
 
-    // Scout UI commands — relay to background which forwards to active job tab
-    if (SCOUT_RELAY_COMMANDS.has(msg.type as string)) {
+    // Shadow Network: fire scan request — result is pushed back via PUSH_SCAN_RESULT
+    if (msg.type === "APEX_SCAN_CONNECTIONS") {
       chrome.runtime.sendMessage({
-        type: "RELAY_SCOUT_COMMAND",
+        type: "SCAN_LINKEDIN_CONNECTIONS",
+        companyName: msg.companyName,
+        jobTitle: msg.jobTitle,
+      }).catch(() => {})
+      return
+    }
+
+    // Apex UI commands — relay to background which forwards to active job tab
+    if (APEX_RELAY_COMMANDS.has(msg.type as string)) {
+      chrome.runtime.sendMessage({
+        type: "RELAY_APEX_COMMAND",
         command: msg.type,
         payload: typeof msg.payload === "object" ? msg.payload : {},
       })
@@ -665,9 +737,26 @@ function bootstrap(): void {
 
   registerMessageBridge()
   registerPageBridge()
-  void mountScoutBarWhenReady()
+  void mountApexBarWhenReady()
   void mountJobCardBadgesWhenReady()
   maybeRunLinkedInProfileSync()
+
+  // Proactively announce to the Apex app that the extension is live.
+  // This prevents the race condition where the app sends GET_ACTIVE_CONTEXT
+  // before the content script is ready to respond.
+  if (isHireovenPage()) {
+    setTimeout(() => {
+      if (!chrome.runtime?.id) return
+      chrome.runtime.sendMessage({ type: "GET_ACTIVE_CONTEXT" }, (response) => {
+        if (chrome.runtime.lastError) return
+        const ctx = (response as { context?: unknown })?.context ?? null
+        window.postMessage(
+          { source: "hireoven-ext", type: "ACTIVE_CONTEXT_CHANGED", context: ctx },
+          window.location.origin,
+        )
+      })
+    }, 300)
+  }
 }
 
 // LinkedIn uses history.pushState for SPA navigation.

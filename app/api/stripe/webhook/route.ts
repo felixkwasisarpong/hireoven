@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
       if (session.metadata?.type === "live_interview_credits") {
         const credits = parseInt(session.metadata?.credits ?? "0", 10)
         if (credits > 0) {
-          const { grantCredits } = await import("@/lib/scout/interview/credits")
+          const { grantCredits } = await import("@/lib/apex/interview/credits")
           await grantCredits(
             userId,
             credits,

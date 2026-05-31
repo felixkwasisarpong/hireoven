@@ -17,7 +17,7 @@ import CompanyHeader from "@/components/companies/CompanyHeader"
 import SimilarCompanies from "@/components/companies/SimilarCompanies"
 import { EmployerHealthScore } from "@/components/employers/EmployerHealthScore"
 import { SponsorshipTruthScore } from "@/components/employers/SponsorshipTruthScore"
-import { ScoutMiniPanel } from "@/components/scout/ScoutMiniPanel"
+import { ApexMiniPanel } from "@/components/apex/ApexMiniPanel"
 import {
   JOB_APPLICATION_SAVED_EVENT,
   fetchJobSavedState,
@@ -853,7 +853,7 @@ export default function CompanyProfilePageClient({
         <div aria-hidden className="h-[clamp(3rem,10vh,6rem)] shrink-0" />
       </div>
 
-      <ScoutMiniPanel
+      <ApexMiniPanel
         pagePath={`/dashboard/companies/${companyId}`}
         companyId={companyId}
         suggestionChips={["Is this company worth targeting?"]}

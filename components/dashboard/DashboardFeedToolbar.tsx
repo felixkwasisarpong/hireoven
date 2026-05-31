@@ -39,10 +39,10 @@ import { cn } from "@/lib/utils"
 import type { EmploymentType, JobFilters, SeniorityLevel } from "@/types"
 
 /**
- * Small Sparkles badge that appears on a filter button when Scout just changed it.
+ * Small Sparkles badge that appears on a filter button when Apex just changed it.
  * Sits in the top-right corner of the button's relative wrapper.
  */
-function ScoutPulseBadge() {
+function ApexPulseBadge() {
   return (
     <span
       className="pointer-events-none absolute -right-1 -top-1 z-10 flex h-4 w-4 items-center justify-center rounded-full bg-orange-500 shadow-sm ring-2 ring-white"
@@ -165,9 +165,9 @@ export default function DashboardFeedToolbar({
   const [titlesLoading, setTitlesLoading] = useState(false)
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const [canHover, setCanHover] = useState(false)
-  // Set of toolbar button keys that Scout just changed — cleared after the pulse animation
-  const [scoutPulse, setScoutPulse] = useState<Set<string>>(new Set())
-  const scoutPulseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Set of toolbar button keys that Apex just changed — cleared after the pulse animation
+  const [apexPulse, setApexPulse] = useState<Set<string>>(new Set())
+  const apexPulseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     const mql = window.matchMedia("(hover: hover) and (pointer: fine)")
@@ -193,22 +193,22 @@ export default function DashboardFeedToolbar({
         paramKeys.flatMap((k) => (PARAM_TO_BUTTON[k] ? [PARAM_TO_BUTTON[k]] : []))
       )
       if (buttonKeys.size === 0) return
-      if (scoutPulseTimerRef.current) clearTimeout(scoutPulseTimerRef.current)
-      setScoutPulse(buttonKeys)
-      scoutPulseTimerRef.current = setTimeout(() => setScoutPulse(new Set()), 2800)
+      if (apexPulseTimerRef.current) clearTimeout(apexPulseTimerRef.current)
+      setApexPulse(buttonKeys)
+      apexPulseTimerRef.current = setTimeout(() => setApexPulse(new Set()), 2800)
     }
 
     function handleFiltersRestored() {
-      if (scoutPulseTimerRef.current) clearTimeout(scoutPulseTimerRef.current)
-      setScoutPulse(new Set())
+      if (apexPulseTimerRef.current) clearTimeout(apexPulseTimerRef.current)
+      setApexPulse(new Set())
     }
 
-    window.addEventListener("scout:filters-applied", handleFiltersApplied)
-    window.addEventListener("scout:filters-restored", handleFiltersRestored)
+    window.addEventListener("apex:filters-applied", handleFiltersApplied)
+    window.addEventListener("apex:filters-restored", handleFiltersRestored)
     return () => {
-      window.removeEventListener("scout:filters-applied", handleFiltersApplied)
-      window.removeEventListener("scout:filters-restored", handleFiltersRestored)
-      if (scoutPulseTimerRef.current) clearTimeout(scoutPulseTimerRef.current)
+      window.removeEventListener("apex:filters-applied", handleFiltersApplied)
+      window.removeEventListener("apex:filters-restored", handleFiltersRestored)
+      if (apexPulseTimerRef.current) clearTimeout(apexPulseTimerRef.current)
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -476,13 +476,13 @@ export default function DashboardFeedToolbar({
 
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative">
-          {scoutPulse.has("titles") && <ScoutPulseBadge />}
+          {apexPulse.has("titles") && <ApexPulseBadge />}
           <button
             type="button"
             onClick={() => (filterDropdown === "titles" ? setFilterDropdown(null) : openDropdown("titles"))}
             className={cn(
               filterBtn(Boolean(filters.titles?.length), "blue"),
-              scoutPulse.has("titles") && "ring-2 ring-orange-400/60 ring-offset-1"
+              apexPulse.has("titles") && "ring-2 ring-orange-400/60 ring-offset-1"
             )}
           >
             <Briefcase className={iconCls(Boolean(filters.titles?.length), "blue")} />
@@ -598,13 +598,13 @@ export default function DashboardFeedToolbar({
         </div>
 
         <div className="relative">
-          {scoutPulse.has("location") && <ScoutPulseBadge />}
+          {apexPulse.has("location") && <ApexPulseBadge />}
           <button
             type="button"
             onClick={() => openDropdown("location")}
             className={cn(
               filterBtn(Boolean(filters.locationQuery?.trim()) || Boolean(filters.remote), "sky"),
-              scoutPulse.has("location") && "ring-2 ring-orange-400/60 ring-offset-1"
+              apexPulse.has("location") && "ring-2 ring-orange-400/60 ring-offset-1"
             )}
           >
             <MapPin
@@ -787,13 +787,13 @@ export default function DashboardFeedToolbar({
         </div>
 
         <div className="relative">
-          {scoutPulse.has("sponsorship") && <ScoutPulseBadge />}
+          {apexPulse.has("sponsorship") && <ApexPulseBadge />}
           <button
             type="button"
             onClick={() => replaceFilters({ ...filters, sponsorship: !filters.sponsorship })}
             className={cn(
               filterBtn(Boolean(filters.sponsorship), "emerald"),
-              scoutPulse.has("sponsorship") && "ring-2 ring-orange-400/60 ring-offset-1"
+              apexPulse.has("sponsorship") && "ring-2 ring-orange-400/60 ring-offset-1"
             )}
           >
             <Plane className={iconCls(Boolean(filters.sponsorship), "emerald")} />
@@ -803,13 +803,13 @@ export default function DashboardFeedToolbar({
 
 
         <div className="relative">
-          {scoutPulse.has("remote") && <ScoutPulseBadge />}
+          {apexPulse.has("remote") && <ApexPulseBadge />}
           <button
             type="button"
             onClick={() => replaceFilters({ ...filters, remote: !filters.remote ? true : false })}
             className={cn(
               filterBtn(Boolean(filters.remote), "cyan"),
-              scoutPulse.has("remote") && "ring-2 ring-orange-400/60 ring-offset-1"
+              apexPulse.has("remote") && "ring-2 ring-orange-400/60 ring-offset-1"
             )}
           >
             <Globe2 className={iconCls(Boolean(filters.remote), "cyan")} />

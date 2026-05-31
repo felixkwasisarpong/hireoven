@@ -18,8 +18,8 @@ export type CtaPref = "always_show" | "hide_on_site" | "hide_everywhere"
 
 export type CtaPrefs = Partial<Record<AggregatorSite, CtaPref>>
 
-const PREFS_KEY = "scout.ctaPrefs"
-const DISMISSES_KEY = "scout.dismisses"
+const PREFS_KEY = "apex.ctaPrefs"
+const DISMISSES_KEY = "apex.dismisses"
 const SUPPRESSION_THRESHOLD = 3
 
 export async function getCtaPrefs(): Promise<CtaPrefs> {

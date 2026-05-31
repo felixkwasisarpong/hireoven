@@ -7,7 +7,7 @@ import { getSessionUser } from "@/lib/auth/session-user"
 import { canAccess } from "@/lib/gates"
 import { getPlanForUserId } from "@/lib/gates/server-gate"
 import { getPostgresPool } from "@/lib/postgres/server"
-import { getInterviewSession, type InterviewSession } from "@/lib/scout/interview/queries"
+import { getInterviewSession, type InterviewSession } from "@/lib/apex/interview/queries"
 
 export const dynamic = "force-dynamic"
 

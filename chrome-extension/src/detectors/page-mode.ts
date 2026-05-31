@@ -2,7 +2,7 @@
  * Extension page-mode detector.
  *
  * Splits the world the extension operates in into two distinct modes so the
- * Scout Bar can wear the right hat:
+ * Apex Bar can wear the right hat:
  *
  *   1. Job-board overlay mode  — LinkedIn / Indeed / Glassdoor / Handshake.
  *      These are discovery surfaces. The user can't reliably submit from
@@ -13,7 +13,7 @@
  *
  *   2. ATS / application mode  — Greenhouse / Lever / Ashby / Workday /
  *      iCIMS / SmartRecruiters / BambooHR. These host the real application form, so
- *      autofill is the relevant primitive. Scout panel still works on
+ *      autofill is the relevant primitive. Apex panel still works on
  *      ATS job-detail pages even before the user reaches the form.
  *
  * Pure detection — never fills, clicks, navigates, or mutates the DOM.

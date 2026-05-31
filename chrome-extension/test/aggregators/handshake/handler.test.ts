@@ -52,9 +52,9 @@ describe("HandshakeHandler", () => {
       const job = h.scrapeJob()!
       h.injectPill(document.querySelector("button")!, job)
       await new Promise((r) => setTimeout(r, 0))
-      const pills = document.querySelectorAll("[data-scout-pill]")
+      const pills = document.querySelectorAll("[data-apex-pill]")
       expect(pills).toHaveLength(1)
-      expect(pills[0].getAttribute("data-testid")).toBe("scout-pill-handshake")
+      expect(pills[0].getAttribute("data-testid")).toBe("apex-pill-handshake")
     })
   })
 

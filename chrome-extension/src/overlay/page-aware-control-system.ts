@@ -17,7 +17,7 @@ import type {
   QueueStateResult,
   ResolveJobResult,
   SaveResult,
-  ScoutOverlayResult,
+  ApexOverlayResult,
   SessionResult,
   TailorApproveResult,
   TailorPreviewResult,
@@ -103,9 +103,9 @@ interface BadgeViewModel {
 
 const ROOT_HOST_ID = "hireoven-page-aware-controls"
 const LEGACY_IDS = [
-  "hireoven-scout-overlay-host",
-  "hireoven-scout-bar-host",
-  "hireoven-scout-command-dock",
+  "hireoven-apex-overlay-host",
+  "hireoven-apex-bar-host",
+  "hireoven-apex-command-dock",
   "hireoven-focused-intelligence-layer",
   "hireoven-search-filter-layer",
   "hireoven-job-screener",
@@ -2158,10 +2158,10 @@ export class PageAwareControlSystem {
 
     await this.runBusy("match", async () => {
       try {
-        const raw = await sendToBackground({ type: "GET_SCOUT_OVERLAY", jobId })
-        const result = raw as ScoutOverlayResult
+        const raw = await sendToBackground({ type: "GET_APEX_OVERLAY", jobId })
+        const result = raw as ApexOverlayResult
 
-        if (result.type === "SCOUT_OVERLAY_RESULT" && result.ok) {
+        if (result.type === "APEX_OVERLAY_RESULT" && result.ok) {
           const memory = this.ensureMemory(canonicalId)
           memory.insights = {
             matchPercent: result.matchPercent,
@@ -2358,7 +2358,7 @@ export class PageAwareControlSystem {
       },
       onMarkSubmitted: async (jobId?: string) => {
         try {
-          await fetch(`${this.appOrigin}/api/scout/mark-submitted`, {
+          await fetch(`${this.appOrigin}/api/apex/mark-submitted`, {
             method:       "POST",
             credentials:  "include",
             headers:      { "Content-Type": "application/json" },
@@ -2614,8 +2614,8 @@ export class PageAwareControlSystem {
   }
 
   /**
-   * Execute a Scout command by name — used when the background relays
-   * commands from the Scout dashboard (OPEN_AUTOFILL, START_TAILOR, etc.).
+   * Execute a Apex command by name — used when the background relays
+   * commands from the Apex dashboard (OPEN_AUTOFILL, START_TAILOR, etc.).
    * Maps command names to the existing onAction action strings.
    */
   public executeAction(command: string): void {
@@ -3178,7 +3178,7 @@ export class PageAwareControlSystem {
   /**
    * True when the active job has an explicit "no sponsorship" signal that
    * makes it ineligible for the apply queue — keyword-matched OR from the
-   * scout overlay insights.
+   * apex overlay insights.
    */
   private hasNoSponsorHardBlock(): boolean {
     const card = this.activeCard()
@@ -3400,7 +3400,7 @@ export class PageAwareControlSystem {
         </button>
         ${activeFilterCount > 1 ? `<span class="pill queue">${activeFilterCount} filters</span>` : ""}
         ${queuePill}
-        <button class="action" data-action="open-dashboard">Open Scout →</button>
+        <button class="action" data-action="open-dashboard">Open Apex →</button>
       `
     }
 

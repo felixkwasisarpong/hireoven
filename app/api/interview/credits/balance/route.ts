@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { getUserPlan } from "@/lib/gates/server-gate"
-import { getBalance, creditsForDuration } from "@/lib/scout/interview/credits"
+import { getBalance, creditsForDuration } from "@/lib/apex/interview/credits"
 
 export const runtime = "nodejs"
 

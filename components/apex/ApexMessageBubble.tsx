@@ -1,0 +1,119 @@
+"use client"
+
+/**
+ * ApexMessageBubble — layout shell for Apex chat messages.
+ *
+ * Renders the avatar, bubble container, recommendation badge, and metadata.
+ * All content routing (text, actions, workflow, compare, graph...) is
+ * delegated to ApexResponseRenderer.
+ *
+ * Both /dashboard/apex and ApexMiniPanel use this component,
+ * so renderer behavior is always identical across surfaces.
+ */
+
+import { Lock, Zap } from "lucide-react"
+import type { FeatureKey } from "@/lib/gates"
+import type { ApexResponse } from "@/lib/apex/types"
+import { ApexResponseRenderer } from "./ApexResponseRenderer"
+import { ApexIcon } from "@/components/apex/ApexIcon"
+import type { ApexRenderContext } from "@/lib/apex/normalize-apex-response"
+
+const RECOMMENDATION_CONFIG = {
+  Apply:   { bg: "bg-emerald-500", pill: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  Skip:    { bg: "bg-red-500",     pill: "bg-red-50 text-red-700 border-red-200" },
+  Improve: { bg: "bg-amber-500",   pill: "bg-amber-50 text-amber-700 border-amber-200" },
+  Wait:    { bg: "bg-blue-500",    pill: "bg-blue-50 text-blue-700 border-blue-200" },
+  Explore: { bg: "bg-indigo-500",  pill: "bg-indigo-50 text-indigo-700 border-indigo-200" },
+} as const
+
+type Props = {
+  response:  ApexResponse
+  /** Pass "mini" for compact Apex surfaces — ApexResponseRenderer adapts automatically */
+  context?:  ApexRenderContext
+  compact?:  boolean
+  onUpgrade?: (feature: FeatureKey) => void
+}
+
+export function ApexMessageBubble({ response, context = "dashboard", compact = false, onUpgrade }: Props) {
+  const recConfig =
+    RECOMMENDATION_CONFIG[response.recommendation] ?? RECOMMENDATION_CONFIG.Explore
+  const isCompact = compact || context === "mini" || context === "extension"
+  const showRecommendation =
+    response.recommendation !== "Explore" ||
+    Boolean((response.actions?.length ?? 0) > 0 || response.workflow || response.compare)
+  const showGatedUpgradeCard = Boolean(response.gated) && !isCompact && typeof onUpgrade === "function"
+
+  return (
+    <div className={`group flex items-start ${isCompact ? "gap-2.5" : "gap-3"}`}>
+      {/* Avatar */}
+      <div
+        className={`mt-0.5 flex-shrink-0 inline-flex items-center justify-center rounded-lg bg-indigo-600 shadow-[0_2px_8px_rgba(99,102,241,0.30)] ${
+          isCompact ? "h-6 w-6" : "h-7 w-7"
+        }`}
+      >
+        <ApexIcon size={isCompact ? 13 : 16} glow={false} className="brightness-[10]" />
+      </div>
+
+      {/* Bubble */}
+      <div className="min-w-0 flex-1 overflow-hidden rounded-2xl rounded-tl-sm border border-slate-100 bg-white shadow-sm">
+        {/* Coloured accent line */}
+        <div className={`h-[2px] w-full ${recConfig.bg}`} />
+
+        <div className={isCompact ? "p-3" : "p-4 sm:p-5"}>
+          {/* Recommendation badge — compact single pill, no mode/confidence noise */}
+          {showRecommendation && (
+            <div className="flex items-center gap-2">
+              <span
+                className={`inline-flex items-center rounded-full border font-semibold uppercase tracking-wide ${recConfig.pill} ${
+                  isCompact ? "px-2 py-0.5 text-[10px]" : "px-2.5 py-0.5 text-[11px]"
+                }`}
+              >
+                {response.recommendation}
+              </span>
+            </div>
+          )}
+
+          {/* ── All content routing via ApexResponseRenderer ─────────── */}
+          <div className={showRecommendation ? "mt-2.5" : "mt-1"}>
+            <ApexResponseRenderer
+              response={response}
+              context={context}
+              onUpgrade={onUpgrade}
+            />
+          </div>
+
+          {/* Gated upgrade card */}
+          {showGatedUpgradeCard && response.gated && (
+            <div
+              className={`rounded-xl border border-indigo-100 bg-indigo-50/60 ${
+                isCompact ? "mt-3 p-3" : "mt-4 p-4"
+              }`}
+            >
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-indigo-100">
+                  <Lock className="h-4 w-4 text-indigo-600" />
+                </div>
+                <div className="flex-1">
+                  <p className={`font-semibold text-indigo-900 ${isCompact ? "text-xs" : "text-sm"}`}>
+                    Premium Apex feature
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-indigo-700">
+                    {response.gated.upgradeMessage}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => onUpgrade?.(response.gated!.feature)}
+                    className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-indigo-700"
+                  >
+                    <Zap className="h-3 w-3" />
+                    Upgrade to unlock
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}

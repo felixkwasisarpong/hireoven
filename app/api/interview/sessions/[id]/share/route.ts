@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getPostgresPool } from "@/lib/postgres/server"
-import { getInterviewSession } from "@/lib/scout/interview/queries"
+import { getInterviewSession } from "@/lib/apex/interview/queries"
 import { randomBytes } from "crypto"
 
 export const runtime = "nodejs"

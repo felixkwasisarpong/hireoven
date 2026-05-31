@@ -12,14 +12,14 @@ import {
   INTERNATIONAL_HIGHLIGHTS,
   INTERVIEW_FEATURES,
   JOB_INTEL_FEATURES,
-  SCOUT_FEATURES,
+  APEX_FEATURES,
   TRACKER_FEATURES,
 } from "@/lib/marketing/product-features"
 
 export const metadata: Metadata = {
   title: "Features | Hireoven",
   description:
-    "Fresh job feed, AI match scores, per-job intelligence, Scout AI career coach, text/coding/live interview prep, application tracker, and international job-search signals. Everything in one place.",
+    "Fresh job feed, AI match scores, per-job intelligence, Apex AI career coach, text/coding/live interview prep, application tracker, and international job-search signals. Everything in one place.",
 }
 
 export default function FeaturesPage() {
@@ -90,16 +90,16 @@ export default function FeaturesPage() {
         </div>
       </section>
 
-      {/* ── Scout AI ──────────────────────────────────────────────── */}
+      {/* ── Apex AI ──────────────────────────────────────────────── */}
       <section className="px-6 py-16 md:py-20">
         <div className="mx-auto max-w-6xl">
           <SectionHeader
-            kicker="Scout AI"
+            kicker="Apex AI"
             title="Your AI career coach"
-            body="Not just a chatbot. Scout reads your resume, knows the job market, and gives you a concrete plan: which roles to target, which gaps to close, which bullets to rewrite."
+            body="Not just a chatbot. Apex reads your resume, knows the job market, and gives you a concrete plan: which roles to target, which gaps to close, which bullets to rewrite."
             kickerColor="text-indigo-600"
           />
-          <CoreFeaturesTable features={SCOUT_FEATURES} />
+          <CoreFeaturesTable features={APEX_FEATURES} />
         </div>
       </section>
 

@@ -1,7 +1,7 @@
 /**
  * Merge active companies that share the same normalized name but live under
  * different domains — only when one of the domains is clearly low-quality
- * (mangled synthetic, scout placeholder, USCIS-employer, ATS tenant) and the
+ * (mangled synthetic, apex placeholder, USCIS-employer, ATS tenant) and the
  * other is a real-looking domain.
  *
  * Ambiguous clusters (two real-looking domains, e.g. snyk.com vs snyk.io) are
@@ -48,7 +48,7 @@ function hostOf(domain: string): string {
 
 function isLowQuality(row: Row): boolean {
   const d = row.domain.toLowerCase()
-  if (d.endsWith(".scout-placeholder")) return true
+  if (d.endsWith(".apex-placeholder")) return true
   if (d.endsWith(".uscis-employer") || d.endsWith(".lca-employer")) return true
   if (/\.wd\d+\.myworkdayjobs\.com$/.test(d)) return true
   if (d.endsWith(".applytojob.com")) return true
@@ -66,7 +66,7 @@ function domainScore(row: Row): number {
   let score = 0
 
   // Hard negatives — these are never canonical.
-  if (d.endsWith(".scout-placeholder")) score -= 100
+  if (d.endsWith(".apex-placeholder")) score -= 100
   if (d.endsWith(".uscis-employer") || d.endsWith(".lca-employer")) score -= 80
   if (/\.wd\d+\.myworkdayjobs\.com$/.test(d)) score -= 60
   if (d.endsWith(".applytojob.com")) score -= 60

@@ -103,7 +103,7 @@ async function appendApplicationTimeline(args: {
     date: new Date().toISOString(),
     auto: true,
     note: [
-      `Scout autofill ${args.stage}`,
+      `Apex autofill ${args.stage}`,
       `ATS=${args.ats}`,
       `${args.fieldsFilled}/${args.fieldsTotal} fields`,
       args.manualReviewCount > 0 ? `manual_review=${args.manualReviewCount}` : null,
