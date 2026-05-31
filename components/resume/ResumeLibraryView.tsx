@@ -121,60 +121,32 @@ function StatusPill({ status }: { status: ResumeStatus }) {
 }
 
 function ResumeThumb({ resume }: { resume: Resume }) {
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const title = resume.full_name ?? resume.name ?? resume.file_name
   const role = resume.primary_role ?? "Resume"
   const summary = resume.summary ?? resume.raw_text?.split(/\s+/).slice(0, 12).join(" ") ?? "Resume preview"
-  const isPdf = /pdf/i.test(resume.file_type ?? resume.file_name)
-  const canRenderFile = Boolean(resume.storage_path && resume.file_type !== "generated")
 
-  useEffect(() => {
-    let cancelled = false
-
-    async function loadPreviewUrl() {
-      if (!canRenderFile) {
-        setPreviewUrl(null)
-        return
-      }
-
-      const response = await fetch(`/api/resume/${resume.id}`, { cache: "no-store" })
-      if (!response.ok) return
-      const data = (await response.json()) as Resume & { download_url?: string }
-      if (!cancelled) setPreviewUrl(data.download_url ?? data.file_url ?? null)
-    }
-
-    void loadPreviewUrl()
-
-    return () => {
-      cancelled = true
-    }
-  }, [canRenderFile, resume.id])
-
+  // Static rendered thumbnail only — we deliberately DO NOT load the actual
+  // file into an iframe here. MinIO stores most uploads as octet-stream, which
+  // browsers force-download even with inline disposition, causing an automatic
+  // download on page load. Previewing the real file happens only on explicit
+  // "View"/"Download" actions.
   return (
     <div className="h-[64px] w-[48px] shrink-0 overflow-hidden rounded-md border border-slate-200 bg-white p-0.5 shadow-sm">
-      {previewUrl && isPdf ? (
-        <iframe
-          title={`${title} thumbnail`}
-          src={`${previewUrl}#toolbar=0&navpanes=0&scrollbar=0&page=1&zoom=35`}
-          className="pointer-events-none h-full w-full rounded-sm border-0 bg-white"
-        />
-      ) : (
-        <div className="h-full overflow-hidden rounded-sm border border-slate-100 bg-slate-50 px-1.5 py-1.5">
-          <p className="truncate text-[5px] font-bold uppercase tracking-wide text-slate-700">{title}</p>
-          <p className="mt-0.5 truncate text-[4.5px] font-semibold text-[#5B4DFF]">{role}</p>
-          <div className="mt-1.5 space-y-0.5">
-            {summary.split(/\s+/).slice(0, 8).map((word, index) => (
-              <div
-                key={`${word}-${index}`}
-                className={cn(
-                  "h-0.5 rounded bg-slate-200",
-                  index % 3 === 0 ? "w-full" : index % 3 === 1 ? "w-10/12" : "w-8/12"
-                )}
-              />
-            ))}
-          </div>
+      <div className="h-full overflow-hidden rounded-sm border border-slate-100 bg-slate-50 px-1.5 py-1.5">
+        <p className="truncate text-[5px] font-bold uppercase tracking-wide text-slate-700">{title}</p>
+        <p className="mt-0.5 truncate text-[4.5px] font-semibold text-[#5B4DFF]">{role}</p>
+        <div className="mt-1.5 space-y-0.5">
+          {summary.split(/\s+/).slice(0, 8).map((word, index) => (
+            <div
+              key={`${word}-${index}`}
+              className={cn(
+                "h-0.5 rounded bg-slate-200",
+                index % 3 === 0 ? "w-full" : index % 3 === 1 ? "w-10/12" : "w-8/12"
+              )}
+            />
+          ))}
         </div>
-      )}
+      </div>
     </div>
   )
 }
@@ -541,11 +513,13 @@ export default function ResumeLibraryView({ topSlot }: { topSlot?: ReactNode }) 
       return
     }
     const data = (await res.json()) as Resume & { download_url?: string }
-    const url = data.download_url ?? data.file_url
-    if (!url) {
+    const baseUrl = data.download_url ?? data.file_url
+    if (!baseUrl) {
       pushToast({ tone: "error", title: "Resume file is not available" })
       return
     }
+    // Force attachment disposition for explicit downloads
+    const url = baseUrl.includes("?") ? `${baseUrl}&download=1` : `${baseUrl}?download=1`
     const link = document.createElement("a")
     link.href = url
     link.download = resume.file_name
