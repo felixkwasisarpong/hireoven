@@ -164,7 +164,11 @@ async function fetchPage(
 
 export const workableAdapter: AtsAdapter = {
   name: "workable",
-  concurrency: envConcurrency("workable", 8),
+  // apply.workable.com rate-limits hard (429) under bursts — at concurrency 8
+  // across N worker instances the effective parallelism (8×N) trips it the
+  // moment many boards come due together. 2 keeps total parallelism modest;
+  // env-overridable via HARVESTER_WORKABLE_CONCURRENCY.
+  concurrency: envConcurrency("workable", 2),
   detectFromUrl,
   async fetchJobs({ slug, ctx }): Promise<HarvestResult> {
     const fetchedAt = new Date()
