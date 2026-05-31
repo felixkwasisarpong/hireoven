@@ -1,28 +1,28 @@
 import { canAccess, type FeatureKey, type Plan } from "@/lib/gates"
-import type { ScoutMode, ScoutResponse } from "./types"
+import type { ApexMode, ApexResponse } from "./types"
 
-export type ScoutPremiumGate = NonNullable<ScoutResponse["gated"]>
+export type ApexPremiumGate = NonNullable<ApexResponse["gated"]>
 
 type PremiumIntentRule = {
   feature: FeatureKey
   reason: string
   upgradeMessage: string
-  test: (input: { message: string; mode: ScoutMode }) => boolean
+  test: (input: { message: string; mode: ApexMode }) => boolean
 }
 
 const PREMIUM_INTENT_RULES: PremiumIntentRule[] = [
   {
-    feature: "scout_actions",
-    reason: "Resume tailoring actions are part of Scout Pro actions.",
-    upgradeMessage: "Upgrade to unlock resume tailoring shortcuts and advanced Scout actions.",
+    feature: "apex_actions",
+    reason: "Resume tailoring actions are part of Apex Pro actions.",
+    upgradeMessage: "Upgrade to unlock resume tailoring shortcuts and advanced Apex actions.",
     test: ({ message }) =>
       /\b(tailor|tailoring|rewrite|optimize|optimi[sz]e)\b.*\bresume\b|\bresume\b.*\b(tailor|tailoring)\b/i.test(
         message
       ),
   },
   {
-    feature: "scout_deep_analysis",
-    reason: "Deep sponsorship analysis is available on paid Scout plans.",
+    feature: "apex_deep_analysis",
+    reason: "Deep sponsorship analysis is available on paid Apex plans.",
     upgradeMessage: "Upgrade to unlock deeper sponsorship intelligence and evidence-driven risk analysis.",
     test: ({ message }) =>
       /\bdeep\b.*\b(sponsorship|h-?1b|visa)\b|\bsponsorship\b.*\bdeep\b|\bdetailed sponsorship\b/i.test(
@@ -39,8 +39,8 @@ const PREMIUM_INTENT_RULES: PremiumIntentRule[] = [
       ),
   },
   {
-    feature: "scout_strategy",
-    reason: "Strategy command-center recommendations are part of paid Scout.",
+    feature: "apex_strategy",
+    reason: "Strategy command-center recommendations are part of paid Apex.",
     upgradeMessage: "Upgrade to unlock strategy playbooks, application performance insights, and multi-step action plans.",
     test: ({ message, mode }) =>
       mode === "applications" ||
@@ -50,11 +50,11 @@ const PREMIUM_INTENT_RULES: PremiumIntentRule[] = [
   },
 ]
 
-export function findScoutPremiumGate(input: {
+export function findApexPremiumGate(input: {
   plan: Plan | null
   message: string
-  mode: ScoutMode
-}): ScoutPremiumGate | null {
+  mode: ApexMode
+}): ApexPremiumGate | null {
   for (const rule of PREMIUM_INTENT_RULES) {
     if (rule.test({ message: input.message, mode: input.mode }) && !canAccess(input.plan, rule.feature)) {
       return {
@@ -68,23 +68,23 @@ export function findScoutPremiumGate(input: {
   return null
 }
 
-export function canUseAdvancedScoutActions(plan: Plan | null): boolean {
-  return canAccess(plan, "scout_actions")
+export function canUseAdvancedApexActions(plan: Plan | null): boolean {
+  return canAccess(plan, "apex_actions")
 }
 
-export function canUsePremiumScoutFeatures(plan: Plan | null): boolean {
+export function canUsePremiumApexFeatures(plan: Plan | null): boolean {
   return (
-    canAccess(plan, "scout_deep_analysis") &&
-    canAccess(plan, "scout_actions") &&
-    canAccess(plan, "scout_strategy")
+    canAccess(plan, "apex_deep_analysis") &&
+    canAccess(plan, "apex_actions") &&
+    canAccess(plan, "apex_strategy")
   )
 }
 
-export function buildGatedScoutResponse(input: {
-  gate: ScoutPremiumGate
-  mode: ScoutMode
+export function buildGatedApexResponse(input: {
+  gate: ApexPremiumGate
+  mode: ApexMode
   answer?: string
-}): ScoutResponse {
+}): ApexResponse {
   return {
     answer:
       input.answer ??

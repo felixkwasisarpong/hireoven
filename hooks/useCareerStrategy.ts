@@ -1,11 +1,11 @@
 "use client"
 
 import { useCallback, useState } from "react"
-import { writeCareerStrategy } from "@/lib/scout/career/store"
-import type { ScoutCareerStrategyResult } from "@/lib/scout/career/types"
+import { writeCareerStrategy } from "@/lib/apex/career/store"
+import type { ApexCareerStrategyResult } from "@/lib/apex/career/types"
 
 export type CareerStrategyState = {
-  data:    ScoutCareerStrategyResult | null
+  data:    ApexCareerStrategyResult | null
   loading: boolean
   error:   string | null
 }
@@ -23,7 +23,7 @@ export function useCareerStrategy(): CareerStrategyActions {
   const generate = useCallback(async (message: string) => {
     setState({ data: null, loading: true, error: null })
     try {
-      const res = await fetch("/api/scout/career", {
+      const res = await fetch("/api/apex/career", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({ message }),
@@ -35,7 +35,7 @@ export function useCareerStrategy(): CareerStrategyActions {
         return
       }
 
-      const data = await res.json() as ScoutCareerStrategyResult
+      const data = await res.json() as ApexCareerStrategyResult
       writeCareerStrategy(data)
       setState({ data, loading: false, error: null })
     } catch {

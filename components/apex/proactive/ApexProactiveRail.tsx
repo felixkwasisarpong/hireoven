@@ -1,23 +1,23 @@
 "use client"
 
 import { Bell, BellOff, ChevronRight, Clock3, X } from "lucide-react"
-import type { ScoutProactiveEvent, ScoutProactiveEventType } from "@/lib/scout/proactive/types"
+import type { ApexProactiveEvent, ApexProactiveEventType } from "@/lib/apex/proactive/types"
 import { cn } from "@/lib/utils"
 
 type Props = {
-  events: ScoutProactiveEvent[]
+  events: ApexProactiveEvent[]
   enabled: boolean
   mutedCount?: number
   loading?: boolean
-  onOpen: (event: ScoutProactiveEvent) => void
+  onOpen: (event: ApexProactiveEvent) => void
   onDismiss: (eventId: string) => void
   onSnooze: (eventId: string) => void
-  onMuteType: (type: ScoutProactiveEventType) => void
+  onMuteType: (type: ApexProactiveEventType) => void
   onClearMutedTypes?: () => void
   onSetEnabled: (enabled: boolean) => void
 }
 
-function severityDot(severity: ScoutProactiveEvent["severity"]): string {
+function severityDot(severity: ApexProactiveEvent["severity"]): string {
   if (severity === "urgent") return "bg-red-500"
   if (severity === "important") return "bg-amber-500"
   return "bg-slate-400"
@@ -30,11 +30,11 @@ function EventRow({
   onSnooze,
   onMuteType,
 }: {
-  event: ScoutProactiveEvent
-  onOpen: (event: ScoutProactiveEvent) => void
+  event: ApexProactiveEvent
+  onOpen: (event: ApexProactiveEvent) => void
   onDismiss: (eventId: string) => void
   onSnooze: (eventId: string) => void
-  onMuteType: (type: ScoutProactiveEventType) => void
+  onMuteType: (type: ApexProactiveEventType) => void
 }) {
   return (
     <div className="rounded-lg border border-slate-200/80 bg-white p-2.5">
@@ -83,7 +83,7 @@ function EventRow({
   )
 }
 
-export function ScoutProactiveRail({
+export function ApexProactiveRail({
   events,
   enabled,
   mutedCount = 0,
@@ -101,7 +101,7 @@ export function ScoutProactiveRail({
         <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
           <div className="flex items-center gap-2">
             <BellOff className="h-3.5 w-3.5 text-slate-400" />
-            <p className="text-[10.5px] font-semibold uppercase tracking-widest text-slate-400">Proactive Scout</p>
+            <p className="text-[10.5px] font-semibold uppercase tracking-widest text-slate-400">Proactive Apex</p>
           </div>
         </div>
         <div className="px-4 py-3">
@@ -125,8 +125,8 @@ export function ScoutProactiveRail({
     <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_2px_12px_rgba(15,23,42,0.05)]">
       <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
         <div className="flex items-center gap-2">
-          <Bell className="h-3.5 w-3.5 text-[#FF5C18]" />
-          <p className="text-[10.5px] font-semibold uppercase tracking-widest text-slate-400">Proactive Scout</p>
+          <Bell className="h-3.5 w-3.5 text-[#6366F1]" />
+          <p className="text-[10.5px] font-semibold uppercase tracking-widest text-slate-400">Proactive Apex</p>
         </div>
         <button
           type="button"

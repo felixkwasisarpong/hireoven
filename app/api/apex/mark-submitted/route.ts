@@ -1,5 +1,5 @@
 /**
- * POST /api/scout/mark-submitted
+ * POST /api/apex/mark-submitted
  *
  * Called when the user clicks "Mark submitted manually" in the review
  * drawer or extension panel. Looks up (or creates) the job_applications
@@ -57,7 +57,7 @@ export async function POST(request: Request) {
     status: "applied",
     date:   now,
     auto:   false,
-    note:   notes ?? "Marked submitted manually via Scout review panel",
+    note:   notes ?? "Marked submitted manually via Apex review panel",
   }
 
   // ── Update existing row ───────────────────────────────────────────────────────
@@ -91,7 +91,7 @@ export async function POST(request: Request) {
     `INSERT INTO job_applications
        (id, user_id, job_id, job_title, company_name, apply_url,
         status, applied_at, source, timeline, created_at, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, 'applied', $7, 'scout_bulk', $8::jsonb, $9, $9)`,
+     VALUES ($1, $2, $3, $4, $5, $6, 'applied', $7, 'apex_bulk', $8::jsonb, $9, $9)`,
     [
       newId, user.id, jobId ?? null,
       jobTitle, companyName, applyUrl ?? null,

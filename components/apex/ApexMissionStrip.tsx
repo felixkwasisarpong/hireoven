@@ -11,12 +11,12 @@ import {
   X,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { activeMissions } from "@/lib/scout/missions/store"
-import type { ScoutMission, ScoutMissionStatus, ScoutMissionType } from "@/lib/scout/missions/types"
+import { activeMissions } from "@/lib/apex/missions/store"
+import type { ApexMission, ApexMissionStatus, ApexMissionType } from "@/lib/apex/missions/types"
 
 // ── Icons + colours per mission type ─────────────────────────────────────────
 
-const TYPE_META: Record<ScoutMissionType, { icon: React.ElementType; label: string }> = {
+const TYPE_META: Record<ApexMissionType, { icon: React.ElementType; label: string }> = {
   applications:    { icon: Briefcase,    label: "Apply" },
   resume:          { icon: FileText,     label: "Resume" },
   compare:         { icon: BarChart2,    label: "Compare" },
@@ -26,7 +26,7 @@ const TYPE_META: Record<ScoutMissionType, { icon: React.ElementType; label: stri
 }
 
 const PRIORITY_DOT: Record<string, string> = {
-  high:   "bg-[#FF5C18]",
+  high:   "bg-[#6366F1]",
   medium: "bg-amber-400",
   low:    "bg-slate-300",
 }
@@ -38,7 +38,7 @@ function MissionRow({
   onLaunch,
   onDismiss,
 }: {
-  mission:   ScoutMission
+  mission:   ApexMission
   onLaunch:  (query: string) => void
   onDismiss: (id: string) => void
 }) {
@@ -47,7 +47,7 @@ function MissionRow({
   const query = mission.suggestedActions?.[0] ?? ""
 
   return (
-    <div className="group flex items-start gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3.5 transition hover:border-[#FF5C18]/30 hover:shadow-[0_4px_16px_rgba(255,92,24,0.06)]">
+    <div className="group flex items-start gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3.5 transition hover:border-[#6366F1]/30 hover:shadow-[0_4px_16px_rgba(99,102,241,0.06)]">
 
       {/* Priority dot + icon */}
       <div className="mt-0.5 flex flex-shrink-0 flex-col items-center gap-1.5">
@@ -90,14 +90,14 @@ function MissionRow({
 // ── Strip component ───────────────────────────────────────────────────────────
 
 type Props = {
-  missions:      ScoutMission[]
+  missions:      ApexMission[]
   momentumLine?: string
   onLaunch:      (query: string) => void
   onDismiss:     (missionId: string) => void
   onDisableAll:  () => void
 }
 
-export function ScoutMissionStrip({
+export function ApexMissionStrip({
   missions,
   momentumLine,
   onLaunch,

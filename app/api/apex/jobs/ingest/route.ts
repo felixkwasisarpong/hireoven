@@ -1,23 +1,23 @@
 /**
- * POST /api/scout/jobs/ingest
+ * POST /api/apex/jobs/ingest
  *
  * Aggregator-side job ingestion endpoint used by the LinkedIn / Glassdoor /
  * Indeed / Handshake content scripts via the background dispatcher.
  *
  * Per-source dedupe (brief Step 10):
- *   linkedin  — match (company_id, scoutSource='linkedin', scoutSourceId);
+ *   linkedin  — match (company_id, apexSource='linkedin', apexSourceId);
  *               fallback (company_id, normalized_title, posted_at::date)
- *   glassdoor — match (company_id, scoutSource='glassdoor', scoutSourceId);
+ *   glassdoor — match (company_id, apexSource='glassdoor', apexSourceId);
  *               cross-source: if (company_id, normalized_title, normalized_city)
  *               match within 14 days, attach Glassdoor as secondary source.
  *   indeed    — strictest: match (company_id, normalized_title,
  *               normalized_location_city); keep earliest posted_at.
- *   handshake — match (company_id, scoutSource='handshake', scoutSourceId);
+ *   handshake — match (company_id, apexSource='handshake', apexSourceId);
  *               preserve metadata.deadline through dedupe.
  *
  * Auth: Bearer JWT (same as other extension routes).
  *
- * NOTE: scoutSource / scoutSourceId / scoutSources are stored in jobs.raw_data
+ * NOTE: apexSource / apexSourceId / apexSources are stored in jobs.raw_data
  * for now to avoid a schema migration. A follow-up should promote these to
  * indexed columns.
  */
@@ -30,7 +30,7 @@ import {
   normalizeLocationCity,
   normalizeTitle,
   postedAtDay,
-} from "@/lib/scout/aggregator-dedupe"
+} from "@/lib/apex/aggregator-dedupe"
 import {
   extensionCorsHeaders,
   extensionError,
@@ -158,7 +158,7 @@ async function resolveCompanyId(
   if (existing?.rows[0]) return existing.rows[0].id
 
   const slug = companyName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")
-  const placeholderDomain = `${slug || "unknown"}.scout-aggregator-placeholder`
+  const placeholderDomain = `${slug || "unknown"}.apex-aggregator-placeholder`
 
   const created = await pool
     .query<{ id: string }>(
@@ -289,8 +289,8 @@ async function findBySourceId(
     .query<{ id: string }>(
       `SELECT id FROM jobs
        WHERE company_id = $1::uuid
-         AND raw_data->>'scoutSource' = $2
-         AND raw_data->>'scoutSourceId' = $3
+         AND raw_data->>'apexSource' = $2
+         AND raw_data->>'apexSourceId' = $3
        LIMIT 1`,
       [companyId, source, sourceId],
     )
@@ -310,11 +310,11 @@ async function insertJob(
   const isHybrid = job.workMode === "hybrid"
   const applyUrl = canonicalApplyUrl(job)
   const rawData = {
-    captureSource: "scout-aggregator",
+    captureSource: "apex-aggregator",
     captureAdapter: job.site,
-    scoutSource: job.site,
-    scoutSourceId: job.sourceId,
-    scoutSources: [{ source: job.site, sourceId: job.sourceId }],
+    apexSource: job.site,
+    apexSourceId: job.sourceId,
+    apexSources: [{ source: job.site, sourceId: job.sourceId }],
     postedAt: job.postedAt,
     postedAtPrecision: job.postedAtPrecision,
     salaryText: job.salary ?? null,
@@ -426,7 +426,7 @@ async function touchJob(
     )
     return (result.rowCount ?? 0) > 0
   } catch (error) {
-    console.error("[scout/jobs/ingest] touchJob failed", {
+    console.error("[apex/jobs/ingest] touchJob failed", {
       jobId,
       site: job.site,
       sourceId: job.sourceId,
@@ -438,7 +438,7 @@ async function touchJob(
 
 /**
  * Glassdoor cross-source attach: keep the existing job row, append Glassdoor
- * to raw_data.scoutSources without changing the primary scoutSource.
+ * to raw_data.apexSources without changing the primary apexSource.
  */
 async function attachSecondarySource(
   pool: ReturnType<typeof getPostgresPool>,
@@ -451,8 +451,8 @@ async function attachSecondarySource(
       `UPDATE jobs
        SET raw_data = jsonb_set(
              COALESCE(raw_data, '{}'::jsonb),
-             '{scoutSources}',
-             COALESCE(raw_data->'scoutSources', '[]'::jsonb) || $2::jsonb,
+             '{apexSources}',
+             COALESCE(raw_data->'apexSources', '[]'::jsonb) || $2::jsonb,
              true
            ),
            last_seen_at = NOW(),
@@ -462,7 +462,7 @@ async function attachSecondarySource(
     )
     return (result.rowCount ?? 0) > 0
   } catch (error) {
-    console.error("[scout/jobs/ingest] attachSecondarySource failed", {
+    console.error("[apex/jobs/ingest] attachSecondarySource failed", {
       jobId,
       site: job.site,
       sourceId: job.sourceId,

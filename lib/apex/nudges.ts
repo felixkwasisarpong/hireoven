@@ -1,25 +1,25 @@
 /**
- * Scout Nudges — Phase 2.4: Proactive, deterministic surface hints.
+ * Apex Nudges — Phase 2.4: Proactive, deterministic surface hints.
  *
  * All nudges are computed from existing data with zero AI calls.
  * No DB writes, no destructive actions, no autonomous execution.
  */
 
-import type { ScoutMode, ScoutAction, ScoutStrategyBoard } from "@/lib/scout/types"
-import type { ScoutBehaviorSignals } from "@/lib/scout/behavior"
+import type { ApexMode, ApexAction, ApexStrategyBoard } from "@/lib/apex/types"
+import type { ApexBehaviorSignals } from "@/lib/apex/behavior"
 
-export type ScoutNudgeSeverity = "info" | "warning" | "opportunity"
+export type ApexNudgeSeverity = "info" | "warning" | "opportunity"
 
-export type ScoutNudge = {
+export type ApexNudge = {
   id: string
   title: string
   description: string
-  severity: ScoutNudgeSeverity
+  severity: ApexNudgeSeverity
   /** Optional safe action the user can choose to execute */
-  action?: ScoutAction
+  action?: ApexAction
 }
 
-export type ScoutNudgeOptions = {
+export type ApexNudgeOptions = {
   /** Whether Focus Mode is currently active on the feed */
   isFocusMode?: boolean
   /** Primary resume ID — used to generate tailor actions when relevant */
@@ -31,7 +31,7 @@ const MAX_NUDGES = 3
 
 /**
  * Returns up to MAX_NUDGES deterministic nudges based on:
- * - Current Scout mode (page context)
+ * - Current Apex mode (page context)
  * - Behavior signals inferred from user activity
  * - Strategy board snapshot, risks, and moves
  * - Optional overrides (focus mode state, resume ID)
@@ -39,22 +39,22 @@ const MAX_NUDGES = 3
  * Nudges are ordered: warnings → opportunities → info.
  * Within each tier, more actionable nudges come first.
  */
-export function getScoutNudges(
-  mode: ScoutMode,
-  signals: ScoutBehaviorSignals,
-  board: ScoutStrategyBoard,
-  opts: ScoutNudgeOptions = {}
-): ScoutNudge[] {
+export function getApexNudges(
+  mode: ApexMode,
+  signals: ApexBehaviorSignals,
+  board: ApexStrategyBoard,
+  opts: ApexNudgeOptions = {}
+): ApexNudge[] {
   const { isFocusMode = false, resumeId } = opts
   const hasResume = !!resumeId
 
-  const warnings: ScoutNudge[] = []
-  const opportunities: ScoutNudge[] = []
-  const info: ScoutNudge[] = []
+  const warnings: ApexNudge[] = []
+  const opportunities: ApexNudge[] = []
+  const info: ApexNudge[] = []
 
   // ── Shared shortcuts ────────────────────────────────────────────────────
-  const onScoutOrFeed = mode === "scout" || mode === "feed"
-  const onScoutOrApps = mode === "scout" || mode === "applications"
+  const onApexOrFeed = mode === "apex" || mode === "feed"
+  const onApexOrApps = mode === "apex" || mode === "applications"
   const velocityLow =
     signals.recentApplicationVelocity === "none" ||
     signals.recentApplicationVelocity === "low"
@@ -64,7 +64,7 @@ export function getScoutNudges(
 
   // Low / stalled application velocity with existing pipeline
   if (
-    onScoutOrApps &&
+    onApexOrApps &&
     signals.recentApplicationVelocity === "none" &&
     board.snapshot.savedJobs > 0
   ) {
@@ -119,15 +119,15 @@ export function getScoutNudges(
       id: "missing-resume-context",
       title: "Resume context is missing",
       description:
-        "Upload and parse a resume to unlock match scores, tailoring, and deeper Scout analysis.",
+        "Upload and parse a resume to unlock match scores, tailoring, and deeper Apex analysis.",
       severity: "warning",
     })
   }
 
   // ── OPPORTUNITIES ────────────────────────────────────────────────────────
 
-  // Focus Mode is off — surface on Scout Home and feed mode
-  if (onScoutOrFeed && !isFocusMode) {
+  // Focus Mode is off — surface on Apex Home and feed mode
+  if (onApexOrFeed && !isFocusMode) {
     opportunities.push({
       id: "focus-mode-off",
       title: "Focus Mode is off",
@@ -144,7 +144,7 @@ export function getScoutNudges(
 
   // Saved jobs with no recent applications
   if (
-    onScoutOrApps &&
+    onApexOrApps &&
     board.snapshot.savedJobs > 0 &&
     board.snapshot.recentApplications === 0
   ) {
@@ -178,7 +178,7 @@ export function getScoutNudges(
 
   // Good momentum — healthy velocity but low average match (opportunity to tighten targeting)
   if (
-    onScoutOrFeed &&
+    onApexOrFeed &&
     signals.recentApplicationVelocity === "healthy" &&
     board.snapshot.averageMatchScore !== null &&
     board.snapshot.averageMatchScore < 65
@@ -195,12 +195,12 @@ export function getScoutNudges(
   // ── INFO ────────────────────────────────────────────────────────────────
 
   // Resume not set up (info level when no board risk is present)
-  if (!hasResume && (mode === "scout" || mode === "resume")) {
+  if (!hasResume && (mode === "apex" || mode === "resume")) {
     info.push({
       id: "missing-resume",
       title: "Resume not uploaded",
       description:
-        "Add a resume to unlock match scores, tailoring suggestions, and deeper Scout guidance.",
+        "Add a resume to unlock match scores, tailoring suggestions, and deeper Apex guidance.",
       severity: "info",
     })
   }
@@ -221,7 +221,7 @@ export function getScoutNudges(
 
   // Incomplete profile preferences
   if (
-    mode === "scout" &&
+    mode === "apex" &&
     board.risks.some((r) => r.id === "empty-preferences") &&
     signals.preferredRoles.length === 0
   ) {

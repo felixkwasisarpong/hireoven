@@ -2,10 +2,10 @@
 
 import { ArrowUpRight, FileText, MonitorSmartphone, Zap } from "lucide-react"
 import { cn } from "@/lib/utils"
-import type { ActiveBrowserContext } from "@/lib/scout/browser-context"
-import type { ScoutActiveWorkflow } from "@/lib/scout/workflows/types"
-import type { ScoutTimelineEvent } from "@/lib/scout/timeline/types"
-import type { ScoutProactiveEvent } from "@/lib/scout/proactive/types"
+import type { ActiveBrowserContext } from "@/lib/apex/browser-context"
+import type { ApexActiveWorkflow } from "@/lib/apex/workflows/types"
+import type { ApexTimelineEvent } from "@/lib/apex/timeline/types"
+import type { ApexProactiveEvent } from "@/lib/apex/proactive/types"
 
 // ── ATS display names ──────────────────────────────────────────────────────────
 
@@ -29,7 +29,7 @@ const PAGE_STYLE: Record<PageModeStyleKey, string> = {
   job_detail:       "bg-blue-50 text-blue-700",
   application_form: "bg-amber-50 text-amber-700",
   search_results:   "bg-violet-50 text-violet-700",
-  company_page:     "bg-[#FF5C18]/8 text-[#c94010]",
+  company_page:     "bg-[#6366F1]/8 text-[#4338CA]",
   unknown:          "bg-slate-50 text-slate-500",
 }
 
@@ -46,17 +46,17 @@ const PAGE_LABEL: Record<PageModeStyleKey, string> = {
 type Props = {
   context: ActiveBrowserContext
   /** Active running workflow (to show workflow status in rail) */
-  activeWorkflow: ScoutActiveWorkflow | null
+  activeWorkflow: ApexActiveWorkflow | null
   /** Recent timeline activity for at-a-glance transparency in the rail */
-  latestEvents?: ScoutTimelineEvent[]
+  latestEvents?: ApexTimelineEvent[]
   /** Proactive companion events shown in compact rail form */
-  proactiveEvents?: ScoutProactiveEvent[]
-  /** Pre-fills the Scout command bar — user reviews before submitting */
+  proactiveEvents?: ApexProactiveEvent[]
+  /** Pre-fills the Apex command bar — user reviews before submitting */
   onPreFill: (query: string) => void
   /** Expand the floating workflow panel */
   onExpandWorkflow: () => void
   /** Opens a proactive suggestion (workspace restore or command prefill). */
-  onOpenProactive?: (event: ScoutProactiveEvent) => void
+  onOpenProactive?: (event: ApexProactiveEvent) => void
 }
 
 function shortTime(iso: string): string {
@@ -96,7 +96,7 @@ export function BrowserContextRail({
 
         {/* Header */}
         <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-3">
-          <MonitorSmartphone className="h-3.5 w-3.5 flex-shrink-0 text-[#FF5C18]" />
+          <MonitorSmartphone className="h-3.5 w-3.5 flex-shrink-0 text-[#6366F1]" />
           <p className="text-[10.5px] font-semibold uppercase tracking-widest text-slate-400">
             Active browser tab
           </p>
@@ -132,8 +132,8 @@ export function BrowserContextRail({
               {pageLabel}
             </span>
             {context.autofillAvailable && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-[#FF5C18]/8 px-2 py-0.5 text-[10px] font-semibold text-[#FF5C18]">
-                <span className="h-1.5 w-1.5 rounded-full bg-[#FF5C18]" />
+              <span className="inline-flex items-center gap-1 rounded-full bg-[#6366F1]/8 px-2 py-0.5 text-[10px] font-semibold text-[#6366F1]">
+                <span className="h-1.5 w-1.5 rounded-full bg-[#6366F1]" />
                 Autofill ready
               </span>
             )}
@@ -145,7 +145,7 @@ export function BrowserContextRail({
               href={context.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-1 text-[11px] text-slate-400 transition hover:text-[#FF5C18]"
+              className="flex items-center gap-1 text-[11px] text-slate-400 transition hover:text-[#6366F1]"
             >
               <span className="min-w-0 flex-1 truncate">{hostname}</span>
               <ArrowUpRight className="h-3 w-3 flex-shrink-0" />
@@ -199,11 +199,11 @@ export function BrowserContextRail({
 
       {/* ── Active workflow card ─────────────────────────────────────────── */}
       {activeWorkflow && activeStep && (
-        <div className="overflow-hidden rounded-2xl border border-[#FF5C18]/20 bg-white shadow-[0_2px_12px_rgba(255,92,24,0.06)]">
+        <div className="overflow-hidden rounded-2xl border border-[#6366F1]/20 bg-white shadow-[0_2px_12px_rgba(99,102,241,0.06)]">
           <div className="px-4 py-3">
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-[#FF5C18]">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6366F1]">
                   Active workflow
                 </p>
                 <p className="mt-1 text-[12px] font-semibold text-slate-900 leading-5">
@@ -217,14 +217,14 @@ export function BrowserContextRail({
               <span
                 className={cn(
                   "mt-1 flex-shrink-0 h-2 w-2 rounded-full",
-                  activeStep.status === "waiting_user" ? "bg-amber-400" : "bg-[#FF5C18] animate-pulse"
+                  activeStep.status === "waiting_user" ? "bg-amber-400" : "bg-[#6366F1] animate-pulse"
                 )}
               />
             </div>
             <button
               type="button"
               onClick={onExpandWorkflow}
-              className="mt-2.5 w-full rounded-xl border border-[#FF5C18]/20 px-3 py-1.5 text-[11px] font-semibold text-[#FF5C18] transition hover:bg-[#FF5C18]/6"
+              className="mt-2.5 w-full rounded-xl border border-[#6366F1]/20 px-3 py-1.5 text-[11px] font-semibold text-[#6366F1] transition hover:bg-[#6366F1]/6"
             >
               {activeStep.status === "waiting_user" ? "Continue step →" : "View all steps"}
             </button>
@@ -232,12 +232,12 @@ export function BrowserContextRail({
         </div>
       )}
 
-      {/* ── Latest Scout actions ───────────────────────────────────────────── */}
+      {/* ── Latest Apex actions ───────────────────────────────────────────── */}
       {latestEvents.length > 0 && (
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_2px_12px_rgba(15,23,42,0.05)]">
           <div className="border-b border-slate-100 px-4 py-2.5">
             <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
-              Latest Scout actions
+              Latest Apex actions
             </p>
           </div>
           <div className="space-y-1.5 px-4 py-3">
@@ -253,12 +253,12 @@ export function BrowserContextRail({
         </div>
       )}
 
-      {/* ── Proactive Scout (compact) ─────────────────────────────────────── */}
+      {/* ── Proactive Apex (compact) ─────────────────────────────────────── */}
       {proactiveEvents.length > 0 && (
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_2px_12px_rgba(15,23,42,0.05)]">
           <div className="border-b border-slate-100 px-4 py-2.5">
             <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
-              Proactive Scout
+              Proactive Apex
             </p>
           </div>
           <div className="space-y-1.5 px-4 py-3">

@@ -11,10 +11,10 @@ export type FeatureKey =
   | "autofill"
   | "match_scores"
   | "interview_prep"
-  | "scout_basic"
-  | "scout_deep_analysis"
-  | "scout_actions"
-  | "scout_strategy"
+  | "apex_basic"
+  | "apex_deep_analysis"
+  | "apex_actions"
+  | "apex_strategy"
   | "international"
   | "international_advanced"
   | "interview_live"
@@ -26,7 +26,7 @@ export const FEATURE_GATES: Record<FeatureKey, AccessLevel> = {
   match_scores:           "public",   // data-gated (requires resume) — not plan-gated
   resume_upload:          "public",
   job_applications:       "auth",
-  scout_basic:            "auth",
+  apex_basic:            "auth",
   autofill:               "auth",     // quota-gated: free=10/mo, pro=50/mo, pro_max=unlimited
   // All international features free — pages enforce the profile check themselves
   international:          "auth",
@@ -35,11 +35,11 @@ export const FEATURE_GATES: Record<FeatureKey, AccessLevel> = {
   cover_letter:           "auth",
   // Pro-only
   interview_prep:         "pro",
-  scout_deep_analysis:    "pro",
-  scout_actions:          "pro",
+  apex_deep_analysis:    "pro",
+  apex_actions:          "pro",
   // Pro Max only
   international_advanced: "pro_max",
-  scout_strategy:         "pro_max",
+  apex_strategy:         "pro_max",
   interview_live:         "auth",    // credit-gated: any auth user can buy and use live sessions
 }
 
@@ -53,10 +53,10 @@ export const FEATURE_DESCRIPTIONS: Record<FeatureKey, string> = {
   autofill:               "One-click job application autofill",
   match_scores:           "See your match score for each job",
   interview_prep:         "AI interview prep questions",
-  scout_basic:            "Basic Scout chat",
-  scout_deep_analysis:    "Scout deep analysis and sponsorship intelligence",
-  scout_actions:          "Scout advanced actions like resume tailoring",
-  scout_strategy:         "Scout strategy plans and application performance insights",
+  apex_basic:            "Basic Apex chat",
+  apex_deep_analysis:    "Apex deep analysis and sponsorship intelligence",
+  apex_actions:          "Apex advanced actions like resume tailoring",
+  apex_strategy:         "Apex strategy plans and application performance insights",
   international:          "International tools — OPT, offer risk, LCA explorer, sponsorship data",
   international_advanced: "Advanced H1B intelligence — petition history, likelihood scores",
   interview_live:         "Live voice + webcam mock interviews",

@@ -54,7 +54,7 @@ async function main() {
   if (!product) {
     product = await stripe.products.create({
       name: "Hireoven Pro Max",
-      description: "Scout strategy, generous monthly quotas, and 1 live voice interview / 28 days.",
+      description: "Apex strategy, generous monthly quotas, and 1 live voice interview / 28 days.",
       metadata: { hireoven_plan: "pro_max" },
     })
     console.log(`+ Created product: ${product.id}`)

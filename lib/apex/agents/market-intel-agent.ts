@@ -8,24 +8,24 @@
  * load). This agent makes them available in every chat request where relevant.
  */
 
-import type { ScoutAgent, ScoutExecutionContext, AgentResult } from "./types"
-import type { MarketSignal } from "@/lib/scout/market-intelligence"
-import { formatMarketSignalsForClaude } from "@/lib/scout/market-intelligence"
+import type { ApexAgent, ApexExecutionContext, AgentResult } from "./types"
+import type { MarketSignal } from "@/lib/apex/market-intelligence"
+import { formatMarketSignalsForClaude } from "@/lib/apex/market-intelligence"
 
 const RELEVANT_INTENTS = ["search", "compare", "market", "general"] as const
 
 type MarketResult = { signals: MarketSignal[] }
 
-export class MarketIntelAgent implements ScoutAgent<MarketResult> {
+export class MarketIntelAgent implements ApexAgent<MarketResult> {
   readonly id = "market"
   readonly relevantIntents = [...RELEVANT_INTENTS] as import("./types").AgentIntent[]
 
-  async run(ctx: ScoutExecutionContext): Promise<AgentResult<MarketResult>> {
+  async run(ctx: ApexExecutionContext): Promise<AgentResult<MarketResult>> {
     const start = Date.now()
     try {
       // Re-use the existing market intelligence function — same DB queries the
-      // /api/scout/market endpoint uses, now available inline for chat context.
-      const { getMarketIntelligence } = await import("@/lib/scout/market-intelligence")
+      // /api/apex/market endpoint uses, now available inline for chat context.
+      const { getMarketIntelligence } = await import("@/lib/apex/market-intelligence")
       const result = await getMarketIntelligence(ctx.userId)
 
       if (!result.signals.length) {

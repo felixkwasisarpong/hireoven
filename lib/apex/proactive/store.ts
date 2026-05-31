@@ -1,18 +1,18 @@
 "use client"
 
 import type {
-  ScoutProactiveEvent,
-  ScoutProactiveEventType,
-  ScoutProactiveSettings,
-  ScoutProactiveStore,
+  ApexProactiveEvent,
+  ApexProactiveEventType,
+  ApexProactiveSettings,
+  ApexProactiveStore,
 } from "./types"
 
-const KEY = "hireoven:scout:proactive:v1"
+const KEY = "hireoven:apex:proactive:v1"
 const MAX_EVENTS = 80
 const MAX_EVENT_AGE_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
 const MAX_CONTROL_AGE_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
 
-const DEFAULT_SETTINGS: ScoutProactiveSettings = {
+const DEFAULT_SETTINGS: ApexProactiveSettings = {
   enabled: true,
   mutedTypes: [],
   snoozedUntil: {},
@@ -29,7 +29,7 @@ function tsMs(iso: string | undefined): number | null {
   return Number.isFinite(ms) ? ms : null
 }
 
-function isEventExpired(event: ScoutProactiveEvent, now: number): boolean {
+function isEventExpired(event: ApexProactiveEvent, now: number): boolean {
   const createdMs = tsMs(event.createdAt) ?? now
   if (now - createdMs > MAX_EVENT_AGE_MS) return true
   const expiresMs = tsMs(event.expiresAt)
@@ -48,9 +48,9 @@ function pruneControlMap(map: Record<string, string>, now: number): Record<strin
   return next
 }
 
-function cleanStore(store: ScoutProactiveStore): ScoutProactiveStore {
+function cleanStore(store: ApexProactiveStore): ApexProactiveStore {
   const now = nowMs()
-  const settings: ScoutProactiveSettings = {
+  const settings: ApexProactiveSettings = {
     enabled: store.settings?.enabled ?? true,
     mutedTypes: Array.isArray(store.settings?.mutedTypes) ? [...new Set(store.settings.mutedTypes)] : [],
     snoozedUntil: pruneControlMap(store.settings?.snoozedUntil ?? {}, now),
@@ -74,7 +74,7 @@ function cleanStore(store: ScoutProactiveStore): ScoutProactiveStore {
   }
 }
 
-function defaultStore(): ScoutProactiveStore {
+function defaultStore(): ApexProactiveStore {
   return {
     v: 1,
     events: [],
@@ -83,12 +83,12 @@ function defaultStore(): ScoutProactiveStore {
   }
 }
 
-export function readProactiveStore(): ScoutProactiveStore {
+export function readProactiveStore(): ApexProactiveStore {
   if (typeof window === "undefined") return defaultStore()
   try {
     const raw = localStorage.getItem(KEY)
     if (!raw) return defaultStore()
-    const parsed = JSON.parse(raw) as ScoutProactiveStore
+    const parsed = JSON.parse(raw) as ApexProactiveStore
     if (parsed.v !== 1) return defaultStore()
     const cleaned = cleanStore(parsed)
     // Opportunistic write-back after prune/sanitize.
@@ -99,7 +99,7 @@ export function readProactiveStore(): ScoutProactiveStore {
   }
 }
 
-export function writeProactiveStore(store: ScoutProactiveStore): void {
+export function writeProactiveStore(store: ApexProactiveStore): void {
   if (typeof window === "undefined") return
   try {
     const cleaned = cleanStore(store)
@@ -107,17 +107,17 @@ export function writeProactiveStore(store: ScoutProactiveStore): void {
   } catch {}
 }
 
-export function readProactiveEvents(): ScoutProactiveEvent[] {
+export function readProactiveEvents(): ApexProactiveEvent[] {
   return readProactiveStore().events
 }
 
-export function readProactiveSettings(): ScoutProactiveSettings {
+export function readProactiveSettings(): ApexProactiveSettings {
   return readProactiveStore().settings
 }
 
-export function upsertProactiveEvents(events: ScoutProactiveEvent[]): ScoutProactiveStore {
+export function upsertProactiveEvents(events: ApexProactiveEvent[]): ApexProactiveStore {
   const current = readProactiveStore()
-  const byId = new Map<string, ScoutProactiveEvent>()
+  const byId = new Map<string, ApexProactiveEvent>()
   for (const e of current.events) byId.set(e.id, e)
   for (const e of events) byId.set(e.id, e)
   const next = cleanStore({
@@ -130,10 +130,10 @@ export function upsertProactiveEvents(events: ScoutProactiveEvent[]): ScoutProac
 }
 
 function patchSettings(
-  patch: (settings: ScoutProactiveSettings) => ScoutProactiveSettings,
-): ScoutProactiveStore {
+  patch: (settings: ApexProactiveSettings) => ApexProactiveSettings,
+): ApexProactiveStore {
   const current = readProactiveStore()
-  const next: ScoutProactiveStore = cleanStore({
+  const next: ApexProactiveStore = cleanStore({
     ...current,
     settings: patch(current.settings),
     savedAt: nowMs(),
@@ -142,11 +142,11 @@ function patchSettings(
   return next
 }
 
-export function setProactiveEnabled(enabled: boolean): ScoutProactiveStore {
+export function setProactiveEnabled(enabled: boolean): ApexProactiveStore {
   return patchSettings((s) => ({ ...s, enabled }))
 }
 
-export function dismissProactiveEvent(eventId: string): ScoutProactiveStore {
+export function dismissProactiveEvent(eventId: string): ApexProactiveStore {
   return patchSettings((s) => ({
     ...s,
     dismissedAt: {
@@ -156,7 +156,7 @@ export function dismissProactiveEvent(eventId: string): ScoutProactiveStore {
   }))
 }
 
-export function snoozeProactiveEvent(eventId: string, snoozeMs: number): ScoutProactiveStore {
+export function snoozeProactiveEvent(eventId: string, snoozeMs: number): ApexProactiveStore {
   const until = new Date(nowMs() + Math.max(60_000, snoozeMs)).toISOString()
   return patchSettings((s) => ({
     ...s,
@@ -167,21 +167,21 @@ export function snoozeProactiveEvent(eventId: string, snoozeMs: number): ScoutPr
   }))
 }
 
-export function muteProactiveType(type: ScoutProactiveEventType): ScoutProactiveStore {
+export function muteProactiveType(type: ApexProactiveEventType): ApexProactiveStore {
   return patchSettings((s) => ({
     ...s,
     mutedTypes: [...new Set([...s.mutedTypes, type])],
   }))
 }
 
-export function unmuteProactiveType(type: ScoutProactiveEventType): ScoutProactiveStore {
+export function unmuteProactiveType(type: ApexProactiveEventType): ApexProactiveStore {
   return patchSettings((s) => ({
     ...s,
     mutedTypes: s.mutedTypes.filter((t) => t !== type),
   }))
 }
 
-export function clearMutedProactiveTypes(): ScoutProactiveStore {
+export function clearMutedProactiveTypes(): ApexProactiveStore {
   return patchSettings((s) => ({
     ...s,
     mutedTypes: [],
@@ -189,8 +189,8 @@ export function clearMutedProactiveTypes(): ScoutProactiveStore {
 }
 
 export function isProactiveEventSuppressed(
-  event: ScoutProactiveEvent,
-  settings: ScoutProactiveSettings,
+  event: ApexProactiveEvent,
+  settings: ApexProactiveSettings,
   atMs = nowMs(),
 ): boolean {
   if (!settings.enabled) return true

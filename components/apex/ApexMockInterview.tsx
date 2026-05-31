@@ -16,7 +16,7 @@ import {
 } from "lucide-react"
 import { useCallback, useRef, useState } from "react"
 import { useUpgradeModal } from "@/lib/context/UpgradeModalContext"
-import type { ScoutMockInterviewFeedback, ScoutMockInterviewTurn } from "@/lib/scout/types"
+import type { ApexMockInterviewFeedback, ApexMockInterviewTurn } from "@/lib/apex/types"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -29,17 +29,17 @@ type MockInterviewProps = {
 
 type SessionState = {
   sessionId: string
-  history: ScoutMockInterviewTurn[]
+  history: ApexMockInterviewTurn[]
   currentQuestion: string | null
   questionIndex: number
   totalQuestions: number
   isComplete: boolean
-  pendingFeedback: ScoutMockInterviewFeedback | null
+  pendingFeedback: ApexMockInterviewFeedback | null
 }
 
 type APIResponse = {
   question?: string | null
-  feedback?: ScoutMockInterviewFeedback | null
+  feedback?: ApexMockInterviewFeedback | null
   questionIndex?: number
   totalQuestions?: number
   isComplete?: boolean
@@ -51,13 +51,13 @@ type APIResponse = {
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
-function FeedbackCard({ feedback }: { feedback: ScoutMockInterviewFeedback }) {
+function FeedbackCard({ feedback }: { feedback: ApexMockInterviewFeedback }) {
   const [showSuggested, setShowSuggested] = useState(false)
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">
-        Scout Feedback
+        Apex Feedback
       </p>
 
       {feedback.strengths.length > 0 && (
@@ -162,7 +162,7 @@ function ProgressBar({
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export function ScoutMockInterview({
+export function ApexMockInterview({
   jobId,
   resumeId,
   jobTitle,
@@ -187,7 +187,7 @@ export function ScoutMockInterview({
 
   const callAPI = useCallback(
     async (params: {
-      history: ScoutMockInterviewTurn[]
+      history: ApexMockInterviewTurn[]
       currentAnswer?: string
       questionIndex: number
       sessionId: string
@@ -196,7 +196,7 @@ export function ScoutMockInterview({
       setApiError(null)
 
       try {
-        const res = await fetch("/api/scout/mock-interview", {
+        const res = await fetch("/api/apex/mock-interview", {
           method: "POST",
           headers: { Accept: "application/json", "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -212,7 +212,7 @@ export function ScoutMockInterview({
         const data = (await res.json().catch(() => null)) as APIResponse | null
 
         if (!res.ok || !data) {
-          setApiError(data?.error ?? "Scout couldn't generate a question right now. Try again.")
+          setApiError(data?.error ?? "Apex couldn't generate a question right now. Try again.")
           return null
         }
 
@@ -263,7 +263,7 @@ export function ScoutMockInterview({
     if (!session || !answer.trim() || isLoading) return
 
     const trimmed = answer.trim()
-    const currentTurn: ScoutMockInterviewTurn = {
+    const currentTurn: ApexMockInterviewTurn = {
       question: session.currentQuestion ?? "",
       answer: trimmed,
     }
@@ -321,7 +321,7 @@ export function ScoutMockInterview({
           <div className="flex-1 min-w-0">
             <p className="text-sm font-bold text-slate-950">Text mock interview</p>
             <p className="mt-1 text-xs leading-5 text-slate-500">
-              Practice answering questions for {roleLabel}. Scout asks one question at a time
+              Practice answering questions for {roleLabel}. Apex asks one question at a time
               and gives you feedback after each answer.
             </p>
             <ul className="mt-2 space-y-1">
@@ -444,7 +444,7 @@ export function ScoutMockInterview({
       {isLoading && !session?.currentQuestion && (
         <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-5 py-4">
           <Loader2 className="h-4 w-4 animate-spin text-orange-600" />
-          <p className="text-sm text-slate-500">Scout is preparing your next question…</p>
+          <p className="text-sm text-slate-500">Apex is preparing your next question…</p>
         </div>
       )}
 

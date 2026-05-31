@@ -53,7 +53,7 @@ describe("LinkedInHandler", () => {
       h.injectPill(document.querySelector(".jobs-apply-button")!, job)
       // injectPill is intentionally a no-op on LinkedIn.
       await new Promise((r) => setTimeout(r, 0))
-      expect(document.querySelector("[data-scout-pill]")).toBeNull()
+      expect(document.querySelector("[data-apex-pill]")).toBeNull()
     })
   })
 
@@ -91,7 +91,7 @@ describe("LinkedInHandler", () => {
       const job = h.scrapeJob()!
       h.injectPill(document.querySelector(".jobs-apply-button")!, job)
       await new Promise((r) => setTimeout(r, 0))
-      expect(document.querySelector("[data-scout-pill]")).toBeNull()
+      expect(document.querySelector("[data-apex-pill]")).toBeNull()
     })
   })
 

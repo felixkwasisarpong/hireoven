@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { cn } from "@/lib/utils"
 import type { PipelineStats } from "@/types"
-import type { SalaryFloorProfile } from "@/lib/scout/salary/floor-detector"
+import type { SalaryFloorProfile } from "@/lib/apex/salary/floor-detector"
 
 // ── Salary health signal ──────────────────────────────────────────────────────
 
@@ -12,7 +12,7 @@ export function SalaryHealthSignal() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch("/api/scout/salary-floor")
+    fetch("/api/apex/salary-floor")
       .then((r) => (r.ok ? (r.json() as Promise<{ profile: SalaryFloorProfile }>) : Promise.reject()))
       .then((d) => setProfile(d.profile))
       .catch(() => {})
@@ -28,7 +28,7 @@ export function SalaryHealthSignal() {
 
   return (
     <a
-      href="/dashboard/scout?q=Am+I+underselling+myself%3F"
+      href="/dashboard/apex?q=Am+I+underselling+myself%3F"
       className={cn(
         "flex items-center gap-3 rounded-[14px] border px-4 py-3 text-[13px] transition-colors hover:opacity-90",
         isUnderselling
@@ -53,7 +53,7 @@ export function SalaryHealthSignal() {
           <span className="font-semibold">Your salary targeting is on track</span>
         )}
       </div>
-      <span className="shrink-0 text-[12px] font-semibold opacity-60">Open Scout →</span>
+      <span className="shrink-0 text-[12px] font-semibold opacity-60">Open Apex →</span>
     </a>
   )
 }

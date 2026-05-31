@@ -6,42 +6,42 @@ import {
   appendTimelineEvent,
   clearTimeline,
   makeTimelineId,
-} from "@/lib/scout/timeline/store"
-import { FILTER_EVENT_TYPES } from "@/lib/scout/timeline/types"
+} from "@/lib/apex/timeline/store"
+import { FILTER_EVENT_TYPES } from "@/lib/apex/timeline/types"
 import type {
-  ScoutTimelineEvent,
-  ScoutTimelineEventType,
+  ApexTimelineEvent,
+  ApexTimelineEventType,
   TimelineFilter,
-} from "@/lib/scout/timeline/types"
+} from "@/lib/apex/timeline/types"
 
-export type { ScoutTimelineEvent, TimelineFilter }
+export type { ApexTimelineEvent, TimelineFilter }
 
-export type ScoutTimelineActions = {
+export type ApexTimelineActions = {
   /** All events, newest-first */
-  events:         ScoutTimelineEvent[]
+  events:         ApexTimelineEvent[]
   /** Append one event — safe to call on every render (uses stable refs). */
-  append:         (event: Omit<ScoutTimelineEvent, "id">) => void
+  append:         (event: Omit<ApexTimelineEvent, "id">) => void
   /** Filter events by category. Returns newest-first slice (max 50). */
-  filtered:       (filter: TimelineFilter) => ScoutTimelineEvent[]
+  filtered:       (filter: TimelineFilter) => ApexTimelineEvent[]
   /** Clear entire timeline (e.g. on "Start fresh"). */
   clear:          () => void
   /** Util: generate a unique timeline event ID. */
   makeId:         () => string
 }
 
-export function useScoutTimeline(): ScoutTimelineActions {
+export function useApexTimeline(): ApexTimelineActions {
   // Start with empty array on both server and client (avoids hydration mismatch).
   // localStorage is loaded after mount so the server-rendered HTML matches the
   // initial client render before React takes over.
-  const [events, setEvents] = useState<ScoutTimelineEvent[]>([])
+  const [events, setEvents] = useState<ApexTimelineEvent[]>([])
 
   useEffect(() => {
     const stored = readTimelineEvents()
     if (stored.length > 0) setEvents(stored)
   }, [])
 
-  const append = useCallback((partial: Omit<ScoutTimelineEvent, "id">) => {
-    const event: ScoutTimelineEvent = {
+  const append = useCallback((partial: Omit<ApexTimelineEvent, "id">) => {
+    const event: ApexTimelineEvent = {
       id: makeTimelineId(),
       severity: "info",
       ...partial,
@@ -51,11 +51,11 @@ export function useScoutTimeline(): ScoutTimelineActions {
   }, [])
 
   const filtered = useCallback(
-    (filter: TimelineFilter): ScoutTimelineEvent[] => {
+    (filter: TimelineFilter): ApexTimelineEvent[] => {
       const allowedTypes = FILTER_EVENT_TYPES[filter]
       const src = allowedTypes.length === 0
         ? events
-        : events.filter((e) => (allowedTypes as ScoutTimelineEventType[]).includes(e.type))
+        : events.filter((e) => (allowedTypes as ApexTimelineEventType[]).includes(e.type))
       return src.slice(0, 50)
     },
     [events]

@@ -1,5 +1,5 @@
 /**
- * Scout Career Strategy Engine — Types V1
+ * Apex Career Strategy Engine — Types V1
  *
  * Advisory career direction analysis. Evidence-backed, cautiously phrased.
  *
@@ -12,7 +12,7 @@
 
 // ── Career direction ──────────────────────────────────────────────────────────
 
-export type ScoutCareerDirectionCategory =
+export type ApexCareerDirectionCategory =
   | "backend"
   | "platform"
   | "ai_engineering"
@@ -23,10 +23,10 @@ export type ScoutCareerDirectionCategory =
   | "fullstack"
   | "data"
 
-export type ScoutCareerDirection = {
+export type ApexCareerDirection = {
   id:                  string
   title:               string
-  category:            ScoutCareerDirectionCategory
+  category:            ApexCareerDirectionCategory
 
   /** 0–1. Reflects evidence quality — never absolute fit score. */
   confidence:          number
@@ -38,10 +38,10 @@ export type ScoutCareerDirection = {
   suggestedRoles?:     string[]
 }
 
-// ── Full strategy result (returned by /api/scout/career) ─────────────────────
+// ── Full strategy result (returned by /api/apex/career) ─────────────────────
 
-export type ScoutCareerStrategyResult = {
-  directions:      ScoutCareerDirection[]
+export type ApexCareerStrategyResult = {
+  directions:      ApexCareerDirection[]
   /** 2–3 sentence strategic overview */
   summary:         string
   /** Where the user appears to get strongest traction */
@@ -54,7 +54,7 @@ export type ScoutCareerStrategyResult = {
 // ── UI metadata ───────────────────────────────────────────────────────────────
 
 export const DIRECTION_CATEGORY_META: Record<
-  ScoutCareerDirectionCategory,
+  ApexCareerDirectionCategory,
   { label: string; accent: string; bg: string; dot: string }
 > = {
   backend:       { label: "Backend Engineering",    accent: "text-blue-700",    bg: "bg-blue-50 border-blue-100",    dot: "bg-blue-500"    },

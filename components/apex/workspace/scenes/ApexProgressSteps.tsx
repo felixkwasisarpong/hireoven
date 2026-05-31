@@ -14,7 +14,7 @@ type Props = {
   intervalMs?: number
 }
 
-export function ScoutProgressSteps({ steps, activeStep, intervalMs = 1100 }: Props) {
+export function ApexProgressSteps({ steps, activeStep, intervalMs = 1100 }: Props) {
   const [autoIndex, setAutoIndex] = useState(0)
 
   useEffect(() => {
@@ -35,7 +35,7 @@ export function ScoutProgressSteps({ steps, activeStep, intervalMs = 1100 }: Pro
           <li
             key={label}
             style={{ animationDelay: `${i * 80}ms` }}
-            className="flex items-center gap-3 motion-safe:animate-[scoutFadeUp_0.4s_ease-out_both]"
+            className="flex items-center gap-3 motion-safe:animate-[apexFadeUp_0.4s_ease-out_both]"
           >
             <span
               className={cn(

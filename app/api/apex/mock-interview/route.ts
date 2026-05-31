@@ -4,18 +4,18 @@ import { createClient } from "@/lib/supabase/server"
 import { getUserPlan } from "@/lib/gates/server-gate"
 import { canAccess } from "@/lib/gates"
 import { requireQuota } from "@/lib/usage/server-quota"
-import { getScoutContext } from "@/lib/scout/context"
+import { getApexContext } from "@/lib/apex/context"
 import {
   MOCK_INTERVIEW_SYSTEM_PROMPT,
   TOTAL_QUESTIONS,
   formatMockInterviewContext,
   parseMockInterviewResponse,
-} from "@/lib/scout/mock-interview-prompt"
+} from "@/lib/apex/mock-interview-prompt"
 import { SONNET_MODEL } from "@/lib/ai/anthropic-models"
-import { withAICall } from "@/lib/scout/budget/ai-call"
-import { AI_TIMEOUTS } from "@/lib/scout/budget/router"
+import { withAICall } from "@/lib/apex/budget/ai-call"
+import { AI_TIMEOUTS } from "@/lib/apex/budget/router"
 import { sanitizeGeneratedText } from "@/lib/text/sanitize-generated-text"
-import type { ScoutMockInterviewTurn } from "@/lib/scout/types"
+import type { ApexMockInterviewTurn } from "@/lib/apex/types"
 
 export const runtime = "nodejs"
 export const maxDuration = 30
@@ -27,7 +27,7 @@ const anthropic = process.env.ANTHROPIC_API_KEY
 // Mock interviews require coherent coaching feedback and stable multi-turn behavior.
 const MODEL = SONNET_MODEL
 
-function scoutError(status: number, message: string) {
+function apexError(status: number, message: string) {
   return NextResponse.json({ ok: false, status, message, error: message }, { status })
 }
 
@@ -36,7 +36,7 @@ type RequestBody = {
   jobId?: string
   resumeId?: string
   /** All previous Q&A pairs for the session — client owns state */
-  history?: ScoutMockInterviewTurn[]
+  history?: ApexMockInterviewTurn[]
   /** Answer being submitted for the current question (absent on session start) */
   currentAnswer?: string
   /** 1-indexed question number we expect next (1 = start new session) */
@@ -50,11 +50,11 @@ export async function POST(request: NextRequest) {
   } = await supabase.auth.getUser()
 
   if (!user) {
-    return scoutError(401, "Unauthorized")
+    return apexError(401, "Unauthorized")
   }
 
   if (!anthropic) {
-    return scoutError(503, "AI service is not configured.")
+    return apexError(503, "AI service is not configured.")
   }
 
   const body = (await request.json().catch(() => ({}))) as RequestBody
@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
         gated: true,
         feature: "interview_prep",
         upgradeMessage:
-          "Upgrade to Scout Pro to continue the mock interview and get detailed answer feedback.",
+          "Upgrade to Apex Pro to continue the mock interview and get detailed answer feedback.",
       },
       { status: 200 }
     )
@@ -92,7 +92,7 @@ export async function POST(request: NextRequest) {
   }
 
   // ── Build context ─────────────────────────────────────────────────────────
-  const context = await getScoutContext({
+  const context = await getApexContext({
     userId: user.id,
     mode: "job",
     jobId: jobId ?? undefined,
@@ -110,8 +110,8 @@ export async function POST(request: NextRequest) {
   try {
     const { value: parsed, timedOut } = await withAICall({
       anthropic,
-      feature:   "scout_mock_interview",
-      timeoutMs: AI_TIMEOUTS.scout_mock_interview,
+      feature:   "apex_mock_interview",
+      timeoutMs: AI_TIMEOUTS.apex_mock_interview,
       params: {
         model:      MODEL,
         max_tokens: 1200,
@@ -126,7 +126,7 @@ export async function POST(request: NextRequest) {
     })
 
     if (timedOut || !parsed) {
-      return scoutError(500, "Scout couldn't generate an interview question right now. Please try again.")
+      return apexError(500, "Apex couldn't generate an interview question right now. Please try again.")
     }
 
     // Cap totalQuestions for free users to 1 (they can only preview Q1)
@@ -142,6 +142,6 @@ export async function POST(request: NextRequest) {
     }))
   } catch (error) {
     console.error("[mock-interview] Claude error:", error)
-    return scoutError(500, "Scout couldn't generate an interview question right now. Please try again.")
+    return apexError(500, "Apex couldn't generate an interview question right now. Please try again.")
   }
 }

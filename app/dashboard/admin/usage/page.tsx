@@ -87,7 +87,7 @@ function EntryRow({ entry, dim }: { entry: BudgetEntry; dim?: string }) {
   )
 }
 
-export default function ScoutUsageDashboard() {
+export default function ApexUsageDashboard() {
   const [data,    setData]    = useState<UsageData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error,   setError]   = useState<string | null>(null)
@@ -96,7 +96,7 @@ export default function ScoutUsageDashboard() {
     setLoading(true)
     setError(null)
     try {
-      const res  = await fetch("/api/scout/usage")
+      const res  = await fetch("/api/apex/usage")
       if (!res.ok) throw new Error(`${res.status}`)
       setData(await res.json() as UsageData)
     } catch (e) {
@@ -118,7 +118,7 @@ export default function ScoutUsageDashboard() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-bold text-slate-900">Scout Usage</h1>
+            <h1 className="text-xl font-bold text-slate-900">Apex Usage</h1>
             <p className="text-sm text-slate-400">AI cost · latency · cache — last 500 calls</p>
           </div>
           <button

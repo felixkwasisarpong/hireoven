@@ -1,8 +1,8 @@
 import type { MeteredFeature } from "@/lib/usage/quotas"
 
 export type PackKey =
-  | "scout_50"
-  | "scout_200"
+  | "apex_50"
+  | "apex_200"
   | "interview_25"
   | "interview_100"
   | "deep_10"
@@ -11,7 +11,7 @@ export type PackKey =
   | "autofill_200"
   | "cover_letter_15"
   | "resume_tailor_25"
-  | "scout_strategy_5"
+  | "apex_strategy_5"
 
 export type PackDefinition = {
   feature: MeteredFeature
@@ -22,19 +22,19 @@ export type PackDefinition = {
 }
 
 export const FEATURE_PACKS: Record<PackKey, PackDefinition> = {
-  scout_50: {
-    feature: "scout_message",
+  apex_50: {
+    feature: "apex_message",
     credits: 50,
     amountCents: 400,
-    label: "+50 Scout messages",
-    description: "Extra Scout chat for the rest of the month.",
+    label: "+50 Apex messages",
+    description: "Extra Apex chat for the rest of the month.",
   },
-  scout_200: {
-    feature: "scout_message",
+  apex_200: {
+    feature: "apex_message",
     credits: 200,
     amountCents: 1200,
-    label: "+200 Scout messages",
-    description: "Best value Scout top-up.",
+    label: "+200 Apex messages",
+    description: "Best value Apex top-up.",
   },
   interview_25: {
     feature: "interview_prep_turn",
@@ -92,11 +92,11 @@ export const FEATURE_PACKS: Record<PackKey, PackDefinition> = {
     label: "+25 Resume tailors",
     description: "Extra AI-tailored resume versions.",
   },
-  scout_strategy_5: {
-    feature: "scout_strategy",
+  apex_strategy_5: {
+    feature: "apex_strategy",
     credits: 5,
     amountCents: 800,
-    label: "+5 Scout strategy plans",
+    label: "+5 Apex strategy plans",
     description: "Extra strategy + career-engine runs.",
   },
 }

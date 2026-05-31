@@ -1,5 +1,5 @@
 /**
- * Standalone announcement email for the Hireoven Scout Bridge Chrome extension
+ * Standalone announcement email for the Hireoven Apex Bridge Chrome extension
  * launch. Used by `scripts/send-extension-announcement.ts` for one-off sends.
  */
 import { Resend } from "resend"
@@ -8,7 +8,7 @@ import { getHireovenEmailLogoUrl } from "@/lib/email/branding"
 import { getAlertsFromEmail } from "@/lib/email/identity"
 
 const CHROME_STORE_URL =
-  "https://chromewebstore.google.com/detail/hireoven-scout-bridge/mkmfffcaimjnaecoelnanifookmdbfok"
+  "https://chromewebstore.google.com/detail/hireoven-apex-bridge/mkmfffcaimjnaecoelnanifookmdbfok"
 
 function getBaseUrl(): string {
   return process.env.NEXT_PUBLIC_APP_URL ?? "https://hireoven.com"
@@ -33,9 +33,9 @@ export function renderExtensionAnnouncementHtml(opts: {
   const year = new Date().getFullYear()
   const subject = "New: a match score on every job posting (free Chrome extension)"
   const preheader =
-    "Hireoven Scout Bridge overlays match scores, missing-skills analysis, and one-click autofill on Greenhouse, Lever, Ashby, Workday, iCIMS, and more."
+    "Hireoven Apex Bridge overlays match scores, missing-skills analysis, and one-click autofill on Greenhouse, Lever, Ashby, Workday, iCIMS, and more."
   const extensionUrl = `${base}/extension`
-  const scoutAnalysisImg = `${base}/extension/scout-analysis.png`
+  const apexAnalysisImg = `${base}/extension/apex-analysis.png`
   const autofillImg = `${base}/extension/autofill-drawer.png`
 
   const html = `<!DOCTYPE html>
@@ -67,7 +67,7 @@ export function renderExtensionAnnouncementHtml(opts: {
                 <span style="color:#FF9A3C;">every job posting.</span>
               </div>
               <div style="font-size:15px;color:rgba(255,255,255,0.65);line-height:1.6;margin-top:14px;">
-                Hireoven Scout Bridge is live. It overlays your match score, missing-skills callouts, and one-click autofill on the ATS pages you&rsquo;re already on — Greenhouse, Lever, Ashby, Workday, iCIMS, and more.
+                Hireoven Apex Bridge is live. It overlays your match score, missing-skills callouts, and one-click autofill on the ATS pages you&rsquo;re already on — Greenhouse, Lever, Ashby, Workday, iCIMS, and more.
               </div>
             </td></tr>
 
@@ -83,7 +83,7 @@ export function renderExtensionAnnouncementHtml(opts: {
             </td></tr>
 
             <tr><td style="padding:18px 28px 28px;">
-              <img src="${scoutAnalysisImg}" alt="Scout analysis overlay on a Greenhouse posting"
+              <img src="${apexAnalysisImg}" alt="Apex analysis overlay on a Greenhouse posting"
                    width="528" style="display:block;width:100%;max-width:528px;height:auto;border-radius:10px;border:1px solid rgba(255,255,255,0.08);" />
             </td></tr>
           </table>
@@ -97,7 +97,7 @@ export function renderExtensionAnnouncementHtml(opts: {
                 ${esc(greeting)}
               </div>
               <div style="font-size:14.5px;color:#334155;line-height:1.7;margin-top:14px;">
-                We just shipped the <strong>Hireoven Scout Bridge</strong> on the Chrome Web Store. It&rsquo;s the workspace that lives <em>where you actually apply</em> — overlaid on every ATS page, ready in one click.
+                We just shipped the <strong>Hireoven Apex Bridge</strong> on the Chrome Web Store. It&rsquo;s the workspace that lives <em>where you actually apply</em> — overlaid on every ATS page, ready in one click.
               </div>
             </td></tr>
 
@@ -118,7 +118,7 @@ export function renderExtensionAnnouncementHtml(opts: {
                 </td></tr>
                 <tr><td style="padding:8px 0;border-top:1px solid #f1f5f9;">
                   <div style="font-size:14px;font-weight:700;color:#0f172a;">✍️&nbsp;&nbsp;Resume tailoring on the spot</div>
-                  <div style="font-size:13px;color:#64748b;line-height:1.6;margin-top:3px;">Open Scout, tailor your resume to the JD, attach it — without leaving the page.</div>
+                  <div style="font-size:13px;color:#64748b;line-height:1.6;margin-top:3px;">Open Apex, tailor your resume to the JD, attach it — without leaving the page.</div>
                 </td></tr>
                 <tr><td style="padding:8px 0;border-top:1px solid #f1f5f9;border-bottom:1px solid #f1f5f9;">
                   <div style="font-size:14px;font-weight:700;color:#0f172a;">🛡️&nbsp;&nbsp;You&rsquo;re always in control</div>

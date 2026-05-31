@@ -1,7 +1,7 @@
 /**
- * Scout Memory Engine — Types V1
+ * Apex Memory Engine — Types V1
  *
- * Persistent, server-side, user-controlled long-term context for Scout.
+ * Persistent, server-side, user-controlled long-term context for Apex.
  * Each memory is a single, human-readable fact about the user's career
  * preferences, goals, or patterns — never sensitive demographics.
  *
@@ -14,7 +14,7 @@
 
 // ── Core types ────────────────────────────────────────────────────────────────
 
-export type ScoutMemoryCategory =
+export type ApexMemoryCategory =
   | "career_goal"          // "Targeting senior IC at AI infrastructure companies"
   | "role_preference"      // "Prefers backend / platform engineering roles"
   | "company_preference"   // "Likes Series B–D startups; dislikes noisy corp culture"
@@ -26,18 +26,18 @@ export type ScoutMemoryCategory =
   | "search_preference"    // "Filters to remote-only, senior IC, fintech / fininfra"
   | "skill_focus"          // "Actively building Kubernetes and Rust depth"
 
-export type ScoutMemorySource =
+export type ApexMemorySource =
   | "explicit_user"    // User stated this directly in a message
   | "behavior"         // Inferred from repeated search / application patterns
-  | "workflow"         // Learned from completed Scout workflow
+  | "workflow"         // Learned from completed Apex workflow
   | "search_history"   // Extracted from APPLY_FILTERS actions
 
-export type ScoutMemory = {
+export type ApexMemory = {
   id:         string
-  category:   ScoutMemoryCategory
+  category:   ApexMemoryCategory
   summary:    string
   confidence: number           // 0.0–1.0  (1.0 = explicit, <0.7 = inferred)
-  source:     ScoutMemorySource
+  source:     ApexMemorySource
   active:     boolean
   createdAt:  string           // ISO timestamp
   updatedAt:  string
@@ -46,10 +46,10 @@ export type ScoutMemory = {
 // ── Input shapes ──────────────────────────────────────────────────────────────
 
 export type CreateMemoryInput = {
-  category:    ScoutMemoryCategory
+  category:    ApexMemoryCategory
   summary:     string
   confidence?: number            // defaults to 0.8
-  source?:     ScoutMemorySource // defaults to "explicit_user"
+  source?:     ApexMemorySource // defaults to "explicit_user"
 }
 
 export type UpdateMemoryInput = {
@@ -65,7 +65,7 @@ export type MemoryCandidate = CreateMemoryInput & {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-export const MEMORY_CATEGORY_LABELS: Record<ScoutMemoryCategory, string> = {
+export const MEMORY_CATEGORY_LABELS: Record<ApexMemoryCategory, string> = {
   career_goal:        "Career Goal",
   role_preference:    "Role Preference",
   company_preference: "Company Preference",
@@ -78,7 +78,7 @@ export const MEMORY_CATEGORY_LABELS: Record<ScoutMemoryCategory, string> = {
   skill_focus:        "Skill Focus",
 }
 
-export const MEMORY_CATEGORY_ICONS: Record<ScoutMemoryCategory, string> = {
+export const MEMORY_CATEGORY_ICONS: Record<ApexMemoryCategory, string> = {
   career_goal:        "🎯",
   role_preference:    "💼",
   company_preference: "🏢",
@@ -91,13 +91,13 @@ export const MEMORY_CATEGORY_ICONS: Record<ScoutMemoryCategory, string> = {
   skill_focus:        "🧠",
 }
 
-export const VALID_MEMORY_CATEGORIES = new Set<ScoutMemoryCategory>([
+export const VALID_MEMORY_CATEGORIES = new Set<ApexMemoryCategory>([
   "career_goal", "role_preference", "company_preference", "visa_requirement",
   "salary_preference", "workflow_pattern", "resume_preference",
   "interview_pattern", "search_preference", "skill_focus",
 ])
 
-export const VALID_MEMORY_SOURCES = new Set<ScoutMemorySource>([
+export const VALID_MEMORY_SOURCES = new Set<ApexMemorySource>([
   "explicit_user", "behavior", "workflow", "search_history",
 ])
 

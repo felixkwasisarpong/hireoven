@@ -1,5 +1,5 @@
 /**
- * Scout workspace session — lightweight localStorage persistence.
+ * Apex workspace session — lightweight localStorage persistence.
  *
  * PERSISTS:   last mode, last 5 user commands, last chips, rail label/summary,
  *             safe mode metadata (filter summary, compare count, etc.)
@@ -12,22 +12,22 @@
  */
 
 import type { WorkspaceMode, WorkspaceRail } from "./workspace"
-import type { ScoutResponse } from "./types"
+import type { ApexResponse } from "./types"
 
-export const STORAGE_KEY = "hireoven:scout-workspace:v1"
+export const STORAGE_KEY = "hireoven:apex-workspace:v1"
 
 const MAX_COMMANDS = 5
 const MAX_AGE_MS = 24 * 60 * 60 * 1000 // 24 hours
 
 // ── Session shape ─────────────────────────────────────────────────────────────
 
-export type ScoutWorkspaceSession = {
+export type ApexWorkspaceSession = {
   /** Schema version — bump if shape changes. */
   v: 1
   mode: WorkspaceMode
   /** Suggestion chips active at time of save. */
   chips: string[]
-  /** Last N user command strings (not Scout answers). */
+  /** Last N user command strings (not Apex answers). */
   recentCommands: string[]
   /** Rail label only — actions are NOT stored (may reference stale IDs). */
   rail: { title: string; summary?: string } | null
@@ -43,15 +43,15 @@ export type ScoutWorkspaceSession = {
 
 // ── IO helpers ────────────────────────────────────────────────────────────────
 
-export function readScoutSession(): ScoutWorkspaceSession | null {
+export function readApexSession(): ApexWorkspaceSession | null {
   if (typeof window === "undefined") return null
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return null
-    const parsed = JSON.parse(raw) as ScoutWorkspaceSession
+    const parsed = JSON.parse(raw) as ApexWorkspaceSession
     if (parsed.v !== 1) return null
     if (Date.now() - parsed.savedAt > MAX_AGE_MS) {
-      clearScoutSession()
+      clearApexSession()
       return null
     }
     return parsed
@@ -63,20 +63,20 @@ export function readScoutSession(): ScoutWorkspaceSession | null {
 // Modes that are transient UI flows — restoring them on refresh makes no sense
 const NON_PERSISTENT_MODES = new Set(["bulk_application"])
 
-export function writeScoutSession(
-  session: Omit<ScoutWorkspaceSession, "v" | "savedAt">
+export function writeApexSession(
+  session: Omit<ApexWorkspaceSession, "v" | "savedAt">
 ): void {
   if (typeof window === "undefined") return
   if (NON_PERSISTENT_MODES.has(session.mode)) return
   try {
-    const full: ScoutWorkspaceSession = { v: 1, savedAt: Date.now(), ...session }
+    const full: ApexWorkspaceSession = { v: 1, savedAt: Date.now(), ...session }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(full))
   } catch {
     // Quota exceeded or private mode — fail silently
   }
 }
 
-export function clearScoutSession(): void {
+export function clearApexSession(): void {
   if (typeof window === "undefined") return
   try {
     localStorage.removeItem(STORAGE_KEY)
@@ -95,11 +95,11 @@ export function appendCommand(
   return [command, ...current.filter((c) => c !== command)].slice(0, MAX_COMMANDS)
 }
 
-/** Extract only safe, non-sensitive metadata from a Scout response for persistence. */
+/** Extract only safe, non-sensitive metadata from a Apex response for persistence. */
 export function extractModeMetadata(
   mode: WorkspaceMode,
-  response: ScoutResponse
-): ScoutWorkspaceSession["modeMetadata"] {
+  response: ApexResponse
+): ApexWorkspaceSession["modeMetadata"] {
   switch (mode) {
     case "search": {
       const action = response.actions?.find((a) => a.type === "APPLY_FILTERS")
@@ -131,7 +131,7 @@ export function extractModeMetadata(
 /** Extract only the label/summary from a rail (no actions, no IDs). */
 export function extractRailMetadata(
   rail: WorkspaceRail | null
-): ScoutWorkspaceSession["rail"] {
+): ApexWorkspaceSession["rail"] {
   if (!rail) return null
   return { title: rail.title, summary: rail.summary }
 }

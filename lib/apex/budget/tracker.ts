@@ -1,5 +1,5 @@
 /**
- * Scout Budget Tracker — in-memory ring buffer of recent AI calls.
+ * Apex Budget Tracker — in-memory ring buffer of recent AI calls.
  *
  * Stores the last RING_SIZE entries in memory for the dev dashboard.
  * Does NOT replace DB logging — existing logApiUsage() calls remain.
@@ -87,8 +87,8 @@ class BudgetTracker {
   }
 }
 
-const globalForTracker = globalThis as typeof globalThis & { _scoutBudgetTracker?: BudgetTracker }
-export const budgetTracker = globalForTracker._scoutBudgetTracker ?? (globalForTracker._scoutBudgetTracker = new BudgetTracker())
+const globalForTracker = globalThis as typeof globalThis & { _apexBudgetTracker?: BudgetTracker }
+export const budgetTracker = globalForTracker._apexBudgetTracker ?? (globalForTracker._apexBudgetTracker = new BudgetTracker())
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

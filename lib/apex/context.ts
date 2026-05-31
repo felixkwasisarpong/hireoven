@@ -1,14 +1,14 @@
 import { getPostgresPool } from "@/lib/postgres/server"
-import type { ScoutMode } from "@/lib/scout/types"
+import type { ApexMode } from "@/lib/apex/types"
 import {
-  getScoutBehaviorSignals,
+  getApexBehaviorSignals,
   formatBehaviorSignalsForClaude,
-  type ScoutBehaviorSignals,
-} from "@/lib/scout/behavior"
-import { getMemories } from "@/lib/scout/memory/store"
-import type { ScoutMemory } from "@/lib/scout/memory/types"
-import { formatOpportunitiesForClaude } from "@/lib/scout/opportunity-graph/formatter"
-import type { OpportunityGraphResponse } from "@/lib/scout/opportunity-graph/types"
+  type ApexBehaviorSignals,
+} from "@/lib/apex/behavior"
+import { getMemories } from "@/lib/apex/memory/store"
+import type { ApexMemory } from "@/lib/apex/memory/types"
+import { formatOpportunitiesForClaude } from "@/lib/apex/opportunity-graph/formatter"
+import type { OpportunityGraphResponse } from "@/lib/apex/opportunity-graph/types"
 import type {
   Job,
   Company,
@@ -36,10 +36,10 @@ export type CompareJobContext = {
   match_score: number | null
 }
 
-export type ScoutContextInput = {
+export type ApexContextInput = {
   userId: string
   pagePath?: string
-  mode?: ScoutMode
+  mode?: ApexMode
   jobId?: string
   companyId?: string
   resumeId?: string
@@ -52,7 +52,7 @@ export type ScoutContextInput = {
   compareLimit?: number
 }
 
-export type ScoutContext = {
+export type ApexContext = {
   user: {
     id: string
     profile: Profile | null
@@ -130,23 +130,23 @@ export type ScoutContext = {
     applied_at: string | null
     notes: string | null
   } | null
-  mode: ScoutMode
+  mode: ApexMode
   pagePath: string | null
-  behaviorSignals: ScoutBehaviorSignals | null
+  behaviorSignals: ApexBehaviorSignals | null
   /** Jobs to compare — populated when compareJobIds or autoCompare is set */
   compareJobs: CompareJobContext[] | null
   /** Opportunity graph — populated when jobId or companyId is in context */
   opportunityGraph: OpportunityGraphResponse | null
   /** Outcome learning signals — populated from application history */
-  outcomeLearning: import("@/lib/scout/outcomes/types").OutcomeLearningResult | null
+  outcomeLearning: import("@/lib/apex/outcomes/types").OutcomeLearningResult | null
   /** Persistent user memories — injected into Claude prompt via retriever */
-  memories: import("@/lib/scout/memory/types").ScoutMemory[]
+  memories: import("@/lib/apex/memory/types").ApexMemory[]
 }
 
-type ScoutContextResume = NonNullable<ScoutContext["resume"]>
+type ApexContextResume = NonNullable<ApexContext["resume"]>
 
 /**
- * Retrieves grounded Scout context for the authenticated user.
+ * Retrieves grounded Apex context for the authenticated user.
  * Only returns data the user has access to. Returns null for missing data.
  */
 const COMPARE_JOBS_SELECT = `
@@ -237,7 +237,7 @@ const COMPARE_SAVED_APPS_SELECT = `
   LIMIT $2
 `
 
-export async function getScoutContext(input: ScoutContextInput): Promise<ScoutContext> {
+export async function getApexContext(input: ApexContextInput): Promise<ApexContext> {
   const pool = getPostgresPool()
   const {
     userId,
@@ -258,8 +258,8 @@ export async function getScoutContext(input: ScoutContextInput): Promise<ScoutCo
       "SELECT * FROM profiles WHERE id = $1 LIMIT 1",
       [userId]
     ),
-    getScoutBehaviorSignals(userId).catch(() => null),
-    getMemories(userId, pool, { activeOnly: true }).catch((): ScoutMemory[] => []),
+    getApexBehaviorSignals(userId).catch(() => null),
+    getMemories(userId, pool, { activeOnly: true }).catch((): ApexMemory[] => []),
   ])
   const profile = profileResult.rows[0] ?? null
 
@@ -352,7 +352,7 @@ export async function getScoutContext(input: ScoutContextInput): Promise<ScoutCo
       const result = await pool.query<CompareJobContext>(COMPARE_JOBS_SELECT, [compareJobIds, userId])
       compareJobs = result.rows.length >= 2 ? result.rows : null
     } catch (err) {
-      console.error("[Scout] COMPARE_JOBS_SELECT failed:", err)
+      console.error("[Apex] COMPARE_JOBS_SELECT failed:", err)
       compareJobs = null
     }
   } else if (autoCompare) {
@@ -380,7 +380,7 @@ export async function getScoutContext(input: ScoutContextInput): Promise<ScoutCo
         }
       }
     } catch (err) {
-      console.error("[Scout] compare context resolution failed:", err)
+      console.error("[Apex] compare context resolution failed:", err)
       compareJobs = null
     }
   }
@@ -434,8 +434,8 @@ export async function getScoutContext(input: ScoutContextInput): Promise<ScoutCo
           skills: resume.skills,
           seniority_level: resume.seniority_level,
           updated_at: resume.updated_at ?? null,
-          work_experience: resume.work_experience as ScoutContextResume["work_experience"],
-          education: resume.education as ScoutContextResume["education"],
+          work_experience: resume.work_experience as ApexContextResume["work_experience"],
+          education: resume.education as ApexContextResume["education"],
         }
       : null,
     matchScore: matchScore
@@ -470,9 +470,9 @@ export async function getScoutContext(input: ScoutContextInput): Promise<ScoutCo
 }
 
 /**
- * Formats Scout context into a readable string for Claude.
+ * Formats Apex context into a readable string for Claude.
  */
-export async function formatScoutContextForClaude(context: ScoutContext): Promise<string> {
+export async function formatApexContextForClaude(context: ApexContext): Promise<string> {
   const sections: string[] = []
 
   sections.push(`Page Context:
@@ -651,11 +651,11 @@ ${job.description.substring(0, 500)}...`)
     )
   }
 
-  // Scout Memory — injected BEFORE other context sections so Claude treats it as
+  // Apex Memory — injected BEFORE other context sections so Claude treats it as
   // established fact rather than a late hint. Retrieval + formatting handled in
   // the chat route using the relevance scorer; here we receive the pre-selected slice.
   if (context.memories && context.memories.length > 0) {
-    const { formatMemoriesForClaude } = await import("@/lib/scout/memory/retriever")
+    const { formatMemoriesForClaude } = await import("@/lib/apex/memory/retriever")
     const memorySection = formatMemoriesForClaude(context.memories)
     if (memorySection) sections.unshift(memorySection)
   }

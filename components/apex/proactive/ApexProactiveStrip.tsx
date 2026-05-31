@@ -1,19 +1,19 @@
 "use client"
 
 import { AlertCircle, ArrowUpRight, Bell, Clock3, EyeOff, TrendingUp, X } from "lucide-react"
-import type { ScoutProactiveEvent } from "@/lib/scout/proactive/types"
+import type { ApexProactiveEvent } from "@/lib/apex/proactive/types"
 import { cn } from "@/lib/utils"
 
 type Props = {
-  event: ScoutProactiveEvent | null
+  event: ApexProactiveEvent | null
   enabled: boolean
-  onOpen: (event: ScoutProactiveEvent) => void
+  onOpen: (event: ApexProactiveEvent) => void
   onDismiss: (eventId: string) => void
   onSnooze: (eventId: string) => void
   onDisable: () => void
 }
 
-type Severity = ScoutProactiveEvent["severity"]
+type Severity = ApexProactiveEvent["severity"]
 
 type Tone = {
   border:    string
@@ -81,11 +81,11 @@ const TONE: Record<Severity, Tone> = {
 
 const KICKER_LABEL: Record<Severity, string> = {
   urgent:    "Needs your attention",
-  important: "Scout suggestion",
+  important: "Apex suggestion",
   info:      "Heads up",
 }
 
-export function ScoutProactiveStrip({
+export function ApexProactiveStrip({
   event,
   enabled,
   onOpen,
@@ -104,7 +104,7 @@ export function ScoutProactiveStrip({
       role="status"
       aria-live="polite"
       className={cn(
-        "group relative mb-4 overflow-hidden rounded-2xl border backdrop-blur transition-all motion-safe:animate-[scoutFadeUp_0.45s_ease-out_both]",
+        "group relative mb-4 overflow-hidden rounded-2xl border backdrop-blur transition-all motion-safe:animate-[apexFadeUp_0.45s_ease-out_both]",
         tone.border,
         tone.bg,
         tone.shadow

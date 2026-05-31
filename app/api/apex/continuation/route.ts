@@ -4,11 +4,11 @@ import { getPostgresPool } from "@/lib/postgres/server"
 import {
   isEmptyContinuationState,
   sanitizeContinuationState,
-} from "@/lib/scout/continuation/sanitize"
+} from "@/lib/apex/continuation/sanitize"
 import type {
-  ScoutContinuationApiResponse,
-  ScoutContinuationState,
-} from "@/lib/scout/continuation/types"
+  ApexContinuationApiResponse,
+  ApexContinuationState,
+} from "@/lib/apex/continuation/types"
 
 export const runtime = "nodejs"
 
@@ -31,8 +31,8 @@ function isMissingColumnError(error: unknown): boolean {
   return false
 }
 
-function okResponse(state: ScoutContinuationState | null, updatedAt?: string | null) {
-  const body: ScoutContinuationApiResponse = {
+function okResponse(state: ApexContinuationState | null, updatedAt?: string | null) {
+  const body: ApexContinuationApiResponse = {
     state,
     updatedAt: updatedAt ?? null,
   }
@@ -68,7 +68,7 @@ export async function GET() {
     if (isMissingColumnError(error)) {
       return okResponse(null, null)
     }
-    console.error("[scout/continuation] GET failed:", error)
+    console.error("[apex/continuation] GET failed:", error)
     return NextResponse.json({ error: "Unable to read continuation state" }, { status: 500 })
   }
 }
@@ -99,12 +99,12 @@ export async function PUT(request: Request) {
   } catch (error) {
     if (isMissingColumnError(error)) {
       return NextResponse.json(
-        { error: "Continuation column missing. Run migration add-profiles-scout-continuation-state.sql" },
+        { error: "Continuation column missing. Run migration add-profiles-apex-continuation-state.sql" },
         { status: 503 },
       )
     }
 
-    console.error("[scout/continuation] PUT failed:", error)
+    console.error("[apex/continuation] PUT failed:", error)
     return NextResponse.json({ error: "Unable to save continuation state" }, { status: 500 })
   }
 }

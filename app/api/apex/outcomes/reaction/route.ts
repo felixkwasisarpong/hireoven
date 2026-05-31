@@ -1,5 +1,5 @@
 /**
- * POST /api/scout/outcomes/reaction
+ * POST /api/apex/outcomes/reaction
  *
  * Records a lightweight user reaction to a learning signal.
  * One reaction per (user, signal_id) — subsequent calls update it (upsert).
@@ -12,17 +12,17 @@ import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { randomUUID } from "crypto"
-import type { ScoutSignalReaction } from "@/lib/scout/outcomes/types"
+import type { ApexSignalReaction } from "@/lib/apex/outcomes/types"
 
 export const runtime = "nodejs"
 
-const VALID_REACTIONS = new Set<ScoutSignalReaction>([
+const VALID_REACTIONS = new Set<ApexSignalReaction>([
   "helpful", "not_helpful", "got_interview", "applied", "rejected", "ignore",
 ])
 
 type Body = {
   signalId: string
-  reaction: ScoutSignalReaction
+  reaction: ApexSignalReaction
 }
 
 export async function POST(request: Request) {
@@ -41,13 +41,13 @@ export async function POST(request: Request) {
   const pool = getPostgresPool()
 
   await pool.query(
-    `INSERT INTO scout_signal_reactions (id, user_id, signal_id, reaction, created_at)
+    `INSERT INTO apex_signal_reactions (id, user_id, signal_id, reaction, created_at)
      VALUES ($1, $2, $3, $4, NOW())
      ON CONFLICT (user_id, signal_id)
      DO UPDATE SET reaction = EXCLUDED.reaction, created_at = NOW()`,
     [randomUUID(), user.id, body.signalId, body.reaction],
   ).catch((err) => {
-    console.error("[scout/outcomes/reaction] upsert failed", err)
+    console.error("[apex/outcomes/reaction] upsert failed", err)
     throw err
   })
 

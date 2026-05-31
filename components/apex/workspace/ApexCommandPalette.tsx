@@ -6,9 +6,9 @@ import {
   buildDisplayGroups,
   flattenGroups,
   GROUP_META,
-  type ScoutCommand,
-} from "@/lib/scout/commands"
-import type { WorkspaceMode } from "@/lib/scout/workspace"
+  type ApexCommand,
+} from "@/lib/apex/commands"
+import type { WorkspaceMode } from "@/lib/apex/workspace"
 import { cn } from "@/lib/utils"
 
 type Props = {
@@ -18,7 +18,7 @@ type Props = {
   workspaceMode: WorkspaceMode
 }
 
-export function ScoutCommandPalette({
+export function ApexCommandPalette({
   isOpen,
   onClose,
   onSelect,
@@ -85,7 +85,7 @@ export function ScoutCommandPalette({
     itemRefs.current = []
   }, [search])
 
-  function handleSelect(cmd: ScoutCommand) {
+  function handleSelect(cmd: ApexCommand) {
     onSelect(cmd.query, cmd.autoRun)
     onClose()
   }
@@ -108,7 +108,7 @@ export function ScoutCommandPalette({
         className="fixed left-1/2 top-[14vh] z-50 w-full max-w-lg -translate-x-1/2 px-4"
         role="dialog"
         aria-modal
-        aria-label="Scout command palette"
+        aria-label="Apex command palette"
       >
         <div className="overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-[0_24px_72px_rgba(15,23,42,0.24)] animate-in fade-in zoom-in-95 duration-150">
 
@@ -224,7 +224,7 @@ export function ScoutCommandPalette({
               <span><kbd className="font-medium">↵</kbd> select</span>
             </div>
             <div className="flex items-center gap-1.5 text-[10px] text-gray-400">
-              <span className="font-medium text-[#FF5C18]">↵ run</span>
+              <span className="font-medium text-[#6366F1]">↵ run</span>
               <span className="text-gray-300">auto-submits</span>
               <span className="mx-1 text-gray-300">·</span>
               <span className="font-medium text-gray-500">↵ fill</span>

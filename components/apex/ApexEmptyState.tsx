@@ -1,16 +1,16 @@
 "use client"
 
 /**
- * ScoutEmptyState — consistent fallback for all Scout workspace modes.
+ * ApexEmptyState — consistent fallback for all Apex workspace modes.
  *
- * Use this when a Scout mode panel has nothing to show:
+ * Use this when a Apex mode panel has nothing to show:
  *   - loading    → spinner + label
  *   - empty      → icon + message + optional action
  *   - error      → alert icon + message + retry
  *   - unsupported→ info + manual guidance
  *   - needs_action → prompt with CTA
  *
- * No blank panels — every Scout surface should show one of these states.
+ * No blank panels — every Apex surface should show one of these states.
  */
 
 import {
@@ -25,7 +25,7 @@ import { cn } from "@/lib/utils"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-export type ScoutEmptyStateType =
+export type ApexEmptyStateType =
   | "loading"
   | "empty"
   | "error"
@@ -33,7 +33,7 @@ export type ScoutEmptyStateType =
   | "needs_action"
 
 type Props = {
-  type:      ScoutEmptyStateType
+  type:      ApexEmptyStateType
   title?:    string
   message?:  string
   /** Single primary action (retry, open, etc.) */
@@ -49,7 +49,7 @@ type Props = {
 // ── Icon + colour per state ───────────────────────────────────────────────────
 
 const STATE_CONFIG: Record<
-  ScoutEmptyStateType,
+  ApexEmptyStateType,
   {
     icon:    React.ElementType
     iconCls: string
@@ -61,11 +61,11 @@ const STATE_CONFIG: Record<
 > = {
   loading: {
     icon:    Loader2,
-    iconCls: "animate-spin text-[#FF5C18]",
+    iconCls: "animate-spin text-[#6366F1]",
     bg:      "bg-white",
     border:  "border-slate-100",
     title:   "Loading…",
-    message: "Preparing your Scout workspace.",
+    message: "Preparing your Apex workspace.",
   },
   empty: {
     icon:    Sparkles,
@@ -73,7 +73,7 @@ const STATE_CONFIG: Record<
     bg:      "bg-white",
     border:  "border-slate-100",
     title:   "Nothing here yet",
-    message: "Ask Scout a question to get started.",
+    message: "Ask Apex a question to get started.",
   },
   error: {
     icon:    AlertCircle,
@@ -81,7 +81,7 @@ const STATE_CONFIG: Record<
     bg:      "bg-red-50/60",
     border:  "border-red-100",
     title:   "Something went wrong",
-    message: "Scout hit an error loading this section. Try again.",
+    message: "Apex hit an error loading this section. Try again.",
   },
   unsupported: {
     icon:    Info,
@@ -93,17 +93,17 @@ const STATE_CONFIG: Record<
   },
   needs_action: {
     icon:    MessageSquare,
-    iconCls: "text-[#FF5C18]/70",
+    iconCls: "text-[#6366F1]/70",
     bg:      "bg-orange-50/40",
     border:  "border-orange-100",
     title:   "Action needed",
-    message: "Scout needs a little more context to help here.",
+    message: "Apex needs a little more context to help here.",
   },
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function ScoutEmptyState({ type, title, message, action, compact, className }: Props) {
+export function ApexEmptyState({ type, title, message, action, compact, className }: Props) {
   const cfg  = STATE_CONFIG[type]
   const Icon = cfg.icon
 
@@ -116,7 +116,7 @@ export function ScoutEmptyState({ type, title, message, action, compact, classNa
           <button
             type="button"
             onClick={action.onClick}
-            className="ml-auto text-[11px] font-semibold text-[#FF5C18] hover:underline"
+            className="ml-auto text-[11px] font-semibold text-[#6366F1] hover:underline"
           >
             {action.label}
           </button>

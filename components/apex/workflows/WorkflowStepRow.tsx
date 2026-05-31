@@ -2,34 +2,34 @@
 
 import { AlertCircle, Check, ChevronRight, Clock, Loader2, SkipForward, X } from "lucide-react"
 import { cn } from "@/lib/utils"
-import type { ScoutActiveWorkflowStep, ScoutWorkflowStepStatus } from "@/lib/scout/workflows/types"
+import type { ApexActiveWorkflowStep, ApexWorkflowStepStatus } from "@/lib/apex/workflows/types"
 
 type Props = {
-  step: ScoutActiveWorkflowStep
+  step: ApexActiveWorkflowStep
   isLast: boolean
   onContinue: () => void
   onSkip: () => void
 }
 
-const STEP_DOT: Record<ScoutWorkflowStepStatus, React.ReactNode> = {
+const STEP_DOT: Record<ApexWorkflowStepStatus, React.ReactNode> = {
   pending:      <span className="h-1.5 w-1.5 rounded-full bg-slate-300" />,
-  running:      <Loader2 className="h-3 w-3 animate-spin text-[#FF5C18]" />,
+  running:      <Loader2 className="h-3 w-3 animate-spin text-[#6366F1]" />,
   waiting_user: <Clock className="h-3 w-3 text-amber-500" />,
   completed:    <Check className="h-3 w-3 text-emerald-500" />,
   failed:       <X className="h-3 w-3 text-red-500" />,
   skipped:      <SkipForward className="h-3 w-3 text-slate-300" />,
 }
 
-const RING: Record<ScoutWorkflowStepStatus, string> = {
+const RING: Record<ApexWorkflowStepStatus, string> = {
   pending:      "border-slate-200 bg-slate-50",
-  running:      "border-[#FF5C18]/40 bg-[#FF5C18]/6 shadow-[0_0_0_3px_rgba(255,92,24,0.08)]",
+  running:      "border-[#6366F1]/40 bg-[#6366F1]/6 shadow-[0_0_0_3px_rgba(99,102,241,0.08)]",
   waiting_user: "border-amber-300 bg-amber-50",
   completed:    "border-emerald-200 bg-emerald-50",
   failed:       "border-red-200 bg-red-50",
   skipped:      "border-slate-100 bg-slate-50 opacity-50",
 }
 
-const TITLE: Record<ScoutWorkflowStepStatus, string> = {
+const TITLE: Record<ApexWorkflowStepStatus, string> = {
   pending:      "text-slate-400",
   running:      "text-slate-900 font-semibold",
   waiting_user: "text-slate-900 font-semibold",
@@ -80,7 +80,7 @@ export function WorkflowStepRow({ step, isLast, onContinue, onSkip }: Props) {
               <button
                 type="button"
                 onClick={onContinue}
-                className="inline-flex items-center gap-1 rounded-full border border-[#FF5C18]/30 bg-[#FF5C18]/6 px-2.5 py-0.5 text-[11px] font-semibold text-[#FF5C18] transition hover:bg-[#FF5C18]/12"
+                className="inline-flex items-center gap-1 rounded-full border border-[#6366F1]/30 bg-[#6366F1]/6 px-2.5 py-0.5 text-[11px] font-semibold text-[#6366F1] transition hover:bg-[#6366F1]/12"
               >
                 <Check className="h-3 w-3" />
                 Done

@@ -3,7 +3,7 @@
 import { Ban, ChevronDown, ChevronUp, Pause, Play, Sparkles, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { WorkflowTimeline } from "./WorkflowTimeline"
-import type { WorkflowEngineActions } from "@/lib/scout/workflows/engine"
+import type { WorkflowEngineActions } from "@/lib/apex/workflows/engine"
 
 type Props = Pick<
   WorkflowEngineActions,
@@ -53,7 +53,7 @@ export function WorkflowPanel({
           isComplete ? "border-emerald-100 bg-emerald-50/60" : "border-slate-100 bg-white"
         )}
       >
-        <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-lg bg-[#FF5C18] shadow-[0_2px_6px_rgba(255,92,24,0.4)]">
+        <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-lg bg-[#6366F1] shadow-[0_2px_6px_rgba(99,102,241,0.4)]">
           <Sparkles className="h-2.5 w-2.5 text-white" />
         </span>
 
@@ -105,7 +105,7 @@ export function WorkflowPanel({
         <div
           className={cn(
             "h-full transition-all duration-500",
-            isComplete ? "bg-emerald-400" : "bg-[#FF5C18]"
+            isComplete ? "bg-emerald-400" : "bg-[#6366F1]"
           )}
           style={{ width: `${pct}%` }}
         />
@@ -129,7 +129,7 @@ export function WorkflowPanel({
           <button
             type="button"
             onClick={resumeWorkflow}
-            className="mt-2 inline-flex items-center gap-1 rounded-full border border-[#FF5C18]/25 bg-[#FF5C18]/6 px-3 py-1 text-[11px] font-semibold text-[#FF5C18] transition hover:bg-[#FF5C18]/12"
+            className="mt-2 inline-flex items-center gap-1 rounded-full border border-[#6366F1]/25 bg-[#6366F1]/6 px-3 py-1 text-[11px] font-semibold text-[#6366F1] transition hover:bg-[#6366F1]/12"
           >
             <Play className="h-3 w-3" />
             Resume

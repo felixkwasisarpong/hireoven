@@ -5,7 +5,7 @@
  * Runs on client (intent gate in handleSubmit) and server (engine).
  */
 
-import type { ScoutResearchTask, ScoutResearchStep } from "./types"
+import type { ApexResearchTask, ApexResearchStep } from "./types"
 
 // ── Intent detection ──────────────────────────────────────────────────────────
 
@@ -45,7 +45,7 @@ export function detectResearchType(message: string): ResearchType {
 
 // ── Step skeleton templates ───────────────────────────────────────────────────
 
-type StepSkeleton = Pick<ScoutResearchStep, "id" | "title" | "agent">
+type StepSkeleton = Pick<ApexResearchStep, "id" | "title" | "agent">
 
 const STEP_TEMPLATES: Record<ResearchType, StepSkeleton[]> = {
   visa_friendly_companies: [
@@ -113,18 +113,18 @@ const RESEARCH_TITLES: Record<ResearchType, string> = {
 
 export function buildResearchTask(
   message: string
-): { task: ScoutResearchTask; type: ResearchType } {
+): { task: ApexResearchTask; type: ResearchType } {
   const type = detectResearchType(message)
   const skeletons = STEP_TEMPLATES[type]
 
-  const steps: ScoutResearchStep[] = skeletons.map((s) => ({
+  const steps: ApexResearchStep[] = skeletons.map((s) => ({
     id:     s.id,
     title:  s.title,
     agent:  s.agent,
     status: "pending",
   }))
 
-  const task: ScoutResearchTask = {
+  const task: ApexResearchTask = {
     id:        `research-${Date.now()}`,
     title:     RESEARCH_TITLES[type],
     objective: message.trim(),

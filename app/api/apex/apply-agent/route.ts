@@ -1,5 +1,5 @@
 /**
- * GET /api/scout/apply-agent?minMatchScore=80&count=5&sponsorship=true&workMode=remote&q=java+backend&strictQuery=true&strictScoreOnly=true&freshnessHours=24
+ * GET /api/apex/apply-agent?minMatchScore=80&count=5&sponsorship=true&workMode=remote&q=java+backend&strictQuery=true&strictScoreOnly=true&freshnessHours=24
  *
  * Selects jobs from the live feed pool (recently added, active jobs) that match
  * the user's criteria. `q` is a free-text query matched against title + description
@@ -12,7 +12,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getPostgresPool } from "@/lib/postgres/server"
-import type { ApplyAgentJob } from "@/lib/scout/apply-agent/types"
+import type { ApplyAgentJob } from "@/lib/apex/apply-agent/types"
 
 export const runtime = "nodejs"
 
@@ -176,7 +176,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ jobs })
   } catch (error) {
-    console.error("[scout/apply-agent] query_failed", {
+    console.error("[apex/apply-agent] query_failed", {
       userId: user.id,
       error:  error instanceof Error ? error.message : String(error),
     })

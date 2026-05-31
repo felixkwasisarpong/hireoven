@@ -6,7 +6,7 @@
  */
 
 import type { ApplicationReviewChecklist, SubmitReadiness } from "./types"
-import type { BulkJobArtifacts, BulkJobWarning } from "@/lib/scout/bulk-application/types"
+import type { BulkJobArtifacts, BulkJobWarning } from "@/lib/apex/bulk-application/types"
 
 type AutofillCounts = {
   sensitive:   number

@@ -11,7 +11,7 @@ import {
   Minus,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import type { CompanyIntel, CompanyIntelSummary } from "@/lib/scout/company-intel/types"
+import type { CompanyIntel, CompanyIntelSummary } from "@/lib/apex/company-intel/types"
 
 type CompanyIntelResponse = {
   intel:       CompanyIntel
@@ -61,7 +61,7 @@ export function CompanyMode({ companyId, companyName: nameProp, onFollowUp }: Pr
   useEffect(() => {
     setLoading(true)
     setError(null)
-    fetch(`/api/scout/company-intel/${companyId}`)
+    fetch(`/api/apex/company-intel/${companyId}`)
       .then(async (res) => {
         if (!res.ok) throw new Error("Could not load company intel")
         const json = (await res.json()) as CompanyIntelResponse

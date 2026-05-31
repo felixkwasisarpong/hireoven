@@ -3,13 +3,13 @@
 import { TrendingUp, TrendingDown, AlertTriangle, Info, ChevronDown, ChevronUp } from "lucide-react"
 import { useState } from "react"
 import { cn } from "@/lib/utils"
-import type { MarketSignal } from "@/lib/scout/market-intelligence"
+import type { MarketSignal } from "@/lib/apex/market-intelligence"
 
 // ── Per-signal style ──────────────────────────────────────────────────────────
 
 const SEVERITY_STYLE = {
   warning:  { dot: "bg-amber-400",   text: "text-amber-700",  icon: AlertTriangle },
-  positive: { dot: "bg-[#FF5C18]",   text: "text-[#c94010]",  icon: TrendingUp    },
+  positive: { dot: "bg-[#6366F1]",   text: "text-[#4338CA]",  icon: TrendingUp    },
   info:     { dot: "bg-slate-300",   text: "text-slate-500",  icon: Info          },
 } as const
 
@@ -74,7 +74,7 @@ function SignalRow({ signal }: { signal: MarketSignal }) {
   )
 }
 
-export function ScoutMarketRail({ signals, loading = false }: Props) {
+export function ApexMarketRail({ signals, loading = false }: Props) {
   if (loading) {
     return (
       <div className="space-y-2.5 py-1">
@@ -94,7 +94,7 @@ export function ScoutMarketRail({ signals, loading = false }: Props) {
     <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_2px_12px_rgba(15,23,42,0.06)]">
       {/* Header */}
       <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-3">
-        <TrendingUp className="h-3.5 w-3.5 flex-shrink-0 text-[#FF5C18]" />
+        <TrendingUp className="h-3.5 w-3.5 flex-shrink-0 text-[#6366F1]" />
         <p className="text-[10.5px] font-semibold uppercase tracking-widest text-slate-400">
           Market signals
         </p>

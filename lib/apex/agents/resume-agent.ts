@@ -6,7 +6,7 @@
  * Claude's context so tailor/workflow responses are grounded in real data.
  */
 
-import type { ScoutAgent, ScoutExecutionContext, AgentResult } from "./types"
+import type { ApexAgent, ApexExecutionContext, AgentResult } from "./types"
 
 type ResumeResult = {
   missingKeywords: string[]
@@ -15,11 +15,11 @@ type ResumeResult = {
   suggestedSummary?: string
 }
 
-export class ResumeAgent implements ScoutAgent<ResumeResult> {
+export class ResumeAgent implements ApexAgent<ResumeResult> {
   readonly id = "resume"
   readonly relevantIntents = ["tailor", "workflow"] as import("./types").AgentIntent[]
 
-  async run(ctx: ScoutExecutionContext): Promise<AgentResult<ResumeResult>> {
+  async run(ctx: ApexExecutionContext): Promise<AgentResult<ResumeResult>> {
     const start = Date.now()
     if (!ctx.resume?.id || !ctx.job?.description) {
       return { agentId: this.id, success: true, durationMs: Date.now() - start }

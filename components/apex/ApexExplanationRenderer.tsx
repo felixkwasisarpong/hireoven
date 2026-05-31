@@ -2,18 +2,18 @@
 
 import { Info } from "lucide-react"
 import type {
-  ScoutExplanationBlock,
-  ScoutExplanationItemStatus,
-  ScoutStandardExplanationBlock,
-} from "@/lib/scout/types"
-import { ScoutEvidenceBridge } from "./ScoutEvidenceBridge"
+  ApexExplanationBlock,
+  ApexExplanationItemStatus,
+  ApexStandardExplanationBlock,
+} from "@/lib/apex/types"
+import { ApexEvidenceBridge } from "./ApexEvidenceBridge"
 
-type ScoutExplanationRendererProps = {
-  explanations?: ScoutExplanationBlock[]
+type ApexExplanationRendererProps = {
+  explanations?: ApexExplanationBlock[]
   compact?: boolean
 }
 
-const STATUS_STYLES: Record<ScoutExplanationItemStatus, string> = {
+const STATUS_STYLES: Record<ApexExplanationItemStatus, string> = {
   strong: "border-emerald-200 bg-emerald-50 text-emerald-700",
   medium: "border-blue-200 bg-blue-50 text-blue-700",
   weak: "border-amber-200 bg-amber-50 text-amber-700",
@@ -21,7 +21,7 @@ const STATUS_STYLES: Record<ScoutExplanationItemStatus, string> = {
   unknown: "border-slate-200 bg-slate-100 text-slate-600",
 }
 
-const BLOCK_LABELS: Record<ScoutStandardExplanationBlock["type"], string> = {
+const BLOCK_LABELS: Record<ApexStandardExplanationBlock["type"], string> = {
   match_breakdown: "Match breakdown",
   resume_gap: "Resume gaps",
   sponsorship_signal: "Sponsorship signals",
@@ -33,7 +33,7 @@ function StandardExplanationBlock({
   block,
   compact,
 }: {
-  block: ScoutStandardExplanationBlock
+  block: ApexStandardExplanationBlock
   compact: boolean
 }) {
   return (
@@ -92,10 +92,10 @@ function StandardExplanationBlock({
   )
 }
 
-export function ScoutExplanationRenderer({
+export function ApexExplanationRenderer({
   explanations,
   compact = false,
-}: ScoutExplanationRendererProps) {
+}: ApexExplanationRendererProps) {
   if (!explanations || explanations.length === 0) return null
 
   return (
@@ -104,7 +104,7 @@ export function ScoutExplanationRenderer({
         const key = `${block.type}-${block.title}-${blockIndex}`
 
         if (block.type === "evidence_bridge") {
-          return <ScoutEvidenceBridge key={key} block={block} compact={compact} />
+          return <ApexEvidenceBridge key={key} block={block} compact={compact} />
         }
 
         return <StandardExplanationBlock key={key} block={block} compact={compact} />
@@ -112,7 +112,7 @@ export function ScoutExplanationRenderer({
 
       <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
         <Info className="h-3.5 w-3.5" />
-        Visual explanations only use evidence available in Scout context.
+        Visual explanations only use evidence available in Apex context.
       </div>
     </div>
   )

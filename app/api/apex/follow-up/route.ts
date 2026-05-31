@@ -5,10 +5,10 @@ import { getUserPlan } from "@/lib/gates/server-gate"
 import { canAccess } from "@/lib/gates"
 import { requireQuota } from "@/lib/usage/server-quota"
 import { getPostgresPool } from "@/lib/postgres/server"
-import { analyzeFollowUp } from "@/lib/scout/follow-up"
+import { analyzeFollowUp } from "@/lib/apex/follow-up"
 import { HAIKU_MODEL } from "@/lib/ai/anthropic-models"
-import { withAICall } from "@/lib/scout/budget/ai-call"
-import { AI_TIMEOUTS } from "@/lib/scout/budget/router"
+import { withAICall } from "@/lib/apex/budget/ai-call"
+import { AI_TIMEOUTS } from "@/lib/apex/budget/router"
 import { sanitizeGeneratedText } from "@/lib/text/sanitize-generated-text"
 import type { JobApplication } from "@/types"
 
@@ -22,7 +22,7 @@ const anthropic = process.env.ANTHROPIC_API_KEY
 // Follow-up drafts are short and latency-sensitive; Haiku is sufficient here.
 const MODEL = HAIKU_MODEL
 
-function scoutError(status: number, message: string) {
+function apexError(status: number, message: string) {
   return NextResponse.json({ ok: false, status, message, error: message }, { status })
 }
 
@@ -61,8 +61,8 @@ async function generateDraft(app: JobApplication, userId: string): Promise<strin
   try {
     const { value } = await withAICall({
       anthropic,
-      feature:   "scout_follow_up",
-      timeoutMs: AI_TIMEOUTS.scout_follow_up,
+      feature:   "apex_follow_up",
+      timeoutMs: AI_TIMEOUTS.apex_follow_up,
       params: {
         model:      MODEL,
         max_tokens: 280,
@@ -80,7 +80,7 @@ async function generateDraft(app: JobApplication, userId: string): Promise<strin
   }
 }
 
-// ── POST /api/scout/follow-up ─────────────────────────────────────────────────
+// ── POST /api/apex/follow-up ─────────────────────────────────────────────────
 
 type RequestBody = {
   applicationId?: string
@@ -94,14 +94,14 @@ export async function POST(request: NextRequest) {
   } = await supabase.auth.getUser()
 
   if (!user) {
-    return scoutError(401, "Unauthorized")
+    return apexError(401, "Unauthorized")
   }
 
   const body = (await request.json().catch(() => ({}))) as RequestBody
   const { applicationId, jobId } = body
 
   if (!applicationId && !jobId) {
-    return scoutError(400, "applicationId or jobId is required")
+    return apexError(400, "applicationId or jobId is required")
   }
 
   // Fetch application — must belong to user
@@ -130,11 +130,11 @@ export async function POST(request: NextRequest) {
     }
   } catch (err) {
     console.error("[follow-up] DB query error:", err)
-    return scoutError(500, "Failed to fetch application.")
+    return apexError(500, "Failed to fetch application.")
   }
 
   if (!app) {
-    return scoutError(404, "Application not found.")
+    return apexError(404, "Application not found.")
   }
 
   const analysis = analyzeFollowUp(app)
@@ -148,8 +148,8 @@ export async function POST(request: NextRequest) {
 
   if (analysis.status === "ready") {
     if (isPro) {
-      // Draft generation burns one Scout message against the daily quota.
-      const quota = await requireQuota(user.id, "scout_message", plan)
+      // Draft generation burns one Apex message against the daily quota.
+      const quota = await requireQuota(user.id, "apex_message", plan)
       if (quota instanceof NextResponse) return quota
       draft = await generateDraft(app, user.id)
     } else {

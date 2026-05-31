@@ -18,25 +18,25 @@ import {
   X,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { buildInterviewQuestions } from "@/lib/scout/interview/questions"
+import { buildInterviewQuestions } from "@/lib/apex/interview/questions"
 import {
   writeInterviewSession,
   makeInterviewSessionId,
-} from "@/lib/scout/interview/store"
+} from "@/lib/apex/interview/store"
 import {
   QUESTION_CATEGORY_META,
   INTERVIEW_TYPE_LABELS,
-} from "@/lib/scout/interview/types"
+} from "@/lib/apex/interview/types"
 import type {
-  ScoutInterviewSession,
-  ScoutInterviewQuestion,
-  ScoutInterviewType,
-  ScoutInterviewQuestionCategory,
-} from "@/lib/scout/interview/types"
-import type { ScoutResponse } from "@/lib/scout/types"
-import type { ActiveEntities } from "./ScoutWorkspaceShell"
-import { getScoutDisplayText } from "@/lib/scout/display-text"
-import { ScoutMockInterview } from "@/components/scout/ScoutMockInterview"
+  ApexInterviewSession,
+  ApexInterviewQuestion,
+  ApexInterviewType,
+  ApexInterviewQuestionCategory,
+} from "@/lib/apex/interview/types"
+import type { ApexResponse } from "@/lib/apex/types"
+import type { ActiveEntities } from "./ApexWorkspaceShell"
+import { getApexDisplayText } from "@/lib/apex/display-text"
+import { ApexMockInterview } from "@/components/apex/ApexMockInterview"
 
 // ── Question card ─────────────────────────────────────────────────────────────
 
@@ -45,7 +45,7 @@ function QuestionCard({
   index,
   onAsk,
 }: {
-  q:      ScoutInterviewQuestion
+  q:      ApexInterviewQuestion
   index:  number
   onAsk:  (question: string) => void
 }) {
@@ -96,7 +96,7 @@ function QuestionCard({
         <button
           type="button"
           onClick={() => onAsk(q.question)}
-          title="Ask Scout for guidance"
+          title="Ask Apex for guidance"
           className="flex-shrink-0 rounded-lg p-1.5 text-slate-400 transition hover:bg-white/60 hover:text-slate-600"
         >
           <MessageSquareText className="h-3.5 w-3.5" />
@@ -108,26 +108,26 @@ function QuestionCard({
 
 // ── Category filter tabs ──────────────────────────────────────────────────────
 
-const CATEGORY_ORDER: ScoutInterviewQuestionCategory[] = [
+const CATEGORY_ORDER: ApexInterviewQuestionCategory[] = [
   "behavioral", "technical", "system_design", "resume", "company"
 ]
 
 // ── Main component ────────────────────────────────────────────────────────────
 
 type Props = {
-  response:        ScoutResponse
+  response:        ApexResponse
   onFollowUp:      (query: string) => void
   activeEntities?: ActiveEntities
 }
 
 export function InterviewPrepMode({ response, onFollowUp, activeEntities }: Props) {
   const prep         = response.interviewPrep
-  const answerText   = getScoutDisplayText(response.answer)
+  const answerText   = getApexDisplayText(response.answer)
   const wdPayload    = response.workspace_directive?.mode === "interview"
     ? (response.workspace_directive.payload ?? {})
     : {}
 
-  const interviewType  = (wdPayload.interviewType as ScoutInterviewType | undefined)
+  const interviewType  = (wdPayload.interviewType as ApexInterviewType | undefined)
   const companyName    = (wdPayload.companyName as string | undefined) ?? activeEntities?.companyName
   const jobTitle       = (wdPayload.jobTitle    as string | undefined) ?? activeEntities?.jobTitle
   const jobId          = (wdPayload.jobId       as string | undefined) ?? activeEntities?.jobId
@@ -140,14 +140,14 @@ export function InterviewPrepMode({ response, onFollowUp, activeEntities }: Prop
   )
 
   // ── Category filter ──────────────────────────────────────────────────────────
-  const [activeCategory, setActiveCategory] = useState<ScoutInterviewQuestionCategory | "all">("all")
+  const [activeCategory, setActiveCategory] = useState<ApexInterviewQuestionCategory | "all">("all")
 
   const filteredQuestions = activeCategory === "all"
     ? questions
     : questions.filter((q) => q.category === activeCategory)
 
   const categoryCounts = useMemo(() => {
-    const counts: Partial<Record<ScoutInterviewQuestionCategory, number>> = {}
+    const counts: Partial<Record<ApexInterviewQuestionCategory, number>> = {}
     for (const q of questions) {
       counts[q.category] = (counts[q.category] ?? 0) + 1
     }
@@ -159,7 +159,7 @@ export function InterviewPrepMode({ response, onFollowUp, activeEntities }: Prop
 
   const startMockSession = useCallback(() => {
     if (!prep) return
-    const session: ScoutInterviewSession = {
+    const session: ApexInterviewSession = {
       id:                makeInterviewSessionId(),
       jobId,
       companyId,
@@ -182,7 +182,7 @@ export function InterviewPrepMode({ response, onFollowUp, activeEntities }: Prop
       <div className="rounded-2xl border border-gray-200 bg-white px-5 py-5">
         <p className="text-sm font-semibold text-gray-900">Interview Prep</p>
         <p className="mt-2 text-sm text-gray-500">
-          Open a job and ask Scout to prepare your interview to generate a tailored prep plan.
+          Open a job and ask Apex to prepare your interview to generate a tailored prep plan.
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
           {["Prepare me for this interview", "What questions should I expect?", "Help me prep for the technical round"].map((chip) => (
@@ -206,7 +206,7 @@ export function InterviewPrepMode({ response, onFollowUp, activeEntities }: Prop
       <div>
         <div className="mb-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Mic2 className="h-4 w-4 text-[#FF5C18]" />
+            <Mic2 className="h-4 w-4 text-[#6366F1]" />
             <p className="text-sm font-semibold text-slate-900">Mock Interview Session</p>
             {companyName && (
               <span className="text-sm text-slate-400">— {companyName}</span>
@@ -221,7 +221,7 @@ export function InterviewPrepMode({ response, onFollowUp, activeEntities }: Prop
             Back to prep
           </button>
         </div>
-        <ScoutMockInterview
+        <ApexMockInterview
           jobId={jobId}
           resumeId={undefined}
           jobTitle={jobTitle}
@@ -242,7 +242,7 @@ export function InterviewPrepMode({ response, onFollowUp, activeEntities }: Prop
         <div className="flex items-start justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
-              <Brain className="h-4 w-4 text-[#FF5C18]" />
+              <Brain className="h-4 w-4 text-[#6366F1]" />
               <p className="text-sm font-semibold text-slate-900">
                 Interview Prep
                 {interviewType && ` — ${INTERVIEW_TYPE_LABELS[interviewType]}`}
@@ -379,11 +379,11 @@ export function InterviewPrepMode({ response, onFollowUp, activeEntities }: Prop
       {/* ── Right: intelligence rail ────────────────────────────────────── */}
       <div className="hidden space-y-5 lg:block">
 
-        {/* Scout guidance */}
+        {/* Apex guidance */}
         {answerText && (
           <div>
             <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-              Scout Guidance
+              Apex Guidance
             </p>
             <p className="text-xs leading-5 text-slate-600">{answerText}</p>
           </div>

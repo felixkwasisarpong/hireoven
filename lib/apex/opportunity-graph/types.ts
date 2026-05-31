@@ -1,5 +1,5 @@
 /**
- * Scout Opportunity Graph — Types V1
+ * Apex Opportunity Graph — Types V1
  *
  * Lightweight relationship engine connecting jobs, companies, skills,
  * roles, and the user's profile. All relationships are evidence-backed.
@@ -36,7 +36,7 @@ export type OpportunityRelationship = {
   evidence?:        string[]
 }
 
-// ── Higher-level recommendations (surfaced to UI + Scout chat) ────────────────
+// ── Higher-level recommendations (surfaced to UI + Apex chat) ────────────────
 
 export type OpportunityRecommendationType =
   | "similar_job"
@@ -54,7 +54,7 @@ export type OpportunityRecommendation = {
   subtitle?:    string
   description:  string
   evidence:     string[]
-  /** Pre-built Scout command bar query — user clicks to launch */
+  /** Pre-built Apex command bar query — user clicks to launch */
   query:        string
   confidence:   OpportunityConfidence
   /** IDs of related entities (jobId, companyId, skill name) */

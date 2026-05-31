@@ -1,5 +1,5 @@
 /**
- * Scout Proactive Companion Mode — Types V1
+ * Apex Proactive Companion Mode — Types V1
  *
  * Design goals:
  * - high-signal, actionable, calm suggestions
@@ -7,7 +7,7 @@
  * - no hidden automation
  */
 
-export type ScoutProactiveEvent = {
+export type ApexProactiveEvent = {
   id: string
 
   type:
@@ -37,22 +37,22 @@ export type ScoutProactiveEvent = {
   expiresAt?: string
 }
 
-export type ScoutProactiveEventType = ScoutProactiveEvent["type"]
-export type ScoutProactiveSeverity = ScoutProactiveEvent["severity"]
+export type ApexProactiveEventType = ApexProactiveEvent["type"]
+export type ApexProactiveSeverity = ApexProactiveEvent["severity"]
 
-export type ScoutProactiveSettings = {
+export type ApexProactiveSettings = {
   enabled: boolean
-  mutedTypes: ScoutProactiveEventType[]
+  mutedTypes: ApexProactiveEventType[]
   /** Event IDs snoozed until a timestamp. */
   snoozedUntil: Record<string, string>
   /** Event IDs dismissed at timestamp (used for short-term dedupe). */
   dismissedAt: Record<string, string>
 }
 
-export type ScoutProactiveStore = {
+export type ApexProactiveStore = {
   v: 1
-  events: ScoutProactiveEvent[]
-  settings: ScoutProactiveSettings
+  events: ApexProactiveEvent[]
+  settings: ApexProactiveSettings
   savedAt: number
 }
 
@@ -106,7 +106,7 @@ export type ProactiveSkillGap = {
   demandCount: number
 }
 
-export type ScoutProactiveSnapshot = {
+export type ApexProactiveSnapshot = {
   computedAt: string
   highMatches: ProactiveHighMatch[]
   sponsorshipFriendlyMatchCount: number

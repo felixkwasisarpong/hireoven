@@ -25,7 +25,7 @@ import { useApplications } from "@/lib/hooks/useApplications"
 import { ApplicationCard } from "@/components/applications/ApplicationCard"
 import { ApplicationDrawer } from "@/components/applications/ApplicationDrawer"
 import { AddApplicationModal } from "@/components/applications/AddApplicationModal"
-import { ScoutMiniPanel } from "@/components/scout/ScoutMiniPanel"
+import { ApexMiniPanel } from "@/components/apex/ApexMiniPanel"
 import { SalaryHealthSignal } from "@/components/applications/PipelineStats"
 import type { ApplicationStatus, JobApplication, PipelineStats } from "@/types"
 
@@ -395,7 +395,7 @@ export default function ApplicationsPageClient({
           />
         )}
 
-        <ScoutMiniPanel
+        <ApexMiniPanel
           pagePath="/dashboard/applications"
           applicationId={currentApp?.id}
           suggestionChips={["What needs follow-up?", "Where am I wasting time?"]}

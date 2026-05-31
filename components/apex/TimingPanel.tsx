@@ -1,8 +1,8 @@
 "use client"
 
-import { useEffect } from "react"
-import type { TimingRecommendation } from "@/lib/scout/timing/timing-engine"
-import type { ApplicationQueueItem } from "@/lib/scout/timing/queue-manager"
+import { useEffect, useState } from "react"
+import type { TimingRecommendation } from "@/lib/apex/timing/timing-engine"
+import type { ApplicationQueueItem } from "@/lib/apex/timing/queue-manager"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -108,6 +108,9 @@ function QueueIcon({ status }: { status: ApplicationQueueItem["status"] }) {
 
 export function TimingPanel({ data, queue, queueLoading, onApplyNow, onSchedule }: Props) {
   const verdict = VERDICT_CONFIG[data.timingRecommendation]
+  // Defer current-slot highlight to client — server UTC time ≠ client local time
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => { setMounted(true) }, [])
 
   // Inject Material Icons stylesheet once
   useEffect(() => {
@@ -204,7 +207,7 @@ export function TimingPanel({ data, queue, queueLoading, onApplyNow, onSchedule 
                   (c) => c.dayLabel === dayLabel && c.hourLabel === hourLabel,
                 )
                 const rate = cell?.screenRate ?? 0.04
-                const isCurrent = cell ? isCurrentSlot(cell) : false
+                const isCurrent = mounted && cell ? isCurrentSlot(cell) : false
                 return (
                   <div
                     key={`${dayLabel}-${hourLabel}`}

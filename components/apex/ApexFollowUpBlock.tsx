@@ -11,7 +11,7 @@ import {
 } from "lucide-react"
 import { useState } from "react"
 import { cn } from "@/lib/utils"
-import { analyzeFollowUp, urgencyMeta } from "@/lib/scout/follow-up"
+import { analyzeFollowUp, urgencyMeta } from "@/lib/apex/follow-up"
 import { useUpgradeModal } from "@/lib/context/UpgradeModalContext"
 import type { JobApplication } from "@/types"
 
@@ -30,7 +30,7 @@ type Props = {
   app: JobApplication
 }
 
-export function ScoutFollowUpBlock({ app }: Props) {
+export function ApexFollowUpBlock({ app }: Props) {
   const { showUpgrade } = useUpgradeModal()
   const [isExpanded, setIsExpanded] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
@@ -56,7 +56,7 @@ export function ScoutFollowUpBlock({ app }: Props) {
     setDraftGated(false)
 
     try {
-      const res = await fetch("/api/scout/follow-up", {
+      const res = await fetch("/api/apex/follow-up", {
         method: "POST",
         headers: { Accept: "application/json", "Content-Type": "application/json" },
         body: JSON.stringify({ applicationId: app.id }),
@@ -108,7 +108,7 @@ export function ScoutFollowUpBlock({ app }: Props) {
             <MessageCircle className="h-3.5 w-3.5 text-white" />
           </div>
           <div>
-            <p className="text-[12.5px] font-semibold text-slate-900">Scout: Follow-up advice</p>
+            <p className="text-[12.5px] font-semibold text-slate-900">Apex: Follow-up advice</p>
           </div>
         </div>
 
@@ -183,7 +183,7 @@ export function ScoutFollowUpBlock({ app }: Props) {
                 </p>
               </div>
               <p className="mt-1 text-[11.5px] leading-4 text-amber-800">
-                Upgrade to Scout Pro to generate AI-drafted follow-up messages.
+                Upgrade to Apex Pro to generate AI-drafted follow-up messages.
               </p>
               <button
                 type="button"
@@ -224,7 +224,7 @@ export function ScoutFollowUpBlock({ app }: Props) {
                 )}
               </button>
               <p className="text-[10.5px] text-slate-400">
-                Review before sending. Scout does not email on your behalf.
+                Review before sending. Apex does not email on your behalf.
               </p>
             </div>
           )}

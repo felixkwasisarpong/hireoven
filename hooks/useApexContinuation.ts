@@ -5,45 +5,45 @@ import {
   isEmptyContinuationState,
   sanitizeContinuationState,
   serializeContinuationState,
-} from "@/lib/scout/continuation/sanitize"
+} from "@/lib/apex/continuation/sanitize"
 import {
   clearContinuationState,
   readContinuationState,
   writeContinuationState,
-} from "@/lib/scout/continuation/store"
+} from "@/lib/apex/continuation/store"
 import type {
-  ScoutContinuationApiResponse,
-  ScoutContinuationState,
-} from "@/lib/scout/continuation/types"
+  ApexContinuationApiResponse,
+  ApexContinuationState,
+} from "@/lib/apex/continuation/types"
 
-type UseScoutContinuationOptions = {
+type UseApexContinuationOptions = {
   enabled?: boolean
   syncDebounceMs?: number
 }
 
-type UseScoutContinuationResult = {
-  state: ScoutContinuationState | null
+type UseApexContinuationResult = {
+  state: ApexContinuationState | null
   loading: boolean
   hydrated: boolean
   syncPending: boolean
   error: string | null
-  save: (state: ScoutContinuationState) => void
+  save: (state: ApexContinuationState) => void
   clear: () => void
   refresh: () => Promise<void>
 }
 
-export function useScoutContinuation({
+export function useApexContinuation({
   enabled = true,
   syncDebounceMs = 1_200,
-}: UseScoutContinuationOptions = {}): UseScoutContinuationResult {
-  const [state, setState] = useState<ScoutContinuationState | null>(null)
+}: UseApexContinuationOptions = {}): UseApexContinuationResult {
+  const [state, setState] = useState<ApexContinuationState | null>(null)
   const [loading, setLoading] = useState(true)
   const [hydrated, setHydrated] = useState(false)
   const [syncPending, setSyncPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const queuedSyncRef = useRef<ScoutContinuationState | null | undefined>(undefined)
+  const queuedSyncRef = useRef<ApexContinuationState | null | undefined>(undefined)
   const lastSerializedRef = useRef("")
   const localSavedAtRef = useRef<number>(0)
 
@@ -54,7 +54,7 @@ export function useScoutContinuation({
     if (queued === undefined) return
 
     try {
-      await fetch("/api/scout/continuation", {
+      await fetch("/api/apex/continuation", {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -71,7 +71,7 @@ export function useScoutContinuation({
     }
   }, [enabled])
 
-  const scheduleSync = useCallback((next: ScoutContinuationState | null) => {
+  const scheduleSync = useCallback((next: ApexContinuationState | null) => {
     if (!enabled) return
     queuedSyncRef.current = next
     setSyncPending(true)
@@ -94,7 +94,7 @@ export function useScoutContinuation({
 
     try {
       setLoading(true)
-      const res = await fetch("/api/scout/continuation", {
+      const res = await fetch("/api/apex/continuation", {
         cache: "no-store",
         headers: { Accept: "application/json" },
       })
@@ -103,7 +103,7 @@ export function useScoutContinuation({
         throw new Error(`Continuation GET failed (${res.status})`)
       }
 
-      const data = (await res.json().catch(() => null)) as ScoutContinuationApiResponse | null
+      const data = (await res.json().catch(() => null)) as ApexContinuationApiResponse | null
       const remoteState = data?.state ? sanitizeContinuationState(data.state) : null
       const remoteUpdatedAtMs = data?.updatedAt ? new Date(data.updatedAt).getTime() : 0
 
@@ -145,7 +145,7 @@ export function useScoutContinuation({
     }
   }, [refresh])
 
-  const save = useCallback((nextState: ScoutContinuationState) => {
+  const save = useCallback((nextState: ApexContinuationState) => {
     const clean = sanitizeContinuationState(nextState)
     if (isEmptyContinuationState(clean)) return
 

@@ -1,5 +1,5 @@
 /**
- * Scout Outcome Categorizers — V2
+ * Apex Outcome Categorizers — V2
  *
  * Pure keyword-based inference of role category and sector from job title
  * and company context. No external calls. Used at outcome-recording time to

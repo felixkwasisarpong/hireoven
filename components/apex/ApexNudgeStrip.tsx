@@ -8,16 +8,16 @@ import {
   Loader2,
   X,
 } from "lucide-react"
-import type { ScoutNudge, ScoutNudgeSeverity } from "@/lib/scout/nudges"
-import { getDefaultActionLabel } from "@/lib/scout/actions"
-import { useScoutActionExecutor } from "./useScoutActionExecutor"
+import type { ApexNudge, ApexNudgeSeverity } from "@/lib/apex/nudges"
+import { getDefaultActionLabel } from "@/lib/apex/actions"
+import { useApexActionExecutor } from "./useApexActionExecutor"
 
-type ScoutNudgeStripProps = {
-  nudges: ScoutNudge[]
+type ApexNudgeStripProps = {
+  nudges: ApexNudge[]
 }
 
 const SEVERITY_CONFIG: Record<
-  ScoutNudgeSeverity,
+  ApexNudgeSeverity,
   {
     border: string
     bg: string
@@ -73,7 +73,7 @@ const SEVERITY_CONFIG: Record<
   },
 }
 
-function NudgeIcon({ severity }: { severity: ScoutNudgeSeverity }) {
+function NudgeIcon({ severity }: { severity: ApexNudgeSeverity }) {
   const cfg = SEVERITY_CONFIG[severity]
   const Icon =
     severity === "warning"
@@ -95,11 +95,11 @@ function NudgeCard({
   nudge,
   onDismiss,
 }: {
-  nudge: ScoutNudge
+  nudge: ApexNudge
   onDismiss: () => void
 }) {
   const cfg = SEVERITY_CONFIG[nudge.severity]
-  const { executeAction, feedback } = useScoutActionExecutor()
+  const { executeAction, feedback } = useApexActionExecutor()
   const [actionDone, setActionDone] = useState(false)
   const [actionLoading, setActionLoading] = useState(false)
 
@@ -167,13 +167,13 @@ function NudgeCard({
 }
 
 /**
- * Renders up to 3 proactive Scout nudges.
+ * Renders up to 3 proactive Apex nudges.
  *
  * - Nudges are passed as props (computed client-side from already-fetched data).
  * - Dismissed state is session-local (cleared on context reset).
  * - No AI calls, no auto-execution.
  */
-export function ScoutNudgeStrip({ nudges }: ScoutNudgeStripProps) {
+export function ApexNudgeStrip({ nudges }: ApexNudgeStripProps) {
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set())
 
   // Re-show dismissed nudges when context is reset
@@ -181,8 +181,8 @@ export function ScoutNudgeStrip({ nudges }: ScoutNudgeStripProps) {
     function onReset() {
       setDismissedIds(new Set())
     }
-    window.addEventListener("scout:reset-context", onReset)
-    return () => window.removeEventListener("scout:reset-context", onReset)
+    window.addEventListener("apex:reset-context", onReset)
+    return () => window.removeEventListener("apex:reset-context", onReset)
   }, [])
 
   const visible = nudges.filter((n) => !dismissedIds.has(n.id))
@@ -193,9 +193,9 @@ export function ScoutNudgeStrip({ nudges }: ScoutNudgeStripProps) {
   }
 
   return (
-    <div className="space-y-2" role="region" aria-label="Scout suggestions">
+    <div className="space-y-2" role="region" aria-label="Apex suggestions">
       <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-        Scout suggests
+        Apex suggests
       </p>
       {visible.map((nudge) => (
         <NudgeCard key={nudge.id} nudge={nudge} onDismiss={() => dismiss(nudge.id)} />
@@ -205,17 +205,17 @@ export function ScoutNudgeStrip({ nudges }: ScoutNudgeStripProps) {
 }
 
 /**
- * Compact variant for the ScoutMiniPanel — renders nudges without the section label.
+ * Compact variant for the ApexMiniPanel — renders nudges without the section label.
  */
-export function ScoutNudgeStripCompact({ nudges }: ScoutNudgeStripProps) {
+export function ApexNudgeStripCompact({ nudges }: ApexNudgeStripProps) {
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     function onReset() {
       setDismissedIds(new Set())
     }
-    window.addEventListener("scout:reset-context", onReset)
-    return () => window.removeEventListener("scout:reset-context", onReset)
+    window.addEventListener("apex:reset-context", onReset)
+    return () => window.removeEventListener("apex:reset-context", onReset)
   }, [])
 
   const visible = nudges.filter((n) => !dismissedIds.has(n.id)).slice(0, 2)

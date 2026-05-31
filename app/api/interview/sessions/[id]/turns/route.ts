@@ -13,9 +13,9 @@ import {
   appendTurn,
   getTurns,
   type InterviewTurn,
-} from "@/lib/scout/interview/queries"
-import { buildInterviewContext, deriveSkillList } from "@/lib/scout/interview/context"
-import { buildTextInterviewerSystemPrompt } from "@/lib/scout/interview/agentPrompts"
+} from "@/lib/apex/interview/queries"
+import { buildInterviewContext, deriveSkillList } from "@/lib/apex/interview/context"
+import { buildTextInterviewerSystemPrompt } from "@/lib/apex/interview/agentPrompts"
 import { replaceEmDash, sanitizeGeneratedText } from "@/lib/text/sanitize-generated-text"
 
 export const runtime = "nodejs"

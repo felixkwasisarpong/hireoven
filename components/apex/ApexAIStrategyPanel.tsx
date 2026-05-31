@@ -15,19 +15,19 @@ import {
 } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 import { useUpgradeModal } from "@/lib/context/UpgradeModalContext"
-import { getDefaultActionLabel } from "@/lib/scout/actions"
-import type { ScoutAction, ScoutAIStrategy, ScoutAIStrategyGated } from "@/lib/scout/types"
-import { useScoutActionExecutor } from "./useScoutActionExecutor"
+import { getDefaultActionLabel } from "@/lib/apex/actions"
+import type { ApexAction, ApexAIStrategy, ApexAIStrategyGated } from "@/lib/apex/types"
+import { useApexActionExecutor } from "./useApexActionExecutor"
 
 type StrategyAPIResponse = {
-  strategy: ScoutAIStrategy
-  gated: ScoutAIStrategyGated | null
+  strategy: ApexAIStrategy
+  gated: ApexAIStrategyGated | null
   isPremium: boolean
   error?: string
 }
 
 type SectionConfig = {
-  key: keyof Omit<ScoutAIStrategy, "actions">
+  key: keyof Omit<ApexAIStrategy, "actions">
   label: string
   icon: React.ElementType
   iconBg: string
@@ -179,8 +179,8 @@ function ActionsCard({
   onExecute,
   feedback,
 }: {
-  actions: ScoutAction[]
-  onExecute: (action: ScoutAction) => void
+  actions: ApexAction[]
+  onExecute: (action: ApexAction) => void
   feedback: string | null
 }) {
   if (actions.length === 0) return null
@@ -204,7 +204,7 @@ function ActionsCard({
             onClick={() => onExecute(action)}
             className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-[#ea580c]/20 hover:bg-[#ea580c]/5 hover:text-[#ea580c]"
           >
-            {action.label ?? getDefaultActionLabel(action as ScoutAction)}
+            {action.label ?? getDefaultActionLabel(action as ApexAction)}
           </button>
         ))}
       </div>
@@ -219,21 +219,21 @@ function ActionsCard({
   )
 }
 
-type ScoutAIStrategyPanelProps = {
+type ApexAIStrategyPanelProps = {
   /** Optional ref — parent can store the trigger fn and call it externally */
   triggerRef?: React.MutableRefObject<(() => void) | null>
 }
 
 /**
- * AI-powered weekly strategy panel for Scout.
- * User-initiated — never auto-refreshes. Gated by scout_strategy feature.
+ * AI-powered weekly strategy panel for Apex.
+ * User-initiated — never auto-refreshes. Gated by apex_strategy feature.
  */
-export function ScoutAIStrategyPanel({ triggerRef }: ScoutAIStrategyPanelProps = {}) {
+export function ApexAIStrategyPanel({ triggerRef }: ApexAIStrategyPanelProps = {}) {
   const { showUpgrade } = useUpgradeModal()
-  const { executeAction, feedback } = useScoutActionExecutor()
+  const { executeAction, feedback } = useApexActionExecutor()
 
-  const [strategy, setStrategy] = useState<ScoutAIStrategy | null>(null)
-  const [gated, setGated] = useState<ScoutAIStrategyGated | null>(null)
+  const [strategy, setStrategy] = useState<ApexAIStrategy | null>(null)
+  const [gated, setGated] = useState<ApexAIStrategyGated | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [generatedAt, setGeneratedAt] = useState<Date | null>(null)
@@ -247,17 +247,17 @@ export function ScoutAIStrategyPanel({ triggerRef }: ScoutAIStrategyPanelProps =
     setError(null)
 
     try {
-      const res = await fetch("/api/scout/strategy", {
+      const res = await fetch("/api/apex/strategy", {
         method: "POST",
         headers: { Accept: "application/json", "Content-Type": "application/json" },
-        body: JSON.stringify({ pagePath: "/dashboard/scout" }),
+        body: JSON.stringify({ pagePath: "/dashboard/apex" }),
         cache: "no-store",
       })
 
       const data = (await res.json().catch(() => null)) as StrategyAPIResponse | null
 
       if (!res.ok || !data) {
-        setError(data?.error ?? "Scout couldn't generate a strategy right now. Please try again.")
+        setError(data?.error ?? "Apex couldn't generate a strategy right now. Please try again.")
         return
       }
 
@@ -286,7 +286,7 @@ export function ScoutAIStrategyPanel({ triggerRef }: ScoutAIStrategyPanelProps =
       <div className="rounded-[20px] border border-slate-200/80 bg-white px-6 py-5 shadow-[0_2px_16px_rgba(15,23,42,0.06)]">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#FF5C18]">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#6366F1]">
               AI Strategy Mode
             </p>
             <h2 className="mt-1 text-lg font-bold tracking-tight text-slate-900">
@@ -348,10 +348,10 @@ export function ScoutAIStrategyPanel({ triggerRef }: ScoutAIStrategyPanelProps =
             </div>
             <div>
               <p className="text-sm font-semibold text-slate-800">
-                Scout is analyzing your search state…
+                Apex is analyzing your search state…
               </p>
               <p className="mt-0.5 text-xs text-slate-400">
-                This takes 5–10 seconds. Scout reads your applications, resume, and behavior signals.
+                This takes 5–10 seconds. Apex reads your applications, resume, and behavior signals.
               </p>
             </div>
           </div>
@@ -369,7 +369,7 @@ export function ScoutAIStrategyPanel({ triggerRef }: ScoutAIStrategyPanelProps =
                 config={cfg}
                 items={strategy[cfg.key]}
                 locked={isLocked(cfg.key)}
-                onUnlock={() => showUpgrade("scout_strategy")}
+                onUnlock={() => showUpgrade("apex_strategy")}
               />
             ))}
           </div>
@@ -382,7 +382,7 @@ export function ScoutAIStrategyPanel({ triggerRef }: ScoutAIStrategyPanelProps =
                 config={cfg}
                 items={strategy[cfg.key]}
                 locked={isLocked(cfg.key)}
-                onUnlock={() => showUpgrade("scout_strategy")}
+                onUnlock={() => showUpgrade("apex_strategy")}
               />
             ))}
           </div>

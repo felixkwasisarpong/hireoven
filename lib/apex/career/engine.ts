@@ -1,8 +1,8 @@
 /**
- * Scout Career Strategy Engine — data gathering + Claude synthesis.
+ * Apex Career Strategy Engine — data gathering + Claude synthesis.
  *
  * Server-only. Runs deterministic DB queries, then calls Claude once
- * to synthesise ScoutCareerDirection[] from the gathered evidence.
+ * to synthesise ApexCareerDirection[] from the gathered evidence.
  *
  * Safety:
  *   - No inferences about protected traits
@@ -12,7 +12,7 @@
  */
 
 import type { Pool } from "pg"
-import type { ScoutCareerDirection, ScoutCareerStrategyResult } from "./types"
+import type { ApexCareerDirection, ApexCareerStrategyResult } from "./types"
 
 // ── Direction keyword maps (for traction clustering) ──────────────────────────
 
@@ -104,7 +104,7 @@ async function synthesiseDirections(
   unlocks:   SkillUnlockRow[],
   paths:     CareerPathRow[],
   market:    string[],
-): Promise<ScoutCareerStrategyResult> {
+): Promise<ApexCareerStrategyResult> {
   const Anthropic = (await import("@anthropic-ai/sdk")).default
   const anthropic = process.env.ANTHROPIC_API_KEY
     ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
@@ -206,7 +206,7 @@ Valid categories: ${validCategories}`
     }
 
     const VALID_CATS = new Set(Object.keys(DIRECTION_KEYWORDS))
-    const directions: ScoutCareerDirection[] = []
+    const directions: ApexCareerDirection[] = []
 
     for (const raw of parsed.directions ?? []) {
       if (!raw || typeof raw !== "object") continue
@@ -217,7 +217,7 @@ Valid categories: ${validCategories}`
       directions.push({
         id:                  typeof d.id === "string" ? d.id : `dir-${directions.length + 1}`,
         title:               d.title,
-        category:            d.category as ScoutCareerDirection["category"],
+        category:            d.category as ApexCareerDirection["category"],
         confidence:          typeof d.confidence === "number"
                                ? Math.min(0.88, Math.max(0.4, d.confidence))
                                : 0.6,
@@ -259,7 +259,7 @@ export async function runCareerEngine(
   objective: string,
   userId:    string,
   pool:      Pool,
-): Promise<ScoutCareerStrategyResult> {
+): Promise<ApexCareerStrategyResult> {
 
   const [appRes, resumeRes, unlockRes, pathRes] = await Promise.allSettled([
     // Recent applications with status + match score for traction analysis
@@ -327,7 +327,7 @@ export async function runCareerEngine(
   // Pull market signals (non-critical — don't fail if unavailable)
   let marketSignals: string[] = []
   try {
-    const { getMarketIntelligence } = await import("@/lib/scout/market-intelligence")
+    const { getMarketIntelligence } = await import("@/lib/apex/market-intelligence")
     const intel = await getMarketIntelligence(userId).catch(() => ({ signals: [] }))
     marketSignals = intel.signals.slice(0, 3).map((s) => s.summary)
   } catch {}

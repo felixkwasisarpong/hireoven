@@ -1,12 +1,12 @@
 /**
- * Scout Workflow Engine — Stateful runtime types.
+ * Apex Workflow Engine — Stateful runtime types.
  *
  * These are RUNTIME types for live workflow execution.
- * The simpler `ScoutWorkflow` in lib/scout/types.ts is the suggestion type
+ * The simpler `ApexWorkflow` in lib/apex/types.ts is the suggestion type
  * Claude returns; these types drive the step-by-step workflow panel.
  */
 
-export type ScoutWorkflowStepStatus =
+export type ApexWorkflowStepStatus =
   | "pending"
   | "running"
   | "waiting_user"
@@ -14,11 +14,11 @@ export type ScoutWorkflowStepStatus =
   | "failed"
   | "skipped"
 
-export type ScoutActiveWorkflowStep = {
+export type ApexActiveWorkflowStep = {
   id: string
   title: string
   description?: string
-  status: ScoutWorkflowStepStatus
+  status: ApexWorkflowStepStatus
   /** Logical action this step represents — for display/routing, not auto-execution */
   actionType: string
   /** When true, step pauses at waiting_user and requires explicit Continue click */
@@ -27,18 +27,18 @@ export type ScoutActiveWorkflowStep = {
   payload?: Record<string, unknown>
 }
 
-export type ScoutActiveWorkflow = {
+export type ApexActiveWorkflow = {
   id: string
   title: string
   goal: string
-  steps: ScoutActiveWorkflowStep[]
+  steps: ApexActiveWorkflowStep[]
   activeStepId?: string
   completedAt?: string
   cancelledAt?: string
   pausedAt?: string
 }
 
-export type ScoutWorkflowType =
+export type ApexWorkflowType =
   | "tailor_and_prepare"
   | "compare_and_prioritize"
   | "interview_prep"

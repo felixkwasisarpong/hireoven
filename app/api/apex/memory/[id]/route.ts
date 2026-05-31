@@ -1,12 +1,12 @@
 /**
- * PATCH  /api/scout/memory/[id]  — update summary, confidence, or active flag
- * DELETE /api/scout/memory/[id]  — permanently delete a memory
+ * PATCH  /api/apex/memory/[id]  — update summary, confidence, or active flag
+ * DELETE /api/apex/memory/[id]  — permanently delete a memory
  */
 
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getPostgresPool } from "@/lib/postgres/server"
-import { updateMemory, deleteMemory } from "@/lib/scout/memory/store"
+import { updateMemory, deleteMemory } from "@/lib/apex/memory/store"
 
 export const runtime = "nodejs"
 

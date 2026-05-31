@@ -1,11 +1,11 @@
 /**
- * Scout Actions - Validation & Normalization
+ * Apex Actions - Validation & Normalization
  * Phase 1.3: Safe UI Actions
  */
 
-import type { ScoutAction, ScoutActionType } from "./types"
+import type { ApexAction, ApexActionType } from "./types"
 
-const ALLOWED_ACTION_TYPES: ScoutActionType[] = [
+const ALLOWED_ACTION_TYPES: ApexActionType[] = [
   "OPEN_JOB",
   "APPLY_FILTERS",
   "OPEN_RESUME_TAILOR",
@@ -15,7 +15,7 @@ const ALLOWED_ACTION_TYPES: ScoutActionType[] = [
   "RESET_CONTEXT",
   // Phase 1.4 placeholder — not validated by Claude yet, only surfaced manually.
   "OPEN_EXTENSION_BRIDGE",
-  // Phase 2 — autofill preview hint from Scout.
+  // Phase 2 — autofill preview hint from Apex.
   "OPEN_EXTENSION_AUTOFILL_PREVIEW",
   // Phase 3 — tailor resume before autofill.
   "PREPARE_TAILORED_AUTOFILL",
@@ -26,14 +26,14 @@ const MAX_ACTIONS_PER_RESPONSE = 4
 /**
  * Validates whether an action is allowed and well-formed.
  */
-export function isAllowedScoutAction(action: unknown): action is ScoutAction {
+export function isAllowedApexAction(action: unknown): action is ApexAction {
   if (typeof action !== "object" || action === null) return false
   
   const candidate = action as Record<string, unknown>
   
   // Must have a type
   if (typeof candidate.type !== "string") return false
-  if (!ALLOWED_ACTION_TYPES.includes(candidate.type as ScoutActionType)) return false
+  if (!ALLOWED_ACTION_TYPES.includes(candidate.type as ApexActionType)) return false
   
   // Must have a payload
   if (typeof candidate.payload !== "object" || candidate.payload === null) return false
@@ -99,15 +99,15 @@ export function isAllowedScoutAction(action: unknown): action is ScoutAction {
  * Normalizes and validates an array of actions from Claude.
  * Returns only valid actions, capped at MAX_ACTIONS_PER_RESPONSE.
  */
-export function normalizeScoutActions(actions: unknown): ScoutAction[] {
+export function normalizeApexActions(actions: unknown): ApexAction[] {
   if (!Array.isArray(actions)) return []
   
-  const validActions: ScoutAction[] = []
+  const validActions: ApexAction[] = []
   
   for (const action of actions) {
     if (validActions.length >= MAX_ACTIONS_PER_RESPONSE) break
     
-    if (isAllowedScoutAction(action)) {
+    if (isAllowedApexAction(action)) {
       validActions.push(action)
     }
   }
@@ -118,7 +118,7 @@ export function normalizeScoutActions(actions: unknown): ScoutAction[] {
 /**
  * Generates a default label for an action if none is provided.
  */
-export function getDefaultActionLabel(action: ScoutAction): string {
+export function getDefaultActionLabel(action: ApexAction): string {
   switch (action.type) {
     case "OPEN_JOB":
       return "View Job"
@@ -133,9 +133,9 @@ export function getDefaultActionLabel(action: ScoutAction): string {
     case "SET_FOCUS_MODE":
       return action.payload.enabled ? "Turn on Focus Mode" : "Turn off Focus Mode"
     case "RESET_CONTEXT":
-      return "Reset Scout context"
+      return "Reset Apex context"
     case "OPEN_EXTENSION_BRIDGE":
-      return "Open Scout Extension"
+      return "Open Apex Extension"
     case "OPEN_EXTENSION_AUTOFILL_PREVIEW":
       return "Autofill this Application"
     case "PREPARE_TAILORED_AUTOFILL":

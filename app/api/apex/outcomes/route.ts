@@ -1,6 +1,6 @@
 /**
- * GET /api/scout/outcomes  — compute learning signals from application history
- * POST /api/scout/outcomes — record an outcome for a specific application
+ * GET /api/apex/outcomes  — compute learning signals from application history
+ * POST /api/apex/outcomes — record an outcome for a specific application
  *
  * GET response: OutcomeLearningResult (signals + feedback needed + stats)
  * POST body:    { applicationId, outcome, evidence?, notes? }
@@ -14,9 +14,9 @@ import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { randomUUID } from "crypto"
-import { computeOutcomeLearning, type LearningApplicationRow } from "@/lib/scout/outcomes/learning"
-import type { ApplicationOutcome } from "@/lib/scout/outcomes/types"
-import { OUTCOME_TO_STATUS } from "@/lib/scout/outcomes/types"
+import { computeOutcomeLearning, type LearningApplicationRow } from "@/lib/apex/outcomes/learning"
+import type { ApplicationOutcome } from "@/lib/apex/outcomes/types"
+import { OUTCOME_TO_STATUS } from "@/lib/apex/outcomes/types"
 
 export const runtime = "nodejs"
 
@@ -53,7 +53,7 @@ export async function GET(_request: NextRequest) {
   const apps: LearningApplicationRow[] = result?.rows ?? []
   const learning = computeOutcomeLearning(apps)
 
-  console.log("[scout/outcomes] GET", { userId: user.id, apps: apps.length, signals: learning.signals.length })
+  console.log("[apex/outcomes] GET", { userId: user.id, apps: apps.length, signals: learning.signals.length })
 
   return NextResponse.json(learning, {
     headers: { "Cache-Control": "s-maxage=1800, stale-while-revalidate=3600" },
@@ -149,7 +149,7 @@ export async function POST(request: NextRequest) {
     values
   )
 
-  console.log("[scout/outcomes] POST", { userId: user.id, applicationId, outcome, newStatus })
+  console.log("[apex/outcomes] POST", { userId: user.id, applicationId, outcome, newStatus })
 
   return NextResponse.json({ success: true, outcome, newStatus })
 }

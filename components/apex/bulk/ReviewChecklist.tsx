@@ -12,7 +12,7 @@ import {
   Zap,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import type { ApplicationReviewChecklist } from "@/lib/scout/review/types"
+import type { ApplicationReviewChecklist } from "@/lib/apex/review/types"
 
 const READINESS_CONFIG = {
   ready:        { label: "Ready to apply",  bg: "bg-emerald-50",  border: "border-emerald-200", text: "text-emerald-700", icon: CheckCircle2 },
@@ -132,7 +132,7 @@ export function ReviewChecklist({ checklist, compact = false }: Props) {
         <p className="text-[11px] leading-5 text-slate-500">
           Review the application carefully, then{" "}
           <span className="font-semibold text-slate-700">submit manually on the site.</span>{" "}
-          Scout never clicks submit.
+          Apex never clicks submit.
         </p>
       </div>
     </div>

@@ -65,8 +65,8 @@ export async function POST(request: Request) {
   const [user, errResponse] = await requireExtensionAuth(request)
   if (errResponse) return errResponse
   const plan = await getPlanForUserId(user.sub)
-  if (!canAccess(plan, "scout_actions")) {
-    const needed = requiredPlanFor("scout_actions")
+  if (!canAccess(plan, "apex_actions")) {
+    const needed = requiredPlanFor("apex_actions")
     return extensionError(request, 403, `This feature requires the ${needed} plan`, { headers })
   }
   const quotaResult = await requireQuota(user.sub, "resume_tailor", plan)

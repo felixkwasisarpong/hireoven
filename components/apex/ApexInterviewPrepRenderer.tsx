@@ -9,7 +9,7 @@ import {
   Target,
 } from "lucide-react"
 import type { ComponentType } from "react"
-import type { ScoutInterviewPrep } from "@/lib/scout/types"
+import type { ApexInterviewPrep } from "@/lib/apex/types"
 
 type PrepSection = {
   title: string
@@ -18,8 +18,8 @@ type PrepSection = {
   accent: string
 }
 
-type ScoutInterviewPrepRendererProps = {
-  interviewPrep: ScoutInterviewPrep
+type ApexInterviewPrepRendererProps = {
+  interviewPrep: ApexInterviewPrep
 }
 
 function SectionCard({ section }: { section: PrepSection }) {
@@ -49,7 +49,7 @@ function SectionCard({ section }: { section: PrepSection }) {
   )
 }
 
-export function ScoutInterviewPrepRenderer({ interviewPrep }: ScoutInterviewPrepRendererProps) {
+export function ApexInterviewPrepRenderer({ interviewPrep }: ApexInterviewPrepRendererProps) {
   const sections: PrepSection[] = [
     {
       title: "Role Focus",

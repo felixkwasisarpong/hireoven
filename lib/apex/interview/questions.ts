@@ -1,15 +1,15 @@
 /**
  * Interview question builder — pure computation, no I/O.
  *
- * Transforms Claude's flat ScoutInterviewPrep into categorised
- * ScoutInterviewQuestion objects with coaching hints.
+ * Transforms Claude's flat ApexInterviewPrep into categorised
+ * ApexInterviewQuestion objects with coaching hints.
  *
  * Categorisation is heuristic. When in doubt, defaults to "resume".
  * Questions are enriched with STAR hints for behavioral types.
  */
 
-import type { ScoutInterviewPrep } from "@/lib/scout/types"
-import type { ScoutInterviewQuestion, ScoutInterviewQuestionCategory } from "./types"
+import type { ApexInterviewPrep } from "@/lib/apex/types"
+import type { ApexInterviewQuestion, ApexInterviewQuestionCategory } from "./types"
 
 // ── Category detection ────────────────────────────────────────────────────────
 
@@ -28,7 +28,7 @@ const COMPANY_RE =
 const RESUME_RE =
   /\b(your experience|on your resume|project you|role you|background|previous|past work|accomplish|achievement|built|shipped|owned|impact|metrics|result)\b/i
 
-function categorise(question: string): ScoutInterviewQuestionCategory {
+function categorise(question: string): ApexInterviewQuestionCategory {
   const q = question.toLowerCase()
   if (SYSTEM_DESIGN_RE.test(q)) return "system_design"
   if (TECHNICAL_RE.test(q))     return "technical"
@@ -58,7 +58,7 @@ const TECHNICAL_HINTS = [
   "Consider edge cases and complexity after your initial solution",
 ]
 
-function hintsFor(category: ScoutInterviewQuestionCategory): string[] {
+function hintsFor(category: ApexInterviewQuestionCategory): string[] {
   switch (category) {
     case "behavioral":    return STAR_HINTS
     case "system_design": return SYSTEM_DESIGN_HINTS
@@ -71,13 +71,13 @@ function hintsFor(category: ScoutInterviewQuestionCategory): string[] {
 
 /**
  * Build categorised questions from Claude's interview prep response.
- * Each practice question becomes a ScoutInterviewQuestion.
+ * Each practice question becomes a ApexInterviewQuestion.
  * roleFocus skills are attached where relevant.
  */
 export function buildInterviewQuestions(
-  prep: ScoutInterviewPrep
-): ScoutInterviewQuestion[] {
-  const questions: ScoutInterviewQuestion[] = []
+  prep: ApexInterviewPrep
+): ApexInterviewQuestion[] {
+  const questions: ApexInterviewQuestion[] = []
 
   const skills = prep.roleFocus ?? []
 

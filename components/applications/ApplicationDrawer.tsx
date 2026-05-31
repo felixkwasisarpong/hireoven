@@ -22,7 +22,7 @@ import type { ApplicationStatus, InterviewFormat, InterviewOutcome, InterviewRou
 import { InterviewPrep } from "./InterviewPrep"
 import { TakeHomeEngine } from "@/components/compensation/TakeHomeEngine"
 import FeatureGate from "@/components/gates/FeatureGate"
-import { ScoutFollowUpBlock } from "@/components/scout/ScoutFollowUpBlock"
+import { ApexFollowUpBlock } from "@/components/apex/ApexFollowUpBlock"
 
 const STATUS_META: Record<ApplicationStatus, { label: string; color: string }> = {
   saved: { label: "Saved", color: "bg-slate-100 text-slate-600 border-slate-200" },
@@ -91,7 +91,7 @@ function OverviewTab({
             Job profile
           </p>
           <p className="mt-2 text-[13px] leading-snug text-slate-700">
-            Open your Hireoven listing for posting text, sponsorship signals, match tools, and Scout.
+            Open your Hireoven listing for posting text, sponsorship signals, match tools, and Apex.
           </p>
           <Link
             href={`/dashboard/jobs/${app.job_id}`}
@@ -151,7 +151,7 @@ function OverviewTab({
         />
       </div>
 
-      <ScoutFollowUpBlock app={app} />
+      <ApexFollowUpBlock app={app} />
     </div>
   )
 }

@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { ChevronDown, ChevronRight, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import type { TestRunResult } from "@/lib/scout/interview/codingRunner"
+import type { TestRunResult } from "@/lib/apex/interview/codingRunner"
 
 type Props = {
   result: TestRunResult | null

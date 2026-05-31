@@ -43,7 +43,7 @@ export function AnimatedMic({ state, className, iconSize = 18 }: Props) {
       {/* Idle breathing ring */}
       {!isListening && state !== "processing" && (
         <span
-          className="pointer-events-none absolute inset-0 rounded-full bg-current opacity-20 motion-safe:animate-[scoutMicBreath_2.6s_ease-out_infinite]"
+          className="pointer-events-none absolute inset-0 rounded-full bg-current opacity-20 motion-safe:animate-[apexMicBreath_2.6s_ease-out_infinite]"
         />
       )}
 
@@ -57,7 +57,7 @@ export function AnimatedMic({ state, className, iconSize = 18 }: Props) {
           {[0, 90, 180, 270, 120].map((delay, i) => (
             <span
               key={i}
-              className="block w-[2px] origin-bottom rounded-full bg-current motion-safe:animate-[scoutMicBar_0.9s_ease-in-out_infinite]"
+              className="block w-[2px] origin-bottom rounded-full bg-current motion-safe:animate-[apexMicBar_0.9s_ease-in-out_infinite]"
               style={{
                 height: `${iconSize * 0.85}px`,
                 animationDelay: `${delay}ms`,

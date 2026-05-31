@@ -1,10 +1,16 @@
+import type { Metadata } from "next"
 import { Suspense } from "react"
-import { ScoutWorkspaceShell } from "@/components/scout/workspace/ScoutWorkspaceShell"
+import { ApexWorkspaceShell } from "@/components/apex/workspace/ApexWorkspaceShell"
 
-export default function ScoutPage() {
+export const metadata: Metadata = {
+  title: "Apex · Hireoven",
+  description: "Your AI career co-pilot. Apex prepares, applies, and fights for your career.",
+}
+
+export default function ApexPage() {
   return (
     <Suspense>
-      <ScoutWorkspaceShell />
+      <ApexWorkspaceShell />
     </Suspense>
   )
 }

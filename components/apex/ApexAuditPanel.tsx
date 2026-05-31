@@ -1,21 +1,21 @@
 "use client"
 
 import { HelpCircle, RotateCcw, X } from "lucide-react"
-import type { ScoutAuditEntry, ScoutActionSource } from "./useScoutActionExecutor"
+import type { ApexAuditEntry, ApexActionSource } from "./useApexActionExecutor"
 
 // ── Source badge config ─────────────────────────────────────────────────────
 
-const SOURCE_CONFIG: Record<ScoutActionSource, { label: string; color: string }> = {
+const SOURCE_CONFIG: Record<ApexActionSource, { label: string; color: string }> = {
   chat:     { label: "Chat response", color: "bg-blue-100 text-blue-700" },
-  nudge:    { label: "Scout nudge",   color: "bg-orange-100 text-orange-700" },
+  nudge:    { label: "Apex nudge",   color: "bg-orange-100 text-orange-700" },
   strategy: { label: "Strategy plan", color: "bg-orange-100 text-orange-700" },
   workflow: { label: "Workflow",      color: "bg-emerald-100 text-emerald-700" },
 }
 
 // ── Props ────────────────────────────────────────────────────────────────────
 
-type ScoutAuditPanelProps = {
-  entry: ScoutAuditEntry
+type ApexAuditPanelProps = {
+  entry: ApexAuditEntry
   undoUrl?: string
   onUndo?: () => void
   onClose: () => void
@@ -23,7 +23,7 @@ type ScoutAuditPanelProps = {
 
 // ── Component ────────────────────────────────────────────────────────────────
 
-export function ScoutAuditPanel({ entry, undoUrl, onUndo, onClose }: ScoutAuditPanelProps) {
+export function ApexAuditPanel({ entry, undoUrl, onUndo, onClose }: ApexAuditPanelProps) {
   const sourceConfig = entry.source ? SOURCE_CONFIG[entry.source] : null
 
   return (
@@ -32,7 +32,7 @@ export function ScoutAuditPanel({ entry, undoUrl, onUndo, onClose }: ScoutAuditP
       <div className="mb-3 flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5">
           <HelpCircle className="h-3.5 w-3.5 text-slate-500" />
-          <span className="font-semibold text-slate-700">Why did Scout do this?</span>
+          <span className="font-semibold text-slate-700">Why did Apex do this?</span>
         </div>
         <button
           type="button"
@@ -81,7 +81,7 @@ export function ScoutAuditPanel({ entry, undoUrl, onUndo, onClose }: ScoutAuditP
         {entry.reason && (
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-              Scout&apos;s reason
+              Apex&apos;s reason
             </p>
             <p className="mt-1 leading-5 text-slate-600 line-clamp-4">{entry.reason}</p>
           </div>

@@ -2,89 +2,89 @@ import Anthropic from "@anthropic-ai/sdk"
 import { NextRequest, NextResponse } from "next/server"
 import { logApiUsage } from "@/lib/admin/usage"
 import { createClient } from "@/lib/supabase/server"
-import { getScoutContext, formatScoutContextForClaude } from "@/lib/scout/context"
-import { resolveJobContext, listTopSavedJobs } from "@/lib/scout/resolve-job-context"
-import { encodeSSE } from "@/lib/scout/streaming/types"
-import { runOrchestrator, detectAgentIntent } from "@/lib/scout/agents/orchestrator"
-import { isAllowedScoutAction, normalizeScoutActions } from "@/lib/scout/actions"
-import { detectScoutMode } from "@/lib/scout/mode"
-import { getScoutSystemPrompt } from "@/lib/scout/prompts"
+import { getApexContext, formatApexContextForClaude } from "@/lib/apex/context"
+import { resolveJobContext, listTopSavedJobs } from "@/lib/apex/resolve-job-context"
+import { encodeSSE } from "@/lib/apex/streaming/types"
+import { runOrchestrator, detectAgentIntent } from "@/lib/apex/agents/orchestrator"
+import { isAllowedApexAction, normalizeApexActions } from "@/lib/apex/actions"
+import { detectApexMode } from "@/lib/apex/mode"
+import { getApexSystemPrompt } from "@/lib/apex/prompts"
 import {
-  buildGatedScoutResponse,
-  canUseAdvancedScoutActions,
-  canUsePremiumScoutFeatures,
-  findScoutPremiumGate,
-} from "@/lib/scout/gating"
+  buildGatedApexResponse,
+  canUseAdvancedApexActions,
+  canUsePremiumApexFeatures,
+  findApexPremiumGate,
+} from "@/lib/apex/gating"
 import { canAccess, type Plan } from "@/lib/gates"
 import { getUserPlan } from "@/lib/gates/server-gate"
-import { bumpScoutUsage } from "@/lib/scout/free-tier-quota"
+import { bumpApexUsage } from "@/lib/apex/free-tier-quota"
 import { ANTHROPIC_TIER_PRICING, SONNET_MODEL } from "@/lib/ai/anthropic-models"
-import { budgetTracker, calcCost, inferTier } from "@/lib/scout/budget/tracker"
-import { streamWithTimeout } from "@/lib/scout/budget/ai-call"
-import { isAiBudgetExceeded } from "@/lib/scout/budget/cap"
-import { routeScoutMessage, AI_TIMEOUTS } from "@/lib/scout/budget/router"
-import { scoutCache, CACHE_TTL, cacheKey, stableHash } from "@/lib/scout/budget/cache"
+import { budgetTracker, calcCost, inferTier } from "@/lib/apex/budget/tracker"
+import { streamWithTimeout } from "@/lib/apex/budget/ai-call"
+import { isAiBudgetExceeded } from "@/lib/apex/budget/cap"
+import { routeApexMessage, AI_TIMEOUTS } from "@/lib/apex/budget/router"
+import { apexCache, CACHE_TTL, cacheKey, stableHash } from "@/lib/apex/budget/cache"
 import { sanitizeGeneratedText } from "@/lib/text/sanitize-generated-text"
 import {
-  isScoutIntent,
-  isScoutMode,
-  type ScoutCompareItem,
-  type ScoutCompareRecommendation,
-  type ScoutCompareResponse,
-  type ScoutEvidenceBridgeBlock,
-  type ScoutEvidenceBridgeItemStatus,
-  type ScoutExplanationBlock,
-  type ScoutExplanationBlockType,
-  type ScoutExplanationItemStatus,
-  type ScoutInterviewPrep,
-  type ScoutAction,
-  type ScoutStandardExplanationBlock,
-  type ScoutIntent,
-  type ScoutMode,
-  type ScoutResponse,
-  type ScoutWorkflow,
-  type ScoutWorkflowDirective,
-} from "@/lib/scout/types"
+  isApexIntent,
+  isApexMode,
+  type ApexCompareItem,
+  type ApexCompareRecommendation,
+  type ApexCompareResponse,
+  type ApexEvidenceBridgeBlock,
+  type ApexEvidenceBridgeItemStatus,
+  type ApexExplanationBlock,
+  type ApexExplanationBlockType,
+  type ApexExplanationItemStatus,
+  type ApexInterviewPrep,
+  type ApexAction,
+  type ApexStandardExplanationBlock,
+  type ApexIntent,
+  type ApexMode,
+  type ApexResponse,
+  type ApexWorkflow,
+  type ApexWorkflowDirective,
+} from "@/lib/apex/types"
 
 export const runtime = "nodejs"
 export const maxDuration = 30
 
 /**
- * Scout Chat API - Phase 1.2: Grounded Context Retrieval
+ * Apex Chat API - Phase 1.2: Grounded Context Retrieval
  * 
  * Test Scenarios:
  * 
  * 1. No Context (should say insufficient data):
- *    POST /api/scout/chat
+ *    POST /api/apex/chat
  *    { "message": "Should I apply to this job?" }
- *    Expected: Scout says "I need more information - which job are you referring to?"
+ *    Expected: Apex says "I need more information - which job are you referring to?"
  * 
  * 2. With Job ID (should use job/company/resume context):
- *    POST /api/scout/chat
+ *    POST /api/apex/chat
  *    { "message": "Is this a good fit for me?", "jobId": "uuid-here" }
- *    Expected: Scout analyzes based on job description, company sponsorship data, user's resume
+ *    Expected: Apex analyzes based on job description, company sponsorship data, user's resume
  * 
  * 3. With Company ID only (should use company context):
- *    POST /api/scout/chat
+ *    POST /api/apex/chat
  *    { "message": "Does this company sponsor H-1B?", "companyId": "uuid-here" }
- *    Expected: Scout provides sponsorship data if available
+ *    Expected: Apex provides sponsorship data if available
  * 
  * 4. With Resume ID (should use specific resume):
- *    POST /api/scout/chat
+ *    POST /api/apex/chat
  *    { "message": "What's missing from my resume?", "resumeId": "uuid-here" }
- *    Expected: Scout reviews that specific resume
+ *    Expected: Apex reviews that specific resume
  * 
  * 5. Job + Match Score exists:
- *    POST /api/scout/chat
+ *    POST /api/apex/chat
  *    { "message": "What's my match score for this role?", "jobId": "uuid-here" }
- *    Expected: Scout explains existing match score breakdown
+ *    Expected: Apex explains existing match score breakdown
  */
 
 const anthropic = process.env.ANTHROPIC_API_KEY
   ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
   : null
 
-// Grounded Scout Q&A/compare workflows need better instruction following and reasoning depth.
+// Grounded Apex Q&A/compare workflows need better instruction following and reasoning depth.
 const MODEL = SONNET_MODEL
 const MODEL_PRICING = ANTHROPIC_TIER_PRICING.sonnet
 const IS_DEV = process.env.NODE_ENV === "development"
@@ -97,27 +97,27 @@ const COMPARE_HINT_RE =
 const INTERVIEW_PREP_HINT_RE =
   /\b(interview prep|prepare me for (this|the) interview|questions should i expect|how should i prepare for (this|the) role|give me interview prep|prep for (this|the) job|prepare for (this|the) job)\b/i
 
-const COMPARE_RECOMMENDATIONS = new Set<ScoutCompareRecommendation>(["Best", "Good", "Risky", "Skip"])
+const COMPARE_RECOMMENDATIONS = new Set<ApexCompareRecommendation>(["Best", "Good", "Risky", "Skip"])
 
-function scoutError(status: number, message: string) {
+function apexError(status: number, message: string) {
   return NextResponse.json({ ok: false, status, message, error: message }, { status })
 }
 
-function sanitizeScoutResponse(response: ScoutResponse): ScoutResponse {
+function sanitizeApexResponse(response: ApexResponse): ApexResponse {
   return sanitizeGeneratedText(response)
 }
 
 /**
- * Free-tier users can still execute safe "basic" Scout controls (filtering,
+ * Free-tier users can still execute safe "basic" Apex controls (filtering,
  * focus mode, navigation). This pass strips only premium actions/features.
  */
 function stripProOnlyFieldsForFreeUsers(
-  response: ScoutResponse,
+  response: ApexResponse,
   plan: Plan | null
-): ScoutResponse {
-  if (canAccess(plan, "scout_actions")) return response
+): ApexResponse {
+  if (canAccess(plan, "apex_actions")) return response
 
-  const filteredActions = (response.actions ?? []).filter((action) => !isPremiumScoutAction(action))
+  const filteredActions = (response.actions ?? []).filter((action) => !isPremiumApexAction(action))
   const removedPremiumActions = filteredActions.length !== (response.actions ?? []).length
 
   const filteredWorkflow = response.workflow
@@ -144,9 +144,9 @@ function stripProOnlyFieldsForFreeUsers(
     response.gated ??
     (removedPremiumActions || removedPremiumWorkflowStep || removedInterviewPrep
       ? {
-          feature: "scout_actions" as const,
-          reason: "Some advanced Scout actions are part of paid plans.",
-          upgradeMessage: "Upgrade to unlock resume tailoring and advanced Scout workflows.",
+          feature: "apex_actions" as const,
+          reason: "Some advanced Apex actions are part of paid plans.",
+          upgradeMessage: "Upgrade to unlock resume tailoring and advanced Apex workflows.",
         }
       : undefined)
 
@@ -162,14 +162,14 @@ function stripProOnlyFieldsForFreeUsers(
 function parseCompareResponse(
   raw: unknown,
   knownJobIds: Set<string>
-): ScoutCompareResponse | null {
+): ApexCompareResponse | null {
   if (!raw || typeof raw !== "object") return null
   const p = raw as Record<string, unknown>
 
   if (typeof p.summary !== "string" || !p.summary.trim()) return null
   if (!Array.isArray(p.items) || p.items.length < 2) return null
 
-  const items: ScoutCompareItem[] = []
+  const items: ApexCompareItem[] = []
   for (const rawItem of p.items) {
     if (!rawItem || typeof rawItem !== "object") continue
     const item = rawItem as Record<string, unknown>
@@ -185,8 +185,8 @@ function parseCompareResponse(
       salaryRange: typeof item.salaryRange === "string" ? item.salaryRange : null,
       location: typeof item.location === "string" ? item.location : null,
       riskSummary: typeof item.riskSummary === "string" ? item.riskSummary : undefined,
-      recommendation: COMPARE_RECOMMENDATIONS.has(item.recommendation as ScoutCompareRecommendation)
-        ? (item.recommendation as ScoutCompareRecommendation)
+      recommendation: COMPARE_RECOMMENDATIONS.has(item.recommendation as ApexCompareRecommendation)
+        ? (item.recommendation as ApexCompareRecommendation)
         : undefined,
     })
     if (items.length >= 5) break
@@ -219,11 +219,11 @@ function parseStringList(raw: unknown, maxItems: number): string[] {
     .slice(0, maxItems)
 }
 
-function parseInterviewPrep(raw: unknown): ScoutInterviewPrep | undefined {
+function parseInterviewPrep(raw: unknown): ApexInterviewPrep | undefined {
   if (!raw || typeof raw !== "object") return undefined
   const p = raw as Record<string, unknown>
 
-  const prep: ScoutInterviewPrep = {
+  const prep: ApexInterviewPrep = {
     roleFocus: parseStringList(p.roleFocus, 4),
     likelyTopics: parseStringList(p.likelyTopics, 4),
     resumeTalkingPoints: parseStringList(p.resumeTalkingPoints, 4),
@@ -251,12 +251,12 @@ function buildInterviewPrepPreview(input: {
   jobId: string
   hasResume: boolean
   hasMatchScore: boolean
-  mode: ScoutMode
-}): ScoutResponse {
+  mode: ApexMode
+}): ApexResponse {
   const previewBits = [
     `I can build full interview prep for ${input.jobTitle} at ${input.companyName}.`,
     input.hasResume
-      ? "Preview: anchor your prep around the role responsibilities, your strongest matching resume evidence, and any gaps Scout found."
+      ? "Preview: anchor your prep around the role responsibilities, your strongest matching resume evidence, and any gaps Apex found."
       : "Preview: start by reviewing the job requirements and bring a resume into context for tailored talking points.",
     input.hasMatchScore
       ? "I can also use the existing match context to turn weaker areas into practice prompts."
@@ -314,7 +314,7 @@ const BULK_PREP_RE =
 // Intents that require a resolved job context (tailor, workflow, "best job" open)
 const NEEDS_JOB_RESOLVE_RE = /\b(tailor|tailor.?my|prepare.?application|prepare.?my.?resume|workflow.*job|open.?strong|strongest.?match|best.?saved|my.?best.*job|best.*matching)\b/i
 
-function inferBulkWorkspaceDirective(message: string): import("@/lib/scout/types").ScoutWorkspaceDirective | undefined {
+function inferBulkWorkspaceDirective(message: string): import("@/lib/apex/types").ApexWorkspaceDirective | undefined {
   if (!BULK_PREP_RE.test(message)) return undefined
   const countMatch = message.match(/\b(\d+)\b/)
   const count = countMatch ? parseInt(countMatch[1], 10) : 10
@@ -342,7 +342,7 @@ function inferBulkWorkspaceDirective(message: string): import("@/lib/scout/types
   }
 }
 
-function inferWorkflowDirective(message: string, intent: ScoutIntent): ScoutWorkflowDirective | undefined {
+function inferWorkflowDirective(message: string, intent: ApexIntent): ApexWorkflowDirective | undefined {
   if (intent !== "workflow") return undefined
   // Bulk prep is handled by workspace_directive — don't start a single-job workflow
   if (BULK_PREP_RE.test(message)) return undefined
@@ -352,9 +352,9 @@ function inferWorkflowDirective(message: string, intent: ScoutIntent): ScoutWork
   return undefined
 }
 
-function buildDeterministicScoutResponse(message: string, mode: ScoutMode): ScoutResponse {
+function buildDeterministicApexResponse(message: string, mode: ApexMode): ApexResponse {
   const m = message.toLowerCase()
-  const actions: ScoutResponse["actions"] = []
+  const actions: ApexResponse["actions"] = []
 
   const worthTimeIntent =
     /\b(worth my time|top match(?:es)?|best match(?:es)?|strong opportunities|prioritize top)\b/i.test(message)
@@ -442,7 +442,7 @@ const DESTRUCTIVE_COMMAND_RE =
   /\b(delete|remove|erase|clear|wipe)\b[\s\S]{0,40}\b(saved jobs|watchlist|applications|profile|resume|data|everything|all)\b/i
 const MAX_EXPLANATION_BLOCKS = 4
 const MAX_EXPLANATION_ITEMS = 6
-const EXPLANATION_BLOCK_TYPES = new Set<ScoutExplanationBlockType>([
+const EXPLANATION_BLOCK_TYPES = new Set<ApexExplanationBlockType>([
   "match_breakdown",
   "resume_gap",
   "sponsorship_signal",
@@ -450,14 +450,14 @@ const EXPLANATION_BLOCK_TYPES = new Set<ScoutExplanationBlockType>([
   "next_action",
   "evidence_bridge",
 ])
-const EXPLANATION_ITEM_STATUSES = new Set<ScoutExplanationItemStatus>([
+const EXPLANATION_ITEM_STATUSES = new Set<ApexExplanationItemStatus>([
   "strong",
   "medium",
   "weak",
   "missing",
   "unknown",
 ])
-const EVIDENCE_BRIDGE_ITEM_STATUSES = new Set<ScoutEvidenceBridgeItemStatus>([
+const EVIDENCE_BRIDGE_ITEM_STATUSES = new Set<ApexEvidenceBridgeItemStatus>([
   "strong",
   "partial",
   "missing",
@@ -470,7 +470,7 @@ function normalizeConfidence(raw: unknown): number | undefined {
   return Number(clamped.toFixed(2))
 }
 
-function inferIntentFromMessage(message: string): ScoutIntent {
+function inferIntentFromMessage(message: string): ApexIntent {
   const normalized = message.trim()
   // BULK_PREP_RE check must come before ANALYSIS_HINT_RE — phrases like
   // "apply to 2 jobs with match score > 80" contain "score" which would
@@ -490,7 +490,7 @@ function inferIntentFromMessage(message: string): ScoutIntent {
  * keyword queries from prior profile context (e.g. "backend java kafka ...").
  * If the user didn't ask for role/skill keywords, strip `payload.query`.
  */
-function normalizeFilterQueriesForRequest(response: ScoutResponse, userMessage: string): void {
+function normalizeFilterQueriesForRequest(response: ApexResponse, userMessage: string): void {
   if (!response.actions?.length) return
 
   const sponsorshipIntent = /\b(sponsorship|sponsor|h-?1b|visa)\b/i.test(userMessage)
@@ -511,7 +511,7 @@ function normalizeFilterQueriesForRequest(response: ScoutResponse, userMessage: 
       return action
     }
 
-    const payload: Extract<ScoutAction, { type: "APPLY_FILTERS" }>["payload"] = {}
+    const payload: Extract<ApexAction, { type: "APPLY_FILTERS" }>["payload"] = {}
     if (action.payload.location) payload.location = action.payload.location
     if (action.payload.workMode) payload.workMode = action.payload.workMode
     if (action.payload.sponsorship) payload.sponsorship = action.payload.sponsorship
@@ -530,7 +530,7 @@ function normalizeFilterQueriesForRequest(response: ScoutResponse, userMessage: 
   })
 }
 
-function defaultConfidenceForIntent(intent: ScoutIntent): number {
+function defaultConfidenceForIntent(intent: ApexIntent): number {
   switch (intent) {
     case "command":
       return 0.84
@@ -544,7 +544,7 @@ function defaultConfidenceForIntent(intent: ScoutIntent): number {
   }
 }
 
-function extractRecommendation(text: string): ScoutResponse["recommendation"] {
+function extractRecommendation(text: string): ApexResponse["recommendation"] {
   const lower = text.toLowerCase()
   const lastParagraph = text.split("\n").slice(-3).join(" ").toLowerCase()
 
@@ -613,15 +613,15 @@ function extractJsonObjectCandidate(text: string): string | null {
 }
 
 /**
- * Attempt to build a validated ScoutResponse from a parsed JSON object.
+ * Attempt to build a validated ApexResponse from a parsed JSON object.
  * Returns null if the shape is wrong.
  */
 function buildResponseFromParsed(
   parsed: unknown,
-  fallbackMode: ScoutMode,
-  fallbackIntent: ScoutIntent,
+  fallbackMode: ApexMode,
+  fallbackIntent: ApexIntent,
   safetyNotes: string[]
-): ScoutResponse | null {
+): ApexResponse | null {
   if (
     typeof parsed !== "object" ||
     parsed === null ||
@@ -639,16 +639,16 @@ function buildResponseFromParsed(
   const p = parsed as Record<string, unknown>
 
   const rawActionCount = Array.isArray(p.actions) ? p.actions.length : 0
-  const actions = normalizeScoutActions(p.actions)
+  const actions = normalizeApexActions(p.actions)
 
   const rawExplanationCount = Array.isArray(p.explanations) ? p.explanations.length : 0
   const parsedExplanations =
-    "explanations" in p ? parseScoutExplanations(p.explanations) : undefined
+    "explanations" in p ? parseApexExplanations(p.explanations) : undefined
   // Always return an array — never undefined
-  const explanations: ScoutExplanationBlock[] = parsedExplanations ?? []
+  const explanations: ApexExplanationBlock[] = parsedExplanations ?? []
 
-  const workflow = "workflow" in p ? parseScoutWorkflow(p.workflow) : undefined
-  const intent = isScoutIntent(p.intent) ? p.intent : fallbackIntent
+  const workflow = "workflow" in p ? parseApexWorkflow(p.workflow) : undefined
+  const intent = isApexIntent(p.intent) ? p.intent : fallbackIntent
   const confidence =
     normalizeConfidence(p.confidence) ?? defaultConfidenceForIntent(intent)
 
@@ -670,21 +670,21 @@ function buildResponseFromParsed(
 
   return {
     answer: p.answer as string,
-    recommendation: p.recommendation as ScoutResponse["recommendation"],
+    recommendation: p.recommendation as ApexResponse["recommendation"],
     actions,
     explanations,
     workflow,
     intent,
     confidence,
-    mode: isScoutMode(p.mode) ? p.mode : fallbackMode,
+    mode: isApexMode(p.mode) ? p.mode : fallbackMode,
     interviewPrep: parseInterviewPrep(p.interviewPrep),
-    outreach: "outreach" in p ? parseScoutOutreach(p.outreach) : undefined,
+    outreach: "outreach" in p ? parseApexOutreach(p.outreach) : undefined,
   }
 }
 
 // ── Outreach draft parser ────────────────────────────────────────────────────
 
-function parseScoutOutreach(raw: unknown): import("@/lib/scout/outreach/types").ScoutOutreachDraft | undefined {
+function parseApexOutreach(raw: unknown): import("@/lib/apex/outreach/types").ApexOutreachDraft | undefined {
   if (!raw || typeof raw !== "object") return undefined
   const p = raw as Record<string, unknown>
   if (typeof p.draft !== "string" || !p.draft.trim()) return undefined
@@ -692,8 +692,8 @@ function parseScoutOutreach(raw: unknown): import("@/lib/scout/outreach/types").
   const VALID_TYPES  = new Set(["linkedin_message", "email", "follow_up", "referral_request"])
   const VALID_TONES  = new Set(["professional", "warm", "direct"])
 
-  type OutreachType = import("@/lib/scout/outreach/types").ScoutOutreachType
-  type OutreachTone = import("@/lib/scout/outreach/types").ScoutOutreachTone
+  type OutreachType = import("@/lib/apex/outreach/types").ApexOutreachType
+  type OutreachTone = import("@/lib/apex/outreach/types").ApexOutreachTone
 
   const parseStrList = (v: unknown, max: number): string[] | undefined => {
     if (!Array.isArray(v)) return undefined
@@ -718,11 +718,11 @@ function parseScoutOutreach(raw: unknown): import("@/lib/scout/outreach/types").
   }
 }
 
-function parseScoutResponse(
+function parseApexResponse(
   text: string,
-  fallbackMode: ScoutMode,
-  fallbackIntent: ScoutIntent
-): { response: ScoutResponse; safetyNotes: string[] } {
+  fallbackMode: ApexMode,
+  fallbackIntent: ApexIntent
+): { response: ApexResponse; safetyNotes: string[] } {
   const safetyNotes: string[] = []
   const trimmed = text.trim()
   const stripped = stripMarkdownCodeFence(trimmed)
@@ -767,10 +767,10 @@ function parseScoutResponse(
 
 function parseEvidenceBridgeBlock(
   candidate: Record<string, unknown>
-): ScoutEvidenceBridgeBlock | null {
+): ApexEvidenceBridgeBlock | null {
   if (!Array.isArray(candidate.items)) return null
 
-  const items: ScoutEvidenceBridgeBlock["items"] = []
+  const items: ApexEvidenceBridgeBlock["items"] = []
   for (const rawItem of candidate.items) {
     if (items.length >= MAX_EXPLANATION_ITEMS) break
     if (!rawItem || typeof rawItem !== "object") continue
@@ -780,8 +780,8 @@ function parseEvidenceBridgeBlock(
 
     const status =
       typeof item.status === "string" &&
-      EVIDENCE_BRIDGE_ITEM_STATUSES.has(item.status as ScoutEvidenceBridgeItemStatus)
-        ? (item.status as ScoutEvidenceBridgeItemStatus)
+      EVIDENCE_BRIDGE_ITEM_STATUSES.has(item.status as ApexEvidenceBridgeItemStatus)
+        ? (item.status as ApexEvidenceBridgeItemStatus)
         : "unknown"
 
     items.push({
@@ -804,10 +804,10 @@ function parseEvidenceBridgeBlock(
 
 function parseStandardExplanationBlock(
   candidate: Record<string, unknown>
-): ScoutStandardExplanationBlock | null {
+): ApexStandardExplanationBlock | null {
   if (!Array.isArray(candidate.items)) return null
 
-  const items: ScoutStandardExplanationBlock["items"] = []
+  const items: ApexStandardExplanationBlock["items"] = []
   for (const rawItem of candidate.items) {
     if (items.length >= MAX_EXPLANATION_ITEMS) break
     if (!rawItem || typeof rawItem !== "object") continue
@@ -817,8 +817,8 @@ function parseStandardExplanationBlock(
 
     const status =
       typeof item.status === "string" &&
-      EXPLANATION_ITEM_STATUSES.has(item.status as ScoutExplanationItemStatus)
-        ? (item.status as ScoutExplanationItemStatus)
+      EXPLANATION_ITEM_STATUSES.has(item.status as ApexExplanationItemStatus)
+        ? (item.status as ApexExplanationItemStatus)
         : undefined
 
     items.push({
@@ -832,17 +832,17 @@ function parseStandardExplanationBlock(
   if (items.length === 0) return null
 
   return {
-    type: candidate.type as Exclude<ScoutExplanationBlockType, "evidence_bridge">,
+    type: candidate.type as Exclude<ApexExplanationBlockType, "evidence_bridge">,
     title: candidate.title as string,
     summary: typeof candidate.summary === "string" ? candidate.summary : undefined,
     items,
   }
 }
 
-function parseScoutExplanations(raw: unknown): ScoutExplanationBlock[] | undefined {
+function parseApexExplanations(raw: unknown): ApexExplanationBlock[] | undefined {
   if (!Array.isArray(raw)) return undefined
 
-  const normalized: ScoutExplanationBlock[] = []
+  const normalized: ApexExplanationBlock[] = []
 
   for (const block of raw) {
     if (normalized.length >= MAX_EXPLANATION_BLOCKS) break
@@ -851,7 +851,7 @@ function parseScoutExplanations(raw: unknown): ScoutExplanationBlock[] | undefin
     const candidate = block as Record<string, unknown>
     if (
       typeof candidate.type !== "string" ||
-      !EXPLANATION_BLOCK_TYPES.has(candidate.type as ScoutExplanationBlockType) ||
+      !EXPLANATION_BLOCK_TYPES.has(candidate.type as ApexExplanationBlockType) ||
       typeof candidate.title !== "string"
     ) {
       continue
@@ -869,13 +869,13 @@ function parseScoutExplanations(raw: unknown): ScoutExplanationBlock[] | undefin
   return normalized.length > 0 ? normalized : undefined
 }
 
-function parseScoutWorkflow(raw: unknown): ScoutWorkflow | undefined {
+function parseApexWorkflow(raw: unknown): ApexWorkflow | undefined {
   if (!raw || typeof raw !== "object") return undefined
   const candidate = raw as Record<string, unknown>
   if (typeof candidate.title !== "string" || !Array.isArray(candidate.steps)) return undefined
   if (candidate.steps.length === 0 || candidate.steps.length > 4) return undefined
 
-  const normalizedSteps: ScoutWorkflow["steps"] = []
+  const normalizedSteps: ApexWorkflow["steps"] = []
 
   for (const step of candidate.steps) {
     if (!step || typeof step !== "object") return undefined
@@ -883,14 +883,14 @@ function parseScoutWorkflow(raw: unknown): ScoutWorkflow | undefined {
     if (typeof item.id !== "string" || typeof item.title !== "string") return undefined
 
     if ("action" in item && item.action !== undefined) {
-      if (!isAllowedScoutAction(item.action)) return undefined
+      if (!isAllowedApexAction(item.action)) return undefined
     }
 
     normalizedSteps.push({
       id: item.id,
       title: item.title,
       description: typeof item.description === "string" ? item.description : undefined,
-      action: "action" in item && isAllowedScoutAction(item.action) ? item.action : undefined,
+      action: "action" in item && isAllowedApexAction(item.action) ? item.action : undefined,
     })
   }
 
@@ -900,28 +900,28 @@ function parseScoutWorkflow(raw: unknown): ScoutWorkflow | undefined {
   }
 }
 
-function isPremiumScoutAction(action: ScoutResponse["actions"][number]): boolean {
+function isPremiumApexAction(action: ApexResponse["actions"][number]): boolean {
   return action.type === "OPEN_RESUME_TAILOR"
 }
 
-function isPremiumWorkflowAction(stepAction: NonNullable<NonNullable<ScoutResponse["workflow"]>["steps"][number]["action"]>): boolean {
+function isPremiumWorkflowAction(stepAction: NonNullable<NonNullable<ApexResponse["workflow"]>["steps"][number]["action"]>): boolean {
   return stepAction.type === "OPEN_RESUME_TAILOR"
 }
 
-type KnownScoutIds = {
+type KnownApexIds = {
   jobIds: Set<string>
   companyIds: Set<string>
   resumeIds: Set<string>
 }
 
-function getKnownScoutIds(input: {
+function getKnownApexIds(input: {
   bodyJobId?: string
   bodyCompanyId?: string
   bodyResumeId?: string
   contextJobId?: string
   contextCompanyId?: string
   contextResumeId?: string
-}): KnownScoutIds {
+}): KnownApexIds {
   const jobIds = new Set<string>()
   const companyIds = new Set<string>()
   const resumeIds = new Set<string>()
@@ -939,7 +939,7 @@ function getKnownScoutIds(input: {
   return { jobIds, companyIds, resumeIds }
 }
 
-function isActionUsingKnownIds(action: ScoutResponse["actions"][number], knownIds: KnownScoutIds): boolean {
+function isActionUsingKnownIds(action: ApexResponse["actions"][number], knownIds: KnownApexIds): boolean {
   switch (action.type) {
     case "APPLY_FILTERS":
     case "SET_FOCUS_MODE":
@@ -970,7 +970,7 @@ function isActionUsingKnownIds(action: ScoutResponse["actions"][number], knownId
  * ID-safety filtering runs. Without this, valid tailor actions can be dropped
  * when Claude omits jobId and we only resolve it server-side.
  */
-function backfillResumeTailorJobIds(response: ScoutResponse, fallbackJobId?: string): void {
+function backfillResumeTailorJobIds(response: ApexResponse, fallbackJobId?: string): void {
   if (!fallbackJobId) return
 
   response.actions = response.actions.map((action) => {
@@ -1007,7 +1007,7 @@ export async function POST(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   
   if (!user) {
-    return scoutError(401, "Unauthorized")
+    return apexError(401, "Unauthorized")
   }
 
   const body = await request.json().catch(() => ({})) as {
@@ -1041,112 +1041,112 @@ export async function POST(request: NextRequest) {
   }
 
   const userMessage = body.message?.trim()
-  const mode = detectScoutMode(body.pagePath ?? "")
+  const mode = detectApexMode(body.pagePath ?? "")
   const requestSource = body.source === "mini" ? "mini" : "workspace"
 
   if (!userMessage) {
-    return scoutError(400, "message is required")
+    return apexError(400, "message is required")
   }
 
   if (DESTRUCTIVE_COMMAND_RE.test(userMessage)) {
     return NextResponse.json(
-      sanitizeScoutResponse({
+      sanitizeApexResponse({
         answer:
-          "I can’t run destructive commands. I can help you review or filter saved jobs, but I won’t delete data from Scout commands.",
+          "I can’t run destructive commands. I can help you review or filter saved jobs, but I won’t delete data from Apex commands.",
         recommendation: "Explore",
         actions: [],
         explanations: [],
         intent: "command",
         confidence: 0.99,
         mode,
-      } satisfies ScoutResponse)
+      } satisfies ApexResponse)
     )
   }
 
-  // MiniScout is deterministic-only and does not consume paid Scout credits.
-  const routing = routeScoutMessage(userMessage)
+  // MiniApex is deterministic-only and does not consume paid Apex credits.
+  const routing = routeApexMessage(userMessage)
   if (requestSource === "mini") {
     if (!routing.useLLM) {
-      const deterministicResponse = buildDeterministicScoutResponse(userMessage, mode)
+      const deterministicResponse = buildDeterministicApexResponse(userMessage, mode)
       budgetTracker.record({
-        feature: "scout_chat", model: MODEL, tier: inferTier(MODEL),
+        feature: "apex_chat", model: MODEL, tier: inferTier(MODEL),
         inputTokens: 0, outputTokens: 0, latencyMs: 0, costUsd: 0,
         success: true, cached: true, timedOut: false,
         userId: undefined, timestamp: Date.now(),
       })
-      return NextResponse.json(sanitizeScoutResponse(deterministicResponse))
+      return NextResponse.json(sanitizeApexResponse(deterministicResponse))
     }
 
     return NextResponse.json(
-      sanitizeScoutResponse({
-        answer: "Mini Scout only supports quick filters and lookups. Open full Scout for deep analysis.",
+      sanitizeApexResponse({
+        answer: "Mini Apex only supports quick filters and lookups. Open full Apex for deep analysis.",
         recommendation: "Explore",
         actions: [],
         explanations: [],
         intent: "command",
         confidence: 0.99,
         mode,
-      } satisfies ScoutResponse)
+      } satisfies ApexResponse)
     )
   }
 
-  // Every full Scout request counts against a daily message quota
+  // Every full Apex request counts against a daily message quota
   // (free=5, pro=30, pro_max=60, see lib/usage/quotas.ts). Pro additionally unlocks
   // actions, workflows, and deep analysis via separate gates below.
   const { plan: userPlan } = await getUserPlan(request)
-  const isPro = canAccess(userPlan, "scout_actions")
+  const isPro = canAccess(userPlan, "apex_actions")
 
-  const quota = await bumpScoutUsage(user.id, userPlan)
+  const quota = await bumpApexUsage(user.id, userPlan)
   if (quota.exceeded) {
     return NextResponse.json(
-      sanitizeScoutResponse({
+      sanitizeApexResponse({
         answer: isPro
-          ? `You've used your ${quota.limit} Scout messages today. Your quota resets at midnight.`
-          : `You've used your ${quota.limit} free Scout messages today. Upgrade to Pro for 30 messages a day — plus actions, workflows, and deep analysis.`,
+          ? `You've used your ${quota.limit} Apex messages today. Your quota resets at midnight.`
+          : `You've used your ${quota.limit} free Apex messages today. Upgrade to Pro for 30 messages a day — plus actions, workflows, and deep analysis.`,
         recommendation: "Wait",
         actions: [],
         explanations: [],
         gated: {
-          feature: "scout_actions",
-          reason: `Daily Scout message limit (${quota.limit}) reached.`,
+          feature: "apex_actions",
+          reason: `Daily Apex message limit (${quota.limit}) reached.`,
           upgradeMessage: isPro
             ? "Quota resets at midnight."
-            : "Upgrade to Pro for 30 Scout messages a day.",
+            : "Upgrade to Pro for 30 Apex messages a day.",
         },
-      } satisfies ScoutResponse),
+      } satisfies ApexResponse),
       { status: 429 }
     )
   }
 
   if (!anthropic) {
     return NextResponse.json(
-      sanitizeScoutResponse({
-        answer: "Scout is temporarily unavailable. The AI service is not configured.",
+      sanitizeApexResponse({
+        answer: "Apex is temporarily unavailable. The AI service is not configured.",
         recommendation: "Wait",
         actions: [],
         explanations: [],
-      } satisfies ScoutResponse),
+      } satisfies ApexResponse),
       { status: 503 }
     )
   }
   const anthropicClient = anthropic
 
   // Daily AI spend ceiling. When today's total Anthropic cost crosses the
-  // configured cap (AI_DAILY_BUDGET_USD), Scout pauses gracefully instead
+  // configured cap (AI_DAILY_BUDGET_USD), Apex pauses gracefully instead
   // of running up the bill. Resets at UTC midnight when api_usage rolls.
   if (await isAiBudgetExceeded()) {
     return NextResponse.json(
-      sanitizeScoutResponse({
-        answer: "Scout's daily AI budget for today has been reached. Try again after midnight UTC — your quota will refresh then.",
+      sanitizeApexResponse({
+        answer: "Apex's daily AI budget for today has been reached. Try again after midnight UTC — your quota will refresh then.",
         recommendation: "Wait",
         actions: [],
         explanations: [],
         gated: {
-          feature: "scout_actions",
+          feature: "apex_actions",
           reason: "Daily AI spend cap reached.",
           upgradeMessage: "Quota resets at midnight UTC.",
         },
-      } satisfies ScoutResponse),
+      } satisfies ApexResponse),
       { status: 503 }
     )
   }
@@ -1161,7 +1161,7 @@ export async function POST(request: NextRequest) {
     const sponsorHint = bp.requireSponsorshipSignal ? " that sponsor H-1B" : ""
 
     // Query matching jobs server-side
-    let applyAgentDirective: import("@/lib/scout/apply-agent/types").ApplyAgentDirective | undefined
+    let applyAgentDirective: import("@/lib/apex/apply-agent/types").ApplyAgentDirective | undefined
     try {
       const params = new URLSearchParams()
       if (bp.minMatchScore)          params.set("minMatchScore", String(bp.minMatchScore))
@@ -1175,11 +1175,11 @@ export async function POST(request: NextRequest) {
       // Pass the full message so apply-agent can free-text search any condition
       params.set("q", userMessage)
       const origin = request.nextUrl.origin || process.env.NEXT_PUBLIC_APP_URL || "http://127.0.0.1:3000"
-      const res    = await fetch(`${origin}/api/scout/apply-agent?${params.toString()}`, {
+      const res    = await fetch(`${origin}/api/apex/apply-agent?${params.toString()}`, {
         headers: { cookie: request.headers.get("cookie") ?? "" },
       })
       if (res.ok) {
-        const data = await res.json() as { jobs: import("@/lib/scout/apply-agent/types").ApplyAgentJob[] }
+        const data = await res.json() as { jobs: import("@/lib/apex/apply-agent/types").ApplyAgentJob[] }
         if (data.jobs.length > 0) {
           applyAgentDirective = {
             jobs:     data.jobs,
@@ -1204,7 +1204,7 @@ export async function POST(request: NextRequest) {
       ? `I found **${jobCount} job${jobCount !== 1 ? "s" : ""}**${scoreHint}${sponsorHint} in the live feed. I'll walk you through tailoring and applying to each one — starting with the best match.`
       : `I couldn't find feed jobs${scoreHint}${sponsorHint} right now. Try relaxing filters or lowering the match threshold, and I’ll rebuild the queue.`
 
-    const bulkResponse: ScoutResponse = {
+    const bulkResponse: ApexResponse = {
       answer,
       recommendation: "Explore",
       actions:        [],
@@ -1224,7 +1224,7 @@ export async function POST(request: NextRequest) {
       void (async () => {
         try {
           if (bulkDirective) ctrl.enqueue(enc.encode(encodeSSE({ type: "workspace_directive", payload: bulkDirective })))
-          ctrl.enqueue(enc.encode(encodeSSE({ type: "response", payload: sanitizeScoutResponse(bulkResponse) })))
+          ctrl.enqueue(enc.encode(encodeSSE({ type: "response", payload: sanitizeApexResponse(bulkResponse) })))
           ctrl.enqueue(enc.encode(encodeSSE({ type: "done" })))
         } finally {
           try { ctrl.close() } catch {}
@@ -1240,27 +1240,27 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    return NextResponse.json(sanitizeScoutResponse(bulkResponse))
+    return NextResponse.json(sanitizeApexResponse(bulkResponse))
   }
 
   // Deterministic routing gate — no LLM needed for pure UI/filter commands
   if (!routing.useLLM) {
-    const deterministicResponse = buildDeterministicScoutResponse(userMessage, mode)
+    const deterministicResponse = buildDeterministicApexResponse(userMessage, mode)
     budgetTracker.record({
-      feature: "scout_chat", model: MODEL, tier: inferTier(MODEL),
+      feature: "apex_chat", model: MODEL, tier: inferTier(MODEL),
       inputTokens: 0, outputTokens: 0, latencyMs: 0, costUsd: 0,
       success: true, cached: true, timedOut: false,
       userId: undefined, timestamp: Date.now(),
     })
-    return NextResponse.json(sanitizeScoutResponse(deterministicResponse))
+    return NextResponse.json(sanitizeApexResponse(deterministicResponse))
   }
 
   const effectivePlan = userPlan ?? "free"
   const inferredIntent = inferIntentFromMessage(userMessage)
 
-  // TODO(scout-usage): Add persistent free daily usage tracking once storage schema is finalized.
+  // TODO(apex-usage): Add persistent free daily usage tracking once storage schema is finalized.
   // For now this is a placeholder and does not enforce a hard/soft quota.
-  const premiumGate = findScoutPremiumGate({
+  const premiumGate = findApexPremiumGate({
     plan: effectivePlan,
     message: userMessage,
     mode,
@@ -1268,12 +1268,12 @@ export async function POST(request: NextRequest) {
 
   const shouldShortCircuitForGate =
     premiumGate &&
-    premiumGate.feature !== "scout_strategy" &&
+    premiumGate.feature !== "apex_strategy" &&
     premiumGate.feature !== "interview_prep"
 
   if (shouldShortCircuitForGate) {
     return NextResponse.json(
-      sanitizeScoutResponse(buildGatedScoutResponse({
+      sanitizeApexResponse(buildGatedApexResponse({
         gate: premiumGate,
         mode,
         answer:
@@ -1292,31 +1292,31 @@ export async function POST(request: NextRequest) {
   if (
     hasExplicitCompareIds &&
     (body.compareJobIds?.length ?? 0) > 2 &&
-    !canAccess(effectivePlan, "scout_deep_analysis")
+    !canAccess(effectivePlan, "apex_deep_analysis")
   ) {
     return NextResponse.json(
-      sanitizeScoutResponse({
+      sanitizeApexResponse({
         answer:
-          "Free Scout can compare up to 2 jobs. Upgrade to Scout Pro to compare 3 or more jobs with deep analysis.",
+          "Free Apex can compare up to 2 jobs. Upgrade to Apex Pro to compare 3 or more jobs with deep analysis.",
         recommendation: "Explore",
         actions: [],
         explanations: [],
         mode,
         gated: {
-          feature: "scout_deep_analysis" as const,
-          reason: "Comparing 3+ jobs requires Scout Pro deep analysis.",
+          feature: "apex_deep_analysis" as const,
+          reason: "Comparing 3+ jobs requires Apex Pro deep analysis.",
           upgradeMessage: "Upgrade to unlock multi-job comparison with deep analysis and sponsorship signals.",
         },
-      } satisfies ScoutResponse)
+      } satisfies ApexResponse)
     )
   }
 
   // Cap auto-compare to 2 jobs for free users, 5 for paid
-  const compareLimit = canAccess(effectivePlan, "scout_deep_analysis") ? 5 : 2
+  const compareLimit = canAccess(effectivePlan, "apex_deep_analysis") ? 5 : 2
 
   // ── Job context resolver ────────────────────────────────────────────────────
   // Detect commands that need a concrete job (tailor, workflow, "best saved job",
-  // "open strongest match") and resolve one server-side before calling getScoutContext.
+  // "open strongest match") and resolve one server-side before calling getApexContext.
   // This ensures Claude's answer, action payloads, and workspace_directive all
   // reference the same job — never a hallucinated or mismatched ID.
   const needsJobResolve =
@@ -1324,14 +1324,14 @@ export async function POST(request: NextRequest) {
     !BULK_PREP_RE.test(userMessage) &&    // not a bulk-prep command
     NEEDS_JOB_RESOLVE_RE.test(userMessage)
 
-  let resolvedJob: import("@/lib/scout/resolve-job-context").ResolvedJobContext | null = null
+  let resolvedJob: import("@/lib/apex/resolve-job-context").ResolvedJobContext | null = null
   const pool = (await import("@/lib/postgres/server")).getPostgresPool()
 
   if (needsJobResolve) {
     resolvedJob = await resolveJobContext(user.id, pool, {}).catch(() => null)
 
     if (process.env.NODE_ENV === "development") {
-      console.log("[scout:resolve]", {
+      console.log("[apex:resolve]", {
         message:      userMessage.slice(0, 60),
         resolvedJobId: resolvedJob?.jobId ?? null,
         source:        resolvedJob?.source ?? null,
@@ -1345,7 +1345,7 @@ export async function POST(request: NextRequest) {
       const topSaved = await listTopSavedJobs(user.id, pool, 5).catch(() => [])
       if (topSaved.length === 0) {
         return NextResponse.json(
-          sanitizeScoutResponse({
+          sanitizeApexResponse({
             answer:
               "I don't see any saved jobs in your list. To tailor your resume or prepare an application, save a job from the feed first — then come back and I can prepare everything for that specific role.",
             recommendation: "Explore",
@@ -1354,7 +1354,7 @@ export async function POST(request: NextRequest) {
             intent: "command",
             confidence: 0.95,
             mode,
-          } satisfies ScoutResponse)
+          } satisfies ApexResponse)
         )
       }
       // There are saved jobs but none with a resolved job_id — prompt selection
@@ -1362,15 +1362,15 @@ export async function POST(request: NextRequest) {
         .map((j, i) => `${i + 1}. **${j.title}** at ${j.company}${j.score ? ` (${j.score}% match)` : ""}`)
         .join("\n")
       return NextResponse.json(
-        sanitizeScoutResponse({
-          answer: `I found ${topSaved.length} saved job${topSaved.length !== 1 ? "s" : ""}. Which one should I tailor for?\n\n${jobList}\n\nNavigate to the job and open Scout from that page, or tell me which role to target.`,
+        sanitizeApexResponse({
+          answer: `I found ${topSaved.length} saved job${topSaved.length !== 1 ? "s" : ""}. Which one should I tailor for?\n\n${jobList}\n\nNavigate to the job and open Apex from that page, or tell me which role to target.`,
           recommendation: "Explore",
           actions: [],
           explanations: [],
           intent: "command",
           confidence: 0.9,
           mode,
-        } satisfies ScoutResponse)
+        } satisfies ApexResponse)
       )
     }
   }
@@ -1379,8 +1379,8 @@ export async function POST(request: NextRequest) {
   const effectiveJobId = resolvedJob?.jobId ?? body.jobId
 
   try {
-    // Retrieve grounded context (includes active memories via getScoutContext)
-    const context = await getScoutContext({
+    // Retrieve grounded context (includes active memories via getApexContext)
+    const context = await getApexContext({
       userId: user.id,
       pagePath: body.pagePath,
       mode,
@@ -1397,11 +1397,11 @@ export async function POST(request: NextRequest) {
     // Replace the full memory list with the top-N most relevant to this request
     // so we never bloat the prompt with low-relevance memories.
     if (context.memories.length > 0) {
-      const { selectRelevantMemories } = await import("@/lib/scout/memory/retriever")
+      const { selectRelevantMemories } = await import("@/lib/apex/memory/retriever")
       context.memories = selectRelevantMemories(context.memories, { mode, message: userMessage })
     }
 
-    const formattedContext = await formatScoutContextForClaude(context)
+    const formattedContext = await formatApexContextForClaude(context)
 
     // ── Multi-agent orchestrator ────────────────────────────────────────────────
     // Runs specialist agents in parallel after context is loaded.
@@ -1431,7 +1431,7 @@ export async function POST(request: NextRequest) {
       sponsorshipRequired: context.behaviorSignals?.sponsorshipSensitivity === "high",
     }).catch(() => ({ contextSections: [], enrichments: {}, totalDurationMs: 0, traces: undefined }))
 
-    function attachDebug(response: ScoutResponse): void {
+    function attachDebug(response: ApexResponse): void {
       if (!IS_DEV) return
       response.debug = {
         orchestrator: {
@@ -1550,7 +1550,7 @@ export async function POST(request: NextRequest) {
     // ── End application tracker enrichment ──────────────────────────────────────
 
     // ── Offer negotiation enrichment ─────────────────────────────────────────────
-    const { isOfferNegotiationIntent } = await import("@/lib/scout/offer-negotiation-intent")
+    const { isOfferNegotiationIntent } = await import("@/lib/apex/offer-negotiation-intent")
     const isOfferNegotIntent = isOfferNegotiationIntent(userMessage)
     let offerNegotiationContext = ""
 
@@ -1658,13 +1658,13 @@ export async function POST(request: NextRequest) {
       : enrichedContext
 
     // ── Salary coaching enrichment ────────────────────────────────────────────────
-    const { isSalaryCoachingIntent } = await import("@/lib/scout/salary-coaching-intent")
+    const { isSalaryCoachingIntent } = await import("@/lib/apex/salary-coaching-intent")
     const isSalaryCoachIntent = isSalaryCoachingIntent(userMessage)
     let salaryCoachingContext = ""
 
     if (isSalaryCoachIntent) {
       try {
-        const { detectSalaryFloor } = await import("@/lib/scout/salary/floor-detector")
+        const { detectSalaryFloor } = await import("@/lib/apex/salary/floor-detector")
         const floorProfile = await detectSalaryFloor(user.id)
 
         if (floorProfile.detectedFloor > 0) {
@@ -1691,7 +1691,7 @@ export async function POST(request: NextRequest) {
                 [user.id]
               )
               const up = userProfileResult.rows[0]
-              const { generateSalaryExpectationScript } = await import("@/lib/scout/salary/expectation-coach")
+              const { generateSalaryExpectationScript } = await import("@/lib/apex/salary/expectation-coach")
               const script = await generateSalaryExpectationScript(
                 user.id,
                 floorProfile.roleContext,
@@ -1720,7 +1720,7 @@ export async function POST(request: NextRequest) {
       : afterOfferContext
 
     // ── Burnout / pace check-in enrichment ────────────────────────────────────────
-    const { isBurnoutCheckinIntent } = await import("@/lib/scout/burnout-checkin-intent")
+    const { isBurnoutCheckinIntent } = await import("@/lib/apex/burnout-checkin-intent")
     const isBurnoutIntent = isBurnoutCheckinIntent(userMessage)
 
     // Also check: returning user (7+ days absent) — detect from application activity
@@ -1744,7 +1744,7 @@ export async function POST(request: NextRequest) {
       try {
         if (isReturningUser && !isBurnoutIntent) {
           // Return experience — no classification needed
-          const { buildReturnExperience } = await import("@/lib/scout/burnout/return-experience")
+          const { buildReturnExperience } = await import("@/lib/apex/burnout/return-experience")
           const returnExp = await buildReturnExperience(user.id, daysSinceLastActivity)
 
           burnoutContext = [
@@ -1762,8 +1762,8 @@ export async function POST(request: NextRequest) {
           ].filter(Boolean).join("\n")
         } else {
           // Active check-in or explicit distress signal — classify and intervene
-          const { classifyBurnoutState } = await import("@/lib/scout/burnout/classifier")
-          const { executeIntervention } = await import("@/lib/scout/burnout/interventions")
+          const { classifyBurnoutState } = await import("@/lib/apex/burnout/classifier")
+          const { executeIntervention } = await import("@/lib/apex/burnout/interventions")
 
           const burnoutState = await classifyBurnoutState(user.id)
           const intervention = burnoutState.interventionType !== "none"
@@ -1817,8 +1817,8 @@ export async function POST(request: NextRequest) {
           firstQuestion ? `First question to ask: ${firstQuestion.prompt}` : "",
           `Total questions: ${set?.questions.length ?? 0}`,
           `INSTRUCTION: Surface this check-in as the opening message if the user has not explicitly asked about something else. Ask one question at a time. The user can say "skip" or "not now" to dismiss.`,
-          `SAVE ENDPOINT: POST /api/scout/checkin with { checkinId, action: "complete", responses: {...} }`,
-          `SKIP ENDPOINT: POST /api/scout/checkin with { checkinId, action: "skip" }`,
+          `SAVE ENDPOINT: POST /api/apex/checkin with { checkinId, action: "complete", responses: {...} }`,
+          `SKIP ENDPOINT: POST /api/apex/checkin with { checkinId, action: "skip" }`,
         ].filter(Boolean).join("\n")
       }
     } catch {
@@ -1872,7 +1872,7 @@ export async function POST(request: NextRequest) {
 
     if (isInterviewPrepIntent && !context.job) {
       return NextResponse.json(
-        sanitizeScoutResponse({
+        sanitizeApexResponse({
           answer:
             "I need a specific job loaded before I can create interview prep. Open a job page or send a jobId, then ask me again.",
           recommendation: "Explore",
@@ -1881,13 +1881,13 @@ export async function POST(request: NextRequest) {
           intent: "analysis",
           confidence: 0.92,
           mode,
-        } satisfies ScoutResponse)
+        } satisfies ApexResponse)
       )
     }
 
     if (isInterviewPrepIntent && context.job && !canAccess(effectivePlan, "interview_prep")) {
       return NextResponse.json(
-        sanitizeScoutResponse(buildInterviewPrepPreview({
+        sanitizeApexResponse(buildInterviewPrepPreview({
           jobTitle: context.job.title,
           companyName: context.job.company_name,
           jobId: context.job.id,
@@ -1935,14 +1935,14 @@ export async function POST(request: NextRequest) {
       ? `\nSearch Profile (soft hints — do not over-weight, user message always takes priority):\n${searchProfileLines.join("\n")}\n`
       : ""
 
-    const contextualPrompt = `Active Scout Mode: ${mode}
+    const contextualPrompt = `Active Apex Mode: ${mode}
 Current Page Path: ${body.pagePath ?? "Unknown"}
 Intent hint from UI/server: ${inferredIntent}
 
 Current Feed State (IMPORTANT — do not suggest actions that are already active):
 ${feedStateLines.join("\n")}
 ${searchProfileSection}
-Scout Context:
+Apex Context:
 ${finalContext}
 
 ---
@@ -1965,15 +1965,15 @@ User Input: ${userMessage}`
       const sseStream = new ReadableStream<Uint8Array>({
         start: (c) => { ctrl = c },
       })
-      const emit = (event: import("@/lib/scout/streaming/types").ScoutStreamEvent) => {
+      const emit = (event: import("@/lib/apex/streaming/types").ApexStreamEvent) => {
         try { ctrl.enqueue(enc.encode(encodeSSE(event))) } catch {}
       }
 
-      const systemPrompt = getScoutSystemPrompt(mode, {
-        premiumEnabled: canUsePremiumScoutFeatures(effectivePlan) && !premiumGate,
+      const systemPrompt = getApexSystemPrompt(mode, {
+        premiumEnabled: canUsePremiumApexFeatures(effectivePlan) && !premiumGate,
       })
       // Mark the system prompt for ephemeral (5-minute) prompt caching.
-      // The Scout system prompt is large (~500 lines); without this each
+      // The Apex system prompt is large (~500 lines); without this each
       // streaming call pays full input cost for identical preamble bytes.
       const msgParams = {
         model: MODEL,
@@ -1986,35 +1986,35 @@ User Input: ${userMessage}`
         const streamStart = Date.now()
         try {
           const rawStream = anthropicClient.messages.stream(msgParams)
-          const { stream, abort: abortStream } = streamWithTimeout(rawStream, AI_TIMEOUTS.scout_chat_stream)
+          const { stream, abort: abortStream } = streamWithTimeout(rawStream, AI_TIMEOUTS.apex_chat_stream)
           stream.on("text", (text) => emit({ type: "text_delta", text }))
           let msg: Awaited<ReturnType<typeof stream.finalMessage>>
           try {
             msg = await stream.finalMessage()
           } catch {
             abortStream()
-            emit({ type: "error", message: "Scout is taking too long — please try again." })
-            budgetTracker.record({ feature: "scout_chat_stream", model: MODEL, tier: inferTier(MODEL), inputTokens: 0, outputTokens: 0, latencyMs: Date.now() - streamStart, costUsd: 0, success: false, cached: false, timedOut: true, timestamp: Date.now() })
+            emit({ type: "error", message: "Apex is taking too long — please try again." })
+            budgetTracker.record({ feature: "apex_chat_stream", model: MODEL, tier: inferTier(MODEL), inputTokens: 0, outputTokens: 0, latencyMs: Date.now() - streamStart, costUsd: 0, success: false, cached: false, timedOut: true, timestamp: Date.now() })
             return
           }
 
           const inputTokens  = msg.usage?.input_tokens  ?? 0
           const outputTokens = msg.usage?.output_tokens ?? 0
           const costUsd = calcCost(inferTier(MODEL), inputTokens, outputTokens)
-          budgetTracker.record({ feature: "scout_chat_stream", model: MODEL, tier: inferTier(MODEL), inputTokens, outputTokens, latencyMs: Date.now() - streamStart, costUsd, success: true, cached: false, timedOut: false, timestamp: Date.now() })
-          await logApiUsage({ service: "claude", operation: "scout_chat_stream", tokens_used: inputTokens + outputTokens, cost_usd: Number(costUsd.toFixed(6)) })
+          budgetTracker.record({ feature: "apex_chat_stream", model: MODEL, tier: inferTier(MODEL), inputTokens, outputTokens, latencyMs: Date.now() - streamStart, costUsd, success: true, cached: false, timedOut: false, timestamp: Date.now() })
+          await logApiUsage({ service: "claude", operation: "apex_chat_stream", tokens_used: inputTokens + outputTokens, cost_usd: Number(costUsd.toFixed(6)) })
 
           const responseText = msg.content.filter((b) => b.type === "text").map((b) => b.text).join("\n").trim()
-          const { response: scoutResponse, safetyNotes } = parseScoutResponse(responseText, mode, inferredIntent)
-          if (!isInterviewPrepIntent || !canAccess(effectivePlan, "interview_prep")) scoutResponse.interviewPrep = undefined
+          const { response: apexResponse, safetyNotes } = parseApexResponse(responseText, mode, inferredIntent)
+          if (!isInterviewPrepIntent || !canAccess(effectivePlan, "interview_prep")) apexResponse.interviewPrep = undefined
 
-          const knownIds = getKnownScoutIds({ bodyJobId: body.jobId, bodyCompanyId: body.companyId, bodyResumeId: body.resumeId, contextJobId: context.job?.id, contextCompanyId: context.company?.id, contextResumeId: context.resume?.id })
+          const knownIds = getKnownApexIds({ bodyJobId: body.jobId, bodyCompanyId: body.companyId, bodyResumeId: body.resumeId, contextJobId: context.job?.id, contextCompanyId: context.company?.id, contextResumeId: context.resume?.id })
           if (resolvedJob) { knownIds.jobIds.add(resolvedJob.jobId); if (resolvedJob.companyId) knownIds.companyIds.add(resolvedJob.companyId) }
           if (context.compareJobs) { for (const cj of context.compareJobs) { knownIds.jobIds.add(cj.id); if (cj.company_id) knownIds.companyIds.add(cj.company_id) } }
-          backfillResumeTailorJobIds(scoutResponse, resolvedJob?.jobId ?? effectiveJobId ?? context.job?.id)
-          scoutResponse.actions = scoutResponse.actions.filter((action) => isActionUsingKnownIds(action, knownIds))
-          if (scoutResponse.workflow?.steps) { scoutResponse.workflow.steps = scoutResponse.workflow.steps.map((step) => ({ ...step, action: step.action && isActionUsingKnownIds(step.action, knownIds) ? step.action : undefined })) }
-          if (safetyNotes.length > 0) scoutResponse.answer = `${scoutResponse.answer}\n\nNote: ${safetyNotes.join(" ")}`
+          backfillResumeTailorJobIds(apexResponse, resolvedJob?.jobId ?? effectiveJobId ?? context.job?.id)
+          apexResponse.actions = apexResponse.actions.filter((action) => isActionUsingKnownIds(action, knownIds))
+          if (apexResponse.workflow?.steps) { apexResponse.workflow.steps = apexResponse.workflow.steps.map((step) => ({ ...step, action: step.action && isActionUsingKnownIds(step.action, knownIds) ? step.action : undefined })) }
+          if (safetyNotes.length > 0) apexResponse.answer = `${apexResponse.answer}\n\nNote: ${safetyNotes.join(" ")}`
 
           const wfDir = inferWorkflowDirective(userMessage, inferredIntent)
           if (wfDir) {
@@ -2024,24 +2024,24 @@ User Input: ${userMessage}`
             if (wfJobId) cp.jobId = wfJobId; if (wfResumeId) cp.resumeId = wfResumeId
             if (resolvedJob) { cp.title = resolvedJob.title; cp.company = resolvedJob.company; cp.detailUrl = resolvedJob.detailUrl; cp.source = resolvedJob.source }
             if (Object.keys(cp).length > 0) wfDir.payload = cp
-            scoutResponse.workflow_directive = wfDir
+            apexResponse.workflow_directive = wfDir
           }
-          if (!scoutResponse.workspace_directive) {
+          if (!apexResponse.workspace_directive) {
             const bulkDir = inferBulkWorkspaceDirective(userMessage)
-            if (bulkDir) scoutResponse.workspace_directive = bulkDir
+            if (bulkDir) apexResponse.workspace_directive = bulkDir
           }
-          if (TAILOR_INTENT_RE.test(userMessage) && !BULK_PREP_RE.test(userMessage) && !scoutResponse.workspace_directive) {
+          if (TAILOR_INTENT_RE.test(userMessage) && !BULK_PREP_RE.test(userMessage) && !apexResponse.workspace_directive) {
             const tjId = resolvedJob?.jobId ?? effectiveJobId ?? context.job?.id
-            if (tjId) scoutResponse.workspace_directive = { mode: "tailor", payload: { jobId: tjId, resumeId: body.resumeId ?? context.resume?.id, title: resolvedJob?.title ?? context.job?.title, company: resolvedJob?.company ?? context.job?.company_name, detailUrl: resolvedJob?.detailUrl ?? `/dashboard/jobs/${tjId}`, source: resolvedJob?.source ?? "explicit" } }
+            if (tjId) apexResponse.workspace_directive = { mode: "tailor", payload: { jobId: tjId, resumeId: body.resumeId ?? context.resume?.id, title: resolvedJob?.title ?? context.job?.title, company: resolvedJob?.company ?? context.job?.company_name, detailUrl: resolvedJob?.detailUrl ?? `/dashboard/jobs/${tjId}`, source: resolvedJob?.source ?? "explicit" } }
           }
 
           // Compare guard (streaming path) — mirrors the non-streaming guard below
           if (isCompareIntent && context.compareJobs && context.compareJobs.length >= 2) {
-            if (!scoutResponse.workspace_directive) scoutResponse.workspace_directive = { mode: "compare" }
-            if (!scoutResponse.compare) {
-              scoutResponse.compare = {
-                summary: scoutResponse.answer?.trim()
-                  ? scoutResponse.answer.split(/[.!?]/)[0]?.trim() + "."
+            if (!apexResponse.workspace_directive) apexResponse.workspace_directive = { mode: "compare" }
+            if (!apexResponse.compare) {
+              apexResponse.compare = {
+                summary: apexResponse.answer?.trim()
+                  ? apexResponse.answer.split(/[.!?]/)[0]?.trim() + "."
                   : `Comparing your ${context.compareJobs.length} saved jobs.`,
                 items: context.compareJobs.map((cj) => ({
                   jobId:             cj.id,
@@ -2060,8 +2060,8 @@ User Input: ${userMessage}`
           }
 
           // Interview guard (streaming path) — inject interview workspace_directive
-          if (scoutResponse.interviewPrep && !scoutResponse.workspace_directive) {
-            scoutResponse.workspace_directive = {
+          if (apexResponse.interviewPrep && !apexResponse.workspace_directive) {
+            apexResponse.workspace_directive = {
               mode: "interview",
               payload: {
                 interviewType: detectInterviewType(userMessage),
@@ -2075,30 +2075,30 @@ User Input: ${userMessage}`
           }
 
           // Outreach guard (streaming path) — mirror of non-streaming guard below
-          if (scoutResponse.outreach && !scoutResponse.workspace_directive) {
+          if (apexResponse.outreach && !apexResponse.workspace_directive) {
             const ctxName = context.job?.company_name ?? context.company?.name
-            scoutResponse.workspace_directive = {
+            apexResponse.workspace_directive = {
               mode: "outreach",
               payload: { companyName: ctxName, jobTitle: context.job?.title },
               chips:   ["Make it more concise", "Use a warmer tone", "Prepare a follow-up version"],
             }
           }
 
-          normalizeFilterQueriesForRequest(scoutResponse, userMessage)
-          attachDebug(scoutResponse)
+          normalizeFilterQueriesForRequest(apexResponse, userMessage)
+          attachDebug(apexResponse)
 
-          const finalScoutResponse = sanitizeScoutResponse(
-            stripProOnlyFieldsForFreeUsers(scoutResponse, userPlan)
+          const finalApexResponse = sanitizeApexResponse(
+            stripProOnlyFieldsForFreeUsers(apexResponse, userPlan)
           )
 
           // Emit workspace/workflow directives early so client can morph immediately
-          if (finalScoutResponse.workspace_directive) emit({ type: "workspace_directive", payload: finalScoutResponse.workspace_directive })
-          if (finalScoutResponse.workflow_directive)  emit({ type: "workflow_directive",  payload: finalScoutResponse.workflow_directive  })
+          if (finalApexResponse.workspace_directive) emit({ type: "workspace_directive", payload: finalApexResponse.workspace_directive })
+          if (finalApexResponse.workflow_directive)  emit({ type: "workflow_directive",  payload: finalApexResponse.workflow_directive  })
 
-          emit({ type: "response", payload: finalScoutResponse })
+          emit({ type: "response", payload: finalApexResponse })
           emit({ type: "done" })
         } catch (err) {
-          emit({ type: "error", message: err instanceof Error ? err.message : "Scout encountered an error." })
+          emit({ type: "error", message: err instanceof Error ? err.message : "Apex encountered an error." })
         } finally {
           try { ctrl.close() } catch {}
         }
@@ -2117,18 +2117,18 @@ User Input: ${userMessage}`
 
     const chatStart = Date.now()
     const chatAbort = new AbortController()
-    const chatTimer = setTimeout(() => chatAbort.abort(), AI_TIMEOUTS.scout_chat)
+    const chatTimer = setTimeout(() => chatAbort.abort(), AI_TIMEOUTS.apex_chat)
     let message: Anthropic.Message
     try {
       const createParams = {
         model: MODEL,
         max_tokens: maxTokens,
-        // Ephemeral prompt caching: identical Scout system prompts reuse
+        // Ephemeral prompt caching: identical Apex system prompts reuse
         // the cached tokens across requests within ~5 min, cutting input
         // cost on the large preamble to ~10% of normal.
         system: [{
           type: "text" as const,
-          text: getScoutSystemPrompt(mode, { premiumEnabled: canUsePremiumScoutFeatures(effectivePlan) && !premiumGate }),
+          text: getApexSystemPrompt(mode, { premiumEnabled: canUsePremiumApexFeatures(effectivePlan) && !premiumGate }),
           cache_control: { type: "ephemeral" as const },
         }],
         messages: [{ role: "user" as const, content: contextualPrompt }],
@@ -2136,19 +2136,19 @@ User Input: ${userMessage}`
       message = await anthropicClient.messages.create(createParams, { signal: chatAbort.signal })
     } catch {
       clearTimeout(chatTimer)
-      budgetTracker.record({ feature: "scout_chat", model: MODEL, tier: inferTier(MODEL), inputTokens: 0, outputTokens: 0, latencyMs: Date.now() - chatStart, costUsd: 0, success: false, cached: false, timedOut: true, timestamp: Date.now() })
-      return scoutError(503, "Scout is taking too long right now. Please try again in a moment.")
+      budgetTracker.record({ feature: "apex_chat", model: MODEL, tier: inferTier(MODEL), inputTokens: 0, outputTokens: 0, latencyMs: Date.now() - chatStart, costUsd: 0, success: false, cached: false, timedOut: true, timestamp: Date.now() })
+      return apexError(503, "Apex is taking too long right now. Please try again in a moment.")
     }
     clearTimeout(chatTimer)
 
     const inputTokens = message.usage?.input_tokens ?? 0
     const outputTokens = message.usage?.output_tokens ?? 0
     const costUsd = calcCost(inferTier(MODEL), inputTokens, outputTokens)
-    budgetTracker.record({ feature: "scout_chat", model: MODEL, tier: inferTier(MODEL), inputTokens, outputTokens, latencyMs: Date.now() - chatStart, costUsd, success: true, cached: false, timedOut: false, timestamp: Date.now() })
+    budgetTracker.record({ feature: "apex_chat", model: MODEL, tier: inferTier(MODEL), inputTokens, outputTokens, latencyMs: Date.now() - chatStart, costUsd, success: true, cached: false, timedOut: false, timestamp: Date.now() })
 
     await logApiUsage({
       service: "claude",
-      operation: "scout_chat",
+      operation: "apex_chat",
       tokens_used: inputTokens + outputTokens,
       cost_usd: Number(costUsd.toFixed(6)),
     })
@@ -2159,11 +2159,11 @@ User Input: ${userMessage}`
       .join("\n")
       .trim()
 
-    const { response: scoutResponse, safetyNotes } = parseScoutResponse(responseText, mode, inferredIntent)
+    const { response: apexResponse, safetyNotes } = parseApexResponse(responseText, mode, inferredIntent)
     if (!isInterviewPrepIntent || !canAccess(effectivePlan, "interview_prep")) {
-      scoutResponse.interviewPrep = undefined
+      apexResponse.interviewPrep = undefined
     }
-    const knownIds = getKnownScoutIds({
+    const knownIds = getKnownApexIds({
       bodyJobId: body.jobId,
       bodyCompanyId: body.companyId,
       bodyResumeId: body.resumeId,
@@ -2204,7 +2204,7 @@ User Input: ${userMessage}`
             for (const item of parsed.items) {
               if (item.companyId) knownIds.companyIds.add(item.companyId)
             }
-            scoutResponse.compare = parsed
+            apexResponse.compare = parsed
           }
         }
       } catch {
@@ -2212,55 +2212,55 @@ User Input: ${userMessage}`
       }
     }
 
-    backfillResumeTailorJobIds(scoutResponse, resolvedJob?.jobId ?? effectiveJobId ?? context.job?.id)
+    backfillResumeTailorJobIds(apexResponse, resolvedJob?.jobId ?? effectiveJobId ?? context.job?.id)
 
-    const beforeActionCount = scoutResponse.actions.length
-    scoutResponse.actions = scoutResponse.actions.filter((action) => isActionUsingKnownIds(action, knownIds))
+    const beforeActionCount = apexResponse.actions.length
+    apexResponse.actions = apexResponse.actions.filter((action) => isActionUsingKnownIds(action, knownIds))
 
-    const beforeWorkflowActionCount = scoutResponse.workflow
-      ? scoutResponse.workflow.steps.filter((step) => step.action).length
+    const beforeWorkflowActionCount = apexResponse.workflow
+      ? apexResponse.workflow.steps.filter((step) => step.action).length
       : 0
 
-    if (scoutResponse.workflow) {
-      scoutResponse.workflow.steps = scoutResponse.workflow.steps.map((step) => ({
+    if (apexResponse.workflow) {
+      apexResponse.workflow.steps = apexResponse.workflow.steps.map((step) => ({
         ...step,
         action: step.action && isActionUsingKnownIds(step.action, knownIds) ? step.action : undefined,
       }))
     }
 
-    if (beforeActionCount > scoutResponse.actions.length) {
+    if (beforeActionCount > apexResponse.actions.length) {
       safetyNotes.push(
         "Some actions were omitted because required IDs were missing from the current page context."
       )
     }
     if (
-      scoutResponse.workflow &&
+      apexResponse.workflow &&
       beforeWorkflowActionCount >
-        scoutResponse.workflow.steps.filter((step) => step.action).length
+        apexResponse.workflow.steps.filter((step) => step.action).length
     ) {
       safetyNotes.push(
         "Some workflow actions were omitted because required IDs were missing from the current page context."
       )
     }
 
-    if (!canUseAdvancedScoutActions(effectivePlan)) {
-      const removedPremiumAction = scoutResponse.actions.some((action) => isPremiumScoutAction(action))
-      scoutResponse.actions = scoutResponse.actions.filter((action) => !isPremiumScoutAction(action))
+    if (!canUseAdvancedApexActions(effectivePlan)) {
+      const removedPremiumAction = apexResponse.actions.some((action) => isPremiumApexAction(action))
+      apexResponse.actions = apexResponse.actions.filter((action) => !isPremiumApexAction(action))
 
       if (removedPremiumAction) {
-        scoutResponse.gated = {
-          feature: "scout_actions",
-          reason: "Resume tailoring action is part of paid Scout actions.",
-          upgradeMessage: "Upgrade to unlock resume tailoring shortcuts from Scout.",
+        apexResponse.gated = {
+          feature: "apex_actions",
+          reason: "Resume tailoring action is part of paid Apex actions.",
+          upgradeMessage: "Upgrade to unlock resume tailoring shortcuts from Apex.",
         }
       }
     }
 
-    if (scoutResponse.workflow && !canUseAdvancedScoutActions(effectivePlan)) {
-      const hadPremiumWorkflowAction = scoutResponse.workflow.steps.some(
+    if (apexResponse.workflow && !canUseAdvancedApexActions(effectivePlan)) {
+      const hadPremiumWorkflowAction = apexResponse.workflow.steps.some(
         (step) => step.action && isPremiumWorkflowAction(step.action)
       )
-      scoutResponse.workflow.steps = scoutResponse.workflow.steps.map((step) => ({
+      apexResponse.workflow.steps = apexResponse.workflow.steps.map((step) => ({
         ...step,
         action:
           step.action && isPremiumWorkflowAction(step.action)
@@ -2268,21 +2268,21 @@ User Input: ${userMessage}`
             : step.action,
       }))
 
-      if (hadPremiumWorkflowAction && !scoutResponse.gated) {
-        scoutResponse.gated = {
-          feature: "scout_actions",
-          reason: "Some workflow actions are part of paid Scout actions.",
+      if (hadPremiumWorkflowAction && !apexResponse.gated) {
+        apexResponse.gated = {
+          feature: "apex_actions",
+          reason: "Some workflow actions are part of paid Apex actions.",
           upgradeMessage: "Upgrade to unlock advanced workflow actions like resume tailoring.",
         }
       }
     }
 
-    if (premiumGate?.feature === "scout_strategy" && !scoutResponse.gated) {
-      scoutResponse.gated = premiumGate
+    if (premiumGate?.feature === "apex_strategy" && !apexResponse.gated) {
+      apexResponse.gated = premiumGate
     }
 
     if (safetyNotes.length > 0) {
-      scoutResponse.answer = `${scoutResponse.answer}\n\nNote: ${safetyNotes.join(" ")}`
+      apexResponse.answer = `${apexResponse.answer}\n\nNote: ${safetyNotes.join(" ")}`
     }
 
     // Inject workflow_directive when the intent is workflow and keywords match a known type.
@@ -2303,7 +2303,7 @@ User Input: ${userMessage}`
         ctxPayload.source   = resolvedJob.source
       }
       if (Object.keys(ctxPayload).length > 0) workflowDirective.payload = ctxPayload
-      scoutResponse.workflow_directive = workflowDirective
+      apexResponse.workflow_directive = workflowDirective
     }
 
     // Compare guard: when compare context was loaded and compare intent fired, always
@@ -2311,15 +2311,15 @@ User Input: ${userMessage}`
     // Claude sometimes decides "your jobs are poor fits, let me redirect to search" and
     // omits the compare field; we still need to show the comparison the user asked for.
     if (isCompareIntent && context.compareJobs && context.compareJobs.length >= 2) {
-      if (!scoutResponse.workspace_directive) {
-        scoutResponse.workspace_directive = { mode: "compare" }
+      if (!apexResponse.workspace_directive) {
+        apexResponse.workspace_directive = { mode: "compare" }
       }
       // If Claude omitted the compare field entirely, build a minimal fallback comparison
       // from the context jobs so CompareMode has something to render.
-      if (!scoutResponse.compare) {
-        scoutResponse.compare = {
-          summary: scoutResponse.answer?.trim()
-            ? scoutResponse.answer.split(/[.!?]/)[0]?.trim() + "."
+      if (!apexResponse.compare) {
+        apexResponse.compare = {
+          summary: apexResponse.answer?.trim()
+            ? apexResponse.answer.split(/[.!?]/)[0]?.trim() + "."
             : `Here is a comparison of your ${context.compareJobs.length} saved jobs.`,
           items: context.compareJobs.map((cj) => ({
             jobId:              cj.id,
@@ -2344,10 +2344,10 @@ User Input: ${userMessage}`
 
     // Inject tailor workspace_directive with full resolved job payload.
     // This ensures TailorMode shows the correct title/company/detailUrl.
-    if (!scoutResponse.workspace_directive && TAILOR_INTENT_RE.test(userMessage) && !BULK_PREP_RE.test(userMessage)) {
+    if (!apexResponse.workspace_directive && TAILOR_INTENT_RE.test(userMessage) && !BULK_PREP_RE.test(userMessage)) {
       const tailorJobId = resolvedJob?.jobId ?? effectiveJobId ?? context.job?.id
       if (tailorJobId) {
-        scoutResponse.workspace_directive = {
+        apexResponse.workspace_directive = {
           mode: "tailor",
           payload: {
             jobId:    tailorJobId,
@@ -2365,17 +2365,17 @@ User Input: ${userMessage}`
     // Also handles the case where Claude's response independently sets bulk_application
     // mode (e.g. for commands the regex didn't catch) — we still fetch jobs for it.
     const needsBulkJobs =
-      !scoutResponse.apply_agent &&
-      (scoutResponse.workspace_directive?.mode === "bulk_application" ||
+      !apexResponse.apply_agent &&
+      (apexResponse.workspace_directive?.mode === "bulk_application" ||
         inferBulkWorkspaceDirective(userMessage) !== undefined)
 
-    if (!scoutResponse.workspace_directive) {
+    if (!apexResponse.workspace_directive) {
       const bulkDirective = inferBulkWorkspaceDirective(userMessage)
-      if (bulkDirective) scoutResponse.workspace_directive = bulkDirective
+      if (bulkDirective) apexResponse.workspace_directive = bulkDirective
     }
 
-    if (needsBulkJobs && scoutResponse.workspace_directive?.mode === "bulk_application") {
-      const bp = scoutResponse.workspace_directive.payload ?? {}
+    if (needsBulkJobs && apexResponse.workspace_directive?.mode === "bulk_application") {
+      const bp = apexResponse.workspace_directive.payload ?? {}
       try {
         const params = new URLSearchParams()
         if (bp.minMatchScore) params.set("minMatchScore", String(bp.minMatchScore))
@@ -2389,13 +2389,13 @@ User Input: ${userMessage}`
         params.set("q", userMessage)
 
         const origin = request.nextUrl.origin || process.env.NEXT_PUBLIC_APP_URL || "http://127.0.0.1:3000"
-        const res = await fetch(`${origin}/api/scout/apply-agent?${params.toString()}`, {
+        const res = await fetch(`${origin}/api/apex/apply-agent?${params.toString()}`, {
           headers: { cookie: request.headers.get("cookie") ?? "" },
         })
         if (res.ok) {
-          const data = await res.json() as { jobs: import("@/lib/scout/apply-agent/types").ApplyAgentJob[] }
+          const data = await res.json() as { jobs: import("@/lib/apex/apply-agent/types").ApplyAgentJob[] }
           if (data.jobs.length > 0) {
-            scoutResponse.apply_agent = {
+            apexResponse.apply_agent = {
               jobs:     data.jobs,
               criteria: {
                 minMatchScore:           bp.minMatchScore as number | undefined,
@@ -2416,8 +2416,8 @@ User Input: ${userMessage}`
     }
 
     // Ensure interview mode is set whenever interviewPrep was generated.
-    if (scoutResponse.interviewPrep && !scoutResponse.workspace_directive) {
-      scoutResponse.workspace_directive = {
+    if (apexResponse.interviewPrep && !apexResponse.workspace_directive) {
+      apexResponse.workspace_directive = {
         mode: "interview",
         payload: {
           interviewType: detectInterviewType(userMessage),
@@ -2432,9 +2432,9 @@ User Input: ${userMessage}`
 
     // Ensure outreach mode is set whenever an outreach draft was generated.
     // Claude may forget the workspace_directive even when it produces the outreach field.
-    if (scoutResponse.outreach && !scoutResponse.workspace_directive) {
+    if (apexResponse.outreach && !apexResponse.workspace_directive) {
       const contextName = context.job?.company_name ?? context.company?.name
-      scoutResponse.workspace_directive = {
+      apexResponse.workspace_directive = {
         mode: "outreach",
         payload: {
           companyName: contextName,
@@ -2444,17 +2444,17 @@ User Input: ${userMessage}`
       }
     }
 
-    normalizeFilterQueriesForRequest(scoutResponse, userMessage)
-    attachDebug(scoutResponse)
+    normalizeFilterQueriesForRequest(apexResponse, userMessage)
+    attachDebug(apexResponse)
 
     // ── Async memory extraction (fire-and-forget) ────────────────────────────
     // Extract new memory candidates from this chat turn and persist those that
     // clear the confidence threshold. Never blocks the response.
     void (async () => {
       try {
-        const { extractFromChatTurn } = await import("@/lib/scout/memory/extractor")
-        const { persistCandidates }   = await import("@/lib/scout/memory/store")
-        const candidates = extractFromChatTurn(userMessage, scoutResponse)
+        const { extractFromChatTurn } = await import("@/lib/apex/memory/extractor")
+        const { persistCandidates }   = await import("@/lib/apex/memory/store")
+        const candidates = extractFromChatTurn(userMessage, apexResponse)
         if (candidates.length > 0) {
           await persistCandidates(user.id, pool, candidates)
         }
@@ -2464,10 +2464,10 @@ User Input: ${userMessage}`
     })()
 
     return NextResponse.json(
-      sanitizeScoutResponse(stripProOnlyFieldsForFreeUsers(scoutResponse, userPlan))
+      sanitizeApexResponse(stripProOnlyFieldsForFreeUsers(apexResponse, userPlan))
     )
   } catch (error) {
-    console.error("Scout chat error:", error)
+    console.error("Apex chat error:", error)
 
     return NextResponse.json(
       {

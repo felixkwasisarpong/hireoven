@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
-import { getMarketIntelligence } from "@/lib/scout/market-intelligence"
+import { getMarketIntelligence } from "@/lib/apex/market-intelligence"
 import { getPostgresPool } from "@/lib/postgres/server"
 
 export const runtime = "nodejs"

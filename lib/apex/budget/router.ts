@@ -1,5 +1,5 @@
 /**
- * Scout AI Router — deterministic-first decision layer.
+ * Apex AI Router — deterministic-first decision layer.
  *
  * Rules:
  *   - No LLM for hover/UI hints, badges, or cosmetic labels
@@ -32,7 +32,7 @@ const SPONSORSHIP_FILTER_COMMAND_RE =
 // Commands that map directly to app navigation
 const NAV_COMMANDS_RE = /^(go to|open|show me|take me to)\s+(my (jobs|pipeline|applications|resume|profile|saved|matches|dashboard|settings))/i
 
-export function routeScoutMessage(message: string): RoutingDecision {
+export function routeApexMessage(message: string): RoutingDecision {
   const msg = message.trim()
 
   if (DETERMINISTIC_COMMANDS.test(msg)) {
@@ -60,15 +60,15 @@ export function routeScoutMessage(message: string): RoutingDecision {
 // ── Per-feature timeout budgets ───────────────────────────────────────────────
 
 export const AI_TIMEOUTS = {
-  scout_chat:            14_000, // non-streaming; streaming has its own abort
-  scout_chat_stream:     25_000, // hard stop on stream IIFE
-  scout_strategy:        16_000,
-  scout_research:         9_000, // per synthesis call (engine has 30s total)
-  scout_follow_up:        4_000, // haiku + 2-3 sentences
-  scout_mock_interview:   9_000,
-  scout_bulk_prepare:    18_000,
-  scout_career:          16_000,
-  scout_memory_extract:  10_000,
+  apex_chat:            14_000, // non-streaming; streaming has its own abort
+  apex_chat_stream:     25_000, // hard stop on stream IIFE
+  apex_strategy:        16_000,
+  apex_research:         9_000, // per synthesis call (engine has 30s total)
+  apex_follow_up:        4_000, // haiku + 2-3 sentences
+  apex_mock_interview:   9_000,
+  apex_bulk_prepare:    18_000,
+  apex_career:          16_000,
+  apex_memory_extract:  10_000,
   resume_generate:       25_000,
   resume_ai_write:       12_000,
   resume_tailor_analyze: 12_000,
@@ -82,11 +82,11 @@ export const AI_TIMEOUTS = {
 // ── Safe fallback messages ────────────────────────────────────────────────────
 
 export const FALLBACK_MESSAGES = {
-  scout_chat:         "Scout is taking a bit longer than expected. Please try again in a moment.",
-  scout_strategy:     "Strategy planning is taking longer than usual. Please try again shortly.",
-  scout_follow_up:    "Unable to draft the follow-up right now. Try again in a moment.",
-  scout_mock_interview: "Interview coaching is temporarily slow. Please try again.",
-  scout_research:     "Research is taking longer than expected. Please try again.",
+  apex_chat:         "Apex is taking a bit longer than expected. Please try again in a moment.",
+  apex_strategy:     "Strategy planning is taking longer than usual. Please try again shortly.",
+  apex_follow_up:    "Unable to draft the follow-up right now. Try again in a moment.",
+  apex_mock_interview: "Interview coaching is temporarily slow. Please try again.",
+  apex_research:     "Research is taking longer than expected. Please try again.",
   resume_generate:    "Resume generation is taking longer than expected. Please try again.",
   cover_letter:       "Cover letter generation timed out. Please try again.",
   interview_prep:     "Interview prep is temporarily unavailable. Please try again.",

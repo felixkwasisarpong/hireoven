@@ -1,5 +1,5 @@
 /**
- * Per-source dedupe + normalization helpers for /api/scout/jobs/ingest.
+ * Per-source dedupe + normalization helpers for /api/apex/jobs/ingest.
  *
  * Title normalization (per brief): lowercase, strip punctuation, drop common
  * suffixes like "(Remote)" / "(Hybrid)" / "I/II/III" roman numerals at end,

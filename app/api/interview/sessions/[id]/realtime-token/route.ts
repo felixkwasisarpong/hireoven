@@ -3,16 +3,16 @@ import fs from "node:fs"
 import path from "node:path"
 import { createClient } from "@/lib/supabase/server"
 import { getPostgresPool } from "@/lib/postgres/server"
-import { getInterviewSession } from "@/lib/scout/interview/queries"
-import { buildInterviewContext } from "@/lib/scout/interview/context"
+import { getInterviewSession } from "@/lib/apex/interview/queries"
+import { buildInterviewContext } from "@/lib/apex/interview/context"
 import {
   buildTextInterviewerSystemPrompt,
   buildCodingInterviewerSystemPrompt,
-} from "@/lib/scout/interview/agentPrompts"
+} from "@/lib/apex/interview/agentPrompts"
 import { canAccess, requiredPlanFor } from "@/lib/gates"
 import { gateResponse, getPlanForUserId } from "@/lib/gates/server-gate"
-import { getBalance, deductCredits } from "@/lib/scout/interview/credits"
-import type { InterviewPersona } from "@/lib/scout/interview/queries"
+import { getBalance, deductCredits } from "@/lib/apex/interview/credits"
+import type { InterviewPersona } from "@/lib/apex/interview/queries"
 
 export const runtime = "nodejs"
 

@@ -2,9 +2,9 @@
 
 import { Ban, CheckCircle2, Sparkles, X } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { getQueueSummary, type BulkApplicationQueue } from "@/lib/scout/bulk-application/types"
+import { getQueueSummary, type BulkApplicationQueue } from "@/lib/apex/bulk-application/types"
 import { BulkJobRow } from "./BulkJobRow"
-import type { BulkEngineActions } from "@/lib/scout/bulk-application/engine"
+import type { BulkEngineActions } from "@/lib/apex/bulk-application/engine"
 
 type Props = Pick<
   BulkEngineActions,
@@ -48,7 +48,7 @@ export function BulkQueuePanel({
         "flex items-center gap-3 border-b px-4 py-3.5",
         isComplete ? "border-emerald-100 bg-emerald-50/60" : "border-slate-100 bg-white",
       )}>
-        <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-lg bg-[#FF5C18] shadow-[0_2px_6px_rgba(255,92,24,0.4)]">
+        <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-lg bg-[#6366F1] shadow-[0_2px_6px_rgba(99,102,241,0.4)]">
           <Sparkles className="h-3 w-3 text-white" />
         </span>
         <div className="min-w-0 flex-1">
@@ -72,7 +72,7 @@ export function BulkQueuePanel({
       {/* Progress bar */}
       <div className="h-0.5 w-full bg-slate-100">
         <div
-          className={cn("h-full transition-all duration-500", isComplete ? "bg-emerald-400" : "bg-[#FF5C18]")}
+          className={cn("h-full transition-all duration-500", isComplete ? "bg-emerald-400" : "bg-[#6366F1]")}
           style={{ width: `${progressPct}%` }}
         />
       </div>

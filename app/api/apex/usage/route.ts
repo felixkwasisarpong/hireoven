@@ -1,13 +1,13 @@
 /**
- * GET /api/scout/usage — dev dashboard data
+ * GET /api/apex/usage — dev dashboard data
  *
  * Returns in-memory tracker stats + cache stats.
  * Only accessible in development or by admin users.
  */
 
 import { NextResponse } from "next/server"
-import { budgetTracker } from "@/lib/scout/budget/tracker"
-import { scoutCache } from "@/lib/scout/budget/cache"
+import { budgetTracker } from "@/lib/apex/budget/tracker"
+import { apexCache } from "@/lib/apex/budget/cache"
 import { createClient } from "@/lib/supabase/server"
 
 export const runtime = "nodejs"
@@ -25,7 +25,7 @@ export async function GET() {
 
   return NextResponse.json({
     stats:     budgetTracker.stats(),
-    cache:     scoutCache.stats(),
+    cache:     apexCache.stats(),
     slowest:   budgetTracker.slowest(10),
     expensive: budgetTracker.mostExpensive(10),
     failed:    budgetTracker.failed(20),

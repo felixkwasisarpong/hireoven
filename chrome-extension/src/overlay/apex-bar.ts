@@ -1,5 +1,5 @@
 /**
- * Hireoven Scout Bar — MVP UI shell.
+ * Hireoven Apex Bar — MVP UI shell.
  *
  * Visual-only floating bar gated by isProbablyJobPage(). Pure UI + detection;
  * no backend calls, no autofill, no resume tailoring.
@@ -27,7 +27,7 @@ import {
   shouldShowAutofillFeatures,
   type ExtensionPageMode,
 } from "../detectors/page-mode"
-import { extractJob, type ExtractedJob } from "../extractors/scout-extractor"
+import { extractJob, type ExtractedJob } from "../extractors/apex-extractor"
 import {
   analyzeExtractedJob,
   answerQuestion,
@@ -66,16 +66,16 @@ import {
 
 // ── Public types ──────────────────────────────────────────────────────────────
 
-export type ScoutBarState = "detecting" | "not_job_page" | "ready" | "error"
+export type ApexBarState = "detecting" | "not_job_page" | "ready" | "error"
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const HOST_ID = "hireoven-scout-bar"
-const MINIMIZED_STORAGE_KEY = "hireovenScoutBarMinimized"
+const HOST_ID = "hireoven-apex-bar"
+const MINIMIZED_STORAGE_KEY = "hireovenApexBarMinimized"
 const URL_POLL_INTERVAL_MS = 600
 const ATS_FORM_REFRESH_INTERVAL_MS = 1200
 
-const STATUS_TEXT: Record<ScoutBarState, string> = {
+const STATUS_TEXT: Record<ApexBarState, string> = {
   detecting:    "Detecting job page…",
   ready:        "Job page detected",
   not_job_page: "Not a supported job page",
@@ -88,7 +88,7 @@ const STYLES = `
   :host { all: initial; }
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-  .scout-bar {
+  .apex-bar {
     position: fixed;
     left: 50%;
     bottom: 20px;
@@ -1064,7 +1064,7 @@ function pageSignature(): string {
 /**
  * Send a popup-style message (raw response, not the {ok, data} EXT_MVP_*
  * envelope) to the background. Used for tailor preview/approve from inline
- * scout-bar flows so we don't need to add EXT_MVP_ wrappers for every action.
+ * apex-bar flows so we don't need to add EXT_MVP_ wrappers for every action.
  */
 function sendBackgroundMessage<T>(message: unknown): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -1088,11 +1088,11 @@ function sendBackgroundMessage<T>(message: unknown): Promise<T> {
 
 // ── Implementation ────────────────────────────────────────────────────────────
 
-export class ScoutBar {
+export class ApexBar {
   private host: HTMLDivElement | null = null
   private shadow: ShadowRoot | null = null
   private root: HTMLDivElement | null = null
-  private state: ScoutBarState = "detecting"
+  private state: ApexBarState = "detecting"
   private site: SupportedSite = "unknown"
   private job: ExtractedJob | null = null
   private debugOpen = false
@@ -1554,7 +1554,7 @@ export class ScoutBar {
 
     if (this.minimized) {
       this.root.innerHTML = `
-        <button class="restore" data-action="restore" aria-label="Show Hireoven Scout" title="Show Hireoven Scout">
+        <button class="restore" data-action="restore" aria-label="Show Hireoven Apex" title="Show Hireoven Apex">
           ●
         </button>
       `
@@ -1571,10 +1571,10 @@ export class ScoutBar {
       ${this.renderAutofillPanel()}
       ${this.renderAnalysisPanel()}
       ${this.renderProofPrompt()}
-      <div class="scout-bar" role="region" aria-label="Hireoven Scout">
+      <div class="apex-bar" role="region" aria-label="Hireoven Apex">
         <div class="brand">
           <span class="dot ${this.state}"></span>
-          <span class="brand-text">Hireoven Scout</span>
+          <span class="brand-text">Hireoven Apex</span>
         </div>
         <div class="status">${this.renderStatus()}</div>
         <div class="actions">
@@ -2373,7 +2373,7 @@ export class ScoutBar {
     })
   }
 
-  public async executeScoutCommand(command: string, payload?: Record<string, unknown>): Promise<void> {
+  public async executeApexCommand(command: string, payload?: Record<string, unknown>): Promise<void> {
     if (command === "OPEN_AUTOFILL") {
       await this.onAutofillPreview()
       return
@@ -3034,7 +3034,7 @@ export class ScoutBar {
             confidence: "needs_review",
             source: "manual_required",
             filled: false,
-            skippedReason: "Scout never fills voluntary legal disclosures.",
+            skippedReason: "Apex never fills voluntary legal disclosures.",
           },
           {
             label: "Review & Submit",
@@ -3042,7 +3042,7 @@ export class ScoutBar {
             confidence: "needs_review",
             source: "manual_required",
             filled: false,
-            skippedReason: "Scout never auto-submits.",
+            skippedReason: "Apex never auto-submits.",
           },
         ]
         this.autofillStatus = "preview"
@@ -3233,14 +3233,14 @@ export class ScoutBar {
           this.autofillError = "Self-Identify step reached. Complete manually, then click Save and Continue."
         } else if (result.reachedReview) {
           this.autofillStatus = "done"
-          this.autofillError = "Review step reached. Verify everything and submit yourself — Scout will not auto-submit."
+          this.autofillError = "Review step reached. Verify everything and submit yourself — Apex will not auto-submit."
         } else if (result.manualReviewCount > 0) {
           // Step partially filled — some required fields still need the user.
           this.autofillStatus = "done"
           this.autofillError = `${filledMsg} ${result.manualReviewCount} field${result.manualReviewCount === 1 ? "" : "s"} still need you${hint ? ` (${hint})` : ""}. Fix and click Save and Continue.`
         } else if (result.fieldsFilledCount === 0) {
           // Workday question pages frequently contain tenant-specific policy
-          // prompts where Scout cannot infer safe defaults. That's a review
+          // prompts where Apex cannot infer safe defaults. That's a review
           // outcome, not a hard runtime failure.
           this.autofillStatus = "done"
           const questionStep = result.stepId === "application_questions"
@@ -3643,7 +3643,7 @@ export class ScoutBar {
       this.proofStatus = "error"
       // No UI surfaces this; log so dev tools can still surface real
       // failures during the silent auto-save flow.
-      console.warn("[scout-bar] application proof auto-save failed:", err)
+      console.warn("[apex-bar] application proof auto-save failed:", err)
     }
     this.render()
   }

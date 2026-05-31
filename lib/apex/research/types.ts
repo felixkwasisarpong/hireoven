@@ -1,5 +1,5 @@
 /**
- * Scout Autonomous Research Mode — Types V1
+ * Apex Autonomous Research Mode — Types V1
  *
  * Bounded multi-step research: gathers real evidence, synthesizes findings,
  * streams results progressively.
@@ -13,16 +13,16 @@
 
 // ── Core task model ───────────────────────────────────────────────────────────
 
-export type ScoutResearchTaskStatus =
+export type ApexResearchTaskStatus =
   | "queued"
   | "running"
   | "waiting_user"
   | "completed"
   | "failed"
 
-export type ScoutResearchStepStatus = "pending" | "running" | "completed" | "failed"
+export type ApexResearchStepStatus = "pending" | "running" | "completed" | "failed"
 
-export type ScoutResearchFindingType =
+export type ApexResearchFindingType =
   | "job_cluster"
   | "company_pattern"
   | "skill_gap"
@@ -30,8 +30,8 @@ export type ScoutResearchFindingType =
   | "sponsorship_pattern"
   | "career_path"
 
-export type ScoutResearchFinding = {
-  type:       ScoutResearchFindingType
+export type ApexResearchFinding = {
+  type:       ApexResearchFindingType
   title:      string
   summary:    string
   evidence?:  string[]
@@ -40,22 +40,22 @@ export type ScoutResearchFinding = {
   actions?: { label: string; command: string }[]
 }
 
-export type ScoutResearchStep = {
+export type ApexResearchStep = {
   id:         string
   title:      string
-  status:     ScoutResearchStepStatus
+  status:     ApexResearchStepStatus
   agent?:     string
   summary?:   string
   durationMs?: number
 }
 
-export type ScoutResearchTask = {
+export type ApexResearchTask = {
   id:          string
   title:       string
   objective:   string
-  status:      ScoutResearchTaskStatus
-  steps:       ScoutResearchStep[]
-  findings?:   ScoutResearchFinding[]
+  status:      ApexResearchTaskStatus
+  steps:       ApexResearchStep[]
+  findings?:   ApexResearchFinding[]
   createdAt:    string
   updatedAt?:   string
   completedAt?: string
@@ -63,14 +63,14 @@ export type ScoutResearchTask = {
 }
 
 // ── Research SSE event protocol ───────────────────────────────────────────────
-// Used by /api/scout/research — separate from ScoutStreamEvent (chat stream).
+// Used by /api/apex/research — separate from ApexStreamEvent (chat stream).
 
 export type ResearchSSEEvent =
-  | { type: "research_init";       task:      ScoutResearchTask }
+  | { type: "research_init";       task:      ApexResearchTask }
   | { type: "research_step_start"; stepId:    string; title: string }
   | { type: "research_step_done";  stepId:    string; summary: string; durationMs: number }
-  | { type: "research_finding";    finding:   ScoutResearchFinding }
-  | { type: "research_complete";   task:      ScoutResearchTask }
+  | { type: "research_finding";    finding:   ApexResearchFinding }
+  | { type: "research_complete";   task:      ApexResearchTask }
   | { type: "research_error";      message:   string }
 
 export function encodeResearchSSE(event: ResearchSSEEvent): string {

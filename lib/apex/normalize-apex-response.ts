@@ -1,9 +1,9 @@
 /**
- * Scout Response Display Normalizer
+ * Apex Response Display Normalizer
  *
  * TWO-LAYER normalization:
- *   Layer 1 (lib/scout/normalize.ts)  — raw API JSON → typed ScoutResponse
- *   Layer 2 (THIS FILE)               — ScoutResponse → NormalizedScoutResponse
+ *   Layer 1 (lib/apex/normalize.ts)  — raw API JSON → typed ApexResponse
+ *   Layer 2 (THIS FILE)               — ApexResponse → NormalizedApexResponse
  *
  * Layer 2 is purely for rendering:
  *   - Extracts safe display text (never raw JSON)
@@ -16,66 +16,66 @@
  */
 
 import type {
-  ScoutResponse,
-  ScoutRecommendation,
-  ScoutIntent,
-  ScoutMode,
-  ScoutAction,
-  ScoutExplanationBlock,
-  ScoutWorkflow,
-  ScoutCompareResponse,
-  ScoutInterviewPrep,
-  ScoutMockInterview,
-  ScoutWorkspaceDirective,
-  ScoutWorkflowDirective,
-} from "@/lib/scout/types"
-import type { ScoutGraph } from "@/components/scout/renderers/ScoutGraphRenderer"
-import { getScoutDisplayText } from "@/lib/scout/display-text"
-import { runQualityControl, type QCContext } from "@/lib/scout/quality-control"
+  ApexResponse,
+  ApexRecommendation,
+  ApexIntent,
+  ApexMode,
+  ApexAction,
+  ApexExplanationBlock,
+  ApexWorkflow,
+  ApexCompareResponse,
+  ApexInterviewPrep,
+  ApexMockInterview,
+  ApexWorkspaceDirective,
+  ApexWorkflowDirective,
+} from "@/lib/apex/types"
+import type { ApexGraph } from "@/components/apex/renderers/ApexGraphRenderer"
+import { getApexDisplayText } from "@/lib/apex/display-text"
+import { runQualityControl, type QCContext } from "@/lib/apex/quality-control"
 
-export type ScoutRenderContext = "dashboard" | "mini" | "extension"
+export type ApexRenderContext = "dashboard" | "mini" | "extension"
 
-export type NormalizedScoutResponse = {
+export type NormalizedApexResponse = {
   /** Safe, human-readable text — never raw JSON */
   displayText:        string
 
-  recommendation:     ScoutRecommendation
-  intent?:            ScoutIntent
+  recommendation:     ApexRecommendation
+  intent?:            ApexIntent
   confidence?:        number
-  mode?:              ScoutMode
+  mode?:              ApexMode
 
-  actions:            ScoutAction[]
-  explanations:       ScoutExplanationBlock[]
-  workflow?:          ScoutWorkflow
-  compare?:           ScoutCompareResponse
-  interviewPrep?:     ScoutInterviewPrep
-  mockInterview?:     ScoutMockInterview
-  graph?:             ScoutGraph
-  gated?:             ScoutResponse["gated"]
+  actions:            ApexAction[]
+  explanations:       ApexExplanationBlock[]
+  workflow?:          ApexWorkflow
+  compare?:           ApexCompareResponse
+  interviewPrep?:     ApexInterviewPrep
+  mockInterview?:     ApexMockInterview
+  graph?:             ApexGraph
+  gated?:             ApexResponse["gated"]
 
   /**
    * workspace_directive and workflow_directive are NEVER rendered as visible
    * text. They are stripped here and retained only for dev inspection.
    */
-  workspace_directive?: ScoutWorkspaceDirective
-  workflow_directive?:  ScoutWorkflowDirective
+  workspace_directive?: ApexWorkspaceDirective
+  workflow_directive?:  ApexWorkflowDirective
 
   /** Dev-only: original response for debug panel */
-  rawDebugPayload?: ScoutResponse
+  rawDebugPayload?: ApexResponse
 }
 
 const IS_DEV = false
 
 export function normalizeForDisplay(
-  response: ScoutResponse,
+  response: ApexResponse,
   qcContext?: QCContext,
-): NormalizedScoutResponse {
+): NormalizedApexResponse {
   // Run QC pass before display normalisation so every rendering path —
   // dashboard shell, mini command bar, extension overlay — sees the same
   // validated and repaired response.
   const { safeResponse } = runQualityControl(response, qcContext ?? {})
 
-  const displayText = getScoutDisplayText(safeResponse.answer)
+  const displayText = getApexDisplayText(safeResponse.answer)
 
   return {
     displayText,
@@ -98,7 +98,7 @@ export function normalizeForDisplay(
 }
 
 /** True when the normalized response has any structured content to render. */
-export function hasStructuredContent(n: NormalizedScoutResponse): boolean {
+export function hasStructuredContent(n: NormalizedApexResponse): boolean {
   return (
     n.explanations.length > 0 ||
     Boolean(n.compare) ||

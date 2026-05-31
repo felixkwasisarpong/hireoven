@@ -11,10 +11,10 @@ import {
   getTurns,
   createCodingAttempt,
   type CodingProblem,
-} from "@/lib/scout/interview/queries"
-import { selectProblemForSession } from "@/lib/scout/interview/codingSelector"
-import { buildInterviewContext } from "@/lib/scout/interview/context"
-import { buildCodingInterviewerSystemPrompt } from "@/lib/scout/interview/agentPrompts"
+} from "@/lib/apex/interview/queries"
+import { selectProblemForSession } from "@/lib/apex/interview/codingSelector"
+import { buildInterviewContext } from "@/lib/apex/interview/context"
+import { buildCodingInterviewerSystemPrompt } from "@/lib/apex/interview/agentPrompts"
 import { replaceEmDash, sanitizeGeneratedText } from "@/lib/text/sanitize-generated-text"
 
 export const runtime = "nodejs"

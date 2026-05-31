@@ -1,18 +1,18 @@
 "use client"
 
 /**
- * Scout Active Browser Context — V1
+ * Apex Active Browser Context — V1
  *
  * The extension content script running on hireoven.com relays lightweight
  * page-state from the background service worker via window.postMessage.
  *
- * Extension → Scout events (postMessage source: "hireoven-ext"):
+ * Extension → Apex events (postMessage source: "hireoven-ext"):
  *   ACTIVE_CONTEXT_CHANGED — page context updated (tab switch, URL change)
  *   AUTOFILL_AVAILABLE     — active tab has an application form ready to fill
  *   JOB_RESOLVED           — active job now has a Hireoven job ID
  *   PAGE_MODE_CHANGED      — pageType changed (e.g. job_detail → application_form)
  *
- * Scout → Extension commands (postMessage source: "hireoven-scout"):
+ * Apex → Extension commands (postMessage source: "hireoven-apex"):
  *   GET_ACTIVE_CONTEXT     — request current context snapshot
  *   OPEN_AUTOFILL          — ask extension to open autofill drawer on active job tab
  *   START_TAILOR           — ask extension to open tailor drawer
@@ -47,13 +47,13 @@ export type ActiveBrowserContext = {
   timestamp: number
 }
 
-export type ScoutExtensionCommand =
+export type ApexExtensionCommand =
   | "GET_ACTIVE_CONTEXT"
   | "OPEN_AUTOFILL"
   | "START_TAILOR"
   | "START_COMPARE"
   | "START_WORKFLOW"
-  // Browser Operator V1 — supervised actions dispatched by useScoutBrowserOperator
+  // Browser Operator V1 — supervised actions dispatched by useApexBrowserOperator
   | "OPERATOR_OPEN_TAB"
   | "OPERATOR_NAVIGATE"
   | "OPERATOR_FOCUS_FIELD"
@@ -64,7 +64,7 @@ export type ScoutExtensionCommand =
 
 // ── Protocol constants ────────────────────────────────────────────────────────
 
-export const FROM_SCOUT = "hireoven-scout"
+export const FROM_APEX = "hireoven-apex"
 export const FROM_EXT   = "hireoven-ext"
 
 const HANDLED_EXT_EVENTS = new Set([
@@ -129,7 +129,7 @@ export function useActiveBrowserContext(): BrowserContextState & {
   const requestSync = useCallback(() => {
     if (typeof window === "undefined") return
     window.postMessage(
-      { source: FROM_SCOUT, type: "GET_ACTIVE_CONTEXT" },
+      { source: FROM_APEX, type: "GET_ACTIVE_CONTEXT" },
       window.location.origin,
     )
   }, [])
@@ -138,7 +138,7 @@ export function useActiveBrowserContext(): BrowserContextState & {
     window.addEventListener("message", handleMessage)
     requestSync()
     // Keep the extension bridge "connected" state warm even when no tab-change
-    // events are happening (e.g. user stays on Scout dashboard for minutes).
+    // events are happening (e.g. user stays on Apex dashboard for minutes).
     const heartbeat = setInterval(() => requestSync(), HEARTBEAT_MS)
 
     const handleFocus = () => requestSync()
@@ -161,7 +161,7 @@ export function useActiveBrowserContext(): BrowserContextState & {
   return { ...state, requestSync }
 }
 
-// ── Scout → Extension command sender ─────────────────────────────────────────
+// ── Apex → Extension command sender ─────────────────────────────────────────
 
 /**
  * Posts a command to the extension via the hireoven.com content script bridge.
@@ -172,12 +172,12 @@ export function useActiveBrowserContext(): BrowserContextState & {
  * perform autonomous actions (no auto-submit, no silent autofill).
  */
 export function sendExtensionCommand(
-  command: ScoutExtensionCommand,
+  command: ApexExtensionCommand,
   payload?: Record<string, unknown>,
 ): void {
   if (typeof window === "undefined") return
   window.postMessage(
-    { source: FROM_SCOUT, type: command, ...payload },
+    { source: FROM_APEX, type: command, ...payload },
     window.location.origin,
   )
 }

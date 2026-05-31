@@ -1,15 +1,15 @@
 "use client"
 
 import { CheckCircle2, CircleDashed, Info, XCircle, AlertCircle, Lightbulb } from "lucide-react"
-import type { ScoutEvidenceBridgeBlock, ScoutEvidenceBridgeItemStatus } from "@/lib/scout/types"
+import type { ApexEvidenceBridgeBlock, ApexEvidenceBridgeItemStatus } from "@/lib/apex/types"
 
-type ScoutEvidenceBridgeProps = {
-  block: ScoutEvidenceBridgeBlock
+type ApexEvidenceBridgeProps = {
+  block: ApexEvidenceBridgeBlock
   compact?: boolean
 }
 
 const STATUS_CONFIG: Record<
-  ScoutEvidenceBridgeItemStatus,
+  ApexEvidenceBridgeItemStatus,
   { label: string; badgeClass: string; Icon: React.ElementType }
 > = {
   strong:  { label: "Matched",  badgeClass: "border-emerald-200 bg-emerald-50 text-emerald-700",  Icon: CheckCircle2 },
@@ -18,7 +18,7 @@ const STATUS_CONFIG: Record<
   unknown: { label: "Unknown",  badgeClass: "border-slate-200  bg-slate-100 text-slate-500",    Icon: CircleDashed },
 }
 
-export function ScoutEvidenceBridge({ block, compact = false }: ScoutEvidenceBridgeProps) {
+export function ApexEvidenceBridge({ block, compact = false }: ApexEvidenceBridgeProps) {
   const pad = compact ? "p-3" : "p-3.5"
 
   return (
@@ -83,7 +83,7 @@ export function ScoutEvidenceBridge({ block, compact = false }: ScoutEvidenceBri
 
       <div className="mt-2.5 flex items-center gap-1.5 text-[11px] text-slate-400">
         <Info className="h-3.5 w-3.5 shrink-0" />
-        Based only on job and resume data available in Scout context.
+        Based only on job and resume data available in Apex context.
       </div>
     </section>
   )

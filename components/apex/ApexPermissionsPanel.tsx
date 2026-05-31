@@ -2,7 +2,7 @@
 
 import { Ban, ChevronRight, RotateCcw, Shield, ShieldCheck, X } from "lucide-react"
 import { cn } from "@/lib/utils"
-import type { ScoutPermission, ScoutPermissionState } from "@/lib/scout/permissions"
+import type { ApexPermission, ApexPermissionState } from "@/lib/apex/permissions"
 import {
   PERMISSION_LABELS,
   getDefaultPermissions,
@@ -10,11 +10,11 @@ import {
   updatePermission,
   readAuditLog,
   clearAuditLog,
-} from "@/lib/scout/permissions"
+} from "@/lib/apex/permissions"
 import { Check } from "lucide-react"
 
 // Permissions that start unlocked (no confirmation required by default)
-const READ_ONLY_PERMS = new Set<ScoutPermission>(["read_jobs", "read_resume"])
+const READ_ONLY_PERMS = new Set<ApexPermission>(["read_jobs", "read_resume"])
 
 // Hard-blocked actions shown as a static row at the bottom
 const HARD_BLOCKED_DISPLAY = [
@@ -24,8 +24,8 @@ const HARD_BLOCKED_DISPLAY = [
 ]
 
 type Props = {
-  permissions: ScoutPermissionState[]
-  onPermissionsChange: (updated: ScoutPermissionState[]) => void
+  permissions: ApexPermissionState[]
+  onPermissionsChange: (updated: ApexPermissionState[]) => void
   onClose: () => void
 }
 
@@ -33,8 +33,8 @@ function PermRow({
   state,
   onChange,
 }: {
-  state: ScoutPermissionState
-  onChange: (patch: Partial<Pick<ScoutPermissionState, "allowed" | "requiresConfirmation">>) => void
+  state: ApexPermissionState
+  onChange: (patch: Partial<Pick<ApexPermissionState, "allowed" | "requiresConfirmation">>) => void
 }) {
   const meta = PERMISSION_LABELS[state.permission]
   const isReadOnly = READ_ONLY_PERMS.has(state.permission)
@@ -88,7 +88,7 @@ function PermRow({
             "mt-0.5 flex-shrink-0 rounded-full transition-colors",
             "h-5 w-9 border",
             state.allowed
-              ? "border-[#FF5C18]/30 bg-[#FF5C18]"
+              ? "border-[#6366F1]/30 bg-[#6366F1]"
               : "border-slate-200 bg-slate-100"
           )}
           aria-label={state.allowed ? "Disable permission" : "Enable permission"}
@@ -103,12 +103,12 @@ function PermRow({
   )
 }
 
-export function ScoutPermissionsPanel({ permissions, onPermissionsChange, onClose }: Props) {
+export function ApexPermissionsPanel({ permissions, onPermissionsChange, onClose }: Props) {
   const auditLog = readAuditLog()
 
   function handleChange(
-    permission: ScoutPermission,
-    patch: Partial<Pick<ScoutPermissionState, "allowed" | "requiresConfirmation">>,
+    permission: ApexPermission,
+    patch: Partial<Pick<ApexPermissionState, "allowed" | "requiresConfirmation">>,
   ) {
     const updated = updatePermission(permissions, permission, patch)
     onPermissionsChange(updated)
@@ -136,11 +136,11 @@ export function ScoutPermissionsPanel({ permissions, onPermissionsChange, onClos
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-4 border-b border-slate-100 flex-shrink-0">
           <div className="flex items-center gap-2.5">
-            <div className="h-7 w-7 rounded-lg bg-[#FF5C18]/10 flex items-center justify-center flex-shrink-0">
-              <Shield className="h-4 w-4 text-[#FF5C18]" />
+            <div className="h-7 w-7 rounded-lg bg-[#6366F1]/10 flex items-center justify-center flex-shrink-0">
+              <Shield className="h-4 w-4 text-[#6366F1]" />
             </div>
             <div>
-              <div className="text-sm font-bold text-slate-900">Scout Permissions</div>
+              <div className="text-sm font-bold text-slate-900">Apex Permissions</div>
               <div className="text-[10px] text-slate-400">
                 {allowedCount} of {permissions.length} actions allowed
               </div>
@@ -159,7 +159,7 @@ export function ScoutPermissionsPanel({ permissions, onPermissionsChange, onClos
         {/* Privacy notice */}
         <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-100 flex-shrink-0">
           <p className="text-[10.5px] text-slate-500 leading-relaxed">
-            Control exactly what Scout can do on your behalf.{" "}
+            Control exactly what Apex can do on your behalf.{" "}
             <strong className="text-slate-600">You approve every sensitive action.</strong>{" "}
             Toggle off anything you&apos;d prefer to handle manually.
           </p>
@@ -233,7 +233,7 @@ export function ScoutPermissionsPanel({ permissions, onPermissionsChange, onClos
           <button
             type="button"
             onClick={onClose}
-            className="inline-flex items-center gap-1 text-[11.5px] font-semibold text-[#FF5C18] transition hover:text-[#c94010]"
+            className="inline-flex items-center gap-1 text-[11.5px] font-semibold text-[#6366F1] transition hover:text-[#4338CA]"
           >
             Done <ChevronRight className="h-3 w-3" />
           </button>

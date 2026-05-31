@@ -1,10 +1,10 @@
 "use client"
 
 /**
- * ScoutExtensionPromo — lightweight, dismissable extension capability card.
+ * ApexExtensionPromo — lightweight, dismissable extension capability card.
  *
  * Shown in IdleMode when the extension is not connected.
- * Non-blocking: user can dismiss and use Scout without the extension.
+ * Non-blocking: user can dismiss and use Apex without the extension.
  * No aggressive banners. No guilt.
  */
 
@@ -21,7 +21,7 @@ const CAPABILITIES = [
   { icon: Chrome, label: "Workflow continuation on-page"  },
 ]
 
-function isLocalScoutHost(hostname: string): boolean {
+function isLocalApexHost(hostname: string): boolean {
   const host = hostname.toLowerCase().replace(/^www\./, "")
   return (
     host === "localhost" ||
@@ -33,10 +33,10 @@ function isLocalScoutHost(hostname: string): boolean {
   )
 }
 
-export function ScoutExtensionPromo({ onDismiss }: Props) {
+export function ApexExtensionPromo({ onDismiss }: Props) {
   const installHref = useMemo(() => {
     if (typeof window === "undefined") return "/extension"
-    return isLocalScoutHost(window.location.hostname)
+    return isLocalApexHost(window.location.hostname)
       ? "/extension"
       : "https://chrome.google.com/webstore/detail/hireoven"
   }, [])
@@ -46,15 +46,15 @@ export function ScoutExtensionPromo({ onDismiss }: Props) {
       <div className="flex items-start gap-3 px-4 py-3.5">
         {/* Icon */}
         <div className="flex-shrink-0 mt-0.5">
-          <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-[#FF5C18]/10">
-            <Chrome className="h-4 w-4 text-[#FF5C18]" />
+          <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-[#6366F1]/10">
+            <Chrome className="h-4 w-4 text-[#6366F1]" />
           </span>
         </div>
 
         {/* Content */}
         <div className="min-w-0 flex-1">
           <p className="text-[12.5px] font-semibold text-slate-900">
-            Scout works best with the browser extension
+            Apex works best with the browser extension
           </p>
 
           <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">

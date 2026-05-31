@@ -14,19 +14,19 @@ import {
   XCircle,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import type { ScoutResearchTask, ScoutResearchFinding, ScoutResearchStep } from "@/lib/scout/research/types"
+import type { ApexResearchTask, ApexResearchFinding, ApexResearchStep } from "@/lib/apex/research/types"
 
 // ── Finding type metadata ─────────────────────────────────────────────────────
 
 const FINDING_META: Record<
-  ScoutResearchFinding["type"],
+  ApexResearchFinding["type"],
   { icon: React.ElementType; label: string; accent: string; bg: string }
 > = {
   job_cluster:         { icon: Briefcase,    label: "Job Cluster",          accent: "text-blue-600",   bg: "bg-blue-50 border-blue-100"   },
   company_pattern:     { icon: Building2,    label: "Company Pattern",      accent: "text-violet-600", bg: "bg-violet-50 border-violet-100" },
   skill_gap:           { icon: AlertCircle,  label: "Skill Gap",            accent: "text-amber-600",  bg: "bg-amber-50 border-amber-100"  },
   market_signal:       { icon: TrendingUp,   label: "Market Signal",        accent: "text-emerald-600",bg: "bg-emerald-50 border-emerald-100" },
-  sponsorship_pattern: { icon: Globe,        label: "Sponsorship Pattern",  accent: "text-[#FF5C18]",  bg: "bg-orange-50 border-orange-100" },
+  sponsorship_pattern: { icon: Globe,        label: "Sponsorship Pattern",  accent: "text-[#6366F1]",  bg: "bg-orange-50 border-orange-100" },
   career_path:         { icon: ArrowUpRight, label: "Career Path",          accent: "text-sky-600",    bg: "bg-sky-50 border-sky-100"      },
 }
 
@@ -41,7 +41,7 @@ function confidenceLabel(conf?: number): { label: string; cls: string } {
 
 // ── Step row ──────────────────────────────────────────────────────────────────
 
-function StepRow({ step, index }: { step: ScoutResearchStep; index: number }) {
+function StepRow({ step, index }: { step: ApexResearchStep; index: number }) {
   const isRunning   = step.status === "running"
   const isCompleted = step.status === "completed"
   const isFailed    = step.status === "failed"
@@ -53,7 +53,7 @@ function StepRow({ step, index }: { step: ScoutResearchStep; index: number }) {
       isPending && "opacity-40",
     )}>
       <div className="mt-0.5 flex-shrink-0">
-        {isRunning   && <Loader2  className="h-4 w-4 animate-spin text-[#FF5C18]" />}
+        {isRunning   && <Loader2  className="h-4 w-4 animate-spin text-[#6366F1]" />}
         {isCompleted && <CheckCircle2 className="h-4 w-4 text-emerald-500" />}
         {isFailed    && <XCircle  className="h-4 w-4 text-red-400" />}
         {isPending   && <Circle   className="h-4 w-4 text-slate-300" />}
@@ -69,7 +69,7 @@ function StepRow({ step, index }: { step: ScoutResearchStep; index: number }) {
           <p className="mt-0.5 text-[11px] text-slate-400">{step.summary}</p>
         )}
         {isRunning && (
-          <p className="mt-0.5 text-[11px] text-[#FF5C18]/70 animate-pulse">Running…</p>
+          <p className="mt-0.5 text-[11px] text-[#6366F1]/70 animate-pulse">Running…</p>
         )}
       </div>
       {step.durationMs !== undefined && isCompleted && (
@@ -85,7 +85,7 @@ function FindingCard({
   finding,
   onCommand,
 }: {
-  finding:   ScoutResearchFinding
+  finding:   ApexResearchFinding
   onCommand: (cmd: string) => void
 }) {
   const meta = FINDING_META[finding.type]
@@ -151,7 +151,7 @@ function FindingCard({
 
 // ── Status badge ──────────────────────────────────────────────────────────────
 
-function StatusBadge({ task }: { task: ScoutResearchTask }) {
+function StatusBadge({ task }: { task: ApexResearchTask }) {
   const completedSteps = task.steps.filter((s) => s.status === "completed").length
   const total          = task.steps.length
   const isRunning      = task.status === "running"
@@ -171,7 +171,7 @@ function StatusBadge({ task }: { task: ScoutResearchTask }) {
     </span>
   )
   if (isRunning) return (
-    <span className="inline-flex items-center gap-1.5 rounded-full bg-orange-50 border border-orange-100 px-2.5 py-1 text-[10px] font-medium text-[#FF5C18]">
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-orange-50 border border-orange-100 px-2.5 py-1 text-[10px] font-medium text-[#6366F1]">
       <Loader2 className="h-3 w-3 animate-spin" />
       {completedSteps}/{total} steps
     </span>
@@ -186,7 +186,7 @@ function StatusBadge({ task }: { task: ScoutResearchTask }) {
 // ── Main component ────────────────────────────────────────────────────────────
 
 type Props = {
-  task:      ScoutResearchTask | null
+  task:      ApexResearchTask | null
   isRunning: boolean
   onCommand: (cmd: string) => void
 }
@@ -196,7 +196,7 @@ export function ResearchMode({ task, isRunning, onCommand }: Props) {
   if (!task) {
     return (
       <div className="flex items-center gap-3 py-10 text-slate-400">
-        <Loader2 className="h-5 w-5 animate-spin text-[#FF5C18]" />
+        <Loader2 className="h-5 w-5 animate-spin text-[#6366F1]" />
         <span className="text-sm">Initialising research…</span>
       </div>
     )
@@ -244,7 +244,7 @@ export function ResearchMode({ task, isRunning, onCommand }: Props) {
       {/* ── Empty state during synthesis ─────────────────────────────────────── */}
       {findings.length === 0 && task.status === "running" && task.steps.find((s) => s.id === "s5" && s.status === "running") && (
         <div className="flex items-center gap-3 rounded-xl border border-dashed border-slate-200 px-4 py-5 text-slate-400">
-          <Loader2 className="h-4 w-4 animate-spin text-[#FF5C18]/70 flex-shrink-0" />
+          <Loader2 className="h-4 w-4 animate-spin text-[#6366F1]/70 flex-shrink-0" />
           <p className="text-sm">Synthesising findings from gathered data…</p>
         </div>
       )}

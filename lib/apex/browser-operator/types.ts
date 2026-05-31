@@ -1,5 +1,5 @@
 /**
- * Scout Browser Operator — Types V1
+ * Apex Browser Operator — Types V1
  *
  * Supervised browser operation: every action is visible, reviewable,
  * and cancellable. The operator never submits, never hides actions,
@@ -14,7 +14,7 @@
 
 // ── Action types ──────────────────────────────────────────────────────────────
 
-export type ScoutBrowserAction =
+export type ApexBrowserAction =
   | "open_tab"           // open job/application page in a new tab
   | "navigate"           // navigate the active job tab to a URL
   | "focus_field"        // focus a specific form field (visual hint only)
@@ -23,21 +23,21 @@ export type ScoutBrowserAction =
   | "prepare_autofill"   // open the autofill review drawer
   | "insert_text"        // insert cover letter / text into a field (requires approval)
   | "upload_resume"      // attach a resume file to the form (requires approval)
-  | "open_drawer"        // open the Scout extension overlay drawer
+  | "open_drawer"        // open the Apex extension overlay drawer
 
 // ── Action event ──────────────────────────────────────────────────────────────
 
-export type ScoutBrowserActionStatus =
+export type ApexBrowserActionStatus =
   | "pending"    // waiting for user approval
   | "running"    // dispatched to extension, awaiting completion
   | "completed"  // extension confirmed or optimistic completion
   | "failed"     // dispatch failed or extension reported error
   | "blocked"    // permission denied or extension not connected
 
-export type ScoutBrowserActionEvent = {
+export type ApexBrowserActionEvent = {
   id:              string
-  action:          ScoutBrowserAction
-  status:          ScoutBrowserActionStatus
+  action:          ApexBrowserAction
+  status:          ApexBrowserActionStatus
   /** Human-readable target (e.g. "Work Authorization field", "Resume.pdf") */
   target?:         string
   /** One-sentence status description shown in the action strip */
@@ -54,10 +54,10 @@ export type ScoutBrowserActionEvent = {
 }
 
 // ── Permission mapping ────────────────────────────────────────────────────────
-// Maps operator actions to existing ScoutPermission keys.
+// Maps operator actions to existing ApexPermission keys.
 // No new permissions needed — all actions map to existing system permissions.
 
-export const BROWSER_ACTION_PERMISSION: Partial<Record<ScoutBrowserAction, string>> = {
+export const BROWSER_ACTION_PERMISSION: Partial<Record<ApexBrowserAction, string>> = {
   prepare_autofill:  "autofill_fields",
   open_drawer:       "autofill_fields",
   insert_text:       "insert_cover_letter",
@@ -70,7 +70,7 @@ export const BROWSER_ACTION_PERMISSION: Partial<Record<ScoutBrowserAction, strin
 // ── Approval gates ────────────────────────────────────────────────────────────
 // Actions that MUST pause for explicit user approval before dispatching.
 
-export const APPROVAL_REQUIRED_ACTIONS = new Set<ScoutBrowserAction>([
+export const APPROVAL_REQUIRED_ACTIONS = new Set<ApexBrowserAction>([
   "upload_resume",
   "insert_text",
   "navigate",
@@ -78,7 +78,7 @@ export const APPROVAL_REQUIRED_ACTIONS = new Set<ScoutBrowserAction>([
 
 // ── Human-readable action labels ──────────────────────────────────────────────
 
-export const BROWSER_ACTION_LABELS: Record<ScoutBrowserAction, string> = {
+export const BROWSER_ACTION_LABELS: Record<ApexBrowserAction, string> = {
   open_tab:          "Open application tab",
   navigate:          "Navigate to page",
   focus_field:       "Focus field",
@@ -87,5 +87,5 @@ export const BROWSER_ACTION_LABELS: Record<ScoutBrowserAction, string> = {
   prepare_autofill:  "Prepare autofill",
   insert_text:       "Insert text",
   upload_resume:     "Upload resume",
-  open_drawer:       "Open Scout drawer",
+  open_drawer:       "Open Apex drawer",
 }

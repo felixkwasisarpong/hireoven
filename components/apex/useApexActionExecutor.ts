@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import { usePathname } from "next/navigation"
 import { useRouter } from "next/navigation"
-import type { ScoutAction } from "@/lib/scout/types"
+import type { ApexAction } from "@/lib/apex/types"
 import {
   checkPermission,
   logAuditEntry,
@@ -11,18 +11,18 @@ import {
   buildConfirmationCopy,
   readPermissions,
   updatePermission,
-  type ScoutPermissionState,
-} from "@/lib/scout/permissions"
-import type { GateRequest } from "@/components/scout/ScoutActionGate"
+  type ApexPermissionState,
+} from "@/lib/apex/permissions"
+import type { GateRequest } from "@/components/apex/ApexActionGate"
 
-export type ScoutActionSource = "chat" | "nudge" | "strategy" | "workflow"
+export type ApexActionSource = "chat" | "nudge" | "strategy" | "workflow"
 
 /** Compact audit record stored alongside an action's confirmation and timeline entry. */
-export type ScoutAuditEntry = {
+export type ApexAuditEntry = {
   actionType: string
   label: string
   timestamp: number
-  source?: ScoutActionSource
+  source?: ApexActionSource
   reason?: string
   previousStateSummary?: string
   newStateSummary?: string
@@ -32,42 +32,42 @@ type ExecutorOptions = {
   onExecuted?: () => void
   onNotExecuted?: () => void
   /** Where this action originated (chat, nudge, strategy, workflow). */
-  source?: ScoutActionSource
-  /** Human-readable reason Scout suggested this action. */
+  source?: ApexActionSource
+  /** Human-readable reason Apex suggested this action. */
   reason?: string
 }
 
-export type ScoutActionConfirmation = {
+export type ApexActionConfirmation = {
   title: string
   details: string[]
   canUndo: boolean
   /** Live job count injected after the feed refreshes */
   jobCount?: number
   /** Audit trail for the "Why this?" button */
-  auditEntry?: ScoutAuditEntry
+  auditEntry?: ApexAuditEntry
 }
 
-export type ScoutLastChange = {
+export type ApexLastChange = {
   actionType: string
   label: string
   previousSearchParams: string
   newSearchParams: string
   timestamp: number
-  source?: ScoutActionSource
+  source?: ApexActionSource
   reason?: string
   previousStateSummary?: string
   newStateSummary?: string
 }
 
-/** Payload broadcast on window when a Scout action is recorded in the session. */
-export type ScoutActionRecordedDetail = {
+/** Payload broadcast on window when a Apex action is recorded in the session. */
+export type ApexActionRecordedDetail = {
   id: string
   actionType: string
   label: string
   timestamp: number
   /** URL to navigate to in order to undo — only set for URL-based actions */
   undoUrl?: string
-  source?: ScoutActionSource
+  source?: ApexActionSource
   reason?: string
   previousStateSummary?: string
   newStateSummary?: string
@@ -75,7 +75,7 @@ export type ScoutActionRecordedDetail = {
 
 function emitTimelineSignal(detail: Record<string, unknown>) {
   if (typeof window === "undefined") return
-  window.dispatchEvent(new CustomEvent("scout:timeline-signal", { detail }))
+  window.dispatchEvent(new CustomEvent("apex:timeline-signal", { detail }))
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -96,7 +96,7 @@ function summarizeSearchParams(p: URLSearchParams): string {
 }
 
 function buildStateSummaries(
-  action: ScoutAction,
+  action: ApexAction,
   currentSearchParams: URLSearchParams
 ): { previousStateSummary: string; newStateSummary: string } {
   switch (action.type) {
@@ -140,34 +140,34 @@ function buildStateSummaries(
       return { previousStateSummary: "Current page", newStateSummary: "Resume tailor opened" }
     case "RESET_CONTEXT":
       return {
-        previousStateSummary: "Active filters and Scout context",
-        newStateSummary: "Scout context and filters cleared",
+        previousStateSummary: "Active filters and Apex context",
+        newStateSummary: "Apex context and filters cleared",
       }
     default:
       return { previousStateSummary: "Previous state", newStateSummary: "Updated state" }
   }
 }
 
-export function useScoutActionExecutor() {
+export function useApexActionExecutor() {
   const router = useRouter()
   const pathname = usePathname()
 
   const [highlightedJobs, setHighlightedJobs] = useState<string[]>([])
   const [feedback, setFeedback] = useState<string | null>(null)
-  const [confirmation, setConfirmation] = useState<ScoutActionConfirmation | null>(null)
-  const [lastChange, setLastChange] = useState<ScoutLastChange | null>(null)
+  const [confirmation, setConfirmation] = useState<ApexActionConfirmation | null>(null)
+  const [lastChange, setLastChange] = useState<ApexLastChange | null>(null)
 
   // ── Permission system ────────────────────────────────────────────────────────
   // Gate requests are dispatched to the shell via window events so they work
   // regardless of which component instance called executeAction.
-  const [permissions, setPermissions] = useState<ScoutPermissionState[]>(() => readPermissions())
+  const [permissions, setPermissions] = useState<ApexPermissionState[]>(() => readPermissions())
   const pendingActionRef  = useRef<(() => void) | null>(null)
   const pendingCancelRef  = useRef<(() => void) | null>(null)
   const gateInFlightRef   = useRef(false)
 
   // Ref mirror of confirmation — lets the feed-updated listener read current state
   // without needing to be re-registered on every confirmation change
-  const confirmationRef = useRef<ScoutActionConfirmation | null>(null)
+  const confirmationRef = useRef<ApexActionConfirmation | null>(null)
   confirmationRef.current = confirmation
 
   // Stores the actual undo callback without triggering re-renders on assignment
@@ -186,8 +186,8 @@ export function useScoutActionExecutor() {
         prev ? { ...prev, jobCount: detail.totalCount } : prev
       )
     }
-    window.addEventListener("scout:feed-updated", onFeedUpdated)
-    return () => window.removeEventListener("scout:feed-updated", onFeedUpdated)
+    window.addEventListener("apex:feed-updated", onFeedUpdated)
+    return () => window.removeEventListener("apex:feed-updated", onFeedUpdated)
   }, [])
 
   function showFeedback(message: string) {
@@ -196,7 +196,7 @@ export function useScoutActionExecutor() {
   }
 
   function showConfirmation(
-    state: ScoutActionConfirmation,
+    state: ApexActionConfirmation,
     undoFn?: () => void,
     duration = 8000
   ) {
@@ -225,7 +225,7 @@ export function useScoutActionExecutor() {
 
     if (undoType === "filters") {
       if (typeof window !== "undefined") {
-        window.dispatchEvent(new CustomEvent("scout:filters-restored"))
+        window.dispatchEvent(new CustomEvent("apex:filters-restored"))
       }
       showConfirmation(
         {
@@ -253,7 +253,7 @@ export function useScoutActionExecutor() {
 
   // ── Core executor with permission gate ──────────────────────────────────────
 
-  function executeAction(action: ScoutAction, options?: ExecutorOptions) {
+  function executeAction(action: ApexAction, options?: ExecutorOptions) {
     const { source } = options ?? {}
     const perm = ACTION_PERMISSION[action.type]
 
@@ -261,7 +261,7 @@ export function useScoutActionExecutor() {
     const permCheck = checkPermission(action.type, permissions)
 
     if (!permCheck.allowed) {
-      showFeedback(permCheck.reason ?? `"${action.type}" is blocked in Scout permissions.`)
+      showFeedback(permCheck.reason ?? `"${action.type}" is blocked in Apex permissions.`)
       if (perm) {
         logAuditEntry({
           id: `audit-${Date.now()}`,
@@ -337,7 +337,7 @@ export function useScoutActionExecutor() {
 
     // Listen for the shell's gate response (once only)
     const onGateResponse = (e: Event) => {
-      window.removeEventListener("scout:gate-response", onGateResponse)
+      window.removeEventListener("apex:gate-response", onGateResponse)
       if (gateTimeout) clearTimeout(gateTimeout)
       gateInFlightRef.current = false
       const detail = (e as CustomEvent<{ approved: boolean; alwaysAllow: boolean }>).detail
@@ -363,7 +363,7 @@ export function useScoutActionExecutor() {
     // Safety: if the gate UI is unavailable on this surface, never leave the
     // action in a permanent "processing" state.
     const gateTimeout = setTimeout(() => {
-      window.removeEventListener("scout:gate-response", onGateResponse)
+      window.removeEventListener("apex:gate-response", onGateResponse)
       if (!gateInFlightRef.current) return
       gateInFlightRef.current = false
       pendingCancelRef.current?.()
@@ -372,10 +372,10 @@ export function useScoutActionExecutor() {
       showFeedback("Permission prompt timed out. Try again.")
     }, 15000)
 
-    window.addEventListener("scout:gate-response", onGateResponse)
+    window.addEventListener("apex:gate-response", onGateResponse)
 
-    // Dispatch the gate open event — shell listens and renders ScoutActionGate
-    window.dispatchEvent(new CustomEvent("scout:gate-open", {
+    // Dispatch the gate open event — shell listens and renders ApexActionGate
+    window.dispatchEvent(new CustomEvent("apex:gate-open", {
       detail: {
         actionType: action.type,
         permission: perm,
@@ -385,7 +385,7 @@ export function useScoutActionExecutor() {
     }))
   }
 
-  function runAction(action: ScoutAction, options?: ExecutorOptions) {
+  function runAction(action: ApexAction, options?: ExecutorOptions) {
     try {
       const { source, reason } = options ?? {}
       const currentSearchParams =
@@ -441,7 +441,7 @@ export function useScoutActionExecutor() {
           // Notify the feed toolbar which filter buttons to highlight
           if (typeof window !== "undefined") {
             window.dispatchEvent(
-              new CustomEvent("scout:filters-applied", {
+              new CustomEvent("apex:filters-applied", {
                 detail: { paramKeys: [...params.keys()] },
               })
             )
@@ -453,7 +453,7 @@ export function useScoutActionExecutor() {
             new URLSearchParams(currentSearchParamsString)
           )
           const ts = Date.now()
-          const auditEntry: ScoutAuditEntry = {
+          const auditEntry: ApexAuditEntry = {
             actionType: "APPLY_FILTERS",
             label: applied.length > 0 ? `Applied: ${applied.join(" · ")}` : "Filters applied",
             timestamp: ts,
@@ -465,12 +465,12 @@ export function useScoutActionExecutor() {
 
           if (typeof window !== "undefined") {
             window.dispatchEvent(
-              new CustomEvent("scout:action-recorded", {
+              new CustomEvent("apex:action-recorded", {
                 detail: {
                   id: `action-${ts}`,
                   ...auditEntry,
                   undoUrl: previousUrl,
-                } satisfies ScoutActionRecordedDetail,
+                } satisfies ApexActionRecordedDetail,
               })
             )
           }
@@ -490,7 +490,7 @@ export function useScoutActionExecutor() {
           undoTypeRef.current = "filters"
           showConfirmation(
             {
-              title: "Scout updated your feed",
+              title: "Apex updated your feed",
               details: [
                 applied.length > 0 ? `Applied: ${applied.join(" · ")}` : "Filters applied",
                 prioritized.length > 0 ? `Prioritized: ${prioritized.join(" · ")}` : "Results refreshed",
@@ -521,7 +521,7 @@ export function useScoutActionExecutor() {
             new URLSearchParams(currentSearchParamsString)
           )
           const ts = Date.now()
-          const auditEntry: ScoutAuditEntry = {
+          const auditEntry: ApexAuditEntry = {
             actionType: "HIGHLIGHT_JOBS",
             label: `Highlighted ${count} job${count !== 1 ? "s" : ""}`,
             timestamp: ts,
@@ -533,11 +533,11 @@ export function useScoutActionExecutor() {
 
           if (typeof window !== "undefined") {
             window.dispatchEvent(
-              new CustomEvent("scout:action-recorded", {
+              new CustomEvent("apex:action-recorded", {
                 detail: {
                   id: `action-${ts}`,
                   ...auditEntry,
-                } satisfies ScoutActionRecordedDetail,
+                } satisfies ApexActionRecordedDetail,
               })
             )
           }
@@ -545,7 +545,7 @@ export function useScoutActionExecutor() {
           undoTypeRef.current = "highlights"
           showConfirmation(
             {
-              title: `Scout highlighted ${count} job${count !== 1 ? "s" : ""}`,
+              title: `Apex highlighted ${count} job${count !== 1 ? "s" : ""}`,
               details: [
                 action.payload.reason ?? `${count} job${count !== 1 ? "s" : ""} marked`,
                 "Scroll your feed to see them",
@@ -567,14 +567,14 @@ export function useScoutActionExecutor() {
           break
 
         case "RESET_CONTEXT": {
-          // Dispatch reset event so all Scout chat components clear their state
+          // Dispatch reset event so all Apex chat components clear their state
           if (typeof window !== "undefined") {
-            window.dispatchEvent(new CustomEvent("scout:reset-context"))
+            window.dispatchEvent(new CustomEvent("apex:reset-context"))
           }
           if (action.payload.clearFilters !== false) {
             router.push("/dashboard")
           }
-          showFeedback("Scout context reset")
+          showFeedback("Apex context reset")
           break
         }
 
@@ -583,11 +583,11 @@ export function useScoutActionExecutor() {
           // No navigation, no auto-apply; purely informational.
           showFeedback(
             action.payload.hint ??
-              "Open the Hireoven Scout extension on a job page to capture it."
+              "Open the Hireoven Apex extension on a job page to capture it."
           )
           emitTimelineSignal({
             type: "extension_detected_page",
-            title: "Scout requested extension bridge action",
+            title: "Apex requested extension bridge action",
             summary: "Open the Hireoven extension on your active job tab.",
             severity: "info",
           })
@@ -596,18 +596,18 @@ export function useScoutActionExecutor() {
 
         case "OPEN_EXTENSION_AUTOFILL_PREVIEW": {
           // Phase 2 — instructs the user to open the extension autofill preview.
-          // Scout cannot directly trigger the extension; this is purely a UI hint.
+          // Apex cannot directly trigger the extension; this is purely a UI hint.
           const hint = action.payload.hint
           const url = action.payload.url
           const message = hint
             ? hint
             : url
             ? `Navigate to the application form, then click the Hireoven extension icon and choose "Preview Autofill": ${url}`
-            : "Open the Hireoven Scout extension on the application form page and click \"Preview Autofill\" to fill your details."
+            : "Open the Hireoven Apex extension on the application form page and click \"Preview Autofill\" to fill your details."
           showFeedback(message)
           emitTimelineSignal({
             type: "autofill_reviewed",
-            title: "Scout prompted autofill review",
+            title: "Apex prompted autofill review",
             summary: "Autofill remains user-controlled and review-first.",
             severity: "info",
           })
@@ -616,7 +616,7 @@ export function useScoutActionExecutor() {
 
         case "PREPARE_TAILORED_AUTOFILL": {
           // Phase 3 — guide user through tailor-before-autofill flow.
-          // Scout cannot control the extension directly; we show a step-by-step instruction.
+          // Apex cannot control the extension directly; we show a step-by-step instruction.
           const { jobId, url, hint } = action.payload
 
           if (hint) {
@@ -651,7 +651,7 @@ export function useScoutActionExecutor() {
           emitTimelineSignal({
             type: "workflow_started",
             title: "Workflow started: Tailor + Prepare Application",
-            summary: "Scout prepared a review-first tailor/autofill workflow.",
+            summary: "Apex prepared a review-first tailor/autofill workflow.",
             severity: "info",
           })
           break
@@ -665,8 +665,8 @@ export function useScoutActionExecutor() {
             const params = new URLSearchParams(currentSearchParamsString)
             params.set("focus", "1")
             params.set("sort", "match")
-            // Persist so Scout workspace survives navigation back from /dashboard
-            try { localStorage.setItem("hireoven:scout-focus-mode:v1", "1") } catch {}
+            // Persist so Apex workspace survives navigation back from /dashboard
+            try { localStorage.setItem("hireoven:apex-focus-mode:v1", "1") } catch {}
             router.push(`/dashboard?${params.toString()}`)
 
             const { previousStateSummary, newStateSummary } = buildStateSummaries(
@@ -674,7 +674,7 @@ export function useScoutActionExecutor() {
               new URLSearchParams(currentSearchParamsString)
             )
             const ts = Date.now()
-            const auditEntry: ScoutAuditEntry = {
+            const auditEntry: ApexAuditEntry = {
               actionType: "SET_FOCUS_MODE",
               label: action.payload.reason ?? "Focus Mode on",
               timestamp: ts,
@@ -686,17 +686,17 @@ export function useScoutActionExecutor() {
 
             if (typeof window !== "undefined") {
               window.dispatchEvent(
-                new CustomEvent("scout:filters-applied", {
+                new CustomEvent("apex:filters-applied", {
                   detail: { paramKeys: ["focus", "sort"] },
                 })
               )
               window.dispatchEvent(
-                new CustomEvent("scout:action-recorded", {
+                new CustomEvent("apex:action-recorded", {
                   detail: {
                     id: `action-${ts}`,
                     ...auditEntry,
                     undoUrl: previousUrl,
-                  } satisfies ScoutActionRecordedDetail,
+                  } satisfies ApexActionRecordedDetail,
                 })
               )
             }
@@ -716,7 +716,7 @@ export function useScoutActionExecutor() {
             undoTypeRef.current = "filters"
             showConfirmation(
               {
-                title: "Scout Focus Mode is on",
+                title: "Apex Focus Mode is on",
                 details: [
                   action.payload.reason ?? "Sorted by best match",
                   "Prioritized: match score · recency · sponsorship",
@@ -732,11 +732,11 @@ export function useScoutActionExecutor() {
             params.delete("focus")
             params.delete("sort")
             const qs = params.toString()
-            // Clear persistence so Scout workspace reflects the off state
-            try { localStorage.removeItem("hireoven:scout-focus-mode:v1") } catch {}
-            // Notify ScoutWorkspaceShell to update localFocusMode state
+            // Clear persistence so Apex workspace reflects the off state
+            try { localStorage.removeItem("hireoven:apex-focus-mode:v1") } catch {}
+            // Notify ApexWorkspaceShell to update localFocusMode state
             if (typeof window !== "undefined") {
-              window.dispatchEvent(new CustomEvent("scout:focus-mode-changed", { detail: { enabled: false } }))
+              window.dispatchEvent(new CustomEvent("apex:focus-mode-changed", { detail: { enabled: false } }))
             }
             router.push(`/dashboard${qs ? `?${qs}` : ""}`)
             showFeedback("Focus Mode off")
@@ -747,7 +747,7 @@ export function useScoutActionExecutor() {
 
       options?.onExecuted?.()
     } catch (err) {
-      console.error("Error executing Scout action:", err)
+      console.error("Error executing Apex action:", err)
       showFeedback("Failed to execute action")
       options?.onNotExecuted?.()
     }

@@ -4,19 +4,19 @@ import { useState } from "react"
 import { Check, Lock, Zap } from "lucide-react"
 import { useFeatureAccess } from "@/lib/hooks/useFeatureAccess"
 import { useUpgradeModal } from "@/lib/context/UpgradeModalContext"
-import { getDefaultActionLabel } from "@/lib/scout/actions"
-import type { ScoutWorkflow } from "@/lib/scout/types"
-import { useScoutActionExecutor } from "./useScoutActionExecutor"
+import { getDefaultActionLabel } from "@/lib/apex/actions"
+import type { ApexWorkflow } from "@/lib/apex/types"
+import { useApexActionExecutor } from "./useApexActionExecutor"
 
-type ScoutWorkflowRendererProps = {
-  workflow: ScoutWorkflow
+type ApexWorkflowRendererProps = {
+  workflow: ApexWorkflow
 }
 
-export function ScoutWorkflowRenderer({ workflow }: ScoutWorkflowRendererProps) {
+export function ApexWorkflowRenderer({ workflow }: ApexWorkflowRendererProps) {
   const [completedSteps, setCompletedSteps] = useState<Set<string>>(new Set())
-  const { hasAccess: canExecuteAllSteps } = useFeatureAccess("scout_strategy")
+  const { hasAccess: canExecuteAllSteps } = useFeatureAccess("apex_strategy")
   const { showUpgrade } = useUpgradeModal()
-  const { executeAction, feedback } = useScoutActionExecutor()
+  const { executeAction, feedback } = useApexActionExecutor()
 
   if (!workflow.steps.length) return null
 
@@ -115,7 +115,7 @@ export function ScoutWorkflowRenderer({ workflow }: ScoutWorkflowRendererProps) 
                         type="button"
                         onClick={() => {
                           if (isLocked) {
-                            showUpgrade("scout_strategy")
+                            showUpgrade("apex_strategy")
                             return
                           }
                           executeAction(action, { onExecuted: () => markComplete(step.id) })
@@ -162,7 +162,7 @@ export function ScoutWorkflowRenderer({ workflow }: ScoutWorkflowRendererProps) 
               Free plan: step 1 only.{" "}
               <button
                 type="button"
-                onClick={() => showUpgrade("scout_strategy")}
+                onClick={() => showUpgrade("apex_strategy")}
                 className="font-semibold underline underline-offset-2"
               >
                 Upgrade

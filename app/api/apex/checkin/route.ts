@@ -64,7 +64,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ error: "Invalid action" }, { status: 400 })
   } catch (err) {
-    console.error("[scout/checkin] error:", err instanceof Error ? err.message : err)
+    console.error("[apex/checkin] error:", err instanceof Error ? err.message : err)
     return NextResponse.json({ error: "Failed" }, { status: 500 })
   }
 }

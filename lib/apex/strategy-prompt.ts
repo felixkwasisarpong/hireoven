@@ -1,22 +1,22 @@
 /**
- * Scout Strategy Mode — AI prompt, context formatter, and response parser.
+ * Apex Strategy Mode — AI prompt, context formatter, and response parser.
  *
  * Separate from strategy.ts (deterministic board) intentionally:
  * this module owns everything that touches Claude for strategy generation.
  */
 
-import type { ScoutContext } from "@/lib/scout/context"
-import type { ScoutStrategyBoard, ScoutAIStrategy, ScoutActionType } from "@/lib/scout/types"
-import { normalizeScoutActions } from "@/lib/scout/actions"
+import type { ApexContext } from "@/lib/apex/context"
+import type { ApexStrategyBoard, ApexAIStrategy, ApexActionType } from "@/lib/apex/types"
+import { normalizeApexActions } from "@/lib/apex/actions"
 
 // Strategy Mode only allows filter/resume/focus actions — no navigation or page-context actions
-const STRATEGY_ALLOWED_ACTION_TYPES = new Set<ScoutActionType>([
+const STRATEGY_ALLOWED_ACTION_TYPES = new Set<ApexActionType>([
   "APPLY_FILTERS",
   "OPEN_RESUME_TAILOR",
   "SET_FOCUS_MODE",
 ])
 
-export const STRATEGY_SYSTEM_PROMPT = `You are Scout in Strategy Mode — Hireoven's AI job-search strategist.
+export const STRATEGY_SYSTEM_PROMPT = `You are Apex in Strategy Mode — Hireoven's AI job-search strategist.
 
 Your job is to generate a focused, SPECIFIC weekly strategy for this job seeker based ONLY on data in the provided context.
 
@@ -37,7 +37,7 @@ Section definitions:
 - "avoid": 1–2 patterns, role types, or signals to stop wasting time on. Must be based on evidence (bad fit, sponsorship issues, rejection patterns, etc.).
 - "improve": 2–3 concrete, specific resume or profile improvements. Only suggest fixes with evidence (e.g., "Add FastAPI — your last 4 applied jobs list it as required").
 - "thisWeek": 3–4 completable tasks for this specific week. Be concrete and time-bounded.
-- "actions": 0–3 Scout UI actions to immediately help execute the strategy. Only reference IDs from context.
+- "actions": 0–3 Apex UI actions to immediately help execute the strategy. Only reference IDs from context.
 
 OUTPUT FORMAT — MANDATORY JSON ONLY
 Your ENTIRE response MUST be a single valid JSON object. No prose, no markdown, no explanation.
@@ -56,11 +56,11 @@ Required schema (replace placeholder strings with real content):
 }`
 
 /**
- * Formats Scout context + strategy board into a compact string for Claude's user message.
+ * Formats Apex context + strategy board into a compact string for Claude's user message.
  */
 export function formatStrategyContext(
-  context: ScoutContext,
-  board: ScoutStrategyBoard
+  context: ApexContext,
+  board: ApexStrategyBoard
 ): string {
   const parts: string[] = []
 
@@ -216,12 +216,12 @@ function extractJsonBlock(text: string): string | null {
 
 /**
  * Parses and validates the AI strategy response.
- * Returns null if the response cannot be parsed into a valid ScoutAIStrategy.
+ * Returns null if the response cannot be parsed into a valid ApexAIStrategy.
  */
 export function parseStrategyResponse(
   text: string,
   allowedResumeId?: string
-): ScoutAIStrategy | null {
+): ApexAIStrategy | null {
   const trimmed = text.trim()
 
   // Build candidates: extracted JSON block first, then the raw trimmed text as fallback
@@ -245,8 +245,8 @@ export function parseStrategyResponse(
 
       // Validate + normalize actions, then filter to strategy-allowed types only
       const rawActions = Array.isArray(p.actions) ? p.actions : []
-      const normalized = normalizeScoutActions(rawActions).filter((a) =>
-        STRATEGY_ALLOWED_ACTION_TYPES.has(a.type as ScoutActionType)
+      const normalized = normalizeApexActions(rawActions).filter((a) =>
+        STRATEGY_ALLOWED_ACTION_TYPES.has(a.type as ApexActionType)
       )
 
       // OPEN_RESUME_TAILOR requires a known resume ID
@@ -261,7 +261,7 @@ export function parseStrategyResponse(
         return true
       })
 
-      const strategy: ScoutAIStrategy = {
+      const strategy: ApexAIStrategy = {
         focus: toStringArray(p.focus, 4),
         prioritize: toStringArray(p.prioritize, 4),
         avoid: toStringArray(p.avoid, 4),

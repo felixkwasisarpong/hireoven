@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { generateProactiveEvents, type ProactiveGeneratorInput } from "@/lib/scout/proactive/generator"
+import { generateProactiveEvents, type ProactiveGeneratorInput } from "@/lib/apex/proactive/generator"
 import {
   clearMutedProactiveTypes,
   dismissProactiveEvent,
@@ -14,22 +14,22 @@ import {
   snoozeProactiveEvent,
   unmuteProactiveType,
   upsertProactiveEvents,
-} from "@/lib/scout/proactive/store"
+} from "@/lib/apex/proactive/store"
 import type {
-  ScoutProactiveEvent,
-  ScoutProactiveEventType,
-  ScoutProactiveSettings,
-  ScoutProactiveSnapshot,
-} from "@/lib/scout/proactive/types"
+  ApexProactiveEvent,
+  ApexProactiveEventType,
+  ApexProactiveSettings,
+  ApexProactiveSnapshot,
+} from "@/lib/apex/proactive/types"
 
-type UseScoutProactiveInput = Omit<ProactiveGeneratorInput, "snapshot"> & {
+type UseApexProactiveInput = Omit<ProactiveGeneratorInput, "snapshot"> & {
   /** Poll cadence for snapshot refresh. */
   refreshMs?: number
   /** Debounce write-back to avoid noisy localStorage churn. */
   debounceMs?: number
 }
 
-const TYPE_COOLDOWN_MS: Record<ScoutProactiveEventType, number> = {
+const TYPE_COOLDOWN_MS: Record<ApexProactiveEventType, number> = {
   new_match: 2 * 60 * 60 * 1000,
   market_shift: 4 * 60 * 60 * 1000,
   workflow_reminder: 60 * 60 * 1000,
@@ -42,13 +42,13 @@ const TYPE_COOLDOWN_MS: Record<ScoutProactiveEventType, number> = {
   queue_ready: 30 * 60 * 1000,
 }
 
-const SEVERITY_WEIGHT: Record<ScoutProactiveEvent["severity"], number> = {
+const SEVERITY_WEIGHT: Record<ApexProactiveEvent["severity"], number> = {
   urgent: 0,
   important: 1,
   info: 2,
 }
 
-function sortEvents(events: ScoutProactiveEvent[]): ScoutProactiveEvent[] {
+function sortEvents(events: ApexProactiveEvent[]): ApexProactiveEvent[] {
   return [...events].sort((a, b) => {
     const aw = SEVERITY_WEIGHT[a.severity]
     const bw = SEVERITY_WEIGHT[b.severity]
@@ -59,23 +59,23 @@ function sortEvents(events: ScoutProactiveEvent[]): ScoutProactiveEvent[] {
   })
 }
 
-export type ScoutProactiveActions = {
+export type ApexProactiveActions = {
   loading: boolean
-  snapshot: ScoutProactiveSnapshot | null
-  events: ScoutProactiveEvent[]
-  visibleEvents: ScoutProactiveEvent[]
-  topEvent: ScoutProactiveEvent | null
-  settings: ScoutProactiveSettings
+  snapshot: ApexProactiveSnapshot | null
+  events: ApexProactiveEvent[]
+  visibleEvents: ApexProactiveEvent[]
+  topEvent: ApexProactiveEvent | null
+  settings: ApexProactiveSettings
   refresh: () => Promise<void>
   dismiss: (eventId: string) => void
   snooze: (eventId: string, snoozeMs?: number) => void
-  muteType: (type: ScoutProactiveEventType) => void
-  unmuteType: (type: ScoutProactiveEventType) => void
+  muteType: (type: ApexProactiveEventType) => void
+  unmuteType: (type: ApexProactiveEventType) => void
   clearMutedTypes: () => void
   setEnabled: (enabled: boolean) => void
 }
 
-export function useScoutProactive({
+export function useApexProactive({
   marketSignals,
   outcomeLearning,
   searchProfile,
@@ -85,13 +85,13 @@ export function useScoutProactive({
   now,
   refreshMs = 10 * 60 * 1000,
   debounceMs = 300,
-}: UseScoutProactiveInput): ScoutProactiveActions {
+}: UseApexProactiveInput): ApexProactiveActions {
   const [loading, setLoading] = useState(false)
-  const [snapshot, setSnapshot] = useState<ScoutProactiveSnapshot | null>(null)
+  const [snapshot, setSnapshot] = useState<ApexProactiveSnapshot | null>(null)
   // Start with empty/default values — same initial HTML on server and client.
   // The useEffect below loads persisted data from localStorage after mount.
-  const [events, setEvents] = useState<ScoutProactiveEvent[]>([])
-  const [settings, setSettings] = useState<ScoutProactiveSettings>({
+  const [events, setEvents] = useState<ApexProactiveEvent[]>([])
+  const [settings, setSettings] = useState<ApexProactiveSettings>({
     enabled: true,
     mutedTypes: [],
     snoozedUntil: {},
@@ -101,11 +101,11 @@ export function useScoutProactive({
   const refresh = useCallback(async () => {
     try {
       setLoading(true)
-      const res = await fetch("/api/scout/proactive", {
+      const res = await fetch("/api/apex/proactive", {
         cache: "no-store",
         headers: { Accept: "application/json" },
       })
-      const data = (await res.json().catch(() => ({}))) as { snapshot?: ScoutProactiveSnapshot }
+      const data = (await res.json().catch(() => ({}))) as { snapshot?: ApexProactiveSnapshot }
       setSnapshot(data.snapshot ?? null)
     } finally {
       setLoading(false)
@@ -154,7 +154,7 @@ export function useScoutProactive({
       const existing = readProactiveStore()
       const nowMs = Date.now()
 
-      const accepted: ScoutProactiveEvent[] = generated.filter((event) => {
+      const accepted: ApexProactiveEvent[] = generated.filter((event) => {
         if (isProactiveEventSuppressed(event, existing.settings, nowMs)) return false
 
         const latestSameType = existing.events.find((e) => e.type === event.type)
@@ -187,13 +187,13 @@ export function useScoutProactive({
     setSettings(next.settings)
   }, [])
 
-  const muteType = useCallback((type: ScoutProactiveEventType) => {
+  const muteType = useCallback((type: ApexProactiveEventType) => {
     const next = muteProactiveType(type)
     setEvents(sortEvents(next.events))
     setSettings(next.settings)
   }, [])
 
-  const unmuteType = useCallback((type: ScoutProactiveEventType) => {
+  const unmuteType = useCallback((type: ApexProactiveEventType) => {
     const next = unmuteProactiveType(type)
     setEvents(sortEvents(next.events))
     setSettings(next.settings)

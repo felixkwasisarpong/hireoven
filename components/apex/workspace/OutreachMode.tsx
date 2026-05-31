@@ -3,19 +3,19 @@
 import { useCallback, useRef, useState } from "react"
 import { AlertTriangle, ArrowUpRight, Check, Copy, Lightbulb, Mail, MessageSquare, RefreshCw, Reply, Users } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { getScoutDisplayText } from "@/lib/scout/display-text"
+import { getApexDisplayText } from "@/lib/apex/display-text"
 import {
   OUTREACH_TYPE_LABELS,
   OUTREACH_TONE_LABELS,
   OUTREACH_CHAR_LIMITS,
-} from "@/lib/scout/outreach/types"
-import type { ScoutOutreachDraft, ScoutOutreachType } from "@/lib/scout/outreach/types"
-import type { ScoutResponse } from "@/lib/scout/types"
-import type { ActiveEntities } from "./ScoutWorkspaceShell"
+} from "@/lib/apex/outreach/types"
+import type { ApexOutreachDraft, ApexOutreachType } from "@/lib/apex/outreach/types"
+import type { ApexResponse } from "@/lib/apex/types"
+import type { ActiveEntities } from "./ApexWorkspaceShell"
 
 // ── Type icons ────────────────────────────────────────────────────────────────
 
-const TYPE_ICONS: Record<ScoutOutreachType, React.ElementType> = {
+const TYPE_ICONS: Record<ApexOutreachType, React.ElementType> = {
   linkedin_message: MessageSquare,
   email:            Mail,
   follow_up:        Reply,
@@ -79,7 +79,7 @@ function CharCounter({ count, limit }: { count: number; limit: number }) {
 // ── Main component ────────────────────────────────────────────────────────────
 
 type Props = {
-  response:       ScoutResponse
+  response:       ApexResponse
   onFollowUp:     (query: string) => void
   activeEntities?: ActiveEntities
 }
@@ -94,7 +94,7 @@ export function OutreachMode({ response, onFollowUp, activeEntities }: Props) {
   const Icon          = TYPE_ICONS[outreachType]
   const typeLabel     = OUTREACH_TYPE_LABELS[outreachType]
   const toneLabel     = outreach?.tone ? OUTREACH_TONE_LABELS[outreach.tone] : null
-  const answerText    = getScoutDisplayText(response.answer)
+  const answerText    = getApexDisplayText(response.answer)
 
   // ── Context from workspace_directive payload ─────────────────────────────────
   const wdPayload = response.workspace_directive?.mode === "outreach"
@@ -111,7 +111,7 @@ export function OutreachMode({ response, onFollowUp, activeEntities }: Props) {
         <div className="rounded-2xl border border-gray-200 bg-white px-5 py-5">
           <p className="text-sm font-semibold text-gray-900">Outreach</p>
           <p className="mt-2 text-sm text-gray-500">
-            Scout couldn't generate a draft. Try giving more context — mention the company, role, and recipient type.
+            Apex couldn't generate a draft. Try giving more context — mention the company, role, and recipient type.
           </p>
           <div className="mt-4 flex flex-wrap gap-2">
             {["Draft a LinkedIn message for this role", "Write a follow-up email after applying", "Help me contact the hiring manager"].map((chip) => (
@@ -163,7 +163,7 @@ export function OutreachMode({ response, onFollowUp, activeEntities }: Props) {
               type="button"
               onClick={() => onFollowUp(`Regenerate this ${typeLabel.toLowerCase()}`)}
               title="Regenerate draft"
-              className="flex-shrink-0 text-slate-400 transition hover:text-[#FF5C18]"
+              className="flex-shrink-0 text-slate-400 transition hover:text-[#6366F1]"
             >
               <RefreshCw className="h-3.5 w-3.5" />
             </button>
@@ -190,7 +190,7 @@ export function OutreachMode({ response, onFollowUp, activeEntities }: Props) {
             <div className="mt-4 flex items-center gap-3">
               <CopyButton text={draft} />
               <p className="text-[10px] text-gray-400">
-                Edit directly above · Scout never sends on your behalf
+                Edit directly above · Apex never sends on your behalf
               </p>
             </div>
           </div>
@@ -229,11 +229,11 @@ export function OutreachMode({ response, onFollowUp, activeEntities }: Props) {
       {/* ── Right: intelligence context ───────────────────────────────────── */}
       <div className="hidden space-y-5 lg:block">
 
-        {/* Scout guidance */}
+        {/* Apex guidance */}
         {answerText && (
           <div>
             <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-400">
-              Scout Guidance
+              Apex Guidance
             </p>
             <p className="text-xs leading-5 text-gray-600">{answerText}</p>
           </div>
@@ -248,7 +248,7 @@ export function OutreachMode({ response, onFollowUp, activeEntities }: Props) {
             <ul className="space-y-2">
               {outreach.talkingPoints.map((pt, i) => (
                 <li key={i} className="flex items-start gap-2">
-                  <Lightbulb className="mt-0.5 h-3 w-3 flex-shrink-0 text-[#FF5C18]" />
+                  <Lightbulb className="mt-0.5 h-3 w-3 flex-shrink-0 text-[#6366F1]" />
                   <span className="text-xs text-gray-600">{pt}</span>
                 </li>
               ))}
@@ -290,8 +290,8 @@ export function OutreachMode({ response, onFollowUp, activeEntities }: Props) {
         {/* Reminder */}
         <div className="rounded-xl border border-dashed border-gray-200 px-3 py-3">
           <p className="text-[10px] leading-4 text-gray-400">
-            Scout drafts are starting points. Edit to match your voice before sending.
-            Scout never contacts anyone on your behalf.
+            Apex drafts are starting points. Edit to match your voice before sending.
+            Apex never contacts anyone on your behalf.
           </p>
         </div>
       </div>

@@ -3,20 +3,20 @@
 import Link from "next/link"
 import { ArrowRight, Search } from "lucide-react"
 import { cn } from "@/lib/utils"
-import type { ScoutResponse, ScoutAction } from "@/lib/scout/types"
-import type { ActiveEntities } from "./ScoutWorkspaceShell"
-import { buildFeedUrl } from "@/lib/scout/workspace"
-import { OpportunityPanel } from "@/components/scout/OpportunityPanel"
-import { getScoutDisplayText } from "@/lib/scout/display-text"
+import type { ApexResponse, ApexAction } from "@/lib/apex/types"
+import type { ActiveEntities } from "./ApexWorkspaceShell"
+import { buildFeedUrl } from "@/lib/apex/workspace"
+import { OpportunityPanel } from "@/components/apex/OpportunityPanel"
+import { getApexDisplayText } from "@/lib/apex/display-text"
 
 type Props = {
-  response: ScoutResponse
+  response: ApexResponse
   onFollowUp: (query: string) => void
   activeEntities?: ActiveEntities
 }
 
-/** @deprecated — use getScoutDisplayText from lib/scout/display-text instead */
-const getReadableAnswer = getScoutDisplayText
+/** @deprecated — use getApexDisplayText from lib/apex/display-text instead */
+const getReadableAnswer = getApexDisplayText
 
 function FilterTag({ label, value }: { label: string; value: string }) {
   return (
@@ -31,7 +31,7 @@ function FilterTag({ label, value }: { label: string; value: string }) {
 
 export function SearchMode({ response, onFollowUp, activeEntities }: Props) {
   const filterAction = response.actions?.find(
-    (a): a is Extract<ScoutAction, { type: "APPLY_FILTERS" }> => a.type === "APPLY_FILTERS"
+    (a): a is Extract<ApexAction, { type: "APPLY_FILTERS" }> => a.type === "APPLY_FILTERS"
   )
   const filters = filterAction?.payload
   const feedUrl = buildFeedUrl(response)
@@ -59,7 +59,7 @@ export function SearchMode({ response, onFollowUp, activeEntities }: Props) {
             <div>
               <p className="text-sm font-semibold text-gray-900">Job search ready</p>
               <p className="text-[11px] text-gray-400">
-                Filtered by Scout based on your request
+                Filtered by Apex based on your request
               </p>
             </div>
           </div>
@@ -132,11 +132,11 @@ export function SearchMode({ response, onFollowUp, activeEntities }: Props) {
 
       {/* ── Right: intelligence pane ───────────────────────────────────── */}
       <div className="hidden space-y-4 lg:block">
-        {/* Scout reasoning */}
+        {/* Apex reasoning */}
         {answerText && (
           <div>
             <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-gray-400">
-              Scout reasoning
+              Apex reasoning
             </p>
             <p className="text-xs leading-5 text-gray-600">{answerText}</p>
           </div>

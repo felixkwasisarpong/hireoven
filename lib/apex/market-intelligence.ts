@@ -1,5 +1,5 @@
 /**
- * Scout Market Intelligence — V1
+ * Apex Market Intelligence — V1
  *
  * Computes lightweight aggregate market signals from the user's job search
  * activity and the broader jobs/company dataset.

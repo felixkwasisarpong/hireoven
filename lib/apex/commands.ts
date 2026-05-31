@@ -12,12 +12,12 @@ export type CommandGroup =
   | "autofill"
   | "international"
 
-export type ScoutCommand = {
+export type ApexCommand = {
   id: string
   label: string
   description?: string
   group: CommandGroup
-  /** Text that fills the Scout command bar when this command is selected. */
+  /** Text that fills the Apex command bar when this command is selected. */
   query: string
   /**
    * If true, the command is submitted automatically when selected.
@@ -49,7 +49,7 @@ export const GROUP_META: Record<
 
 // ── Command registry ──────────────────────────────────────────────────────────
 
-export const ALL_COMMANDS: ScoutCommand[] = [
+export const ALL_COMMANDS: ApexCommand[] = [
   // ── Context commands (mode-aware, shown first) ─────────────────────────────
   {
     id: "ctx-search-remote",
@@ -72,7 +72,7 @@ export const ALL_COMMANDS: ScoutCommand[] = [
   {
     id: "ctx-search-compare",
     label: "Compare these results",
-    description: "Ask Scout to compare the top results",
+    description: "Ask Apex to compare the top results",
     group: "context",
     query: "Compare the top jobs from my current search",
     autoRun: true,
@@ -89,7 +89,7 @@ export const ALL_COMMANDS: ScoutCommand[] = [
   {
     id: "ctx-compare-winner",
     label: "Pick the best match",
-    description: "Scout recommends which job to prioritize",
+    description: "Apex recommends which job to prioritize",
     group: "context",
     query: "Which job in this comparison should I apply to first?",
     autoRun: true,
@@ -123,7 +123,7 @@ export const ALL_COMMANDS: ScoutCommand[] = [
   {
     id: "ctx-apps-next",
     label: "What's my next step?",
-    description: "Scout prioritizes your next action",
+    description: "Apex prioritizes your next action",
     group: "context",
     query: "What should I do next across my applications?",
     autoRun: true,
@@ -132,7 +132,7 @@ export const ALL_COMMANDS: ScoutCommand[] = [
   {
     id: "ctx-apps-followup",
     label: "Draft a follow-up message",
-    description: "Scout writes a follow-up for your in-progress applications",
+    description: "Apex writes a follow-up for your in-progress applications",
     group: "context",
     query: "Draft a professional follow-up for my pending applications",
     autoRun: false, // involves composition — user should review before sending
@@ -187,7 +187,7 @@ export const ALL_COMMANDS: ScoutCommand[] = [
   {
     id: "resume-tailor",
     label: "Tailor my resume for the current role",
-    description: "Scout adapts your CV to the active job context",
+    description: "Apex adapts your CV to the active job context",
     group: "resume",
     query: "Tailor my resume for the current job and show me what to change",
     autoRun: false, // involves edits — user should review
@@ -225,7 +225,7 @@ export const ALL_COMMANDS: ScoutCommand[] = [
   {
     id: "compare-saved",
     label: "Compare my saved jobs",
-    description: "Scout ranks all saved jobs side by side",
+    description: "Apex ranks all saved jobs side by side",
     group: "compare",
     query: "Compare all my saved jobs and tell me which to prioritize",
     autoRun: true,
@@ -256,7 +256,7 @@ export const ALL_COMMANDS: ScoutCommand[] = [
   {
     id: "bulk-prepare-top10",
     label: "Prepare my top 10 applications",
-    description: "Scout selects your best-matched saved jobs and prepares each application",
+    description: "Apex selects your best-matched saved jobs and prepares each application",
     group: "applications",
     query: "Prepare applications for my top 10 saved jobs",
     autoRun: true,
@@ -349,15 +349,15 @@ export const ALL_COMMANDS: ScoutCommand[] = [
   // ── Autofill ───────────────────────────────────────────────────────────────
   {
     id: "autofill-explain",
-    label: "How does Scout autofill work?",
+    label: "How does Apex autofill work?",
     group: "autofill",
-    query: "Explain how Scout's autofill feature works and how to use it",
+    query: "Explain how Apex's autofill feature works and how to use it",
     autoRun: true,
   },
   {
     id: "autofill-prepare",
     label: "Prepare tailored autofill for this role",
-    description: "Scout creates role-specific autofill suggestions",
+    description: "Apex creates role-specific autofill suggestions",
     group: "autofill",
     query: "Prepare a tailored autofill strategy for the current job application",
     autoRun: false, // involves preparation steps — user should confirm
@@ -419,7 +419,7 @@ export const ALL_COMMANDS: ScoutCommand[] = [
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /** Return commands that match the current workspace mode as the "context" group. */
-export function getContextCommands(mode: WorkspaceMode): ScoutCommand[] {
+export function getContextCommands(mode: WorkspaceMode): ApexCommand[] {
   if (mode === "idle") return []
   return ALL_COMMANDS.filter(
     (cmd) => cmd.group === "context" && cmd.modes?.includes(mode)
@@ -428,9 +428,9 @@ export function getContextCommands(mode: WorkspaceMode): ScoutCommand[] {
 
 /** Filter commands by a search string (label, description, query). */
 export function filterCommands(
-  commands: ScoutCommand[],
+  commands: ApexCommand[],
   search: string
-): ScoutCommand[] {
+): ApexCommand[] {
   const q = search.trim().toLowerCase()
   if (!q) return commands
   return commands.filter(
@@ -448,7 +448,7 @@ export function filterCommands(
 export function buildDisplayGroups(
   mode: WorkspaceMode,
   search: string
-): { group: CommandGroup; commands: ScoutCommand[] }[] {
+): { group: CommandGroup; commands: ApexCommand[] }[] {
   const contextCmds = search
     ? filterCommands(getContextCommands(mode), search)
     : getContextCommands(mode)
@@ -456,7 +456,7 @@ export function buildDisplayGroups(
   const nonContextBase = ALL_COMMANDS.filter((c) => c.group !== "context")
   const nonContext     = filterCommands(nonContextBase, search)
 
-  const groups: { group: CommandGroup; commands: ScoutCommand[] }[] = []
+  const groups: { group: CommandGroup; commands: ApexCommand[] }[] = []
 
   if (contextCmds.length > 0) {
     groups.push({ group: "context", commands: contextCmds })
@@ -474,7 +474,7 @@ export function buildDisplayGroups(
 
 /** Flatten grouped display into a sequential list for keyboard navigation. */
 export function flattenGroups(
-  groups: { group: CommandGroup; commands: ScoutCommand[] }[]
-): ScoutCommand[] {
+  groups: { group: CommandGroup; commands: ApexCommand[] }[]
+): ApexCommand[] {
   return groups.flatMap((g) => g.commands)
 }

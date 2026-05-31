@@ -1,10 +1,10 @@
 "use client"
 
 import { WorkflowStepRow } from "./WorkflowStepRow"
-import type { ScoutActiveWorkflow } from "@/lib/scout/workflows/types"
+import type { ApexActiveWorkflow } from "@/lib/apex/workflows/types"
 
 type Props = {
-  plan: ScoutActiveWorkflow
+  plan: ApexActiveWorkflow
   onContinue: (stepId: string) => void
   onSkip: (stepId: string) => void
 }

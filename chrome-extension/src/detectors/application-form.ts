@@ -3,7 +3,7 @@
  *
  * Pure detection — never fills, clicks, uploads, or mutates the DOM.
  *
- * Used by the Scout Bar to:
+ * Used by the Apex Bar to:
  *   1. Decide whether the current page hosts a real application form (vs. a
  *      job description page or a careers landing page).
  *   2. Tell the user whether autofill is fully supported, partial, or not

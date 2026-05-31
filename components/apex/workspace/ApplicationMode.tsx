@@ -2,18 +2,18 @@
 
 import { useEffect, useState } from "react"
 import { CheckCircle2, TrendingUp, Zap } from "lucide-react"
-import { ScoutWorkflowRenderer } from "@/components/scout/ScoutWorkflowRenderer"
-import { ScoutActionRenderer } from "@/components/scout/ScoutActionRenderer"
-import { ScoutInterviewPrepRenderer } from "@/components/scout/ScoutInterviewPrepRenderer"
-import { ScoutFeedbackPrompt } from "@/components/scout/ScoutFeedbackPrompt"
-import { isOutcomeLearningDisabled } from "@/lib/scout/outcomes/store"
-import type { ScoutResponse } from "@/lib/scout/types"
-import type { ActiveEntities } from "./ScoutWorkspaceShell"
-import type { OutcomeLearningResult, ApplicationOutcome } from "@/lib/scout/outcomes/types"
-import { getScoutDisplayText as getReadableAnswer } from "@/lib/scout/display-text"
+import { ApexWorkflowRenderer } from "@/components/apex/ApexWorkflowRenderer"
+import { ApexActionRenderer } from "@/components/apex/ApexActionRenderer"
+import { ApexInterviewPrepRenderer } from "@/components/apex/ApexInterviewPrepRenderer"
+import { ApexFeedbackPrompt } from "@/components/apex/ApexFeedbackPrompt"
+import { isOutcomeLearningDisabled } from "@/lib/apex/outcomes/store"
+import type { ApexResponse } from "@/lib/apex/types"
+import type { ActiveEntities } from "./ApexWorkspaceShell"
+import type { OutcomeLearningResult, ApplicationOutcome } from "@/lib/apex/outcomes/types"
+import { getApexDisplayText as getReadableAnswer } from "@/lib/apex/display-text"
 
 type Props = {
-  response:      ScoutResponse
+  response:      ApexResponse
   onFollowUp:    (query: string) => void
   activeEntities?: ActiveEntities
 }
@@ -31,7 +31,7 @@ export function ApplicationMode({ response, onFollowUp, activeEntities }: Props)
   // Fetch outcome learning data when in applications mode
   useEffect(() => {
     if (learningDisabled) return
-    fetch("/api/scout/outcomes")
+    fetch("/api/apex/outcomes")
       .then(async (res) => {
         if (!res.ok) return
         const data = (await res.json().catch(() => null)) as OutcomeLearningResult | null
@@ -65,20 +65,20 @@ export function ApplicationMode({ response, onFollowUp, activeEntities }: Props)
         </div>
 
         {hasWorkflow && response.workflow && (
-          <ScoutWorkflowRenderer workflow={response.workflow} />
+          <ApexWorkflowRenderer workflow={response.workflow} />
         )}
 
         {hasInterviewPrep && response.interviewPrep && (
-          <ScoutInterviewPrepRenderer interviewPrep={response.interviewPrep} />
+          <ApexInterviewPrepRenderer interviewPrep={response.interviewPrep} />
         )}
 
         {hasActions && !hasWorkflow && (
-          <ScoutActionRenderer actions={response.actions} source="chat" />
+          <ApexActionRenderer actions={response.actions} source="chat" />
         )}
 
         {/* Outcome feedback prompts — subtle, max 2, not nagging */}
         {!learningDisabled && hasFeedbackNeeded && (
-          <ScoutFeedbackPrompt
+          <ApexFeedbackPrompt
             items={outcomeLearning!.feedbackNeeded}
             outcomeLearningDisabled={learningDisabled}
           />
@@ -103,7 +103,7 @@ export function ApplicationMode({ response, onFollowUp, activeEntities }: Props)
         {answerText && (
           <div>
             <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-gray-400">
-              Scout context
+              Apex context
             </p>
             <p className="text-xs leading-5 text-gray-600">{answerText}</p>
           </div>
@@ -127,7 +127,7 @@ export function ApplicationMode({ response, onFollowUp, activeEntities }: Props)
         {!learningDisabled && hasOutcomeSignals && outcomeLearning && (
           <div className="border-t border-gray-100 pt-4">
             <div className="flex items-center gap-1.5 mb-2">
-              <TrendingUp className="h-3 w-3 text-[#FF5C18]" />
+              <TrendingUp className="h-3 w-3 text-[#6366F1]" />
               <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-gray-400">
                 What&apos;s working
               </p>

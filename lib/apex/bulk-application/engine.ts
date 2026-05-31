@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import type { BulkApplicationQueue, BulkJobItem, BulkJobStatus, BulkFailReason, BulkJobArtifacts, BulkJobWarning } from "./types"
 import { readBulkQueue, writeBulkQueue, clearBulkQueue } from "./store"
 import type { BulkSelectionOptions } from "./selector"
-import type { ApplyAgentJob } from "@/lib/scout/apply-agent/types"
+import type { ApplyAgentJob } from "@/lib/apex/apply-agent/types"
 
 const MAX_CONCURRENT = 2
 
@@ -29,7 +29,7 @@ export type BulkEngineActions = {
   queue:            BulkApplicationQueue | null
   initState:        BulkInitState
   initError:        string | null
-  /** Shell calls this when it detects a bulk prep directive from Scout. */
+  /** Shell calls this when it detects a bulk prep directive from Apex. */
   initQueue:        (opts: import("./selector").BulkSelectionOptions) => Promise<void>
   isConfirming:     boolean
   confirmJobs:      BulkJobItem[]
@@ -83,7 +83,7 @@ export function useBulkApplicationEngine(): BulkEngineActions {
     patchJob(job.queueId, { status: "preparing" })
 
     try {
-      const res = await fetch("/api/scout/bulk-prepare", {
+      const res = await fetch("/api/apex/bulk-prepare", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -169,7 +169,7 @@ export function useBulkApplicationEngine(): BulkEngineActions {
       if (typeof opts.workMode === "string" && opts.workMode.length > 0) params.set("workMode", opts.workMode)
       if (opts.strictScoreOnly) params.set("strictScoreOnly", "true")
 
-      const res = await fetch(`/api/scout/apply-agent?${params.toString()}`, {
+      const res = await fetch(`/api/apex/apply-agent?${params.toString()}`, {
         headers: { Accept: "application/json" },
       })
       if (!res.ok) throw new Error("Could not load feed matches")

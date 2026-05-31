@@ -1,24 +1,24 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getPostgresPool } from "@/lib/postgres/server"
-import { getScoutBehaviorSignals } from "@/lib/scout/behavior"
-import { getScoutStrategyBoard } from "@/lib/scout/strategy"
-import { getScoutNudges } from "@/lib/scout/nudges"
-import { isScoutMode } from "@/lib/scout/types"
+import { getApexBehaviorSignals } from "@/lib/apex/behavior"
+import { getApexStrategyBoard } from "@/lib/apex/strategy"
+import { getApexNudges } from "@/lib/apex/nudges"
+import { isApexMode } from "@/lib/apex/types"
 
 export const runtime = "nodejs"
 
 /**
- * GET /api/scout/nudges
+ * GET /api/apex/nudges
  *
  * Query params:
- *   mode      — current Scout mode (default: "scout")
+ *   mode      — current Apex mode (default: "apex")
  *   focusMode — "1" if Focus Mode is active (default: "0")
  *
- * Returns: { nudges: ScoutNudge[] }
+ * Returns: { nudges: ApexNudge[] }
  *
  * Used by contexts that cannot compute nudges client-side
- * (e.g. ScoutMiniPanel on non-Scout pages).
+ * (e.g. ApexMiniPanel on non-Apex pages).
  */
 export async function GET(request: NextRequest) {
   const supabase = await createClient()
@@ -31,16 +31,16 @@ export async function GET(request: NextRequest) {
   }
 
   const { searchParams } = new URL(request.url)
-  const rawMode = searchParams.get("mode") ?? "scout"
-  const mode = isScoutMode(rawMode) ? rawMode : "scout"
+  const rawMode = searchParams.get("mode") ?? "apex"
+  const mode = isApexMode(rawMode) ? rawMode : "apex"
   const isFocusMode = searchParams.get("focusMode") === "1"
 
   try {
     const pool = getPostgresPool()
 
     const [signals, board, resumeResult] = await Promise.all([
-      getScoutBehaviorSignals(user.id),
-      getScoutStrategyBoard(user.id),
+      getApexBehaviorSignals(user.id),
+      getApexStrategyBoard(user.id),
       pool.query<{ id: string }>(
         `SELECT id FROM resumes
          WHERE user_id = $1 AND parse_status = 'complete'
@@ -51,11 +51,11 @@ export async function GET(request: NextRequest) {
     ])
 
     const resumeId = resumeResult.rows[0]?.id ?? null
-    const nudges = getScoutNudges(mode, signals, board, { isFocusMode, resumeId })
+    const nudges = getApexNudges(mode, signals, board, { isFocusMode, resumeId })
 
     return NextResponse.json({ nudges })
   } catch (err) {
-    console.error("Scout nudges error:", err)
+    console.error("Apex nudges error:", err)
     return NextResponse.json({ nudges: [] })
   }
 }

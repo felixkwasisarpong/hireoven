@@ -1,30 +1,30 @@
-import type { ScoutMode } from "./types"
-import type { ScoutSearchProfile } from "./search-profile"
+import type { ApexMode } from "./types"
+import type { ApexSearchProfile } from "./search-profile"
 
-const SCOUT_MODE_SUGGESTIONS: Record<ScoutMode, string[]> = {
+const APEX_MODE_SUGGESTIONS: Record<ApexMode, string[]> = {
   feed: ["Show me jobs worth my time", "Filter high sponsorship roles"],
   job: ["Should I apply?", "What should I fix first?"],
   resume: ["What's weak in my resume?", "Improve this for backend roles"],
   applications: ["What should I follow up on?", "Where am I wasting time?"],
   company: ["Is this company worth targeting?", "How strong is sponsorship here?"],
-  scout: ["What should I do next this week?", "Where should I focus today?"],
+  apex: ["What should I do next this week?", "Where should I focus today?"],
   general: ["Help me prioritize my job search", "How can I improve outcomes this month?"],
 }
 
-const SCOUT_MODE_LABELS: Record<ScoutMode, string> = {
+const APEX_MODE_LABELS: Record<ApexMode, string> = {
   feed: "Feed Copilot",
   job: "Job Decision Assistant",
   resume: "Resume Assistant",
   applications: "Applications Assistant",
   company: "Company Intelligence Assistant",
-  scout: "Scout Command Center",
-  general: "Scout Assistant",
+  apex: "Apex Command Center",
+  general: "Apex Assistant",
 }
 
-export function detectScoutMode(pagePath: string): ScoutMode {
+export function detectApexMode(pagePath: string): ApexMode {
   const path = normalizePagePath(pagePath)
 
-  if (path === "/dashboard/scout") return "scout"
+  if (path === "/dashboard/apex") return "apex"
   if (/^\/dashboard\/companies\/[^/]+$/.test(path)) return "company"
   if (/^\/dashboard\/jobs\/[^/]+$/.test(path)) return "job"
   if (path.startsWith("/dashboard/resume")) return "resume"
@@ -34,8 +34,8 @@ export function detectScoutMode(pagePath: string): ScoutMode {
   return "general"
 }
 
-export function getScoutSuggestionChips(mode: ScoutMode): string[] {
-  return SCOUT_MODE_SUGGESTIONS[mode]
+export function getApexSuggestionChips(mode: ApexMode): string[] {
+  return APEX_MODE_SUGGESTIONS[mode]
 }
 
 /**
@@ -44,10 +44,10 @@ export function getScoutSuggestionChips(mode: ScoutMode): string[] {
  * Returns at most 4 chips.
  */
 export function getPersonalizedChips(
-  mode: ScoutMode,
-  profile: ScoutSearchProfile | null,
+  mode: ApexMode,
+  profile: ApexSearchProfile | null,
 ): string[] {
-  const defaults = SCOUT_MODE_SUGGESTIONS[mode] ?? []
+  const defaults = APEX_MODE_SUGGESTIONS[mode] ?? []
   if (!profile) return defaults
 
   const personal: string[] = []
@@ -62,7 +62,7 @@ export function getPersonalizedChips(
     personal.push("Remote-only roles")
   }
 
-  if (profile.preferredRoles?.length && (mode === "feed" || mode === "scout")) {
+  if (profile.preferredRoles?.length && (mode === "feed" || mode === "apex")) {
     personal.push(`Find ${profile.preferredRoles[0]} jobs`)
   }
 
@@ -80,8 +80,8 @@ export function getPersonalizedChips(
   return personal.slice(0, 4)
 }
 
-export function getScoutModeLabel(mode: ScoutMode): string {
-  return SCOUT_MODE_LABELS[mode]
+export function getApexModeLabel(mode: ApexMode): string {
+  return APEX_MODE_LABELS[mode]
 }
 
 function normalizePagePath(pagePath: string): string {

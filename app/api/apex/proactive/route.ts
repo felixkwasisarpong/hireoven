@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getPostgresPool } from "@/lib/postgres/server"
-import type { ScoutProactiveSnapshot } from "@/lib/scout/proactive/types"
+import type { ApexProactiveSnapshot } from "@/lib/apex/proactive/types"
 
 export const runtime = "nodejs"
 export const maxDuration = 20
@@ -85,7 +85,7 @@ const FOLLOW_UP_HIGH: Record<string, number> = {
   final_round: 5,
 }
 
-function emptySnapshot(): ScoutProactiveSnapshot {
+function emptySnapshot(): ApexProactiveSnapshot {
   return {
     computedAt: new Date().toISOString(),
     highMatches: [],
@@ -141,11 +141,11 @@ function followUpUrgency(status: string, days: number): "low" | "medium" | "high
   return "low"
 }
 
-function pickSkillGaps(rows: SkillDemandRow[], resumeSkills: string[]): ScoutProactiveSnapshot["skillGaps"] {
+function pickSkillGaps(rows: SkillDemandRow[], resumeSkills: string[]): ApexProactiveSnapshot["skillGaps"] {
   const have = new Set(resumeSkills.map((s) => s.trim().toLowerCase()).filter(Boolean))
   const STOP = new Set(["and", "the", "for", "with", "manager", "engineer", "senior", "junior"])
 
-  const gaps: ScoutProactiveSnapshot["skillGaps"] = []
+  const gaps: ApexProactiveSnapshot["skillGaps"] = []
   for (const row of rows) {
     const skill = row.skill.trim().toLowerCase()
     if (!skill || STOP.has(skill) || have.has(skill)) continue
@@ -322,7 +322,7 @@ export async function GET() {
       daysOld: daysSince(r.created_at),
     }))
 
-    const followUpCandidates: ScoutProactiveSnapshot["followUpCandidates"] = []
+    const followUpCandidates: ApexProactiveSnapshot["followUpCandidates"] = []
     for (const row of followUpRes.rows) {
       const threshold = FOLLOW_UP_THRESHOLD[row.status]
       if (!threshold) continue
@@ -341,7 +341,7 @@ export async function GET() {
     }
     followUpCandidates.sort((a, b) => b.daysStale - a.daysStale)
 
-    const interviewsSoon: ScoutProactiveSnapshot["interviewsSoon"] = []
+    const interviewsSoon: ApexProactiveSnapshot["interviewsSoon"] = []
     for (const app of interviewsRes.rows) {
       const rounds = toArray<InterviewLike>(app.interviews)
       for (const round of rounds) {
@@ -365,7 +365,7 @@ export async function GET() {
     }
     interviewsSoon.sort((a, b) => a.hoursUntil - b.hoursUntil)
 
-    const snapshot: ScoutProactiveSnapshot = {
+    const snapshot: ApexProactiveSnapshot = {
       computedAt: snapshotBase.computedAt,
       highMatches: highMatchRes.rows.map((r) => ({
         jobId: r.job_id,
@@ -391,7 +391,7 @@ export async function GET() {
       headers: { "Cache-Control": "s-maxage=600, stale-while-revalidate=900" },
     })
   } catch (error) {
-    console.error("[scout/proactive] snapshot error:", error)
+    console.error("[apex/proactive] snapshot error:", error)
     return NextResponse.json({ snapshot: snapshotBase })
   }
 }

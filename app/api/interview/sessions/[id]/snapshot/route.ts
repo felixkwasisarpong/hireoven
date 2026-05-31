@@ -5,7 +5,7 @@ import {
   isSnapshotStorageConfigured,
   uploadInterviewSnapshot,
 } from "@/lib/storage/interview-snapshots"
-import { getTurns, appendTurn } from "@/lib/scout/interview/queries"
+import { getTurns, appendTurn } from "@/lib/apex/interview/queries"
 
 export const runtime = "nodejs"
 

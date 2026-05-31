@@ -14,7 +14,7 @@ import { getPostgresPool } from "@/lib/postgres/server"
 
 export const runtime = "nodejs"
 
-// ── GET — list recent scout_bulk applications ──────────────────────────────────
+// ── GET — list recent apex_bulk applications ──────────────────────────────────
 export async function GET(request: Request) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -36,7 +36,7 @@ export async function GET(request: Request) {
   }>(
     `SELECT id, job_id, job_title, company_name, apply_url, status, applied_at, created_at
      FROM job_applications
-     WHERE user_id = $1 AND source = 'scout_bulk' AND is_archived = false
+     WHERE user_id = $1 AND source = 'apex_bulk' AND is_archived = false
      ORDER BY created_at DESC
      LIMIT $2`,
     [user.id, limit],

@@ -1,9 +1,9 @@
 /**
- * Context-aware Scout suggestion chips and placeholder text.
+ * Context-aware Apex suggestion chips and placeholder text.
  *
- * When the extension reports an active browser context, Scout adapts its
+ * When the extension reports an active browser context, Apex adapts its
  * command bar chips and placeholder to reflect the user's current page
- * rather than showing generic Scout suggestions.
+ * rather than showing generic Apex suggestions.
  */
 
 import type { ActiveBrowserContext, ActiveBrowserPageType } from "./browser-context"
@@ -49,8 +49,8 @@ const PLACEHOLDERS: Record<ActiveBrowserPageType, (ctx: ActiveBrowserContext) =>
   application_form: () => "Review autofill fields before applying…",
   company_page: (ctx) =>
     ctx.company
-      ? `Ask Scout about ${ctx.company}…`
-      : "Ask Scout about this company…",
+      ? `Ask Apex about ${ctx.company}…`
+      : "Ask Apex about this company…",
   unknown: () => "",
 }
 

@@ -1,13 +1,13 @@
 "use client"
 
 import { BarChart2 } from "lucide-react"
-import { ScoutCompareRenderer } from "@/components/scout/ScoutCompareRenderer"
-import type { ScoutResponse } from "@/lib/scout/types"
-import type { ActiveEntities } from "./ScoutWorkspaceShell"
-import { getScoutDisplayText as getReadableAnswer } from "@/lib/scout/display-text"
+import { ApexCompareRenderer } from "@/components/apex/ApexCompareRenderer"
+import type { ApexResponse } from "@/lib/apex/types"
+import type { ActiveEntities } from "./ApexWorkspaceShell"
+import { getApexDisplayText as getReadableAnswer } from "@/lib/apex/display-text"
 
 type Props = {
-  response: ScoutResponse
+  response: ApexResponse
   onFollowUp: (query: string) => void
   activeEntities?: ActiveEntities
 }
@@ -22,7 +22,7 @@ export function CompareMode({ response, onFollowUp }: Props) {
     <div className="space-y-5">
 
       {/* Header */}
-      <div className="flex items-center gap-3 opacity-0 animate-[scout-card-in_0.4s_cubic-bezier(0.22,1,0.36,1)_forwards]">
+      <div className="flex items-center gap-3 opacity-0 animate-[apex-card-in_0.4s_cubic-bezier(0.22,1,0.36,1)_forwards]">
         <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-slate-950 shadow-[0_2px_8px_-2px_rgba(15,23,42,0.4)]">
           <BarChart2 className="h-3.5 w-3.5 text-white" />
         </div>
@@ -37,17 +37,17 @@ export function CompareMode({ response, onFollowUp }: Props) {
       </div>
 
       {/* Cards */}
-      <ScoutCompareRenderer compare={compare} />
+      <ApexCompareRenderer compare={compare} />
 
-      {/* Scout summary — shown below cards if present */}
+      {/* Apex summary — shown below cards if present */}
       {answerText && (
-        <p className="text-sm leading-6 text-slate-600 opacity-0 animate-[scout-card-in_0.5s_cubic-bezier(0.22,1,0.36,1)_forwards] [animation-delay:300ms]">
+        <p className="text-sm leading-6 text-slate-600 opacity-0 animate-[apex-card-in_0.5s_cubic-bezier(0.22,1,0.36,1)_forwards] [animation-delay:300ms]">
           {answerText}
         </p>
       )}
 
       {/* Follow-up chips */}
-      <div className="flex flex-wrap gap-2 opacity-0 animate-[scout-card-in_0.5s_cubic-bezier(0.22,1,0.36,1)_forwards] [animation-delay:400ms]">
+      <div className="flex flex-wrap gap-2 opacity-0 animate-[apex-card-in_0.5s_cubic-bezier(0.22,1,0.36,1)_forwards] [animation-delay:400ms]">
         {[
           "Which has better salary?",
           "Which sponsors H-1B?",

@@ -1,8 +1,8 @@
 "use client"
 
 import { AlertTriangle, Layers, Loader2 } from "lucide-react"
-import { BulkQueuePanel } from "@/components/scout/bulk/BulkQueuePanel"
-import type { BulkEngineActions } from "@/lib/scout/bulk-application/engine"
+import { BulkQueuePanel } from "@/components/apex/bulk/BulkQueuePanel"
+import type { BulkEngineActions } from "@/lib/apex/bulk-application/engine"
 
 type Props = {
   engine:     BulkEngineActions
@@ -25,7 +25,7 @@ export function BulkApplicationMode({ engine, onFollowUp, onOpenApp }: Props) {
       {/* Loading */}
       {engine.initState === "loading" && (
         <div className="flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50 px-4 py-5">
-          <Loader2 className="h-4 w-4 animate-spin flex-shrink-0 text-[#FF5C18]" />
+          <Loader2 className="h-4 w-4 animate-spin flex-shrink-0 text-[#6366F1]" />
           <p className="text-sm text-slate-600">
             Scanning the live feed and selecting the best matches…
           </p>

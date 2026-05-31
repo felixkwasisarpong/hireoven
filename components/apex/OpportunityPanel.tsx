@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { ArrowRight, Building2, Loader2, Sparkles, TrendingUp, Zap } from "lucide-react"
 import { cn } from "@/lib/utils"
-import type { OpportunityGraphResponse, OpportunityRecommendation } from "@/lib/scout/opportunity-graph/types"
+import type { OpportunityGraphResponse, OpportunityRecommendation } from "@/lib/apex/opportunity-graph/types"
 
 // ── Single recommendation row ─────────────────────────────────────────────────
 
@@ -31,10 +31,10 @@ function RecommendationRow({
       onClick={() => onLaunch(rec.query)}
       className="group flex w-full items-start gap-3 rounded-xl border border-transparent px-3 py-3 text-left transition hover:border-slate-200 hover:bg-white"
     >
-      <Icon className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-slate-400 group-hover:text-[#FF5C18]" />
+      <Icon className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-slate-400 group-hover:text-[#6366F1]" />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
-          <p className="truncate text-sm font-semibold text-slate-800 group-hover:text-[#FF5C18]">
+          <p className="truncate text-sm font-semibold text-slate-800 group-hover:text-[#6366F1]">
             {rec.title}
           </p>
           {rec.subtitle && (
@@ -112,7 +112,7 @@ export function OpportunityPanel({
 
     setLoading(true)
     setError(false)
-    fetch(`/api/scout/opportunities?${params}`)
+    fetch(`/api/apex/opportunities?${params}`)
       .then(async (res) => {
         if (!res.ok) throw new Error()
         const json = (await res.json()) as OpportunityGraphResponse
@@ -129,7 +129,7 @@ export function OpportunityPanel({
     <div className="overflow-hidden rounded-2xl border border-gray-200 bg-gray-50/60">
       {showHeader && (
         <div className="flex items-center gap-2 border-b border-gray-100 bg-white px-4 py-3">
-          <Sparkles className="h-3.5 w-3.5 text-[#FF5C18]" />
+          <Sparkles className="h-3.5 w-3.5 text-[#6366F1]" />
           <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
             Related opportunities
           </p>

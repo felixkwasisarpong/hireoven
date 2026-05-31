@@ -1,7 +1,7 @@
 /**
- * GET /api/extension/jobs/:jobId/scout-overlay
+ * GET /api/extension/jobs/:jobId/apex-overlay
  *
- * Returns cached Hireoven signals for the Scout overlay (no AI generation).
+ * Returns cached Hireoven signals for the Apex overlay (no AI generation).
  * Caller should only request after the job is saved to the user's pipeline.
  */
 
@@ -64,7 +64,7 @@ export async function GET(
       {
         ok: false,
         error: "not_saved",
-        message: "Save this job in Hireoven first to load Scout signals.",
+        message: "Save this job in Hireoven first to load Apex signals.",
       },
       { status: 404, headers }
     )
@@ -120,7 +120,7 @@ export async function GET(
   )
 }
 
-interface ScoutOverlayResponse {
+interface ApexOverlayResponse {
   ok: true
   matchPercent: number | null
   sponsorshipLikely: boolean | null
@@ -137,7 +137,7 @@ function buildPayload(
   intel: JobIntelligence | null,
   autofillReady: boolean,
   resumeId: string | null
-): ScoutOverlayResponse {
+): ApexOverlayResponse {
   const fromIntel = (intel?.matchScore?.missingSkills ?? []).filter(
     (s): s is string => typeof s === "string" && s.trim().length > 0
   )

@@ -16,19 +16,19 @@ import {
 import Navbar from "@/components/layout/Navbar"
 
 export const metadata: Metadata = {
-  title: "Hireoven Scout Bridge — Match scores & autofill on every job posting",
+  title: "Hireoven Apex Bridge — Match scores & autofill on every job posting",
   description:
     "The Chrome extension that overlays a match score, missing-skills analysis, and one-click autofill on Greenhouse, Lever, Ashby, Workday, iCIMS and more. Free.",
   openGraph: {
-    title: "Hireoven Scout Bridge for Chrome",
+    title: "Hireoven Apex Bridge for Chrome",
     description:
-      "Match scores, autofill, and Scout AI overlaid on every job posting. Free Chrome extension.",
-    images: ["/extension/scout-analysis.png"],
+      "Match scores, autofill, and Apex AI overlaid on every job posting. Free Chrome extension.",
+    images: ["/extension/apex-analysis.png"],
   },
 }
 
 const CHROME_STORE_URL =
-  "https://chromewebstore.google.com/detail/hireoven-scout-bridge/mkmfffcaimjnaecoelnanifookmdbfok"
+  "https://chromewebstore.google.com/detail/hireoven-apex-bridge/mkmfffcaimjnaecoelnanifookmdbfok"
 
 // ── Local primitives ─────────────────────────────────────────────────────────
 
@@ -170,7 +170,7 @@ export default function ExtensionPage() {
               </h1>
 
               <p className="mt-5 max-w-xl text-[16px] leading-[1.65] text-white/65">
-                Hireoven Scout Bridge overlays a real-time match score, missing-skills
+                Hireoven Apex Bridge overlays a real-time match score, missing-skills
                 analysis, and one-click autofill on the ATS pages you&apos;re already on
                 — Greenhouse, Lever, Ashby, Workday, iCIMS, and more.
               </p>
@@ -202,8 +202,8 @@ export default function ExtensionPage() {
             <div className="relative">
               <div className="relative overflow-hidden rounded-2xl border border-white/10 shadow-[0_30px_60px_-25px_rgba(0,0,0,0.55)]">
                 <Image
-                  src="/extension/scout-analysis.png"
-                  alt="Hireoven Scout analysis overlay showing match score, matched and missing skills on a Greenhouse job posting"
+                  src="/extension/apex-analysis.png"
+                  alt="Hireoven Apex analysis overlay showing match score, matched and missing skills on a Greenhouse job posting"
                   width={1280}
                   height={800}
                   className="block h-auto w-full"
@@ -252,7 +252,7 @@ export default function ExtensionPage() {
                 Stop guessing whether you should apply.
               </h2>
               <p className="mt-4 text-lg text-slate-500">
-                Scout reads the posting, scores your fit, surfaces the gap, then fills
+                Apex reads the posting, scores your fit, surfaces the gap, then fills
                 the form. You stay in the loop on every action.
               </p>
             </div>
@@ -278,7 +278,7 @@ export default function ExtensionPage() {
               <FeatureCard
                 icon={FileText}
                 title="Resume tailoring on the spot"
-                body="Open Scout, tailor your resume to this JD, and attach the new version — without leaving the page."
+                body="Open Apex, tailor your resume to this JD, and attach the new version — without leaving the page."
               />
               <FeatureCard
                 icon={Zap}
@@ -300,13 +300,13 @@ export default function ExtensionPage() {
             <div className="grid gap-12 lg:grid-cols-2 lg:items-center">
               <div>
                 <p className="mb-3 text-[10.5px] font-bold uppercase tracking-[0.2em] text-[#FF5C18]">
-                  Scout analysis
+                  Apex analysis
                 </p>
                 <h3 className="text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">
                   Hit a job page. See your fit in a second.
                 </h3>
                 <p className="mt-4 text-[15px] leading-[1.7] text-slate-500">
-                  The Scout bar attaches to every ATS page. Click it and the analysis
+                  The Apex bar attaches to every ATS page. Click it and the analysis
                   panel slides in with a match score, matched and missing skills,
                   sponsorship signal, and the option to tailor your resume right
                   there. Designed to be unobtrusive — it stays out of your way until
@@ -330,8 +330,8 @@ export default function ExtensionPage() {
               </div>
               <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_20px_50px_-25px_rgba(15,23,42,0.25)]">
                 <Image
-                  src="/extension/scout-analysis.png"
-                  alt="Scout analysis panel on a Greenhouse application showing 71% match, matched skills (Data Engineering, PyTorch, Python, AWS, Compliance), and missing skills (Machine Learning, TensorFlow)"
+                  src="/extension/apex-analysis.png"
+                  alt="Apex analysis panel on a Greenhouse application showing 71% match, matched skills (Data Engineering, PyTorch, Python, AWS, Compliance), and missing skills (Machine Learning, TensorFlow)"
                   width={1280}
                   height={800}
                   className="block h-auto w-full"
@@ -358,9 +358,9 @@ export default function ExtensionPage() {
                 </h3>
                 <p className="mt-4 text-[15px] leading-[1.7] text-slate-500">
                   Click <span className="font-semibold text-slate-700">Autofill</span> on
-                  the Scout bar. A drawer opens listing every detected field with a
+                  the Apex bar. A drawer opens listing every detected field with a
                   status: <span className="font-semibold text-emerald-600">WILL FILL</span> when
-                  Scout is confident, <span className="font-semibold text-amber-600">NEEDS REVIEW</span> for
+                  Apex is confident, <span className="font-semibold text-amber-600">NEEDS REVIEW</span> for
                   custom questions, <span className="font-semibold text-rose-600">REVIEW BELOW</span> for
                   uploads. Hit <span className="font-semibold text-slate-700">Confirm</span> and
                   it fills — never submits.

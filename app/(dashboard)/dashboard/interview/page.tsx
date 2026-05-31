@@ -1,6 +1,6 @@
 import { getSessionUser } from "@/lib/auth/session-user"
 import { getPostgresPool } from "@/lib/postgres/server"
-import { listRecentSessions, type InterviewSessionWithDebrief } from "@/lib/scout/interview/queries"
+import { listRecentSessions, type InterviewSessionWithDebrief } from "@/lib/apex/interview/queries"
 import InterviewHubCards from "@/components/interview/InterviewHubCards"
 import RecommendedJobsList from "@/components/interview/RecommendedJobsList"
 import RecentSessionsList from "@/components/interview/RecentSessionsList"

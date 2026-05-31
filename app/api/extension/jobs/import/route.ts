@@ -543,7 +543,7 @@ export async function POST(request: Request) {
       status: "saved",
       date: new Date().toISOString(),
       auto: true,
-      note: "Saved via Hireoven Scout Bridge",
+      note: "Saved via Hireoven Apex Bridge",
     },
   ])
 

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
-import { getTimingOptimizedQueue } from "@/lib/scout/timing/queue-manager"
+import { getTimingOptimizedQueue } from "@/lib/apex/timing/queue-manager"
 
 export const runtime = "nodejs"
 export const maxDuration = 30

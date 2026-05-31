@@ -1,7 +1,7 @@
 /**
- * Scout aggregator dispatcher (background-context).
+ * Apex aggregator dispatcher (background-context).
  *
- * Receives SCOUT_* messages from aggregator content scripts and (a) forwards
+ * Receives APEX_* messages from aggregator content scripts and (a) forwards
  * job/company writes to the web app, (b) relays UI gate/answer prompts to the
  * active hireoven.com tab via window.postMessage, (c) tracks site connection
  * status for the web app's "extension connected?" indicator.
@@ -45,7 +45,7 @@ function recordConnection(site: AggregatorSite): void {
   lastConnectedAt.set(site, Date.now())
 }
 
-/** Returns the sites that responded to the last broadcast SCOUT_PING within 5s. */
+/** Returns the sites that responded to the last broadcast APEX_PING within 5s. */
 async function pingAllTabs(): Promise<{ connected: AggregatorSite[] }> {
   const tabs = await chrome.tabs.query({})
   const responses = new Set<AggregatorSite>()
@@ -55,7 +55,7 @@ async function pingAllTabs(): Promise<{ connected: AggregatorSite[] }> {
       try {
         const reply = await Promise.race<{ alive?: boolean; site?: AggregatorSite } | null>([
           new Promise((resolve) => {
-            chrome.tabs.sendMessage(tab.id!, { type: "SCOUT_PING" }, (r) => {
+            chrome.tabs.sendMessage(tab.id!, { type: "APEX_PING" }, (r) => {
               if (chrome.runtime.lastError) {
                 resolve(null)
                 return
@@ -91,7 +91,7 @@ async function getSessionToken(origin: string): Promise<string | null> {
   })
 }
 
-async function postScout<T>(path: string, body: unknown): Promise<{ ok: true; data: T } | { ok: false; error: string; status?: number }> {
+async function postApex<T>(path: string, body: unknown): Promise<{ ok: true; data: T } | { ok: false; error: string; status?: number }> {
   const origin = await resolveOrigin()
   const token = await getSessionToken(origin)
   if (!token) return { ok: false, error: "no_session", status: 401 }
@@ -101,7 +101,7 @@ async function postScout<T>(path: string, body: unknown): Promise<{ ok: true; da
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
-        "X-Hireoven-Extension": "scout-aggregator",
+        "X-Hireoven-Extension": "apex-aggregator",
       },
       body: JSON.stringify(body),
     })
@@ -115,7 +115,7 @@ async function postScout<T>(path: string, body: unknown): Promise<{ ok: true; da
   }
 }
 
-async function getScout<T>(path: string): Promise<{ ok: true; data: T } | { ok: false; error: string; status?: number }> {
+async function getApex<T>(path: string): Promise<{ ok: true; data: T } | { ok: false; error: string; status?: number }> {
   const origin = await resolveOrigin()
   const token = await getSessionToken(origin)
   if (!token) return { ok: false, error: "no_session", status: 401 }
@@ -124,7 +124,7 @@ async function getScout<T>(path: string): Promise<{ ok: true; data: T } | { ok: 
       method: "GET",
       headers: {
         Authorization: `Bearer ${token}`,
-        "X-Hireoven-Extension": "scout-aggregator",
+        "X-Hireoven-Extension": "apex-aggregator",
       },
     })
     if (!response.ok) {
@@ -162,7 +162,7 @@ async function relayToHireovenTab<T = unknown>(
         if (!tab.id) continue
         chrome.tabs.sendMessage(
           tab.id,
-          { type: "BROADCAST_CONTEXT", context: null, events: [], scoutRelay: payload },
+          { type: "BROADCAST_CONTEXT", context: null, events: [], apexRelay: payload },
           (response) => {
             if (chrome.runtime.lastError) return
             if (settled) return
@@ -189,7 +189,7 @@ async function broadcastToHireovenTabs(payload: Record<string, unknown>): Promis
     if (!tab.url || !APP_ORIGINS.some((o) => tab.url!.startsWith(o))) continue
     chrome.tabs.sendMessage(
       tab.id,
-      { type: "BROADCAST_CONTEXT", context: null, events: [], scoutBroadcast: payload },
+      { type: "BROADCAST_CONTEXT", context: null, events: [], apexBroadcast: payload },
       () => {
         void chrome.runtime.lastError
       },
@@ -244,7 +244,7 @@ function guessAtsFromUrl(url: string): string | null {
  * Returns true if `message` was claimed (caller should `return true` to keep
  * the channel open). Returns false to let other listeners handle it.
  */
-export function dispatchScoutMessage(
+export function dispatchApexMessage(
   message: unknown,
   _sender: chrome.runtime.MessageSender,
   sendResponse: (response: unknown) => void,
@@ -252,46 +252,46 @@ export function dispatchScoutMessage(
   if (typeof message !== "object" || message === null) return false
   const m = message as Record<string, unknown>
   const type = m.type
-  if (typeof type !== "string" || !type.startsWith("SCOUT_")) return false
+  if (typeof type !== "string" || !type.startsWith("APEX_")) return false
 
   switch (type) {
-    case "SCOUT_CONNECTED": {
+    case "APEX_CONNECTED": {
       const site = m.site as AggregatorSite | undefined
       if (site) recordConnection(site)
-      void broadcastToHireovenTabs({ kind: "scout.connected", site })
+      void broadcastToHireovenTabs({ kind: "apex.connected", site })
       sendResponse({ ok: true })
       return false
     }
 
-    case "SCOUT_PING_REQUEST": {
+    case "APEX_PING_REQUEST": {
       // Initiated by the hireoven.com page when it wants a connection probe.
       void pingAllTabs().then((result) => sendResponse(result))
       return true
     }
 
-    case "SCOUT_INGEST_JOB": {
+    case "APEX_INGEST_JOB": {
       const job = m.job as ScrapedJob | undefined
       if (!job) {
         sendResponse({ ok: false, error: "missing job" })
         return false
       }
-      void postScout("/api/scout/jobs/ingest", { source: job.site, job }).then(sendResponse)
+      void postApex("/api/apex/jobs/ingest", { source: job.site, job }).then(sendResponse)
       return true
     }
 
-    case "SCOUT_TRACK_INTEREST": {
+    case "APEX_TRACK_INTEREST": {
       const job = m.job as ScrapedJob | undefined
       const applyMethod = (m.applyMethod as string) ?? "express_interest"
       if (!job) {
         sendResponse({ ok: false, error: "missing job" })
         return false
       }
-      void postScout("/api/scout/jobs/ingest", { source: job.site, job, applyMethod }).then(sendResponse)
+      void postApex("/api/apex/jobs/ingest", { source: job.site, job, applyMethod }).then(sendResponse)
       return true
     }
 
-    case "SCOUT_ENRICH_COMPANY": {
-      void postScout("/api/scout/companies/enrich", {
+    case "APEX_ENRICH_COMPANY": {
+      void postApex("/api/apex/companies/enrich", {
         source: m.source,
         companyName: m.companyName,
         explicit: !!m.explicit,
@@ -300,8 +300,8 @@ export function dispatchScoutMessage(
       return true
     }
 
-    case "SCOUT_GET_USER_MAJOR": {
-      void getScout<{ profile?: { field_of_study?: string | null } | null }>(
+    case "APEX_GET_USER_MAJOR": {
+      void getApex<{ profile?: { field_of_study?: string | null } | null }>(
         "/api/extension/autofill-profile",
       ).then((res) => {
         if (res.ok) {
@@ -313,9 +313,9 @@ export function dispatchScoutMessage(
       return true
     }
 
-    case "SCOUT_OPEN_APPLY_FLOW": {
+    case "APEX_OPEN_APPLY_FLOW": {
       void broadcastToHireovenTabs({
-        kind: "scout.openApplyFlow",
+        kind: "apex.openApplyFlow",
         site: m.site,
         jobId: m.jobId,
         scrapedJob: m.scrapedJob,
@@ -324,9 +324,9 @@ export function dispatchScoutMessage(
       return false
     }
 
-    case "SCOUT_GATE_STEP": {
+    case "APEX_GATE_STEP": {
       void relayToHireovenTab<{ approved?: boolean; reason?: string }>({
-        kind: "scout.gateStep",
+        kind: "apex.gateStep",
         driver: m.driver,
         stepName: m.stepName,
       }).then((reply) => {
@@ -335,18 +335,18 @@ export function dispatchScoutMessage(
       return true
     }
 
-    case "SCOUT_NEEDS_ANSWER": {
+    case "APEX_NEEDS_ANSWER": {
       void relayToHireovenTab<{ answer?: string | null }>({
-        kind: "scout.needsAnswer",
+        kind: "apex.needsAnswer",
         driver: m.driver,
         question: m.question,
       }).then((reply) => sendResponse(reply ?? { answer: null }))
       return true
     }
 
-    case "SCOUT_DISQUALIFY_WARNING": {
+    case "APEX_DISQUALIFY_WARNING": {
       void relayToHireovenTab<{ proceed?: boolean }>({
-        kind: "scout.disqualifyWarning",
+        kind: "apex.disqualifyWarning",
         driver: m.driver,
         question: m.question,
         savedAnswer: m.savedAnswer,
@@ -354,15 +354,15 @@ export function dispatchScoutMessage(
       return true
     }
 
-    case "SCOUT_LOCKED_RESUME": {
+    case "APEX_LOCKED_RESUME": {
       void relayToHireovenTab<{ proceed?: boolean }>({
-        kind: "scout.lockedResume",
+        kind: "apex.lockedResume",
         driver: m.driver,
       }).then((reply) => sendResponse(reply ?? { proceed: false }))
       return true
     }
 
-    case "SCOUT_RESOLVE_INDEED_REDIRECT": {
+    case "APEX_RESOLVE_INDEED_REDIRECT": {
       const url = m.url as string | undefined
       if (!url) {
         sendResponse({ finalUrl: null, atsGuess: null })

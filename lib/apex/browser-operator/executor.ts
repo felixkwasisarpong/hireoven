@@ -3,21 +3,21 @@
  *
  * Dispatches approved browser actions to the extension via the
  * existing window.postMessage bridge. Each action maps to a
- * ScoutExtensionCommand that the extension content script handles.
+ * ApexExtensionCommand that the extension content script handles.
  *
  * Fire-and-forget: the bridge has no return channel for most actions,
  * so the caller uses optimistic completion after dispatch.
  *
  * Safety: hard-blocked actions are rejected before reaching this layer.
- * The permission check is done in useScoutBrowserOperator before calling here.
+ * The permission check is done in useApexBrowserOperator before calling here.
  */
 
-import { FROM_SCOUT } from "@/lib/scout/browser-context"
-import type { ScoutBrowserAction } from "./types"
+import { FROM_APEX } from "@/lib/apex/browser-context"
+import type { ApexBrowserAction } from "./types"
 
 // ── Action → extension command mapping ───────────────────────────────────────
 
-const ACTION_TO_COMMAND: Record<ScoutBrowserAction, string> = {
+const ACTION_TO_COMMAND: Record<ApexBrowserAction, string> = {
   prepare_autofill:  "OPEN_AUTOFILL",
   open_drawer:       "OPEN_AUTOFILL",
   open_tab:          "OPERATOR_OPEN_TAB",
@@ -30,7 +30,7 @@ const ACTION_TO_COMMAND: Record<ScoutBrowserAction, string> = {
 }
 
 // Actions the extension can handle in V1 (others are dispatched but may no-op)
-const EXTENSION_SUPPORTED_V1 = new Set<ScoutBrowserAction>([
+const EXTENSION_SUPPORTED_V1 = new Set<ApexBrowserAction>([
   "prepare_autofill",
   "open_drawer",
   "highlight_element",
@@ -52,7 +52,7 @@ export type ExecuteResult = {
  * Returns immediately — completion is optimistic.
  */
 export function dispatchBrowserAction(
-  action:   ScoutBrowserAction,
+  action:   ApexBrowserAction,
   payload?: Record<string, unknown>,
 ): ExecuteResult {
   if (typeof window === "undefined") {
@@ -67,7 +67,7 @@ export function dispatchBrowserAction(
 
   try {
     window.postMessage(
-      { source: FROM_SCOUT, type: command, ...(payload ?? {}) },
+      { source: FROM_APEX, type: command, ...(payload ?? {}) },
       window.location.origin,
     )
     return { dispatched: true }
@@ -104,7 +104,7 @@ export async function pingExtension(): Promise<boolean> {
     window.addEventListener("message", handler)
     try {
       window.postMessage(
-        { source: FROM_SCOUT, type: "EXTENSION_PING" },
+        { source: FROM_APEX, type: "EXTENSION_PING" },
         window.location.origin,
       )
     } catch {
@@ -117,7 +117,7 @@ export async function pingExtension(): Promise<boolean> {
 
 /** Generate a readable summary sentence for a browser action event. */
 export function buildActionSummary(
-  action:  ScoutBrowserAction,
+  action:  ApexBrowserAction,
   target?: string,
   context?: { company?: string; atsProvider?: string }
 ): string {
@@ -130,55 +130,55 @@ export function buildActionSummary(
   switch (action) {
     case "prepare_autofill":
     case "open_drawer":
-      return `Scout opened the autofill drawer${where}.`
+      return `Apex opened the autofill drawer${where}.`
     case "upload_resume":
       return target
-        ? `Scout prepared to attach "${target}"${where}.`
-        : `Scout prepared resume upload${where}.`
+        ? `Apex prepared to attach "${target}"${where}.`
+        : `Apex prepared resume upload${where}.`
     case "insert_text":
       return target
-        ? `Scout inserted text into "${target}"${where}.`
-        : `Scout inserted text into the form${where}.`
+        ? `Apex inserted text into "${target}"${where}.`
+        : `Apex inserted text into the form${where}.`
     case "focus_field":
       return target
-        ? `Scout focused the "${target}" field.`
-        : "Scout focused a form field."
+        ? `Apex focused the "${target}" field.`
+        : "Apex focused a form field."
     case "highlight_element":
       return target
-        ? `Scout highlighted the "${target}" section.`
-        : "Scout highlighted a form section."
+        ? `Apex highlighted the "${target}" section.`
+        : "Apex highlighted a form section."
     case "scroll_to":
       return target
-        ? `Scout scrolled to "${target}".`
-        : "Scout scrolled to the section."
+        ? `Apex scrolled to "${target}".`
+        : "Apex scrolled to the section."
     case "navigate":
-      return target ? `Scout navigated to ${target}.` : "Scout navigated the application tab."
+      return target ? `Apex navigated to ${target}.` : "Apex navigated the application tab."
     case "open_tab":
-      return target ? `Scout opened ${target} in a new tab.` : "Scout opened the application page."
+      return target ? `Apex opened ${target} in a new tab.` : "Apex opened the application page."
     default:
-      return "Scout performed a browser action."
+      return "Apex performed a browser action."
   }
 }
 
 /** Generate the pending-approval message shown before user approves. */
 export function buildApprovalPrompt(
-  action:  ScoutBrowserAction,
+  action:  ApexBrowserAction,
   target?: string,
 ): string {
   switch (action) {
     case "upload_resume":
       return target
-        ? `Scout wants to attach your resume "${target}" to this application.`
-        : "Scout wants to attach your resume to this application."
+        ? `Apex wants to attach your resume "${target}" to this application.`
+        : "Apex wants to attach your resume to this application."
     case "insert_text":
       return target
-        ? `Scout wants to insert text into the "${target}" field.`
-        : "Scout wants to insert text into the application form."
+        ? `Apex wants to insert text into the "${target}" field.`
+        : "Apex wants to insert text into the application form."
     case "navigate":
       return target
-        ? `Scout wants to navigate to ${target}.`
-        : "Scout wants to navigate the active tab."
+        ? `Apex wants to navigate to ${target}.`
+        : "Apex wants to navigate the active tab."
     default:
-      return "Scout is requesting your approval before continuing."
+      return "Apex is requesting your approval before continuing."
   }
 }

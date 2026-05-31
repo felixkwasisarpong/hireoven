@@ -108,7 +108,7 @@ export async function generateSalaryDigest(userId: string): Promise<SalaryDigest
       ? `More than half your applications this week were below your market rate. Apply a minimum salary filter of $${Math.round((marketFloor ?? 120000) / 5000) * 5000} to your job feed next week.`
       : aboveMarketPct >= 70
         ? "Great targeting this week — most of your applications were at or above market rate. Keep this up."
-        : "Mixed week. Try using the salary filter in Scout to surface more roles at your target range."
+        : "Mixed week. Try using the salary filter in Apex to surface more roles at your target range."
 
   // Persist the digest
   try {

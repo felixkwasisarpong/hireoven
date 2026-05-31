@@ -1,14 +1,14 @@
 /**
- * GET  /api/scout/memory  — list all memories for the authenticated user
- * POST /api/scout/memory  — create a new memory (explicit user or bulk-extracted)
+ * GET  /api/apex/memory  — list all memories for the authenticated user
+ * POST /api/apex/memory  — create a new memory (explicit user or bulk-extracted)
  */
 
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getPostgresPool } from "@/lib/postgres/server"
-import { getMemories, createMemory } from "@/lib/scout/memory/store"
-import { VALID_MEMORY_CATEGORIES, VALID_MEMORY_SOURCES } from "@/lib/scout/memory/types"
-import type { ScoutMemoryCategory, ScoutMemorySource } from "@/lib/scout/memory/types"
+import { getMemories, createMemory } from "@/lib/apex/memory/store"
+import { VALID_MEMORY_CATEGORIES, VALID_MEMORY_SOURCES } from "@/lib/apex/memory/types"
+import type { ApexMemoryCategory, ApexMemorySource } from "@/lib/apex/memory/types"
 
 export const runtime = "nodejs"
 
@@ -39,17 +39,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "category and summary are required" }, { status: 400 })
   }
 
-  if (!VALID_MEMORY_CATEGORIES.has(body.category as ScoutMemoryCategory)) {
+  if (!VALID_MEMORY_CATEGORIES.has(body.category as ApexMemoryCategory)) {
     return NextResponse.json({ error: "Invalid category" }, { status: 400 })
   }
 
-  const source: ScoutMemorySource = VALID_MEMORY_SOURCES.has(body.source as ScoutMemorySource)
-    ? (body.source as ScoutMemorySource)
+  const source: ApexMemorySource = VALID_MEMORY_SOURCES.has(body.source as ApexMemorySource)
+    ? (body.source as ApexMemorySource)
     : "explicit_user"
 
   const pool = getPostgresPool()
   const memory = await createMemory(user.id, pool, {
-    category:   body.category as ScoutMemoryCategory,
+    category:   body.category as ApexMemoryCategory,
     summary:    body.summary,
     confidence: typeof body.confidence === "number" ? body.confidence : 1.0,
     source,

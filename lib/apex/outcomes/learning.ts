@@ -146,7 +146,7 @@ function matchScoreSignal(apps: LearningApplicationRow[]): OutcomeLearningSignal
     signal:    `Based on recorded outcomes, applications with 75%+ match score appear to get ${highRate}% response vs ${lowRate}% for lower matches.`,
     evidence:  [`${highMatch.filter(isPositiveOutcome).length}/${highMatch.length} high-match applications advanced`, `${lowMatch.filter(isPositiveOutcome).length}/${lowMatch.length} lower-match applications advanced`],
     confidence: confidenceFromCount(withScores.length),
-    suggestedAction: "Focus new applications on roles where Scout shows 75%+ match",
+    suggestedAction: "Focus new applications on roles where Apex shows 75%+ match",
     dimension:  "general",
   }
 }
@@ -384,15 +384,15 @@ function sponsorshipFriendlySignal(apps: LearningApplicationRow[]): OutcomeLearn
 }
 
 /**
- * Workflow conversion: applications from Scout's apply queue (source="scout_bulk")
+ * Workflow conversion: applications from Apex's apply queue (source="apex_bulk")
  * vs manually submitted — which converts better?
  */
 function workflowConversionSignal(apps: LearningApplicationRow[]): OutcomeLearningSignal | null {
   const terminal = apps.filter(isTerminal)
   if (terminal.length < 6) return null
 
-  const workflow = terminal.filter((a) => a.source === "scout_bulk")
-  const manual   = terminal.filter((a) => a.source !== "scout_bulk")
+  const workflow = terminal.filter((a) => a.source === "apex_bulk")
+  const manual   = terminal.filter((a) => a.source !== "apex_bulk")
   if (workflow.length < 2 || manual.length < 2) return null
 
   const workflowRate = rate({ total: workflow.length, positive: workflow.filter(isPositiveOutcome).length })
@@ -404,10 +404,10 @@ function workflowConversionSignal(apps: LearningApplicationRow[]): OutcomeLearni
   if (diff > 0) {
     return {
       id:        "workflow-converts-better",
-      signal:    `Applications prepared via Scout's apply queue appear to get more responses (${workflowRate}% vs ${manualRate}% for manually submitted). Tailored resumes and cover letters may be contributing.`,
+      signal:    `Applications prepared via Apex's apply queue appear to get more responses (${workflowRate}% vs ${manualRate}% for manually submitted). Tailored resumes and cover letters may be contributing.`,
       evidence:  [`${workflow.filter(isPositiveOutcome).length} of ${workflow.length} queue-prepared applications advanced`],
       confidence: confidenceFromCount(terminal.length),
-      suggestedAction: "Continue using Scout's apply queue with tailoring for new applications",
+      suggestedAction: "Continue using Apex's apply queue with tailoring for new applications",
       dimension:  "general",
     }
   } else {

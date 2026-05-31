@@ -12,11 +12,11 @@ import {
   ArrowRight,
 } from "lucide-react"
 import type {
-  ScoutCompareItem,
-  ScoutCompareResponse,
-  ScoutCompareRecommendation,
-} from "@/lib/scout/types"
-import { useScoutActionExecutor } from "./useScoutActionExecutor"
+  ApexCompareItem,
+  ApexCompareResponse,
+  ApexCompareRecommendation,
+} from "@/lib/apex/types"
+import { useApexActionExecutor } from "./useApexActionExecutor"
 
 // ── Config ───────────────────────────────────────────────────────────────────
 
@@ -30,7 +30,7 @@ type RecCfg = {
   ringTrack: string          // SVG track colour
 }
 
-const REC: Record<ScoutCompareRecommendation, RecCfg> = {
+const REC: Record<ApexCompareRecommendation, RecCfg> = {
   Best: {
     label: "Best match",
     badgeCls: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200",
@@ -157,8 +157,8 @@ function ScoreBar({ score, delay = 0 }: { score: number; delay?: number }) {
 
 // ── Action executor hook shim ────────────────────────────────────────────────
 
-function useCardActions(item: ScoutCompareItem, resumeId?: string) {
-  const { executeAction, feedback } = useScoutActionExecutor()
+function useCardActions(item: ApexCompareItem, resumeId?: string) {
+  const { executeAction, feedback } = useApexActionExecutor()
   const [opening, setOpening] = useState<"job" | "company" | "tailor" | null>(null)
 
   function open(type: "job" | "company" | "tailor") {
@@ -198,7 +198,7 @@ function FeaturedCard({
   resumeId,
   index,
 }: {
-  item: ScoutCompareItem
+  item: ApexCompareItem
   resumeId?: string
   index: number
 }) {
@@ -208,7 +208,7 @@ function FeaturedCard({
 
   return (
     <article
-      className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_4px_24px_-8px_rgba(15,23,42,0.14)] opacity-0 animate-[scout-card-in_0.5s_cubic-bezier(0.22,1,0.36,1)_forwards] transition-shadow duration-300 hover:shadow-[0_12px_36px_-12px_rgba(15,23,42,0.20)]"
+      className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_4px_24px_-8px_rgba(15,23,42,0.14)] opacity-0 animate-[apex-card-in_0.5s_cubic-bezier(0.22,1,0.36,1)_forwards] transition-shadow duration-300 hover:shadow-[0_12px_36px_-12px_rgba(15,23,42,0.20)]"
       style={{ animationDelay: `${index * 60}ms` }}
     >
       <div className="flex min-h-[130px] flex-col sm:flex-row">
@@ -301,7 +301,7 @@ function FeaturedCard({
             )}
             <button
               type="button" onClick={() => open("tailor")} disabled={!!opening}
-              className="inline-flex items-center gap-1 rounded-md bg-[#FF5C18] px-3 py-1.5 text-[12px] font-semibold text-white shadow-[0_4px_12px_-4px_rgba(255,92,24,0.50)] transition hover:bg-[#E14F0E] disabled:opacity-50"
+              className="inline-flex items-center gap-1 rounded-md bg-[#6366F1] px-3 py-1.5 text-[12px] font-semibold text-white shadow-[0_4px_12px_-4px_rgba(99,102,241,0.50)] transition hover:bg-[#4F46E5] disabled:opacity-50"
             >
               <FileEdit className="h-3.5 w-3.5" />
               Tailor resume
@@ -324,7 +324,7 @@ function SecondaryCard({
   resumeId,
   index,
 }: {
-  item: ScoutCompareItem
+  item: ApexCompareItem
   rank: number
   resumeId?: string
   index: number
@@ -335,7 +335,7 @@ function SecondaryCard({
 
   return (
     <article
-      className={`group relative flex flex-col overflow-hidden rounded-xl border-l-[3px] border border-slate-200/80 bg-white shadow-[0_2px_12px_-6px_rgba(15,23,42,0.10)] ${cfg.borderCls} opacity-0 animate-[scout-card-in_0.5s_cubic-bezier(0.22,1,0.36,1)_forwards] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_10px_28px_-10px_rgba(15,23,42,0.16)]`}
+      className={`group relative flex flex-col overflow-hidden rounded-xl border-l-[3px] border border-slate-200/80 bg-white shadow-[0_2px_12px_-6px_rgba(15,23,42,0.10)] ${cfg.borderCls} opacity-0 animate-[apex-card-in_0.5s_cubic-bezier(0.22,1,0.36,1)_forwards] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_10px_28px_-10px_rgba(15,23,42,0.16)]`}
       style={{ animationDelay: `${index * 60}ms` }}
     >
       <div className="flex-1 px-4 pt-4 pb-3">
@@ -425,12 +425,12 @@ function SecondaryCard({
 
 // ── Main renderer ─────────────────────────────────────────────────────────────
 
-type ScoutCompareRendererProps = {
-  compare: ScoutCompareResponse
+type ApexCompareRendererProps = {
+  compare: ApexCompareResponse
   resumeId?: string
 }
 
-export function ScoutCompareRenderer({ compare, resumeId }: ScoutCompareRendererProps) {
+export function ApexCompareRenderer({ compare, resumeId }: ApexCompareRendererProps) {
   const { items, summary, winnerJobId, tradeoffs } = compare
   if (items.length < 2) return null
 
@@ -449,7 +449,7 @@ export function ScoutCompareRenderer({ compare, resumeId }: ScoutCompareRenderer
     <div className="space-y-3">
       {/* Summary */}
       {summary && (
-        <p className="text-sm leading-6 text-slate-600 opacity-0 animate-[scout-card-in_0.4s_cubic-bezier(0.22,1,0.36,1)_forwards]">
+        <p className="text-sm leading-6 text-slate-600 opacity-0 animate-[apex-card-in_0.4s_cubic-bezier(0.22,1,0.36,1)_forwards]">
           {summary}
         </p>
       )}
@@ -493,7 +493,7 @@ export function ScoutCompareRenderer({ compare, resumeId }: ScoutCompareRenderer
 
       {/* Tradeoffs */}
       {tradeoffs && tradeoffs.length > 0 && (
-        <div className="rounded-xl border border-slate-200 bg-slate-50/70 px-4 py-3.5 opacity-0 animate-[scout-card-in_0.5s_cubic-bezier(0.22,1,0.36,1)_forwards] [animation-delay:360ms]">
+        <div className="rounded-xl border border-slate-200 bg-slate-50/70 px-4 py-3.5 opacity-0 animate-[apex-card-in_0.5s_cubic-bezier(0.22,1,0.36,1)_forwards] [animation-delay:360ms]">
           <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">
             Key tradeoffs
           </p>

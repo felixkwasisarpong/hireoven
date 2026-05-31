@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
-import { getInterviewSession } from "@/lib/scout/interview/queries"
-import { generateDebrief } from "@/lib/scout/interview/debriefGenerator"
+import { getInterviewSession } from "@/lib/apex/interview/queries"
+import { generateDebrief } from "@/lib/apex/interview/debriefGenerator"
 import { canAccess, requiredPlanFor } from "@/lib/gates"
 import { gateResponse, getPlanForUserId } from "@/lib/gates/server-gate"
 

@@ -1,8 +1,8 @@
 /**
- * Scout Memory Extractor
+ * Apex Memory Extractor
  *
  * Extracts memory candidates from three sources:
- *   1. A single chat turn (user message + Scout response)
+ *   1. A single chat turn (user message + Apex response)
  *   2. Accumulated behavior signals from DB
  *   3. Completed workflow context
  *
@@ -15,9 +15,9 @@
  *   - Confidence < MIN_AUTO_PERSIST_CONFIDENCE → candidate is never persisted automatically
  */
 
-import type { ScoutResponse, ScoutAction } from "@/lib/scout/types"
-import type { ScoutBehaviorSignals } from "@/lib/scout/behavior"
-import type { ScoutMemoryCategory, ScoutMemorySource, MemoryCandidate } from "./types"
+import type { ApexResponse, ApexAction } from "@/lib/apex/types"
+import type { ApexBehaviorSignals } from "@/lib/apex/behavior"
+import type { ApexMemoryCategory, ApexMemorySource, MemoryCandidate } from "./types"
 import { MIN_AUTO_PERSIST_CONFIDENCE } from "./types"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -26,15 +26,15 @@ function norm(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim()
 }
 
-function makeKey(category: ScoutMemoryCategory, summary: string): string {
+function makeKey(category: ApexMemoryCategory, summary: string): string {
   return `${category}::${norm(summary).slice(0, 60)}`
 }
 
 function candidate(
-  category: ScoutMemoryCategory,
+  category: ApexMemoryCategory,
   summary: string,
   confidence: number,
-  source: ScoutMemorySource,
+  source: ApexMemorySource,
 ): MemoryCandidate {
   return { category, summary, confidence, source, dedupKey: makeKey(category, summary) }
 }
@@ -75,7 +75,7 @@ const INTERVIEW_RE = /\b(?:prep(?:aring)?\s+for\s+(?:system\s+design|behavioral|
 
 export function extractFromChatTurn(
   userMessage: string,
-  response: ScoutResponse,
+  response: ApexResponse,
 ): MemoryCandidate[] {
   const msg = userMessage.trim()
   const candidates: MemoryCandidate[] = []
@@ -199,7 +199,7 @@ export function extractFromChatTurn(
 
   // ── APPLY_FILTERS actions — reliable search preferences ───────────────────
   const filterAction = response.actions?.find(
-    (a): a is Extract<ScoutAction, { type: "APPLY_FILTERS" }> => a.type === "APPLY_FILTERS",
+    (a): a is Extract<ApexAction, { type: "APPLY_FILTERS" }> => a.type === "APPLY_FILTERS",
   )
   if (filterAction) {
     const p = filterAction.payload
@@ -251,11 +251,11 @@ export function extractFromChatTurn(
 // ── Behavior signal extraction ────────────────────────────────────────────────
 
 /**
- * Converts ScoutBehaviorSignals (server-side, DB-derived) into memory candidates.
+ * Converts ApexBehaviorSignals (server-side, DB-derived) into memory candidates.
  * These have lower confidence since they are inferred, not stated.
  */
 export function extractFromBehaviorSignals(
-  signals: ScoutBehaviorSignals,
+  signals: ApexBehaviorSignals,
 ): MemoryCandidate[] {
   const candidates: MemoryCandidate[] = []
   const seen = new Set<string>()
@@ -287,7 +287,7 @@ export function extractFromBehaviorSignals(
 // ── Workflow extraction ───────────────────────────────────────────────────────
 
 /**
- * Extracts a workflow_pattern memory when a Scout workflow is completed.
+ * Extracts a workflow_pattern memory when a Apex workflow is completed.
  * Called once per workflow completion — not per step.
  */
 export function extractFromWorkflowCompletion(
@@ -300,7 +300,7 @@ export function extractFromWorkflowCompletion(
     : workflowType === "compare_and_prioritize"
     ? "Uses compare-and-prioritize workflow for shortlisting"
     : workflowType === "interview_prep"
-    ? "Uses Scout interview prep before interviews"
+    ? "Uses Apex interview prep before interviews"
     : null
 
   if (!label) return null

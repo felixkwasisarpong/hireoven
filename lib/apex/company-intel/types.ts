@@ -1,5 +1,5 @@
 /**
- * Scout Company Intelligence Layer — Types V1
+ * Apex Company Intelligence Layer — Types V1
  *
  * All intel fields are derived from real DB data (CompanyHiringHealth,
  * CompanyImmigrationProfileSummary, Job rows). Nothing is fabricated.
@@ -44,7 +44,7 @@ export type CompanyIntel = {
   }
 }
 
-/** Compact summary surfaced in UI labels and Scout chat */
+/** Compact summary surfaced in UI labels and Apex chat */
 export type CompanyIntelSummary = {
   companyId:              string
   companyName:            string
@@ -53,6 +53,6 @@ export type CompanyIntelSummary = {
   freshnessLabel?:        string  // e.g. "Posting appears stale"
   competitionLabel?:      string  // e.g. "Likely high competition"
   activeOpeningsCount?:   number
-  /** Short prose bullet list for Scout conversational surfacing */
+  /** Short prose bullet list for Apex conversational surfacing */
   conversationalSignals:  string[]
 }

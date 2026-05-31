@@ -24,9 +24,9 @@ import {
   ChevronRight,
   X,
 } from "lucide-react"
-import type { ApplyAgentJob } from "@/lib/scout/apply-agent/types"
-import type { BulkFailReason } from "@/lib/scout/bulk-application/types"
-import { BULK_FAIL_LABELS } from "@/lib/scout/bulk-application/types"
+import type { ApplyAgentJob } from "@/lib/apex/apply-agent/types"
+import type { BulkFailReason } from "@/lib/apex/bulk-application/types"
+import { BULK_FAIL_LABELS } from "@/lib/apex/bulk-application/types"
 import type { Resume } from "@/types"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -93,10 +93,10 @@ type Props = {
   onDone?:     () => void
 }
 
-const FROM_SCOUT = "hireoven-scout"
+const FROM_APEX = "hireoven-apex"
 const FROM_EXT = "hireoven-ext"
 
-function isLocalScoutHost(hostname: string): boolean {
+function isLocalApexHost(hostname: string): boolean {
   const host = hostname.toLowerCase().replace(/^www\./, "")
   return (
     host === "localhost" ||
@@ -309,7 +309,7 @@ function ResumeQaSidePreview({ resume }: { resume: Resume | null }) {
                   <p className="text-[13px] font-semibold text-slate-900">{p.name}</p>
                   {p.url && (
                     <a href={p.url} target="_blank" rel="noopener noreferrer"
-                      className="text-[10px] text-[#FF5C18] hover:underline">↗</a>
+                      className="text-[10px] text-[#6366F1] hover:underline">↗</a>
                   )}
                 </div>
                 {p.description && (
@@ -422,7 +422,7 @@ function applyTailoredSignalsToResume(base: Resume, job: JobState | null): Resum
 
 function sendToExtension(type: string, payload?: Record<string, unknown>) {
   if (typeof window !== "undefined") {
-    window.postMessage({ source: FROM_SCOUT, type, ...(payload ?? {}) }, window.location.origin)
+    window.postMessage({ source: FROM_APEX, type, ...(payload ?? {}) }, window.location.origin)
   }
 }
 
@@ -502,7 +502,7 @@ export function ApplyAgentFlow({
   const [extMidFlowDisconnected, setExtMidFlowDisconnected] = useState(false)
   const extensionInstallHref = useMemo(() => {
     if (typeof window === "undefined") return "/extension"
-    return isLocalScoutHost(window.location.hostname)
+    return isLocalApexHost(window.location.hostname)
       ? "/extension"
       : "https://chrome.google.com/webstore"
   }, [])
@@ -666,7 +666,7 @@ export function ApplyAgentFlow({
             .catch(() => null)
         : Promise.resolve(null)
 
-      const prepFetch = fetch("/api/scout/bulk-prepare", {
+      const prepFetch = fetch("/api/apex/bulk-prepare", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({
@@ -867,7 +867,7 @@ export function ApplyAgentFlow({
     // ── Salary intercept check ──────────────────────────────────────────────
     if (job.jobId) {
       try {
-        const interceptRes = await fetch(`/api/scout/salary-intercept?jobId=${encodeURIComponent(job.jobId)}`)
+        const interceptRes = await fetch(`/api/apex/salary-intercept?jobId=${encodeURIComponent(job.jobId)}`)
         if (interceptRes.ok) {
           const data = await interceptRes.json() as {
             intercept: {
@@ -939,7 +939,7 @@ export function ApplyAgentFlow({
 
     setBusy(true)
     try {
-      await fetch("/api/scout/mark-submitted", {
+      await fetch("/api/apex/mark-submitted", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -947,7 +947,7 @@ export function ApplyAgentFlow({
           jobTitle:    job.jobTitle,
           companyName: job.company ?? "Unknown Company",
           applyUrl:    job.applyUrl,
-          notes:       "Marked submitted manually from Scout apply agent flow",
+          notes:       "Marked submitted manually from Apex apply agent flow",
         }),
       })
     } catch {
@@ -1063,7 +1063,7 @@ export function ApplyAgentFlow({
 
       const nextPointer = applyPointer + 1
       setBusy(true)
-      void fetch("/api/scout/mark-submitted", {
+      void fetch("/api/apex/mark-submitted", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1123,7 +1123,7 @@ export function ApplyAgentFlow({
   const dismissInterceptAndApply = useCallback(async () => {
     if (!salaryIntercept) return
     // Log the override
-    void fetch("/api/scout/salary-intercept", {
+    void fetch("/api/apex/salary-intercept", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1143,7 +1143,7 @@ export function ApplyAgentFlow({
 
   const dismissInterceptFindBetter = useCallback(() => {
     if (!salaryIntercept) return
-    void fetch("/api/scout/salary-intercept", {
+    void fetch("/api/apex/salary-intercept", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1267,10 +1267,10 @@ export function ApplyAgentFlow({
       {/* Header */}
       <div className="border-b border-slate-100 px-5 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="h-8 w-8 rounded-xl bg-[#FF5C18]/10 flex items-center justify-center flex-shrink-0">
+          <div className="h-8 w-8 rounded-xl bg-[#6366F1]/10 flex items-center justify-center flex-shrink-0">
             {busy
-              ? <Loader2 className="h-4 w-4 text-[#FF5C18] animate-spin" />
-              : <CheckCircle2 className="h-4 w-4 text-[#FF5C18]" />
+              ? <Loader2 className="h-4 w-4 text-[#6366F1] animate-spin" />
+              : <CheckCircle2 className="h-4 w-4 text-[#6366F1]" />
             }
           </div>
           <div>
@@ -1298,8 +1298,8 @@ export function ApplyAgentFlow({
               className={`h-1.5 rounded-full transition-all ${
                 job.applied  ? "w-4 bg-emerald-400" :
                 job.skipped  ? "w-1.5 bg-slate-200" :
-                i === currentIndex ? "w-4 bg-[#FF5C18]" :
-                job.tailored ? "w-1.5 bg-[#FF5C18]/40" :
+                i === currentIndex ? "w-4 bg-[#6366F1]" :
+                job.tailored ? "w-1.5 bg-[#6366F1]/40" :
                 "w-1.5 bg-slate-200"
               }`}
             />
@@ -1308,7 +1308,7 @@ export function ApplyAgentFlow({
             <button
               type="button"
               onClick={() => onFollowUp("Track my applications")}
-              className="ml-2 text-xs font-semibold text-[#FF5C18] hover:underline flex items-center gap-1"
+              className="ml-2 text-xs font-semibold text-[#6366F1] hover:underline flex items-center gap-1"
             >
               Track <ChevronRight className="h-3 w-3" />
             </button>
@@ -1323,7 +1323,7 @@ export function ApplyAgentFlow({
             key={job.jobId}
             className={`flex items-center gap-3 rounded-xl border px-4 py-3.5 transition-all ${
               i === currentIndex && phase !== "done"
-                ? "border-[#FF5C18]/30 bg-[#FF5C18]/[0.03] shadow-[0_0_0_1px_rgba(255,92,24,0.12)]"
+                ? "border-[#6366F1]/30 bg-[#6366F1]/[0.03] shadow-[0_0_0_1px_rgba(99,102,241,0.12)]"
                 : "border-slate-100 bg-white"
             }`}
           >
@@ -1366,7 +1366,7 @@ export function ApplyAgentFlow({
       {/* Tailoring progress pulse */}
       {phase === "tailoring" && busy && (
         <div className="mx-5 mt-4 mb-1 rounded-xl border border-slate-100 bg-slate-50/80 px-5 py-4 flex items-center gap-3">
-          <Loader2 className="h-4 w-4 text-[#FF5C18] animate-spin flex-shrink-0" />
+          <Loader2 className="h-4 w-4 text-[#6366F1] animate-spin flex-shrink-0" />
           <p className="text-[13px] text-slate-600">
             Analysing <span className="font-semibold text-slate-800">{currentJob?.jobTitle}</span> against your resume…
           </p>
@@ -1414,7 +1414,7 @@ export function ApplyAgentFlow({
               type="button"
               onClick={() => void resolveSkillConfirmation(true)}
               disabled={busy || selectedPendingSkills.length === 0}
-              className="flex-1 rounded-xl bg-[#FF5C18] px-4 py-2.5 text-[13px] font-semibold text-white transition hover:bg-[#e25115] disabled:opacity-40"
+              className="flex-1 rounded-xl bg-[#6366F1] px-4 py-2.5 text-[13px] font-semibold text-white transition hover:bg-[#e25115] disabled:opacity-40"
             >
               Add {selectedPendingSkills.length} skill{selectedPendingSkills.length !== 1 ? "s" : ""} & continue
             </button>
@@ -1435,7 +1435,7 @@ export function ApplyAgentFlow({
         <div className="border-t border-slate-100 px-5 pt-5 pb-6">
           {/* Section heading */}
           <div className="mb-4">
-            <p className="text-[10.5px] font-bold uppercase tracking-[0.2em] text-[#FF5C18]">Resume QA</p>
+            <p className="text-[10.5px] font-bold uppercase tracking-[0.2em] text-[#6366F1]">Resume QA</p>
             <p className="mt-1 text-[15px] font-bold text-slate-900">
               {jobs[reviewJobIdx]?.jobTitle}
             </p>
@@ -1505,7 +1505,7 @@ export function ApplyAgentFlow({
               type="button"
               onClick={approveResumeQa}
               disabled={!allQaChecked || busy}
-              className="flex-1 rounded-xl bg-[#FF5C18] px-4 py-2.5 text-[13px] font-semibold text-white transition hover:bg-[#e25115] disabled:opacity-40"
+              className="flex-1 rounded-xl bg-[#6366F1] px-4 py-2.5 text-[13px] font-semibold text-white transition hover:bg-[#e25115] disabled:opacity-40"
             >
               {allQaChecked ? "Approve & continue →" : `${qaChecks.filter(Boolean).length} / ${RESUME_QA_CHECKLIST.length} confirmed`}
             </button>
@@ -1525,7 +1525,7 @@ export function ApplyAgentFlow({
       {phase === "applying" && (
         <div className="mx-4 mt-3 mb-1 rounded-xl border border-blue-100 bg-blue-50/40 px-4 py-3">
           <p className="text-sm font-semibold text-slate-800">
-            Current application: <span className="text-[#FF5C18]">{currentApplyJob?.jobTitle ?? "Role"}</span>
+            Current application: <span className="text-[#6366F1]">{currentApplyJob?.jobTitle ?? "Role"}</span>
           </p>
           <p className="text-[11px] text-slate-600">
             Open, review, submit manually, then confirm here to continue to the next job.
@@ -1590,7 +1590,7 @@ export function ApplyAgentFlow({
           )}
           {extensionStatus !== "disconnected" && !extensionConnected && (
             <p className="mt-2 text-[11px] text-amber-700">
-              Extension offline: Scout can open the tab, but form-fill is manual.
+              Extension offline: Apex can open the tab, but form-fill is manual.
             </p>
           )}
           <div className="mt-3 flex flex-wrap gap-2">
@@ -1607,7 +1607,7 @@ export function ApplyAgentFlow({
               type="button"
               onClick={() => void markCurrentSubmittedAndNext()}
               disabled={busy || !currentApplyJob}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-[#FF5C18] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#e25115] disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-[#6366F1] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#e25115] disabled:opacity-50"
             >
               <CheckCircle2 className="h-3.5 w-3.5" />
               Submitted, next job

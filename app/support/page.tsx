@@ -49,7 +49,7 @@ export default function SupportPage() {
               <div>
                 <h3 className="font-medium text-gray-900">How do I install the extension?</h3>
                 <p className="mt-1 text-sm">
-                  Search for &quot;Hireoven Scout Bridge&quot; in the Chrome Web Store and click Add to Chrome. You&apos;ll
+                  Search for &quot;Hireoven Apex Bridge&quot; in the Chrome Web Store and click Add to Chrome. You&apos;ll
                   need a Hireoven account — sign up free at{" "}
                   <Link href="/" className="text-[#0369A1] hover:underline">hireoven.com</Link>.
                 </p>
@@ -93,7 +93,7 @@ export default function SupportPage() {
           <section>
             <h2 className="text-xl font-semibold text-gray-900 mb-3">Data &amp; privacy</h2>
             <p>
-              The Hireoven Scout Bridge extension only reads job listing data from pages you actively visit and
+              The Hireoven Apex Bridge extension only reads job listing data from pages you actively visit and
               uses your session cookie to authenticate saves to your account. We do not track your browsing
               history or collect data from non-job pages. See our{" "}
               <Link href="/privacy" className="text-[#0369A1] hover:underline">Privacy Policy</Link> for full details.

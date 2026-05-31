@@ -2,24 +2,24 @@
 
 import Link from "next/link"
 import { ArrowRight, ArrowUpRight, FileText } from "lucide-react"
-import type { ScoutResponse, ScoutAction } from "@/lib/scout/types"
-import type { ActiveEntities } from "./ScoutWorkspaceShell"
-import { getScoutDisplayText } from "@/lib/scout/display-text"
+import type { ApexResponse, ApexAction } from "@/lib/apex/types"
+import type { ActiveEntities } from "./ApexWorkspaceShell"
+import { getApexDisplayText } from "@/lib/apex/display-text"
 
 type Props = {
-  response:      ScoutResponse
+  response:      ApexResponse
   onFollowUp:    (query: string) => void
   activeEntities?: ActiveEntities
 }
 
 function getReadableAnswer(answer: string): string {
-  return getScoutDisplayText(answer)
+  return getApexDisplayText(answer)
 }
 
 const TAILOR_STEPS = [
   "Align bullet points to job description keywords",
   "Highlight skills and experience that match requirements",
-  "Suggest additions for gaps Scout detected",
+  "Suggest additions for gaps Apex detected",
 ]
 
 export function TailorMode({ response, onFollowUp, activeEntities }: Props) {
@@ -32,7 +32,7 @@ export function TailorMode({ response, onFollowUp, activeEntities }: Props) {
     : {}
 
   const tailorAction = response.actions?.find(
-    (a): a is Extract<ScoutAction, { type: "OPEN_RESUME_TAILOR" }> =>
+    (a): a is Extract<ApexAction, { type: "OPEN_RESUME_TAILOR" }> =>
       a.type === "OPEN_RESUME_TAILOR"
   )
 
@@ -91,7 +91,7 @@ export function TailorMode({ response, onFollowUp, activeEntities }: Props) {
                 target="_blank"
                 rel="noopener noreferrer"
                 title="View job detail"
-                className="flex-shrink-0 text-slate-400 transition hover:text-[#FF5C18]"
+                className="flex-shrink-0 text-slate-400 transition hover:text-[#6366F1]"
               >
                 <ArrowUpRight className="h-4 w-4" />
               </Link>
@@ -102,14 +102,14 @@ export function TailorMode({ response, onFollowUp, activeEntities }: Props) {
           {!hasJobContext && (
             <div className="border-b border-amber-100 bg-amber-50 px-5 py-3">
               <p className="text-xs text-amber-700">
-                No job selected. Open a job from your saved list first so Scout can tailor specifically for that role.
+                No job selected. Open a job from your saved list first so Apex can tailor specifically for that role.
               </p>
             </div>
           )}
 
           <div className="px-5 py-4">
             <p className="mb-3 text-sm text-gray-700">
-              Scout has a role-focused tailoring checklist ready.
+              Apex has a role-focused tailoring checklist ready.
             </p>
 
             <details className="mb-4 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 sm:hidden">
@@ -159,7 +159,7 @@ export function TailorMode({ response, onFollowUp, activeEntities }: Props) {
         {answerText && (
           <div>
             <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-gray-400">
-              Scout insight
+              Apex insight
             </p>
             <p className="text-xs leading-5 text-gray-600">{answerText}</p>
           </div>
@@ -179,7 +179,7 @@ export function TailorMode({ response, onFollowUp, activeEntities }: Props) {
             {resolvedDetailUrl && (
               <Link
                 href={resolvedDetailUrl}
-                className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-medium text-[#FF5C18] hover:underline"
+                className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-medium text-[#6366F1] hover:underline"
               >
                 View job <ArrowUpRight className="h-3 w-3" />
               </Link>
@@ -192,7 +192,7 @@ export function TailorMode({ response, onFollowUp, activeEntities }: Props) {
             Process
           </p>
           <ol className="space-y-1.5">
-            {["Review Scout's suggested edits", "Approve or adjust changes", "Save as new resume version"].map((s, i) => (
+            {["Review Apex's suggested edits", "Approve or adjust changes", "Save as new resume version"].map((s, i) => (
               <li key={s} className="flex items-start gap-2 text-xs text-gray-500">
                 <span className="mt-0.5 flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full bg-gray-100 text-[9px] font-bold text-gray-500">
                   {i + 1}

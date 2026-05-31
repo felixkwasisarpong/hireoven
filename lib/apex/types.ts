@@ -1,10 +1,10 @@
 /**
- * Scout Action Types - Phase 1.3: Safe UI Actions
+ * Apex Action Types - Phase 1.3: Safe UI Actions
  * 
  * Only non-destructive, navigation-based actions are allowed.
  */
 
-export type ScoutActionType =
+export type ApexActionType =
   | "OPEN_JOB"
   | "APPLY_FILTERS"
   | "OPEN_RESUME_TAILOR"
@@ -12,30 +12,30 @@ export type ScoutActionType =
   | "OPEN_COMPANY"
   | "SET_FOCUS_MODE"
   | "RESET_CONTEXT"
-  // Phase 1.4 placeholder — triggers Chrome extension bridge from Scout chat.
+  // Phase 1.4 placeholder — triggers Chrome extension bridge from Apex chat.
   | "OPEN_EXTENSION_BRIDGE"
   // Phase 2 — instructs user to open autofill preview for the current application page.
   | "OPEN_EXTENSION_AUTOFILL_PREVIEW"
   // Phase 3 — full tailor-before-autofill flow: import job → tailor resume preview → autofill.
   | "PREPARE_TAILORED_AUTOFILL"
 
-export const SCOUT_MODES = [
+export const APEX_MODES = [
   "feed",
   "job",
   "resume",
   "applications",
   "company",
-  "scout",
+  "apex",
   "general",
 ] as const
 
-export type ScoutMode = (typeof SCOUT_MODES)[number]
+export type ApexMode = (typeof APEX_MODES)[number]
 
-export function isScoutMode(value: unknown): value is ScoutMode {
-  return typeof value === "string" && SCOUT_MODES.includes(value as ScoutMode)
+export function isApexMode(value: unknown): value is ApexMode {
+  return typeof value === "string" && APEX_MODES.includes(value as ApexMode)
 }
 
-export type ScoutAction =
+export type ApexAction =
   | {
       type: "OPEN_JOB"
       payload: { jobId: string }
@@ -85,7 +85,7 @@ export type ScoutAction =
   | {
       /**
        * Phase 1.4 placeholder.
-       * Scout can suggest opening the extension bridge to capture a job from
+       * Apex can suggest opening the extension bridge to capture a job from
        * an external site. The UI renders a prompt; no auto-apply occurs.
        */
       type: "OPEN_EXTENSION_BRIDGE"
@@ -110,36 +110,36 @@ export type ScoutAction =
        *   2. Click "Tailor Resume" to preview AI-suggested changes.
        *   3. Approve changes (creates a new resume version draft).
        *   4. Then proceed with autofill.
-       * Scout cannot trigger the extension directly — this is a user-guided flow.
+       * Apex cannot trigger the extension directly — this is a user-guided flow.
        */
       type: "PREPARE_TAILORED_AUTOFILL"
       payload: { jobId?: string; url?: string; hint?: string }
       label?: string
     }
 
-export type ScoutRecommendation = "Apply" | "Skip" | "Improve" | "Wait" | "Explore"
+export type ApexRecommendation = "Apply" | "Skip" | "Improve" | "Wait" | "Explore"
 
-export const SCOUT_INTENTS = ["question", "command", "workflow", "analysis", "interview_prep"] as const
+export const APEX_INTENTS = ["question", "command", "workflow", "analysis", "interview_prep"] as const
 
-export type ScoutIntent = (typeof SCOUT_INTENTS)[number]
+export type ApexIntent = (typeof APEX_INTENTS)[number]
 
-export function isScoutIntent(value: unknown): value is ScoutIntent {
-  return typeof value === "string" && SCOUT_INTENTS.includes(value as ScoutIntent)
+export function isApexIntent(value: unknown): value is ApexIntent {
+  return typeof value === "string" && APEX_INTENTS.includes(value as ApexIntent)
 }
 
-export type ScoutStep = {
+export type ApexStep = {
   id: string
   title: string
   description?: string
-  action?: ScoutAction
+  action?: ApexAction
 }
 
-export type ScoutWorkflow = {
+export type ApexWorkflow = {
   title: string
-  steps: ScoutStep[]
+  steps: ApexStep[]
 }
 
-export type ScoutExplanationBlockType =
+export type ApexExplanationBlockType =
   | "match_breakdown"
   | "resume_gap"
   | "sponsorship_signal"
@@ -147,69 +147,69 @@ export type ScoutExplanationBlockType =
   | "next_action"
   | "evidence_bridge"
 
-export type ScoutExplanationItemStatus =
+export type ApexExplanationItemStatus =
   | "strong"
   | "medium"
   | "weak"
   | "missing"
   | "unknown"
 
-export type ScoutEvidenceBridgeItemStatus = "strong" | "partial" | "missing" | "unknown"
+export type ApexEvidenceBridgeItemStatus = "strong" | "partial" | "missing" | "unknown"
 
-export type ScoutEvidenceBridgeItem = {
+export type ApexEvidenceBridgeItem = {
   requirement: string
   resumeEvidence?: string
-  status: ScoutEvidenceBridgeItemStatus
+  status: ApexEvidenceBridgeItemStatus
   suggestedFix?: string
 }
 
-export type ScoutEvidenceBridgeBlock = {
+export type ApexEvidenceBridgeBlock = {
   type: "evidence_bridge"
   title: string
   summary?: string
-  items: ScoutEvidenceBridgeItem[]
+  items: ApexEvidenceBridgeItem[]
 }
 
-export type ScoutStandardExplanationBlock = {
-  type: Exclude<ScoutExplanationBlockType, "evidence_bridge">
+export type ApexStandardExplanationBlock = {
+  type: Exclude<ApexExplanationBlockType, "evidence_bridge">
   title: string
   summary?: string
   items: Array<{
     label: string
-    status?: ScoutExplanationItemStatus
+    status?: ApexExplanationItemStatus
     evidence?: string
     recommendation?: string
   }>
 }
 
-export type ScoutExplanationBlock = ScoutStandardExplanationBlock | ScoutEvidenceBridgeBlock
+export type ApexExplanationBlock = ApexStandardExplanationBlock | ApexEvidenceBridgeBlock
 
-export type ScoutStrategyRiskSeverity = "low" | "medium" | "high"
+export type ApexStrategyRiskSeverity = "low" | "medium" | "high"
 
-export type ScoutStrategyRisk = {
+export type ApexStrategyRisk = {
   id: string
   title: string
   description: string
-  severity: ScoutStrategyRiskSeverity
+  severity: ApexStrategyRiskSeverity
 }
 
-export type ScoutWeakSignalSeverity = "info" | "warning" | "opportunity"
+export type ApexWeakSignalSeverity = "info" | "warning" | "opportunity"
 
-export type ScoutWeakSignal = {
+export type ApexWeakSignal = {
   id: string
   title: string
   description: string
-  severity?: ScoutWeakSignalSeverity
+  severity?: ApexWeakSignalSeverity
 }
 
-export type ScoutStrategyMove = {
+export type ApexStrategyMove = {
   id: string
   title: string
   description: string
-  action?: ScoutAction
+  action?: ApexAction
 }
 
-export type ScoutStrategyBoard = {
+export type ApexStrategyBoard = {
   todayFocus: string[]
   snapshot: {
     savedJobs: number
@@ -217,16 +217,16 @@ export type ScoutStrategyBoard = {
     recentApplications: number
     averageMatchScore: number | null
   }
-  risks: ScoutStrategyRisk[]
-  nextMoves: ScoutStrategyMove[]
-  weakSignals: ScoutWeakSignal[]
+  risks: ApexStrategyRisk[]
+  nextMoves: ApexStrategyMove[]
+  weakSignals: ApexWeakSignal[]
 }
 
 // ── Compare Mode ─────────────────────────────────────────────────────────────
 
-export type ScoutCompareRecommendation = "Best" | "Good" | "Risky" | "Skip"
+export type ApexCompareRecommendation = "Best" | "Good" | "Risky" | "Skip"
 
-export type ScoutCompareItem = {
+export type ApexCompareItem = {
   jobId: string
   title: string
   company?: string
@@ -237,19 +237,19 @@ export type ScoutCompareItem = {
   salaryRange?: string | null
   location?: string | null
   riskSummary?: string
-  recommendation?: ScoutCompareRecommendation
+  recommendation?: ApexCompareRecommendation
 }
 
-export type ScoutCompareResponse = {
+export type ApexCompareResponse = {
   summary: string
-  items: ScoutCompareItem[]
+  items: ApexCompareItem[]
   winnerJobId?: string
   tradeoffs?: string[]
 }
 
 // ── Interview Prep ───────────────────────────────────────────────────────────
 
-export type ScoutInterviewPrep = {
+export type ApexInterviewPrep = {
   roleFocus: string[]
   likelyTopics: string[]
   resumeTalkingPoints: string[]
@@ -260,28 +260,28 @@ export type ScoutInterviewPrep = {
 
 // ── Mock Interview ────────────────────────────────────────────────────────────
 
-export type ScoutMockInterviewFeedback = {
+export type ApexMockInterviewFeedback = {
   strengths: string[]
   improvements: string[]
   suggestedAnswer?: string
 }
 
-export type ScoutMockInterview = {
+export type ApexMockInterview = {
   sessionId: string
   mode: "text"
   jobId?: string
   currentQuestion: string
   questionIndex: number
   totalQuestions: number
-  feedback?: ScoutMockInterviewFeedback
+  feedback?: ApexMockInterviewFeedback
   isComplete: boolean
 }
 
 /** A single exchange stored client-side — sent back on every request. */
-export type ScoutMockInterviewTurn = {
+export type ApexMockInterviewTurn = {
   question: string
   answer?: string
-  feedback?: ScoutMockInterviewFeedback
+  feedback?: ApexMockInterviewFeedback
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -289,11 +289,11 @@ export type ScoutMockInterviewTurn = {
 // ── Workflow Directive ─────────────────────────────────────────────────────────
 
 /**
- * When present in a ScoutResponse, the frontend should mount the workflow panel
+ * When present in a ApexResponse, the frontend should mount the workflow panel
  * and start tracking the named workflow type.
  * The backend infers this from intent + message keywords — Claude does not emit it directly.
  */
-export type ScoutWorkflowDirective = {
+export type ApexWorkflowDirective = {
   /** One of the known workflow types: tailor_and_prepare | compare_and_prioritize | interview_prep */
   workflowType: string
   /** Optional: a pre-assigned workflow ID for deduplication */
@@ -304,11 +304,11 @@ export type ScoutWorkflowDirective = {
 
 // ── Workspace Directive ────────────────────────────────────────────────────────
 
-export type ScoutWorkspaceMode = "idle" | "search" | "compare" | "tailor" | "applications" | "bulk_application" | "company" | "research" | "outreach" | "interview" | "career_strategy" | "offer_negotiation" | "salary_coaching" | "burnout_checkin" | "post_hire_checkin" | "personal_brand"
+export type ApexWorkspaceMode = "idle" | "search" | "compare" | "tailor" | "applications" | "bulk_application" | "company" | "research" | "outreach" | "interview" | "career_strategy" | "offer_negotiation" | "salary_coaching" | "burnout_checkin" | "post_hire_checkin" | "personal_brand" | "jd_decoder" | "reputation_guard" | "pipeline_sim" | "shadow_network" | "auto_apply"
 
-export type ScoutWorkspaceDirective = {
+export type ApexWorkspaceDirective = {
   /** Which workspace panel to activate. */
-  mode: ScoutWorkspaceMode
+  mode: ApexWorkspaceMode
   /** How the workspace should transition. Defaults to "replace". */
   transition?: "replace" | "push" | "slide-right" | "none"
   /** Arbitrary mode-specific payload for the workspace component. */
@@ -320,7 +320,7 @@ export type ScoutWorkspaceDirective = {
   rail?: {
     title: string
     summary?: string
-    actions?: ScoutAction[]
+    actions?: ApexAction[]
   } | null
   /** Follow-up suggestion chips relevant to the active mode. */
   chips?: string[]
@@ -328,20 +328,20 @@ export type ScoutWorkspaceDirective = {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type ScoutResponse = {
+export type ApexResponse = {
   answer: string
-  recommendation: ScoutRecommendation
-  actions: ScoutAction[]
-  explanations?: ScoutExplanationBlock[]
-  workflow?: ScoutWorkflow
-  intent?: ScoutIntent
+  recommendation: ApexRecommendation
+  actions: ApexAction[]
+  explanations?: ApexExplanationBlock[]
+  workflow?: ApexWorkflow
+  intent?: ApexIntent
   confidence?: number
-  mode?: ScoutMode
-  /** Optional structured graph payload — rendered by ScoutGraphRenderer, never shown as text */
-  graph?: import("@/components/scout/renderers/ScoutGraphRenderer").ScoutGraph
-  compare?: ScoutCompareResponse
-  interviewPrep?: ScoutInterviewPrep
-  mockInterview?: ScoutMockInterview
+  mode?: ApexMode
+  /** Optional structured graph payload — rendered by ApexGraphRenderer, never shown as text */
+  graph?: import("@/components/apex/renderers/ApexGraphRenderer").ApexGraph
+  compare?: ApexCompareResponse
+  interviewPrep?: ApexInterviewPrep
+  mockInterview?: ApexMockInterview
   gated?: {
     feature: import("@/lib/gates").FeatureKey
     reason: string
@@ -352,22 +352,22 @@ export type ScoutResponse = {
    * instead of inferring from the response shape. Frontend inference
    * remains as a fallback when this field is absent.
    */
-  workspace_directive?: ScoutWorkspaceDirective
+  workspace_directive?: ApexWorkspaceDirective
   /**
    * When present, the frontend mounts the workflow panel and starts tracking
    * the named multi-step workflow. Only emitted when intent === "workflow".
    */
-  workflow_directive?: ScoutWorkflowDirective
+  workflow_directive?: ApexWorkflowDirective
   /**
    * Recruiter copilot — generated outreach draft.
-   * User reviews and edits before sending. Scout never sends automatically.
+   * User reviews and edits before sending. Apex never sends automatically.
    */
-  outreach?: import("@/lib/scout/outreach/types").ScoutOutreachDraft
+  outreach?: import("@/lib/apex/outreach/types").ApexOutreachDraft
   /**
-   * Apply agent — emitted when Scout selects jobs to apply to and drives
+   * Apply agent — emitted when Apex selects jobs to apply to and drives
    * the tailor → confirm → apply loop. Never emitted for single-job flows.
    */
-  apply_agent?: import("@/lib/scout/apply-agent/types").ApplyAgentDirective
+  apply_agent?: import("@/lib/apex/apply-agent/types").ApplyAgentDirective
   /**
    * Development-only diagnostics. Never render directly in user-facing UI.
    * Used for timeline metadata and local debugging of orchestrator behavior.
@@ -391,7 +391,7 @@ export type ScoutResponse = {
 }
 
 /** AI-generated weekly strategy plan returned from Strategy Mode. */
-export type ScoutAIStrategy = {
+export type ApexAIStrategy = {
   /** 2–3 strategic themes for the week — where to direct energy */
   focus: string[]
   /** 2–3 specific opportunity types, companies, or signals to pursue first */
@@ -402,11 +402,11 @@ export type ScoutAIStrategy = {
   improve: string[]
   /** 3–4 completable tasks for this specific week */
   thisWeek: string[]
-  /** 0–4 Scout UI actions to immediately execute the strategy */
-  actions: ScoutAction[]
+  /** 0–4 Apex UI actions to immediately execute the strategy */
+  actions: ApexAction[]
 }
 
-export type ScoutAIStrategyGated = {
+export type ApexAIStrategyGated = {
   feature: import("@/lib/gates").FeatureKey
   upgradeMessage: string
   lockedSections: Array<"prioritize" | "avoid" | "improve">

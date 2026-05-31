@@ -4,56 +4,58 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { usePathname, useSearchParams } from "next/navigation"
 import dynamic from "next/dynamic"
 import { MoreHorizontal, Sparkles, Target, X } from "lucide-react"
-import { ScoutOrb } from "@/components/scout/ScoutOrb"
-import { runQualityControl, buildQCContext } from "@/lib/scout/quality-control"
-import { ScoutCommandBar } from "./ScoutCommandBar"
+import { ApexOrb } from "@/components/apex/ApexOrb"
+import { ApexAlertBadge } from "@/components/apex/ApexAlertBadge"
+import { ApexIcon } from "@/components/apex/ApexIcon"
+import { runQualityControl, buildQCContext } from "@/lib/apex/quality-control"
+import { ApexCommandBar } from "./ApexCommandBar"
 import { WorkspaceSurface } from "./WorkspaceSurface"
 import { IdleMode } from "./IdleMode"
 import { BrowserActionStrip } from "./BrowserActionStrip"
-import { ScoutLeftPanel } from "./ScoutLeftPanel"
-import { ScoutRightPanel } from "./ScoutRightPanel"
-import { ScoutThinkingCanvas } from "./ScoutThinkingCanvas"
-import { ScoutWelcomeScene } from "./scenes/ScoutWelcomeScene"
-import { ScoutStoryScene } from "./scenes/ScoutStoryScene"
-import { ScoutWorkspaceStage } from "./scenes/ScoutWorkspaceStage"
-import { ScoutContextPanel, type ContextPanelTab } from "./scenes/ScoutContextPanel"
-import { ScoutErrorBoundary } from "@/components/scout/ScoutErrorBoundary"
-import { ScoutMemoryChips } from "@/components/scout/ScoutMemoryChips"
-import { ScoutProactiveStrip } from "@/components/scout/proactive/ScoutProactiveStrip"
-import { useWorkflowEngine } from "@/lib/scout/workflows/engine"
-import { useBulkApplicationEngine } from "@/lib/scout/bulk-application/engine"
-import { useScoutStream } from "@/hooks/useScoutStream"
+import { ApexLeftPanel } from "./ApexLeftPanel"
+import { ApexRightPanel } from "./ApexRightPanel"
+import { ApexThinkingCanvas } from "./ApexThinkingCanvas"
+import { ApexWelcomeScene } from "./scenes/ApexWelcomeScene"
+import { ApexStoryScene } from "./scenes/ApexStoryScene"
+import { ApexWorkspaceStage } from "./scenes/ApexWorkspaceStage"
+import { ApexContextPanel, type ContextPanelTab } from "./scenes/ApexContextPanel"
+import { ApexErrorBoundary } from "@/components/apex/ApexErrorBoundary"
+import { ApexMemoryChips } from "@/components/apex/ApexMemoryChips"
+import { ApexProactiveStrip } from "@/components/apex/proactive/ApexProactiveStrip"
+import { useWorkflowEngine } from "@/lib/apex/workflows/engine"
+import { useBulkApplicationEngine } from "@/lib/apex/bulk-application/engine"
+import { useApexStream } from "@/hooks/useApexStream"
 import { useResearchStream } from "@/hooks/useResearchStream"
-import { detectPreflightMode, PREFLIGHT_NARRATIVE } from "@/lib/scout/streaming/intent-preflight"
-import { isResearchIntent } from "@/lib/scout/research/tasks"
-import { writeResearchTask, readResearchTask } from "@/lib/scout/research/store"
-import { isCareerStrategyIntent } from "@/lib/scout/career/intent"
+import { detectPreflightMode, PREFLIGHT_NARRATIVE } from "@/lib/apex/streaming/intent-preflight"
+import { isResearchIntent } from "@/lib/apex/research/tasks"
+import { writeResearchTask, readResearchTask } from "@/lib/apex/research/store"
+import { isCareerStrategyIntent } from "@/lib/apex/career/intent"
 import { useCareerStrategy } from "@/hooks/useCareerStrategy"
-import { useScoutBrowserOperator } from "@/hooks/useScoutBrowserOperator"
-import { SCOUT_FLAGS } from "@/lib/scout/flags"
+import { useApexBrowserOperator } from "@/hooks/useApexBrowserOperator"
+import { APEX_FLAGS } from "@/lib/apex/flags"
 import {
   isExtPromosDismissed,
   dismissExtPromo,
-} from "@/lib/scout/first-run"
-import { useScoutTimeline } from "@/hooks/useScoutTimeline"
-import { useScoutProactive } from "@/hooks/useScoutProactive"
+} from "@/lib/apex/first-run"
+import { useApexTimeline } from "@/hooks/useApexTimeline"
+import { useApexProactive } from "@/hooks/useApexProactive"
 import type {
-  ScoutTimelineEvent,
-  ScoutTimelineReplayAction,
-} from "@/lib/scout/timeline/types"
-import type { ScoutProactiveEvent } from "@/lib/scout/proactive/types"
-import type { ScoutResearchTask } from "@/lib/scout/research/types"
-import { generateDailyMissions, buildMomentumLine } from "@/lib/scout/missions/generator"
+  ApexTimelineEvent,
+  ApexTimelineReplayAction,
+} from "@/lib/apex/timeline/types"
+import type { ApexProactiveEvent } from "@/lib/apex/proactive/types"
+import type { ApexResearchTask } from "@/lib/apex/research/types"
+import { generateDailyMissions, buildMomentumLine } from "@/lib/apex/missions/generator"
 import {
   readMissionStore,
   writeMissionStore,
   patchMissionStatus,
   setMissionsDisabled,
-} from "@/lib/scout/missions/store"
-import type { ScoutMissionStore } from "@/lib/scout/missions/types"
-import { useActiveBrowserContext } from "@/lib/scout/browser-context"
-import { getContextualChips, getContextualPlaceholder } from "@/lib/scout/context-chips"
-import { writePinnedContext } from "@/lib/scout/pinned-context"
+} from "@/lib/apex/missions/store"
+import type { ApexMissionStore } from "@/lib/apex/missions/types"
+import { useActiveBrowserContext } from "@/lib/apex/browser-context"
+import { getContextualChips, getContextualPlaceholder } from "@/lib/apex/context-chips"
+import { writePinnedContext } from "@/lib/apex/pinned-context"
 import {
   readSearchProfile,
   writeSearchProfile,
@@ -61,33 +63,33 @@ import {
   mergeProfileUpdate,
   extractProfileUpdate,
   buildMemoryChips,
-  type ScoutSearchProfile,
-} from "@/lib/scout/search-profile"
-import { getPersonalizedChips } from "@/lib/scout/mode"
-import { readPermissions, type ScoutPermissionState } from "@/lib/scout/permissions"
-import { getScoutSuggestionChips } from "@/lib/scout/mode"
-import { getScoutNudges } from "@/lib/scout/nudges"
-import { detectScoutMode } from "@/lib/scout/mode"
-import { inferWorkspaceMode, type WorkspaceMode, type WorkspaceRail } from "@/lib/scout/workspace"
+  type ApexSearchProfile,
+} from "@/lib/apex/search-profile"
+import { getPersonalizedChips } from "@/lib/apex/mode"
+import { readPermissions, type ApexPermissionState } from "@/lib/apex/permissions"
+import { getApexSuggestionChips } from "@/lib/apex/mode"
+import { getApexNudges } from "@/lib/apex/nudges"
+import { detectApexMode } from "@/lib/apex/mode"
+import { inferWorkspaceMode, type WorkspaceMode, type WorkspaceRail } from "@/lib/apex/workspace"
 import {
   appendCommand,
-  clearScoutSession,
+  clearApexSession,
   extractModeMetadata,
   extractRailMetadata,
-  readScoutSession,
-  writeScoutSession,
-} from "@/lib/scout/session"
+  readApexSession,
+  writeApexSession,
+} from "@/lib/apex/session"
 import { useResumeContext } from "@/components/resume/ResumeProvider"
 import { useAuth } from "@/lib/hooks/useAuth"
-import type { ApplyAgentDirective } from "@/lib/scout/apply-agent/types"
-import type { ScoutResponse, ScoutStrategyBoard } from "@/lib/scout/types"
-import type { ScoutBehaviorSignals } from "@/lib/scout/behavior"
-import type { ScoutNudge } from "@/lib/scout/nudges"
-import type { OutcomeLearningResult } from "@/lib/scout/outcomes/types"
-import { useScoutContinuation } from "@/hooks/useScoutContinuation"
-import { mergeResumableContexts } from "@/lib/scout/continuation/sanitize"
-import type { ScoutResumableContext } from "@/lib/scout/continuation/types"
-import type { MarketSignal } from "@/lib/scout/market-intelligence"
+import type { ApplyAgentDirective } from "@/lib/apex/apply-agent/types"
+import type { ApexResponse, ApexStrategyBoard } from "@/lib/apex/types"
+import type { ApexBehaviorSignals } from "@/lib/apex/behavior"
+import type { ApexNudge } from "@/lib/apex/nudges"
+import type { OutcomeLearningResult } from "@/lib/apex/outcomes/types"
+import { useApexContinuation } from "@/hooks/useApexContinuation"
+import { mergeResumableContexts } from "@/lib/apex/continuation/sanitize"
+import type { ApexResumableContext } from "@/lib/apex/continuation/types"
+import type { MarketSignal } from "@/lib/apex/market-intelligence"
 import { cn } from "@/lib/utils"
 
 // ── Lazy-loaded workspace modes (only one is rendered at a time) ──────────────
@@ -101,22 +103,27 @@ const ResearchMode       = dynamic(() => import("./ResearchMode").then(m => ({ d
 const OutreachMode       = dynamic(() => import("./OutreachMode").then(m => ({ default: m.OutreachMode })), { ssr: false })
 const InterviewPrepMode  = dynamic(() => import("./InterviewPrepMode").then(m => ({ default: m.InterviewPrepMode })), { ssr: false })
 const CareerStrategyMode = dynamic(() => import("./CareerStrategyMode").then(m => ({ default: m.CareerStrategyMode })), { ssr: false })
-const ApplyAgentFlow     = dynamic(() => import("@/components/scout/ApplyAgentFlow").then(m => ({ default: m.ApplyAgentFlow })), { ssr: false })
+const ApplyAgentFlow     = dynamic(() => import("@/components/apex/ApplyAgentFlow").then(m => ({ default: m.ApplyAgentFlow })), { ssr: false })
+const JDDecoderPanel     = dynamic(() => import("@/components/apex/JDDecoderPanel").then(m => ({ default: m.JDDecoderPanel })), { ssr: false })
+const ReputationGuardPanel = dynamic(() => import("@/components/apex/ReputationGuardPanel").then(m => ({ default: m.ReputationGuardPanel })), { ssr: false })
+const PipelineSimulator  = dynamic(() => import("@/components/apex/PipelineSimulator").then(m => ({ default: m.PipelineSimulator })), { ssr: false })
+const ShadowNetworkMode  = dynamic(() => import("./ShadowNetworkMode").then(m => ({ default: m.ShadowNetworkMode })), { ssr: false })
+const AutoApplyPanel     = dynamic(() => import("@/components/apex/AutoApplyPanel").then(m => ({ default: m.AutoApplyPanel })), { ssr: false })
 
 // ── Lazy-loaded panels (opened on demand) ─────────────────────────────────────
-const ScoutCommandPalette = dynamic(() => import("./ScoutCommandPalette").then(m => ({ default: m.ScoutCommandPalette })), { ssr: false })
-const WorkflowPanel       = dynamic(() => import("@/components/scout/workflows/WorkflowPanel").then(m => ({ default: m.WorkflowPanel })), { ssr: false })
-const ScoutActionGate     = dynamic(() => import("@/components/scout/ScoutActionGate").then(m => ({ default: m.ScoutActionGate })), { ssr: false })
-const ScoutPermissionsPanel = dynamic(() => import("@/components/scout/ScoutPermissionsPanel").then(m => ({ default: m.ScoutPermissionsPanel })), { ssr: false })
-const ScoutMemoryPanel    = dynamic(() => import("@/components/scout/memory/ScoutMemoryPanel").then(m => ({ default: m.ScoutMemoryPanel })), { ssr: false })
-const BulkConfirmDialog   = dynamic(() => import("@/components/scout/bulk/BulkConfirmDialog").then(m => ({ default: m.BulkConfirmDialog })), { ssr: false })
-const BulkReviewDrawer    = dynamic(() => import("@/components/scout/bulk/BulkReviewDrawer").then(m => ({ default: m.BulkReviewDrawer })), { ssr: false })
-const ScoutContinuationStrip = dynamic(() => import("@/components/scout/continuation/ScoutContinuationStrip").then(m => ({ default: m.ScoutContinuationStrip })), { ssr: false })
+const ApexCommandPalette = dynamic(() => import("./ApexCommandPalette").then(m => ({ default: m.ApexCommandPalette })), { ssr: false })
+const WorkflowPanel       = dynamic(() => import("@/components/apex/workflows/WorkflowPanel").then(m => ({ default: m.WorkflowPanel })), { ssr: false })
+const ApexActionGate     = dynamic(() => import("@/components/apex/ApexActionGate").then(m => ({ default: m.ApexActionGate })), { ssr: false })
+const ApexPermissionsPanel = dynamic(() => import("@/components/apex/ApexPermissionsPanel").then(m => ({ default: m.ApexPermissionsPanel })), { ssr: false })
+const ApexMemoryPanel    = dynamic(() => import("@/components/apex/memory/ApexMemoryPanel").then(m => ({ default: m.ApexMemoryPanel })), { ssr: false })
+const BulkConfirmDialog   = dynamic(() => import("@/components/apex/bulk/BulkConfirmDialog").then(m => ({ default: m.BulkConfirmDialog })), { ssr: false })
+const BulkReviewDrawer    = dynamic(() => import("@/components/apex/bulk/BulkReviewDrawer").then(m => ({ default: m.BulkReviewDrawer })), { ssr: false })
+const ApexContinuationStrip = dynamic(() => import("@/components/apex/continuation/ApexContinuationStrip").then(m => ({ default: m.ApexContinuationStrip })), { ssr: false })
 
 type ChatMessage =
   | { id: string; role: "user";           text: string }
-  | { id: string; role: "scout";          response: ScoutResponse }
-  | { id: string; role: "scout_streaming"; streamText: string }
+  | { id: string; role: "apex";          response: ApexResponse }
+  | { id: string; role: "apex_streaming"; streamText: string }
 
 /** Entities carried across workspace mode transitions */
 export type ActiveEntities = {
@@ -126,9 +133,9 @@ export type ActiveEntities = {
   companyName?: string
 }
 
-/** Extract safe entity identifiers from a Scout response (no text content). */
+/** Extract safe entity identifiers from a Apex response (no text content). */
 function extractEntities(
-  response: ScoutResponse,
+  response: ApexResponse,
   current: ActiveEntities
 ): ActiveEntities {
   const next: ActiveEntities = { ...current }
@@ -151,29 +158,55 @@ function extractEntities(
     }
   }
 
+  // Pull companyName / jobTitle from workspace_directive.payload
+  const payload = response.workspace_directive?.payload
+  if (payload) {
+    if (typeof payload.companyName === "string" && payload.companyName) next.companyName = payload.companyName
+    if (typeof payload.jobTitle    === "string" && payload.jobTitle)    next.jobTitle    = payload.jobTitle
+    if (typeof payload.jobId       === "string" && payload.jobId)       next.jobId       = payload.jobId
+  }
+
+  // If we still don't have a company name, try to extract it from the answer text.
+  // Claude often says "Shadow Network for Stripe" or "connections at Acme Corp".
+  if (!next.companyName && response.workspace_directive?.mode === "shadow_network") {
+    const answer = response.answer ?? ""
+    const m =
+      answer.match(/Shadow Network for ([A-Za-z0-9 &'.,]+?)(?:\s*[-–]|\s+based|\s+to\s+surface|[.,]|$)/i) ??
+      answer.match(/connections? at ([A-Za-z0-9 &'.,]+?)(?:\s+based|\s+to\s+surface|[.,]|$)/i) ??
+      answer.match(/who (?:you|I) know at ([A-Za-z0-9 &'.,]+?)(?:\s+based|\s+to\s+surface|[.,]|$)/i) ??
+      answer.match(/(?:network|referral).{0,20}at ([A-Za-z0-9 &'.,]+?)(?:\s*[-–]|\s+based|[.,]|$)/i)
+    const extracted = m?.[1]?.trim().replace(/\s+$/, "")
+    if (extracted && extracted.length < 60) next.companyName = extracted
+  }
+
   return next
 }
 
-/** Derive a short Scout narrative string from a response. */
-function buildNarrative(mode: WorkspaceMode, response: ScoutResponse): string {
+/** Derive a short Apex narrative string from a response. */
+function buildNarrative(mode: WorkspaceMode, response: ApexResponse): string {
   const answer = response.answer?.trim()
   if (!answer || /^\s*[{[]/.test(answer)) {
     const labels: Record<WorkspaceMode, string> = {
-      search:            "Scout prepared a filtered job search.",
-      compare:           "Scout compared your saved roles.",
-      tailor:            "Scout identified tailoring opportunities.",
-      applications:      "Scout prepared a workflow plan.",
-      bulk_application:  "Scout is preparing your bulk application queue.",
-      company:           "Scout surfaced company intelligence.",
-      research:          "Scout is running your research task.",
-      outreach:          "Scout prepared your outreach draft.",
-      interview:          "Scout generated your interview prep plan.",
-      career_strategy:    "Scout analysed your career profile and directions.",
-      offer_negotiation:  "Scout benchmarked your offer and prepared negotiation guidance.",
-      salary_coaching:    "Scout analysed your salary targeting against market rates.",
-      burnout_checkin:    "Scout checked in on your search.",
-      post_hire_checkin:  "Scout opened your employer check-in.",
-      personal_brand:     "Scout analysed your brand visibility.",
+      search:            "Apex prepared a filtered job search.",
+      compare:           "Apex compared your saved roles.",
+      tailor:            "Apex identified tailoring opportunities.",
+      applications:      "Apex prepared a workflow plan.",
+      bulk_application:  "Apex is preparing your bulk application queue.",
+      company:           "Apex surfaced company intelligence.",
+      research:          "Apex is running your research task.",
+      outreach:          "Apex prepared your outreach draft.",
+      interview:          "Apex generated your interview prep plan.",
+      career_strategy:    "Apex analysed your career profile and directions.",
+      offer_negotiation:  "Apex benchmarked your offer and prepared negotiation guidance.",
+      salary_coaching:    "Apex analysed your salary targeting against market rates.",
+      burnout_checkin:    "Apex checked in on your search.",
+      post_hire_checkin:  "Apex opened your employer check-in.",
+      personal_brand:     "Apex analysed your brand visibility.",
+      jd_decoder:         "Apex is reading between the lines of this job posting.",
+      reputation_guard:   "Apex is scoring this employer's reputation before you apply.",
+      pipeline_sim:       "Apex ran your job search through a probability simulation.",
+      shadow_network:     "Apex found warm referral paths in your network.",
+      auto_apply:         "Set your 1-click apply rules — Apex prepares matching applications for your review.",
       idle:               "",
     }
     return labels[mode] ?? ""
@@ -191,7 +224,7 @@ function renderBold(text: string): React.ReactNode {
   )
 }
 
-type TimelineSignalDetail = Partial<Omit<ScoutTimelineEvent, "id" | "timestamp">> & {
+type TimelineSignalDetail = Partial<Omit<ApexTimelineEvent, "id" | "timestamp">> & {
   timestamp?: string
 }
 
@@ -208,7 +241,7 @@ function queueStatusLabel(status: string): string {
   }
 }
 
-function proactiveCommandSuggestion(event: ScoutProactiveEvent): string {
+function proactiveCommandSuggestion(event: ApexProactiveEvent): string {
   switch (event.type) {
     case "new_match":
       return "Show me the new high-match jobs and rank them by fit"
@@ -235,7 +268,7 @@ function proactiveCommandSuggestion(event: ScoutProactiveEvent): string {
   }
 }
 
-function continuationContextKey(context: ScoutResumableContext): string {
+function continuationContextKey(context: ApexResumableContext): string {
   return `${context.type}:${context.id}`
 }
 
@@ -249,7 +282,7 @@ function toSpokenText(value: string): string {
     .trim()
 }
 
-function openContinuationPrompt(context: ScoutResumableContext): string {
+function openContinuationPrompt(context: ApexResumableContext): string {
   switch (context.type) {
     case "workflow":
       return `Resume ${context.title}?`
@@ -270,7 +303,7 @@ function openContinuationPrompt(context: ScoutResumableContext): string {
 
 const IS_DEV = process.env.NODE_ENV === "development"
 
-export function ScoutWorkspaceShell() {
+export function ApexWorkspaceShell() {
   const pathname   = usePathname()
   const searchParams = useSearchParams()
   const { primaryResume } = useResumeContext()
@@ -285,13 +318,18 @@ export function ScoutWorkspaceShell() {
   // ── Bulk application engine ─────────────────────────────────────────────────
   const bulkEngine = useBulkApplicationEngine()
 
-  // ── Scout streaming ─────────────────────────────────────────────────────────
-  const scoutStream    = useScoutStream()
+  // ── Apex streaming ─────────────────────────────────────────────────────────
+  const apexStream    = useApexStream()
   const streamMsgId    = useRef<string | null>(null)
   const isSubmittingRef = useRef(false)   // sync guard — prevents double-submit within same tick
 
   // Refs for timeline change detection (avoid duplicate event emission)
   const prevModeRef          = useRef<WorkspaceMode>("idle")
+  // Always-current workspace mode (for reading inside async stream callbacks)
+  const workspaceModeRef     = useRef<WorkspaceMode>("idle")
+  // Set when the current turn was an explicit 1-click/auto-apply intent — the
+  // self-contained panel must not be overridden by Claude's response mode.
+  const forceAutoApplyRef    = useRef(false)
   const prevWorkflowIdRef    = useRef<string | null>(null)
   const prevWorkflowStepRef  = useRef<string | null>(null)
   const prevBrowserCtxKey    = useRef<string | null>(null)
@@ -306,7 +344,7 @@ export function ScoutWorkspaceShell() {
   const commandStartedAtRef  = useRef<number | null>(null)
   const pendingVoiceReplyRef = useRef(false)
   const lastCommandLatencyRef = useRef<number | null>(null)
-  const lastDebugRef = useRef<ScoutResponse["debug"] | null>(null)
+  const lastDebugRef = useRef<ApexResponse["debug"] | null>(null)
 
   // ── Research streaming ──────────────────────────────────────────────────────
   const researchStream = useResearchStream()
@@ -315,7 +353,7 @@ export function ScoutWorkspaceShell() {
   const careerStrategy = useCareerStrategy()
 
   // ── Activity timeline ───────────────────────────────────────────────────────
-  const timeline       = useScoutTimeline()
+  const timeline       = useApexTimeline()
   // Unified contextual side panel — replaces the always-on right rail
   const [contextPanelOpen, setContextPanelOpen] = useState(false)
   const [contextPanelTab, setContextPanelTab]   = useState<ContextPanelTab>("context")
@@ -325,23 +363,23 @@ export function ScoutWorkspaceShell() {
   }, [])
   const closeContextPanel = useCallback(() => setContextPanelOpen(false), [])
   // Restored research task — used by session replay when research mode is re-entered
-  const [restoredResearchTask, setRestoredResearchTask] = useState<ScoutResearchTask | null>(null)
+  const [restoredResearchTask, setRestoredResearchTask] = useState<ApexResearchTask | null>(null)
 
   // ── Active browser context (from extension) ─────────────────────────────────
   const { context: browserContext, isExtensionConnected } = useActiveBrowserContext()
 
   // ── Search profile (persistent lightweight memory) ──────────────────────────
-  const [searchProfile, setSearchProfile] = useState<ScoutSearchProfile | null>(null)
+  const [searchProfile, setSearchProfile] = useState<ApexSearchProfile | null>(null)
 
   // ── Market intelligence signals ─────────────────────────────────────────────
   const [marketSignals,   setMarketSignals]   = useState<MarketSignal[]>([])
   const [marketLoading,   setMarketLoading]   = useState(true)
 
   // ── Permission gate (shell-level — handles events from any executor) ─────────
-  const [activeGate,        setActiveGate]        = useState<import("@/components/scout/ScoutActionGate").GateRequest | null>(null)
+  const [activeGate,        setActiveGate]        = useState<import("@/components/apex/ApexActionGate").GateRequest | null>(null)
   const [showPermissions,   setShowPermissions]   = useState(false)
   const [memoryPanelOpen,   setMemoryPanelOpen]   = useState(false)
-  const [shellPermissions,  setShellPermissions]  = useState<ScoutPermissionState[]>(() => readPermissions())
+  const [shellPermissions,  setShellPermissions]  = useState<ApexPermissionState[]>(() => readPermissions())
 
   // ── Extension promo state — loaded after mount to avoid hydration mismatch ──
   const [extPromoDismissed, setExtPromoDismissed] = useState(false)
@@ -349,7 +387,7 @@ export function ScoutWorkspaceShell() {
     setExtPromoDismissed(isExtPromosDismissed())
   }, [])
 
-  const showExtPromo = !isExtensionConnected && !extPromoDismissed && SCOUT_FLAGS.extensionBridgeEnabled
+  const showExtPromo = !isExtensionConnected && !extPromoDismissed && APEX_FLAGS.extensionBridgeEnabled
 
   const handleDismissExtPromo = useCallback(() => {
     dismissExtPromo()
@@ -357,7 +395,7 @@ export function ScoutWorkspaceShell() {
   }, [])
 
   // ── Browser operator — must be after browserContext, isExtensionConnected, shellPermissions ──
-  const operator = useScoutBrowserOperator({
+  const operator = useApexBrowserOperator({
     permissions:          shellPermissions,
     browserContext,
     isExtensionConnected,
@@ -383,18 +421,18 @@ export function ScoutWorkspaceShell() {
   const [orbDone, setOrbDone] = useState(false)
   const wasStreamingRef = useRef(false)
   useEffect(() => {
-    const isStreaming = scoutStream.isStreaming || researchStream.isRunning
+    const isStreaming = apexStream.isStreaming || researchStream.isRunning
     if (wasStreamingRef.current && !isStreaming) {
       setOrbDone(true)
       const t = setTimeout(() => setOrbDone(false), 400)
       return () => clearTimeout(t)
     }
     wasStreamingRef.current = isStreaming
-  }, [scoutStream.isStreaming, researchStream.isRunning])
+  }, [apexStream.isStreaming, researchStream.isRunning])
 
   // ── Workspace state ─────────────────────────────────────────────────────────
   const [workspaceMode,   setWorkspaceMode]   = useState<WorkspaceMode>("idle")
-  const [activeResponse,  setActiveResponse]  = useState<ScoutResponse | null>(null)
+  const [activeResponse,  setActiveResponse]  = useState<ApexResponse | null>(null)
   const [rail,            setRail]            = useState<WorkspaceRail | null>(null)
   const [chips,           setChips]           = useState<string[]>([])
   const [activeEntities,  setActiveEntities]  = useState<ActiveEntities>({})
@@ -409,32 +447,38 @@ export function ScoutWorkspaceShell() {
   const [dismissedContinuationIds, setDismissedContinuationIds] = useState<Set<string>>(new Set())
 
   // ── Strategy / behavior data ────────────────────────────────────────────────
-  const [strategyBoard,   setStrategyBoard]   = useState<ScoutStrategyBoard | null>(null)
+  const [strategyBoard,   setStrategyBoard]   = useState<ApexStrategyBoard | null>(null)
   const [strategyLoading, setStrategyLoading] = useState(true)
-  const [behaviorSignals, setBehaviorSignals] = useState<ScoutBehaviorSignals | null>(null)
+  const [behaviorSignals, setBehaviorSignals] = useState<ApexBehaviorSignals | null>(null)
   const [behaviorLoading, setBehaviorLoading] = useState(true)
   const [outcomeLearning, setOutcomeLearning] = useState<OutcomeLearningResult | null>(null)
 
   // ── Daily missions ──────────────────────────────────────────────────────────
-  const [missionStore, setMissionStore] = useState<ScoutMissionStore | null>(null)
+  const [missionStore, setMissionStore] = useState<ApexMissionStore | null>(null)
 
   // ── Derived ─────────────────────────────────────────────────────────────────
-  const scoutMode = detectScoutMode(pathname ?? "")
+  const apexMode = detectApexMode(pathname ?? "")
 
   // Focus mode persists across navigation: read from URL param (when on /dashboard)
-  // OR from localStorage (when the user navigated back to /dashboard/scout).
-  // The action executor writes/clears localStorage when SET_FOCUS_MODE fires.
-  const [localFocusMode, setLocalFocusMode] = useState(() => {
-    if (typeof window === "undefined") return false
-    return localStorage.getItem("hireoven:scout-focus-mode:v1") === "1"
-  })
+  // OR from localStorage (when the user navigated back to /dashboard/apex).
+  // Start as false on both server and client to prevent SSR hydration mismatch;
+  // a useEffect syncs the real localStorage value after hydration.
+  const [localFocusMode, setLocalFocusMode] = useState(false)
   const isFocusMode = searchParams.get("focus") === "1" || localFocusMode
 
   // Sync localStorage → state when the URL focus param changes
-  // (e.g. user visits /dashboard?focus=1 and then navigates to Scout)
+  // Read localStorage after hydration (safe — runs only on client)
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("hireoven:apex-focus-mode:v1") === "1"
+      if (stored) setLocalFocusMode(true)
+    } catch {}
+  }, [])
+
+  // (e.g. user visits /dashboard?focus=1 and then navigates to Apex)
   useEffect(() => {
     if (searchParams.get("focus") === "1") {
-      try { localStorage.setItem("hireoven:scout-focus-mode:v1", "1") } catch {}
+      try { localStorage.setItem("hireoven:apex-focus-mode:v1", "1") } catch {}
       setLocalFocusMode(true)
     }
   }, [searchParams])
@@ -447,25 +491,25 @@ export function ScoutWorkspaceShell() {
       setLocalFocusMode(detail.enabled)
     }
     function onStorage(e: StorageEvent) {
-      if (e.key === "hireoven:scout-focus-mode:v1") {
+      if (e.key === "hireoven:apex-focus-mode:v1") {
         setLocalFocusMode(e.newValue === "1")
       }
     }
-    window.addEventListener("scout:focus-mode-changed", onFocusChanged)
+    window.addEventListener("apex:focus-mode-changed", onFocusChanged)
     window.addEventListener("storage", onStorage)
     return () => {
-      window.removeEventListener("scout:focus-mode-changed", onFocusChanged)
+      window.removeEventListener("apex:focus-mode-changed", onFocusChanged)
       window.removeEventListener("storage", onStorage)
     }
   }, [])
 
-  const nudges: ScoutNudge[] = useMemo(() => {
+  const nudges: ApexNudge[] = useMemo(() => {
     if (!strategyBoard || !behaviorSignals) return []
-    return getScoutNudges(scoutMode, behaviorSignals, strategyBoard, {
+    return getApexNudges(apexMode, behaviorSignals, strategyBoard, {
       isFocusMode,
       resumeId: primaryResume?.id ?? null,
     })
-  }, [strategyBoard, behaviorSignals, scoutMode, isFocusMode, primaryResume?.id])
+  }, [strategyBoard, behaviorSignals, apexMode, isFocusMode, primaryResume?.id])
 
   const contextIds = {
     jobId:         searchParams.get("jobId")         ?? undefined,
@@ -484,7 +528,7 @@ export function ScoutWorkspaceShell() {
     setGreeting(h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening")
   }, [])
 
-  const speakScoutReply = useCallback((text: string) => {
+  const speakApexReply = useCallback((text: string) => {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) return
     const spoken = toSpokenText(text).slice(0, 420)
     if (!spoken) return
@@ -496,7 +540,7 @@ export function ScoutWorkspaceShell() {
       utterance.pitch = 1
       window.speechSynthesis.speak(utterance)
     } catch {
-      // Voice reply is best-effort and should never block Scout UX.
+      // Voice reply is best-effort and should never block Apex UX.
     }
   }, [])
 
@@ -508,7 +552,7 @@ export function ScoutWorkspaceShell() {
     }
   }, [])
 
-  const proactive = useScoutProactive({
+  const proactive = useApexProactive({
     marketSignals,
     outcomeLearning,
     searchProfile,
@@ -517,7 +561,7 @@ export function ScoutWorkspaceShell() {
     bulkQueue: bulkEngine.queue,
   })
 
-  const continuation = useScoutContinuation()
+  const continuation = useApexContinuation()
 
   // ── Gate event bus — listens for permission requests from any executor ────────
   useEffect(() => {
@@ -525,8 +569,8 @@ export function ScoutWorkspaceShell() {
       const detail = (e as CustomEvent).detail
       setActiveGate(detail)
     }
-    window.addEventListener("scout:gate-open", onGateOpen)
-    return () => window.removeEventListener("scout:gate-open", onGateOpen)
+    window.addEventListener("apex:gate-open", onGateOpen)
+    return () => window.removeEventListener("apex:gate-open", onGateOpen)
   }, [])
 
   // ── Extension review-submitted bridge ────────────────────────────────────────
@@ -564,7 +608,7 @@ export function ScoutWorkspaceShell() {
       if (typeof detail.title !== "string" || !detail.title.trim()) return
 
       timeline.append({
-        type: detail.type as ScoutTimelineEvent["type"],
+        type: detail.type as ApexTimelineEvent["type"],
         title: detail.title,
         summary: typeof detail.summary === "string" ? detail.summary : undefined,
         timestamp: detail.timestamp ?? new Date().toISOString(),
@@ -575,11 +619,11 @@ export function ScoutWorkspaceShell() {
       })
     }
 
-    window.addEventListener("scout:timeline-signal", onTimelineSignal as EventListener)
-    return () => window.removeEventListener("scout:timeline-signal", onTimelineSignal as EventListener)
+    window.addEventListener("apex:timeline-signal", onTimelineSignal as EventListener)
+    return () => window.removeEventListener("apex:timeline-signal", onTimelineSignal as EventListener)
   }, [timeline.append])
 
-  // ── Scout action audit bridge → timeline ───────────────────────────────────
+  // ── Apex action audit bridge → timeline ───────────────────────────────────
   useEffect(() => {
     function onActionRecorded(e: Event) {
       const detail = (e as CustomEvent<Record<string, unknown>>).detail
@@ -587,7 +631,7 @@ export function ScoutWorkspaceShell() {
       const label = typeof detail?.label === "string" ? detail.label : null
       if (!actionType || !label) return
 
-      let type: ScoutTimelineEvent["type"] = "workflow_step"
+      let type: ApexTimelineEvent["type"] = "workflow_step"
       if (actionType === "OPEN_EXTENSION_AUTOFILL_PREVIEW") type = "autofill_reviewed"
       if (actionType === "APPLY_FILTERS" || actionType === "SET_FOCUS_MODE" || actionType === "RESET_CONTEXT") {
         type = "workspace_change"
@@ -610,13 +654,13 @@ export function ScoutWorkspaceShell() {
       })
     }
 
-    window.addEventListener("scout:action-recorded", onActionRecorded as EventListener)
-    return () => window.removeEventListener("scout:action-recorded", onActionRecorded as EventListener)
+    window.addEventListener("apex:action-recorded", onActionRecorded as EventListener)
+    return () => window.removeEventListener("apex:action-recorded", onActionRecorded as EventListener)
   }, [timeline.append])
 
   function dispatchGateResponse(approved: boolean, alwaysAllow = false) {
     setActiveGate(null)
-    window.dispatchEvent(new CustomEvent("scout:gate-response", {
+    window.dispatchEvent(new CustomEvent("apex:gate-response", {
       detail: { approved, alwaysAllow },
     }))
   }
@@ -629,8 +673,8 @@ export function ScoutWorkspaceShell() {
       clearSearchProfile()
       setSearchProfile(null)
     }
-    window.addEventListener("scout:memory-cleared", onMemoryCleared)
-    return () => window.removeEventListener("scout:memory-cleared", onMemoryCleared)
+    window.addEventListener("apex:memory-cleared", onMemoryCleared)
+    return () => window.removeEventListener("apex:memory-cleared", onMemoryCleared)
   }, [])
 
   // ── Pin browser context to sessionStorage so workflows can read it ───────────
@@ -662,7 +706,7 @@ export function ScoutWorkspaceShell() {
       }
       // Search profile personalization as fallback
       if (base === chips) {
-        const personalChips = getPersonalizedChips(scoutMode, searchProfile)
+        const personalChips = getPersonalizedChips(apexMode, searchProfile)
         if (personalChips.length > 0) base = personalChips
       }
     }
@@ -670,18 +714,18 @@ export function ScoutWorkspaceShell() {
     if (query.trim().length > 0 || !proactiveChip) return base
     if (base.includes(proactiveChip)) return base
     return [proactiveChip, ...base].slice(0, 5)
-  }, [workspaceMode, hasSession, browserContext, searchProfile, scoutMode, chips, proactiveChip, query])
+  }, [workspaceMode, hasSession, browserContext, searchProfile, apexMode, chips, proactiveChip, query])
 
   // ── Adaptive command bar placeholder ────────────────────────────────────────
   const commandBarPlaceholder = useMemo(() => {
     if (workspaceMode !== "idle") {
       if (workspaceMode === "search")  return "Refine this search…"
       if (workspaceMode === "compare") return "Ask about this comparison…"
-      return "Follow up with Scout…"
+      return "Follow up with Apex…"
     }
     return getContextualPlaceholder(
       browserContext,
-      "Ask Scout anything…  (/ or ⌘K for commands)",
+      "Ask Apex anything…  (/ or ⌘K for commands)",
     )
   }, [workspaceMode, browserContext])
 
@@ -700,9 +744,9 @@ export function ScoutWorkspaceShell() {
     [proactive.visibleEvents]
   )
 
-  const generatedResumableContexts = useMemo<ScoutResumableContext[]>(() => {
+  const generatedResumableContexts = useMemo<ApexResumableContext[]>(() => {
     const nowIso = new Date().toISOString()
-    const contexts: ScoutResumableContext[] = []
+    const contexts: ApexResumableContext[] = []
 
     const wf = workflowEngine.activeWorkflow
     if (wf) {
@@ -784,26 +828,26 @@ export function ScoutWorkspaceShell() {
   // ── Session restore ─────────────────────────────────────────────────────────
   // We intentionally do NOT restore session.mode here. The persisted session
   // covers chips/rail/recent commands only — `messages` and `activeResponse`
-  // are deliberately excluded (see lib/scout/session.ts header). Restoring a
+  // are deliberately excluded (see lib/apex/session.ts header). Restoring a
   // non-idle mode without the response stranded the UI in a permanent
   // "Scanning jobs for you..." skeleton state because the render branch
   // below has no signal that the mode is stale rather than mid-stream.
   // Recent commands + chips are enough re-entry context; the user re-fires
   // their last command if they want the mode-specific view back.
   useEffect(() => {
-    const session = readScoutSession()
-    if (!session) { setChips(getScoutSuggestionChips(scoutMode)); return }
+    const session = readApexSession()
+    if (!session) { setChips(getApexSuggestionChips(apexMode)); return }
     setHasSession(true)
     setRecentCommands(session.recentCommands)
-    setChips(session.chips.length > 0 ? session.chips : getScoutSuggestionChips(scoutMode))
+    setChips(session.chips.length > 0 ? session.chips : getApexSuggestionChips(apexMode))
     if (session.rail) setRail({ title: session.rail.title, summary: session.rail.summary })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
-    if (!hasSession) setChips(getScoutSuggestionChips(scoutMode))
+    if (!hasSession) setChips(getApexSuggestionChips(apexMode))
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scoutMode])
+  }, [apexMode])
 
   // ── Effects ─────────────────────────────────────────────────────────────────
 
@@ -826,13 +870,13 @@ export function ScoutWorkspaceShell() {
 
   useEffect(() => {
     function onReset() {
-      clearScoutSession()
+      clearApexSession()
       setMessages([]); setError(null); setActiveResponse(null)
       setWorkspaceMode("idle"); setRail(null); setNarrative("")
       setActiveEntities({}); setRecentCommands([]); setHasSession(false)
     }
-    window.addEventListener("scout:reset-context", onReset)
-    return () => window.removeEventListener("scout:reset-context", onReset)
+    window.addEventListener("apex:reset-context", onReset)
+    return () => window.removeEventListener("apex:reset-context", onReset)
   }, [])
 
   // Global Cmd+K / Ctrl+K → open command palette
@@ -850,9 +894,9 @@ export function ScoutWorkspaceShell() {
   useEffect(() => {
     let cancelled = false
     setStrategyLoading(true)
-    fetch("/api/scout/strategy", { cache: "no-store", headers: { Accept: "application/json" } })
+    fetch("/api/apex/strategy", { cache: "no-store", headers: { Accept: "application/json" } })
       .then(async (res) => {
-        const data = (await res.json().catch(() => ({}))) as { board?: ScoutStrategyBoard } | undefined
+        const data = (await res.json().catch(() => ({}))) as { board?: ApexStrategyBoard } | undefined
         if (!cancelled) setStrategyBoard(data?.board ?? null)
       })
       .catch(() => { if (!cancelled) setStrategyBoard(null) })
@@ -863,7 +907,7 @@ export function ScoutWorkspaceShell() {
   useEffect(() => {
     let cancelled = false
     setMarketLoading(true)
-    fetch("/api/scout/market", { cache: "no-store", headers: { Accept: "application/json" } })
+    fetch("/api/apex/market", { cache: "no-store", headers: { Accept: "application/json" } })
       .then(async (res) => {
         const data = (await res.json().catch(() => ({}))) as { signals?: MarketSignal[] } | undefined
         if (!cancelled) setMarketSignals(data?.signals ?? [])
@@ -876,9 +920,9 @@ export function ScoutWorkspaceShell() {
   useEffect(() => {
     let cancelled = false
     setBehaviorLoading(true)
-    fetch("/api/scout/behavior", { cache: "no-store", headers: { Accept: "application/json" } })
+    fetch("/api/apex/behavior", { cache: "no-store", headers: { Accept: "application/json" } })
       .then(async (res) => {
-        const data = (await res.json().catch(() => ({}))) as { signals?: ScoutBehaviorSignals | null } | undefined
+        const data = (await res.json().catch(() => ({}))) as { signals?: ApexBehaviorSignals | null } | undefined
         if (!cancelled) setBehaviorSignals(data?.signals ?? null)
       })
       .catch(() => { if (!cancelled) setBehaviorSignals(null) })
@@ -888,7 +932,7 @@ export function ScoutWorkspaceShell() {
 
   useEffect(() => {
     let cancelled = false
-    fetch("/api/scout/outcomes", { cache: "no-store", headers: { Accept: "application/json" } })
+    fetch("/api/apex/outcomes", { cache: "no-store", headers: { Accept: "application/json" } })
       .then(async (res) => {
         const data = (await res.json().catch(() => null)) as OutcomeLearningResult | null
         if (!cancelled) setOutcomeLearning(data)
@@ -899,8 +943,8 @@ export function ScoutWorkspaceShell() {
 
   // ── Company intel — fetched when company context changes ───────────────────────
   const [companyIntelData, setCompanyIntelData] = useState<{
-    intel: import("@/lib/scout/company-intel/types").CompanyIntel
-    summary: import("@/lib/scout/company-intel/types").CompanyIntelSummary
+    intel: import("@/lib/apex/company-intel/types").CompanyIntel
+    summary: import("@/lib/apex/company-intel/types").CompanyIntelSummary
     companyName: string
   } | null>(null)
   const [companyIntelLoading, setCompanyIntelLoading] = useState(false)
@@ -910,7 +954,7 @@ export function ScoutWorkspaceShell() {
     if (!cid) { setCompanyIntelData(null); return }
     let cancelled = false
     setCompanyIntelLoading(true)
-    fetch(`/api/scout/company-intel/${cid}`)
+    fetch(`/api/apex/company-intel/${cid}`)
       .then(async (res) => {
         const data = await res.json().catch(() => null)
         if (!cancelled && data?.intel) setCompanyIntelData(data)
@@ -939,7 +983,7 @@ export function ScoutWorkspaceShell() {
 
     // Reduce mission count for users with a slowed/stalled search pace
     let missionLimit = 3
-    fetch("/api/scout/burnout")
+    fetch("/api/apex/burnout")
       .then((r) => r.ok ? r.json() : null)
       .then((d: { state?: { state?: string; intervention_type?: string } } | null) => {
         const pace = d?.state?.state
@@ -949,7 +993,7 @@ export function ScoutWorkspaceShell() {
 
     const missions      = generateDailyMissions(ctx, missionLimit)
     const momentumLine  = buildMomentumLine(ctx)
-    const store: ScoutMissionStore = {
+    const store: ApexMissionStore = {
       date:         "",   // store.ts fills this in
       missions,
       momentumLine,
@@ -964,19 +1008,19 @@ export function ScoutWorkspaceShell() {
   // Live-update the streaming message bubble as text arrives
   useEffect(() => {
     const id = streamMsgId.current
-    if (!id || !scoutStream.isStreaming) return
+    if (!id || !apexStream.isStreaming) return
     setMessages((prev) =>
       prev.map((m) =>
-        m.id === id ? { ...m, role: "scout_streaming" as const, streamText: scoutStream.streamText } : m
+        m.id === id ? { ...m, role: "apex_streaming" as const, streamText: apexStream.streamText } : m
       )
     )
-  }, [scoutStream.streamText, scoutStream.isStreaming])
+  }, [apexStream.streamText, apexStream.isStreaming])
 
   // When the full response arrives, replace the streaming bubble with the final one
   useEffect(() => {
     const id = streamMsgId.current
-    if (!scoutStream.finalResponse || !id) return
-    const normalized = scoutStream.finalResponse
+    if (!apexStream.finalResponse || !id) return
+    const normalized = apexStream.finalResponse
     if (commandStartedAtRef.current) {
       lastCommandLatencyRef.current = Date.now() - commandStartedAtRef.current
       commandStartedAtRef.current = null
@@ -994,19 +1038,25 @@ export function ScoutWorkspaceShell() {
     })
     const { safeResponse, issues: qcIssues } = runQualityControl(normalized, qcCtx)
     if (qcIssues.length > 0 && process.env.NODE_ENV === "development") {
-      console.warn("[Scout QC] Shell:", qcIssues)
+      console.warn("[Apex QC] Shell:", qcIssues)
     }
 
     setMessages((prev) =>
       prev.map((m) =>
-        m.id === id ? { id, role: "scout" as const, response: safeResponse } : m
+        m.id === id ? { id, role: "apex" as const, response: safeResponse } : m
       )
     )
     isSubmittingRef.current = false; setIsLoading(false)
     setActiveResponse(safeResponse)
 
     const directive = safeResponse.workspace_directive
-    const newMode   = directive?.mode ?? inferWorkspaceMode(safeResponse)
+    let newMode   = directive?.mode ?? inferWorkspaceMode(safeResponse)
+    // If this turn was an explicit 1-click/auto-apply request, the self-contained
+    // config panel is authoritative — Claude's response mode must not override it.
+    if (forceAutoApplyRef.current) {
+      newMode = "auto_apply"
+      forceAutoApplyRef.current = false
+    }
     setWorkspaceMode(newMode)
     if (newMode !== "idle") setNarrative(buildNarrative(newMode, safeResponse))
     setActiveEntities((prev) => extractEntities(safeResponse, prev))
@@ -1092,7 +1142,7 @@ export function ScoutWorkspaceShell() {
 
         void (async () => {
           try {
-            const res = await fetch(`/api/scout/apply-agent?${params.toString()}`, {
+            const res = await fetch(`/api/apex/apply-agent?${params.toString()}`, {
               headers: { Accept: "application/json" },
             })
             const data = (await res.json().catch(() => null)) as { jobs?: ApplyAgentDirective["jobs"] } | null
@@ -1122,34 +1172,34 @@ export function ScoutWorkspaceShell() {
       workflowEngine.startWorkflow(safeResponse.workflow_directive.workflowType, safeResponse.workflow_directive.payload)
     }
     const railActions = safeResponse.actions?.filter((a) => ["OPEN_JOB","OPEN_COMPANY","OPEN_RESUME_TAILOR"].includes(a.type))
-    const newRail = directive?.rail !== undefined ? (directive.rail ?? null) : railActions?.length ? { title: "Scout context", summary: "Suggested next steps", actions: railActions } : null
+    const newRail = directive?.rail !== undefined ? (directive.rail ?? null) : railActions?.length ? { title: "Apex context", summary: "Suggested next steps", actions: railActions } : null
     setRail(newRail)
     if (directive?.chips?.length) setChips(directive.chips)
     const updatedCmds = appendCommand(recentCommands, "")
     setHasSession(true)
-    writeScoutSession({ mode: newMode, chips: directive?.chips ?? chips, recentCommands: updatedCmds, rail: extractRailMetadata(newRail), modeMetadata: extractModeMetadata(newMode, safeResponse) })
+    writeApexSession({ mode: newMode, chips: directive?.chips ?? chips, recentCommands: updatedCmds, rail: extractRailMetadata(newRail), modeMetadata: extractModeMetadata(newMode, safeResponse) })
     streamMsgId.current = null
 
     if (pendingVoiceReplyRef.current) {
       pendingVoiceReplyRef.current = false
       const responseText = safeResponse.answer?.trim() || buildNarrative(newMode, safeResponse)
-      if (responseText) speakScoutReply(responseText)
+      if (responseText) speakApexReply(responseText)
     }
-  }, [scoutStream.finalResponse])
+  }, [apexStream.finalResponse])
 
   // Handle stream errors
   useEffect(() => {
-    if (!scoutStream.error || scoutStream.isStreaming) return
+    if (!apexStream.error || apexStream.isStreaming) return
     commandStartedAtRef.current = null
     lastDebugRef.current = null
     pendingVoiceReplyRef.current = false
-    setError(scoutStream.error)
+    setError(apexStream.error)
     isSubmittingRef.current = false; setIsLoading(false)
     // Replace the streaming bubble with an error notice (remove it)
     const id = streamMsgId.current
     if (id) setMessages((prev) => prev.filter((m) => m.id !== id))
     streamMsgId.current = null
-  }, [scoutStream.error, scoutStream.isStreaming])
+  }, [apexStream.error, apexStream.isStreaming])
 
   // Research stream — task completion: persist, update chips, clear loading
   useEffect(() => {
@@ -1201,7 +1251,10 @@ export function ScoutWorkspaceShell() {
   // ── Timeline tracking effects ───────────────────────────────────────────────
   // Each effect uses a ref to detect meaningful changes so events are never
   // duplicated. These effects are purely observational — they never modify
-  // any Scout state.
+  // any Apex state.
+
+  // Keep the always-current mode ref in sync for async stream callbacks
+  useEffect(() => { workspaceModeRef.current = workspaceMode }, [workspaceMode])
 
   // 1. Workspace mode changes (skip idle — it's the default/return state)
   useEffect(() => {
@@ -1211,15 +1264,15 @@ export function ScoutWorkspaceShell() {
     }
     prevModeRef.current = workspaceMode
     const LABELS: Partial<Record<WorkspaceMode, string>> = {
-      search:           "Scout switched to job search view",
-      compare:          "Scout opened job comparison",
-      tailor:           "Scout opened resume tailoring",
-      applications:     "Scout opened application workflow",
-      bulk_application: "Scout opened bulk application queue",
-      company:          "Scout opened company intelligence",
-      research:         "Scout started a research task",
+      search:           "Apex switched to job search view",
+      compare:          "Apex opened job comparison",
+      tailor:           "Apex opened resume tailoring",
+      applications:     "Apex opened application workflow",
+      bulk_application: "Apex opened bulk application queue",
+      company:          "Apex opened company intelligence",
+      research:         "Apex started a research task",
     }
-    const replayAction: ScoutTimelineReplayAction | undefined =
+    const replayAction: ApexTimelineReplayAction | undefined =
       workspaceMode === "bulk_application"
         ? undefined
         : workspaceMode === "compare"
@@ -1448,7 +1501,7 @@ export function ScoutWorkspaceShell() {
     timeline.append({
       type:      "permission_prompt",
       title:     activeGate.title || `Permission required: ${key.replace(/_/g, " ")}`,
-      summary:   activeGate.description || "Awaiting your approval before Scout proceeds",
+      summary:   activeGate.description || "Awaiting your approval before Apex proceeds",
       timestamp: new Date().toISOString(),
       severity:  "warning",
       metadata:  IS_DEV ? { permission: key, debugOnly: true } : undefined,
@@ -1458,23 +1511,23 @@ export function ScoutWorkspaceShell() {
 
   // 6. Errors
   useEffect(() => {
-    const err = scoutStream.error ?? researchStream.error
+    const err = apexStream.error ?? researchStream.error
     if (!err) return
     timeline.append({
       type:      "error",
-      title:     "Scout encountered an error",
+      title:     "Apex encountered an error",
       summary:   err.length > 120 ? `${err.slice(0, 120)}…` : err,
       timestamp: new Date().toISOString(),
       severity:  "error",
       metadata: IS_DEV
         ? {
-            source: scoutStream.error ? "scout_stream" : "research_stream",
+            source: apexStream.error ? "apex_stream" : "research_stream",
             debugOnly: true,
           }
         : undefined,
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scoutStream.error, researchStream.error])
+  }, [apexStream.error, researchStream.error])
 
   // 7. Bulk application queue transitions (application workflow observability)
   useEffect(() => {
@@ -1571,10 +1624,10 @@ export function ScoutWorkspaceShell() {
 
   // Early workspace directive — morph before Claude finishes
   useEffect(() => {
-    if (!scoutStream.earlyDirective) return
-    const mode = scoutStream.earlyDirective.mode ?? "idle"
+    if (!apexStream.earlyDirective) return
+    const mode = apexStream.earlyDirective.mode ?? "idle"
     if (mode !== "idle") setWorkspaceMode(mode)
-  }, [scoutStream.earlyDirective])
+  }, [apexStream.earlyDirective])
 
   // ── Submit ───────────────────────────────────────────────────────────────────
 
@@ -1586,7 +1639,7 @@ export function ScoutWorkspaceShell() {
     ) => {
       event.preventDefault()
       const message = (overrideMessage ?? query).trim()
-      if (!message || isSubmittingRef.current || isLoading || scoutStream.isStreaming || researchStream.isRunning) return
+      if (!message || isSubmittingRef.current || isLoading || apexStream.isStreaming || researchStream.isRunning) return
       isSubmittingRef.current = true
       pendingVoiceReplyRef.current = source === "voice"
 
@@ -1596,7 +1649,7 @@ export function ScoutWorkspaceShell() {
       setMessages((prev) => [
         ...prev,
         { id: `u-${Date.now()}`, role: "user", text: message },
-        { id: msgId, role: "scout_streaming", streamText: "" },
+        { id: msgId, role: "apex_streaming", streamText: "" },
       ])
       setQuery("")
       setIsLoading(true)
@@ -1640,7 +1693,7 @@ export function ScoutWorkspaceShell() {
         setWorkspaceMode("research")
         setNarrative(PREFLIGHT_NARRATIVE.research ?? "")
         researchStream.reset()
-        void researchStream.startStream("/api/scout/research", {
+        void researchStream.startStream("/api/apex/research", {
           message,
           ...contextIds,
         })
@@ -1652,6 +1705,7 @@ export function ScoutWorkspaceShell() {
 
       // ── Pre-flight: morph workspace immediately before network call ────────
       const preflightMode = detectPreflightMode(message)
+      forceAutoApplyRef.current = preflightMode === "auto_apply"
       if (preflightMode) {
         setWorkspaceMode(preflightMode)
         const preflightNarrative = PREFLIGHT_NARRATIVE[preflightMode]
@@ -1659,7 +1713,7 @@ export function ScoutWorkspaceShell() {
       }
 
       // ── Start SSE stream ───────────────────────────────────────────────────
-      void scoutStream.startStream("/api/scout/chat", {
+      void apexStream.startStream("/api/apex/chat", {
         message, pagePath: pathname, commandMode: true, focusMode: isFocusMode,
         activeFilters: {
           q: searchParams.get("q") ?? undefined, location: searchParams.get("location") ?? undefined,
@@ -1689,7 +1743,7 @@ export function ScoutWorkspaceShell() {
   function handleFollowUp(text: string)  { setQuery(text); setTimeout(() => inputRef.current?.focus(), 50) }
   function handleSendCommand(query: string) { setQuery(query); setTimeout(() => inputRef.current?.focus(), 50) }
 
-  function handleOpenProactive(event: ScoutProactiveEvent) {
+  function handleOpenProactive(event: ApexProactiveEvent) {
     proactive.snooze(event.id, 2 * 60 * 60 * 1000)
     timeline.append({
       type: "workspace_change",
@@ -1732,7 +1786,7 @@ export function ScoutWorkspaceShell() {
   }
 
   // ── Timeline replay ─────────────────────────────────────────────────────────
-  function handleReplay(action: ScoutTimelineReplayAction) {
+  function handleReplay(action: ApexTimelineReplayAction) {
     switch (action.type) {
       case "resend_command": {
         const msg = action.payload?.message as string | undefined
@@ -1778,22 +1832,22 @@ export function ScoutWorkspaceShell() {
   }
 
   function handleStartFresh() {
-    clearScoutSession()
+    clearApexSession()
     setMessages([]); setError(null); setActiveResponse(null)
     setWorkspaceMode("idle"); setRail(null); setNarrative(""); setActiveEntities({})
-    setRecentCommands([]); setHasSession(false); setChips(getScoutSuggestionChips(scoutMode))
+    setRecentCommands([]); setHasSession(false); setChips(getApexSuggestionChips(apexMode))
   }
 
   // ── Render ───────────────────────────────────────────────────────────────────
 
   const showNarrative = narrative && !narrativeDismissed && workspaceMode !== "idle"
-  const narrativePending = isLoading || scoutStream.isStreaming || researchStream.isRunning || careerStrategy.loading
+  const narrativePending = isLoading || apexStream.isStreaming || researchStream.isRunning || careerStrategy.loading
   // Welcome state: clean centered hero — hide top command bar / chips / proactive strip
   const isWelcomeState =
     workspaceMode === "idle" &&
     messages.length === 0 &&
     !isLoading &&
-    !scoutStream.isStreaming &&
+    !apexStream.isStreaming &&
     !researchStream.isRunning
   // Derived: has the user accumulated any job/application data yet?
   const hasData = (strategyBoard?.snapshot?.savedJobs ?? 0) > 0
@@ -1804,13 +1858,13 @@ export function ScoutWorkspaceShell() {
     workspaceMode === "idle" &&
     messages.length > 0 &&             // suppress on the clean welcome hero
     !isLoading &&
-    !scoutStream.isStreaming &&
+    !apexStream.isStreaming &&
     !researchStream.isRunning &&
     query.trim().length === 0 &&
     Boolean(proactive.topEvent)
   const showIdleStoryScene =
     workspaceMode === "idle" &&
-    (scoutStream.isStreaming || researchStream.isRunning)
+    (apexStream.isStreaming || researchStream.isRunning)
 
   const MODE_DISPLAY_LABELS: Partial<Record<WorkspaceMode, string>> = {
     search:           "Job Search",
@@ -1831,7 +1885,7 @@ export function ScoutWorkspaceShell() {
       ? "Ready"
       : workspaceMode.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()))
 
-  const statusLine = scoutStream.isStreaming
+  const statusLine = apexStream.isStreaming
     ? "Thinking…"
     : researchStream.isRunning
       ? "Researching…"
@@ -1846,26 +1900,29 @@ export function ScoutWorkspaceShell() {
       <div className="sticky top-0 z-20 border-b border-slate-200/60 bg-white/97 px-5 shadow-[0_1px_0_rgba(0,0,0,0.04)] backdrop-blur-md sm:px-8">
         <div className="flex items-center justify-between py-3">
           <div className="flex items-center gap-3">
-            <ScoutOrb
+            <ApexOrb
               size="md"
               state={
                 orbDone ? "done"
-                : (scoutStream.isStreaming || researchStream.isRunning) ? "thinking"
+                : (apexStream.isStreaming || researchStream.isRunning) ? "thinking"
                 : "idle"
               }
             />
             <div>
-              <p className="text-[14px] font-bold leading-none tracking-tight text-slate-900">Scout</p>
+              <div className="flex items-center gap-1.5">
+                <ApexIcon size={18} glow={false} />
+                <p className="text-[14px] font-bold leading-none tracking-tight text-slate-900">Apex</p>
+              </div>
               {/* Subtitle fades in on key change when mode transitions */}
               <p
                 key={statusLine}
                 className={cn(
-                  "mt-0.5 text-[11px] font-medium motion-safe:animate-[scoutSubtitleIn_0.3s_ease-out_both]",
-                  (scoutStream.isStreaming || researchStream.isRunning)
-                    ? "text-[#2563EB]"
+                  "mt-0.5 text-[11px] font-medium motion-safe:animate-[apexSubtitleIn_0.3s_ease-out_both]",
+                  (apexStream.isStreaming || researchStream.isRunning)
+                    ? "text-indigo-600"
                     : workspaceMode === "idle"
                       ? "font-normal text-slate-400"
-                      : "text-blue-600"
+                      : "text-indigo-600"
                 )}
               >{statusLine}</p>
             </div>
@@ -1873,11 +1930,11 @@ export function ScoutWorkspaceShell() {
 
           <div className="flex items-center gap-1.5">
             {/* Streaming stop button */}
-            {(scoutStream.isStreaming || researchStream.isRunning) && (
+            {(apexStream.isStreaming || researchStream.isRunning) && (
               <button
                 type="button"
-                onClick={researchStream.isRunning ? researchStream.cancel : scoutStream.cancel}
-                title="Stop Scout"
+                onClick={researchStream.isRunning ? researchStream.cancel : apexStream.cancel}
+                title="Stop Apex"
                 className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-[11px] font-semibold text-red-500 transition hover:bg-red-100"
               >
                 Stop
@@ -1889,13 +1946,13 @@ export function ScoutWorkspaceShell() {
                 type="button"
                 title="Focus Mode is on — click to turn off"
                 onClick={() => {
-                  try { localStorage.removeItem("hireoven:scout-focus-mode:v1") } catch {}
+                  try { localStorage.removeItem("hireoven:apex-focus-mode:v1") } catch {}
                   setLocalFocusMode(false)
                   if (typeof window !== "undefined") {
-                    window.dispatchEvent(new CustomEvent("scout:focus-mode-changed", { detail: { enabled: false } }))
+                    window.dispatchEvent(new CustomEvent("apex:focus-mode-changed", { detail: { enabled: false } }))
                   }
                 }}
-                className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700 transition hover:bg-blue-100"
+                className="inline-flex items-center gap-1.5 rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-[11px] font-semibold text-indigo-700 transition hover:bg-indigo-100"
               >
                 <Target className="h-3 w-3" />
                 Focus
@@ -1903,8 +1960,8 @@ export function ScoutWorkspaceShell() {
               </button>
             )}
             {/* Mode pill */}
-            {workspaceMode !== "idle" && !scoutStream.isStreaming && (
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-[11px] font-semibold text-blue-700">
+            {workspaceMode !== "idle" && !apexStream.isStreaming && (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-[11px] font-semibold text-indigo-700">
                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#2563EB]" />
                 {workspaceModeLabel}
               </span>
@@ -1913,11 +1970,11 @@ export function ScoutWorkspaceShell() {
             <button
               type="button"
               onClick={() => openContextPanel("context")}
-              title="Scout menu"
+              title="Apex menu"
               className={cn(
                 "inline-flex h-8 w-8 items-center justify-center rounded-lg transition",
                 contextPanelOpen
-                  ? "bg-[#EFF6FF] text-[#2563EB]"
+                  ? "bg-indigo-50 text-indigo-600"
                   : "text-slate-400 hover:bg-slate-100 hover:text-slate-700",
               )}
             >
@@ -1928,7 +1985,7 @@ export function ScoutWorkspaceShell() {
 
         {/* Command bar hides in welcome state — moved into the centered hero */}
         {!isWelcomeState && (
-          <ScoutCommandBar
+          <ApexCommandBar
             query={query} onChange={setQuery} onSubmit={handleSubmit}
             onVoiceCommand={handleVoiceCommand}
             isLoading={isLoading} chips={displayChips} onChipClick={handleChipClick}
@@ -1954,8 +2011,8 @@ export function ScoutWorkspaceShell() {
       <div className="flex flex-1 overflow-hidden">
 
         {/* Left intelligence panel */}
-        <ScoutLeftPanel
-          isActive={scoutStream.isStreaming || researchStream.isRunning || isLoading}
+        <ApexLeftPanel
+          isActive={apexStream.isStreaming || researchStream.isRunning || isLoading}
           recentEvents={timeline.events}
           onCommand={(cmd) => { setQuery(cmd); setTimeout(() => inputRef.current?.focus(), 50) }}
           firstName={firstName}
@@ -1964,9 +2021,12 @@ export function ScoutWorkspaceShell() {
         {/* Center — scrollable main content */}
         <div className="min-w-0 flex-1 overflow-y-auto px-5 py-5 pb-[max(6rem,calc(env(safe-area-inset-bottom)+5.5rem))] sm:px-8">
 
+          {/* Real-time alert badge — floats above proactive strip */}
+          <ApexAlertBadge className="mb-2" />
+
           {/* Proactive companion strip (non-intrusive, idle only) */}
           {showProactiveStrip && (
-            <ScoutProactiveStrip
+            <ApexProactiveStrip
               event={proactive.topEvent}
               enabled={proactive.settings.enabled}
               onOpen={handleOpenProactive}
@@ -1976,19 +2036,19 @@ export function ScoutWorkspaceShell() {
             />
           )}
 
-          {/* Scout narrative strip */}
+          {/* Apex narrative strip */}
           {showNarrative && (
             <div
               className={`group relative mb-4 flex items-center gap-3 overflow-hidden rounded-xl border px-4 py-2.5 transition-colors ${
                 narrativePending
-                  ? "border-blue-200 bg-gradient-to-r from-[#F8FAFF] via-[#EEF4FF] to-[#F8FAFF]"
-                  : "border-blue-100 bg-blue-50/55"
+                  ? "border-indigo-200 bg-gradient-to-r from-indigo-50/30 via-indigo-50 to-indigo-50/30"
+                  : "border-indigo-100 bg-indigo-50/55"
               }`}
             >
               {narrativePending && (
                 <span
                   aria-hidden
-                  className="pointer-events-none absolute inset-0 -translate-x-full animate-[scout-shimmer_2.2s_ease-in-out_infinite] bg-gradient-to-r from-transparent via-white/55 to-transparent"
+                  className="pointer-events-none absolute inset-0 -translate-x-full animate-[apex-shimmer_2.2s_ease-in-out_infinite] bg-gradient-to-r from-transparent via-white/55 to-transparent"
                 />
               )}
 
@@ -1997,15 +2057,15 @@ export function ScoutWorkspaceShell() {
                   <span className="absolute inset-0 animate-ping rounded-full bg-[#2563EB]/25" />
                 )}
                 <Sparkles
-                  className={`relative h-3.5 w-3.5 text-[#2563EB] ${
-                    narrativePending ? "animate-[scout-pulse_1.8s_ease-in-out_infinite]" : ""
+                  className={`relative h-3.5 w-3.5 text-indigo-600 ${
+                    narrativePending ? "animate-[apex-pulse_1.8s_ease-in-out_infinite]" : ""
                   }`}
                 />
               </span>
 
               <p className="relative flex-1 text-sm leading-5 text-slate-700">
                 {narrativePending ? (
-                  <span className="bg-gradient-to-r from-slate-700 via-[#2563EB] to-slate-700 bg-[length:200%_100%] bg-clip-text text-transparent animate-[scout-text-shimmer_2.4s_linear_infinite]">
+                  <span className="bg-gradient-to-r from-slate-700 via-[#2563EB] to-slate-700 bg-[length:200%_100%] bg-clip-text text-transparent animate-[apex-text-shimmer_2.4s_linear_infinite]">
                     {renderBold(narrative.replace(/…+$/, ""))}
                   </span>
                 ) : (
@@ -2013,9 +2073,9 @@ export function ScoutWorkspaceShell() {
                 )}
                 {narrativePending && (
                   <span className="ml-0.5 inline-flex translate-y-[-1px] gap-0.5 align-middle">
-                    <span className="h-1 w-1 animate-[scout-dot_1.2s_ease-in-out_infinite] rounded-full bg-[#2563EB]" />
-                    <span className="h-1 w-1 animate-[scout-dot_1.2s_ease-in-out_0.18s_infinite] rounded-full bg-[#2563EB]" />
-                    <span className="h-1 w-1 animate-[scout-dot_1.2s_ease-in-out_0.36s_infinite] rounded-full bg-[#2563EB]" />
+                    <span className="h-1 w-1 animate-[apex-dot_1.2s_ease-in-out_infinite] rounded-full bg-[#2563EB]" />
+                    <span className="h-1 w-1 animate-[apex-dot_1.2s_ease-in-out_0.18s_infinite] rounded-full bg-[#2563EB]" />
+                    <span className="h-1 w-1 animate-[apex-dot_1.2s_ease-in-out_0.36s_infinite] rounded-full bg-[#2563EB]" />
                   </span>
                 )}
               </p>
@@ -2031,13 +2091,13 @@ export function ScoutWorkspaceShell() {
             </div>
           )}
 
-          {/* Scout learned — lightweight memory chips, idle only */}
+          {/* Apex learned — lightweight memory chips, idle only */}
           {workspaceMode === "idle" && searchProfile && (() => {
             const memChips = buildMemoryChips(searchProfile)
             if (!memChips.length) return null
             return (
               <div className="mb-4">
-                <ScoutMemoryChips
+                <ApexMemoryChips
                   chips={memChips}
                   onDismiss={(fieldKey) => {
                     setSearchProfile((prev) => {
@@ -2048,7 +2108,7 @@ export function ScoutWorkspaceShell() {
                     })
                   }}
                   onClearAll={() => {
-                    window.dispatchEvent(new CustomEvent("scout:memory-cleared"))
+                    window.dispatchEvent(new CustomEvent("apex:memory-cleared"))
                   }}
                 />
               </div>
@@ -2056,7 +2116,7 @@ export function ScoutWorkspaceShell() {
           })()}
 
           {/* WorkspaceSurface — smooth opacity fade between modes */}
-          <ScoutErrorBoundary surface="Workspace" retryLabel="Reload workspace">
+          <ApexErrorBoundary surface="Workspace" retryLabel="Reload workspace">
           <WorkspaceSurface
             mode={workspaceMode}
             render={(displayedMode) => {
@@ -2064,18 +2124,18 @@ export function ScoutWorkspaceShell() {
                 if (showIdleStoryScene) {
                   const lastUserMessage = messages.findLast((m) => m.role === "user")
                   return (
-                    <ScoutStoryScene
+                    <ApexStoryScene
                       command={lastUserMessage?.role === "user" ? lastUserMessage.text : undefined}
                       narrative={narrative}
                       mode={workspaceMode}
-                      streamText={scoutStream.streamText}
+                      streamText={apexStream.streamText}
                     />
                   )
                 }
                 // No conversation yet → premium welcome scene (story-mode aesthetic)
                 if (messages.length === 0 && !isLoading) {
                   return (
-                    <ScoutWelcomeScene
+                    <ApexWelcomeScene
                       greeting={greeting}
                       firstName={firstName}
                       hasResume={Boolean(primaryResume?.id)}
@@ -2086,7 +2146,7 @@ export function ScoutWorkspaceShell() {
                         window.setTimeout(() => inputRef.current?.focus(), 50)
                       }}
                       commandSlot={
-                        <ScoutCommandBar
+                        <ApexCommandBar
                           query={query}
                           onChange={setQuery}
                           onSubmit={handleSubmit}
@@ -2137,12 +2197,12 @@ export function ScoutWorkspaceShell() {
               }
               // Non-idle mode with no response yet → show skeleton ONLY while
               // a request is actually in flight. Without this guard, returning
-              // to /dashboard/scout after navigating away strands the UI in a
+              // to /dashboard/apex after navigating away strands the UI in a
               // permanent "Scanning..." state when workspaceMode is non-idle
               // but no stream/load is active.
               if (!activeResponse) {
                 const isActuallyWorking =
-                  isLoading || scoutStream.isStreaming || researchStream.isRunning
+                  isLoading || apexStream.isStreaming || researchStream.isRunning
                 if (!isActuallyWorking) {
                   return (
                     <IdleMode
@@ -2177,7 +2237,7 @@ export function ScoutWorkspaceShell() {
                 }
                 const lastMsg = messages.findLast?.((m) => m.role === "user")
                 return (
-                  <ScoutThinkingCanvas
+                  <ApexThinkingCanvas
                     workspaceMode={displayedMode}
                     lastUserMessage={lastMsg?.role === "user" ? lastMsg.text : undefined}
                     narrative={narrative}
@@ -2230,7 +2290,7 @@ export function ScoutWorkspaceShell() {
                 )
               }
               if (displayedMode === "bulk_application") {
-                // If Scout selected specific jobs server-side, use the agentic loop
+                // If Apex selected specific jobs server-side, use the agentic loop
                 if (applyAgent && applyAgent.jobs.length > 0) {
                   return (
                     <ApplyAgentFlow
@@ -2309,17 +2369,63 @@ export function ScoutWorkspaceShell() {
                   />
                 )
               }
+              if (displayedMode === "jd_decoder") {
+                const jobTitle = activeEntities?.jobTitle ?? activeResponse?.workspace_directive?.payload?.jobTitle as string ?? "Unknown Role"
+                const jobDesc  = activeResponse?.workspace_directive?.payload?.jobDescription as string ?? ""
+                return (
+                  <JDDecoderPanel
+                    title={jobTitle}
+                    description={jobDesc}
+                    className="w-full"
+                  />
+                )
+              }
+              if (displayedMode === "reputation_guard") {
+                const companyName = activeEntities?.companyName ?? activeResponse?.workspace_directive?.payload?.companyName as string ?? ""
+                const jobTitle    = activeEntities?.jobTitle    ?? ""
+                return (
+                  <ReputationGuardPanel
+                    companyName={companyName}
+                    jobTitle={jobTitle}
+                    className="w-full"
+                  />
+                )
+              }
+              if (displayedMode === "pipeline_sim") {
+                return <PipelineSimulator className="w-full" />
+              }
+              if (displayedMode === "shadow_network") {
+                const companyName = activeEntities?.companyName ?? ""
+                const jobTitle    = activeEntities?.jobTitle    ?? "Software Engineer"
+                return (
+                  <ShadowNetworkMode
+                    targetCompany={companyName}
+                    targetJobTitle={jobTitle}
+                    extensionConnected={isExtensionConnected}
+                    className="w-full"
+                  />
+                )
+              }
+              if (displayedMode === "auto_apply") {
+                return (
+                  <AutoApplyPanel
+                    extensionConnected={isExtensionConnected}
+                    onFollowUp={(q) => { setQuery(q); setTimeout(() => handleSubmit({ preventDefault: () => {} } as React.FormEvent), 50) }}
+                    className="w-full"
+                  />
+                )
+              }
               // Fallback for restored session with no activeResponse
               return null
             }}
           />
-          </ScoutErrorBoundary>
+          </ApexErrorBoundary>
         </div>
 
         {/* Right command-center panel — hidden during bulk apply to give the resume room */}
         {workspaceMode !== "bulk_application" && (
-          <ScoutRightPanel
-            isActive={scoutStream.isStreaming || researchStream.isRunning || isLoading}
+          <ApexRightPanel
+            isActive={apexStream.isStreaming || researchStream.isRunning || isLoading}
             narrative={narrative}
             workspaceModeLabel={workspaceModeLabel}
             searchProfile={searchProfile}
@@ -2334,8 +2440,8 @@ export function ScoutWorkspaceShell() {
       </div>
 
       {/* ── Unified contextual side panel — replaces the always-on right rail ── */}
-      <ScoutErrorBoundary surface="Context panel" retryLabel="Reload panel">
-        <ScoutContextPanel
+      <ApexErrorBoundary surface="Context panel" retryLabel="Reload panel">
+        <ApexContextPanel
           open={contextPanelOpen}
           tab={contextPanelTab}
           onTabChange={setContextPanelTab}
@@ -2398,9 +2504,9 @@ export function ScoutWorkspaceShell() {
           onOpenPermissions={() => { closeContextPanel(); setShowPermissions(true) }}
           permissions={shellPermissions}
         />
-      </ScoutErrorBoundary>
+      </ApexErrorBoundary>
       {/* ── Command palette ──────────────────────────────────────────── */}
-      <ScoutCommandPalette
+      <ApexCommandPalette
         isOpen={paletteOpen}
         onClose={() => setPaletteOpen(false)}
         workspaceMode={workspaceMode}
@@ -2432,7 +2538,7 @@ export function ScoutWorkspaceShell() {
 
       {/* ── Permission gate — bottom-center, not a modal ────────────── */}
       {activeGate && (
-        <ScoutActionGate
+        <ApexActionGate
           gate={activeGate}
           onAllowOnce={() => dispatchGateResponse(true, false)}
           onAlwaysAllow={() => dispatchGateResponse(true, true)}
@@ -2442,16 +2548,16 @@ export function ScoutWorkspaceShell() {
 
       {/* ── Permissions panel — bottom-right slide-in ───────────────── */}
       {showPermissions && (
-        <ScoutPermissionsPanel
+        <ApexPermissionsPanel
           permissions={shellPermissions}
           onPermissionsChange={setShellPermissions}
           onClose={() => setShowPermissions(false)}
         />
       )}
 
-      {/* ── Scout Memory panel ──────────────────────────────────────────── */}
+      {/* ── Apex Memory panel ──────────────────────────────────────────── */}
       {memoryPanelOpen && (
-        <ScoutMemoryPanel onClose={() => setMemoryPanelOpen(false)} />
+        <ApexMemoryPanel onClose={() => setMemoryPanelOpen(false)} />
       )}
 
       {/* ── Bulk confirm dialog — modal, shown immediately on trigger ── */}

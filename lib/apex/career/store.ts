@@ -1,17 +1,17 @@
 "use client"
 
-import type { ScoutCareerStrategyResult } from "./types"
+import type { ApexCareerStrategyResult } from "./types"
 
-const KEY     = "hireoven:scout:career:v1"
+const KEY     = "hireoven:apex:career:v1"
 const MAX_AGE = 4 * 60 * 60 * 1000   // 4 h — career directions don't change often
 
 type Store = {
   v:       1
-  result:  ScoutCareerStrategyResult
+  result:  ApexCareerStrategyResult
   savedAt: number
 }
 
-export function readCareerStrategy(): ScoutCareerStrategyResult | null {
+export function readCareerStrategy(): ApexCareerStrategyResult | null {
   if (typeof window === "undefined") return null
   try {
     const raw = localStorage.getItem(KEY)
@@ -23,7 +23,7 @@ export function readCareerStrategy(): ScoutCareerStrategyResult | null {
   } catch { return null }
 }
 
-export function writeCareerStrategy(result: ScoutCareerStrategyResult): void {
+export function writeCareerStrategy(result: ApexCareerStrategyResult): void {
   if (typeof window === "undefined") return
   try {
     localStorage.setItem(KEY, JSON.stringify({ v: 1, result, savedAt: Date.now() } satisfies Store))

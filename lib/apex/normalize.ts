@@ -1,48 +1,50 @@
 /**
- * Client-side Scout response normalizer.
+ * Client-side Apex response normalizer.
  *
- * Converts any unknown API payload into a well-shaped ScoutResponse so UI
+ * Converts any unknown API payload into a well-shaped ApexResponse so UI
  * components never encounter raw JSON strings, missing fields, or unexpected
  * types.  This is the last line of defence after the server-side parser; it
  * does NOT change business logic.
  */
 
 import {
-  isScoutIntent,
-  isScoutMode,
-  type ScoutCompareResponse,
-  type ScoutExplanationBlock,
-  type ScoutInterviewPrep,
-  type ScoutResponse,
-  type ScoutWorkflow,
-  type ScoutWorkflowDirective,
-  type ScoutWorkspaceDirective,
-  type ScoutWorkspaceMode,
-} from "@/lib/scout/types"
+  isApexIntent,
+  isApexMode,
+  type ApexCompareResponse,
+  type ApexExplanationBlock,
+  type ApexInterviewPrep,
+  type ApexResponse,
+  type ApexWorkflow,
+  type ApexWorkflowDirective,
+  type ApexWorkspaceDirective,
+  type ApexWorkspaceMode,
+} from "@/lib/apex/types"
 import { sanitizeGeneratedText } from "@/lib/text/sanitize-generated-text"
 
-const VALID_WORKSPACE_MODES = new Set<ScoutWorkspaceMode>([
+const VALID_WORKSPACE_MODES = new Set<ApexWorkspaceMode>([
   "idle", "search", "compare", "tailor", "applications", "bulk_application", "company", "research", "outreach", "interview", "career_strategy",
+  "offer_negotiation", "salary_coaching", "burnout_checkin", "post_hire_checkin", "personal_brand",
+  "jd_decoder", "reputation_guard", "pipeline_sim", "shadow_network", "auto_apply",
 ])
 
-function isWorkspaceMode(v: unknown): v is ScoutWorkspaceMode {
-  return typeof v === "string" && VALID_WORKSPACE_MODES.has(v as ScoutWorkspaceMode)
+function isWorkspaceMode(v: unknown): v is ApexWorkspaceMode {
+  return typeof v === "string" && VALID_WORKSPACE_MODES.has(v as ApexWorkspaceMode)
 }
 
-function normalizeWorkspaceDirective(raw: unknown): ScoutWorkspaceDirective | undefined {
+function normalizeWorkspaceDirective(raw: unknown): ApexWorkspaceDirective | undefined {
   if (typeof raw !== "object" || raw === null) return undefined
   const r = raw as Record<string, unknown>
   if (!isWorkspaceMode(r.mode)) return undefined
 
   const rail =
     typeof r.rail === "object" && r.rail !== null
-      ? (r.rail as ScoutWorkspaceDirective["rail"])
+      ? (r.rail as ApexWorkspaceDirective["rail"])
       : r.rail === null
         ? null
         : undefined
 
   const chips = Array.isArray(r.chips) ? (r.chips as string[]).filter((c) => typeof c === "string") : undefined
-  const transition = typeof r.transition === "string" ? (r.transition as ScoutWorkspaceDirective["transition"]) : undefined
+  const transition = typeof r.transition === "string" ? (r.transition as ApexWorkspaceDirective["transition"]) : undefined
   const payload = typeof r.payload === "object" && r.payload !== null ? (r.payload as Record<string, unknown>) : undefined
 
   return { mode: r.mode, transition, payload, rail, chips }
@@ -50,7 +52,7 @@ function normalizeWorkspaceDirective(raw: unknown): ScoutWorkspaceDirective | un
 
 const VALID_RECOMMENDATIONS = new Set(["Apply", "Skip", "Improve", "Wait", "Explore"])
 
-function isValidRecommendation(value: unknown): value is ScoutResponse["recommendation"] {
+function isValidRecommendation(value: unknown): value is ApexResponse["recommendation"] {
   return typeof value === "string" && VALID_RECOMMENDATIONS.has(value)
 }
 
@@ -98,7 +100,7 @@ function extractJsonObjectCandidate(text: string): string | null {
   return null
 }
 
-function tryParseScoutResponseObject(text: string): Record<string, unknown> | null {
+function tryParseApexResponseObject(text: string): Record<string, unknown> | null {
   const candidate = extractJsonObjectCandidate(text)
   if (!candidate) return null
 
@@ -120,7 +122,7 @@ function tryParseScoutResponseObject(text: string): Record<string, unknown> | nu
  * and the raw JSON string ends up stored in `answer`.
  */
 function tryUnwrapJsonAnswer(answer: string): Record<string, unknown> | null {
-  const inner = tryParseScoutResponseObject(answer)
+  const inner = tryParseApexResponseObject(answer)
   if (
     inner &&
     "answer" in inner &&
@@ -132,10 +134,10 @@ function tryUnwrapJsonAnswer(answer: string): Record<string, unknown> | null {
   return null
 }
 
-export function normalizeScoutResponse(raw: unknown): ScoutResponse {
+export function normalizeApexResponse(raw: unknown): ApexResponse {
   if (typeof raw === "string") {
-    const parsed = tryParseScoutResponseObject(raw)
-    if (parsed) return normalizeScoutResponse(parsed)
+    const parsed = tryParseApexResponseObject(raw)
+    if (parsed) return normalizeApexResponse(parsed)
   }
 
   // Hard fallback for completely unexpected shapes
@@ -144,7 +146,7 @@ export function normalizeScoutResponse(raw: unknown): ScoutResponse {
       answer:
         typeof raw === "string" && raw.trim()
           ? raw.trim()
-          : "Scout returned an unexpected response.",
+          : "Apex returned an unexpected response.",
       recommendation: "Explore",
       actions: [],
     })
@@ -162,27 +164,27 @@ export function normalizeScoutResponse(raw: unknown): ScoutResponse {
   const answer =
     typeof record.answer === "string" && record.answer.trim()
       ? record.answer.trim()
-      : "Scout returned an unexpected response."
+      : "Apex returned an unexpected response."
 
   const recommendation = isValidRecommendation(record.recommendation)
     ? record.recommendation
     : "Explore"
 
   const actions = Array.isArray(record.actions)
-    ? (record.actions as ScoutResponse["actions"])
+    ? (record.actions as ApexResponse["actions"])
     : []
 
   const explanations = Array.isArray(record.explanations)
-    ? (record.explanations as ScoutExplanationBlock[])
+    ? (record.explanations as ApexExplanationBlock[])
     : undefined
 
   const workflow =
     typeof record.workflow === "object" && record.workflow !== null
-      ? (record.workflow as ScoutWorkflow)
+      ? (record.workflow as ApexWorkflow)
       : undefined
 
-  const intent = isScoutIntent(record.intent) ? record.intent : undefined
-  const mode = isScoutMode(record.mode) ? record.mode : undefined
+  const intent = isApexIntent(record.intent) ? record.intent : undefined
+  const mode = isApexMode(record.mode) ? record.mode : undefined
   const confidence =
     typeof record.confidence === "number" ? record.confidence : undefined
 
@@ -191,17 +193,17 @@ export function normalizeScoutResponse(raw: unknown): ScoutResponse {
     record.gated !== null &&
     "feature" in (record.gated as Record<string, unknown>) &&
     "upgradeMessage" in (record.gated as Record<string, unknown>)
-      ? (record.gated as ScoutResponse["gated"])
+      ? (record.gated as ApexResponse["gated"])
       : undefined
 
   const compare =
     typeof record.compare === "object" && record.compare !== null
-      ? (record.compare as ScoutCompareResponse)
+      ? (record.compare as ApexCompareResponse)
       : undefined
 
   const interviewPrep =
     typeof record.interviewPrep === "object" && record.interviewPrep !== null
-      ? (record.interviewPrep as ScoutInterviewPrep)
+      ? (record.interviewPrep as ApexInterviewPrep)
       : undefined
 
   const workspace_directive = normalizeWorkspaceDirective(record.workspace_directive)
@@ -210,23 +212,23 @@ export function normalizeScoutResponse(raw: unknown): ScoutResponse {
   // Pass graph through as-is — it's server-validated structural data
   const graph =
     typeof record.graph === "object" && record.graph !== null
-      ? (record.graph as ScoutResponse["graph"])
+      ? (record.graph as ApexResponse["graph"])
       : undefined
 
   const debug =
     typeof record.debug === "object" && record.debug !== null
-      ? (record.debug as ScoutResponse["debug"])
+      ? (record.debug as ApexResponse["debug"])
       : undefined
 
-  // Pass outreach through as-is — server-validated before writing to ScoutResponse
+  // Pass outreach through as-is — server-validated before writing to ApexResponse
   const outreach =
     typeof record.outreach === "object" && record.outreach !== null
-      ? (record.outreach as ScoutResponse["outreach"])
+      ? (record.outreach as ApexResponse["outreach"])
       : undefined
 
   const apply_agent =
     typeof record.apply_agent === "object" && record.apply_agent !== null
-      ? (record.apply_agent as ScoutResponse["apply_agent"])
+      ? (record.apply_agent as ApexResponse["apply_agent"])
       : undefined
 
   return sanitizeGeneratedText({
@@ -250,7 +252,7 @@ export function normalizeScoutResponse(raw: unknown): ScoutResponse {
   })
 }
 
-function normalizeWorkflowDirective(raw: unknown): ScoutWorkflowDirective | undefined {
+function normalizeWorkflowDirective(raw: unknown): ApexWorkflowDirective | undefined {
   if (typeof raw !== "object" || raw === null) return undefined
   const r = raw as Record<string, unknown>
   if (typeof r.workflowType !== "string" || !r.workflowType.trim()) return undefined

@@ -1,13 +1,13 @@
 "use client"
 
 /**
- * ScoutErrorBoundary — React class-based error boundary for Scout surfaces.
+ * ApexErrorBoundary — React class-based error boundary for Apex surfaces.
  *
- * Wraps Scout workspace panels, context rails, and renderers so that a
- * crash in one component does not cascade to the rest of the Scout OS.
+ * Wraps Apex workspace panels, context rails, and renderers so that a
+ * crash in one component does not cascade to the rest of the Apex OS.
  *
  * Shows a compact, actionable fallback on error. Never shows raw stack traces.
- * Logs errors to the Scout observer (console + session ring buffer).
+ * Logs errors to the Apex observer (console + session ring buffer).
  */
 
 import React from "react"
@@ -38,7 +38,7 @@ type State = {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export class ScoutErrorBoundary extends React.Component<Props, State> {
+export class ApexErrorBoundary extends React.Component<Props, State> {
   constructor(props: Props) {
     super(props)
     this.state = { error: null, errorInfo: null }
@@ -54,8 +54,8 @@ export class ScoutErrorBoundary extends React.Component<Props, State> {
     // Non-blocking observability — never throws, never logs sensitive values
     try {
       // Dynamic import keeps observer out of the critical path
-      import("@/lib/scout/observer").then(({ scoutObserver }) => {
-        scoutObserver.capture({
+      import("@/lib/apex/observer").then(({ apexObserver }) => {
+        apexObserver.capture({
           type:    "render_error",
           message: error.message.slice(0, 200),
           metadata: {
@@ -91,7 +91,7 @@ export class ScoutErrorBoundary extends React.Component<Props, State> {
               {surface ? `${surface} encountered an error` : "Something went wrong"}
             </p>
             <p className="mt-0.5 text-xs text-red-600">
-              This section failed to render. Your other Scout data is safe.
+              This section failed to render. Your other Apex data is safe.
             </p>
             {isDev && this.state.error && (
               <p className="mt-1.5 font-mono text-[10px] text-red-500 break-all">

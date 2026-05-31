@@ -108,7 +108,7 @@ async function main() {
         AND COALESCE(ats_type, 'none') IN ('none', 'custom')
         AND domain NOT ILIKE '%.uscis-employer'
         AND domain NOT ILIKE '%.lca-employer'
-        AND domain NOT ILIKE '%.scout-placeholder'
+        AND domain NOT ILIKE '%.apex-placeholder'
       ORDER BY name
       LIMIT $1`,
     [limit]

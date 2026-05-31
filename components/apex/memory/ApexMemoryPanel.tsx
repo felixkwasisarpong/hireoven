@@ -1,10 +1,10 @@
 "use client"
 
 /**
- * Scout Memory Panel
+ * Apex Memory Panel
  *
- * Lets users inspect, edit, disable, and delete their persistent Scout memories.
- * Rendered as a right-side drawer over the Scout workspace.
+ * Lets users inspect, edit, disable, and delete their persistent Apex memories.
+ * Rendered as a right-side drawer over the Apex workspace.
  *
  * Design principles:
  *   - Full transparency: every memory is visible
@@ -18,9 +18,9 @@ import {
   MEMORY_CATEGORY_LABELS,
   MEMORY_CATEGORY_ICONS,
   VALID_MEMORY_CATEGORIES,
-  type ScoutMemory,
-  type ScoutMemoryCategory,
-} from "@/lib/scout/memory/types"
+  type ApexMemory,
+  type ApexMemoryCategory,
+} from "@/lib/apex/memory/types"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -42,7 +42,7 @@ function confidenceLabel(c: number): { label: string; color: string } {
   return              { label: "Weak",        color: "text-slate-500 bg-slate-50 border-slate-200" }
 }
 
-function sourceLabel(s: ScoutMemory["source"]): string {
+function sourceLabel(s: ApexMemory["source"]): string {
   switch (s) {
     case "explicit_user": return "You said this"
     case "behavior":      return "From your activity"
@@ -59,7 +59,7 @@ function MemoryRow({
   onDelete,
   onSaveEdit,
 }: {
-  memory:      ScoutMemory
+  memory:      ApexMemory
   onToggle:    (id: string, active: boolean) => void
   onDelete:    (id: string) => void
   onSaveEdit:  (id: string, summary: string) => void
@@ -125,7 +125,7 @@ function MemoryRow({
               <div className="flex gap-2 mt-1.5">
                 <button
                   onClick={handleSave}
-                  className="text-xs font-semibold text-white bg-[#FF5C18] hover:bg-[#e0511a] rounded-lg px-3 py-1 transition"
+                  className="text-xs font-semibold text-white bg-[#6366F1] hover:bg-[#e0511a] rounded-lg px-3 py-1 transition"
                 >
                   Save
                 </button>
@@ -155,7 +155,7 @@ function MemoryRow({
         <div className="flex items-center gap-1 flex-shrink-0 mt-0.5">
           <button
             onClick={() => onToggle(memory.id, !memory.active)}
-            title={memory.active ? "Disable — Scout won't use this" : "Re-enable"}
+            title={memory.active ? "Disable — Apex won't use this" : "Re-enable"}
             className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
           >
             {memory.active ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
@@ -175,9 +175,9 @@ function MemoryRow({
 
 // ── Add memory form ───────────────────────────────────────────────────────────
 
-function AddMemoryForm({ onAdd }: { onAdd: (category: ScoutMemoryCategory, summary: string) => void }) {
+function AddMemoryForm({ onAdd }: { onAdd: (category: ApexMemoryCategory, summary: string) => void }) {
   const [open,     setOpen]     = useState(false)
-  const [category, setCategory] = useState<ScoutMemoryCategory>("role_preference")
+  const [category, setCategory] = useState<ApexMemoryCategory>("role_preference")
   const [summary,  setSummary]  = useState("")
 
   const handleSubmit = () => {
@@ -191,7 +191,7 @@ function AddMemoryForm({ onAdd }: { onAdd: (category: ScoutMemoryCategory, summa
     return (
       <button
         onClick={() => setOpen(true)}
-        className="w-full flex items-center justify-center gap-2 rounded-xl border border-dashed border-slate-200 py-2.5 text-xs font-semibold text-slate-400 hover:border-[#FF5C18] hover:text-[#FF5C18] transition"
+        className="w-full flex items-center justify-center gap-2 rounded-xl border border-dashed border-slate-200 py-2.5 text-xs font-semibold text-slate-400 hover:border-[#6366F1] hover:text-[#6366F1] transition"
       >
         <Plus className="h-3.5 w-3.5" />
         Add memory manually
@@ -200,13 +200,13 @@ function AddMemoryForm({ onAdd }: { onAdd: (category: ScoutMemoryCategory, summa
   }
 
   return (
-    <div className="rounded-xl border border-[#FF5C18]/30 bg-orange-50/40 p-3 space-y-2.5">
+    <div className="rounded-xl border border-[#6366F1]/30 bg-orange-50/40 p-3 space-y-2.5">
       <div className="text-xs font-semibold text-slate-600">New memory</div>
 
       <select
         value={category}
-        onChange={(e) => setCategory(e.target.value as ScoutMemoryCategory)}
-        className="w-full text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#FF5C18]/30"
+        onChange={(e) => setCategory(e.target.value as ApexMemoryCategory)}
+        className="w-full text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#6366F1]/30"
       >
         {[...VALID_MEMORY_CATEGORIES].map((c) => (
           <option key={c} value={c}>
@@ -221,14 +221,14 @@ function AddMemoryForm({ onAdd }: { onAdd: (category: ScoutMemoryCategory, summa
         onChange={(e) => setSummary(e.target.value)}
         rows={2}
         maxLength={300}
-        className="w-full text-xs border border-slate-200 rounded-lg p-2 resize-none bg-white text-slate-800 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-[#FF5C18]/30"
+        className="w-full text-xs border border-slate-200 rounded-lg p-2 resize-none bg-white text-slate-800 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-[#6366F1]/30"
       />
 
       <div className="flex gap-2">
         <button
           onClick={handleSubmit}
           disabled={summary.trim().length < 4}
-          className="text-xs font-semibold text-white bg-[#FF5C18] hover:bg-[#e0511a] disabled:opacity-40 rounded-lg px-3 py-1.5 transition"
+          className="text-xs font-semibold text-white bg-[#6366F1] hover:bg-[#e0511a] disabled:opacity-40 rounded-lg px-3 py-1.5 transition"
         >
           Save
         </button>
@@ -245,8 +245,8 @@ function AddMemoryForm({ onAdd }: { onAdd: (category: ScoutMemoryCategory, summa
 
 // ── Main panel ────────────────────────────────────────────────────────────────
 
-export function ScoutMemoryPanel({ onClose }: Props) {
-  const [memories,    setMemories]    = useState<ScoutMemory[]>([])
+export function ApexMemoryPanel({ onClose }: Props) {
+  const [memories,    setMemories]    = useState<ApexMemory[]>([])
   const [loading,     setLoading]     = useState(true)
   const [extracting,  setExtracting]  = useState(false)
   const [extractedN,  setExtractedN]  = useState<number | null>(null)
@@ -255,9 +255,9 @@ export function ScoutMemoryPanel({ onClose }: Props) {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch("/api/scout/memory")
+      const res = await fetch("/api/apex/memory")
       if (!res.ok) throw new Error("Failed to load memories")
-      const data = (await res.json()) as { memories: ScoutMemory[] }
+      const data = (await res.json()) as { memories: ApexMemory[] }
       setMemories(data.memories)
     } catch {
       // Fail silently — table may not exist yet or user may be unauthenticated
@@ -274,7 +274,7 @@ export function ScoutMemoryPanel({ onClose }: Props) {
     setExtracting(true)
     setExtractedN(null)
     try {
-      const res = await fetch("/api/scout/memory/extract", { method: "POST" })
+      const res = await fetch("/api/apex/memory/extract", { method: "POST" })
       const data = (await res.json()) as { extracted: number }
       setExtractedN(data.extracted)
       if (data.extracted > 0) void load()
@@ -286,21 +286,21 @@ export function ScoutMemoryPanel({ onClose }: Props) {
   }
 
   // ── CRUD ─────────────────────────────────────────────────────────────────
-  const handleAdd = async (category: ScoutMemoryCategory, summary: string) => {
-    const res = await fetch("/api/scout/memory", {
+  const handleAdd = async (category: ApexMemoryCategory, summary: string) => {
+    const res = await fetch("/api/apex/memory", {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
       body:    JSON.stringify({ category, summary, confidence: 1.0, source: "explicit_user" }),
     })
     if (res.ok) {
-      const data = (await res.json()) as { memory: ScoutMemory }
+      const data = (await res.json()) as { memory: ApexMemory }
       setMemories((prev) => [data.memory, ...prev])
     }
   }
 
   const handleToggle = async (id: string, active: boolean) => {
     setMemories((prev) => prev.map((m) => (m.id === id ? { ...m, active } : m)))
-    await fetch(`/api/scout/memory/${id}`, {
+    await fetch(`/api/apex/memory/${id}`, {
       method:  "PATCH",
       headers: { "Content-Type": "application/json" },
       body:    JSON.stringify({ active }),
@@ -309,12 +309,12 @@ export function ScoutMemoryPanel({ onClose }: Props) {
 
   const handleDelete = async (id: string) => {
     setMemories((prev) => prev.filter((m) => m.id !== id))
-    await fetch(`/api/scout/memory/${id}`, { method: "DELETE" })
+    await fetch(`/api/apex/memory/${id}`, { method: "DELETE" })
   }
 
   const handleSaveEdit = async (id: string, summary: string) => {
     setMemories((prev) => prev.map((m) => (m.id === id ? { ...m, summary } : m)))
-    await fetch(`/api/scout/memory/${id}`, {
+    await fetch(`/api/apex/memory/${id}`, {
       method:  "PATCH",
       headers: { "Content-Type": "application/json" },
       body:    JSON.stringify({ summary }),
@@ -322,13 +322,13 @@ export function ScoutMemoryPanel({ onClose }: Props) {
   }
 
   const handleDisableAll = async () => {
-    if (!confirm("Disable all memories? Scout won't use them until you re-enable them.")) return
+    if (!confirm("Disable all memories? Apex won't use them until you re-enable them.")) return
     setMemories((prev) => prev.map((m) => ({ ...m, active: false })))
     await Promise.all(
       memories
         .filter((m) => m.active)
         .map((m) =>
-          fetch(`/api/scout/memory/${m.id}`, {
+          fetch(`/api/apex/memory/${m.id}`, {
             method:  "PATCH",
             headers: { "Content-Type": "application/json" },
             body:    JSON.stringify({ active: false }),
@@ -357,11 +357,11 @@ export function ScoutMemoryPanel({ onClose }: Props) {
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-4 border-b border-slate-100 flex-shrink-0">
           <div className="flex items-center gap-2.5">
-            <div className="h-7 w-7 rounded-lg bg-[#FF5C18]/10 flex items-center justify-center flex-shrink-0">
-              <Brain className="h-4 w-4 text-[#FF5C18]" />
+            <div className="h-7 w-7 rounded-lg bg-[#6366F1]/10 flex items-center justify-center flex-shrink-0">
+              <Brain className="h-4 w-4 text-[#6366F1]" />
             </div>
             <div>
-              <div className="text-sm font-700 text-slate-900 font-bold">Scout Memory</div>
+              <div className="text-sm font-700 text-slate-900 font-bold">Apex Memory</div>
               <div className="text-[10px] text-slate-400">
                 {memories.length === 0 ? "No memories yet" : `${active.length} active · ${memories.length} total`}
               </div>
@@ -379,7 +379,7 @@ export function ScoutMemoryPanel({ onClose }: Props) {
         {/* Privacy notice */}
         <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-100 flex-shrink-0">
           <p className="text-[10.5px] text-slate-500 leading-relaxed">
-            Scout uses these to personalise recommendations across sessions.{" "}
+            Apex uses these to personalise recommendations across sessions.{" "}
             <strong className="text-slate-600">You control everything here.</strong>{" "}
             Edit, disable, or delete any memory at any time.
           </p>
@@ -437,7 +437,7 @@ export function ScoutMemoryPanel({ onClose }: Props) {
               <Brain className="h-8 w-8 text-slate-200 mx-auto" />
               <p className="text-sm font-medium text-slate-400">No memories yet</p>
               <p className="text-xs text-slate-300">
-                Scout will learn from your conversations. Click "Scan my activity" to get started.
+                Apex will learn from your conversations. Click "Scan my activity" to get started.
               </p>
             </div>
           )}

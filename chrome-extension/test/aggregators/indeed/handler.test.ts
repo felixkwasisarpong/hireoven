@@ -56,7 +56,7 @@ describe("IndeedHandler", () => {
       const job = h.scrapeJob()!
       h.injectPill(document.querySelector("[data-testid='indeedApplyButton']")!, job)
       await new Promise((r) => setTimeout(r, 0))
-      const pill = document.querySelector("[data-testid='scout-pill-indeed']")
+      const pill = document.querySelector("[data-testid='apex-pill-indeed']")
       expect(pill).not.toBeNull()
       expect(pill!.previousElementSibling?.getAttribute("data-testid")).toBe("indeedApplyButton")
     })

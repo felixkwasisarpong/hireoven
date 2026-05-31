@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { getUserPlan } from "@/lib/gates/server-gate"
 import { getPostgresPool } from "@/lib/postgres/server"
-import { getBalance } from "@/lib/scout/interview/credits"
+import { getBalance } from "@/lib/apex/interview/credits"
 import { FEATURE_QUOTAS, METERED_FEATURE_KEYS, type MeteredFeature } from "@/lib/usage/quotas"
 import { getAllQuotas } from "@/lib/usage/quotas-server"
 

@@ -1,5 +1,5 @@
 /**
- * Scout Orchestrator V1
+ * Apex Orchestrator V1
  *
  * Routes an incoming user intent to the appropriate specialized agents,
  * runs them in parallel (where safe), and merges their outputs into:
@@ -7,7 +7,7 @@
  *   - enrichments:     structured data for workspace directives / compare fallback
  *   - traces:          dev-only execution log
  *
- * The user experiences one Scout. The orchestrator is invisible.
+ * The user experiences one Apex. The orchestrator is invisible.
  *
  * Design rules:
  *   - No LLM calls in this layer (Claude is called once, in the chat route)
@@ -18,8 +18,8 @@
  */
 
 import type {
-  ScoutAgent,
-  ScoutExecutionContext,
+  ApexAgent,
+  ApexExecutionContext,
   AgentIntent,
   AgentResult,
   AgentTrace,
@@ -34,7 +34,7 @@ const IS_DEV = process.env.NODE_ENV === "development"
 
 // ── Agent registry ────────────────────────────────────────────────────────────
 
-const AGENTS: ScoutAgent[] = [
+const AGENTS: ApexAgent[] = [
   new MarketIntelAgent(),
   new CompanyIntelAgent(),
   new ResumeAgent(),
@@ -74,7 +74,7 @@ export function detectAgentIntent(message: string): AgentIntent {
 // ── Main orchestrator ─────────────────────────────────────────────────────────
 
 export async function runOrchestrator(
-  ctx: ScoutExecutionContext
+  ctx: ApexExecutionContext
 ): Promise<OrchestratorResult> {
   const start = Date.now()
 
@@ -126,7 +126,7 @@ export async function runOrchestrator(
   const total = Date.now() - start
 
   if (IS_DEV && traces.length > 0) {
-    console.log("[scout:orchestrator]", {
+    console.log("[apex:orchestrator]", {
       intent:     ctx.detectedIntent,
       agents:     traces.map((t) => `${t.agentId}(${t.durationMs}ms,${t.success ? "ok" : "fail"})`).join(" "),
       totalMs:    total,

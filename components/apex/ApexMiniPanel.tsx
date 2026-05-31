@@ -2,18 +2,16 @@
 
 import { useMemo, useEffect, useRef, useState } from "react"
 import { usePathname } from "next/navigation"
-import { Loader2, RefreshCw, Send, Sparkles, X, SlidersHorizontal, Star, MessageSquare } from "lucide-react"
-import Image from "next/image"
-
-const LOADER_GIF = "/hireoven_clean_loader_160.gif"
-import { ScoutMessageBubble } from "@/components/scout/ScoutMessageBubble"
-import { ScoutActivityTimeline } from "@/components/scout/ScoutActivityTimeline"
-import { ScoutContextChip } from "@/components/scout/ScoutContextChip"
+import { Loader2, RefreshCw, Send, X, SlidersHorizontal, Star, MessageSquare } from "lucide-react"
+import { ApexIcon } from "@/components/apex/ApexIcon"
+import { ApexMessageBubble } from "@/components/apex/ApexMessageBubble"
+import { ApexActivityTimeline } from "@/components/apex/ApexActivityTimeline"
+import { ApexContextChip } from "@/components/apex/ApexContextChip"
 import { useResumeContext } from "@/components/resume/ResumeProvider"
-import { useScoutActionExecutor } from "@/components/scout/useScoutActionExecutor"
-import { normalizeScoutResponse } from "@/lib/scout/normalize"
+import { useApexActionExecutor } from "@/components/apex/useApexActionExecutor"
+import { normalizeApexResponse } from "@/lib/apex/normalize"
 import { cn } from "@/lib/utils"
-import type { ScoutAction, ScoutResponse } from "@/lib/scout/types"
+import type { ApexAction, ApexResponse } from "@/lib/apex/types"
 
 type MiniTask = {
   title: string
@@ -36,7 +34,7 @@ const MINI_TASKS: MiniTask[] = [
     icon: Star,
   },
   {
-    title: "Ask Scout",
+    title: "Ask Apex",
     description: "Get detailed insights on specific jobs.",
     prompt: "Show this job's match score, location, sponsorship signal, and salary if available.",
     icon: MessageSquare,
@@ -45,9 +43,9 @@ const MINI_TASKS: MiniTask[] = [
 
 type ChatMessage =
   | { id: string; role: "user"; text: string }
-  | { id: string; role: "scout"; response: ScoutResponse }
+  | { id: string; role: "apex"; response: ApexResponse }
 
-type ScoutMiniPanelProps = {
+type ApexMiniPanelProps = {
   pagePath?: string
   jobId?: string
   companyId?: string
@@ -59,12 +57,19 @@ type ScoutMiniPanelProps = {
 function TypingIndicator() {
   return (
     <div className="flex items-start gap-2.5">
-      <Image src={LOADER_GIF} alt="" width={28} height={28} unoptimized className="mt-0.5 flex-shrink-0" />
+      <span className="mt-0.5 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-indigo-50">
+        <ApexIcon size={16} glow={false} />
+      </span>
+      <div className="flex items-center gap-1 rounded-2xl rounded-tl-sm bg-gray-100 px-3.5 py-3">
+        <span className="h-1.5 w-1.5 rounded-full bg-indigo-400 animate-bounce [animation-delay:0ms]" />
+        <span className="h-1.5 w-1.5 rounded-full bg-indigo-400 animate-bounce [animation-delay:150ms]" />
+        <span className="h-1.5 w-1.5 rounded-full bg-indigo-400 animate-bounce [animation-delay:300ms]" />
+      </div>
     </div>
   )
 }
 
-function sanitizeMiniResponse(response: ScoutResponse): ScoutResponse {
+function sanitizeMiniResponse(response: ApexResponse): ApexResponse {
   if (!response.gated) return response
   return {
     ...response,
@@ -73,7 +78,7 @@ function sanitizeMiniResponse(response: ScoutResponse): ScoutResponse {
   }
 }
 
-function isMiniAutoAction(action: ScoutAction): boolean {
+function isMiniAutoAction(action: ApexAction): boolean {
   return (
     action.type === "APPLY_FILTERS" ||
     action.type === "SET_FOCUS_MODE" ||
@@ -81,17 +86,17 @@ function isMiniAutoAction(action: ScoutAction): boolean {
   )
 }
 
-export function ScoutMiniPanel({
+export function ApexMiniPanel({
   pagePath,
   jobId,
   companyId,
   resumeId,
   applicationId,
   suggestionChips,
-}: ScoutMiniPanelProps) {
+}: ApexMiniPanelProps) {
   const pathname = usePathname()
   const { primaryResume } = useResumeContext()
-  const { executeAction } = useScoutActionExecutor()
+  const { executeAction } = useApexActionExecutor()
 
   const [isOpen, setIsOpen] = useState(false)
   const [query, setQuery] = useState("")
@@ -131,8 +136,8 @@ export function ScoutMiniPanel({
 
   useEffect(() => {
     function onReset() { setMessages([]); setError(null) }
-    window.addEventListener("scout:reset-context", onReset)
-    return () => window.removeEventListener("scout:reset-context", onReset)
+    window.addEventListener("apex:reset-context", onReset)
+    return () => window.removeEventListener("apex:reset-context", onReset)
   }, [])
 
   useEffect(() => {
@@ -142,8 +147,8 @@ export function ScoutMiniPanel({
       setQuery(prefillQuery)
       setTimeout(() => inputRef.current?.focus(), 80)
     }
-    window.addEventListener("scout:open-with-job", onOpenWithJob as EventListener)
-    return () => window.removeEventListener("scout:open-with-job", onOpenWithJob as EventListener)
+    window.addEventListener("apex:open-with-job", onOpenWithJob as EventListener)
+    return () => window.removeEventListener("apex:open-with-job", onOpenWithJob as EventListener)
   }, [])
 
   async function sendMessage(message: string) {
@@ -160,7 +165,7 @@ export function ScoutMiniPanel({
       const controller = new AbortController()
       timeoutId = setTimeout(() => controller.abort(), 25000)
 
-      const res = await fetch("/api/scout/chat", {
+      const res = await fetch("/api/apex/chat", {
         method: "POST",
         headers: { Accept: "application/json", "Content-Type": "application/json" },
         signal: controller.signal,
@@ -196,35 +201,35 @@ export function ScoutMiniPanel({
       const raw = (await res.json().catch(() => null)) as unknown
       const rawObj = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : null
 
-      // The server can return non-2xx with a fully-formed ScoutResponse body.
-      // In MiniScout we still render a normal response message.
-      const looksLikeScoutResponse =
+      // The server can return non-2xx with a fully-formed ApexResponse body.
+      // In MiniApex we still render a normal response message.
+      const looksLikeApexResponse =
         rawObj !== null && typeof rawObj.answer === "string" && rawObj.answer.length > 0
 
-      if (!res.ok && !looksLikeScoutResponse) {
+      if (!res.ok && !looksLikeApexResponse) {
         const errMsg = rawObj && "error" in rawObj
           ? String(rawObj.error)
-          : "Scout could not respond right now."
+          : "Apex could not respond right now."
         setError(errMsg)
         return
       }
 
-      const normalized = sanitizeMiniResponse(normalizeScoutResponse(raw))
+      const normalized = sanitizeMiniResponse(normalizeApexResponse(raw))
       const autoActions = normalized.actions.filter(isMiniAutoAction)
       for (const action of autoActions) {
         executeAction(action, {
           source: "chat",
-          reason: "Mini Scout quick task",
+          reason: "Mini Apex quick task",
         })
       }
       const visibleResponse =
         autoActions.length > 0
           ? { ...normalized, actions: normalized.actions.filter((a) => !isMiniAutoAction(a)) }
           : normalized
-      setMessages((prev) => [...prev, { id: `s-${Date.now()}`, role: "scout", response: visibleResponse }])
+      setMessages((prev) => [...prev, { id: `s-${Date.now()}`, role: "apex", response: visibleResponse }])
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {
-        setError("Scout took too long to respond. Try again.")
+        setError("Apex took too long to respond. Try again.")
       } else {
         setError("Network error. Please try again.")
       }
@@ -258,22 +263,21 @@ export function ScoutMiniPanel({
           style={{ maxHeight: "min(72vh,520px)" }}
         >
           {/* ── Header ── */}
-          <div className="flex flex-shrink-0 items-center gap-3 bg-[#FF5C18] px-4 py-3.5">
+          <div className="flex flex-shrink-0 items-center gap-3 bg-indigo-600 px-4 py-3.5">
             {/* Avatar */}
             <span className="inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-white/20 ring-2 ring-white/30">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/brand/hireoven-icon.svg" alt="" className="h-5 w-5" draggable={false} />
+              <ApexIcon size={20} glow={false} className="brightness-[10]" />
             </span>
 
             <div className="flex-1 min-w-0">
-              <p className="text-[13px] font-bold leading-none text-white">Scout</p>
+              <p className="text-[13px] font-bold leading-none text-white">Apex</p>
               <p className="mt-0.5 text-[10.5px] leading-none text-white/70">Your AI job-search copilot</p>
             </div>
 
             <button
               type="button"
               onClick={() => setIsOpen(false)}
-              aria-label="Close Scout"
+              aria-label="Close Apex"
               className="inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-white/70 transition hover:bg-white/15 hover:text-white"
             >
               <X className="h-4 w-4" />
@@ -287,29 +291,31 @@ export function ScoutMiniPanel({
             {resumeRefreshedNotice && (
               <div className="flex items-center gap-2 rounded-xl border border-orange-100 bg-orange-50 px-3 py-2 text-xs text-orange-700">
                 <RefreshCw className="h-3 w-3 flex-shrink-0" />
-                Scout refreshed context for your updated resume.
+                Apex refreshed context for your updated resume.
               </div>
             )}
 
             {/* Greeting + action chips (empty state) */}
             {!hasConversation && !isLoading && (
               <>
-                {/* Timestamp */}
-                <p className="text-center text-[10px] text-gray-400">
+                {/* Timestamp — suppressHydrationWarning because this is client-only time */}
+                <p suppressHydrationWarning className="text-center text-[10px] text-gray-400">
                   {new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
                 </p>
 
-                {/* Scout greeting bubble */}
+                {/* Apex greeting bubble */}
                 <div className="flex items-start gap-2.5">
-                  <Image src={LOADER_GIF} alt="" width={28} height={28} unoptimized className="mt-0.5 flex-shrink-0" />
+                  <span className="mt-0.5 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-indigo-50">
+                    <ApexIcon size={16} glow={false} />
+                  </span>
                   <div className="rounded-2xl rounded-tl-sm bg-gray-100 px-3.5 py-2.5 text-[13px] leading-5 text-gray-800">
-                    Hi there! I&apos;m Scout, your AI job-search copilot. Tell me what you&apos;re working on — I&apos;ll handle the rest.
+                    Hi there! I&apos;m Apex, your AI job-search copilot. Tell me what you&apos;re working on — I&apos;ll handle the rest.
                   </div>
                 </div>
 
                 {/* Context chip */}
                 <div className="pl-9">
-                  <ScoutContextChip onReset={() => setMessages([])} />
+                  <ApexContextChip onReset={() => setMessages([])} />
                 </div>
 
                 {/* Action chips — Clara-style stacked pills */}
@@ -323,9 +329,9 @@ export function ScoutMiniPanel({
                         key={chip}
                         type="button"
                         onClick={() => runChip(prompt)}
-                        className="flex w-full items-center gap-2 rounded-full bg-[#FF5C18] px-4 py-2 text-left text-[12px] font-semibold text-white transition hover:bg-[#E14F0E] active:scale-[0.98]"
+                        className="flex w-full items-center gap-2 rounded-full bg-indigo-600 px-4 py-2 text-left text-[12px] font-semibold text-white transition hover:bg-indigo-700 active:scale-[0.98]"
                       >
-                        <Sparkles className="h-3 w-3 flex-shrink-0 opacity-75" />
+                        <ApexIcon size={12} glow={false} className="flex-shrink-0 opacity-80 brightness-[10]" />
                         {chip}
                       </button>
                     )
@@ -336,19 +342,19 @@ export function ScoutMiniPanel({
 
             {/* Conversation context chip */}
             {hasConversation && (
-              <ScoutContextChip onReset={() => setMessages([])} />
+              <ApexContextChip onReset={() => setMessages([])} />
             )}
 
             {/* Messages */}
             {messages.map((msg) =>
               msg.role === "user" ? (
                 <div key={msg.id} className="flex justify-end">
-                  <div className="max-w-[80%] rounded-2xl rounded-tr-sm bg-[#FF5C18] px-3.5 py-2.5 text-[13px] leading-5 text-white">
+                  <div className="max-w-[80%] rounded-2xl rounded-tr-sm bg-indigo-600 px-3.5 py-2.5 text-[13px] leading-5 text-white">
                     {msg.text}
                   </div>
                 </div>
               ) : (
-                <ScoutMessageBubble
+                <ApexMessageBubble
                   key={msg.id}
                   response={msg.response}
                   context="mini"
@@ -384,7 +390,7 @@ export function ScoutMiniPanel({
                   type="submit"
                   disabled={!query.trim() || isLoading}
                   aria-label="Send"
-                  className="flex-shrink-0 text-[#FF5C18] transition hover:text-[#E14F0E] disabled:opacity-30"
+                  className="flex-shrink-0 text-indigo-600 transition hover:text-indigo-700 disabled:opacity-30"
                 >
                   {isLoading
                     ? <Loader2 className="h-5 w-5 animate-spin" />
@@ -411,17 +417,17 @@ export function ScoutMiniPanel({
       <button
         type="button"
         onClick={() => setIsOpen((v) => !v)}
-        aria-label={isOpen ? "Close Scout" : "Open Scout"}
-        className="pointer-events-auto relative inline-flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-[#FF5C18] shadow-[0_4px_20px_rgba(255,92,24,0.45)] transition-all duration-200 hover:bg-[#E14F0E] hover:scale-105 hover:shadow-[0_6px_28px_rgba(255,92,24,0.55)] active:scale-95"
+        aria-label={isOpen ? "Close Apex" : "Open Apex"}
+        className="pointer-events-auto relative inline-flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-indigo-600 shadow-[0_4px_20px_rgba(99,102,241,0.45)] transition-all duration-200 hover:bg-indigo-700 hover:scale-105 hover:shadow-[0_6px_28px_rgba(99,102,241,0.55)] active:scale-95"
       >
         {isOpen
           ? <X className="h-5 w-5 text-white" />
-          : <Sparkles className="h-5 w-5 text-white" />
+          : <ApexIcon size={22} glow={false} className="brightness-[10]" />
         }
 
         {/* Unread badge */}
         {hasConversation && !isOpen && (
-          <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full border-2 border-white bg-white text-[8px] font-bold text-[#FF5C18]">
+          <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full border-2 border-white bg-white text-[8px] font-bold text-indigo-600">
             {userTurns}
           </span>
         )}

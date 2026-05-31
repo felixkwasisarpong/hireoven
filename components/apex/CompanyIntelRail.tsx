@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { ArrowUpRight, Loader2, TrendingDown, TrendingUp, Minus } from "lucide-react"
 import { cn } from "@/lib/utils"
-import type { CompanyIntel, CompanyIntelSummary } from "@/lib/scout/company-intel/types"
+import type { CompanyIntel, CompanyIntelSummary } from "@/lib/apex/company-intel/types"
 
 // ── Signal badges ─────────────────────────────────────────────────────────────
 

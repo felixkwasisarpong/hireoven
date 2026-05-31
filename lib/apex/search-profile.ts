@@ -1,5 +1,5 @@
 /**
- * Scout Search Profile — V1 Lightweight Job Search Memory
+ * Apex Search Profile — V1 Lightweight Job Search Memory
  *
  * Persists learned search preferences to localStorage (client-side only).
  * Signals are derived from the user's chat interactions, filter applications,
@@ -10,14 +10,14 @@
  *   - Stores only search preferences (roles, locations, work modes, sponsorship)
  *   - User can clear all memory at any time
  *   - Expires after 30 days of inactivity
- *   - Visible and editable via "Scout learned" chips in the UI
+ *   - Visible and editable via "Apex learned" chips in the UI
  */
 
-import type { ScoutResponse, ScoutAction } from "./types"
+import type { ApexResponse, ApexAction } from "./types"
 
 // ── Type ─────────────────────────────────────────────────────────────────────
 
-export type ScoutSearchProfile = {
+export type ApexSearchProfile = {
   preferredRoles?: string[]
   preferredLocations?: string[]
   preferredWorkModes?: Array<"remote" | "hybrid" | "onsite">
@@ -31,25 +31,25 @@ export type ScoutSearchProfile = {
 }
 
 // A single editable memory item surfaced to the user
-export type ScoutMemoryChip = {
+export type ApexMemoryChip = {
   key: string
   label: string
   /** Field path + value to clear when dismissed */
-  fieldKey: keyof ScoutSearchProfile
+  fieldKey: keyof ApexSearchProfile
   fieldValue?: unknown
 }
 
 // ── Storage ───────────────────────────────────────────────────────────────────
 
-const STORAGE_KEY = "hireoven:scout-search-profile:v1"
+const STORAGE_KEY = "hireoven:apex-search-profile:v1"
 const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000 // 30 days
 
-export function readSearchProfile(): ScoutSearchProfile | null {
+export function readSearchProfile(): ApexSearchProfile | null {
   if (typeof window === "undefined") return null
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return null
-    const parsed = JSON.parse(raw) as ScoutSearchProfile
+    const parsed = JSON.parse(raw) as ApexSearchProfile
     if (
       parsed.updatedAt &&
       Date.now() - new Date(parsed.updatedAt).getTime() > MAX_AGE_MS
@@ -63,7 +63,7 @@ export function readSearchProfile(): ScoutSearchProfile | null {
   }
 }
 
-export function writeSearchProfile(profile: ScoutSearchProfile): void {
+export function writeSearchProfile(profile: ApexSearchProfile): void {
   if (typeof window === "undefined") return
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(profile))
@@ -86,9 +86,9 @@ function dedup<T>(arr: T[], max: number): T[] {
 }
 
 export function mergeProfileUpdate(
-  current: ScoutSearchProfile | null,
-  update: Partial<ScoutSearchProfile>
-): ScoutSearchProfile {
+  current: ApexSearchProfile | null,
+  update: Partial<ApexSearchProfile>
+): ApexSearchProfile {
   const base = current ?? { updatedAt: new Date().toISOString() }
 
   return {
@@ -130,7 +130,7 @@ export function mergeProfileUpdate(
   }
 }
 
-// ── Signal extraction from Scout chat interactions ────────────────────────────
+// ── Signal extraction from Apex chat interactions ────────────────────────────
 
 /** Patterns that indicate sponsorship is required */
 const SPONSORSHIP_REQUIRED_RE = /\b(sponsor(?:ship)?|h[- ]?1b|visa|opt|cpt|ead|need.*sponsor|require.*sponsor)\b/i
@@ -154,18 +154,18 @@ function extractRoleKeywords(text: string): string[] {
 }
 
 /**
- * Extracts a partial profile update from a single Scout chat turn.
- * Signal sources: APPLY_FILTERS action, message text patterns, Scout recommendation.
+ * Extracts a partial profile update from a single Apex chat turn.
+ * Signal sources: APPLY_FILTERS action, message text patterns, Apex recommendation.
  */
 export function extractProfileUpdate(
-  response: ScoutResponse,
+  response: ApexResponse,
   userMessage: string,
-): Partial<ScoutSearchProfile> {
-  const update: Partial<ScoutSearchProfile> = {}
+): Partial<ApexSearchProfile> {
+  const update: Partial<ApexSearchProfile> = {}
 
   // ── APPLY_FILTERS action — most reliable signal ───────────────────────────
   const filterAction = response.actions?.find(
-    (a): a is Extract<ScoutAction, { type: "APPLY_FILTERS" }> => a.type === "APPLY_FILTERS"
+    (a): a is Extract<ApexAction, { type: "APPLY_FILTERS" }> => a.type === "APPLY_FILTERS"
   )
   if (filterAction) {
     const p = filterAction.payload
@@ -222,14 +222,14 @@ export function extractProfileUpdate(
   return update
 }
 
-// ── "Scout learned" chip generation ─────────────────────────────────────────
+// ── "Apex learned" chip generation ─────────────────────────────────────────
 
 /**
- * Returns up to 3 human-readable memory chips representing what Scout has
+ * Returns up to 3 human-readable memory chips representing what Apex has
  * learned about the user's preferences. Each chip can be individually dismissed.
  */
-export function buildMemoryChips(profile: ScoutSearchProfile): ScoutMemoryChip[] {
-  const chips: ScoutMemoryChip[] = []
+export function buildMemoryChips(profile: ApexSearchProfile): ApexMemoryChip[] {
+  const chips: ApexMemoryChip[] = []
 
   if (profile.sponsorshipPreference === "required") {
     chips.push({
@@ -278,10 +278,10 @@ export function buildMemoryChips(profile: ScoutSearchProfile): ScoutMemoryChip[]
 // ── Claude context formatting ─────────────────────────────────────────────────
 
 /**
- * Formats the search profile as a compact string for the Scout prompt.
+ * Formats the search profile as a compact string for the Apex prompt.
  * Marked as "weak hints" so Claude doesn't over-weight them.
  */
-export function formatProfileForClaude(profile: ScoutSearchProfile | null): string {
+export function formatProfileForClaude(profile: ApexSearchProfile | null): string {
   if (!profile) return ""
 
   const lines: string[] = []

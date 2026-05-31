@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getPostgresPool } from "@/lib/postgres/server"
-import { classifyBurnoutState } from "@/lib/scout/burnout/classifier"
-import { executeIntervention } from "@/lib/scout/burnout/interventions"
-import type { BurnoutState } from "@/lib/scout/burnout/classifier"
+import { classifyBurnoutState } from "@/lib/apex/burnout/classifier"
+import { executeIntervention } from "@/lib/apex/burnout/interventions"
+import type { BurnoutState } from "@/lib/apex/burnout/classifier"
 
 export const dynamic = "force-dynamic"
 export const maxDuration = 30

@@ -1,7 +1,7 @@
 /**
  * POST /api/extension/jobs/analyze
  *
- * Scout analyze endpoint. Deterministic only — no AI calls.
+ * Apex analyze endpoint. Deterministic only — no AI calls.
  *
  * Returns:
  *   - existsInHireoven (lookup-only, never writes)
@@ -93,7 +93,7 @@ interface AnalysisResponse {
 // ── Deterministic rules ───────────────────────────────────────────────────────
 
 /**
- * Autofill capability by source. The Scout Bar uses this to gate the autofill
+ * Autofill capability by source. The Apex Bar uses this to gate the autofill
  * action. true = full support planned, false = job board (apply happens elsewhere).
  * Workday/LinkedIn are "partial" — we still set true, with a partial signal.
  */
@@ -140,7 +140,7 @@ const HYBRID_RE = /\bhybrid\b/i
 const ONSITE_RE = /\b(?:on[-\s]?site|in[-\s]?office)\b/i
 const ZERO_UUID = "00000000-0000-0000-0000-000000000000"
 
-// Mirrors chrome-extension/src/extractors/scout-extractor.ts and JobCardV2.
+// Mirrors chrome-extension/src/extractors/apex-extractor.ts and JobCardV2.
 const ACTIVELY_HIRING_RE =
   /\b(?:actively\s+(?:recruiting|hiring|seeking|reviewing\s+(?:applicants?|applications?|candidates?))|urgently?\s+hiring|hiring\s+now|now\s+hiring|immediate(?:ly)?\s+(?:hire|hiring|need|opening)|urgent(?:ly)?\s+(?:hiring|need)|high(?:ly)?\s+priority\s+role)\b/i
 

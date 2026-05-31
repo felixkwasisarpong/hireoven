@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getPostgresPool } from "@/lib/postgres/server"
-import { checkSalaryBeforeApply } from "@/lib/scout/salary/pre-apply-interceptor"
+import { checkSalaryBeforeApply } from "@/lib/apex/salary/pre-apply-interceptor"
 
 export const dynamic = "force-dynamic"
 

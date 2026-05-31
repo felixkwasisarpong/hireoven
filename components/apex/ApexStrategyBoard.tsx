@@ -12,12 +12,12 @@ import {
 } from "lucide-react"
 import { useFeatureAccess } from "@/lib/hooks/useFeatureAccess"
 import { useUpgradeModal } from "@/lib/context/UpgradeModalContext"
-import { getDefaultActionLabel } from "@/lib/scout/actions"
-import type { ScoutAction, ScoutStrategyBoard } from "@/lib/scout/types"
-import { useScoutActionExecutor } from "./useScoutActionExecutor"
+import { getDefaultActionLabel } from "@/lib/apex/actions"
+import type { ApexAction, ApexStrategyBoard } from "@/lib/apex/types"
+import { useApexActionExecutor } from "./useApexActionExecutor"
 
-type ScoutStrategyBoardProps = {
-  board: ScoutStrategyBoard | null
+type ApexStrategyBoardProps = {
+  board: ApexStrategyBoard | null
   isLoading: boolean
   error: string | null
 }
@@ -28,11 +28,11 @@ const RISK_CONFIG = {
   low:    { bar: "bg-slate-300",  pill: "border-slate-200 bg-slate-50 text-slate-700", dot: "bg-slate-300" },
 } as const
 
-export function ScoutStrategyBoard({ board, isLoading, error }: ScoutStrategyBoardProps) {
-  const { hasAccess: hasStrategyAccess } = useFeatureAccess("scout_strategy")
-  const { hasAccess: hasActionAccess } = useFeatureAccess("scout_actions")
+export function ApexStrategyBoard({ board, isLoading, error }: ApexStrategyBoardProps) {
+  const { hasAccess: hasStrategyAccess } = useFeatureAccess("apex_strategy")
+  const { hasAccess: hasActionAccess } = useFeatureAccess("apex_actions")
   const { showUpgrade } = useUpgradeModal()
-  const { executeAction, feedback } = useScoutActionExecutor()
+  const { executeAction, feedback } = useApexActionExecutor()
 
   if (isLoading) {
     return (
@@ -58,7 +58,7 @@ export function ScoutStrategyBoard({ board, isLoading, error }: ScoutStrategyBoa
     return (
       <section className="rounded-[20px] border border-slate-200/80 bg-white p-6 shadow-[0_2px_16px_rgba(15,23,42,0.06)]">
         <p className="text-sm font-semibold text-slate-900">Strategy board unavailable</p>
-        <p className="mt-1 text-xs text-slate-500">Ask Scout for guidance while we gather your signals.</p>
+        <p className="mt-1 text-xs text-slate-500">Ask Apex for guidance while we gather your signals.</p>
       </section>
     )
   }
@@ -92,7 +92,7 @@ export function ScoutStrategyBoard({ board, isLoading, error }: ScoutStrategyBoa
           {!hasStrategyAccess && (
             <button
               type="button"
-              onClick={() => showUpgrade("scout_strategy")}
+              onClick={() => showUpgrade("apex_strategy")}
               className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 transition hover:bg-amber-100"
             >
               <Lock className="h-3 w-3" />
@@ -229,7 +229,7 @@ export function ScoutStrategyBoard({ board, isLoading, error }: ScoutStrategyBoa
                         type="button"
                         onClick={() => {
                           if (actionLocked) {
-                            showUpgrade("scout_actions")
+                            showUpgrade("apex_actions")
                             return
                           }
                           executeAction(action)
@@ -241,7 +241,7 @@ export function ScoutStrategyBoard({ board, isLoading, error }: ScoutStrategyBoa
                         }`}
                       >
                         {actionLocked && <Lock className="h-3 w-3" />}
-                        {actionLocked ? "Unlock action" : action.label || getDefaultActionLabel(action as ScoutAction)}
+                        {actionLocked ? "Unlock action" : action.label || getDefaultActionLabel(action as ApexAction)}
                       </button>
                     )}
                   </div>
@@ -259,7 +259,7 @@ export function ScoutStrategyBoard({ board, isLoading, error }: ScoutStrategyBoa
           )}
           {!hasActionAccess && (
             <p className="mt-3 text-[11px] text-amber-700">
-              Resume tailoring actions are on paid Scout plans.
+              Resume tailoring actions are on paid Apex plans.
             </p>
           )}
         </article>
@@ -272,7 +272,7 @@ export function ScoutStrategyBoard({ board, isLoading, error }: ScoutStrategyBoa
           <div>
             <p className="text-sm font-semibold text-blue-900">Onboarding signals are incomplete</p>
             <p className="mt-0.5 text-xs text-blue-700">
-              Fill out your resume context and profile preferences to improve Scout recommendations.
+              Fill out your resume context and profile preferences to improve Apex recommendations.
             </p>
           </div>
         </div>

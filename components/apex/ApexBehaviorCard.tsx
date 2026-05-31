@@ -2,14 +2,14 @@
 
 import { useEffect, useState } from "react"
 import { Brain, X } from "lucide-react"
-import type { ScoutBehaviorSignals } from "@/lib/scout/behavior"
+import type { ApexBehaviorSignals } from "@/lib/apex/behavior"
 
 type Props = {
-  signals: ScoutBehaviorSignals | null
+  signals: ApexBehaviorSignals | null
   isLoading?: boolean
 }
 
-function deriveObservations(signals: ScoutBehaviorSignals): string[] {
+function deriveObservations(signals: ApexBehaviorSignals): string[] {
   const obs: string[] = []
 
   if (signals.preferredRoles.length > 0) {
@@ -48,19 +48,19 @@ function deriveObservations(signals: ScoutBehaviorSignals): string[] {
 }
 
 /**
- * Displays lightweight "Scout noticed" personalization card derived from the
+ * Displays lightweight "Apex noticed" personalization card derived from the
  * user's existing activity signals. Dismissible per session; re-shows on context reset.
  */
-export function ScoutBehaviorCard({ signals, isLoading }: Props) {
+export function ApexBehaviorCard({ signals, isLoading }: Props) {
   const [dismissed, setDismissed] = useState(false)
 
-  // Re-show when the user resets Scout context
+  // Re-show when the user resets Apex context
   useEffect(() => {
     function onReset() {
       setDismissed(false)
     }
-    window.addEventListener("scout:reset-context", onReset)
-    return () => window.removeEventListener("scout:reset-context", onReset)
+    window.addEventListener("apex:reset-context", onReset)
+    return () => window.removeEventListener("apex:reset-context", onReset)
   }, [])
 
   if (dismissed || isLoading || !signals) return null
@@ -76,14 +76,14 @@ export function ScoutBehaviorCard({ signals, isLoading }: Props) {
             <Brain className="h-3.5 w-3.5 text-orange-600" />
           </div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-orange-700">
-            Scout noticed
+            Apex noticed
           </p>
         </div>
         <button
           type="button"
           onClick={() => setDismissed(true)}
           className="flex-shrink-0 inline-flex h-6 w-6 items-center justify-center rounded-md text-orange-400 transition hover:bg-orange-100 hover:text-orange-700"
-          aria-label="Dismiss Scout noticed card"
+          aria-label="Dismiss Apex noticed card"
         >
           <X className="h-3.5 w-3.5" />
         </button>
@@ -102,7 +102,7 @@ export function ScoutBehaviorCard({ signals, isLoading }: Props) {
       </ul>
 
       <p className="mt-2.5 pl-9 text-[10px] leading-4 text-orange-400/80">
-        Based on your activity · Scout uses these as hints, not rules
+        Based on your activity · Apex uses these as hints, not rules
       </p>
     </section>
   )

@@ -2,25 +2,25 @@
 
 import Link from "next/link"
 import { ArrowUpRight, X } from "lucide-react"
-import type { ScoutAction } from "@/lib/scout/types"
-import type { WorkspaceRail } from "@/lib/scout/workspace"
+import type { ApexAction } from "@/lib/apex/types"
+import type { WorkspaceRail } from "@/lib/apex/workspace"
 
 type Props = {
   rail: WorkspaceRail
   onClose: () => void
 }
 
-function ActionItem({ action }: { action: ScoutAction }) {
+function ActionItem({ action }: { action: ApexAction }) {
   const label = action.label ?? action.type.replace(/_/g, " ").toLowerCase()
 
   if (action.type === "OPEN_JOB") {
     return (
       <Link
         href={`/dashboard/jobs/${action.payload.jobId}`}
-        className="group flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-medium text-gray-700 transition hover:border-[#FF5C18]/30 hover:text-[#FF5C18]"
+        className="group flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-medium text-gray-700 transition hover:border-[#6366F1]/30 hover:text-[#6366F1]"
       >
         <span className="flex-1 capitalize">{label}</span>
-        <ArrowUpRight className="h-3.5 w-3.5 flex-shrink-0 text-gray-300 group-hover:text-[#FF5C18]" />
+        <ArrowUpRight className="h-3.5 w-3.5 flex-shrink-0 text-gray-300 group-hover:text-[#6366F1]" />
       </Link>
     )
   }
@@ -29,10 +29,10 @@ function ActionItem({ action }: { action: ScoutAction }) {
     return (
       <Link
         href={`/dashboard/companies/${action.payload.companyId}`}
-        className="group flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-medium text-gray-700 transition hover:border-[#FF5C18]/30 hover:text-[#FF5C18]"
+        className="group flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-medium text-gray-700 transition hover:border-[#6366F1]/30 hover:text-[#6366F1]"
       >
         <span className="flex-1 capitalize">{label}</span>
-        <ArrowUpRight className="h-3.5 w-3.5 flex-shrink-0 text-gray-300 group-hover:text-[#FF5C18]" />
+        <ArrowUpRight className="h-3.5 w-3.5 flex-shrink-0 text-gray-300 group-hover:text-[#6366F1]" />
       </Link>
     )
   }
@@ -44,10 +44,10 @@ function ActionItem({ action }: { action: ScoutAction }) {
     return (
       <Link
         href={href}
-        className="group flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-medium text-gray-700 transition hover:border-[#FF5C18]/30 hover:text-[#FF5C18]"
+        className="group flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-medium text-gray-700 transition hover:border-[#6366F1]/30 hover:text-[#6366F1]"
       >
         <span className="flex-1 capitalize">{label}</span>
-        <ArrowUpRight className="h-3.5 w-3.5 flex-shrink-0 text-gray-300 group-hover:text-[#FF5C18]" />
+        <ArrowUpRight className="h-3.5 w-3.5 flex-shrink-0 text-gray-300 group-hover:text-[#6366F1]" />
       </Link>
     )
   }

@@ -10,7 +10,7 @@
 
 import type Anthropic from "@anthropic-ai/sdk"
 import type { MessageParam, MessageCreateParamsNonStreaming } from "@anthropic-ai/sdk/resources/messages"
-import type { ScoutFeature, ModelTier } from "./types"
+import type { ApexFeature, ModelTier } from "./types"
 import { budgetTracker, calcCost, inferTier } from "./tracker"
 import { isAiBudgetExceeded } from "./cap"
 import { logApiUsage } from "@/lib/admin/usage"
@@ -18,7 +18,7 @@ import { sanitizeGeneratedText } from "@/lib/text/sanitize-generated-text"
 
 export type AICallOptions<T> = {
   anthropic:  Anthropic
-  feature:    ScoutFeature
+  feature:    ApexFeature
   params:     Omit<MessageCreateParamsNonStreaming, "stream">
   timeoutMs:  number
   /** Called when timeout fires. Return a safe deterministic response. */
@@ -156,7 +156,7 @@ export function streamWithTimeout(
 
 // ── Record a cached hit into the tracker ─────────────────────────────────────
 
-export function recordCacheHit(feature: ScoutFeature, model: string, userId?: string): void {
+export function recordCacheHit(feature: ApexFeature, model: string, userId?: string): void {
   budgetTracker.record({
     feature, model, tier: inferTier(model),
     inputTokens: 0, outputTokens: 0, latencyMs: 0, costUsd: 0,

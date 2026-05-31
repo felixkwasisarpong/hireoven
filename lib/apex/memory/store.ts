@@ -1,5 +1,5 @@
 /**
- * Scout Memory Store — DB CRUD helpers
+ * Apex Memory Store — DB CRUD helpers
  *
  * All operations are user-scoped. Postgres RLS provides a second enforcement
  * layer, but every query here also filters by user_id explicitly.
@@ -7,8 +7,8 @@
 
 import type { Pool } from "pg"
 import type {
-  ScoutMemory,
-  ScoutMemoryCategory,
+  ApexMemory,
+  ApexMemoryCategory,
   CreateMemoryInput,
   UpdateMemoryInput,
   MemoryCandidate,
@@ -33,13 +33,13 @@ type MemoryRow = {
   updated_at: string
 }
 
-function rowToMemory(row: MemoryRow): ScoutMemory {
+function rowToMemory(row: MemoryRow): ApexMemory {
   return {
     id:         row.id,
-    category:   row.category as ScoutMemory["category"],
+    category:   row.category as ApexMemory["category"],
     summary:    row.summary,
     confidence: row.confidence,
-    source:     row.source as ScoutMemory["source"],
+    source:     row.source as ApexMemory["source"],
     active:     row.active,
     createdAt:  row.created_at,
     updatedAt:  row.updated_at,
@@ -81,7 +81,7 @@ export async function getMemories(
   userId: string,
   pool: Pool,
   opts: { activeOnly?: boolean } = {},
-): Promise<ScoutMemory[]> {
+): Promise<ApexMemory[]> {
   await ensureTable(pool)
 
   const where = opts.activeOnly
@@ -102,9 +102,9 @@ export async function getMemories(
 /** Fetch active memories for a specific category. */
 export async function getMemoriesByCategory(
   userId: string,
-  category: ScoutMemoryCategory,
+  category: ApexMemoryCategory,
   pool: Pool,
-): Promise<ScoutMemory[]> {
+): Promise<ApexMemory[]> {
   const result = await pool.query<MemoryRow>(
     `SELECT id, category, summary, confidence, source, active, created_at, updated_at
      FROM scout_memories
@@ -122,7 +122,7 @@ export async function createMemory(
   userId: string,
   pool: Pool,
   input: CreateMemoryInput,
-): Promise<ScoutMemory | null> {
+): Promise<ApexMemory | null> {
   await ensureTable(pool)
 
   if (!VALID_MEMORY_CATEGORIES.has(input.category)) return null
@@ -157,7 +157,7 @@ export async function updateMemory(
   userId: string,
   pool: Pool,
   patch: UpdateMemoryInput,
-): Promise<ScoutMemory | null> {
+): Promise<ApexMemory | null> {
   const sets: string[] = []
   const values: unknown[] = []
   let idx = 3

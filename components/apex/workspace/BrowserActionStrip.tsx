@@ -7,17 +7,17 @@
  * command bar and the workspace. Appears and disappears automatically.
  *
  * Three states:
- *   running      — "Scout prepared autofill…"    + dismiss ×
- *   pending      — "Scout wants to upload resume"  + Allow + Cancel
+ *   running      — "Apex prepared autofill…"    + dismiss ×
+ *   pending      — "Apex wants to upload resume"  + Allow + Cancel
  *   blocked/fail — "Could not complete — reason"   + dismiss ×
  */
 
 import { AlertTriangle, Check, CheckCircle2, Loader2, Shield, X } from "lucide-react"
 import { cn } from "@/lib/utils"
-import type { ScoutBrowserActionEvent } from "@/lib/scout/browser-operator/types"
+import type { ApexBrowserActionEvent } from "@/lib/apex/browser-operator/types"
 
 type Props = {
-  action:   ScoutBrowserActionEvent
+  action:   ApexBrowserActionEvent
   onApprove?: (id: string) => void
   onCancel:   (id: string) => void
   onDismiss:  (id: string) => void
@@ -50,7 +50,7 @@ export function BrowserActionStrip({ action, onApprove, onCancel, onDismiss }: P
 
   const iconCls = cn(
     "h-3.5 w-3.5 flex-shrink-0",
-    isRunning   ? "animate-spin text-[#FF5C18]" :
+    isRunning   ? "animate-spin text-[#6366F1]" :
     isPending   ? "text-amber-500" :
     isCompleted ? "text-emerald-500" :
                   "text-red-500",
@@ -69,7 +69,7 @@ export function BrowserActionStrip({ action, onApprove, onCancel, onDismiss }: P
   return (
     <div className={stripCls}>
       <Icon className={iconCls} />
-      <p className={textCls}>{summary ?? "Scout is preparing a browser action…"}</p>
+      <p className={textCls}>{summary ?? "Apex is preparing a browser action…"}</p>
 
       <div className="flex flex-shrink-0 items-center gap-1.5">
         {/* Pending approval: Allow + Cancel */}

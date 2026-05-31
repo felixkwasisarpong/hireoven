@@ -1,7 +1,7 @@
 import type { ReactNode } from "react"
 
 /**
- * Render a string with the small subset of inline markdown Scout actually uses:
+ * Render a string with the small subset of inline markdown Apex actually uses:
  *
  *   **bold**         → <strong>
  *   *italic* / _italic_ → <em>
@@ -11,7 +11,7 @@ import type { ReactNode } from "react"
  * Everything else is rendered as plain text. Newlines are preserved by the
  * caller via `whitespace-pre-wrap` on the surrounding element.
  *
- * This is intentionally tiny and dependency-free — Scout output should stay
+ * This is intentionally tiny and dependency-free — Apex output should stay
  * legible if the regex misses an edge case.
  */
 export function renderInlineMarkdown(text: string): ReactNode[] {

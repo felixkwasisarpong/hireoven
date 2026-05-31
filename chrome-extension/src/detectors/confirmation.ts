@@ -3,7 +3,7 @@
  *
  * Runs after the user submits an application manually. Detects whether the
  * current page is a "thanks for applying" / submitted-successfully screen so
- * the Scout Bar can prompt the user to save proof.
+ * the Apex Bar can prompt the user to save proof.
  *
  * Pure detection — never submits, never mutates. Safe to call on every URL
  * change or DOM tick.

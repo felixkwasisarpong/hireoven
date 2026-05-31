@@ -1,6 +1,6 @@
 "use client"
 
-const EXT_KEY = "hireoven:scout:ext-promo-dismissed:v1"
+const EXT_KEY = "hireoven:apex:ext-promo-dismissed:v1"
 
 // ── Extension promo ───────────────────────────────────────────────────────────
 

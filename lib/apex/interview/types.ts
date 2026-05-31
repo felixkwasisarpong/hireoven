@@ -1,8 +1,8 @@
 /**
- * Scout Interview Copilot — Types V1
+ * Apex Interview Copilot — Types V1
  *
  * Models a structured interview preparation session. The session is created
- * when Scout generates interview prep and persists in localStorage so the
+ * when Apex generates interview prep and persists in localStorage so the
  * user can return to it.
  *
  * Safety contract:
@@ -14,7 +14,7 @@
 
 // ── Interview session ─────────────────────────────────────────────────────────
 
-export type ScoutInterviewType =
+export type ApexInterviewType =
   | "recruiter_screen"    // phone/recruiter screen
   | "technical"           // coding / domain technical
   | "system_design"       // architecture / design round
@@ -22,9 +22,9 @@ export type ScoutInterviewType =
   | "manager"             // hiring manager / cultural fit
   | "onsite"              // full onsite / interview loop
 
-export type ScoutInterviewSessionStatus = "planned" | "active" | "completed"
+export type ApexInterviewSessionStatus = "planned" | "active" | "completed"
 
-export type ScoutInterviewSession = {
+export type ApexInterviewSession = {
   id:          string
   companyId?:  string
   jobId?:      string
@@ -32,14 +32,14 @@ export type ScoutInterviewSession = {
   jobTitle?:   string
 
   /** Interview round type — detected from user message or workspace_directive payload */
-  type?:       ScoutInterviewType
+  type?:       ApexInterviewType
 
-  status:      ScoutInterviewSessionStatus
+  status:      ApexInterviewSessionStatus
 
-  /** Core prep themes Scout surfaced */
+  /** Core prep themes Apex surfaced */
   focusAreas?: string[]
-  /** Categorised practice questions derived from ScoutInterviewPrep */
-  generatedQuestions?: ScoutInterviewQuestion[]
+  /** Categorised practice questions derived from ApexInterviewPrep */
+  generatedQuestions?: ApexInterviewQuestion[]
 
   createdAt:   string
   activeAt?:   string
@@ -48,16 +48,16 @@ export type ScoutInterviewSession = {
 
 // ── Interview question ────────────────────────────────────────────────────────
 
-export type ScoutInterviewQuestionCategory =
+export type ApexInterviewQuestionCategory =
   | "behavioral"      // STAR-format situational questions
   | "technical"       // domain/coding questions
   | "system_design"   // architecture / scale questions
   | "resume"          // experience deep-dives
   | "company"         // company-specific / motivation
 
-export type ScoutInterviewQuestion = {
+export type ApexInterviewQuestion = {
   id:             string
-  category:       ScoutInterviewQuestionCategory
+  category:       ApexInterviewQuestionCategory
   question:       string
   /** 1–3 coaching hints (e.g. STAR prompt, what to emphasise) */
   hints?:         string[]
@@ -68,7 +68,7 @@ export type ScoutInterviewQuestion = {
 // ── Category metadata (for UI display) ───────────────────────────────────────
 
 export const QUESTION_CATEGORY_META: Record<
-  ScoutInterviewQuestionCategory,
+  ApexInterviewQuestionCategory,
   { label: string; accent: string; bg: string }
 > = {
   behavioral:    { label: "Behavioral",    accent: "text-violet-700",  bg: "bg-violet-50 border-violet-100"  },
@@ -78,7 +78,7 @@ export const QUESTION_CATEGORY_META: Record<
   company:       { label: "Company",       accent: "text-amber-700",   bg: "bg-amber-50 border-amber-100"    },
 }
 
-export const INTERVIEW_TYPE_LABELS: Record<ScoutInterviewType, string> = {
+export const INTERVIEW_TYPE_LABELS: Record<ApexInterviewType, string> = {
   recruiter_screen: "Recruiter Screen",
   technical:        "Technical",
   system_design:    "System Design",

@@ -1,15 +1,15 @@
 /**
- * Scout Pinned Context — V1
+ * Apex Pinned Context — V1
  *
- * Persists the active browser context (job, company, ATS) across Scout tab
+ * Persists the active browser context (job, company, ATS) across Apex tab
  * navigations using sessionStorage. This survives page refreshes within the
  * same session but not browser restarts — intentionally lightweight.
  *
- * Written by ScoutWorkspaceShell whenever browserContext changes.
+ * Written by ApexWorkspaceShell whenever browserContext changes.
  * Read by the workflow engine and ContextRail to pre-seed job context.
  */
 
-const KEY = "hireoven:scout-pinned-context:v1"
+const KEY = "hireoven:apex-pinned-context:v1"
 const MAX_AGE_MS = 4 * 60 * 60 * 1000 // 4 hours
 
 export type PinnedBrowserContext = {

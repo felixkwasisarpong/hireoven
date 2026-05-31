@@ -13,7 +13,7 @@ import {
   XCircle,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { BULK_FAIL_LABELS, type BulkJobItem } from "@/lib/scout/bulk-application/types"
+import { BULK_FAIL_LABELS, type BulkJobItem } from "@/lib/apex/bulk-application/types"
 
 const STATUS_CONFIG = {
   pending:      { label: "Queued",      icon: Circle,       color: "text-slate-400" },

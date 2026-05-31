@@ -1,12 +1,12 @@
 /**
- * POST /api/scout/outcomes/record
+ * POST /api/apex/outcomes/record
  *
- * Records a typed ScoutOutcome event to the scout_outcomes table.
+ * Records a typed ApexOutcome event to the scout_outcomes table.
  * Also updates the linked job_application status when the outcome implies
  * a status change (e.g., interview_received → status = "interview").
  *
  * Called by:
- *   - ScoutOutcomePicker when the user taps an outcome button
+ *   - ApexOutcomePicker when the user taps an outcome button
  *   - The browser extension when "Mark submitted" is clicked
  *   - Workflow engine when a workflow is abandoned
  *
@@ -18,28 +18,28 @@ import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { randomUUID } from "crypto"
-import type { ScoutOutcomeType, ScoutOutcomeMeta } from "@/lib/scout/outcomes/types"
-import { OUTCOME_TYPE_TO_APP_OUTCOME } from "@/lib/scout/outcomes/types"
-import { inferRoleCategory, inferSector, inferWorkMode } from "@/lib/scout/outcomes/categorizers"
+import type { ApexOutcomeType, ApexOutcomeMeta } from "@/lib/apex/outcomes/types"
+import { OUTCOME_TYPE_TO_APP_OUTCOME } from "@/lib/apex/outcomes/types"
+import { inferRoleCategory, inferSector, inferWorkMode } from "@/lib/apex/outcomes/categorizers"
 
 export const runtime = "nodejs"
 
 type Body = {
-  type:              ScoutOutcomeType
+  type:              ApexOutcomeType
   applicationId?:    string | null
   relatedJobId?:     string | null
   relatedCompanyId?: string | null
   source?:           "manual" | "application_status" | "extension" | "workflow"
 }
 
-const VALID_OUTCOME_TYPES = new Set<ScoutOutcomeType>([
+const VALID_OUTCOME_TYPES = new Set<ApexOutcomeType>([
   "application_sent", "application_reviewed", "recruiter_reply",
   "interview_received", "interview_passed", "offer_received",
   "offer_accepted", "application_rejected", "workflow_abandoned",
 ])
 
 // Which outcome types justify bumping the application status
-const STATUS_UPDATE_TYPES = new Set<ScoutOutcomeType>([
+const STATUS_UPDATE_TYPES = new Set<ApexOutcomeType>([
   "recruiter_reply", "interview_received", "interview_passed",
   "offer_received", "offer_accepted", "application_rejected",
 ])
@@ -78,7 +78,7 @@ export async function POST(request: Request) {
   }
 
   // ── Derive metadata from application / job record ─────────────────────────
-  let meta: ScoutOutcomeMeta = {}
+  let meta: ApexOutcomeMeta = {}
   let jobId = body.relatedJobId ?? null
   let companyId = body.relatedCompanyId ?? null
 
@@ -116,7 +116,9 @@ export async function POST(request: Request) {
   }
 
   // ── Insert outcome event ──────────────────────────────────────────────────
-  await pool.query(
+  // Outcome recording is non-critical analytics — never 500 the caller if the
+  // table/columns are missing or the DB hiccups. Degrade to a soft response.
+  const insertResult = await pool.query(
     `INSERT INTO scout_outcomes
        (id, user_id, type, application_id, related_job_id, related_company_id,
         role_category, sector, sponsorship_related, work_mode, source, created_at)
@@ -128,10 +130,15 @@ export async function POST(request: Request) {
       meta.sponsorshipRelated ?? false, meta.workMode ?? null,
       source, now,
     ],
-  ).catch((err) => {
-    console.error("[scout/outcomes/record] insert failed", err)
-    throw err
+  ).then(() => ({ ok: true }))
+   .catch((err) => {
+    console.error("[apex/outcomes/record] insert failed", err)
+    return { ok: false, error: err instanceof Error ? err.message : "insert failed" }
   })
+
+  if (!insertResult.ok) {
+    return NextResponse.json({ ok: false, recorded: false, reason: insertResult.error }, { status: 200 })
+  }
 
   // ── Optionally advance application status ─────────────────────────────────
   if (body.applicationId && STATUS_UPDATE_TYPES.has(body.type)) {
@@ -180,7 +187,7 @@ export async function POST(request: Request) {
     }
   }
 
-  console.log("[scout/outcomes/record]", { userId: user.id, type: body.type, appId: body.applicationId })
+  console.log("[apex/outcomes/record]", { userId: user.id, type: body.type, appId: body.applicationId })
 
   return NextResponse.json({ ok: true, duplicate: false })
 }

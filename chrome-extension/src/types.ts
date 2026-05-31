@@ -1,3 +1,7 @@
+import type { ScannedConnection as _ScannedConnection } from "./apex-connection-scanner"
+export type { ScannedConnection } from "./apex-connection-scanner"
+type ScannedConnection = _ScannedConnection
+
 // ── ATS / Page detection ──────────────────────────────────────────────────────
 
 export type ATSProvider =
@@ -103,7 +107,9 @@ export type ContentMessageType =
   | "DETECT_FORM_FIELDS"
   | "FILL_FORM_FIELDS"
   | "INJECT_RESUME_FILE"
-  | "EXECUTE_SCOUT_COMMAND"
+  | "EXECUTE_APEX_COMMAND"
+  | "SCRAPE_LINKEDIN_CONNECTIONS"
+  | "PUSH_SCAN_RESULT"
 
 export interface DetectPageMessage { type: "DETECT_PAGE" }
 export interface ExtractJobMessage { type: "EXTRACT_JOB" }
@@ -123,13 +129,26 @@ export interface InjectResumeFileContentMessage {
   filename: string
 }
 
+export interface ScrapeLinkedInConnectionsMessage {
+  type: "SCRAPE_LINKEDIN_CONNECTIONS"
+}
+
+export interface PushScanResultMessage {
+  type: "PUSH_SCAN_RESULT"
+  ok: boolean
+  connections?: ScannedConnection[]
+  error?: string
+}
+
 export type ContentMessage =
   | DetectPageMessage
   | ExtractJobMessage
   | DetectFormFieldsMessage
   | FillFormFieldsMessage
   | InjectResumeFileContentMessage
-  | ExecuteScoutCommandMessage
+  | ExecuteApexCommandMessage
+  | ScrapeLinkedInConnectionsMessage
+  | PushScanResultMessage
 
 // Safe profile subset the extension receives
 export interface ExtensionSafeProfile {
@@ -192,7 +211,7 @@ export type ContentResponseType =
   | "FORM_FIELDS_DETECTED"
   | "FORM_FILLED"
   | "INJECT_RESUME_FILE_RESULT"
-  | "SCOUT_COMMAND_EXECUTED"
+  | "APEX_COMMAND_EXECUTED"
   | "ERROR"
 
 export interface PageDetectedResponse {
@@ -217,8 +236,8 @@ export interface FormFilledResponse {
   skippedCount: number
 }
 
-export interface ScoutCommandExecutedResponse {
-  type: "SCOUT_COMMAND_EXECUTED"
+export interface ApexCommandExecutedResponse {
+  type: "APEX_COMMAND_EXECUTED"
   accepted: boolean
   message?: string
 }
@@ -233,7 +252,7 @@ export type ContentResponse =
   | JobExtractedResponse
   | FormFieldsDetectedResponse
   | FormFilledResponse
-  | ScoutCommandExecutedResponse
+  | ApexCommandExecutedResponse
   | InjectResumeFileResult
   | ErrorResponse
 
@@ -250,11 +269,11 @@ export type BackgroundMessageType =
   | "APPROVE_TAILORED_RESUME"
   | "GENERATE_COVER_LETTER"
   | "FILL_COVER_LETTER"
-  | "GET_SCOUT_OVERLAY"
+  | "GET_APEX_OVERLAY"
   | "LIST_RESUMES"
   | "GET_WORKFLOW_STATE"
   | "GET_ACTIVE_CONTEXT"
-  | "RELAY_SCOUT_COMMAND"
+  | "RELAY_APEX_COMMAND"
   | "QUEUE_GET_STATE"
   | "QUEUE_ADD_JOB"
   | "QUEUE_SKIP_JOB"
@@ -270,6 +289,7 @@ export type BackgroundMessageType =
   | "SYNC_LINKEDIN_BRAND_PROFILE"
   | "GET_STORED_LINKEDIN_URL"
   | "AGENT_APPLICATION_SUBMITTED"
+  | "SCAN_LINKEDIN_CONNECTIONS"
 
 export interface ExtensionResumeSummary {
   id: string
@@ -334,8 +354,8 @@ export interface FillCoverLetterMessage {
   text: string
 }
 
-export interface GetScoutOverlayMessage {
-  type: "GET_SCOUT_OVERLAY"
+export interface GetApexOverlayMessage {
+  type: "GET_APEX_OVERLAY"
   jobId: string
 }
 
@@ -348,7 +368,7 @@ export interface ListResumesResult {
   resumes: ExtensionResumeSummary[]
 }
 
-export type ScoutOverlayInsightsPayload = {
+export type ApexOverlayInsightsPayload = {
   ok: true
   matchPercent: number | null
   sponsorshipLikely: boolean | null
@@ -360,9 +380,9 @@ export type ScoutOverlayInsightsPayload = {
   jobIntelligenceStale: boolean
 }
 
-export type ScoutOverlayResult =
-  | ({ type: "SCOUT_OVERLAY_RESULT" } & ScoutOverlayInsightsPayload)
-  | { type: "SCOUT_OVERLAY_RESULT"; ok: false; error?: string; message?: string }
+export type ApexOverlayResult =
+  | ({ type: "APEX_OVERLAY_RESULT" } & ApexOverlayInsightsPayload)
+  | { type: "APEX_OVERLAY_RESULT"; ok: false; error?: string; message?: string }
 
 // ── Apply Queue ────────────────────────────────────────────────────────────────
 
@@ -467,11 +487,11 @@ export type BackgroundMessage =
   | ApproveTailoredResumeMessage
   | GenerateCoverLetterMessage
   | FillCoverLetterMessage
-  | GetScoutOverlayMessage
+  | GetApexOverlayMessage
   | ListResumesMessage
   | GetWorkflowStateMessage
   | GetActiveContextMessage
-  | RelayScoutCommandMessage
+  | RelayApexCommandMessage
   | QueueGetStateMessage
   | QueueAddJobMessage
   | QueueSkipJobMessage
@@ -487,6 +507,20 @@ export type BackgroundMessage =
   | SyncLinkedInBrandProfileMessage
   | GetStoredLinkedInUrlMessage
   | AgentApplicationSubmittedMessage
+  | ScanLinkedInConnectionsMessage
+
+export interface ScanLinkedInConnectionsMessage {
+  type: "SCAN_LINKEDIN_CONNECTIONS"
+  companyName: string
+  jobTitle?: string
+}
+
+export interface ScanLinkedInConnectionsResult {
+  type: "SCAN_LINKEDIN_CONNECTIONS_RESULT"
+  ok: boolean
+  connections?: import("./apex-connection-scanner").ScannedConnection[]
+  error?: string
+}
 
 export interface GetStoredLinkedInUrlMessage {
   type: "GET_STORED_LINKEDIN_URL"
@@ -691,11 +725,11 @@ export type BackgroundResponse =
   | TailorApproveResult
   | CoverLetterResult
   | FillCoverLetterResult
-  | ScoutOverlayResult
+  | ApexOverlayResult
   | ListResumesResult
   | WorkflowStateResult
   | ActiveContextResult
-  | RelayScoutCommandResult
+  | RelayApexCommandResult
   | QueueStateResult
   | QueueAddResult
   | QueueActionResult
@@ -704,6 +738,7 @@ export type BackgroundResponse =
   | InjectResumeFileInTabResult
   | StoredLinkedInUrlResult
   | AgentApplicationSubmittedAck
+  | ScanLinkedInConnectionsResult
   | BackgroundError
 
 export interface StoredLinkedInUrlResult {
@@ -713,7 +748,7 @@ export interface StoredLinkedInUrlResult {
 // ── Active browser context ────────────────────────────────────────────────────
 //
 // Built from live page detection in the background service worker and pushed
-// to hireoven.com tabs so Scout can adapt its UI to the user's active tab.
+// to hireoven.com tabs so Apex can adapt its UI to the user's active tab.
 
 export type ActiveBrowserPageType =
   | "search_results"
@@ -770,36 +805,36 @@ export interface ReviewSubmittedMessage {
   queueItemId?: string
 }
 
-/** Scout commands that hireoven.com page can send to the extension */
-export type ScoutExtensionCommandType =
+/** Apex commands that hireoven.com page can send to the extension */
+export type ApexExtensionCommandType =
   | "OPEN_AUTOFILL"
   | "START_TAILOR"
   | "START_COMPARE"
   | "START_WORKFLOW"
   | "AGENT_AUTOFILL"
 
-/** Content script on hireoven.com → background: relay a Scout UI command to the active job tab */
-export interface RelayScoutCommandMessage {
-  type: "RELAY_SCOUT_COMMAND"
-  command: ScoutExtensionCommandType
+/** Content script on hireoven.com → background: relay a Apex UI command to the active job tab */
+export interface RelayApexCommandMessage {
+  type: "RELAY_APEX_COMMAND"
+  command: ApexExtensionCommandType
   payload?: Record<string, unknown>
 }
 
-/** Background → content script on job site: execute a Scout command */
-export interface ExecuteScoutCommandMessage {
-  type: "EXECUTE_SCOUT_COMMAND"
-  command: ScoutExtensionCommandType
+/** Background → content script on job site: execute a Apex command */
+export interface ExecuteApexCommandMessage {
+  type: "EXECUTE_APEX_COMMAND"
+  command: ApexExtensionCommandType
   payload?: Record<string, unknown>
 }
 
-export interface RelayScoutCommandResult {
-  type: "RELAY_SCOUT_COMMAND_RESULT"
+export interface RelayApexCommandResult {
+  type: "RELAY_APEX_COMMAND_RESULT"
   delivered: boolean
 }
 
 // ── Workflow extension state ──────────────────────────────────────────────────
 //
-// The extension content script can POST this state to the Scout dashboard
+// The extension content script can POST this state to the Apex dashboard
 // via window.postMessage when it detects a relevant page change.
 // The dashboard listens for "hireoven:extension-page-state" messages and
 // can update the active workflow step status accordingly.

@@ -1,5 +1,5 @@
 /**
- * POST /api/scout/companies/enrich
+ * POST /api/apex/companies/enrich
  *
  * Glassdoor handler streams company-level signals (rating, review count,
  * pros/cons phrases, role-specific salary range, etc.) here. We attach the
@@ -25,7 +25,7 @@ export const runtime = "nodejs"
 interface EnrichBody {
   source: "glassdoor" | string
   companyName: string
-  /** True if the user explicitly clicked "Save company to Scout"; false for auto-enrich. */
+  /** True if the user explicitly clicked "Save company to Apex"; false for auto-enrich. */
   explicit?: boolean
   signals: Record<string, unknown>
 }
@@ -62,7 +62,7 @@ export async function POST(request: Request) {
   let companyId = existing?.rows[0]?.id ?? null
   if (!companyId) {
     const slug = companyName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")
-    const placeholderDomain = `${slug || "unknown"}.scout-enrichment-placeholder`
+    const placeholderDomain = `${slug || "unknown"}.apex-enrichment-placeholder`
     const created = await pool
       .query<{ id: string }>(
         `INSERT INTO companies (name, is_active, ats_type, domain)
@@ -98,7 +98,7 @@ export async function POST(request: Request) {
       return extensionError(request, 500, "company enrichment update failed", { headers: corsHeaders })
     }
   } catch (error) {
-    console.error("[scout/companies/enrich] update failed", {
+    console.error("[apex/companies/enrich] update failed", {
       companyId,
       source: body.source,
       error: error instanceof Error ? error.message : String(error),
@@ -153,7 +153,7 @@ export async function POST(request: Request) {
          WHERE chs.company_id = u.company_id`,
         [companyId, rating],
       ).catch((error) => {
-        console.error("[scout/companies/enrich] health score update failed", {
+        console.error("[apex/companies/enrich] health score update failed", {
           companyId,
           rating,
           error: error instanceof Error ? error.message : String(error),

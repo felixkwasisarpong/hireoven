@@ -1,17 +1,17 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import type { ScoutActiveWorkflow, ScoutActiveWorkflowStep, ScoutWorkflowType } from "./types"
+import type { ApexActiveWorkflow, ApexActiveWorkflowStep, ApexWorkflowType } from "./types"
 import { preparePlan } from "./definitions"
 import { clearActiveWorkflow, readActiveWorkflow, writeActiveWorkflow } from "./store"
 
 // ── State machine helpers ─────────────────────────────────────────────────────
 
 function patchStep(
-  workflow: ScoutActiveWorkflow,
+  workflow: ApexActiveWorkflow,
   stepId: string,
-  patch: Partial<ScoutActiveWorkflowStep>
-): ScoutActiveWorkflow {
+  patch: Partial<ApexActiveWorkflowStep>
+): ApexActiveWorkflow {
   return {
     ...workflow,
     steps: workflow.steps.map((s) => (s.id === stepId ? { ...s, ...patch } : s)),
@@ -19,21 +19,21 @@ function patchStep(
 }
 
 function nextPendingStep(
-  steps: ScoutActiveWorkflowStep[],
+  steps: ApexActiveWorkflowStep[],
   afterId: string
-): ScoutActiveWorkflowStep | null {
+): ApexActiveWorkflowStep | null {
   const idx = steps.findIndex((s) => s.id === afterId)
   if (idx === -1) return null
   return steps.slice(idx + 1).find((s) => s.status === "pending") ?? null
 }
 
-function allSettled(steps: ScoutActiveWorkflowStep[]): boolean {
+function allSettled(steps: ApexActiveWorkflowStep[]): boolean {
   return steps.every(
     (s) => s.status === "completed" || s.status === "skipped" || s.status === "failed"
   )
 }
 
-function advance(workflow: ScoutActiveWorkflow, completedId: string): ScoutActiveWorkflow {
+function advance(workflow: ApexActiveWorkflow, completedId: string): ApexActiveWorkflow {
   const next = nextPendingStep(workflow.steps, completedId)
   if (!next) {
     const settled = allSettled(workflow.steps)
@@ -49,8 +49,8 @@ function advance(workflow: ScoutActiveWorkflow, completedId: string): ScoutActiv
 // ── Public API ────────────────────────────────────────────────────────────────
 
 export type WorkflowEngineActions = {
-  activeWorkflow: ScoutActiveWorkflow | null
-  startWorkflow: (type: ScoutWorkflowType | string, payload?: Record<string, unknown>) => ScoutActiveWorkflow
+  activeWorkflow: ApexActiveWorkflow | null
+  startWorkflow: (type: ApexWorkflowType | string, payload?: Record<string, unknown>) => ApexActiveWorkflow
   continueStep: (stepId: string) => void
   skipStep: (stepId: string) => void
   failStep: (stepId: string, reason?: string) => void
@@ -62,7 +62,7 @@ export type WorkflowEngineActions = {
 }
 
 export function useWorkflowEngine(): WorkflowEngineActions {
-  const [activeWorkflow, setActiveWorkflow] = useState<ScoutActiveWorkflow | null>(null)
+  const [activeWorkflow, setActiveWorkflow] = useState<ApexActiveWorkflow | null>(null)
   const [isExpanded, setExpanded] = useState(true)
   const hasMounted = useRef(false)
 
@@ -88,7 +88,7 @@ export function useWorkflowEngine(): WorkflowEngineActions {
   }, [activeWorkflow])
 
   const startWorkflow = useCallback(
-    (type: ScoutWorkflowType | string, payload?: Record<string, unknown>): ScoutActiveWorkflow => {
+    (type: ApexWorkflowType | string, payload?: Record<string, unknown>): ApexActiveWorkflow => {
       const workflow = preparePlan(type, payload)
       setActiveWorkflow(workflow)
       setExpanded(true)

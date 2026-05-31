@@ -3,8 +3,8 @@
  * No sensitive outcome data stored here — only user preferences and flags.
  */
 
-const KEY_DISABLED = "hireoven:scout-outcome-learning:disabled:v1"
-const KEY_DISMISSED = "hireoven:scout-feedback-dismissed:v1"
+const KEY_DISABLED = "hireoven:apex-outcome-learning:disabled:v1"
+const KEY_DISMISSED = "hireoven:apex-feedback-dismissed:v1"
 const MAX_DISMISSED = 50
 
 export function isOutcomeLearningDisabled(): boolean {

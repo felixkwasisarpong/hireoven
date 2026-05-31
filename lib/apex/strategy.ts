@@ -1,9 +1,9 @@
 import { getPostgresPool } from "@/lib/postgres/server"
 import type {
-  ScoutStrategyBoard,
-  ScoutStrategyMove,
-  ScoutStrategyRisk,
-  ScoutWeakSignal,
+  ApexStrategyBoard,
+  ApexStrategyMove,
+  ApexStrategyRisk,
+  ApexWeakSignal,
 } from "./types"
 
 type ProfileSummary = {
@@ -47,7 +47,7 @@ type CountRow = {
   count: number
 }
 
-export async function getScoutStrategyBoard(userId: string): Promise<ScoutStrategyBoard> {
+export async function getApexStrategyBoard(userId: string): Promise<ApexStrategyBoard> {
   const pool = getPostgresPool()
 
   const [
@@ -179,12 +179,12 @@ export async function getScoutStrategyBoard(userId: string): Promise<ScoutStrate
   const lowMatchSignal =
     sampledScores >= 4 && lowScores >= Math.max(2, Math.ceil(sampledScores * 0.5))
 
-  const risks: ScoutStrategyRisk[] = []
+  const risks: ApexStrategyRisk[] = []
   if (!hasResumeContext) {
     risks.push({
       id: "missing-resume-context",
       title: "Missing resume context",
-      description: "Add resume summary and core skills so Scout can personalize guidance better.",
+      description: "Add resume summary and core skills so Apex can personalize guidance better.",
       severity: "high",
     })
   }
@@ -300,8 +300,8 @@ function buildNextMoves(input: {
   preferredRole: string | null
   sponsorshipNeeds: boolean
   activeAlerts: number
-}): ScoutStrategyMove[] {
-  const moves: ScoutStrategyMove[] = []
+}): ApexStrategyMove[] {
+  const moves: ApexStrategyMove[] = []
 
   if (input.topSavedJob) {
     moves.push({
@@ -395,8 +395,8 @@ function buildWeakSignals(input: {
   activeApplications: number
   sampledScores: number
   averageMatchScore: number | null
-}): ScoutWeakSignal[] {
-  const signals: ScoutWeakSignal[] = []
+}): ApexWeakSignal[] {
+  const signals: ApexWeakSignal[] = []
 
   // ── Hard warnings ────────────────────────────────────────────────────────────
 
@@ -405,7 +405,7 @@ function buildWeakSignals(input: {
       id: "missing-resume-context",
       title: "No resume context",
       description:
-        "Scout can't personalize scoring or suggestions without a parsed resume. Upload and complete your primary resume.",
+        "Apex can't personalize scoring or suggestions without a parsed resume. Upload and complete your primary resume.",
       severity: "warning",
     })
   }
@@ -447,7 +447,7 @@ function buildWeakSignals(input: {
       id: "empty-preferences",
       title: "Role and location preferences missing",
       description:
-        "Set desired roles and locations in your profile so Scout can rank and filter more precisely.",
+        "Set desired roles and locations in your profile so Apex can rank and filter more precisely.",
       severity: "info",
     })
   }

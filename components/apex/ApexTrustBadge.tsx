@@ -1,12 +1,12 @@
 "use client"
 
 /**
- * ScoutTrustBadge — persistent, subtle safety copy.
+ * ApexTrustBadge — persistent, subtle safety copy.
  *
- * Reinforces Scout's safety model without being intrusive.
+ * Reinforces Apex's safety model without being intrusive.
  * Appears below action tiles in idle mode and near sensitive actions.
  *
- * Core message: "Scout prepares. You approve."
+ * Core message: "Apex prepares. You approve."
  */
 
 import { Shield } from "lucide-react"
@@ -20,7 +20,7 @@ type Props = {
   className?: string
 }
 
-const DEFAULT_MESSAGE = "Scout prepares. You approve. Nothing is submitted automatically."
+const DEFAULT_MESSAGE = "Apex prepares. You approve. Nothing is submitted automatically."
 
 const SAFETY_POINTS = [
   "No applications are submitted automatically",
@@ -28,7 +28,7 @@ const SAFETY_POINTS = [
   "You approve every autofill before it runs",
 ]
 
-export function ScoutTrustBadge({ variant = "inline", message, className }: Props) {
+export function ApexTrustBadge({ variant = "inline", message, className }: Props) {
   if (variant === "pill") {
     return (
       <span className={cn(
@@ -36,7 +36,7 @@ export function ScoutTrustBadge({ variant = "inline", message, className }: Prop
         className,
       )}>
         <Shield className="h-3 w-3 text-slate-400" />
-        {message ?? "Scout prepares. You approve."}
+        {message ?? "Apex prepares. You approve."}
       </span>
     )
   }

@@ -116,15 +116,15 @@ export class HandshakeHandler extends AggregatorHandler {
       if (suppressed) return
       const isInterest = job.applyMode.kind === "express_interest"
       const copy = isInterest
-        ? "Track interest in Scout"
+        ? "Track interest in Apex"
         : this.userMajor
-        ? `Apply with Scout — tailored for ${this.userMajor}`
-        : "Apply with Scout"
+        ? `Apply with Apex — tailored for ${this.userMajor}`
+        : "Apply with Apex"
 
       const pill = createPill({
         variant: "green",
         copy,
-        testId: "scout-pill-handshake",
+        testId: "apex-pill-handshake",
         dismissible: true,
         onDismiss: () => void recordDismiss(this.site),
         onClick: (event) => {
@@ -133,7 +133,7 @@ export class HandshakeHandler extends AggregatorHandler {
           if (isInterest) {
             chrome.runtime.sendMessage(
               {
-                type: "SCOUT_TRACK_INTEREST",
+                type: "APEX_TRACK_INTEREST",
                 site: this.site,
                 jobId: job.sourceId,
                 scrapedJob: job,
@@ -146,7 +146,7 @@ export class HandshakeHandler extends AggregatorHandler {
             return
           }
           chrome.runtime.sendMessage(
-            { type: "SCOUT_OPEN_APPLY_FLOW", site: this.site, jobId: job.sourceId, scrapedJob: job },
+            { type: "APEX_OPEN_APPLY_FLOW", site: this.site, jobId: job.sourceId, scrapedJob: job },
             () => {
               void chrome.runtime.lastError
             },
@@ -246,7 +246,7 @@ export class HandshakeHandler extends AggregatorHandler {
   private requestUserMajor(): void {
     if (this.majorRequested || !chrome.runtime?.id) return
     this.majorRequested = true
-    chrome.runtime.sendMessage({ type: "SCOUT_GET_USER_MAJOR" }, (response) => {
+    chrome.runtime.sendMessage({ type: "APEX_GET_USER_MAJOR" }, (response) => {
       if (chrome.runtime.lastError) return
       const data = response as { major?: string | null } | undefined
       if (data?.major && this.userMajor !== data.major) {
@@ -338,7 +338,7 @@ if (document.readyState === "loading") {
 chrome.runtime?.onMessage.addListener((msg: unknown, _sender, sendResponse) => {
   if (typeof msg !== "object" || msg === null) return false
   const m = msg as Record<string, unknown>
-  if (m.type !== "SCOUT_RUN_DRIVER" || m.driver !== "handshake") return false
+  if (m.type !== "APEX_RUN_DRIVER" || m.driver !== "handshake") return false
 
   const job = m.job as ScrapedJob | undefined
   const prefs = m.prefs as HandshakeApplyPrefs | undefined

@@ -1,8 +1,8 @@
 /**
- * Hireoven Job-Detail Scout Panel — for job-board sites only
+ * Hireoven Job-Detail Apex Panel — for job-board sites only
  * (LinkedIn / Indeed / Glassdoor / Handshake) on `job_board_detail` pages.
  *
- * Dedicated panel because the existing Scout Bar is denylisted on these
+ * Dedicated panel because the existing Apex Bar is denylisted on these
  * sites (extraction reliability + apply-URL hygiene). Renders intelligence
  * read off the extracted job + the analyze backend response. No autofill
  * action — this surface is intentionally read-only intelligence + handoff
@@ -14,7 +14,7 @@
  *   - No autofill UI here. (Autofill is gated separately on ATS forms.)
  */
 
-import { extractJob, type ExtractedJob } from "../extractors/scout-extractor"
+import { extractJob, type ExtractedJob } from "../extractors/apex-extractor"
 import {
   analyzeExtractedJob,
   saveExtractedJob,
@@ -29,8 +29,8 @@ import {
 } from "../detectors/application-form"
 import type { TailorApproveResult, TailorPreviewResult } from "../types"
 
-const HOST_ID = "hireoven-detail-scout"
-const COLLAPSED_KEY = "hireovenDetailScoutCollapsed"
+const HOST_ID = "hireoven-detail-apex"
+const COLLAPSED_KEY = "hireovenDetailApexCollapsed"
 
 let host: HTMLElement | null = null
 let shadow: ShadowRoot | null = null
@@ -212,7 +212,7 @@ const STYLES = `
 
 // ── Lifecycle ────────────────────────────────────────────────────────────────
 
-export async function mountDetailScoutPanel(_site: SupportedSite): Promise<void> {
+export async function mountDetailApexPanel(_site: SupportedSite): Promise<void> {
   const url = window.location.href
   if (host && mountedUrl === url) {
     // Already mounted for this URL — refresh in case DOM changed.
@@ -220,7 +220,7 @@ export async function mountDetailScoutPanel(_site: SupportedSite): Promise<void>
     render()
     return
   }
-  unmountDetailScoutPanel()
+  unmountDetailApexPanel()
 
   try {
     const stored = await chrome.storage.local.get(COLLAPSED_KEY)
@@ -246,7 +246,7 @@ export async function mountDetailScoutPanel(_site: SupportedSite): Promise<void>
   }
   if (!job?.title && !job?.url) {
     // Page didn't extract enough — don't show an empty panel
-    unmountDetailScoutPanel()
+    unmountDetailApexPanel()
     return
   }
 
@@ -271,7 +271,7 @@ export async function mountDetailScoutPanel(_site: SupportedSite): Promise<void>
   void runAnalysis()
 }
 
-export function unmountDetailScoutPanel(): void {
+export function unmountDetailApexPanel(): void {
   if (host) {
     host.remove()
     host = null
@@ -612,7 +612,7 @@ function render(): void {
   root.className = `panel ${collapsed ? "collapsed" : ""}`
   root.innerHTML = `
     <div class="header">
-      <span class="brand"><span class="brand-dot"></span>Hireoven Scout</span>
+      <span class="brand"><span class="brand-dot"></span>Hireoven Apex</span>
       <button class="icon-btn" data-action="collapse" title="${collapsed ? "Expand" : "Collapse"}">${collapsed ? "▾" : "▴"}</button>
     </div>
     <div class="body">

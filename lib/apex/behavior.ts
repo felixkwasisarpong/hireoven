@@ -1,6 +1,6 @@
 import { getPostgresPool } from "@/lib/postgres/server"
 
-export type ScoutBehaviorSignals = {
+export type ApexBehaviorSignals = {
   preferredRoles: string[]
   preferredLocations: string[]
   commonSkills: string[]
@@ -53,9 +53,9 @@ type RecentCountRow = {
 /**
  * Derives lightweight behavioral signals from the user's existing product activity.
  * Uses only existing DB tables — no new schema required.
- * Returns compact signals for personalizing Scout suggestions.
+ * Returns compact signals for personalizing Apex suggestions.
  */
-export async function getScoutBehaviorSignals(userId: string): Promise<ScoutBehaviorSignals> {
+export async function getApexBehaviorSignals(userId: string): Promise<ApexBehaviorSignals> {
   const pool = getPostgresPool()
 
   const [profileRes, resumeRes, appRes, watchlistRes, recentCountRes] = await Promise.all([
@@ -166,7 +166,7 @@ export async function getScoutBehaviorSignals(userId: string): Promise<ScoutBeha
   }
 
   // ── Sponsorship sensitivity ──
-  let sponsorshipSensitivity: ScoutBehaviorSignals["sponsorshipSensitivity"] = "unknown"
+  let sponsorshipSensitivity: ApexBehaviorSignals["sponsorshipSensitivity"] = "unknown"
   if (profile) {
     if (profile.needs_sponsorship) {
       sponsorshipSensitivity = "high"
@@ -181,7 +181,7 @@ export async function getScoutBehaviorSignals(userId: string): Promise<ScoutBeha
   }
 
   // ── Application velocity (last 14 days) ──
-  let recentApplicationVelocity: ScoutBehaviorSignals["recentApplicationVelocity"] = "none"
+  let recentApplicationVelocity: ApexBehaviorSignals["recentApplicationVelocity"] = "none"
   if (recentCount >= 4) {
     recentApplicationVelocity = "healthy"
   } else if (recentCount >= 1) {
@@ -229,7 +229,7 @@ export async function getScoutBehaviorSignals(userId: string): Promise<ScoutBeha
  * Formats behavior signals into a compact string for inclusion in the Claude prompt.
  * Intentionally vague — signals are hints, not facts.
  */
-export function formatBehaviorSignalsForClaude(signals: ScoutBehaviorSignals): string {
+export function formatBehaviorSignalsForClaude(signals: ApexBehaviorSignals): string {
   const lines: string[] = []
 
   if (signals.preferredRoles.length > 0) {

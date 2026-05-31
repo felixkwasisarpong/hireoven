@@ -1,8 +1,8 @@
 /**
- * Scout Multi-Agent Architecture — Shared Types V1
+ * Apex Multi-Agent Architecture — Shared Types V1
  *
  * Agents are deterministic computation units. They:
- *   - receive a structured ScoutExecutionContext
+ *   - receive a structured ApexExecutionContext
  *   - return a structured AgentResult
  *   - NEVER render UI directly
  *   - NEVER make autonomous LLM calls (unless explicitly configured)
@@ -14,12 +14,12 @@
 
 import type { Pool } from "pg"
 import type {
-  ScoutMode,
-  ScoutAction,
-  ScoutWorkspaceDirective,
-  ScoutWorkflowDirective,
-} from "@/lib/scout/types"
-import type { CompareJobContext } from "@/lib/scout/context"
+  ApexMode,
+  ApexAction,
+  ApexWorkspaceDirective,
+  ApexWorkflowDirective,
+} from "@/lib/apex/types"
+import type { CompareJobContext } from "@/lib/apex/context"
 
 // ── Intent (derived from user message + regexes, no LLM needed) ──────────────
 
@@ -37,7 +37,7 @@ export type AgentIntent =
 
 // ── Shared execution context passed to every agent ───────────────────────────
 
-export type ScoutExecutionContext = {
+export type ApexExecutionContext = {
   userId:        string
   message:       string
   detectedIntent: AgentIntent
@@ -49,7 +49,7 @@ export type ScoutExecutionContext = {
   companyId?:    string
   resumeId?:     string
 
-  /** Resolved from getScoutContext() — read-only, agents do not re-fetch */
+  /** Resolved from getApexContext() — read-only, agents do not re-fetch */
   resume?: {
     id:            string
     topSkills:     string[] | null
@@ -100,11 +100,11 @@ export type AgentResult<T = Record<string, unknown>> = {
 
 // ── Base agent interface ──────────────────────────────────────────────────────
 
-export interface ScoutAgent<T = Record<string, unknown>> {
+export interface ApexAgent<T = Record<string, unknown>> {
   readonly id: string
   /** Intents this agent is relevant for (empty = runs for all) */
   readonly relevantIntents: AgentIntent[]
-  run(ctx: ScoutExecutionContext): Promise<AgentResult<T>>
+  run(ctx: ApexExecutionContext): Promise<AgentResult<T>>
 }
 
 // ── Orchestrator result ───────────────────────────────────────────────────────
@@ -135,9 +135,9 @@ export type OrchestratorResult = {
 }
 
 export type OrchestratorEnrichments = {
-  market:    import("@/lib/scout/market-intelligence").MarketSignal[]
-  company:   import("@/lib/scout/company-intel/types").CompanyIntelSummary
+  market:    import("@/lib/apex/market-intelligence").MarketSignal[]
+  company:   import("@/lib/apex/company-intel/types").CompanyIntelSummary
   resume:    { missingKeywords: string[]; matchScore: number | null }
   compare:   CompareJobContext[]
-  opportunity: import("@/lib/scout/opportunity-graph/types").OpportunityRecommendation[]
+  opportunity: import("@/lib/apex/opportunity-graph/types").OpportunityRecommendation[]
 }

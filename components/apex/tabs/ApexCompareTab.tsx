@@ -15,11 +15,11 @@ import {
   Trophy,
 } from "lucide-react"
 
-import { ScoutCompareRenderer } from "@/components/scout/ScoutCompareRenderer"
-import type { ScoutCompareResponse } from "@/lib/scout/types"
+import { ApexCompareRenderer } from "@/components/apex/ApexCompareRenderer"
+import type { ApexCompareResponse } from "@/lib/apex/types"
 
-export type ScoutCompareTabProps = {
-  compareResponse: ScoutCompareResponse | null
+export type ApexCompareTabProps = {
+  compareResponse: ApexCompareResponse | null
   onRunCompareCommand: (message: string) => void
   isLoading?: boolean
   error?: string | null
@@ -35,7 +35,7 @@ const COMPARE_PROMPTS = [
   {
     icon: Target,
     title: "Pick the best role",
-    description: "Ask Scout which job deserves your time first.",
+    description: "Ask Apex which job deserves your time first.",
     chip: "Which job should I apply to first?",
   },
   {
@@ -65,7 +65,7 @@ function CompareEmptyState({
             Compare jobs before you spend time applying
           </h3>
           <p className="mt-2 max-w-xl text-sm leading-6 text-slate-500">
-            Scout can compare jobs side by side using the data Hireoven already has: match score,
+            Apex can compare jobs side by side using the data Hireoven already has: match score,
             company signals, sponsorship context, salary, location, and risk.
           </p>
 
@@ -126,7 +126,7 @@ function CompareResultHeader({
   onRunCompareCommand,
   isLoading,
 }: {
-  compare: ScoutCompareResponse
+  compare: ApexCompareResponse
   onRunCompareCommand: (message: string) => void
   isLoading: boolean
 }) {
@@ -146,7 +146,7 @@ function CompareResultHeader({
           </h3>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
             {compare.summary ||
-              "Scout compared the available jobs using existing Hireoven signals."}
+              "Apex compared the available jobs using existing Hireoven signals."}
           </p>
         </div>
 
@@ -186,12 +186,12 @@ function CompareResultHeader({
   )
 }
 
-export function ScoutCompareTab({
+export function ApexCompareTab({
   compareResponse,
   onRunCompareCommand,
   isLoading = false,
   error = null,
-}: ScoutCompareTabProps) {
+}: ApexCompareTabProps) {
   return (
     <div className="space-y-5">
       {/* Header */}
@@ -209,7 +209,7 @@ export function ScoutCompareTab({
               Compare opportunities
             </h2>
             <p className="mt-1.5 max-w-2xl text-sm leading-6 text-slate-500">
-              Put jobs side by side so Scout can help you choose the best next move before you spend time applying.
+              Put jobs side by side so Apex can help you choose the best next move before you spend time applying.
             </p>
           </div>
 
@@ -261,7 +261,7 @@ export function ScoutCompareTab({
             <Sparkles className="h-6 w-6 animate-pulse text-white" />
           </div>
           <div className="text-center">
-            <p className="text-sm font-semibold text-slate-800">Scout is comparing your jobs…</p>
+            <p className="text-sm font-semibold text-slate-800">Apex is comparing your jobs…</p>
             <p className="mt-0.5 text-xs text-slate-400">
               Reading saved jobs, match scores, and sponsorship signals.
             </p>
@@ -293,7 +293,7 @@ export function ScoutCompareTab({
                 </h3>
               </div>
               <div className="p-5">
-                <ScoutCompareRenderer compare={compareResponse} />
+                <ApexCompareRenderer compare={compareResponse} />
               </div>
             </section>
           </>

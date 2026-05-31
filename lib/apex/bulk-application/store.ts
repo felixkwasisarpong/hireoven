@@ -1,6 +1,6 @@
 import type { BulkApplicationQueue } from "./types"
 
-const KEY = "hireoven:scout-bulk-queue:v1"
+const KEY = "hireoven:apex-bulk-queue:v1"
 
 export function readBulkQueue(): BulkApplicationQueue | null {
   if (typeof window === "undefined") return null

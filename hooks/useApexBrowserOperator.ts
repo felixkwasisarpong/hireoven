@@ -1,7 +1,7 @@
 "use client"
 
 /**
- * Scout Browser Operator Hook — V1
+ * Apex Browser Operator Hook — V1
  *
  * Manages the browser action queue: permission checking, approval gates,
  * dispatch, and timeline recording. All actions are visible and cancellable.
@@ -13,23 +13,23 @@
  */
 
 import { useCallback, useRef, useState } from "react"
-import { checkPermission } from "@/lib/scout/permissions"
-import { dispatchBrowserAction, buildActionSummary, buildApprovalPrompt } from "@/lib/scout/browser-operator/executor"
+import { checkPermission } from "@/lib/apex/permissions"
+import { dispatchBrowserAction, buildActionSummary, buildApprovalPrompt } from "@/lib/apex/browser-operator/executor"
 import {
   BROWSER_ACTION_PERMISSION,
   APPROVAL_REQUIRED_ACTIONS,
-} from "@/lib/scout/browser-operator/types"
+} from "@/lib/apex/browser-operator/types"
 import type {
-  ScoutBrowserAction,
-  ScoutBrowserActionEvent,
-} from "@/lib/scout/browser-operator/types"
-import type { ScoutPermissionState } from "@/lib/scout/permissions"
-import type { ActiveBrowserContext } from "@/lib/scout/browser-context"
+  ApexBrowserAction,
+  ApexBrowserActionEvent,
+} from "@/lib/apex/browser-operator/types"
+import type { ApexPermissionState } from "@/lib/apex/permissions"
+import type { ActiveBrowserContext } from "@/lib/apex/browser-context"
 
 // ── Options ───────────────────────────────────────────────────────────────────
 
 export type UseOperatorOptions = {
-  permissions:         ScoutPermissionState[]
+  permissions:         ApexPermissionState[]
   browserContext:      ActiveBrowserContext | null
   isExtensionConnected: boolean
   onTimelineEvent?:    (event: { type: "browser_action"; title: string; summary?: string; severity?: "info" | "warning" | "error" }) => void
@@ -38,18 +38,18 @@ export type UseOperatorOptions = {
 export type ExecuteOptions = {
   target?:   string
   payload?:  Record<string, unknown>
-  context?:  ScoutBrowserActionEvent["context"]
+  context?:  ApexBrowserActionEvent["context"]
 }
 
 export type UseOperatorResult = {
   /** All actions in this session (newest-first) */
-  events:            ScoutBrowserActionEvent[]
+  events:            ApexBrowserActionEvent[]
   /** Current running or pending-approval action */
-  activeAction:      ScoutBrowserActionEvent | null
+  activeAction:      ApexBrowserActionEvent | null
   /** Actions awaiting user approval */
-  pendingApprovals:  ScoutBrowserActionEvent[]
+  pendingApprovals:  ApexBrowserActionEvent[]
   /** Queue one browser action */
-  execute:           (action: ScoutBrowserAction, opts?: ExecuteOptions) => void
+  execute:           (action: ApexBrowserAction, opts?: ExecuteOptions) => void
   /** Approve a pending action (triggers dispatch) */
   approve:           (actionId: string) => void
   /** Cancel a pending or running action */
@@ -65,18 +65,18 @@ function makeId(): string {
   return `op-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
 }
 
-export function useScoutBrowserOperator({
+export function useApexBrowserOperator({
   permissions,
   browserContext,
   isExtensionConnected,
   onTimelineEvent,
 }: UseOperatorOptions): UseOperatorResult {
-  const [events, setEvents] = useState<ScoutBrowserActionEvent[]>([])
+  const [events, setEvents] = useState<ApexBrowserActionEvent[]>([])
   const timersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
 
   // ── Internal helpers ────────────────────────────────────────────────────────
 
-  const patchEvent = useCallback((id: string, patch: Partial<ScoutBrowserActionEvent>) => {
+  const patchEvent = useCallback((id: string, patch: Partial<ApexBrowserActionEvent>) => {
     setEvents((prev) => prev.map((e) => e.id === id ? { ...e, ...patch } : e))
   }, [])
 
@@ -90,7 +90,7 @@ export function useScoutBrowserOperator({
 
   // ── Dispatch an action (shared by execute and approve) ─────────────────────
 
-  const dispatch = useCallback((event: ScoutBrowserActionEvent) => {
+  const dispatch = useCallback((event: ApexBrowserActionEvent) => {
     const result = dispatchBrowserAction(event.action, event.context ? {
       ...event.context,
       target: event.target,
@@ -125,7 +125,7 @@ export function useScoutBrowserOperator({
 
   // ── Public API ─────────────────────────────────────────────────────────────
 
-  const execute = useCallback((action: ScoutBrowserAction, opts: ExecuteOptions = {}) => {
+  const execute = useCallback((action: ApexBrowserAction, opts: ExecuteOptions = {}) => {
     const { target, payload, context } = opts
 
     // Permission check using existing system
@@ -133,7 +133,7 @@ export function useScoutBrowserOperator({
     if (permKey) {
       const check = checkPermission(permKey, permissions)
       if (!check.allowed) {
-        const blocked: ScoutBrowserActionEvent = {
+        const blocked: ApexBrowserActionEvent = {
           id:        makeId(),
           action,
           status:    "blocked",
@@ -150,7 +150,7 @@ export function useScoutBrowserOperator({
 
     // Extension connectivity check (warn but don't block for non-critical actions)
     if (!isExtensionConnected && (action === "upload_resume" || action === "insert_text" || action === "prepare_autofill")) {
-      const blocked: ScoutBrowserActionEvent = {
+      const blocked: ApexBrowserActionEvent = {
         id:        makeId(),
         action,
         status:    "blocked",
@@ -165,7 +165,7 @@ export function useScoutBrowserOperator({
 
     const requiresApproval = APPROVAL_REQUIRED_ACTIONS.has(action)
 
-    const event: ScoutBrowserActionEvent = {
+    const event: ApexBrowserActionEvent = {
       id:              makeId(),
       action,
       status:          requiresApproval ? "pending" : "running",

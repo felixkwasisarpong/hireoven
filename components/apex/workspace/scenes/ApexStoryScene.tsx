@@ -1,18 +1,18 @@
 "use client"
 
-import { ScoutOrb } from "@/components/scout/ScoutOrb"
-import { ScoutProgressSteps } from "./ScoutProgressSteps"
-import { renderInlineMarkdown } from "@/lib/scout/inline-markdown"
-import type { WorkspaceMode } from "@/lib/scout/workspace"
+import { ApexOrb } from "@/components/apex/ApexOrb"
+import { ApexProgressSteps } from "./ApexProgressSteps"
+import { renderInlineMarkdown } from "@/lib/apex/inline-markdown"
+import type { WorkspaceMode } from "@/lib/apex/workspace"
 
 type Props = {
   /** The user's last command — shown as the spoken intent. */
   command?: string
-  /** Optional Scout narrative — if absent we fall back to a calm generic line. */
+  /** Optional Apex narrative — if absent we fall back to a calm generic line. */
   narrative?: string
-  /** Mode Scout is morphing toward (drives the step labels). */
+  /** Mode Apex is morphing toward (drives the step labels). */
   mode?: WorkspaceMode
-  /** Streamed scout text so we can show the early answer beneath the steps. */
+  /** Streamed apex text so we can show the early answer beneath the steps. */
   streamText?: string
 }
 
@@ -36,7 +36,7 @@ const DEFAULT_PLAN = [
   "Loading the response",
 ]
 
-export function ScoutStoryScene({ command, narrative, mode, streamText }: Props) {
+export function ApexStoryScene({ command, narrative, mode, streamText }: Props) {
   const steps = (mode && MODE_PLAN[mode]) ?? DEFAULT_PLAN
   const calmNarrative =
     narrative?.trim() ||
@@ -45,8 +45,8 @@ export function ScoutStoryScene({ command, narrative, mode, streamText }: Props)
   return (
     <section
       aria-live="polite"
-      aria-label="Scout is preparing your workspace"
-      className="mx-auto w-full max-w-2xl px-4 pt-6 sm:pt-10 motion-safe:animate-[scoutFadeUp_0.5s_ease-out_both]"
+      aria-label="Apex is preparing your workspace"
+      className="mx-auto w-full max-w-2xl px-4 pt-6 sm:pt-10 motion-safe:animate-[apexFadeUp_0.5s_ease-out_both]"
     >
       {/* User command echo */}
       {command && (
@@ -57,16 +57,16 @@ export function ScoutStoryScene({ command, narrative, mode, streamText }: Props)
         </div>
       )}
 
-      {/* Scout narrative card */}
+      {/* Apex narrative card */}
       <div className="relative overflow-hidden rounded-3xl border border-slate-200/80 bg-white p-5 shadow-[0_2px_18px_rgba(15,23,42,0.06)] sm:p-6">
         {/* Glow halo */}
         <div className="pointer-events-none absolute -top-12 -left-12 h-40 w-40 rounded-full bg-blue-500/10 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-16 -right-12 h-44 w-44 rounded-full bg-indigo-200/30 blur-3xl" />
 
         <div className="relative flex items-start gap-3">
-          <ScoutOrb size="md" state="thinking" className="mt-0.5" />
+          <ApexOrb size="md" state="thinking" className="mt-0.5" />
           <div className="min-w-0 flex-1">
-            <p className="text-[10.5px] font-semibold uppercase tracking-[0.18em] text-[#2563EB]">Scout</p>
+            <p className="text-[10.5px] font-semibold uppercase tracking-[0.18em] text-[#2563EB]">Apex</p>
             <p className="mt-1 text-[15px] leading-relaxed text-slate-800">
               {renderInlineMarkdown(calmNarrative)}
             </p>
@@ -81,12 +81,12 @@ export function ScoutStoryScene({ command, narrative, mode, streamText }: Props)
 
         {/* Progress steps */}
         <div className="relative mt-5 border-t border-slate-100 pt-5">
-          <ScoutProgressSteps steps={steps} />
+          <ApexProgressSteps steps={steps} />
         </div>
 
         {/* Bottom shimmer */}
         <div className="relative mt-5 h-[2px] w-full overflow-hidden rounded-full bg-slate-100">
-          <span className="absolute inset-y-0 -left-1/3 w-1/3 bg-gradient-to-r from-transparent via-[#2563EB] to-transparent motion-safe:animate-[scoutShimmer_1.6s_linear_infinite]" />
+          <span className="absolute inset-y-0 -left-1/3 w-1/3 bg-gradient-to-r from-transparent via-[#2563EB] to-transparent motion-safe:animate-[apexShimmer_1.6s_linear_infinite]" />
         </div>
       </div>
     </section>

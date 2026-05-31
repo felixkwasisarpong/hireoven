@@ -10,7 +10,7 @@ import InterviewerWaveform from "@/components/interview/InterviewerWaveform"
 import LiveCaptions, { type CaptionItem } from "@/components/interview/LiveCaptions"
 import LiveControlsBar from "@/components/interview/LiveControlsBar"
 import SkillCoverageRail from "@/components/interview/SkillCoverageRail"
-import { RealtimeClient } from "@/lib/scout/interview/RealtimeClient"
+import { RealtimeClient } from "@/lib/apex/interview/RealtimeClient"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 

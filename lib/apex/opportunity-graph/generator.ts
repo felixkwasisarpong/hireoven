@@ -1,7 +1,7 @@
 /**
  * Opportunity Graph Generator — pure functions, no I/O.
  *
- * Takes DB query results and produces OpportunityRecommendation[] for Scout.
+ * Takes DB query results and produces OpportunityRecommendation[] for Apex.
  * All scoring is evidence-based (skill counts, job counts) — never invented.
  *
  * Safety: every recommendation has an evidence[] array with the raw data

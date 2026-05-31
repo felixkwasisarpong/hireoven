@@ -1,13 +1,13 @@
-export type ScoutFeature =
-  | "scout_chat"
-  | "scout_chat_stream"
-  | "scout_strategy"
-  | "scout_research"
-  | "scout_follow_up"
-  | "scout_mock_interview"
-  | "scout_bulk_prepare"
-  | "scout_career"
-  | "scout_memory_extract"
+export type ApexFeature =
+  | "apex_chat"
+  | "apex_chat_stream"
+  | "apex_strategy"
+  | "apex_research"
+  | "apex_follow_up"
+  | "apex_mock_interview"
+  | "apex_bulk_prepare"
+  | "apex_career"
+  | "apex_memory_extract"
   | "resume_generate"
   | "resume_ai_write"
   | "resume_tailor_analyze"
@@ -20,7 +20,7 @@ export type ScoutFeature =
 export type ModelTier = "haiku" | "sonnet" | "opus"
 
 export type BudgetEntry = {
-  feature: ScoutFeature
+  feature: ApexFeature
   model: string
   tier: ModelTier
   inputTokens: number
@@ -57,7 +57,7 @@ export type FeatureStats = {
   totalOutputTokens: number
 }
 
-export type ScoutCacheStats = {
+export type ApexCacheStats = {
   size: number
   maxSize: number
   hits: number

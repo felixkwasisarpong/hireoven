@@ -3,9 +3,9 @@
 import { useEffect, useState } from "react"
 import { AlertCircle, ArrowRight, CheckCircle2 } from "lucide-react"
 import Link from "next/link"
-import { ScoutActivityTimeline } from "@/components/scout/ScoutActivityTimeline"
-import { analyzeFollowUp } from "@/lib/scout/follow-up"
-import type { FollowUpUrgency } from "@/lib/scout/follow-up"
+import { ApexActivityTimeline } from "@/components/apex/ApexActivityTimeline"
+import { analyzeFollowUp } from "@/lib/apex/follow-up"
+import type { FollowUpUrgency } from "@/lib/apex/follow-up"
 import type { JobApplication } from "@/types"
 
 // ── Stale applications nudge ──────────────────────────────────────────────────
@@ -102,12 +102,12 @@ function FollowUpNudgePanel() {
 
 // ── Tab ───────────────────────────────────────────────────────────────────────
 
-export function ScoutActivityTab() {
+export function ApexActivityTab() {
   return (
     <div className="space-y-5">
       <FollowUpNudgePanel />
 
-      <ScoutActivityTimeline />
+      <ApexActivityTimeline />
 
       {/* Static context card */}
       <div className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-[0_2px_16px_rgba(15,23,42,0.06)]">
@@ -115,15 +115,15 @@ export function ScoutActivityTab() {
           <CheckCircle2 className="mt-0.5 h-4 w-4 flex-shrink-0 text-emerald-500" />
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">
-              About Scout Activity
+              About Apex Activity
             </p>
             <p className="mt-2 text-sm leading-6 text-slate-600">
-              Scout logs every action it takes — filter changes, focus mode, job highlights, and
+              Apex logs every action it takes — filter changes, focus mode, job highlights, and
               more. Each entry explains what changed, why, and how many jobs are now showing.
               Actions with an undo window let you revert changes instantly.
             </p>
             <p className="mt-2 text-xs text-slate-400">
-              Activity appears here as you use Scout in this session.
+              Activity appears here as you use Apex in this session.
             </p>
           </div>
         </div>

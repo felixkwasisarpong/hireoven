@@ -1,12 +1,12 @@
 "use client"
 
 import { BookOpen, Sparkles } from "lucide-react"
-import { ScoutInterviewPrepRenderer } from "@/components/scout/ScoutInterviewPrepRenderer"
-import { ScoutMockInterview } from "@/components/scout/ScoutMockInterview"
-import type { ScoutInterviewPrep } from "@/lib/scout/types"
+import { ApexInterviewPrepRenderer } from "@/components/apex/ApexInterviewPrepRenderer"
+import { ApexMockInterview } from "@/components/apex/ApexMockInterview"
+import type { ApexInterviewPrep } from "@/lib/apex/types"
 
-export type ScoutInterviewPrepTabProps = {
-  interviewPrep: ScoutInterviewPrep | null
+export type ApexInterviewPrepTabProps = {
+  interviewPrep: ApexInterviewPrep | null
   onFillChip: (chip: string) => void
   /** Optional job context for the mock interview */
   jobId?: string
@@ -15,14 +15,14 @@ export type ScoutInterviewPrepTabProps = {
   companyName?: string
 }
 
-export function ScoutInterviewPrepTab({
+export function ApexInterviewPrepTab({
   interviewPrep,
   onFillChip,
   jobId,
   resumeId,
   jobTitle,
   companyName,
-}: ScoutInterviewPrepTabProps) {
+}: ApexInterviewPrepTabProps) {
   if (!interviewPrep) {
     return (
       <div className="space-y-5">
@@ -33,7 +33,7 @@ export function ScoutInterviewPrepTab({
           </div>
           <p className="mt-4 text-[15px] font-semibold text-slate-700">No interview prep yet</p>
           <p className="mt-1.5 max-w-xs text-sm leading-6 text-slate-500">
-            Open a specific job and ask Scout to prepare you for the interview. Scout tailors prep
+            Open a specific job and ask Apex to prepare you for the interview. Apex tailors prep
             to the role and your resume.
           </p>
           <button
@@ -47,7 +47,7 @@ export function ScoutInterviewPrepTab({
         </div>
 
         {/* Mock interview — available even without prep content */}
-        <ScoutMockInterview
+        <ApexMockInterview
           jobId={jobId}
           resumeId={resumeId}
           jobTitle={jobTitle}
@@ -71,12 +71,12 @@ export function ScoutInterviewPrepTab({
           </p>
         </div>
         <div className="p-5">
-          <ScoutInterviewPrepRenderer interviewPrep={interviewPrep} />
+          <ApexInterviewPrepRenderer interviewPrep={interviewPrep} />
         </div>
       </section>
 
       {/* Mock interview — always shown below prep */}
-      <ScoutMockInterview
+      <ApexMockInterview
         jobId={jobId}
         resumeId={resumeId}
         jobTitle={jobTitle}

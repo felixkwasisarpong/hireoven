@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
-import { getScoutBehaviorSignals } from "@/lib/scout/behavior"
+import { getApexBehaviorSignals } from "@/lib/apex/behavior"
 
 export const runtime = "nodejs"
 
@@ -15,10 +15,10 @@ export async function GET() {
   }
 
   try {
-    const signals = await getScoutBehaviorSignals(user.id)
+    const signals = await getApexBehaviorSignals(user.id)
     return NextResponse.json({ signals })
   } catch (err) {
-    console.error("Scout behavior signals error:", err)
+    console.error("Apex behavior signals error:", err)
     return NextResponse.json({ signals: null })
   }
 }

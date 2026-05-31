@@ -1,7 +1,7 @@
 "use client"
 
 /**
- * Scout Timeline Store — append-only localStorage persistence.
+ * Apex Timeline Store — append-only localStorage persistence.
  *
  * Bounds:
  *   - Max 240 events (oldest pruned on overflow)
@@ -12,10 +12,10 @@
  *   - Production strips metadata and stores only human-readable event text
  */
 
-import type { ScoutTimelineEvent } from "./types"
+import type { ApexTimelineEvent } from "./types"
 
-const KEY         = "hireoven:scout:timeline:v1"
-const SESSION_KEY = "hireoven:scout:timeline:session:v1"
+const KEY         = "hireoven:apex:timeline:v1"
+const SESSION_KEY = "hireoven:apex:timeline:session:v1"
 const MAX_EVENTS  = 240
 const MAX_AGE_MS  = 48 * 60 * 60 * 1000   // 48 h
 const MAX_META_BYTES = 2_000
@@ -24,7 +24,7 @@ const IS_DEV = process.env.NODE_ENV === "development"
 
 type Store = {
   v:       1
-  events:  ScoutTimelineEvent[]   // newest first
+  events:  ApexTimelineEvent[]   // newest first
   savedAt: number
 }
 
@@ -44,12 +44,12 @@ function trimMetadata(meta: Record<string, unknown> | undefined): Record<string,
   }
 }
 
-function getEventTimeMs(event: ScoutTimelineEvent): number {
+function getEventTimeMs(event: ApexTimelineEvent): number {
   const ms = new Date(event.timestamp).getTime()
   return Number.isFinite(ms) ? ms : Date.now()
 }
 
-function sanitizeForStorage(event: ScoutTimelineEvent): ScoutTimelineEvent {
+function sanitizeForStorage(event: ApexTimelineEvent): ApexTimelineEvent {
   const sessionId = getTimelineSessionId()
   const metadata = IS_DEV
     ? trimMetadata({
@@ -65,9 +65,9 @@ function sanitizeForStorage(event: ScoutTimelineEvent): ScoutTimelineEvent {
   }
 }
 
-function sanitizeOnRead(events: ScoutTimelineEvent[]): ScoutTimelineEvent[] {
+function sanitizeOnRead(events: ApexTimelineEvent[]): ApexTimelineEvent[] {
   const now = Date.now()
-  const cleaned: ScoutTimelineEvent[] = []
+  const cleaned: ApexTimelineEvent[] = []
 
   for (const event of events) {
     const age = now - getEventTimeMs(event)
@@ -97,7 +97,7 @@ function sanitizeOnRead(events: ScoutTimelineEvent[]): ScoutTimelineEvent[] {
 
 // ── IO ────────────────────────────────────────────────────────────────────────
 
-export function readTimelineEvents(): ScoutTimelineEvent[] {
+export function readTimelineEvents(): ApexTimelineEvent[] {
   if (typeof window === "undefined") return []
   try {
     const raw = localStorage.getItem(KEY)
@@ -117,7 +117,7 @@ export function readTimelineEvents(): ScoutTimelineEvent[] {
   } catch { return [] }
 }
 
-function writeTimelineEvents(events: ScoutTimelineEvent[]): void {
+function writeTimelineEvents(events: ApexTimelineEvent[]): void {
   if (typeof window === "undefined") return
   try {
     const store: Store = { v: 1, events, savedAt: Date.now() }
@@ -128,7 +128,7 @@ function writeTimelineEvents(events: ScoutTimelineEvent[]): void {
 // ── Mutations ─────────────────────────────────────────────────────────────────
 
 /** Prepend one event. Prunes the oldest if the cap is exceeded. */
-export function appendTimelineEvent(event: ScoutTimelineEvent): void {
+export function appendTimelineEvent(event: ApexTimelineEvent): void {
   const current = readTimelineEvents()
   const clean   = sanitizeForStorage(event)
   const next    = [clean, ...current].slice(0, MAX_EVENTS)

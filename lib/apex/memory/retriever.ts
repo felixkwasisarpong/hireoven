@@ -1,5 +1,5 @@
 /**
- * Scout Memory Retriever
+ * Apex Memory Retriever
  *
  * Scores active memories by relevance to the current request context,
  * selects the top-N, and formats them for Claude prompt injection.
@@ -11,19 +11,19 @@
  *   - Max injection: 6 memories (avoids prompt bloat)
  */
 
-import type { ScoutMode } from "@/lib/scout/types"
-import type { ScoutMemory, ScoutMemoryCategory } from "./types"
+import type { ApexMode } from "@/lib/apex/types"
+import type { ApexMemory, ApexMemoryCategory } from "./types"
 import { MEMORY_CATEGORY_LABELS, MAX_MEMORY_INJECTION } from "./types"
 
 // ── Relevance scoring ─────────────────────────────────────────────────────────
 
 type ScoringContext = {
-  mode:    ScoutMode
+  mode:    ApexMode
   message: string
 }
 
 // Category base weights — how generically important each category is
-const BASE_WEIGHTS: Record<ScoutMemoryCategory, number> = {
+const BASE_WEIGHTS: Record<ApexMemoryCategory, number> = {
   visa_requirement:   1.0,   // always critical if it exists
   career_goal:        0.9,   // always useful
   role_preference:    0.85,
@@ -37,18 +37,18 @@ const BASE_WEIGHTS: Record<ScoutMemoryCategory, number> = {
 }
 
 // Mode-to-category boosts — which categories matter more in a given workspace mode
-const MODE_BOOSTS: Partial<Record<ScoutMode, Partial<Record<ScoutMemoryCategory, number>>>> = {
+const MODE_BOOSTS: Partial<Record<ApexMode, Partial<Record<ApexMemoryCategory, number>>>> = {
   feed:         { search_preference: 0.25, role_preference: 0.15, visa_requirement: 0.15 },
   job:          { role_preference: 0.20, company_preference: 0.20, salary_preference: 0.20 },
   company:      { company_preference: 0.30, visa_requirement: 0.10 },
   resume:       { resume_preference: 0.35, skill_focus: 0.25, role_preference: 0.15 },
   applications: { workflow_pattern: 0.20, interview_pattern: 0.15 },
-  scout:        { career_goal: 0.15, role_preference: 0.10 },
+  apex:        { career_goal: 0.15, role_preference: 0.10 },
   general:      {},
 }
 
 // Message keyword-to-category boosts
-const MSG_BOOSTS: Array<{ pattern: RegExp; category: ScoutMemoryCategory; boost: number }> = [
+const MSG_BOOSTS: Array<{ pattern: RegExp; category: ApexMemoryCategory; boost: number }> = [
   { pattern: /\b(salary|compensation|pay|offer)\b/i,         category: "salary_preference",   boost: 0.3 },
   { pattern: /\b(visa|sponsorship|h[- ]?1b|opt|cpt)\b/i,    category: "visa_requirement",     boost: 0.2 },
   { pattern: /\b(interview|prep|practise|behavioral|design)\b/i, category: "interview_pattern", boost: 0.35 },
@@ -60,7 +60,7 @@ const MSG_BOOSTS: Array<{ pattern: RegExp; category: ScoutMemoryCategory; boost:
   { pattern: /\b(apply|queue|batch|workflow)\b/i,            category: "workflow_pattern",     boost: 0.25 },
 ]
 
-function scoreMemory(memory: ScoutMemory, ctx: ScoringContext): number {
+function scoreMemory(memory: ApexMemory, ctx: ScoringContext): number {
   let score = BASE_WEIGHTS[memory.category] ?? 0.5
 
   // Confidence multiplier: high-confidence memories score higher
@@ -88,10 +88,10 @@ function scoreMemory(memory: ScoutMemory, ctx: ScoringContext): number {
  * Always includes visa_requirement and career_goal if present (they're always relevant).
  */
 export function selectRelevantMemories(
-  memories: ScoutMemory[],
+  memories: ApexMemory[],
   ctx: ScoringContext,
   maxCount = MAX_MEMORY_INJECTION,
-): ScoutMemory[] {
+): ApexMemory[] {
   if (memories.length === 0) return []
 
   const active = memories.filter((m) => m.active)
@@ -127,7 +127,7 @@ export function selectRelevantMemories(
  *
  * Claude instruction: treat these as trusted context, not "soft hints".
  */
-export function formatMemoriesForClaude(memories: ScoutMemory[]): string {
+export function formatMemoriesForClaude(memories: ApexMemory[]): string {
   if (memories.length === 0) return ""
 
   const lines = memories.map((m) => {
@@ -143,7 +143,7 @@ export function formatMemoriesForClaude(memories: ScoutMemory[]): string {
     return `- [${categoryLabel}] ${m.summary} (${confidence} — ${sourceLabel})`
   })
 
-  return `Scout Memory (persistent user context — treat as trusted, not soft hints):
+  return `Apex Memory (persistent user context — treat as trusted, not soft hints):
 ${lines.join("\n")}
 
 Memory rules:
@@ -164,8 +164,8 @@ export type MemoryInjectionSummary = {
 }
 
 export function buildInjectionSummary(
-  allActive: ScoutMemory[],
-  injected: ScoutMemory[],
+  allActive: ApexMemory[],
+  injected: ApexMemory[],
 ): MemoryInjectionSummary {
   return {
     totalActive: allActive.length,

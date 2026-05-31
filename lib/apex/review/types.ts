@@ -1,5 +1,5 @@
 /**
- * Scout Review & Submit Handoff — shared types.
+ * Apex Review & Submit Handoff — shared types.
  *
  * Used by both the dashboard review drawer and the Chrome extension
  * final review panel. No UI or API dependencies — pure data shapes.

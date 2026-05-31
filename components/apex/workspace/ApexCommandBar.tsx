@@ -1,7 +1,7 @@
 "use client"
 
 import { Command, Loader2, Send } from "lucide-react"
-import { AnimatedMic } from "@/components/scout/AnimatedMic"
+import { AnimatedMic } from "@/components/apex/AnimatedMic"
 import { useEffect, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
 
@@ -43,7 +43,7 @@ const VOICE_STATUS: Partial<Record<VoiceState, string>> = {
   error:       "Couldn't hear that. Try again.",
 }
 
-const WAKE_WORD_RE = /\bhey\s+scout\b[\s,.:;!?-]*/i
+const WAKE_WORD_RE = /\bhey\s+apex\b[\s,.:;!?-]*/i
 const WAKE_COMMAND_WINDOW_MS = 10_000
 
 // ── useVoiceRecognition ───────────────────────────────────────────────────────
@@ -180,7 +180,7 @@ type Props = {
   query: string
   onChange: (value: string) => void
   onSubmit: (e: React.FormEvent) => void
-  /** Optional wake-word path: "Hey Scout <command>" auto-sends the command. */
+  /** Optional wake-word path: "Hey Apex <command>" auto-sends the command. */
   onVoiceCommand?: (message: string) => void
   isLoading: boolean
   chips: string[]
@@ -195,7 +195,7 @@ type Props = {
   onOpenPalette?: () => void
 }
 
-export function ScoutCommandBar({
+export function ApexCommandBar({
   query,
   onChange,
   onSubmit,
@@ -242,8 +242,8 @@ export function ScoutCommandBar({
         return
       }
 
-      // Wake-word flow: "Hey Scout <command>" (single utterance) OR
-      // "Hey Scout" followed by command within a short window.
+      // Wake-word flow: "Hey Apex <command>" (single utterance) OR
+      // "Hey Apex" followed by command within a short window.
       if (onVoiceCommand) {
         const inlineCommand = stripWakePrefix(normalized)
         if (inlineCommand !== null) {
@@ -282,7 +282,7 @@ export function ScoutCommandBar({
   const isProcessing = voiceState === "processing"
   const statusText  =
     isListening && onVoiceCommand
-      ? 'Say "Hey Scout" and your command'
+      ? 'Say "Hey Apex" and your command'
       : VOICE_STATUS[voiceState]
 
   // ── History navigation ──────────────────────────────────────────────────────
@@ -408,7 +408,7 @@ export function ScoutCommandBar({
             placeholder={
               isListening
                 ? "Listening…"
-                : placeholder ?? "Ask Scout anything…"
+                : placeholder ?? "Ask Apex anything…"
             }
             autoComplete="off"
             className={cn(

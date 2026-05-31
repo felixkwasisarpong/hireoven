@@ -19,9 +19,9 @@ import {
   Zap,
 } from "lucide-react"
 
-import { ScoutActionRenderer } from "@/components/scout/ScoutActionRenderer"
-import { ScoutWorkflowRenderer } from "@/components/scout/ScoutWorkflowRenderer"
-import type { ScoutAction, ScoutWorkflow } from "@/lib/scout/types"
+import { ApexActionRenderer } from "@/components/apex/ApexActionRenderer"
+import { ApexWorkflowRenderer } from "@/components/apex/ApexWorkflowRenderer"
+import type { ApexAction, ApexWorkflow } from "@/lib/apex/types"
 
 const QUICK_COMMANDS = [
   {
@@ -48,7 +48,7 @@ const ACTION_CAPABILITIES = [
   {
     icon: Filter,
     title: "Apply filters",
-    description: "Scout can reshape the feed with validated filters.",
+    description: "Apex can reshape the feed with validated filters.",
     status: "Live",
   },
   {
@@ -66,7 +66,7 @@ const ACTION_CAPABILITIES = [
   {
     icon: MousePointerClick,
     title: "User approved",
-    description: "Scout suggests. You click before anything runs.",
+    description: "Apex suggests. You click before anything runs.",
     status: "Controlled",
   },
 ]
@@ -81,10 +81,10 @@ function EmptyExecutionState({ onFillChip }: { onFillChip: (chip: string) => voi
             Command ready
           </div>
           <h3 className="mt-4 text-xl font-bold tracking-tight text-slate-950">
-            No active Scout action yet
+            No active Apex action yet
           </h3>
           <p className="mt-2 max-w-xl text-sm leading-6 text-slate-500">
-            Ask Scout for a command or workflow. When Scout finds something useful, actions will appear here as safe, clickable controls.
+            Ask Apex for a command or workflow. When Apex finds something useful, actions will appear here as safe, clickable controls.
           </p>
 
           <div className="mt-5 grid gap-3 sm:grid-cols-3">
@@ -120,11 +120,11 @@ function EmptyExecutionState({ onFillChip }: { onFillChip: (chip: string) => voi
           <ol className="mt-3 space-y-3 text-xs leading-5 text-slate-500">
             <li className="flex gap-2">
               <span className="font-bold text-slate-400">1.</span>
-              Ask Scout what you want.
+              Ask Apex what you want.
             </li>
             <li className="flex gap-2">
               <span className="font-bold text-slate-400">2.</span>
-              Scout returns validated actions.
+              Apex returns validated actions.
             </li>
             <li className="flex gap-2">
               <span className="font-bold text-slate-400">3.</span>
@@ -141,8 +141,8 @@ function ActiveExecutionPanel({
   workflow,
   actions,
 }: {
-  workflow: ScoutWorkflow | null
-  actions: ScoutAction[] | null
+  workflow: ApexWorkflow | null
+  actions: ApexAction[] | null
 }) {
   return (
     <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -153,7 +153,7 @@ function ActiveExecutionPanel({
             Ready to run
           </div>
           <h3 className="mt-3 text-xl font-bold tracking-tight text-slate-950">
-            Scout prepared actions for you
+            Apex prepared actions for you
           </h3>
           <p className="mt-1 text-sm leading-6 text-slate-500">
             Review the steps and execute only the ones you want. Nothing runs automatically.
@@ -175,7 +175,7 @@ function ActiveExecutionPanel({
                   Guided Workflow
                 </p>
               </div>
-              <ScoutWorkflowRenderer workflow={workflow} />
+              <ApexWorkflowRenderer workflow={workflow} />
             </div>
           )}
 
@@ -187,7 +187,7 @@ function ActiveExecutionPanel({
                   Suggested Actions
                 </p>
               </div>
-              <ScoutActionRenderer actions={actions} source="chat" />
+              <ApexActionRenderer actions={actions} source="chat" />
             </div>
           )}
         </div>
@@ -198,8 +198,8 @@ function ActiveExecutionPanel({
           </p>
           <div className="mt-4 space-y-3">
             {[
-              "Scout cannot auto-apply to jobs.",
-              "Scout cannot delete or hide saved data permanently.",
+              "Apex cannot auto-apply to jobs.",
+              "Apex cannot delete or hide saved data permanently.",
               "Every UI change must be clicked by you.",
             ].map((rule) => (
               <div key={rule} className="flex items-start gap-2 rounded-2xl bg-slate-50 px-3 py-2.5">
@@ -223,7 +223,7 @@ function CapabilityGrid({ onFillChip }: { onFillChip: (chip: string) => void }) 
             Action Library
           </p>
           <h3 className="mt-1 text-lg font-bold tracking-tight text-slate-950">
-            What Scout can control
+            What Apex can control
           </h3>
         </div>
         <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold text-slate-500">
@@ -271,17 +271,17 @@ function CapabilityGrid({ onFillChip }: { onFillChip: (chip: string) => void }) 
   )
 }
 
-export type ScoutActionsTabProps = {
-  lastWorkflowResponse: ScoutWorkflow | null
-  lastActionsResponse: ScoutAction[] | null
+export type ApexActionsTabProps = {
+  lastWorkflowResponse: ApexWorkflow | null
+  lastActionsResponse: ApexAction[] | null
   onFillChip: (chip: string) => void
 }
 
-export function ScoutActionsTab({
+export function ApexActionsTab({
   lastWorkflowResponse,
   lastActionsResponse,
   onFillChip,
-}: ScoutActionsTabProps) {
+}: ApexActionsTabProps) {
   const hasContent =
     lastWorkflowResponse !== null ||
     (lastActionsResponse !== null && lastActionsResponse.length > 0)
@@ -295,10 +295,10 @@ export function ScoutActionsTab({
             Actions
           </div>
           <h2 className="mt-3 text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">
-            Scout control center
+            Apex control center
           </h2>
           <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
-            Workflows, commands, and safe UI actions Scout can prepare for your job search.
+            Workflows, commands, and safe UI actions Apex can prepare for your job search.
           </p>
         </div>
 

@@ -482,7 +482,7 @@ export default function JobCardV2({
       cardView.preview_description ?? "",
       pickRawString(raw, ["sponsorshipSignal", "sponsorship_signal"]) ?? "",
     ].join(" ")
-    // Mirrors chrome-extension/src/extractors/scout-extractor.ts ACTIVELY_HIRING_RE.
+    // Mirrors chrome-extension/src/extractors/apex-extractor.ts ACTIVELY_HIRING_RE.
     return /\b(?:actively\s+(?:recruiting|hiring|seeking|reviewing\s+(?:applicants?|applications?|candidates?))|urgently?\s+hiring|hiring\s+now|now\s+hiring|immediate(?:ly)?\s+(?:hire|hiring|need|opening)|urgent(?:ly)?\s+(?:hiring|need)|high(?:ly)?\s+priority\s+role)\b/i.test(haystack)
   }, [raw, job.title, cardView.preview_description])
 

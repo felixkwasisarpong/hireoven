@@ -15,7 +15,7 @@ type Props = {
   className?: string
 }
 
-export function ScoutSuggestedCommands({ suggestions, onSelect, className }: Props) {
+export function ApexSuggestedCommands({ suggestions, onSelect, className }: Props) {
   if (suggestions.length === 0) return null
   return (
     <div className={cn("grid grid-cols-1 gap-2.5 sm:grid-cols-2", className)}>
@@ -32,7 +32,7 @@ export function ScoutSuggestedCommands({ suggestions, onSelect, className }: Pro
             "hover:-translate-y-0.5 hover:border-[#2563EB]/35",
             "hover:shadow-[0_10px_28px_rgba(37,99,235,0.14),0_3px_10px_rgba(15,23,42,0.08)]",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]/35",
-            "motion-safe:animate-[scoutFadeUp_0.5s_ease-out_both]",
+            "motion-safe:animate-[apexFadeUp_0.5s_ease-out_both]",
           )}
         >
           {/* Hover glow fill */}

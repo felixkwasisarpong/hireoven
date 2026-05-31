@@ -1,6 +1,6 @@
-import type { ScoutActiveWorkflow, ScoutActiveWorkflowStep, ScoutWorkflowType } from "./types"
+import type { ApexActiveWorkflow, ApexActiveWorkflowStep, ApexWorkflowType } from "./types"
 
-type WorkflowTemplate = Omit<ScoutActiveWorkflow, "id" | "completedAt" | "cancelledAt" | "pausedAt">
+type WorkflowTemplate = Omit<ApexActiveWorkflow, "id" | "completedAt" | "cancelledAt" | "pausedAt">
 
 const TAILOR_AND_PREPARE: WorkflowTemplate = {
   title: "Tailor + Prepare Application",
@@ -10,7 +10,7 @@ const TAILOR_AND_PREPARE: WorkflowTemplate = {
     {
       id: "resolve-job",
       title: "Resolve current job",
-      description: "Confirm the target job is loaded and synced to Scout",
+      description: "Confirm the target job is loaded and synced to Apex",
       status: "running",
       actionType: "RESOLVE_JOB",
     },
@@ -24,7 +24,7 @@ const TAILOR_AND_PREPARE: WorkflowTemplate = {
     {
       id: "tailor-resume",
       title: "Tailor resume",
-      description: "Review Scout's suggested resume changes — approve before applying",
+      description: "Review Apex's suggested resume changes — approve before applying",
       status: "pending",
       actionType: "OPEN_RESUME_TAILOR",
       requiresConfirmation: true,
@@ -52,7 +52,7 @@ const TAILOR_AND_PREPARE: WorkflowTemplate = {
       actionType: "OPEN_EXTENSION_AUTOFILL_PREVIEW",
       requiresConfirmation: true,
     },
-  ] satisfies ScoutActiveWorkflowStep[],
+  ] satisfies ApexActiveWorkflowStep[],
 }
 
 const COMPARE_AND_PRIORITIZE: WorkflowTemplate = {
@@ -91,12 +91,12 @@ const COMPARE_AND_PRIORITIZE: WorkflowTemplate = {
     {
       id: "recommend-applications",
       title: "Recommend next applications",
-      description: "Review Scout's prioritized shortlist — your decision to act",
+      description: "Review Apex's prioritized shortlist — your decision to act",
       status: "pending",
       actionType: "RECOMMEND_APPLICATIONS",
       requiresConfirmation: true,
     },
-  ] satisfies ScoutActiveWorkflowStep[],
+  ] satisfies ApexActiveWorkflowStep[],
 }
 
 const INTERVIEW_PREP: WorkflowTemplate = {
@@ -140,20 +140,20 @@ const INTERVIEW_PREP: WorkflowTemplate = {
       actionType: "START_MOCK_INTERVIEW",
       requiresConfirmation: true,
     },
-  ] satisfies ScoutActiveWorkflowStep[],
+  ] satisfies ApexActiveWorkflowStep[],
 }
 
-const TEMPLATES: Record<ScoutWorkflowType, WorkflowTemplate> = {
+const TEMPLATES: Record<ApexWorkflowType, WorkflowTemplate> = {
   tailor_and_prepare: TAILOR_AND_PREPARE,
   compare_and_prioritize: COMPARE_AND_PRIORITIZE,
   interview_prep: INTERVIEW_PREP,
 }
 
 export function preparePlan(
-  type: ScoutWorkflowType | string,
+  type: ApexWorkflowType | string,
   payload?: Record<string, unknown>
-): ScoutActiveWorkflow {
-  const template = TEMPLATES[type as ScoutWorkflowType] ?? TAILOR_AND_PREPARE
+): ApexActiveWorkflow {
+  const template = TEMPLATES[type as ApexWorkflowType] ?? TAILOR_AND_PREPARE
   const id = `wf-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
 
   // Distribute job context (jobId, title, company, detailUrl) to all steps that

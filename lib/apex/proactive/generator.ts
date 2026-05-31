@@ -1,23 +1,23 @@
-import type { MarketSignal } from "@/lib/scout/market-intelligence"
-import type { OutcomeLearningResult } from "@/lib/scout/outcomes/types"
-import type { ScoutSearchProfile } from "@/lib/scout/search-profile"
-import type { ScoutBehaviorSignals } from "@/lib/scout/behavior"
-import type { ScoutActiveWorkflow } from "@/lib/scout/workflows/types"
-import type { BulkApplicationQueue } from "@/lib/scout/bulk-application/types"
-import type { ScoutProactiveEvent, ScoutProactiveSnapshot } from "./types"
+import type { MarketSignal } from "@/lib/apex/market-intelligence"
+import type { OutcomeLearningResult } from "@/lib/apex/outcomes/types"
+import type { ApexSearchProfile } from "@/lib/apex/search-profile"
+import type { ApexBehaviorSignals } from "@/lib/apex/behavior"
+import type { ApexActiveWorkflow } from "@/lib/apex/workflows/types"
+import type { BulkApplicationQueue } from "@/lib/apex/bulk-application/types"
+import type { ApexProactiveEvent, ApexProactiveSnapshot } from "./types"
 
 export type ProactiveGeneratorInput = {
-  snapshot: ScoutProactiveSnapshot | null
+  snapshot: ApexProactiveSnapshot | null
   marketSignals: MarketSignal[]
   outcomeLearning: OutcomeLearningResult | null
-  searchProfile: ScoutSearchProfile | null
-  behaviorSignals: ScoutBehaviorSignals | null
-  activeWorkflow: ScoutActiveWorkflow | null
+  searchProfile: ApexSearchProfile | null
+  behaviorSignals: ApexBehaviorSignals | null
+  activeWorkflow: ApexActiveWorkflow | null
   bulkQueue: BulkApplicationQueue | null
   now?: Date
 }
 
-const SEVERITY_WEIGHT: Record<ScoutProactiveEvent["severity"], number> = {
+const SEVERITY_WEIGHT: Record<ApexProactiveEvent["severity"], number> = {
   urgent: 0,
   important: 1,
   info: 2,
@@ -34,7 +34,7 @@ function daysOld(iso: string): number {
   return Math.max(0, Math.floor((Date.now() - ms) / 86_400_000))
 }
 
-function idFrom(type: ScoutProactiveEvent["type"], seed: string, dayKey: string): string {
+function idFrom(type: ApexProactiveEvent["type"], seed: string, dayKey: string): string {
   const safe = seed
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
@@ -44,17 +44,17 @@ function idFrom(type: ScoutProactiveEvent["type"], seed: string, dayKey: string)
 }
 
 function topRoleHint(
-  searchProfile: ScoutSearchProfile | null,
-  behaviorSignals: ScoutBehaviorSignals | null,
+  searchProfile: ApexSearchProfile | null,
+  behaviorSignals: ApexBehaviorSignals | null,
 ): string | null {
   return searchProfile?.preferredRoles?.[0] ?? behaviorSignals?.preferredRoles?.[0] ?? null
 }
 
-export function generateProactiveEvents(input: ProactiveGeneratorInput): ScoutProactiveEvent[] {
+export function generateProactiveEvents(input: ProactiveGeneratorInput): ApexProactiveEvent[] {
   const now = input.now ?? new Date()
   const createdAt = now.toISOString()
   const dayKey = createdAt.slice(0, 10)
-  const events: ScoutProactiveEvent[] = []
+  const events: ApexProactiveEvent[] = []
 
   const roleHint = topRoleHint(input.searchProfile, input.behaviorSignals)
   const snapshot = input.snapshot
@@ -67,7 +67,7 @@ export function generateProactiveEvents(input: ProactiveGeneratorInput): ScoutPr
     events.push({
       id: idFrom("new_match", `${top.jobId}-${count}`, dayKey),
       type: "new_match",
-      title: `Scout found ${count} new ${roleLabel}match${count === 1 ? "" : "es"}`.replace(/\s+/g, " ").trim(),
+      title: `Apex found ${count} new ${roleLabel}match${count === 1 ? "" : "es"}`.replace(/\s+/g, " ").trim(),
       summary:
         count === 1
           ? `${top.jobTitle}${top.companyName ? ` at ${top.companyName}` : ""} is a strong fit (${top.matchScore}% match).`
@@ -90,7 +90,7 @@ export function generateProactiveEvents(input: ProactiveGeneratorInput): ScoutPr
     events.push({
       id: idFrom("sponsorship_signal", `friendly-${count}`, dayKey),
       type: "sponsorship_signal",
-      title: `Scout found ${count} sponsorship-friendly opening${count === 1 ? "" : "s"}`,
+      title: `Apex found ${count} sponsorship-friendly opening${count === 1 ? "" : "s"}`,
       summary: `These roles align with your sponsorship preferences and recent fit signals.`,
       severity: count >= 3 ? "important" : "info",
       createdAt,
@@ -172,7 +172,7 @@ export function generateProactiveEvents(input: ProactiveGeneratorInput): ScoutPr
   // 7) Interview reminders
   if (snapshot && snapshot.interviewsSoon.length > 0) {
     const soonest = [...snapshot.interviewsSoon].sort((a, b) => a.hoursUntil - b.hoursUntil)[0]
-    const urgency: ScoutProactiveEvent["severity"] =
+    const urgency: ApexProactiveEvent["severity"] =
       soonest.hoursUntil <= 12 ? "urgent" : soonest.hoursUntil <= 36 ? "important" : "info"
     events.push({
       id: idFrom("interview_reminder", `${soonest.applicationId}-${soonest.roundName}`, dayKey),

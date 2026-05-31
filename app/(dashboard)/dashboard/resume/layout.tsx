@@ -1,5 +1,5 @@
 import ResumeSubNav from "@/components/resume/ResumeSubNav"
-import { ScoutMiniPanel } from "@/components/scout/ScoutMiniPanel"
+import { ApexMiniPanel } from "@/components/apex/ApexMiniPanel"
 
 export default function ResumeHubLayout({
   children,
@@ -10,7 +10,7 @@ export default function ResumeHubLayout({
     <div className="resume-tab-shell">
       <ResumeSubNav />
       {children}
-      <ScoutMiniPanel
+      <ApexMiniPanel
         suggestionChips={[
           "Adjust my current preferences",
           "Show jobs worth my time",

@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { requireFeature } from "@/lib/gates/server-gate"
-import { buildResearchTask } from "@/lib/scout/research/tasks"
-import { runResearchEngine } from "@/lib/scout/research/engine"
-import { encodeResearchSSE } from "@/lib/scout/research/types"
-import type { ResearchSSEEvent } from "@/lib/scout/research/types"
+import { buildResearchTask } from "@/lib/apex/research/tasks"
+import { runResearchEngine } from "@/lib/apex/research/engine"
+import { encodeResearchSSE } from "@/lib/apex/research/types"
+import type { ResearchSSEEvent } from "@/lib/apex/research/types"
 import { logApiUsage } from "@/lib/admin/usage"
 import { sanitizeGeneratedText } from "@/lib/text/sanitize-generated-text"
 
@@ -12,7 +12,7 @@ export const runtime    = "nodejs"
 export const maxDuration = 35   // 30 s engine + 5 s buffer
 
 export async function POST(request: NextRequest) {
-  const gate = await requireFeature("scout_deep_analysis", request)
+  const gate = await requireFeature("apex_deep_analysis", request)
   if (gate instanceof NextResponse) return gate
   const { userId } = gate
   const supabase = await createClient()
@@ -51,12 +51,12 @@ export async function POST(request: NextRequest) {
       await runResearchEngine(task, { userId, pool, researchType: type }, emit)
       await logApiUsage({
         service:     "claude",
-        operation:   "scout_research",
+        operation:   "apex_research",
         tokens_used: 0,   // tokens are logged inside runSynthesis if needed
         cost_usd:    0,
       }).catch(() => {})
     } catch (err) {
-      console.error("[scout:research] engine error:", err)
+      console.error("[apex:research] engine error:", err)
       emit({
         type:    "research_error",
         message: err instanceof Error ? err.message : "Research engine failed",

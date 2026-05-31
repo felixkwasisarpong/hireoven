@@ -1,5 +1,5 @@
 /**
- * Scout Job Context Resolver
+ * Apex Job Context Resolver
  *
  * Resolves the best job to use for tailor, workflow, and "open strongest job"
  * commands when no explicit jobId is provided in the request.
@@ -133,7 +133,7 @@ export async function resolveJobContext(
 }
 
 /**
- * Returns the top N saved jobs as a selectable list for Scout to present
+ * Returns the top N saved jobs as a selectable list for Apex to present
  * when the user asks to "pick a job" but doesn't specify which one.
  */
 export async function listTopSavedJobs(

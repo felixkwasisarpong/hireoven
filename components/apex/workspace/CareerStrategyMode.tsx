@@ -16,8 +16,8 @@ import { useState } from "react"
 import { cn } from "@/lib/utils"
 import {
   DIRECTION_CATEGORY_META,
-} from "@/lib/scout/career/types"
-import type { ScoutCareerDirection, ScoutCareerStrategyResult } from "@/lib/scout/career/types"
+} from "@/lib/apex/career/types"
+import type { ApexCareerDirection, ApexCareerStrategyResult } from "@/lib/apex/career/types"
 
 // ── Confidence badge ──────────────────────────────────────────────────────────
 
@@ -33,7 +33,7 @@ function DirectionCard({
   direction,
   onCommand,
 }: {
-  direction: ScoutCareerDirection
+  direction: ApexCareerDirection
   onCommand: (cmd: string) => void
 }) {
   const [open, setOpen] = useState(false)
@@ -143,7 +143,7 @@ function DirectionCard({
 // ── Main component ────────────────────────────────────────────────────────────
 
 type Props = {
-  data:      ScoutCareerStrategyResult | null
+  data:      ApexCareerStrategyResult | null
   loading:   boolean
   error:     string | null
   onCommand: (cmd: string) => void
@@ -156,7 +156,7 @@ export function CareerStrategyMode({ data, loading, error, onCommand }: Props) {
     return (
       <div className="space-y-4">
         <div className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-white px-5 py-6">
-          <Loader2 className="h-5 w-5 animate-spin text-[#FF5C18]" />
+          <Loader2 className="h-5 w-5 animate-spin text-[#6366F1]" />
           <div>
             <p className="text-sm font-semibold text-slate-900">Analysing your career profile…</p>
             <p className="mt-0.5 text-xs text-slate-400">Gathering skill patterns, traction signals, and market data</p>
@@ -197,11 +197,11 @@ export function CareerStrategyMode({ data, loading, error, onCommand }: Props) {
     return (
       <div className="rounded-2xl border border-slate-200 bg-white px-5 py-5">
         <div className="flex items-center gap-2 mb-3">
-          <Target className="h-4 w-4 text-[#FF5C18]" />
+          <Target className="h-4 w-4 text-[#6366F1]" />
           <p className="text-sm font-semibold text-slate-900">Career Strategy</p>
         </div>
         <p className="text-sm text-slate-500">
-          Ask Scout to analyse your career direction. It uses your skills, applications, and market signals.
+          Ask Apex to analyse your career direction. It uses your skills, applications, and market signals.
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
           {[
@@ -234,7 +234,7 @@ export function CareerStrategyMode({ data, loading, error, onCommand }: Props) {
         {/* Strategic header */}
         <div>
           <div className="flex items-center gap-2">
-            <Target className="h-4 w-4 text-[#FF5C18]" />
+            <Target className="h-4 w-4 text-[#6366F1]" />
             <p className="text-sm font-semibold text-slate-900">Career Strategy</p>
             <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-500">
               {data.directions.length} direction{data.directions.length !== 1 ? "s" : ""}
@@ -373,10 +373,10 @@ export function CareerStrategyMode({ data, loading, error, onCommand }: Props) {
           )
         })()}
 
-        {/* Scout guidance note */}
+        {/* Apex guidance note */}
         <div className="rounded-xl border border-dashed border-slate-200 px-3 py-3">
           <div className="mb-1 flex items-center gap-1.5">
-            <Sparkles className="h-3 w-3 text-[#FF5C18]/70" />
+            <Sparkles className="h-3 w-3 text-[#6366F1]/70" />
             <p className="text-[10px] font-semibold text-slate-400">About this analysis</p>
           </div>
           <p className="text-[10px] leading-4 text-slate-400">

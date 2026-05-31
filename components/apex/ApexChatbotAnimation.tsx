@@ -3,11 +3,11 @@
 import { Bot } from "lucide-react"
 import { cn } from "@/lib/utils"
 
-type ScoutChatbotAnimationProps = {
+type ApexChatbotAnimationProps = {
   className?: string
 }
 
-export function ScoutChatbotAnimation({ className }: ScoutChatbotAnimationProps) {
+export function ApexChatbotAnimation({ className }: ApexChatbotAnimationProps) {
   return (
     <span className={cn("relative inline-flex h-full w-full items-center justify-center", className)} aria-hidden="true">
       <span className="absolute inset-[14%] rounded-[30%] border border-white/30 bg-white/10" />

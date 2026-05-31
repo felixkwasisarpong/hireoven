@@ -2,7 +2,7 @@
 
 import { ReactNode } from "react"
 import { cn } from "@/lib/utils"
-import { ScoutNarrativeHeader } from "./ScoutNarrativeHeader"
+import { ApexNarrativeHeader } from "./ApexNarrativeHeader"
 
 type Props = {
   modeLabel: string
@@ -18,7 +18,7 @@ type Props = {
  * Replaces the previous "card soup" of stacked panels with one calm surface
  * and an optional small narrative header above the mounted mode component.
  */
-export function ScoutWorkspaceStage({
+export function ApexWorkspaceStage({
   modeLabel,
   narrative,
   onDismissNarrative,
@@ -30,12 +30,12 @@ export function ScoutWorkspaceStage({
     <section
       aria-label={`${modeLabel} workspace`}
       className={cn(
-        "min-w-0 flex-1 motion-safe:animate-[scoutFadeUp_0.45s_ease-out_both]",
+        "min-w-0 flex-1 motion-safe:animate-[apexFadeUp_0.45s_ease-out_both]",
         className
       )}
     >
       {showNarrative && narrative && (
-        <ScoutNarrativeHeader
+        <ApexNarrativeHeader
           modeLabel={modeLabel}
           narrative={narrative}
           onDismiss={onDismissNarrative}

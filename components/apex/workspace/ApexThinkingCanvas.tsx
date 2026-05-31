@@ -7,7 +7,7 @@ import { Sparkles } from "lucide-react"
 function JobCardSkeleton({ delay = 0 }: { delay?: number }) {
   return (
     <div
-      className="rounded-xl border border-slate-100 bg-white p-4 shadow-sm opacity-0 animate-[scout-card-in_0.4s_ease-out_forwards]"
+      className="rounded-xl border border-slate-100 bg-white p-4 shadow-sm opacity-0 animate-[apex-card-in_0.4s_ease-out_forwards]"
       style={{ animationDelay: `${delay}ms` }}
     >
       <div className="animate-pulse">
@@ -57,7 +57,7 @@ type Props = {
   narrative?: string
 }
 
-export function ScoutThinkingCanvas({ workspaceMode, lastUserMessage, narrative }: Props) {
+export function ApexThinkingCanvas({ workspaceMode, lastUserMessage, narrative }: Props) {
   const caption = narrative || MODE_CAPTION[workspaceMode] || "Working"
 
   return (
@@ -72,10 +72,10 @@ export function ScoutThinkingCanvas({ workspaceMode, lastUserMessage, narrative 
         </div>
       )}
 
-      {/* Scout thinking bubble */}
+      {/* Apex thinking bubble */}
       <div className="flex items-start gap-3">
-        <span className="relative mt-0.5 flex-shrink-0 inline-flex h-7 w-7 items-center justify-center rounded-xl bg-[#FF5C18] shadow-[0_4px_14px_rgba(255,92,24,0.40)]">
-          <span className="absolute inset-0 animate-ping rounded-xl bg-[#FF5C18] opacity-25" />
+        <span className="relative mt-0.5 flex-shrink-0 inline-flex h-7 w-7 items-center justify-center rounded-xl bg-[#6366F1] shadow-[0_4px_14px_rgba(99,102,241,0.40)]">
+          <span className="absolute inset-0 animate-ping rounded-xl bg-[#6366F1] opacity-25" />
           <Sparkles className="h-3.5 w-3.5 text-white" />
         </span>
         <div className="rounded-2xl rounded-tl-sm border border-slate-100 bg-white px-5 py-3.5 shadow-sm">
@@ -85,7 +85,7 @@ export function ScoutThinkingCanvas({ workspaceMode, lastUserMessage, narrative 
               {[0, 150, 300].map((d) => (
                 <span
                   key={d}
-                  className="h-1.5 w-1.5 rounded-full bg-[#FF5C18]/50 animate-bounce"
+                  className="h-1.5 w-1.5 rounded-full bg-[#6366F1]/50 animate-bounce"
                   style={{ animationDelay: `${d}ms` }}
                 />
               ))}

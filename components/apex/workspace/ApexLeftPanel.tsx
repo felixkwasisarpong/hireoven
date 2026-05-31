@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { Activity, Eye, Search, Layers, FileText, CheckCircle2, Send, Bookmark, Zap } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
-import type { ScoutTimelineEvent } from "@/lib/scout/timeline/types"
+import type { ApexTimelineEvent } from "@/lib/apex/timeline/types"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -16,7 +16,7 @@ type WatchlistEntry = {
 
 type Props = {
   isActive: boolean
-  recentEvents: ScoutTimelineEvent[]
+  recentEvents: ApexTimelineEvent[]
   onCommand: (cmd: string) => void
   firstName?: string
 }
@@ -115,7 +115,7 @@ function actionIconFor(title: string): { Icon: LucideIcon; color: string } {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function ScoutLeftPanel({ isActive, recentEvents, onCommand }: Props) {
+export function ApexLeftPanel({ isActive, recentEvents, onCommand }: Props) {
   const [watchlist, setWatchlist] = useState<WatchlistEntry[]>([])
   const [loaded, setLoaded] = useState(false)
 
@@ -204,7 +204,7 @@ export function ScoutLeftPanel({ isActive, recentEvents, onCommand }: Props) {
               return (
                 <div
                   key={ev.id}
-                  className={`flex items-start gap-2 ${idx === 0 ? "animate-[scout-slide-in_0.3s_ease-out_both]" : ""}`}
+                  className={`flex items-start gap-2 ${idx === 0 ? "animate-[apex-slide-in_0.3s_ease-out_both]" : ""}`}
                 >
                   <span
                     className={`mt-[5px] h-1.5 w-1.5 flex-shrink-0 rounded-full ${

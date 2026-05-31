@@ -895,7 +895,7 @@ export default function AutofillPageClient({
               index={7}
             >
               <p className="text-xs leading-relaxed text-gray-400 -mt-2">
-                Most ATS platforms include voluntary EEO questions. Enabling this means Scout will attempt to fill them
+                Most ATS platforms include voluntary EEO questions. Enabling this means Apex will attempt to fill them
                 using the values you choose below, fuzzy-matched to whatever options the ATS provides.
               </p>
 
@@ -953,7 +953,7 @@ export default function AutofillPageClient({
 
               {!form.auto_fill_diversity && (
                 <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-700">
-                  Enable &ldquo;Auto-fill EEO&rdquo; above to have Scout fill these fields.
+                  Enable &ldquo;Auto-fill EEO&rdquo; above to have Apex fill these fields.
                   Your selections are saved but won&rsquo;t be used until you opt in.
                 </p>
               )}

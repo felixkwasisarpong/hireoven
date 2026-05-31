@@ -1,13 +1,13 @@
 import type { Plan } from "@/lib/gates"
 
 export type MeteredFeature =
-  | "scout_message"
+  | "apex_message"
   | "cover_letter"
   | "resume_tailor"
   | "deep_analysis"
   | "autofill"
   | "interview_prep_turn"
-  | "scout_strategy"
+  | "apex_strategy"
 
 export type QuotaPeriod = "day" | "month"
 
@@ -22,10 +22,10 @@ export type QuotaConfig = {
 // utilization. See scripts/audit-ai-costs.ts (TODO) for the underlying math.
 // Power users above these caps purchase top-up packs (see lib/billing/packs.ts).
 export const FEATURE_QUOTAS: Record<MeteredFeature, QuotaConfig> = {
-  scout_message: {
+  apex_message: {
     period: "month",
-    label: "Scout messages",
-    shortLabel: "Scout",
+    label: "Apex messages",
+    shortLabel: "Apex",
     limits: { free: 15, pro: 150, pro_max: 300 },
   },
   cover_letter: {
@@ -60,9 +60,9 @@ export const FEATURE_QUOTAS: Record<MeteredFeature, QuotaConfig> = {
     // Free has zero — interview_prep is plan-gated.
     limits: { free: 0, pro: 50, pro_max: 120 },
   },
-  scout_strategy: {
+  apex_strategy: {
     period: "month",
-    label: "Scout strategy plans",
+    label: "Apex strategy plans",
     shortLabel: "Strategy",
     // Strategy / career-engine calls. Free has zero — feature is plan-gated.
     limits: { free: 0, pro: 3, pro_max: 12 },

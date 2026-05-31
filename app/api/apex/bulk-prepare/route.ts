@@ -5,7 +5,7 @@ import { getPostgresPool } from "@/lib/postgres/server"
 import { generateCoverLetter } from "@/lib/resume/cover-letter-generator"
 import { compareResumeToJob } from "@/lib/resume/hub"
 import { logApiUsage } from "@/lib/admin/usage"
-import type { BulkFailReason } from "@/lib/scout/bulk-application/types"
+import type { BulkFailReason } from "@/lib/apex/bulk-application/types"
 import type { Resume, Job, Company } from "@/types"
 import type { TailoredBulletSuggestion } from "@/types/resume-hub"
 
@@ -51,7 +51,7 @@ function detectAtsFromApplyUrl(applyUrl: string | null | undefined): DetectedAts
 }
 
 export async function POST(request: Request) {
-  const gate = await requireFeature("scout_actions", request as Parameters<typeof requireFeature>[1])
+  const gate = await requireFeature("apex_actions", request as Parameters<typeof requireFeature>[1])
   if (gate instanceof NextResponse) return gate
   const { userId } = gate
   const supabase = await createClient()

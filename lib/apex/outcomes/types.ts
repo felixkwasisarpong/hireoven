@@ -1,5 +1,5 @@
 /**
- * Scout Outcome Tracking + Learning Loop — Types V2
+ * Apex Outcome Tracking + Learning Loop — Types V2
  *
  * Outcomes are user-controlled signals about what happened after applying.
  * Learning signals are derived from patterns in recorded outcomes.
@@ -15,7 +15,7 @@ import type { RoleCategory, JobSector } from "./categorizers"
 
 // ── V2: Typed outcome lifecycle ────────────────────────────────────────────────
 
-export type ScoutOutcomeType =
+export type ApexOutcomeType =
   | "application_sent"
   | "application_reviewed"   // employer opened the application
   | "recruiter_reply"         // recruiter reached out
@@ -24,9 +24,9 @@ export type ScoutOutcomeType =
   | "offer_received"          // offer extended
   | "offer_accepted"          // user accepted
   | "application_rejected"    // formal rejection
-  | "workflow_abandoned"      // user abandoned a Scout workflow mid-way
+  | "workflow_abandoned"      // user abandoned a Apex workflow mid-way
 
-export type ScoutOutcomeMeta = {
+export type ApexOutcomeMeta = {
   roleCategory?:      RoleCategory | null
   sector?:            JobSector | null
   sponsorshipRelated?: boolean
@@ -34,19 +34,19 @@ export type ScoutOutcomeMeta = {
 }
 
 /** V2 outcome event — persisted to scout_outcomes table */
-export type ScoutOutcome = {
+export type ApexOutcome = {
   id:               string
-  type:             ScoutOutcomeType
+  type:             ApexOutcomeType
   relatedJobId?:    string | null
   relatedCompanyId?: string | null
   applicationId?:   string | null
-  metadata?:        ScoutOutcomeMeta
+  metadata?:        ApexOutcomeMeta
   source:           "manual" | "application_status" | "extension" | "workflow"
   createdAt:        string
 }
 
 /** Reaction a user records against a learning signal */
-export type ScoutSignalReaction =
+export type ApexSignalReaction =
   | "helpful"
   | "not_helpful"
   | "got_interview"
@@ -54,7 +54,7 @@ export type ScoutSignalReaction =
   | "rejected"
   | "ignore"
 
-export const SIGNAL_REACTION_LABELS: Record<ScoutSignalReaction, string> = {
+export const SIGNAL_REACTION_LABELS: Record<ApexSignalReaction, string> = {
   helpful:       "Helpful",
   not_helpful:   "Not helpful",
   got_interview: "Got interview",
@@ -63,8 +63,8 @@ export const SIGNAL_REACTION_LABELS: Record<ScoutSignalReaction, string> = {
   ignore:        "Ignore",
 }
 
-// Maps V2 ScoutOutcomeType → V1 ApplicationOutcome (for backward compat with existing DB logic)
-export const OUTCOME_TYPE_TO_APP_OUTCOME: Record<ScoutOutcomeType, string> = {
+// Maps V2 ApexOutcomeType → V1 ApplicationOutcome (for backward compat with existing DB logic)
+export const OUTCOME_TYPE_TO_APP_OUTCOME: Record<ApexOutcomeType, string> = {
   application_sent:      "applied",
   application_reviewed:  "applied",
   recruiter_reply:       "recruiter_screen",
@@ -77,7 +77,7 @@ export const OUTCOME_TYPE_TO_APP_OUTCOME: Record<ScoutOutcomeType, string> = {
 }
 
 // Human-readable labels for each outcome type
-export const SCOUT_OUTCOME_LABELS: Record<ScoutOutcomeType, string> = {
+export const APEX_OUTCOME_LABELS: Record<ApexOutcomeType, string> = {
   application_sent:      "Application sent",
   application_reviewed:  "Application reviewed by employer",
   recruiter_reply:       "Recruiter replied",
@@ -90,7 +90,7 @@ export const SCOUT_OUTCOME_LABELS: Record<ScoutOutcomeType, string> = {
 }
 
 // Positive outcomes for learning signal purposes
-export const POSITIVE_SCOUT_OUTCOMES = new Set<ScoutOutcomeType>([
+export const POSITIVE_APEX_OUTCOMES = new Set<ApexOutcomeType>([
   "recruiter_reply",
   "interview_received",
   "interview_passed",
@@ -141,7 +141,7 @@ export const TERMINAL_OUTCOMES = new Set<ApplicationOutcome>(["offer", "rejected
 
 // ── Outcome signal ────────────────────────────────────────────────────────────
 
-export type ScoutOutcomeSignal = {
+export type ApexOutcomeSignal = {
   applicationId: string
   jobId:         string
   companyId?:    string
@@ -163,7 +163,7 @@ export type OutcomeLearningSignal = {
   signal:          string
   evidence:        string[]
   confidence:      "high" | "medium" | "low"
-  /** Optional suggested Scout action or mission adjustment */
+  /** Optional suggested Apex action or mission adjustment */
   suggestedAction?: string
   /** What dimension drove this signal (role, company type, work mode, etc.) */
   dimension:       "role_type" | "work_mode" | "company_type" | "sponsorship" | "seniority" | "general"

@@ -1,7 +1,7 @@
 "use client"
 
 import { cn } from "@/lib/utils"
-import type { CodingLanguage } from "@/lib/scout/interview/codingRunner"
+import type { CodingLanguage } from "@/lib/apex/interview/codingRunner"
 
 const OPTIONS: { id: CodingLanguage; label: string }[] = [
   { id: "python",     label: "Python" },

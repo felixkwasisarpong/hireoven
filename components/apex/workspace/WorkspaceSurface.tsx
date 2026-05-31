@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import type { WorkspaceMode } from "@/lib/scout/workspace"
+import type { WorkspaceMode } from "@/lib/apex/workspace"
 
 // Transition timings — fast and understated (no bounce, no spring)
 const LEAVE_MS  = 110  // fade out old mode

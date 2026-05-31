@@ -1,5 +1,5 @@
 /**
- * Scout Research Engine — bounded multi-step research execution.
+ * Apex Research Engine — bounded multi-step research execution.
  *
  * Server-only. Each step runs sequentially so SSE events stream
  * progressively to the client. Step order mirrors the skeleton in tasks.ts.
@@ -17,7 +17,7 @@
  */
 
 import type { Pool } from "pg"
-import type { ScoutResearchTask, ScoutResearchFinding, ResearchSSEEvent } from "./types"
+import type { ApexResearchTask, ApexResearchFinding, ResearchSSEEvent } from "./types"
 import type { ResearchType } from "./tasks"
 
 const STEP_TIMEOUT_MS  = 10_000
@@ -218,8 +218,8 @@ async function runFetchCompanyIntel(
 async function runFetchMarketSignals(
   userId: string
 ): Promise<{ summary: string; signals: string[] }> {
-  const { getMarketIntelligence } = await import("@/lib/scout/market-intelligence")
-  const result = await getMarketIntelligence(userId).catch(() => ({ signals: [] as import("@/lib/scout/market-intelligence").MarketSignal[] }))
+  const { getMarketIntelligence } = await import("@/lib/apex/market-intelligence")
+  const result = await getMarketIntelligence(userId).catch(() => ({ signals: [] as import("@/lib/apex/market-intelligence").MarketSignal[] }))
   const signals = result.signals.slice(0, 4).map((s) => s.summary)
   return {
     summary: signals.length > 0 ? `Gathered ${signals.length} market signal${signals.length !== 1 ? "s" : ""}` : "Market signals unavailable",
@@ -270,7 +270,7 @@ async function runLoadUserProfile(
 async function runSynthesis(
   objective: string,
   data: AccumulatedData
-): Promise<{ findings: ScoutResearchFinding[] }> {
+): Promise<{ findings: ApexResearchFinding[] }> {
   const Anthropic = (await import("@anthropic-ai/sdk")).default
   const anthropic = process.env.ANTHROPIC_API_KEY
     ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
@@ -352,7 +352,7 @@ CRITICAL: Only cite numbers from the evidence above. Never invent statistics.`
     const parsed  = JSON.parse(cleaned) as { findings?: unknown[] }
 
     const VALID_TYPES = new Set(["job_cluster","company_pattern","skill_gap","market_signal","sponsorship_pattern","career_path"])
-    const findings: ScoutResearchFinding[] = []
+    const findings: ApexResearchFinding[] = []
 
     for (const raw of parsed.findings ?? []) {
       if (!raw || typeof raw !== "object") continue
@@ -361,7 +361,7 @@ CRITICAL: Only cite numbers from the evidence above. Never invent statistics.`
       if (typeof f.type !== "string" || !VALID_TYPES.has(f.type)) continue
 
       findings.push({
-        type:       f.type as ScoutResearchFinding["type"],
+        type:       f.type as ApexResearchFinding["type"],
         title:      f.title.trim(),
         summary:    f.summary.trim(),
         evidence:   Array.isArray(f.evidence)
@@ -395,7 +395,7 @@ type StepFn = () => Promise<string>   // returns summary string
 
 async function executeStep(
   stepId: string,
-  task:   ScoutResearchTask,
+  task:   ApexResearchTask,
   emit:   ResearchEmit,
   fn:     StepFn
 ): Promise<void> {
@@ -420,10 +420,10 @@ export type ResearchEngineCtx = {
 }
 
 export async function runResearchEngine(
-  task: ScoutResearchTask,
+  task: ApexResearchTask,
   ctx:  ResearchEngineCtx,
   emit: ResearchEmit
-): Promise<ScoutResearchTask> {
+): Promise<ApexResearchTask> {
   const { userId, pool, researchType } = ctx
   const data: AccumulatedData = {}
   const deadline = Date.now() + TOTAL_TIMEOUT_MS

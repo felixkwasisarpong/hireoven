@@ -5,7 +5,7 @@
  * Hard rules:
  *   - Never auto-clicks the final submit button.
  *   - If the resume upload field is disabled (school-locked profile), surfaces
- *     SCOUT_LOCKED_RESUME and waits for user acknowledgement before continuing.
+ *     APEX_LOCKED_RESUME and waits for user acknowledgement before continuing.
  *   - Transcript attachment is opportunistic: only when both a transcript blob
  *     is supplied AND the form exposes a transcript field.
  */
@@ -183,7 +183,7 @@ async function gateStep(stepName: string): Promise<{ approved: boolean; reason?:
       resolve({ approved: false, reason: "no_runtime" })
       return
     }
-    chrome.runtime.sendMessage({ type: "SCOUT_GATE_STEP", driver: "handshake", stepName }, (response) => {
+    chrome.runtime.sendMessage({ type: "APEX_GATE_STEP", driver: "handshake", stepName }, (response) => {
       clearTimeout(timer)
       if (chrome.runtime.lastError) {
         resolve({ approved: false, reason: chrome.runtime.lastError.message })
@@ -203,7 +203,7 @@ async function lockedResumeWarning(): Promise<boolean> {
       resolve(false)
       return
     }
-    chrome.runtime.sendMessage({ type: "SCOUT_LOCKED_RESUME", driver: "handshake" }, (response) => {
+    chrome.runtime.sendMessage({ type: "APEX_LOCKED_RESUME", driver: "handshake" }, (response) => {
       clearTimeout(timer)
       if (chrome.runtime.lastError) {
         resolve(false)

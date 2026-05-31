@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
-import { detectSalaryFloor } from "@/lib/scout/salary/floor-detector"
+import { detectSalaryFloor } from "@/lib/apex/salary/floor-detector"
 
 export const dynamic = "force-dynamic"
 

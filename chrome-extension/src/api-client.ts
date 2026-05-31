@@ -1,7 +1,7 @@
 /**
- * Hireoven Scout MVP — extension API client.
+ * Hireoven Apex MVP — extension API client.
  *
- * Routes content-script callers (Scout Bar) through the background service
+ * Routes content-script callers (Apex Bar) through the background service
  * worker, which is the only context with chrome.cookies access for reading
  * the ho_session JWT. The bar must NOT call fetch() directly: it has no way
  * to attach the session token from a third-party page like LinkedIn.
@@ -11,7 +11,7 @@
  *   response: { ok: true, data } | { ok: false, error: string }
  */
 
-import type { ExtractedJob } from "./extractors/scout-extractor"
+import type { ExtractedJob } from "./extractors/apex-extractor"
 import type { LinkedInProfileData } from "./extractors/linkedin-profile"
 import type {
   ExtensionJobAnalysis,

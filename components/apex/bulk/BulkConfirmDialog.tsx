@@ -1,7 +1,7 @@
 "use client"
 
 import { Ban, ChevronRight, X } from "lucide-react"
-import type { BulkJobItem } from "@/lib/scout/bulk-application/types"
+import type { BulkJobItem } from "@/lib/apex/bulk-application/types"
 
 type Props = {
   jobs:          BulkJobItem[]
@@ -20,7 +20,7 @@ export function BulkConfirmDialog({ jobs, onConfirm, onEditList, onCancel }: Pro
         {/* Header */}
         <div className="flex items-start justify-between border-b border-slate-100 px-6 py-5">
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Scout Bulk Preparation</p>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Apex Bulk Preparation</p>
             <h2 className="mt-1 text-lg font-bold text-slate-900">
               Prepare {count} application{count !== 1 ? "s" : ""}
             </h2>
@@ -37,7 +37,7 @@ export function BulkConfirmDialog({ jobs, onConfirm, onEditList, onCancel }: Pro
         {/* Description */}
         <div className="px-6 py-5">
           <p className="text-sm leading-6 text-slate-600">
-            Scout will prepare a tailored resume draft, cover letter, and autofill packet for each role.
+            Apex will prepare a tailored resume draft, cover letter, and autofill packet for each role.
             <span className="font-semibold text-slate-800"> You review and submit each application manually.</span>
           </p>
 
@@ -70,7 +70,7 @@ export function BulkConfirmDialog({ jobs, onConfirm, onEditList, onCancel }: Pro
           <div className="mt-4 flex items-start gap-2 rounded-xl border border-slate-100 bg-slate-50 px-3.5 py-3">
             <Ban className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-slate-400" />
             <p className="text-xs leading-5 text-slate-500">
-              Scout will never submit applications, attach files, or insert content without your explicit approval.
+              Apex will never submit applications, attach files, or insert content without your explicit approval.
               Sensitive fields are always skipped.
             </p>
           </div>

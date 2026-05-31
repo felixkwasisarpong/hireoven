@@ -1,11 +1,11 @@
 /**
- * Scout in-memory TTL cache — no Redis dependency.
+ * Apex in-memory TTL cache — no Redis dependency.
  * Runs as a singleton in the Node.js process; survives across requests.
  *
  * Safety: never cache sensitive user data (resumes, autofill values, application answers).
  */
 
-import type { ScoutCacheStats } from "./types"
+import type { ApexCacheStats } from "./types"
 
 type CacheEntry<T> = {
   value:     T
@@ -16,7 +16,7 @@ type CacheEntry<T> = {
 
 const DEFAULT_MAX_SIZE = 400
 
-class ScoutCache {
+class ApexCache {
   private store = new Map<string, CacheEntry<unknown>>()
   private hits   = 0
   private misses = 0
@@ -64,7 +64,7 @@ class ScoutCache {
     }
   }
 
-  stats(): ScoutCacheStats {
+  stats(): ApexCacheStats {
     const total = this.hits + this.misses
     return {
       size:    this.store.size,
@@ -92,8 +92,8 @@ class ScoutCache {
 }
 
 // Singleton — one cache per process, shared across requests
-const globalForCache = globalThis as typeof globalThis & { _scoutCache?: ScoutCache }
-export const scoutCache = globalForCache._scoutCache ?? (globalForCache._scoutCache = new ScoutCache())
+const globalForCache = globalThis as typeof globalThis & { _apexCache?: ApexCache }
+export const apexCache = globalForCache._apexCache ?? (globalForCache._apexCache = new ApexCache())
 
 // ── TTL constants ─────────────────────────────────────────────────────────────
 
@@ -104,7 +104,7 @@ export const CACHE_TTL = {
   RESEARCH:            1 * 60 * 60 * 1000, // 1h per objective
   JOB_FIT:            30 * 60 * 1000,      // 30min — resume/job fit
   MARKET_SIGNALS:     60 * 60 * 1000,      // 1h
-  SCOUT_CHAT_COMMAND:  5 * 60 * 1000,      // 5min for repeated identical commands
+  APEX_CHAT_COMMAND:  5 * 60 * 1000,      // 5min for repeated identical commands
   COVER_LETTER:       30 * 60 * 1000,      // 30min — job + resume pair
 } as const
 

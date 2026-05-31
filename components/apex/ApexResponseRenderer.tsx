@@ -1,11 +1,11 @@
 "use client"
 
 /**
- * ScoutResponseRenderer — the single routing component for all Scout output.
+ * ApexResponseRenderer — the single routing component for all Apex output.
  *
  * Used by:
- *   - ScoutMessageBubble (dashboard + mini chat bubbles)
- *   - Any future Scout surface (extension overlay, mobile, etc.)
+ *   - ApexMessageBubble (dashboard + mini chat bubbles)
+ *   - Any future Apex surface (extension overlay, mobile, etc.)
  *
  * Contract:
  *   - NEVER renders raw JSON to the user
@@ -21,15 +21,15 @@
 
 import { useState } from "react"
 import { ChevronDown, ChevronUp } from "lucide-react"
-import { normalizeForDisplay, hasStructuredContent, type ScoutRenderContext } from "@/lib/scout/normalize-scout-response"
-import { renderInlineMarkdown } from "@/lib/scout/inline-markdown"
-import { ScoutActionRenderer } from "./ScoutActionRenderer"
-import { ScoutCompareRenderer } from "./ScoutCompareRenderer"
-import { ScoutExplanationRenderer } from "./ScoutExplanationRenderer"
-import { ScoutInterviewPrepRenderer } from "./ScoutInterviewPrepRenderer"
-import { ScoutWorkflowRenderer } from "./ScoutWorkflowRenderer"
-import { ScoutGraphRenderer } from "./renderers/ScoutGraphRenderer"
-import type { ScoutResponse } from "@/lib/scout/types"
+import { normalizeForDisplay, hasStructuredContent, type ApexRenderContext } from "@/lib/apex/normalize-apex-response"
+import { renderInlineMarkdown } from "@/lib/apex/inline-markdown"
+import { ApexActionRenderer } from "./ApexActionRenderer"
+import { ApexCompareRenderer } from "./ApexCompareRenderer"
+import { ApexExplanationRenderer } from "./ApexExplanationRenderer"
+import { ApexInterviewPrepRenderer } from "./ApexInterviewPrepRenderer"
+import { ApexWorkflowRenderer } from "./ApexWorkflowRenderer"
+import { ApexGraphRenderer } from "./renderers/ApexGraphRenderer"
+import type { ApexResponse } from "@/lib/apex/types"
 import type { FeatureKey } from "@/lib/gates"
 import { cn } from "@/lib/utils"
 
@@ -37,7 +37,7 @@ const IS_DEV = false
 
 // ── Dev-only debug panel ──────────────────────────────────────────────────────
 
-function DebugPanel({ raw }: { raw: ScoutResponse }) {
+function DebugPanel({ raw }: { raw: ApexResponse }) {
   const [open, setOpen] = useState(false)
   return (
     <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50">
@@ -61,13 +61,13 @@ function DebugPanel({ raw }: { raw: ScoutResponse }) {
 // ── Public component ──────────────────────────────────────────────────────────
 
 type Props = {
-  response:   ScoutResponse
-  context?:   ScoutRenderContext
+  response:   ApexResponse
+  context?:   ApexRenderContext
   /** Called when user clicks an upgrade CTA — pass through from parent */
   onUpgrade?: (feature: FeatureKey) => void
 }
 
-export function ScoutResponseRenderer({ response, context = "dashboard", onUpgrade }: Props) {
+export function ApexResponseRenderer({ response, context = "dashboard", onUpgrade }: Props) {
   const n       = normalizeForDisplay(response)
   const compact = context === "mini" || context === "extension"
 
@@ -85,36 +85,36 @@ export function ScoutResponseRenderer({ response, context = "dashboard", onUpgra
       {/* ── Fallback when answer is blank but structured content exists ── */}
       {!n.displayText && hasStructuredContent(n) && (
         <p className={cn("text-slate-600", textSizeClass)}>
-          Scout prepared the structured guidance below.
+          Apex prepared the structured guidance below.
         </p>
       )}
 
       {/* ── Graph / chart ──────────────────────────────────────────────── */}
       {n.graph && (
-        <ScoutGraphRenderer graph={n.graph} compact={compact} />
+        <ApexGraphRenderer graph={n.graph} compact={compact} />
       )}
 
       {/* ── Visual explanation blocks ──────────────────────────────────── */}
-      <ScoutExplanationRenderer explanations={n.explanations} compact={compact} />
+      <ApexExplanationRenderer explanations={n.explanations} compact={compact} />
 
       {/* ── Job comparison ─────────────────────────────────────────────── */}
       {n.compare && (
-        <ScoutCompareRenderer compare={n.compare} />
+        <ApexCompareRenderer compare={n.compare} />
       )}
 
       {/* ── Interview prep ──────────────────────────────────────────────── */}
       {n.interviewPrep && (
-        <ScoutInterviewPrepRenderer interviewPrep={n.interviewPrep} />
+        <ApexInterviewPrepRenderer interviewPrep={n.interviewPrep} />
       )}
 
       {/* ── Suggested actions ──────────────────────────────────────────── */}
       {n.actions.length > 0 && (
-        <ScoutActionRenderer actions={n.actions} source="chat" />
+        <ApexActionRenderer actions={n.actions} source="chat" />
       )}
 
       {/* ── Guided workflow ─────────────────────────────────────────────── */}
       {n.workflow && (
-        <ScoutWorkflowRenderer workflow={n.workflow} />
+        <ApexWorkflowRenderer workflow={n.workflow} />
       )}
 
       {/* ── Dev-only debug panel — raw JSON never shown by default ─────── */}

@@ -1,25 +1,25 @@
 "use client"
 
 /**
- * ScoutOutcomePicker — V2
+ * ApexOutcomePicker — V2
  *
  * Records typed outcome lifecycle events against an application.
- * Calls the new /api/scout/outcomes/record endpoint which writes
+ * Calls the new /api/apex/outcomes/record endpoint which writes
  * to scout_outcomes and optionally advances the application status.
  *
- * Also exports ScoutSignalReactionBar — lightweight reaction buttons
+ * Also exports ApexSignalReactionBar — lightweight reaction buttons
  * for learning signal cards (helpful / got interview / not helpful).
  */
 
 import { useState } from "react"
 import { CheckCircle2, ChevronDown, Loader2, ThumbsUp, ThumbsDown, Briefcase, X } from "lucide-react"
 import { cn } from "@/lib/utils"
-import type { ScoutOutcomeType, ScoutSignalReaction } from "@/lib/scout/outcomes/types"
-import { SCOUT_OUTCOME_LABELS, SIGNAL_REACTION_LABELS } from "@/lib/scout/outcomes/types"
+import type { ApexOutcomeType, ApexSignalReaction } from "@/lib/apex/outcomes/types"
+import { APEX_OUTCOME_LABELS, SIGNAL_REACTION_LABELS } from "@/lib/apex/outcomes/types"
 
 // ── Outcome groups for the picker UI ─────────────────────────────────────────
 
-const OUTCOME_GROUPS: { label: string; outcomes: ScoutOutcomeType[] }[] = [
+const OUTCOME_GROUPS: { label: string; outcomes: ApexOutcomeType[] }[] = [
   {
     label: "Progress",
     outcomes: [
@@ -37,7 +37,7 @@ const OUTCOME_GROUPS: { label: string; outcomes: ScoutOutcomeType[] }[] = [
   },
 ]
 
-const OUTCOME_TONE: Partial<Record<ScoutOutcomeType, string>> = {
+const OUTCOME_TONE: Partial<Record<ApexOutcomeType, string>> = {
   application_reviewed: "text-sky-600 bg-sky-50 hover:bg-sky-100 border-sky-200",
   recruiter_reply:      "text-emerald-600 bg-emerald-50 hover:bg-emerald-100 border-emerald-200",
   interview_received:   "text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border-emerald-200",
@@ -47,7 +47,7 @@ const OUTCOME_TONE: Partial<Record<ScoutOutcomeType, string>> = {
   application_rejected: "text-red-600 bg-red-50 hover:bg-red-100 border-red-200",
 }
 
-const OUTCOME_DOT: Partial<Record<ScoutOutcomeType, string>> = {
+const OUTCOME_DOT: Partial<Record<ApexOutcomeType, string>> = {
   application_reviewed: "bg-sky-400",
   recruiter_reply:      "bg-emerald-400",
   interview_received:   "bg-emerald-500",
@@ -57,30 +57,30 @@ const OUTCOME_DOT: Partial<Record<ScoutOutcomeType, string>> = {
   application_rejected: "bg-red-400",
 }
 
-// ── ScoutOutcomePicker ────────────────────────────────────────────────────────
+// ── ApexOutcomePicker ────────────────────────────────────────────────────────
 
 type PickerProps = {
   applicationId:   string
-  currentOutcome?: ScoutOutcomeType | null
+  currentOutcome?: ApexOutcomeType | null
   compact?:        boolean
-  onRecorded?:     (outcome: ScoutOutcomeType) => void
+  onRecorded?:     (outcome: ApexOutcomeType) => void
 }
 
-export function ScoutOutcomePicker({
+export function ApexOutcomePicker({
   applicationId,
   currentOutcome,
   compact = false,
   onRecorded,
 }: PickerProps) {
   const [saving,   setSaving]   = useState(false)
-  const [recorded, setRecorded] = useState<ScoutOutcomeType | null>(currentOutcome ?? null)
+  const [recorded, setRecorded] = useState<ApexOutcomeType | null>(currentOutcome ?? null)
   const [open,     setOpen]     = useState(false)
 
-  async function handleSelect(type: ScoutOutcomeType) {
+  async function handleSelect(type: ApexOutcomeType) {
     setSaving(true)
     setOpen(false)
     try {
-      await fetch("/api/scout/outcomes/record", {
+      await fetch("/api/apex/outcomes/record", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({ type, applicationId, source: "manual" }),
@@ -94,7 +94,7 @@ export function ScoutOutcomePicker({
     }
   }
 
-  const displayLabel = recorded ? SCOUT_OUTCOME_LABELS[recorded] : "Record outcome"
+  const displayLabel = recorded ? APEX_OUTCOME_LABELS[recorded] : "Record outcome"
 
   // ── Compact mode: dropdown trigger ─────────────────────────────────────
   if (compact) {
@@ -133,7 +133,7 @@ export function ScoutOutcomePicker({
                         OUTCOME_DOT[type] ?? "bg-slate-300",
                       )}
                     />
-                    {SCOUT_OUTCOME_LABELS[type]}
+                    {APEX_OUTCOME_LABELS[type]}
                   </button>
                 ))}
               </div>
@@ -160,7 +160,7 @@ export function ScoutOutcomePicker({
         <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2">
           <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
           <span className="text-xs font-semibold text-emerald-700">
-            Recorded: {SCOUT_OUTCOME_LABELS[recorded]}
+            Recorded: {APEX_OUTCOME_LABELS[recorded]}
           </span>
           <button
             type="button"
@@ -191,7 +191,7 @@ export function ScoutOutcomePicker({
                 )}
               >
                 {saving && <Loader2 className="mr-1 inline h-3 w-3 animate-spin" />}
-                {SCOUT_OUTCOME_LABELS[type]}
+                {APEX_OUTCOME_LABELS[type]}
               </button>
             ))}
           </div>
@@ -201,16 +201,16 @@ export function ScoutOutcomePicker({
   )
 }
 
-// ── ScoutSignalReactionBar ────────────────────────────────────────────────────
+// ── ApexSignalReactionBar ────────────────────────────────────────────────────
 // Lightweight reaction strip shown below a learning signal card.
 
 type ReactionBarProps = {
   signalId:   string
-  onReact?:   (reaction: ScoutSignalReaction) => void
+  onReact?:   (reaction: ApexSignalReaction) => void
 }
 
 const REACTION_BUTTONS: Array<{
-  reaction: ScoutSignalReaction
+  reaction: ApexSignalReaction
   icon:     React.ReactNode
   label:    string
   style:    string
@@ -241,15 +241,15 @@ const REACTION_BUTTONS: Array<{
   },
 ]
 
-export function ScoutSignalReactionBar({ signalId, onReact }: ReactionBarProps) {
-  const [recorded, setRecorded] = useState<ScoutSignalReaction | null>(null)
+export function ApexSignalReactionBar({ signalId, onReact }: ReactionBarProps) {
+  const [recorded, setRecorded] = useState<ApexSignalReaction | null>(null)
   const [saving,   setSaving]   = useState(false)
 
-  async function handleReact(reaction: ScoutSignalReaction) {
+  async function handleReact(reaction: ApexSignalReaction) {
     if (saving) return
     setSaving(true)
     try {
-      await fetch("/api/scout/outcomes/reaction", {
+      await fetch("/api/apex/outcomes/reaction", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({ signalId, reaction }),

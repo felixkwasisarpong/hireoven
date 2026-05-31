@@ -1,19 +1,19 @@
 "use client"
 
 import { BarChart2, Clock3, FileText, ListTodo, Sparkles, X, Zap } from "lucide-react"
-import type { ActiveBrowserContext } from "@/lib/scout/browser-context"
-import type { ScoutActiveWorkflow } from "@/lib/scout/workflows/types"
-import type { ScoutTimelineEvent } from "@/lib/scout/timeline/types"
-import type { ScoutProactiveEvent } from "@/lib/scout/proactive/types"
+import type { ActiveBrowserContext } from "@/lib/apex/browser-context"
+import type { ApexActiveWorkflow } from "@/lib/apex/workflows/types"
+import type { ApexTimelineEvent } from "@/lib/apex/timeline/types"
+import type { ApexProactiveEvent } from "@/lib/apex/proactive/types"
 
 type Props = {
   open: boolean
   onClose: () => void
   browserContext: ActiveBrowserContext | null
-  activeWorkflow: ScoutActiveWorkflow | null
-  latestEvents: ScoutTimelineEvent[]
-  proactiveEvents: ScoutProactiveEvent[]
-  onOpenProactive: (event: ScoutProactiveEvent) => void
+  activeWorkflow: ApexActiveWorkflow | null
+  latestEvents: ApexTimelineEvent[]
+  proactiveEvents: ApexProactiveEvent[]
+  onOpenProactive: (event: ApexProactiveEvent) => void
   onExpandWorkflow: () => void
   onPreFill: (query: string) => void
   onOpenTimeline: () => void
@@ -45,7 +45,7 @@ export function MobileContextSheet({
     <div className="fixed inset-0 z-50 lg:hidden">
       <button
         type="button"
-        aria-label="Close Scout context"
+        aria-label="Close Apex context"
         onClick={onClose}
         className="absolute inset-0 bg-black/25"
       />
@@ -53,7 +53,7 @@ export function MobileContextSheet({
       <div className="absolute inset-x-0 bottom-0 max-h-[82vh] overflow-hidden rounded-t-3xl border border-slate-200 bg-white shadow-[0_-12px_36px_rgba(15,23,42,0.25)]">
         <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
           <div>
-            <p className="text-xs font-semibold text-slate-900">Scout context</p>
+            <p className="text-xs font-semibold text-slate-900">Apex context</p>
             <p className="text-[11px] text-slate-500">Latest activity and browser awareness</p>
           </div>
           <button
@@ -81,7 +81,7 @@ export function MobileContextSheet({
                       onExpandWorkflow()
                       onClose()
                     }}
-                    className="mt-2 rounded-full border border-[#FF5C18]/25 bg-[#FF5C18]/7 px-3 py-1 text-[11px] font-semibold text-[#FF5C18]"
+                    className="mt-2 rounded-full border border-[#6366F1]/25 bg-[#6366F1]/7 px-3 py-1 text-[11px] font-semibold text-[#6366F1]"
                   >
                     Open workflow
                   </button>
@@ -100,7 +100,7 @@ export function MobileContextSheet({
                     onOpenTimeline()
                     onClose()
                   }}
-                  className="text-[10px] font-semibold text-[#FF5C18]"
+                  className="text-[10px] font-semibold text-[#6366F1]"
                 >
                   View timeline
                 </button>
@@ -116,7 +116,7 @@ export function MobileContextSheet({
                   </div>
                 ))}
                 {latestEvents.length === 0 && (
-                  <p className="text-xs text-slate-500">No recent Scout actions.</p>
+                  <p className="text-xs text-slate-500">No recent Apex actions.</p>
                 )}
               </div>
             </div>
@@ -176,7 +176,7 @@ export function MobileContextSheet({
             </div>
 
             <div className="min-w-[84%] snap-start rounded-2xl border border-slate-200 bg-slate-50/80 p-3">
-              <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Proactive Scout</p>
+              <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Proactive Apex</p>
               <div className="space-y-1.5">
                 {proactiveEvents.slice(0, 3).map((event) => (
                   <button

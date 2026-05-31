@@ -1,8 +1,8 @@
 /**
- * Hireoven Scout Bar — Job extractor.
+ * Hireoven Apex Bar — Job extractor.
  *
  * Pure DOM/URL-based extraction. No backend calls, no AI. Returns a normalized
- * job snapshot the Scout Bar (and later integrations) can render.
+ * job snapshot the Apex Bar (and later integrations) can render.
  *
  * Strategy per call:
  *   1. Dispatch by detectSite() to a source-specific DOM extractor.
@@ -12,7 +12,7 @@
  *
  * Distinct from the legacy `extractors/job.ts` which targets the older
  * `ExtractedJob` shape in `types.ts` consumed by background/popup. The two
- * extractors coexist; the Scout Bar imports this one.
+ * extractors coexist; the Apex Bar imports this one.
  */
 
 import { detectSite, type SupportedSite } from "../detectors/site"
@@ -56,7 +56,7 @@ export type ExtractedJob = {
   /**
    * "Over 100 people clicked apply", "23 applicants", etc. — the engagement
    * snippet LinkedIn (and a few others) include in the metadata row. Useful
-   * for the Detail Scout panel; never used as a filter.
+   * for the Detail Apex panel; never used as a filter.
    */
   applicantActivityText?: string
   /** True when the metadata row contains "Promoted". */

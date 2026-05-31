@@ -1,8 +1,8 @@
 /**
- * GET /api/scout/company-intel/[companyId]
+ * GET /api/apex/company-intel/[companyId]
  *
  * Returns CompanyIntel derived from existing DB data — no new schema, no AI calls.
- * Fast enough to call on company context change in Scout workspace.
+ * Fast enough to call on company context change in Apex workspace.
  *
  * Cache: 6-hour stale-while-revalidate (data changes slowly).
  */
@@ -10,7 +10,7 @@
 import { NextResponse } from "next/server"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { createClient } from "@/lib/supabase/server"
-import { deriveCompanyIntel, buildCompanyIntelSummary } from "@/lib/scout/company-intel/aggregator"
+import { deriveCompanyIntel, buildCompanyIntelSummary } from "@/lib/apex/company-intel/aggregator"
 import type { Company, Job } from "@/types"
 
 export const runtime = "nodejs"

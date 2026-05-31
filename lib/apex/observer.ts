@@ -1,7 +1,7 @@
 /**
- * Scout Observer — lightweight structured observability.
+ * Apex Observer — lightweight structured observability.
  *
- * Captures Scout-specific error events without logging sensitive values.
+ * Captures Apex-specific error events without logging sensitive values.
  * Writes to:
  *   - console.error (dev only, or on explicit errors)
  *   - sessionStorage ring buffer (last 30 events, cleared on tab close)
@@ -14,17 +14,17 @@
  * Future: swap the sessionStorage sink for a proper APM endpoint.
  */
 
-const STORE_KEY  = "hireoven:scout:observer:v1"
+const STORE_KEY  = "hireoven:apex:observer:v1"
 const MAX_EVENTS = 30
 
 // ── Event types ───────────────────────────────────────────────────────────────
 
-export type ScoutObserverEventType =
+export type ApexObserverEventType =
   | "render_error"          // React error boundary caught a crash
-  | "command_failure"       // Scout chat returned an error
+  | "command_failure"       // Apex chat returned an error
   | "directive_failure"     // workspace_directive failed to apply
-  | "parse_failure"         // JSON parse failed on Scout response
-  | "permission_denial"     // Scout action blocked by permission check
+  | "parse_failure"         // JSON parse failed on Apex response
+  | "permission_denial"     // Apex action blocked by permission check
   | "extension_failure"     // extension bridge dispatch failed
   | "workflow_failure"      // workflow step failed
   | "autofill_failure"      // autofill dispatch or field fill failed
@@ -34,14 +34,14 @@ export type ScoutObserverEventType =
   | "sse_error"             // SSE stream error
   | "timeout"               // request/step exceeded time limit
 
-export type ScoutObserverEvent = {
-  type:       ScoutObserverEventType
+export type ApexObserverEvent = {
+  type:       ApexObserverEventType
   message:    string
   metadata?:  Record<string, unknown>
   timestamp?: number
 }
 
-type StoredEvent = ScoutObserverEvent & { timestamp: number }
+type StoredEvent = ApexObserverEvent & { timestamp: number }
 
 const IS_DEV = process.env.NODE_ENV === "development"
 
@@ -64,18 +64,18 @@ function writeBuffer(events: StoredEvent[]): void {
 
 // ── Public observer ───────────────────────────────────────────────────────────
 
-export const scoutObserver = {
+export const apexObserver = {
   /**
-   * Record one Scout event. Never throws.
+   * Record one Apex event. Never throws.
    * Safe metadata only — never pass form values or user content.
    */
-  capture(event: ScoutObserverEvent): void {
+  capture(event: ApexObserverEvent): void {
     try {
       const stored: StoredEvent = { ...event, timestamp: Date.now() }
 
       // Console — always log errors to console.error regardless of env
       if (IS_DEV || event.type === "render_error" || event.type === "command_failure") {
-        console.error(`[scout:observer] ${event.type}`, event.message, event.metadata ?? "")
+        console.error(`[apex:observer] ${event.type}`, event.message, event.metadata ?? "")
       }
 
       const buf = readBuffer()
@@ -88,7 +88,7 @@ export const scoutObserver = {
 
   /** Convenience wrapper for caught Error objects. */
   captureError(
-    type:      ScoutObserverEventType,
+    type:      ApexObserverEventType,
     error:     unknown,
     metadata?: Record<string, unknown>,
   ): void {

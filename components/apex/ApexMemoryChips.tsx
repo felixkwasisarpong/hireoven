@@ -1,22 +1,22 @@
 "use client"
 
 import { Brain, X, Trash2 } from "lucide-react"
-import type { ScoutMemoryChip } from "@/lib/scout/search-profile"
+import type { ApexMemoryChip } from "@/lib/apex/search-profile"
 
 type Props = {
-  chips: ScoutMemoryChip[]
-  onDismiss: (key: ScoutMemoryChip["fieldKey"]) => void
+  chips: ApexMemoryChip[]
+  onDismiss: (key: ApexMemoryChip["fieldKey"]) => void
   onClearAll: () => void
 }
 
-export function ScoutMemoryChips({ chips, onDismiss, onClearAll }: Props) {
+export function ApexMemoryChips({ chips, onDismiss, onClearAll }: Props) {
   if (chips.length === 0) return null
 
   return (
     <div className="flex flex-wrap items-center gap-2 px-1">
       <div className="flex items-center gap-1.5 text-[10.5px] font-bold uppercase tracking-[0.2em] text-slate-400">
         <Brain className="h-3 w-3" />
-        Scout learned
+        Apex learned
       </div>
 
       {chips.map((chip) => (
@@ -40,7 +40,7 @@ export function ScoutMemoryChips({ chips, onDismiss, onClearAll }: Props) {
         type="button"
         onClick={onClearAll}
         className="inline-flex items-center gap-1 text-[10.5px] font-medium text-slate-400 transition hover:text-slate-600"
-        title="Clear all Scout memory"
+        title="Clear all Apex memory"
       >
         <Trash2 className="h-2.5 w-2.5" />
         Clear

@@ -23,15 +23,15 @@ import {
 import { useMemo, useState } from "react"
 import { cn } from "@/lib/utils"
 import type {
-  ScoutTimelineEvent,
-  ScoutTimelineEventType,
+  ApexTimelineEvent,
+  ApexTimelineEventType,
   TimelineFilter,
-  ScoutTimelineReplayAction,
-} from "@/lib/scout/timeline/types"
-import { FILTER_EVENT_TYPES } from "@/lib/scout/timeline/types"
+  ApexTimelineReplayAction,
+} from "@/lib/apex/timeline/types"
+import { FILTER_EVENT_TYPES } from "@/lib/apex/timeline/types"
 
 const EVENT_META: Record<
-  ScoutTimelineEventType,
+  ApexTimelineEventType,
   { icon: React.ElementType; label: string; dot: string }
 > = {
   command:                 { icon: MessageSquare, label: "Command",           dot: "bg-slate-400"   },
@@ -43,10 +43,10 @@ const EVENT_META: Record<
   autofill_detected:       { icon: Zap,           label: "Autofill",          dot: "bg-yellow-400"  },
   autofill_reviewed:       { icon: CheckSquare,   label: "Autofill reviewed", dot: "bg-yellow-500"  },
   permission_prompt:       { icon: Shield,        label: "Permission",        dot: "bg-amber-500"   },
-  research_started:        { icon: Search,        label: "Research",          dot: "bg-[#FF5C18]"   },
+  research_started:        { icon: Search,        label: "Research",          dot: "bg-[#6366F1]"   },
   research_finding:        { icon: Lightbulb,     label: "Finding",           dot: "bg-orange-400"  },
   manual_submit:           { icon: Briefcase,     label: "Manual submit",     dot: "bg-teal-500"    },
-  browser_action:          { icon: Zap,           label: "Browser action",    dot: "bg-[#FF5C18]"   },
+  browser_action:          { icon: Zap,           label: "Browser action",    dot: "bg-[#6366F1]"   },
   error:                   { icon: AlertCircle,   label: "Error",             dot: "bg-red-500"     },
 }
 
@@ -72,7 +72,7 @@ function formatDay(iso: string): string {
   return d.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })
 }
 
-function getSessionId(event: ScoutTimelineEvent): string {
+function getSessionId(event: ApexTimelineEvent): string {
   const value = event.metadata?.sessionId
   return typeof value === "string" && value.trim() ? value : "session-unknown"
 }
@@ -83,8 +83,8 @@ function shortSessionLabel(sessionId: string, index: number): string {
 }
 
 type EventRowProps = {
-  event: ScoutTimelineEvent
-  onReplay: (action: ScoutTimelineReplayAction) => void
+  event: ApexTimelineEvent
+  onReplay: (action: ApexTimelineReplayAction) => void
   isDev: boolean
 }
 
@@ -163,16 +163,16 @@ function EventRow({ event, onReplay, isDev }: EventRowProps) {
 
 type GroupedDay = {
   dayKey: string
-  events: ScoutTimelineEvent[]
+  events: ApexTimelineEvent[]
 }
 
 type GroupedSession = {
   sessionId: string
-  events: ScoutTimelineEvent[]
+  events: ApexTimelineEvent[]
 }
 
-function groupByDay(events: ScoutTimelineEvent[]): GroupedDay[] {
-  const map = new Map<string, ScoutTimelineEvent[]>()
+function groupByDay(events: ApexTimelineEvent[]): GroupedDay[] {
+  const map = new Map<string, ApexTimelineEvent[]>()
   for (const e of events) {
     const key = formatDay(e.timestamp)
     const bucket = map.get(key) ?? []
@@ -182,8 +182,8 @@ function groupByDay(events: ScoutTimelineEvent[]): GroupedDay[] {
   return [...map.entries()].map(([dayKey, rows]) => ({ dayKey, events: rows }))
 }
 
-function groupBySession(events: ScoutTimelineEvent[]): GroupedSession[] {
-  const map = new Map<string, ScoutTimelineEvent[]>()
+function groupBySession(events: ApexTimelineEvent[]): GroupedSession[] {
+  const map = new Map<string, ApexTimelineEvent[]>()
   for (const e of events) {
     const sessionId = getSessionId(e)
     const bucket = map.get(sessionId) ?? []
@@ -194,14 +194,14 @@ function groupBySession(events: ScoutTimelineEvent[]): GroupedSession[] {
 }
 
 type Props = {
-  events: ScoutTimelineEvent[]
+  events: ApexTimelineEvent[]
   onClose: () => void
-  onReplay: (action: ScoutTimelineReplayAction) => void
+  onReplay: (action: ApexTimelineReplayAction) => void
   onClear: () => void
   isDev: boolean
 }
 
-export function ScoutTimelinePanel({ events, onClose, onReplay, onClear, isDev }: Props) {
+export function ApexTimelinePanel({ events, onClose, onReplay, onClear, isDev }: Props) {
   const [filter, setFilter] = useState<TimelineFilter>("all")
 
   const visible = useMemo(() => {
@@ -220,7 +220,7 @@ export function ScoutTimelinePanel({ events, onClose, onReplay, onClear, isDev }
       <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
         <div className="flex items-center gap-2">
           <Clock className="h-3.5 w-3.5 text-slate-400" />
-          <p className="text-sm font-semibold text-slate-900">Scout Activity</p>
+          <p className="text-sm font-semibold text-slate-900">Apex Activity</p>
           {events.length > 0 && (
             <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
               {events.length}

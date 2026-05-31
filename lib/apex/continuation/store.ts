@@ -1,19 +1,19 @@
 "use client"
 
-import type { ScoutContinuationState } from "./types"
+import type { ApexContinuationState } from "./types"
 import { isEmptyContinuationState, sanitizeContinuationState } from "./sanitize"
 
-const KEY = "hireoven:scout:continuation:v1"
+const KEY = "hireoven:apex:continuation:v1"
 const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
 
-type ScoutContinuationLocalStore = {
+type ApexContinuationLocalStore = {
   v: 1
-  state: ScoutContinuationState
+  state: ApexContinuationState
   savedAt: number
 }
 
 export type ReadContinuationResult = {
-  state: ScoutContinuationState | null
+  state: ApexContinuationState | null
   savedAt: number | null
 }
 
@@ -32,7 +32,7 @@ export function readContinuationState(): ReadContinuationResult {
     const raw = localStorage.getItem(KEY)
     if (!raw) return defaultRead()
 
-    const parsed = JSON.parse(raw) as ScoutContinuationLocalStore
+    const parsed = JSON.parse(raw) as ApexContinuationLocalStore
     if (parsed.v !== 1 || typeof parsed.savedAt !== "number") return defaultRead()
 
     if (nowMs() - parsed.savedAt > MAX_AGE_MS) {
@@ -49,7 +49,7 @@ export function readContinuationState(): ReadContinuationResult {
   }
 }
 
-export function writeContinuationState(state: ScoutContinuationState): void {
+export function writeContinuationState(state: ApexContinuationState): void {
   if (typeof window === "undefined") return
 
   const clean = sanitizeContinuationState(state)
@@ -59,7 +59,7 @@ export function writeContinuationState(state: ScoutContinuationState): void {
   }
 
   try {
-    const payload: ScoutContinuationLocalStore = {
+    const payload: ApexContinuationLocalStore = {
       v: 1,
       state: clean,
       savedAt: nowMs(),

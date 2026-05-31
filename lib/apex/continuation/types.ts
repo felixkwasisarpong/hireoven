@@ -1,5 +1,5 @@
 /**
- * Scout Cross-Device Continuity — Types V1
+ * Apex Cross-Device Continuity — Types V1
  *
  * Privacy contract:
  * - Never include sensitive autofill values
@@ -9,21 +9,21 @@
  * Continuity payload should remain lightweight and human-reviewable.
  */
 
-export type ScoutResumableContextType =
+export type ApexResumableContextType =
   | "workflow"
   | "compare"
   | "tailor"
   | "research"
   | "application_queue"
 
-export type ScoutResumableContext = {
-  type: ScoutResumableContextType
+export type ApexResumableContext = {
+  type: ApexResumableContextType
   id: string
   title: string
   updatedAt: string
 }
 
-export type ScoutContinuationState = {
+export type ApexContinuationState = {
   activeMode?: string
   activeWorkflowId?: string
   activeJobId?: string
@@ -32,10 +32,10 @@ export type ScoutContinuationState = {
 
   recentCommands?: string[]
 
-  resumableContexts?: ScoutResumableContext[]
+  resumableContexts?: ApexResumableContext[]
 }
 
-export type ScoutContinuationApiResponse = {
-  state: ScoutContinuationState | null
+export type ApexContinuationApiResponse = {
+  state: ApexContinuationState | null
   updatedAt?: string | null
 }

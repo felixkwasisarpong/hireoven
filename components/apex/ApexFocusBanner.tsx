@@ -3,16 +3,16 @@
 import { useRouter, useSearchParams } from "next/navigation"
 import { Focus, X } from "lucide-react"
 
-export function ScoutFocusBanner() {
+export function ApexFocusBanner() {
   const router = useRouter()
   const searchParams = useSearchParams()
 
   function clearPersistedFocusMode() {
     try {
-      localStorage.removeItem("hireoven:scout-focus-mode:v1")
+      localStorage.removeItem("hireoven:apex-focus-mode:v1")
     } catch {}
     if (typeof window !== "undefined") {
-      window.dispatchEvent(new CustomEvent("scout:focus-mode-changed", { detail: { enabled: false } }))
+      window.dispatchEvent(new CustomEvent("apex:focus-mode-changed", { detail: { enabled: false } }))
     }
   }
 
@@ -35,7 +35,7 @@ export function ScoutFocusBanner() {
     >
       <Focus className="h-4 w-4 shrink-0 text-orange-600" aria-hidden />
       <div className="min-w-0 flex-1">
-        <span className="font-semibold text-orange-800">Scout Focus Mode is on</span>
+        <span className="font-semibold text-orange-800">Apex Focus Mode is on</span>
         <span className="ml-2 text-orange-600">
           Sorted by best match · prioritizing recent and sponsored roles
         </span>

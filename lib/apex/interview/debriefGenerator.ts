@@ -366,7 +366,7 @@ CONSTRAINTS
 3. SAMPLE BETTER ANSWERS: 2-3 items, only for the WEAKEST answers. The stronger_answer MUST use facts from the candidate's resume (if resume context was used). Never invent experience.
 4. OVERALL SCORE: integer 0-100. Calibrate: 85-100 ready now; 70-84 solid; 55-69 needs prep; 40-54 significant gap; 0-39 wrong interview type.
 5. HEADLINE: one sentence, 12-20 words, blunt and useful.
-6. RECOMMENDED_NEXT: exactly 3 actionable items for the next 7 days. At least one should mention a specific skill from the gaps. At least one should reference a Scout feature ("Run a coding test on...","Start a text interview targeting system design...").
+6. RECOMMENDED_NEXT: exactly 3 actionable items for the next 7 days. At least one should mention a specific skill from the gaps. At least one should reference a Apex feature ("Run a coding test on...","Start a text interview targeting system design...").
 7. CODING_FEEDBACK: null for text/live. Required for coding. correctness_pct must be exactly ${correctnessPct}.
 8. NEVER fabricate quotes. Empty string if none found.
 9. Output the JSON object now. No other text.`

@@ -2,22 +2,22 @@
 
 import { useEffect, useState } from "react"
 import { ArrowRight, RefreshCw, RotateCcw, Sparkles } from "lucide-react"
-import { ScoutMessageBubble } from "@/components/scout/ScoutMessageBubble"
-import { ScoutMissionStrip } from "@/components/scout/ScoutMissionStrip"
-import { ScoutNudgeStrip } from "@/components/scout/ScoutNudgeStrip"
-import { ScoutStreamingText } from "@/components/scout/ScoutStreamingText"
-import { ScoutExtensionPromo } from "@/components/scout/ScoutExtensionPromo"
-import { ScoutTrustBadge } from "@/components/scout/ScoutTrustBadge"
+import { ApexMessageBubble } from "@/components/apex/ApexMessageBubble"
+import { ApexMissionStrip } from "@/components/apex/ApexMissionStrip"
+import { ApexNudgeStrip } from "@/components/apex/ApexNudgeStrip"
+import { ApexStreamingText } from "@/components/apex/ApexStreamingText"
+import { ApexExtensionPromo } from "@/components/apex/ApexExtensionPromo"
+import { ApexTrustBadge } from "@/components/apex/ApexTrustBadge"
 import { useUpgradeModal } from "@/lib/context/UpgradeModalContext"
-import type { ScoutResponse } from "@/lib/scout/types"
-import type { ScoutNudge } from "@/lib/scout/nudges"
-import type { ScoutMission } from "@/lib/scout/missions/types"
-import type { ScoutResumableContext } from "@/lib/scout/continuation/types"
+import type { ApexResponse } from "@/lib/apex/types"
+import type { ApexNudge } from "@/lib/apex/nudges"
+import type { ApexMission } from "@/lib/apex/missions/types"
+import type { ApexResumableContext } from "@/lib/apex/continuation/types"
 
 type ChatMessage =
   | { id: string; role: "user";            text: string }
-  | { id: string; role: "scout";           response: ScoutResponse }
-  | { id: string; role: "scout_streaming"; streamText: string }
+  | { id: string; role: "apex";           response: ApexResponse }
+  | { id: string; role: "apex_streaming"; streamText: string }
 
 type Props = {
   greeting: string
@@ -25,7 +25,7 @@ type Props = {
   messages: ChatMessage[]
   isLoading: boolean
   error: string | null
-  nudges: ScoutNudge[]
+  nudges: ApexNudge[]
   strategyLoading: boolean
   resumeRefreshedNotice: boolean
   onClearChat: () => void
@@ -35,13 +35,13 @@ type Props = {
   hasSession?: boolean
   onStartFresh?: () => void
   userInitial?: string
-  missions?: ScoutMission[]
+  missions?: ApexMission[]
   momentumLine?: string
   onMissionLaunch?: (query: string) => void
   onMissionDismiss?: (missionId: string) => void
   onMissionsDisable?: () => void
-  continuationContexts?: ScoutResumableContext[]
-  onContinuationOpen?: (context: ScoutResumableContext) => void
+  continuationContexts?: ApexResumableContext[]
+  onContinuationOpen?: (context: ApexResumableContext) => void
   showExtensionPromo?: boolean
   hasData?: boolean
   onDismissExtPromo?: () => void
@@ -55,7 +55,7 @@ function TypingIndicator() {
         <Sparkles className="h-3.5 w-3.5 text-white" />
       </span>
       <div className="flex items-center gap-3 rounded-2xl rounded-tl-sm border border-slate-100 bg-white px-5 py-3.5 shadow-sm">
-        <span className="text-[12px] font-medium text-slate-400">Scout is thinking</span>
+        <span className="text-[12px] font-medium text-slate-400">Apex is thinking</span>
         <span className="flex items-center gap-1">
           {[0, 150, 300].map((delay) => (
             <span
@@ -99,7 +99,7 @@ export function IdleMode({
 }: Props) {
   const { showUpgrade } = useUpgradeModal()
   const hasConversation = messages.length > 0
-  const hasStreamingMessage = messages.some((msg) => msg.role === "scout_streaming")
+  const hasStreamingMessage = messages.some((msg) => msg.role === "apex_streaming")
 
   const [mounted, setMounted] = useState(false)
   useEffect(() => {
@@ -134,14 +134,14 @@ export function IdleMode({
             <div className={`mb-10 ${fade} ${mounted ? show : hide}`}>
               <div className="mb-4 inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-[11px] font-semibold text-blue-700">
                 <span className="h-1.5 w-1.5 rounded-full bg-[#2563EB] animate-pulse" />
-                Scout is ready
+                Apex is ready
               </div>
               <h2 className="text-[2.1rem] font-semibold leading-tight tracking-tight text-slate-900 sm:text-[2.4rem]">
                 {greeting}, {firstName}.
               </h2>
               <p className="mt-2.5 text-base text-slate-500">
                 {!hasData
-                  ? "Scout prepares applications, research, and workflows — you stay in control."
+                  ? "Apex prepares applications, research, and workflows — you stay in control."
                   : "What are you working on today?"}
               </p>
               {hasSession && onStartFresh && (
@@ -160,13 +160,13 @@ export function IdleMode({
               <div className={`mb-5 inline-flex items-center gap-2 text-xs text-slate-500 ${fade} ${mounted ? show : hide}`}
                 style={{ transitionDelay: "60ms" }}>
                 <RefreshCw className="h-3.5 w-3.5 flex-shrink-0 text-[#2563EB]" />
-                Scout refreshed context for your updated resume.
+                Apex refreshed context for your updated resume.
               </div>
             )}
 
             {showExtensionPromo && !hasSession && onDismissExtPromo && (
               <div className={`mb-5 ${fade} ${mounted ? show : hide}`} style={{ transitionDelay: "60ms" }}>
-                <ScoutExtensionPromo onDismiss={onDismissExtPromo} />
+                <ApexExtensionPromo onDismiss={onDismissExtPromo} />
               </div>
             )}
           </>
@@ -194,7 +194,7 @@ export function IdleMode({
           {/* Daily missions */}
           {!strategyLoading && missions.length > 0 && onMissionLaunch && onMissionDismiss && onMissionsDisable && (
             <div className={`mb-6 ${fade} ${mounted ? show : hide}`} style={{ transitionDelay: "180ms" }}>
-              <ScoutMissionStrip
+              <ApexMissionStrip
                 missions={missions}
                 momentumLine={momentumLine}
                 onLaunch={onMissionLaunch}
@@ -231,7 +231,7 @@ export function IdleMode({
           {/* Nudges */}
           {!strategyLoading && nudges.length > 0 && (
             <div className={`mb-6 ${fade} ${mounted ? show : hide}`} style={{ transitionDelay: "220ms" }}>
-              <ScoutNudgeStrip nudges={nudges} />
+              <ApexNudgeStrip nudges={nudges} />
             </div>
           )}
 
@@ -256,7 +256,7 @@ export function IdleMode({
           )}
 
           <div className={`mt-4 ${fade} ${mounted ? show : hide}`} style={{ transitionDelay: "300ms" }}>
-            <ScoutTrustBadge variant="strip" />
+            <ApexTrustBadge variant="strip" />
           </div>
         </div>
       )}
@@ -300,7 +300,7 @@ export function IdleMode({
               )
             }
 
-            if (msg.role === "scout_streaming") {
+            if (msg.role === "apex_streaming") {
               return (
                 <div key={msg.id} className="flex items-start gap-3">
                   <span className="relative mt-0.5 flex-shrink-0 inline-flex h-7 w-7 items-center justify-center rounded-xl bg-[#2563EB] shadow-[0_4px_14px_rgba(37,99,235,0.35)]">
@@ -310,7 +310,7 @@ export function IdleMode({
                   <div className="min-w-0 flex-1 overflow-hidden rounded-2xl rounded-tl-sm border border-slate-100 bg-white px-5 py-4 shadow-sm">
                     <div className="h-[2px] w-[calc(100%+2.5rem)] bg-[#2563EB] -mx-5 -mt-4 mb-3" />
                     {msg.streamText
-                      ? <ScoutStreamingText text={msg.streamText} />
+                      ? <ApexStreamingText text={msg.streamText} />
                       : <TypingIndicator />
                     }
                   </div>
@@ -319,7 +319,7 @@ export function IdleMode({
             }
 
             return (
-              <ScoutMessageBubble
+              <ApexMessageBubble
                 key={msg.id}
                 response={msg.response}
                 context="dashboard"

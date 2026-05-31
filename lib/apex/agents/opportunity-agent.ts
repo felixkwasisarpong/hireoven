@@ -8,16 +8,16 @@
  * sponsorship alternatives — enriches Claude with real relationship data.
  */
 
-import type { ScoutAgent, ScoutExecutionContext, AgentResult } from "./types"
-import type { OpportunityRecommendation } from "@/lib/scout/opportunity-graph/types"
+import type { ApexAgent, ApexExecutionContext, AgentResult } from "./types"
+import type { OpportunityRecommendation } from "@/lib/apex/opportunity-graph/types"
 
 type OpportunityResult = { recommendations: OpportunityRecommendation[] }
 
-export class OpportunityAgent implements ScoutAgent<OpportunityResult> {
+export class OpportunityAgent implements ApexAgent<OpportunityResult> {
   readonly id = "opportunity"
   readonly relevantIntents = ["opportunity", "compare", "search"] as import("./types").AgentIntent[]
 
-  async run(ctx: ScoutExecutionContext): Promise<AgentResult<OpportunityResult>> {
+  async run(ctx: ApexExecutionContext): Promise<AgentResult<OpportunityResult>> {
     const start = Date.now()
 
     const effectiveSkills = [
@@ -66,7 +66,7 @@ export class OpportunityAgent implements ScoutAgent<OpportunityResult> {
       ])
 
       const { skillOverlap, buildSimilarJobRecommendations, buildSkillUnlockRecommendations } =
-        await import("@/lib/scout/opportunity-graph/generator")
+        await import("@/lib/apex/opportunity-graph/generator")
 
       const similarHits = similarJobsRes.rows.filter((r) => r.overlap_count >= 2).map((r) => ({
         jobId:         r.id,

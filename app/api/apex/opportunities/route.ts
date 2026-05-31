@@ -1,5 +1,5 @@
 /**
- * GET /api/scout/opportunities
+ * GET /api/apex/opportunities
  *
  * Returns opportunity graph recommendations for the current context.
  * All relationships derived from existing DB data — no external graph engine.
@@ -17,14 +17,14 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { createClient } from "@/lib/supabase/server"
-import { skillOverlap, jaccardSimilarity, generateRecommendations } from "@/lib/scout/opportunity-graph/generator"
+import { skillOverlap, jaccardSimilarity, generateRecommendations } from "@/lib/apex/opportunity-graph/generator"
 import type {
   SimilarJobHit,
   AdjacentCompanyHit,
   SkillUnlockHit,
   CareerProgressionHit,
   OpportunityGraphResponse,
-} from "@/lib/scout/opportunity-graph/types"
+} from "@/lib/apex/opportunity-graph/types"
 
 export const runtime = "nodejs"
 

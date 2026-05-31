@@ -1,7 +1,7 @@
 import type {
-  ScoutContinuationState,
-  ScoutResumableContext,
-  ScoutResumableContextType,
+  ApexContinuationState,
+  ApexResumableContext,
+  ApexResumableContextType,
 } from "./types"
 
 const MAX_RECENT_COMMANDS = 8
@@ -11,7 +11,7 @@ const MAX_ID_LENGTH = 120
 const MAX_TITLE_LENGTH = 96
 const MAX_MODE_LENGTH = 36
 
-const CONTEXT_TYPES = new Set<ScoutResumableContextType>([
+const CONTEXT_TYPES = new Set<ApexResumableContextType>([
   "workflow",
   "compare",
   "tailor",
@@ -50,17 +50,17 @@ function sanitizeRecentCommands(value: unknown): string[] | undefined {
   return cleaned.length > 0 ? cleaned : undefined
 }
 
-function sanitizeResumableContexts(value: unknown, fallbackIso: string): ScoutResumableContext[] | undefined {
+function sanitizeResumableContexts(value: unknown, fallbackIso: string): ApexResumableContext[] | undefined {
   if (!Array.isArray(value)) return undefined
 
-  const byKey = new Map<string, ScoutResumableContext>()
+  const byKey = new Map<string, ApexResumableContext>()
 
   for (const raw of value) {
     if (!raw || typeof raw !== "object") continue
 
     const maybeType = safeString((raw as { type?: unknown }).type, 40)
-    const type = maybeType && CONTEXT_TYPES.has(maybeType as ScoutResumableContextType)
-      ? (maybeType as ScoutResumableContextType)
+    const type = maybeType && CONTEXT_TYPES.has(maybeType as ApexResumableContextType)
+      ? (maybeType as ApexResumableContextType)
       : null
 
     if (!type) continue
@@ -90,11 +90,11 @@ function sanitizeResumableContexts(value: unknown, fallbackIso: string): ScoutRe
   return list.length > 0 ? list : undefined
 }
 
-export function sanitizeContinuationState(input: unknown, nowIso = new Date().toISOString()): ScoutContinuationState {
+export function sanitizeContinuationState(input: unknown, nowIso = new Date().toISOString()): ApexContinuationState {
   const src = input && typeof input === "object" ? (input as Record<string, unknown>) : {}
 
   const rawMode = safeString(src.activeMode, MAX_MODE_LENGTH)
-  const state: ScoutContinuationState = {
+  const state: ApexContinuationState = {
     // bulk_application is transient — never restore it on refresh
     activeMode: rawMode === "bulk_application" ? undefined : rawMode,
     activeWorkflowId: safeString(src.activeWorkflowId, MAX_ID_LENGTH),
@@ -108,7 +108,7 @@ export function sanitizeContinuationState(input: unknown, nowIso = new Date().to
   return state
 }
 
-export function isEmptyContinuationState(state: ScoutContinuationState | null | undefined): boolean {
+export function isEmptyContinuationState(state: ApexContinuationState | null | undefined): boolean {
   if (!state) return true
 
   return !(
@@ -122,7 +122,7 @@ export function isEmptyContinuationState(state: ScoutContinuationState | null | 
   )
 }
 
-export function serializeContinuationState(state: ScoutContinuationState | null | undefined): string {
+export function serializeContinuationState(state: ApexContinuationState | null | undefined): string {
   if (!state) return ""
   return JSON.stringify({
     activeMode: state.activeMode ?? null,
@@ -141,9 +141,9 @@ export function serializeContinuationState(state: ScoutContinuationState | null 
 }
 
 export function mergeResumableContexts(
-  previous: ScoutResumableContext[] | undefined,
-  next: ScoutResumableContext[] | undefined,
-): ScoutResumableContext[] | undefined {
+  previous: ApexResumableContext[] | undefined,
+  next: ApexResumableContext[] | undefined,
+): ApexResumableContext[] | undefined {
   const nowIso = new Date().toISOString()
   const merged = sanitizeResumableContexts([...(next ?? []), ...(previous ?? [])], nowIso)
   return merged

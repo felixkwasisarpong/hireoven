@@ -1,38 +1,46 @@
-import type { ScoutAction, ScoutResponse, ScoutWorkspaceDirective, ScoutWorkspaceMode } from "./types"
+import type { ApexAction, ApexResponse, ApexWorkspaceDirective, ApexWorkspaceMode } from "./types"
 
-export type { ScoutWorkspaceDirective, ScoutWorkspaceMode }
+export type { ApexWorkspaceDirective, ApexWorkspaceMode }
 
-export type WorkspaceMode = ScoutWorkspaceMode
+export type WorkspaceMode = ApexWorkspaceMode
 
 export type WorkspaceRail = {
   title: string
   summary?: string
-  actions?: ScoutAction[]
+  actions?: ApexAction[]
 }
 
 /**
- * Infers the workspace mode from a Scout response.
+ * Infers the workspace mode from a Apex response.
  * Used as a fallback when the response does not include a workspace_directive.
  */
-export function inferWorkspaceMode(response: ScoutResponse): WorkspaceMode {
+export function inferWorkspaceMode(response: ApexResponse): WorkspaceMode {
+  // Explicit directive is the primary signal — check all valid modes first
+  const dm = response.workspace_directive?.mode
+  if (dm && dm !== "idle") return dm
+
   if (response.outreach) return "outreach"
   if (response.compare) return "compare"
-  if (response.workspace_directive?.mode === "bulk_application") return "bulk_application"
-  if (response.workspace_directive?.mode === "company") return "company"
   if (response.interviewPrep || response.intent === "interview_prep") return "interview"
   if (response.workflow || response.intent === "workflow") return "applications"
   if (response.actions?.some((a) => a.type === "OPEN_RESUME_TAILOR")) return "tailor"
   if (response.actions?.some((a) => a.type === "OPEN_COMPANY")) return "company"
-  if (
-    response.actions?.some((a) => a.type === "APPLY_FILTERS") ||
-    response.mode === "feed"
-  )
-    return "search"
+  if (response.actions?.some((a) => a.type === "APPLY_FILTERS") || response.mode === "feed") return "search"
+
+  // Text-pattern fallback — catches cases where Claude responds in natural
+  // language without a workspace_directive JSON block
+  const text = (response.answer ?? "").toLowerCase()
+  if (/1-click apply|one-click apply|auto.?apply|apply (for|to) me automatically|set up.*apply|pre.?approve.*appl/i.test(text)) return "auto_apply"
+  if (/shadow network|who do (you|i) know|referral path|warm intro|linkedin connection/i.test(text)) return "shadow_network"
+  if (/reputation guard|ghosting rate|employer score|trust.*compan|is.*good place to work/i.test(text)) return "reputation_guard"
+  if (/jd decoder|decode.*job|x-ray.*posting|read between the lines|hidden expectation/i.test(text)) return "jd_decoder"
+  if (/pipeline sim|probability.*offer|monte carlo|how long.*search|weeks to offer|my odds/i.test(text)) return "pipeline_sim"
+
   return "idle"
 }
 
 /** Extract the APPLY_FILTERS payload as a URL query string for the job feed. */
-export function buildFeedUrl(response: ScoutResponse): string {
+export function buildFeedUrl(response: ApexResponse): string {
   const action = response.actions?.find((a) => a.type === "APPLY_FILTERS")
   if (!action || action.type !== "APPLY_FILTERS") return "/dashboard"
   const p = action.payload

@@ -1,8 +1,8 @@
 /**
  * POST /api/extension/jobs/save
  *
- * Scout MVP save endpoint. Accepts the new minimal ExtractedJob shape from
- * the Scout Bar and persists it via the same tables (companies / jobs /
+ * Apex MVP save endpoint. Accepts the new minimal ExtractedJob shape from
+ * the Apex Bar and persists it via the same tables (companies / jobs /
  * job_applications) used by the legacy /api/extension/jobs/import route.
  *
  * Idempotent — repeated saves of the same canonical URL by the same user
@@ -217,7 +217,7 @@ export async function POST(request: Request) {
 
   // Trust the extension's signal first; otherwise re-detect from title +
   // description so older client builds without the flag still surface it.
-  // Mirrors chrome-extension/src/extractors/scout-extractor.ts and JobCardV2.
+  // Mirrors chrome-extension/src/extractors/apex-extractor.ts and JobCardV2.
   const ACTIVELY_HIRING_RE =
     /\b(?:actively\s+(?:recruiting|hiring|seeking|reviewing\s+(?:applicants?|applications?|candidates?))|urgently?\s+hiring|hiring\s+now|now\s+hiring|immediate(?:ly)?\s+(?:hire|hiring|need|opening)|urgent(?:ly)?\s+(?:hiring|need)|high(?:ly)?\s+priority\s+role)\b/i
   const activelyHiring =
@@ -306,14 +306,14 @@ export async function POST(request: Request) {
         const slug = (companyName ?? "unknown")
           .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")
         return {
-          companyDomain: `${slug || "unknown"}.scout-placeholder`,
+          companyDomain: `${slug || "unknown"}.apex-placeholder`,
           careersUrl: `${u.protocol}//${u.host}`,
         }
       }
       // Branded careers page: real company domain.
       return { companyDomain: host, careersUrl: `${u.protocol}//${u.host}` }
     } catch {
-      return { companyDomain: "unknown.scout-placeholder", careersUrl: applyUrl }
+      return { companyDomain: "unknown.apex-placeholder", careersUrl: applyUrl }
     }
   })()
 
@@ -388,7 +388,7 @@ export async function POST(request: Request) {
           isHybrid,
           externalJobId,
           JSON.stringify({
-            captureSource: "scout-mvp",
+            captureSource: "apex-mvp",
             captureAdapter: ats,
             sourceUrl,
             applyUrl,
@@ -493,7 +493,7 @@ export async function POST(request: Request) {
         status: "saved",
         date: new Date().toISOString(),
         auto: true,
-        note: "Saved via Hireoven Scout",
+        note: "Saved via Hireoven Apex",
       },
     ])
 
@@ -516,7 +516,7 @@ export async function POST(request: Request) {
          ) VALUES (
            $1, $2, $3, 'saved',
            $4, $5, $6,
-           $7::jsonb, '[]'::jsonb, false, 'extension-scout',
+           $7::jsonb, '[]'::jsonb, false, 'extension-apex',
            NOW(), NOW()
          )`,
         [

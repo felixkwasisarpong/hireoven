@@ -4,52 +4,52 @@ import { cn } from "@/lib/utils"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-export type ScoutGraphItemColor = "orange" | "blue" | "green" | "amber" | "red" | "slate"
+export type ApexGraphItemColor = "orange" | "blue" | "green" | "amber" | "red" | "slate"
 
-export type ScoutGraphItem = {
+export type ApexGraphItem = {
   label:    string
   value:    number
   /** For bar/score charts: the scale maximum. Defaults to 100. */
   maxValue?: number
-  color?:   ScoutGraphItemColor
+  color?:   ApexGraphItemColor
   /** Optional sub-label / secondary value */
   sublabel?: string
 }
 
-export type ScoutGraphType =
+export type ApexGraphType =
   | "bar"             // horizontal percentage bars
   | "comparison"      // side-by-side bars (two series)
   | "score_breakdown" // labeled score bars with value annotation
   | "market_signal"   // compact signal rows with colored severity dots
 
-export type ScoutGraph = {
-  type:  ScoutGraphType
+export type ApexGraph = {
+  type:  ApexGraphType
   title: string
-  items: ScoutGraphItem[]
+  items: ApexGraphItem[]
   /** Unit appended to values e.g. "%" | " jobs" | "k" */
   unit?: string
 }
 
 // ── Color maps ────────────────────────────────────────────────────────────────
 
-const COLOR_BAR: Record<ScoutGraphItemColor, string> = {
-  orange: "bg-[#FF5C18]",
+const COLOR_BAR: Record<ApexGraphItemColor, string> = {
+  orange: "bg-[#6366F1]",
   blue:   "bg-blue-500",
   green:  "bg-emerald-500",
   amber:  "bg-amber-400",
   red:    "bg-red-500",
   slate:  "bg-slate-400",
 }
-const COLOR_TEXT: Record<ScoutGraphItemColor, string> = {
-  orange: "text-[#FF5C18]",
+const COLOR_TEXT: Record<ApexGraphItemColor, string> = {
+  orange: "text-[#6366F1]",
   blue:   "text-blue-600",
   green:  "text-emerald-600",
   amber:  "text-amber-600",
   red:    "text-red-600",
   slate:  "text-slate-500",
 }
-const COLOR_DOT: Record<ScoutGraphItemColor, string> = {
-  orange: "bg-[#FF5C18]",
+const COLOR_DOT: Record<ApexGraphItemColor, string> = {
+  orange: "bg-[#6366F1]",
   blue:   "bg-blue-500",
   green:  "bg-emerald-500",
   amber:  "bg-amber-400",
@@ -57,14 +57,14 @@ const COLOR_DOT: Record<ScoutGraphItemColor, string> = {
   slate:  "bg-slate-400",
 }
 
-function defaultColor(index: number): ScoutGraphItemColor {
-  const palette: ScoutGraphItemColor[] = ["orange", "blue", "green", "amber", "slate"]
+function defaultColor(index: number): ApexGraphItemColor {
+  const palette: ApexGraphItemColor[] = ["orange", "blue", "green", "amber", "slate"]
   return palette[index % palette.length]
 }
 
 // ── Bar chart ─────────────────────────────────────────────────────────────────
 
-function BarChart({ items, unit = "%" }: { items: ScoutGraphItem[]; unit?: string }) {
+function BarChart({ items, unit = "%" }: { items: ApexGraphItem[]; unit?: string }) {
   return (
     <ul className="space-y-2.5">
       {items.map((item, i) => {
@@ -97,7 +97,7 @@ function BarChart({ items, unit = "%" }: { items: ScoutGraphItem[]; unit?: strin
 
 // ── Score breakdown ───────────────────────────────────────────────────────────
 
-function ScoreBreakdown({ items, unit = "%" }: { items: ScoutGraphItem[]; unit?: string }) {
+function ScoreBreakdown({ items, unit = "%" }: { items: ApexGraphItem[]; unit?: string }) {
   return (
     <ul className="divide-y divide-slate-50">
       {items.map((item, i) => {
@@ -125,7 +125,7 @@ function ScoreBreakdown({ items, unit = "%" }: { items: ScoutGraphItem[]; unit?:
 
 // ── Market signal list ────────────────────────────────────────────────────────
 
-function MarketSignalList({ items }: { items: ScoutGraphItem[] }) {
+function MarketSignalList({ items }: { items: ApexGraphItem[] }) {
   return (
     <ul className="space-y-2">
       {items.map((item, i) => {
@@ -148,7 +148,7 @@ function MarketSignalList({ items }: { items: ScoutGraphItem[] }) {
 
 // ── Comparison chart ──────────────────────────────────────────────────────────
 
-function ComparisonChart({ items, unit = "%" }: { items: ScoutGraphItem[]; unit?: string }) {
+function ComparisonChart({ items, unit = "%" }: { items: ApexGraphItem[]; unit?: string }) {
   const maxVal = Math.max(...items.map((i) => i.maxValue ?? i.value), 1)
   return (
     <ul className="space-y-3">
@@ -183,11 +183,11 @@ function ComparisonChart({ items, unit = "%" }: { items: ScoutGraphItem[]; unit?
 // ── Main renderer ─────────────────────────────────────────────────────────────
 
 type Props = {
-  graph:    ScoutGraph
+  graph:    ApexGraph
   compact?: boolean
 }
 
-export function ScoutGraphRenderer({ graph, compact = false }: Props) {
+export function ApexGraphRenderer({ graph, compact = false }: Props) {
   if (!graph.items.length) return null
 
   return (

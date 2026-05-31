@@ -4,20 +4,20 @@
  * Derives company intelligence (hiring velocity, sponsorship signals, response
  * likelihood) from the company already in context — no extra DB round-trips.
  *
- * The /api/scout/company-intel/[id] endpoint exists for the UI rail, but that
+ * The /api/apex/company-intel/[id] endpoint exists for the UI rail, but that
  * route isn't called in chat requests. This agent bridges the gap.
  */
 
-import type { ScoutAgent, ScoutExecutionContext, AgentResult } from "./types"
-import type { CompanyIntelSummary } from "@/lib/scout/company-intel/types"
+import type { ApexAgent, ApexExecutionContext, AgentResult } from "./types"
+import type { CompanyIntelSummary } from "@/lib/apex/company-intel/types"
 
 type CompanyIntelResult = { summary: CompanyIntelSummary }
 
-export class CompanyIntelAgent implements ScoutAgent<CompanyIntelResult> {
+export class CompanyIntelAgent implements ApexAgent<CompanyIntelResult> {
   readonly id = "company"
   readonly relevantIntents = ["compare", "tailor", "company", "workflow"] as import("./types").AgentIntent[]
 
-  async run(ctx: ScoutExecutionContext): Promise<AgentResult<CompanyIntelResult>> {
+  async run(ctx: ApexExecutionContext): Promise<AgentResult<CompanyIntelResult>> {
     const start = Date.now()
     if (!ctx.company?.id) {
       return { agentId: this.id, success: true, durationMs: Date.now() - start }
@@ -42,7 +42,7 @@ export class CompanyIntelAgent implements ScoutAgent<CompanyIntelResult> {
       if (!company) return { agentId: this.id, success: true, durationMs: Date.now() - start }
 
       const { deriveCompanyIntel, buildCompanyIntelSummary, formatCompanyIntelForClaude } =
-        await import("@/lib/scout/company-intel/aggregator")
+        await import("@/lib/apex/company-intel/aggregator")
 
       const intel   = deriveCompanyIntel(company as import("@/types").Company, jobs as import("@/types").Job[])
       const summary = buildCompanyIntelSummary(company as import("@/types").Company, intel, jobs.length)

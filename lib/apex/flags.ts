@@ -1,13 +1,13 @@
 /**
- * Scout Feature Flags — V1
+ * Apex Feature Flags — V1
  *
  * Environment-variable driven feature flags for controlled rollout.
  * All flags default to ENABLED (opt-out pattern) so existing deployments
  * are unaffected. Set the env var to "false" to disable a feature.
  *
  * Usage:
- *   import { SCOUT_FLAGS } from "@/lib/scout/flags"
- *   if (!SCOUT_FLAGS.browserOperatorEnabled) return null
+ *   import { APEX_FLAGS } from "@/lib/apex/flags"
+ *   if (!APEX_FLAGS.browserOperatorEnabled) return null
  *
  * All vars must be NEXT_PUBLIC_ prefixed so client components can read them.
  * Server-side guards use the same values (no secret exposure risk).
@@ -19,29 +19,29 @@ function flag(envKey: string, defaultEnabled = true): boolean {
   return val !== "false" && val !== "0"
 }
 
-export const SCOUT_FLAGS = {
-  /** Master switch: disable to fall back to the legacy Scout page */
-  scoutOsEnabled:           flag("NEXT_PUBLIC_SCOUT_OS_ENABLED"),
+export const APEX_FLAGS = {
+  /** Master switch: disable to fall back to the legacy Apex page */
+  apexOsEnabled:           flag("NEXT_PUBLIC_APEX_OS_ENABLED"),
   /** Extension postMessage bridge (browser context + autofill relay) */
-  extensionBridgeEnabled:   flag("NEXT_PUBLIC_SCOUT_EXTENSION_BRIDGE_ENABLED"),
+  extensionBridgeEnabled:   flag("NEXT_PUBLIC_APEX_EXTENSION_BRIDGE_ENABLED"),
   /** Supervised browser operator (autofill dispatch, field focus, etc.) */
-  browserOperatorEnabled:   flag("NEXT_PUBLIC_SCOUT_BROWSER_OPERATOR_ENABLED"),
+  browserOperatorEnabled:   flag("NEXT_PUBLIC_APEX_BROWSER_OPERATOR_ENABLED"),
   /** Bulk application queue */
-  bulkQueueEnabled:         flag("NEXT_PUBLIC_SCOUT_BULK_QUEUE_ENABLED"),
+  bulkQueueEnabled:         flag("NEXT_PUBLIC_APEX_BULK_QUEUE_ENABLED"),
   /** Autonomous research mode */
-  researchModeEnabled:      flag("NEXT_PUBLIC_SCOUT_RESEARCH_MODE_ENABLED"),
+  researchModeEnabled:      flag("NEXT_PUBLIC_APEX_RESEARCH_MODE_ENABLED"),
   /** Career strategy engine */
-  careerStrategyEnabled:    flag("NEXT_PUBLIC_SCOUT_CAREER_STRATEGY_ENABLED"),
+  careerStrategyEnabled:    flag("NEXT_PUBLIC_APEX_CAREER_STRATEGY_ENABLED"),
   /** Interview copilot workspace */
-  interviewCopilotEnabled:  flag("NEXT_PUBLIC_SCOUT_INTERVIEW_COPILOT_ENABLED"),
+  interviewCopilotEnabled:  flag("NEXT_PUBLIC_APEX_INTERVIEW_COPILOT_ENABLED"),
   /** Recruiter outreach copilot */
-  outreachCopilotEnabled:   flag("NEXT_PUBLIC_SCOUT_OUTREACH_COPILOT_ENABLED"),
+  outreachCopilotEnabled:   flag("NEXT_PUBLIC_APEX_OUTREACH_COPILOT_ENABLED"),
   /** Timeline + session replay panel */
-  timelineEnabled:          flag("NEXT_PUBLIC_SCOUT_TIMELINE_ENABLED"),
+  timelineEnabled:          flag("NEXT_PUBLIC_APEX_TIMELINE_ENABLED"),
   /** Proactive companion events */
-  proactiveEnabled:         flag("NEXT_PUBLIC_SCOUT_PROACTIVE_ENABLED"),
+  proactiveEnabled:         flag("NEXT_PUBLIC_APEX_PROACTIVE_ENABLED"),
   /** Multi-agent orchestrator (parallel context agents before Claude) */
-  orchestratorEnabled:      flag("NEXT_PUBLIC_SCOUT_ORCHESTRATOR_ENABLED"),
+  orchestratorEnabled:      flag("NEXT_PUBLIC_APEX_ORCHESTRATOR_ENABLED"),
 } as const
 
-export type ScoutFlagKey = keyof typeof SCOUT_FLAGS
+export type ApexFlagKey = keyof typeof APEX_FLAGS

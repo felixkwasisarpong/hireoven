@@ -3,14 +3,14 @@
 import { useState } from "react"
 import { X } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { ScoutOutcomePicker } from "./ScoutOutcomePicker"
-import { dismissFeedbackPrompt, isFeedbackDismissed } from "@/lib/scout/outcomes/store"
-import type { ApplicationFeedbackItem, ScoutOutcomeType } from "@/lib/scout/outcomes/types"
+import { ApexOutcomePicker } from "./ApexOutcomePicker"
+import { dismissFeedbackPrompt, isFeedbackDismissed } from "@/lib/apex/outcomes/store"
+import type { ApplicationFeedbackItem, ApexOutcomeType } from "@/lib/apex/outcomes/types"
 
 type SinglePromptProps = {
   item:        ApplicationFeedbackItem
   onDismiss:   (id: string) => void
-  onRecorded:  (id: string, outcome: ScoutOutcomeType) => void
+  onRecorded:  (id: string, outcome: ApexOutcomeType) => void
 }
 
 function SingleFeedbackPrompt({ item, onDismiss, onRecorded }: SinglePromptProps) {
@@ -52,7 +52,7 @@ function SingleFeedbackPrompt({ item, onDismiss, onRecorded }: SinglePromptProps
         </div>
       ) : (
         <div className="border-t border-slate-50 px-4 py-3">
-          <ScoutOutcomePicker
+          <ApexOutcomePicker
             applicationId={item.applicationId}
             compact={false}
             onRecorded={(outcome) => onRecorded(item.applicationId, outcome)}
@@ -68,10 +68,10 @@ function SingleFeedbackPrompt({ item, onDismiss, onRecorded }: SinglePromptProps
 type Props = {
   items:              ApplicationFeedbackItem[]
   outcomeLearningDisabled?: boolean
-  onOutcomeRecorded?: (applicationId: string, outcome: ScoutOutcomeType) => void
+  onOutcomeRecorded?: (applicationId: string, outcome: ApexOutcomeType) => void
 }
 
-export function ScoutFeedbackPrompt({ items, outcomeLearningDisabled, onOutcomeRecorded }: Props) {
+export function ApexFeedbackPrompt({ items, outcomeLearningDisabled, onOutcomeRecorded }: Props) {
   const [dismissed, setDismissed]   = useState<Set<string>>(new Set())
   const [recorded,  setRecorded]    = useState<Set<string>>(new Set())
 
@@ -88,7 +88,7 @@ export function ScoutFeedbackPrompt({ items, outcomeLearningDisabled, onOutcomeR
     setDismissed((prev) => new Set(prev).add(id))
   }
 
-  function handleRecorded(id: string, outcome: ScoutOutcomeType) {
+  function handleRecorded(id: string, outcome: ApexOutcomeType) {
     setRecorded((prev) => new Set(prev).add(id))
     onOutcomeRecorded?.(id, outcome)
   }
@@ -99,7 +99,7 @@ export function ScoutFeedbackPrompt({ items, outcomeLearningDisabled, onOutcomeR
         <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">
           Outcome updates
         </p>
-        <p className="text-[10px] text-slate-300">Helps Scout learn what's working</p>
+        <p className="text-[10px] text-slate-300">Helps Apex learn what's working</p>
       </div>
 
       {/* Show at most 2 prompts at once — not nagging */}

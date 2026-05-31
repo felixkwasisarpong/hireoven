@@ -11,14 +11,14 @@ import {
   X,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { BULK_FAIL_LABELS, type BulkJobItem } from "@/lib/scout/bulk-application/types"
-import { computeReadiness } from "@/lib/scout/review/readiness"
-import { logReviewEvent } from "@/lib/scout/review/audit"
+import { BULK_FAIL_LABELS, type BulkJobItem } from "@/lib/apex/bulk-application/types"
+import { computeReadiness } from "@/lib/apex/review/readiness"
+import { logReviewEvent } from "@/lib/apex/review/audit"
 import { ReviewChecklist } from "./ReviewChecklist"
 
 function emitTimelineSignal(detail: Record<string, unknown>) {
   if (typeof window === "undefined") return
-  window.dispatchEvent(new CustomEvent("scout:timeline-signal", { detail }))
+  window.dispatchEvent(new CustomEvent("apex:timeline-signal", { detail }))
 }
 
 type Props = {
@@ -62,7 +62,7 @@ export function BulkReviewDrawer({ job, onClose, onOpenApp, onMarkSubmitted, onS
     emitTimelineSignal({
       type: "manual_submit",
       title: "Manual submission handoff opened",
-      summary: "Scout opened the application tab for your manual review and submit.",
+      summary: "Apex opened the application tab for your manual review and submit.",
       severity: "info",
       metadata: {
         queueId: job.queueId,
@@ -74,7 +74,7 @@ export function BulkReviewDrawer({ job, onClose, onOpenApp, onMarkSubmitted, onS
   const handleMarkSubmitted = useCallback(async () => {
     setSubmitting(true)
     try {
-      await fetch("/api/scout/mark-submitted", {
+      await fetch("/api/apex/mark-submitted", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({

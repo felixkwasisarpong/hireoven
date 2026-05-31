@@ -2,9 +2,9 @@
 
 import { useRouter } from "next/navigation"
 import { Brain, Shield, Target, Layers, ToggleLeft, ToggleRight, ArrowUpRight } from "lucide-react"
-import type { ScoutSearchProfile } from "@/lib/scout/search-profile"
-import type { ScoutStrategyBoard } from "@/lib/scout/types"
-import { type ScoutPermissionState, PERMISSION_LABELS, writePermissions } from "@/lib/scout/permissions"
+import type { ApexSearchProfile } from "@/lib/apex/search-profile"
+import type { ApexStrategyBoard } from "@/lib/apex/types"
+import { type ApexPermissionState, PERMISSION_LABELS, writePermissions } from "@/lib/apex/permissions"
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -12,10 +12,10 @@ type Props = {
   isActive: boolean
   narrative: string
   workspaceModeLabel: string
-  searchProfile: ScoutSearchProfile | null
-  strategyBoard: ScoutStrategyBoard | null
-  permissions: ScoutPermissionState[]
-  onPermissionsChange: (next: ScoutPermissionState[]) => void
+  searchProfile: ApexSearchProfile | null
+  strategyBoard: ApexStrategyBoard | null
+  permissions: ApexPermissionState[]
+  onPermissionsChange: (next: ApexPermissionState[]) => void
   onOpenMemory?: () => void
   onOpenPermissions?: () => void
 }
@@ -71,7 +71,7 @@ function MemoryRow({ label, value }: { label: string; value: string }) {
 
 // ── Component ────────────────────────────────────────────────────────────────
 
-export function ScoutRightPanel({
+export function ApexRightPanel({
   isActive,
   narrative,
   workspaceModeLabel,
@@ -113,7 +113,7 @@ export function ScoutRightPanel({
 
   const hasMemory = memoryRows.length > 0
 
-  const KEY_PERMS: Array<ScoutPermissionState["permission"]> = [
+  const KEY_PERMS: Array<ApexPermissionState["permission"]> = [
     "autofill_fields",
     "queue_applications",
     "attach_resume",
@@ -149,7 +149,7 @@ export function ScoutRightPanel({
             <p className="text-[12px] leading-5 text-slate-600">{narrative || "Processing…"}</p>
           </div>
           <div className="relative mt-3 h-[2px] overflow-hidden rounded-full bg-slate-100">
-            <div className="absolute inset-y-0 w-1/3 bg-gradient-to-r from-blue-200/0 via-blue-500 to-blue-200/0 animate-[scout-shimmer_1.8s_ease-in-out_infinite]" />
+            <div className="absolute inset-y-0 w-1/3 bg-gradient-to-r from-blue-200/0 via-blue-500 to-blue-200/0 animate-[apex-shimmer_1.8s_ease-in-out_infinite]" />
           </div>
           {workspaceModeLabel && workspaceModeLabel !== "Ready" && (
             <p className="mt-1.5 text-[10px] font-bold uppercase tracking-wide text-blue-600/70">
@@ -196,7 +196,7 @@ export function ScoutRightPanel({
               ))}
             </div>
             <p className="text-[11px] leading-relaxed text-slate-400">
-              Scout learns your preferences as you chat.
+              Apex learns your preferences as you chat.
             </p>
           </div>
         )}

@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { renderInlineMarkdown } from "@/lib/scout/inline-markdown"
+import { renderInlineMarkdown } from "@/lib/apex/inline-markdown"
 
 /**
  * Renders streaming text with phrase-chunked updates.
@@ -27,7 +27,7 @@ type Props = {
   className?: string
 }
 
-export function ScoutStreamingText({ text, className }: Props) {
+export function ApexStreamingText({ text, className }: Props) {
   const [displayed, setDisplayed]   = useState("")
   const pendingRef  = useRef("")
   const timerRef    = useRef<ReturnType<typeof setTimeout> | null>(null)

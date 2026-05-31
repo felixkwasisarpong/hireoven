@@ -1,5 +1,5 @@
-import type { ScoutContext } from "./context"
-import type { ScoutMockInterviewFeedback, ScoutMockInterviewTurn } from "./types"
+import type { ApexContext } from "./context"
+import type { ApexMockInterviewFeedback, ApexMockInterviewTurn } from "./types"
 
 export const TOTAL_QUESTIONS = 6
 
@@ -40,8 +40,8 @@ Always respond with valid JSON only. No markdown, no preamble, no code fences. E
 // ── Context formatter ─────────────────────────────────────────────────────────
 
 export function formatMockInterviewContext(
-  context: ScoutContext,
-  history: ScoutMockInterviewTurn[],
+  context: ApexContext,
+  history: ApexMockInterviewTurn[],
   currentAnswer: string | undefined,
   questionIndex: number
 ): string {
@@ -128,7 +128,7 @@ type RawMockInterviewResponse = {
 
 export function parseMockInterviewResponse(raw: string): {
   question: string | null
-  feedback?: ScoutMockInterviewFeedback
+  feedback?: ApexMockInterviewFeedback
   questionIndex: number
   totalQuestions: number
   isComplete: boolean
@@ -148,7 +148,7 @@ export function parseMockInterviewResponse(raw: string): {
         ? parsed.question.trim()
         : null
 
-    let feedback: ScoutMockInterviewFeedback | undefined
+    let feedback: ApexMockInterviewFeedback | undefined
     if (parsed.feedback && typeof parsed.feedback === "object") {
       const strengths = Array.isArray(parsed.feedback.strengths)
         ? (parsed.feedback.strengths as unknown[]).filter((s) => typeof s === "string") as string[]

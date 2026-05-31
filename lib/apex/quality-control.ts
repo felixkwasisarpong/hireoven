@@ -1,8 +1,8 @@
 /**
- * Scout Quality Control Layer V1
+ * Apex Quality Control Layer V1
  *
  * A lightweight, synchronous validation + repair pass that runs on every
- * ScoutResponse before it reaches the UI.
+ * ApexResponse before it reaches the UI.
  *
  * Designed to be:
  *   - Fast (no I/O, no async, no LLM calls)
@@ -22,8 +22,8 @@
  *  10. Duplicate or directly-conflicting actions are deduplicated
  */
 
-import type { ScoutResponse, ScoutAction } from "./types"
-import { getScoutDisplayText, isRawJson } from "./display-text"
+import type { ApexResponse, ApexAction } from "./types"
+import { getApexDisplayText, isRawJson } from "./display-text"
 
 // ── Context ───────────────────────────────────────────────────────────────────
 
@@ -56,7 +56,7 @@ export type QCResult = {
   /** Human-readable description of each issue detected */
   issues: string[]
   /** The (possibly repaired) response that is safe to render */
-  safeResponse: ScoutResponse
+  safeResponse: ApexResponse
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -105,18 +105,18 @@ const MIN_ANSWER_FOR_WORKSPACE_DIRECTIVE = 20
 
 // ── Rule helpers ──────────────────────────────────────────────────────────────
 
-function cloneResponse(r: ScoutResponse): ScoutResponse {
-  return JSON.parse(JSON.stringify(r)) as ScoutResponse
+function cloneResponse(r: ApexResponse): ApexResponse {
+  return JSON.parse(JSON.stringify(r)) as ApexResponse
 }
 
-function deduplicateActions(actions: ScoutAction[]): { deduped: ScoutAction[]; removed: number } {
+function deduplicateActions(actions: ApexAction[]): { deduped: ApexAction[]; removed: number } {
   const seen = new Map<string, boolean>()
-  const deduped: ScoutAction[] = []
+  const deduped: ApexAction[] = []
   let removed = 0
 
   // Detect direct conflicts first: SET_FOCUS_MODE true + false
   const focusModes = actions.filter((a) => a.type === "SET_FOCUS_MODE") as Array<
-    Extract<ScoutAction, { type: "SET_FOCUS_MODE" }>
+    Extract<ApexAction, { type: "SET_FOCUS_MODE" }>
   >
   const hasConflictingFocus =
     focusModes.length >= 2 &&
@@ -143,7 +143,7 @@ function deduplicateActions(actions: ScoutAction[]): { deduped: ScoutAction[]; r
   return { deduped, removed }
 }
 
-function actionDedupKey(action: ScoutAction): string {
+function actionDedupKey(action: ApexAction): string {
   switch (action.type) {
     case "OPEN_JOB":
       return `open_job:${action.payload.jobId}`
@@ -177,7 +177,7 @@ function softtenCertaintyLanguage(text: string): { softened: string; changed: bo
 // ── Main QC function ──────────────────────────────────────────────────────────
 
 export function runQualityControl(
-  response: ScoutResponse,
+  response: ApexResponse,
   context: QCContext = {},
 ): QCResult {
   const issues: string[] = []
@@ -186,31 +186,31 @@ export function runQualityControl(
   // ── Rule 1: No raw JSON in answer ─────────────────────────────────────────
   if (safe.answer && isRawJson(safe.answer)) {
     issues.push("R1: answer contains raw JSON — replaced with display-safe text")
-    safe.answer = getScoutDisplayText(safe.answer)
-    // If getScoutDisplayText still returns JSON (double-wrapped), replace with fallback
+    safe.answer = getApexDisplayText(safe.answer)
+    // If getApexDisplayText still returns JSON (double-wrapped), replace with fallback
     if (isRawJson(safe.answer) || !safe.answer.trim()) {
-      safe.answer = "Scout prepared a structured response — see the cards and actions below."
+      safe.answer = "Apex prepared a structured response — see the cards and actions below."
     }
   }
 
   // ── Rule 2: Job-link actions reference valid-looking IDs ──────────────────
   safe.actions = safe.actions.filter((action) => {
     if (action.type === "OPEN_JOB") {
-      const id = (action as Extract<ScoutAction, { type: "OPEN_JOB" }>).payload.jobId
+      const id = (action as Extract<ApexAction, { type: "OPEN_JOB" }>).payload.jobId
       if (!UUID_RE.test(id)) {
         issues.push(`R2: OPEN_JOB action removed — jobId "${id}" is not a valid UUID`)
         return false
       }
     }
     if (action.type === "OPEN_COMPANY") {
-      const id = (action as Extract<ScoutAction, { type: "OPEN_COMPANY" }>).payload.companyId
+      const id = (action as Extract<ApexAction, { type: "OPEN_COMPANY" }>).payload.companyId
       if (!UUID_RE.test(id)) {
         issues.push(`R2: OPEN_COMPANY action removed — companyId "${id}" is not a valid UUID`)
         return false
       }
     }
     if (action.type === "HIGHLIGHT_JOBS") {
-      const ids = (action as Extract<ScoutAction, { type: "HIGHLIGHT_JOBS" }>).payload.jobIds
+      const ids = (action as Extract<ApexAction, { type: "HIGHLIGHT_JOBS" }>).payload.jobIds
       const allValid = ids.every((id) => UUID_RE.test(id))
       if (!allValid) {
         issues.push(`R2: HIGHLIGHT_JOBS action removed — one or more jobIds are not valid UUIDs`)
@@ -218,7 +218,7 @@ export function runQualityControl(
       }
     }
     if (action.type === "OPEN_RESUME_TAILOR") {
-      const p = (action as Extract<ScoutAction, { type: "OPEN_RESUME_TAILOR" }>).payload
+      const p = (action as Extract<ApexAction, { type: "OPEN_RESUME_TAILOR" }>).payload
       const jobIdOk = !p.jobId || UUID_RE.test(p.jobId)
       const resumeIdOk = !p.resumeId || UUID_RE.test(p.resumeId)
       if (!jobIdOk || !resumeIdOk) {
@@ -235,7 +235,7 @@ export function runQualityControl(
       if (!step.action) return step
       const action = step.action
       if (action.type === "OPEN_JOB") {
-        const id = (action as Extract<ScoutAction, { type: "OPEN_JOB" }>).payload.jobId
+        const id = (action as Extract<ApexAction, { type: "OPEN_JOB" }>).payload.jobId
         if (!UUID_RE.test(id)) {
           issues.push(`R2: workflow step OPEN_JOB removed — jobId "${id}" not a valid UUID`)
           return { ...step, action: undefined }
@@ -249,14 +249,14 @@ export function runQualityControl(
   // (resumeId alone is not enough for a meaningful tailor action)
   safe.actions = safe.actions.filter((action) => {
     if (action.type === "OPEN_RESUME_TAILOR") {
-      const p = (action as Extract<ScoutAction, { type: "OPEN_RESUME_TAILOR" }>).payload
+      const p = (action as Extract<ApexAction, { type: "OPEN_RESUME_TAILOR" }>).payload
       if (!p.jobId) {
         issues.push("R3: OPEN_RESUME_TAILOR removed — no jobId present (cannot tailor without a job)")
         return false
       }
     }
     if (action.type === "PREPARE_TAILORED_AUTOFILL") {
-      const p = (action as Extract<ScoutAction, { type: "PREPARE_TAILORED_AUTOFILL" }>).payload
+      const p = (action as Extract<ApexAction, { type: "PREPARE_TAILORED_AUTOFILL" }>).payload
       if (!p.jobId && !p.url) {
         issues.push("R3: PREPARE_TAILORED_AUTOFILL removed — no jobId or URL")
         return false
@@ -330,12 +330,12 @@ export function runQualityControl(
   // ── Rule 8: Destructive RESET_CONTEXT requires user intent ───────────────
   if (!context.userRequestedReset) {
     const resetActions = safe.actions.filter(
-      (a) => a.type === "RESET_CONTEXT" && (a as Extract<ScoutAction, { type: "RESET_CONTEXT" }>).payload.clearFilters,
+      (a) => a.type === "RESET_CONTEXT" && (a as Extract<ApexAction, { type: "RESET_CONTEXT" }>).payload.clearFilters,
     )
     if (resetActions.length > 0 && safe.answer && DESTRUCTIVE_RESET_PATTERNS.some((p) => p.test(safe.answer))) {
       // The answer explicitly suggests a destructive clear — remove the action
       safe.actions = safe.actions.filter(
-        (a) => !(a.type === "RESET_CONTEXT" && (a as Extract<ScoutAction, { type: "RESET_CONTEXT" }>).payload.clearFilters),
+        (a) => !(a.type === "RESET_CONTEXT" && (a as Extract<ApexAction, { type: "RESET_CONTEXT" }>).payload.clearFilters),
       )
       issues.push("R8: destructive RESET_CONTEXT (clearFilters:true) removed — user intent not confirmed")
     }
@@ -373,7 +373,7 @@ export function runQualityControl(
 
   // ── Dev logging ───────────────────────────────────────────────────────────
   if (IS_DEV && issues.length > 0) {
-    console.warn("[Scout QC]", issues.length, "issue(s) found/repaired:", issues)
+    console.warn("[Apex QC]", issues.length, "issue(s) found/repaired:", issues)
   }
 
   return {
@@ -383,10 +383,10 @@ export function runQualityControl(
   }
 }
 
-// ── Convenience: build QCContext from existing ScoutContext data ──────────────
+// ── Convenience: build QCContext from existing ApexContext data ──────────────
 
 /**
- * Derives a QCContext from the data available in the Scout workspace shell.
+ * Derives a QCContext from the data available in the Apex workspace shell.
  * All fields default to undefined (permissive) when data is unavailable.
  */
 export function buildQCContext(opts: {

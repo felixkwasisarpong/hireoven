@@ -1,12 +1,12 @@
 "use client"
 
 import { ArrowRight, BarChart2, Clock3, FileText, FlaskConical, ListTodo } from "lucide-react"
-import type { ScoutResumableContext } from "@/lib/scout/continuation/types"
+import type { ApexResumableContext } from "@/lib/apex/continuation/types"
 import { cn } from "@/lib/utils"
 
 type Props = {
-  contexts: ScoutResumableContext[]
-  onOpen: (context: ScoutResumableContext) => void
+  contexts: ApexResumableContext[]
+  onOpen: (context: ApexResumableContext) => void
 }
 
 type ContextVisual = {
@@ -14,7 +14,7 @@ type ContextVisual = {
   tint: string
 }
 
-const CONTEXT_VISUAL: Record<ScoutResumableContext["type"], ContextVisual> = {
+const CONTEXT_VISUAL: Record<ApexResumableContext["type"], ContextVisual> = {
   workflow: {
     icon: ListTodo,
     tint: "text-violet-600 bg-violet-50 border-violet-200",
@@ -25,7 +25,7 @@ const CONTEXT_VISUAL: Record<ScoutResumableContext["type"], ContextVisual> = {
   },
   tailor: {
     icon: FileText,
-    tint: "text-[#FF5C18] bg-orange-50 border-orange-200",
+    tint: "text-[#6366F1] bg-orange-50 border-orange-200",
   },
   research: {
     icon: FlaskConical,
@@ -37,7 +37,7 @@ const CONTEXT_VISUAL: Record<ScoutResumableContext["type"], ContextVisual> = {
   },
 }
 
-function formatPrompt(context: ScoutResumableContext): string {
+function formatPrompt(context: ApexResumableContext): string {
   switch (context.type) {
     case "workflow":
       return `Resume ${context.title}?`
@@ -54,7 +54,7 @@ function formatPrompt(context: ScoutResumableContext): string {
   }
 }
 
-export function ScoutContinuationStrip({ contexts, onOpen }: Props) {
+export function ApexContinuationStrip({ contexts, onOpen }: Props) {
   if (!contexts.length) return null
 
   return (

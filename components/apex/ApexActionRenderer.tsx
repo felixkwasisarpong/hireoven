@@ -18,16 +18,16 @@ import {
   RotateCcw,
   X,
 } from "lucide-react"
-import type { ScoutAction } from "@/lib/scout/types"
-import type { ScoutActionConfirmation, ScoutActionSource } from "./useScoutActionExecutor"
-import { getDefaultActionLabel } from "@/lib/scout/actions"
-import { useScoutActionExecutor } from "./useScoutActionExecutor"
-import { ScoutAuditPanel } from "./ScoutAuditPanel"
+import type { ApexAction } from "@/lib/apex/types"
+import type { ApexActionConfirmation, ApexActionSource } from "./useApexActionExecutor"
+import { getDefaultActionLabel } from "@/lib/apex/actions"
+import { useApexActionExecutor } from "./useApexActionExecutor"
+import { ApexAuditPanel } from "./ApexAuditPanel"
 
-type ScoutActionRendererProps = {
-  actions: ScoutAction[]
+type ApexActionRendererProps = {
+  actions: ApexAction[]
   /** Where these actions originated — stored in the audit trail. */
-  source?: ScoutActionSource
+  source?: ApexActionSource
   /** Optional reason passed from the parent context (e.g. chat response answer). */
   reason?: string
 }
@@ -45,7 +45,7 @@ const ACTION_STYLES: Record<string, { bg: string; text: string; icon: string; bo
   PREPARE_TAILORED_AUTOFILL:       { bg: "bg-indigo-50",  text: "text-indigo-700",  icon: "text-indigo-500",  border: "border-indigo-200" },
 }
 
-function getActionIcon(action: ScoutAction) {
+function getActionIcon(action: ApexAction) {
   switch (action.type) {
     case "OPEN_JOB":           return <ExternalLink className="h-3.5 w-3.5" />
     case "APPLY_FILTERS":      return <Filter className="h-3.5 w-3.5" />
@@ -61,7 +61,7 @@ function getActionIcon(action: ScoutAction) {
   }
 }
 
-function getActionDescription(action: ScoutAction): string | null {
+function getActionDescription(action: ApexAction): string | null {
   switch (action.type) {
     case "APPLY_FILTERS": {
       const filters: string[] = []
@@ -85,7 +85,7 @@ function ConfirmationBanner({
   onUndo,
   onDismiss,
 }: {
-  confirmation: ScoutActionConfirmation
+  confirmation: ApexActionConfirmation
   onUndo: () => void
   onDismiss: () => void
 }) {
@@ -156,7 +156,7 @@ function ConfirmationBanner({
       {/* Inline audit panel */}
       {showAudit && confirmation.auditEntry && (
         <div className="border-t border-emerald-200 bg-white px-4 pb-4 pt-0">
-          <ScoutAuditPanel
+          <ApexAuditPanel
             entry={confirmation.auditEntry}
             onUndo={confirmation.canUndo ? onUndo : undefined}
             onClose={() => setShowAudit(false)}
@@ -169,7 +169,7 @@ function ConfirmationBanner({
 
 // ── Main renderer ──────────────────────────────────────────────────────────
 
-export function ScoutActionRenderer({ actions, source, reason }: ScoutActionRendererProps) {
+export function ApexActionRenderer({ actions, source, reason }: ApexActionRendererProps) {
   // Tracks which action indices are permanently applied
   const [executedActions, setExecutedActions] = useState<Set<number>>(new Set())
   // Tracks which action is currently being processed (brief disabled state)
@@ -182,11 +182,11 @@ export function ScoutActionRenderer({ actions, source, reason }: ScoutActionRend
     confirmation,
     dismissConfirmation,
     executeUndo,
-  } = useScoutActionExecutor()
+  } = useApexActionExecutor()
 
   if (!actions || actions.length === 0) return null
 
-  function handleClick(action: ScoutAction, index: number) {
+  function handleClick(action: ApexAction, index: number) {
     if (executedActions.has(index) || processingActions.has(index)) return
 
     // Mark as processing immediately for instant visual feedback

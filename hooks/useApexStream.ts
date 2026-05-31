@@ -1,13 +1,13 @@
 "use client"
 
 import { useCallback, useRef, useState } from "react"
-import { normalizeScoutResponse } from "@/lib/scout/normalize"
-import { parseSSELine, type ScoutStreamEvent } from "@/lib/scout/streaming/types"
-import type { ScoutResponse } from "@/lib/scout/types"
-import type { ScoutWorkspaceDirective, ScoutWorkflowDirective } from "@/lib/scout/types"
+import { normalizeApexResponse } from "@/lib/apex/normalize"
+import { parseSSELine, type ApexStreamEvent } from "@/lib/apex/streaming/types"
+import type { ApexResponse } from "@/lib/apex/types"
+import type { ApexWorkspaceDirective, ApexWorkflowDirective } from "@/lib/apex/types"
 
 /**
- * Client-side hard deadline. Server's scout_chat_stream timeout is 25s; this
+ * Client-side hard deadline. Server's apex_chat_stream timeout is 25s; this
  * is the safety net for cases where the server emits `done` (or the
  * connection drops) without a preceding `response` event — proxy timeouts,
  * mid-stream crashes, etc. Without this, isStreaming flips false but
@@ -16,26 +16,26 @@ import type { ScoutWorkspaceDirective, ScoutWorkflowDirective } from "@/lib/scou
 const STREAM_HARD_TIMEOUT_MS = 45_000
 const STREAM_ABSOLUTE_TIMEOUT_MS = 75_000
 
-export type ScoutStreamState = {
+export type ApexStreamState = {
   /** Accumulated raw text from text_delta events */
   streamText:          string
   /** True while Claude is generating */
   isStreaming:         boolean
   /** The full processed response — only set after done */
-  finalResponse:       ScoutResponse | null
+  finalResponse:       ApexResponse | null
   /** Workspace directive emitted mid-stream (if any) — for early workspace morph */
-  earlyDirective:      ScoutWorkspaceDirective | null
-  earlyWorkflow:       ScoutWorkflowDirective | null
+  earlyDirective:      ApexWorkspaceDirective | null
+  earlyWorkflow:       ApexWorkflowDirective | null
   error:               string | null
 }
 
-export type ScoutStreamActions = ScoutStreamState & {
+export type ApexStreamActions = ApexStreamState & {
   startStream: (url: string, body: Record<string, unknown>) => Promise<void>
   cancel:      () => void
   reset:       () => void
 }
 
-const INITIAL: ScoutStreamState = {
+const INITIAL: ApexStreamState = {
   streamText:     "",
   isStreaming:    false,
   finalResponse:  null,
@@ -48,7 +48,7 @@ function deriveDisplayStreamText(raw: string): string {
   const trimmed = raw.trimStart()
   if (!trimmed) return ""
 
-  // Scout model responses are JSON-first in command mode; never render raw JSON
+  // Apex model responses are JSON-first in command mode; never render raw JSON
   // tokens in the live bubble.
   if (
     trimmed.startsWith("{") ||
@@ -63,8 +63,8 @@ function deriveDisplayStreamText(raw: string): string {
   return raw
 }
 
-export function useScoutStream(): ScoutStreamActions {
-  const [state, setState] = useState<ScoutStreamState>(INITIAL)
+export function useApexStream(): ApexStreamActions {
+  const [state, setState] = useState<ApexStreamState>(INITIAL)
   const abortRef = useRef<AbortController | null>(null)
 
   const cancel = useCallback(() => {
@@ -95,7 +95,7 @@ export function useScoutStream(): ScoutStreamActions {
           setState((prev) => ({
             ...prev,
             isStreaming: false,
-            error: prev.error ?? "Scout took too long to respond. Please try again.",
+            error: prev.error ?? "Apex took too long to respond. Please try again.",
           }))
         }
       }, STREAM_HARD_TIMEOUT_MS)
@@ -106,7 +106,7 @@ export function useScoutStream(): ScoutStreamActions {
         setState((prev) => ({
           ...prev,
           isStreaming: false,
-          error: prev.error ?? "Scout is taking longer than expected. Please try again.",
+          error: prev.error ?? "Apex is taking longer than expected. Please try again.",
         }))
       }
     }, STREAM_ABSOLUTE_TIMEOUT_MS)
@@ -130,13 +130,13 @@ export function useScoutStream(): ScoutStreamActions {
         setState((prev) => ({
           ...prev,
           isStreaming: false,
-          error: errJson?.message ?? "Scout could not respond right now.",
+          error: errJson?.message ?? "Apex could not respond right now.",
         }))
         return
       }
 
       const contentType = res.headers.get("content-type")?.toLowerCase() ?? ""
-      // Some Scout paths intentionally return JSON even when stream=true
+      // Some Apex paths intentionally return JSON even when stream=true
       // (deterministic / early-return responses). Treat those as a completed
       // response instead of trying to parse SSE frames.
       if (contentType.includes("application/json")) {
@@ -146,7 +146,7 @@ export function useScoutStream(): ScoutStreamActions {
         const payload = await res.json().catch(() => null)
         setState((prev) => ({
           ...prev,
-          finalResponse: normalizeScoutResponse(payload),
+          finalResponse: normalizeApexResponse(payload),
           isStreaming: false,
           error: null,
         }))
@@ -157,7 +157,7 @@ export function useScoutStream(): ScoutStreamActions {
         setState((prev) => ({
           ...prev,
           isStreaming: false,
-          error: "Scout could not open a response stream. Please try again.",
+          error: "Apex could not open a response stream. Please try again.",
         }))
         return
       }
@@ -167,7 +167,7 @@ export function useScoutStream(): ScoutStreamActions {
       let buffer    = ""
       let rawStreamText = ""
 
-      const processEvent = (event: ScoutStreamEvent) => {
+      const processEvent = (event: ApexStreamEvent) => {
         switch (event.type) {
           case "text_delta":
             rawStreamText += event.text
@@ -188,7 +188,7 @@ export function useScoutStream(): ScoutStreamActions {
             window.clearTimeout(absoluteTimeout)
             setState((prev) => ({
               ...prev,
-              finalResponse: normalizeScoutResponse(event.payload),
+              finalResponse: normalizeApexResponse(event.payload),
               isStreaming:   false,
             }))
             break
@@ -245,7 +245,7 @@ export function useScoutStream(): ScoutStreamActions {
           return {
             ...prev,
             isStreaming: false,
-            error: "Scout's response was cut off. Please try again.",
+            error: "Apex's response was cut off. Please try again.",
           }
         })
       }

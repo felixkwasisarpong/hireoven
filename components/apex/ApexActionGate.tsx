@@ -2,12 +2,12 @@
 
 import { ShieldAlert, X } from "lucide-react"
 import { cn } from "@/lib/utils"
-import type { ScoutPermission } from "@/lib/scout/permissions"
-import { PERMISSION_LABELS } from "@/lib/scout/permissions"
+import type { ApexPermission } from "@/lib/apex/permissions"
+import { PERMISSION_LABELS } from "@/lib/apex/permissions"
 
 export type GateRequest = {
   actionType: string
-  permission: ScoutPermission
+  permission: ApexPermission
   title: string
   description: string
 }
@@ -19,7 +19,7 @@ type Props = {
   onCancel: () => void
 }
 
-export function ScoutActionGate({ gate, onAllowOnce, onAlwaysAllow, onCancel }: Props) {
+export function ApexActionGate({ gate, onAllowOnce, onAlwaysAllow, onCancel }: Props) {
   return (
     <div
       className={cn(
@@ -29,11 +29,11 @@ export function ScoutActionGate({ gate, onAllowOnce, onAlwaysAllow, onCancel }: 
       )}
       role="dialog"
       aria-modal="true"
-      aria-label="Scout permission request"
+      aria-label="Apex permission request"
     >
       {/* Header */}
       <div className="flex items-start gap-3 border-b border-slate-100 px-5 py-4">
-        <ShieldAlert className="mt-0.5 h-4 w-4 flex-shrink-0 text-[#FF5C18]" />
+        <ShieldAlert className="mt-0.5 h-4 w-4 flex-shrink-0 text-[#6366F1]" />
         <div className="min-w-0 flex-1">
           <p className="text-[13px] font-semibold leading-5 text-slate-900">{gate.title}</p>
           <p className="mt-0.5 text-[12px] leading-4.5 text-slate-500">{gate.description}</p>
@@ -62,7 +62,7 @@ export function ScoutActionGate({ gate, onAllowOnce, onAlwaysAllow, onCancel }: 
         <button
           type="button"
           onClick={onAllowOnce}
-          className="inline-flex flex-1 items-center justify-center rounded-xl border border-[#FF5C18]/30 bg-[#FF5C18]/6 px-4 py-2 text-[12px] font-semibold text-[#FF5C18] transition hover:bg-[#FF5C18]/12"
+          className="inline-flex flex-1 items-center justify-center rounded-xl border border-[#6366F1]/30 bg-[#6366F1]/6 px-4 py-2 text-[12px] font-semibold text-[#6366F1] transition hover:bg-[#6366F1]/12"
         >
           Allow once
         </button>

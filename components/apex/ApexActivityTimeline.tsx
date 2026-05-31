@@ -3,12 +3,12 @@
 import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Eye, Filter, Focus, HelpCircle, RotateCcw, Sparkles } from "lucide-react"
-import type { ScoutActionRecordedDetail } from "./useScoutActionExecutor"
-import { ScoutAuditPanel } from "./ScoutAuditPanel"
+import type { ApexActionRecordedDetail } from "./useApexActionExecutor"
+import { ApexAuditPanel } from "./ApexAuditPanel"
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-export type ScoutTimelineEntry = ScoutActionRecordedDetail & {
+export type ApexTimelineEntry = ApexActionRecordedDetail & {
   jobCount?: number
   canUndo: boolean
 }
@@ -18,15 +18,15 @@ const UNDO_WINDOW_MS = 8_000
 
 // ── Hook ───────────────────────────────────────────────────────────────────
 
-export function useScoutTimeline(): ScoutTimelineEntry[] {
-  const [entries, setEntries] = useState<ScoutTimelineEntry[]>([])
+export function useApexTimeline(): ApexTimelineEntry[] {
+  const [entries, setEntries] = useState<ApexTimelineEntry[]>([])
   // Stable ref used inside the timeout callback to avoid stale closure on `entries`
   const timeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
 
   useEffect(() => {
     function onActionRecorded(e: Event) {
-      const detail = (e as CustomEvent<ScoutActionRecordedDetail>).detail
-      const entry: ScoutTimelineEntry = {
+      const detail = (e as CustomEvent<ApexActionRecordedDetail>).detail
+      const entry: ApexTimelineEntry = {
         ...detail,
         canUndo: !!detail.undoUrl,
       }
@@ -54,11 +54,11 @@ export function useScoutTimeline(): ScoutTimelineEntry[] {
       })
     }
 
-    window.addEventListener("scout:action-recorded", onActionRecorded)
-    window.addEventListener("scout:feed-updated", onFeedUpdated)
+    window.addEventListener("apex:action-recorded", onActionRecorded)
+    window.addEventListener("apex:feed-updated", onFeedUpdated)
     return () => {
-      window.removeEventListener("scout:action-recorded", onActionRecorded)
-      window.removeEventListener("scout:feed-updated", onFeedUpdated)
+      window.removeEventListener("apex:action-recorded", onActionRecorded)
+      window.removeEventListener("apex:feed-updated", onFeedUpdated)
       timeoutsRef.current.forEach(clearTimeout)
     }
   }, [])
@@ -89,13 +89,13 @@ function ActionIcon({ type }: { type: string }) {
 
 // ── Component ──────────────────────────────────────────────────────────────
 
-type ScoutActivityTimelineProps = {
+type ApexActivityTimelineProps = {
   compact?: boolean
 }
 
-export function ScoutActivityTimeline({ compact = false }: ScoutActivityTimelineProps) {
+export function ApexActivityTimeline({ compact = false }: ApexActivityTimelineProps) {
   const router = useRouter()
-  const entries = useScoutTimeline()
+  const entries = useApexTimeline()
   const [activeAuditId, setActiveAuditId] = useState<string | null>(null)
   // Force re-render every 15 s so "time ago" labels stay fresh
   const [, setTick] = useState(0)
@@ -106,7 +106,7 @@ export function ScoutActivityTimeline({ compact = false }: ScoutActivityTimeline
 
   if (entries.length === 0) return null
 
-  const hasAuditData = (entry: ScoutTimelineEntry) =>
+  const hasAuditData = (entry: ApexTimelineEntry) =>
     !!(entry.source ?? entry.reason ?? entry.previousStateSummary ?? entry.newStateSummary)
 
   if (compact) {
@@ -147,7 +147,7 @@ export function ScoutActivityTimeline({ compact = false }: ScoutActivityTimeline
   return (
     <section>
       <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">
-        Scout Activity
+        Apex Activity
       </p>
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
         {entries.map((entry, idx) => {
@@ -210,7 +210,7 @@ export function ScoutActivityTimeline({ compact = false }: ScoutActivityTimeline
               {/* Inline audit detail */}
               {isAuditOpen && (
                 <div className="border-t border-slate-100 px-4 pb-4 pt-0">
-                  <ScoutAuditPanel
+                  <ApexAuditPanel
                     entry={{
                       actionType: entry.actionType,
                       label: entry.label,

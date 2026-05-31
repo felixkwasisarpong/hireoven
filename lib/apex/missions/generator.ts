@@ -1,5 +1,5 @@
 /**
- * Scout Daily Mission Generator — deterministic, zero AI calls.
+ * Apex Daily Mission Generator — deterministic, zero AI calls.
  *
  * Generates 1–3 focused daily missions from existing context data
  * already fetched by the shell (strategy board, behavior signals,
@@ -12,28 +12,28 @@
  *   - Every mission must be actionable
  */
 
-import type { ScoutMission, ScoutMissionType } from "./types"
-import type { ScoutStrategyBoard } from "@/lib/scout/types"
-import type { ScoutBehaviorSignals } from "@/lib/scout/behavior"
-import type { MarketSignal } from "@/lib/scout/market-intelligence"
-import type { ScoutSearchProfile } from "@/lib/scout/search-profile"
-import type { OutcomeLearningResult } from "@/lib/scout/outcomes/types"
+import type { ApexMission, ApexMissionType } from "./types"
+import type { ApexStrategyBoard } from "@/lib/apex/types"
+import type { ApexBehaviorSignals } from "@/lib/apex/behavior"
+import type { MarketSignal } from "@/lib/apex/market-intelligence"
+import type { ApexSearchProfile } from "@/lib/apex/search-profile"
+import type { OutcomeLearningResult } from "@/lib/apex/outcomes/types"
 
 export type MissionContext = {
-  board:            ScoutStrategyBoard | null
-  signals:          ScoutBehaviorSignals | null
+  board:            ApexStrategyBoard | null
+  signals:          ApexBehaviorSignals | null
   marketSignals:    MarketSignal[]
-  searchProfile:    ScoutSearchProfile | null
+  searchProfile:    ApexSearchProfile | null
   hasResume:        boolean
   /** Outcome learning — used to surface feedback missions when stale applications need updates */
   outcomeLearning?: OutcomeLearningResult | null
 }
 
-type MissionCandidate = Omit<ScoutMission, "generatedAt" | "status">
+type MissionCandidate = Omit<ApexMission, "generatedAt" | "status">
 
 const DEFAULT_MAX_MISSIONS = 3
 
-function makeId(type: ScoutMissionType, suffix: string): string {
+function makeId(type: ApexMissionType, suffix: string): string {
   return `mission-${type}-${suffix}`
 }
 
@@ -85,7 +85,7 @@ function compareMission(ctx: MissionContext): MissionCandidate | null {
     id:       makeId("compare", "saved-jobs"),
     type:     "compare",
     title:    "Compare your top saved matches",
-    summary:  `${saved} saved roles ready to rank. Scout will compare by match score, sponsorship signal, and role fit so you know where to focus first.`,
+    summary:  `${saved} saved roles ready to rank. Apex will compare by match score, sponsorship signal, and role fit so you know where to focus first.`,
     priority: "medium",
     suggestedActions: [`Compare my saved${rolePhrase} jobs and tell me which to apply to first`],
   }
@@ -150,7 +150,7 @@ function missingResumeMission(ctx: MissionContext): MissionCandidate | null {
     id:       makeId("resume", "upload"),
     type:     "resume",
     title:    "Upload your resume to unlock AI tailoring",
-    summary:  "Scout can tailor your resume for specific roles, analyze match scores, and prep cover letters — all require a resume in your library.",
+    summary:  "Apex can tailor your resume for specific roles, analyze match scores, and prep cover letters — all require a resume in your library.",
     priority: "high",
     suggestedActions: ["How do I upload my resume to Hireoven?"],
   }
@@ -194,7 +194,7 @@ function outcomeFeedbackMission(ctx: MissionContext): MissionCandidate | null {
     id:       makeId("follow_up", "outcome-feedback"),
     type:     "follow_up",
     title:    `Update ${count} application outcome${count !== 1 ? "s" : ""}`,
-    summary:  `${count} application${count !== 1 ? "s" : ""} (${oldest.companyName} and ${count > 1 ? "others" : "more"}) haven't had outcomes recorded in ${oldest.daysSinceApplied}+ days. Update them so Scout can learn what's working.`,
+    summary:  `${count} application${count !== 1 ? "s" : ""} (${oldest.companyName} and ${count > 1 ? "others" : "more"}) haven't had outcomes recorded in ${oldest.daysSinceApplied}+ days. Update them so Apex can learn what's working.`,
     priority: "medium" as const,
     suggestedActions: ["Review my application outcomes and update any missing results"],
   }
@@ -205,7 +205,7 @@ function outcomeFeedbackMission(ctx: MissionContext): MissionCandidate | null {
 export function generateDailyMissions(
   ctx: MissionContext,
   maxMissions: number = DEFAULT_MAX_MISSIONS
-): ScoutMission[] {
+): ApexMission[] {
   const now = new Date().toISOString()
   const limit = Math.max(1, Math.min(maxMissions, DEFAULT_MAX_MISSIONS))
 

@@ -1,7 +1,7 @@
 /**
- * Scout Agent Guardrails + Permission System — V1
+ * Apex Agent Guardrails + Permission System — V1
  *
- * Controls what Scout and the extension overlay are allowed to do.
+ * Controls what Apex and the extension overlay are allowed to do.
  * Persists to localStorage so user choices survive page refreshes.
  * Audit log goes to sessionStorage (clears on browser close, never stores values).
  *
@@ -14,7 +14,7 @@
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-export type ScoutPermission =
+export type ApexPermission =
   | "read_jobs"
   | "read_resume"
   | "tailor_resume"
@@ -25,8 +25,8 @@ export type ScoutPermission =
   | "open_external_pages"
   | "queue_applications"
 
-export type ScoutPermissionState = {
-  permission: ScoutPermission
+export type ApexPermissionState = {
+  permission: ApexPermission
   allowed: boolean
   /** When true, user must confirm before each execution */
   requiresConfirmation: boolean
@@ -39,10 +39,10 @@ export type PermissionCheck = {
   requiresConfirmation?: boolean
 }
 
-export type ScoutAuditLogEntry = {
+export type ApexAuditLogEntry = {
   id: string
   actionType: string
-  permission: ScoutPermission | "hard_blocked"
+  permission: ApexPermission | "hard_blocked"
   timestamp: number
   approved: boolean
   /** "always_allowed" | "confirmed_once" | "always_allowed_updated" | "blocked" | "cancelled" */
@@ -63,9 +63,9 @@ export const HARD_BLOCKED_ACTIONS = new Set([
 
 // ── Permission defaults ───────────────────────────────────────────────────────
 
-type PermissionDefault = Pick<ScoutPermissionState, "allowed" | "requiresConfirmation">
+type PermissionDefault = Pick<ApexPermissionState, "allowed" | "requiresConfirmation">
 
-const PERMISSION_DEFAULTS: Record<ScoutPermission, PermissionDefault> = {
+const PERMISSION_DEFAULTS: Record<ApexPermission, PermissionDefault> = {
   read_jobs:             { allowed: true, requiresConfirmation: false },
   read_resume:           { allowed: true, requiresConfirmation: false },
   tailor_resume:         { allowed: true, requiresConfirmation: true  },
@@ -78,7 +78,7 @@ const PERMISSION_DEFAULTS: Record<ScoutPermission, PermissionDefault> = {
 }
 
 /** Human-readable labels for the permissions panel */
-export const PERMISSION_LABELS: Record<ScoutPermission, { name: string; description: string }> = {
+export const PERMISSION_LABELS: Record<ApexPermission, { name: string; description: string }> = {
   read_jobs:             { name: "Read jobs",            description: "View job listings and company info" },
   read_resume:           { name: "Read resume",          description: "Access your resume for context and scoring" },
   tailor_resume:         { name: "Tailor resume",        description: "Create tailored resume versions (originals are never changed)" },
@@ -92,8 +92,8 @@ export const PERMISSION_LABELS: Record<ScoutPermission, { name: string; descript
 
 // ── Action → Permission mapping ───────────────────────────────────────────────
 
-export const ACTION_PERMISSION: Record<string, ScoutPermission> = {
-  // Dashboard Scout actions
+export const ACTION_PERMISSION: Record<string, ApexPermission> = {
+  // Dashboard Apex actions
   OPEN_JOB:                        "read_jobs",
   APPLY_FILTERS:                   "read_jobs",
   HIGHLIGHT_JOBS:                  "read_jobs",
@@ -133,24 +133,24 @@ export const ACTION_PERMISSION: Record<string, ScoutPermission> = {
 
 // ── Storage ───────────────────────────────────────────────────────────────────
 
-const PERM_KEY  = "hireoven:scout-permissions:v1"
-const AUDIT_KEY = "hireoven:scout-audit-log:v1"
+const PERM_KEY  = "hireoven:apex-permissions:v1"
+const AUDIT_KEY = "hireoven:apex-audit-log:v1"
 const MAX_AUDIT = 50
 
-export function getDefaultPermissions(): ScoutPermissionState[] {
-  return (Object.keys(PERMISSION_DEFAULTS) as ScoutPermission[]).map((p) => ({
+export function getDefaultPermissions(): ApexPermissionState[] {
+  return (Object.keys(PERMISSION_DEFAULTS) as ApexPermission[]).map((p) => ({
     permission: p,
     ...PERMISSION_DEFAULTS[p],
     updatedAt: new Date().toISOString(),
   }))
 }
 
-export function readPermissions(): ScoutPermissionState[] {
+export function readPermissions(): ApexPermissionState[] {
   if (typeof window === "undefined") return getDefaultPermissions()
   try {
     const raw = localStorage.getItem(PERM_KEY)
     if (!raw) return getDefaultPermissions()
-    const parsed = JSON.parse(raw) as ScoutPermissionState[]
+    const parsed = JSON.parse(raw) as ApexPermissionState[]
     // Merge with defaults so newly added permissions get sensible values
     const stored = new Map(parsed.map((p) => [p.permission, p]))
     return getDefaultPermissions().map((d) => stored.get(d.permission) ?? d)
@@ -159,7 +159,7 @@ export function readPermissions(): ScoutPermissionState[] {
   }
 }
 
-export function writePermissions(states: ScoutPermissionState[]): void {
+export function writePermissions(states: ApexPermissionState[]): void {
   if (typeof window === "undefined") return
   try { localStorage.setItem(PERM_KEY, JSON.stringify(states)) } catch {}
 }
@@ -170,10 +170,10 @@ export function resetPermissions(): void {
 }
 
 export function updatePermission(
-  current: ScoutPermissionState[],
-  permission: ScoutPermission,
-  patch: Partial<Pick<ScoutPermissionState, "allowed" | "requiresConfirmation">>,
-): ScoutPermissionState[] {
+  current: ApexPermissionState[],
+  permission: ApexPermission,
+  patch: Partial<Pick<ApexPermissionState, "allowed" | "requiresConfirmation">>,
+): ApexPermissionState[] {
   const updated = current.map((s) =>
     s.permission === permission
       ? { ...s, ...patch, updatedAt: new Date().toISOString() }
@@ -187,13 +187,13 @@ export function updatePermission(
 
 export function checkPermission(
   actionType: string,
-  permissions: ScoutPermissionState[],
+  permissions: ApexPermissionState[],
 ): PermissionCheck {
   // Hard-blocked: forbidden regardless of settings
   if (HARD_BLOCKED_ACTIONS.has(actionType)) {
     return {
       allowed: false,
-      reason: `"${actionType}" is permanently blocked — Scout cannot submit applications or overwrite resumes automatically.`,
+      reason: `"${actionType}" is permanently blocked — Apex cannot submit applications or overwrite resumes automatically.`,
     }
   }
 
@@ -209,7 +209,7 @@ export function checkPermission(
   if (!state.allowed) {
     return {
       allowed: false,
-      reason: `"${PERMISSION_LABELS[permission].name}" is currently disabled in Scout permissions.`,
+      reason: `"${PERMISSION_LABELS[permission].name}" is currently disabled in Apex permissions.`,
     }
   }
 
@@ -221,22 +221,22 @@ export function checkPermission(
 
 // ── Audit log ─────────────────────────────────────────────────────────────────
 
-export function logAuditEntry(entry: ScoutAuditLogEntry): void {
+export function logAuditEntry(entry: ApexAuditLogEntry): void {
   if (typeof window === "undefined") return
   try {
     const raw = sessionStorage.getItem(AUDIT_KEY)
-    const log: ScoutAuditLogEntry[] = raw ? (JSON.parse(raw) as ScoutAuditLogEntry[]) : []
+    const log: ApexAuditLogEntry[] = raw ? (JSON.parse(raw) as ApexAuditLogEntry[]) : []
     log.unshift(entry)
     // Rolling window — never exceed MAX_AUDIT entries
     sessionStorage.setItem(AUDIT_KEY, JSON.stringify(log.slice(0, MAX_AUDIT)))
   } catch {}
 }
 
-export function readAuditLog(): ScoutAuditLogEntry[] {
+export function readAuditLog(): ApexAuditLogEntry[] {
   if (typeof window === "undefined") return []
   try {
     const raw = sessionStorage.getItem(AUDIT_KEY)
-    return raw ? (JSON.parse(raw) as ScoutAuditLogEntry[]) : []
+    return raw ? (JSON.parse(raw) as ApexAuditLogEntry[]) : []
   } catch {
     return []
   }
@@ -252,20 +252,20 @@ export function clearAuditLog(): void {
 export function buildConfirmationCopy(actionType: string): { title: string; description: string } {
   const permission = ACTION_PERMISSION[actionType]
   const defaults = {
-    title: "Scout wants to perform an action",
-    description: "Confirm to allow Scout to proceed.",
+    title: "Apex wants to perform an action",
+    description: "Confirm to allow Apex to proceed.",
   }
 
   if (!permission) return defaults
 
-  const map: Partial<Record<ScoutPermission, { title: string; description: string }>> = {
-    tailor_resume:         { title: "Tailor your resume",           description: "Scout will create a tailored version for this role. Your original resume is never changed." },
-    generate_cover_letter: { title: "Generate a cover letter",      description: "Scout will draft a cover letter based on this job. You review and edit before using it." },
-    autofill_fields:       { title: "Autofill application fields",  description: "Scout will fill form fields from your profile. Sensitive fields are excluded and must be filled manually." },
-    insert_cover_letter:   { title: "Insert cover letter into form", description: "Scout will paste your cover letter into the detected text field. You must still click Submit." },
-    attach_resume:         { title: "Attach a resume file",        description: "Scout will attach a resume to the file upload. You approve before any form is submitted." },
-    open_external_pages:   { title: "Open an external page",       description: "Scout wants to navigate to a company page or application URL." },
-    queue_applications:    { title: "Queue this application",      description: "Scout will add this role to your application workflow queue for you to review." },
+  const map: Partial<Record<ApexPermission, { title: string; description: string }>> = {
+    tailor_resume:         { title: "Tailor your resume",           description: "Apex will create a tailored version for this role. Your original resume is never changed." },
+    generate_cover_letter: { title: "Generate a cover letter",      description: "Apex will draft a cover letter based on this job. You review and edit before using it." },
+    autofill_fields:       { title: "Autofill application fields",  description: "Apex will fill form fields from your profile. Sensitive fields are excluded and must be filled manually." },
+    insert_cover_letter:   { title: "Insert cover letter into form", description: "Apex will paste your cover letter into the detected text field. You must still click Submit." },
+    attach_resume:         { title: "Attach a resume file",        description: "Apex will attach a resume to the file upload. You approve before any form is submitted." },
+    open_external_pages:   { title: "Open an external page",       description: "Apex wants to navigate to a company page or application URL." },
+    queue_applications:    { title: "Queue this application",      description: "Apex will add this role to your application workflow queue for you to review." },
   }
 
   return map[permission] ?? defaults

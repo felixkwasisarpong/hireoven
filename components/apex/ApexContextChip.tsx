@@ -4,16 +4,16 @@ import { useMemo } from "react"
 import { useRouter, usePathname } from "next/navigation"
 import { Focus, RefreshCw, SlidersHorizontal, User, X } from "lucide-react"
 import { useResumeContext } from "@/components/resume/ResumeProvider"
-import { detectScoutMode, getScoutModeLabel } from "@/lib/scout/mode"
+import { detectApexMode, getApexModeLabel } from "@/lib/apex/mode"
 
-type ScoutContextChipProps = {
+type ApexContextChipProps = {
   /** Called after a reset so the parent can clear its local chat state */
   onReset?: () => void
   jobTitle?: string
   companyName?: string
 }
 
-export function ScoutContextChip({ onReset, jobTitle, companyName }: ScoutContextChipProps) {
+export function ApexContextChip({ onReset, jobTitle, companyName }: ApexContextChipProps) {
   const router = useRouter()
   const pathname = usePathname()
   const { primaryResume } = useResumeContext()
@@ -22,8 +22,8 @@ export function ScoutContextChip({ onReset, jobTitle, companyName }: ScoutContex
     return new URLSearchParams(window.location.search)
   }, [pathname])
 
-  const mode = detectScoutMode(pathname ?? "")
-  const modeLabel = getScoutModeLabel(mode)
+  const mode = detectApexMode(pathname ?? "")
+  const modeLabel = getApexModeLabel(mode)
 
   const isFocusMode = searchParams.get("focus") === "1"
   const queryFilter = searchParams.get("q")
@@ -37,10 +37,10 @@ export function ScoutContextChip({ onReset, jobTitle, companyName }: ScoutContex
 
   function clearPersistedFocusMode() {
     try {
-      localStorage.removeItem("hireoven:scout-focus-mode:v1")
+      localStorage.removeItem("hireoven:apex-focus-mode:v1")
     } catch {}
     if (typeof window !== "undefined") {
-      window.dispatchEvent(new CustomEvent("scout:focus-mode-changed", { detail: { enabled: false } }))
+      window.dispatchEvent(new CustomEvent("apex:focus-mode-changed", { detail: { enabled: false } }))
     }
   }
 
@@ -69,7 +69,7 @@ export function ScoutContextChip({ onReset, jobTitle, companyName }: ScoutContex
   function resetContext() {
     clearPersistedFocusMode()
     if (typeof window !== "undefined") {
-      window.dispatchEvent(new CustomEvent("scout:reset-context"))
+      window.dispatchEvent(new CustomEvent("apex:reset-context"))
     }
     router.push("/dashboard")
     onReset?.()
@@ -85,7 +85,7 @@ export function ScoutContextChip({ onReset, jobTitle, companyName }: ScoutContex
       {/* Context tags */}
       <div className="mb-2.5 flex flex-wrap items-center gap-1.5">
         <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-          Scout context
+          Apex context
         </span>
 
         {/* Mode */}
@@ -158,7 +158,7 @@ export function ScoutContextChip({ onReset, jobTitle, companyName }: ScoutContex
           type="button"
           onClick={resetContext}
           className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-medium text-slate-500 transition hover:border-slate-300 hover:text-slate-700 active:scale-95"
-          title="Clear filters, focus mode, and Scout conversation"
+          title="Clear filters, focus mode, and Apex conversation"
         >
           <RefreshCw className="h-2.5 w-2.5" />
           Reset context

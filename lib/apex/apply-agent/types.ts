@@ -32,7 +32,7 @@ export type SkillGap = {
 }
 
 export type ApplyAgentDirective = {
-  /** Jobs Scout selected to apply to — sorted by match score desc */
+  /** Jobs Apex selected to apply to — sorted by match score desc */
   jobs:         ApplyAgentJob[]
   /** Criteria used to select jobs */
   criteria: {

@@ -20,7 +20,7 @@ const PLANS = [
     highlighted: true,
     color: { from: "#FF5C18", to: "#FF9A3C" },
     features: [
-      "Scout AI — 30 messages/day",
+      "Apex AI — 30 messages/day",
       "Resume tailoring — 30/month",
       "Cover letter generator — 25/month",
       "Deep resume analysis — 20/month",
@@ -40,12 +40,12 @@ const PLANS = [
     highlighted: false,
     color: { from: "#7C3AED", to: "#C026D3" },
     features: [
-      "Scout AI — 60 messages/day",
+      "Apex AI — 60 messages/day",
       "Resume tailoring — unlimited",
       "Cover letters — unlimited",
       "Deep analysis — unlimited",
       "Live interviews (1 credit / 28d + top-ups)",
-      "Scout strategy insights",
+      "Apex strategy insights",
       "Everything in Pro",
     ],
   },

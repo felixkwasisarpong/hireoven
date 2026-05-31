@@ -15,11 +15,11 @@ import {
   Target,
 } from "lucide-react"
 import { useRef } from "react"
-import { ScoutMessageBubble } from "@/components/scout/ScoutMessageBubble"
+import { ApexMessageBubble } from "@/components/apex/ApexMessageBubble"
 import { useUpgradeModal } from "@/lib/context/UpgradeModalContext"
-import type { ScoutResponse, ScoutStrategyBoard } from "@/lib/scout/types"
-import type { ScoutNudge } from "@/lib/scout/nudges"
-function TopNudgesGrid({ nudges }: { nudges: ScoutNudge[] }) {
+import type { ApexResponse, ApexStrategyBoard } from "@/lib/apex/types"
+import type { ApexNudge } from "@/lib/apex/nudges"
+function TopNudgesGrid({ nudges }: { nudges: ApexNudge[] }) {
   return (
     <div className="grid gap-3 md:grid-cols-3">
       {nudges.map((nudge) => {
@@ -66,9 +66,9 @@ function TopNudgesGrid({ nudges }: { nudges: ScoutNudge[] }) {
 
 type ChatMessage =
   | { id: string; role: "user"; text: string }
-  | { id: string; role: "scout"; response: ScoutResponse }
+  | { id: string; role: "apex"; response: ApexResponse }
 
-export type ScoutOverviewTabProps = {
+export type ApexOverviewTabProps = {
   greeting: string
   firstName: string
   query: string
@@ -80,9 +80,9 @@ export type ScoutOverviewTabProps = {
   messages: ChatMessage[]
   error: string | null
   resumeRefreshedNotice: boolean
-  strategyBoard: ScoutStrategyBoard | null
+  strategyBoard: ApexStrategyBoard | null
   strategyLoading: boolean
-  nudges: ScoutNudge[]
+  nudges: ApexNudge[]
   hasConversation: boolean
   userTurns: number
   onSubmit: (e: React.FormEvent) => void
@@ -120,7 +120,7 @@ function ErrorBubble({ message }: { message: string }) {
         <Sparkles className="h-3.5 w-3.5 text-red-500" />
       </div>
       <div className="flex-1 rounded-2xl rounded-tl-sm border border-red-200 bg-red-50 px-4 py-3.5">
-        <p className="text-sm font-semibold text-red-800">Scout hit an error</p>
+        <p className="text-sm font-semibold text-red-800">Apex hit an error</p>
         <p className="mt-0.5 text-xs leading-5 text-red-600">{message}</p>
       </div>
     </div>
@@ -132,7 +132,7 @@ function TodayFocusCard({
   isLoading,
   onViewStrategy,
 }: {
-  board: ScoutStrategyBoard | null
+  board: ApexStrategyBoard | null
   isLoading: boolean
   onViewStrategy: () => void
 }) {
@@ -143,7 +143,7 @@ function TodayFocusCard({
           <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">
             Today&apos;s Focus
           </p>
-          <p className="mt-1 text-xs text-slate-500">What Scout is optimizing right now.</p>
+          <p className="mt-1 text-xs text-slate-500">What Apex is optimizing right now.</p>
         </div>
         <div className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-orange-50">
           <Target className="h-4 w-4 text-orange-600" />
@@ -166,7 +166,7 @@ function TodayFocusCard({
             ))}
         {!isLoading && (!board || board.todayFocus.length === 0) && (
           <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-xs leading-5 text-slate-500">
-            Ask Scout to build your first focus plan.
+            Ask Apex to build your first focus plan.
           </div>
         )}
       </div>
@@ -187,7 +187,7 @@ function NextMovesRow({
   board,
   isLoading,
 }: {
-  board: ScoutStrategyBoard | null
+  board: ApexStrategyBoard | null
   isLoading: boolean
 }) {
   const moves = board?.nextMoves.slice(0, 3) ?? []
@@ -237,7 +237,7 @@ function NextMovesRow({
 
 // ── Main export ───────────────────────────────────────────────────────────────
 
-export function ScoutOverviewTab({
+export function ApexOverviewTab({
   greeting,
   firstName,
   query,
@@ -259,7 +259,7 @@ export function ScoutOverviewTab({
   onClearChat,
   onResetContext,
   onViewStrategy,
-}: ScoutOverviewTabProps) {
+}: ApexOverviewTabProps) {
   const { showUpgrade } = useUpgradeModal()
   const inputRef = useRef<HTMLInputElement>(null)
   const chatEndRef = useRef<HTMLDivElement>(null)
@@ -274,7 +274,7 @@ export function ScoutOverviewTab({
             {greeting}, {firstName} 👋
           </h1>
           <p className="mt-1.5 text-sm text-slate-500">
-            Here&apos;s what Scout has for you today.
+            Here&apos;s what Apex has for you today.
           </p>
         </div>
 
@@ -308,12 +308,12 @@ export function ScoutOverviewTab({
             <div className="min-h-[150px] rounded-2xl border border-slate-100 bg-slate-50/70 p-4">
               <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-slate-400">
                 <Bot className="h-4 w-4 text-orange-600" />
-                Ask Scout
+                Ask Apex
               </div>
               <textarea
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder={hasConversation ? "Follow up…" : "Ask Scout anything…"}
+                placeholder={hasConversation ? "Follow up…" : "Ask Apex anything…"}
                 disabled={isLoading}
                 rows={3}
                 className="mt-4 w-full resize-none bg-transparent text-sm leading-6 text-slate-800 outline-none placeholder:text-slate-400 disabled:opacity-50"
@@ -368,7 +368,7 @@ export function ScoutOverviewTab({
       {resumeRefreshedNotice && (
         <div className="flex items-center gap-2.5 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-medium text-blue-700">
           <RefreshCw className="h-4 w-4 shrink-0" />
-          Scout refreshed context for your updated resume.
+          Apex refreshed context for your updated resume.
         </div>
       )}
 
@@ -382,7 +382,7 @@ export function ScoutOverviewTab({
                 <MessageSquare className="h-4 w-4" />
               </span>
               <div>
-                <p className="text-sm font-bold text-slate-950">Scout conversation</p>
+                <p className="text-sm font-bold text-slate-950">Apex conversation</p>
                 <p className="text-xs text-slate-500">
                   {userTurns === 0 ? "Ready for your first message" : userTurns === 1 ? "1 message in this thread" : `${userTurns} messages in this thread`}
                 </p>
@@ -408,7 +408,7 @@ export function ScoutOverviewTab({
                   </div>
                 </div>
               ) : (
-                <ScoutMessageBubble key={msg.id} response={msg.response} onUpgrade={showUpgrade} />
+                <ApexMessageBubble key={msg.id} response={msg.response} onUpgrade={showUpgrade} />
               )
             )}
             {isLoading && <TypingIndicator />}
@@ -424,7 +424,7 @@ export function ScoutOverviewTab({
           <div className="mb-3 flex items-center justify-between">
             <div>
               <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">Top Nudges</p>
-              <p className="mt-0.5 text-xs text-slate-500">Small moves Scout thinks are worth your attention.</p>
+              <p className="mt-0.5 text-xs text-slate-500">Small moves Apex thinks are worth your attention.</p>
             </div>
             <button type="button" className="text-[11px] font-bold text-orange-600 hover:underline">
               View all

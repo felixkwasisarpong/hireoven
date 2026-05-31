@@ -6,7 +6,7 @@ import {
   generateJavaProgram,
   generateTsProgram,
   type CodingLanguage,
-} from "@/lib/scout/interview/languageUtils"
+} from "@/lib/apex/interview/languageUtils"
 
 export const runtime = "nodejs"
 

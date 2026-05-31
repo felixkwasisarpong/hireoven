@@ -1,7 +1,7 @@
 /**
  * GET /api/extension/jobs/check?url=...&applyUrl=...
  *
- * Lightweight presence check used by the Scout Bar to decide whether to show
+ * Lightweight presence check used by the Apex Bar to decide whether to show
  * the Save button. Just looks up whether the current user already has an
  * active (non-archived) job_applications row pointing at the same job.
  *

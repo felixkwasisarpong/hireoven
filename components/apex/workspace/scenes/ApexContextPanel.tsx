@@ -4,19 +4,19 @@ import { useEffect, useState } from "react"
 import dynamic from "next/dynamic"
 import { Brain, Building2, Clock, Globe, Layers, Shield, Workflow as WorkflowIcon, X } from "lucide-react"
 import { cn } from "@/lib/utils"
-import type { ScoutTimelineEvent, ScoutTimelineReplayAction } from "@/lib/scout/timeline/types"
-import type { CompanyIntel, CompanyIntelSummary } from "@/lib/scout/company-intel/types"
-import type { ScoutPermissionState } from "@/lib/scout/permissions"
-import type { ScoutProactiveEvent, ScoutProactiveEventType } from "@/lib/scout/proactive/types"
-import type { MarketSignal } from "@/lib/scout/market-intelligence"
-import type { ActiveBrowserContext } from "@/lib/scout/browser-context"
-import type { ScoutActiveWorkflow } from "@/lib/scout/workflows/types"
+import type { ApexTimelineEvent, ApexTimelineReplayAction } from "@/lib/apex/timeline/types"
+import type { CompanyIntel, CompanyIntelSummary } from "@/lib/apex/company-intel/types"
+import type { ApexPermissionState } from "@/lib/apex/permissions"
+import type { ApexProactiveEvent, ApexProactiveEventType } from "@/lib/apex/proactive/types"
+import type { MarketSignal } from "@/lib/apex/market-intelligence"
+import type { ActiveBrowserContext } from "@/lib/apex/browser-context"
+import type { ApexActiveWorkflow } from "@/lib/apex/workflows/types"
 
-const ScoutTimelinePanel  = dynamic(() => import("@/components/scout/timeline/ScoutTimelinePanel").then((m) => ({ default: m.ScoutTimelinePanel })),  { ssr: false })
-const CompanyIntelRail    = dynamic(() => import("@/components/scout/CompanyIntelRail").then((m) => ({ default: m.CompanyIntelRail })),               { ssr: false })
-const BrowserContextRail  = dynamic(() => import("@/components/scout/workspace/BrowserContextRail").then((m) => ({ default: m.BrowserContextRail })), { ssr: false })
-const ScoutProactiveRail  = dynamic(() => import("@/components/scout/proactive/ScoutProactiveRail").then((m) => ({ default: m.ScoutProactiveRail })), { ssr: false })
-const ScoutMarketRail     = dynamic(() => import("@/components/scout/ScoutMarketRail").then((m) => ({ default: m.ScoutMarketRail })),                  { ssr: false })
+const ApexTimelinePanel  = dynamic(() => import("@/components/apex/timeline/ApexTimelinePanel").then((m) => ({ default: m.ApexTimelinePanel })),  { ssr: false })
+const CompanyIntelRail    = dynamic(() => import("@/components/apex/CompanyIntelRail").then((m) => ({ default: m.CompanyIntelRail })),               { ssr: false })
+const BrowserContextRail  = dynamic(() => import("@/components/apex/workspace/BrowserContextRail").then((m) => ({ default: m.BrowserContextRail })), { ssr: false })
+const ApexProactiveRail  = dynamic(() => import("@/components/apex/proactive/ApexProactiveRail").then((m) => ({ default: m.ApexProactiveRail })), { ssr: false })
+const ApexMarketRail     = dynamic(() => import("@/components/apex/ApexMarketRail").then((m) => ({ default: m.ApexMarketRail })),                  { ssr: false })
 
 export type ContextPanelTab =
   | "timeline"
@@ -32,9 +32,9 @@ type Props = {
   onClose: () => void
 
   // Timeline
-  timelineEvents:   ScoutTimelineEvent[]
+  timelineEvents:   ApexTimelineEvent[]
   onClearTimeline:  () => void
-  onReplay:         (a: ScoutTimelineReplayAction) => void
+  onReplay:         (a: ApexTimelineReplayAction) => void
   isDev:            boolean
 
   // Context: company intel
@@ -47,21 +47,21 @@ type Props = {
 
   // Context: browser
   browserContext?:  ActiveBrowserContext | null
-  activeWorkflow?:  ScoutActiveWorkflow | null
-  latestRailEvents?: ScoutTimelineEvent[]
-  proactiveRailEvents?: ScoutProactiveEvent[]
+  activeWorkflow?:  ApexActiveWorkflow | null
+  latestRailEvents?: ApexTimelineEvent[]
+  proactiveRailEvents?: ApexProactiveEvent[]
   onPreFill?:       (q: string) => void
   onExpandWorkflow?: () => void
-  onOpenProactive?: (e: ScoutProactiveEvent) => void
+  onOpenProactive?: (e: ApexProactiveEvent) => void
 
   // Context: proactive (when no company / no browser context)
-  proactiveEvents?: ScoutProactiveEvent[]
+  proactiveEvents?: ApexProactiveEvent[]
   proactiveEnabled?: boolean
   proactiveMutedCount?: number
   proactiveLoading?: boolean
   onDismissProactive?: (id: string) => void
   onSnoozeProactive?: (id: string) => void
-  onMuteProactiveType?: (type: ScoutProactiveEventType) => void
+  onMuteProactiveType?: (type: ApexProactiveEventType) => void
   onClearMutedTypes?: () => void
   onSetProactiveEnabled?: (enabled: boolean) => void
 
@@ -70,7 +70,7 @@ type Props = {
   marketLoading?:   boolean
 
   // Workflow
-  workflowState?:   ScoutActiveWorkflow | null
+  workflowState?:   ApexActiveWorkflow | null
   onContinueStep?:  () => void
   onSkipStep?:      () => void
   onPauseWorkflow?: () => void
@@ -80,7 +80,7 @@ type Props = {
   // Memory / Permissions — open the existing dedicated panels
   onOpenMemory?:       () => void
   onOpenPermissions?:  () => void
-  permissions?:        ScoutPermissionState[]
+  permissions?:        ApexPermissionState[]
 }
 
 const TABS: Array<{ value: ContextPanelTab; label: string; Icon: typeof Clock }> = [
@@ -91,7 +91,7 @@ const TABS: Array<{ value: ContextPanelTab; label: string; Icon: typeof Clock }>
   { value: "permissions", label: "Permissions", Icon: Shield      },
 ]
 
-export function ScoutContextPanel(props: Props) {
+export function ApexContextPanel(props: Props) {
   const {
     open, tab, onTabChange, onClose,
     timelineEvents, onClearTimeline, onReplay, isDev,
@@ -143,7 +143,7 @@ export function ScoutContextPanel(props: Props) {
       {/* Panel */}
       <aside
         role="complementary"
-        aria-label="Scout context"
+        aria-label="Apex context"
         className={cn(
           "fixed inset-y-0 right-0 z-50 flex w-[min(420px,100vw)] flex-col border-l border-slate-200 bg-white/95 shadow-[0_24px_60px_-24px_rgba(15,23,42,0.35)] backdrop-blur-md transition-transform duration-200 ease-out",
           open ? "translate-x-0" : "translate-x-full"
@@ -152,7 +152,7 @@ export function ScoutContextPanel(props: Props) {
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
           <p className="text-[12px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-            Scout context
+            Apex context
           </p>
           <button
             type="button"
@@ -205,7 +205,7 @@ export function ScoutContextPanel(props: Props) {
         <div className="min-h-0 flex-1 overflow-y-auto px-3 py-4">
           {tab === "timeline" && (
             <div className="-mx-3">
-              <ScoutTimelinePanel
+              <ApexTimelinePanel
                 events={timelineEvents}
                 onClose={onClose}
                 onReplay={onReplay}
@@ -242,7 +242,7 @@ export function ScoutContextPanel(props: Props) {
               )}
 
               {(proactiveEvents.length > 0 || proactiveLoading) && (
-                <ScoutProactiveRail
+                <ApexProactiveRail
                   events={proactiveEvents}
                   enabled={proactiveEnabled}
                   mutedCount={proactiveMutedCount}
@@ -257,7 +257,7 @@ export function ScoutContextPanel(props: Props) {
               )}
 
               {(marketSignals.length > 0 || marketLoading) && (
-                <ScoutMarketRail signals={marketSignals} loading={Boolean(marketLoading)} />
+                <ApexMarketRail signals={marketSignals} loading={Boolean(marketLoading)} />
               )}
             </div>
           )}
@@ -290,7 +290,7 @@ function ContextEmpty() {
       </div>
       <p className="text-[13.5px] font-semibold text-slate-700">No active context</p>
       <p className="mt-1 text-[12px] text-slate-500">
-        Open a job, company, or active tab via the extension and Scout&apos;s relevant intel will appear here.
+        Open a job, company, or active tab via the extension and Apex&apos;s relevant intel will appear here.
       </p>
     </div>
   )
@@ -300,7 +300,7 @@ function ContextEmpty() {
 function WorkflowSummary({
   state, onContinue, onSkip, onPause, onResume, onCancel,
 }: {
-  state: ScoutActiveWorkflow | null
+  state: ApexActiveWorkflow | null
   onContinue?: () => void
   onSkip?: () => void
   onPause?: () => void
@@ -315,7 +315,7 @@ function WorkflowSummary({
         </div>
         <p className="text-[13.5px] font-semibold text-slate-700">No active workflow</p>
         <p className="mt-1 text-[12px] text-slate-500">
-          Workflows you start with Scout appear here so you can step through, pause, or resume.
+          Workflows you start with Apex appear here so you can step through, pause, or resume.
         </p>
       </div>
     )
@@ -327,7 +327,7 @@ function WorkflowSummary({
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_1px_0_rgba(15,23,42,0.04)]">
-      <p className="text-[10.5px] font-semibold uppercase tracking-[0.18em] text-[#FF5C18]">
+      <p className="text-[10.5px] font-semibold uppercase tracking-[0.18em] text-[#6366F1]">
         Active workflow
       </p>
       <p className="mt-1 text-[14px] font-semibold text-slate-900">{state.title}</p>
@@ -345,7 +345,7 @@ function WorkflowSummary({
               className={cn(
                 "flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-[12.5px]",
                 active
-                  ? "border-[#FFD5C2] bg-[#FFF8F5] text-[#FF5C18]"
+                  ? "border-[#FFD5C2] bg-[#FFF8F5] text-[#6366F1]"
                   : done
                     ? "border-slate-100 bg-slate-50 text-slate-400 line-through"
                     : "border-slate-100 bg-white text-slate-600"
@@ -354,7 +354,7 @@ function WorkflowSummary({
               <span
                 className={cn(
                   "flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-bold",
-                  active ? "bg-[#FF5C18] text-white" : done ? "bg-emerald-500 text-white" : "bg-slate-200 text-slate-500"
+                  active ? "bg-[#6366F1] text-white" : done ? "bg-emerald-500 text-white" : "bg-slate-200 text-slate-500"
                 )}
               >
                 {i + 1}

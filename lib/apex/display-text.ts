@@ -1,9 +1,9 @@
 /**
- * Scout display text utilities — shared by all Scout UI surfaces.
+ * Apex display text utilities — shared by all Apex UI surfaces.
  *
  * Single source of truth for converting a raw `response.answer` string
  * into user-facing text.  No component should call `.answer` directly
- * without running it through `getScoutDisplayText` first.
+ * without running it through `getApexDisplayText` first.
  *
  * Rules (in order):
  *   1. Empty / whitespace → return ""
@@ -65,7 +65,7 @@ function looksLikeRawStructuredText(text: string): boolean {
   return false
 }
 
-export function getScoutDisplayText(answer: string): string {
+export function getApexDisplayText(answer: string): string {
   if (!answer || !answer.trim()) return ""
 
   const trimmed = answer.trim()
@@ -95,7 +95,7 @@ export function getScoutDisplayText(answer: string): string {
 
   // Whole string looks like JSON → never show it as prose
   if (looksLikeRawStructuredText(trimmed)) {
-    return "Scout prepared a structured response — see the cards and actions below."
+    return "Apex prepared a structured response — see the cards and actions below."
   }
 
   return trimmed
