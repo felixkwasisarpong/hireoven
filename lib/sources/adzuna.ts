@@ -61,7 +61,6 @@ export async function searchAdzunaJobs(opts: AdzunaSearchOptions): Promise<Adzun
     results_per_page: String(PAGE_SIZE),
     what: opts.what,
     sort_by: opts.sortBy ?? "date",
-    content_type: "application/json",
   })
   if (opts.where) params.set("where", opts.where)
   if (opts.maxDaysOld) params.set("max_days_old", String(opts.maxDaysOld))
