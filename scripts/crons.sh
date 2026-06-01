@@ -42,6 +42,7 @@ run() {
 # deliver-checkins   0 9 * * *         run api/cron/deliver-checkins
 # blog-generate      0 8 * * 1-5       run api/cron/blog-generate
 # dice-ingest        0 */6 * * *       run api/cron/dice-ingest
+# adzuna-ingest      30 */6 * * *      run api/cron/adzuna-ingest
 # waas-ingest        15 */6 * * *      run api/cron/waas-ingest
 # discover-companies 0 5 * * *         run api/cron/discover-companies
 # discover-tenants   0 */2 * * *       run api/cron/discover-tenants
@@ -67,6 +68,7 @@ case "${1:-}" in
   deliver-checkins)  run api/cron/deliver-checkins ;;
   blog-generate)     run api/cron/blog-generate ;;
   dice-ingest)       run api/cron/dice-ingest ;;
+  adzuna-ingest)     run api/cron/adzuna-ingest ;;
   waas-ingest)       run api/cron/waas-ingest ;;
   discover-companies) run api/cron/discover-companies ;;
   discover-tenants)  run api/cron/discover-tenants ;;
@@ -88,6 +90,7 @@ case "${1:-}" in
     run api/cron/deliver-checkins
     run api/cron/blog-generate
     run api/cron/dice-ingest
+    run api/cron/adzuna-ingest
     run api/cron/waas-ingest
     ;;
   *)
@@ -98,7 +101,7 @@ case "${1:-}" in
     echo "  cohort-detect  cohort-match  layoffs-fyi  health-scores"
     echo "  rejection-patterns  burnout-classify  salary-digest  warn-act"
     echo "  cohort-aggregate  deliver-checkins  blog-generate  dice-ingest"
-    echo "  waas-ingest  discover-companies  discover-tenants"
+    echo "  adzuna-ingest  waas-ingest  discover-companies  discover-tenants"
     exit 1
     ;;
 esac
