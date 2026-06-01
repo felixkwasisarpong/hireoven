@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { ChevronRight, Lock, Sparkles } from "lucide-react"
+import { ChevronRight, Lock } from "lucide-react"
 import { useEffect, useState } from "react"
 import {
   DASHBOARD_NAV_ITEMS,
@@ -294,13 +294,6 @@ export default function DashboardSidebarNav({
 
   const sharedProps = { applicationCount, variant, navSkin }
 
-  function startPremiumTour() {
-    if (typeof window === "undefined") return
-    window.dispatchEvent(
-      new CustomEvent("hireoven:product-tour:start", { detail: { mode: "premium" } })
-    )
-  }
-
   return (
     <nav className="flex h-full min-h-full flex-col" aria-label="Dashboard" data-tour="dashboard-sidebar">
       <div className="space-y-1">
@@ -320,16 +313,6 @@ export default function DashboardSidebarNav({
           ))}
         </div>
       )}
-
-      <button
-        type="button"
-        onClick={startPremiumTour}
-        className="mt-3 inline-flex items-center justify-center gap-1.5 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-[12px] font-semibold text-[#B64613] transition hover:bg-orange-100"
-        data-tour="nav-tour-trigger"
-      >
-        <Sparkles className="h-3.5 w-3.5" />
-        Preview premium features
-      </button>
     </nav>
   )
 }

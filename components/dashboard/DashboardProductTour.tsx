@@ -7,7 +7,6 @@ import { PLAN_NAMES, type FeatureKey, type Plan } from "@/lib/gates"
 import { useUpgradeModal } from "@/lib/context/UpgradeModalContext"
 import { useSubscription } from "@/lib/hooks/useSubscription"
 
-const TOUR_SEEN_KEY = "hireoven:dashboard-product-tour:v1"
 const TOUR_START_EVENT = "hireoven:product-tour:start"
 const TOUR_OPEN_GROUPS_EVENT = "hireoven:product-tour:open-groups"
 
@@ -228,6 +227,8 @@ export default function DashboardProductTour() {
   const { showUpgrade } = useUpgradeModal()
 
   const [mounted, setMounted] = useState(false)
+  const [seenLoaded, setSeenLoaded] = useState(false)
+  const [hasSeenTour, setHasSeenTour] = useState(true)
   const [open, setOpen] = useState(false)
   const [steps, setSteps] = useState<TourStep[]>([])
   const [index, setIndex] = useState(0)
@@ -239,15 +240,17 @@ export default function DashboardProductTour() {
 
   const activeStep = steps[index] ?? null
 
-  const markTourSeen = useCallback(() => {
+  const markTourSeen = useCallback(async () => {
+    setHasSeenTour(true)
+    setSeenLoaded(true)
     try {
-      localStorage.setItem(TOUR_SEEN_KEY, String(Date.now()))
+      await fetch("/api/profile/tour", { method: "POST" })
     } catch {}
   }, [])
 
   const closeTour = useCallback(() => {
     setOpen(false)
-    markTourSeen()
+    void markTourSeen()
   }, [markTourSeen])
 
   const startTour = useCallback(
@@ -284,6 +287,31 @@ export default function DashboardProductTour() {
   }, [])
 
   useEffect(() => {
+    if (!mounted || pathname !== "/dashboard") return
+    let cancelled = false
+
+    async function loadSeenState() {
+      try {
+        const res = await fetch("/api/profile/tour", { cache: "no-store" })
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const data = (await res.json()) as { seenAt?: string | null }
+        if (cancelled) return
+        setHasSeenTour(Boolean(data.seenAt))
+      } catch {
+        if (cancelled) return
+        setHasSeenTour(false)
+      } finally {
+        if (!cancelled) setSeenLoaded(true)
+      }
+    }
+
+    void loadSeenState()
+    return () => {
+      cancelled = true
+    }
+  }, [mounted, pathname])
+
+  useEffect(() => {
     if (!mounted) return
     const syncViewport = () => setViewport({ width: window.innerWidth, height: window.innerHeight })
     syncViewport()
@@ -302,15 +330,13 @@ export default function DashboardProductTour() {
   }, [mounted, startTour])
 
   useEffect(() => {
-    if (!mounted || open || isLoading) return
+    if (!mounted || open || isLoading || !seenLoaded) return
     if (pathname !== "/dashboard") return
-    try {
-      if (localStorage.getItem(TOUR_SEEN_KEY)) return
-    } catch {}
+    if (hasSeenTour) return
 
-    const timer = window.setTimeout(() => startTour("default"), 900)
+    const timer = window.setTimeout(() => startTour("default"), 200)
     return () => window.clearTimeout(timer)
-  }, [isLoading, mounted, open, pathname, startTour])
+  }, [hasSeenTour, isLoading, mounted, open, pathname, seenLoaded, startTour])
 
   useEffect(() => {
     if (!open || !activeStep?.selector) {
