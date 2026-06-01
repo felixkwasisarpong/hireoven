@@ -94,7 +94,7 @@ export async function GET(request: NextRequest) {
       // Waitlist gate: don't let Google sign-in be a side door around the
       // invite requirement. Existing Google users (matched above) still work.
       if (process.env.WAITLIST_ONLY === "true") {
-        return loginError(origin, "waitlist")
+        return NextResponse.redirect(new URL("/waitlist", origin))
       }
       userId = randomUUID()
       const client = await pool.connect()
