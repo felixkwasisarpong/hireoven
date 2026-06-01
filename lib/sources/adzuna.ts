@@ -74,9 +74,15 @@ export async function searchAdzunaJobs(opts: AdzunaSearchOptions): Promise<Adzun
         "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
     },
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    // Bypass Next.js fetch cache — without this, the patched fetch in App Router
+    // may add unexpected headers or deduplicate requests incorrectly.
+    cache: "no-store",
   })
 
-  if (!res.ok) throw new Error(`Adzuna API ${res.status} for "${opts.what}"`)
+  if (!res.ok) {
+    const body = await res.text().catch(() => "")
+    throw new Error(`Adzuna API ${res.status} for "${opts.what}": ${body.slice(0, 200)}`)
+  }
 
   const body = await res.json() as {
     results?: RawAdzunaJob[]
