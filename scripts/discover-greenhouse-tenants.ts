@@ -225,16 +225,33 @@ async function main() {
     newSlugs.push({ slug, name: slugToName.get(slug) ?? slug, usaConfirmed: false, usaJobCount: 0, jobCount: 0 })
   }
 
+  // Early WAF circuit-breaker — abort mid-run when a rolling window shows too
+  // many 403/406/429s, instead of probing all candidates and only warning at
+  // the end. The checkpoint lets a later run resume from a fresh egress.
+  const WAF_WINDOW = 100
+  const WAF_THRESHOLD = 0.3
+  let aborted = false
+  const recentBlocked: boolean[] = []
+
   await Promise.all(
     candidates.map((slug) =>
       limiter(async () => {
-        if (previouslyFound.has(slug)) return
+        if (aborted || previouslyFound.has(slug)) return
         if (stagger > 0) await sleep(stagger)
 
         processed += 1
         const result = await probeGreenhouse(slug)
+        const isBlocked = !result.ok && (result.status === 403 || result.status === 406 || result.status === 429)
+        recentBlocked.push(isBlocked)
+        if (recentBlocked.length > WAF_WINDOW) recentBlocked.shift()
+        if (!aborted && recentBlocked.length === WAF_WINDOW &&
+            recentBlocked.filter(Boolean).length / WAF_WINDOW > WAF_THRESHOLD) {
+          aborted = true
+          console.warn(`\n[discover-greenhouse] ⚠ WAF throttling detected — aborting early. Resume from a different egress; checkpoint: ${CHECKPOINT}`)
+          return
+        }
         if (!result.ok) {
-          if (result.status === 403 || result.status === 406 || result.status === 429) blocked403 += 1
+          if (isBlocked) blocked403 += 1
           if (processed % 250 === 0) {
             console.log(
               `  progress: ${processed}/${candidates.length} hits=${hits} blocked=${blocked403}`

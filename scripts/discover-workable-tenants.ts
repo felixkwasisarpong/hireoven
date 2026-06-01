@@ -50,7 +50,7 @@ function generateCandidates(name: string): string[] {
   return Array.from(out).filter(s => s.length >= 2 && s.length <= 60)
 }
 
-async function probeWorkable(slug: string): Promise<boolean> {
+async function probeWorkable(slug: string): Promise<"hit" | "miss" | "blocked"> {
   const url = `https://apply.workable.com/${encodeURIComponent(slug)}/`
   try {
     const ctrl = new AbortController()
@@ -64,15 +64,16 @@ async function probeWorkable(slug: string): Promise<boolean> {
       signal: ctrl.signal,
     })
     clearTimeout(t)
-    // Real tenant: 200. Non-existent: 302 → /oops.
-    if (res.status === 200) return true
+    // Real tenant: 200. Non-existent: 302 → /oops. Throttled: 403/406/429.
+    if (res.status === 200) return "hit"
     if (res.status === 302 || res.status === 301) {
       const loc = res.headers.get("location") ?? ""
-      return !loc.includes("/oops") && !loc.includes("workable.com/oops")
+      return !loc.includes("/oops") && !loc.includes("workable.com/oops") ? "hit" : "miss"
     }
-    return false
+    if (res.status === 403 || res.status === 406 || res.status === 429) return "blocked"
+    return "miss"
   } catch {
-    return false
+    return "miss"
   }
 }
 
@@ -133,23 +134,42 @@ async function main() {
   type HitRecord = { slug: string; name: string }
   const newHits: HitRecord[] = []
 
+  // Early WAF circuit-breaker — apply.workable.com 429s under sustained load, so
+  // abort mid-run if a rolling window shows too many 403/406/429s.
+  const WAF_WINDOW = 100
+  const WAF_THRESHOLD = 0.3
+  let aborted = false
+  let blocked = 0
+  const recentBlocked: boolean[] = []
+
   await Promise.all(
     candidates.map(slug =>
       limiter(async () => {
+        if (aborted) return
         processed++
-        const ok = await probeWorkable(slug)
-        if (ok) {
+        const result = await probeWorkable(slug)
+        const isBlocked = result === "blocked"
+        recentBlocked.push(isBlocked)
+        if (recentBlocked.length > WAF_WINDOW) recentBlocked.shift()
+        if (isBlocked) blocked++
+        if (!aborted && recentBlocked.length === WAF_WINDOW &&
+            recentBlocked.filter(Boolean).length / WAF_WINDOW > WAF_THRESHOLD) {
+          aborted = true
+          console.warn(`\n[discover-workable] ⚠ WAF throttling detected — aborting early. Run from a different egress or wait.`)
+          return
+        }
+        if (result === "hit") {
           hits++
           const name = slugToName.get(slug) ?? slug
           newHits.push({ slug, name })
           console.log(`  ✓ ${slug.padEnd(36)} (${name})`)
         }
-        if (processed % 1000 === 0) console.log(`  progress: ${processed}/${candidates.length} hits=${hits}`)
+        if (processed % 1000 === 0) console.log(`  progress: ${processed}/${candidates.length} hits=${hits} blocked=${blocked}`)
       })
     )
   )
 
-  console.log(`\n[discover-workable] probed=${processed} hits=${hits}`)
+  console.log(`\n[discover-workable] probed=${processed} hits=${hits} blocked=${blocked}${aborted ? " (ABORTED — WAF)" : ""}`)
 
   // Allow TIME_WAIT sockets from the probe phase to drain before opening DB connections.
   if (execute && newHits.length > 0) {
