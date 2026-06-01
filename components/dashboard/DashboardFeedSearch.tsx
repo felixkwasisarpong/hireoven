@@ -63,6 +63,7 @@ export default function DashboardFeedSearch({ className }: { className?: string 
 
   return (
     <label
+      data-tour="dashboard-search"
       className={cn(
         "relative flex h-10 w-full max-w-[520px] items-center rounded-full border border-slate-200 bg-white",
         className

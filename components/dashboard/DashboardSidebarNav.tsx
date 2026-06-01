@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { ChevronRight, Lock } from "lucide-react"
+import { ChevronRight, Lock, Sparkles } from "lucide-react"
 import { useEffect, useState } from "react"
 import {
   DASHBOARD_NAV_ITEMS,
@@ -30,6 +30,15 @@ function isExternalNavHref(href: string) {
   )
 }
 
+function navTourId(label: string): string | undefined {
+  const key = label.trim().toLowerCase()
+  if (key === "feed") return "nav-feed"
+  if (key === "watchlist") return "nav-watchlist"
+  if (key === "apex") return "nav-apex"
+  if (key === "cohorts") return "nav-cohorts"
+  return undefined
+}
+
 // ── Single nav item renderer ──────────────────────────────────────────────────
 
 function NavItem({
@@ -55,6 +64,7 @@ function NavItem({
   const requiredPlan = item.gate ? requiredPlanFor(item.gate) : null
   const lockLabel = requiredPlan ? PLAN_NAMES[requiredPlan] : "Pro"
   const feedSkin = navSkin === "feed" && variant === "light"
+  const tourId = navTourId(item.label)
 
   const badge =
     item.label === "Applications" && !feedSkin
@@ -149,6 +159,7 @@ function NavItem({
       <button type="button" onClick={() => showUpgrade(item.gate!)}
         className={cn(linkClass, "w-full text-left")}
         title={`Upgrade to ${lockLabel} to unlock ${item.label}`}
+        data-tour={tourId}
       >
         {inner}
       </button>
@@ -160,15 +171,16 @@ function NavItem({
         type="button"
         onClick={openFeedback}
         className={cn(linkClass, "w-full text-left")}
+        data-tour={tourId}
       >
         {inner}
       </button>
     )
   }
   if (external) {
-    return <a href={item.href} className={linkClass} rel="noopener noreferrer">{inner}</a>
+    return <a href={item.href} className={linkClass} rel="noopener noreferrer" data-tour={tourId}>{inner}</a>
   }
-  return <Link href={item.href} className={linkClass}>{inner}</Link>
+  return <Link href={item.href} className={linkClass} data-tour={tourId}>{inner}</Link>
 }
 
 // ── Collapsible group renderer ────────────────────────────────────────────────
@@ -272,8 +284,15 @@ export default function DashboardSidebarNav({
 
   const sharedProps = { applicationCount, variant, navSkin }
 
+  function startPremiumTour() {
+    if (typeof window === "undefined") return
+    window.dispatchEvent(
+      new CustomEvent("hireoven:product-tour:start", { detail: { mode: "premium" } })
+    )
+  }
+
   return (
-    <nav className="flex h-full min-h-full flex-col" aria-label="Dashboard">
+    <nav className="flex h-full min-h-full flex-col" aria-label="Dashboard" data-tour="dashboard-sidebar">
       <div className="space-y-1">
         {topLevel.map((item) => (
           <NavItem key={item.label} item={item} {...sharedProps} />
@@ -291,6 +310,16 @@ export default function DashboardSidebarNav({
           ))}
         </div>
       )}
+
+      <button
+        type="button"
+        onClick={startPremiumTour}
+        className="mt-3 inline-flex items-center justify-center gap-1.5 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-[12px] font-semibold text-[#B64613] transition hover:bg-orange-100"
+        data-tour="nav-tour-trigger"
+      >
+        <Sparkles className="h-3.5 w-3.5" />
+        Preview premium features
+      </button>
     </nav>
   )
 }
