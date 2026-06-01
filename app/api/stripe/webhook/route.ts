@@ -5,6 +5,17 @@ import { startTrial } from "@/lib/stripe/trial"
 
 export const runtime = "nodejs"
 
+function normalizePlanForPricing(raw: string | null | undefined): PlanKey {
+  if (raw === "pro_international") return "pro_max"
+  if (raw === "pro" || raw === "pro_max" || raw === "free") return raw
+  return "free"
+}
+
+function normalizePlanForStorage(plan: PlanKey): "free" | "pro" | "pro_international" {
+  if (plan === "pro_max") return "pro_international"
+  return plan
+}
+
 function getSubscriptionPeriod(sub: any) {
   const firstItem = sub.items?.data?.[0]
   return {
@@ -78,6 +89,8 @@ export async function POST(request: NextRequest) {
       const interval = session.metadata?.interval ?? "monthly"
       if (!plan || (plan !== 'pro' && plan !== 'pro_max' && plan !== 'pro_international')) break
       if (interval !== "monthly" && interval !== "yearly") break
+      const planForPricing = normalizePlanForPricing(plan)
+      if (planForPricing !== "pro" && planForPricing !== "pro_max") break
 
       const sub = await stripe.subscriptions.retrieve(session.subscription as string)
       const period = getSubscriptionPeriod(sub)
@@ -85,7 +98,7 @@ export async function POST(request: NextRequest) {
         ? new Date(sub.trial_end * 1000)
         : new Date(period.end * 1000)
 
-      await startTrial(userId, plan, interval, trialEnd, sub.id, session.customer as string)
+      await startTrial(userId, planForPricing, interval, trialEnd, sub.id, session.customer as string)
       break
     }
 
@@ -102,7 +115,8 @@ export async function POST(request: NextRequest) {
         past_due: "past_due",
         unpaid: "unpaid",
       }
-      const plan = (sub.metadata?.plan ?? "free") as PlanKey
+      const plan = normalizePlanForPricing(sub.metadata?.plan ?? "free")
+      const planForStorage = normalizePlanForStorage(plan)
       const recurringInterval = sub.items?.data?.[0]?.price?.recurring?.interval
       const interval: BillingInterval =
         sub.metadata?.interval === "yearly" || recurringInterval === "year"
@@ -148,7 +162,7 @@ export async function POST(request: NextRequest) {
           updated_at = EXCLUDED.updated_at`,
         [
           userId,
-          plan,
+          planForStorage,
           statusMap[sub.status] ?? "canceled",
           sub.id,
           sub.customer as string,

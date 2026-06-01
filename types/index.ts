@@ -1002,6 +1002,8 @@ export type Profile = {
   is_admin: boolean;
   /** URL search-param string applied when /dashboard is opened with no query params. */
   default_feed_filters?: string | null;
+  /** Timestamp when the first-run dashboard product tour was completed/dismissed. */
+  product_tour_seen_at?: string | null;
   /** When set, account is suspended (Postgres-backed; enforced in middleware). */
   suspended_at?: string | null;
   created_at: string;

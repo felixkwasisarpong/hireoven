@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation"
 import { X } from "lucide-react"
 import DashboardHeader from "@/components/dashboard/DashboardHeader"
 import { DashboardMobileNavProvider } from "@/components/dashboard/DashboardMobileNav"
+import DashboardProductTour from "@/components/dashboard/DashboardProductTour"
 import DashboardSubpageSidebar from "@/components/dashboard/DashboardSubpageSidebar"
 import { ResumeProvider } from "@/components/resume/ResumeProvider"
 import { useSubscription } from "@/lib/hooks/useSubscription"
@@ -135,6 +136,7 @@ export default function DashboardLayout({
       <DashboardMobileNavProvider>
         <div className="product-skin">
           <DashboardLayoutInner>{children}</DashboardLayoutInner>
+          <DashboardProductTour />
         </div>
       </DashboardMobileNavProvider>
     </ResumeProvider>

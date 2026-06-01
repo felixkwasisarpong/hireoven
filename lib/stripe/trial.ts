@@ -10,6 +10,7 @@ export async function startTrial(
   stripeCustomerId: string
 ): Promise<void> {
   const pool = getPostgresPool()
+  const planForStorage = plan === "pro_max" ? "pro_international" : "pro"
 
   await pool.query(
     `INSERT INTO subscriptions (
@@ -41,7 +42,7 @@ export async function startTrial(
       updated_at = EXCLUDED.updated_at`,
     [
       userId,
-      plan,
+      planForStorage,
       stripeSubscriptionId,
       stripeCustomerId,
       interval,

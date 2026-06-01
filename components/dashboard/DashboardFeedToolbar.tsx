@@ -439,6 +439,7 @@ export default function DashboardFeedToolbar({
   return (
     <div
       ref={filtersBarRef as RefObject<HTMLDivElement>}
+      data-tour="dashboard-filters"
       className="space-y-2"
     >
       <div className="flex flex-wrap items-center justify-end gap-3">

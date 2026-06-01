@@ -16,6 +16,8 @@ import { useUpgradeModal } from "@/lib/context/UpgradeModalContext"
 import { useFeedbackModal } from "@/lib/context/FeedbackModalContext"
 import { cn } from "@/lib/utils"
 
+const TOUR_OPEN_GROUPS_EVENT = "hireoven:product-tour:open-groups"
+
 function formatNavBadge(n: number) {
   if (n <= 0) return undefined
   if (n > 99) return "99+"
@@ -28,6 +30,15 @@ function isExternalNavHref(href: string) {
     href.startsWith("http://") ||
     href.startsWith("https://")
   )
+}
+
+function navTourId(label: string): string | undefined {
+  const slug = label
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+  return slug ? `nav-${slug}` : undefined
 }
 
 // ── Single nav item renderer ──────────────────────────────────────────────────
@@ -55,6 +66,7 @@ function NavItem({
   const requiredPlan = item.gate ? requiredPlanFor(item.gate) : null
   const lockLabel = requiredPlan ? PLAN_NAMES[requiredPlan] : "Pro"
   const feedSkin = navSkin === "feed" && variant === "light"
+  const tourId = navTourId(item.label)
 
   const badge =
     item.label === "Applications" && !feedSkin
@@ -149,6 +161,7 @@ function NavItem({
       <button type="button" onClick={() => showUpgrade(item.gate!)}
         className={cn(linkClass, "w-full text-left")}
         title={`Upgrade to ${lockLabel} to unlock ${item.label}`}
+        data-tour={tourId}
       >
         {inner}
       </button>
@@ -160,15 +173,16 @@ function NavItem({
         type="button"
         onClick={openFeedback}
         className={cn(linkClass, "w-full text-left")}
+        data-tour={tourId}
       >
         {inner}
       </button>
     )
   }
   if (external) {
-    return <a href={item.href} className={linkClass} rel="noopener noreferrer">{inner}</a>
+    return <a href={item.href} className={linkClass} rel="noopener noreferrer" data-tour={tourId}>{inner}</a>
   }
-  return <Link href={item.href} className={linkClass}>{inner}</Link>
+  return <Link href={item.href} className={linkClass} data-tour={tourId}>{inner}</Link>
 }
 
 // ── Collapsible group renderer ────────────────────────────────────────────────
@@ -199,6 +213,14 @@ function NavGroup({
   useEffect(() => {
     if (hasActive) setOpen(true)
   }, [hasActive])
+
+  useEffect(() => {
+    function onTourPrep() {
+      setOpen(true)
+    }
+    window.addEventListener(TOUR_OPEN_GROUPS_EVENT, onTourPrep)
+    return () => window.removeEventListener(TOUR_OPEN_GROUPS_EVENT, onTourPrep)
+  }, [])
 
   const headerClass = feedSkin
     ? cn(
@@ -273,7 +295,7 @@ export default function DashboardSidebarNav({
   const sharedProps = { applicationCount, variant, navSkin }
 
   return (
-    <nav className="flex h-full min-h-full flex-col" aria-label="Dashboard">
+    <nav className="flex h-full min-h-full flex-col" aria-label="Dashboard" data-tour="dashboard-sidebar">
       <div className="space-y-1">
         {topLevel.map((item) => (
           <NavItem key={item.label} item={item} {...sharedProps} />

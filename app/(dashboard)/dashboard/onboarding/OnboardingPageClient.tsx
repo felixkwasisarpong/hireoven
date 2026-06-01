@@ -1,6 +1,6 @@
 "use client"
 
-import { KeyboardEvent, useEffect, useRef, useState } from "react"
+import { KeyboardEvent, useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { ArrowLeft, Briefcase, Globe2, Sparkles, Check, Search, ShieldCheck, Users } from "lucide-react"
@@ -61,6 +61,35 @@ const STEP_META: { title: string; icon: typeof Briefcase }[] = [
 
 const TOTAL_STEPS = STEP_META.length
 const MAX_COMPANIES = 20
+
+type JobTitleSuggestion = { title: string; n: number }
+
+const LOCATION_SUGGESTION_SEEDS = [
+  "Remote",
+  "New York, NY",
+  "San Francisco, CA",
+  "Seattle, WA",
+  "Austin, TX",
+  "Chicago, IL",
+  "Boston, MA",
+  "Los Angeles, CA",
+  "San Diego, CA",
+  "Denver, CO",
+  "Atlanta, GA",
+  "Dallas, TX",
+  "Miami, FL",
+  "Phoenix, AZ",
+  "Washington, DC",
+  "Philadelphia, PA",
+  "San Jose, CA",
+  "Portland, OR",
+  "Minneapolis, MN",
+  "Raleigh, NC",
+  "Nashville, TN",
+  "Detroit, MI",
+  "Columbus, OH",
+  "Houston, TX",
+]
 
 // ---------------------------------------------------------------------------
 // Main component
@@ -346,18 +375,76 @@ function StepOne({
 }) {
   const roleInputRef = useRef<HTMLInputElement>(null)
   const locationInputRef = useRef<HTMLInputElement>(null)
+  const skipRoleBlurAddRef = useRef(false)
+  const skipLocationBlurAddRef = useRef(false)
   const [roleInput, setRoleInput] = useState("")
   const [locationInput, setLocationInput] = useState("")
+  const [roleSuggestions, setRoleSuggestions] = useState<JobTitleSuggestion[]>([])
+  const [roleSuggestionsLoading, setRoleSuggestionsLoading] = useState(false)
+  const [showRoleSuggestions, setShowRoleSuggestions] = useState(false)
+  const [showLocationSuggestions, setShowLocationSuggestions] = useState(false)
+
+  const visibleRoleSuggestions = useMemo(
+    () => roleSuggestions.filter(
+      (item) => !data.roles.some((r) => r.toLowerCase() === item.title.toLowerCase())
+    ),
+    [data.roles, roleSuggestions]
+  )
+
+  const locationSuggestions = useMemo(() => {
+    const q = locationInput.trim().toLowerCase()
+    if (!q) return []
+    return LOCATION_SUGGESTION_SEEDS
+      .filter((item) => item.toLowerCase().includes(q))
+      .filter((item) => !data.locations.some((loc) => loc.toLowerCase() === item.toLowerCase()))
+      .slice(0, 8)
+  }, [data.locations, locationInput])
+
+  useEffect(() => {
+    const q = roleInput.trim()
+    if (q.length < 2) {
+      setRoleSuggestions([])
+      setRoleSuggestionsLoading(false)
+      return
+    }
+
+    let cancelled = false
+    setRoleSuggestionsLoading(true)
+    const timer = window.setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/jobs/title-suggest?q=${encodeURIComponent(q)}&limit=8`, {
+          cache: "no-store",
+        })
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const body = (await res.json()) as { titles?: JobTitleSuggestion[] }
+        if (!cancelled) setRoleSuggestions(body.titles ?? [])
+      } catch {
+        if (!cancelled) setRoleSuggestions([])
+      } finally {
+        if (!cancelled) setRoleSuggestionsLoading(false)
+      }
+    }, 180)
+
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+  }, [roleInput])
 
   function addTag(
     field: "roles" | "locations",
     value: string,
     setter: (v: string) => void
   ) {
-    const trimmed = value.trim()
+    const trimmed = value.replace(/,+$/, "").trim()
     if (!trimmed) return
-    if (!data[field].includes(trimmed)) {
-      onChange({ ...data, [field]: [...data[field], trimmed] })
+    const normalized =
+      field === "locations" && trimmed.toLowerCase() === "remote"
+        ? "Remote"
+        : trimmed
+    const exists = data[field].some((item) => item.toLowerCase() === normalized.toLowerCase())
+    if (!exists) {
+      onChange({ ...data, [field]: [...data[field], normalized] })
     }
     setter("")
   }
@@ -372,9 +459,43 @@ function StepOne({
     value: string,
     setter: (v: string) => void
   ) {
-    if (e.key === "Enter" || e.key === ",") {
+    if (e.key === "Enter") {
+      e.preventDefault()
+
+      if (field === "roles") {
+        const suggested = visibleRoleSuggestions[0]?.title
+        if (suggested && value.trim().length >= 2) {
+          addTag("roles", suggested, setter)
+          setShowRoleSuggestions(false)
+          return
+        }
+      }
+
+      if (field === "locations") {
+        const suggested = locationSuggestions[0]
+        if (suggested) {
+          addTag("locations", suggested, setter)
+          setShowLocationSuggestions(false)
+          return
+        }
+      }
+
+      addTag(field, value, setter)
+      if (field === "roles") setShowRoleSuggestions(false)
+      if (field === "locations") setShowLocationSuggestions(false)
+      return
+    }
+
+    if (e.key === ",") {
       e.preventDefault()
       addTag(field, value, setter)
+      if (field === "roles") setShowRoleSuggestions(false)
+      if (field === "locations") setShowLocationSuggestions(false)
+    }
+
+    if (e.key === "Escape") {
+      if (field === "roles") setShowRoleSuggestions(false)
+      if (field === "locations") setShowLocationSuggestions(false)
     }
   }
 
@@ -411,12 +532,56 @@ function StepOne({
           <input
             ref={roleInputRef}
             value={roleInput}
-            onChange={(e) => setRoleInput(e.target.value)}
+            onChange={(e) => {
+              setRoleInput(e.target.value)
+              setShowRoleSuggestions(true)
+            }}
+            onFocus={() => setShowRoleSuggestions(true)}
             onKeyDown={(e) => handleKeyDown(e, "roles", roleInput, setRoleInput)}
-            onBlur={() => addTag("roles", roleInput, setRoleInput)}
+            onBlur={() => {
+              if (skipRoleBlurAddRef.current) {
+                skipRoleBlurAddRef.current = false
+                return
+              }
+              addTag("roles", roleInput, setRoleInput)
+              setShowRoleSuggestions(false)
+            }}
             placeholder='e.g. "Software Engineer"'
             className={inputClass}
           />
+          {showRoleSuggestions && roleInput.trim().length > 0 && (
+            <div className="mt-2 overflow-hidden rounded-xl border border-gray-200 bg-white">
+              {roleInput.trim().length < 2 ? (
+                <p className="px-3 py-2 text-xs text-gray-500">Type at least 2 characters to see role suggestions.</p>
+              ) : roleSuggestionsLoading ? (
+                <p className="px-3 py-2 text-xs text-gray-500">Loading suggestions...</p>
+              ) : visibleRoleSuggestions.length === 0 ? (
+                <p className="px-3 py-2 text-xs text-gray-500">No matches yet. Press Enter to add what you typed.</p>
+              ) : (
+                <ul className="divide-y divide-gray-100">
+                  {visibleRoleSuggestions.map((item) => (
+                    <li key={item.title}>
+                      <button
+                        type="button"
+                        onMouseDown={() => {
+                          skipRoleBlurAddRef.current = true
+                        }}
+                        onClick={() => {
+                          addTag("roles", item.title, setRoleInput)
+                          setShowRoleSuggestions(false)
+                          roleInputRef.current?.focus()
+                        }}
+                        className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm text-gray-700 transition hover:bg-gray-50"
+                      >
+                        <span className="truncate">{item.title}</span>
+                        <span className="text-xs text-gray-400">{item.n.toLocaleString()}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
         </Field>
 
         {/* Locations */}
@@ -431,12 +596,51 @@ function StepOne({
           <input
             ref={locationInputRef}
             value={locationInput}
-            onChange={(e) => setLocationInput(e.target.value)}
+            onChange={(e) => {
+              setLocationInput(e.target.value)
+              setShowLocationSuggestions(true)
+            }}
+            onFocus={() => setShowLocationSuggestions(true)}
             onKeyDown={(e) => handleKeyDown(e, "locations", locationInput, setLocationInput)}
-            onBlur={() => addTag("locations", locationInput, setLocationInput)}
+            onBlur={() => {
+              if (skipLocationBlurAddRef.current) {
+                skipLocationBlurAddRef.current = false
+                return
+              }
+              addTag("locations", locationInput, setLocationInput)
+              setShowLocationSuggestions(false)
+            }}
             placeholder='e.g. "New York" — press Enter to add'
             className={inputClass}
           />
+          {showLocationSuggestions && locationInput.trim().length > 0 && (
+            <div className="mt-2 overflow-hidden rounded-xl border border-gray-200 bg-white">
+              {locationSuggestions.length === 0 ? (
+                <p className="px-3 py-2 text-xs text-gray-500">No quick matches. Press Enter to add this location.</p>
+              ) : (
+                <ul className="divide-y divide-gray-100">
+                  {locationSuggestions.map((item) => (
+                    <li key={item}>
+                      <button
+                        type="button"
+                        onMouseDown={() => {
+                          skipLocationBlurAddRef.current = true
+                        }}
+                        onClick={() => {
+                          addTag("locations", item, setLocationInput)
+                          setShowLocationSuggestions(false)
+                          locationInputRef.current?.focus()
+                        }}
+                        className="w-full px-3 py-2 text-left text-sm text-gray-700 transition hover:bg-gray-50"
+                      >
+                        {item}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
           <label className="mt-3 inline-flex cursor-pointer items-center gap-2">
             <Checkbox
               checked={data.locations.includes("Remote")}

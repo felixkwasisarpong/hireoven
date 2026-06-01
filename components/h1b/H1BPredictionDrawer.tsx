@@ -139,7 +139,7 @@ export default function H1BPredictionDrawer({
   isLoading,
   onClose,
 }: Props) {
-  const { isProInternational } = useSubscription()
+  const { isProInternational, isLoading: subLoading } = useSubscription()
   const [deepAnalysis, setDeepAnalysis] = useState<string | null>(null)
   const [deepLoading, setDeepLoading] = useState(false)
   const [deepError, setDeepError] = useState<string | null>(null)
@@ -163,7 +163,7 @@ export default function H1BPredictionDrawer({
   }, [])
 
   async function runDeepAnalysis() {
-    if (!isProInternational) return
+    if (subLoading || !isProInternational) return
     setDeepLoading(true)
     setDeepError(null)
     try {
@@ -359,10 +359,14 @@ export default function H1BPredictionDrawer({
               <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
                 Deep H1B analysis
               </h3>
-              {!isProInternational && <Lock className="h-3.5 w-3.5 text-slate-400" />}
+              {!subLoading && !isProInternational && <Lock className="h-3.5 w-3.5 text-slate-400" />}
             </div>
 
-            {isProInternational ? (
+            {subLoading ? (
+              <div className="rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-500">
+                Checking your plan access...
+              </div>
+            ) : isProInternational ? (
               <>
                 {deepAnalysis ? (
                   <div className="whitespace-pre-wrap rounded-lg border border-slate-200 bg-white px-3 py-3 text-sm leading-6 text-slate-700">
