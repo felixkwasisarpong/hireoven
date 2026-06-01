@@ -44,6 +44,7 @@ run() {
 # dice-ingest        0 */6 * * *       run api/cron/dice-ingest
 # waas-ingest        15 */6 * * *      run api/cron/waas-ingest
 # discover-companies 0 5 * * *         run api/cron/discover-companies
+# discover-tenants   0 */2 * * *       run api/cron/discover-tenants
 # ──────────────────────────────────────────────────────────────────────────────
 
 case "${1:-}" in
@@ -68,6 +69,7 @@ case "${1:-}" in
   dice-ingest)       run api/cron/dice-ingest ;;
   waas-ingest)       run api/cron/waas-ingest ;;
   discover-companies) run api/cron/discover-companies ;;
+  discover-tenants)  run api/cron/discover-tenants ;;
   all)
     run 'api/alerts/recent-jobs?segment=with-resume'
     run api/crawl
@@ -96,7 +98,7 @@ case "${1:-}" in
     echo "  cohort-detect  cohort-match  layoffs-fyi  health-scores"
     echo "  rejection-patterns  burnout-classify  salary-digest  warn-act"
     echo "  cohort-aggregate  deliver-checkins  blog-generate  dice-ingest"
-    echo "  waas-ingest"
+    echo "  waas-ingest  discover-companies  discover-tenants"
     exit 1
     ;;
 esac

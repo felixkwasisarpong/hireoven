@@ -12,6 +12,7 @@ services:
       - hireoven_postgres_data:/var/lib/postgresql/data
       - ./lib/postgres/auth-bootstrap.sql:/docker-entrypoint-initdb.d/01-auth-bootstrap.sql:ro
       - ./docker/postgres/02-profiles.sql:/docker-entrypoint-initdb.d/02-profiles.sql:ro
+    shm_size: "256m"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-busy} -d ${POSTGRES_DB:-hireoven}"]
       interval: 5s
