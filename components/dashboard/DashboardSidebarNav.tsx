@@ -16,6 +16,8 @@ import { useUpgradeModal } from "@/lib/context/UpgradeModalContext"
 import { useFeedbackModal } from "@/lib/context/FeedbackModalContext"
 import { cn } from "@/lib/utils"
 
+const TOUR_OPEN_GROUPS_EVENT = "hireoven:product-tour:open-groups"
+
 function formatNavBadge(n: number) {
   if (n <= 0) return undefined
   if (n > 99) return "99+"
@@ -31,12 +33,12 @@ function isExternalNavHref(href: string) {
 }
 
 function navTourId(label: string): string | undefined {
-  const key = label.trim().toLowerCase()
-  if (key === "feed") return "nav-feed"
-  if (key === "watchlist") return "nav-watchlist"
-  if (key === "apex") return "nav-apex"
-  if (key === "cohorts") return "nav-cohorts"
-  return undefined
+  const slug = label
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+  return slug ? `nav-${slug}` : undefined
 }
 
 // ── Single nav item renderer ──────────────────────────────────────────────────
@@ -211,6 +213,14 @@ function NavGroup({
   useEffect(() => {
     if (hasActive) setOpen(true)
   }, [hasActive])
+
+  useEffect(() => {
+    function onTourPrep() {
+      setOpen(true)
+    }
+    window.addEventListener(TOUR_OPEN_GROUPS_EVENT, onTourPrep)
+    return () => window.removeEventListener(TOUR_OPEN_GROUPS_EVENT, onTourPrep)
+  }, [])
 
   const headerClass = feedSkin
     ? cn(

@@ -9,6 +9,7 @@ import { useSubscription } from "@/lib/hooks/useSubscription"
 
 const TOUR_SEEN_KEY = "hireoven:dashboard-product-tour:v1"
 const TOUR_START_EVENT = "hireoven:product-tour:start"
+const TOUR_OPEN_GROUPS_EVENT = "hireoven:product-tour:open-groups"
 
 type TourMode = "default" | "premium"
 type StepGroup = "core" | "premium"
@@ -79,7 +80,7 @@ function buildTourSteps(plan: Plan | null): TourStep[] {
       id: "welcome",
       group: "core",
       title: "Welcome to your dashboard",
-      body: "This quick walkthrough shows where to find jobs faster, plus how paid tools can accelerate applications.",
+      body: "This walkthrough covers every major product area so users can see the full workflow in one pass.",
     },
     {
       id: "search",
@@ -106,6 +107,70 @@ function buildTourSteps(plan: Plan | null): TourStep[] {
       highlightPadding: 8,
     },
     {
+      id: "alerts",
+      group: "core",
+      selector: "[data-tour=\"nav-alerts\"]",
+      title: "Alerts for new roles",
+      body: "Use alerts to get notified as soon as matching openings are posted.",
+      highlightPadding: 8,
+    },
+    {
+      id: "interview",
+      group: "core",
+      selector: "[data-tour=\"nav-interview\"]",
+      title: "Interview prep and live sessions",
+      body: "Practice with AI interview flows and move into live sessions when ready.",
+      highlightPadding: 8,
+    },
+    {
+      id: "applications",
+      group: "core",
+      selector: "[data-tour=\"nav-applications\"]",
+      title: "Application tracking",
+      body: "Track submissions, pipeline stages, and outcomes in one place.",
+      highlightPadding: 8,
+    },
+    {
+      id: "resume",
+      group: "core",
+      selector: "[data-tour=\"nav-resume\"]",
+      title: "Resume workspace",
+      body: "Build, score, and tailor resume versions for specific roles.",
+      highlightPadding: 8,
+    },
+    {
+      id: "cover-letters",
+      group: "core",
+      selector: "[data-tour=\"nav-cover-letters\"]",
+      title: "Cover letter generation",
+      body: "Generate and reuse tailored letters tied to your saved opportunities.",
+      highlightPadding: 8,
+    },
+    {
+      id: "autofill",
+      group: "core",
+      selector: "[data-tour=\"nav-autofill\"]",
+      title: "Autofill applications",
+      body: "Speed up application forms with one-click autofill support.",
+      highlightPadding: 8,
+    },
+    {
+      id: "international",
+      group: "core",
+      selector: "[data-tour=\"nav-international\"]",
+      title: "International workflow",
+      body: "Access international job search, eligibility, and offer-risk tooling.",
+      highlightPadding: 8,
+    },
+    {
+      id: "h1b-intel",
+      group: "core",
+      selector: "[data-tour=\"nav-h-1b-intel\"]",
+      title: "H-1B intelligence",
+      body: "Use petition history and sponsorship signals to prioritize targets.",
+      highlightPadding: 8,
+    },
+    {
       id: "premium-apex",
       group: "premium",
       selector: "[data-tour=\"nav-apex\"]",
@@ -119,6 +184,22 @@ function buildTourSteps(plan: Plan | null): TourStep[] {
       selector: "[data-tour=\"nav-cohorts\"]",
       title: "Premium strategy insights",
       body: "Cohorts, fair chance, and brand intel help you decide where to spend time for higher return.",
+      highlightPadding: 8,
+    },
+    {
+      id: "premium-fair-chance",
+      group: "premium",
+      selector: "[data-tour=\"nav-fair-chance\"]",
+      title: "Fair chance intelligence",
+      body: "Find employers with stronger fair-chance indicators before applying.",
+      highlightPadding: 8,
+    },
+    {
+      id: "premium-brand",
+      group: "premium",
+      selector: "[data-tour=\"nav-brand\"]",
+      title: "Brand and visibility",
+      body: "Track external brand signals that can influence recruiter response rate.",
       highlightPadding: 8,
     },
     {
@@ -154,6 +235,7 @@ export default function DashboardProductTour() {
   const [viewport, setViewport] = useState({ width: 0, height: 0 })
   const [cardHeight, setCardHeight] = useState(260)
   const cardRef = useRef<HTMLDivElement | null>(null)
+  const startTimerRef = useRef<number | null>(null)
 
   const activeStep = steps[index] ?? null
 
@@ -170,23 +252,35 @@ export default function DashboardProductTour() {
 
   const startTour = useCallback(
     (mode: TourMode = "default") => {
-      const seeded = buildTourSteps(plan)
-      const available = seeded.filter((step) => {
-        if (!step.selector) return true
-        return Boolean(findVisibleElement(step.selector))
-      })
-      if (!available.length) return
-      const premiumStart = available.findIndex((step) => step.group === "premium")
-      const startIndex = mode === "premium" && premiumStart >= 0 ? premiumStart : 0
-      setSteps(available)
-      setIndex(startIndex)
-      setOpen(true)
+      if (typeof window === "undefined") return
+      window.dispatchEvent(new CustomEvent(TOUR_OPEN_GROUPS_EVENT))
+      if (startTimerRef.current) window.clearTimeout(startTimerRef.current)
+
+      startTimerRef.current = window.setTimeout(() => {
+        const seeded = buildTourSteps(plan)
+        const available = seeded.filter((step) => {
+          if (!step.selector) return true
+          return Boolean(findVisibleElement(step.selector))
+        })
+        if (!available.length) return
+        const premiumStart = available.findIndex((step) => step.group === "premium")
+        const startIndex = mode === "premium" && premiumStart >= 0 ? premiumStart : 0
+        setSteps(available)
+        setIndex(startIndex)
+        setOpen(true)
+      }, 140)
     },
     [plan]
   )
 
   useEffect(() => {
     setMounted(true)
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (startTimerRef.current) window.clearTimeout(startTimerRef.current)
+    }
   }, [])
 
   useEffect(() => {
@@ -210,14 +304,13 @@ export default function DashboardProductTour() {
   useEffect(() => {
     if (!mounted || open || isLoading) return
     if (pathname !== "/dashboard") return
-    if (plan !== "free") return
     try {
       if (localStorage.getItem(TOUR_SEEN_KEY)) return
     } catch {}
 
     const timer = window.setTimeout(() => startTour("default"), 900)
     return () => window.clearTimeout(timer)
-  }, [isLoading, mounted, open, pathname, plan, startTour])
+  }, [isLoading, mounted, open, pathname, startTour])
 
   useEffect(() => {
     if (!open || !activeStep?.selector) {
