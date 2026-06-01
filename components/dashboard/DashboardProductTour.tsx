@@ -30,6 +30,7 @@ type Rect = {
   left: number
   width: number
   height: number
+  bottom: number
 }
 
 function clamp(value: number, min: number, max: number) {
@@ -363,6 +364,7 @@ export default function DashboardProductTour() {
         left: rect.left,
         width: rect.width,
         height: rect.height,
+        bottom: rect.bottom,
       })
     }
 
