@@ -3,6 +3,7 @@
 import { type FormEvent, useState } from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
+import { Eye, EyeOff } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import HireovenLogo from "@/components/ui/HireovenLogo"
 
@@ -84,6 +85,7 @@ export function AuthForm({ defaultMode = "login" }: Props) {
   const [fullName, setFullName] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
   const [inviteResolved, setInviteResolved] = useState(false)
@@ -110,6 +112,7 @@ export function AuthForm({ defaultMode = "login" }: Props) {
     setMode(m)
     setError(null)
     setPassword("")
+    setShowPassword(false)
     window.history.replaceState(null, "", m === "login" ? "/login" : "/signup")
   }
 
@@ -200,8 +203,8 @@ export function AuthForm({ defaultMode = "login" }: Props) {
         {/* Logo — icon in native colors + white wordmark text */}
         <div className="relative z-10">
           <Link href="/" className="inline-flex items-center gap-3">
-            <HireovenLogo variant="mark" priority className="h-10 w-10 shrink-0" />
-            <HireovenLogo variant="wordmark" priority className="h-6 w-auto brightness-0 invert" />
+            <HireovenLogo variant="mark" priority className="h-12 w-12 shrink-0" />
+            <HireovenLogo variant="wordmark" priority className="h-8 w-auto brightness-0 invert" />
           </Link>
         </div>
 
@@ -250,7 +253,7 @@ export function AuthForm({ defaultMode = "login" }: Props) {
 
         {/* Mobile logo */}
         <Link href="/" className="mb-8 lg:hidden">
-          <HireovenLogo variant="header" priority className="h-9 w-auto" />
+          <HireovenLogo variant="header" priority className="h-11 w-auto" />
         </Link>
 
         <div className="w-full max-w-[400px]">
@@ -371,17 +374,27 @@ export function AuthForm({ defaultMode = "login" }: Props) {
                   </Link>
                 )}
               </div>
-              <input
-                id="password"
-                type="password"
-                autoComplete={isLogin ? "current-password" : "new-password"}
-                required
-                minLength={isLogin ? undefined : 8}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder={isLogin ? "••••••••" : "Min. 8 characters"}
-                className="w-full rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 outline-none ring-0 transition focus:border-[#FF5C18] focus:ring-2 focus:ring-[#FF5C18]/15"
-              />
+              <div className="relative">
+                <input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  autoComplete={isLogin ? "current-password" : "new-password"}
+                  required
+                  minLength={isLogin ? undefined : 8}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder={isLogin ? "••••••••" : "Min. 8 characters"}
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 pr-11 text-sm text-slate-900 placeholder:text-slate-400 outline-none ring-0 transition focus:border-[#FF5C18] focus:ring-2 focus:ring-[#FF5C18]/15"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((current) => !current)}
+                  className="absolute inset-y-0 right-0 inline-flex items-center px-3 text-slate-400 transition hover:text-slate-700"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
             </div>
 
             {error && <ErrorBanner message={error} />}

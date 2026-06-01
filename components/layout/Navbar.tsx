@@ -9,7 +9,7 @@ export default function Navbar() {
       <div className="mx-auto flex w-full max-w-[88rem] items-center justify-between gap-4">
         <div className="flex min-w-0 items-center gap-6 sm:gap-8">
           <Link href="/" className="flex shrink-0 items-center">
-            <HireovenLogo variant="header" className="h-9 w-auto sm:h-10" priority />
+            <HireovenLogo variant="header" className="h-10 w-auto sm:h-12" priority />
           </Link>
           <div className="hidden items-center gap-6 md:flex">
             <Link
