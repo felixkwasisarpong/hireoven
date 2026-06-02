@@ -3,6 +3,7 @@ import { detectATS, detectExtensionPageMode, detectPage } from "../detectors/ats
 import { extractJobWithMeta } from "../extractors/job"
 import type {
   ApplyQueueState,
+  ATSProvider,
   AutofillExecuteResult,
   AutofillPreviewResult,
   CoverLetterResult,
