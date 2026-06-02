@@ -75,6 +75,16 @@ const MINIMIZED_STORAGE_KEY = "hireovenApexBarMinimized"
 const URL_POLL_INTERVAL_MS = 600
 const ATS_FORM_REFRESH_INTERVAL_MS = 1200
 
+const TAILORING_ATS_SITES = new Set([
+  "greenhouse",
+  "lever",
+  "ashby",
+  "workday",
+  "icims",
+  "smartrecruiters",
+  "bamboohr",
+])
+
 const STATUS_TEXT: Record<ApexBarState, string> = {
   detecting:    "Detecting job page…",
   ready:        "Job page detected",
@@ -2842,7 +2852,12 @@ export class ApexBar {
       }
 
       const detectedAts = this.formDetection?.detectedAts
-      const ats = detectedAts && detectedAts !== "unknown" ? detectedAts : undefined
+      const ats =
+        detectedAts && detectedAts !== "unknown"
+          ? detectedAts
+          : TAILORING_ATS_SITES.has(this.site)
+            ? this.site
+            : undefined
 
       const preview = await sendBackgroundMessage<TailorPreviewResult>({
         type: "GET_TAILOR_PREVIEW",

@@ -1,5 +1,5 @@
 import { sendToBackground } from "../bridge"
-import { detectExtensionPageMode, detectPage } from "../detectors/ats"
+import { detectATS, detectExtensionPageMode, detectPage } from "../detectors/ats"
 import { extractJobWithMeta } from "../extractors/job"
 import type {
   ApplyQueueState,
@@ -119,6 +119,20 @@ const DEFAULT_SCREENER_FILTERS: ScreenerFilters = {
   eVerifyOnly: false,
   hideNoSponsor: false,
   hideViewed: false,
+}
+
+const TAILORING_ATS_PROVIDERS = new Set<ATSProvider>([
+  "workday",
+  "greenhouse",
+  "lever",
+  "ashby",
+  "icims",
+  "smartrecruiters",
+  "bamboohr",
+])
+
+function isTailoringAtsProvider(value: ATSProvider | null | undefined): value is ATSProvider {
+  return Boolean(value && value !== "generic" && TAILORING_ATS_PROVIDERS.has(value))
 }
 
 const STYLE = `
@@ -1846,6 +1860,19 @@ export class PageAwareControlSystem {
     return this.currentTailorResumeId ?? this.selectedResumeId ?? undefined
   }
 
+  private resolveTailorAtsHint(): ATSProvider | undefined {
+    const activeJobAts = this.activeJob?.ats
+    if (isTailoringAtsProvider(activeJobAts)) return activeJobAts
+
+    const applyUrlAts = this.activeJob?.applyUrl ? detectATS(this.activeJob.applyUrl) : "generic"
+    if (isTailoringAtsProvider(applyUrlAts)) return applyUrlAts
+
+    const pageAts = detectPage().ats
+    if (isTailoringAtsProvider(pageAts)) return pageAts
+
+    return undefined
+  }
+
   private async ensureResumeList(): Promise<void> {
     if (this.resumeList.length > 0 || this.resumeListLoading) return
     this.resumeListLoading = true
@@ -2255,7 +2282,7 @@ export class PageAwareControlSystem {
           type:     "GET_TAILOR_PREVIEW",
           jobId,
           resumeId: this.effectiveResumeId(),
-          ats:      this.activeJob?.ats,
+          ats:      this.resolveTailorAtsHint(),
         })
         this.tailorPreview = previewRaw as TailorPreviewResult
         this.currentTailorResumeId = this.tailorPreview.resumeId ?? this.currentTailorResumeId
@@ -2276,7 +2303,7 @@ export class PageAwareControlSystem {
           type:     "APPROVE_TAILORED_RESUME",
           jobId,
           resumeId: this.effectiveResumeId(),
-          ats:      this.activeJob?.ats,
+          ats:      this.resolveTailorAtsHint(),
         })
         const approved = approveRaw as TailorApproveResult
         if (approved.success && approved.resumeId) {
@@ -2477,7 +2504,7 @@ export class PageAwareControlSystem {
           type: "GET_TAILOR_PREVIEW",
           jobId,
           resumeId: this.effectiveResumeId(),
-          ats: this.activeJob?.ats,
+          ats: this.resolveTailorAtsHint(),
         })
         this.tailorPreview = raw as TailorPreviewResult
         this.currentTailorResumeId = this.tailorPreview.resumeId ?? this.currentTailorResumeId
@@ -2514,7 +2541,7 @@ export class PageAwareControlSystem {
           type: "APPROVE_TAILORED_RESUME",
           jobId,
           resumeId: this.effectiveResumeId(),
-          ats: this.activeJob?.ats,
+          ats: this.resolveTailorAtsHint(),
         })
         const result = raw as TailorApproveResult
         if (result.success) {
