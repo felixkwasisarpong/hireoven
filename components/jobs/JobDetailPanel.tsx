@@ -452,16 +452,27 @@ export default function JobDetailPanel({
 
           {/* Confirmation prompt — appears after user clicks Apply */}
           {applyClicked && !applied && (
-            <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 ring-1 ring-slate-200/80">
-              <span className="text-[12px] text-slate-500">Did you submit?</span>
-              <button
-                type="button"
-                onClick={handleConfirmApplied}
-                disabled={confirming}
-                className="text-[12px] font-semibold text-emerald-600 hover:text-emerald-500 disabled:opacity-60"
-              >
-                {confirming ? "Saving…" : "Yes, I applied →"}
-              </button>
+            <div className="flex flex-col gap-2 rounded-xl bg-emerald-50 p-3 ring-1 ring-emerald-200">
+              <p className="text-[12.5px] font-medium text-emerald-800">
+                Did you submit your application?
+              </p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleConfirmApplied}
+                  disabled={confirming}
+                  className="flex-1 rounded-lg bg-emerald-600 py-2 text-[12.5px] font-bold text-white transition hover:bg-emerald-500 disabled:opacity-60"
+                >
+                  {confirming ? "Saving…" : "Yes, I applied"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setApplyClicked(false)}
+                  className="rounded-lg px-3 py-2 text-[12.5px] font-medium text-emerald-700 hover:bg-emerald-100"
+                >
+                  Not yet
+                </button>
+              </div>
             </div>
           )}
 

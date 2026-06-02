@@ -59,24 +59,27 @@ export default function ApplyButton({
 
   if (clicked) {
     return (
-      <div className="flex flex-col items-end gap-1.5">
-        <button
-          type="button"
-          onClick={handleApply}
-          className={className}
-        >
+      <div className="flex flex-col items-end gap-2">
+        <button type="button" onClick={handleApply} className={className}>
           Apply Now
           <ExternalLink className="h-4 w-4" strokeWidth={2.25} aria-hidden />
         </button>
-        <div className="flex items-center gap-2 text-[12px] text-slate-500">
-          <span>Did you submit?</span>
+        <div className="flex items-center gap-2 rounded-xl bg-emerald-50 px-4 py-2.5 ring-1 ring-emerald-200">
+          <span className="text-[12.5px] font-medium text-emerald-800">Did you apply?</span>
           <button
             type="button"
             onClick={handleConfirmApplied}
             disabled={confirming}
-            className="font-semibold text-emerald-600 hover:text-emerald-500 disabled:opacity-60"
+            className="rounded-lg bg-emerald-600 px-3 py-1 text-[12px] font-bold text-white hover:bg-emerald-500 disabled:opacity-60"
           >
-            {confirming ? "Saving…" : "Yes, I applied"}
+            {confirming ? "Saving…" : "Yes, mark it"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setClicked(false)}
+            className="text-[12px] text-emerald-700 hover:text-emerald-500"
+          >
+            Not yet
           </button>
         </div>
       </div>
