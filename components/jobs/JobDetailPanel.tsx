@@ -39,6 +39,7 @@ import {
   JOB_APPLICATION_SAVED_EVENT,
   fetchJobSavedState,
   saveJobToPipeline,
+  markJobApplied,
 } from "@/lib/applications/save-job-client"
 import { getApplyVariant } from "@/lib/jobs/apply-cta"
 import { jobSourceFallbackLogo } from "@/lib/jobs/source-fallback-logo"
@@ -208,6 +209,8 @@ export default function JobDetailPanel({
 
   const [saved, setSaved] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [applied, setApplied] = useState(false)
+  const [applying, setApplying] = useState(false)
   const [recruiterOpen, setRecruiterOpen] = useState(false)
 
   const intel = useMemo(() => getJobIntelligence(job), [job])
@@ -277,6 +280,37 @@ export default function JobDetailPanel({
       pushToast({ tone: "error", title: "Save failed", description: err instanceof Error ? err.message : "Try again." })
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function handleApply() {
+    // Open the URL immediately — don't block the user on the API call
+    window.open(applyUrl, "_blank", "noopener,noreferrer")
+    if (applying || applied) return
+    setApplying(true)
+    try {
+      const sourceFallback = jobSourceFallbackLogo(job, job.company?.domain ?? null, job.company?.logo_url ?? null)
+      const result = await markJobApplied({
+        jobId: job.id,
+        companyName: job.company?.name ?? "Company",
+        companyLogoUrl: sourceFallback?.logoUrl ?? job.company?.logo_url ?? null,
+        jobTitle: displayTitle,
+        applyUrl,
+        matchScore: overall,
+        source: "hireoven_detail",
+      })
+      if (!result.ok) {
+        if (result.status !== 401) pushToast({ tone: "error", title: "Tracking failed", description: result.message })
+        return
+      }
+      setApplied(true)
+      setSaved(true)
+      window.dispatchEvent(new CustomEvent(JOB_APPLICATION_SAVED_EVENT, { detail: { jobId: job.id } }))
+      if (!result.alreadyApplied) pushToast({ tone: "success", title: "Application tracked", description: "Moved to Applied in your pipeline." })
+    } catch {
+      // Non-fatal — URL was already opened
+    } finally {
+      setApplying(false)
     }
   }
 
@@ -366,35 +400,35 @@ export default function JobDetailPanel({
         {/* ── Actions ── */}
         <div className="space-y-2.5 p-5">
           {applyVariant === "autofill" ? (
-            <a
-              href={applyUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-orange-500 px-4 py-3 text-[13.5px] font-bold text-white shadow-[0_4px_16px_rgba(249,115,22,0.3)] transition hover:bg-orange-400 active:scale-[0.98]"
+            <button
+              type="button"
+              onClick={handleApply}
+              disabled={applying}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-orange-500 px-4 py-3 text-[13.5px] font-bold text-white shadow-[0_4px_16px_rgba(249,115,22,0.3)] transition hover:bg-orange-400 active:scale-[0.98] disabled:opacity-70"
             >
-              Quick Apply
-              <ExternalLink className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden />
-            </a>
+              {applied ? "Applied ✓" : "Quick Apply"}
+              {!applied && <ExternalLink className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden />}
+            </button>
           ) : applyVariant === "linkedin" ? (
-            <a
-              href={applyUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#0a66c2] px-4 py-3 text-[13.5px] font-bold text-white shadow-[0_4px_16px_rgba(10,102,194,0.3)] transition hover:bg-[#004182] active:scale-[0.98]"
+            <button
+              type="button"
+              onClick={handleApply}
+              disabled={applying}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#0a66c2] px-4 py-3 text-[13.5px] font-bold text-white shadow-[0_4px_16px_rgba(10,102,194,0.3)] transition hover:bg-[#004182] active:scale-[0.98] disabled:opacity-70"
             >
-              Apply on LinkedIn
-              <Linkedin className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden />
-            </a>
+              {applied ? "Applied ✓" : "Apply on LinkedIn"}
+              {!applied && <Linkedin className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden />}
+            </button>
           ) : (
-            <a
-              href={applyUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-orange-500 px-4 py-3 text-[13.5px] font-bold text-white shadow-[0_4px_16px_rgba(249,115,22,0.3)] transition hover:bg-orange-400 active:scale-[0.98]"
+            <button
+              type="button"
+              onClick={handleApply}
+              disabled={applying}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-orange-500 px-4 py-3 text-[13.5px] font-bold text-white shadow-[0_4px_16px_rgba(249,115,22,0.3)] transition hover:bg-orange-400 active:scale-[0.98] disabled:opacity-70"
             >
-              Apply
-              <ExternalLink className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden />
-            </a>
+              {applied ? "Applied ✓" : "Apply"}
+              {!applied && <ExternalLink className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden />}
+            </button>
           )}
 
           <div className="grid grid-cols-2 gap-2">

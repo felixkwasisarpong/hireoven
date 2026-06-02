@@ -10,7 +10,6 @@ import {
   Building2,
   CheckCircle2,
   ChevronRight,
-  ExternalLink,
   FileText,
   Home as HomeIcon,
   MapPin,
@@ -48,6 +47,7 @@ import {
 } from "@/lib/skills/taxonomy"
 import { isScoreFreshForResume } from "@/lib/matching/score-freshness"
 import { cn } from "@/lib/utils"
+import ApplyButton from "@/components/jobs/ApplyButton"
 import type { Company, Job, JobMatchScore, Skills } from "@/types"
 
 type Props = { params: Promise<{ id: string }> }
@@ -625,15 +625,15 @@ export default async function DashboardJobDetailPage({ params }: Props) {
 
             {/* CTA — desktop */}
             <div className="hidden shrink-0 flex-col items-end gap-2.5 sm:flex">
-              <a
-                href={page.apply_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 rounded-xl bg-orange-500 px-6 py-3 text-[14px] font-bold text-white shadow-[0_4px_24px_rgba(249,115,22,0.35)] transition hover:bg-orange-400 active:scale-[0.98]"
-              >
-                Apply Now
-                <ExternalLink className="h-4 w-4" strokeWidth={2.25} aria-hidden />
-              </a>
+              <ApplyButton
+                jobId={id}
+                jobTitle={displayTitle}
+                companyName={company?.name ?? "Company"}
+                companyLogoUrl={companyLogoUrl}
+                applyUrl={page.apply_url}
+                matchScore={initialMatchScore?.overall_score ?? null}
+                className="inline-flex items-center gap-2 rounded-xl bg-orange-500 px-6 py-3 text-[14px] font-bold text-white shadow-[0_4px_24px_rgba(249,115,22,0.35)] transition hover:bg-orange-400 active:scale-[0.98] disabled:opacity-70"
+              />
             </div>
           </div>
 
