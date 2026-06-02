@@ -42,6 +42,7 @@ const MODE_CAPTION: Record<string, string> = {
   tailor:           "Tailoring your resume",
   research:         "Deep-researching",
   career_strategy:  "Building your strategy",
+  autonomous_hunt:  "Ranking your live hunt queue",
   outreach:         "Drafting outreach",
   interview:        "Preparing interview content",
   applications:     "Reviewing your applications",

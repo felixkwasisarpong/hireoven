@@ -7,6 +7,8 @@ import {
 } from "@/lib/apex/behavior"
 import { getMemories } from "@/lib/apex/memory/store"
 import type { ApexMemory } from "@/lib/apex/memory/types"
+import { getLatestCareerTwin } from "@/lib/apex/career-twin/store"
+import type { CareerTwinSnapshot } from "@/lib/apex/career-twin/types"
 import { formatOpportunitiesForClaude } from "@/lib/apex/opportunity-graph/formatter"
 import type { OpportunityGraphResponse } from "@/lib/apex/opportunity-graph/types"
 import type {
@@ -141,6 +143,8 @@ export type ApexContext = {
   outcomeLearning: import("@/lib/apex/outcomes/types").OutcomeLearningResult | null
   /** Persistent user memories — injected into Claude prompt via retriever */
   memories: import("@/lib/apex/memory/types").ApexMemory[]
+  /** Persistent adaptive user model — loaded from the latest Career Twin snapshot */
+  careerTwin: CareerTwinSnapshot | null
 }
 
 type ApexContextResume = NonNullable<ApexContext["resume"]>
@@ -253,13 +257,14 @@ export async function getApexContext(input: ApexContextInput): Promise<ApexConte
   } = input
 
   // Fetch user profile, behavior signals, and memories concurrently
-  const [profileResult, behaviorSignals, memories] = await Promise.all([
+  const [profileResult, behaviorSignals, memories, careerTwin] = await Promise.all([
     pool.query<Profile>(
       "SELECT * FROM profiles WHERE id = $1 LIMIT 1",
       [userId]
     ),
     getApexBehaviorSignals(userId).catch(() => null),
     getMemories(userId, pool, { activeOnly: true }).catch((): ApexMemory[] => []),
+    getLatestCareerTwin(userId, pool, { maxAgeHours: 168 }).catch(() => null),
   ])
   const profile = profileResult.rows[0] ?? null
 
@@ -466,6 +471,7 @@ export async function getApexContext(input: ApexContextInput): Promise<ApexConte
     opportunityGraph: null,
     outcomeLearning:  null,
     memories,
+    careerTwin,
   }
 }
 
@@ -520,6 +526,21 @@ ${resume.work_experience
   .map((exp) => `  - ${exp.title ?? "Unknown"} at ${exp.company ?? "Unknown Company"}`)
   .join("\n")}`)
     }
+  }
+
+  if (context.careerTwin) {
+    const twin = context.careerTwin
+    const twinLines = [
+      `- Headline: ${twin.headline}`,
+      `- Summary: ${twin.summary}`,
+      `- Strengths: ${twin.strengths.slice(0, 3).join(" | ") || "None yet"}`,
+      `- Risks: ${twin.risks.slice(0, 3).join(" | ") || "None yet"}`,
+      `- Constraints: ${twin.constraints.slice(0, 2).join(" | ") || "None yet"}`,
+      `- Recommended focus: ${twin.recommendedFocus.slice(0, 3).join(" | ") || "None yet"}`,
+      `- Twin confidence: ${twin.confidence}/100`,
+      `- Twin freshness: ${twin.freshnessScore}/100`,
+    ]
+    sections.push(`Career Twin:\n${twinLines.join("\n")}`)
   }
 
   // Job

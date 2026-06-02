@@ -23,6 +23,7 @@ import { sanitizeGeneratedText } from "@/lib/text/sanitize-generated-text"
 
 const VALID_WORKSPACE_MODES = new Set<ApexWorkspaceMode>([
   "idle", "search", "compare", "tailor", "applications", "bulk_application", "company", "research", "outreach", "interview", "career_strategy",
+  "autonomous_hunt",
   "offer_negotiation", "salary_coaching", "burnout_checkin", "post_hire_checkin", "personal_brand",
   "jd_decoder", "reputation_guard", "pipeline_sim", "shadow_network", "auto_apply",
 ])

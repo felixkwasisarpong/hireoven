@@ -27,6 +27,7 @@ const MODE_PLAN: Partial<Record<WorkspaceMode, string[]>> = {
   outreach:         ["Reading the request",      "Drafting outreach",               "Tightening tone",              "Opening outreach"],
   interview:        ["Reading the request",      "Pulling interview signals",       "Sketching prep plan",          "Opening prep workspace"],
   career_strategy:  ["Reading the request",      "Reviewing career signals",        "Mapping directions",           "Opening strategy view"],
+  autonomous_hunt:  ["Reading the request",      "Ranking live opportunities",      "Tightening the queue",         "Opening attack plan"],
 }
 
 const DEFAULT_PLAN = [

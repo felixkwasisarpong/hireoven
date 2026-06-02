@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { usePathname, useSearchParams } from "next/navigation"
 import dynamic from "next/dynamic"
 import { MoreHorizontal, Sparkles, Target, X } from "lucide-react"
-import { ApexOrb } from "@/components/apex/ApexOrb"
 import { ApexAlertBadge } from "@/components/apex/ApexAlertBadge"
 import { ApexIcon } from "@/components/apex/ApexIcon"
 import { runQualityControl, buildQCContext } from "@/lib/apex/quality-control"
@@ -13,7 +12,6 @@ import { WorkspaceSurface } from "./WorkspaceSurface"
 import { IdleMode } from "./IdleMode"
 import { BrowserActionStrip } from "./BrowserActionStrip"
 import { ApexLeftPanel } from "./ApexLeftPanel"
-import { ApexRightPanel } from "./ApexRightPanel"
 import { ApexThinkingCanvas } from "./ApexThinkingCanvas"
 import { ApexWelcomeScene } from "./scenes/ApexWelcomeScene"
 import { ApexStoryScene } from "./scenes/ApexStoryScene"
@@ -27,10 +25,13 @@ import { useBulkApplicationEngine } from "@/lib/apex/bulk-application/engine"
 import { useApexStream } from "@/hooks/useApexStream"
 import { useResearchStream } from "@/hooks/useResearchStream"
 import { detectPreflightMode, PREFLIGHT_NARRATIVE } from "@/lib/apex/streaming/intent-preflight"
+import { resolveExecutableApexCommand } from "@/lib/apex/command-normalizer"
+import { isAutonomousHuntIntent } from "@/lib/apex/hunt/intent"
 import { isResearchIntent } from "@/lib/apex/research/tasks"
 import { writeResearchTask, readResearchTask } from "@/lib/apex/research/store"
 import { isCareerStrategyIntent } from "@/lib/apex/career/intent"
 import { useCareerStrategy } from "@/hooks/useCareerStrategy"
+import { useAutonomousHunt } from "@/hooks/useAutonomousHunt"
 import { useApexBrowserOperator } from "@/hooks/useApexBrowserOperator"
 import { APEX_FLAGS } from "@/lib/apex/flags"
 import {
@@ -90,6 +91,7 @@ import { useApexContinuation } from "@/hooks/useApexContinuation"
 import { mergeResumableContexts } from "@/lib/apex/continuation/sanitize"
 import type { ApexResumableContext } from "@/lib/apex/continuation/types"
 import type { MarketSignal } from "@/lib/apex/market-intelligence"
+import type { CareerTwinSnapshot } from "@/lib/apex/career-twin/types"
 import { cn } from "@/lib/utils"
 
 // ── Lazy-loaded workspace modes (only one is rendered at a time) ──────────────
@@ -103,6 +105,7 @@ const ResearchMode       = dynamic(() => import("./ResearchMode").then(m => ({ d
 const OutreachMode       = dynamic(() => import("./OutreachMode").then(m => ({ default: m.OutreachMode })), { ssr: false })
 const InterviewPrepMode  = dynamic(() => import("./InterviewPrepMode").then(m => ({ default: m.InterviewPrepMode })), { ssr: false })
 const CareerStrategyMode = dynamic(() => import("./CareerStrategyMode").then(m => ({ default: m.CareerStrategyMode })), { ssr: false })
+const AutonomousHuntMode = dynamic(() => import("./AutonomousHuntMode").then(m => ({ default: m.AutonomousHuntMode })), { ssr: false })
 const ApplyAgentFlow     = dynamic(() => import("@/components/apex/ApplyAgentFlow").then(m => ({ default: m.ApplyAgentFlow })), { ssr: false })
 const JDDecoderPanel     = dynamic(() => import("@/components/apex/JDDecoderPanel").then(m => ({ default: m.JDDecoderPanel })), { ssr: false })
 const ReputationGuardPanel = dynamic(() => import("@/components/apex/ReputationGuardPanel").then(m => ({ default: m.ReputationGuardPanel })), { ssr: false })
@@ -197,6 +200,7 @@ function buildNarrative(mode: WorkspaceMode, response: ApexResponse): string {
       outreach:          "Apex prepared your outreach draft.",
       interview:          "Apex generated your interview prep plan.",
       career_strategy:    "Apex analysed your career profile and directions.",
+      autonomous_hunt:    "Apex built a live hunt plan around your lane, queue, and execution pressure.",
       offer_negotiation:  "Apex benchmarked your offer and prepared negotiation guidance.",
       salary_coaching:    "Apex analysed your salary targeting against market rates.",
       burnout_checkin:    "Apex checked in on your search.",
@@ -213,6 +217,39 @@ function buildNarrative(mode: WorkspaceMode, response: ApexResponse): string {
   }
   const sentence = answer.split(/\.[\s\n]/)[0]
   return sentence.length <= 140 ? sentence : `${sentence.slice(0, 137)}…`
+}
+
+function hasMeaningfulApexPayload(response: ApexResponse): boolean {
+  return Boolean(
+    response.actions?.length ||
+    response.workspace_directive ||
+    response.workflow_directive ||
+    response.workflow ||
+    response.compare ||
+    response.interviewPrep ||
+    response.graph ||
+    response.outreach ||
+    response.apply_agent ||
+    response.gated
+  )
+}
+
+function isSoftFailureResponse(response: ApexResponse): boolean {
+  if (hasMeaningfulApexPayload(response)) return false
+
+  const answer = response.answer?.trim() ?? ""
+  if (!answer) return true
+
+  return [
+    /encountered an error/i,
+    /please try again/i,
+    /taking too long/i,
+    /temporarily unavailable/i,
+    /returned an unexpected response/i,
+    /could not respond right now/i,
+    /response was cut off/i,
+    /unable to .* right now/i,
+  ].some((pattern) => pattern.test(answer))
 }
 
 /** Render **bold** markdown inline as <strong> elements. */
@@ -345,12 +382,14 @@ export function ApexWorkspaceShell() {
   const pendingVoiceReplyRef = useRef(false)
   const lastCommandLatencyRef = useRef<number | null>(null)
   const lastDebugRef = useRef<ApexResponse["debug"] | null>(null)
+  const planTwinRefreshTimerRef = useRef<number | null>(null)
 
   // ── Research streaming ──────────────────────────────────────────────────────
   const researchStream = useResearchStream()
 
   // ── Career strategy ─────────────────────────────────────────────────────────
   const careerStrategy = useCareerStrategy()
+  const autonomousHunt = useAutonomousHunt()
 
   // ── Activity timeline ───────────────────────────────────────────────────────
   const timeline       = useApexTimeline()
@@ -417,19 +456,6 @@ export function ApexWorkspaceShell() {
   const [error,     setError]     = useState<string | null>(null)
   const [resumeRefreshedNotice, setResumeRefreshedNotice] = useState(false)
 
-  // ── Orb "done" flash — briefly fires after stream ends ──────────────────────
-  const [orbDone, setOrbDone] = useState(false)
-  const wasStreamingRef = useRef(false)
-  useEffect(() => {
-    const isStreaming = apexStream.isStreaming || researchStream.isRunning
-    if (wasStreamingRef.current && !isStreaming) {
-      setOrbDone(true)
-      const t = setTimeout(() => setOrbDone(false), 400)
-      return () => clearTimeout(t)
-    }
-    wasStreamingRef.current = isStreaming
-  }, [apexStream.isStreaming, researchStream.isRunning])
-
   // ── Workspace state ─────────────────────────────────────────────────────────
   const [workspaceMode,   setWorkspaceMode]   = useState<WorkspaceMode>("idle")
   const [activeResponse,  setActiveResponse]  = useState<ApexResponse | null>(null)
@@ -452,12 +478,38 @@ export function ApexWorkspaceShell() {
   const [behaviorSignals, setBehaviorSignals] = useState<ApexBehaviorSignals | null>(null)
   const [behaviorLoading, setBehaviorLoading] = useState(true)
   const [outcomeLearning, setOutcomeLearning] = useState<OutcomeLearningResult | null>(null)
+  const [careerTwin, setCareerTwin] = useState<CareerTwinSnapshot | null>(null)
+  const [careerTwinHistory, setCareerTwinHistory] = useState<CareerTwinSnapshot[]>([])
+  const [careerTwinLoading, setCareerTwinLoading] = useState(true)
+  const [careerTwinRefreshing, setCareerTwinRefreshing] = useState(false)
+  const [careerTwinError, setCareerTwinError] = useState<string | null>(null)
 
   // ── Daily missions ──────────────────────────────────────────────────────────
   const [missionStore, setMissionStore] = useState<ApexMissionStore | null>(null)
 
   // ── Derived ─────────────────────────────────────────────────────────────────
   const apexMode = detectApexMode(pathname ?? "")
+
+  const clearPendingStreamBubble = useCallback(() => {
+    const streamId = streamMsgId.current
+    if (!streamId) return
+    setMessages((prev) => prev.filter((message) => message.id !== streamId))
+    streamMsgId.current = null
+  }, [])
+
+  const enterRecoveryState = useCallback((message: string) => {
+    commandStartedAtRef.current = null
+    pendingVoiceReplyRef.current = false
+    isSubmittingRef.current = false
+    setIsLoading(false)
+    setError(message)
+    setWorkspaceMode("idle")
+    setActiveResponse(null)
+    setNarrative("")
+    setNarrativeDismissed(false)
+    setRail(null)
+    clearPendingStreamBubble()
+  }, [clearPendingStreamBubble])
 
   // Focus mode persists across navigation: read from URL param (when on /dashboard)
   // OR from localStorage (when the user navigated back to /dashboard/apex).
@@ -563,6 +615,84 @@ export function ApexWorkspaceShell() {
 
   const continuation = useApexContinuation()
 
+  const loadCareerTwin = useCallback(async (options?: { rebuild?: boolean }) => {
+    const shouldRebuild = options?.rebuild === true
+
+    if (shouldRebuild) {
+      setCareerTwinRefreshing(true)
+    } else {
+      setCareerTwinLoading(true)
+    }
+
+    setCareerTwinError(null)
+
+    try {
+      if (shouldRebuild) {
+        const rebuildRes = await fetch("/api/apex/career-twin", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          body: JSON.stringify({ reason: "manual_refresh" }),
+        })
+
+        if (!rebuildRes.ok) {
+          const payload = (await rebuildRes.json().catch(() => null)) as { error?: string } | null
+          throw new Error(payload?.error ?? "Unable to rebuild Career Twin right now.")
+        }
+      }
+
+      const res = await fetch("/api/apex/career-twin?fresh=1&history=1&hours=24", {
+        cache: "no-store",
+        headers: { Accept: "application/json" },
+      })
+
+      if (!res.ok) {
+        const payload = (await res.json().catch(() => null)) as { error?: string } | null
+        throw new Error(payload?.error ?? "Unable to load Career Twin right now.")
+      }
+
+      const data = (await res.json().catch(() => null)) as {
+        twin?: CareerTwinSnapshot | null
+        history?: CareerTwinSnapshot[]
+      } | null
+
+      setCareerTwin(data?.twin ?? null)
+      setCareerTwinHistory(data?.history ?? [])
+    } catch (error) {
+      setCareerTwinError(error instanceof Error ? error.message : "Unable to load Career Twin right now.")
+      if (!shouldRebuild) {
+        setCareerTwin(null)
+        setCareerTwinHistory([])
+      }
+    } finally {
+      setCareerTwinLoading(false)
+      setCareerTwinRefreshing(false)
+    }
+  }, [])
+
+  const scheduleCareerTwinRebuildFromPlan = useCallback(() => {
+    if (typeof window === "undefined") return
+
+    if (planTwinRefreshTimerRef.current !== null) {
+      window.clearTimeout(planTwinRefreshTimerRef.current)
+    }
+
+    planTwinRefreshTimerRef.current = window.setTimeout(() => {
+      planTwinRefreshTimerRef.current = null
+      void loadCareerTwin({ rebuild: true })
+    }, 700)
+  }, [loadCareerTwin])
+
+  useEffect(() => {
+    return () => {
+      if (typeof window !== "undefined" && planTwinRefreshTimerRef.current !== null) {
+        window.clearTimeout(planTwinRefreshTimerRef.current)
+      }
+    }
+  }, [])
+
   // ── Gate event bus — listens for permission requests from any executor ────────
   useEffect(() => {
     function onGateOpen(e: Event) {
@@ -596,7 +726,7 @@ export function ApexWorkspaceShell() {
     }
     window.addEventListener("message", onReviewSubmitted)
     return () => window.removeEventListener("message", onReviewSubmitted)
-  }, [bulkEngine, timeline.append])
+  }, [bulkEngine, timeline])
 
   // ── External timeline signals ───────────────────────────────────────────────
   // Child components can emit lightweight timeline-safe events through this bus.
@@ -621,7 +751,7 @@ export function ApexWorkspaceShell() {
 
     window.addEventListener("apex:timeline-signal", onTimelineSignal as EventListener)
     return () => window.removeEventListener("apex:timeline-signal", onTimelineSignal as EventListener)
-  }, [timeline.append])
+  }, [timeline])
 
   // ── Apex action audit bridge → timeline ───────────────────────────────────
   useEffect(() => {
@@ -656,7 +786,7 @@ export function ApexWorkspaceShell() {
 
     window.addEventListener("apex:action-recorded", onActionRecorded as EventListener)
     return () => window.removeEventListener("apex:action-recorded", onActionRecorded as EventListener)
-  }, [timeline.append])
+  }, [timeline])
 
   function dispatchGateResponse(approved: boolean, alwaysAllow = false) {
     setActiveGate(null)
@@ -676,6 +806,10 @@ export function ApexWorkspaceShell() {
     window.addEventListener("apex:memory-cleared", onMemoryCleared)
     return () => window.removeEventListener("apex:memory-cleared", onMemoryCleared)
   }, [])
+
+  useEffect(() => {
+    void loadCareerTwin()
+  }, [loadCareerTwin])
 
   // ── Pin browser context to sessionStorage so workflows can read it ───────────
   useEffect(() => {
@@ -799,25 +933,16 @@ export function ApexWorkspaceShell() {
 
     return contexts
   }, [
-    workflowEngine.activeWorkflow?.id,
-    workflowEngine.activeWorkflow?.activeStepId,
-    workflowEngine.activeWorkflow?.pausedAt,
-    workflowEngine.activeWorkflow?.completedAt,
-    activeResponse?.compare?.winnerJobId,
-    activeResponse?.compare?.items?.length,
+    workflowEngine.activeWorkflow,
+    activeResponse?.compare,
     workspaceMode,
     activeEntities.jobId,
     activeEntities.jobTitle,
     activeEntities.companyId,
     activeEntities.companyName,
-    researchStream.task?.id,
-    researchStream.task?.updatedAt,
-    researchStream.task?.status,
-    restoredResearchTask?.id,
-    restoredResearchTask?.updatedAt,
-    restoredResearchTask?.status,
-    bulkEngine.queue?.id,
-    bulkEngine.queue?.completedAt,
+    researchStream.task,
+    restoredResearchTask,
+    bulkEngine.queue,
   ])
 
   const continuationContexts = useMemo(() => {
@@ -1041,6 +1166,26 @@ export function ApexWorkspaceShell() {
       console.warn("[Apex QC] Shell:", qcIssues)
     }
 
+    if (isSoftFailureResponse(safeResponse)) {
+      const failureMessage = safeResponse.answer?.trim() || "Apex could not complete that request."
+      timeline.append({
+        type: "error",
+        title: "Apex returned a fallback response",
+        summary: failureMessage.length > 120 ? `${failureMessage.slice(0, 120)}…` : failureMessage,
+        timestamp: new Date().toISOString(),
+        severity: "error",
+        metadata: IS_DEV
+          ? {
+              source: "soft_failure_response",
+              debugOnly: true,
+            }
+          : undefined,
+      })
+
+      enterRecoveryState(failureMessage)
+      return
+    }
+
     setMessages((prev) =>
       prev.map((m) =>
         m.id === id ? { id, role: "apex" as const, response: safeResponse } : m
@@ -1185,27 +1330,24 @@ export function ApexWorkspaceShell() {
       const responseText = safeResponse.answer?.trim() || buildNarrative(newMode, safeResponse)
       if (responseText) speakApexReply(responseText)
     }
-  }, [apexStream.finalResponse])
+  // This effect must only process a newly completed stream payload once.
+  // Re-running on other changing references would duplicate state transitions.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apexStream.finalResponse, enterRecoveryState])
 
   // Handle stream errors
   useEffect(() => {
     if (!apexStream.error || apexStream.isStreaming) return
-    commandStartedAtRef.current = null
     lastDebugRef.current = null
-    pendingVoiceReplyRef.current = false
-    setError(apexStream.error)
-    isSubmittingRef.current = false; setIsLoading(false)
-    // Replace the streaming bubble with an error notice (remove it)
-    const id = streamMsgId.current
-    if (id) setMessages((prev) => prev.filter((m) => m.id !== id))
-    streamMsgId.current = null
-  }, [apexStream.error, apexStream.isStreaming])
+    enterRecoveryState(apexStream.error)
+  }, [apexStream.error, apexStream.isStreaming, enterRecoveryState])
 
   // Research stream — task completion: persist, update chips, clear loading
   useEffect(() => {
     const task = researchStream.task
     if (!task || researchStream.isRunning) return
     isSubmittingRef.current = false; setIsLoading(false)
+    clearPendingStreamBubble()
     if (task.status === "completed") {
       writeResearchTask(task)
       const followUps = task.followUpCommands ?? []
@@ -1217,23 +1359,22 @@ export function ApexWorkspaceShell() {
       )
     }
     if (task.status === "failed") {
-      setError("Research could not produce findings. Try a more specific query.")
-      setWorkspaceMode("idle")
+      enterRecoveryState("Research could not produce findings. Try a more specific query.")
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [researchStream.isRunning])
+  }, [researchStream.isRunning, clearPendingStreamBubble, enterRecoveryState])
 
   // Research stream error
   useEffect(() => {
     if (!researchStream.error) return
-    setError(researchStream.error)
-    isSubmittingRef.current = false; setIsLoading(false)
-  }, [researchStream.error])
+    enterRecoveryState(researchStream.error)
+  }, [researchStream.error, enterRecoveryState])
 
   // Career strategy — data loaded
   useEffect(() => {
     if (careerStrategy.loading) return
     isSubmittingRef.current = false; setIsLoading(false)
+    clearPendingStreamBubble()
     if (careerStrategy.data) {
       const dirCount = careerStrategy.data.directions.length
       if (dirCount > 0) {
@@ -1242,11 +1383,35 @@ export function ApexWorkspaceShell() {
       }
     }
     if (careerStrategy.error) {
-      setError(careerStrategy.error)
-      setWorkspaceMode("idle")
+      enterRecoveryState(careerStrategy.error)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [careerStrategy.loading, careerStrategy.data, careerStrategy.error])
+  }, [careerStrategy.loading, careerStrategy.data, careerStrategy.error, clearPendingStreamBubble, enterRecoveryState])
+
+  // Autonomous Hunt — planner loaded
+  useEffect(() => {
+    if (autonomousHunt.loading) return
+    isSubmittingRef.current = false
+    setIsLoading(false)
+
+    clearPendingStreamBubble()
+
+    if (autonomousHunt.data) {
+      setError(null)
+      setNarrative("Autonomous Hunt ranked the live queue and prepared your attack plan.")
+      setChips([
+        "Run autonomous hunt for sponsorship-friendly roles matching my profile",
+        "Show recent high-match postings only and rank them by fit",
+        "What should I do next across my applications?",
+      ])
+      setHasSession(true)
+      return
+    }
+
+    if (autonomousHunt.error) {
+      enterRecoveryState(autonomousHunt.error)
+    }
+  }, [autonomousHunt.loading, autonomousHunt.data, autonomousHunt.error, clearPendingStreamBubble, enterRecoveryState])
 
   // ── Timeline tracking effects ───────────────────────────────────────────────
   // Each effect uses a ref to detect meaningful changes so events are never
@@ -1271,6 +1436,7 @@ export function ApexWorkspaceShell() {
       bulk_application: "Apex opened bulk application queue",
       company:          "Apex opened company intelligence",
       research:         "Apex started a research task",
+      autonomous_hunt:  "Apex opened your autonomous hunt plan",
     }
     const replayAction: ApexTimelineReplayAction | undefined =
       workspaceMode === "bulk_application"
@@ -1629,6 +1795,12 @@ export function ApexWorkspaceShell() {
     if (mode !== "idle") setWorkspaceMode(mode)
   }, [apexStream.earlyDirective])
 
+  useEffect(() => {
+    if (workspaceMode !== "autonomous_hunt") return
+    if (autonomousHunt.loading || autonomousHunt.data || autonomousHunt.error) return
+    void autonomousHunt.generate("Run autonomous hunt for today")
+  }, [workspaceMode, autonomousHunt, autonomousHunt.loading, autonomousHunt.data, autonomousHunt.error, autonomousHunt.generate])
+
   // ── Submit ───────────────────────────────────────────────────────────────────
 
   const handleSubmit = useCallback(
@@ -1640,6 +1812,7 @@ export function ApexWorkspaceShell() {
       event.preventDefault()
       const message = (overrideMessage ?? query).trim()
       if (!message || isSubmittingRef.current || isLoading || apexStream.isStreaming || researchStream.isRunning) return
+      const executableMessage = resolveExecutableApexCommand(message)
       isSubmittingRef.current = true
       pendingVoiceReplyRef.current = source === "voice"
 
@@ -1674,13 +1847,24 @@ export function ApexWorkspaceShell() {
           : undefined,
       })
 
+      if (isAutonomousHuntIntent(executableMessage)) {
+        pendingVoiceReplyRef.current = false
+        setWorkspaceMode("autonomous_hunt")
+        setNarrative(PREFLIGHT_NARRATIVE.autonomous_hunt ?? "")
+        void autonomousHunt.generate(executableMessage)
+        const updatedCmds = appendCommand(recentCommands, message)
+        setRecentCommands(updatedCmds)
+        setHasSession(true)
+        return
+      }
+
       // ── Career strategy — before research (research RE also catches career phrases) ──
-      if (isCareerStrategyIntent(message)) {
+      if (isCareerStrategyIntent(executableMessage)) {
         pendingVoiceReplyRef.current = false
         setWorkspaceMode("career_strategy")
         setNarrative(PREFLIGHT_NARRATIVE.career_strategy ?? "")
         careerStrategy.reset()
-        void careerStrategy.generate(message)
+        void careerStrategy.generate(executableMessage)
         const updatedCmds = appendCommand(recentCommands, message)
         setRecentCommands(updatedCmds)
         setHasSession(true)
@@ -1688,13 +1872,13 @@ export function ApexWorkspaceShell() {
       }
 
       // ── Research intent — route to research endpoint, not chat ────────────
-      if (isResearchIntent(message)) {
+      if (isResearchIntent(executableMessage)) {
         pendingVoiceReplyRef.current = false
         setWorkspaceMode("research")
         setNarrative(PREFLIGHT_NARRATIVE.research ?? "")
         researchStream.reset()
         void researchStream.startStream("/api/apex/research", {
-          message,
+          message: executableMessage,
           ...contextIds,
         })
         const updatedCmds = appendCommand(recentCommands, message)
@@ -1704,7 +1888,7 @@ export function ApexWorkspaceShell() {
       }
 
       // ── Pre-flight: morph workspace immediately before network call ────────
-      const preflightMode = detectPreflightMode(message)
+      const preflightMode = detectPreflightMode(executableMessage)
       forceAutoApplyRef.current = preflightMode === "auto_apply"
       if (preflightMode) {
         setWorkspaceMode(preflightMode)
@@ -1714,7 +1898,7 @@ export function ApexWorkspaceShell() {
 
       // ── Start SSE stream ───────────────────────────────────────────────────
       void apexStream.startStream("/api/apex/chat", {
-        message, pagePath: pathname, commandMode: true, focusMode: isFocusMode,
+        message: executableMessage, pagePath: pathname, commandMode: true, focusMode: isFocusMode,
         activeFilters: {
           q: searchParams.get("q") ?? undefined, location: searchParams.get("location") ?? undefined,
           sponsorship: searchParams.get("sponsorship") ?? undefined, workMode: searchParams.get("workMode") ?? undefined,
@@ -1739,9 +1923,22 @@ export function ApexWorkspaceShell() {
     void handleSubmit(fakeEvent, message, "voice")
   }, [handleSubmit])
 
-  function handleChipClick(chip: string) { setQuery(chip); setTimeout(() => inputRef.current?.focus(), 50) }
-  function handleFollowUp(text: string)  { setQuery(text); setTimeout(() => inputRef.current?.focus(), 50) }
-  function handleSendCommand(query: string) { setQuery(query); setTimeout(() => inputRef.current?.focus(), 50) }
+  function runCommandNow(command: string) {
+    const fakeEvent = { preventDefault: () => {} } as React.FormEvent
+    void handleSubmit(fakeEvent, command)
+  }
+  function prefillOrRunCommand(command: string) {
+    const executable = resolveExecutableApexCommand(command)
+    if (isAutonomousHuntIntent(executable)) {
+      runCommandNow(command)
+      return
+    }
+    setQuery(command)
+    setTimeout(() => inputRef.current?.focus(), 50)
+  }
+  function handleChipClick(chip: string) { prefillOrRunCommand(chip) }
+  function handleFollowUp(text: string)  { prefillOrRunCommand(text) }
+  function handleSendCommand(query: string) { prefillOrRunCommand(query) }
 
   function handleOpenProactive(event: ApexProactiveEvent) {
     proactive.snooze(event.id, 2 * 60 * 60 * 1000)
@@ -1841,7 +2038,7 @@ export function ApexWorkspaceShell() {
   // ── Render ───────────────────────────────────────────────────────────────────
 
   const showNarrative = narrative && !narrativeDismissed && workspaceMode !== "idle"
-  const narrativePending = isLoading || apexStream.isStreaming || researchStream.isRunning || careerStrategy.loading
+  const narrativePending = isLoading || apexStream.isStreaming || researchStream.isRunning || careerStrategy.loading || autonomousHunt.loading
   // Welcome state: clean centered hero — hide top command bar / chips / proactive strip
   const isWelcomeState =
     workspaceMode === "idle" &&
@@ -1865,6 +2062,7 @@ export function ApexWorkspaceShell() {
   const showIdleStoryScene =
     workspaceMode === "idle" &&
     (apexStream.isStreaming || researchStream.isRunning)
+  const showWorkspaceLeftRail = workspaceMode !== "idle"
 
   const MODE_DISPLAY_LABELS: Partial<Record<WorkspaceMode, string>> = {
     search:           "Job Search",
@@ -1877,6 +2075,7 @@ export function ApexWorkspaceShell() {
     outreach:         "Outreach",
     interview:        "Interview Prep",
     career_strategy:  "Career Strategy",
+    autonomous_hunt:  "Autonomous Hunt",
   }
 
   const workspaceModeLabel =
@@ -1890,7 +2089,7 @@ export function ApexWorkspaceShell() {
     : researchStream.isRunning
       ? "Researching…"
       : workspaceMode === "idle"
-        ? "Your AI job-search copilot"
+        ? ""
         : workspaceModeLabel
 
   return (
@@ -1900,31 +2099,27 @@ export function ApexWorkspaceShell() {
       <div className="sticky top-0 z-20 border-b border-slate-200/60 bg-white/97 px-5 shadow-[0_1px_0_rgba(0,0,0,0.04)] backdrop-blur-md sm:px-8">
         <div className="flex items-center justify-between py-3">
           <div className="flex items-center gap-3">
-            <ApexOrb
-              size="md"
-              state={
-                orbDone ? "done"
-                : (apexStream.isStreaming || researchStream.isRunning) ? "thinking"
-                : "idle"
-              }
-            />
             <div>
               <div className="flex items-center gap-1.5">
                 <ApexIcon size={18} glow={false} />
                 <p className="text-[14px] font-bold leading-none tracking-tight text-slate-900">Apex</p>
               </div>
               {/* Subtitle fades in on key change when mode transitions */}
-              <p
-                key={statusLine}
-                className={cn(
-                  "mt-0.5 text-[11px] font-medium motion-safe:animate-[apexSubtitleIn_0.3s_ease-out_both]",
-                  (apexStream.isStreaming || researchStream.isRunning)
-                    ? "text-indigo-600"
-                    : workspaceMode === "idle"
-                      ? "font-normal text-slate-400"
-                      : "text-indigo-600"
-                )}
-              >{statusLine}</p>
+              {statusLine && (
+                <p
+                  key={statusLine}
+                  className={cn(
+                    "mt-0.5 text-[11px] font-medium motion-safe:animate-[apexSubtitleIn_0.3s_ease-out_both]",
+                    (apexStream.isStreaming || researchStream.isRunning)
+                      ? "text-indigo-600"
+                      : workspaceMode === "idle"
+                        ? "font-normal text-slate-400"
+                        : "text-indigo-600"
+                  )}
+                >
+                  {statusLine}
+                </p>
+              )}
             </div>
           </div>
 
@@ -2011,12 +2206,13 @@ export function ApexWorkspaceShell() {
       <div className="flex flex-1 overflow-hidden">
 
         {/* Left intelligence panel */}
-        <ApexLeftPanel
-          isActive={apexStream.isStreaming || researchStream.isRunning || isLoading}
-          recentEvents={timeline.events}
-          onCommand={(cmd) => { setQuery(cmd); setTimeout(() => inputRef.current?.focus(), 50) }}
-          firstName={firstName}
-        />
+        {showWorkspaceLeftRail && (
+          <ApexLeftPanel
+            isActive={apexStream.isStreaming || researchStream.isRunning || isLoading}
+            recentEvents={timeline.events}
+            onCommand={prefillOrRunCommand}
+          />
+        )}
 
         {/* Center — scrollable main content */}
         <div className="min-w-0 flex-1 overflow-y-auto px-5 py-5 pb-[max(6rem,calc(env(safe-area-inset-bottom)+5.5rem))] sm:px-8">
@@ -2092,7 +2288,7 @@ export function ApexWorkspaceShell() {
           )}
 
           {/* Apex learned — lightweight memory chips, idle only */}
-          {workspaceMode === "idle" && searchProfile && (() => {
+          {showWorkspaceLeftRail && searchProfile && (() => {
             const memChips = buildMemoryChips(searchProfile)
             if (!memChips.length) return null
             return (
@@ -2141,10 +2337,21 @@ export function ApexWorkspaceShell() {
                       hasResume={Boolean(primaryResume?.id)}
                       hasData={hasData}
                       isExtensionConnected={isExtensionConnected}
-                      onSuggestionClick={(q) => {
-                        setQuery(q)
-                        window.setTimeout(() => inputRef.current?.focus(), 50)
+                      onSuggestionClick={prefillOrRunCommand}
+                      onRunCommand={runCommandNow}
+                      strategyBoard={strategyBoard}
+                      strategyLoading={strategyLoading || behaviorLoading}
+                      nudges={nudges}
+                      careerTwin={careerTwin}
+                      careerTwinHistory={careerTwinHistory}
+                      careerTwinLoading={careerTwinLoading}
+                      careerTwinRefreshing={careerTwinRefreshing}
+                      careerTwinError={careerTwinError}
+                      onRefreshCareerTwin={() => {
+                        void loadCareerTwin({ rebuild: true })
                       }}
+                      onOpenPlanHistory={() => openContextPanel("plan")}
+                      onPlanStateCommitted={scheduleCareerTwinRebuildFromPlan}
                       commandSlot={
                         <ApexCommandBar
                           query={query}
@@ -2171,17 +2378,15 @@ export function ApexWorkspaceShell() {
                     strategyLoading={strategyLoading || behaviorLoading}
                     resumeRefreshedNotice={resumeRefreshedNotice}
                     onClearChat={handleClearChat}
-                    onTileClick={(q) => { setQuery(q); setTimeout(() => inputRef.current?.focus(), 50) }}
+                    onTileClick={prefillOrRunCommand}
+                    onRunCommand={runCommandNow}
                     chatEndRef={chatEndRef as React.RefObject<HTMLDivElement>}
                     recentCommands={recentCommands} hasSession={hasSession}
                     onStartFresh={handleStartFresh}
                     userInitial={firstName ? firstName.charAt(0).toUpperCase() : undefined}
                     missions={missionStore?.disabled ? [] : (missionStore?.missions ?? [])}
                     momentumLine={missionStore?.momentumLine}
-                    onMissionLaunch={(q) => {
-                      setQuery(q)
-                      setTimeout(() => inputRef.current?.focus(), 50)
-                    }}
+                    onMissionLaunch={prefillOrRunCommand}
                     onMissionDismiss={(id) => {
                       setMissionStore((prev) => prev ? patchMissionStatus(prev, id, "dismissed") : prev)
                     }}
@@ -2192,6 +2397,17 @@ export function ApexWorkspaceShell() {
                     showExtensionPromo={showExtPromo}
                     hasData={hasData}
                     onDismissExtPromo={handleDismissExtPromo}
+                    strategyBoard={strategyBoard}
+                    careerTwin={careerTwin}
+                    careerTwinHistory={careerTwinHistory}
+                    careerTwinLoading={careerTwinLoading}
+                    careerTwinRefreshing={careerTwinRefreshing}
+                    careerTwinError={careerTwinError}
+                    onRefreshCareerTwin={() => {
+                      void loadCareerTwin({ rebuild: true })
+                    }}
+                    onOpenPlanHistory={() => openContextPanel("plan")}
+                    onPlanStateCommitted={scheduleCareerTwinRebuildFromPlan}
                   />
                 )
               }
@@ -2201,48 +2417,74 @@ export function ApexWorkspaceShell() {
               // permanent "Scanning..." state when workspaceMode is non-idle
               // but no stream/load is active.
               if (!activeResponse) {
+                const canRenderWithoutActiveResponse =
+                  displayedMode === "bulk_application" ||
+                  displayedMode === "company" ||
+                  displayedMode === "research" ||
+                  displayedMode === "career_strategy" ||
+                  displayedMode === "autonomous_hunt" ||
+                  displayedMode === "jd_decoder" ||
+                  displayedMode === "reputation_guard" ||
+                  displayedMode === "pipeline_sim" ||
+                  displayedMode === "shadow_network" ||
+                  displayedMode === "auto_apply"
+
+                if (canRenderWithoutActiveResponse) {
+                  // Let the mode-specific branches below render from their own
+                  // state instead of forcing the shell back into IdleMode.
+                } else {
                 const isActuallyWorking =
                   isLoading || apexStream.isStreaming || researchStream.isRunning
-                if (!isActuallyWorking) {
-                  return (
-                    <IdleMode
-                      greeting={greeting} firstName={firstName} messages={messages}
-                      isLoading={isLoading} error={error} nudges={nudges}
-                      strategyLoading={strategyLoading || behaviorLoading}
+                  if (!isActuallyWorking) {
+                    return (
+                      <IdleMode
+                        greeting={greeting} firstName={firstName} messages={messages}
+                        isLoading={isLoading} error={error} nudges={nudges}
+                        strategyLoading={strategyLoading || behaviorLoading}
                       resumeRefreshedNotice={resumeRefreshedNotice}
                       onClearChat={handleClearChat}
-                      onTileClick={(q) => { setQuery(q); setTimeout(() => inputRef.current?.focus(), 50) }}
-                      chatEndRef={chatEndRef as React.RefObject<HTMLDivElement>}
-                      recentCommands={recentCommands} hasSession={hasSession}
-                      onStartFresh={handleStartFresh}
-                      userInitial={firstName ? firstName.charAt(0).toUpperCase() : undefined}
+                      onTileClick={prefillOrRunCommand}
+                      onRunCommand={runCommandNow}
+                        chatEndRef={chatEndRef as React.RefObject<HTMLDivElement>}
+                        recentCommands={recentCommands} hasSession={hasSession}
+                        onStartFresh={handleStartFresh}
+                        userInitial={firstName ? firstName.charAt(0).toUpperCase() : undefined}
                       missions={missionStore?.disabled ? [] : (missionStore?.missions ?? [])}
                       momentumLine={missionStore?.momentumLine}
-                      onMissionLaunch={(q) => {
-                        setQuery(q)
-                        setTimeout(() => inputRef.current?.focus(), 50)
-                      }}
-                      onMissionDismiss={(id) => {
-                        setMissionStore((prev) => prev ? patchMissionStatus(prev, id, "dismissed") : prev)
-                      }}
-                      onMissionsDisable={() => {
-                        setMissionsDisabled(true)
-                        setMissionStore((prev) => prev ? { ...prev, disabled: true } : prev)
-                      }}
-                      showExtensionPromo={showExtPromo}
-                      hasData={hasData}
-                      onDismissExtPromo={handleDismissExtPromo}
+                      onMissionLaunch={prefillOrRunCommand}
+                        onMissionDismiss={(id) => {
+                          setMissionStore((prev) => prev ? patchMissionStatus(prev, id, "dismissed") : prev)
+                        }}
+                        onMissionsDisable={() => {
+                          setMissionsDisabled(true)
+                          setMissionStore((prev) => prev ? { ...prev, disabled: true } : prev)
+                        }}
+                        showExtensionPromo={showExtPromo}
+                        hasData={hasData}
+                        onDismissExtPromo={handleDismissExtPromo}
+                        strategyBoard={strategyBoard}
+                        careerTwin={careerTwin}
+                        careerTwinHistory={careerTwinHistory}
+                        careerTwinLoading={careerTwinLoading}
+                        careerTwinRefreshing={careerTwinRefreshing}
+                        careerTwinError={careerTwinError}
+                        onRefreshCareerTwin={() => {
+                          void loadCareerTwin({ rebuild: true })
+                        }}
+                        onOpenPlanHistory={() => openContextPanel("plan")}
+                        onPlanStateCommitted={scheduleCareerTwinRebuildFromPlan}
+                      />
+                    )
+                  }
+                  const lastMsg = messages.findLast?.((m) => m.role === "user")
+                  return (
+                    <ApexThinkingCanvas
+                      workspaceMode={displayedMode}
+                      lastUserMessage={lastMsg?.role === "user" ? lastMsg.text : undefined}
+                      narrative={narrative}
                     />
                   )
                 }
-                const lastMsg = messages.findLast?.((m) => m.role === "user")
-                return (
-                  <ApexThinkingCanvas
-                    workspaceMode={displayedMode}
-                    lastUserMessage={lastMsg?.role === "user" ? lastMsg.text : undefined}
-                    narrative={narrative}
-                  />
-                )
               }
               if (displayedMode === "search" && activeResponse) {
                 return (
@@ -2337,7 +2579,7 @@ export function ApexWorkspaceShell() {
                   <ResearchMode
                     task={researchStream.task ?? restoredResearchTask}
                     isRunning={researchStream.isRunning}
-                    onCommand={(cmd) => { setQuery(cmd); setTimeout(() => inputRef.current?.focus(), 50) }}
+                    onCommand={prefillOrRunCommand}
                   />
                 )
               }
@@ -2365,7 +2607,18 @@ export function ApexWorkspaceShell() {
                     data={careerStrategy.data}
                     loading={careerStrategy.loading}
                     error={careerStrategy.error}
-                    onCommand={(cmd) => { setQuery(cmd); setTimeout(() => inputRef.current?.focus(), 50) }}
+                    onCommand={prefillOrRunCommand}
+                  />
+                )
+              }
+              if (displayedMode === "autonomous_hunt") {
+                return (
+                  <AutonomousHuntMode
+                    data={autonomousHunt.data}
+                    loading={autonomousHunt.loading}
+                    error={autonomousHunt.error}
+                    onCommand={runCommandNow}
+                    onRefresh={() => { void autonomousHunt.refresh() }}
                   />
                 )
               }
@@ -2421,21 +2674,6 @@ export function ApexWorkspaceShell() {
           />
           </ApexErrorBoundary>
         </div>
-
-        {/* Right command-center panel — hidden during bulk apply to give the resume room */}
-        {workspaceMode !== "bulk_application" && (
-          <ApexRightPanel
-            isActive={apexStream.isStreaming || researchStream.isRunning || isLoading}
-            narrative={narrative}
-            workspaceModeLabel={workspaceModeLabel}
-            searchProfile={searchProfile}
-            strategyBoard={strategyBoard}
-            permissions={shellPermissions}
-            onPermissionsChange={setShellPermissions}
-            onOpenMemory={() => setMemoryPanelOpen(true)}
-            onOpenPermissions={() => setShowPermissions(true)}
-          />
-        )}
 
       </div>
 
@@ -2517,9 +2755,7 @@ export function ApexWorkspaceShell() {
             const fakeEvent = { preventDefault: () => {} } as React.FormEvent
             void handleSubmit(fakeEvent, paletteQuery)
           } else {
-            // Fill the bar for user to review before submitting
-            setQuery(paletteQuery)
-            setTimeout(() => inputRef.current?.focus(), 50)
+            prefillOrRunCommand(paletteQuery)
           }
         }}
       />

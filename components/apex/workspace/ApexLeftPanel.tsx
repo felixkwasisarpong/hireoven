@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Activity, Eye, Search, Layers, FileText, CheckCircle2, Send, Bookmark, Zap } from "lucide-react"
+import { Activity, Eye, Search, Layers, FileText, CheckCircle2, Send, Bookmark, Target, Zap } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import type { ApexTimelineEvent } from "@/lib/apex/timeline/types"
 
@@ -18,7 +18,6 @@ type Props = {
   isActive: boolean
   recentEvents: ApexTimelineEvent[]
   onCommand: (cmd: string) => void
-  firstName?: string
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -113,6 +112,15 @@ function actionIconFor(title: string): { Icon: LucideIcon; color: string } {
   return { Icon: Zap,            color: "text-slate-300" }
 }
 
+function SectionLabel({ icon: Icon, label }: { icon: LucideIcon; label: string }) {
+  return (
+    <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.22em] text-slate-400">
+      <Icon className="h-3 w-3" />
+      {label}
+    </p>
+  )
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function ApexLeftPanel({ isActive, recentEvents, onCommand }: Props) {
@@ -136,18 +144,39 @@ export function ApexLeftPanel({ isActive, recentEvents, onCommand }: Props) {
       .catch(() => setLoaded(true))
   }, [])
 
-  const displayEvents = recentEvents.slice(0, 5)
+  const activeWatchCount = watchlist.filter((entry) => entry.recentJobsCount > 0).length
+  const displayWatchlist = watchlist.slice(0, 4)
+  const displayEvents = recentEvents.slice(0, 3)
+  const quickCommands = [
+    { label: "Hunt", cmd: "Run autonomous hunt for today", Icon: Target },
+    { label: "Find jobs", cmd: "Find me matching jobs", Icon: Search },
+    { label: "Compare", cmd: "Compare my saved jobs", Icon: Layers },
+    { label: "Resume", cmd: "What should I improve on my resume?", Icon: FileText },
+  ]
 
   return (
-    <aside className="flex h-full w-[240px] flex-shrink-0 flex-col overflow-hidden border-r border-slate-200 bg-slate-50">
-
-      {/* ── Monitoring ── */}
-      <div className="border-b border-slate-200 px-4 py-4">
-        <p className="mb-3 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.25em] text-slate-500">
-          <Eye className="h-3 w-3" />
-          Monitoring
-        </p>
-        <div className="space-y-2.5">
+    <aside className="hidden h-full w-[216px] flex-shrink-0 flex-col overflow-hidden border-r border-slate-200/70 bg-[linear-gradient(180deg,#FAFCFF_0%,#F8FAFC_100%)] xl:flex">
+      <div className="border-b border-slate-200/70 px-4 py-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <SectionLabel icon={Eye} label="Signal Watch" />
+            <p className="mt-2 text-[13px] font-semibold leading-5 text-slate-900">
+              {loaded
+                ? `${activeWatchCount} active target${activeWatchCount === 1 ? "" : "s"}`
+                : "Watching your target companies"}
+            </p>
+            <p className="mt-1 text-[11px] leading-5 text-slate-500">
+              Quiet monitoring on the side. Apex surfaces movement without turning this rail into the main event.
+            </p>
+          </div>
+          {isActive && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-blue-100 bg-blue-50 px-2 py-1 text-[10px] font-semibold text-blue-700">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-600" />
+              Live
+            </span>
+          )}
+        </div>
+        <div className="mt-4 space-y-2.5">
           {!loaded ? (
             Array.from({ length: 3 }).map((_, i) => (
               <div key={i} className="flex items-center gap-2">
@@ -155,16 +184,16 @@ export function ApexLeftPanel({ isActive, recentEvents, onCommand }: Props) {
                 <div className="h-3.5 flex-1 animate-pulse rounded bg-slate-200/80" style={{ opacity: 1 - i * 0.25 }} />
               </div>
             ))
-          ) : watchlist.length === 0 ? (
+          ) : displayWatchlist.length === 0 ? (
             <p className="text-[11px] italic text-slate-400">Add companies to your watchlist</p>
           ) : (
-            watchlist.map((c) => {
+            displayWatchlist.map((c) => {
               const level = activityLevel(c.lastJobPostedAt, c.recentJobsCount)
               return (
-                <div key={c.id} className="flex items-center gap-2">
+                <div key={c.id} className="flex items-center gap-2 rounded-xl border border-slate-200/80 bg-white/90 px-2.5 py-2">
                   <StatusDot lastPostedAt={c.lastJobPostedAt} count={c.recentJobsCount} />
                   <CompanyAvatar name={c.name} level={level} />
-                  <span className="flex-1 truncate text-[12px] text-slate-600">{c.name}</span>
+                  <span className="flex-1 truncate text-[11.5px] text-slate-600">{c.name}</span>
                   {c.recentJobsCount > 0 && (
                     <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold tabular-nums ${
                       level === "green" ? "bg-green-500/15 text-green-500" :
@@ -181,21 +210,9 @@ export function ApexLeftPanel({ isActive, recentEvents, onCommand }: Props) {
         </div>
       </div>
 
-      {/* ── Recent actions ── */}
       <div className="flex-1 overflow-y-auto px-4 py-4">
-        <div className="mb-3 flex items-center justify-between">
-          <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.25em] text-slate-500">
-            <Activity className="h-3 w-3" />
-            Recent Actions
-          </p>
-          {isActive && (
-            <span className="flex items-center gap-1 text-[10px] font-semibold text-blue-600">
-              <span className="h-1 w-1 rounded-full bg-blue-600 animate-pulse" />
-              Live
-            </span>
-          )}
-        </div>
-        <div className="space-y-3.5">
+        <SectionLabel icon={Activity} label="Session Pulse" />
+        <div className="mt-3 space-y-3">
           {displayEvents.length === 0 ? (
             <p className="text-[11px] italic text-slate-400">No actions this session</p>
           ) : (
@@ -204,48 +221,38 @@ export function ApexLeftPanel({ isActive, recentEvents, onCommand }: Props) {
               return (
                 <div
                   key={ev.id}
-                  className={`flex items-start gap-2 ${idx === 0 ? "animate-[apex-slide-in_0.3s_ease-out_both]" : ""}`}
+                  className={`rounded-2xl border border-slate-200/80 bg-white/90 px-3 py-3 ${idx === 0 ? "animate-[apex-slide-in_0.3s_ease-out_both]" : ""}`}
                 >
-                  <span
-                    className={`mt-[5px] h-1.5 w-1.5 flex-shrink-0 rounded-full ${
-                      idx === 0
-                        ? "bg-blue-600 shadow-[0_0_5px_rgba(37,99,235,0.45)]"
-                        : "bg-slate-300"
-                    }`}
-                  />
-                  <Icon className={`mt-0.5 h-3 w-3 flex-shrink-0 ${color}`} />
-                  <div className="min-w-0">
-                    <p className="truncate text-[11.5px] leading-4 text-slate-600">{ev.title}</p>
-                    <p className="mt-0.5 text-[10px] text-slate-400">{timeAgo(ev.timestamp)}</p>
+                  <div className="flex items-start gap-2">
+                    <span
+                      className={`mt-[5px] h-1.5 w-1.5 flex-shrink-0 rounded-full ${
+                        idx === 0
+                          ? "bg-blue-600 shadow-[0_0_5px_rgba(37,99,235,0.45)]"
+                          : "bg-slate-300"
+                      }`}
+                    />
+                    <Icon className={`mt-0.5 h-3 w-3 flex-shrink-0 ${color}`} />
+                    <div className="min-w-0">
+                      <p className="text-[11.5px] leading-5 text-slate-700">{ev.title}</p>
+                      <p className="mt-0.5 text-[10px] text-slate-400">{timeAgo(ev.timestamp)}</p>
+                    </div>
                   </div>
                 </div>
               )
             })
           )}
         </div>
-        {recentEvents.length > 5 && (
-          <button
-            type="button"
-            className="mt-3 text-[10px] font-medium text-blue-600/80 transition-colors hover:text-blue-700"
-          >
-            View full timeline →
-          </button>
-        )}
       </div>
 
-      {/* ── Quick commands ── */}
-      <div className="border-t border-slate-200 px-3 py-3">
-        <div className="space-y-0.5">
-          {[
-            { label: "Find matching jobs",  cmd: "Find me matching jobs",               Icon: Search   },
-            { label: "Compare saved jobs",  cmd: "Compare my saved jobs",               Icon: Layers   },
-            { label: "Resume strategy",     cmd: "What should I improve on my resume?", Icon: FileText },
-          ].map(({ label, cmd, Icon }) => (
+      <div className="border-t border-slate-200/70 px-4 py-4">
+        <SectionLabel icon={Zap} label="Launch" />
+        <div className="mt-3 space-y-1.5">
+          {quickCommands.map(({ label, cmd, Icon }) => (
             <button
               key={label}
               type="button"
               onClick={() => onCommand(cmd)}
-              className="group flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-all duration-150 hover:bg-blue-50"
+              className="group flex w-full items-center gap-2.5 rounded-xl border border-slate-200/80 bg-white/90 px-3 py-2.5 text-left transition-all duration-150 hover:border-blue-200 hover:bg-blue-50/70"
             >
               <Icon className="h-3.5 w-3.5 flex-shrink-0 text-slate-400 transition-colors group-hover:text-blue-600" />
               <span className="truncate text-[12px] text-slate-500 transition-colors group-hover:text-slate-800">
@@ -254,8 +261,8 @@ export function ApexLeftPanel({ isActive, recentEvents, onCommand }: Props) {
             </button>
           ))}
         </div>
-        <div className="mt-2 flex items-center justify-between border-t border-slate-200 pt-2.5">
-          <span className="text-[10px] text-slate-400">Command palette</span>
+        <div className="mt-3 flex items-center justify-between border-t border-slate-200 pt-3">
+          <span className="text-[10px] text-slate-400">Open command palette</span>
           <kbd className="rounded bg-slate-200/70 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">⌘K</kbd>
         </div>
       </div>

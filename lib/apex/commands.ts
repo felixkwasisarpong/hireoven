@@ -176,6 +176,14 @@ export const ALL_COMMANDS: ApexCommand[] = [
     autoRun: true,
   },
   {
+    id: "search-autonomous-hunt",
+    label: "Run today's attack plan",
+    description: "Apex builds a live autonomous hunt around fit, freshness, and execution pressure",
+    group: "search",
+    query: "Run autonomous hunt for today",
+    autoRun: true,
+  },
+  {
     id: "search-ml",
     label: "Find machine learning / AI roles",
     group: "search",

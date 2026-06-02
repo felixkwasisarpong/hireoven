@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getApexStrategyBoard } from "@/lib/apex/strategy"
 import { getApexContext } from "@/lib/apex/context"
+import { ensureFreshCareerTwin } from "@/lib/apex/career-twin/builder"
+import { getApexPlanExecutionSummary } from "@/lib/apex/plan/server"
 import {
   STRATEGY_SYSTEM_PROMPT,
   formatStrategyContext,
@@ -71,8 +73,10 @@ export async function POST(request: NextRequest) {
   const isPremium = canAccess(plan, "apex_strategy")
 
   try {
+    const planExecution = await getApexPlanExecutionSummary(user.id).catch(() => null)
+
     // Check cache before hitting AI — strategy changes at most daily
-    const ck = cacheKey("strategy", user.id)
+    const ck = cacheKey("strategy", user.id, planExecution?.executionFingerprint ?? "no-plan-state")
     const cached = apexCache.get<{ strategy: ApexAIStrategy; resumeId?: string }>(ck)
     if (cached) {
       recordCacheHit("apex_strategy", MODEL, user.id)
@@ -100,13 +104,18 @@ export async function POST(request: NextRequest) {
     const quota = await requireQuota(user.id, "apex_strategy", plan)
     if (quota instanceof NextResponse) return quota
 
+    await ensureFreshCareerTwin(user.id, {
+      maxAgeHours: 24,
+      reason: "strategy_request",
+    }).catch(() => null)
+
     // Build Apex context + strategy board data in parallel
     const [context, board] = await Promise.all([
       getApexContext({ userId: user.id, mode: "apex" }),
       getApexStrategyBoard(user.id),
     ])
 
-    const contextStr = formatStrategyContext(context, board)
+    const contextStr = formatStrategyContext(context, board, planExecution)
 
     const { value: strategy, timedOut } = await withAICall({
       anthropic,

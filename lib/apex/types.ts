@@ -304,7 +304,7 @@ export type ApexWorkflowDirective = {
 
 // ── Workspace Directive ────────────────────────────────────────────────────────
 
-export type ApexWorkspaceMode = "idle" | "search" | "compare" | "tailor" | "applications" | "bulk_application" | "company" | "research" | "outreach" | "interview" | "career_strategy" | "offer_negotiation" | "salary_coaching" | "burnout_checkin" | "post_hire_checkin" | "personal_brand" | "jd_decoder" | "reputation_guard" | "pipeline_sim" | "shadow_network" | "auto_apply"
+export type ApexWorkspaceMode = "idle" | "search" | "compare" | "tailor" | "applications" | "bulk_application" | "company" | "research" | "outreach" | "interview" | "career_strategy" | "autonomous_hunt" | "offer_negotiation" | "salary_coaching" | "burnout_checkin" | "post_hire_checkin" | "personal_brand" | "jd_decoder" | "reputation_guard" | "pipeline_sim" | "shadow_network" | "auto_apply"
 
 export type ApexWorkspaceDirective = {
   /** Which workspace panel to activate. */

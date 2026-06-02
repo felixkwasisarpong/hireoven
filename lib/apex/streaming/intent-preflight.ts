@@ -10,6 +10,7 @@
  */
 
 import type { WorkspaceMode } from "@/lib/apex/workspace"
+import { isAutonomousHuntIntent } from "@/lib/apex/hunt/intent"
 
 const COMPARE_RE       = /\b(compare|rank.*job|which.*apply.*first|side.?by.?side|shortlist)\b/i
 const OFFER_NEGOT_RE   = /\b(got\s+an?\s+offer|received\s+an?\s+offer|they\s+offered\s+me|should\s+i\s+negotiate|how\s+(?:do\s+i|to)\s+(?:negotiate|counter)|is\s+this\s+(?:salary|offer)\s+(?:fair|good|competitive)|negotiate\s+(?:my\s+)?(?:offer|salary|comp)|counter.?offer|salary\s+negotiation|evaluate\s+(?:this\s+)?offer)\b/i
@@ -40,6 +41,7 @@ export function detectPreflightMode(message: string): WorkspaceMode | null {
   // 1-click / auto-apply setup takes highest priority — must beat BULK_PREP_RE
   // which also matches "apply to my … matches"
   if (AUTO_APPLY_RE.test(m)) return "auto_apply"
+  if (isAutonomousHuntIntent(m)) return "autonomous_hunt"
   // Outreach drafting (clear "draft/write message" signal)
   if (OUTREACH_RE.test(m))  return "outreach"
   // Career strategy before research (research RE also catches "career direction")
@@ -70,6 +72,7 @@ export { BURNOUT_RE }
  * Displayed immediately — replaced by actual Apex answer when stream completes.
  */
 export const PREFLIGHT_NARRATIVE: Partial<Record<WorkspaceMode, string>> = {
+  autonomous_hunt:   "Ranking the live market and building your attack plan…",
   career_strategy:   "Analysing your career profile and market signals…",
   interview:         "Generating your interview prep plan…",
   outreach:          "Preparing your outreach draft…",
