@@ -47,6 +47,8 @@ run() {
 # waas-ingest        15 */6 * * *      run api/cron/waas-ingest
 # discover-companies 0 5 * * *         run api/cron/discover-companies
 # discover-tenants   0 */2 * * *       run api/cron/discover-tenants
+# glassdoor-discovery 30 5 * * *       run api/cron/glassdoor-discovery
+# signal-api-webhooks * * * * *        run api/cron/signal-api-webhooks
 # ──────────────────────────────────────────────────────────────────────────────
 
 case "${1:-}" in
@@ -74,6 +76,8 @@ case "${1:-}" in
   waas-ingest)       run api/cron/waas-ingest ;;
   discover-companies) run api/cron/discover-companies ;;
   discover-tenants)  run api/cron/discover-tenants ;;
+  glassdoor-discovery) run api/cron/glassdoor-discovery ;;
+  signal-api-webhooks) run api/cron/signal-api-webhooks ;;
   all)
     run 'api/alerts/recent-jobs?segment=with-resume'
     run api/crawl
@@ -95,6 +99,8 @@ case "${1:-}" in
     run api/cron/adzuna-ingest
     run api/cron/jsearch-ingest
     run api/cron/waas-ingest
+    run api/cron/glassdoor-discovery
+    run api/cron/signal-api-webhooks
     ;;
   *)
     echo "Usage: $0 <name|all>"
@@ -105,6 +111,7 @@ case "${1:-}" in
     echo "  rejection-patterns  burnout-classify  salary-digest  warn-act"
     echo "  cohort-aggregate  deliver-checkins  blog-generate  dice-ingest"
     echo "  adzuna-ingest  jsearch-ingest  waas-ingest  discover-companies  discover-tenants"
+    echo "  glassdoor-discovery  signal-api-webhooks"
     exit 1
     ;;
 esac

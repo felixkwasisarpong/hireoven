@@ -1,0 +1,7 @@
+{
+  "source": "glassdoor",
+  "search_url_template": "https://www.glassdoor.com/Explore/browse-companies.htm?locKeyword={location}&keyword={sector}&page={page}",
+  "pages_per_job": 1,
+  "sector_keywords": ["software", "fintech", "cybersecurity"],
+  "location_keywords": ["United States", "New York, NY", "San Francisco, CA"]
+}

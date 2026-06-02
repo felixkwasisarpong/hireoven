@@ -1,0 +1,43 @@
+{
+  "source": "glassdoor",
+  "search_url_template": "https://www.glassdoor.com/Explore/browse-companies.htm?locKeyword={location}&keyword={sector}&page={page}",
+  "pages_per_job": 1,
+  "sector_keywords": [
+    "software",
+    "saas",
+    "artificial intelligence",
+    "machine learning",
+    "data platform",
+    "fintech",
+    "cybersecurity",
+    "cloud infrastructure",
+    "devops",
+    "healthtech",
+    "biotech",
+    "pharma",
+    "semiconductor",
+    "robotics",
+    "it consulting",
+    "banking technology",
+    "insurance technology",
+    "cleantech",
+    "energy technology",
+    "electric vehicles",
+    "supply chain technology",
+    "edtech"
+  ],
+  "location_keywords": [
+    "United States",
+    "San Francisco, CA",
+    "New York, NY",
+    "Seattle, WA",
+    "Austin, TX",
+    "Chicago, IL",
+    "Boston, MA",
+    "Raleigh, NC",
+    "Atlanta, GA",
+    "Dallas, TX",
+    "Los Angeles, CA",
+    "San Diego, CA"
+  ]
+}
