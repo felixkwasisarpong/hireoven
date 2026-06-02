@@ -148,8 +148,13 @@ export async function runBuiltinDiscoveryWorker(opts: { pool: Pool; fetchImpl?: 
   const pool = opts.pool
   const fetchImpl = opts.fetchImpl ?? fetch
   const userAgent = process.env.BUILTIN_DISCOVERY_USER_AGENT ?? DEFAULT_USER_AGENT
-  const maxPages = intEnv("BUILTIN_MAX_PAGES", 60)
-  const pagesPerRun = intEnv("BUILTIN_PAGES_PER_RUN", 5)
+  // /companies is a deep directory — pages are fully distinct out to 120+
+  // (~10k companies total, matching the full Built In list). Cover it all;
+  // pages with no companies past the end are cheap no-ops that re-crawl weekly.
+  const maxPages = intEnv("BUILTIN_MAX_PAGES", 500)
+  // ~20 pages/run × the 12 req/min limit ≈ 100s, well inside the 300s budget;
+  // a full sweep completes in a few days, then weekly re-crawl keeps it fresh.
+  const pagesPerRun = intEnv("BUILTIN_PAGES_PER_RUN", 20)
   const timeoutMs = intEnv("BUILTIN_FETCH_TIMEOUT_MS", 15_000, 1_000)
 
   const robots = new RobotsCache({ fetchImpl, userAgent, timeoutMs })
