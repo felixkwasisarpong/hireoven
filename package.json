@@ -17,6 +17,8 @@
     "discover:github-seeds:execute": "tsx scripts/discover-github-seeds.ts --execute",
     "discover:startup-directories": "tsx scripts/discover-startup-directories.ts",
     "discover:startup-directories:execute": "tsx scripts/discover-startup-directories.ts --execute",
+    "discover:glassdoor": "tsx scripts/glassdoor-discovery-worker.ts",
+    "discover:glassdoor:execute": "tsx scripts/glassdoor-discovery-worker.ts --execute",
     "capture:wellfound-session": "tsx scripts/capture-wellfound-session.ts",
     "recover:blocked": "tsx scripts/recover-blocked-companies.ts",
     "recover:blocked:execute": "tsx scripts/recover-blocked-companies.ts --execute",

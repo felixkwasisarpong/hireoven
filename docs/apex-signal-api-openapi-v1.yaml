@@ -1,0 +1,975 @@
+openapi: 3.1.0
+jsonSchemaDialect: "https://json-schema.org/draft/2020-12/schema"
+info:
+  title: Apex Signal API
+  summary: Standalone market and sponsorship intelligence API powered by Apex.
+  description: |
+    Apex Signal API exposes evidence-backed career market intelligence as a standalone product.
+    This contract defines an external `/v1` API facade over existing Apex engines.
+
+    Notes:
+    - Authentication for this public API is API key based (`x-api-key`).
+    - Internal Hireoven routes currently use authenticated user sessions/JWT and are mapped below via `x-implementation`.
+    - All signals are advisory and probabilistic. The API does not provide legal advice or hiring guarantees.
+  version: 0.1.0
+servers:
+  - url: https://api.apexsignals.com
+    description: Production
+  - url: https://staging-api.apexsignals.com
+    description: Staging
+security:
+  - ApiKeyAuth: []
+tags:
+  - name: Signals
+    description: Evidence-backed intelligence signals and recommendations.
+  - name: Streams
+    description: Real-time signal delivery streams.
+  - name: Ingestion
+    description: Job ingestion for partner-side sources.
+  - name: Feedback
+    description: Outcome feedback for learning loops.
+  - name: Webhooks
+    description: Events delivered from Apex to customer endpoints.
+paths:
+  /v1/signals/market:
+    get:
+      tags: [Signals]
+      summary: Get market intelligence signals for a tenant profile.
+      description: Returns up to 4 prioritized market signals with confidence and severity.
+      operationId: getMarketSignals
+      x-implementation:
+        route: /api/apex/market
+        handlerFile: app/api/apex/market/route.ts
+        backingEngineFile: lib/apex/market-intelligence.ts
+        status: existing_internal
+      responses:
+        "200":
+          description: Market signals computed successfully.
+          headers:
+            X-RateLimit-Limit:
+              description: Request quota for the current period.
+              schema: { type: integer }
+            X-RateLimit-Remaining:
+              description: Remaining requests in the current period.
+              schema: { type: integer }
+            X-RateLimit-Reset:
+              description: UNIX timestamp when quota resets.
+              schema: { type: integer }
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MarketIntelligenceResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/signals/company/{companyId}:
+    get:
+      tags: [Signals]
+      summary: Get company intelligence for a target company.
+      operationId: getCompanySignals
+      x-implementation:
+        route: /api/apex/company-intel/{companyId}
+        handlerFile: app/api/apex/company-intel/[companyId]/route.ts
+        backingEngineFile: lib/apex/company-intel/aggregator.ts
+        status: existing_internal
+      parameters:
+        - name: companyId
+          in: path
+          required: true
+          description: Company UUID used by the Apex company catalog.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Company intelligence payload.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CompanyIntelResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/signals/opportunities:
+    get:
+      tags: [Signals]
+      summary: Get opportunity graph recommendations.
+      description: |
+        Builds relationship-driven recommendations (similar jobs, adjacent companies,
+        skill unlocks, and career progression).
+      operationId: getOpportunitySignals
+      x-implementation:
+        route: /api/apex/opportunities
+        handlerFile: app/api/apex/opportunities/route.ts
+        backingEngineFile: lib/apex/opportunity-graph/generator.ts
+        status: existing_internal
+      parameters:
+        - name: jobId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: companyId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: skills
+          in: query
+          required: false
+          description: Comma-separated skill list.
+          schema:
+            type: string
+            example: "typescript,postgresql,kubernetes"
+        - name: roles
+          in: query
+          required: false
+          description: Comma-separated preferred roles.
+          schema:
+            type: string
+            example: "backend engineer,platform engineer"
+        - name: sponsorship
+          in: query
+          required: false
+          description: Whether sponsorship-required recommendations should be prioritized.
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: Opportunity graph recommendations.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OpportunityGraphResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/signals/proactive:
+    get:
+      tags: [Signals]
+      summary: Get proactive snapshot for autonomous nudges and interventions.
+      operationId: getProactiveSignals
+      x-implementation:
+        route: /api/apex/proactive
+        handlerFile: app/api/apex/proactive/route.ts
+        backingTypeFile: lib/apex/proactive/types.ts
+        status: existing_internal
+      responses:
+        "200":
+          description: Proactive signal snapshot.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [snapshot]
+                properties:
+                  snapshot:
+                    $ref: "#/components/schemas/ProactiveSnapshot"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/alerts/stream:
+    get:
+      tags: [Streams]
+      summary: Subscribe to real-time high-match and top-drop alerts.
+      description: |
+        Server-Sent Events stream.
+        Event types currently emitted by the internal engine:
+        - `new_match`
+        - `top_drop`
+        - keepalive comments every 15s
+      operationId: streamAlerts
+      x-implementation:
+        route: /api/apex/alerts
+        handlerFile: app/api/apex/alerts/route.ts
+        status: existing_internal
+      responses:
+        "200":
+          description: SSE stream.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: Raw SSE frame data.
+                example: |
+                  : apex-alerts connected
+
+                  event: new_match
+                  data: {"jobId":"0cdb2d9d-6c19-44fb-a6a9-ec9a27778827","title":"Backend Engineer","company":"Example","matchScore":88}
+
+                  : keepalive
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
+  /v1/jobs/ingest:
+    post:
+      tags: [Ingestion]
+      summary: Ingest a job record from a partner source.
+      description: |
+        Performs source-aware dedupe and inserts/updates a canonical job row.
+      operationId: ingestJob
+      x-implementation:
+        route: /api/signal/v1/jobs/ingest
+        handlerFile: app/api/signal/v1/jobs/ingest/route.ts
+        status: facade_live_tenant_scoped
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JobIngestRequest"
+      responses:
+        "200":
+          description: Existing job matched and updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobIngestResult"
+        "201":
+          description: New job inserted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobIngestResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "415":
+          description: Unsupported media type.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/feedback/outcomes:
+    post:
+      tags: [Feedback]
+      summary: Record an outcome signal for a specific application.
+      description: |
+        Captures supervised feedback that feeds downstream learning signals.
+      operationId: recordOutcomeFeedback
+      x-implementation:
+        route: /api/apex/outcomes (POST)
+        handlerFile: app/api/apex/outcomes/route.ts
+        status: existing_internal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OutcomeFeedbackRequest"
+      responses:
+        "200":
+          description: Outcome recorded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OutcomeFeedbackResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+webhooks:
+  signalEvent:
+    post:
+      tags: [Webhooks]
+      summary: Event delivered to customer-configured webhook endpoint.
+      description: |
+        Apex pushes these events to registered customer URLs.
+        Receivers should return 2xx within 5 seconds.
+
+        Delivery contract:
+        - Retries are asynchronous and may re-deliver the same `id`.
+        - Treat `id` as the idempotency key for de-dupe on your side.
+        - Verify `X-Apex-Webhook-Signature` against the raw request body using:
+          `hex(hmac_sha256(signing_secret, "${X-Apex-Webhook-Timestamp}.${rawBody}"))`
+
+        Headers sent on every delivery:
+        - `X-Apex-Webhook-Id`
+        - `X-Apex-Event-Type`
+        - `X-Apex-Webhook-Attempt`
+        - `X-Apex-Webhook-Timestamp`
+        - `X-Apex-Webhook-Signature`
+
+        See `docs/apex-signal-api-webhooks.md` for verification examples.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SignalWebhookEnvelope"
+      responses:
+        "200":
+          description: Event accepted.
+        "202":
+          description: Event accepted for async processing.
+        "400":
+          description: Invalid payload at receiver.
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid credentials.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error: Unauthorized
+            code: UNAUTHORIZED
+            status: 401
+            requestId: req_2p3f5c
+    BadRequest:
+      description: Validation failed.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: Resource not found.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    RateLimited:
+      description: Request quota exceeded.
+      headers:
+        Retry-After:
+          description: Seconds to wait before retrying.
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    InternalError:
+      description: Internal server error.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+  schemas:
+    ErrorResponse:
+      type: object
+      additionalProperties: true
+      required: [error]
+      properties:
+        error:
+          type: string
+        code:
+          type: string
+        status:
+          type: integer
+        requestId:
+          type: string
+
+    MarketSignalType:
+      type: string
+      enum:
+        - salary_shift
+        - sponsorship_trend
+        - ghost_job_risk
+        - hiring_spike
+        - market_cooling
+        - skill_demand
+        - response_likelihood
+        - application_competition
+
+    MarketSignalSeverity:
+      type: string
+      enum: [info, positive, warning]
+
+    MarketSignal:
+      type: object
+      required: [id, type, title, summary, confidence, severity, createdAt]
+      properties:
+        id: { type: string }
+        type: { $ref: "#/components/schemas/MarketSignalType" }
+        title: { type: string }
+        summary: { type: string }
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+        severity:
+          $ref: "#/components/schemas/MarketSignalSeverity"
+        relatedRoles:
+          type: array
+          items: { type: string }
+        relatedSkills:
+          type: array
+          items: { type: string }
+        relatedCompanies:
+          type: array
+          items: { type: string }
+        createdAt:
+          type: string
+          format: date-time
+
+    MarketIntelligenceResponse:
+      type: object
+      required: [signals, computedAt]
+      properties:
+        signals:
+          type: array
+          items:
+            $ref: "#/components/schemas/MarketSignal"
+        computedAt:
+          type: string
+          format: date-time
+
+    CompanyIntel:
+      type: object
+      required: [companyId]
+      properties:
+        companyId:
+          type: string
+          format: uuid
+        hiringVelocity:
+          type: object
+          properties:
+            trend:
+              type: string
+              enum: [rising, stable, slowing, unknown]
+            evidence:
+              type: array
+              items: { type: string }
+        sponsorshipSignals:
+          type: object
+          properties:
+            h1bHistory: { type: boolean }
+            lcaHistory: { type: boolean }
+            likelySponsorsRoles:
+              type: array
+              items: { type: string }
+            confidence:
+              type: number
+              minimum: 0
+              maximum: 1
+        responseSignals:
+          type: object
+          properties:
+            likelihood:
+              type: string
+              enum: [high, medium, low, unknown]
+            reasons:
+              type: array
+              items: { type: string }
+        interviewSignals:
+          type: object
+          properties:
+            processLength:
+              type: string
+              enum: [short, medium, long, unknown]
+            commonStages:
+              type: array
+              items: { type: string }
+        hiringFreshness:
+          type: object
+          properties:
+            freshness:
+              type: string
+              enum: [active, mixed, stale, unknown]
+            evidence:
+              type: array
+              items: { type: string }
+        marketPosition:
+          type: object
+          properties:
+            category: { type: string }
+            sector: { type: string }
+            size: { type: string }
+
+    CompanyIntelSummary:
+      type: object
+      required: [companyId, companyName, conversationalSignals]
+      properties:
+        companyId:
+          type: string
+          format: uuid
+        companyName:
+          type: string
+        sponsorshipLabel:
+          type: string
+        hiringLabel:
+          type: string
+        freshnessLabel:
+          type: string
+        competitionLabel:
+          type: string
+        activeOpeningsCount:
+          type: integer
+        conversationalSignals:
+          type: array
+          items: { type: string }
+
+    CompanyIntelResponse:
+      type: object
+      required: [intel, summary, companyName]
+      properties:
+        intel:
+          $ref: "#/components/schemas/CompanyIntel"
+        summary:
+          $ref: "#/components/schemas/CompanyIntelSummary"
+        companyName:
+          type: string
+
+    OpportunityConfidence:
+      type: string
+      enum: [high, medium, low]
+
+    SimilarJobHit:
+      type: object
+      required:
+        - jobId
+        - title
+        - companyName
+        - companyId
+        - overlapCount
+        - overlapSkills
+        - sponsorsH1b
+        - isRemote
+        - strength
+      properties:
+        jobId: { type: string, format: uuid }
+        title: { type: string }
+        companyName: { type: string }
+        companyId: { type: string, format: uuid }
+        overlapCount: { type: integer }
+        overlapSkills:
+          type: array
+          items: { type: string }
+        sponsorsH1b:
+          type: ["boolean", "null"]
+        isRemote:
+          type: boolean
+        strength:
+          type: number
+          minimum: 0
+          maximum: 1
+
+    AdjacentCompanyHit:
+      type: object
+      required:
+        - companyId
+        - companyName
+        - industry
+        - sponsorsH1b
+        - matchingJobCount
+        - commonSkills
+        - strength
+      properties:
+        companyId: { type: string, format: uuid }
+        companyName: { type: string }
+        industry:
+          type: ["string", "null"]
+        sponsorsH1b:
+          type: boolean
+        matchingJobCount:
+          type: integer
+        commonSkills:
+          type: array
+          items: { type: string }
+        strength:
+          type: number
+          minimum: 0
+          maximum: 1
+
+    SkillUnlockHit:
+      type: object
+      required: [skill, jobCount, netUnlock, categories]
+      properties:
+        skill: { type: string }
+        jobCount: { type: integer }
+        netUnlock: { type: integer }
+        categories:
+          type: array
+          items: { type: string }
+
+    CareerProgressionHit:
+      type: object
+      required: [targetRole, seniorityStep, skillGap, description, confidence]
+      properties:
+        targetRole: { type: string }
+        seniorityStep:
+          type: string
+          enum: [lateral, up, adjacent]
+        skillGap:
+          type: array
+          items: { type: string }
+        description: { type: string }
+        confidence:
+          $ref: "#/components/schemas/OpportunityConfidence"
+
+    OpportunityRecommendation:
+      type: object
+      required: [id, type, title, description, evidence, query, confidence]
+      properties:
+        id: { type: string }
+        type:
+          type: string
+          enum:
+            - similar_job
+            - adjacent_company
+            - skill_unlock
+            - sponsorship_alternative
+            - career_progression
+        title: { type: string }
+        subtitle: { type: string }
+        description: { type: string }
+        evidence:
+          type: array
+          items: { type: string }
+        query:
+          type: string
+        confidence:
+          $ref: "#/components/schemas/OpportunityConfidence"
+        entityIds:
+          type: array
+          items: { type: string }
+
+    OpportunityGraphResponse:
+      type: object
+      required:
+        - similarJobs
+        - adjacentCompanies
+        - skillUnlocks
+        - recommendations
+        - generatedAt
+      properties:
+        similarJobs:
+          type: array
+          items:
+            $ref: "#/components/schemas/SimilarJobHit"
+        adjacentCompanies:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdjacentCompanyHit"
+        skillUnlocks:
+          type: array
+          items:
+            $ref: "#/components/schemas/SkillUnlockHit"
+        careerProgression:
+          type: array
+          items:
+            $ref: "#/components/schemas/CareerProgressionHit"
+        recommendations:
+          type: array
+          items:
+            $ref: "#/components/schemas/OpportunityRecommendation"
+        generatedAt:
+          type: string
+          format: date-time
+
+    ProactiveHighMatch:
+      type: object
+      required: [jobId, jobTitle, matchScore, sponsorsH1b]
+      properties:
+        jobId: { type: string, format: uuid }
+        jobTitle: { type: string }
+        companyId: { type: string, format: uuid }
+        companyName: { type: string }
+        matchScore: { type: integer }
+        sponsorsH1b: { type: boolean }
+
+    ProactiveStaleSavedJob:
+      type: object
+      required: [applicationId, jobTitle, companyName, daysOld]
+      properties:
+        applicationId: { type: string, format: uuid }
+        jobId: { type: string, format: uuid }
+        jobTitle: { type: string }
+        companyName: { type: string }
+        daysOld: { type: integer }
+
+    ProactiveFollowUpCandidate:
+      type: object
+      required: [applicationId, jobTitle, companyName, daysStale, urgency]
+      properties:
+        applicationId: { type: string, format: uuid }
+        jobId: { type: string, format: uuid }
+        jobTitle: { type: string }
+        companyName: { type: string }
+        daysStale: { type: integer }
+        urgency:
+          type: string
+          enum: [low, medium, high]
+
+    ProactiveInterviewReminder:
+      type: object
+      required:
+        - applicationId
+        - jobTitle
+        - companyName
+        - roundName
+        - interviewDate
+        - hoursUntil
+      properties:
+        applicationId: { type: string, format: uuid }
+        jobId: { type: string, format: uuid }
+        companyId: { type: string, format: uuid }
+        jobTitle: { type: string }
+        companyName: { type: string }
+        roundName: { type: string }
+        interviewDate: { type: string, format: date-time }
+        hoursUntil: { type: integer }
+
+    ProactiveCompanySpike:
+      type: object
+      required: [companyId, companyName, freshRoleCount]
+      properties:
+        companyId: { type: string, format: uuid }
+        companyName: { type: string }
+        freshRoleCount: { type: integer }
+
+    ProactiveSkillGap:
+      type: object
+      required: [skill, demandCount]
+      properties:
+        skill: { type: string }
+        demandCount: { type: integer }
+
+    ProactiveSnapshot:
+      type: object
+      required:
+        - computedAt
+        - highMatches
+        - sponsorshipFriendlyMatchCount
+        - staleSavedJobs
+        - followUpCandidates
+        - interviewsSoon
+        - companySpikes
+        - skillGaps
+      properties:
+        computedAt:
+          type: string
+          format: date-time
+        highMatches:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProactiveHighMatch"
+        sponsorshipFriendlyMatchCount:
+          type: integer
+        staleSavedJobs:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProactiveStaleSavedJob"
+        followUpCandidates:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProactiveFollowUpCandidate"
+        interviewsSoon:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProactiveInterviewReminder"
+        companySpikes:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProactiveCompanySpike"
+        skillGaps:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProactiveSkillGap"
+
+    SourceType:
+      type: string
+      enum: [linkedin, glassdoor, indeed, handshake]
+
+    PostedAtPrecision:
+      type: string
+      enum: [exact, day, bucket]
+
+    WorkMode:
+      type: string
+      enum: [remote, hybrid, onsite]
+
+    ApplyMode:
+      type: object
+      required: [kind]
+      properties:
+        kind:
+          type: string
+        driver:
+          type: string
+        destinationGuess:
+          type: string
+      additionalProperties: false
+
+    ScrapedJob:
+      type: object
+      required:
+        - site
+        - sourceId
+        - title
+        - company
+        - location
+        - postedAt
+        - postedAtPrecision
+        - description
+        - applyMode
+        - metadata
+      properties:
+        site:
+          $ref: "#/components/schemas/SourceType"
+        sourceId:
+          type: string
+        title:
+          type: string
+        company:
+          type: string
+        companyUrl:
+          type: string
+          format: uri
+        location:
+          type: string
+        workMode:
+          $ref: "#/components/schemas/WorkMode"
+        employmentType:
+          type: string
+        postedAt:
+          type: string
+          format: date-time
+        postedAtPrecision:
+          $ref: "#/components/schemas/PostedAtPrecision"
+        description:
+          type: string
+        salary:
+          type: string
+        salaryConfirmed:
+          type: boolean
+        applyMode:
+          $ref: "#/components/schemas/ApplyMode"
+        metadata:
+          type: object
+          additionalProperties: true
+
+    JobIngestRequest:
+      type: object
+      required: [source, job]
+      properties:
+        source:
+          $ref: "#/components/schemas/SourceType"
+        job:
+          $ref: "#/components/schemas/ScrapedJob"
+        applyMethod:
+          type: string
+          description: Optional apply method marker (e.g. express_interest).
+
+    JobIngestResult:
+      type: object
+      required: [jobId, created, matchedBy]
+      properties:
+        jobId:
+          type: string
+          format: uuid
+        created:
+          type: boolean
+        attachedAsSecondarySource:
+          type: boolean
+        matchedBy:
+          type: string
+
+    OutcomeFeedbackRequest:
+      type: object
+      required: [applicationId, outcome]
+      properties:
+        applicationId:
+          type: string
+          format: uuid
+        outcome:
+          type: string
+          enum:
+            - applied
+            - viewed_by_employer
+            - recruiter_screen
+            - interview
+            - assessment
+            - offer
+            - rejected
+            - ghosted
+            - withdrawn
+        evidence:
+          type: array
+          items: { type: string }
+        notes:
+          type: string
+
+    OutcomeFeedbackResponse:
+      type: object
+      required: [success, outcome, newStatus]
+      properties:
+        success:
+          type: boolean
+        outcome:
+          type: string
+        newStatus:
+          type: string
+
+    SignalWebhookEnvelope:
+      type: object
+      required: [id, eventType, occurredAt, tenantId, data]
+      properties:
+        id:
+          type: string
+          format: uuid
+        eventType:
+          type: string
+          enum:
+            - signal.new_match
+            - signal.top_drop
+            - signal.sponsorship_shift
+            - signal.market_shift
+            - signal.followup_required
+            - signal.interview_reminder
+            - signal.job_ingested
+            - signal.outcome_recorded
+        occurredAt:
+          type: string
+          format: date-time
+        tenantId:
+          type: string
+        data:
+          type: object
+          additionalProperties: true

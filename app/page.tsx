@@ -1,6 +1,6 @@
 import type { Metadata } from "next"
 import Link from "next/link"
-import { ArrowRight, Check, CheckCircle2, Globe2, ShieldCheck, Sparkles, Users, Zap } from "lucide-react"
+import { ArrowRight, Check, CheckCircle2, Globe2, Radar, ShieldCheck, Sparkles, Users, Zap } from "lucide-react"
 import Navbar from "@/components/layout/Navbar"
 import LogoWall from "@/components/marketing/LogoWall"
 import { WaitlistInlineForm } from "@/components/marketing/WaitlistInlineForm"
@@ -292,10 +292,9 @@ export default async function HomePage() {
       {/* ── Stats + Logo wall ────────────────────────────────────────────── */}
       <section className="border-b border-slate-100 bg-slate-50/60 px-6 py-16">
         <div className="mx-auto max-w-6xl">
-          <div className="mb-12 grid grid-cols-3 gap-6">
+          <div className="mb-12 grid grid-cols-2 gap-6">
             {[
               { value: stats.jobs > 0 ? stats.jobs.toLocaleString() : "10K+", label: "active jobs" },
-              { value: "<30min", label: "avg. detection time" },
               { value: "Real-time", label: "feed updates" },
             ].map(({ value, label }) => (
               <div key={label} className="text-center">
@@ -374,12 +373,13 @@ export default async function HomePage() {
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <FeatureCard icon="⚡" title="Real-time job feed" body="New roles appear within minutes of posting — before most job boards index them." accent="No sponsored listings" color="#FF5C18" />
+            <FeatureCard icon="⚡" title="Real-time, from the source" body="We watch companies' actual ATS — not aggregators — so new roles appear within minutes of posting, before most job boards even index them." accent="Original source, not copies" color="#FF5C18" />
             <FeatureCard icon="🎯" title="AI match scores" body="Every job gets a match score against your profile, skills, and target role. Algorithmic, instant." color="#7C3AED" />
             <FeatureCard icon="🤖" title="One-click autofill" body="The extension detects fields and pre-fills them from your profile. You review before it goes in." accent="Chrome extension" color="#0EA5E9" />
             <FeatureCard icon="✍️" title="Resume tailoring" body="Apex adapts your CV to the job description. Keyword gaps flagged. Every edit needs your approval." color="#10B981" />
             <FeatureCard icon="📄" title="Cover letter AI" body="Generates a tailored, ATS-aware letter in seconds. Role-specific, honest, ready to personalise." color="#F59E0B" />
             <FeatureCard icon="🛡️" title="Ghost job detector" body="Signals whether a role is actively hiring or just collecting CVs — before you spend time on it." color="#EF4444" />
+            <FeatureCard icon="🇺🇸" title="Built for the US market" body="Every role is US-based — no overseas noise to filter out. The feed, match scores, and visa signals are all tuned to the American job market." accent="USA-only" color="#2563EB" />
           </div>
         </div>
       </section>
@@ -395,7 +395,16 @@ export default async function HomePage() {
               Differentiators built into the core flow
             </h2>
           </div>
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-2xl border border-[#FFE0CC] bg-[#FFF7F2] p-5 shadow-[0_2px_12px_rgba(255,92,24,0.09)]">
+              <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-white text-[#FF5C18]">
+                <Radar className="h-4.5 w-4.5" />
+              </div>
+              <p className="mt-3 text-[15px] font-bold text-slate-900">Original source, not copies</p>
+              <p className="mt-1.5 text-[13px] leading-relaxed text-slate-600">
+                Jobs pulled straight from companies' own ATS — Greenhouse, Lever, Ashby, Workday — not recycled from aggregators. The original posting, minutes after it goes live.
+              </p>
+            </div>
             <div className="rounded-2xl border border-[#D8E8FF] bg-[#F5FAFF] p-5 shadow-[0_2px_12px_rgba(37,99,235,0.08)]">
               <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-white text-[#2563EB]">
                 <Globe2 className="h-4.5 w-4.5" />

@@ -232,6 +232,7 @@ export type MarketIntelligenceResult = {
 export async function getMarketIntelligence(
   userId: string,
   salaryExpMin?: number | null,
+  tenantId?: string | null,
 ): Promise<MarketIntelligenceResult> {
   const pool = getPostgresPool()
   const computedAt = new Date().toISOString()
@@ -262,8 +263,9 @@ export async function getMarketIntelligence(
          FROM watchlist w
          JOIN companies c ON c.id = w.company_id
          LEFT JOIN jobs j ON j.company_id = c.id
+                         AND ($2::text IS NULL OR COALESCE(j.raw_data->>'signalTenantId', '') = $2::text)
          WHERE w.user_id = $1`,
-        [userId],
+        [userId, tenantId ?? null],
       ),
 
       pool.query<ApplicationOutcomeRow>(
@@ -279,10 +281,11 @@ export async function getMarketIntelligence(
            COUNT(*) FILTER (WHERE j.is_remote = true)::int AS remote_total
          FROM job_applications ja
          JOIN jobs j ON j.id = ja.job_id
+                    AND ($2::text IS NULL OR COALESCE(j.raw_data->>'signalTenantId', '') = $2::text)
          WHERE ja.user_id = $1
            AND ja.is_archived = false
            AND COALESCE(ja.applied_at, ja.created_at) >= NOW() - INTERVAL '90 days'`,
-        [userId],
+        [userId, tenantId ?? null],
       ),
     ])
 

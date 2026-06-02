@@ -77,6 +77,7 @@ const PLACEHOLDER_SOURCES = [
   'lca_import',
   'lca_reconciliation',
   'uscis_reconciliation',
+  'glassdoor_company_discovery',
 ]
 
 type PlaceholderRow = {
