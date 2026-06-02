@@ -209,8 +209,9 @@ export default function JobDetailPanel({
 
   const [saved, setSaved] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [applyClicked, setApplyClicked] = useState(false)
   const [applied, setApplied] = useState(false)
-  const [applying, setApplying] = useState(false)
+  const [confirming, setConfirming] = useState(false)
   const [recruiterOpen, setRecruiterOpen] = useState(false)
 
   const intel = useMemo(() => getJobIntelligence(job), [job])
@@ -283,11 +284,28 @@ export default function JobDetailPanel({
     }
   }
 
-  async function handleApply() {
-    // Open the URL immediately — don't block the user on the API call
+  function handleApply() {
     window.open(applyUrl, "_blank", "noopener,noreferrer")
-    if (applying || applied) return
-    setApplying(true)
+    if (applyClicked) return
+    setApplyClicked(true)
+    // Save as "saved" in the background — intent to apply, not confirmation
+    const sourceFallback = jobSourceFallbackLogo(job, job.company?.domain ?? null, job.company?.logo_url ?? null)
+    saveJobToPipeline({
+      jobId: job.id,
+      companyName: job.company?.name ?? "Company",
+      companyLogoUrl: sourceFallback?.logoUrl ?? job.company?.logo_url ?? null,
+      jobTitle: displayTitle,
+      applyUrl,
+      matchScore: overall,
+      source: "hireoven_detail",
+    }).then((result) => {
+      if (result.ok) setSaved(true)
+    }).catch(() => {})
+  }
+
+  async function handleConfirmApplied() {
+    if (confirming || applied) return
+    setConfirming(true)
     try {
       const sourceFallback = jobSourceFallbackLogo(job, job.company?.domain ?? null, job.company?.logo_url ?? null)
       const result = await markJobApplied({
@@ -306,11 +324,10 @@ export default function JobDetailPanel({
       setApplied(true)
       setSaved(true)
       window.dispatchEvent(new CustomEvent(JOB_APPLICATION_SAVED_EVENT, { detail: { jobId: job.id } }))
-      if (!result.alreadyApplied) pushToast({ tone: "success", title: "Application tracked", description: "Moved to Applied in your pipeline." })
     } catch {
-      // Non-fatal — URL was already opened
+      // Non-fatal
     } finally {
-      setApplying(false)
+      setConfirming(false)
     }
   }
 
@@ -399,36 +416,53 @@ export default function JobDetailPanel({
 
         {/* ── Actions ── */}
         <div className="space-y-2.5 p-5">
-          {applyVariant === "autofill" ? (
+          {applied ? (
+            <div className="flex items-center justify-center gap-1.5 py-2 text-[13px] font-semibold text-emerald-500">
+              <CheckCircle2 className="h-4 w-4" strokeWidth={2} />
+              Applied — tracked in pipeline
+            </div>
+          ) : applyVariant === "autofill" ? (
             <button
               type="button"
               onClick={handleApply}
-              disabled={applying}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-orange-500 px-4 py-3 text-[13.5px] font-bold text-white shadow-[0_4px_16px_rgba(249,115,22,0.3)] transition hover:bg-orange-400 active:scale-[0.98] disabled:opacity-70"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-orange-500 px-4 py-3 text-[13.5px] font-bold text-white shadow-[0_4px_16px_rgba(249,115,22,0.3)] transition hover:bg-orange-400 active:scale-[0.98]"
             >
-              {applied ? "Applied ✓" : "Quick Apply"}
-              {!applied && <ExternalLink className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden />}
+              Quick Apply
+              <ExternalLink className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden />
             </button>
           ) : applyVariant === "linkedin" ? (
             <button
               type="button"
               onClick={handleApply}
-              disabled={applying}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#0a66c2] px-4 py-3 text-[13.5px] font-bold text-white shadow-[0_4px_16px_rgba(10,102,194,0.3)] transition hover:bg-[#004182] active:scale-[0.98] disabled:opacity-70"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#0a66c2] px-4 py-3 text-[13.5px] font-bold text-white shadow-[0_4px_16px_rgba(10,102,194,0.3)] transition hover:bg-[#004182] active:scale-[0.98]"
             >
-              {applied ? "Applied ✓" : "Apply on LinkedIn"}
-              {!applied && <Linkedin className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden />}
+              Apply on LinkedIn
+              <Linkedin className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden />
             </button>
           ) : (
             <button
               type="button"
               onClick={handleApply}
-              disabled={applying}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-orange-500 px-4 py-3 text-[13.5px] font-bold text-white shadow-[0_4px_16px_rgba(249,115,22,0.3)] transition hover:bg-orange-400 active:scale-[0.98] disabled:opacity-70"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-orange-500 px-4 py-3 text-[13.5px] font-bold text-white shadow-[0_4px_16px_rgba(249,115,22,0.3)] transition hover:bg-orange-400 active:scale-[0.98]"
             >
-              {applied ? "Applied ✓" : "Apply"}
-              {!applied && <ExternalLink className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden />}
+              Apply
+              <ExternalLink className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden />
             </button>
+          )}
+
+          {/* Confirmation prompt — appears after user clicks Apply */}
+          {applyClicked && !applied && (
+            <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 ring-1 ring-slate-200/80">
+              <span className="text-[12px] text-slate-500">Did you submit?</span>
+              <button
+                type="button"
+                onClick={handleConfirmApplied}
+                disabled={confirming}
+                className="text-[12px] font-semibold text-emerald-600 hover:text-emerald-500 disabled:opacity-60"
+              >
+                {confirming ? "Saving…" : "Yes, I applied →"}
+              </button>
+            </div>
           )}
 
           <div className="grid grid-cols-2 gap-2">
