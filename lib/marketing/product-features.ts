@@ -12,6 +12,7 @@ import {
   FileCheck2,
   Flame,
   Ghost,
+  Globe2,
   Kanban,
   Layers,
   MessageSquare,
@@ -36,8 +37,8 @@ export const CORE_FEATURES: {
 }[] = [
   {
     icon: Zap,
-    title: "Fresh jobs, before the crowd",
-    body: "New roles land in your feed within minutes of going live. The first handful of applicants get the most eyes. We make sure you're in it.",
+    title: "Straight from the source, within minutes",
+    body: "We monitor companies' real career pages and ATS directly — Greenhouse, Lever, Ashby, Workday and more — so new roles land in your feed within minutes of going live. The original posting, not a recycled job-board copy. The first handful of applicants get the most eyes; we keep you in that window.",
     accent: "text-[#0369A1]",
     ring: "border-[#BAE6FD] bg-[#F0F9FF]",
   },
@@ -75,6 +76,13 @@ export const CORE_FEATURES: {
     body: "Follow companies you love. The moment they post, you hear about it: email, push, or right inside your dashboard.",
     accent: "text-rose-700",
     ring: "border-rose-200 bg-rose-50",
+  },
+  {
+    icon: Globe2,
+    title: "Built for the US market",
+    body: "Every role is US-based — no overseas listings to filter out. The feed, match scores, and visa signals are all tuned to the American job market.",
+    accent: "text-[#2563EB]",
+    ring: "border-[#D8E8FF] bg-[#F5FAFF]",
   },
 ]
 
