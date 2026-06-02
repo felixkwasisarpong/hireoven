@@ -8,6 +8,7 @@ import {
   Briefcase,
   Building2,
   Database,
+  KeyRound,
   LayoutDashboard,
   Radar,
   Settings,
@@ -31,6 +32,7 @@ const LINKS = [
   { href: "/admin/marketing", label: "Marketing", icon: Megaphone },
   { href: "/admin/promos", label: "Promos", icon: Tag },
   { href: "/admin/blog", label: "Blog", icon: BookOpen },
+  { href: "/admin/signal-api", label: "Signal API", icon: KeyRound },
   { href: "/admin/settings", label: "Settings", icon: Settings },
 ]
 
