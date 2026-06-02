@@ -53,12 +53,13 @@ const MAX_SLUGS_PER_NAME = 2
 // concurrency 16 against one host and got throttled).
 const PER_ATS_CONCURRENCY = 2
 // Delay before each probe — smooths the per-host request rate.
-const PROBE_STAGGER_MS = 75
-// Circuit-breaker: over the last WAF_WINDOW probes, abort if more than
-// WAF_ABORT_FRACTION returned a WAF status. Stops us hammering a host that has
-// started throttling.
-const WAF_WINDOW = 40
-const WAF_ABORT_FRACTION = 0.3
+const PROBE_STAGGER_MS = 150
+// Per-ATS circuit-breaker: if a single ATS platform returns WAF responses on
+// more than WAF_ABORT_FRACTION of its last WAF_WINDOW probes, skip that ATS
+// for the rest of this run. Other ATSes continue unaffected — one throttled
+// platform no longer kills the whole batch.
+const WAF_WINDOW = 20
+const WAF_ABORT_FRACTION = 0.4
 // 404 (a genuinely missing tenant) also throws — only these statuses mean
 // "the host is pushing back; back off".
 const WAF_STATUS_RE = /http_?(?:403|406|429)|forbidden|too many requests|rate.?limit/i
@@ -185,34 +186,45 @@ export async function GET(req: NextRequest) {
   let probed = 0, enrolled = 0, held = 0, rejected = 0
   let budgetHit = false, wafAborted = false
   const processed = new Set<string>()
-  const recentWaf: boolean[] = []
-  const noteWaf = (isWaf: boolean) => {
-    recentWaf.push(isWaf)
-    if (recentWaf.length > WAF_WINDOW) recentWaf.shift()
-    if (recentWaf.length === WAF_WINDOW && recentWaf.filter(Boolean).length / WAF_WINDOW > WAF_ABORT_FRACTION) {
-      wafAborted = true
+
+  // Per-ATS sliding window — tracks WAF rate independently for each platform.
+  // If one ATS starts throttling, skip it for the rest of this run while the
+  // others keep running. The global wafAborted flag only fires when ALL
+  // remaining ATSes are throttled.
+  const atsWafWindow = new Map<AtsName, boolean[]>()
+  const atsSkipped = new Set<AtsName>()
+  for (const a of PROBE_ATSES) atsWafWindow.set(a, [])
+
+  const noteWaf = (ats: AtsName, isWaf: boolean) => {
+    const w = atsWafWindow.get(ats)!
+    w.push(isWaf)
+    if (w.length > WAF_WINDOW) w.shift()
+    if (w.length === WAF_WINDOW && w.filter(Boolean).length / WAF_WINDOW > WAF_ABORT_FRACTION) {
+      atsSkipped.add(ats)
+      if (atsSkipped.size === PROBE_ATSES.length) wafAborted = true
     }
   }
 
   await Promise.all(
     batch.map((company) =>
       limit(async () => {
-        if (wafAborted || budgetHit) return
+        if (budgetHit) return
         if (Date.now() - startedAt > TIME_BUDGET_MS) { budgetHit = true; return }
         const slugs = generateSlugCandidates(company.name).slice(0, MAX_SLUGS_PER_NAME)
         processed.add(company.id)
         if (slugs.length === 0) return
 
         for (const ats of PROBE_ATSES) {
+          if (atsSkipped.has(ats)) continue
           for (const slug of slugs) {
-            if (wafAborted || budgetHit) return
+            if (budgetHit) return
             if (known.has(`${ats}:${slug.toLowerCase()}`)) continue
             probed += 1
             const result = await atsLimit.get(ats)!(async () => {
               await sleep(PROBE_STAGGER_MS)
               return probe(ats, slug)
             })
-            noteWaf(result.kind === "waf")
+            noteWaf(ats, result.kind === "waf")
             if (result.kind !== "hit" || result.jobsFound === 0) continue
 
             const { score, decision, rejectedReason } = computeConfidence({
