@@ -154,7 +154,9 @@ export const SKILL_DEFINITIONS: SkillDefinition[] = [
   { label: "Datadog",      aliases: ["datadog"] },
 
   // ─── APIs & Integration ───────────────────────────────────────────────────
-  { label: "API Development", aliases: ["api", "apis", "api development", "api design"] },
+  // Bare "api"/"apis" matched every backend JD that merely mentions APIs.
+  // Require the full phrase so this only fires when API dev/design is the skill.
+  { label: "API Development", aliases: ["api development", "api design"] },
   { label: "GraphQL",    aliases: ["graphql"] },
   { label: "REST",       aliases: ["rest", "restful", "rest api", "rest apis"] },
   { label: "gRPC",       aliases: ["grpc"] },
@@ -278,7 +280,9 @@ export const SKILL_DEFINITIONS: SkillDefinition[] = [
   { label: "Operations Management", aliases: ["operations management", "ops management"] },
   { label: "Supply Chain",          aliases: ["supply chain", "supply chain management"] },
   { label: "Logistics",             aliases: ["logistics", "logistics management"] },
-  { label: "Process Improvement",   aliases: ["process improvement", "process optimization", "lean", "six sigma"] },
+  // "lean" alone is a common English word ("lean team", "lean into") — drop the
+  // bare alias; keep the specific methodology phrases.
+  { label: "Process Improvement",   aliases: ["process improvement", "process optimization", "lean six sigma", "six sigma"] },
   { label: "Vendor Management",     aliases: ["vendor management"] },
   { label: "Procurement",           aliases: ["procurement"] },
   { label: "ERP",                   aliases: ["erp", "enterprise resource planning"] },

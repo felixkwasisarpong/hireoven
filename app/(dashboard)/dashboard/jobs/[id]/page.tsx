@@ -41,6 +41,7 @@ import {
   extractSkillsFromText,
   filterSkillsByTextEvidence,
   getSkillsBucketValues,
+  isSoftSkill,
   normalizeSkillKey,
   normalizeSkillList,
   skillMatches,
@@ -351,6 +352,11 @@ export default async function DashboardJobDetailPage({ params }: Props) {
     ...page.sections.requirements.items,
     ...page.sections.preferred_qualifications.items
   )
+    // Soft skills (Problem Solving, Collaboration, Adaptability, Mentoring, …)
+    // match on generic prose ("community of problem solvers", "adapt to change")
+    // and are noise on a technical job card. Keep the card to concrete,
+    // role-specific skills only. Matching/scoring still uses the full set.
+    .filter((skill) => !isSoftSkill(skill))
 
   const sponsorshipPill = employerSponsorshipPill({ ...job, company })
   const sponsorsConfirmed = employerLikelySponsorsH1b({ ...job, company })
