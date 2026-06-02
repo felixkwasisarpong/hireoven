@@ -18,6 +18,7 @@ import { randomUUID } from "crypto"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { createResumeSnapshot } from "@/lib/resume/hub"
 import { tailorResumeForAts } from "@/lib/resume/ats-tailor"
+import { resolveTailorAts } from "@/lib/resume/resolve-tailor-ats"
 import { canAccess, requiredPlanFor } from "@/lib/gates"
 import { getPlanForUserId } from "@/lib/gates/server-gate"
 import { requireQuota } from "@/lib/usage/server-quota"
@@ -92,15 +93,33 @@ export async function POST(request: Request) {
 
   // ── 1. Fetch job ────────────────────────────────────────────────────────────
 
-  let job: { id: string; title: string | null; description: string | null; company_name?: string | null } | null = null
+  let job: {
+    id: string
+    title: string | null
+    description: string | null
+    company_name?: string | null
+    apply_url?: string | null
+    company_ats_type?: string | null
+    company_careers_url?: string | null
+  } | null = null
   try {
     const jobRow = await pool.query<{
       id: string
       title: string | null
       description: string | null
       company_name: string | null
+      apply_url: string | null
+      company_ats_type: string | null
+      company_careers_url: string | null
     }>(
-      `SELECT j.id, j.title, j.description, c.name AS company_name
+      `SELECT
+          j.id,
+          j.title,
+          j.description,
+          j.apply_url,
+          c.name AS company_name,
+          c.ats_type AS company_ats_type,
+          c.careers_url AS company_careers_url
        FROM jobs j
        LEFT JOIN companies c ON c.id = j.company_id
        WHERE j.id = $1
@@ -119,6 +138,12 @@ export async function POST(request: Request) {
 
   const companyName = job.company_name ?? null
   const jobTitle = job.title ?? null
+  const resolvedAts = resolveTailorAts({
+    requestAts: ats,
+    jobApplyUrl: job.apply_url,
+    companyAtsType: job.company_ats_type,
+    companyCareersUrl: job.company_careers_url,
+  })
 
   // ── 2. Fetch resume ─────────────────────────────────────────────────────────
 
@@ -159,7 +184,7 @@ export async function POST(request: Request) {
       job.description,
       jobTitle,
       companyName,
-      ats
+      resolvedAts.ats
     )
   } catch (err) {
     console.error("[tailor-approve] tailorResumeForAts failed:", err)
