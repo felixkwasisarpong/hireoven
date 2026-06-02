@@ -18,7 +18,14 @@ import { parseBuiltinCompanies, builtinPageHasCompanies } from "./parser"
  */
 
 const SOURCE = "builtin"
-const BASE = "https://builtin.com/companies"
+const ORIGIN = "https://builtin.com"
+// Built In's robots.txt disallows `*?page=` (query pagination), so we can't walk
+// /companies?page=N. Instead we enumerate via the robots-declared sitemap of
+// browse/filter pages (/companies/location/*, /companies/hiring/*, …), each of
+// which server-renders ~20 companies and is mostly robots-permitted (a handful
+// of major-metro slices are Disallowed and get skipped). The union covers the
+// directory, robots-compliantly.
+const SITEMAP_URL = "https://builtin.com/companies/sitemap.xml"
 const DEFAULT_USER_AGENT =
   "HireovenBuiltinCompanyDiscoveryBot/1.0 (+https://hireoven.com; bot@hireoven.com)"
 
@@ -41,16 +48,52 @@ function disabled(): boolean {
   return process.env.BUILTIN_DISCOVERY_DISABLED === "true"
 }
 
-/** Seed one discovery_jobs row per page (idempotent). */
-async function ensureJobs(pool: Pool, maxPages: number): Promise<void> {
-  for (let page = 1; page <= maxPages; page += 1) {
-    await pool.query(
+/** Seed one discovery_jobs row per sitemap browse-page path. Runs once — skips
+ *  if builtin jobs already exist. location_keyword holds the URL path. */
+async function ensureJobs(
+  pool: Pool,
+  fetchImpl: typeof fetch,
+  userAgent: string,
+  timeoutMs: number,
+  maxUrls: number
+): Promise<number> {
+  const { rows: existing } = await pool.query<{ n: string }>(
+    `SELECT count(*) AS n FROM discovery_jobs WHERE source = $1`,
+    [SOURCE]
+  )
+  if (Number.parseInt(existing[0]?.n ?? "0", 10) > 0) return 0
+
+  const res = await fetchImpl(SITEMAP_URL, {
+    headers: { "user-agent": userAgent, accept: "application/xml,text/xml" },
+    signal: AbortSignal.timeout(timeoutMs),
+  })
+  if (!res.ok) return 0
+  const xml = await res.text()
+
+  // Browse-page paths under /companies (skip the bare /companies, which is the
+  // ?page=-paginated root we can't fully use).
+  const paths = [
+    ...new Set(
+      [...xml.matchAll(/<loc>\s*https?:\/\/builtin\.com(\/companies\/[^<\s]+)\s*<\/loc>/gi)]
+        .map((m) => m[1].trim())
+        .filter(Boolean)
+    ),
+  ].slice(0, maxUrls)
+
+  let seeded = 0
+  const CHUNK = 500
+  for (let i = 0; i < paths.length; i += CHUNK) {
+    const chunk = paths.slice(i, i + CHUNK)
+    const values = chunk.map((_, j) => `($1,'browse',$${j + 2},'pending',0,now())`).join(",")
+    const r = await pool.query(
       `INSERT INTO discovery_jobs (source, sector_keyword, location_keyword, status, attempts, next_run_at)
-       VALUES ($1, 'companies', $2, 'pending', 0, now())
+       VALUES ${values}
        ON CONFLICT (source, sector_keyword, location_keyword) DO NOTHING`,
-      [SOURCE, `page-${page}`]
+      [SOURCE, ...chunk]
     )
+    seeded += r.rowCount ?? 0
   }
+  return seeded
 }
 
 async function claimJobs(pool: Pool, limit: number) {
@@ -148,13 +191,10 @@ export async function runBuiltinDiscoveryWorker(opts: { pool: Pool; fetchImpl?: 
   const pool = opts.pool
   const fetchImpl = opts.fetchImpl ?? fetch
   const userAgent = process.env.BUILTIN_DISCOVERY_USER_AGENT ?? DEFAULT_USER_AGENT
-  // /companies is a deep directory — pages are fully distinct out to 120+
-  // (~10k companies total, matching the full Built In list). Cover it all;
-  // pages with no companies past the end are cheap no-ops that re-crawl weekly.
-  const maxPages = intEnv("BUILTIN_MAX_PAGES", 500)
-  // ~20 pages/run × the 12 req/min limit ≈ 100s, well inside the 300s budget;
-  // a full sweep completes in a few days, then weekly re-crawl keeps it fresh.
-  const pagesPerRun = intEnv("BUILTIN_PAGES_PER_RUN", 20)
+  // The sitemap has ~7.8k browse pages; cap how many we seed, and how many we
+  // crawl per run (rate-limited, so ~20/run keeps each run inside the budget).
+  const maxUrls = intEnv("BUILTIN_MAX_BROWSE_URLS", 8000)
+  const urlsPerRun = intEnv("BUILTIN_URLS_PER_RUN", 20)
   const timeoutMs = intEnv("BUILTIN_FETCH_TIMEOUT_MS", 15_000, 1_000)
 
   const robots = new RobotsCache({ fetchImpl, userAgent, timeoutMs })
@@ -165,13 +205,12 @@ export async function runBuiltinDiscoveryWorker(opts: { pool: Pool; fetchImpl?: 
   })
 
   try {
-    await ensureJobs(pool, maxPages)
-    const jobs = await claimJobs(pool, pagesPerRun)
+    await ensureJobs(pool, fetchImpl, userAgent, timeoutMs, maxUrls)
+    const jobs = await claimJobs(pool, urlsPerRun)
     if (jobs.length === 0) return { ...summary, status: "no_due_jobs" }
 
     for (const job of jobs) {
-      const page = Number.parseInt(job.location_keyword.replace(/^page-/, ""), 10) || 1
-      const url = `${BASE}?page=${page}`
+      const url = `${ORIGIN}${job.location_keyword}`
 
       const allowed = await robots.allowed(url)
       if (!allowed.allowed) {
