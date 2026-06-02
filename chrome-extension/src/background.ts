@@ -379,17 +379,23 @@ async function apiRequest<T>(
 
 async function queryContentScript(
   tabId: number,
-  message: ContentMessage
+  message: ContentMessage,
+  frameId?: number,
 ): Promise<ContentResponse | null> {
   const send = (): Promise<ContentResponse | null> =>
     new Promise((resolve) => {
-      chrome.tabs.sendMessage(tabId, message, (response: ContentResponse | undefined) => {
+      const callback = (response: ContentResponse | undefined) => {
         if (chrome.runtime.lastError) {
           resolve(null)
           return
         }
         resolve(response ?? null)
-      })
+      }
+      if (frameId != null) {
+        chrome.tabs.sendMessage(tabId, message, { frameId }, callback)
+        return
+      }
+      chrome.tabs.sendMessage(tabId, message, callback)
     })
 
   // Prefer messaging first to avoid duplicate content-script executions.
@@ -399,7 +405,7 @@ async function queryContentScript(
   // Fallback: inject once, then retry the message.
   try {
     await chrome.scripting.executeScript({
-      target: { tabId },
+      target: frameId != null ? { tabId, frameIds: [frameId] } : { tabId },
       files: ["dist/content.js"],
     })
   } catch {
@@ -407,14 +413,127 @@ async function queryContentScript(
   }
 
   return new Promise((resolve) => {
-    chrome.tabs.sendMessage(tabId, message, (response: ContentResponse | undefined) => {
+    const callback = (response: ContentResponse | undefined) => {
       if (chrome.runtime.lastError) {
         resolve(null)
         return
       }
       resolve(response ?? null)
-    })
+    }
+    if (frameId != null) {
+      chrome.tabs.sendMessage(tabId, message, { frameId }, callback)
+      return
+    }
+    chrome.tabs.sendMessage(tabId, message, callback)
   })
+}
+
+type AutofillFrameProbe = {
+  hasForm: boolean
+  inputCount: number
+  textLikeCount: number
+  fileCount: number
+  href: string
+}
+
+async function resolveBestAutofillFrameId(tabId: number): Promise<number | undefined> {
+  try {
+    const probes = await chrome.scripting.executeScript<
+      [],
+      AutofillFrameProbe
+    >({
+      target: { tabId, allFrames: true },
+      func: () => {
+        const selectors = [
+          "#grnhse_app form",
+          "#application_form",
+          "form#new_application",
+          "form#application-form",
+          "form.application--form",
+          ".greenhouse-application",
+          ".greenhouse-application form",
+          "form[action*='greenhouse']",
+          "form[action*='job-boards']",
+          ".lever-apply-form",
+          "form.application-form",
+          "form[action*='lever']",
+          "form[action*='ashby']",
+          "form[action*='jobs.ashbyhq']",
+          "._ashby-application-form",
+          "._ashby-application-form-container form",
+          "[data-testid='application-form']",
+          "[data-automation-id='applicationSummaryStep']",
+          "[data-automation-id='applyStep']",
+          "[data-automation-id='applyFlow']",
+          "[data-automation-id='applicationStep']",
+          "[data-automation-id='stepContent']",
+          "form[data-automation-id]",
+          "form[action*='workday']",
+          "form[action*='myworkday']",
+          "#icims_content form",
+          ".iCIMS_Content form",
+          "#iCIMS_JobsWidget form",
+          "form[action*='icims']",
+          ".sr-apply-step",
+          ".smartrecruiters-widget form",
+          "#apply-form",
+          "form[action*='smartrecruiters']",
+          "#bamboohr-apply",
+          ".BambooHR-ATS form",
+          "#apply-form-card form",
+          "form[action*='bamboohr']",
+          "form[action*='apply']",
+          "form[id*='apply']",
+          "form[class*='apply']",
+          "[id*='application-form']",
+          "[class*='application-form']",
+        ]
+
+        const root =
+          selectors
+            .map((selector) => document.querySelector(selector))
+            .find((node): node is Element => Boolean(node)) ??
+          Array.from(document.querySelectorAll("form")).find((form) => {
+            const textLikeCount = form.querySelectorAll(
+              "input[type=text], input[type=email], input[type=tel], input[type=url], textarea, select",
+            ).length
+            const fileCount = form.querySelectorAll("input[type=file]").length
+            return textLikeCount >= 2 || fileCount >= 1
+          }) ??
+          null
+
+        const inputCount = root
+          ? root.querySelectorAll(
+              "input:not([type=hidden]):not([type=submit]):not([type=button]):not([type=reset]), select, textarea, [role='combobox'], [aria-haspopup='listbox']",
+            ).length
+          : 0
+        const textLikeCount = root
+          ? root.querySelectorAll("input[type=text], input[type=email], input[type=tel], input[type=url], textarea, select").length
+          : 0
+        const fileCount = root ? root.querySelectorAll("input[type=file]").length : 0
+
+        return {
+          hasForm: Boolean(root && (inputCount >= 2 || fileCount >= 1)),
+          inputCount,
+          textLikeCount,
+          fileCount,
+          href: location.href,
+        }
+      },
+    })
+
+    const best = probes
+      .filter((probe) => probe.result?.hasForm)
+      .sort((a, b) => {
+        const scoreA = (a.result?.inputCount ?? 0) * 10 + (a.result?.fileCount ?? 0) * 5 + (a.result?.textLikeCount ?? 0)
+        const scoreB = (b.result?.inputCount ?? 0) * 10 + (b.result?.fileCount ?? 0) * 5 + (b.result?.textLikeCount ?? 0)
+        return scoreB - scoreA
+      })[0]
+
+    return best?.frameId
+  } catch {
+    return undefined
+  }
 }
 
 // ── Message handler ────────────────────────────────────────────────────────────
@@ -746,16 +865,17 @@ async function handleGetAutofillPreview(sender: chrome.runtime.MessageSender): P
   // 2. Target tab — content script callers must supply sender.tab (popup uses active tab)
   const tabId = await resolveTargetTabId(sender)
   if (tabId == null) return empty
+  const frameId = await resolveBestAutofillFrameId(tabId)
 
   // 3. Get detected page ATS
-  const pageResponse = await queryContentScript(tabId, { type: "DETECT_PAGE" })
+  const pageResponse = await queryContentScript(tabId, { type: "DETECT_PAGE" }, frameId)
   const ats = pageResponse?.type === "PAGE_DETECTED" ? pageResponse.page.ats : "generic"
 
   // 4. Send form detection request to content script
   const fieldsResponse = await queryContentScript(tabId, {
     type: "DETECT_FORM_FIELDS",
     profile: profileData.profile,
-  } as ContentMessage)
+  } as ContentMessage, frameId)
 
   if (!fieldsResponse || fieldsResponse.type !== "FORM_FIELDS_DETECTED") return empty
 
@@ -785,11 +905,12 @@ async function handleExecuteAutofill(
 
   const tabId = await resolveTargetTabId(sender)
   if (tabId == null) return empty
+  const frameId = await resolveBestAutofillFrameId(tabId)
 
   const response = await queryContentScript(tabId, {
     type: "FILL_FORM_FIELDS",
     fields: fieldsToFill,
-  } as ContentMessage)
+  } as ContentMessage, frameId)
 
   if (!response || response.type !== "FORM_FILLED") return empty
 
@@ -916,11 +1037,12 @@ async function handleFillCoverLetter(
 ): Promise<FillCoverLetterResult> {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
   if (!tab?.id) return { type: "FILL_COVER_LETTER_RESULT", success: false }
+  const frameId = await resolveBestAutofillFrameId(tab.id)
 
   const response = await queryContentScript(tab.id, {
     type: "FILL_FORM_FIELDS",
     fields: [{ elementRef, value: text }],
-  } as ContentMessage)
+  } as ContentMessage, frameId)
 
   return {
     type: "FILL_COVER_LETTER_RESULT",
@@ -1059,11 +1181,12 @@ async function handleInjectResumeFileInTab(
   if (!fileResult.base64 || !fileResult.filename) return fail(fileResult.error ?? "PDF fetch failed")
 
   try {
+    const frameId = await resolveBestAutofillFrameId(tabId)
     const response = await queryContentScript(tabId, {
       type:     "INJECT_RESUME_FILE",
       base64:   fileResult.base64,
       filename: fileResult.filename,
-    } as import("./types").ContentMessage)
+    } as import("./types").ContentMessage, frameId)
 
     if (!response || response.type !== "INJECT_RESUME_FILE_RESULT") return fail("No response from content script")
     return {

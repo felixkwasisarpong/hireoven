@@ -95,8 +95,15 @@ export function shouldShowAutofillFeatures(mode: ExtensionPageMode): boolean {
  */
 const APPLICATION_FORM_SELECTORS: ReadonlyArray<string> = [
   // Greenhouse
+  "#grnhse_app",
+  "#grnhse_app form",
+  "#application_form",
+  "form#new_application",
   "form#application-form",
   "form.application--form",
+  ".greenhouse-application",
+  ".greenhouse-application form",
+  "form[action*='job-boards']",
   // Lever
   "form.application-form",
   // Ashby — embedded apply iframe / SPA form
@@ -129,6 +136,20 @@ const APPLICATION_FORM_SELECTORS: ReadonlyArray<string> = [
 ]
 
 function pageHasApplicationForm(doc: Document, site: SupportedSite): boolean {
+  const embeddedIframeSelectors: Partial<Record<SupportedSite, string[]>> = {
+    greenhouse: ['iframe[src*="greenhouse.io/embed/job_app"]', 'iframe[src*="greenhouse.io/job_app"]'],
+    lever: ['iframe[src*="lever.co"]'],
+    ashby: ['iframe[src*="ashbyhq.com"]'],
+    workday: ['iframe[src*="workday"]'],
+    icims: ['iframe[src*="icims.com"]'],
+    smartrecruiters: ['iframe[src*="smartrecruiters.com"]'],
+    bamboohr: ['iframe[src*="bamboohr.com"]'],
+  }
+
+  for (const selector of embeddedIframeSelectors[site] ?? []) {
+    if (doc.querySelector(selector)) return true
+  }
+
   if (site === "workday") {
     const workdayUploadInput = doc.querySelector(
       '[data-automation-id="select-files"] input[type="file"], ' +

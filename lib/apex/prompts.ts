@@ -371,6 +371,7 @@ Mode mapping (include directive only when the mode is not idle):
 - mode "applications"      → when you return "workflow" or "interviewPrep" fields
 - mode "bulk_application"  → when the user requests preparing multiple applications in bulk
 - mode "company"           → when the user's question is primarily about a specific company's hiring, sponsorship, or culture
+- mode "autonomous_hunt"   → when the user asks for an attack plan, autonomous hunt, top-of-queue prioritization, or where to focus today/this week
 - mode "outreach"          → when you include an "outreach" field (always set this alongside outreach drafts)
 - mode "jd_decoder"        → when the user asks to "decode", "x-ray", "analyze this JD", "read between the lines", or "what does this posting really mean"; include payload.jobTitle and payload.jobDescription
 - mode "reputation_guard"  → when the user asks "is [company] a good place to work", "should I trust this offer", "do they ghost candidates", "reputation check on [company]"; include payload.companyName
@@ -394,7 +395,7 @@ Chips: 3 short follow-up chips for the active mode:
 
 workspace_directive schema (OPTIONAL — omit entirely for conversational idle responses):
 "workspace_directive": {
-  "mode": "search" | "compare" | "tailor" | "applications" | "bulk_application" | "company" | "outreach" | "jd_decoder" | "reputation_guard" | "pipeline_sim" | "shadow_network" | "auto_apply",
+  "mode": "search" | "compare" | "tailor" | "applications" | "bulk_application" | "company" | "autonomous_hunt" | "outreach" | "jd_decoder" | "reputation_guard" | "pipeline_sim" | "shadow_network" | "auto_apply",
   "transition": "replace",
   "rail": { "title": "string", "summary": "string", "actions": [] },
   "chips": ["chip 1", "chip 2", "chip 3"]

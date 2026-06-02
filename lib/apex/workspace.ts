@@ -31,6 +31,7 @@ export function inferWorkspaceMode(response: ApexResponse): WorkspaceMode {
   // language without a workspace_directive JSON block
   const text = (response.answer ?? "").toLowerCase()
   if (/1-click apply|one-click apply|auto.?apply|apply (for|to) me automatically|set up.*apply|pre.?approve.*appl/i.test(text)) return "auto_apply"
+  if (/autonomous hunt|attack plan|highest-?conviction batch|top of the queue/i.test(text)) return "autonomous_hunt"
   if (/shadow network|who do (you|i) know|referral path|warm intro|linkedin connection/i.test(text)) return "shadow_network"
   if (/reputation guard|ghosting rate|employer score|trust.*compan|is.*good place to work/i.test(text)) return "reputation_guard"
   if (/jd decoder|decode.*job|x-ray.*posting|read between the lines|hidden expectation/i.test(text)) return "jd_decoder"

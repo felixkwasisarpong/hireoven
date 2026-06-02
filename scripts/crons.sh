@@ -48,6 +48,7 @@ run() {
 # discover-companies 0 5 * * *         run api/cron/discover-companies
 # discover-tenants   0 */2 * * *       run api/cron/discover-tenants
 # glassdoor-discovery 30 5 * * *       run api/cron/glassdoor-discovery
+# builtin-discovery   0 */4 * * *       run api/cron/builtin-discovery
 # signal-api-webhooks * * * * *        run api/cron/signal-api-webhooks
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -77,6 +78,7 @@ case "${1:-}" in
   discover-companies) run api/cron/discover-companies ;;
   discover-tenants)  run api/cron/discover-tenants ;;
   glassdoor-discovery) run api/cron/glassdoor-discovery ;;
+  builtin-discovery) run api/cron/builtin-discovery ;;
   signal-api-webhooks) run api/cron/signal-api-webhooks ;;
   all)
     run 'api/alerts/recent-jobs?segment=with-resume'

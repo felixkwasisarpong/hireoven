@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import dynamic from "next/dynamic"
-import { Brain, Building2, Clock, Globe, Layers, Shield, Workflow as WorkflowIcon, X } from "lucide-react"
+import { Brain, Building2, Clock, Globe, Layers, Shield, Target, Workflow as WorkflowIcon, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { ApexTimelineEvent, ApexTimelineReplayAction } from "@/lib/apex/timeline/types"
 import type { CompanyIntel, CompanyIntelSummary } from "@/lib/apex/company-intel/types"
@@ -17,8 +17,10 @@ const CompanyIntelRail    = dynamic(() => import("@/components/apex/CompanyIntel
 const BrowserContextRail  = dynamic(() => import("@/components/apex/workspace/BrowserContextRail").then((m) => ({ default: m.BrowserContextRail })), { ssr: false })
 const ApexProactiveRail  = dynamic(() => import("@/components/apex/proactive/ApexProactiveRail").then((m) => ({ default: m.ApexProactiveRail })), { ssr: false })
 const ApexMarketRail     = dynamic(() => import("@/components/apex/ApexMarketRail").then((m) => ({ default: m.ApexMarketRail })),                  { ssr: false })
+const ApexPlanExecutionPanel = dynamic(() => import("@/components/apex/workspace/ApexPlanExecutionPanel").then((m) => ({ default: m.ApexPlanExecutionPanel })), { ssr: false })
 
 export type ContextPanelTab =
+  | "plan"
   | "timeline"
   | "context"
   | "workflow"
@@ -85,6 +87,7 @@ type Props = {
 
 const TABS: Array<{ value: ContextPanelTab; label: string; Icon: typeof Clock }> = [
   { value: "context",     label: "Context",     Icon: Layers      },
+  { value: "plan",        label: "Plan",        Icon: Target      },
   { value: "timeline",    label: "Timeline",    Icon: Clock       },
   { value: "workflow",    label: "Workflow",    Icon: WorkflowIcon },
   { value: "memory",      label: "Memory",      Icon: Brain       },
@@ -260,6 +263,15 @@ export function ApexContextPanel(props: Props) {
                 <ApexMarketRail signals={marketSignals} loading={Boolean(marketLoading)} />
               )}
             </div>
+          )}
+
+          {tab === "plan" && (
+            <ApexPlanExecutionPanel
+              onRunQuery={(query) => {
+                onClose()
+                onPreFill?.(query)
+              }}
+            />
           )}
 
           {tab === "workflow" && (

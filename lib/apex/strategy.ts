@@ -1,4 +1,5 @@
 import { getPostgresPool } from "@/lib/postgres/server"
+import { getApexPlanExecutionSummary } from "@/lib/apex/plan/server"
 import type {
   ApexStrategyBoard,
   ApexStrategyMove,
@@ -59,6 +60,7 @@ export async function getApexStrategyBoard(userId: string): Promise<ApexStrategy
     alertsCountResult,
     sponsorshipTargetResult,
     topSavedJobResult,
+    planExecution,
   ] = await Promise.all([
     pool.query<ProfileSummary>(
       `SELECT desired_roles, desired_locations, needs_sponsorship
@@ -148,6 +150,13 @@ export async function getApexStrategyBoard(userId: string): Promise<ApexStrategy
        LIMIT 1`,
       [userId]
     ),
+    getApexPlanExecutionSummary(userId).catch(() => ({
+      today: { runCount: 0, doneCount: 0, deferredCount: 0 },
+      trailing7d: { runCount: 0, doneCount: 0, deferredCount: 0, activeDays: 0 },
+      frequentDeferredTitles: [],
+      frequentCompletedTitles: [],
+      executionFingerprint: "0|0|0|0|0|0|0|_|_",
+    })),
   ])
 
   const profile = profileResult.rows[0] ?? null
@@ -228,6 +237,7 @@ export async function getApexStrategyBoard(userId: string): Promise<ApexStrategy
     recentApplications,
     activeApplications,
     hasPreferences,
+    planExecution,
   })
 
   const nextMoves = buildNextMoves({
@@ -250,6 +260,7 @@ export async function getApexStrategyBoard(userId: string): Promise<ApexStrategy
     activeApplications,
     sampledScores,
     averageMatchScore,
+    planExecution,
   })
 
   return {
@@ -273,8 +284,24 @@ function buildTodayFocus(input: {
   recentApplications: number
   activeApplications: number
   hasPreferences: boolean
+  planExecution: {
+    today: { runCount: number; doneCount: number; deferredCount: number }
+    trailing7d: { runCount: number; doneCount: number; deferredCount: number; activeDays: number }
+    frequentCompletedTitles: string[]
+  }
 }): string[] {
   const focus: string[] = []
+
+  if (
+    input.planExecution.trailing7d.deferredCount >= 3 &&
+    input.planExecution.trailing7d.deferredCount > input.planExecution.trailing7d.doneCount
+  ) {
+    focus.push("Finish one previously deferred high-conviction step before expanding the search")
+  }
+
+  if (input.planExecution.trailing7d.doneCount >= 2) {
+    focus.push("Repeat the types of actions you actually complete")
+  }
 
   if (input.savedJobs > 0) focus.push("Review high-match saved jobs")
   if (!input.hasResumeContext) focus.push("Improve resume gaps for stronger match quality")
@@ -395,6 +422,11 @@ function buildWeakSignals(input: {
   activeApplications: number
   sampledScores: number
   averageMatchScore: number | null
+  planExecution: {
+    trailing7d: { runCount: number; doneCount: number; deferredCount: number; activeDays: number }
+    frequentDeferredTitles: string[]
+    frequentCompletedTitles: string[]
+  }
 }): ApexWeakSignal[] {
   const signals: ApexWeakSignal[] = []
 
@@ -489,6 +521,32 @@ function buildWeakSignals(input: {
     })
   }
 
+  if (
+    input.planExecution.trailing7d.deferredCount >= 3 &&
+    input.planExecution.trailing7d.deferredCount > input.planExecution.trailing7d.doneCount
+  ) {
+    signals.push({
+      id: "plan-follow-through-slipping",
+      title: "Plan follow-through is slipping",
+      description:
+        input.planExecution.frequentDeferredTitles.length > 0
+          ? `Recent deferred items include ${input.planExecution.frequentDeferredTitles.join(", ")}. Narrow the plan before adding more work.`
+          : "Recent plan items are being deferred more often than completed. Narrow the plan before adding more work.",
+      severity: "warning",
+    })
+  }
+
+  if (
+    input.planExecution.trailing7d.doneCount >= 2 &&
+    input.planExecution.frequentCompletedTitles.length > 0
+  ) {
+    signals.push({
+      id: "execution-rhythm-present",
+      title: "Execution rhythm is emerging",
+      description: `You are completing actions such as ${input.planExecution.frequentCompletedTitles.join(", ")}. Apex should build on the behaviors you actually follow through on.`,
+      severity: "opportunity",
+    })
+  }
+
   return signals.slice(0, 5)
 }
-

@@ -754,7 +754,7 @@ function extractGreenhouse(doc: Document): Partial<ExtractedJob> {
   // Greenhouse: the application form lives on the same page. If we detect it,
   // the apply URL is the page URL (resolving the form's relative action).
   const form = doc.querySelector(
-    "form#application-form, form.application--form, form[action*='boards'], form[action*='job-boards']",
+    "#grnhse_app form, #application_form, form#new_application, form#application-form, form.application--form, .greenhouse-application form, form[action*='greenhouse'], form[action*='boards'], form[action*='job-boards']",
   ) as HTMLFormElement | null
   let applyUrl: string | undefined
   if (form) {

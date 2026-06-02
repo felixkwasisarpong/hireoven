@@ -41,8 +41,15 @@ export type ApplicationFormDetection = {
  */
 const ATS_FORM_SELECTORS: ReadonlyArray<string> = [
   // Greenhouse
+  "#grnhse_app",
+  "#grnhse_app form",
+  "#application_form",
+  "form#new_application",
   "form#application-form",
   "form.application--form",
+  ".greenhouse-application",
+  ".greenhouse-application form",
+  "form[action*='job-boards']",
   // Lever
   "form.application-form",
   // Ashby
@@ -82,6 +89,28 @@ const SAFE_PROFILE_FIELD_RE =
   /\b(first[\s_-]?name|last[\s_-]?name|full[\s_-]?name|email|phone|tel|mobile|linkedin|github|portfolio|website|location|city|address)\b/i
 
 const WORKDAY_QUESTION_PLACEHOLDER_RE = /^(select one|select|choose one|choose|please select)$/i
+
+function findEmbeddedApplicationIframe(doc: Document, ats: SupportedSite): HTMLIFrameElement | null {
+  const iframeSelectors: Partial<Record<SupportedSite, string[]>> = {
+    greenhouse: [
+      'iframe[src*="greenhouse.io/embed/job_app"]',
+      'iframe[src*="greenhouse.io/job_app"]',
+    ],
+    lever: ['iframe[src*="lever.co"]'],
+    ashby: ['iframe[src*="ashbyhq.com"]'],
+    workday: ['iframe[src*="workday"]'],
+    icims: ['iframe[src*="icims.com"]'],
+    smartrecruiters: ['iframe[src*="smartrecruiters.com"]'],
+    bamboohr: ['iframe[src*="bamboohr.com"]'],
+  }
+
+  for (const selector of iframeSelectors[ats] ?? []) {
+    const iframe = doc.querySelector<HTMLIFrameElement>(selector)
+    if (iframe) return iframe
+  }
+
+  return null
+}
 
 function hasApplicationLikeInputs(root: Element, ats: SupportedSite): boolean {
   const candidates = root.querySelectorAll(
@@ -318,6 +347,24 @@ export function detectLinkedInEasyApplyModal(doc: Document = document): boolean 
 export function detectApplicationForm(doc: Document = document): ApplicationFormDetection {
   const ats = detectSite()
   const reasons: string[] = []
+
+  const embeddedIframe = findEmbeddedApplicationIframe(doc, ats)
+  if (embeddedIframe) {
+    reasons.push("Application form is embedded in an ATS iframe — Autofill will target that frame.")
+    if (ats === "unknown") {
+      reasons.push("Embedded application form detected on a non-standard ATS host — using generic autofill strategy.")
+    } else {
+      reasons.push(`Embedded ${ats} application detected — using ATS-aware autofill strategy.`)
+    }
+    return {
+      hasForm: true,
+      formCount: 1,
+      detectedAts: ats,
+      fields: [],
+      supportsAutofill: true,
+      reasons,
+    }
+  }
 
   const forms = findFormRoots(doc, ats)
   if (forms.length === 0) {

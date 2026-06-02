@@ -10,6 +10,7 @@ import CompanyLogo from "@/components/ui/CompanyLogo"
 import { useResumeContext } from "@/components/resume/ResumeProvider"
 import { useH1BPrediction } from "@/lib/context/H1BPredictionContext"
 import type { JobCardViewModel } from "@/lib/jobs/normalization/types"
+import { isSoftSkill } from "@/lib/skills/taxonomy"
 import {
   effectiveEmployerSponsorshipScore,
   employerLikelySponsorsH1b,
@@ -177,7 +178,9 @@ export default function JobCard({
     ? (job.card_view as JobCardViewModel)
     : { title: job.title, location: job.location ?? null, salary_label: null, employment_label: null, seniority_label: null, preview_description: null, skills: [], skill_groups: { programmingLanguages:[], frameworks:[], cloud:[], databases:[], devops:[], aiMl:[], data:[], security:[], engineering:[], testing:[], networking:[], media:[], healthcare:[], science:[], softSkills:[] }, sponsorship_badge: null, visa_card_label: null, show_visa_drawer: false }
   const displayTitle = cardView.title
-  const topSkills = cardView.skills.slice(0, 3)
+  // Drop soft skills (Problem Solving, Collaboration, Adaptability, …) from the
+  // card — they match on generic prose and add noise. Scoring keeps the full set.
+  const topSkills = cardView.skills.filter((s) => !isSoftSkill(s)).slice(0, 3)
   const applyVariant = getApplyVariant(job.apply_url)
   const applyCtaLabel = getApplyVariantLabel(applyVariant)
 

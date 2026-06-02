@@ -6,6 +6,7 @@
  */
 
 import type { ApexContext } from "@/lib/apex/context"
+import type { ApexPlanExecutionSummary } from "@/lib/apex/plan/server"
 import type { ApexStrategyBoard, ApexAIStrategy, ApexActionType } from "@/lib/apex/types"
 import { normalizeApexActions } from "@/lib/apex/actions"
 
@@ -60,7 +61,8 @@ Required schema (replace placeholder strings with real content):
  */
 export function formatStrategyContext(
   context: ApexContext,
-  board: ApexStrategyBoard
+  board: ApexStrategyBoard,
+  planExecution?: ApexPlanExecutionSummary | null
 ): string {
   const parts: string[] = []
 
@@ -178,6 +180,30 @@ export function formatStrategyContext(
     if (sigLines.length > 0) {
       parts.push(`Behavior Signals:\n${sigLines.join("\n")}`)
     }
+  }
+
+  if (context.careerTwin) {
+    const twin = context.careerTwin
+    const twinLines = [
+      `- Headline: ${twin.headline}`,
+      `- Summary: ${twin.summary}`,
+      `- Strengths: ${twin.strengths.slice(0, 3).join(" | ") || "None yet"}`,
+      `- Risks: ${twin.risks.slice(0, 3).join(" | ") || "None yet"}`,
+      `- Constraints: ${twin.constraints.slice(0, 2).join(" | ") || "None yet"}`,
+      `- Recommended focus: ${twin.recommendedFocus.slice(0, 3).join(" | ") || "None yet"}`,
+      `- Confidence / freshness: ${twin.confidence}/100 confidence, ${twin.freshnessScore}/100 freshness`,
+    ]
+    parts.push(`Career Twin:\n${twinLines.join("\n")}`)
+  }
+
+  if (planExecution) {
+    const executionLines = [
+      `- Today: ${planExecution.today.runCount} launches, ${planExecution.today.doneCount} completed, ${planExecution.today.deferredCount} deferred`,
+      `- Last 7 days: ${planExecution.trailing7d.runCount} launches, ${planExecution.trailing7d.doneCount} completed, ${planExecution.trailing7d.deferredCount} deferred across ${planExecution.trailing7d.activeDays} active day(s)`,
+      `- Frequently deferred: ${planExecution.frequentDeferredTitles.join(" | ") || "None"}`,
+      `- Frequently completed or launched: ${planExecution.frequentCompletedTitles.join(" | ") || "None"}`,
+    ]
+    parts.push(`Plan Execution Signals:\n${executionLines.join("\n")}`)
   }
 
   // ── Available IDs for actions ──
