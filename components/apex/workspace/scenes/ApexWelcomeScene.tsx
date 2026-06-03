@@ -144,7 +144,7 @@ export function ApexWelcomeScene({
         </div>
       </div>
 
-      <div className="mt-5 grid w-full gap-4 text-left motion-safe:animate-[apexFadeUp_0.6s_ease-out_260ms_both] lg:grid-cols-[1.05fr_0.95fr]">
+      <div className="mt-5 grid w-full gap-4 text-left motion-safe:animate-[apexFadeUp_0.6s_ease-out_260ms_both] lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
         <ApexTodayPlanCard
           board={strategyBoard}
           nudges={nudges}
