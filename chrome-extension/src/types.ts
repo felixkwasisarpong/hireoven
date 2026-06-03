@@ -110,6 +110,8 @@ export type ContentMessageType =
   | "EXECUTE_APEX_COMMAND"
   | "SCRAPE_LINKEDIN_CONNECTIONS"
   | "PUSH_SCAN_RESULT"
+  | "SCRAPE_LINKEDIN_PROFILE"
+  | "PUSH_LINKEDIN_PROFILE_RESULT"
 
 export interface DetectPageMessage { type: "DETECT_PAGE" }
 export interface ExtractJobMessage { type: "EXTRACT_JOB" }
@@ -140,6 +142,17 @@ export interface PushScanResultMessage {
   error?: string
 }
 
+export interface ScrapeLinkedInProfileMessage {
+  type: "SCRAPE_LINKEDIN_PROFILE"
+}
+
+export interface PushLinkedInProfileResultMessage {
+  type: "PUSH_LINKEDIN_PROFILE_RESULT"
+  ok: boolean
+  rawText?: string
+  error?: string
+}
+
 export type ContentMessage =
   | DetectPageMessage
   | ExtractJobMessage
@@ -149,6 +162,8 @@ export type ContentMessage =
   | ExecuteApexCommandMessage
   | ScrapeLinkedInConnectionsMessage
   | PushScanResultMessage
+  | ScrapeLinkedInProfileMessage
+  | PushLinkedInProfileResultMessage
 
 // Safe profile subset the extension receives
 export interface ExtensionSafeProfile {
@@ -290,6 +305,7 @@ export type BackgroundMessageType =
   | "GET_STORED_LINKEDIN_URL"
   | "AGENT_APPLICATION_SUBMITTED"
   | "SCAN_LINKEDIN_CONNECTIONS"
+  | "SPA_NAVIGATION_COMPLETE"
 
 export interface ExtensionResumeSummary {
   id: string
@@ -508,6 +524,12 @@ export type BackgroundMessage =
   | GetStoredLinkedInUrlMessage
   | AgentApplicationSubmittedMessage
   | ScanLinkedInConnectionsMessage
+  | SpaNavigationCompleteMessage
+
+export interface SpaNavigationCompleteMessage {
+  type: "SPA_NAVIGATION_COMPLETE"
+  url: string
+}
 
 export interface ScanLinkedInConnectionsMessage {
   type: "SCAN_LINKEDIN_CONNECTIONS"
@@ -739,7 +761,12 @@ export type BackgroundResponse =
   | StoredLinkedInUrlResult
   | AgentApplicationSubmittedAck
   | ScanLinkedInConnectionsResult
+  | SpaNavigationAck
   | BackgroundError
+
+export interface SpaNavigationAck {
+  ok: boolean
+}
 
 export interface StoredLinkedInUrlResult {
   linkedinUrl: string | null

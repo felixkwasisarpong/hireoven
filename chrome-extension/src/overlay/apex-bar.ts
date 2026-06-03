@@ -988,6 +988,35 @@ const STYLES = `
   .cl-skeleton > div:nth-child(1) { width: 92%; }
   .cl-skeleton > div:nth-child(2) { width: 78%; }
   .cl-skeleton > div:nth-child(3) { width: 64%; }
+
+  /* Agent login-waiting banner */
+  .agent-login-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px 14px;
+    background: linear-gradient(135deg, #fff8f0 0%, #fff3e8 100%);
+    border: 1px solid rgba(249, 115, 22, 0.3);
+    border-radius: 10px;
+    margin-bottom: 6px;
+  }
+  .agent-login-icon { font-size: 16px; line-height: 1; flex-shrink: 0; }
+  .agent-login-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .agent-login-text strong {
+    font-size: 12px;
+    font-weight: 700;
+    color: #9a3412;
+    line-height: 1.3;
+  }
+  .agent-login-text span {
+    font-size: 11px;
+    color: #c2410c;
+    line-height: 1.4;
+  }
 `
 
 // ── Utility ───────────────────────────────────────────────────────────────────
@@ -1206,6 +1235,7 @@ export class ApexBar {
   private autoProofFired: boolean = false
   private confirmationTimer: ReturnType<typeof setInterval> | null = null
   private agentModeRunning: boolean = false
+  private agentWaitingForLogin: boolean = false
 
   private isDevInstall(): boolean {
     try {
@@ -1581,6 +1611,14 @@ export class ApexBar {
       ${this.renderAutofillPanel()}
       ${this.renderAnalysisPanel()}
       ${this.renderProofPrompt()}
+      ${this.agentWaitingForLogin ? `
+        <div class="agent-login-banner" role="status" aria-live="polite">
+          <span class="agent-login-icon">🔑</span>
+          <div class="agent-login-text">
+            <strong>Log in to continue</strong>
+            <span>Apex will auto-fill your application once you're signed in.</span>
+          </div>
+        </div>` : ""}
       <div class="apex-bar" role="region" aria-label="Hireoven Apex">
         <div class="brand">
           <span class="dot ${this.state}"></span>
@@ -2383,14 +2421,14 @@ export class ApexBar {
     })
   }
 
-  public async executeApexCommand(command: string, payload?: Record<string, unknown>): Promise<void> {
+  public async executeApexCommand(command: string, payload?: Record<string, unknown>): Promise<{ handled: boolean }> {
     if (command === "OPEN_AUTOFILL") {
       await this.onAutofillPreview()
-      return
+      return { handled: true }
     }
     if (command === "START_TAILOR") {
       await this.onTailor()
-      return
+      return { handled: true }
     }
     if (command === "START_COMPARE" || command === "START_WORKFLOW") {
       let url = this.saveResult?.dashboardUrl ?? this.existingDashboardUrl
@@ -2399,11 +2437,12 @@ export class ApexBar {
         url = this.saveResult?.dashboardUrl ?? this.existingDashboardUrl
       }
       if (url) window.open(url, "_blank", "noopener")
-      return
+      return { handled: true }
     }
     if (command === "AGENT_AUTOFILL") {
-      await this.runAgentAutofill(payload)
+      return await this.runAgentAutofill(payload)
     }
+    return { handled: false }
   }
 
   private toAutofillSource(): AutofillSource {
@@ -2500,6 +2539,25 @@ export class ApexBar {
     const conf = detectConfirmation(document)
     this.confirmation = conf
     return conf.isConfirmation && conf.confidence !== "low"
+  }
+
+  // Detects login / account-creation pages so the agent can wait instead of
+  // failing. Checks URL patterns first (cheapest), then DOM.
+  private isLoginOrAccountPage(): boolean {
+    const url = location.href.toLowerCase()
+    const LOGIN_URL_RE = /\/(login|signin|sign-in|auth|sso|register|signup|sign-up|create-account|account\/create|create-profile|join|onboard)/
+    if (LOGIN_URL_RE.test(url)) return true
+
+    // Password field present but no recognisable application form → login page.
+    const hasPassword = !!document.querySelector('input[type="password"]')
+    if (!hasPassword) return false
+    const hasAppForm = !!document.querySelector([
+      "#grnhse_app", "form.application-form", "#icims_content form",
+      ".sr-application-form", "#bamboohr-apply",
+      '[data-automation-id="applyStep"]', 'form[action*="apply"]',
+      'form[action*="boards"]',
+    ].join(","))
+    return !hasAppForm
   }
 
   private findBestActionButton(kind: "next" | "submit"): HTMLElement | null {
@@ -2672,8 +2730,8 @@ export class ApexBar {
     return { submitted: false, reason: "Workday agent mode reached max step transitions before confirmation." }
   }
 
-  private async runAgentAutofill(payload?: Record<string, unknown>): Promise<void> {
-    if (this.agentModeRunning) return
+  private async runAgentAutofill(payload?: Record<string, unknown>): Promise<{ handled: boolean }> {
+    if (this.agentModeRunning) return { handled: true }
     this.agentModeRunning = true
 
     try {
@@ -2687,11 +2745,27 @@ export class ApexBar {
       // Always refresh form/context before automation kicks in.
       this.runDetection()
 
+      // Login / account-creation page — the user needs to sign in first.
+      // Show a banner, do NOT mark as error, and return handled:false so the
+      // background keeps the pending context and retries on the next page load.
+      if (this.isLoginOrAccountPage()) {
+        this.agentWaitingForLogin = true
+        this.autofillStatus = "idle"
+        this.autofillError = null
+        this.render()
+        return { handled: false }
+      }
+
+      // If we were waiting for login and now have a form, clear the banner.
+      this.agentWaitingForLogin = false
+
       if (!this.autofillSiteSupported()) {
         this.autofillStatus = "error"
         this.autofillError = "No supported application form detected for agent mode."
         this.render()
-        return
+        // Return handled:false — background will retry on the next page load
+        // which may be the actual application form after a redirect.
+        return { handled: false }
       }
 
       // Ensure a tracker record exists for later proof persistence.
@@ -2706,7 +2780,7 @@ export class ApexBar {
         this.autofillStatus = "error"
         this.autofillError = "No saved autofill profile found."
         this.render()
-        return
+        return { handled: true }
       }
 
       this.autofillStatus = "filling"
@@ -2722,7 +2796,7 @@ export class ApexBar {
         this.autofillStatus = "error"
         this.autofillError = result.reason ?? "Agent mode could not submit this application."
         this.render()
-        return
+        return { handled: true }
       }
 
       await this.maybeSaveProofAutomatically()
@@ -2743,10 +2817,12 @@ export class ApexBar {
       this.autofillStatus = "done"
       this.autofillError = null
       this.render()
+      return { handled: true }
     } catch (err) {
       this.autofillStatus = "error"
       this.autofillError = err instanceof Error ? err.message : "Agent mode failed unexpectedly."
       this.render()
+      return { handled: true }
     } finally {
       this.agentModeRunning = false
     }

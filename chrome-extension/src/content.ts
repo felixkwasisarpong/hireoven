@@ -298,8 +298,11 @@ function registerMessageBridge(): void {
               })
               return
             }
-            await apexBarInstance.executeApexCommand(message.command, message.payload)
-            sendResponse({ type: "APEX_COMMAND_EXECUTED", accepted: true })
+            const cmdResult = await apexBarInstance.executeApexCommand(message.command, message.payload)
+            // Return accepted:false when on a login page or unsupported page so
+            // the background keeps the pending agent context and retries on the
+            // next page load (after the user signs in / redirects to the form).
+            sendResponse({ type: "APEX_COMMAND_EXECUTED", accepted: cmdResult.handled })
           })().catch((err) => {
             sendResponse({
               type: "APEX_COMMAND_EXECUTED",
@@ -759,14 +762,22 @@ function bootstrap(): void {
   }
 }
 
-// LinkedIn uses history.pushState for SPA navigation.
-// Poll the URL every second — lightweight and reliable across all LinkedIn builds.
+// URL-change poller — covers both LinkedIn SPA navigation and ATS pages where
+// login → application is a client-side route change (no full page reload).
+// When on an ATS page, signal the background to retry any pending agent context
+// so autofill fires automatically after the user completes login.
 let lastHref = window.location.href
 setInterval(() => {
-  if (window.location.href !== lastHref) {
-    lastHref = window.location.href
-    maybeRunLinkedInProfileSync()
+  const href = window.location.href
+  if (href === lastHref) return
+  lastHref = href
+
+  maybeRunLinkedInProfileSync()
+
+  // Notify background of the SPA navigation so it can retry pending agent tabs.
+  if (chrome.runtime?.id) {
+    chrome.runtime.sendMessage({ type: "SPA_NAVIGATION_COMPLETE", url: href }).catch(() => {})
   }
-}, 1000)
+}, 800)
 
 bootstrap()
