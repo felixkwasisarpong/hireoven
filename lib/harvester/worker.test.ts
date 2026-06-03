@@ -46,6 +46,7 @@ test("loadWorkerConfig: falls back on garbage env", () => {
 test("resolvePerCompanyTimeoutMs: uses ATS-specific defaults for slow adapters", () => {
   assert.equal(resolvePerCompanyTimeoutMs("workday", {}), 120_000)
   assert.equal(resolvePerCompanyTimeoutMs("smartrecruiters", {}), 90_000)
+  assert.equal(resolvePerCompanyTimeoutMs("apple", {}), 180_000)
   assert.equal(resolvePerCompanyTimeoutMs("greenhouse", {}), 60_000)
 })
 

@@ -94,6 +94,7 @@ const PER_COMPANY_TIMEOUT_BY_ADAPTER: Partial<Record<AtsName, number>> = {
   ashby: 90_000,
   usajobs: 90_000,
   icims: 90_000,
+  apple: 180_000,
 }
 
 function parseTimeoutMs(raw: string | undefined, fallback: number): number {
