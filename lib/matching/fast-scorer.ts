@@ -1,9 +1,9 @@
 /**
  * Fast resume↔job scorer — pure TypeScript, runs in-process with no external calls.
  *
- * Seven weighted dimensions (weights sum to 1.0):
- *   skills 0.45 · experience 0.22 · title 0.10 · education 0.10
- *   domain 0.03 · certs 0.02 · semantic 0.08
+ * Eight weighted dimensions (weights sum to 1.0):
+ *   skills 0.36 · experience 0.20 · title 0.10 · education 0.09
+ *   role-family 0.14 · semantic 0.06 · domain 0.03 · certs 0.02
  *
  * Hard gates applied after aggregation:
  *   missing-required-cert (≥5 required)  → –15 pts, floor 45
@@ -75,13 +75,14 @@ export interface FastScoreResumeContext {
 const CURRENT_YEAR = new Date().getFullYear()
 
 const W = {
-  skills:     0.45,
-  experience: 0.22,
+  skills:     0.36,
+  experience: 0.20,
   title:      0.10,
-  education:  0.10,
+  education:  0.09,
   domain:     0.03,
   certs:      0.02,
-  semantic:   0.08,
+  semantic:   0.06,
+  roleFamily: 0.14,
 } as const
 
 // ─── Primitive helpers ────────────────────────────────────────────────────────
@@ -258,7 +259,7 @@ function getGeneralistSubstituteScore(
   return null
 }
 
-// ─── 1. Skills (weight 0.40) ──────────────────────────────────────────────────
+// ─── 1. Skills (weight 0.36) ──────────────────────────────────────────────────
 
 /**
  * Per-skill match score on a 0–1 scale.
@@ -490,7 +491,7 @@ function scoreSkills(resumeContext: FastScoreResumeContext, job: Job): SkillsSco
   }
 }
 
-// ─── 2. Experience (weight 0.22) ──────────────────────────────────────────────
+// ─── 2. Experience (weight 0.20) ──────────────────────────────────────────────
 
 const MIN_YEARS_PATTERNS = [
   // Range "X-Y years" or "X to Y years" — always take the lower bound
@@ -600,6 +601,51 @@ const TITLE_STOP = new Set([
   "i", "ii", "iii", "iv",
 ])
 
+const WEAK_SINGLE_TITLE_TOKENS = new Set([
+  "assistant",
+  "associate",
+  "coordinator",
+  "specialist",
+  "manager",
+  "administrator",
+  "admin",
+  "analyst",
+  "technician",
+  "support",
+  "consultant",
+])
+
+const STRONG_PROFESSION_TITLE_TOKENS = new Set([
+  "developer",
+  "programmer",
+  "pharmacist",
+  "nurse",
+  "physician",
+  "doctor",
+  "clinician",
+  "therapist",
+  "dentist",
+  "hygienist",
+  "sonographer",
+  "phlebotomist",
+  "paramedic",
+  "attorney",
+  "lawyer",
+  "paralegal",
+  "accountant",
+  "auditor",
+  "recruiter",
+  "teacher",
+  "professor",
+  "instructor",
+  "designer",
+  "electrician",
+  "plumber",
+  "welder",
+  "carpenter",
+  "mechanic",
+])
+
 function seniorityTier(title: string): number {
   const l = title.toLowerCase()
   for (let i = 0; i < SENIORITY_TIERS.length; i++) {
@@ -615,6 +661,34 @@ function titleTokens(t: string): Set<string> {
   )
 }
 
+function titleSimilarity(jobTokens: Set<string>, candidateTokens: Set<string>) {
+  const base = jaccard(jobTokens, candidateTokens)
+  if (jobTokens.size === 0 || candidateTokens.size === 0) return base
+
+  const shared = [...candidateTokens].filter((token) => jobTokens.has(token))
+  if (shared.length === 0) return base
+
+  const containment = shared.length / Math.min(jobTokens.size, candidateTokens.size)
+  if (shared.length >= 2 && containment >= 0.75) {
+    return Math.max(base, 0.85)
+  }
+
+  if (
+    shared.length === 1 &&
+    containment >= 1 &&
+    Math.min(jobTokens.size, candidateTokens.size) === 1 &&
+    !WEAK_SINGLE_TITLE_TOKENS.has(shared[0])
+  ) {
+    return Math.max(base, 0.80)
+  }
+
+  if (shared.length === 1 && STRONG_PROFESSION_TITLE_TOKENS.has(shared[0])) {
+    return Math.max(base, 0.45)
+  }
+
+  return base
+}
+
 function scoreTitle(resumeContext: FastScoreResumeContext, job: Job) {
   if (resumeContext.experienceForTitles.length === 0) {
     return { score: 0.35, evidence: "No past titles on resume." }
@@ -624,7 +698,7 @@ function scoreTitle(resumeContext: FastScoreResumeContext, job: Job) {
   let maxSim = 0
   let bestTitle = ""
   for (const exp of resumeContext.experienceForTitles) {
-    const sim = jaccard(jdTok, exp.titleTokens)
+    const sim = titleSimilarity(jdTok, exp.titleTokens)
     if (sim > maxSim) { maxSim = sim; bestTitle = exp.title }
   }
 
@@ -694,7 +768,7 @@ const EDUCATION_FIELDS = new Set([
 // still match via "engineer"/"analyst" + their description text.
 // Ambiguous short words (`data`, `ai`, `ml`) now require context to prevent
 // "Data Entry Clerk" / "AI Care Assistant" from misclassifying as tech.
-const TECH_JOB_RE       = /\b(?:engineer|developer|programmer|architect|devops|sre|software|backend|frontend|fullstack|full.?stack|infrastructure|platform engineer|cloud engineer|data\s+(?:scientist|engineer|analyst|architect|specialist)|ml\s+(?:engineer|scientist|researcher)|machine\s+learning\s+engineer|ai\s+(?:engineer|scientist|researcher)|analytics\s+engineer|qa\s+engineer|test\s+engineer)\b/i
+const TECH_JOB_RE       = /\b(?:engineer|developer|programmer|architect|devops|sre|site\s+reliability|software|backend|frontend|fullstack|full.?stack|infrastructure|platform engineer|cloud engineer|data\s+(?:scientist|engineer|analyst|architect|specialist)|ml\s+(?:engineer|scientist|researcher)|machine\s+learning\s+engineer|ai\s+(?:engineer|scientist|researcher)|analytics\s+engineer|qa\s+engineer|test\s+engineer|(?:i\.?t\.?|information technology)\s+(?:specialist|analyst|engineer|administrator|admin|support|technician|manager|consultant)|systems?\s+(?:administrator|admin|engineer|analyst)|sysadmin|network\s+(?:engineer|administrator|admin|analyst|specialist)|help\s*desk|desktop\s+support|technical\s+support\s+engineer)\b/i
 const HEALTHCARE_JOB_RE = /\b(?:nurse|nursing|physician|doctor|clinical|medical|healthcare|pharmacist|pharmacy|therapist|patient\s+(?:care|journey)|hospital|dental|radiology|radiologic|surgeon|clinician|caregiver|sonograph|phlebotom|cna|rn\b|lpn|emt|paramedic|(?:radiologic|surgical|ultrasound|cardiovascular|nuclear|medical|imaging|laboratory|respiratory|pharmacy)\s+technologist|(?:pharmacy|surgical|lab|medical|dental|veterinary|patient\s+care)\s+(?:technician|tech))\b/i
 const DESIGN_JOB_RE     = /\b(?:designer|design lead|ux|ui|creative director|art director|brand designer|visual designer|motion designer|illustrator|animator)\b/i
 const MARKETING_JOB_RE  = /\b(?:marketing|growth|demand generation|brand manager|content strategist|seo specialist|sem|social media|public relations|pr manager|copywriter)\b/i
@@ -703,7 +777,7 @@ const HR_JOB_RE         = /\b(?:human resources|recruiter|recruiting|talent acqu
 const LEGAL_JOB_RE      = /\b(?:lawyer|attorney|legal counsel|paralegal|compliance officer|general counsel)\b/i
 const FINANCE_JOB_RE    = /\b(?:financial analyst|finance manager|controller|cfo|investment|trader|banker|auditor|actuar|fp&a|treasury|accountant|bookkeeper)\b/i
 const OPS_JOB_RE        = /\b(?:supply chain|logistics|procurement|warehouse manager|manufacturing|program manager|project manager|operations manager|data entry)\b/i
-const EDUCATION_JOB_RE  = /\b(?:teacher|instructor|professor|curriculum|learning|coach|educator|academic|tutor|principal|dean)\b/i
+const EDUCATION_JOB_RE  = /\b(?:teacher|instructor|professor|curriculum|learning\s+(?:designer|specialist|consultant|coordinator|manager|coach|instructor)|coach|educator|academic|tutor|(?:school|assistant|vice)\s+principal|principal\s+(?:teacher|educator|curriculum|learning)|dean)\b/i
 
 // Non-tech families used by the role-family gate. These are domains
 // fundamentally incompatible with most office/tech backgrounds — when the JD
@@ -714,7 +788,7 @@ const PHYSICAL_SECURITY_JOB_RE = /\b(?:security officer|security guard|security 
 // bare "Technician" stays unclassified rather than misrouting to trades.
 const SKILLED_TRADES_JOB_RE    = /\b(?:electrician|plumber|hvac|welder|carpenter|locksmith|machinist|millwright|pipefitter|ironworker|roofer|mason|(?:hvac|automotive|auto|mechanical|electrical|electronics|maintenance|field|service|industrial)\s+(?:technician|tech)|(?:diesel|aircraft)\s+mechanic)\b/i
 const INSPECTION_JOB_RE        = /\b(?:ndt|non.?destructive|ultrasonic|utsw|paut|radiographic\s+(?:testing|technician)|inspector|inspect(?:ion)?\s+(?:level|technician)|qa\s+inspect|magnetic\s+particle|penetrant\s+test)\b/i
-const FOODSERVICE_JOB_RE       = /\b(?:chef|cook|server|waiter|waitress|barista|bro?ista|bartender|barback|sous chef|line cook|prep cook|host(?:ess)?\s+server|crew member|food (?:runner|prep)|dishwasher|fast food|restaurant (?:associate|team)|cashier|food service|kitchen (?:staff|helper))\b/i
+const FOODSERVICE_JOB_RE       = /\b(?:chef|cook|(?:restaurant|food|banquet|dining)\s+server|waiter|waitress|barista|bro?ista|bartender|barback|sous chef|line cook|prep cook|host(?:ess)?\s+server|crew member|food (?:runner|prep)|dishwasher|fast food|restaurant (?:associate|team)|cashier|food service|kitchen (?:staff|helper))\b/i
 const LABOR_JOB_RE             = /\b(?:forklift|truck driver|cdl|warehouse associate|warehouse worker|picker|packer|janitor|custodian|cleaner|housekeep|landscape|groundskeep|laborer|stocker)\b/i
 const VEHICLE_JOB_RE           = /\b(?:veterinarian|veterinary|groomer|delivery driver|courier|uber driver|lyft driver|taxi driver|chauffeur|bus driver)\b/i
 
@@ -827,6 +901,83 @@ export function isRoleFamilyCompatible(candidate: RoleFamily, job: RoleFamily): 
   if (candidate === "unknown" || job === "unknown") return true
   if (candidate === job) return true
   return ROLE_FAMILY_ADJACENT.get(candidate)?.has(job) ?? false
+}
+
+function uniqueRoleFamilies(families: RoleFamily[]): RoleFamily[] {
+  const seen = new Set<RoleFamily>()
+  const out: RoleFamily[] = []
+  for (const family of families) {
+    if (seen.has(family)) continue
+    seen.add(family)
+    out.push(family)
+  }
+  return out
+}
+
+function knownRoleFamilies(families: RoleFamily[]): RoleFamily[] {
+  const known = families.filter((family) => family !== "unknown")
+  return known.length > 0 ? uniqueRoleFamilies(known) : uniqueRoleFamilies(families)
+}
+
+function getCandidateRoleFamilies(
+  resumeContext: FastScoreResumeContext,
+  resume: Resume
+): RoleFamily[] {
+  const families = [...resumeContext.recentRoleFamilies]
+  if (resume.primary_role) families.push(classifyRoleFamily(resume.primary_role))
+  return knownRoleFamilies(families)
+}
+
+function scoreRoleFamilyFit(
+  resumeContext: FastScoreResumeContext,
+  resume: Resume,
+  job: Job
+) {
+  const jobFamily = classifyRoleFamily(job.title, job.description)
+  const candidateFamilies = getCandidateRoleFamilies(resumeContext, resume)
+
+  if (
+    jobFamily === "unknown" ||
+    candidateFamilies.length === 0 ||
+    candidateFamilies.every((family) => family === "unknown")
+  ) {
+    return {
+      score: 0.55,
+      jobFamily,
+      candidateFamilies,
+      compatible: true,
+      evidence: "Role family could not be classified confidently.",
+    }
+  }
+
+  if (candidateFamilies.includes(jobFamily)) {
+    return {
+      score: 1.0,
+      jobFamily,
+      candidateFamilies,
+      compatible: true,
+      evidence: `Candidate has recent ${jobFamily} experience.`,
+    }
+  }
+
+  const adjacent = candidateFamilies.find((family) => isRoleFamilyCompatible(family, jobFamily))
+  if (adjacent) {
+    return {
+      score: 0.75,
+      jobFamily,
+      candidateFamilies,
+      compatible: true,
+      evidence: `Candidate's ${adjacent} background is adjacent to ${jobFamily}.`,
+    }
+  }
+
+  return {
+    score: 0.2,
+    jobFamily,
+    candidateFamilies,
+    compatible: false,
+    evidence: `Candidate families (${candidateFamilies.join(", ")}) do not align with ${jobFamily}.`,
+  }
 }
 
 function fieldRelevance(field: string, job: Job): number {
@@ -1122,7 +1273,7 @@ function scoreCerts(resumeContext: FastScoreResumeContext, job: Job) {
   return { score: 1.0, evidence: `Has all required certifications: ${required.join(", ")}.`, certGate: false }
 }
 
-// ─── 8. Semantic overlap (weight 0.08) ────────────────────────────────────────
+// ─── 8. Semantic overlap (weight 0.06) ────────────────────────────────────────
 
 const REQ_HEADERS = new Set([
   "qualifications", "requirements", "required", "preferred",
@@ -1252,7 +1403,7 @@ export function buildFastScoreResumeContext(resume: Resume): FastScoreResumeCont
   // doesn't keep the candidate eligible for everything.
   const recentRoleFamilies = experienceByRecency
     .slice(0, 3)
-    .map((exp) => classifyRoleFamily(exp.title))
+    .map((exp) => classifyRoleFamily(exp.title, exp.descriptionLower))
 
   return {
     candidateSkillKeys,
@@ -1287,6 +1438,7 @@ export function computeFastScore({
   const domain     = scoreDomain(context, job)
   const certs      = scoreCerts(context, job)
   const semantic   = scoreSemanticOverlap(context, job)
+  const roleFamily = scoreRoleFamilyFit(context, resume, job)
   const sponsorship = getSponsorshipScore(profile, job)
   const seniorityGap = getSeniorityGap(resume.seniority_level, job.seniority_level)
 
@@ -1298,12 +1450,14 @@ export function computeFastScore({
     education.score  * W.education  * 100 +
     domain.score     * W.domain     * 100 +
     certs.score      * W.certs      * 100 +
-    semantic.score   * W.semantic   * 100
+    semantic.score   * W.semantic   * 100 +
+    roleFamily.score * W.roleFamily * 100
   )
 
   // Hard gates (applied after weighted sum, in order of severity)
   const gatesTriggered: string[] = []
   const totalRequired = skills.requiredCount
+  let topBandPromotion: string | null = null
 
   // Cert gate — soft penalty (–15 pts) rather than hard cap, preserving strong
   // overall matches. Certs are obtainable; a 95-match candidate shouldn't be
@@ -1321,7 +1475,16 @@ export function computeFastScore({
   // Observed: Dutch Bros "Broista" job with 1 extracted skill scored 72
   // against a SWE resume — caught here at 65.
   if (totalRequired > 0 && totalRequired < 5) {
-    overall = Math.min(overall, 65)
+    const strongSameFamilyEvidence =
+      roleFamily.score >= 1 &&
+      experience.score >= 0.7 &&
+      title.score >= 0.65 &&
+      education.score >= 0.55
+    const cap = strongSameFamilyEvidence ? 78 : 65
+    overall = Math.min(overall, cap)
+    if (strongSameFamilyEvidence) {
+      overall = Math.max(overall, 70)
+    }
     gatesTriggered.push(`low_signal_skills_lt5:${totalRequired}`)
   }
 
@@ -1353,29 +1516,59 @@ export function computeFastScore({
     gatesTriggered.push("extreme_seniority_mismatch")
   }
 
+  // Same broad family is helpful but not enough by itself. A pharmacist and
+  // registered nurse are both healthcare; a backend engineer and help-desk
+  // technician are both tech. If the title evidence is very weak, keep the
+  // score below the strong-match band unless the rest of the evidence is
+  // unusually specific.
+  if (roleFamily.score >= 1 && title.score < 0.35 && skills.score < 0.85) {
+    overall = Math.min(overall, 68)
+    gatesTriggered.push("same_family_low_title_fit")
+  }
+
   // Role-family gate — caps scores when the JD belongs to a fundamentally
   // different career family from the candidate's recent roles. Caused by
   // soft-skill overlap inflating cross-domain matches (e.g. SWE matched to
   // "Security Officer" at 91% because both resumes/JDs mention
-  // "Communication"). `unknown` on either side skips the gate.
-  // Fallback: when work_experience didn't yield any classifiable families
-  // (sparse resumes, non-traditional titles), classify from `primary_role`
-  // so the gate still fires for an obvious cross-domain mismatch.
-  const jobFamily = classifyRoleFamily(job.title, job.description)
-  let candidateFamilies = context.recentRoleFamilies
-  if (candidateFamilies.length === 0 && resume.primary_role) {
-    const fromPrimaryRole = classifyRoleFamily(resume.primary_role)
-    if (fromPrimaryRole !== "unknown") candidateFamilies = [fromPrimaryRole]
+  // "Communication"). Unknown candidate families are ignored when any known
+  // family exists, so one sparse title cannot disable the cross-domain guard.
+  if (
+    roleFamily.jobFamily !== "unknown" &&
+    roleFamily.candidateFamilies.length > 0 &&
+    !roleFamily.compatible
+  ) {
+    // Relaxed 40 → 55: the role-family classifier mis-fires on
+    // multidisciplinary roles (SWE → "Data Scientist", "Security Engineer"
+    // → "Software Engineer", etc.). Cap at 55 keeps these out of the
+    // "great match" band but doesn't bury legitimate adjacent fits.
+    overall = Math.min(overall, 55)
+    gatesTriggered.push(`role_family_mismatch:${roleFamily.candidateFamilies[0]}→${roleFamily.jobFamily}`)
   }
-  if (jobFamily !== "unknown" && candidateFamilies.length > 0) {
-    const compatible = candidateFamilies.some((cf) => isRoleFamilyCompatible(cf, jobFamily))
-    if (!compatible) {
-      // Relaxed 40 → 55: the role-family classifier mis-fires on
-      // multidisciplinary roles (SWE → "Data Scientist", "Security Engineer"
-      // → "Software Engineer", etc.). Cap at 55 keeps these out of the
-      // "great match" band but doesn't bury legitimate adjacent fits.
-      overall = Math.min(overall, 55)
-      gatesTriggered.push(`role_family_mismatch:${candidateFamilies[0]}→${jobFamily}`)
+
+  const hasTopBandBlockingGate = gatesTriggered.some((gate) =>
+    gate === "missing_required_cert" ||
+    gate === "missing_required_skills_gt75pct" ||
+    gate === "insufficient_experience" ||
+    gate === "extreme_seniority_mismatch" ||
+    gate === "same_family_low_title_fit" ||
+    gate.startsWith("role_family_mismatch:")
+  )
+  const hasUsableSkillEvidence =
+    skills.score >= 0.45 ||
+    (totalRequired > 0 && totalRequired < 5 && skills.hardMatchedCount >= 1 && skills.hardMissing.length <= 1)
+  const excellentSameProfessionEvidence =
+    !hasTopBandBlockingGate &&
+    roleFamily.score >= 1 &&
+    title.score >= 0.9 &&
+    experience.score >= 0.7 &&
+    education.score >= 0.5 &&
+    hasUsableSkillEvidence
+
+  if (excellentSameProfessionEvidence) {
+    const target = skills.score >= 0.8 ? 95 : skills.score >= 0.6 ? 92 : 90
+    if (overall < target) {
+      overall = target
+      topBandPromotion = `Excellent same-profession evidence promoted score to ${target}.`
     }
   }
 
@@ -1427,6 +1620,9 @@ export function computeFastScore({
       skillsScore:         Math.round(skills.score * 100),
       experienceScore:     Math.round(experience.score * 100),
       seniorityScore:      null,
+      roleFamilyScore:     Math.round(roleFamily.score * 100),
+      roleFamily:          roleFamily.jobFamily,
+      candidateRoleFamilies: roleFamily.candidateFamilies,
       locationScore:       null,
       employmentTypeScore: null,
       sponsorshipScore:    sponsorship.score,
@@ -1445,6 +1641,10 @@ export function computeFastScore({
         ...(skills.hardMissing.length > 0
           ? [`Missing ${skills.hardMissing.length} required skill${skills.hardMissing.length !== 1 ? "s" : ""}`]
           : []),
+        ...(roleFamily.score >= 1 && totalRequired > 0 && totalRequired < 5
+          ? ["Sparse job-skill extraction; role-family evidence carried more weight."]
+          : []),
+        ...(topBandPromotion ? [topBandPromotion] : []),
         ...gatesTriggered.map(g => `Gate: ${g}`),
       ],
       computedAt: now,

@@ -4,7 +4,7 @@
  * Bump FAST_SCORE_CACHE_EPOCH_ISO whenever fast scoring logic changes in a way
  * that should invalidate historical rows.
  */
-export const FAST_SCORE_CACHE_EPOCH_ISO = "2026-05-15T02:10:00.000Z"
+export const FAST_SCORE_CACHE_EPOCH_ISO = "2026-06-03T18:00:00.000Z"
 export const FAST_SCORE_CACHE_EPOCH_MS = Date.parse(FAST_SCORE_CACHE_EPOCH_ISO)
 
 if (!Number.isFinite(FAST_SCORE_CACHE_EPOCH_MS)) {
