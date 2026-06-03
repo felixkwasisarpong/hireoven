@@ -662,6 +662,14 @@ async function handleMessage(
       )
       return { type: "OPERATOR_OPEN_TAB_ACK" }
 
+    case "SPA_NAVIGATION_COMPLETE":
+      // Content script detected a client-side URL change (login → form redirect
+      // without a full page reload). Retry pending agent autofill for this tab.
+      if (sender.tab?.id) {
+        void tryDispatchAgentAutofill(sender.tab.id)
+      }
+      return { ok: true }
+
     case "AGENT_APPLICATION_SUBMITTED":
       return handleAgentApplicationSubmitted(
         message.jobId,
