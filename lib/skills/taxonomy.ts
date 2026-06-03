@@ -192,7 +192,10 @@ export const SKILL_DEFINITIONS: SkillDefinition[] = [
   { label: "Penetration Testing", aliases: ["penetration testing", "pen testing", "pentest"] },
   { label: "Network Security",    aliases: ["network security"] },
   { label: "SIEM",                aliases: ["siem"] },
-  { label: "Compliance",          aliases: ["compliance", "sox", "hipaa", "gdpr", "ccpa", "pci", "iso 27001"] },
+  // Bare "compliance" matched the compliance *team/requirement* ("partner with
+  // security and compliance") on technical roles. Require a specific framework
+  // or qualified phrase so it only fires when compliance is the actual skill.
+  { label: "Compliance",          aliases: ["regulatory compliance", "compliance framework", "compliance program", "soc 2", "sox", "hipaa", "gdpr", "ccpa", "pci", "iso 27001"] },
 
   // ─── Design & UX ─────────────────────────────────────────────────────────
   { label: "Figma",              aliases: ["figma"] },
@@ -299,7 +302,9 @@ export const SKILL_DEFINITIONS: SkillDefinition[] = [
   { label: "Performance Management", aliases: ["performance management", "performance reviews"] },
   { label: "Employee Relations",  aliases: ["employee relations"] },
   { label: "HRIS",                aliases: ["hris", "workday", "bamboohr"] },
-  { label: "Onboarding",          aliases: ["onboarding"] },
+  // Bare "onboarding" matched product features ("onboarding assistants") on
+  // engineering roles. Require an HR/CS-qualified phrase so it's only the skill.
+  { label: "Onboarding",          aliases: ["employee onboarding", "customer onboarding", "new hire onboarding", "onboarding process", "onboarding program"] },
   // Bare "compensation" matches the salary boilerplate ("Compensation: $80k–$120k")
   // present in most US JDs, so we only count phrases that clearly mean the HR
   // discipline, not the pay disclosure. Bare "total rewards" is also excluded
@@ -432,13 +437,20 @@ export const SKILL_DEFINITIONS: SkillDefinition[] = [
   { label: "EHR/EMR",          aliases: ["ehr", "emr", "electronic health records", "electronic medical records"] },
   { label: "ICD-10",           aliases: ["icd-10", "icd10", "medical coding", "cpt coding"] },
   { label: "Clinical Trials",  aliases: ["clinical trials", "clinical research", "clinical studies"] },
+  { label: "Clinical Research", aliases: ["clinical research", "clinical research coordination", "clinical study coordination", "research coordinator"] },
+  { label: "Pharmacology",     aliases: ["pharmacology", "pharmacotherapeutics", "drug therapy"] },
+  { label: "Pharmacy Practice", aliases: ["pharmacy practice", "pharmacist", "medication therapy management", "mtm", "dispensing", "prescription verification", "patient counseling", "pharmacy operations"] },
+  { label: "Patient Care",     aliases: ["patient care", "clinical care", "patient counseling", "patient services"] },
+  { label: "Clinical Laboratory Techniques", aliases: ["clinical laboratory techniques", "clinical lab techniques", "laboratory techniques", "lab techniques", "clinical laboratory", "medical laboratory"] },
   { label: "GMP",              aliases: ["gmp", "good manufacturing practice", "cgmp"] },
   { label: "FDA Regulatory",   aliases: ["fda", "fda regulatory", "510k", "pma", "fda approval", "regulatory affairs"] },
   { label: "Bioinformatics",   aliases: ["bioinformatics", "computational biology", "genomics"] },
-  { label: "PCR",              aliases: ["pcr", "qpcr", "rt-pcr", "polymerase chain reaction"] },
+  { label: "PCR",              aliases: ["pcr", "rt-pcr", "polymerase chain reaction"] },
+  { label: "qPCR",             aliases: ["qpcr", "q-pcr", "qt-pcr", "real-time pcr", "quantitative pcr"] },
   { label: "CRISPR",           aliases: ["crispr", "gene editing", "gene therapy"] },
   { label: "Flow Cytometry",   aliases: ["flow cytometry", "facs", "cell sorting"] },
   { label: "Microscopy",       aliases: ["microscopy", "confocal microscopy", "electron microscopy"] },
+  { label: "Molecular Biology", aliases: ["molecular biology"] },
   { label: "NGS",              aliases: ["ngs", "next generation sequencing", "dna sequencing", "rna sequencing", "rnaseq"] },
   { label: "Cell Culture",     aliases: ["cell culture", "tissue culture", "mammalian cell culture"] },
   { label: "Pharmacovigilance", aliases: ["pharmacovigilance", "drug safety", "adverse event reporting"] },
@@ -451,11 +463,14 @@ export const SKILL_DEFINITIONS: SkillDefinition[] = [
   { label: "STATA",            aliases: ["stata"] },
   { label: "LaTeX",            aliases: ["latex"] },
   { label: "Scientific Writing", aliases: ["scientific writing", "research writing", "grant writing"] },
+  { label: "Research",         aliases: ["research", "research methods"] },
   { label: "Lab Research",     aliases: ["laboratory research", "lab research", "wet lab", "dry lab"] },
   { label: "Experimental Design", aliases: ["experimental design", "study design", "research methodology"] },
   { label: "Mass Spectrometry", aliases: ["mass spectrometry", "hplc", "gc-ms", "lc-ms"] },
   { label: "Protein Analysis", aliases: ["western blot", "elisa", "protein purification", "sds-page"] },
+  { label: "Western Blotting", aliases: ["western blot", "western blotting"] },
   { label: "Animal Studies",   aliases: ["animal studies", "in vivo", "mouse model", "preclinical"] },
+  { label: "Animal Models",    aliases: ["animal models", "animal research models", "in vivo models", "preclinical models"] },
   { label: "GIS",              aliases: ["gis", "arcgis", "qgis", "geographic information systems"] },
 
   // ─── Soft Skills ─────────────────────────────────────────────────────────
@@ -641,13 +656,17 @@ const MEDIA_SKILLS = new Set([
 
 const HEALTHCARE_SKILLS = new Set([
   "HIPAA", "Epic", "Cerner", "HL7/FHIR", "EHR/EMR", "ICD-10", "Clinical Trials",
-  "GMP", "FDA Regulatory", "Bioinformatics", "PCR", "CRISPR", "Flow Cytometry",
-  "Microscopy", "NGS", "Cell Culture", "Pharmacovigilance", "Medical Devices", "Radiology",
+  "Clinical Research", "Pharmacology", "Pharmacy Practice", "Patient Care",
+  "Clinical Laboratory Techniques", "GMP", "FDA Regulatory", "Bioinformatics",
+  "PCR", "qPCR", "CRISPR", "Flow Cytometry", "Microscopy", "Molecular Biology",
+  "NGS", "Cell Culture", "Pharmacovigilance", "Medical Devices", "Radiology",
 ])
 
 const SCIENCE_SKILLS = new Set([
-  "SAS", "SPSS", "STATA", "LaTeX", "Scientific Writing", "Lab Research",
-  "Experimental Design", "Mass Spectrometry", "Protein Analysis", "Animal Studies", "GIS",
+  "SAS", "SPSS", "STATA", "LaTeX", "Scientific Writing", "Research", "Lab Research",
+  "Experimental Design", "Mass Spectrometry", "Protein Analysis", "Western Blotting",
+  "Animal Studies", "Animal Models", "Clinical Laboratory Techniques",
+  "Molecular Biology", "qPCR", "GIS",
 ])
 
 export const SOFT_SKILLS = new Set([
@@ -849,6 +868,10 @@ const BOILERPLATE_PRONE_SKILLS = new Set([
   "Sales",
   "Writing",
   "Public Speaking",
+  // Generic business term that over-extracts on technical roles ("onboarding
+  // assistants", "onboarding flow"); keep only when an HR/CS-qualified phrase
+  // matches the (tightened) aliases.
+  "Onboarding",
 ])
 
 export function filterSkillsByTextEvidence(
@@ -1016,6 +1039,10 @@ export const SKILL_FAMILIES: Record<string, string[]> = {
   api_style:         ["REST", "GraphQL", "gRPC", "API Development"],
   data_warehouse:    ["Snowflake", "BigQuery", "Redshift", "Databricks"],
   iac_tool:          ["Terraform", "CloudFormation", "Pulumi"],
+  pharmacy_care:     ["Pharmacology", "Pharmacy Practice", "Pharmacovigilance", "Patient Care"],
+  clinical_research: ["Clinical Research", "Clinical Trials", "Research", "Experimental Design"],
+  lab_methods:       ["Clinical Laboratory Techniques", "Lab Research", "PCR", "qPCR", "Western Blotting", "Molecular Biology", "Cell Culture", "Microscopy"],
+  preclinical_research: ["Animal Models", "Animal Studies", "Research", "Experimental Design"],
 } as const
 
 const SKILL_TO_FAMILY: Map<string, string> = (() => {

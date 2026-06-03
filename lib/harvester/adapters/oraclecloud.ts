@@ -7,6 +7,8 @@ import {
   type HarvestResult,
   type HarvestedJob,
 } from "@/lib/harvester/adapters/_base"
+import { fetchHtmlConditional } from "@/lib/harvester/adapters/_json-ld"
+import pLimit from "p-limit"
 
 /**
  * Oracle Cloud HCM (the modern successor to Taleo / Oracle Recruiting Cloud).
@@ -28,6 +30,15 @@ const MAX_PAGES = Math.max(
   1,
   Number.parseInt(process.env.HARVESTER_ORACLECLOUD_MAX_PAGES ?? "20", 10)
 )
+const DETAIL_MAX_JOBS = Math.max(
+  0,
+  Number.parseInt(process.env.HARVESTER_ORACLECLOUD_DETAIL_MAX_JOBS ?? "100", 10)
+)
+const DETAIL_CONCURRENCY = Math.max(
+  1,
+  Number.parseInt(process.env.HARVESTER_ORACLECLOUD_DETAIL_CONCURRENCY ?? "4", 10)
+)
+const MIN_USEFUL_DESCRIPTION = 200
 
 // `recruitingCEJobRequisitions` accepts the "expand" parameter to inline
 // related entities. We pull workLocation + secondaryLocations + responsibility
@@ -200,6 +211,48 @@ function stripHtml(value: string | undefined | null): string | undefined {
   return text || undefined
 }
 
+function decodeHtmlEntities(value: string): string {
+  return value
+    .replace(/&nbsp;?/gi, " ")
+    .replace(/&amp;?/gi, "&")
+    .replace(/&lt;?/gi, "<")
+    .replace(/&gt;?/gi, ">")
+    .replace(/&quot;?/gi, '"')
+    .replace(/&#39;?/gi, "'")
+    .replace(/&apos;?/gi, "'")
+    .replace(/&rsquo;?/gi, "'")
+    .replace(/&lsquo;?/gi, "'")
+    .replace(/&rdquo;?/gi, '"')
+    .replace(/&ldquo;?/gi, '"')
+    .replace(/&ndash;?/gi, "-")
+    .replace(/&mdash;?/gi, "-")
+    .replace(/&#x([0-9a-f]+);?/gi, (_, hex: string) =>
+      String.fromCodePoint(Number.parseInt(hex, 16))
+    )
+    .replace(/&#(\d+);?/g, (_, dec: string) =>
+      String.fromCodePoint(Number.parseInt(dec, 10))
+    )
+}
+
+function readMetaAttribute(tag: string, attr: string): string | undefined {
+  const match = tag.match(new RegExp(`${attr}\\s*=\\s*(["'])([\\s\\S]*?)\\1`, "i"))
+  return match?.[2]
+}
+
+export function extractOracleDetailDescriptionFromHtml(html: string): string | undefined {
+  const metaTags = html.match(/<meta\b[^>]*>/gi) ?? []
+  for (const tag of metaTags) {
+    const key = (readMetaAttribute(tag, "property") ?? readMetaAttribute(tag, "name") ?? "")
+      .trim()
+      .toLowerCase()
+    if (key !== "og:description" && key !== "description") continue
+    const content = readMetaAttribute(tag, "content")
+    const cleaned = decodeHtmlEntities(content ?? "").replace(/\s+/g, " ").trim()
+    if (cleaned.length >= MIN_USEFUL_DESCRIPTION) return cleaned.slice(0, 8_000)
+  }
+  return undefined
+}
+
 function flattenLocation(req: OracleRequisition): string | undefined {
   // Prefer the requisition's structured PrimaryLocation string; fall back to
   // the workLocation entity, then the first secondary location.
@@ -297,6 +350,44 @@ export function mapResponseToJobs(
   return jobs
 }
 
+async function enrichMissingDescriptions(
+  jobs: HarvestedJob[],
+  ctx: HarvestCtx
+): Promise<void> {
+  if (DETAIL_MAX_JOBS === 0) return
+  const alreadyDescribed = ctx.alreadyDescribedIds
+  const targets = jobs
+    .filter((job) => (job.description?.length ?? 0) < MIN_USEFUL_DESCRIPTION)
+    .filter((job) => !alreadyDescribed?.has(job.externalId))
+    .slice(0, DETAIL_MAX_JOBS)
+  if (targets.length === 0) return
+
+  const limiter = pLimit(DETAIL_CONCURRENCY)
+  await Promise.all(
+    targets.map((job) =>
+      limiter(async () => {
+        const result = await fetchHtmlConditional(
+          job.applyUrl,
+          { ...ctx, etag: null, lastModified: null },
+          { maxAttempts: 2 }
+        )
+        if (result.kind !== "ok") return
+        const description = extractOracleDetailDescriptionFromHtml(result.html)
+        if (!description || description.length <= (job.description?.length ?? 0)) return
+        job.description = description
+        job.contentHash = hashContent([
+          job.title,
+          job.applyUrl,
+          job.location,
+          job.postedAt,
+          job.workMode,
+          description.slice(0, 4_000),
+        ])
+      })
+    )
+  )
+}
+
 export const oraclecloudAdapter: AtsAdapter = {
   name: "oraclecloud",
   // The Oracle CE REST API is fast and per-pod-scoped. Many distinct customer
@@ -376,8 +467,11 @@ export const oraclecloudAdapter: AtsAdapter = {
       throw err
     }
 
+    const jobs = Array.from(all.values())
+    await enrichMissingDescriptions(jobs, ctx)
+
     return {
-      jobs: Array.from(all.values()),
+      jobs,
       notModified: false,
       etag,
       lastModified,

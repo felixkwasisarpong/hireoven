@@ -268,7 +268,7 @@ export function IdleMode({
           </>
 
           <div
-            className={`mb-6 mt-5 grid gap-4 lg:grid-cols-[1.05fr_0.95fr] ${fade} ${mounted ? show : hide}`}
+            className={`mb-6 mt-5 grid gap-4 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] ${fade} ${mounted ? show : hide}`}
             style={{ transitionDelay: "160ms" }}
           >
             <ApexTodayPlanCard

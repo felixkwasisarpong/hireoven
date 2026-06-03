@@ -398,6 +398,38 @@ function cleanPDFText(raw: string): string {
     .trim()
 }
 
+/**
+ * pdf-parse (pdfjs v4) references the browser DOM globals DOMMatrix / ImageData
+ * / Path2D at module-eval time. In a Node server (Next's runtime) these are
+ * undefined, so parsing throws "DOMMatrix is not defined" and the upload fails
+ * (no role, no preview). pdf-parse tries to load @napi-rs/canvas to fill them,
+ * but that path is unreliable under Next's bundling. So we polyfill the three
+ * globals deterministically from @napi-rs/canvas before importing pdf-parse.
+ */
+async function ensurePdfDomGlobals(): Promise<void> {
+  const g = globalThis as Record<string, unknown>
+  if (
+    typeof g.DOMMatrix === "function" &&
+    typeof g.ImageData === "function" &&
+    typeof g.Path2D === "function"
+  ) {
+    return
+  }
+  try {
+    const canvas = (await import("@napi-rs/canvas")) as unknown as {
+      DOMMatrix?: unknown
+      ImageData?: unknown
+      Path2D?: unknown
+    }
+    if (typeof g.DOMMatrix !== "function" && canvas.DOMMatrix) g.DOMMatrix = canvas.DOMMatrix
+    if (typeof g.ImageData !== "function" && canvas.ImageData) g.ImageData = canvas.ImageData
+    if (typeof g.Path2D !== "function" && canvas.Path2D) g.Path2D = canvas.Path2D
+  } catch (error) {
+    // @napi-rs/canvas is optional — many text-based PDFs still parse without it.
+    console.warn("Could not load @napi-rs/canvas DOM globals for PDF parsing", error)
+  }
+}
+
 export async function extractTextFromPDF(buffer: Buffer): Promise<string> {
   const processWithBuiltinModule = process as typeof process & {
     getBuiltinModule?: (id: string) => unknown
@@ -408,6 +440,8 @@ export async function extractTextFromPDF(buffer: Buffer): Promise<string> {
       BUILTIN_MODULES[id] ??
       BUILTIN_MODULES[id.startsWith("node:") ? id.slice(5) : `node:${id}`]
   }
+
+  await ensurePdfDomGlobals()
 
   const { PDFParse } = await import("pdf-parse")
   // verbosity:0 suppresses pdfjs console noise; data accepts Buffer → Uint8Array

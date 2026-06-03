@@ -1,10 +1,10 @@
 "use client"
 
 import { Copy } from "lucide-react"
-import { getPublicSiteUrl } from "@/lib/waitlist/site-url"
+import { getShareOrigin } from "@/lib/waitlist/site-url"
 
 export default function ConfirmedShareBlock({ waitlistId }: { waitlistId: string }) {
-  const base = getPublicSiteUrl()
+  const base = getShareOrigin()
   const share = `${base}/launch?ref=${waitlistId}`
 
   return (

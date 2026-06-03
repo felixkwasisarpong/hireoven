@@ -1018,6 +1018,10 @@ export default function ResumeStudioPage() {
   const [tailorStep, setTailorStep] = useState<TailorWorkflowStep>("idle")
   const [applyingFixId, setApplyingFixId] = useState<string | null>(null)
   const [appliedFixIds, setAppliedFixIds] = useState<string[]>([])
+  // Fix awaiting an in-app honesty confirmation (replaces the native window.confirm).
+  const [pendingConfirmFix, setPendingConfirmFix] = useState<TailorFix | null>(null)
+  // "Create tailored resume with no fixes applied?" in-app confirmation.
+  const [showCreateNoFixesConfirm, setShowCreateNoFixesConfirm] = useState(false)
   const [analysis, setAnalysis] = useState<TailorAnalysisResult | null>(null)
   const [analysisBaselineScore, setAnalysisBaselineScore] = useState<number | null>(null)
   const [sections, setSections] = useState<ResumeSectionState[]>(INITIAL_SECTIONS)
@@ -1446,15 +1450,8 @@ export default function ResumeStudioPage() {
     setProfileSummary(sanitizeTailorSummaryText(fix.suggested))
   }
 
-  const applyTailorFix = useCallback(
+  const performTailorFix = useCallback(
     (fix: TailorFix) => {
-      if (appliedFixIds.includes(fix.id)) return
-      if (fix.requiresConfirmation) {
-        const ok = window.confirm(
-          `Only apply this if it is true: ${fix.label}. Do you have this experience?`
-        )
-        if (!ok) return
-      }
       setApplyingFixId(fix.id)
       try {
         if (fix.type === "add_skill") {
@@ -1486,8 +1483,28 @@ export default function ResumeStudioPage() {
         queueMicrotask(() => setApplyingFixId(null))
       }
     },
-    [appliedFixIds, experienceDrafts, focusEditorSectionFromPreview, pushToast]
+    [experienceDrafts, focusEditorSectionFromPreview, pushToast]
   )
+
+  const applyTailorFix = useCallback(
+    (fix: TailorFix) => {
+      if (appliedFixIds.includes(fix.id)) return
+      // Fixes that assert experience the resume doesn't support need an explicit
+      // honesty check — shown as an in-app modal instead of a native dialog.
+      if (fix.requiresConfirmation) {
+        setPendingConfirmFix(fix)
+        return
+      }
+      performTailorFix(fix)
+    },
+    [appliedFixIds, performTailorFix]
+  )
+
+  const confirmPendingFix = useCallback(() => {
+    const fix = pendingConfirmFix
+    setPendingConfirmFix(null)
+    if (fix) performTailorFix(fix)
+  }, [pendingConfirmFix, performTailorFix])
 
   const applyAllSafeFixes = useCallback(() => {
     if (!analysis) {
@@ -2191,15 +2208,15 @@ export default function ResumeStudioPage() {
       return
     }
     if (appliedFixIds.length === 0) {
-      if (
-        !window.confirm(
-          "You have not applied any recommended fixes. Create a new tailored resume from the current live preview?"
-        )
-      ) {
-        return
-      }
+      setShowCreateNoFixesConfirm(true)
+      return
     }
 
+    await runCreateTailoredResume()
+  }
+
+  async function runCreateTailoredResume() {
+    if (!selectedResume) return
     setIsTailoring(true)
     try {
       // Flush editor state to DB first so duplication starts from the latest edits.
@@ -3025,6 +3042,103 @@ export default function ResumeStudioPage() {
           </div>
         )}
       </div>
+      {pendingConfirmFix && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Confirm before adding"
+          onClick={() => setPendingConfirmFix(null)}
+        >
+          <div
+            className="w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl motion-safe:animate-[apexFadeUp_0.2s_ease-out_both]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start gap-3 border-b border-slate-100 px-6 py-5">
+              <span className="mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-amber-50 text-amber-600">
+                <AlertTriangle className="h-4 w-4" />
+              </span>
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Confirm before adding</p>
+                <h2 className="mt-1 text-lg font-bold text-slate-900">Only apply if it&apos;s true</h2>
+              </div>
+            </div>
+            <div className="px-6 py-5">
+              <p className="text-sm leading-6 text-slate-600">
+                This will add{" "}
+                <span className="font-semibold text-slate-900">{pendingConfirmFix.label}</span>{" "}
+                to your resume. It was found in the job description but isn&apos;t clearly supported by your current resume.
+              </p>
+              <p className="mt-2 text-sm font-medium text-slate-700">Do you actually have this experience?</p>
+            </div>
+            <div className="flex items-center gap-3 border-t border-slate-100 px-6 py-4">
+              <button
+                type="button"
+                onClick={confirmPendingFix}
+                className="flex-1 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
+              >
+                Yes, add it
+              </button>
+              <button
+                type="button"
+                onClick={() => setPendingConfirmFix(null)}
+                className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showCreateNoFixesConfirm && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Create tailored resume"
+          onClick={() => setShowCreateNoFixesConfirm(false)}
+        >
+          <div
+            className="w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl motion-safe:animate-[apexFadeUp_0.2s_ease-out_both]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start gap-3 border-b border-slate-100 px-6 py-5">
+              <span className="mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-indigo-50 text-indigo-600">
+                <Sparkles className="h-4 w-4" />
+              </span>
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Create tailored resume</p>
+                <h2 className="mt-1 text-lg font-bold text-slate-900">No fixes applied yet</h2>
+              </div>
+            </div>
+            <div className="px-6 py-5">
+              <p className="text-sm leading-6 text-slate-600">
+                You haven&apos;t applied any of the recommended fixes. Create a new tailored resume from the current live preview anyway?
+              </p>
+            </div>
+            <div className="flex items-center gap-3 border-t border-slate-100 px-6 py-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCreateNoFixesConfirm(false)
+                  void runCreateTailoredResume()
+                }}
+                className="flex-1 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
+              >
+                Create anyway
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowCreateNoFixesConfirm(false)}
+                className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   )
 }

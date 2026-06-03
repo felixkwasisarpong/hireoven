@@ -20,7 +20,7 @@
 
 import { loadEnvConfig } from "@next/env"
 import pLimit from "p-limit"
-import type { Browser } from "playwright"
+import { renderAppleDetail } from "@/lib/harvester/adapters/apple"
 import { getPostgresPool } from "@/lib/postgres/server"
 
 loadEnvConfig(process.cwd())
@@ -35,13 +35,6 @@ function getArg(prefix: string): string | undefined {
 const limit = Math.max(1, Number.parseInt(getArg("--limit=") ?? "500", 10))
 const concurrency = Math.max(1, Number.parseInt(getArg("--concurrency=") ?? "2", 10))
 const minLength = Math.max(0, Number.parseInt(getArg("--min-length=") ?? "800", 10))
-
-const APPLE_UA =
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " +
-  "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-const PAGE_RENDER_WAIT_MS = 20_000
-const NAV_TIMEOUT_MS = 30_000
-const MIN_USEFUL_DESCRIPTION = 200
 
 type CandidateRow = {
   job_id: string
@@ -64,74 +57,6 @@ async function loadCandidates(): Promise<CandidateRow[]> {
     [limit, minLength]
   )
   return rows
-}
-
-async function renderAppleDetail(browser: Browser, url: string): Promise<string | null> {
-  const context = await browser.newContext({
-    userAgent: APPLE_UA,
-    locale: "en-US",
-    viewport: { width: 1280, height: 1800 },
-  })
-  await context.setExtraHTTPHeaders({ "accept-language": "en-US,en;q=0.9" })
-  const page = await context.newPage()
-  page.setDefaultTimeout(NAV_TIMEOUT_MS)
-  try {
-    await page.goto(url, { waitUntil: "domcontentloaded", timeout: NAV_TIMEOUT_MS })
-    // Apple renders the body shortly after first paint. Wait for either the
-    // "Description" heading or the rendered article to appear, then read.
-    await page
-      .waitForFunction(
-        () => {
-          const text = document.body?.innerText ?? ""
-          return (
-            text.length > 1200 &&
-            /description|qualifications|minimum/i.test(text)
-          )
-        },
-        undefined,
-        { timeout: PAGE_RENDER_WAIT_MS }
-      )
-      .catch(() => null)
-
-    const text = await page.evaluate(() => {
-      const full = (document.body?.innerText ?? "").replace(/ /g, " ")
-      // Cut off the global footer / shop nav so we don't store apple.com
-      // store directory text alongside the JD.
-      const footerMarkers = [
-        "Apple is an equal opportunity employer",
-        "Apple Footer",
-        "Shopping Bag",
-        "Privacy Policy",
-        "Open Menu Close Menu",
-      ]
-      let body = full
-      for (const marker of footerMarkers) {
-        const idx = body.indexOf(marker)
-        if (idx >= 0) body = body.slice(0, idx)
-      }
-      // Apple detail pages have a predictable header: "...Back to search
-      // results <title> <location> Submit Resume Summary Posted: <date>".
-      // The JD body begins right after the "Posted:" line; fall back to the
-      // raw text if no anchor matches.
-      const startPatterns = [
-        /Posted:\s*[A-Z][a-z]+\s+\d{1,2},\s+\d{4}/,
-        /Submit Resume\s*Summary\s+/i,
-        /About the Role/i,
-        /Job Summary/i,
-      ]
-      for (const re of startPatterns) {
-        const m = body.match(re)
-        if (m && m.index !== undefined && m.index > 0) {
-          body = body.slice(m.index + m[0].length)
-          break
-        }
-      }
-      return body.replace(/\n{3,}/g, "\n\n").trim().slice(0, 8000)
-    })
-    return text && text.length >= MIN_USEFUL_DESCRIPTION ? text : null
-  } finally {
-    await context.close().catch(() => {})
-  }
 }
 
 async function main() {

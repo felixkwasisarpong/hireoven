@@ -932,6 +932,9 @@ export type MatchScoreBreakdown = {
   skillsScore: number | null;
   experienceScore: number | null;
   seniorityScore: number | null;
+  roleFamilyScore?: number | null;
+  roleFamily?: string | null;
+  candidateRoleFamilies?: string[] | null;
   locationScore: number | null;
   employmentTypeScore: number | null;
   sponsorshipScore: number | null;

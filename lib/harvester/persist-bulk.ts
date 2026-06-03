@@ -2,7 +2,7 @@ import type { Pool, PoolClient } from "pg"
 import { isAllowedLocation } from "@/lib/jobs/location-filter"
 import { isBlockedApplyUrl, isBlockedCrawlTitle } from "@/lib/jobs/filters"
 import { normalizeCrawlerJobForPersistence } from "@/lib/jobs/normalization"
-import type { HarvestedJob } from "@/lib/harvester/adapters"
+import { hashContent, type HarvestedJob } from "@/lib/harvester/adapters/_base"
 
 /**
  * Anything that exposes pg's parameterised `query()`. Both `Pool` and
@@ -113,11 +113,82 @@ type ActiveJobRow = {
   last_seen_at: string | null
 }
 
+type ExistingJobStateForPersist = NonNullable<
+  Parameters<typeof normalizeCrawlerJobForPersistence>[0]["existing"]
+>
+
+type ExistingJobStateRow = ExistingJobStateForPersist & {
+  external_id: string | null
+}
+
 function chunkValues<T>(items: T[], chunkSize: number): T[][] {
   if (items.length === 0) return []
   const out: T[][] = []
   for (let i = 0; i < items.length; i += chunkSize) {
     out.push(items.slice(i, i + chunkSize))
+  }
+  return out
+}
+
+const EMPTY_EXISTING_JOB_STATE: ExistingJobStateForPersist = {
+  description: null,
+  employment_type: null,
+  seniority_level: null,
+  is_remote: null,
+  is_hybrid: null,
+  requires_authorization: null,
+  salary_min: null,
+  salary_max: null,
+  salary_currency: null,
+  sponsors_h1b: null,
+  sponsorship_score: null,
+  visa_language_detected: null,
+}
+
+async function loadExistingJobStates(
+  pool: DbExecutor,
+  companyId: string,
+  externalIds: string[]
+): Promise<Map<string, ExistingJobStateForPersist>> {
+  if (externalIds.length === 0) return new Map()
+  const out = new Map<string, ExistingJobStateForPersist>()
+  const result = await pool.query<ExistingJobStateRow>(
+    `SELECT external_id,
+            description,
+            employment_type,
+            seniority_level,
+            is_remote,
+            is_hybrid,
+            requires_authorization,
+            salary_min,
+            salary_max,
+            salary_currency,
+            sponsors_h1b,
+            sponsorship_score,
+            visa_language_detected
+       FROM jobs
+      WHERE company_id = $1
+        AND external_id = ANY($2::text[])
+        AND is_active = true
+        AND external_id IS NOT NULL`,
+    [companyId, externalIds]
+  )
+  for (const row of result.rows) {
+    if (!row.external_id) continue
+    out.set(row.external_id, {
+      description: row.description,
+      employment_type: row.employment_type,
+      seniority_level: row.seniority_level,
+      is_remote: row.is_remote,
+      is_hybrid: row.is_hybrid,
+      requires_authorization: row.requires_authorization,
+      salary_min: row.salary_min,
+      salary_max: row.salary_max,
+      salary_currency: row.salary_currency,
+      sponsors_h1b: row.sponsors_h1b,
+      sponsorship_score: row.sponsorship_score,
+      visa_language_detected: row.visa_language_detected,
+    })
   }
   return out
 }
@@ -290,16 +361,23 @@ function buildPersistRow(args: {
   job: HarvestedJob
   companyMeta: BulkPersistInput["companyMeta"]
   crawledAtIso: string
+  existing?: ExistingJobStateForPersist | null
 }): PersistRow | null {
   const { job, companyMeta, crawledAtIso } = args
   const normalizedPostedAt = normalizePostedAtForPersist(job.postedAt, crawledAtIso)
+  const usableIncomingDescription = salvageHarvesterDescription(job.description)
+  const existing = args.existing ?? EMPTY_EXISTING_JOB_STATE
+  const descriptionForNormalization =
+    usableIncomingDescription ?? existing.description ?? null
+  const usedExistingDescriptionFallback =
+    !usableIncomingDescription && Boolean(existing.description)
 
   const normalization = normalizeCrawlerJobForPersistence({
     rawJob: {
       externalId: job.externalId,
       title: job.title,
       url: job.applyUrl,
-      description: job.description,
+      description: descriptionForNormalization ?? undefined,
       location: job.location,
       postedAt: job.postedAt,
       company: companyMeta.name,
@@ -326,20 +404,7 @@ function buildPersistRow(args: {
       companyVerified: null,
     },
     crawledAtIso,
-    existing: {
-      description: null,
-      employment_type: null,
-      seniority_level: null,
-      is_remote: null,
-      is_hybrid: null,
-      requires_authorization: null,
-      salary_min: null,
-      salary_max: null,
-      salary_currency: null,
-      sponsors_h1b: null,
-      sponsorship_score: null,
-      visa_language_detected: null,
-    },
+    existing,
   })
 
   const cols = normalization.nextColumns
@@ -351,7 +416,7 @@ function buildPersistRow(args: {
     raw: {
       title: job.title,
       url: job.applyUrl,
-      description: job.description ?? null,
+      description: descriptionForNormalization,
       location: job.location ?? null,
       posted_at: job.postedAt ?? null,
       external_id: job.externalId,
@@ -389,7 +454,9 @@ function buildPersistRow(args: {
     sponsorship_score: cols.sponsorship_score ?? null,
     visa_language_detected: cols.visa_language_detected ?? null,
     posted_at: normalizedPostedAt,
-    content_hash: job.contentHash,
+    content_hash: usedExistingDescriptionFallback
+      ? hashContent([job.contentHash, descriptionForNormalization?.slice(0, 4_000)])
+      : job.contentHash,
     raw_data: rawData,
   }
 }
@@ -515,9 +582,15 @@ export async function persistJobsBulk(
     }
   }
 
+  const existingByExternalId = await loadExistingJobStates(pool, companyId, [...currentExternalIds])
   const rows: PersistRow[] = []
   for (const job of deduped) {
-    const built = buildPersistRow({ job, companyMeta, crawledAtIso })
+    const built = buildPersistRow({
+      job,
+      companyMeta,
+      crawledAtIso,
+      existing: existingByExternalId.get(job.externalId) ?? null,
+    })
     if (built) rows.push(built)
   }
 

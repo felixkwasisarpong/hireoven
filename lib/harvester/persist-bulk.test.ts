@@ -6,11 +6,19 @@ import { persistJobsBulk } from "./persist-bulk"
 
 type CapturedCall = { text: string; values: unknown[] }
 
-function makeFakePool(rowsByQuery: Array<QueryResult["rows"]>) {
+function makeFakePool(
+  rowsByQuery: Array<QueryResult["rows"]>,
+  options: { existingRows?: QueryResult["rows"]; captureExistingQuery?: boolean } = {}
+) {
   const captured: CapturedCall[] = []
   let call = 0
   const pool = {
     query: async (text: string, values: unknown[]) => {
+      if (/SELECT\s+external_id,\s*description,/i.test(text)) {
+        if (options.captureExistingQuery) captured.push({ text, values })
+        const rows = options.existingRows ?? []
+        return { rows, rowCount: rows.length } as unknown as QueryResult
+      }
       captured.push({ text, values })
       const rows = rowsByQuery[call] ?? []
       call += 1
@@ -258,6 +266,67 @@ test("persistJobsBulk: salvages substantive adapter descriptions when strict nor
     payload[0].description,
     "RESPONSIBILITIES\nBuild backend services and operate production APIs across multiple teams with strong ownership and collaboration mindset"
   )
+})
+
+test("persistJobsBulk: normalizes from existing description when incoming adapter description is useless", async () => {
+  const existingDescription =
+    "Senior platform engineering role owning CI/CD systems, GitHub Actions, internal developer tooling, LLM integrations, RAG knowledge systems, and AI-assisted code review standards for a large engineering organization."
+  const { pool, captured } = makeFakePool(
+    [[{ inserted: false }], [], []],
+    {
+      captureExistingQuery: true,
+      existingRows: [
+        {
+          external_id: "workday:geico:R0064342",
+          description: existingDescription,
+          employment_type: null,
+          seniority_level: "staff",
+          is_remote: false,
+          is_hybrid: false,
+          requires_authorization: false,
+          salary_min: null,
+          salary_max: null,
+          salary_currency: "USD",
+          sponsors_h1b: null,
+          sponsorship_score: 60,
+          visa_language_detected: null,
+        },
+      ],
+    }
+  )
+
+  await persistJobsBulk({
+    pool,
+    companyId: "00000000-0000-0000-0000-000000000055",
+    companyMeta: { name: "GEICO", domain: "geico.com", careersUrl: null },
+    sourceAts: "workday",
+    sourceAtsSlug: "geico:wd1:External",
+    crawledAt: new Date("2026-06-03T00:00:00.000Z"),
+    jobs: [
+      makeJob({
+        externalId: "workday:geico:R0064342",
+        title: "Senior Staff Software Engineer - Developer Experience",
+        applyUrl: "https://geico.wd1.myworkdayjobs.com/en-US/External/job/Palo-Alto-CA/Senior-Staff-Software-Engineer---Developer-Experience_R0064342",
+        description: "R0064342",
+        location: "Palo Alto, CA",
+        contentHash: "9".repeat(32),
+      }),
+    ],
+  })
+
+  assert.match(captured[0].text, /SELECT\s+external_id,\s*description,/i)
+  const upsert = captured[1]
+  const payload = JSON.parse(upsert.values[4] as string) as Array<Record<string, unknown>>
+  const row = payload[0]
+  assert.equal(row.description, existingDescription)
+  assert.notEqual(row.content_hash, "9".repeat(32), "fallback description should force a repair write")
+  assert.deepEqual((row.raw_data as { raw: { description: string | null } }).raw.description, existingDescription)
+  const skills = row.skills as string[]
+  assert.ok(skills.includes("CI/CD"))
+  assert.ok(skills.includes("GitHub Actions"))
+  assert.ok(skills.includes("LLMs"))
+  assert.ok(skills.includes("RAG"))
+  assert.ok(skills.includes("Code Review"))
 })
 
 test("persistJobsBulk: sanitizes malformed unicode/control chars before jsonb payload", async () => {

@@ -5,6 +5,7 @@ import {
   decodeSlug,
   encodeSlug,
   encodeCustomSlug,
+  extractOracleDetailDescriptionFromHtml,
   mapRequisitionToJob,
   oraclecloudAdapter,
   parsePod,
@@ -129,6 +130,23 @@ test("oraclecloud: mapRequisitionToJob skips records missing title or id", () =>
   assert.equal(mapRequisitionToJob({ Title: "No ID" }, "x", "S", "https://x.oraclecloud.com"), null)
 })
 
+test("oraclecloud: extracts detail description from meta tags", () => {
+  const html = `
+    <html>
+      <head>
+        <meta property="og:title" content="Medical Courier"/>
+        <meta property="og:description" content="Medical Courier - Oklahoma City, OK Drive health forward &mdash; with a career that goes the distance. At Quest Diagnostics, your deliveries don&rsquo;t just move packages, they move healthcare forward. Join a trusted team of professionals ensuring life-saving diagnostics reach patients quickly and safely. This detail text is long enough to be useful for matching and normalization."/>
+      </head>
+    </html>
+  `
+
+  const description = extractOracleDetailDescriptionFromHtml(html)
+
+  assert.ok(description)
+  assert.match(description, /Drive health forward - with a career/)
+  assert.match(description, /deliveries don't just move packages/)
+})
+
 test("oraclecloud: fetchJobs paginates until hasMore=false", async () => {
   const page0 = {
     items: [
@@ -166,17 +184,27 @@ test("oraclecloud: fetchJobs paginates until hasMore=false", async () => {
     hasMore: false,
   }
 
-  let calls = 0
+  let listingCalls = 0
+  let detailCalls = 0
   const fetchImpl: typeof fetch = async (input) => {
-    calls += 1
     const raw = typeof input === "string" || input instanceof URL ? input.toString() : input.url
     const url = new URL(raw)
-    assert.equal(url.pathname, "/hcmRestApi/resources/latest/recruitingCEJobRequisitions")
-    const finder = url.searchParams.get("finder") ?? ""
-    const offsetMatch = finder.match(/offset=(\d+)/)
-    const offset = offsetMatch ? Number.parseInt(offsetMatch[1], 10) : -1
-    if (offset === 0) return new Response(JSON.stringify(page0), { headers: { "content-type": "application/json" } })
-    if (offset === 50) return new Response(JSON.stringify(page1), { headers: { "content-type": "application/json" } })
+    if (url.pathname === "/hcmRestApi/resources/latest/recruitingCEJobRequisitions") {
+      listingCalls += 1
+      const finder = url.searchParams.get("finder") ?? ""
+      const offsetMatch = finder.match(/offset=(\d+)/)
+      const offset = offsetMatch ? Number.parseInt(offsetMatch[1], 10) : -1
+      if (offset === 0) return new Response(JSON.stringify(page0), { headers: { "content-type": "application/json" } })
+      if (offset === 50) return new Response(JSON.stringify(page1), { headers: { "content-type": "application/json" } })
+    }
+    if (url.pathname.includes("/hcmUI/CandidateExperience/en/sites/CX_1/job/")) {
+      detailCalls += 1
+      const id = url.pathname.split("/").pop()
+      return new Response(
+        `<meta property="og:description" content="Job ${id} detail description with enough useful responsibilities, qualifications, schedule information, and role context to pass the minimum text threshold for harvesting before persistence. This should be stored during the harvest tick instead of waiting for enrichment."/>`,
+        { headers: { "content-type": "text/html" } }
+      )
+    }
     return new Response("{}", { headers: { "content-type": "application/json" } })
   }
 
@@ -185,7 +213,8 @@ test("oraclecloud: fetchJobs paginates until hasMore=false", async () => {
     ctx: { etag: null, lastModified: null, fetchImpl },
   })
 
-  assert.equal(calls, 2, "should stop after hasMore=false")
+  assert.equal(listingCalls, 2, "should stop after hasMore=false")
+  assert.equal(detailCalls, 3, "should detail-fetch jobs with missing or too-short listing descriptions")
   assert.equal(result.sourceAts, "oraclecloud")
   assert.equal(result.sourceAtsSlug, "eeho.fa.us2:CX_1")
   assert.equal(result.jobs.length, 3)
@@ -197,4 +226,6 @@ test("oraclecloud: fetchJobs paginates until hasMore=false", async () => {
   ])
   const remoteJob = result.jobs.find((j) => j.externalId.endsWith(":1"))
   assert.equal(remoteJob!.workMode, "remote")
+  const detailedJob = result.jobs.find((j) => j.externalId.endsWith(":2"))
+  assert.match(detailedJob!.description ?? "", /detail description with enough useful/)
 })

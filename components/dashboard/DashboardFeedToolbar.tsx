@@ -1,7 +1,8 @@
 "use client"
 
-import type { Dispatch, RefObject, SetStateAction } from "react"
-import { useEffect, useMemo, useRef, useState } from "react"
+import type { CSSProperties, Dispatch, ReactNode, RefObject, SetStateAction } from "react"
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { createPortal } from "react-dom"
 import {
   Bookmark,
   BookmarkCheck,
@@ -50,6 +51,61 @@ function ApexPulseBadge() {
     >
       <Sparkles className="h-2.5 w-2.5 text-white" />
     </span>
+  )
+}
+
+/**
+ * Renders a filter dropdown panel into a body-level portal, positioned `fixed`
+ * just below its trigger button. The toolbar lives inside a scroll container
+ * with `overflow-x-hidden overflow-y-auto` (and a low z-index stacking context),
+ * which would otherwise clip an `absolute` panel and trap it behind sibling
+ * content. Portaling escapes both. Position is recomputed on scroll/resize.
+ * The panel carries `data-filter-dropdown-portal` so the outside-click handler
+ * can tell a click inside it from a true outside click.
+ */
+function FilterDropdownPanel({
+  open,
+  anchor,
+  align = "left",
+  children,
+}: {
+  open: boolean
+  anchor: HTMLElement | null
+  align?: "left" | "right"
+  children: ReactNode
+}) {
+  const [coords, setCoords] = useState<Pick<CSSProperties, "top" | "left" | "right"> | null>(null)
+
+  useLayoutEffect(() => {
+    if (!open || !anchor) {
+      setCoords(null)
+      return
+    }
+    const update = () => {
+      const r = anchor.getBoundingClientRect()
+      const top = r.bottom + 6 // matches the old mt-1.5 gap
+      setCoords(
+        align === "right"
+          ? { top, right: Math.max(8, window.innerWidth - r.right) }
+          : { top, left: r.left }
+      )
+    }
+    update()
+    window.addEventListener("scroll", update, true)
+    window.addEventListener("resize", update)
+    return () => {
+      window.removeEventListener("scroll", update, true)
+      window.removeEventListener("resize", update)
+    }
+  }, [open, anchor, align])
+
+  if (!open || !coords || typeof document === "undefined") return null
+
+  return createPortal(
+    <div data-filter-dropdown-portal style={{ position: "fixed", zIndex: 100, ...coords }}>
+      {children}
+    </div>,
+    document.body
   )
 }
 
@@ -104,6 +160,9 @@ export default function DashboardFeedToolbar({
 
   const [savedDefault, setSavedDefault] = useState<string | null>(null)
   const [savingDefault, setSavingDefault] = useState(false)
+
+  // Anchor elements for each portaled filter dropdown, keyed by dropdown id.
+  const triggerRefs = useRef<Partial<Record<Exclude<FeedToolbarDropdown, null>, HTMLButtonElement | null>>>({})
 
   useEffect(() => {
     let cancelled = false
@@ -480,6 +539,7 @@ export default function DashboardFeedToolbar({
           {apexPulse.has("titles") && <ApexPulseBadge />}
           <button
             type="button"
+            ref={(el) => { triggerRefs.current.titles = el }}
             onClick={() => (filterDropdown === "titles" ? setFilterDropdown(null) : openDropdown("titles"))}
             className={cn(
               filterBtn(Boolean(filters.titles?.length), "blue"),
@@ -490,8 +550,8 @@ export default function DashboardFeedToolbar({
             <span className="max-w-[140px] truncate">{titlesLabel}</span>
             <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
           </button>
-          {filterDropdown === "titles" && (
-            <div className="absolute left-0 top-full z-50 mt-1.5 w-80 rounded-xl border border-slate-200 bg-white p-3 shadow-lg">
+          <FilterDropdownPanel open={filterDropdown === "titles"} anchor={triggerRefs.current.titles ?? null} align="left">
+            <div className="w-80 rounded-xl border border-slate-200 bg-white p-3 shadow-lg">
               <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
                 Job titles
               </p>
@@ -595,13 +655,14 @@ export default function DashboardFeedToolbar({
                 )}
               </div>
             </div>
-          )}
+          </FilterDropdownPanel>
         </div>
 
         <div className="relative">
           {apexPulse.has("location") && <ApexPulseBadge />}
           <button
             type="button"
+            ref={(el) => { triggerRefs.current.location = el }}
             onClick={() => openDropdown("location")}
             className={cn(
               filterBtn(Boolean(filters.locationQuery?.trim()) || Boolean(filters.remote), "sky"),
@@ -617,8 +678,8 @@ export default function DashboardFeedToolbar({
             <span className="max-w-[120px] truncate">{locationLabel}</span>
             <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-400" />
           </button>
-          {filterDropdown === "location" && (
-            <div className="absolute left-0 top-full z-50 mt-1.5 w-72 rounded-xl border border-slate-200 bg-white p-3 shadow-lg">
+          <FilterDropdownPanel open={filterDropdown === "location"} anchor={triggerRefs.current.location ?? null} align="left">
+            <div className="w-72 rounded-xl border border-slate-200 bg-white p-3 shadow-lg">
               <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Location</p>
               <input
                 autoFocus
@@ -665,12 +726,13 @@ export default function DashboardFeedToolbar({
                 </button>
               </div>
             </div>
-          )}
+          </FilterDropdownPanel>
         </div>
 
         <div className="relative">
           <button
             type="button"
+            ref={(el) => { triggerRefs.current.jobtype = el }}
             onClick={() => openDropdown("jobtype")}
             className={filterBtn(Boolean(filters.employment_type?.length), "violet")}
           >
@@ -678,8 +740,8 @@ export default function DashboardFeedToolbar({
             {jobtypeLabel}
             <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-400" />
           </button>
-          {filterDropdown === "jobtype" && (
-            <div className="absolute left-0 top-full z-50 mt-1.5 min-w-[200px] rounded-xl border border-slate-200 bg-white shadow-lg">
+          <FilterDropdownPanel open={filterDropdown === "jobtype"} anchor={triggerRefs.current.jobtype ?? null} align="left">
+            <div className="min-w-[200px] rounded-xl border border-slate-200 bg-white shadow-lg">
               {EMPLOYMENT_OPTIONS.map((opt) => {
                 const active = filters.employment_type?.includes(opt.value) ?? false
                 return (
@@ -704,12 +766,13 @@ export default function DashboardFeedToolbar({
                 )
               })}
             </div>
-          )}
+          </FilterDropdownPanel>
         </div>
 
         <div className="relative">
           <button
             type="button"
+            ref={(el) => { triggerRefs.current.experience = el }}
             onClick={() => openDropdown("experience")}
             className={filterBtn(Boolean(filters.seniority?.length), "indigo")}
           >
@@ -717,8 +780,8 @@ export default function DashboardFeedToolbar({
             {experienceLabel}
             <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-400" />
           </button>
-          {filterDropdown === "experience" && (
-            <div className="absolute left-0 top-full z-50 mt-1.5 min-w-[200px] rounded-xl border border-slate-200 bg-white shadow-lg">
+          <FilterDropdownPanel open={filterDropdown === "experience"} anchor={triggerRefs.current.experience ?? null} align="left">
+            <div className="min-w-[200px] rounded-xl border border-slate-200 bg-white shadow-lg">
               {SENIORITY_OPTIONS.map((opt) => {
                 const active = filters.seniority?.includes(opt.value) ?? false
                 return (
@@ -743,12 +806,13 @@ export default function DashboardFeedToolbar({
                 )
               })}
             </div>
-          )}
+          </FilterDropdownPanel>
         </div>
 
         <div className="relative">
           <button
             type="button"
+            ref={(el) => { triggerRefs.current.salary = el }}
             onClick={() => openDropdown("salary")}
             className={filterBtn(Boolean(filters.min_salary), "emerald")}
           >
@@ -756,8 +820,8 @@ export default function DashboardFeedToolbar({
             {salaryLabel}
             <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-400" />
           </button>
-          {filterDropdown === "salary" && (
-            <div className="absolute left-0 top-full z-50 mt-1.5 min-w-[180px] rounded-xl border border-slate-200 bg-white p-2 shadow-lg">
+          <FilterDropdownPanel open={filterDropdown === "salary"} anchor={triggerRefs.current.salary ?? null} align="left">
+            <div className="min-w-[180px] rounded-xl border border-slate-200 bg-white p-2 shadow-lg">
               <p className="px-2 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
                 Min salary (USD/yr)
               </p>
@@ -784,7 +848,7 @@ export default function DashboardFeedToolbar({
                 )
               })}
             </div>
-          )}
+          </FilterDropdownPanel>
         </div>
 
         <div className="relative">
@@ -821,6 +885,7 @@ export default function DashboardFeedToolbar({
         <div className="relative">
           <button
             type="button"
+            ref={(el) => { triggerRefs.current.skills = el }}
             onClick={() => openDropdown("skills")}
             className={filterBtn(Boolean(filters.skills?.length), "amber")}
           >
@@ -828,8 +893,8 @@ export default function DashboardFeedToolbar({
             Skills
             <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-400" />
           </button>
-          {filterDropdown === "skills" && (
-            <div className="absolute right-0 top-full z-50 mt-1.5 w-72 rounded-xl border border-slate-200 bg-white p-3 shadow-lg">
+          <FilterDropdownPanel open={filterDropdown === "skills"} anchor={triggerRefs.current.skills ?? null} align="right">
+            <div className="w-72 rounded-xl border border-slate-200 bg-white p-3 shadow-lg">
               <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
                 Skills (comma-separated)
               </p>
@@ -859,12 +924,13 @@ export default function DashboardFeedToolbar({
                   Apply
                 </button>
             </div>
-          )}
+          </FilterDropdownPanel>
         </div>
 
         <div className="relative">
           <button
             type="button"
+            ref={(el) => { triggerRefs.current.industry = el }}
             onClick={() => openDropdown("industry")}
             className={filterBtn(Boolean(filters.industryQuery?.trim()), "teal")}
           >
@@ -872,8 +938,8 @@ export default function DashboardFeedToolbar({
             Industry
             <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-400" />
           </button>
-          {filterDropdown === "industry" && (
-            <div className="absolute right-0 top-full z-50 mt-1.5 w-72 rounded-xl border border-slate-200 bg-white p-3 shadow-lg">
+          <FilterDropdownPanel open={filterDropdown === "industry"} anchor={triggerRefs.current.industry ?? null} align="right">
+            <div className="w-72 rounded-xl border border-slate-200 bg-white p-3 shadow-lg">
               <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
                 Industry contains
               </p>
@@ -902,7 +968,7 @@ export default function DashboardFeedToolbar({
                   Apply
                 </button>
             </div>
-          )}
+          </FilterDropdownPanel>
         </div>
 
         <button

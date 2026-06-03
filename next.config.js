@@ -19,9 +19,16 @@ const nextConfig = {
   },
   experimental: {
     serverActions: { allowedOrigins: ["hireoven.com", "localhost:3000"] },
-    serverComponentsExternalPackages: ["pdf-parse", "mammoth", "sharp", "undici"],
+    serverComponentsExternalPackages: ["pdf-parse", "@napi-rs/canvas", "mammoth", "sharp", "undici"],
     outputFileTracingIncludes: {
       "/**": ["./node_modules/sharp/**/*"],
+      // Native .node binary + pdfjs need to be traced into the standalone build
+      // so server-side PDF resume parsing works in production (DOMMatrix etc.).
+      "/api/resume/**": [
+        "./node_modules/@napi-rs/canvas/**/*",
+        "./node_modules/@napi-rs/canvas-*/**/*",
+        "./node_modules/pdf-parse/**/*",
+      ],
     },
   },
   async headers() {

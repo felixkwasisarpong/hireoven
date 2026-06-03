@@ -1,7 +1,7 @@
 /**
  * One-shot local harvest of all Oracle Cloud HCM companies using the updated
- * adapter (with ShortDescriptionStr fallback). Run this to backfill descriptions
- * without waiting for the remote worker to restart.
+ * adapter (with ShortDescriptionStr + detail-page metadata fallback). Run this
+ * to backfill descriptions without waiting for the remote worker to restart.
  *
  * Usage: npx tsx scripts/harvest-oracle-now.ts
  */
@@ -60,7 +60,7 @@ async function main() {
   // Check description coverage after harvest
   const { rows: coverage } = await pool.query(`
     SELECT
-      COUNT(*) FILTER (WHERE length(COALESCE(description,'')) > 50) as with_desc,
+      COUNT(*) FILTER (WHERE length(COALESCE(description,'')) >= 200) as with_desc,
       COUNT(*) as total
     FROM jobs j
     JOIN companies c ON c.id = j.company_id
