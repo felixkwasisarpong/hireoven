@@ -11,6 +11,8 @@ import { ApexTodayPlanCard } from "@/components/apex/ApexTodayPlanCard"
 import { ApexExtensionPromo } from "@/components/apex/ApexExtensionPromo"
 import { ApexTrustBadge } from "@/components/apex/ApexTrustBadge"
 import { ApexSuggestedCommands } from "@/components/apex/workspace/scenes/ApexSuggestedCommands"
+import { ApexWelcomeMessage } from "@/components/apex/ApexWelcomeMessage"
+import { isApexWelcomeSeen } from "@/lib/apex/first-run"
 import { useUpgradeModal } from "@/lib/context/UpgradeModalContext"
 import type { CareerTwinSnapshot } from "@/lib/apex/career-twin/types"
 import type { ApexResponse, ApexStrategyBoard } from "@/lib/apex/types"
@@ -142,8 +144,10 @@ export function IdleMode({
     !hasStreamingMessage
 
   const [mounted, setMounted] = useState(false)
+  const [welcomeSeen, setWelcomeSeen] = useState(true)
   useEffect(() => {
     const t = setTimeout(() => setMounted(true), 40)
+    setWelcomeSeen(isApexWelcomeSeen())
     return () => clearTimeout(t)
   }, [])
 
@@ -198,6 +202,19 @@ export function IdleMode({
                   <RotateCcw className="h-3.5 w-3.5" />
                   Start fresh
                 </button>
+              )}
+
+              {/* First-time welcome — only shown once, dismissed forever */}
+              {!welcomeSeen && !hasConversation && !hasSession && (
+                <div
+                  className={`mt-5 ${fade} ${mounted ? show : hide}`}
+                  style={{ transitionDelay: "80ms" }}
+                >
+                  <ApexWelcomeMessage
+                    firstName={firstName !== "there" ? firstName : undefined}
+                    onSelect={(q) => { setWelcomeSeen(true); onTileClick(q) }}
+                  />
+                </div>
               )}
 
               <div
