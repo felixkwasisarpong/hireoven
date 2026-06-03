@@ -1457,18 +1457,10 @@ export function ApplyAgentFlow({
                 <button
                   type="button"
                   onClick={() => openResumeSidePreview(reviewResumePreview, `Tailored resume · ${reviewJob?.jobTitle ?? "Job"}`)}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-slate-700 transition hover:bg-slate-100"
+                  className="rounded-lg border border-slate-200 bg-white p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                  title="Expand full screen"
                 >
-                  Preview <ExternalLink className="h-3 w-3 text-slate-400" />
-                </button>
-              )}
-              {reviewCoverLetterUrl && (
-                <button
-                  type="button"
-                  onClick={() => openUrlSidePreview(reviewCoverLetterUrl, `Cover letter · ${reviewJob?.jobTitle ?? "Job"}`)}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-slate-700 transition hover:bg-slate-100"
-                >
-                  Cover letter <ExternalLink className="h-3 w-3 text-slate-400" />
+                  <ExternalLink className="h-3.5 w-3.5" />
                 </button>
               )}
             </div>
@@ -1547,16 +1539,6 @@ export function ApplyAgentFlow({
                   className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
                 >
                   Review resume on side
-                  <ExternalLink className="h-3.5 w-3.5 text-slate-400" />
-                </button>
-              )}
-              {applyCoverLetterUrl && (
-                <button
-                  type="button"
-                  onClick={() => openUrlSidePreview(applyCoverLetterUrl, `Cover letter · ${currentApplyJob?.jobTitle ?? "Job"}`)}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
-                >
-                  Review cover letter on side
                   <ExternalLink className="h-3.5 w-3.5 text-slate-400" />
                 </button>
               )}
