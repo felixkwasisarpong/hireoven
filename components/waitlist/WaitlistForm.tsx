@@ -6,7 +6,7 @@ import { useSearchParams } from "next/navigation"
 import { Check, Copy, Linkedin, Twitter } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
-import { getPublicSiteUrl } from "@/lib/waitlist/site-url"
+import { getShareOrigin } from "@/lib/waitlist/site-url"
 
 type Variant = "simple" | "expanded"
 
@@ -97,7 +97,7 @@ export default function WaitlistForm({
   const refId = waitlistId ?? returnedId
 
   const shareUrl = useMemo(() => {
-    const base = getPublicSiteUrl()
+    const base = getShareOrigin()
     const u = new URL("/launch", base)
     if (refId) u.searchParams.set("ref", refId)
     return u.toString()
