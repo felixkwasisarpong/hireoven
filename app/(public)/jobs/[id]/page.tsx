@@ -37,14 +37,27 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const data = rows[0]
   if (!data) return { title: "Job - Hireoven" }
   const companyName = data.company_name ?? ""
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://hireoven.com"
+  const canonicalUrl = `${appUrl}/jobs/${id}`
+  const ogImageUrl = `${appUrl}/api/og/job/${id}`
+  const locationStr = data.is_remote ? "Remote" : (data.location ?? "")
 
   return {
     title: `${data.title} at ${companyName} - Hireoven`,
-    description: `Apply for ${data.title} at ${companyName}. ${data.is_remote ? "Remote." : (data.location ?? "")} See this job fresh on Hireoven.`,
+    description: `${data.title} at ${companyName}${locationStr ? ` · ${locationStr}` : ""}. Fresh on Hireoven — see it before the crowd.`,
     openGraph: {
       title: `${data.title} at ${companyName}`,
-      description: `${data.is_remote ? "Remote · " : ""}Apply fresh on Hireoven`,
+      description: `${locationStr ? `${locationStr} · ` : ""}Fresh job on Hireoven`,
       type: "website",
+      url: canonicalUrl,
+      images: [{ url: ogImageUrl, width: 1200, height: 630, alt: `${data.title} at ${companyName}` }],
+      siteName: "Hireoven",
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: `${data.title} at ${companyName}`,
+      description: `${locationStr ? `${locationStr} · ` : ""}Fresh job on Hireoven`,
+      images: [ogImageUrl],
     },
   }
 }
