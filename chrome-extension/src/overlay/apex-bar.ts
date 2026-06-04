@@ -989,6 +989,10 @@ const STYLES = `
   .cl-skeleton > div:nth-child(2) { width: 78%; }
   .cl-skeleton > div:nth-child(3) { width: 64%; }
 
+  /* Draggable handle — brand + status area */
+  .brand, .status { cursor: grab; user-select: none; }
+  .brand:active, .status:active { cursor: grabbing; }
+
   /* Agent login-waiting banner */
   .agent-login-banner {
     display: flex;
@@ -1237,6 +1241,13 @@ export class ApexBar {
   private agentModeRunning: boolean = false
   private agentWaitingForLogin: boolean = false
 
+  // Draggable position — null means centered (default)
+  private barPosition: { left: number; bottom: number } | null = null
+  private isDragging: boolean = false
+  private dragStartMouse: { x: number; y: number } = { x: 0, y: 0 }
+  private dragStartBar: { left: number; bottom: number } = { left: 0, bottom: 0 }
+  private positionStyleEl: HTMLStyleElement | null = null
+
   private isDevInstall(): boolean {
     try {
       return !chrome.runtime.getManifest().update_url
@@ -1254,10 +1265,14 @@ export class ApexBar {
     // injection (SPA navigation, hot-reload, etc.).
     document.querySelectorAll(`#${HOST_ID}`).forEach((el) => el.remove())
 
-    // Restore the user's minimized preference.
+    // Restore the user's minimized preference and dragged position.
     try {
-      const stored = await chrome.storage.local.get(MINIMIZED_STORAGE_KEY)
+      const stored = await chrome.storage.local.get([MINIMIZED_STORAGE_KEY, "apexBarPosition"])
       this.minimized = Boolean(stored[MINIMIZED_STORAGE_KEY])
+      const pos = stored["apexBarPosition"]
+      if (pos && typeof pos.left === "number" && typeof pos.bottom === "number") {
+        this.barPosition = { left: pos.left, bottom: pos.bottom }
+      }
     } catch {
       // chrome.storage may be unavailable in non-extension contexts — keep default.
     }
@@ -1528,14 +1543,75 @@ export class ApexBar {
     this.root = document.createElement("div")
     this.shadow.appendChild(this.root)
 
+    // Dynamic position override — injected after STYLES so it wins specificity
+    this.positionStyleEl = document.createElement("style")
+    this.shadow.appendChild(this.positionStyleEl)
+    this.applyBarPosition()
+
     this.bindEvents()
+    this.bindDragHandlers()
   }
 
   private tearDownSurface(): void {
+    this.positionStyleEl = null
     this.host?.remove()
     this.host = null
     this.shadow = null
     this.root = null
+  }
+
+  private applyBarPosition(): void {
+    if (!this.positionStyleEl) return
+    if (this.barPosition) {
+      const { left, bottom } = this.barPosition
+      this.positionStyleEl.textContent =
+        `.apex-bar { left: ${left}px !important; bottom: ${bottom}px !important; transform: none !important; }`
+    } else {
+      this.positionStyleEl.textContent = ""
+    }
+  }
+
+  private bindDragHandlers(): void {
+    if (!this.shadow) return
+
+    this.shadow.addEventListener("mousedown", (e: Event) => {
+      const me = e as MouseEvent
+      const target = me.composedPath()[0] as HTMLElement | null
+      if (!target?.closest(".brand") && !target?.closest(".status")) return
+      me.preventDefault()
+
+      const barEl = this.root?.querySelector<HTMLElement>(".apex-bar")
+      if (!barEl) return
+      const rect = barEl.getBoundingClientRect()
+
+      this.isDragging = true
+      this.dragStartMouse = { x: me.clientX, y: me.clientY }
+      this.dragStartBar = {
+        left: this.barPosition?.left ?? rect.left,
+        bottom: this.barPosition?.bottom ?? (window.innerHeight - rect.bottom),
+      }
+    })
+
+    document.addEventListener("mousemove", (e: MouseEvent) => {
+      if (!this.isDragging) return
+      e.preventDefault()
+
+      const dx = e.clientX - this.dragStartMouse.x
+      const dy = e.clientY - this.dragStartMouse.y
+      const newLeft = Math.max(0, Math.min(window.innerWidth - 220, this.dragStartBar.left + dx))
+      const newBottom = Math.max(0, Math.min(window.innerHeight - 56, this.dragStartBar.bottom - dy))
+
+      this.barPosition = { left: newLeft, bottom: newBottom }
+      this.applyBarPosition()
+    })
+
+    document.addEventListener("mouseup", () => {
+      if (!this.isDragging) return
+      this.isDragging = false
+      if (this.barPosition) {
+        chrome.storage.local.set({ apexBarPosition: this.barPosition }).catch(() => {})
+      }
+    })
   }
 
   private renderStatus(): string {
