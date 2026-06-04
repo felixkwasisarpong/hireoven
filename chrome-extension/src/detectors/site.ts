@@ -158,8 +158,12 @@ const JOB_DETAIL_TESTS: Partial<Record<SupportedSite, (path: string, params: URL
   greenhouse: (path, params) =>
     // boards|job-boards.greenhouse.io/company/jobs/[numericId]
     // greenhouse.io/job_app  (direct or embedded application form link)
+    // my.greenhouse.io/quick_apply  (Greenhouse quick apply modal)
     /\/jobs\/\d+/.test(path) ||
     /\/job_app/.test(path) ||
+    /\/quick_apply/.test(path) ||
+    // job-boards.greenhouse.io/company/jobs/slug (non-numeric slugs)
+    /\/jobs\/[^/?#]+/.test(path) ||
     // Embedded on company domain: ?gh_jid=<id>
     params.has("gh_jid"),
 

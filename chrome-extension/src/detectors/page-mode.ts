@@ -94,7 +94,7 @@ export function shouldShowAutofillFeatures(mode: ExtensionPageMode): boolean {
  * Callers that need the full field list should still use detectApplicationForm.
  */
 const APPLICATION_FORM_SELECTORS: ReadonlyArray<string> = [
-  // Greenhouse
+  // Greenhouse (boards, job-boards, my.greenhouse.io/quick_apply)
   "#grnhse_app",
   "#grnhse_app form",
   "#application_form",
@@ -104,6 +104,10 @@ const APPLICATION_FORM_SELECTORS: ReadonlyArray<string> = [
   ".greenhouse-application",
   ".greenhouse-application form",
   "form[action*='job-boards']",
+  "form[action*='greenhouse']",
+  "#quick-apply-form",
+  "form[id*='quick']",
+  "form[class*='quick-apply']",
   // Lever
   "form.application-form",
   // Ashby — embedded apply iframe / SPA form
