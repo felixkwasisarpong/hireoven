@@ -157,8 +157,17 @@ export async function GET(req: NextRequest) {
       WHERE id IN (
         SELECT id FROM companies
          WHERE ats_type IS NULL AND ats_probe_attempted_at IS NULL
-           AND is_active = true AND duplicate_of_company_id IS NULL
+           AND duplicate_of_company_id IS NULL
            AND name IS NOT NULL AND length(trim(name)) >= 2
+           AND status != 'dead'
+           AND (
+             is_active = true
+             -- Also probe inactive placeholder companies from discovery crons
+             -- (Builtin, aggregator ingest) that have a real guessable name.
+             -- Their domain may be a sentinel but slug generation uses the name.
+             OR (is_active = false AND job_count > 0)
+             OR discovered_via IS NOT NULL
+           )
          ORDER BY job_count DESC NULLS LAST
          LIMIT $1
          FOR UPDATE SKIP LOCKED
