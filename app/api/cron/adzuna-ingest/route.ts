@@ -47,6 +47,24 @@ const DEFAULT_QUERIES = [
   "product manager",
   "site reliability engineer",
   "software developer",
+  "mobile developer",
+  "android developer",
+  "ios developer",
+  "react developer",
+  "python developer",
+  "java developer",
+  "node developer",
+  "qa engineer",
+  "security engineer",
+  "solutions architect",
+  "engineering manager",
+  "technical program manager",
+  "ui ux designer",
+  "business analyst",
+  "data analyst",
+  "financial analyst",
+  "sales engineer",
+  "account executive",
 ]
 
 export async function GET(request: NextRequest) {
@@ -64,7 +82,7 @@ export async function GET(request: NextRequest) {
         .filter(Boolean)
         .concat(DEFAULT_QUERIES)
         .filter((q, i, arr) => arr.indexOf(q) === i)
-        .slice(0, 20)
+        .slice(0, 30)
 
   const maxDaysOld = Number(url.searchParams.get("maxDaysOld") ?? process.env.ADZUNA_MAX_DAYS_OLD ?? "1")
   const maxJobs = Number(url.searchParams.get("maxJobs") ?? process.env.ADZUNA_MAX_JOBS ?? "300")

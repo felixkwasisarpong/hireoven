@@ -7,7 +7,7 @@
  *
  * Env:
  *   DICE_SEARCH_QUERIES  comma-separated list of search terms (default below)
- *   DICE_POSTED_DATE     ONE_DAY_AGO | THREE_DAYS_AGO | SEVEN_DAYS_AGO (default: THREE_DAYS_AGO)
+ *   DICE_POSTED_DATE     ONE_DAY_AGO | THREE_DAYS_AGO | SEVEN_DAYS_AGO (default: ONE_DAY_AGO)
  *   DICE_MAX_JOBS        max jobs per query (default: 300)
  */
 
@@ -69,7 +69,7 @@ export async function GET(request: NextRequest) {
         .filter((q, i, arr) => arr.indexOf(q) === i)
         .slice(0, 20)
 
-  const postedDate = url.searchParams.get("postedDate") ?? process.env.DICE_POSTED_DATE ?? "THREE_DAYS_AGO"
+  const postedDate = url.searchParams.get("postedDate") ?? process.env.DICE_POSTED_DATE ?? "ONE_DAY_AGO"
   const maxJobs = Number(url.searchParams.get("maxJobs") ?? process.env.DICE_MAX_JOBS ?? "300")
 
   const pool = getPostgresPool()
