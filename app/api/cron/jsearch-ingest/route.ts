@@ -25,6 +25,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { requireCronAuth } from "@/lib/env"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { bumpHarvestForActiveCompanies } from "@/lib/harvester/freshness-signal"
+import { enrollFromApplyUrl } from "@/lib/harvester/discovery/enroll-from-apply-url"
 import {
   searchJSearchAllPages,
   type JSearchJob,
@@ -115,15 +116,28 @@ export async function GET(request: NextRequest) {
     companyIdMap.set(row.name, row.id)
   }
 
-  // Create placeholder companies for unknowns.
-  // JSearch gives us the real employer domain — use it so discover-tenants
-  // can detect their ATS on the very next run (vs. name-slug placeholders
-  // which never resolve).
+  // Create companies for unknowns.
+  // JSearch returns real apply URLs — try ATS detection first to create a
+  // harvestable row immediately. Fall back to domain-based placeholder.
   const missing = companyNames.filter((n) => !companyIdMap.has(n))
   for (const normName of missing) {
     const sample = byCompany.get(normName)![0]
     const domain = sample.companyDomain ?? deriveFallbackDomain(sample.company)
     try {
+      // Try ATS detection from the direct apply URL
+      if (sample.applyUrl) {
+        const enrolled = await enrollFromApplyUrl(pool, {
+          companyName: sample.company,
+          applyUrl: sample.applyUrl,
+          companyDomain: sample.companyDomain,
+          logoUrl: sample.companyLogo,
+          source: "jsearch",
+        })
+        if (enrolled) {
+          companyIdMap.set(normName, enrolled.id)
+          continue
+        }
+      }
       const res = await pool.query<{ id: string }>(
         `INSERT INTO companies (name, domain, careers_url, is_active, logo_url, raw_ats_config)
          VALUES ($1, $2, $3, false, $4, $5)

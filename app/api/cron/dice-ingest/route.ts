@@ -16,6 +16,7 @@ import pLimit from "p-limit"
 import { requireCronAuth } from "@/lib/env"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { bumpHarvestForActiveCompanies } from "@/lib/harvester/freshness-signal"
+import { enrollFromApplyUrl } from "@/lib/harvester/discovery/enroll-from-apply-url"
 import {
   searchDiceAllPages,
   parseDiceSalary,
@@ -122,12 +123,26 @@ export async function GET(request: NextRequest) {
     companyIdMap.set(row.name, row.id)
   }
 
-  // Create placeholder companies for any that don't exist yet
+  // Create companies for any that don't exist yet.
+  // Try ATS detection from apply URL first — if the job links directly to
+  // Greenhouse/Lever/Ashby/etc., create a real harvestable row instead of
+  // a placeholder that discover-tenants may never resolve.
   const missing = companyNames.filter((n) => !companyIdMap.has(n))
   for (const normName of missing) {
     const jobs = byCompany.get(normName)!
     const sample = jobs[0]
     try {
+      // Attempt ATS detection from the apply URL
+      const enrolled = await enrollFromApplyUrl(pool, {
+        companyName: sample.company,
+        applyUrl: sample.applyUrl,
+        source: "dice",
+      })
+      if (enrolled) {
+        companyIdMap.set(normName, enrolled.id)
+        continue
+      }
+      // Fall back to placeholder
       const res = await pool.query<{ id: string }>(
         `INSERT INTO companies (name, domain, careers_url, is_active, raw_ats_config)
          VALUES ($1, $2, $3, false, $4)
