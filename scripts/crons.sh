@@ -47,6 +47,7 @@ run() {
 # waas-ingest        15 */6 * * *      run api/cron/waas-ingest
 # discover-companies 0 5 * * *         run api/cron/discover-companies
 # discover-tenants   0 */2 * * *       run api/cron/discover-tenants
+# careers-url-discovery 30 */4 * * *   run api/cron/careers-url-discovery
 # glassdoor-discovery 30 5 * * *       run api/cron/glassdoor-discovery
 # builtin-discovery   0 */4 * * *       run api/cron/builtin-discovery
 # signal-api-webhooks * * * * *        run api/cron/signal-api-webhooks
@@ -77,6 +78,7 @@ case "${1:-}" in
   waas-ingest)       run api/cron/waas-ingest ;;
   discover-companies) run api/cron/discover-companies ;;
   discover-tenants)  run api/cron/discover-tenants ;;
+  careers-url-discovery) run api/cron/careers-url-discovery ;;
   glassdoor-discovery) run api/cron/glassdoor-discovery ;;
   builtin-discovery) run api/cron/builtin-discovery ;;
   signal-api-webhooks) run api/cron/signal-api-webhooks ;;
