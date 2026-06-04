@@ -882,7 +882,10 @@ export default async function DashboardJobDetailPage({ params }: Props) {
                   <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400">
                     Share this role
                   </p>
-                  <JobShareRow jobTitle={displayTitle} />
+                  <JobShareRow
+                    jobTitle={displayTitle}
+                    shareUrl={`${process.env.NEXT_PUBLIC_APP_URL ?? "https://hireoven.com"}/jobs/${id}`}
+                  />
                 </div>
               </div>
             </div>
