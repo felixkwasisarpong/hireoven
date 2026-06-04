@@ -30,6 +30,7 @@ import {
   adzunaContractToEmploymentType,
   type AdzunaJob,
 } from "@/lib/sources/adzuna"
+import { isValidCompanyName } from "@/lib/sources/company-name-guard"
 
 export const runtime = "nodejs"
 export const maxDuration = 300
@@ -100,7 +101,7 @@ export async function GET(request: NextRequest) {
       const jobs = await searchAdzunaAllPages({ what: q, maxDaysOld, sortBy: "date" }, maxJobs)
       stats.queries++
       for (const job of jobs) {
-        if (!seen.has(job.id)) seen.set(job.id, job)
+        if (!seen.has(job.id) && isValidCompanyName(job.company)) seen.set(job.id, job)
       }
       stats.fetched = seen.size
     } catch (err) {
