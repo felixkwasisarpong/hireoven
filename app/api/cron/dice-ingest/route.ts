@@ -24,6 +24,7 @@ import {
   fetchDiceJobDescription,
   type DiceJob,
 } from "@/lib/sources/dice"
+import { isValidCompanyName } from "@/lib/sources/company-name-guard"
 
 export const runtime = "nodejs"
 export const maxDuration = 300
@@ -87,7 +88,7 @@ export async function GET(request: NextRequest) {
       const jobs = await searchDiceAllPages({ q, postedDate }, maxJobs)
       stats.queries++
       for (const job of jobs) {
-        if (!seen.has(job.id)) seen.set(job.id, job)
+        if (!seen.has(job.id) && isValidCompanyName(job.company)) seen.set(job.id, job)
       }
       stats.fetched = seen.size
     } catch (err) {
