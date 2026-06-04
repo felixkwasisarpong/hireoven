@@ -52,9 +52,15 @@ const ATS_FORM_SELECTORS: ReadonlyArray<string> = [
   "form[action*='job-boards']",
   // Lever
   "form.application-form",
-  // Ashby
+  // Ashby — React SPA: forms have no action attribute.
+  // Detect by aria-label inputs, data-testid wrappers, or any form
+  // with file + text inputs on an ashbyhq.com /application URL.
   "form[action*='ashby']",
   "form[action*='jobs.ashbyhq']",
+  "[data-testid='application-form']",
+  "[data-testid*='apply']",
+  "form._form",
+  "form[class*='application']",
   // Workday
   "form[action*='workday']",
   "form[action*='myworkday']",
@@ -366,7 +372,28 @@ export function detectApplicationForm(doc: Document = document): ApplicationForm
     }
   }
 
-  const forms = findFormRoots(doc, ats)
+  let forms = findFormRoots(doc, ats)
+
+  // Ashby fallback: their React SPA renders forms without action attributes and
+  // without ATS-specific class names. If standard detection missed it, check:
+  // 1. URL ends with /application (canonical Ashby apply URL pattern)
+  // 2. Page has aria-label inputs consistent with an application form
+  if (forms.length === 0 && ats === "ashby") {
+    const isApplicationUrl = /\/application(\/|$|\?)/.test(location.pathname)
+    const ariaInputs = doc.querySelectorAll<HTMLElement>(
+      'input[aria-label], input[placeholder], textarea[aria-label]',
+    )
+    const hasProfileInputs = Array.from(ariaInputs).some((el) => {
+      const label = (el.getAttribute("aria-label") ?? el.getAttribute("placeholder") ?? "").toLowerCase()
+      return /\b(name|email|phone|linkedin|resume|cover|website|portfolio)\b/.test(label)
+    })
+    if (isApplicationUrl || hasProfileInputs) {
+      // Treat the entire document body as the form root for field discovery
+      forms = [doc.body]
+      reasons.push("Ashby React SPA application detected via URL/aria-label pattern.")
+    }
+  }
+
   if (forms.length === 0) {
     reasons.push("No application form element found on the page.")
     return {

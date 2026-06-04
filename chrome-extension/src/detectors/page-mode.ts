@@ -176,6 +176,20 @@ function pageHasApplicationForm(doc: Document, site: SupportedSite): boolean {
     if (fieldCount >= 2) return true
     if (site === "workday" && root.querySelector("input[type=file]")) return true
   }
+  // Ashby-specific fallback: their React SPA doesn't use form action attributes.
+  // Detect by URL (/application suffix) or presence of aria-label inputs.
+  if (site === "ashby") {
+    if (/\/application(\/|$|\?)/.test(location.pathname)) return true
+    const ariaInputs = doc.querySelectorAll<HTMLElement>(
+      'input[aria-label], input[placeholder]',
+    )
+    const hasProfileInput = Array.from(ariaInputs).some((el) => {
+      const hint = (el.getAttribute("aria-label") ?? el.getAttribute("placeholder") ?? "").toLowerCase()
+      return /\b(name|email|phone|linkedin|resume|cover|website|portfolio)\b/.test(hint)
+    })
+    if (hasProfileInput) return true
+  }
+
   // Structural fallback: a <form> with a file input + ≥2 text-like inputs.
   // Conservative — catches custom application shells without false-positiving
   // newsletters or search bars.
