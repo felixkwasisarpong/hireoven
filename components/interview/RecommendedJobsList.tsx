@@ -79,7 +79,7 @@ export default function RecommendedJobsList({
   return (
     <section className="mt-10">
       <div className="mb-3 flex items-center gap-2">
-        <div className="h-4 w-0.5 rounded-full bg-orange-400" />
+        <div className="h-4 w-0.5 rounded-full bg-indigo-400" />
         <h2 className="text-[12px] font-bold uppercase tracking-widest text-slate-400">
           Practice for your pipeline
         </h2>
@@ -104,7 +104,7 @@ export default function RecommendedJobsList({
 
             <Link
               href={`/dashboard/interview/setup?jobId=${job.id}`}
-              className="flex shrink-0 items-center gap-1.5 rounded-lg border border-orange-200 bg-orange-50 px-3 py-1.5 text-[12px] font-semibold text-orange-600 transition hover:bg-orange-100"
+              className="flex shrink-0 items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-[12px] font-semibold text-indigo-600 transition hover:bg-indigo-100"
             >
               <Zap className="h-3 w-3" />
               Practice

@@ -33,52 +33,52 @@ const MODE_STYLES: Record<Mode, {
   bestFor: string
 }> = {
   text: {
-    accent: "bg-gradient-to-r from-[#ff8f2b] via-[#ff6a3d] to-[#ff8a63]",
-    shell: "border-[#ffd7c4] bg-[#fffaf7] shadow-[0_14px_34px_rgba(255,129,66,0.14)]",
-    surface: "bg-[radial-gradient(circle_at_6%_4%,rgba(255,196,165,0.45),transparent_46%)]",
-    glow: "bg-[radial-gradient(circle_at_94%_6%,rgba(255,164,114,0.24),transparent_52%)]",
-    iconBg: "bg-white/95 ring-1 ring-[#ffd8c8]",
-    iconColor: "text-[#ef5f2a]",
-    chip: "bg-white/90 text-[#d84d1f] ring-1 ring-[#ffd1bf]",
+    accent: "bg-gradient-to-r from-indigo-400 via-indigo-500 to-violet-500",
+    shell: "border-indigo-100 bg-indigo-50/40 shadow-[0_14px_34px_rgba(99,102,241,0.10)]",
+    surface: "bg-[radial-gradient(circle_at_6%_4%,rgba(199,210,254,0.4),transparent_46%)]",
+    glow: "bg-[radial-gradient(circle_at_94%_6%,rgba(167,139,250,0.15),transparent_52%)]",
+    iconBg: "bg-white/95 ring-1 ring-indigo-200",
+    iconColor: "text-indigo-600",
+    chip: "bg-white/90 text-indigo-700 ring-1 ring-indigo-200",
     title: "text-slate-900",
     description: "text-slate-600",
     bestForLabel: "text-slate-400",
     bestForValue: "text-slate-600",
-    button: "bg-[#f26c2f] text-white hover:bg-[#e35b1f]",
+    button: "bg-indigo-600 text-white hover:bg-indigo-700",
     lockOverlay: "bg-white/90",
     lockBtn: "bg-slate-900 text-white hover:bg-slate-700",
     bestFor: "Story crafting · no time pressure",
   },
   live: {
-    accent: "bg-gradient-to-r from-slate-200 via-white to-slate-300",
-    shell: "border-[#2a2a2f] bg-[#09090b] shadow-[0_24px_65px_rgba(2,6,23,0.65)]",
-    surface: "bg-[radial-gradient(circle_at_12%_-4%,rgba(148,163,184,0.2),transparent_42%)]",
-    glow: "bg-[radial-gradient(circle_at_88%_6%,rgba(255,255,255,0.1),transparent_48%)]",
+    accent: "bg-gradient-to-r from-slate-600 via-slate-700 to-slate-800",
+    shell: "border-[#1e293b] bg-[#0f172a] shadow-[0_24px_65px_rgba(2,6,23,0.65)]",
+    surface: "bg-[radial-gradient(circle_at_12%_-4%,rgba(99,102,241,0.12),transparent_42%)]",
+    glow: "bg-[radial-gradient(circle_at_88%_6%,rgba(148,163,184,0.07),transparent_48%)]",
     iconBg: "bg-white/5 ring-1 ring-white/10",
     iconColor: "text-slate-100",
     chip: "bg-white/10 text-slate-200 ring-1 ring-white/15",
     title: "text-white",
-    description: "text-slate-300",
-    bestForLabel: "text-slate-500",
-    bestForValue: "text-slate-300",
-    button: "bg-white text-slate-950 hover:bg-slate-200",
+    description: "text-slate-400",
+    bestForLabel: "text-slate-600",
+    bestForValue: "text-slate-400",
+    button: "bg-indigo-500 text-white hover:bg-indigo-600",
     lockOverlay: "bg-[#0b0b0d]/88",
     lockBtn: "bg-white text-slate-950 hover:bg-slate-200",
     bestFor: "Final-round prep · real pressure",
   },
   coding: {
-    accent: "bg-gradient-to-r from-amber-300 via-amber-500 to-orange-500",
-    shell: "border-amber-200 bg-amber-50/60 shadow-[0_14px_32px_rgba(245,158,11,0.14)]",
-    surface: "bg-[radial-gradient(circle_at_14%_2%,rgba(255,229,159,0.45),transparent_44%)]",
-    glow: "bg-[radial-gradient(circle_at_90%_8%,rgba(253,186,116,0.3),transparent_46%)]",
-    iconBg: "bg-white/95 ring-1 ring-amber-200",
-    iconColor: "text-amber-600",
-    chip: "bg-white/90 text-amber-700 ring-1 ring-amber-200",
+    accent: "bg-gradient-to-r from-emerald-400 via-emerald-500 to-teal-500",
+    shell: "border-emerald-100 bg-emerald-50/40 shadow-[0_14px_32px_rgba(16,185,129,0.10)]",
+    surface: "bg-[radial-gradient(circle_at_14%_2%,rgba(167,243,208,0.35),transparent_44%)]",
+    glow: "bg-[radial-gradient(circle_at_90%_8%,rgba(94,234,212,0.2),transparent_46%)]",
+    iconBg: "bg-white/95 ring-1 ring-emerald-200",
+    iconColor: "text-emerald-600",
+    chip: "bg-white/90 text-emerald-700 ring-1 ring-emerald-200",
     title: "text-slate-900",
     description: "text-slate-600",
     bestForLabel: "text-slate-400",
     bestForValue: "text-slate-600",
-    button: "bg-amber-500 text-white hover:bg-amber-600",
+    button: "bg-emerald-600 text-white hover:bg-emerald-700",
     lockOverlay: "bg-white/90",
     lockBtn: "bg-slate-900 text-white hover:bg-slate-700",
     bestFor: "Algorithm rounds · think out loud",
@@ -122,11 +122,11 @@ function BuyCreditsButton({
         "inline-flex w-full items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-[12px] font-semibold transition disabled:opacity-60",
         tone === "dark"
           ? highlight
-            ? "bg-white text-slate-950 hover:bg-slate-200"
+            ? "bg-indigo-500 text-white hover:bg-indigo-600"
             : "border border-white/20 bg-white/5 text-slate-200 hover:bg-white/10"
           : highlight
-            ? "bg-violet-600 text-white hover:bg-violet-700"
-            : "border border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100"
+            ? "bg-indigo-600 text-white hover:bg-indigo-700"
+            : "border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
       )}
     >
       <CreditCard className="h-3.5 w-3.5" />
@@ -163,7 +163,7 @@ function LockedCard({
         <Lock className={cn("mb-1 h-5 w-5", mode === "live" ? "text-slate-300" : "text-slate-400")} />
         <span className={cn(
           "rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide",
-          requiredPlan === "pro_max" ? "bg-violet-600 text-white" : "bg-[#FF5C18] text-white"
+          requiredPlan === "pro_max" ? "bg-violet-600 text-white" : "bg-indigo-600 text-white"
         )}>
           {badge}
         </span>
