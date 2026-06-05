@@ -1,6 +1,20 @@
-import { fetchPrimaryResume, getAutofillProfile } from "../api-client"
+import { fetchPrimaryResume, getAutofillProfile, matchQuestions } from "../api-client"
+import type { MatchQuestion } from "../api-client"
 import type { SafeProfile } from "./safe-fields"
 import type { AutofillFieldResult } from "./safe-fields"
+
+/**
+ * A required application question the deterministic matcher couldn't answer.
+ * Deferred to the semantic (server/Claude) tier and applied via `apply()` if
+ * the model returns a usable value; otherwise it falls back to manual review.
+ */
+type SemanticQuestion = {
+  el: HTMLElement
+  label: string
+  type: MatchQuestion["type"]
+  options?: string[]
+  apply: (value: string) => boolean | Promise<boolean>
+}
 
 type WorkdayStepId =
   | "account_required"
@@ -18,6 +32,8 @@ type WorkdayStep = {
   index: number
   total: number
 }
+
+type WorkdayNameFieldKind = "first" | "middle" | "last" | "preferred"
 
 type ResumeEducationRow = {
   institution?: string | null
@@ -242,6 +258,21 @@ function isVisible(el: Element | null): boolean {
   return rect.width > 0 && rect.height > 0
 }
 
+/**
+ * Workday renders radio/checkbox <input>s as opacity:0, zero-size overlays —
+ * the visible control is a styled sibling — so isVisible(input) is always
+ * false. Judge reachability by the input's nearest sized/visible ancestor
+ * instead; a programmatic .click() on the hidden input still selects it.
+ */
+function isControlReachable(input: HTMLElement): boolean {
+  if (input instanceof HTMLInputElement && input.disabled) return false
+  let node: HTMLElement | null = input
+  for (let depth = 0; node && depth < 5; depth += 1, node = node.parentElement) {
+    if (isVisible(node)) return true
+  }
+  return false
+}
+
 function nonEmpty(value: string | null | undefined): string {
   return typeof value === "string" ? value.trim() : ""
 }
@@ -287,6 +318,13 @@ function looksMiscased(value: string): boolean {
   const letters = trimmed.replace(/[^A-Za-z]/g, "")
   if (letters.length < 2) return false
   return letters === letters.toUpperCase() || letters === letters.toLowerCase()
+}
+
+function isTextInputControl(el: Element | null): el is HTMLInputElement | HTMLTextAreaElement {
+  if (el instanceof HTMLTextAreaElement) return true
+  if (!(el instanceof HTMLInputElement)) return false
+  const type = (el.getAttribute("type") ?? "text").toLowerCase()
+  return !["hidden", "file", "password", "checkbox", "radio", "submit", "button", "reset"].includes(type)
 }
 
 function sanitizePhone(value: string): string {
@@ -839,6 +877,13 @@ class WorkdayAutofillRunner {
   private totalExpectedFields = 1
   private manualReviewCount = 0
   private manualReviewNotes: string[] = []
+  // Required questions the deterministic matcher couldn't answer this step.
+  // Resolved in one batched Claude call by flushSemanticQueue() before the step
+  // finishes; whatever the model can't answer falls through to manual review.
+  private semanticQueue: SemanticQuestion[] = []
+  // Bounded interval that re-title-cases Legal Name after Workday's async parser
+  // re-uppercases it. Self-terminates; cleared on teardown.
+  private nameSalvageTimer: number | null = null
   // Per-step tally of required fields that hit manual review (empty profile
   // value or selector miss). When > 0 the runner skips auto-advance so we
   // don't submit incomplete data to Workday — that's the most common cause
@@ -961,6 +1006,10 @@ class WorkdayAutofillRunner {
     this.phase = "stopped"
     this.observer?.disconnect()
     this.observer = null
+    if (this.nameSalvageTimer != null) {
+      clearInterval(this.nameSalvageTimer)
+      this.nameSalvageTimer = null
+    }
     this.setToolbarState("STOPPED", "Autofill stopped.")
     if (this.pauseBtn) this.pauseBtn.disabled = true
     if (this.skipBtn) this.skipBtn.disabled = true
@@ -1246,19 +1295,6 @@ class WorkdayAutofillRunner {
         return
       }
 
-      if (step.id === "self_identify" || document.querySelector('[data-automation-id="selfIdentifyPage"]')) {
-        this.paused = true
-        this.eeoPaused = true
-        this.setToolbarState(
-          "PAUSED",
-          "Self-Identify step reached. Apex will not fill optional legal disclosures.",
-        )
-        this.showResumeButton(true)
-        this.logWarning("Manual review needed: Self-Identify (EEO) fields must be completed by user.")
-        this.debug("warn", "run.pause_self_identify")
-        return
-      }
-
       this.showResumeButton(false)
 
       if (step.id === "review") {
@@ -1276,6 +1312,7 @@ class WorkdayAutofillRunner {
         case "resume_upload": {
           const filledBefore = this.fieldsFilledCount
           const uploaded = await this.maybeUploadResume()
+          if (uploaded) this.startNameCasingWatch(20000)
           this.paused = true
           if (uploaded || this.fieldsFilledCount > filledBefore) {
             this.setToolbarState(
@@ -1302,6 +1339,9 @@ class WorkdayAutofillRunner {
         case "application_questions":
           await this.fillApplicationQuestionsStep()
           break
+        case "self_identify":
+          await this.fillSelfIdentifyStep()
+          break
         default:
           break
       }
@@ -1313,7 +1353,11 @@ class WorkdayAutofillRunner {
       // reactive validators with stale field state is the dominant cause of
       // the generic 500 + "Something went wrong" page. Always let the user
       // review, fix anything we missed, and click Save and Continue manually.
-      const fillsThisStep = step.id === "my_information" || step.id === "my_experience" || step.id === "application_questions"
+      const fillsThisStep =
+        step.id === "my_information" ||
+        step.id === "my_experience" ||
+        step.id === "application_questions" ||
+        step.id === "self_identify"
       if (fillsThisStep) {
         if (this.requiredFieldMissesThisStep > 0) {
           this.paused = true
@@ -1537,6 +1581,7 @@ class WorkdayAutofillRunner {
   private async fillMyInformationStep(): Promise<void> {
     if (!this.cv) return
     this.debug("info", "step.my_information.start")
+    await this.repairNameCapitalizationAlerts()
 
     // Name fields are title-cased and force-overwritten — Workday's resume
     // parser frequently dumps ALL CAPS values that fail the tenant's
@@ -1549,113 +1594,133 @@ class WorkdayAutofillRunner {
     //   apply-flow: formField-legalName--firstName, formField-city, …
     // resolveInputControlFromElement drills into the wrapper to find the input
     // regardless of which scheme the tenant uses.
-    await this.fillFirstTextSelector(
+    await this.fillTextSmart(
       [
         '[data-automation-id="legalNameSection_firstName"]',
         '[data-automation-id="formField-legalName--firstName"]',
         '[data-automation-id="legalName--firstName"]',
         '[data-automation-id="firstName"]',
       ],
+      /^(legal\s+)?first\s*name$/,
       this.cv.firstName,
-      "Legal First Name",
+      "First Name",
       { forceOverwrite: true, salvageMiscased: true },
     )
-    await this.fillFirstTextSelector(
+    await this.fillTextSmart(
       [
         '[data-automation-id="legalNameSection_middleName"]',
         '[data-automation-id="formField-legalName--middleName"]',
         '[data-automation-id="legalName--middleName"]',
         '[data-automation-id="middleName"]',
       ],
+      /^(legal\s+)?middle\s*name$/,
       this.cv.middleName,
-      "Legal Middle Name",
+      "Middle Name",
       { optional: true, forceOverwrite: true, salvageMiscased: true },
     )
-    await this.fillFirstTextSelector(
+    await this.fillTextSmart(
       [
         '[data-automation-id="legalNameSection_lastName"]',
         '[data-automation-id="formField-legalName--lastName"]',
         '[data-automation-id="legalName--lastName"]',
         '[data-automation-id="lastName"]',
       ],
+      /^(legal\s+)?(last|family|sur)\s*name$/,
       this.cv.lastName,
-      "Legal Last Name",
+      "Last Name",
       { forceOverwrite: true, salvageMiscased: true },
     )
-    await this.fillFirstTextSelector(
+    await this.fillTextSmart(
       [
         '[data-automation-id="preferredName-firstName"]',
         '[data-automation-id="formField-preferredName--firstName"]',
         '[data-automation-id="preferredName"]',
       ],
+      /^preferred\s+(first\s+)?name$/,
       this.cv.preferredName || this.cv.firstName,
       "Preferred Name",
       { optional: true, forceOverwrite: true },
     )
-    await this.fillFirstTextSelector(
+    // Workday's résumé parser re-populates Legal Name in ALL CAPS *asynchronously*
+    // (a network round-trip after the résumé upload), often AFTER this step has
+    // run — so a one-shot fix loses the race. Start a short bounded watcher that
+    // re-title-cases any miscased name field for a few seconds, outliving the
+    // parse. Placed right after the name fills so it also survives if a later
+    // part of this step throws.
+    this.startNameCasingWatch()
+    await this.fillTextSmart(
       [
         '[data-automation-id="addressSection_addressLine1"]',
         '[data-automation-id="formField-address--addressLine1"]',
         '[data-automation-id="formField-addressLine1"]',
         '[data-automation-id="addressLine1"]',
       ],
+      /^address line 1$/,
       this.cv.address.line1,
       "Address Line 1",
+      { optional: !this.cv.address.line1 }, // can't invent a street we don't have
     )
-    await this.fillFirstTextSelector(
+    await this.fillTextSmart(
       [
         '[data-automation-id="addressSection_addressLine2"]',
         '[data-automation-id="formField-address--addressLine2"]',
         '[data-automation-id="formField-addressLine2"]',
         '[data-automation-id="addressLine2"]',
       ],
+      /^address line 2$/,
       this.cv.address.line2,
       "Address Line 2",
       { optional: true },
     )
-    await this.fillFirstTextSelector(
+    await this.fillTextSmart(
       [
         '[data-automation-id="addressSection_city"]',
         '[data-automation-id="formField-address--city"]',
         '[data-automation-id="formField-city"]',
         '[data-automation-id="city"]',
       ],
+      /^city$/,
       this.cv.address.city,
       "City",
+      { optional: !this.cv.address.city },
     )
     // Country MUST be selected before State and Postal Code on apply-flow
     // tenants — the State dropdown options and the Postal Code validator are
     // both downstream of the selected country. Filling state first triggers
     // Workday's reactive validators with an inconsistent (country, state)
     // pair, which is one of the known triggers for the server-side 500.
-    await this.selectCombobox(
+    await this.selectComboSmart(
       '[data-automation-id="addressSection_country"], ' +
       '[data-automation-id="formField-country"], ' +
       '[data-automation-id="formField-address--country"]',
+      /^country$/,
       this.cv.address.country || "United States",
       "Country",
       { riskyApplyFlowField: true },
     )
     await sleep(400)
-    await this.selectCombobox(
+    await this.selectComboSmart(
       '[data-automation-id="addressSection_countryRegion"], ' +
       '[data-automation-id="formField-address--countryRegion"], ' +
       '[data-automation-id="formField-countryRegion"], ' +
       '[data-automation-id="formField-state"], ' +
       '[data-automation-id="formField-stateRegion"]',
+      /^(state|state\/?\s*province|state\/?\s*region|province|region)$/,
       this.cv.address.state,
       "State/Province",
-      { riskyApplyFlowField: true },
+      { riskyApplyFlowField: true, optional: !this.cv.address.state },
     )
-    await this.fillFirstTextSelector(
+    await this.fillTextSmart(
       [
         '[data-automation-id="addressSection_postalCode"]',
         '[data-automation-id="formField-address--postalCode"]',
         '[data-automation-id="formField-postalCode"]',
         '[data-automation-id="postalCode"]',
       ],
+      /^(postal code|zip code|zip\/?\s*postal code|zip)$/,
       this.cv.address.zip,
       "Postal Code",
+      { optional: !this.cv.address.zip },
     )
     // Phone country code MUST be selected before the phone number on
     // apply-flow tenants — Workday's phone validator chains off it. Skipping
@@ -1685,22 +1750,26 @@ class WorkdayAutofillRunner {
       "Phone Device Type",
       { optional: true },
     )
-    await this.fillFirstTextSelector(
+    await this.fillTextSmart(
       [
         '[data-automation-id="phone-number"]',
         '[data-automation-id="formField-phoneNumber"]',
         '[data-automation-id="formField-phone--phoneNumber"]',
         '[data-automation-id="phoneNumber"]',
       ],
+      /^(phone( number)?|mobile( number)?|telephone)$/,
       this.cv.phone,
       "Phone Number",
+      { optional: !this.cv.phone },
     )
 
-    const emailTarget = Array.from(document.querySelectorAll<HTMLElement>(
-      '[data-automation-id="email"], ' +
-      '[data-automation-id="formField-email"], ' +
-      '[data-automation-id="formField-emailAddress"]',
-    )).find((node) => isVisible(node)) ?? null
+    const emailTarget =
+      (Array.from(document.querySelectorAll<HTMLElement>(
+        '[data-automation-id="email"], ' +
+        '[data-automation-id="formField-email"], ' +
+        '[data-automation-id="formField-emailAddress"]',
+      )).find((node) => isVisible(node)) ?? null) ??
+      this.findControlByLabel(/^(email|email address|e-?mail)$/)
     const emailEl = resolveInputControlFromElement(emailTarget)
     if (emailEl instanceof HTMLInputElement || emailEl instanceof HTMLTextAreaElement) {
       const existing = nonEmpty(emailEl.value)
@@ -1719,11 +1788,672 @@ class WorkdayAutofillRunner {
       this.debug("warn", "field.email.not_found")
     }
 
-    // Do not auto-set Source. On some apply-flow tenants this optional field
-    // issues unstable backend calls and can collapse the page into Workday's
-    // generic "Something went wrong" screen.
-    this.debug("info", "field.source.skipped_by_policy")
+    // "How Did You Hear About Us?" (Source). Historically skipped because on some
+    // apply-flow tenants touching it triggered unstable backend calls. But when it
+    // is REQUIRED (e.g. SpaceX), leaving it empty blocks Save & Continue and stalls
+    // the run — so fill it with a sensible option only in that case.
+    await this.fillSourceIfRequired()
+
+    // Workday tenants scatter screening questions onto My Information too
+    // (e.g. "Are you a previous employee of …?"). Answer the yes/no radios
+    // here and resolve anything the deterministic matcher can't via the
+    // semantic tier, so the step isn't left blocked on an unfilled required
+    // radio that only the questions page used to handle.
+    this.fillScreeningRadios()
+    await this.flushSemanticQueue()
+
+    // Final sweep (the bounded watcher started after the name fills keeps
+    // re-applying this for a few seconds to beat Workday's async parser).
+    await this.repairNameCapitalizationAlerts()
+    this.salvageMiscasedNameFields()
     this.debug("info", "step.my_information.complete")
+  }
+
+  private nameKindFromText(raw: string): WorkdayNameFieldKind | null {
+    const text = normText(raw)
+    if (!text) return null
+    if (text.includes("preferred name") || text.includes("preferred first name")) return "preferred"
+    if (text.includes("first name") || text.includes("given name")) return "first"
+    if (text.includes("middle name")) return "middle"
+    if (text.includes("last name") || text.includes("family name") || text.includes("surname")) return "last"
+    return null
+  }
+
+  private nameFieldLabel(kind: WorkdayNameFieldKind): string {
+    switch (kind) {
+      case "first":
+        return "First Name"
+      case "middle":
+        return "Middle Name"
+      case "last":
+        return "Last Name"
+      case "preferred":
+        return "Preferred Name"
+    }
+  }
+
+  private desiredNameValue(kind: WorkdayNameFieldKind): string {
+    if (!this.cv) return ""
+    switch (kind) {
+      case "first":
+        return this.cv.firstName
+      case "middle":
+        return this.cv.middleName
+      case "last":
+        return this.cv.lastName
+      case "preferred":
+        return this.cv.preferredName || this.cv.firstName
+    }
+  }
+
+  private nameFieldSelectors(kind: WorkdayNameFieldKind): string[] {
+    switch (kind) {
+      case "first":
+        return [
+          '[data-automation-id="legalNameSection_firstName"]',
+          '[data-automation-id="formField-legalName--firstName"]',
+          '[data-automation-id="legalName--firstName"]',
+          '[data-automation-id="firstName"]',
+          'input[autocomplete="given-name"]',
+        ]
+      case "middle":
+        return [
+          '[data-automation-id="legalNameSection_middleName"]',
+          '[data-automation-id="formField-legalName--middleName"]',
+          '[data-automation-id="legalName--middleName"]',
+          '[data-automation-id="middleName"]',
+          'input[autocomplete="additional-name"]',
+        ]
+      case "last":
+        return [
+          '[data-automation-id="legalNameSection_lastName"]',
+          '[data-automation-id="formField-legalName--lastName"]',
+          '[data-automation-id="legalName--lastName"]',
+          '[data-automation-id="lastName"]',
+          'input[autocomplete="family-name"]',
+        ]
+      case "preferred":
+        return [
+          '[data-automation-id="preferredName-firstName"]',
+          '[data-automation-id="formField-preferredName--firstName"]',
+          '[data-automation-id="preferredName"]',
+        ]
+    }
+  }
+
+  private nameFieldContext(el: HTMLInputElement | HTMLTextAreaElement): string {
+    const parts = [
+      parseQuestionLabel(el),
+      el.getAttribute("aria-label") ?? "",
+      el.getAttribute("name") ?? "",
+      el.id ?? "",
+      el.getAttribute("autocomplete") ?? "",
+      el.closest("[data-automation-id*='formField'], [data-automation-id*='legalName'], fieldset, [role='group']")
+        ?.textContent
+        ?.slice(0, 260) ?? "",
+      el.closest("[data-automation-id]")?.getAttribute("data-automation-id") ?? "",
+    ]
+    return normText(parts.join(" "))
+  }
+
+  private controlLooksLikeNameField(
+    el: HTMLInputElement | HTMLTextAreaElement,
+    kind: WorkdayNameFieldKind,
+  ): boolean {
+    const context = this.nameFieldContext(el)
+    if (!context) return false
+    const hasPreferred = context.includes("preferred")
+    if (kind !== "preferred" && hasPreferred) return false
+    if (kind === "preferred") return hasPreferred && context.includes("name")
+    if (kind === "first") return context.includes("first name") || context.includes("given name")
+    if (kind === "middle") return context.includes("middle name") || context.includes("additional name")
+    return context.includes("last name") || context.includes("family name") || context.includes("surname")
+  }
+
+  private isSafeFocusedNameRepairTarget(
+    el: HTMLInputElement | HTMLTextAreaElement,
+    kind: WorkdayNameFieldKind,
+    desired: string,
+  ): boolean {
+    if (!isTextInputControl(el) || el.disabled) return false
+    if (this.controlLooksLikeNameField(el, kind)) return true
+    const existing = nonEmpty(el.value)
+    if (!existing || !desired) return false
+    return normText(existing) === normText(desired) || normText(toTitleCase(existing)) === normText(desired)
+  }
+
+  private findNameInputForKind(kind: WorkdayNameFieldKind): HTMLInputElement | HTMLTextAreaElement | null {
+    const desired = this.desiredNameValue(kind)
+    const active = resolveInputControlFromElement(document.activeElement instanceof HTMLElement ? document.activeElement : null)
+    if (active && this.isSafeFocusedNameRepairTarget(active, kind, desired)) return active
+
+    for (const selector of this.nameFieldSelectors(kind)) {
+      for (const node of Array.from(document.querySelectorAll<HTMLElement>(selector))) {
+        const input = resolveInputControlFromElement(node)
+        if (!isTextInputControl(input) || input.disabled) continue
+        return input
+      }
+    }
+
+    const controls = Array.from(
+      document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
+        'input:not([type="hidden"]):not([type="file"]):not([type="password"]):not([type="checkbox"]):not([type="radio"]), textarea',
+      ),
+    )
+    return controls.find((control) => !control.disabled && this.controlLooksLikeNameField(control, kind)) ?? null
+  }
+
+  private async repairNameField(kind: WorkdayNameFieldKind): Promise<boolean> {
+    const input = this.findNameInputForKind(kind)
+    if (!input) {
+      this.debug("warn", "field.name_alert.input_not_found", { kind })
+      return false
+    }
+
+    const existing = nonEmpty(input.value)
+    let value = this.desiredNameValue(kind)
+    if (!value && existing) value = toTitleCase(existing)
+    if (!value) {
+      this.debug("warn", "field.name_alert.no_value", { kind })
+      return false
+    }
+
+    const ok = this.setElementValue(input, toTitleCase(value), this.nameFieldLabel(kind), {
+      forceOverwrite: true,
+    })
+    if (ok) {
+      this.debug("info", "field.name_alert.repaired", {
+        kind,
+        from: existing.slice(0, 40),
+        to: toTitleCase(value).slice(0, 40),
+      })
+    }
+    return ok
+  }
+
+  private findNameCapitalizationAlertTargets(): Array<{ kind: WorkdayNameFieldKind; target?: HTMLElement }> {
+    const byKind = new Map<WorkdayNameFieldKind, HTMLElement | undefined>()
+    const add = (kind: WorkdayNameFieldKind | null, target?: HTMLElement) => {
+      if (!kind) return
+      if (!byKind.has(kind) || target) byKind.set(kind, target ?? byKind.get(kind))
+    }
+
+    const clickables = Array.from(
+      document.querySelectorAll<HTMLElement>("a, button, [role='link'], [role='button']"),
+    ).filter((el) => isVisible(el))
+    for (const el of clickables) {
+      const text = nonEmpty(el.textContent)
+      const normalized = normText(text)
+      if (!normalized.includes("alert") && !normalized.includes("capital")) continue
+      add(this.nameKindFromText(text), el)
+    }
+
+    const body = normText(document.body?.textContent ?? "")
+    const hasCapitalizationAlert =
+      body.includes("correctly capitalized") ||
+      body.includes("more than 2 capital letters") ||
+      (body.includes("alert") && body.includes("capital"))
+    if (hasCapitalizationAlert) {
+      if (body.includes("first name")) add("first")
+      if (body.includes("middle name")) add("middle")
+      if (body.includes("last name") || body.includes("family name") || body.includes("surname")) add("last")
+      if (body.includes("preferred name")) add("preferred")
+    }
+
+    return Array.from(byKind.entries()).map(([kind, target]) => ({ kind, target }))
+  }
+
+  /**
+   * Workday surfaces capitalization failures as top-of-page alert links after
+   * Save and Continue. Follow those links first because they often expand or
+   * focus a hidden Legal Name control, then force-write only the corresponding
+   * name field from the saved profile.
+   */
+  private async repairNameCapitalizationAlerts(): Promise<number> {
+    const alerts = this.findNameCapitalizationAlertTargets()
+    if (alerts.length === 0) return 0
+
+    let repaired = 0
+    for (const alert of alerts) {
+      if (this.stopped) return repaired
+      this.setToolbarField(this.nameFieldLabel(alert.kind))
+      if (alert.target) {
+        alert.target.scrollIntoView({ block: "center" })
+        alert.target.click()
+        await sleep(220)
+      }
+      if (await this.repairNameField(alert.kind)) repaired += 1
+      this.salvageMiscasedNameFields()
+    }
+
+    this.debug(repaired > 0 ? "info" : "warn", "field.name_alert.repair_complete", {
+      alerts: alerts.length,
+      repaired,
+    })
+    return repaired
+  }
+
+  /**
+   * Re-title-case Legal/Preferred Name inputs that currently hold an all-caps
+   * or all-lowercase value (typically Workday's own résumé-parse output), which
+   * the tenant flags with a capitalization alert. Only rewrites miscased values
+   * — correctly-cased names are left untouched.
+   */
+  private salvageMiscasedNameFields(): void {
+    const selectors = [
+      '[data-automation-id="legalNameSection_firstName"]',
+      '[data-automation-id="formField-legalName--firstName"]',
+      '[data-automation-id="legalName--firstName"]',
+      '[data-automation-id="firstName"]',
+      '[data-automation-id="legalNameSection_middleName"]',
+      '[data-automation-id="formField-legalName--middleName"]',
+      '[data-automation-id="legalName--middleName"]',
+      '[data-automation-id="legalNameSection_lastName"]',
+      '[data-automation-id="formField-legalName--lastName"]',
+      '[data-automation-id="legalName--lastName"]',
+      '[data-automation-id="lastName"]',
+      '[data-automation-id="preferredName-firstName"]',
+      '[data-automation-id="formField-preferredName--firstName"]',
+    ]
+    for (const selector of selectors) {
+      for (const node of Array.from(document.querySelectorAll<HTMLElement>(selector))) {
+        const input = resolveInputControlFromElement(node)
+        if (!(input instanceof HTMLInputElement)) continue
+        const existing = nonEmpty(input.value)
+        if (!existing || !looksMiscased(existing)) continue
+        const fixed = toTitleCase(existing)
+        if (!fixed || fixed === existing) continue
+        const ok = this.setElementValue(input, fixed, "Name", { forceOverwrite: true })
+        this.debug(ok ? "info" : "warn", "field.name.recapitalized", {
+          from: existing.slice(0, 40),
+          to: fixed.slice(0, 40),
+          ok,
+        })
+      }
+    }
+  }
+
+  /**
+   * Re-apply the name-casing salvage on a short interval so it survives
+   * Workday's asynchronous résumé parse (which can re-uppercase Legal Name
+   * seconds after our fill). Only ever rewrites miscased values, so a
+   * correctly-cased name — including one the user just typed — is untouched.
+   * Self-terminates after `durationMs`; replaces any prior watch.
+   */
+  private startNameCasingWatch(durationMs = 9000): void {
+    if (this.nameSalvageTimer != null) {
+      clearInterval(this.nameSalvageTimer)
+      this.nameSalvageTimer = null
+    }
+    this.salvageMiscasedNameFields()
+    const deadline = Date.now() + durationMs
+    this.nameSalvageTimer = window.setInterval(() => {
+      if (this.stopped || Date.now() > deadline) {
+        if (this.nameSalvageTimer != null) {
+          clearInterval(this.nameSalvageTimer)
+          this.nameSalvageTimer = null
+        }
+        return
+      }
+      this.salvageMiscasedNameFields()
+    }, 600)
+  }
+
+  /**
+   * Fill the "How Did You Hear About Us?" / Source combobox, but only when it is
+   * a required field and still unanswered. Tries a few honest, near-universal
+   * options, then falls back to the first real option in the list.
+   */
+  private async fillSourceIfRequired(): Promise<void> {
+    const containers = Array.from(
+      document.querySelectorAll<HTMLElement>('[data-automation-id*="ource"], [data-automation-id*="formField"]'),
+    ).filter((el) => isVisible(el))
+
+    const container =
+      containers.find((el) => {
+        const aid = (el.getAttribute("data-automation-id") ?? "").toLowerCase()
+        if (aid.includes("source")) return true
+        return /how did you hear about us|how did you hear/i.test(el.textContent ?? "")
+      }) ?? null
+
+    if (!container) {
+      this.debug("info", "field.source.not_found")
+      return
+    }
+
+    // "How did you hear about us" is frequently a Workday *multiselect* prompt
+    // (the ☰ icon), not a plain dropdown — so we also match multiselect/prompt
+    // widgets and the bare search input, not just [role=combobox].
+    const comboTarget =
+      container.querySelector<HTMLElement>(
+        '[role="combobox"], [aria-haspopup="listbox"], ' +
+        '[data-automation-id*="dropDown" i], [data-automation-id*="Dropdown" i], ' +
+        '[data-automation-id*="multiselect" i], [data-automation-id*="multiSelect" i], ' +
+        '[data-automation-id*="promptSearch" i], [data-automation-id*="searchBox" i], ' +
+        'input, [role="button"]',
+      ) ?? container
+
+    if (!this.isElementRequired(container, comboTarget)) {
+      this.debug("info", "field.source.skipped_optional")
+      return
+    }
+
+    const existing = nonEmpty(extractComboboxDisplayValue(comboTarget))
+    if (existing && !this.isUnansweredSelectPlaceholder(existing)) {
+      this.bumpFilledCount()
+      this.debug("info", "field.source.already_answered", { existing: existing.slice(0, 60) })
+      return
+    }
+
+    // Ordered by how universally these options appear in tenant source lists.
+    // selectComboboxElement type-searches each and returns on the first that
+    // resolves to a real option, so unavailable ones are simply skipped.
+    const preferred = [
+      "LinkedIn",
+      "Indeed",
+      "Job Board",
+      "Online Job Board",
+      "Company Website",
+      "Social Media",
+      "Other",
+    ]
+    // 1. Native Workday multiselect (data-uxi-widget-type="multiselect"): open
+    //    from the search input / prompt icon and click a (possibly nested)
+    //    promptOption. This is the real PayPal markup.
+    if (await this.fillWorkdayMultiselect(container, preferred, "How Did You Hear About Us?")) {
+      this.bumpFilledCount()
+      this.debug("info", "field.source.filled", { via: "multiselect" })
+      return
+    }
+
+    // 2. Fallbacks for tenants that render Source as a plain combobox.
+    for (const value of preferred) {
+      if (await this.selectComboboxElement(comboTarget, value, "How Did You Hear About Us?", { optional: true })) {
+        this.debug("info", "field.source.filled", { value, via: "combobox" })
+        return
+      }
+    }
+    if (await this.selectFirstRealOption(comboTarget, "How Did You Hear About Us?")) {
+      this.debug("info", "field.source.filled", { via: "first_option" })
+      return
+    }
+
+    this.logWarning("Manual review needed: How Did You Hear About Us?")
+    this.requiredFieldMissesThisStep += 1
+    this.markManualReview(container, "How Did You Hear About Us?")
+  }
+
+  /**
+   * Drive a Workday multiselect "prompt" (data-uxi-widget-type="multiselect",
+   * the ☰ widget). Opens from the search input / prompt icon, then clicks a
+   * matching `promptOption`. "How did you hear about us" lists are usually
+   * categories that drill into sub-options, so we follow one level down,
+   * preferring our values and otherwise taking the first leaf. Returns true
+   * once a selection is registered.
+   */
+  private async fillWorkdayMultiselect(
+    container: HTMLElement,
+    preferred: string[],
+    fieldName: string,
+  ): Promise<boolean> {
+    const input =
+      container.querySelector<HTMLInputElement>('input[data-uxi-widget-type="selectinput"]') ??
+      container.querySelector<HTMLInputElement>('[data-automation-id="multiselectInputContainer"] input') ??
+      container.querySelector<HTMLInputElement>('input[aria-required], input')
+    const icon = container.querySelector<HTMLElement>('[data-automation-id="promptIcon"]')
+    const opener: HTMLElement = input ?? icon ?? container
+
+    const isSelected = (): boolean =>
+      nonEmpty(container.querySelector('[data-automation-id="promptSelectionLabel"]')?.textContent).length > 0 ||
+      container.querySelectorAll('[data-automation-id="selectedItem"], [data-automation-id*="pill" i]').length > 0
+
+    const collect = (): HTMLElement[] =>
+      Array.from(
+        document.querySelectorAll<HTMLElement>('[data-automation-id="promptOption"], [role="option"]'),
+      ).filter((el) => isVisible(el) && nonEmpty(el.textContent).length > 0 && !this.isUnansweredSelectPlaceholder(el.textContent ?? ""))
+
+    const pick = (opts: HTMLElement[]): HTMLElement | null => {
+      for (const want of preferred) {
+        const m = opts.find((o) => normText(o.textContent).includes(normText(want)))
+        if (m) return m
+      }
+      return opts[0] ?? null
+    }
+
+    this.setToolbarField(fieldName)
+    opener.scrollIntoView({ block: "center" })
+    opener.focus()
+    opener.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }))
+    opener.click()
+    opener.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }))
+    if (icon && icon !== opener) icon.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+
+    // Wait for the options popup to render.
+    let options: HTMLElement[] = []
+    const deadline = Date.now() + 1800
+    while (Date.now() < deadline) {
+      options = collect()
+      if (options.length) break
+      await sleep(120)
+    }
+    if (!options.length) {
+      this.debug("warn", "field.source.multiselect_no_options")
+      opener.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))
+      return false
+    }
+
+    // One drill level: click a (preferred) option; if nothing selected, it was a
+    // category — pick a leaf from the freshly-revealed options.
+    for (let level = 0; level < 2; level += 1) {
+      const target = pick(options)
+      if (!target) break
+      target.scrollIntoView({ block: "center" })
+      target.click()
+      await sleep(400)
+      if (isSelected()) {
+        opener.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))
+        return true
+      }
+      const next = collect().filter((el) => el !== target)
+      if (!next.length) break
+      options = next
+    }
+
+    opener.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))
+    return isSelected()
+  }
+
+  /** True when a field is marked required (aria-required, required attr, or a `*` label). */
+  private isElementRequired(container: HTMLElement, target: HTMLElement): boolean {
+    if (target.getAttribute("aria-required") === "true") return true
+    if (container.getAttribute("aria-required") === "true") return true
+    if (target.hasAttribute("required") || container.querySelector("[required], [aria-required='true']")) return true
+    if (container.querySelector('abbr[title="required" i], [data-automation-id*="required"]')) return true
+    const labelText =
+      container.querySelector("label, legend, [data-automation-id*='label'], [role='heading']")?.textContent ?? ""
+    return /\*/.test(labelText)
+  }
+
+  /** Open a combobox and click its first non-placeholder option. Last-resort fill. */
+  private async selectFirstRealOption(target: HTMLElement, fieldName: string): Promise<boolean> {
+    return this.selectOptionMatching(target, fieldName)
+  }
+
+  /**
+   * Open a combobox and click an option. With `matcher`, picks the first option
+   * whose text matches (e.g. a "decline to answer" choice); without it, picks the
+   * first non-placeholder option.
+   */
+  private async selectOptionMatching(
+    target: HTMLElement,
+    fieldName: string,
+    matcher?: (optionText: string) => boolean,
+  ): Promise<boolean> {
+    this.setToolbarField(fieldName)
+    const shell =
+      target.closest<HTMLElement>('[role="combobox"], button[aria-haspopup="listbox"], [aria-haspopup="listbox"]') ??
+      target
+    shell.focus()
+    shell.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }))
+    shell.click()
+    shell.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }))
+
+    const automationId = target.getAttribute("data-automation-id") ?? ""
+    const deadline = Date.now() + 1500
+    while (Date.now() < deadline) {
+      const menuOptions = automationId
+        ? Array.from(document.querySelectorAll(`[data-automation-id^="${safeEscapeSelector(automationId)}-menu-item--"]`))
+        : []
+      const roleOptions = Array.from(
+        document.querySelectorAll('[role="option"], [role="menuitem"], [data-automation-id="promptOption"]'),
+      )
+      const options = [...menuOptions, ...roleOptions].filter(
+        (el): el is HTMLElement => el instanceof HTMLElement && isVisible(el),
+      )
+      const pick = options.find((el) => {
+        const text = el.textContent ?? ""
+        if (this.isUnansweredSelectPlaceholder(text)) return false
+        return matcher ? matcher(text) : true
+      })
+      if (pick) {
+        const clickTarget =
+          pick.closest<HTMLElement>('[role="option"], [role="menuitem"], [data-automation-id="promptOption"]') ?? pick
+        clickTarget.click()
+        await sleep(120)
+        this.bumpFilledCount()
+        return true
+      }
+      await sleep(100)
+    }
+    // Nothing matched — close the menu so it doesn't block the page, and never
+    // pick a wrong option (important for demographic fields where any non-decline
+    // option would assert an identity we must not claim).
+    shell.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))
+    return false
+  }
+
+  // ── Self-Identify / Voluntary Disclosures ────────────────────────────────────
+  // Workday's EEO + disability (CC-305) step. We NEVER assert a demographic
+  // identity. We only satisfy the *required* mechanics so the run can finish:
+  //   • demographic dropdowns/radios → pick the "decline / do not wish to answer"
+  //   • required acknowledgement checkboxes → check
+  //   • CC-305 signature Name → user's name; Date → today
+  private async fillSelfIdentifyStep(): Promise<void> {
+    this.debug("info", "step.self_identify.start")
+    const DECLINE_RE =
+      /don'?t wish to answer|do not wish to answer|prefer not to (?:answer|say|disclose|identify)|decline to (?:answer|self.?identify|disclose|state)|choose not to|do not want to answer|don'?t want to answer|not to disclose|i decline|i don'?t wish to|wish not to/i
+
+    // 1. Demographic comboboxes → decline option only.
+    const containers = Array.from(
+      document.querySelectorAll<HTMLElement>('[data-automation-id*="formField"]'),
+    ).filter((el) => isVisible(el))
+    for (const container of containers) {
+      if (this.stopped || this.paused) return
+      const combo = container.querySelector<HTMLElement>(
+        '[role="combobox"], [aria-haspopup="listbox"], [data-automation-id*="dropDown"], [data-automation-id*="Dropdown"]',
+      )
+      if (!combo || !isVisible(combo)) continue
+      const existing = nonEmpty(extractComboboxDisplayValue(combo))
+      if (existing && !this.isUnansweredSelectPlaceholder(existing)) continue
+      const label = this.extractApplicationQuestionLabel(container, combo) || "Voluntary disclosure"
+      const ok = await this.selectOptionMatching(combo, label, (t) => DECLINE_RE.test(t))
+      this.debug(ok ? "info" : "info", "self_identify.combo", { label, declined: ok })
+    }
+
+    // 2. Radio groups (e.g. disability CC-305) → decline radio.
+    const radios = Array.from(document.querySelectorAll<HTMLInputElement>('input[type="radio"]')).filter((r) =>
+      isVisible(r),
+    )
+    const seenGroups = new Set<string>()
+    for (const radio of radios) {
+      if (this.stopped || this.paused) return
+      const groupName =
+        radio.name || radio.closest("[data-automation-id]")?.getAttribute("data-automation-id") || `__${radios.indexOf(radio)}`
+      if (seenGroups.has(groupName)) continue
+      seenGroups.add(groupName)
+      const group = radio.name ? radios.filter((r) => r.name === radio.name) : [radio]
+      // Only act if the group is unanswered, so we never override a user choice.
+      if (group.some((r) => r.checked)) continue
+      const declineRadio = group.find((r) => DECLINE_RE.test(this.getRadioLabel(r)))
+      if (declineRadio) {
+        declineRadio.click()
+        this.bumpFilledCount()
+        this.debug("info", "self_identify.radio_declined", { group: groupName })
+      }
+    }
+
+    // 3. Required acknowledgement checkboxes → check.
+    const checkboxes = Array.from(document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')).filter((c) =>
+      isVisible(c),
+    )
+    for (const cb of checkboxes) {
+      if (cb.checked) continue
+      const ctx = (
+        cb.closest("[data-automation-id*='formField'], label, fieldset")?.textContent ??
+        cb.getAttribute("aria-label") ??
+        ""
+      ).toLowerCase()
+      if (/acknowledge|understand|have read|consent|certify|\bagree\b|confirm|reviewed/.test(ctx)) {
+        cb.click()
+        this.bumpFilledCount()
+        this.debug("info", "self_identify.ack_checked")
+      }
+    }
+
+    // 4. CC-305 signature: Name (full name) + Date (today).
+    if (this.cv) {
+      const fullName = `${this.cv.firstName} ${this.cv.lastName}`.trim()
+      if (fullName) {
+        await this.fillFirstTextSelector(
+          [
+            '[data-automation-id="name"]',
+            '[data-automation-id="formField-name"]',
+            '[data-automation-id*="selfIdentified"][data-automation-id*="name" i]',
+            '[data-automation-id*="employeeName"]',
+          ],
+          fullName,
+          "Self-ID Name",
+          { optional: true },
+        )
+      }
+    }
+    await this.fillSelfIdentifyDate()
+
+    this.debug("info", "step.self_identify.complete")
+  }
+
+  /** Fill the CC-305 date field with today, handling Workday's segmented widget. */
+  private async fillSelfIdentifyDate(): Promise<void> {
+    const today = new Date()
+    const mm = String(today.getMonth() + 1).padStart(2, "0")
+    const dd = String(today.getDate()).padStart(2, "0")
+    const yyyy = String(today.getFullYear())
+
+    // Segmented spinner inputs (most common on apply-flow).
+    const month = document.querySelector<HTMLInputElement>('[data-automation-id="dateSectionMonth-input"]')
+    const day = document.querySelector<HTMLInputElement>('[data-automation-id="dateSectionDay-input"]')
+    const year = document.querySelector<HTMLInputElement>('[data-automation-id="dateSectionYear-input"]')
+    if (month && day && year && isVisible(month)) {
+      if (!nonEmpty(month.value)) this.setElementValue(month, mm, "Date (month)")
+      if (!nonEmpty(day.value)) this.setElementValue(day, dd, "Date (day)")
+      if (!nonEmpty(year.value)) this.setElementValue(year, yyyy, "Date (year)")
+      this.bumpFilledCount()
+      this.debug("info", "self_identify.date_segmented")
+      return
+    }
+
+    // Single text date input fallback.
+    await this.fillFirstTextSelector(
+      [
+        '[data-automation-id="formField-dateSigned"] input',
+        '[data-automation-id="dateSigned"] input',
+        '[data-automation-id="date"] input',
+        'input[data-automation-id*="date" i]',
+      ],
+      `${mm}/${dd}/${yyyy}`,
+      "Self-ID Date",
+      { optional: true },
+    )
   }
 
   private async fillMyExperienceStep(): Promise<void> {
@@ -1745,20 +2475,14 @@ class WorkdayAutofillRunner {
 
   private async fillWorkExperienceEntries(): Promise<void> {
     if (!this.cv) return
-    const section =
-      document.querySelector('[data-automation-id="workExperienceSection"]') ??
-      document.querySelector('[data-automation-id="workExperience"]')
-    if (!section) {
-      this.debug("warn", "experience.section_missing")
-      return
-    }
-
-    const addButton = section.querySelector<HTMLElement>('[data-automation-id="Add"]')
-    if (!isVisible(addButton)) {
+    const add = this.findAddButtonForSection(
+      ["workExperienceSection", "workExperience"],
+      /work experience|employment|experience/,
+    )
+    if (!add) {
       this.debug("warn", "experience.add_missing")
       return
     }
-    const add = addButton as HTMLElement
 
     for (const [index, job] of this.cv.workExperience.entries()) {
       if (this.stopped || this.paused) return
@@ -1776,20 +2500,20 @@ class WorkdayAutofillRunner {
         break
       }
 
-      await this.fillAutomationIdInRoot(dialog, "jobTitle", job.title, "Job Title")
-      await this.fillAutomationIdInRoot(dialog, "company", job.company, "Company")
-      await this.fillAutomationIdInRoot(dialog, "location", job.location, "Location", { optional: true })
-      await this.selectAutomationComboboxInRoot(dialog, "startDate-Month", job.startDate.month, "Start Month")
-      await this.fillAutomationIdInRoot(dialog, "startDate-Year", job.startDate.year, "Start Year")
+      await this.fillAutomationIdInRoot(dialog, "jobTitle", job.title, "Job Title", { labelRe: /job title|title|position/ })
+      await this.fillAutomationIdInRoot(dialog, "company", job.company, "Company", { labelRe: /company|employer|organization/ })
+      await this.fillAutomationIdInRoot(dialog, "location", job.location, "Location", { optional: true, labelRe: /location/ })
+      await this.selectAutomationComboboxInRoot(dialog, "startDate-Month", job.startDate.month, "Start Month", { labelRe: /from.*month|start.*month|month/ })
+      await this.fillAutomationIdInRoot(dialog, "startDate-Year", job.startDate.year, "Start Year", { labelRe: /from.*year|start.*year|year/ })
       await this.setCheckboxInRoot(dialog, "currentlyWorkHere", job.current, "Currently Work Here")
 
       if (!job.current && job.endDate) {
-        await this.selectAutomationComboboxInRoot(dialog, "endDate-Month", job.endDate.month, "End Month")
-        await this.fillAutomationIdInRoot(dialog, "endDate-Year", job.endDate.year, "End Year")
+        await this.selectAutomationComboboxInRoot(dialog, "endDate-Month", job.endDate.month, "End Month", { optional: true, labelRe: /to.*month|end.*month/ })
+        await this.fillAutomationIdInRoot(dialog, "endDate-Year", job.endDate.year, "End Year", { optional: true, labelRe: /to.*year|end.*year/ })
       }
 
       const description = this.buildExperienceDescription(job)
-      await this.fillTextareaAutomationInRoot(dialog, "description", description, "Description")
+      await this.fillTextareaAutomationInRoot(dialog, "description", description, "Description", { labelRe: /description|responsibilities|role description/ })
 
       const save = dialog.querySelector<HTMLElement>('[data-automation-id="saveWorkExperienceButton"]')
       if (isVisible(save)) {
@@ -1809,17 +2533,11 @@ class WorkdayAutofillRunner {
     if (!this.cv) return
     if (this.cv.education.length === 0) return
 
-    const section = document.querySelector('[data-automation-id="educationSection"]')
-    if (!section) {
-      this.debug("warn", "education.section_missing")
-      return
-    }
-    const addButton = section.querySelector<HTMLElement>('[data-automation-id="Add"]')
-    if (!isVisible(addButton)) {
+    const add = this.findAddButtonForSection(["educationSection"], /education|school|academic|degree/)
+    if (!add) {
       this.debug("warn", "education.add_missing")
       return
     }
-    const add = addButton as HTMLElement
 
     for (const [index, edu] of this.cv.education.entries()) {
       if (this.stopped || this.paused) return
@@ -1837,15 +2555,15 @@ class WorkdayAutofillRunner {
         break
       }
 
-      await this.fillAutomationIdInRoot(dialog, "school", edu.school, "School Name")
-      const degreeSelected = await this.selectAutomationComboboxInRoot(dialog, "degree", edu.degree, "Degree", { optional: true })
+      await this.fillAutomationIdInRoot(dialog, "school", edu.school, "School Name", { labelRe: /school|university|college|institution/ })
+      const degreeSelected = await this.selectAutomationComboboxInRoot(dialog, "degree", edu.degree, "Degree", { optional: true, labelRe: /degree|qualification/ })
       if (!degreeSelected) {
         const fallback = this.pickDegreeFallback(edu.degree)
         if (fallback) {
-          await this.selectAutomationComboboxInRoot(dialog, "degree", fallback, "Degree", { optional: true })
+          await this.selectAutomationComboboxInRoot(dialog, "degree", fallback, "Degree", { optional: true, labelRe: /degree|qualification/ })
         }
       }
-      await this.fillAutomationIdInRoot(dialog, "fieldOfStudy", edu.major, "Field of Study", { optional: true })
+      await this.fillAutomationIdInRoot(dialog, "fieldOfStudy", edu.major, "Field of Study", { optional: true, labelRe: /field of study|major|area of study|discipline/ })
       if (edu.gpa) {
         await this.fillAutomationIdInRoot(dialog, "gpa", edu.gpa, "GPA", { optional: true })
       }
@@ -1880,14 +2598,11 @@ class WorkdayAutofillRunner {
 
   private async fillSkillsSection(): Promise<void> {
     if (!this.cv) return
-    const addButton = document.querySelector<HTMLElement>(
-      '[data-automation-id="skillsSection"] [data-automation-id="Add"]',
-    )
-    if (!isVisible(addButton)) {
+    const add = this.findAddButtonForSection(["skillsSection", "skills"], /skill/)
+    if (!add) {
       this.debug("info", "skills.section_missing_or_hidden")
       return
     }
-    const add = addButton as HTMLElement
     const skills = this.cv.skills.slice(0, 24)
     for (const skill of skills) {
       if (this.stopped || this.paused) return
@@ -1896,7 +2611,9 @@ class WorkdayAutofillRunner {
       await sleep(220)
       const dialog = this.getActiveDialog()
       if (!dialog) break
-      const skillTarget = dialog.querySelector<HTMLElement>('[data-automation-id="skillName"]')
+      const skillTarget =
+        dialog.querySelector<HTMLElement>('[data-automation-id="skillName"]') ??
+        this.findControlByLabel(/skill|search/, { root: dialog })
       const skillInput = resolveInputControlFromElement(skillTarget)
       if (!(skillInput instanceof HTMLInputElement || skillInput instanceof HTMLTextAreaElement)) {
         this.debug("warn", "skills.input_missing", { skill })
@@ -1944,14 +2661,11 @@ class WorkdayAutofillRunner {
 
   private async fillWebsiteSection(): Promise<void> {
     if (!this.cv) return
-    const addButton = document.querySelector<HTMLElement>(
-      '[data-automation-id="websiteSection"] [data-automation-id="Add"]',
-    )
-    if (!isVisible(addButton)) {
+    const add = this.findAddButtonForSection(["websiteSection", "websites"], /website|social|web address|url/)
+    if (!add) {
       this.debug("info", "website.section_missing_or_hidden")
       return
     }
-    const add = addButton as HTMLElement
 
     const entries: Array<{ type: string; url: string }> = []
     if (this.cv.linkedIn) entries.push({ type: "LinkedIn", url: this.cv.linkedIn })
@@ -1965,19 +2679,25 @@ class WorkdayAutofillRunner {
       const dialog = this.getActiveDialog()
       if (!dialog) break
 
-      await this.selectAutomationComboboxInRoot(dialog, "websiteType", entry.type, "Website Type", { optional: true })
-      await this.fillAutomationIdInRoot(dialog, "websiteAddress", entry.url, "Website URL")
+      await this.selectAutomationComboboxInRoot(dialog, "websiteType", entry.type, "Website Type", { optional: true, labelRe: /type|category/ })
+      await this.fillAutomationIdInRoot(dialog, "websiteAddress", entry.url, "Website URL", { labelRe: /url|web address|website|link/ })
       await this.clickSaveInDialog(dialog)
       this.debug("info", "website.entry.saved", { type: entry.type })
       await sleep(220)
     }
   }
 
-  private async fillApplicationQuestionsStep(): Promise<void> {
-    if (!this.cv) return
-    this.debug("info", "step.application_questions.start")
+  /**
+   * Yes/No (and small multi-choice) radio screening questions. Standalone so
+   * it can run on any step — Workday tenants scatter these across My
+   * Information and the dedicated questions page (e.g. "Are you a previous
+   * employee?"). Unrecognised ones defer to the semantic tier.
+   */
+  private fillScreeningRadios(): void {
     const handledRadioNames = new Set<string>()
-    const radios = Array.from(document.querySelectorAll<HTMLInputElement>('input[type="radio"]')).filter(isVisible)
+    // NB: filter by reachability, NOT isVisible — Workday radio inputs are
+    // opacity:0 overlays, so isVisible would drop every one of them.
+    const radios = Array.from(document.querySelectorAll<HTMLInputElement>('input[type="radio"]')).filter(isControlReachable)
     this.debug("info", "questions.radios.detected", { count: radios.length })
     for (const radio of radios) {
       const key = radio.name || radio.id || `radio-${radios.indexOf(radio)}`
@@ -1987,11 +2707,46 @@ class WorkdayAutofillRunner {
       const group = radio.name
         ? Array.from(document.querySelectorAll<HTMLInputElement>(`input[type="radio"][name="${safeEscapeSelector(radio.name)}"]`))
         : [radio]
+      // Skip groups that already have a selection (e.g. user pre-answered).
+      if (group.some((choice) => choice.checked)) continue
       const label = parseQuestionLabel(radio as HTMLElement) || parseQuestionLabel(group[0] as HTMLElement)
       const answer = this.getYesNoAnswer(label)
       if (answer === null) {
         this.debug("warn", "questions.radio.unanswered", { label: label || "(missing label)" })
-        this.markManualReview(radio, label || "Unrecognized radio question")
+        // Defer to the semantic tier. >2 choices → treat as a select over the
+        // radio labels; otherwise a yes/no. The model's answer is matched back
+        // to a choice and clicked.
+        const radioText = (input: HTMLInputElement): string => {
+          if (input.id) {
+            const l = document.querySelector(`label[for="${CSS.escape(input.id)}"]`)
+            if (l?.textContent?.trim()) return l.textContent.trim()
+          }
+          const w = input.closest("label")
+          return w?.textContent?.trim() || nonEmpty(input.value)
+        }
+        const choices = group.map(radioText).map((t) => t.trim()).filter(Boolean)
+        const isYesNo = choices.length <= 2
+        this.queueSemantic({
+          el: radio,
+          label: label || "Application question",
+          type: isYesNo ? "yesno" : "select",
+          options: isYesNo ? undefined : choices,
+          apply: (value: string): boolean => {
+            const want = value.trim().toLowerCase()
+            const pick = group.find((choice) => {
+              const t = radioText(choice).toLowerCase()
+              return isYesNo
+                ? (/^(yes|y|true)$/.test(want) ? /\byes\b|\btrue\b/.test(t) : /\bno\b|\bfalse\b/.test(t))
+                : (t === want || t.includes(want) || want.includes(t))
+            })
+            if (pick && !pick.checked) {
+              pick.click()
+              pick.dispatchEvent(new Event("change", { bubbles: true }))
+              return true
+            }
+            return Boolean(pick?.checked)
+          },
+        })
         continue
       }
       const target = group.find((choice) => {
@@ -2011,6 +2766,12 @@ class WorkdayAutofillRunner {
         })
       }
     }
+  }
+
+  private async fillApplicationQuestionsStep(): Promise<void> {
+    if (!this.cv) return
+    this.debug("info", "step.application_questions.start")
+    this.fillScreeningRadios()
 
     const textFields = Array.from(
       document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
@@ -2025,7 +2786,13 @@ class WorkdayAutofillRunner {
       const answer = this.getTextAnswer(label)
       if (!answer) {
         this.debug("warn", "questions.text.unanswered", { label })
-        this.markManualReview(field, label)
+        const isTextarea = field.tagName.toLowerCase() === "textarea"
+        this.queueSemantic({
+          el: field,
+          label,
+          type: isTextarea ? "textarea" : "text",
+          apply: (value: string) => this.setElementValue(field, value, label),
+        })
         continue
       }
       const ok = this.setElementValue(field, answer, label)
@@ -2044,28 +2811,122 @@ class WorkdayAutofillRunner {
         continue
       }
 
+      const selectOptions = Array.from(select.options)
+      const optionTexts = selectOptions
+        .map((opt) => (opt.textContent ?? "").trim())
+        .filter((text) => text && !this.isUnansweredSelectPlaceholder(text))
+      const applySelect = (value: string): boolean => {
+        const match =
+          selectOptions.find((opt) => normText(opt.textContent) === normText(value)) ??
+          selectOptions.find(
+            (opt) =>
+              normText(opt.textContent).includes(normText(value)) ||
+              normText(value).includes(normText(opt.textContent)),
+          )
+        if (!match) return false
+        select.value = match.value
+        select.dispatchEvent(new Event("input", { bubbles: true }))
+        select.dispatchEvent(new Event("change", { bubbles: true }))
+        return true
+      }
+
       const optionAnswer = this.getSelectAnswer(label)
-      if (!optionAnswer) {
-        this.debug("warn", "questions.select.unanswered", { label })
-        this.markManualReview(select, label)
-        continue
+      if (optionAnswer && applySelect(optionAnswer)) {
+        this.bumpFilledCount()
+        this.debug("info", "questions.select.answered", { label, desired: optionAnswer })
+      } else {
+        this.debug("warn", "questions.select.deferred", { label, desired: optionAnswer })
+        this.queueSemantic({ el: select, label, type: "select", options: optionTexts, apply: applySelect })
       }
-      const options = Array.from(select.options)
-      const option = options.find((opt) => normText(opt.textContent) === normText(optionAnswer)) ??
-        options.find((opt) => normText(opt.textContent).includes(normText(optionAnswer)))
-      if (!option) {
-        this.debug("warn", "questions.select.option_missing", { label, desired: optionAnswer })
-        this.markManualReview(select, label)
-        continue
-      }
-      select.value = option.value
-      select.dispatchEvent(new Event("input", { bubbles: true }))
-      select.dispatchEvent(new Event("change", { bubbles: true }))
-      this.bumpFilledCount()
-      this.debug("info", "questions.select.answered", { label, desired: optionAnswer })
     }
     await this.fillApplicationQuestionComboboxes()
+    await this.flushSemanticQueue()
     this.debug("info", "step.application_questions.complete")
+  }
+
+  /** Enqueue a required question for the batched semantic (Claude) resolver. */
+  private queueSemantic(q: SemanticQuestion): void {
+    if (q.el.getAttribute(MANUAL_REVIEW_ATTR) === "1") return
+    if (this.semanticQueue.some((existing) => existing.el === q.el)) return
+    this.semanticQueue.push(q)
+  }
+
+  /**
+   * Second tier of the apply agent: resolve every deferred required question in
+   * ONE server-side Claude call (profile + résumé aware, option-constrained),
+   * then apply each answer via its captured handler. Anything the model can't
+   * answer — or that fails to apply — falls back to manual review, so this can
+   * only ever improve on the deterministic pass, never regress it.
+   */
+  private async flushSemanticQueue(): Promise<void> {
+    const queue = this.semanticQueue
+    this.semanticQueue = []
+    if (queue.length === 0 || this.stopped) {
+      for (const q of queue) this.markManualReview(q.el, q.label)
+      return
+    }
+
+    const questions: MatchQuestion[] = queue.map((q, index) => ({
+      id: String(index),
+      label: q.label,
+      type: q.type,
+      options: q.options,
+    }))
+
+    let answers: Map<string, string | null>
+    try {
+      this.debug("info", "questions.semantic.request", { count: questions.length })
+      const res = await matchQuestions({
+        questions,
+        jobTitle: this.detectJobTitle(),
+      })
+      answers = new Map(res.answers.map((a) => [a.id, a.value]))
+      this.debug("info", "questions.semantic.response", {
+        answered: res.answers.filter((a) => a.value != null).length,
+        total: questions.length,
+      })
+    } catch (err) {
+      // Network/auth/AI failure — preserve the existing contract: everything
+      // queued becomes manual review, exactly as before this tier existed.
+      this.debug("warn", "questions.semantic.failed", {
+        error: err instanceof Error ? err.message : String(err),
+      })
+      for (const q of queue) this.markManualReview(q.el, q.label)
+      return
+    }
+
+    for (let index = 0; index < queue.length; index++) {
+      if (this.stopped) return
+      const q = queue[index]
+      const value = answers.get(String(index)) ?? null
+      if (!value) {
+        this.markManualReview(q.el, q.label)
+        continue
+      }
+      let ok = false
+      try {
+        ok = await q.apply(value)
+      } catch {
+        ok = false
+      }
+      if (ok) {
+        this.bumpFilledCount()
+        this.debug("info", "questions.semantic.answered", { label: q.label, value })
+        await sleep(120)
+      } else {
+        this.debug("warn", "questions.semantic.apply_failed", { label: q.label, value })
+        this.markManualReview(q.el, q.label)
+      }
+    }
+  }
+
+  /** Best-effort Workday job title for answer context (optional). */
+  private detectJobTitle(): string | undefined {
+    const el = document.querySelector<HTMLElement>(
+      '[data-automation-id="jobPostingHeader"], [data-automation-id="jobTitle"], h1',
+    )
+    const text = el?.textContent?.trim()
+    return text && text.length <= 160 ? text : undefined
   }
 
   private async fillApplicationQuestionComboboxes(): Promise<void> {
@@ -2104,9 +2965,21 @@ class WorkdayAutofillRunner {
       const yn = this.getYesNoAnswer(label)
       let desired = yn === null ? this.getSelectAnswer(label) : (yn ? "Yes" : "No")
       if (!desired) desired = this.inferDefaultQuestionComboboxAnswer(label)
+      // Combobox option lists aren't enumerable without opening the dropdown,
+      // so the semantic tier returns a free value that selectComboboxElement
+      // fuzzy-matches against the live options.
+      const deferCombobox = () =>
+        this.queueSemantic({
+          el: container,
+          label,
+          type: "text",
+          apply: (value: string) =>
+            this.selectComboboxElement(comboboxTarget, value, label, { optional: true }),
+        })
+
       if (!desired) {
         this.debug("warn", "questions.combobox.unanswered", { label })
-        this.markManualReview(container, label)
+        deferCombobox()
         continue
       }
 
@@ -2115,7 +2988,7 @@ class WorkdayAutofillRunner {
         this.debug("info", "questions.combobox.answered", { label, desired })
       } else {
         this.debug("warn", "questions.combobox.answer_failed", { label, desired })
-        this.markManualReview(container, label)
+        deferCombobox()
       }
     }
   }
@@ -2249,6 +3122,22 @@ class WorkdayAutofillRunner {
       q.includes("obligations to a previous employer") ||
       q.includes("non solicitation") ||
       q.includes("non compete")
+    ) {
+      return false
+    }
+    // "Are you a previous/former employee of <company>?" → default No. Avoids an
+    // AI round-trip; a returning employee can correct it via manual review.
+    // Guarded against "previous employer" (handled above) and relative/family
+    // wording so we don't mis-answer a different question.
+    if (
+      (q.includes("previous employee") ||
+        q.includes("former employee") ||
+        q.includes("previously been employed") ||
+        q.includes("currently or previously employed") ||
+        q.includes("ever been employed by") ||
+        q.includes("ever worked for")) &&
+      !q.includes("relative") &&
+      !q.includes("family")
     ) {
       return false
     }
@@ -2666,11 +3555,15 @@ class WorkdayAutofillRunner {
     automationId: string,
     value: string,
     fieldName: string,
-    opts?: { optional?: boolean },
+    opts?: { optional?: boolean; labelRe?: RegExp },
   ): Promise<boolean> {
     const selector = `[data-automation-id="${safeEscapeSelector(automationId)}"]`
     const found = root.querySelector<HTMLElement>(selector)
-    const el = resolveInputControlFromElement(found)
+    let el = resolveInputControlFromElement(found)
+    // Label fallback within the dialog/root when the automation-id misses.
+    if (!(el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) && opts?.labelRe) {
+      el = resolveInputControlFromElement(this.findControlByLabel(opts.labelRe, { root }))
+    }
     if (!(el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement)) {
       this.debug("warn", "field.automation_not_found", { fieldName, automationId, selector })
       if (!opts?.optional) this.logWarning(`Manual review needed: ${fieldName}`)
@@ -2693,10 +3586,14 @@ class WorkdayAutofillRunner {
     automationId: string,
     value: string,
     fieldName: string,
+    opts?: { labelRe?: RegExp },
   ): Promise<boolean> {
     const selector = `[data-automation-id="${safeEscapeSelector(automationId)}"]`
     const found = root.querySelector<HTMLElement>(selector)
-    const el = resolveInputControlFromElement(found)
+    let el = resolveInputControlFromElement(found)
+    if (!(el instanceof HTMLTextAreaElement || el instanceof HTMLInputElement) && opts?.labelRe) {
+      el = resolveInputControlFromElement(this.findControlByLabel(opts.labelRe, { root }))
+    }
     if (!(el instanceof HTMLTextAreaElement || el instanceof HTMLInputElement)) {
       this.debug("warn", "field.textarea_not_found", { fieldName, automationId, selector })
       return false
@@ -2717,10 +3614,20 @@ class WorkdayAutofillRunner {
     automationId: string,
     value: string,
     fieldName: string,
-    opts?: { optional?: boolean },
+    opts?: { optional?: boolean; labelRe?: RegExp },
   ): Promise<boolean> {
     const selector = `[data-automation-id="${safeEscapeSelector(automationId)}"]`
-    return this.selectCombobox(selector, value, fieldName, { root, optional: opts?.optional })
+    if (await this.selectCombobox(selector, value, fieldName, { root, optional: true })) return true
+    // Label fallback within the dialog/root.
+    if (opts?.labelRe) {
+      const combo = this.findControlByLabel(opts.labelRe, { combobox: true, root })
+      if (combo && (await this.selectComboboxElement(combo, value, fieldName, { optional: true }))) return true
+    }
+    if (!opts?.optional) {
+      this.logWarning(`Manual review needed: ${fieldName}`)
+      this.requiredFieldMissesThisStep += 1
+    }
+    return false
   }
 
   private async setCheckboxInRoot(root: ParentNode, automationId: string, checked: boolean, fieldName: string): Promise<boolean> {
@@ -2753,6 +3660,135 @@ class WorkdayAutofillRunner {
     }
     this.debug("info", "field.checkbox_set", { fieldName, checked, finalChecked: el.checked })
     return true
+  }
+
+  /**
+   * Locate a field control by its visible label, so the runner works on tenants
+   * whose data-automation-ids don't match our fixed list. Matches the label of a
+   * formField wrapper (or a <label for>) against `labelRe`.
+   */
+  private findControlByLabel(
+    labelRe: RegExp,
+    opts?: { combobox?: boolean; root?: ParentNode },
+  ): HTMLElement | null {
+    const scope = opts?.root ?? document
+    const sel = opts?.combobox
+      ? '[role="combobox"], [aria-haspopup="listbox"], [data-automation-id*="dropDown" i], button[aria-haspopup="listbox"], input'
+      : "input, textarea"
+
+    const containers = Array.from(
+      scope.querySelectorAll<HTMLElement>('[data-automation-id*="formField"], fieldset, [role="group"]'),
+    ).filter((el) => isVisible(el))
+    for (const c of containers) {
+      const labelEl = c.querySelector("label, legend, [data-automation-id*='label'], [role='heading']")
+      const labelText = normText((labelEl?.textContent ?? "").replace(/\*/g, ""))
+      if (!labelText || !labelRe.test(labelText)) continue
+      const input = Array.from(c.querySelectorAll<HTMLElement>(sel)).find((el) => isVisible(el))
+      if (input) return input
+    }
+    // <label for="id"> fallback.
+    for (const l of Array.from(scope.querySelectorAll<HTMLLabelElement>("label"))) {
+      const labelText = normText((l.textContent ?? "").replace(/\*/g, ""))
+      if (!labelText || !labelRe.test(labelText)) continue
+      const forId = l.getAttribute("for")
+      if (forId) {
+        const el = document.getElementById(forId) // ids are document-global
+        if (el && isVisible(el)) return el
+      }
+    }
+    return null
+  }
+
+  /**
+   * Find a section's "Add" button by data-automation-id first, then by locating a
+   * heading whose text matches `headingRe` and the "Add"/"Add Another" button near
+   * it. Tenant-agnostic so multi-entry sections work when IDs differ.
+   */
+  private findAddButtonForSection(sectionAutomationIds: string[], headingRe: RegExp): HTMLElement | null {
+    for (const id of sectionAutomationIds) {
+      const section = document.querySelector<HTMLElement>(`[data-automation-id="${safeEscapeSelector(id)}"]`)
+      const add = section?.querySelector<HTMLElement>('[data-automation-id="Add"], [data-automation-id="add"]') ?? null
+      if (isVisible(add)) return add
+    }
+    // Heading-matched fallback: associate each visible Add button with its section.
+    const adds = Array.from(
+      document.querySelectorAll<HTMLElement>(
+        '[data-automation-id="Add"], [data-automation-id="add"], button, [role="button"]',
+      ),
+    ).filter((b) => isVisible(b) && /^add(\s+(another|more|new))?$/.test(normText(b.textContent ?? "")))
+    for (const add of adds) {
+      const container = add.closest("section, fieldset, [data-automation-id]") ?? add.parentElement
+      const headingText = normText(
+        container?.querySelector("h2, h3, h4, [role='heading'], legend, [data-automation-id*='label']")?.textContent ??
+          container?.textContent?.slice(0, 120) ??
+          "",
+      )
+      if (headingRe.test(headingText)) return add
+    }
+    return null
+  }
+
+  /**
+   * Fill a text field by data-automation-id selectors first, then fall back to
+   * matching by visible label. Tenant-agnostic. Handles salvage/forceOverwrite.
+   */
+  private async fillTextSmart(
+    selectors: string[],
+    labelRe: RegExp,
+    value: string,
+    fieldName: string,
+    opts?: { optional?: boolean; forceOverwrite?: boolean; salvageMiscased?: boolean },
+  ): Promise<boolean> {
+    // 1. Selector path (optional:true so it doesn't pre-count a miss).
+    if (await this.fillFirstTextSelector(selectors, value, fieldName, { ...opts, optional: true })) return true
+
+    // 2. Label fallback.
+    const found = this.findControlByLabel(labelRe)
+    const input = found ? resolveInputControlFromElement(found) : null
+    if (input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement) {
+      let clean = nonEmpty(value)
+      if (!clean && opts?.salvageMiscased) {
+        const existing = nonEmpty(input.value)
+        if (existing && looksMiscased(existing)) clean = toTitleCase(existing)
+      }
+      if (clean) {
+        this.setToolbarField(fieldName)
+        const ok = this.setElementValue(input, clean, fieldName, { forceOverwrite: opts?.forceOverwrite })
+        if (ok) {
+          this.bumpFilledCount()
+          this.debug("info", "field.text_filled_by_label", { fieldName })
+          return true
+        }
+      }
+    }
+
+    if (!opts?.optional) {
+      this.logWarning(`Manual review needed: ${fieldName}`)
+      this.requiredFieldMissesThisStep += 1
+      this.debug("warn", "field.text_unresolved", { fieldName })
+    }
+    return false
+  }
+
+  /** Select a combobox by selectors first, then by visible label. */
+  private async selectComboSmart(
+    selector: string,
+    labelRe: RegExp,
+    value: string,
+    fieldName: string,
+    opts?: { optional?: boolean; riskyApplyFlowField?: boolean },
+  ): Promise<boolean> {
+    if (await this.selectCombobox(selector, value, fieldName, { ...opts, optional: true })) return true
+    const combo = this.findControlByLabel(labelRe, { combobox: true })
+    if (combo) {
+      const ok = await this.selectComboboxElement(combo, value, fieldName, opts)
+      if (ok) return true
+    }
+    if (!opts?.optional) {
+      this.logWarning(`Manual review needed: ${fieldName}`)
+      this.requiredFieldMissesThisStep += 1
+    }
+    return false
   }
 
   private async fillTextSelector(

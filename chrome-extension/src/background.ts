@@ -540,7 +540,7 @@ async function resolveBestAutofillFrameId(tabId: number): Promise<number | undef
 
 import { dispatchApexMessage } from "./apex-dispatcher"
 import { buildLinkedInSearchUrl } from "./apex-connection-scanner"
-import type { ScanLinkedInConnectionsResult, ScannedConnection } from "./types"
+import type { ImportLinkedInProfileResult, ScanLinkedInConnectionsResult, ScannedConnection } from "./types"
 
 // Aggregator handler messages (linkedin/glassdoor/indeed/handshake) flow
 // through a dedicated dispatcher; register before the main listener so its
@@ -622,10 +622,16 @@ async function handleMessage(
       return handleRelayApexCommand(message.command, message.payload)
 
     case "FETCH_RESUME_FILE":
-      return handleFetchResumeFile(message.resumeId as string)
+      return handleFetchResumeFile({
+        resumeId: typeof message.resumeId === "string" ? message.resumeId : undefined,
+        versionId: typeof message.versionId === "string" ? message.versionId : undefined,
+      })
 
     case "INJECT_RESUME_FILE_IN_TAB":
-      return handleInjectResumeFileInTab(message.resumeId as string, sender)
+      return handleInjectResumeFileInTab({
+        resumeId: typeof message.resumeId === "string" ? message.resumeId : undefined,
+        versionId: typeof message.versionId === "string" ? message.versionId : undefined,
+      }, sender)
 
     case "GET_STORED_LINKEDIN_URL": {
       // Fetch the user's stored LinkedIn URL from the brand profile.
@@ -675,10 +681,26 @@ async function handleMessage(
         message.jobId,
         message.applyUrl,
         message.atsProvider,
+        sender.tab?.id,
       )
+
+    case "AGENT_RUN_STATUS":
+      return handleAgentRunStatus(message.phase, message.reason, sender.tab?.id)
+
+    case "AGENT_PENDING_CHECK":
+      return handleAgentPendingCheck(sender.tab?.id)
+
+    case "AGENT_JOB_CONSUMED":
+      // The in-page agent run reached a terminal state. Drop the context so the
+      // content-pull stops re-dispatching AGENT_AUTOFILL (the Ashby SPA loop).
+      if (sender.tab?.id) void deleteAgentTab(sender.tab.id)
+      return { ok: true }
 
     case "SCAN_LINKEDIN_CONNECTIONS":
       return handleScanLinkedInConnections(message.companyName)
+
+    case "IMPORT_LINKEDIN_PROFILE":
+      return handleImportLinkedInProfile(message.url)
 
     case "GET_WORKFLOW_STATE":
       return { type: "WORKFLOW_STATE_RESULT", state: null } as WorkflowStateResult
@@ -695,6 +717,9 @@ async function handleMessage(
     case "QUEUE_RETRY_JOB":
       return handleQueueRetryJob(message.queueId)
 
+    case "QUEUE_OPEN_JOB":
+      return handleQueueOpenJob(message.queueId)
+
     case "QUEUE_MARK_SUBMITTED":
       return handleQueueMarkSubmitted(message.queueId)
 
@@ -709,6 +734,12 @@ async function handleMessage(
 
     case "QUEUE_CLEAR":
       return handleQueueClear()
+
+    case "QUEUE_START_RUN":
+      return handleQueueStartRun()
+
+    case "QUEUE_STOP_RUN":
+      return handleQueueStopRun()
 
     default:
       return {
@@ -1094,7 +1125,21 @@ async function handleAgentApplicationSubmitted(
   jobId?: string,
   applyUrl?: string,
   atsProvider?: string,
+  senderTabId?: number,
 ): Promise<{ type: "AGENT_APPLICATION_SUBMITTED_ACK"; accepted: boolean }> {
+  // The job is done — drop its agent context so the pull/push loops stop.
+  if (senderTabId !== undefined) void deleteAgentTab(senderTabId)
+
+  // Single-job "Open & Fill": mark just that job, don't advance to others.
+  if (senderTabId !== undefined && manualAgentTabs.has(senderTabId)) {
+    const queueId = manualAgentTabs.get(senderTabId)!
+    manualAgentTabs.delete(senderTabId)
+    void markQueueItemSubmitted(queueId)
+  } else {
+    // Otherwise advance the autonomous run (if any) past the job that submitted.
+    void advanceRunOnSubmit(senderTabId)
+  }
+
   const normalizedAts =
     typeof atsProvider === "string" && atsProvider !== "generic"
       ? (atsProvider as ActiveBrowserContext["atsProvider"])
@@ -1143,14 +1188,24 @@ async function handleRelayApexCommand(
 
 // ── Resume file fetch (for DataTransfer injection) ────────────────────────────
 
-async function handleFetchResumeFile(resumeId: string): Promise<FetchResumeFileResult> {
+async function handleFetchResumeFile(args: {
+  resumeId?: string
+  versionId?: string
+}): Promise<FetchResumeFileResult> {
   try {
+    if (!args.resumeId && !args.versionId) {
+      return { type: "FETCH_RESUME_FILE_RESULT", error: "No resume ID or version ID provided" }
+    }
     const origin = await resolveOrigin()
     const token  = await getSessionToken(origin)
     if (!token) return { type: "FETCH_RESUME_FILE_RESULT", error: "Not authenticated" }
 
+    const params = new URLSearchParams()
+    if (args.versionId) params.set("versionId", args.versionId)
+    else if (args.resumeId) params.set("resumeId", args.resumeId)
+
     // Extension-auth endpoint — uses Bearer token, not cookie session
-    const res = await fetch(`${origin}/api/extension/resume/download?resumeId=${encodeURIComponent(resumeId)}`, {
+    const res = await fetch(`${origin}/api/extension/resume/download?${params.toString()}`, {
       headers: {
         Authorization: `Bearer ${token}`,
         "X-Hireoven-Extension": "1",
@@ -1176,7 +1231,10 @@ async function handleFetchResumeFile(resumeId: string): Promise<FetchResumeFileR
 }
 
 async function handleInjectResumeFileInTab(
-  resumeId: string,
+  args: {
+    resumeId?: string
+    versionId?: string
+  },
   sender: chrome.runtime.MessageSender,
 ): Promise<InjectResumeFileInTabResult> {
   const fail = (error: string): InjectResumeFileInTabResult =>
@@ -1185,7 +1243,7 @@ async function handleInjectResumeFileInTab(
   const tabId = sender.tab?.id
   if (!tabId) return fail("No sender tab ID")
 
-  const fileResult = await handleFetchResumeFile(resumeId)
+  const fileResult = await handleFetchResumeFile(args)
   if (!fileResult.base64 || !fileResult.filename) return fail(fileResult.error ?? "PDF fetch failed")
 
   try {
@@ -1210,8 +1268,7 @@ async function handleInjectResumeFileInTab(
 
 // ── Apply-agent tab opener ────────────────────────────────────────────────────
 
-/** Pending agent contexts keyed by tab ID — sent to content script once the tab is truly ready. */
-const pendingAgentTabs = new Map<number, {
+interface AgentTabCtx {
   jobId?:         string
   jobTitle?:      string
   company?:       string
@@ -1219,7 +1276,53 @@ const pendingAgentTabs = new Map<number, {
   createdAt:      number
   attempts:       number
   inFlight:       boolean
-}>()
+}
+
+/**
+ * Pending agent contexts keyed by tab ID. Persisted to chrome.storage.session
+ * (NOT an in-memory Map) because the MV3 service worker is torn down after ~30s
+ * idle — which is exactly what happens while the user spends a minute on a login
+ * page. An in-memory Map would be wiped on that teardown, so the agent could
+ * never resume after sign-in. storage.session survives worker restarts and is
+ * cleared when the browser closes.
+ */
+const AGENT_TABS_KEY = "pendingAgentTabs"
+
+async function readAgentTabs(): Promise<Record<string, AgentTabCtx>> {
+  try {
+    const r = await chrome.storage.session.get(AGENT_TABS_KEY)
+    const raw = r[AGENT_TABS_KEY]
+    return raw && typeof raw === "object" ? (raw as Record<string, AgentTabCtx>) : {}
+  } catch {
+    return {}
+  }
+}
+
+async function getAgentTab(tabId: number): Promise<AgentTabCtx | null> {
+  const all = await readAgentTabs()
+  return all[String(tabId)] ?? null
+}
+
+async function setAgentTab(tabId: number, ctx: AgentTabCtx): Promise<void> {
+  const all = await readAgentTabs()
+  all[String(tabId)] = ctx
+  try {
+    await chrome.storage.session.set({ [AGENT_TABS_KEY]: all })
+  } catch {
+    // session storage unavailable — agent resume becomes best-effort
+  }
+}
+
+async function deleteAgentTab(tabId: number): Promise<void> {
+  const all = await readAgentTabs()
+  if (!(String(tabId) in all)) return
+  delete all[String(tabId)]
+  try {
+    await chrome.storage.session.set({ [AGENT_TABS_KEY]: all })
+  } catch {
+    // ignore
+  }
+}
 
 async function handleOperatorOpenTab(
   url:            string,
@@ -1228,13 +1331,13 @@ async function handleOperatorOpenTab(
   company?:       string,
   coverLetterId?: string,
   agentMode = false,
-): Promise<void> {
-  if (!url) return
+): Promise<number | null> {
+  if (!url) return null
   const tab = await chrome.tabs.create({ url, active: true })
-  if (!tab.id) return
+  if (!tab.id) return null
 
   if (agentMode) {
-    pendingAgentTabs.set(tab.id, {
+    await setAgentTab(tab.id, {
       jobId,
       jobTitle,
       company,
@@ -1244,28 +1347,31 @@ async function handleOperatorOpenTab(
       inFlight: false,
     })
   }
+  return tab.id
 }
 
 const AGENT_CONTEXT_TTL_MS = 10 * 60 * 1000
 const AGENT_CONTEXT_MAX_ATTEMPTS = 30
 
 async function tryDispatchAgentAutofill(tabId: number): Promise<void> {
-  const ctx = pendingAgentTabs.get(tabId)
+  // Read fresh from storage.session every time — the worker may have restarted
+  // since the context was created (e.g. during a long login).
+  const ctx = await getAgentTab(tabId)
   if (!ctx) return
   if (ctx.inFlight) return
 
   // Expire stale contexts so we do not retry forever after abandoned flows.
   if (Date.now() - ctx.createdAt > AGENT_CONTEXT_TTL_MS || ctx.attempts >= AGENT_CONTEXT_MAX_ATTEMPTS) {
-    pendingAgentTabs.delete(tabId)
+    await deleteAgentTab(tabId)
     return
   }
 
   ctx.inFlight = true
   ctx.attempts += 1
-  pendingAgentTabs.set(tabId, ctx)
+  await setAgentTab(tabId, ctx)
 
   // Brief delay to let the page hydrate before we send the command.
-  await new Promise((resolve) => setTimeout(resolve, 1800))
+  await new Promise((resolve) => setTimeout(resolve, 900))
 
   try {
     const response = await chrome.tabs.sendMessage(tabId, {
@@ -1277,22 +1383,75 @@ async function tryDispatchAgentAutofill(tabId: number): Promise<void> {
         company: ctx.company,
         coverLetterId: ctx.coverLetterId,
       },
-    }) as { type?: string; accepted?: boolean } | undefined
+    }) as { type?: string; accepted?: boolean; waiting?: boolean } | undefined
 
-    const accepted = response?.type === "APEX_COMMAND_EXECUTED" && response.accepted === true
+    const isAlive = response?.type === "APEX_COMMAND_EXECUTED"
+    const accepted = isAlive && response?.accepted === true
     if (accepted) {
-      pendingAgentTabs.delete(tabId)
+      await deleteAgentTab(tabId)
       return
     }
+    if (isAlive && response?.waiting === true) {
+      // The content script is DELIBERATELY waiting (a sign-in page, or a redirect
+      // between steps). Refresh the context + reset the retry budget so a slow
+      // login (2FA, password reset) doesn't expire it before the user returns to
+      // the form. Only the genuine waiting case gets an unbounded reset.
+      const current = await getAgentTab(tabId)
+      if (current) {
+        current.createdAt = Date.now()
+        current.attempts = 0
+        current.inFlight = false
+        await setAgentTab(tabId, current)
+        return
+      }
+    }
+    // isAlive but NOT waiting → a stuck dead-end (e.g. form never detected). Do
+    // NOT reset attempts: let them accumulate toward AGENT_CONTEXT_MAX_ATTEMPTS
+    // so we stop re-dispatching instead of looping forever.
   } catch {
     // Receiving end doesn't exist yet on intermediate pages (login/redirect).
     // Keep context so the next navigation-complete can retry.
-  } finally {
-    const current = pendingAgentTabs.get(tabId)
-    if (current) {
-      current.inFlight = false
-      pendingAgentTabs.set(tabId, current)
-    }
+  }
+  // Clear the in-flight flag so the next navigation can retry.
+  const current = await getAgentTab(tabId)
+  if (current) {
+    current.inFlight = false
+    await setAgentTab(tabId, current)
+  }
+}
+
+/**
+ * Content-pull resume path: the in-page bar asks (on load and on a timer)
+ * whether this tab has a pending agent job. This is the reliable
+ * resume-after-login mechanism — it depends only on the persisted
+ * storage.session context, not on a background event firing while the worker is
+ * alive and the bar is ready.
+ */
+async function handleAgentPendingCheck(tabId?: number): Promise<import("./types").AgentPendingResult> {
+  if (!tabId) return { type: "AGENT_PENDING_RESULT", pending: false }
+  const ctx = await getAgentTab(tabId)
+  if (!ctx) {
+    console.debug("[ho-agent] pending-check: no context for tab", tabId)
+    return { type: "AGENT_PENDING_RESULT", pending: false }
+  }
+  if (Date.now() - ctx.createdAt > AGENT_CONTEXT_TTL_MS) {
+    await deleteAgentTab(tabId)
+    console.debug("[ho-agent] pending-check: context expired for tab", tabId)
+    return { type: "AGENT_PENDING_RESULT", pending: false }
+  }
+  // Keep the context fresh while it's actively being driven (long login + fill).
+  ctx.createdAt = Date.now()
+  await setAgentTab(tabId, ctx)
+  console.debug("[ho-agent] pending-check: pending job for tab", tabId, ctx.jobTitle)
+  return {
+    type: "AGENT_PENDING_RESULT",
+    pending: true,
+    payload: {
+      jobId: ctx.jobId,
+      jobTitle: ctx.jobTitle,
+      company: ctx.company,
+      coverLetterId: ctx.coverLetterId,
+    },
   }
 }
 
@@ -1304,7 +1463,24 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
 
 // Clean up if the tab is closed before automation begins.
 chrome.tabs.onRemoved.addListener((tabId) => {
-  pendingAgentTabs.delete(tabId)
+  void deleteAgentTab(tabId)
+  manualAgentTabs.delete(tabId)
+  // If the user closes the tab the run is actively driving, treat it as a skip
+  // for that job and move on so the loop never stalls. (When *we* close a tab to
+  // advance, currentRunTabId is already nulled, so this won't fire for us.)
+  if (tabId === currentRunTabId) {
+    currentRunTabId = null
+    void (async () => {
+      const queue = await readQueue()
+      if (!queue || queue.runStatus !== "running" || !queue.currentQueueId) return
+      const i = queue.jobs.findIndex((j) => j.queueId === queue.currentQueueId)
+      if (i >= 0 && !["submitted_manually", "skipped"].includes(queue.jobs[i].status)) {
+        queue.jobs[i] = { ...queue.jobs[i], status: "skipped" }
+        await writeQueue(queue)
+      }
+      await advanceRun()
+    })()
+  }
 })
 
 // ── Apply Queue handlers ───────────────────────────────────────────────────────
@@ -1405,6 +1581,7 @@ async function prepareBulkJob(
     const data = await apiRequest<{
       resumeTailorStatus?: string
       coverLetterStatus?: string
+      coverLetterId?: string
       autofillStatus?: string
       warnings?: Array<{ code: string; message: string; severity: "info" | "warning" | "error" }>
       failReason?: string
@@ -1444,6 +1621,7 @@ async function prepareBulkJob(
 
     await updateStatus(nextStatus, {
       warnings: data.warnings as QueueJobEntry["warnings"],
+      coverLetterId: data.coverLetterId ?? null,
     })
   } catch {
     await updateStatus("failed", { failReason: "Preparation failed — can retry" })
@@ -1522,13 +1700,291 @@ async function handleQueuePauseResume(pause: boolean): Promise<QueueActionResult
   const queue = await readQueue()
   if (!queue) return { type: "QUEUE_ACTION_RESULT", ok: false }
   queue.paused = pause
-  await writeQueue(queue)
+  if (pause) {
+    // Halt the run loop: let the in-flight tab finish on its own, but don't open
+    // the next job until the user resumes.
+    if (queue.runStatus === "running") queue.runStatus = "paused"
+    clearRunWatchdog()
+    await writeQueue(queue)
+  } else {
+    if (queue.runStatus === "paused") queue.runStatus = "running"
+    await writeQueue(queue)
+    // Nothing in flight → kick the next job. Otherwise let it keep driving.
+    if (queue.runStatus === "running" && !queue.currentQueueId) {
+      void advanceRun()
+    } else if (queue.currentQueueId) {
+      armRunWatchdog(queue.currentQueueId)
+    }
+  }
   return { type: "QUEUE_ACTION_RESULT", ok: true }
 }
 
 async function handleQueueClear(): Promise<QueueActionResult> {
+  clearRunWatchdog()
+  currentRunTabId = null
   await writeQueue(null)
   return { type: "QUEUE_ACTION_RESULT", ok: true }
+}
+
+// ── Autonomous apply run orchestrator ────────────────────────────────────────
+//
+// Chains the existing single-job agent autofill (pendingAgentTabs →
+// AGENT_AUTOFILL → multi-page fill+submit) across every eligible queued job:
+// open job → agent fills & submits → AGENT_APPLICATION_SUBMITTED → advance.
+// Pauses (does not advance) while a job waits on a sign-in page; a watchdog
+// breaks stuck jobs so the loop can never hang forever.
+
+/** Tab currently being driven by the run. Set to null right before we close it. */
+let currentRunTabId: number | null = null
+let runWatchdog: ReturnType<typeof setTimeout> | null = null
+const RUN_WATCHDOG_MS = 10 * 60 * 1000 // mirrors AGENT_CONTEXT_TTL_MS
+
+/**
+ * Tabs opened by a single-job "Open & Fill" (agent mode, but NOT a chained run).
+ * Maps tabId → queueId so the submit/fail signal updates that one job without
+ * advancing to others.
+ */
+const manualAgentTabs = new Map<number, string>()
+
+/** Mark a queue item submitted and record it server-side. Shared by run + manual. */
+async function markQueueItemSubmitted(queueId: string): Promise<void> {
+  const queue = await readQueue()
+  if (!queue) return
+  const i = queue.jobs.findIndex((j) => j.queueId === queueId)
+  if (i < 0) return
+  const job = queue.jobs[i]
+  if (job.status === "submitted_manually") return
+  queue.jobs[i] = { ...job, status: "submitted_manually", failReason: null }
+  await writeQueue(queue)
+  void apiRequest("POST", "/api/apex/mark-submitted", {
+    jobId: job.jobId ?? undefined,
+    jobTitle: job.jobTitle,
+    companyName: job.company ?? undefined,
+    applyUrl: job.applyUrl,
+    notes: "Submitted via Apply Queue agent",
+  }).catch(() => {})
+}
+
+/** Patch a single queue item's status (no side effects). */
+async function setQueueItemStatus(
+  queueId: string,
+  status: QueueItemStatus,
+  patch?: Partial<QueueJobEntry>,
+): Promise<void> {
+  const queue = await readQueue()
+  if (!queue) return
+  const i = queue.jobs.findIndex((j) => j.queueId === queueId)
+  if (i < 0) return
+  queue.jobs[i] = { ...queue.jobs[i], status, ...patch }
+  await writeQueue(queue)
+}
+
+/** Statuses that are either terminal or mean a job is already in flight. */
+const RUN_DONE_OR_BUSY: QueueItemStatus[] = [
+  "submitted_manually",
+  "skipped",
+  "failed",
+  "applying",
+  "waiting_login",
+]
+
+function clearRunWatchdog(): void {
+  if (runWatchdog) {
+    clearTimeout(runWatchdog)
+    runWatchdog = null
+  }
+}
+
+function armRunWatchdog(queueItemId: string): void {
+  clearRunWatchdog()
+  runWatchdog = setTimeout(() => void onRunWatchdogFired(queueItemId), RUN_WATCHDOG_MS)
+}
+
+async function onRunWatchdogFired(queueItemId: string): Promise<void> {
+  const queue = await readQueue()
+  if (!queue || queue.runStatus !== "running" || queue.currentQueueId !== queueItemId) return
+  const i = queue.jobs.findIndex((j) => j.queueId === queueItemId)
+  if (i < 0) return
+  // Never time a job out while it is legitimately waiting for the user to log in.
+  if (queue.jobs[i].status === "waiting_login") {
+    armRunWatchdog(queueItemId)
+    return
+  }
+  queue.jobs[i] = { ...queue.jobs[i], status: "failed", failReason: "Timed out before submission" }
+  await writeQueue(queue)
+  await advanceRun()
+}
+
+/** Mark the in-flight job submitted (when the agent confirms) and move on. */
+async function advanceRunOnSubmit(senderTabId?: number): Promise<void> {
+  const queue = await readQueue()
+  if (!queue || queue.runStatus !== "running" || !queue.currentQueueId) return
+  if (senderTabId !== undefined && currentRunTabId !== null && senderTabId !== currentRunTabId) return
+
+  await markQueueItemSubmitted(queue.currentQueueId)
+  await advanceRun()
+}
+
+/**
+ * Close the previous job's tab and open the next eligible job in agent mode.
+ * When nothing is left, marks the run done.
+ */
+async function advanceRun(): Promise<void> {
+  clearRunWatchdog()
+
+  // Close the tab from the job we just finished (best-effort).
+  if (currentRunTabId !== null) {
+    const closing = currentRunTabId
+    currentRunTabId = null
+    void deleteAgentTab(closing)
+    chrome.tabs.remove(closing).catch(() => {})
+  }
+
+  let queue = await readQueue()
+  if (!queue) return
+  if (queue.runStatus !== "running" || queue.paused) return
+
+  const next = queue.jobs.find((j) => !RUN_DONE_OR_BUSY.includes(j.status))
+  if (!next) {
+    queue.runStatus = "done"
+    queue.currentQueueId = null
+    await writeQueue(queue)
+    return
+  }
+
+  // Reserve the job before opening so concurrent signals can't double-open it.
+  const idx = queue.jobs.findIndex((j) => j.queueId === next.queueId)
+  queue.jobs[idx] = { ...next, status: "applying", failReason: null }
+  queue.currentQueueId = next.queueId
+  await writeQueue(queue)
+
+  const tabId = await handleOperatorOpenTab(
+    next.applyUrl,
+    next.jobId ?? undefined,
+    next.jobTitle,
+    next.company ?? undefined,
+    next.coverLetterId ?? undefined, // attach the cover letter prepared by bulk-prepare
+    true, // agentMode → background drives AGENT_AUTOFILL page-after-page
+  )
+  currentRunTabId = tabId
+
+  if (tabId === null) {
+    queue = await readQueue()
+    if (queue) {
+      const i = queue.jobs.findIndex((j) => j.queueId === next.queueId)
+      if (i >= 0) {
+        queue.jobs[i] = { ...queue.jobs[i], status: "failed", failReason: "Could not open application tab" }
+        await writeQueue(queue)
+      }
+    }
+    await advanceRun()
+    return
+  }
+  armRunWatchdog(next.queueId)
+}
+
+async function handleQueueStartRun(): Promise<QueueActionResult> {
+  const queue = await readQueue()
+  if (!queue || queue.jobs.length === 0) return { type: "QUEUE_ACTION_RESULT", ok: false }
+  queue.paused = false
+  queue.runStatus = "running"
+  queue.currentQueueId = null
+  // A fresh run retries anything that previously failed.
+  queue.jobs = queue.jobs.map((j) =>
+    j.status === "failed" ? { ...j, status: "queued", failReason: null } : j,
+  )
+  await writeQueue(queue)
+  void advanceRun()
+  return { type: "QUEUE_ACTION_RESULT", ok: true }
+}
+
+async function handleQueueStopRun(): Promise<QueueActionResult> {
+  clearRunWatchdog()
+  // Stop driving the current tab but leave it open for the user.
+  if (currentRunTabId !== null) {
+    void deleteAgentTab(currentRunTabId)
+    currentRunTabId = null
+  }
+  const queue = await readQueue()
+  if (!queue) return { type: "QUEUE_ACTION_RESULT", ok: false }
+  queue.runStatus = "idle"
+  if (queue.currentQueueId) {
+    const i = queue.jobs.findIndex((j) => j.queueId === queue.currentQueueId)
+    if (i >= 0 && (queue.jobs[i].status === "applying" || queue.jobs[i].status === "waiting_login")) {
+      queue.jobs[i] = { ...queue.jobs[i], status: "queued" }
+    }
+  }
+  queue.currentQueueId = null
+  await writeQueue(queue)
+  return { type: "QUEUE_ACTION_RESULT", ok: true }
+}
+
+/** Single-job "Open & Fill": open one queued job in agent mode (fill + submit). */
+async function handleQueueOpenJob(queueId: string): Promise<QueueActionResult> {
+  const queue = await readQueue()
+  if (!queue) return { type: "QUEUE_ACTION_RESULT", ok: false }
+  const job = queue.jobs.find((j) => j.queueId === queueId)
+  if (!job?.applyUrl) return { type: "QUEUE_ACTION_RESULT", ok: false }
+
+  await setQueueItemStatus(queueId, "applying", { failReason: null })
+
+  const tabId = await handleOperatorOpenTab(
+    job.applyUrl,
+    job.jobId ?? undefined,
+    job.jobTitle,
+    job.company ?? undefined,
+    job.coverLetterId ?? undefined,
+    true, // agentMode
+  )
+  if (tabId === null) {
+    await setQueueItemStatus(queueId, "failed", { failReason: "Could not open application tab" })
+    return { type: "QUEUE_ACTION_RESULT", ok: false }
+  }
+  manualAgentTabs.set(tabId, queueId)
+  return { type: "QUEUE_ACTION_RESULT", ok: true }
+}
+
+async function handleAgentRunStatus(
+  phase: "waiting_login" | "filling" | "failed",
+  reason: string | undefined,
+  senderTabId: number | undefined,
+): Promise<import("./types").AgentRunStatusAck> {
+  const reject = { type: "AGENT_RUN_STATUS_ACK", accepted: false } as const
+  const accept = { type: "AGENT_RUN_STATUS_ACK", accepted: true } as const
+
+  // A terminal failure ends this job — drop its agent context so the loops stop.
+  if (phase === "failed" && senderTabId !== undefined) void deleteAgentTab(senderTabId)
+
+  // Manual single-job "Open & Fill" (not a chained run): update just that job.
+  if (senderTabId !== undefined && manualAgentTabs.has(senderTabId)) {
+    const queueId = manualAgentTabs.get(senderTabId)!
+    if (phase === "failed") {
+      manualAgentTabs.delete(senderTabId)
+      await setQueueItemStatus(queueId, "failed", {
+        failReason: reason ?? "Agent could not complete this application",
+      })
+    } else {
+      await setQueueItemStatus(queueId, phase === "waiting_login" ? "waiting_login" : "applying")
+    }
+    return accept
+  }
+
+  const queue = await readQueue()
+  if (!queue || queue.runStatus !== "running" || !queue.currentQueueId) return reject
+  if (senderTabId !== undefined && currentRunTabId !== null && senderTabId !== currentRunTabId) return reject
+
+  if (phase === "failed") {
+    await setQueueItemStatus(queue.currentQueueId, "failed", {
+      failReason: reason ?? "Agent could not complete this application",
+    })
+    await advanceRun()
+    return accept
+  }
+
+  await setQueueItemStatus(queue.currentQueueId, phase === "waiting_login" ? "waiting_login" : "applying")
+  // Re-arm the watchdog so a login wait (or fresh page) doesn't trip the timeout.
+  armRunWatchdog(queue.currentQueueId)
+  return accept
 }
 
 // ── Tab monitoring ─────────────────────────────────────────────────────────────
@@ -1636,6 +2092,15 @@ const MVP_ROUTES: Record<string, MvpRoute> = {
       company:  msg.company,
     }),
   },
+  EXT_MVP_MATCH_QUESTIONS: {
+    method: "POST",
+    path: "/api/extension/match-questions",
+    buildBody: (msg) => ({
+      jobTitle:  msg.jobTitle,
+      company:   msg.company,
+      questions: msg.questions,
+    }),
+  },
   EXT_MVP_TRACK_AUTOFILL: {
     method: "POST",
     path: "/api/extension/autofill/telemetry",
@@ -1653,12 +2118,16 @@ const MVP_ROUTES: Record<string, MvpRoute> = {
  * the download endpoint streams a DOCX.
  */
 async function fetchPrimaryResumeBytes(opts?: {
+  resumeId?: string
+  versionId?: string
   jobId?: string
 }): Promise<
   { ok: true; data: { base64: string; filename: string } } | { ok: false; error: string }
 > {
   const params = new URLSearchParams()
-  if (opts?.jobId) params.set("jobId", opts.jobId)
+  if (opts?.versionId) params.set("versionId", opts.versionId)
+  else if (opts?.resumeId) params.set("resumeId", opts.resumeId)
+  else if (opts?.jobId) params.set("jobId", opts.jobId)
   return fetchBinaryDocx({
     path: "/api/extension/resume/download",
     query: params.toString(),
@@ -1744,7 +2213,9 @@ chrome.runtime.onMessage.addListener(
     // the dedicated fetch+base64 helper.
     if (type === "EXT_MVP_FETCH_PRIMARY_RESUME") {
       const jobId = typeof msg.jobId === "string" ? msg.jobId : undefined
-      void fetchPrimaryResumeBytes({ jobId }).then(sendResponse).catch((err: unknown) =>
+      const resumeId = typeof msg.resumeId === "string" ? msg.resumeId : undefined
+      const versionId = typeof msg.versionId === "string" ? msg.versionId : undefined
+      void fetchPrimaryResumeBytes({ jobId, resumeId, versionId }).then(sendResponse).catch((err: unknown) =>
         sendResponse({ ok: false, error: err instanceof Error ? err.message : String(err) }),
       )
       return true
@@ -1888,4 +2359,162 @@ async function handleScanLinkedInConnections(
   // so we don't block this message port (which would time out in MV3)
   void runScanAndPushResult(companyName)
   return { type: "SCAN_LINKEDIN_CONNECTIONS_RESULT", ok: true }
+}
+
+// ── Resume import: read the user's own LinkedIn profile ───────────────────────
+
+/**
+ * Opens the user's own LinkedIn profile (/in/me/ redirects to it under their
+ * session), scrapes the rendered text, and PUSHES it back to the Apex tab via
+ * PUSH_LINKEDIN_PROFILE_RESULT. Mirrors runScanAndPushResult — same MV3 port
+ * constraint, so we fire-and-forget and push the result when done.
+ */
+/**
+ * Sanitize a user-supplied LinkedIn profile URL. Returns a normalized
+ * https://www.linkedin.com/in/<slug>/ URL, or null if it isn't a LinkedIn
+ * profile URL. Critical: the URL arrives via a page postMessage, so we MUST
+ * restrict what we'll open to linkedin.com /in/ paths only.
+ */
+function sanitizeLinkedInProfileUrl(raw?: string): string | null {
+  if (!raw || typeof raw !== "string") return null
+  try {
+    let s = raw.trim()
+    if (!/^https?:\/\//i.test(s)) s = `https://${s}`
+    const u = new URL(s)
+    if (!/(^|\.)linkedin\.com$/i.test(u.hostname)) return null
+    if (!/^\/in\/[^/]+/i.test(u.pathname)) return null
+    const cleanPath = u.pathname.replace(/\/+$/, "")
+    return `https://www.linkedin.com${cleanPath}/`
+  } catch {
+    return null
+  }
+}
+
+async function runImportAndPushResult(requestedUrl?: string): Promise<void> {
+  const origin = await resolveOrigin()
+  // Open the user-supplied profile when valid; otherwise the user's own (/in/me/).
+  const profileUrl = sanitizeLinkedInProfileUrl(requestedUrl) ?? "https://www.linkedin.com/in/me/"
+
+  async function pushToApexTabs(payload: { ok: boolean; rawText?: string; error?: string }) {
+    const patterns = origin === PROD_APP_ORIGIN
+      ? ["https://hireoven.com/*", "https://www.hireoven.com/*"]
+      : ["http://localhost/*", "http://127.0.0.1/*"]
+    for (const pattern of patterns) {
+      const tabs = await chrome.tabs.query({ url: pattern }).catch(() => [])
+      for (const tab of tabs) {
+        if (!tab.id || !tab.url) continue
+        if (!isApexDashboardUrl(tab.url)) continue
+        chrome.tabs.sendMessage(tab.id, { type: "PUSH_LINKEDIN_PROFILE_RESULT", ...payload }).catch(() => {})
+      }
+    }
+  }
+
+  // Open active so LinkedIn fully renders (background tabs get JS-throttled).
+  const tab = await chrome.tabs.create({ url: profileUrl, active: true })
+  const tabId = tab.id
+  if (!tabId) {
+    await pushToApexTabs({ ok: false, error: "Could not open LinkedIn tab" })
+    return
+  }
+
+  const waitForComplete = (id: number, timeoutMs = 15_000) =>
+    new Promise<void>((resolve) => {
+      const listener = (changedId: number, info: chrome.tabs.TabChangeInfo) => {
+        if (changedId === id && info.status === "complete") {
+          chrome.tabs.onUpdated.removeListener(listener)
+          resolve()
+        }
+      }
+      chrome.tabs.onUpdated.addListener(listener)
+      setTimeout(resolve, timeoutMs)
+    })
+
+  const scrapeTab = (id: number) =>
+    new Promise<string | null>((resolve) => {
+      chrome.tabs.sendMessage(id, { type: "SCRAPE_LINKEDIN_PROFILE" }, (response: unknown) => {
+        if (chrome.runtime.lastError || !response) {
+          resolve(null); return
+        }
+        const text = (response as { rawText?: string })?.rawText ?? null
+        resolve(typeof text === "string" ? text : null)
+      })
+      setTimeout(() => resolve(null), 14_000)
+    })
+
+  // Wait for page load (up to 15s).
+  await waitForComplete(tabId)
+
+  // If we got redirected to a login/authwall, the user isn't signed in.
+  const loaded = await chrome.tabs.get(tabId).catch(() => null)
+  if (loaded?.url && /\/(login|authwall|checkpoint)/i.test(loaded.url)) {
+    await chrome.tabs.remove(tabId).catch(() => {})
+    await pushToApexTabs({ ok: false, error: "Please log into LinkedIn, then try again." })
+    return
+  }
+
+  // Scrape the main profile (headline, about, top skills, contact).
+  const mainText = await scrapeTab(tabId)
+
+  // The main profile TRUNCATES Experience/Education (shows ~2 then "Show all N").
+  // Visit the dedicated detail pages to capture the COMPLETE lists. These are
+  // SPA routes off the resolved profile URL.
+  const base = (() => {
+    try {
+      const u = new URL(loaded?.url ?? profileUrl)
+      const m = u.pathname.match(/^\/in\/[^/]+/i)
+      return m ? `https://www.linkedin.com${m[0]}/` : null
+    } catch {
+      return null
+    }
+  })()
+
+  const sections: string[] = []
+  if (mainText) sections.push(mainText)
+
+  if (base) {
+    for (const [label, path] of [
+      ["EXPERIENCE", "details/experience/"],
+      ["EDUCATION", "details/education/"],
+    ] as const) {
+      try {
+        await chrome.tabs.update(tabId, { url: `${base}${path}` }).catch(() => {})
+        await waitForComplete(tabId, 12_000)
+        const detail = await scrapeTab(tabId)
+        if (detail && detail.trim().length > 0) {
+          sections.push(`===== COMPLETE ${label} (authoritative — use these entries) =====\n${detail}`)
+        }
+      } catch {
+        // best-effort per section
+      }
+    }
+  }
+
+  const rawText = sections.join("\n\n").trim() || mainText
+
+  await chrome.tabs.remove(tabId).catch(() => {})
+
+  // Return focus to the Apex tab.
+  const apexPatterns = origin === PROD_APP_ORIGIN
+    ? ["https://hireoven.com/*", "https://www.hireoven.com/*"]
+    : ["http://localhost/*", "http://127.0.0.1/*"]
+  for (const pattern of apexPatterns) {
+    const apexTabs = await chrome.tabs.query({ url: pattern }).catch(() => [])
+    const apex = apexTabs.find((t) => t.id && t.url && isApexDashboardUrl(t.url))
+    if (apex?.id) {
+      await chrome.tabs.update(apex.id, { active: true }).catch(() => {})
+      break
+    }
+  }
+
+  if (!rawText || rawText.trim().length < 80) {
+    await pushToApexTabs({ ok: false, error: "Could not read your LinkedIn profile. Make sure you are logged in." })
+  } else {
+    await pushToApexTabs({ ok: true, rawText })
+  }
+}
+
+async function handleImportLinkedInProfile(url?: string): Promise<ImportLinkedInProfileResult> {
+  // Fire-and-forget — result is pushed back to the Apex tab (MV3 port timeout).
+  void runImportAndPushResult(url)
+  return { type: "IMPORT_LINKEDIN_PROFILE_RESULT", ok: true }
 }

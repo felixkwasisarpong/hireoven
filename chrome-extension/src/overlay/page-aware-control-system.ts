@@ -1538,6 +1538,7 @@ export class PageAwareControlSystem {
   // ── Apply Queue ──────────────────────────────────────────────────────────────
   private queueState: ApplyQueueState | null = null
   private queuePanel: ApplyQueuePanel | null = null
+  private queueRunPollTimer: ReturnType<typeof setInterval> | null = null
 
   // Tracks whether ensureResumeList has been called at least once this session
   private resumeListFetched = false
@@ -2890,14 +2891,19 @@ export class PageAwareControlSystem {
         onPause: () => void this.queueDoPause(true),
         onResume: () => void this.queueDoPause(false),
         onClear: () => void this.queueDoClear(),
+        onStartRun: () => void this.queueDoStartRun(),
+        onStopRun: () => void this.queueDoStopRun(),
         onClose: () => {
+          this.stopQueueRunPolling()
           this.queuePanel?.unmount()
           this.render()
         },
       })
     }
     this.queuePanel.mount(this.queueState)
-    void this.refreshQueueState()
+    void this.refreshQueueState().then(() => {
+      if (this.queueRunActive()) this.startQueueRunPolling()
+    })
   }
 
   private async queueDoSkip(queueId: string): Promise<void> {
@@ -2916,10 +2922,12 @@ export class PageAwareControlSystem {
   private async queueDoOpen(queueId: string): Promise<void> {
     const job = this.queueState?.jobs.find((j) => j.queueId === queueId)
     if (!job?.applyUrl) return
-    // Open the apply URL — content scripts use window.open
-    window.open(job.applyUrl, "_blank", "noopener")
-    this.setStatus(`Opening ${job.jobTitle ?? "job"}…`)
+    // Open in agent mode: background drives autofill page-by-page and submits.
+    await sendToBackground({ type: "QUEUE_OPEN_JOB", queueId })
+    this.setStatus(`Auto-applying to ${job.jobTitle ?? "job"}…`)
     await this.refreshQueueState()
+    // Surface live status (applying → waiting_login / submitted) for this job.
+    this.startQueueRunPolling()
   }
 
   private async queueDoPause(pause: boolean): Promise<void> {
@@ -2928,8 +2936,50 @@ export class PageAwareControlSystem {
   }
 
   private async queueDoClear(): Promise<void> {
+    this.stopQueueRunPolling()
     await sendToBackground({ type: "QUEUE_CLEAR" })
     await this.refreshQueueState()
+  }
+
+  private async queueDoStartRun(): Promise<void> {
+    await sendToBackground({ type: "QUEUE_START_RUN" })
+    await this.refreshQueueState()
+    this.startQueueRunPolling()
+  }
+
+  private async queueDoStopRun(): Promise<void> {
+    await sendToBackground({ type: "QUEUE_STOP_RUN" })
+    this.stopQueueRunPolling()
+    await this.refreshQueueState()
+  }
+
+  /** Poll queue state while a run is active so the panel reflects live progress. */
+  private startQueueRunPolling(): void {
+    if (this.queueRunPollTimer) return
+    this.queueRunPollTimer = setInterval(() => {
+      if (!this.queuePanel?.isOpen) {
+        this.stopQueueRunPolling()
+        return
+      }
+      void this.refreshQueueState().then(() => {
+        if (!this.queueRunActive()) this.stopQueueRunPolling()
+      })
+    }, 2000)
+  }
+
+  /** A run is active, or at least one job is mid-flight (manual Open & Fill). */
+  private queueRunActive(): boolean {
+    const q = this.queueState
+    if (!q) return false
+    if (q.runStatus === "running" || q.runStatus === "paused") return true
+    return q.jobs.some((j) => j.status === "applying" || j.status === "waiting_login")
+  }
+
+  private stopQueueRunPolling(): void {
+    if (this.queueRunPollTimer) {
+      clearInterval(this.queueRunPollTimer)
+      this.queueRunPollTimer = null
+    }
   }
 
   private renderDrawer(): string {
