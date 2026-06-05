@@ -278,9 +278,13 @@ export default async function DashboardJobDetailPage({ params }: Props) {
     "Not specified"
 
   const aboutRole = deriveAboutRoleParagraphs(
-    page.sections.about_role.items,
+    // Cap fallback about_role to 3 paragraphs — when sections weren't properly
+    // extracted the fallback can include the entire description
+    page.sections.about_role.is_fallback
+      ? page.sections.about_role.items.slice(0, 3)
+      : page.sections.about_role.items,
     page.clean_description
-  )
+  ).slice(0, 3)
 
   // Display-level guards — correct for already-stored jobs where the normalizer
   // may have mis-routed or fragmented content before these fixes were deployed.
