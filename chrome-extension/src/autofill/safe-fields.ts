@@ -155,7 +155,11 @@ const SAFE_KEY_RULES: SafeKeyRule[] = [
   // Names — first/last more specific than "name"
   { key: "first_name", patterns: [/\bfirst[\s_-]?name\b|\bgiven[\s_-]?name\b|^fname$|^firstname$/i] },
   { key: "last_name",  patterns: [/\blast[\s_-]?name\b|\bsurname\b|\bfamily[\s_-]?name\b|^lname$|^lastname$/i] },
-  { key: "full_name",  patterns: [/\bfull[\s_-]?name\b|^name$|\bcandidate[\s_-]?name\b/i] },
+  // labelOnly: the `^name$` anchor must test the human label, not the joined
+  // haystack — Ashby/CSS-module forms pollute name/id with opaque tokens
+  // (`_systemfield_name`) that break the anchor and drop the field to "custom
+  // question". first_name/last_name still win first via their \b… patterns.
+  { key: "full_name",  patterns: [/\bfull[\s_-]?name\b|^name$|\bcandidate[\s_-]?name\b/i], labelOnly: true },
 
   // Contact
   { key: "email", patterns: [/\bemail\b|\be[\s-]?mail\b/i] },
@@ -184,7 +188,11 @@ const SAFE_KEY_RULES: SafeKeyRule[] = [
 // ── Form scoping per source ──────────────────────────────────────────────────
 
 const FORM_CONTROL_SELECTOR =
-  "input:not([type=hidden]):not([type=submit]):not([type=button]):not([type=reset]), select, textarea"
+  // The tabindex/aria-hidden exclusions filter out react-select plumbing inputs,
+  // but file inputs are LEGITIMATELY rendered hidden (tabindex="-1", clipped) and
+  // triggered by a styled button/dropzone — Ashby's Resume field is exactly this.
+  // Always include `input[type=file]` so résumé/attachment fields are collected.
+  "input:not([type=hidden]):not([type=submit]):not([type=button]):not([type=reset]):not([aria-hidden='true']):not([tabindex='-1']), input[type=file], select, textarea"
 const FRAME_SELECTOR_PREFIX = "__ho_frame:"
 type FormControlElement = HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
 type LocatedControl = { el: FormControlElement; framePath: number[] }
@@ -224,6 +232,15 @@ function findApplicationFormRoot(
       "form",
     ],
     ashby: [
+      // Real Ashby markup uses these *unprefixed* stable classes (the
+      // `_jobPostingForm_<hash>` is the CSS-module twin). The application form is
+      // a <div>, not a <form>. Scoping here is critical: it EXCLUDES the separate
+      // "Autofill from resume" parser pane (.ashby-application-form-autofill-uploader),
+      // so we don't re-upload to the parser and race its re-parse while attaching
+      // the résumé to the real required Resume field.
+      ".ashby-application-form-container",
+      ".ashby-application-form",
+      // Legacy/older builds (kept as fallbacks).
       "._ashby-application-form",
       "._ashby-application-form-container form",
       "form[action*='ashby']",
@@ -242,8 +259,12 @@ function findApplicationFormRoot(
       ".sr-apply-step",
       ".smartrecruiters-widget form",
       "#apply-form",
+      "[data-test='application-form']",
+      "#oneclick-ui form",
+      "#oneclick-ui",
       "form[action*='smartrecruiters']",
       "form",
+      "main",
     ],
     bamboohr: [
       "#bamboohr-apply",
@@ -328,6 +349,26 @@ function getFieldLabel(input: HTMLElement): string {
   }
   const ph = input.getAttribute("placeholder")
   if (ph?.trim()) return ph.trim()
+
+  // CSS-module ATSes (Ashby's `_fieldEntry_<hash>` rows, etc.) associate the
+  // label with the control purely by DOM proximity: no `for`, no wrapping
+  // <label>, no aria, no placeholder. Without this, every Ashby field falls
+  // through to its opaque id (`_systemfield_…`) and shows in the drawer as an
+  // unnamed row that can't be classified — i.e. the "long list of fields with
+  // no name, autofill only partial" failure. Climb a few row-wrappers and take
+  // the nearest label-like element, but only while the wrapper holds a single
+  // control so we never borrow a neighbouring field's label.
+  const tidy = (s: string | null | undefined) =>
+    (s ?? "").replace(/\s+/g, " ").replace(/[\s*]+$/, "").trim()
+  let row: HTMLElement | null = input.parentElement
+  for (let depth = 0; row && depth < 4; depth += 1, row = row.parentElement) {
+    if (row.querySelectorAll("input, select, textarea").length > 2) break
+    const lbl = row.querySelector<HTMLElement>(
+      "label, legend, [class*='label' i], [data-testid*='label' i]",
+    )
+    if (lbl && tidy(lbl.textContent)) return tidy(lbl.textContent)
+  }
+
   return input.getAttribute("name") ?? input.id ?? "Unlabelled field"
 }
 
@@ -377,7 +418,42 @@ function buildSelector(input: HTMLElement): string {
   if (input.id) return `#${CSS.escape(input.id)}`
   const name = input.getAttribute("name")
   if (name) return `${input.tagName.toLowerCase()}[name="${CSS.escape(name)}"]`
-  return input.tagName.toLowerCase()
+  // No id/name (common on React/Remix forms): build a unique nth-of-type path so
+  // the selector resolves to THIS element. A bare `input` tag would resolve to the
+  // first input on the page and clobber an unrelated field.
+  return buildUniquePath(input)
+}
+
+/**
+ * Build a CSS path that uniquely identifies `el`, walking up to the nearest
+ * ancestor with an id (or <body>) and chaining `tag:nth-of-type(n)` segments.
+ */
+function buildUniquePath(el: HTMLElement): string {
+  const segments: string[] = []
+  let node: HTMLElement | null = el
+  while (node && node.nodeType === Node.ELEMENT_NODE) {
+    if (node.id) {
+      segments.unshift(`#${CSS.escape(node.id)}`)
+      break
+    }
+    const tag = node.tagName.toLowerCase()
+    if (tag === "body" || tag === "html") {
+      segments.unshift(tag)
+      break
+    }
+    const parent: HTMLElement | null = node.parentElement
+    if (!parent) {
+      segments.unshift(tag)
+      break
+    }
+    const sameTag = Array.from(parent.children).filter(
+      (c) => c.tagName === node!.tagName,
+    )
+    const idx = sameTag.indexOf(node) + 1
+    segments.unshift(sameTag.length > 1 ? `${tag}:nth-of-type(${idx})` : tag)
+    node = parent
+  }
+  return segments.join(" > ")
 }
 
 function buildSelectorWithFrame(input: HTMLElement, framePath: number[]): string {
@@ -444,6 +520,21 @@ function resolveFramePrefixedSelector(
   }
 }
 
+/**
+ * react-select / combobox widgets (Greenhouse Country, Location, School, Degree;
+ * Ashby dropdowns) render a text `<input>` that can't be filled by setting
+ * `.value` — they need a click → type → option-pick interaction. Detect them so
+ * we skip rather than silently "succeed" with a value that never sticks.
+ */
+function isComboboxControl(input: HTMLElement): boolean {
+  if (input.getAttribute("role") === "combobox") return true
+  if (input.getAttribute("aria-autocomplete") === "list") return true
+  if (input.getAttribute("aria-haspopup") === "listbox") return true
+  const cls = input.getAttribute("class") ?? ""
+  if (/\bselect__input\b|\bselect__control\b/.test(cls)) return true
+  return false
+}
+
 function classifyField(input: FormControlElement): DetectedField {
   const label = getFieldLabel(input)
   const tag = input.tagName.toLowerCase()
@@ -462,8 +553,9 @@ function classifyField(input: FormControlElement): DetectedField {
   ].join(" ")
 
   const sensitive = isSensitive(haystack)
+  const combobox = isComboboxControl(input)
   let safeKey: SafeKey | null = null
-  if (!sensitive) {
+  if (!sensitive && !combobox) {
     for (const rule of SAFE_KEY_RULES) {
       if (rule.inputTypes && !rule.inputTypes.includes(inputType)) continue
       const target = rule.labelOnly ? label : haystack
@@ -474,6 +566,31 @@ function classifyField(input: FormControlElement): DetectedField {
         safeKey = rule.key
         break
       }
+    }
+  }
+
+  // Fallback: an unlabelled document-accepting file input on an application form
+  // is almost always the resume dropzone (SmartRecruiters/Ashby render it with no
+  // "resume"/"cv" text). Don't claim image/photo uploads or cover-letter slots.
+  if (!safeKey && !sensitive && inputType === "file") {
+    const accept = (input.getAttribute("accept") ?? "").toLowerCase()
+    // Ashby puts the "Cover Letter, Portfolio…" hint in a sibling description
+    // div (outside the haystack), so include the field row's text — otherwise
+    // "Additional Attachments" gets mislabelled as the résumé and the résumé is
+    // injected into the wrong slot.
+    const row = input.closest<HTMLElement>(
+      "[class*='fieldEntry' i],[class*='field-entry' i],.application-question,.field,fieldset",
+    )
+    const ctx = `${haystack} ${row?.textContent ?? ""}`.toLowerCase().slice(0, 400)
+    const isResumeWord = /\bresume\b|\bcv\b|curriculum/.test(ctx)
+    const isOtherAttachment =
+      /\bcover[\s_-]?letter\b|\bportfolio\b|\battachment\b|\badditional\b|\btranscript\b|\bwriting[\s_-]?sample\b|\bphoto\b|\bheadshot\b|\bavatar\b/.test(ctx)
+    const acceptsDocs = !accept || /pdf|\.doc|word|document|text|rtf|\.txt/.test(accept)
+    const isImageOnly = accept !== "" && /image|\.png|\.jpe?g|\.gif|\.heic/.test(accept) && !acceptsDocs
+    // Résumé only when it's a doc field that isn't another attachment slot — or
+    // it explicitly says résumé/CV.
+    if (acceptsDocs && !isImageOnly && (isResumeWord || !isOtherAttachment)) {
+      safeKey = "resume_upload"
     }
   }
 
@@ -887,9 +1004,19 @@ export async function applySafeFills(
       ? { ...item, filled: true }
       : { ...item, skippedReason: "Could not set field value — fill it manually." },
     )
+    // Human-like pause between fields. Filling many inputs in the same tick is a
+    // strong bot signal for anti-automation systems (DataDome on SmartRecruiters,
+    // etc.) and gets the user IP-blocked. Jittered, not fixed, to look organic.
+    if (ok) await humanDelay(90, 240)
   }
 
   return out
+}
+
+/** Randomized short delay (ms) to make automated input look human-paced. */
+function humanDelay(min = 80, max = 220): Promise<void> {
+  const ms = Math.round(min + Math.random() * Math.max(0, max - min))
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 /**
@@ -899,6 +1026,43 @@ export async function applySafeFills(
  */
 export function injectDocxFile(target: HTMLInputElement, bytes: ResumeBytes): boolean {
   return injectResumeFile(target, bytes)
+}
+
+function dispatchDropWithFile(target: HTMLElement, file: File): void {
+  try {
+    const dt = new DataTransfer()
+    dt.items.add(file)
+    for (const type of ["dragenter", "dragover", "drop"] as const) {
+      let ev: Event & { dataTransfer?: DataTransfer }
+      try {
+        ev = new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer: dt }) as DragEvent & {
+          dataTransfer?: DataTransfer
+        }
+      } catch {
+        ev = new Event(type, { bubbles: true, cancelable: true }) as Event & { dataTransfer?: DataTransfer }
+      }
+      if (!ev.dataTransfer) {
+        try { Object.defineProperty(ev, "dataTransfer", { value: dt }) } catch { /* read-only */ }
+      }
+      target.dispatchEvent(ev)
+    }
+  } catch {
+    // best-effort only
+  }
+}
+
+function findDropzoneFor(input: HTMLInputElement): HTMLElement {
+  const zone = input.closest<HTMLElement>(
+    '[class*="dropzone" i],[class*="drop-zone" i],[class*="droparea" i],[class*="drag" i],' +
+    '[class*="fileupload" i],[class*="file-upload" i],[class*="upload" i],[data-testid*="upload" i]',
+  )
+  if (zone) return zone
+  // react-dropzone roots (Ashby) are a role="presentation" div wrapping the
+  // hidden input. The drop MUST fire on that root (or the input itself) — the
+  // field-entry row is an ANCESTOR of the dropzone, so a drop dispatched there
+  // bubbles up and away and never reaches the handler.
+  const presentation = input.closest<HTMLElement>('[role="presentation"]')
+  return presentation ?? input.parentElement ?? input
 }
 
 /**
@@ -935,6 +1099,7 @@ function injectResumeFile(target: HTMLInputElement, bytes: ResumeBytes): boolean
 
     target.dispatchEvent(new Event("input", { bubbles: true }))
     target.dispatchEvent(new Event("change", { bubbles: true }))
+    dispatchDropWithFile(findDropzoneFor(target), file)
 
     // Verify the attach actually took (some forms re-validate and reject
     // synthetic file events — better to surface that than silently "succeed").
@@ -1033,6 +1198,10 @@ function fillSkillTokens(el: HTMLElement, skills: string[]): boolean {
 export function setReactValue(el: HTMLElement, value: string, opts?: { blur?: boolean }): boolean {
   const tag = el.tagName.toLowerCase()
   try {
+    // Focus first — some controlled forms (React/Remix) only run their onChange
+    // reducer for the currently-focused field, and ignore writes otherwise.
+    try { (el as HTMLElement).focus({ preventScroll: true }) } catch { /* best-effort */ }
+
     if (tag === "textarea") {
       const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set
       setter?.call(el as HTMLTextAreaElement, value)
@@ -1049,7 +1218,14 @@ export function setReactValue(el: HTMLElement, value: string, opts?: { blur?: bo
     } else {
       return false
     }
-    el.dispatchEvent(new Event("input", { bubbles: true }))
+    // Dispatch a real InputEvent — React's ChangeEventPlugin reads `_valueTracker`
+    // on `input`; a bare Event works in most cases, but InputEvent is what trusted
+    // typing produces and is accepted by stricter listeners.
+    const InputEventCtor = (globalThis as { InputEvent?: typeof InputEvent }).InputEvent
+    const inputEvent = typeof InputEventCtor === "function"
+      ? new InputEventCtor("input", { bubbles: true, inputType: "insertText", data: value })
+      : new Event("input", { bubbles: true })
+    el.dispatchEvent(inputEvent)
     el.dispatchEvent(new Event("change", { bubbles: true }))
     if (opts?.blur !== false) {
       el.dispatchEvent(new Event("blur", { bubbles: true }))

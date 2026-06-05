@@ -81,6 +81,13 @@ const chromeStub = {
 
 ;(globalThis as unknown as { chrome: typeof chromeStub }).chrome = chromeStub
 
+// JSDOM doesn't implement CSS.escape, which the autofill selector builder uses.
+const cssHost = globalThis as unknown as { CSS?: { escape?: (s: string) => string } }
+if (!cssHost.CSS) cssHost.CSS = {}
+if (typeof cssHost.CSS.escape !== "function") {
+  cssHost.CSS.escape = (s: string) => String(s).replace(/[^a-zA-Z0-9_-]/g, (c) => `\\${c}`)
+}
+
 // JSDOM doesn't implement layout-aware innerText. The handlers read .innerText
 // on description/header containers; fall back to textContent so fixture parsing
 // behaves the same in tests as it does in a real browser.

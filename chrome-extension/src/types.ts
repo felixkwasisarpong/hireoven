@@ -254,6 +254,12 @@ export interface FormFilledResponse {
 export interface ApexCommandExecutedResponse {
   type: "APEX_COMMAND_EXECUTED"
   accepted: boolean
+  /**
+   * Agent autofill only: true when the run is deliberately paused (login page /
+   * redirect / step transition) and should be retried, vs. a stuck dead-end that
+   * the drivers bound their retries on. Absent ⇒ treated as not-waiting.
+   */
+  waiting?: boolean
   message?: string
 }
 
@@ -305,6 +311,7 @@ export type BackgroundMessageType =
   | "GET_STORED_LINKEDIN_URL"
   | "AGENT_APPLICATION_SUBMITTED"
   | "SCAN_LINKEDIN_CONNECTIONS"
+  | "IMPORT_LINKEDIN_PROFILE"
   | "SPA_NAVIGATION_COMPLETE"
 
 export interface ExtensionResumeSummary {
@@ -409,9 +416,14 @@ export type QueueItemStatus =
   | "cover_letter_ready"
   | "autofill_ready"
   | "waiting_user_review"
+  | "applying"
+  | "waiting_login"
   | "submitted_manually"
   | "failed"
   | "skipped"
+
+/** Lifecycle of the autonomous "apply to all" run that chains queued jobs. */
+export type QueueRunStatus = "idle" | "running" | "paused" | "done"
 
 export interface QueueJobWarning {
   code: string
@@ -431,6 +443,7 @@ export interface QueueJobEntry {
   resumeVersionId?: string | null
   resumeId?: string | null
   coverLetter?: string | null
+  coverLetterId?: string | null
   failReason?: string | null
   warnings?: QueueJobWarning[]
   addedAt: string
@@ -442,6 +455,10 @@ export interface ApplyQueueState {
   jobs: QueueJobEntry[]
   paused: boolean
   createdAt: string
+  /** Autonomous run lifecycle. Absent on older persisted queues → treat as "idle". */
+  runStatus?: QueueRunStatus
+  /** Queue item currently being applied to during an autonomous run. */
+  currentQueueId?: string | null
 }
 
 export interface QueueGetStateMessage { type: "QUEUE_GET_STATE" }
@@ -460,6 +477,8 @@ export interface QueueAddJobMessage {
 
 export interface QueueSkipJobMessage   { type: "QUEUE_SKIP_JOB";   queueId: string }
 export interface QueueRetryJobMessage  { type: "QUEUE_RETRY_JOB";  queueId: string }
+/** Open one queued job in agent mode (fill + submit autonomously) without starting a full run. */
+export interface QueueOpenJobMessage   { type: "QUEUE_OPEN_JOB";   queueId: string }
 
 export interface QueueMarkSubmittedMessage {
   type: "QUEUE_MARK_SUBMITTED"
@@ -476,6 +495,11 @@ export interface QueueApproveResumeMessage {
 export interface QueuePauseMessage  { type: "QUEUE_PAUSE" }
 export interface QueueResumeMessage { type: "QUEUE_RESUME" }
 export interface QueueClearMessage  { type: "QUEUE_CLEAR" }
+
+/** Begin the autonomous run that opens & applies to each eligible queued job in turn. */
+export interface QueueStartRunMessage { type: "QUEUE_START_RUN" }
+/** Hard stop the autonomous run (breaks the loop). Leaves per-job statuses intact. */
+export interface QueueStopRunMessage  { type: "QUEUE_STOP_RUN" }
 
 export interface QueueStateResult {
   type: "QUEUE_STATE_RESULT"
@@ -512,18 +536,25 @@ export type BackgroundMessage =
   | QueueAddJobMessage
   | QueueSkipJobMessage
   | QueueRetryJobMessage
+  | QueueOpenJobMessage
   | QueueMarkSubmittedMessage
   | QueueApproveResumeMessage
   | QueuePauseMessage
   | QueueResumeMessage
   | QueueClearMessage
+  | QueueStartRunMessage
+  | QueueStopRunMessage
   | OperatorOpenTabMessage
   | FetchResumeFileMessage
   | InjectResumeFileInTabMessage
   | SyncLinkedInBrandProfileMessage
   | GetStoredLinkedInUrlMessage
   | AgentApplicationSubmittedMessage
+  | AgentRunStatusMessage
+  | AgentPendingCheckMessage
+  | AgentJobConsumedMessage
   | ScanLinkedInConnectionsMessage
+  | ImportLinkedInProfileMessage
   | SpaNavigationCompleteMessage
 
 export interface SpaNavigationCompleteMessage {
@@ -541,6 +572,18 @@ export interface ScanLinkedInConnectionsResult {
   type: "SCAN_LINKEDIN_CONNECTIONS_RESULT"
   ok: boolean
   connections?: import("./apex-connection-scanner").ScannedConnection[]
+  error?: string
+}
+
+export interface ImportLinkedInProfileMessage {
+  type: "IMPORT_LINKEDIN_PROFILE"
+  /** Optional LinkedIn profile URL to open + scrape. Defaults to the user's own (/in/me/). */
+  url?: string
+}
+
+export interface ImportLinkedInProfileResult {
+  type: "IMPORT_LINKEDIN_PROFILE_RESULT"
+  ok: boolean
   error?: string
 }
 
@@ -588,15 +631,67 @@ export interface AgentApplicationSubmittedAck {
   accepted: boolean
 }
 
+/**
+ * Progress signal emitted by the in-tab agent during an autonomous run so the
+ * background runner can pause on login, surface failures, and break loops.
+ * Harmless when no run is active — the background ignores it then.
+ */
+export interface AgentRunStatusMessage {
+  type: "AGENT_RUN_STATUS"
+  /**
+   * waiting_login → blocked on a sign-in / account page (run pauses, no advance).
+   * filling       → an application form was found and autofill is underway.
+   * failed        → a non-recoverable problem on this job (run advances past it).
+   */
+  phase: "waiting_login" | "filling" | "failed"
+  reason?: string
+}
+
+export interface AgentRunStatusAck {
+  type: "AGENT_RUN_STATUS_ACK"
+  accepted: boolean
+}
+
+/**
+ * Content-pull: the in-page bar asks whether THIS tab has a pending agent job
+ * (keyed by sender tab id in the background). Robust resume-after-login path —
+ * it only needs the persisted storage.session context, not a well-timed push.
+ */
+export interface AgentPendingCheckMessage {
+  type: "AGENT_PENDING_CHECK"
+}
+
+/**
+ * Content-pull: the in-page agent run reached a terminal state (submitted,
+ * handed off after filling, or unrecoverable). Tells the background to drop the
+ * tab's agent context so the 1.5s pull stops re-dispatching AGENT_AUTOFILL.
+ */
+export interface AgentJobConsumedMessage {
+  type: "AGENT_JOB_CONSUMED"
+}
+
+export interface AgentPendingResult {
+  type: "AGENT_PENDING_RESULT"
+  pending: boolean
+  payload?: {
+    jobId?: string
+    jobTitle?: string
+    company?: string
+    coverLetterId?: string
+  }
+}
+
 export interface FetchResumeFileMessage {
   type:     "FETCH_RESUME_FILE"
-  resumeId: string
+  resumeId?: string
+  versionId?: string
 }
 
 /** One-shot: background fetches the PDF and injects it into the sender's tab */
 export interface InjectResumeFileInTabMessage {
   type:     "INJECT_RESUME_FILE_IN_TAB"
-  resumeId: string
+  resumeId?: string
+  versionId?: string
 }
 
 export interface InjectResumeFileInTabResult {
@@ -760,6 +855,8 @@ export type BackgroundResponse =
   | InjectResumeFileInTabResult
   | StoredLinkedInUrlResult
   | AgentApplicationSubmittedAck
+  | AgentRunStatusAck
+  | AgentPendingResult
   | ScanLinkedInConnectionsResult
   | SpaNavigationAck
   | BackgroundError

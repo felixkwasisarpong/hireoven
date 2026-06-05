@@ -10,13 +10,14 @@
 import { NextResponse } from "next/server"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { generateResumeDocx } from "@/lib/resume/docx-generator"
+import { restoreResumeFromSnapshot } from "@/lib/resume/hub"
 import {
   extensionError,
   extensionCorsHeaders,
   handleExtensionPreflight,
   requireExtensionAuth,
 } from "@/lib/extension/auth"
-import type { Resume } from "@/types"
+import type { Resume, ResumeVersion } from "@/types"
 
 export const runtime = "nodejs"
 export const maxDuration = 30
@@ -33,17 +34,45 @@ export async function GET(request: Request) {
   if (errResponse) return errResponse
 
   const { searchParams } = new URL(request.url)
+  const versionId = searchParams.get("versionId")
   const resumeId = searchParams.get("resumeId")
   const jobId = searchParams.get("jobId")
 
   // Resolution priority:
-  //   1. resumeId  → exact match (used when the user explicitly picked a version)
-  //   2. jobId     → tailored copy for that job, if one exists (autofill on a
+  //   1. versionId → exact resume_versions snapshot (inline tailored resume)
+  //   2. resumeId  → exact base resume match
+  //   3. jobId     → tailored copy for that job, if one exists (autofill on a
   //                  saved job page)
-  //   3. fallback  → user's primary resume (or most recently updated)
+  //   4. fallback  → user's primary resume (or most recently updated)
   const pool = getPostgresPool()
-  let result: { rows: Resume[] }
-  if (resumeId) {
+  let result: { rows: Resume[] } = { rows: [] }
+  let resume: Resume | null = null
+  if (versionId) {
+    const versionResult = await pool.query<ResumeVersion>(
+      `SELECT * FROM resume_versions WHERE id = $1 AND user_id = $2 LIMIT 1`,
+      [versionId, user.sub],
+    )
+    const version = versionResult.rows[0]
+    if (!version) {
+      return extensionError(request, 404, "Resume version not found", { headers: cors })
+    }
+    const baseResult = await pool.query<Resume>(
+      `SELECT * FROM resumes WHERE id = $1 AND user_id = $2 LIMIT 1`,
+      [version.resume_id, user.sub],
+    )
+    const baseResume = baseResult.rows[0]
+    if (!baseResume) {
+      return extensionError(request, 404, "Resume not found", { headers: cors })
+    }
+    resume = version.snapshot
+      ? restoreResumeFromSnapshot(baseResume, version.snapshot)
+      : baseResume
+    resume = {
+      ...resume,
+      name: version.name ?? resume.name,
+      file_name: version.name ? `${version.name}.docx` : resume.file_name,
+    }
+  } else if (resumeId) {
     result = await pool.query<Resume>(
       `SELECT * FROM resumes WHERE id = $1 AND user_id = $2 LIMIT 1`,
       [resumeId, user.sub],
@@ -76,12 +105,12 @@ export async function GET(request: Request) {
       [user.sub],
     )
   }
-  const resume = result.rows[0]
+  resume = resume ?? result.rows[0] ?? null
   if (!resume) {
     return extensionError(
       request,
       404,
-      resumeId ? "Resume not found" : "No resume found — upload one in Hireoven first",
+      resumeId || versionId ? "Resume not found" : "No resume found — upload one in Hireoven first",
       { headers: cors },
     )
   }

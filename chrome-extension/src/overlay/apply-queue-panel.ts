@@ -19,6 +19,8 @@ const STATUS_CONFIG: Record<QueueItemStatus, { label: string; color: string; bg:
   cover_letter_ready:      { label: "Cover Ready",     color: "#0369a1", bg: "#f0f9ff" },
   autofill_ready:          { label: "Ready to Fill",   color: "#166534", bg: "#f0fdf4" },
   waiting_user_review:     { label: "Review Now",      color: "#FF5C18", bg: "#fff4f0" },
+  applying:                { label: "Applying…",       color: "#FF5C18", bg: "#fff4f0" },
+  waiting_login:           { label: "Sign in to continue", color: "#b45309", bg: "#fffbeb" },
   submitted_manually:      { label: "Submitted",       color: "#166534", bg: "#f0fdf4" },
   failed:                  { label: "Failed",          color: "#991b1b", bg: "#fef2f2" },
   skipped:                 { label: "Skipped",         color: "#94a3b8", bg: "#f8fafc" },
@@ -54,9 +56,10 @@ function btnStyle(bg: string, color: string, border = "none"): string {
 function buildJobRow(job: QueueJobEntry): string {
   const cfg = STATUS_CONFIG[job.status]
   const done = job.status === "submitted_manually"
+  const inFlight = job.status === "applying" || job.status === "waiting_login"
   const canSkip = !["submitted_manually", "skipped"].includes(job.status)
   const canRetry = job.status === "failed" || job.status === "skipped"
-  const canOpen = !done && job.applyUrl
+  const canOpen = !done && !inFlight && job.applyUrl
 
   const warnCount = (job.warnings ?? []).filter(
     (w) => w.severity === "warning" || w.severity === "error",
@@ -75,7 +78,7 @@ function buildJobRow(job: QueueJobEntry): string {
 
   const actionRow = (canOpen || canSkip || canRetry) ? `
     <div style="display:flex;gap:5px;margin-top:6px;flex-wrap:wrap">
-      ${canOpen ? `<button data-action="queue-open" data-qid="${esc(job.queueId)}" style="${btnStyle("#e2e8f0", "#334155", "#e2e8f0")}">Open &amp; Fill</button>` : ""}
+      ${canOpen ? `<button data-action="queue-open" data-qid="${esc(job.queueId)}" style="${btnStyle("#e2e8f0", "#334155", "#e2e8f0")}">Auto-apply</button>` : ""}
       ${canSkip ? `<button data-action="queue-skip" data-qid="${esc(job.queueId)}" style="${btnStyle("#f8fafc", "#64748b", "#e2e8f0")}">Skip</button>` : ""}
       ${canRetry ? `<button data-action="queue-retry" data-qid="${esc(job.queueId)}" style="${btnStyle("#fff4f0", "#c94010", "#fde8d8")}">Retry</button>` : ""}
     </div>` : ""
@@ -111,6 +114,42 @@ function buildPanelHTML(queue: ApplyQueueState): string {
     ? queue.jobs.map(buildJobRow).join("")
     : `<div style="padding:28px 0;text-align:center;font-size:12px;color:#94a3b8">No jobs in queue.</div>`
 
+  const runStatus = queue.runStatus ?? "idle"
+  const isRunning = runStatus === "running" || runStatus === "paused"
+  const current = queue.currentQueueId
+    ? queue.jobs.find((j) => j.queueId === queue.currentQueueId)
+    : null
+  const waitingLogin = current?.status === "waiting_login"
+
+  // Primary run control — full-width Start / Stop button.
+  const runButton = isRunning
+    ? `<button data-action="run-stop" style="width:100%;min-height:36px;${btnStyle("#fef2f2", "#991b1b", "#fecaca")}">■ Stop auto-apply</button>`
+    : `<button data-action="run-start" ${pending === 0 ? "disabled" : ""} style="width:100%;min-height:36px;${btnStyle(pending === 0 ? "#f1f5f9" : "#FF5C18", pending === 0 ? "#94a3b8" : "#fff", pending === 0 ? "#e2e8f0" : "#FF5C18")};${pending === 0 ? "cursor:not-allowed" : ""}">▶ Auto-apply to ${pending} job${pending === 1 ? "" : "s"}</button>`
+
+  // Contextual banner while a run is active.
+  let runBanner = ""
+  if (waitingLogin && current) {
+    runBanner = `
+      <div style="margin:8px 16px 0;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:9px 11px;font-size:11px;color:#92400e;line-height:1.5;flex-shrink:0">
+        🔐 <strong>Sign in on the open tab</strong> to continue ${esc(trim(current.jobTitle, 28))}. The run resumes automatically once you're in — nothing else proceeds until then.
+      </div>`
+  } else if (runStatus === "running" && current) {
+    runBanner = `
+      <div style="margin:8px 16px 0;background:#fff4f0;border:1px solid #fde8d8;border-radius:8px;padding:9px 11px;font-size:11px;color:#c94010;line-height:1.5;flex-shrink:0">
+        🤖 Auto-applying to <strong>${esc(trim(current.jobTitle, 28))}</strong>… filling page-by-page and submitting, then moving to the next.
+      </div>`
+  } else if (runStatus === "paused") {
+    runBanner = `
+      <div style="margin:8px 16px 0;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:9px 11px;font-size:11px;color:#92400e;line-height:1.5;flex-shrink:0">
+        ⏸ Run paused — the current job finishes, but the next won't open until you resume.
+      </div>`
+  } else if (runStatus === "done") {
+    runBanner = `
+      <div style="margin:8px 16px 0;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:9px 11px;font-size:11px;color:#166534;line-height:1.5;flex-shrink:0">
+        ✓ Run complete — ${done} submitted${skipped ? `, ${skipped} skipped` : ""}.
+      </div>`
+  }
+
   return `
     <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;display:flex;flex-direction:column;height:100%">
 
@@ -136,15 +175,23 @@ function buildPanelHTML(queue: ApplyQueueState): string {
         </div>
       </div>
 
-      <!-- Controls -->
-      <div style="display:flex;gap:6px;padding:10px 16px;border-bottom:1px solid #f1f5f9;flex-shrink:0">
-        <button data-action="${queue.paused ? "queue-resume" : "queue-pause"}" style="flex:1;min-height:30px;${btnStyle(queue.paused ? "#f0fdf4" : "#fffbeb", queue.paused ? "#166534" : "#92400e", queue.paused ? "#bbf7d0" : "#fde68a")}">${queue.paused ? "▶ Resume" : "⏸ Pause"}</button>
-        <button data-action="queue-clear" style="min-height:30px;${btnStyle("#fef2f2", "#991b1b", "#fecaca")}">Clear all</button>
+      <!-- Run control -->
+      <div style="padding:10px 16px 6px;flex-shrink:0">
+        ${runButton}
+      </div>
+
+      <!-- Run banner -->
+      ${runBanner}
+
+      <!-- Secondary controls -->
+      <div style="display:flex;gap:6px;padding:8px 16px 10px;border-bottom:1px solid #f1f5f9;flex-shrink:0">
+        ${isRunning ? `<button data-action="${queue.paused ? "queue-resume" : "queue-pause"}" style="flex:1;min-height:30px;${btnStyle(queue.paused ? "#f0fdf4" : "#fffbeb", queue.paused ? "#166534" : "#92400e", queue.paused ? "#bbf7d0" : "#fde68a")}">${queue.paused ? "▶ Resume" : "⏸ Pause"}</button>` : ""}
+        <button data-action="queue-clear" style="${isRunning ? "" : "flex:1;"}min-height:30px;${btnStyle("#fef2f2", "#991b1b", "#fecaca")}">Clear all</button>
       </div>
 
       <!-- Safety notice -->
       <div style="margin:8px 16px 0;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px 10px;font-size:10px;color:#64748b;line-height:1.5;flex-shrink:0">
-        🚫 Apex prepares and fills fields — <strong>you submit manually</strong>. No application ever auto-submits.
+        🤖 Auto-apply fills <strong>and submits</strong> each application for you, then opens the next. Hit <strong>Stop</strong> any time to take over.
       </div>
 
       <!-- Job list -->
@@ -162,6 +209,8 @@ export interface ApplyQueuePanelCallbacks {
   onResume: () => void
   onClear: () => void
   onClose: () => void
+  onStartRun: () => void
+  onStopRun: () => void
 }
 
 export class ApplyQueuePanel {
@@ -245,6 +294,8 @@ export class ApplyQueuePanel {
           case "queue-pause":       this.cbs.onPause(); break
           case "queue-resume":      this.cbs.onResume(); break
           case "queue-clear":       this.cbs.onClear(); break
+          case "run-start":         this.cbs.onStartRun(); break
+          case "run-stop":          this.cbs.onStopRun(); break
           case "queue-panel-close": this.cbs.onClose(); break
         }
       })

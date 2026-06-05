@@ -9,6 +9,7 @@
  */
 
 import { detectFormFields } from "./autofill/form-detector"
+import { pickResumeFileInput } from "./autofill/resume-target"
 import { extractLinkedInProfile, isOwnLinkedInProfile } from "./extractors/linkedin-profile"
 import { scrapeConnectionResults } from "./apex-connection-scanner"
 import { syncLinkedInBrandProfile } from "./api-client"
@@ -299,10 +300,11 @@ function registerMessageBridge(): void {
               return
             }
             const cmdResult = await apexBarInstance.executeApexCommand(message.command, message.payload)
-            // Return accepted:false when on a login page or unsupported page so
-            // the background keeps the pending agent context and retries on the
-            // next page load (after the user signs in / redirects to the form).
-            sendResponse({ type: "APEX_COMMAND_EXECUTED", accepted: cmdResult.handled })
+            // accepted:false on a login/redirect page so the background keeps the
+            // pending agent context and retries after sign-in. `waiting` marks the
+            // legitimate "deliberately paused" case (login) vs a stuck dead-end —
+            // the background only resets its retry budget when truly waiting.
+            sendResponse({ type: "APEX_COMMAND_EXECUTED", accepted: cmdResult.handled, waiting: cmdResult.waiting === true })
           })().catch((err) => {
             sendResponse({
               type: "APEX_COMMAND_EXECUTED",
@@ -359,6 +361,72 @@ function registerMessageBridge(): void {
           sendResponse({ type: "PAGE_DETECTED", page: { ats: "other" } } as never)
           break
         }
+        case "SCRAPE_LINKEDIN_PROFILE": {
+          // Runs on a LinkedIn profile (or /details/experience|education) tab.
+          // Sections lazy-load on scroll, so walk to the bottom, expand any inline
+          // "…see more" descriptions, then return the main content text for the
+          // server AI parser to structure.
+          ;(async () => {
+            // Scroll until the page height stabilizes at the bottom, capped at ~6s.
+            await new Promise<void>((resolve) => {
+              const start = Date.now()
+              let lastHeight = 0
+              let stableSince = 0
+              function step() {
+                const elapsed = Date.now() - start
+                const h = document.body?.scrollHeight ?? 0
+                const atBottom = window.scrollY + window.innerHeight >= h - 240
+                if (h === lastHeight && atBottom) {
+                  if (!stableSince) stableSince = elapsed
+                  if (elapsed - stableSince > 500) { resolve(); return }
+                } else {
+                  stableSince = 0
+                }
+                lastHeight = h
+                if (elapsed > 6000) { resolve(); return }
+                window.scrollBy(0, Math.round(window.innerHeight * 0.9))
+                setTimeout(step, 280)
+              }
+              step()
+            })
+
+            // Expand inline truncated descriptions ("…see more"). Only the inline
+            // text expander — NOT "Show all" links (those navigate away).
+            document
+              .querySelectorAll<HTMLElement>(
+                'button.inline-show-more-text__button, button[aria-label*="see more" i]',
+              )
+              .forEach((btn) => {
+                try { btn.click() } catch { /* best-effort */ }
+              })
+            await new Promise((r) => setTimeout(r, 400))
+
+            window.scrollTo(0, 0)
+            const root =
+              document.querySelector<HTMLElement>("main") ??
+              document.querySelector<HTMLElement>("[role='main']") ??
+              document.body
+            const rawText = (root?.innerText ?? document.body?.innerText ?? "")
+              .replace(/[ \t]+/g, " ")
+              .replace(/\n{3,}/g, "\n\n")
+              .trim()
+            sendResponse({ type: "PAGE_DETECTED", page: { ats: "linkedin" }, rawText } as never)
+          })()
+          return true // keep the message port open for async sendResponse
+        }
+        case "PUSH_LINKEDIN_PROFILE_RESULT": {
+          // Background finished the profile import and is pushing the result to this
+          // Apex tab. Relay it to the web app via window.postMessage.
+          const msg = message as unknown as { ok: boolean; rawText?: string; error?: string }
+          window.postMessage({
+            type: "LINKEDIN_PROFILE_RESULT",
+            ok: msg.ok,
+            rawText: msg.rawText,
+            error: msg.error,
+          }, window.location.origin)
+          sendResponse({ type: "PAGE_DETECTED", page: { ats: "other" } } as never)
+          break
+        }
         default:
           sendResponse({ type: "ERROR", message: "Unknown message type" })
       }
@@ -402,6 +470,46 @@ function isResumeFileInput(input: HTMLInputElement): boolean {
   return false
 }
 
+/**
+ * Fire a synthetic drag-and-drop carrying the file. Custom dropzones
+ * (Ashby, SmartRecruiters, many React file widgets) listen for a `drop`
+ * event with a populated `dataTransfer` on their root element — NOT for a
+ * file-input `change` — so setting `input.files` alone never registers.
+ * Mirrors WorkdayAutofiller.dispatchDropWithFile. Harmless on plain
+ * `<input>` forms (Greenhouse) where nothing handles `drop`.
+ */
+function dispatchDropWithFile(target: HTMLElement, file: File): void {
+  try {
+    const dt = new DataTransfer()
+    dt.items.add(file)
+    for (const type of ["dragenter", "dragover", "drop"] as const) {
+      let ev: Event & { dataTransfer?: DataTransfer }
+      try {
+        ev = new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer: dt }) as DragEvent & {
+          dataTransfer?: DataTransfer
+        }
+      } catch {
+        ev = new Event(type, { bubbles: true, cancelable: true }) as Event & { dataTransfer?: DataTransfer }
+      }
+      if (!ev.dataTransfer) {
+        try { Object.defineProperty(ev, "dataTransfer", { value: dt }) } catch { /* read-only */ }
+      }
+      target.dispatchEvent(ev)
+    }
+  } catch { /* best-effort */ }
+}
+
+/** Nearest dropzone-like ancestor of a file input (for the drop fallback). */
+function findDropzoneFor(input: HTMLInputElement): HTMLElement {
+  const zone = input.closest<HTMLElement>(
+    '[class*="dropzone" i],[class*="drop-zone" i],[class*="droparea" i],[class*="drag" i],' +
+    '[class*="fileupload" i],[class*="file-upload" i],[class*="upload" i],[data-testid*="upload" i]',
+  )
+  if (zone) return zone
+  const row = input.closest<HTMLElement>('[class*="fieldentry" i],[class*="field-entry" i],[class*="field" i]')
+  return row ?? input.parentElement ?? input
+}
+
 function injectResumeFile(base64: string, filename: string): { type: "INJECT_RESUME_FILE_RESULT"; injected: boolean; selector?: string; error?: string } {
   try {
     // Convert base64 → Uint8Array
@@ -416,24 +524,35 @@ function injectResumeFile(base64: string, filename: string): { type: "INJECT_RES
     const blob = new Blob([bytes], { type: mimeType })
     const file = new File([blob], filename, { type: mimeType, lastModified: Date.now() })
 
-    // Find the resume file input
-    const candidates = [...document.querySelectorAll<HTMLInputElement>('input[type="file"]')]
-    const target     = candidates.find(isResumeFileInput) ?? candidates[0]
+    // Find the résumé *submission* input — scored, not first-match, so the
+    // résumé doesn't land in an "Autofill from resume" parser banner that
+    // sits above the real Resume field (Ashby/Greenhouse-react). Keep the
+    // legacy heuristic as a fallback when the scorer is unsure.
+    const target =
+      pickResumeFileInput(document) ??
+      [...document.querySelectorAll<HTMLInputElement>('input[type="file"]')].find(isResumeFileInput) ??
+      document.querySelector<HTMLInputElement>('input[type="file"]')
     if (!target) return { type: "INJECT_RESUME_FILE_RESULT", injected: false, error: "No file input found" }
 
     const dt = new DataTransfer()
     dt.items.add(file)
-    target.files = dt.files
 
-    // Fire React-compatible events
-    target.dispatchEvent(new Event("input",  { bubbles: true }))
-    target.dispatchEvent(new Event("change", { bubbles: true }))
-
-    // Also trigger React's internal synthetic event system if present
+    // React-controlled inputs (and react-dropzone) only re-render when the
+    // native setter is invoked BEFORE the input/change events fire — otherwise
+    // React's onChange reads the synthesized value and ignores the later setter
+    // call. Set first, dispatch second; plain assignment is the non-React path.
     const nativeSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "files")?.set
     if (nativeSetter) nativeSetter.call(target, dt.files)
+    else target.files = dt.files
+
     target.dispatchEvent(new Event("input",  { bubbles: true }))
     target.dispatchEvent(new Event("change", { bubbles: true }))
+
+    // Plain-input ATSes (Greenhouse) register the file from the change above.
+    // Custom dropzones (Ashby) ignore it and only react to a `drop` event with
+    // a populated dataTransfer on the dropzone root — fire that too. Doing both
+    // is safe: each ATS reacts to the mechanism it listens for.
+    dispatchDropWithFile(findDropzoneFor(target), file)
 
     // Build a stable selector for the result
     const selector = target.id
@@ -442,7 +561,12 @@ function injectResumeFile(base64: string, filename: string): { type: "INJECT_RES
         ? `input[name="${target.name}"]`
         : "input[type='file']"
 
-    return { type: "INJECT_RESUME_FILE_RESULT", injected: true, selector }
+    // We set the FileList on the input, so report success. (We can't reliably
+    // verify a dropzone's internal React state, but the drop event is fired.)
+    const injected = target.files != null && target.files.length > 0
+    return injected
+      ? { type: "INJECT_RESUME_FILE_RESULT", injected: true, selector }
+      : { type: "INJECT_RESUME_FILE_RESULT", injected: false, selector, error: "File was rejected by the form" }
   } catch (err) {
     return { type: "INJECT_RESUME_FILE_RESULT", injected: false, error: String(err) }
   }
@@ -657,6 +781,15 @@ function registerPageBridge(): void {
       return
     }
 
+    // Resume import: open the given LinkedIn profile URL (or the user's own),
+    // scrape it, and push the text back via PUSH_LINKEDIN_PROFILE_RESULT →
+    // LINKEDIN_PROFILE_RESULT.
+    if (msg.type === "IMPORT_LINKEDIN_PROFILE") {
+      const url = typeof msg.url === "string" ? msg.url : undefined
+      chrome.runtime.sendMessage({ type: "IMPORT_LINKEDIN_PROFILE", url }).catch(() => {})
+      return
+    }
+
     // Apex UI commands — relay to background which forwards to active job tab
     if (APEX_RELAY_COMMANDS.has(msg.type as string)) {
       chrome.runtime.sendMessage({
@@ -762,6 +895,98 @@ function bootstrap(): void {
   }
 }
 
+// ── Agent resume (content-pull) ──────────────────────────────────────────────
+// The reliable "resume after login" path. Instead of waiting for the background
+// to push AGENT_AUTOFILL at exactly the right moment (fragile across MV3 worker
+// death + slow page hydration), the in-page bar proactively asks the background
+// whether THIS tab has a pending agent job and runs it. Runs on load, on each
+// SPA navigation, and on a slow timer until the job is consumed.
+let agentPullActive = false
+let agentPullMisses = 0
+let agentPullStuck = 0
+let agentPullTimer: ReturnType<typeof setInterval> | null = null
+const AGENT_PULL_MAX_MISSES = 6
+// Bounded retries for a "stuck" agent run (form never detected, no login wait).
+// ~8 × 1.5s ≈ 12s of SPA-hydration grace before we give up and stop looping.
+const AGENT_PULL_MAX_STUCK = 8
+
+async function checkPendingAgentJob(): Promise<void> {
+  if (agentPullActive) return
+  if (!chrome.runtime?.id) return
+  if (isHireovenPage()) return
+
+  let res: { type?: string; pending?: boolean; payload?: Record<string, unknown> } | undefined
+  try {
+    res = (await chrome.runtime.sendMessage({ type: "AGENT_PENDING_CHECK" })) as typeof res
+  } catch {
+    return
+  }
+
+  if (!res || res.type !== "AGENT_PENDING_RESULT" || !res.pending) {
+    agentPullMisses += 1
+    // No job for this tab after several checks — stop polling to save cycles.
+    if (agentPullMisses >= AGENT_PULL_MAX_MISSES) stopAgentPull()
+    return
+  }
+
+  agentPullMisses = 0
+  agentPullActive = true
+  try {
+    if (!apexBarInstance) await mountApexBarWhenReady()
+    if (apexBarInstance) {
+      console.debug("[ho-agent] resuming pending agent job", res.payload)
+      const result = await apexBarInstance.executeApexCommand("AGENT_AUTOFILL", res.payload ?? {})
+      // Three outcomes:
+      //  • handled:true  → terminal (submitted / filled+handed-off / unrecoverable):
+      //    consume the context and stop the 1.5s pull. Without this the pull
+      //    re-runs AGENT_AUTOFILL forever on SPAs (Ashby) that fill but never
+      //    navigate to a confirmation page — the "filling loops unending" bug.
+      //  • waiting:true  → deliberately paused (login/redirect/transition): keep
+      //    polling so we resume after the user signs in.
+      //  • neither       → a stuck dead-end (e.g. form never detected): retry a
+      //    bounded number of times, then give up so it can't loop forever.
+      if (result?.handled) {
+        try { await chrome.runtime.sendMessage({ type: "AGENT_JOB_CONSUMED" }) } catch { /* worker asleep */ }
+        stopAgentPull()
+      } else if (result?.waiting) {
+        agentPullStuck = 0
+      } else {
+        agentPullStuck += 1
+        if (agentPullStuck >= AGENT_PULL_MAX_STUCK) {
+          try { await chrome.runtime.sendMessage({ type: "AGENT_JOB_CONSUMED" }) } catch { /* worker asleep */ }
+          stopAgentPull()
+        }
+      }
+    }
+  } catch {
+    // ignore — the next tick retries while the job is still pending
+  } finally {
+    agentPullActive = false
+  }
+}
+
+function startAgentPull(): void {
+  if (agentPullTimer) return
+  agentPullStuck = 0
+  agentPullMisses = 0
+  agentPullTimer = setInterval(() => void checkPendingAgentJob(), 1500)
+}
+
+function stopAgentPull(): void {
+  if (agentPullTimer) {
+    clearInterval(agentPullTimer)
+    agentPullTimer = null
+  }
+}
+
+// Kick the pull loop shortly after load (gives the page a moment to hydrate).
+if (!isHireovenPage()) {
+  setTimeout(() => {
+    startAgentPull()
+    void checkPendingAgentJob()
+  }, 1200)
+}
+
 // URL-change poller — covers both LinkedIn SPA navigation and ATS pages where
 // login → application is a client-side route change (no full page reload).
 // When on an ATS page, signal the background to retry any pending agent context
@@ -778,6 +1003,12 @@ setInterval(() => {
   if (chrome.runtime?.id) {
     chrome.runtime.sendMessage({ type: "SPA_NAVIGATION_COMPLETE", url: href }).catch(() => {})
   }
+
+  // A navigation (incl. returning from login) is the best moment to re-check for
+  // a pending agent job — revive the pull loop and probe immediately.
+  agentPullMisses = 0
+  startAgentPull()
+  void checkPendingAgentJob()
 }, 800)
 
 bootstrap()

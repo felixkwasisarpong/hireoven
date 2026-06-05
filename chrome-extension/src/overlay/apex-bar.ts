@@ -36,6 +36,7 @@ import {
   fetchPrimaryResume,
   generateCoverLetter,
   getAutofillProfile,
+  matchQuestions,
   saveApplicationProof,
   saveExtractedJob,
   trackAutofillTelemetry,
@@ -56,6 +57,12 @@ import {
   type AutofillFieldResult,
   type SafeProfile,
 } from "../autofill/safe-fields"
+import { findUnfilledRequiredFields } from "../autofill/required-fields"
+import {
+  fillRequiredAtsFields,
+  fillAshbyComboboxes,
+  type RequiredFieldFillNote,
+} from "../autofill/ashby-autofill"
 import {
   estimateWorkdayAutofillFields,
   isWorkdayApplicationPage,
@@ -1131,6 +1138,17 @@ function sendBackgroundMessage<T>(message: unknown): Promise<T> {
 
 // ── Implementation ────────────────────────────────────────────────────────────
 
+/**
+ * Outcome of one agent autofill loop. `needsLogin` distinguishes a mid-flow
+ * sign-in requirement (pause + wait, keep retrying) from a genuine failure
+ * (give up / advance the run).
+ */
+interface AgentLoopResult {
+  submitted: boolean
+  reason?: string
+  needsLogin?: boolean
+}
+
 export class ApexBar {
   private host: HTMLDivElement | null = null
   private shadow: ShadowRoot | null = null
@@ -1177,6 +1195,7 @@ export class ApexBar {
   private tailorError: string | null = null
   private tailorMatchScore: number | null = null
   private tailoredResumeId: string | null = null
+  private tailoredResumeVersionId: string | null = null
   private tailorSnapStatus: "idle" | "snapping" | "snapped" | "error" = "idle"
   private tailorSnapError: string | null = null
 
@@ -1328,6 +1347,7 @@ export class ApexBar {
     this.tailorError = null
     this.tailorMatchScore = null
     this.tailoredResumeId = null
+    this.tailoredResumeVersionId = null
     this.tailorSnapStatus = "idle"
     this.tailorSnapError = null
     this.autofillStatus = "idle"
@@ -2497,7 +2517,7 @@ export class ApexBar {
     })
   }
 
-  public async executeApexCommand(command: string, payload?: Record<string, unknown>): Promise<{ handled: boolean }> {
+  public async executeApexCommand(command: string, payload?: Record<string, unknown>): Promise<{ handled: boolean; waiting?: boolean }> {
     if (command === "OPEN_AUTOFILL") {
       await this.onAutofillPreview()
       return { handled: true }
@@ -2595,7 +2615,11 @@ export class ApexBar {
     let resumeBytes: { base64: string; filename: string } | null = null
     if (needsResume) {
       try {
-        resumeBytes = await fetchPrimaryResume({ jobId: this.currentAutofillJobId() })
+        resumeBytes = await fetchPrimaryResume({
+          versionId: this.tailoredResumeVersionId ?? undefined,
+          resumeId: this.tailoredResumeId ?? undefined,
+          jobId: this.currentAutofillJobId(),
+        })
       } catch {
         resumeBytes = null
       }
@@ -2606,6 +2630,60 @@ export class ApexBar {
     return {
       rows,
       fillableCount: summary.fillableCount,
+      filledCount: summary.filledCount,
+      manualReviewCount: summary.manualReviewCount,
+    }
+  }
+
+  private requiredFieldFillNotesToRows(notes: RequiredFieldFillNote[]): AutofillFieldResult[] {
+    return notes.map((note) => ({
+      label: note.label,
+      valuePreview: note.valuePreview,
+      confidence: note.filled ? "medium" : "needs_review",
+      source: note.filled ? "profile" : "manual_required",
+      filled: note.filled,
+      skippedReason: note.skippedReason,
+    }))
+  }
+
+  private shouldRunRequiredQuestionCleanup(): boolean {
+    return this.site !== "workday" && this.autofillSiteSupported()
+  }
+
+  private async runRequiredQuestionCleanup(): Promise<{
+    attemptedCount: number
+    filledCount: number
+    manualReviewCount: number
+  }> {
+    if (!this.shouldRunRequiredQuestionCleanup() || !this.autofillProfile) {
+      return { attemptedCount: 0, filledCount: 0, manualReviewCount: 0 }
+    }
+
+    const summary = await fillRequiredAtsFields({
+      profile: this.autofillProfile,
+      doc: document,
+      matchQuestions: async (questions) => {
+        if (questions.length === 0) return []
+        const result = await matchQuestions({
+          questions,
+          jobTitle: this.job?.title ?? undefined,
+          company: this.job?.company ?? undefined,
+        })
+        return result.answers
+      },
+    })
+
+    if (summary.notes.length > 0) {
+      const existing = this.autofillResults ?? []
+      this.autofillResults = [
+        ...existing,
+        ...this.requiredFieldFillNotesToRows(summary.notes),
+      ]
+      this.render()
+    }
+
+    return {
+      attemptedCount: summary.attemptedCount,
       filledCount: summary.filledCount,
       manualReviewCount: summary.manualReviewCount,
     }
@@ -2634,6 +2712,49 @@ export class ApexBar {
       'form[action*="boards"]',
     ].join(","))
     return !hasAppForm
+  }
+
+  /**
+   * On an ATS job posting (no form yet), click the apply CTA — "I'm interested",
+   * "Apply", "Apply now" — to navigate to the actual application form. Returns
+   * true if it clicked something.
+   */
+  private tryClickApplyCta(): boolean {
+    const CTA_RE = /^(i'?m interested|apply now|apply for this job|apply online|apply|start application|continue|get started)$/
+    const candidates = Array.from(
+      document.querySelectorAll<HTMLElement>(
+        'a[href], button, [role="button"], [data-test*="apply" i], [data-ui*="apply" i]',
+      ),
+    ).filter((el) => {
+      if (!isActionableButton(el)) return false
+      const text = (el.textContent ?? el.getAttribute("aria-label") ?? el.getAttribute("value") ?? "")
+        .replace(/\s+/g, " ")
+        .trim()
+        .toLowerCase()
+      if (!text) return false
+      // Avoid "apply filters" / "apply to saved" style false positives.
+      if (/filter|search|sign in|log ?in|save|share/.test(text)) return false
+      return CTA_RE.test(text)
+    })
+    if (candidates.length === 0) return false
+    // Prefer an explicit "I'm interested"/"Apply" over generic "Continue".
+    const score = (el: HTMLElement): number => {
+      const t = (el.textContent ?? "").toLowerCase()
+      if (t.includes("interested")) return 100
+      if (t.includes("apply")) return 90
+      if (t.includes("start application")) return 70
+      if (t.includes("get started")) return 50
+      return 10
+    }
+    candidates.sort((a, b) => score(b) - score(a))
+    const cta = candidates[0]
+    try {
+      cta.scrollIntoView({ block: "center" })
+    } catch {
+      // best-effort
+    }
+    cta.click()
+    return true
   }
 
   private findBestActionButton(kind: "next" | "submit"): HTMLElement | null {
@@ -2705,15 +2826,52 @@ export class ApexBar {
     } catch {
       // best-effort
     }
+    // Brief, jittered settle before clicking. Instant click-after-fill is a bot
+    // tell for anti-automation systems (DataDome) and risks an IP block.
+    await sleep(280 + Math.round(Math.random() * 420))
     button.click()
 
     const start = Date.now()
     while (Date.now() - start < timeoutMs) {
       if (this.isConfirmationPage()) return true
-      if (pageSignature() !== before) return true
-      await sleep(250)
+      // A blocked submit renders a validation summary. That changes the page text
+      // (so pageSignature() flips) but it is NOT progress — returning false here
+      // is what lets the agent loop hand off instead of re-clicking Submit in a
+      // tight loop (the Ashby "tries to submit again and again" bug).
+      if (this.hasBlockingValidationErrors()) return false
+      if (pageSignature() !== before) {
+        // Page changed but it's neither a confirmation nor (yet) an error summary.
+        // Give a validation banner a beat to render before calling it a real
+        // step advance, so we don't mistake a rejection for forward progress.
+        await sleep(450)
+        if (this.hasBlockingValidationErrors()) return false
+        return true
+      }
+      await sleep(220)
     }
     return this.isConfirmationPage()
+  }
+
+  /**
+   * True when the form is showing a validation summary for missing/required
+   * fields after a submit attempt — i.e. the submit was rejected. Used to stop
+   * the agent from treating a rejection as progress and re-submitting in a loop.
+   */
+  private hasBlockingValidationErrors(): boolean {
+    if (this.ashbyValidationErrors().length > 0) return true
+    const alerts = Array.from(
+      document.querySelectorAll<HTMLElement>(
+        '[role="alert"], [aria-live="assertive"], [class*="errorsContainer" i], [class*="error" i][class*="summary" i]',
+      ),
+    )
+    return alerts.some((el) => {
+      const visible = el.offsetParent !== null || el.getClientRects().length > 0
+      if (!visible) return false
+      const text = (el.textContent ?? "").toLowerCase()
+      return /\b(required field|missing entry|this field is required|is required|please (correct|complete|fill)|needs? correction)\b/.test(
+        text,
+      )
+    })
   }
 
   private async maybeSaveProofAutomatically(): Promise<void> {
@@ -2725,7 +2883,27 @@ export class ApexBar {
     }
   }
 
-  private async runGenericAgentLoop(maxTransitions = 10): Promise<{ submitted: boolean; reason?: string }> {
+  /**
+   * Ashby renders a validation summary (role="alert", `…errorsContainer…`) after
+   * a blocked submit, listing each missing required field. Returns those field
+   * labels so the agent can hand off with a precise "these still need you" note
+   * instead of thrashing the Submit button.
+   */
+  private ashbyValidationErrors(): string[] {
+    const container = document.querySelector<HTMLElement>(
+      '[class*="errorsContainer" i], [role="alert"][aria-live="assertive"]',
+    )
+    if (!container) return []
+    const nodes = Array.from(
+      container.querySelectorAll<HTMLElement>('[class*="errorFieldLink" i], li button, li p'),
+    )
+    const labels = nodes
+      .map((el) => (el.textContent ?? "").replace(/^\s*Missing entry for required field:\s*/i, "").trim())
+      .filter((text) => text.length > 0 && text.length < 200)
+    return Array.from(new Set(labels))
+  }
+
+  private async runGenericAgentLoop(maxTransitions = 10): Promise<AgentLoopResult> {
     for (let i = 0; i < maxTransitions; i += 1) {
       if (this.isConfirmationPage()) return { submitted: true }
 
@@ -2741,25 +2919,73 @@ export class ApexBar {
         await this.onAttachCoverLetter()
       }
 
+      await this.runRequiredQuestionCleanup()
+
       if (this.isConfirmationPage()) return { submitted: true }
+
+      // HARD GUARD: never click Submit while required fields are still empty.
+      // The agent was hitting Submit on a half-filled (or empty) form and
+      // tripping the ATS validator. Try one more cleanup pass, then hand off
+      // cleanly with the exact list instead of submitting an incomplete form.
+      let missingRequired = findUnfilledRequiredFields(document)
+      if (missingRequired.length > 0) {
+        await this.runRequiredQuestionCleanup()
+        missingRequired = findUnfilledRequiredFields(document)
+      }
+      if (missingRequired.length > 0) {
+        const shown = missingRequired.slice(0, 5).join(", ")
+        return {
+          submitted: false,
+          reason: `Filled what I can — ${missingRequired.length} required field${missingRequired.length === 1 ? "" : "s"} still need you: ${shown}${missingRequired.length > 5 ? ", …" : ""}. Review and submit.`,
+        }
+      }
 
       const submitButton = this.findBestActionButton("submit")
       if (submitButton) {
         const progressed = await this.clickAndWaitForProgress(submitButton)
         if (this.isConfirmationPage()) return { submitted: true }
         if (progressed) continue
+        const cleanup = await this.runRequiredQuestionCleanup()
+        if (cleanup.filledCount > 0) {
+          const retrySubmit = this.findBestActionButton("submit")
+          if (retrySubmit) {
+            const retryProgressed = await this.clickAndWaitForProgress(retrySubmit)
+            if (this.isConfirmationPage()) return { submitted: true }
+            if (retryProgressed) continue
+          }
+        }
+        // Submit didn't progress and the form is showing validation errors for
+        // required fields we won't/can't auto-answer (citizenship, EEO, etc.).
+        // Hand off cleanly with the exact list instead of re-clicking Submit or
+        // returning a misleading "no submit button" — this is the "fill safe +
+        // stop" terminal state.
+        const blocking = this.ashbyValidationErrors()
+        if (blocking.length > 0) {
+          const shown = blocking.slice(0, 4).join(", ")
+          return {
+            submitted: false,
+            reason: `Filled what I safely can. ${blocking.length} required field${blocking.length === 1 ? "" : "s"} still need you: ${shown}${blocking.length > 4 ? ", …" : ""}. Review and submit.`,
+          }
+        }
       }
 
       const nextButton = this.findBestActionButton("next")
       if (!nextButton) {
         return { submitted: false, reason: "No Continue/Submit button was found after autofill." }
       }
-      await this.clickAndWaitForProgress(nextButton)
+      const nextProgressed = await this.clickAndWaitForProgress(nextButton)
+      if (!nextProgressed) {
+        const cleanup = await this.runRequiredQuestionCleanup()
+        if (cleanup.filledCount > 0) {
+          const retryNext = this.findBestActionButton("next")
+          if (retryNext) await this.clickAndWaitForProgress(retryNext)
+        }
+      }
     }
     return { submitted: false, reason: "Agent mode reached max step transitions before confirmation." }
   }
 
-  private async runWorkdayAgentLoop(maxTransitions = 10): Promise<{ submitted: boolean; reason?: string }> {
+  private async runWorkdayAgentLoop(maxTransitions = 10): Promise<AgentLoopResult> {
     if (!this.autofillProfile) {
       return { submitted: false, reason: "No autofill profile found for Workday." }
     }
@@ -2785,7 +3011,11 @@ export class ApexBar {
         return { submitted: false, reason: summarizeWorkdayDebug(result.debugTail) ?? "Workday autofill failed." }
       }
       if (result.blockedReason === "account_required") {
-        return { submitted: false, reason: "Workday requires account sign-in before autofill can continue." }
+        return {
+          submitted: false,
+          needsLogin: true,
+          reason: "Workday requires account sign-in before autofill can continue.",
+        }
       }
 
       if (result.reachedReview) {
@@ -2806,8 +3036,23 @@ export class ApexBar {
     return { submitted: false, reason: "Workday agent mode reached max step transitions before confirmation." }
   }
 
-  private async runAgentAutofill(payload?: Record<string, unknown>): Promise<{ handled: boolean }> {
-    if (this.agentModeRunning) return { handled: true }
+  /**
+   * Fire-and-forget progress signal for the background autonomous run. Harmless
+   * when no run is active — the background ignores it unless this tab is the one
+   * it is currently driving.
+   */
+  private sendRunStatus(phase: "waiting_login" | "filling" | "failed", reason?: string): void {
+    if (!chrome.runtime?.id) return
+    chrome.runtime.sendMessage({ type: "AGENT_RUN_STATUS", phase, reason }, () => {
+      void chrome.runtime.lastError
+    })
+  }
+
+  private async runAgentAutofill(payload?: Record<string, unknown>): Promise<{ handled: boolean; waiting?: boolean }> {
+    // A run is already in flight — report not-done (waiting) so the caller keeps
+    // the agent context and keeps polling, rather than prematurely consuming it
+    // mid-run or counting it as a stuck retry.
+    if (this.agentModeRunning) return { handled: false, waiting: true }
     this.agentModeRunning = true
 
     try {
@@ -2829,19 +3074,33 @@ export class ApexBar {
         this.autofillStatus = "idle"
         this.autofillError = null
         this.render()
-        return { handled: false }
+        this.sendRunStatus("waiting_login")
+        return { handled: false, waiting: true }
       }
 
       // If we were waiting for login and now have a form, clear the banner.
       this.agentWaitingForLogin = false
+      this.sendRunStatus("filling")
 
       if (!this.autofillSiteSupported()) {
+        // We may be on the job posting (e.g. SmartRecruiters), not the form yet.
+        // Click the apply CTA ("I'm interested" / "Apply") to reach the form, then
+        // let the re-trigger fill it on the next page.
+        if (this.tryClickApplyCta()) {
+          this.autofillStatus = "idle"
+          this.autofillError = null
+          this.render()
+          this.sendRunStatus("filling")
+          // Transitioning toward the form — keep polling (not a stuck retry).
+          return { handled: false, waiting: true }
+        }
         this.autofillStatus = "error"
         this.autofillError = "No supported application form detected for agent mode."
         this.render()
-        // Return handled:false — background will retry on the next page load
-        // which may be the actual application form after a redirect.
-        return { handled: false }
+        // No form and no CTA: this is a genuine dead-end, NOT a login wait.
+        // waiting:false → the drivers bound their retries instead of re-running
+        // forever (the Ashby "fill loops unending" bug when detection misses).
+        return { handled: false, waiting: false }
       }
 
       // Ensure a tracker record exists for later proof persistence.
@@ -2856,6 +3115,7 @@ export class ApexBar {
         this.autofillStatus = "error"
         this.autofillError = "No saved autofill profile found."
         this.render()
+        this.sendRunStatus("failed", this.autofillError)
         return { handled: true }
       }
 
@@ -2869,9 +3129,25 @@ export class ApexBar {
           : await this.runGenericAgentLoop(10)
 
       if (!result.submitted) {
+        // A mid-flow sign-in requirement (e.g. Workday account_required, or a page
+        // that redirected to login between steps) is NOT a failure — pause and keep
+        // the pending agent context alive so we re-trigger automatically after the
+        // user logs in. Returning handled:false tells the background to retry on the
+        // next page load instead of dropping this job.
+        this.runDetection()
+        if (result.needsLogin || this.isLoginOrAccountPage()) {
+          this.agentWaitingForLogin = true
+          this.autofillStatus = "idle"
+          this.autofillError = null
+          this.render()
+          this.sendRunStatus("waiting_login")
+          return { handled: false, waiting: true }
+        }
+
         this.autofillStatus = "error"
         this.autofillError = result.reason ?? "Agent mode could not submit this application."
         this.render()
+        this.sendRunStatus("failed", this.autofillError)
         return { handled: true }
       }
 
@@ -2898,6 +3174,7 @@ export class ApexBar {
       this.autofillStatus = "error"
       this.autofillError = err instanceof Error ? err.message : "Agent mode failed unexpectedly."
       this.render()
+      this.sendRunStatus("failed", this.autofillError)
       return { handled: true }
     } finally {
       this.agentModeRunning = false
@@ -2989,6 +3266,7 @@ export class ApexBar {
     this.tailorError = null
     this.tailorMatchScore = null
     this.tailoredResumeId = null
+    this.tailoredResumeVersionId = null
     this.tailorSnapStatus = "idle"
     this.tailorSnapError = null
     this.render()
@@ -3041,6 +3319,7 @@ export class ApexBar {
       this.tailorStatus = "done"
       this.tailorMatchScore = approve.matchScore ?? preview.matchScore ?? null
       this.tailoredResumeId = approve.resumeId ?? preview.resumeId ?? null
+      this.tailoredResumeVersionId = approve.versionId ?? null
       if (this.site === "workday") {
         // Workday apply-flow tenants can crash when resume attachment is pushed
         // before the Experience step creates a stable application context.
@@ -3066,7 +3345,7 @@ export class ApexBar {
       this.render()
       return
     }
-    if (!this.tailoredResumeId) {
+    if (!this.tailoredResumeVersionId && !this.tailoredResumeId) {
       this.tailorSnapStatus = "error"
       this.tailorSnapError = "No tailored resume version found."
       this.render()
@@ -3086,7 +3365,8 @@ export class ApexBar {
       try {
         const result = await sendBackgroundMessage<InjectResumeFileInTabResult>({
           type: "INJECT_RESUME_FILE_IN_TAB",
-          resumeId: this.tailoredResumeId,
+          versionId: this.tailoredResumeVersionId ?? undefined,
+          resumeId: this.tailoredResumeId ?? undefined,
         })
         if (result.injected) {
           this.tailorSnapStatus = "snapped"
@@ -3466,30 +3746,43 @@ export class ApexBar {
         (f) => f.source === "resume" && !f.skippedReason,
       )
       let resumeBytes: { base64: string; filename: string } | null = null
-      if (needsResume) {
+      const shouldFetchResume = needsResume || this.site === "ashby"
+      if (shouldFetchResume) {
         try {
           // knownJobId is the authoritative jobId for this page — set by /check
           // (always when the job exists in the DB), /save (on fresh save), or
           // /analyze. With it the server returns the per-job tailored copy when
           // one exists; without it, primary resume is the fallback.
-          const jobId =
-            this.knownJobId ??
-            this.analysis?.jobId ??
-            this.saveResult?.jobId ??
-            undefined
-          resumeBytes = await fetchPrimaryResume({ jobId })
+          resumeBytes = await fetchPrimaryResume({
+            versionId: this.tailoredResumeVersionId ?? undefined,
+            resumeId: this.tailoredResumeId ?? undefined,
+            jobId: this.currentAutofillJobId(),
+          })
         } catch {
           // Leave resumeBytes null — applySafeFills will mark the field as
           // "No resume on file — upload one in Hireoven first."
         }
       }
 
+      // Direct fill — we do NOT use Ashby's "Autofill from resume" parser.
+      // applySafeFills fills name/email/phone/LinkedIn text and attaches the
+      // résumé to the real required Resume field; fillAshbyComboboxes selects the
+      // Location typeahead; runRequiredQuestionCleanup answers the yes/no, radio
+      // and consent-checkbox questions.
       this.autofillResults = await applySafeFills(
         this.toAutofillSource(),
         this.autofillProfile,
         resumeBytes,
         document,
       )
+      if (this.site === "ashby") {
+        try {
+          await fillAshbyComboboxes(this.autofillProfile, document)
+        } catch {
+          // best-effort — typeahead selection is non-fatal
+        }
+      }
+      await this.runRequiredQuestionCleanup()
       this.autofillStatus = "done"
       const resultSummary = this.summarizeAutofillRows(this.autofillResults)
       if (resultSummary.fillableCount > 0 && resultSummary.filledCount === 0) {

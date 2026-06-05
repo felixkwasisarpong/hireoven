@@ -28,13 +28,33 @@ type CheckRequest   = {
   applyUrl?: string
 }
 type ProfileRequest = { type: "EXT_MVP_GET_AUTOFILL_PROFILE" }
-type ResumeRequest  = { type: "EXT_MVP_FETCH_PRIMARY_RESUME"; jobId?: string }
+type ResumeRequest  = { type: "EXT_MVP_FETCH_PRIMARY_RESUME"; jobId?: string; resumeId?: string; versionId?: string }
 type CoverGenRequest    = { type: "EXT_MVP_GENERATE_COVER_LETTER"; jobId: string; resumeId?: string; ats?: string }
 type CoverUpdateRequest = { type: "EXT_MVP_UPDATE_COVER_LETTER"; id: string; body?: string; was_used?: boolean }
 type CoverDocxRequest   = { type: "EXT_MVP_FETCH_COVER_LETTER_DOCX"; coverLetterId?: string; jobId?: string }
 type AnswerQuestionRequest = {
   type: "EXT_MVP_ANSWER_QUESTION"
   question: string
+  jobTitle?: string
+  company?: string
+}
+export type MatchQuestion = {
+  /** Stable client id used to map the answer back to the field. */
+  id: string
+  label: string
+  type: "text" | "textarea" | "yesno" | "select"
+  /** Allowed choices for select/radio fields — answers are constrained to these. */
+  options?: string[]
+}
+export type MatchedAnswer = {
+  id: string
+  /** yesno → "yes"/"no"; select → exact option; text → value; null = answer manually. */
+  value: string | null
+  confidence: "high" | "medium" | "low"
+}
+type MatchQuestionsRequest = {
+  type: "EXT_MVP_MATCH_QUESTIONS"
+  questions: MatchQuestion[]
   jobTitle?: string
   company?: string
 }
@@ -81,6 +101,7 @@ function send<T>(
     | CoverDocxRequest
     | ProofRequest
     | AnswerQuestionRequest
+    | MatchQuestionsRequest
     | AutofillTelemetryRequest,
 ): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -151,10 +172,14 @@ export function getAutofillProfile(): Promise<{
  */
 export function fetchPrimaryResume(args?: {
   jobId?: string
+  resumeId?: string
+  versionId?: string
 }): Promise<{ base64: string; filename: string }> {
   return send<{ base64: string; filename: string }>({
     type: "EXT_MVP_FETCH_PRIMARY_RESUME",
     jobId: args?.jobId,
+    resumeId: args?.resumeId,
+    versionId: args?.versionId,
   })
 }
 
@@ -256,6 +281,25 @@ export function answerQuestion(args: {
   return send<{ answer: string }>({
     type: "EXT_MVP_ANSWER_QUESTION",
     question: args.question,
+    jobTitle: args.jobTitle,
+    company: args.company,
+  })
+}
+
+/**
+ * Semantic "second tier" for the apply agent: batch the required fields the
+ * fast matcher couldn't answer and resolve them in one server-side Claude call
+ * against the user's profile/résumé. `select` answers are constrained to the
+ * options passed in. A `null` value means "leave for manual review".
+ */
+export function matchQuestions(args: {
+  questions: MatchQuestion[]
+  jobTitle?: string
+  company?: string
+}): Promise<{ answers: MatchedAnswer[] }> {
+  return send<{ answers: MatchedAnswer[] }>({
+    type: "EXT_MVP_MATCH_QUESTIONS",
+    questions: args.questions,
     jobTitle: args.jobTitle,
     company: args.company,
   })

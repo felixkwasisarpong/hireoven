@@ -70,6 +70,20 @@ const ATS_FORM_SELECTORS: ReadonlyArray<string> = [
   "[data-automation-id='applyFlow']",
   "[data-automation-id='applicationStep']",
   "[data-automation-id='stepContent']",
+  // SmartRecruiters (incl. oneclick-ui React SPA)
+  "form.sr-application-form",
+  ".sr-apply-step",
+  "#oneclick-ui form",
+  "#oneclick-ui",
+  "[data-test='application-form']",
+  "[data-test*='applicationForm']",
+  "form[action*='smartrecruiters']",
+  "form[action*='api.smartrecruiters']",
+  // iCIMS / BambooHR
+  "#icims_content form",
+  "#bamboohr-apply",
+  "form[action*='icims']",
+  "form[action*='bamboohr']",
   // Generic ATS hints
   "form[action*='greenhouse']",
   "form[action*='lever']",
@@ -120,7 +134,7 @@ function findEmbeddedApplicationIframe(doc: Document, ats: SupportedSite): HTMLI
 
 function hasApplicationLikeInputs(root: Element, ats: SupportedSite): boolean {
   const candidates = root.querySelectorAll(
-    "input:not([type=hidden]):not([type=submit]):not([type=button]):not([type=reset]), select, textarea",
+    "input:not([type=hidden]):not([type=submit]):not([type=button]):not([type=reset]):not([aria-hidden='true']):not([tabindex='-1']), select, textarea",
   )
   if (candidates.length >= 4) return true
   const textLike = root.querySelectorAll(
@@ -374,23 +388,35 @@ export function detectApplicationForm(doc: Document = document): ApplicationForm
 
   let forms = findFormRoots(doc, ats)
 
-  // Ashby fallback: their React SPA renders forms without action attributes and
-  // without ATS-specific class names. If standard detection missed it, check:
-  // 1. URL ends with /application (canonical Ashby apply URL pattern)
-  // 2. Page has aria-label inputs consistent with an application form
-  if (forms.length === 0 && ats === "ashby") {
-    const isApplicationUrl = /\/application(\/|$|\?)/.test(location.pathname)
-    const ariaInputs = doc.querySelectorAll<HTMLElement>(
-      'input[aria-label], input[placeholder], textarea[aria-label]',
+  // SPA fallback for React-rendered ATS (Ashby, SmartRecruiters oneclick-ui,
+  // iCIMS, BambooHR) that render forms without an `action` attribute or
+  // recognizable class names. Detect by URL pattern + profile-like fields.
+  const SPA_ATS: SupportedSite[] = ["ashby", "smartrecruiters", "icims", "bamboohr"]
+  if (forms.length === 0 && SPA_ATS.includes(ats)) {
+    const isApplicationUrl = /\/(application|apply|oneclick|onlineapplication|jobapplication)/i.test(
+      location.pathname,
     )
-    const hasProfileInputs = Array.from(ariaInputs).some((el) => {
-      const label = (el.getAttribute("aria-label") ?? el.getAttribute("placeholder") ?? "").toLowerCase()
-      return /\b(name|email|phone|linkedin|resume|cover|website|portfolio)\b/.test(label)
+    const profileInputs = Array.from(doc.querySelectorAll<HTMLElement>("input, textarea")).filter((el) => {
+      const type = (el as HTMLInputElement).type?.toLowerCase() ?? "text"
+      if (type === "hidden" || type === "submit" || type === "button" || type === "reset") return false
+      const hay = [
+        el.getAttribute("aria-label"),
+        el.getAttribute("placeholder"),
+        el.getAttribute("name"),
+        el.id,
+        el.getAttribute("autocomplete"),
+      ]
+        .join(" ")
+        .toLowerCase()
+      return /\b(first|last|full|name|email|phone|mobile|linkedin|resume|cv|cover|website|portfolio|address|city)\b/.test(
+        hay,
+      )
     })
-    if (isApplicationUrl || hasProfileInputs) {
-      // Treat the entire document body as the form root for field discovery
+    const hasFile = Boolean(doc.querySelector('input[type="file"]'))
+    if (isApplicationUrl || profileInputs.length >= 2 || (hasFile && profileInputs.length >= 1)) {
+      // Treat the entire document body as the form root for field discovery.
       forms = [doc.body]
-      reasons.push("Ashby React SPA application detected via URL/aria-label pattern.")
+      reasons.push(`${ats} SPA application detected via URL/field heuristic.`)
     }
   }
 
@@ -411,11 +437,17 @@ export function detectApplicationForm(doc: Document = document): ApplicationForm
   const seenInputs = new Set<Element>()
   let resumeUpload = false
   let coverLetterUpload = false
+  // Robust profile-field signal — checks every attribute we can read on the
+  // element, not just the (often unresolved) label. Used to decide autofill
+  // support so tenants whose labels don't associate cleanly still count.
+  let profileFieldHits = 0
 
   for (const form of forms) {
     const inputs = form.querySelectorAll<HTMLElement>(
-      // Real input surface only — exclude hidden/submit/button/reset.
-      "input:not([type=hidden]):not([type=submit]):not([type=button]):not([type=reset]), select, textarea",
+      // Real input surface only — exclude hidden/submit/button/reset plus
+      // aria-hidden / tabindex=-1 plumbing inputs (e.g. react-select's internal
+      // requiredInput) that would otherwise produce phantom duplicate fields.
+      "input:not([type=hidden]):not([type=submit]):not([type=button]):not([type=reset]):not([aria-hidden='true']):not([tabindex='-1']), select, textarea",
     )
     for (const el of inputs) {
       if (seenInputs.has(el)) continue
@@ -440,11 +472,26 @@ export function detectApplicationForm(doc: Document = document): ApplicationForm
         confidence: classifyConfidence(el, label),
       })
 
+      // Robust profile-field signal across all readable attributes.
+      const attrHaystack = [
+        label,
+        name ?? "",
+        el.id,
+        el.getAttribute("placeholder") ?? "",
+        el.getAttribute("aria-label") ?? "",
+        el.getAttribute("autocomplete") ?? "",
+      ].join(" ")
+      if (type !== "file" && SAFE_PROFILE_FIELD_RE.test(attrHaystack)) profileFieldHits += 1
+
       // File-input semantic detection (resume vs. cover letter).
       if (type === "file") {
         const haystack = `${label} ${name ?? ""} ${el.id} ${el.getAttribute("placeholder") ?? ""}`
-        if (RESUME_LABEL_RE.test(haystack))       resumeUpload = true
+        const accept = (el.getAttribute("accept") ?? "").toLowerCase()
+        const acceptsDocs = !accept || /pdf|\.doc|word|document|text|rtf|\.txt/.test(accept)
         if (COVER_LETTER_LABEL_RE.test(haystack)) coverLetterUpload = true
+        // A document-accepting file input is the resume dropzone even when it
+        // carries no "resume"/"cv" text (SmartRecruiters/Ashby render it bare).
+        else if (RESUME_LABEL_RE.test(haystack) || acceptsDocs) resumeUpload = true
       }
     }
 
@@ -477,17 +524,22 @@ export function detectApplicationForm(doc: Document = document): ApplicationForm
   // Heuristic: autofill is "supported" when we detect at least 2 profile-
   // fillable fields. Workday is a special case because its step surfaces can
   // intentionally expose fewer native controls while still being fillable by
-  // the dedicated runner.
-  const safeFieldCount = fields.filter((f) =>
+  // the dedicated runner. `profileFieldHits` checks every attribute (not just the
+  // label) so tenants with unassociated labels still register; a resume dropzone
+  // alongside ≥1 profile field is also enough.
+  const labelFieldCount = fields.filter((f) =>
     SAFE_PROFILE_FIELD_RE.test(`${f.label} ${f.name ?? ""}`),
   ).length
+  const safeFieldCount = Math.max(labelFieldCount, profileFieldHits)
 
-  const supportsAutofill = ats === "workday" ? true : safeFieldCount >= 2
+  const isWorkday = ats === "workday"
+  const supportsAutofill =
+    isWorkday || safeFieldCount >= 2 || (resumeUpload && safeFieldCount >= 1)
 
-  if (ats !== "workday" && safeFieldCount < 2) {
-    reasons.push("Form detected but profile-fillable fields are limited — autofill may be partial.")
-  } else if (ats === "workday") {
+  if (isWorkday) {
     reasons.push("Workday step detected — Autofill uses step-aware runner (question dropdowns included).")
+  } else if (!supportsAutofill) {
+    reasons.push("Form detected but profile-fillable fields are limited — autofill may be partial.")
   } else if (ats === "unknown") {
     reasons.push("Application form detected on a non-standard ATS host — using generic autofill strategy.")
   } else {

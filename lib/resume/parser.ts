@@ -585,3 +585,23 @@ export async function parseResume(
     return normalizeParsedResume(null, extractedText)
   }
 }
+
+/**
+ * Parse a resume from raw text (no file). Used by the LinkedIn import flow,
+ * which feeds the scraped/pasted profile text straight into the same AI
+ * extraction + normalization pipeline used for uploaded files.
+ */
+export async function parseResumeFromText(rawText: string): Promise<ParsedResume> {
+  const text = rawText.trim()
+  if (!text) {
+    throw new Error("No text provided to parse")
+  }
+
+  try {
+    const parsed = await parseWithClaude(text)
+    return normalizeParsedResume(parsed, text)
+  } catch (error) {
+    console.error("Text resume parsing fell back to heuristic extraction", error)
+    return normalizeParsedResume(null, text)
+  }
+}

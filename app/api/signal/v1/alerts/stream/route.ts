@@ -45,7 +45,8 @@ export async function GET(request: Request) {
           const checkedAt = lastCheckedAt
           lastCheckedAt = new Date().toISOString()
 
-          // TODO: replace with tenant-specific/user-specific high-match query.
+          // company name lives in `companies`; the match score is per-user in
+          // `job_match_scores` (jobs has neither column).
           const pool = getPostgresPool()
           const { rows: jobs } = await pool.query<{
             id: string
@@ -56,14 +57,17 @@ export async function GET(request: Request) {
             is_remote: boolean | null
             created_at: string
           }>(
-            `SELECT id, title, company_name, match_score, location, is_remote, created_at
-             FROM jobs
-             WHERE created_at >= $1
-               AND match_score >= $2
-               AND COALESCE(raw_data->>'signalTenantId', '') = $3
-             ORDER BY match_score DESC
+            `SELECT j.id, j.title, c.name AS company_name,
+                    jms.overall_score AS match_score, j.location, j.is_remote, j.created_at
+             FROM jobs j
+             JOIN job_match_scores jms ON jms.job_id = j.id AND jms.user_id = $1
+             LEFT JOIN companies c ON c.id = j.company_id
+             WHERE j.created_at >= $2
+               AND jms.overall_score >= $3
+               AND COALESCE(j.raw_data->>'signalTenantId', '') = $4
+             ORDER BY jms.overall_score DESC
              LIMIT 5`,
-            [checkedAt, MIN_ALERT_SCORE, auth.tenantId]
+            [userId, checkedAt, MIN_ALERT_SCORE, auth.tenantId]
           )
 
           if (!jobs.length) return
