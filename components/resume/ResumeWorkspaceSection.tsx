@@ -7,6 +7,7 @@ import ParsedResumeView from "@/components/resume/ParsedResumeView"
 import { useResumeContext } from "@/components/resume/ResumeProvider"
 import ResumeScoreCard from "@/components/resume/ResumeScoreCard"
 import ResumeUploader from "@/components/resume/ResumeUploader"
+import ImportLinkedInButton from "@/components/resume/ImportLinkedInButton"
 import { useToast } from "@/components/ui/ToastProvider"
 import { cn } from "@/lib/utils"
 import type { Resume } from "@/types"
@@ -248,7 +249,7 @@ export default function ResumeWorkspaceSection() {
   return (
     <div className="space-y-8">
       {(resumes.length < 3 || !hasResume) && (
-        <section id="resume-upload">
+        <section id="resume-upload" className="space-y-3">
           <ResumeUploader
             onUploadComplete={(resume) => {
               upsertResume(resume)
@@ -257,6 +258,20 @@ export default function ResumeWorkspaceSection() {
               window.dispatchEvent(new Event("hireoven:resumes-changed"))
             }}
             showPrompt={!hasResume}
+          />
+          <div className="flex items-center gap-3 text-[12px] text-slate-400">
+            <span className="h-px flex-1 bg-slate-200" />
+            or
+            <span className="h-px flex-1 bg-slate-200" />
+          </div>
+          <ImportLinkedInButton
+            className="w-full"
+            onImported={(resume) => {
+              upsertResume(resume)
+              setExpandedId(resume.id)
+              void refresh()
+              window.dispatchEvent(new Event("hireoven:resumes-changed"))
+            }}
           />
         </section>
       )}

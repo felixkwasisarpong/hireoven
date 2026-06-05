@@ -1060,6 +1060,11 @@ export default function ResumeStudioPage() {
   const [experienceDrafts, setExperienceDrafts] = useState<ExperienceDraft[]>([])
   const [educationDrafts, setEducationDrafts] = useState<EducationDraft[]>([])
   const [projectsDraft, setProjectsDraft] = useState("")
+  // Per-entry collapse state for individual experience/education rows, keyed by
+  // entry id (e.g. "experience-2"). Lets the user fold one entry independently.
+  const [collapsedEntries, setCollapsedEntries] = useState<Record<string, boolean>>({})
+  const toggleEntryCollapsed = (entryId: string) =>
+    setCollapsedEntries((prev) => ({ ...prev, [entryId]: !prev[entryId] }))
   const [publicationDrafts, setPublicationDrafts] = useState<PublicationDraft[]>([])
   const [sectionEntries, setSectionEntries] = useState<Record<string, StructuredEntry[]>>({})
   const [profileSummary, setProfileSummary] = useState("")
@@ -1916,6 +1921,11 @@ export default function ResumeStudioPage() {
     markDirty()
   }
 
+  function removeExperienceDraft(index: number) {
+    setExperienceDrafts((current) => current.filter((_, i) => i !== index))
+    markDirty()
+  }
+
   function updateEducation(index: number, field: keyof EducationDraft, value: string | boolean) {
     setEducationDrafts((current) =>
       current.map((item, itemIndex) => itemIndex === index ? { ...item, [field]: value } : item)
@@ -1938,6 +1948,11 @@ export default function ResumeStudioPage() {
         description: "",
       },
     ])
+    markDirty()
+  }
+
+  function removeEducationDraft(index: number) {
+    setEducationDrafts((current) => current.filter((_, i) => i !== index))
     markDirty()
   }
 
@@ -2418,12 +2433,29 @@ export default function ResumeStudioPage() {
           <div className="space-y-3">
             {experienceDrafts.map((experienceDraft, index) => {
               const entryId = `experience-${index}`
+              const entryCollapsed = collapsedEntries[entryId] ?? false
               return (
                 <div key={entryId} className="rounded-xl border border-slate-200 bg-slate-50">
-                  <div className="flex items-center justify-between border-b border-slate-200 px-3 py-3">
-                    <p className="text-[13px] font-semibold text-slate-700">{experienceDraft.company || `Work Experience ${index + 1}`}</p>
-                    <ChevronDown className="h-4 w-4 rotate-180 text-slate-600" />
+                  <div className="flex items-center gap-2 border-b border-slate-200 px-3 py-3">
+                    <button
+                      type="button"
+                      onClick={() => toggleEntryCollapsed(entryId)}
+                      aria-expanded={!entryCollapsed}
+                      className="flex flex-1 items-center justify-between text-left"
+                    >
+                      <p className="text-[13px] font-semibold text-slate-700">{experienceDraft.company || `Work Experience ${index + 1}`}</p>
+                      <ChevronDown className={cn("h-4 w-4 text-slate-600 transition", entryCollapsed ? "" : "rotate-180")} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => removeExperienceDraft(index)}
+                      className="text-red-400 transition hover:text-red-600"
+                      aria-label="Remove work experience"
+                    >
+                      <TrashIcon />
+                    </button>
                   </div>
+                  {!entryCollapsed && (
                   <div className="grid gap-3 p-3 sm:grid-cols-2">
                     <TextInput label="Company" value={experienceDraft.company} onChange={(value) => updateExperience(index, "company", value)} />
                     <TextInput label="Role" value={experienceDraft.role} onChange={(value) => updateExperience(index, "role", value)} />
@@ -2455,6 +2487,7 @@ export default function ResumeStudioPage() {
                       />
                     </div>
                   </div>
+                  )}
                 </div>
               )
             })}
@@ -2475,12 +2508,29 @@ export default function ResumeStudioPage() {
           <div className="space-y-3">
             {educationDrafts.map((educationDraft, index) => {
               const entryId = `education-${index}`
+              const entryCollapsed = collapsedEntries[entryId] ?? false
               return (
                 <div key={entryId} className="rounded-xl border border-slate-200 bg-slate-50">
-                  <div className="flex items-center justify-between border-b border-slate-200 px-3 py-3">
-                    <p className="text-[13px] font-semibold text-slate-700">{educationDraft.school || `Education ${index + 1}`}</p>
-                    <ChevronDown className="h-4 w-4 rotate-180 text-slate-600" />
+                  <div className="flex items-center gap-2 border-b border-slate-200 px-3 py-3">
+                    <button
+                      type="button"
+                      onClick={() => toggleEntryCollapsed(entryId)}
+                      aria-expanded={!entryCollapsed}
+                      className="flex flex-1 items-center justify-between text-left"
+                    >
+                      <p className="text-[13px] font-semibold text-slate-700">{educationDraft.school || `Education ${index + 1}`}</p>
+                      <ChevronDown className={cn("h-4 w-4 text-slate-600 transition", entryCollapsed ? "" : "rotate-180")} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => removeEducationDraft(index)}
+                      className="text-red-400 transition hover:text-red-600"
+                      aria-label="Remove education"
+                    >
+                      <TrashIcon />
+                    </button>
                   </div>
+                  {!entryCollapsed && (
                   <div className="grid gap-3 p-3 sm:grid-cols-2">
                     <TextInput label="School" value={educationDraft.school} onChange={(value) => updateEducation(index, "school", value)} />
                     <TextInput label="Field" value={educationDraft.field} onChange={(value) => updateEducation(index, "field", value)} />
@@ -2513,6 +2563,7 @@ export default function ResumeStudioPage() {
                       />
                     </div>
                   </div>
+                  )}
                 </div>
               )
             })}

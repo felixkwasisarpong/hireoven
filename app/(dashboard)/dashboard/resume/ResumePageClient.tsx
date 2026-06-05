@@ -44,6 +44,7 @@ import {
 } from "lucide-react"
 
 import { useResumeContext } from "@/components/resume/ResumeProvider"
+import ImportLinkedInButton from "@/components/resume/ImportLinkedInButton"
 import { useToast } from "@/components/ui/ToastProvider"
 import { publishLocalNotification } from "@/lib/hooks/useNotifications"
 import { writeResumeHandoff } from "@/lib/resume/local-resume-handoff"
@@ -713,6 +714,13 @@ function CleanOverviewPanel({ onTabChange }: { onTabChange: (tab: TabId) => void
             <Pencil className="h-4 w-4 text-[#5B4DFF]" />
             Create from scratch
           </Link>
+          <ImportLinkedInButton
+            className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-[13px] font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+            onImported={() => {
+              window.dispatchEvent(new Event("hireoven:resumes-changed"))
+              onTabChange("library")
+            }}
+          />
         </div>
       </div>
     )
@@ -933,6 +941,13 @@ function CleanOverviewPanel({ onTabChange }: { onTabChange: (tab: TabId) => void
               )
             })}
           </div>
+          <ImportLinkedInButton
+            className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-[13px] font-semibold text-slate-700 transition hover:border-[#0A66C2]/40 hover:bg-[#0A66C2]/5 disabled:cursor-not-allowed disabled:opacity-60"
+            onImported={() => {
+              window.dispatchEvent(new Event("hireoven:resumes-changed"))
+              onTabChange("library")
+            }}
+          />
         </section>
 
         <section className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm">
