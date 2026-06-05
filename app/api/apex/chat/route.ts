@@ -47,7 +47,7 @@ import {
 } from "@/lib/apex/types"
 
 export const runtime = "nodejs"
-export const maxDuration = 30
+export const maxDuration = 60
 
 /**
  * Apex Chat API - Phase 1.2: Grounded Context Retrieval
@@ -1968,6 +1968,11 @@ User Input: ${userMessage}`
       const emit = (event: import("@/lib/apex/streaming/types").ApexStreamEvent) => {
         try { ctrl.enqueue(enc.encode(encodeSSE(event))) } catch {}
       }
+      // Keep the SSE connection alive through proxy/CDN idle windows while
+      // Claude is still generating or while we post-process the final message.
+      const keepalive = setInterval(() => {
+        try { ctrl.enqueue(enc.encode(":\n\n")) } catch {}
+      }, 10_000)
 
       const systemPrompt = getApexSystemPrompt(mode, {
         premiumEnabled: canUsePremiumApexFeatures(effectivePlan) && !premiumGate,
@@ -2100,6 +2105,7 @@ User Input: ${userMessage}`
         } catch (err) {
           emit({ type: "error", message: err instanceof Error ? err.message : "Apex encountered an error." })
         } finally {
+          clearInterval(keepalive)
           try { ctrl.close() } catch {}
         }
       })()

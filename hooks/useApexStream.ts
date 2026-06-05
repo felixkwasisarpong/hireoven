@@ -85,6 +85,7 @@ export function useApexStream(): ApexStreamActions {
     // 1) Activity timeout (resets on stream activity).
     // 2) Absolute timeout (never resets; prevents infinite keepalive hangs).
     let receivedFinalResponse = false
+    let sawDoneEvent = false
     let hardTimeout = 0
     let absoluteTimeout = 0
     const resetHardTimeout = () => {
@@ -168,6 +169,7 @@ export function useApexStream(): ApexStreamActions {
       let rawStreamText = ""
 
       const processEvent = (event: ApexStreamEvent) => {
+        resetHardTimeout()
         switch (event.type) {
           case "text_delta":
             rawStreamText += event.text
@@ -194,6 +196,7 @@ export function useApexStream(): ApexStreamActions {
             break
 
           case "done":
+            sawDoneEvent = true
             window.clearTimeout(hardTimeout)
             window.clearTimeout(absoluteTimeout)
             setState((prev) => ({ ...prev, isStreaming: false }))
@@ -224,6 +227,7 @@ export function useApexStream(): ApexStreamActions {
         }
 
         if (readResult.done) break
+        resetHardTimeout()
         buffer += decoder.decode(readResult.value, { stream: true })
 
         const lines = buffer.split("\n")
@@ -242,6 +246,24 @@ export function useApexStream(): ApexStreamActions {
       if (!receivedFinalResponse) {
         setState((prev) => {
           if (prev.finalResponse || prev.error) return { ...prev, isStreaming: false }
+
+          const raw = rawStreamText.trim()
+          // Best-effort recovery: when stream dropped after text was emitted,
+          // promote the partial/final text into a minimal safe ApexResponse.
+          if (raw.length > 0) {
+            const recovered = normalizeApexResponse({
+              answer: deriveDisplayStreamText(raw).trim() || "Apex response recovered from a partial stream.",
+              recommendation: "Explore",
+              actions: [],
+            })
+            return {
+              ...prev,
+              isStreaming: false,
+              finalResponse: recovered,
+              error: sawDoneEvent ? null : "Apex connection ended early. Showing partial response.",
+            }
+          }
+
           return {
             ...prev,
             isStreaming: false,
