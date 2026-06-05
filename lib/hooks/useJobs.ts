@@ -18,7 +18,12 @@ const SEARCH_CHUNK_SIZE = 80
 const MAX_FETCH_CHUNKS = 14
 
 function effectiveWithinForSort(filters: JobFilters): JobFilters["within"] {
-  if (filters.sort === "match" || filters.sort === "relevant") return "24h"
+  // Match/relevant sort (incl. Apex Focus Mode) caps the candidate set to a
+  // recency window so scoring stays bounded. 24h was too tight: users with
+  // narrow filters (specific titles + remote + sponsorship) routinely had zero
+  // jobs in the last day and hit a dead-end empty feed. 7d keeps the feed
+  // "recent" while giving those combinations room to surface matches.
+  if (filters.sort === "match" || filters.sort === "relevant") return "7d"
   return filters.within
 }
 
