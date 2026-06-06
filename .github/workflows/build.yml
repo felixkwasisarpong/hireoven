@@ -45,8 +45,8 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata
-        id: meta
+      - name: Extract app metadata
+        id: meta-app
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
@@ -54,19 +54,39 @@ jobs:
             type=raw,value=latest
             type=sha,prefix=sha-
 
+      - name: Extract harvester metadata
+        id: meta-harvester
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-harvester
+          tags: |
+            type=raw,value=latest
+            type=sha,prefix=sha-
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build and push
+      - name: Build and push app
         uses: docker/build-push-action@v5
         with:
           context: .
           dockerfile: Dockerfile
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: ${{ steps.meta-app.outputs.tags }}
+          labels: ${{ steps.meta-app.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
             NEXT_PUBLIC_APP_URL=${{ vars.NEXT_PUBLIC_APP_URL }}
             NEXT_PUBLIC_LOGO_DEV_TOKEN=${{ vars.NEXT_PUBLIC_LOGO_DEV_TOKEN }}
+
+      - name: Build and push harvester
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          dockerfile: Dockerfile.harvester
+          push: true
+          tags: ${{ steps.meta-harvester.outputs.tags }}
+          labels: ${{ steps.meta-harvester.outputs.labels }}
+          cache-from: type=gha,scope=harvester
+          cache-to: type=gha,mode=max,scope=harvester
