@@ -1,6 +1,7 @@
 import type { Pool } from "pg"
 import { normalizePersistedJobRecordWithAI } from "@/lib/jobs/normalization"
 import type { PersistedJobForNormalization } from "@/lib/jobs/normalization/types"
+import { publicationStatusForJob } from "@/lib/jobs/publication"
 import { getPostgresPool } from "@/lib/postgres/server"
 
 const DEFAULT_BATCH_SIZE = Math.max(
@@ -160,7 +161,8 @@ async function updateJobAfterEnrichmentSuccess(
          sponsorship_score = $14,
          visa_language_detected = $15,
          skills = $16,
-         raw_data = $17::jsonb,
+         publication_status = $17,
+         raw_data = $18::jsonb,
          updated_at = NOW()
      WHERE id = $1::uuid`,
     [
@@ -180,6 +182,10 @@ async function updateJobAfterEnrichmentSuccess(
       normalization.nextColumns.sponsorship_score,
       normalization.nextColumns.visa_language_detected,
       normalization.nextColumns.skills,
+      publicationStatusForJob({
+        description: normalization.nextColumns.description,
+        skills: normalization.nextColumns.skills,
+      }),
       JSON.stringify(nextRawData),
     ]
   )

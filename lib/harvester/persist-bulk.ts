@@ -2,6 +2,7 @@ import type { Pool, PoolClient } from "pg"
 import { isAllowedLocation } from "@/lib/jobs/location-filter"
 import { isBlockedApplyUrl, isBlockedCrawlTitle } from "@/lib/jobs/filters"
 import { normalizeCrawlerJobForPersistence } from "@/lib/jobs/normalization"
+import { publicationStatusForJob } from "@/lib/jobs/publication"
 import { hashContent, type HarvestedJob } from "@/lib/harvester/adapters/_base"
 
 /**
@@ -102,6 +103,7 @@ type PersistRow = {
   sponsors_h1b: boolean | null
   sponsorship_score: number | null
   visa_language_detected: string | null
+  publication_status: string
   posted_at: string | null
   content_hash: string
   raw_data: RawDataPayload
@@ -290,7 +292,7 @@ INSERT INTO jobs (
   company_id, external_id, title, normalized_title, apply_url, location, description,
   employment_type, seniority_level, is_remote, is_hybrid, requires_authorization,
   salary_min, salary_max, salary_currency, skills, sponsors_h1b, sponsorship_score,
-  visa_language_detected, is_active, last_seen_at, posted_at, content_hash, source_ats,
+  visa_language_detected, publication_status, is_active, last_seen_at, posted_at, content_hash, source_ats,
   source_ats_slug, raw_data, first_detected_at, created_at, updated_at, closed_at
 )
 SELECT
@@ -313,6 +315,7 @@ SELECT
   NULLIF(v->>'sponsors_h1b','')::boolean                                        AS sponsors_h1b,
   NULLIF(v->>'sponsorship_score','')::integer                                   AS sponsorship_score,
   v->>'visa_language_detected'                                                  AS visa_language_detected,
+  COALESCE(NULLIF(v->>'publication_status', ''), 'published')                   AS publication_status,
   true                                                                          AS is_active,
   $2::timestamptz                                                               AS last_seen_at,
   NULLIF(v->>'posted_at','')::timestamptz                                       AS posted_at,
@@ -344,6 +347,7 @@ DO UPDATE SET
   sponsors_h1b           = EXCLUDED.sponsors_h1b,
   sponsorship_score      = EXCLUDED.sponsorship_score,
   visa_language_detected = EXCLUDED.visa_language_detected,
+  publication_status     = EXCLUDED.publication_status,
   is_active              = true,
   last_seen_at           = EXCLUDED.last_seen_at,
   posted_at              = COALESCE(EXCLUDED.posted_at, jobs.posted_at),
@@ -434,13 +438,16 @@ function buildPersistRow(args: {
     view: { page: normalization.pageView, card: normalization.cardView },
   }
 
+  const description = cols.description ?? salvageHarvesterDescription(job.description)
+  const skills = cols.skills ?? []
+
   return {
     external_id: job.externalId,
     title: job.title.trim(),
     normalized_title: cols.normalized_title ?? null,
     apply_url: job.applyUrl,
     location: cols.location ?? null,
-    description: cols.description ?? salvageHarvesterDescription(job.description),
+    description,
     employment_type: cols.employment_type ?? null,
     seniority_level: cols.seniority_level ?? null,
     is_remote: Boolean(cols.is_remote),
@@ -449,10 +456,11 @@ function buildPersistRow(args: {
     salary_min: cols.salary_min ?? null,
     salary_max: cols.salary_max ?? null,
     salary_currency: cols.salary_currency ?? null,
-    skills: cols.skills ?? [],
+    skills,
     sponsors_h1b: cols.sponsors_h1b ?? null,
     sponsorship_score: cols.sponsorship_score ?? null,
     visa_language_detected: cols.visa_language_detected ?? null,
+    publication_status: publicationStatusForJob({ description, skills }),
     posted_at: normalizedPostedAt,
     content_hash: usedExistingDescriptionFallback
       ? hashContent([job.contentHash, descriptionForNormalization?.slice(0, 4_000)])

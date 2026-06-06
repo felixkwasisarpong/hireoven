@@ -21,6 +21,7 @@ import {
 import { normalizeGreenhouseBoardUrl } from "@/lib/companies/greenhouse-url"
 import { isAllowedLocation } from "@/lib/jobs/location-filter"
 import { isBlockedApplyUrl, isBlockedCrawlTitle } from "@/lib/jobs/filters"
+import { publicationStatusForJob } from "@/lib/jobs/publication"
 import type { EmploymentType, SeniorityLevel } from "@/types"
 
 const DESCRIPTION_FETCH_CONCURRENCY = Math.max(
@@ -108,6 +109,7 @@ const JOB_INSERT_COLUMNS = [
   "sponsorship_score",
   "visa_language_detected",
   "skills",
+  "publication_status",
   "is_active",
   "last_seen_at",
   "raw_data",
@@ -194,6 +196,7 @@ async function updateJobsBatch(
          sponsorship_score      = (v->>'sponsorship_score')::integer,
          visa_language_detected = v->>'visa_language_detected',
          skills                 = (SELECT array_agg(x) FROM jsonb_array_elements_text(v->'skills') x),
+         publication_status     = v->>'publication_status',
          is_active              = (v->>'is_active')::boolean,
          last_seen_at           = (v->>'last_seen_at')::timestamptz,
          raw_data               = v->'raw_data',
@@ -641,6 +644,10 @@ export async function persistCrawlJobs({
       sponsorship_score: normalization.nextColumns.sponsorship_score,
       visa_language_detected: normalization.nextColumns.visa_language_detected,
       skills: normalization.nextColumns.skills,
+      publication_status: publicationStatusForJob({
+        description: normalization.nextColumns.description,
+        skills: normalization.nextColumns.skills,
+      }),
       is_active: true,
       last_seen_at: crawledAtIso,
       raw_data: {
