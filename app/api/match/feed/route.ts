@@ -7,6 +7,7 @@ import { dedupeFeedJobsBySignature } from "@/lib/jobs/feed-dedupe"
 import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
 import { getCachedScoresForUser, scoreJobsForUser } from "@/lib/matching/batch-scorer"
 import { hasUsableMatchScore } from "@/lib/jobs/match-score-display"
+import { sqlPublishedJob } from "@/lib/jobs/publication"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { createClient } from "@/lib/supabase/server"
 import { formatEmploymentLabel, formatSalaryLabel } from "@/lib/jobs/normalization/view-model"
@@ -99,7 +100,7 @@ export async function GET(request: NextRequest) {
   const fetchLimit = Math.min(220, Math.max(limit + offset, 60) * fetchMultiplier)
 
   const pool = getPostgresPool()
-  const where: string[] = ["jobs.is_active = true", sqlJobLocatedInUsa("jobs")]
+  const where: string[] = ["jobs.is_active = true", sqlPublishedJob("jobs"), sqlJobLocatedInUsa("jobs")]
   const params: Array<string | number | string[]> = []
   const addParam = (value: string | number | string[]) => {
     params.push(value)
@@ -199,6 +200,7 @@ export async function GET(request: NextRequest) {
           AND ja.user_id = ${userIdParam}::uuid
           AND ja.is_archived = false
          WHERE jobs.is_active = true
+           AND ${sqlPublishedJob("jobs")}
            AND jobs.id NOT IN (SELECT id FROM base)
        )
        SELECT * FROM base

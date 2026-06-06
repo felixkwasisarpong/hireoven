@@ -17,6 +17,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { createClient } from "@/lib/supabase/server"
+import { sqlPublishedJob } from "@/lib/jobs/publication"
 import { skillOverlap, jaccardSimilarity, generateRecommendations } from "@/lib/apex/opportunity-graph/generator"
 import type {
   SimilarJobHit,
@@ -153,6 +154,7 @@ export async function GET(request: NextRequest) {
      FROM jobs j
      LEFT JOIN companies c ON c.id = j.company_id
      WHERE j.is_active = true
+       AND ${sqlPublishedJob("j")}
        AND ($1::uuid IS NULL OR j.id != $1::uuid)
        AND j.skills && $2::text[]
      ORDER BY overlap_count DESC, j.first_detected_at DESC
@@ -184,7 +186,7 @@ export async function GET(request: NextRequest) {
             c.sponsors_h1b, COUNT(DISTINCT j.id)::int AS matching_job_count,
             ARRAY_AGG(DISTINCT s.skill ORDER BY s.skill) FILTER (WHERE s.skill IS NOT NULL) AS sample_skills
      FROM companies c
-     JOIN jobs j ON j.company_id = c.id AND j.is_active = true AND j.skills && $1::text[]
+     JOIN jobs j ON j.company_id = c.id AND j.is_active = true AND ${sqlPublishedJob("j")} AND j.skills && $1::text[]
      CROSS JOIN LATERAL (
        SELECT UNNEST(j.skills) AS skill
      ) AS s
@@ -217,6 +219,7 @@ export async function GET(request: NextRequest) {
        SELECT j.id AS job_id, j.skills, UNNEST(j.skills) AS skill
        FROM jobs j
        WHERE j.is_active = true
+         AND ${sqlPublishedJob("j")}
          AND NOT (j.skills @> $1::text[])
      ) sub
      WHERE LOWER(skill) != ALL(

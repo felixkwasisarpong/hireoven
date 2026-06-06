@@ -4,6 +4,7 @@ import { logApiUsage } from "@/lib/admin/usage"
 import { getEmailCompanyLogoUrl, getHireovenEmailLogoUrl, getHireovenJobDetailUrl, renderEmailExtensionFooter } from "@/lib/email/branding"
 import { getRecentJobsFromEmail } from "@/lib/email/identity"
 import { requireCronAuth } from "@/lib/env"
+import { sqlPublishedJob } from "@/lib/jobs/publication"
 import { matchesLocationFilter } from "@/lib/jobs/search-match"
 import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
 import { getPostgresPool } from "@/lib/postgres/server"
@@ -425,6 +426,7 @@ export async function GET(request: NextRequest) {
          AND jms.overall_score >= 75
          AND jobs.first_detected_at >= $2
          AND jobs.is_active = true
+         AND ${sqlPublishedJob("jobs")}
          AND ${sqlJobLocatedInUsa("jobs")}
        -- Freshest first per user-facing convention. Score is the threshold
        -- (>=75), not the primary sort key.
@@ -549,6 +551,7 @@ export async function GET(request: NextRequest) {
        FROM jobs
        LEFT JOIN companies ON companies.id = jobs.company_id
        WHERE jobs.is_active = true
+         AND ${sqlPublishedJob("jobs")}
          AND ${sqlJobLocatedInUsa("jobs")}
          AND jobs.first_detected_at >= $1
        ORDER BY jobs.first_detected_at DESC

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { sqlPublishedJob } from "@/lib/jobs/publication"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { deriveCompanyIntel, buildCompanyIntelSummary } from "@/lib/apex/company-intel/aggregator"
 import { requireSignalApiAuth } from "@/lib/signal-api/auth"
@@ -39,6 +40,7 @@ export async function GET(
              FROM jobs j
              WHERE j.company_id = c.id
                AND j.is_active = true
+               AND ${sqlPublishedJob("j")}
                AND COALESCE(j.raw_data->>'signalTenantId', '') = $2
            )
          LIMIT 1`,
@@ -50,6 +52,7 @@ export async function GET(
          FROM jobs
          WHERE company_id = $1
            AND is_active = true
+           AND ${sqlPublishedJob("jobs")}
            AND COALESCE(raw_data->>'signalTenantId', '') = $2
          ORDER BY first_detected_at DESC
          LIMIT 100`,

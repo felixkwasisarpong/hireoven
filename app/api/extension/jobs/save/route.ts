@@ -22,6 +22,7 @@ import {
 } from "@/lib/extension/job-fingerprint"
 import { enrichJobWithNormalization } from "@/lib/jobs/enrich-job-with-normalization"
 import { isBlockedApplyUrl, isBlockedCrawlTitle } from "@/lib/jobs/filters"
+import { publicationStatusForJob } from "@/lib/jobs/publication"
 import { getPostgresPool } from "@/lib/postgres/server"
 import {
   extensionCorsHeaders,
@@ -369,12 +370,14 @@ export async function POST(request: Request) {
         `INSERT INTO jobs (
            company_id, title, location, description,
            apply_url, is_remote, is_hybrid, is_active, external_id,
+           publication_status,
            raw_data,
            first_detected_at, last_seen_at
          ) VALUES (
            $1, $2, $3, $4,
            $5, $6, $7, true, $8,
-           $9::jsonb,
+           $9,
+           $10::jsonb,
            NOW(), NOW()
          )
          RETURNING id`,
@@ -387,6 +390,7 @@ export async function POST(request: Request) {
           isRemote,
           isHybrid,
           externalJobId,
+          publicationStatusForJob({ description, skills: [] }),
           JSON.stringify({
             captureSource: "apex-mvp",
             captureAdapter: ats,
@@ -457,10 +461,23 @@ export async function POST(request: Request) {
              END,
              external_id = COALESCE(NULLIF(trim(external_id), ''), $6),
              raw_data = COALESCE(raw_data, '{}'::jsonb) || $7::jsonb,
+             publication_status = CASE
+               WHEN $8 = 'published' THEN 'published'
+               ELSE publication_status
+             END,
              last_seen_at = NOW(),
              updated_at = NOW()
          WHERE id = $1::uuid`,
-        [jobId, companyId, title, location, description, externalJobId, JSON.stringify(rawPatch)],
+        [
+          jobId,
+          companyId,
+          title,
+          location,
+          description,
+          externalJobId,
+          JSON.stringify(rawPatch),
+          publicationStatusForJob({ description, skills: [] }),
+        ],
       )
       .catch(() => null)
     jobUpdated = true
@@ -566,13 +583,10 @@ export async function POST(request: Request) {
     console.error("[extension/jobs/save] normalization enrichment:", e)
   }
 
-  // Visibility safety net. The normalizer truthfully strips "Remote, United
-  // States" when the JD has no remote signal — correct semantics, but the
-  // dashboard feed filter (sqlJobLocatedInUsa) then drops the row from the
-  // user's view. For user-saved jobs we always want them visible, so backfill
-  // a US location when the normalizer left it empty. We don't lie about
-  // is_remote — only set the location text so the feed's
-  // "location ILIKE '%United States%'" branch can match.
+  // Location safety net. The normalizer truthfully strips "Remote, United
+  // States" when the JD has no remote signal. We keep saved jobs addressable
+  // in the tracker by backfilling US location text, but publication_status
+  // still controls whether the row appears in discovery feeds.
   await pool
     .query(
       `UPDATE jobs

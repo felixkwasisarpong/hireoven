@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
+import { sqlPublishedJob } from "@/lib/jobs/publication"
 import { getPostgresPool } from "@/lib/postgres/server"
 import type { ApexProactiveSnapshot } from "@/lib/apex/proactive/types"
 
@@ -215,6 +216,7 @@ export async function GET() {
              AND score.computed_at >= NOW() - INTERVAL '72 hours'
              AND score.overall_score >= 78
              AND j.is_active = true
+             AND ${sqlPublishedJob("j")}
            ORDER BY score.job_id, score.computed_at DESC
          ) ranked
          ORDER BY ranked.overall_score DESC
@@ -283,6 +285,7 @@ export async function GET() {
          JOIN jobs j ON j.company_id = c.id
          WHERE w.user_id = $1
            AND j.is_active = true
+           AND ${sqlPublishedJob("j")}
            AND j.first_detected_at >= NOW() - INTERVAL '7 days'
          GROUP BY c.id, c.name
          HAVING COUNT(j.id) >= 2
@@ -296,6 +299,7 @@ export async function GET() {
            SELECT UNNEST(j.skills) AS skill
            FROM jobs j
            WHERE j.is_active = true
+             AND ${sqlPublishedJob("j")}
              AND j.skills IS NOT NULL
              AND j.first_detected_at >= NOW() - INTERVAL '30 days'
              AND (

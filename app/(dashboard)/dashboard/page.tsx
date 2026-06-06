@@ -1,6 +1,7 @@
 import { Suspense } from "react"
 import { redirect } from "next/navigation"
 import { getSessionUser } from "@/lib/auth/session-user"
+import { sqlPublishedJob } from "@/lib/jobs/publication"
 import { getPostgresPool } from "@/lib/postgres/server"
 import type { WatchlistWithCompany } from "@/types"
 import { listWatchlistWithCompany } from "@/lib/watchlist/store"
@@ -73,6 +74,7 @@ async function getDashboardInitialData(): Promise<DashboardInitialData> {
            FROM jobs
            WHERE company_id = ANY($1::uuid[])
              AND COALESCE(is_active, true) = true
+             AND ${sqlPublishedJob("jobs")}
              AND COALESCE(first_detected_at, created_at)::date = CURRENT_DATE
            GROUP BY company_id`,
           [companyIds]

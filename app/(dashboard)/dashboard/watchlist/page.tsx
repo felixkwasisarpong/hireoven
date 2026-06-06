@@ -1,4 +1,5 @@
 import { getSessionUser } from "@/lib/auth/session-user"
+import { sqlPublishedJob } from "@/lib/jobs/publication"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { listWatchlistWithCompany } from "@/lib/watchlist/store"
 import type { Company, WatchlistWithCompany } from "@/types"
@@ -57,6 +58,7 @@ async function fetchWatchlistInsights(userId: string): Promise<Record<string, Co
        FROM jobs j
        WHERE j.company_id = w.company_id
          AND j.is_active = true
+         AND ${sqlPublishedJob("j")}
          AND j.first_detected_at >= $2::timestamptz
      ) AS stats ON true
      LEFT JOIN LATERAL (
@@ -66,6 +68,7 @@ async function fetchWatchlistInsights(userId: string): Promise<Record<string, Co
        FROM jobs j
        WHERE j.company_id = w.company_id
          AND j.is_active = true
+         AND ${sqlPublishedJob("j")}
          AND j.first_detected_at >= $2::timestamptz
        ORDER BY j.first_detected_at DESC NULLS LAST
        LIMIT 1

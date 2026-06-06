@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { sqlPublishedJob } from "@/lib/jobs/publication"
 import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
 import { getPostgresPool } from "@/lib/postgres/server"
 import type { Company, Job } from "@/types"
@@ -20,6 +21,7 @@ export async function GET(
        FROM jobs
        WHERE company_id = $1
          AND is_active = true
+         AND ${sqlPublishedJob("jobs")}
          AND ${sqlJobLocatedInUsa("jobs")}
        ORDER BY first_detected_at DESC
        LIMIT 50`,
