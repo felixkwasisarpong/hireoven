@@ -19,6 +19,19 @@ test("detectAtsFromUrl recognizes lever, ashby, smartrecruiters, workday, icims,
   assert.equal(detectAtsFromUrl("https://jobs.jobvite.com/acme/job/o123")?.atsIdentifier, "acme")
 })
 
+test("detectAtsFromUrl recognizes enterprise ATS hosts", () => {
+  assert.equal(detectAtsFromUrl("https://acme.taleo.net/careersection/2/jobsearch.ftl")?.atsType, "taleo")
+  assert.equal(detectAtsFromUrl("https://career4.successfactors.com/career?company=acme")?.atsType, "successfactors")
+  assert.equal(detectAtsFromUrl("https://eeho.fa.us2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1/")?.atsType, "oraclecloud")
+  assert.equal(detectAtsFromUrl("https://acme.jobs.phenompeople.com/us/en")?.atsType, "phenom")
+  assert.equal(detectAtsFromUrl("https://acme.eightfold.ai/careers")?.atsType, "eightfold")
+  assert.equal(detectAtsFromUrl("https://acme.avature.net/careers")?.atsType, "avature")
+  assert.equal(detectAtsFromUrl("https://workforcenow.adp.com/mascsr/default/mdf/recruitment/recruitment.html")?.atsType, "adp")
+  assert.equal(detectAtsFromUrl("https://recruiting.ultipro.com/ACM1000/jobboard")?.atsType, "ukg")
+  assert.equal(detectAtsFromUrl("https://apply.workable.com/acme/")?.atsType, "workable")
+  assert.equal(detectAtsFromUrl("https://acme.recruitee.com/o/software-engineer")?.atsType, "recruitee")
+})
+
 test("detectAts prefers apply URL evidence over careers URL", () => {
   const detection = detectAts({
     careersUrl: "https://acme.com/careers",

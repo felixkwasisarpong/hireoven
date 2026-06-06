@@ -10,9 +10,16 @@ export type NormalizedAtsProvider =
   | "smartrecruiters"
   | "bamboohr"
   | "jobvite"
+  | "workable"
+  | "recruitee"
   | "successfactors"
   | "taleo"
   | "oraclecloud"
+  | "phenom"
+  | "eightfold"
+  | "avature"
+  | "adp"
+  | "ukg"
   | "custom"
 
 export type AtsUrlNormalization = {
@@ -64,6 +71,12 @@ function stripTransientParams(url: URL): URL {
   return next
 }
 
+function isAssetLikePath(pathname: string): boolean {
+  return /\.(?:avif|css|gif|ico|jpeg|jpg|js|map|png|svg|webp|woff2?|ttf|eot)$/i.test(
+    pathname
+  )
+}
+
 function trimTrailingSlash(url: string): string {
   const parsed = new URL(url)
   if (parsed.pathname === "/" || parsed.pathname === "") return parsed.origin
@@ -96,9 +109,38 @@ export function normalizeAtsUrl(
     }
   }
 
+  const host = url.hostname.toLowerCase()
+  const pathParts = url.pathname.split("/").filter(Boolean)
+  const hintedProvider = context?.atsType?.toLowerCase() ?? ""
+
+  if (host === "greenhouse.io" || host.endsWith(".greenhouse.io")) {
+    const normalized = normalizeGreenhouseBoardUrl(url.toString())
+    if (normalized.hasValidityToken || !normalized.normalizedUrl) {
+      const temporary = isTemporaryCareersUrl(originalUrl)
+      return {
+        provider: "custom",
+        originalUrl,
+        normalizedUrl: originalUrl,
+        atsIdentifier: null,
+        reason: normalized.hasValidityToken || temporary ? "temporary_or_share_url" : normalized.reason,
+        shouldPersist: false,
+      }
+    }
+    return {
+      provider: "greenhouse",
+      originalUrl,
+      normalizedUrl: normalized.normalizedUrl,
+      atsIdentifier: normalized.boardToken,
+      reason: normalized.reason,
+      shouldPersist: true,
+    }
+  }
+
   // Hard-reject URLs that carry transient/share/embed signals — those reflect
   // a single browsing session rather than a stable careers entry point. The
-  // crawler must never store these as the canonical URL for a company.
+  // crawler must never store these as the canonical URL for a company. This
+  // runs after Greenhouse so embed script URLs with a stable `for=` board token
+  // can still normalize to the durable board URL.
   if (isTemporaryCareersUrl(originalUrl)) {
     return {
       provider: "custom",
@@ -107,22 +149,6 @@ export function normalizeAtsUrl(
       atsIdentifier: null,
       reason: "temporary_or_share_url",
       shouldPersist: false,
-    }
-  }
-
-  const host = url.hostname.toLowerCase()
-  const pathParts = url.pathname.split("/").filter(Boolean)
-  const hintedProvider = context?.atsType?.toLowerCase() ?? ""
-
-  if (host === "greenhouse.io" || host.endsWith(".greenhouse.io")) {
-    const normalized = normalizeGreenhouseBoardUrl(url.toString())
-    return {
-      provider: "greenhouse",
-      originalUrl,
-      normalizedUrl: normalized.normalizedUrl ?? stripTransientParams(url).toString(),
-      atsIdentifier: normalized.boardToken,
-      reason: normalized.reason,
-      shouldPersist: Boolean(normalized.normalizedUrl),
     }
   }
 
@@ -176,7 +202,31 @@ export function normalizeAtsUrl(
     }
   }
 
-  if (host.includes("myworkdayjobs.com")) {
+  if (host === "apply.workable.com") {
+    const company = cleanIdentifier(pathParts[0])
+    return {
+      provider: "workable",
+      originalUrl,
+      normalizedUrl: company ? `https://apply.workable.com/${encodeURIComponent(company)}/` : url.origin,
+      atsIdentifier: company,
+      reason: company ? "workable_company_url" : "workable_missing_company",
+      shouldPersist: Boolean(company),
+    }
+  }
+
+  if (host.endsWith(".recruitee.com") && host !== "recruitee.com") {
+    const company = cleanIdentifier(host.replace(/\.recruitee\.com$/, ""))
+    return {
+      provider: "recruitee",
+      originalUrl,
+      normalizedUrl: company ? `https://${company}.recruitee.com/` : url.origin,
+      atsIdentifier: company,
+      reason: company ? "recruitee_company_url" : "recruitee_missing_company",
+      shouldPersist: Boolean(company),
+    }
+  }
+
+  if (host.includes("myworkdayjobs.com") || host.endsWith(".workdayjobs.com")) {
     const sitePath = workdaySitePath(url)
     // Store tenant/site as identifier so canonical-careers-url.ts can reconstruct
     // the Workday URL when the stored careers_url is stale.
@@ -195,6 +245,11 @@ export function normalizeAtsUrl(
 
   if (host === "icims.com" || host.endsWith(".icims.com")) {
     const clean = stripTransientParams(url)
+    const canonicalPath = clean.pathname.toLowerCase().startsWith("/jobs")
+      ? "/jobs/search"
+      : clean.pathname
+    clean.pathname = canonicalPath
+    if (canonicalPath === "/jobs/search") clean.search = ""
     return {
       provider: "icims",
       originalUrl,
@@ -222,20 +277,20 @@ export function normalizeAtsUrl(
   // SAP SuccessFactors hosted career portals — one of the career{N} shards
   // on .com or .eu, addressed by the `company` query param.
   const sfMatch = host.match(/^(career(?:1[0-2]?|[2-9]))\.successfactors\.(com|eu)$/)
-  if (sfMatch) {
+  if (sfMatch || host === "jobs.hr.cloud.sap") {
     const companyId = url.searchParams.get("company")
     const cleanedCompany =
       companyId && /^[a-z0-9][a-z0-9_-]{0,63}$/i.test(companyId.trim()) ? companyId.trim() : null
-    const normalized = cleanedCompany
+    const normalized = cleanedCompany && sfMatch
       ? `https://${sfMatch[1]}.successfactors.${sfMatch[2]}/career?company=${encodeURIComponent(cleanedCompany)}`
       : trimTrailingSlash(stripTransientParams(url).toString())
     return {
       provider: "successfactors",
       originalUrl,
       normalizedUrl: normalized,
-      atsIdentifier: cleanedCompany ? `${sfMatch[1]}.${sfMatch[2]}:${cleanedCompany}` : null,
-      reason: cleanedCompany ? "successfactors_company_url" : "successfactors_missing_company",
-      shouldPersist: Boolean(cleanedCompany),
+      atsIdentifier: cleanedCompany && sfMatch ? `${sfMatch[1]}.${sfMatch[2]}:${cleanedCompany}` : null,
+      reason: cleanedCompany && sfMatch ? "successfactors_company_url" : "successfactors_portal_url",
+      shouldPersist: Boolean(sfMatch ? cleanedCompany : host === "jobs.hr.cloud.sap"),
     }
   }
 
@@ -277,6 +332,73 @@ export function normalizeAtsUrl(
       atsIdentifier: shouldPersist ? `${pod}:${cleanedSite}` : null,
       reason: shouldPersist ? "oraclecloud_pod_site_url" : "oraclecloud_missing_site",
       shouldPersist,
+    }
+  }
+
+  if (host.endsWith(".phenompeople.com")) {
+    const clean = stripTransientParams(url)
+    const isInfra = host === "www.phenompeople.com" || host.startsWith("cdn.")
+    return {
+      provider: "phenom",
+      originalUrl,
+      normalizedUrl: trimTrailingSlash(clean.toString()),
+      atsIdentifier: cleanIdentifier(host.replace(/\.phenompeople\.com$/, "")),
+      reason: "phenom_portal_url",
+      shouldPersist: !isInfra && !isAssetLikePath(clean.pathname),
+    }
+  }
+
+  if (host.endsWith(".eightfold.ai")) {
+    const clean = stripTransientParams(url)
+    const isInfra = host === "eightfold.ai" || host === "www.eightfold.ai" || host.startsWith("cdn.")
+    return {
+      provider: "eightfold",
+      originalUrl,
+      normalizedUrl: trimTrailingSlash(clean.toString()),
+      atsIdentifier: cleanIdentifier(host.replace(/\.eightfold\.ai$/, "")),
+      reason: "eightfold_portal_url",
+      shouldPersist: !isInfra && !isAssetLikePath(clean.pathname),
+    }
+  }
+
+  if (host.endsWith(".avature.net")) {
+    const clean = stripTransientParams(url)
+    const isInfra = host === "avature.net" || host === "www.avature.net" || host.startsWith("cdn.")
+    return {
+      provider: "avature",
+      originalUrl,
+      normalizedUrl: trimTrailingSlash(clean.toString()),
+      atsIdentifier: cleanIdentifier(host.replace(/\.avature\.net$/, "")),
+      reason: "avature_portal_url",
+      shouldPersist: !isInfra && !isAssetLikePath(clean.pathname),
+    }
+  }
+
+  if (
+    host === "workforcenow.adp.com" ||
+    host === "recruiting.adp.com" ||
+    host.endsWith(".adpemployment.com")
+  ) {
+    const clean = stripTransientParams(url)
+    return {
+      provider: "adp",
+      originalUrl,
+      normalizedUrl: trimTrailingSlash(clean.toString()),
+      atsIdentifier: cleanIdentifier(url.searchParams.get("cid")) ?? cleanIdentifier(pathParts[0]),
+      reason: "adp_recruiting_url",
+      shouldPersist: true,
+    }
+  }
+
+  if (host === "recruiting.ultipro.com" || host === "recruiting2.ultipro.com" || host.endsWith(".ukg.net")) {
+    const clean = stripTransientParams(url)
+    return {
+      provider: "ukg",
+      originalUrl,
+      normalizedUrl: trimTrailingSlash(clean.toString()),
+      atsIdentifier: cleanIdentifier(pathParts[0]) ?? cleanIdentifier(host.split(".")[0]),
+      reason: "ukg_recruiting_url",
+      shouldPersist: true,
     }
   }
 
