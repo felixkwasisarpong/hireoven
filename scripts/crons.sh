@@ -47,7 +47,7 @@ run() {
 # waas-ingest        15 */6 * * *      run api/cron/waas-ingest
 # discover-companies 0 5 * * *         run api/cron/discover-companies
 # discover-tenants   0 */2 * * *       run api/cron/discover-tenants
-# careers-url-discovery 30 */4 * * *   run api/cron/careers-url-discovery
+# careers-url-discovery 30 */4 * * *   CAREERS_DISCOVERY_BATCH=10 bash scripts/crons.sh careers-url-discovery
 # glassdoor-discovery 30 5 * * *       run api/cron/glassdoor-discovery
 # builtin-discovery   0 */4 * * *       run api/cron/builtin-discovery
 # signal-api-webhooks * * * * *        run api/cron/signal-api-webhooks
@@ -78,7 +78,7 @@ case "${1:-}" in
   waas-ingest)       run api/cron/waas-ingest ;;
   discover-companies) run api/cron/discover-companies ;;
   discover-tenants)  run api/cron/discover-tenants ;;
-  careers-url-discovery) run api/cron/careers-url-discovery ;;
+  careers-url-discovery) run "api/cron/careers-url-discovery?batch=${CAREERS_DISCOVERY_BATCH:-10}" ;;
   glassdoor-discovery) run api/cron/glassdoor-discovery ;;
   builtin-discovery) run api/cron/builtin-discovery ;;
   signal-api-webhooks) run api/cron/signal-api-webhooks ;;
@@ -103,6 +103,7 @@ case "${1:-}" in
     run api/cron/adzuna-ingest
     run api/cron/jsearch-ingest
     run api/cron/waas-ingest
+    run "api/cron/careers-url-discovery?batch=${CAREERS_DISCOVERY_BATCH:-10}"
     run api/cron/glassdoor-discovery
     run api/cron/signal-api-webhooks
     ;;
@@ -115,7 +116,7 @@ case "${1:-}" in
     echo "  rejection-patterns  burnout-classify  salary-digest  warn-act"
     echo "  cohort-aggregate  deliver-checkins  blog-generate  dice-ingest"
     echo "  adzuna-ingest  jsearch-ingest  waas-ingest  discover-companies  discover-tenants"
-    echo "  glassdoor-discovery  signal-api-webhooks"
+    echo "  careers-url-discovery  glassdoor-discovery  signal-api-webhooks"
     exit 1
     ;;
 esac
