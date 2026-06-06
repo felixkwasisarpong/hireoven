@@ -49,6 +49,7 @@ import {
 import { isScoreFreshForResume } from "@/lib/matching/score-freshness"
 import { cn } from "@/lib/utils"
 import ApplyButton from "@/components/jobs/ApplyButton"
+import ReferralDraftButton from "@/components/jobs/ReferralDraftButton"
 import type { Company, Job, JobMatchScore, Skills } from "@/types"
 
 type Props = { params: Promise<{ id: string }> }
@@ -638,6 +639,12 @@ export default async function DashboardJobDetailPage({ params }: Props) {
                 applyUrl={page.apply_url}
                 matchScore={initialMatchScore?.overall_score ?? null}
                 className="inline-flex items-center gap-2 rounded-xl bg-orange-500 px-6 py-3 text-[14px] font-bold text-white shadow-[0_4px_24px_rgba(249,115,22,0.35)] transition hover:bg-orange-400 active:scale-[0.98] disabled:opacity-70"
+              />
+              <ReferralDraftButton
+                jobId={id}
+                jobTitle={displayTitle}
+                companyName={company?.name ?? "Company"}
+                applyUrl={page.apply_url}
               />
             </div>
           </div>

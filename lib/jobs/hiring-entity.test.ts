@@ -17,6 +17,14 @@ test("extractLikelyHiringEntityFromDescription: extracts explicit end-client nam
   assert.equal(result?.source, "end_client_label")
 })
 
+test("extractLikelyHiringEntityFromDescription: strips recruiter CTA text from client name", () => {
+  const result = extractLikelyHiringEntityFromDescription(
+    "End client: Anaplan, please send an email with your resume and availability."
+  )
+
+  assert.equal(result?.name, "Anaplan")
+})
+
 test("resolveHiringEntitySignal: marks staffing intermediary when client differs", () => {
   const signal = resolveHiringEntitySignal({
     companyName: "Acme Talent Solutions",
@@ -57,5 +65,23 @@ test("readHiringEntitySignalFromRawData + resolveDisplayCompanyName", () => {
   assert.equal(
     resolveDisplayCompanyName({ companyName: "Tech Recruiters LLC", rawData }),
     "NVIDIA"
+  )
+})
+
+test("resolveDisplayCompanyName: strips stored recruiter CTA text", () => {
+  const rawData = {
+    hiring_entity: {
+      display_name: "Anaplan, please send an email",
+      end_client_name: "Anaplan, please send an email",
+      staffing_company_name: "Acme Talent Solutions",
+      is_staffing_intermediary: true,
+      confidence: 0.82,
+      source: "end_client_label",
+    },
+  }
+
+  assert.equal(
+    resolveDisplayCompanyName({ companyName: "Acme Talent Solutions", rawData }),
+    "Anaplan"
   )
 })
