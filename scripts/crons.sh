@@ -27,7 +27,8 @@ run() {
 # crawl              0 * * * *         run api/crawl
 # crawl-full         15 2 * * *        run api/crawl?sweep=all
 # crawl-full-non-ats 45 2 * * *        run api/crawl?sweep=all&scope=non_ats
-# crawl-enrichment   30 */2 * * *      run api/crawl/enrichment
+# crawl-enrichment   manual only       run api/crawl/enrichment  # AI-backed; disabled by default
+# job-description-enrichment 10 */2 * * * run api/cron/job-description-enrichment?batch=100&concurrency=4
 # ghost-scan         0 */6 * * *       run api/cron/ghost-scan
 # timing-refresh     0 */6 * * *       run api/cron/timing-refresh
 # cohort-detect      0 */4 * * *       run api/cron/cohort-detect
@@ -59,6 +60,7 @@ case "${1:-}" in
   crawl-full)        run 'api/crawl?sweep=all' ;;
   crawl-full-non-ats) run 'api/crawl?sweep=all&scope=non_ats' ;;
   crawl-enrichment)  run api/crawl/enrichment ;;
+  job-description-enrichment) run "api/cron/job-description-enrichment?batch=${JOB_DESCRIPTION_ENRICHMENT_BATCH:-100}&concurrency=${JOB_DESCRIPTION_ENRICHMENT_CONCURRENCY:-4}" ;;
   ghost-scan)        run api/cron/ghost-scan ;;
   timing-refresh)    run api/cron/timing-refresh ;;
   cohort-detect)     run api/cron/cohort-detect ;;
@@ -85,7 +87,7 @@ case "${1:-}" in
   all)
     run 'api/alerts/recent-jobs?segment=with-resume'
     run api/crawl
-    run api/crawl/enrichment
+    run "api/cron/job-description-enrichment?batch=${JOB_DESCRIPTION_ENRICHMENT_BATCH:-100}&concurrency=${JOB_DESCRIPTION_ENRICHMENT_CONCURRENCY:-4}"
     run api/cron/ghost-scan
     run api/cron/timing-refresh
     run api/cron/cohort-detect
@@ -111,7 +113,7 @@ case "${1:-}" in
     echo "Usage: $0 <name|all>"
     echo ""
     echo "Available:"
-    echo "  recent-jobs  crawl  crawl-full  crawl-full-non-ats  crawl-enrichment  ghost-scan  timing-refresh"
+    echo "  recent-jobs  crawl  crawl-full  crawl-full-non-ats  crawl-enrichment  job-description-enrichment  ghost-scan  timing-refresh"
     echo "  cohort-detect  cohort-match  layoffs-fyi  health-scores"
     echo "  rejection-patterns  burnout-classify  salary-digest  warn-act"
     echo "  cohort-aggregate  deliver-checkins  blog-generate  dice-ingest"
