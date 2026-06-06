@@ -12,6 +12,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getPostgresPool } from "@/lib/postgres/server"
+import { sqlPublishedJob } from "@/lib/jobs/publication"
 import type { ApplyAgentJob } from "@/lib/apex/apply-agent/types"
 
 export const runtime = "nodejs"
@@ -77,6 +78,7 @@ export async function GET(request: NextRequest) {
 
   const conditions: string[] = [
     "j.is_active = true",
+    sqlPublishedJob("j"),
     "j.apply_url IS NOT NULL",
     // Fresh-posting guard: by default only return roles discovered in the
     // last 24h so "top matched" prioritizes live opportunities.

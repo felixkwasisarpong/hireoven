@@ -7,9 +7,19 @@ export type AtsType =
   | "ashby"
   | "workday"
   | "icims"
+  | "taleo"
+  | "successfactors"
+  | "oraclecloud"
+  | "phenom"
+  | "eightfold"
+  | "avature"
+  | "adp"
+  | "ukg"
   | "smartrecruiters"
   | "bamboohr"
   | "jobvite"
+  | "workable"
+  | "recruitee"
   | "custom"
 
 export type AtsDetection = {
@@ -58,12 +68,51 @@ export function detectAtsFromUrl(rawUrl: string): AtsDetection | null {
     return { atsType: "ashby", atsIdentifier: identifier, confidence: "high" }
   }
 
-  if (host.includes("myworkdayjobs.com")) {
+  if (host.includes("myworkdayjobs.com") || host.endsWith(".workdayjobs.com")) {
     return { atsType: "workday", atsIdentifier: null, confidence: "high" }
   }
 
   if (host.endsWith(".icims.com") || host === "icims.com") {
     return { atsType: "icims", atsIdentifier: null, confidence: "high" }
+  }
+
+  if (host.endsWith(".taleo.net")) {
+    return { atsType: "taleo", atsIdentifier: cleanIdentifier(host.replace(/\.taleo\.net$/, "")), confidence: "high" }
+  }
+
+  if (
+    /^(career(?:1[0-2]?|[2-9]))\.successfactors\.(com|eu)$/.test(host) ||
+    host === "jobs.hr.cloud.sap"
+  ) {
+    return { atsType: "successfactors", atsIdentifier: cleanIdentifier(parsed.searchParams.get("company")), confidence: "high" }
+  }
+
+  if (host.endsWith(".oraclecloud.com") && parsed.pathname.includes("/CandidateExperience/")) {
+    return { atsType: "oraclecloud", atsIdentifier: null, confidence: "high" }
+  }
+
+  if (host.endsWith(".phenompeople.com")) {
+    return { atsType: "phenom", atsIdentifier: cleanIdentifier(host.split(".")[0]), confidence: "high" }
+  }
+
+  if (host.endsWith(".eightfold.ai")) {
+    return { atsType: "eightfold", atsIdentifier: cleanIdentifier(host.split(".")[0]), confidence: "high" }
+  }
+
+  if (host.endsWith(".avature.net")) {
+    return { atsType: "avature", atsIdentifier: cleanIdentifier(host.split(".")[0]), confidence: "high" }
+  }
+
+  if (
+    host === "workforcenow.adp.com" ||
+    host === "recruiting.adp.com" ||
+    host.endsWith(".adpemployment.com")
+  ) {
+    return { atsType: "adp", atsIdentifier: null, confidence: "high" }
+  }
+
+  if (host === "recruiting.ultipro.com" || host === "recruiting2.ultipro.com" || host.endsWith(".ukg.net")) {
+    return { atsType: "ukg", atsIdentifier: null, confidence: "high" }
   }
 
   if (host === "jobs.smartrecruiters.com") {
@@ -74,6 +123,16 @@ export function detectAtsFromUrl(rawUrl: string): AtsDetection | null {
   if (host === "jobs.jobvite.com") {
     const identifier = cleanIdentifier(pathParts[0])
     return { atsType: "jobvite", atsIdentifier: identifier, confidence: "high" }
+  }
+
+  if (host === "apply.workable.com") {
+    const identifier = cleanIdentifier(pathParts[0])
+    return { atsType: "workable", atsIdentifier: identifier, confidence: "high" }
+  }
+
+  if (host.endsWith(".recruitee.com")) {
+    const identifier = cleanIdentifier(host.split(".")[0])
+    return { atsType: "recruitee", atsIdentifier: identifier, confidence: "high" }
   }
 
   if (host.endsWith(".bamboohr.com") || host === "bamboohr.com") {

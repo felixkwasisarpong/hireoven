@@ -3,6 +3,7 @@ import { dedupeFeedJobsBySignature } from "@/lib/jobs/feed-dedupe"
 import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
 import { scoreJobsForUser } from "@/lib/matching/batch-scorer"
 import { hasUsableMatchScore } from "@/lib/jobs/match-score-display"
+import { sqlPublishedJob } from "@/lib/jobs/publication"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { createClient } from "@/lib/supabase/server"
 import { formatEmploymentLabel, formatSalaryLabel } from "@/lib/jobs/normalization/view-model"
@@ -40,7 +41,11 @@ export async function GET(request: NextRequest) {
   // null-location remote jobs from US H1B-sponsoring employers (Nestle USA,
   // UT Houston, etc.) while still rejecting null-loc remotes from companies
   // with no US-sponsorship evidence.
-  const where: string[] = ["jobs.is_active = true", sqlJobLocatedInUsa("jobs", { companyAlias: "companies" })]
+  const where: string[] = [
+    "jobs.is_active = true",
+    sqlPublishedJob("jobs"),
+    sqlJobLocatedInUsa("jobs", { companyAlias: "companies" }),
+  ]
   const values: Array<string | number | boolean | string[]> = []
 
   const addParam = (value: string | number | boolean | string[]) => {
@@ -147,6 +152,7 @@ export async function GET(request: NextRequest) {
          FROM jobs
          LEFT JOIN companies ON companies.id = jobs.company_id
          WHERE jobs.is_active = true
+           AND ${sqlPublishedJob("jobs")}
            AND ${sqlJobLocatedInUsa("jobs", { companyAlias: "companies" })}
            AND jobs.first_detected_at >= $1`,
         [oneHourAgo]

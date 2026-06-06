@@ -21,6 +21,7 @@ import Navbar from "@/components/layout/Navbar"
 import CompanyLogo from "@/components/ui/CompanyLogo"
 import { EmployerHealthScore } from "@/components/employers/EmployerHealthScore"
 import { buildCompanyImmigrationProfile, formatProfilePercent, getProfileConfidenceLabel } from "@/lib/companies/immigration-profile"
+import { sqlPublishedJob } from "@/lib/jobs/publication"
 import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
 import { getPostgresPool, hasPostgresEnv } from "@/lib/postgres/server"
 import { cn } from "@/lib/utils"
@@ -204,7 +205,10 @@ async function loadCompany(id: string) {
               salary_min, salary_max, salary_currency, sponsors_h1b, sponsorship_score,
               first_detected_at, apply_url, skills
        FROM jobs
-       WHERE company_id = $1::uuid AND is_active = true AND ${sqlJobLocatedInUsa("jobs")}
+       WHERE company_id = $1::uuid
+         AND is_active = true
+         AND ${sqlPublishedJob("jobs")}
+         AND ${sqlJobLocatedInUsa("jobs")}
        ORDER BY first_detected_at DESC NULLS LAST
        LIMIT 12`,
       [id]

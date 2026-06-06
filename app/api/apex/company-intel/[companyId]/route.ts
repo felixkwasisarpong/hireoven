@@ -8,6 +8,7 @@
  */
 
 import { NextResponse } from "next/server"
+import { sqlPublishedJob } from "@/lib/jobs/publication"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { createClient } from "@/lib/supabase/server"
 import { deriveCompanyIntel, buildCompanyIntelSummary } from "@/lib/apex/company-intel/aggregator"
@@ -36,7 +37,9 @@ export async function GET(
       `SELECT id, title, first_detected_at, last_seen_at, is_active, is_remote,
               sponsors_h1b, sponsorship_score, skills, normalized_title
        FROM jobs
-       WHERE company_id = $1 AND is_active = true
+       WHERE company_id = $1
+         AND is_active = true
+         AND ${sqlPublishedJob("jobs")}
        ORDER BY first_detected_at DESC
        LIMIT 100`,
       [companyId]

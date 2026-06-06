@@ -38,6 +38,7 @@ import {
   readExtensionJsonBody,
   requireExtensionAuth,
 } from "@/lib/extension/auth"
+import { publicationStatusForJob } from "@/lib/jobs/publication"
 
 export const runtime = "nodejs"
 
@@ -325,6 +326,10 @@ async function insertJob(
     applyMethod: applyMethod ?? null,
     metadata: job.metadata,
   }
+  const publicationStatus = publicationStatusForJob({
+    description: job.description,
+    skills: [],
+  })
   const inserted = await pool
     .query<{ id: string }>(
       `INSERT INTO jobs (
@@ -332,14 +337,14 @@ async function insertJob(
          apply_url, external_id,
          is_remote, is_hybrid, is_active,
          employment_type,
-         raw_data, posted_at,
+         publication_status, raw_data, posted_at,
          first_detected_at, last_seen_at
        ) VALUES (
          $1, $2, $3, $4, $5,
          $6, $7,
          $8, $9, true,
          $10,
-         $11::jsonb, $12::timestamptz,
+         $11, $12::jsonb, $13::timestamptz,
          NOW(), NOW()
        )
        RETURNING id`,
@@ -354,6 +359,7 @@ async function insertJob(
         isRemote,
         isHybrid,
         job.employmentType || null,
+        publicationStatus,
         JSON.stringify(rawData),
         job.postedAt,
       ],
@@ -404,13 +410,15 @@ async function touchJob(
   // Handshake brief: never lose metadata.deadline. Preserve it explicitly.
   const deadlinePatch =
     job.site === "handshake" && job.metadata?.deadline
-      ? `, raw_data = raw_data || jsonb_build_object('metadata', COALESCE(raw_data->'metadata', '{}'::jsonb) || jsonb_build_object('deadline', $4::text))`
+      ? `, raw_data = raw_data || jsonb_build_object('metadata', COALESCE(raw_data->'metadata', '{}'::jsonb) || jsonb_build_object('deadline', $6::text))`
       : ""
 
   const params: unknown[] = [
     jobId,
     JSON.stringify(patch),
     job.postedAt,
+    job.description || null,
+    publicationStatusForJob({ description: job.description, skills: [] }),
   ]
   if (deadlinePatch) params.push(String(job.metadata.deadline))
 
@@ -419,6 +427,15 @@ async function touchJob(
       `UPDATE jobs
        SET raw_data = COALESCE(raw_data, '{}'::jsonb) || $2::jsonb,
            posted_at = COALESCE(${earliest}, posted_at),
+           description = CASE
+             WHEN lower(coalesce(trim(description), '')) IN ('', 'no job found', 'no job found.')
+             THEN COALESCE(NULLIF(trim($4), ''), description)
+             ELSE description
+           END,
+           publication_status = CASE
+             WHEN $5 = 'published' THEN 'published'
+             ELSE publication_status
+           END,
            last_seen_at = NOW(),
            updated_at = NOW()${deadlinePatch}
        WHERE id = $1::uuid`,

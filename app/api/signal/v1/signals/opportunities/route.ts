@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { sqlPublishedJob } from "@/lib/jobs/publication"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { requireSignalApiAuth } from "@/lib/signal-api/auth"
 import { signalApiError, signalApiJson } from "@/lib/signal-api/http"
@@ -88,6 +89,7 @@ export async function GET(request: Request) {
          FROM jobs j
          LEFT JOIN companies c ON c.id = j.company_id
          WHERE j.id = $1
+           AND ${sqlPublishedJob("j")}
            AND COALESCE(j.raw_data->>'signalTenantId', '') = $2
          LIMIT 1`,
         [jobId, auth.tenantId]
@@ -114,6 +116,7 @@ export async function GET(request: Request) {
              SELECT 1
              FROM jobs j
              WHERE j.company_id = c.id
+               AND ${sqlPublishedJob("j")}
                AND COALESCE(j.raw_data->>'signalTenantId', '') = $2
            )
          LIMIT 1`,
@@ -172,6 +175,7 @@ export async function GET(request: Request) {
        FROM jobs j
        LEFT JOIN companies c ON c.id = j.company_id
        WHERE j.is_active = true
+         AND ${sqlPublishedJob("j")}
          AND ($1::uuid IS NULL OR j.id != $1::uuid)
          AND j.skills && $2::text[]
          AND COALESCE(j.raw_data->>'signalTenantId', '') = $3
@@ -209,6 +213,7 @@ export async function GET(request: Request) {
        FROM companies c
        JOIN jobs j ON j.company_id = c.id
                   AND j.is_active = true
+                  AND ${sqlPublishedJob("j")}
                   AND j.skills && $1::text[]
                   AND COALESCE(j.raw_data->>'signalTenantId', '') = $4
        CROSS JOIN LATERAL (
@@ -244,6 +249,7 @@ export async function GET(request: Request) {
          SELECT j.id AS job_id, j.skills, UNNEST(j.skills) AS skill
          FROM jobs j
          WHERE j.is_active = true
+           AND ${sqlPublishedJob("j")}
            AND NOT (j.skills @> $1::text[])
            AND COALESCE(j.raw_data->>'signalTenantId', '') = $2
        ) sub

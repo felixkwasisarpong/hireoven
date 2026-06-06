@@ -19,6 +19,7 @@ import { fetchEmbeddedGreenhouseJobDetails } from "@/lib/extension/embedded-gree
 import { isPlaceholderJobTitle } from "@/lib/extension/job-fingerprint"
 import { enrichJobWithNormalization } from "@/lib/jobs/enrich-job-with-normalization"
 import { isBlockedApplyUrl, isBlockedCrawlTitle } from "@/lib/jobs/filters"
+import { publicationStatusForJob } from "@/lib/jobs/publication"
 import { getPostgresPool } from "@/lib/postgres/server"
 import {
   extensionError,
@@ -419,6 +420,7 @@ export async function POST(request: Request) {
           apply_url, is_remote, is_hybrid, is_active,
           external_id,
           salary_min, salary_max,
+          publication_status,
           raw_data,
           first_detected_at, last_seen_at
         ) VALUES (
@@ -426,7 +428,8 @@ export async function POST(request: Request) {
           $5, $6, $7, true,
           $8,
           $9, $10,
-          $11::jsonb,
+          $11,
+          $12::jsonb,
           NOW(), NOW()
         )
         RETURNING id`,
@@ -441,6 +444,7 @@ export async function POST(request: Request) {
           externalJobId,
           salaryMin,
           salaryMax,
+          publicationStatusForJob({ description: descriptionText, skills: [] }),
           JSON.stringify(extensionRawData),
         ]
       )
@@ -478,6 +482,10 @@ export async function POST(request: Request) {
              is_remote = CASE WHEN is_remote THEN true ELSE $7 END,
              is_hybrid = CASE WHEN is_hybrid THEN true ELSE $8 END,
              external_id = COALESCE(NULLIF(trim(external_id), ''), $9),
+             publication_status = CASE
+               WHEN $11 = 'published' THEN 'published'
+               ELSE publication_status
+             END,
              last_seen_at = NOW(),
              updated_at = NOW()
          WHERE id = $1::uuid`,
@@ -492,6 +500,7 @@ export async function POST(request: Request) {
           isHybrid,
           externalJobId,
           jobTitle,
+          publicationStatusForJob({ description: descriptionText, skills: [] }),
         ]
       )
       .catch(() => null)

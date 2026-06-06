@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server"
 import { createClient } from "@/lib/supabase/server"
+import { sqlPublishedJob } from "@/lib/jobs/publication"
 import { getPostgresPool } from "@/lib/postgres/server"
 
 /**
@@ -73,6 +74,7 @@ export async function GET(req: NextRequest) {
              JOIN job_match_scores jms ON jms.job_id = j.id AND jms.user_id = $1
              LEFT JOIN companies c ON c.id = j.company_id
              WHERE j.created_at >= $2 AND jms.overall_score >= $3
+               AND ${sqlPublishedJob("j")}
              ORDER BY jms.overall_score DESC
              LIMIT 5`,
             [userId, checkedAt, MIN_ALERT_SCORE],

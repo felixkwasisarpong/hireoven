@@ -58,6 +58,7 @@ CRON_SECRET=REPLACE_ME
 # Re-enable when you want AI-authored blog drafts.
 # 0 8 * * 1-5    cd $HIREOVEN_REPO && bash scripts/crons.sh blog-generate      >>/var/log/hireoven/blog-generate.log 2>&1
   0 */6 * * *      cd $HIREOVEN_REPO && bash scripts/crons.sh dice-ingest        >>/var/log/hireoven/dice-ingest.log 2>&1
+ 30 */4 * * *      cd $HIREOVEN_REPO && CAREERS_DISCOVERY_BATCH=10 bash scripts/crons.sh careers-url-discovery >>/var/log/hireoven/careers-url-discovery.log 2>&1
 
 # ── First-time bootstrap commands (run once, then delete this comment block) ──
 #   sudo mkdir -p /var/log/hireoven && sudo chown $USER:$USER /var/log/hireoven

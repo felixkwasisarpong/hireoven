@@ -4,6 +4,7 @@ import {
   normalizePersistedJobRecordWithAI,
   type PersistedJobForNormalization,
 } from "@/lib/jobs/normalization"
+import { publicationStatusForJob } from "@/lib/jobs/publication"
 import type { Job } from "@/types"
 
 /** Columns persisted by normalizePersistedJobRecord.apply (same set as admin renormalize). */
@@ -23,6 +24,7 @@ const JOB_NORMALIZATION_COLUMNS = new Set([
   "requires_authorization",
   "visa_language_detected",
   "skills",
+  "publication_status",
   "raw_data",
   "updated_at",
 ])
@@ -89,6 +91,10 @@ export async function enrichJobWithNormalization(
 
   const nextPayload: Record<string, unknown> = {
     ...normalization.nextColumns,
+    publication_status: publicationStatusForJob({
+      description: normalization.nextColumns.description,
+      skills: normalization.nextColumns.skills,
+    }),
     raw_data: {
       ...existingRawData,
       ...normalization.rawSnapshot,

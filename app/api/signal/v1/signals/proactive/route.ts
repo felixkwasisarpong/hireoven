@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { sqlPublishedJob } from "@/lib/jobs/publication"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { requireSignalApiAuth } from "@/lib/signal-api/auth"
 import { signalApiError, signalApiJson } from "@/lib/signal-api/http"
@@ -220,6 +221,7 @@ export async function GET(request: Request) {
              AND score.computed_at >= NOW() - INTERVAL '72 hours'
              AND score.overall_score >= 78
              AND j.is_active = true
+             AND ${sqlPublishedJob("j")}
              AND COALESCE(j.raw_data->>'signalTenantId', '') = $2
            ORDER BY score.job_id, score.computed_at DESC
          ) ranked
@@ -291,6 +293,7 @@ export async function GET(request: Request) {
                    AND COALESCE(j.raw_data->>'signalTenantId', '') = $2
          WHERE w.user_id = $1
            AND j.is_active = true
+           AND ${sqlPublishedJob("j")}
            AND j.first_detected_at >= NOW() - INTERVAL '7 days'
          GROUP BY c.id, c.name
          HAVING COUNT(j.id) >= 2
@@ -304,6 +307,7 @@ export async function GET(request: Request) {
            SELECT UNNEST(j.skills) AS skill
            FROM jobs j
            WHERE j.is_active = true
+             AND ${sqlPublishedJob("j")}
              AND j.skills IS NOT NULL
              AND j.first_detected_at >= NOW() - INTERVAL '30 days'
              AND COALESCE(j.raw_data->>'signalTenantId', '') = $2

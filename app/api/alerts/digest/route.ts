@@ -4,6 +4,7 @@ import { logApiUsage } from "@/lib/admin/usage"
 import { getEmailCompanyLogoUrl, getHireovenEmailLogoUrl, getHireovenJobDetailUrl, renderEmailExtensionFooter } from "@/lib/email/branding"
 import { getAlertsFromEmail } from "@/lib/email/identity"
 import { requireCronAuth } from "@/lib/env"
+import { sqlPublishedJob } from "@/lib/jobs/publication"
 import { matchesLocationFilter } from "@/lib/jobs/search-match"
 import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
 import { getPostgresPool } from "@/lib/postgres/server"
@@ -210,6 +211,7 @@ async function fetchTopPicksForUser(
        WHERE s.user_id = $1
          AND s.overall_score >= $2
          AND j.is_active = true
+         AND ${sqlPublishedJob("j")}
          AND j.first_detected_at >= $3
        ORDER BY s.job_id, s.overall_score DESC, s.computed_at DESC
      )
@@ -271,6 +273,7 @@ export async function GET(request: NextRequest) {
      FROM jobs
      LEFT JOIN companies ON companies.id = jobs.company_id
      WHERE jobs.is_active = true
+       AND ${sqlPublishedJob("jobs")}
        AND ${sqlJobLocatedInUsa("jobs")}
        AND jobs.first_detected_at >= $1
      ORDER BY jobs.first_detected_at DESC`,
