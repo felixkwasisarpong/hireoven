@@ -33,6 +33,15 @@ const DEFAULT_MIN_DESCRIPTION_CHARS = Math.max(
   Number.parseInt(process.env.JOB_DESCRIPTION_ENRICHMENT_MIN_CHARS ?? "120", 10)
 )
 
+// Jobs claimed but left in `processing` longer than this are considered stale
+// (the run that claimed them crashed/was killed) and become eligible again.
+// Without this, a single interrupted batch strands those jobs in
+// pending_enrichment forever, so they never reach the public feed.
+const DEFAULT_STALE_PROCESSING_MS = Math.max(
+  60_000,
+  Number.parseInt(process.env.JOB_DESCRIPTION_ENRICHMENT_STALE_MS ?? "900000", 10)
+)
+
 type DescriptionEnrichmentJob = PersistedJobForNormalization & {
   updated_at?: string | null
 }
@@ -72,10 +81,21 @@ async function runWithConcurrency<T>(
   return Promise.all(tasks.map((task) => limit(task)))
 }
 
+function notProcessingOrStaleSql(intervalParam: string): string {
+  return `(
+        COALESCE(raw_data->'description_enrichment'->>'status', '') <> 'processing'
+        OR COALESCE(
+             (raw_data->'description_enrichment'->>'processing_started_at')::timestamptz,
+             'epoch'::timestamptz
+           ) < NOW() - make_interval(secs => ${intervalParam}::float / 1000)
+      )`
+}
+
 async function fetchCandidateIds(
   pool: Pool,
   limit: number,
-  maxAttempts: number
+  maxAttempts: number,
+  staleMs: number
 ): Promise<string[]> {
   const { rows } = await pool.query<{ id: string }>(
     `SELECT id
@@ -84,10 +104,10 @@ async function fetchCandidateIds(
         AND COALESCE(publication_status, 'published') = 'pending_enrichment'
         AND apply_url IS NOT NULL
         AND COALESCE((raw_data->'description_enrichment'->>'attempts')::int, 0) < $1
-        AND COALESCE(raw_data->'description_enrichment'->>'status', '') <> 'processing'
+        AND ${notProcessingOrStaleSql("$3")}
       ORDER BY first_detected_at DESC NULLS LAST, updated_at DESC NULLS LAST
       LIMIT $2`,
-    [maxAttempts, limit]
+    [maxAttempts, limit, staleMs]
   )
   return rows.map((row) => row.id)
 }
@@ -96,7 +116,8 @@ async function claimJob(
   pool: Pool,
   id: string,
   runId: string,
-  maxAttempts: number
+  maxAttempts: number,
+  staleMs: number
 ): Promise<DescriptionEnrichmentJob | null> {
   const nowIso = toIsoNow()
   const { rows } = await pool.query<DescriptionEnrichmentJob>(
@@ -118,12 +139,12 @@ async function claimJob(
         AND COALESCE(publication_status, 'published') = 'pending_enrichment'
         AND apply_url IS NOT NULL
         AND COALESCE((raw_data->'description_enrichment'->>'attempts')::int, 0) < $4
-        AND COALESCE(raw_data->'description_enrichment'->>'status', '') <> 'processing'
+        AND ${notProcessingOrStaleSql("$5")}
       RETURNING id, title, normalized_title, location, apply_url, external_id, description,
                 employment_type, seniority_level, is_remote, is_hybrid, salary_min, salary_max,
                 salary_currency, sponsors_h1b, sponsorship_score, requires_authorization,
                 visa_language_detected, skills, first_detected_at, raw_data, updated_at`,
-    [id, runId, nowIso, maxAttempts]
+    [id, runId, nowIso, maxAttempts, staleMs]
   )
   return rows[0] ?? null
 }
@@ -254,6 +275,7 @@ export async function processPendingDescriptionEnrichmentBatch(options?: {
   maxAttempts?: number
   timeoutMs?: number
   minDescriptionChars?: number
+  staleProcessingMs?: number
 }): Promise<DescriptionEnrichmentResult> {
   const pool = options?.pool ?? getPostgresPool()
   const batchSize = Math.max(1, options?.batchSize ?? DEFAULT_BATCH_SIZE)
@@ -264,15 +286,19 @@ export async function processPendingDescriptionEnrichmentBatch(options?: {
     120,
     options?.minDescriptionChars ?? DEFAULT_MIN_DESCRIPTION_CHARS
   )
+  const staleProcessingMs = Math.max(
+    60_000,
+    options?.staleProcessingMs ?? DEFAULT_STALE_PROCESSING_MS
+  )
   const runId = `desc-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
 
-  const ids = await fetchCandidateIds(pool, batchSize, maxAttempts)
+  const ids = await fetchCandidateIds(pool, batchSize, maxAttempts, staleProcessingMs)
   if (ids.length === 0) {
     return { processed: 0, enriched: 0, published: 0, failed: 0, skipped: 0 }
   }
 
   const claimed = await runWithConcurrency(
-    ids.map((id) => () => claimJob(pool, id, runId, maxAttempts)),
+    ids.map((id) => () => claimJob(pool, id, runId, maxAttempts, staleProcessingMs)),
     concurrency
   )
   const jobs = claimed.filter((job): job is DescriptionEnrichmentJob => Boolean(job))

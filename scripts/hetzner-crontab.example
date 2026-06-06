@@ -38,7 +38,11 @@ CRON_SECRET=REPLACE_ME
 # 15 2 * * *      cd $HIREOVEN_REPO && bash scripts/crons.sh crawl-full         >>/var/log/hireoven/crawl-full.log 2>&1
 # Recommended deep sweep lane for crawler-only territory:
 # 45 2 * * *      flock -n /tmp/hireoven-crawl.lock -c 'cd $HIREOVEN_REPO && timeout 90m bash scripts/crons.sh crawl-full-non-ats >>/var/log/hireoven/crawl-full-non-ats.log 2>&1'
-*/15 * * * *       cd $HIREOVEN_REPO && JOB_DESCRIPTION_ENRICHMENT_BATCH=200 JOB_DESCRIPTION_ENRICHMENT_CONCURRENCY=4 bash scripts/crons.sh job-description-enrichment >>/var/log/hireoven/job-description-enrichment.log 2>&1
+# Description enrichment is the gate between harvested jobs and the public feed:
+# crawler-sourced jobs land as pending_enrichment and stay hidden until this runs.
+# Run every 5 min at higher batch/concurrency so it outpaces crawler inflow; flock
+# means a long run just skips the next tick instead of piling up overlapping runs.
+ */5 * * * *       flock -n /tmp/hireoven-enrich.lock -c 'cd $HIREOVEN_REPO && JOB_DESCRIPTION_ENRICHMENT_BATCH=500 JOB_DESCRIPTION_ENRICHMENT_CONCURRENCY=12 bash scripts/crons.sh job-description-enrichment >>/var/log/hireoven/job-description-enrichment.log 2>&1'
 # crawl-enrichment intentionally disabled — AI-backed legacy enrichment.
 # Re-enable only when you want to spend on AI normalization.
 # 30 */2 * * *    cd $HIREOVEN_REPO && bash scripts/crons.sh crawl-enrichment   >>/var/log/hireoven/crawl-enrichment.log 2>&1
