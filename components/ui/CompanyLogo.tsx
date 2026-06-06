@@ -9,7 +9,7 @@ import {
 } from "@/lib/companies/logo-url"
 import { isAtsDomain } from "@/lib/companies/ats-domains"
 
-const PLACEHOLDER_DOMAIN_RE = /\.(uscis-employer|lca-employer)$/i
+const PLACEHOLDER_DOMAIN_RE = /\.(uscis-employer|lca-employer|ats-placeholder|placeholder)$/i
 const MIN_CRISP_ICON_SIZE = 20
 
 function isPlaceholderDomain(value: string | null | undefined) {
