@@ -92,6 +92,8 @@ export async function GET(request: NextRequest) {
   // extension shows up immediately.
   const sortMode = sp.get("sort") ?? ""
   const isBestMatch = sortMode === "match"
+  const computeScores =
+    sp.get("computeScores") === "1" || sp.get("compute_scores") === "1"
   const limit = Math.min(100, parseInt(sp.get("limit") ?? "24", 10))
   const offset = Math.max(0, parseInt(sp.get("offset") ?? "0", 10))
   const minScore = Number(sp.get("minScore") ?? "0")
@@ -269,19 +271,16 @@ export async function GET(request: NextRequest) {
   const jobs = dedupeFeedJobsBySignature(filteredJobs)
   let scoreMap = new Map<string, JobMatchScore>()
 
-  // Best Match pays the full scoring cost (compute on cache miss). Every
-  // other sort reads from cache only — that's the bottleneck users feel
-  // when toggling between Best Match and Freshest, because each algorithm
-  // version bump invalidates the cache and Best Match's next load has to
-  // recompute ~120 scores in-process (6-24s). Freshest doesn't strictly
-  // need fresh scores; cards with no cached score just render without a
-  // match badge until the next Best Match pass back-fills the cache.
+  // Keep the feed's first paint cache-only. Computing match scores on cache
+  // misses can take 6-24s for ~120 jobs and makes the dashboard feel hung.
+  // Visible cards backfill missing scores through /api/match/score/batch after
+  // the feed has rendered. Explicit callers can opt into blocking computation.
   try {
     const ids = jobs.map((job) => job.id)
-    scoreMap = isBestMatch
+    scoreMap = isBestMatch && computeScores
       ? await scoreJobsForUser(user.id, ids)
       : await getCachedScoresForUser(user.id, ids)
-    console.log(`[match/feed] scored ${scoreMap.size}/${jobs.length} jobs for user ${user.id} (mode: ${isBestMatch ? "compute" : "cache-only"})`)
+    console.log(`[match/feed] scored ${scoreMap.size}/${jobs.length} jobs for user ${user.id} (mode: ${isBestMatch && computeScores ? "compute" : "cache-only"})`)
   } catch (error) {
     console.error("Failed to score personalized feed", error)
   }

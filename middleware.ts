@@ -45,6 +45,13 @@ function isCronAlertsPath(pathname: string): boolean {
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
+  // We do not use Server Actions. Malformed forwarded action requests without
+  // Origin can currently trip a Next 14 runtime error while trying to compute a
+  // digest. Reject them before they reach the app renderer.
+  if (request.headers.has("next-action") && !request.headers.get("origin")) {
+    return new NextResponse("Bad Request", { status: 400 })
+  }
+
   // Cron-authenticated alerts routes manage their own Bearer auth — pass through.
   if (isCronAlertsPath(pathname)) {
     return NextResponse.next({ request: { headers: request.headers } })
