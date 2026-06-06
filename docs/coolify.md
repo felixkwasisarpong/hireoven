@@ -48,6 +48,7 @@ The production **Dockerfile** installs **`curl`** in the final image so schedule
 | `/api/crawl` | `*/30 * * * *` | Crawl active companies (rolling queue) |
 | `/api/crawl?sweep=all` | `15 2 * * *` (optional) | Full sweep of active companies (heavier) |
 | `/api/crawl?sweep=all&scope=non_ats` | `45 2 * * *` (recommended with harvester) | Full sweep of crawler-owned/non-ATS companies |
+| `/api/cron/job-description-enrichment?batch=200&concurrency=4` | `*/15 * * * *` | Deterministically fills descriptions for pending crawler jobs so they can publish |
 | `/api/alerts/digest` | `0 8 * * *` (UTC) | Daily digest emails |
 | `/api/alerts/weekly` | `0 9 * * 1` (UTC) | Weekly digest emails |
 | `/api/alerts/recent-jobs?segment=with-resume` | `0 */6 * * *` | 75%+ resume-match recent jobs |
@@ -69,6 +70,28 @@ node -e "const b=process.env.CRON_SECRET,u=(process.env.APP_URL||'').replace(/\/
 ```
 
 In Coolify, add **`APP_URL`** (e.g. `https://hireoven.com`) and **`CRON_SECRET`** to the application’s environment so the scheduled task inherits them (or inline the URL and use a Coolify secret for the bearer token).
+
+### Harvester worker
+
+The production compose file includes a separate **`harvester`** service. This is required when `CRAWLER_SCOPE=non_ats`: the scheduled `/api/crawl` route handles non-ATS/company careers pages, while the harvester worker continuously claims ATS companies such as Workday, Greenhouse, Lever, Ashby, SmartRecruiters, iCIMS, Oracle, and USAJobs.
+
+GitHub Actions publishes two images on pushes to `main`:
+
+- `ghcr.io/felixkwasisarpong/hireoven:latest` from `Dockerfile`
+- `ghcr.io/felixkwasisarpong/hireoven-harvester:latest` from `Dockerfile.harvester`
+
+Keep these production env vars set in Coolify for the compose application:
+
+```bash
+HARVESTER_USE_NEW_ADAPTERS=true
+HARVESTER_INSTANCES=3
+HARVESTER_TOTAL_CLAIM_BUDGET=36
+HARVESTER_TICK_INTERVAL_MS=30000
+USAJOBS_API_KEY=...
+USAJOBS_USER_AGENT=...
+```
+
+Do not leave the harvester as a manually started `docker run` container long-term; it should be managed by the Coolify compose deployment so it is recreated with app deploys and receives the same production environment.
 
 ### Healthcheck (optional)
 

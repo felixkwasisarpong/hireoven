@@ -31,16 +31,16 @@ CRON_SECRET=REPLACE_ME
 # ── Schedules ───────────────────────────────────────────────────────────────────
 # m h dom mon dow  command
   0 * * * *        cd $HIREOVEN_REPO && bash scripts/crons.sh recent-jobs        >>/var/log/hireoven/recent-jobs.log 2>&1
-  0 * * * *        cd $HIREOVEN_REPO && bash scripts/crons.sh crawl              >>/var/log/hireoven/crawl.log 2>&1
+ 20 * * * *        flock -n /tmp/hireoven-crawl.lock -c 'cd $HIREOVEN_REPO && timeout 55m bash scripts/crons.sh crawl >>/var/log/hireoven/crawl.log 2>&1'
 # Cross-sector capture sweep (includes discovery + rotating state-balanced crawl).
  20 1 * * *        cd $HIREOVEN_REPO && npm run capture:companies:continuous:execute -- --states-per-run=4 --state-limit=36 --state-min-certified=8 >>/var/log/hireoven/capture-companies-continuous.log 2>&1
 # Optional deep sweep lane (heavier): run once nightly off-peak.
 # 15 2 * * *      cd $HIREOVEN_REPO && bash scripts/crons.sh crawl-full         >>/var/log/hireoven/crawl-full.log 2>&1
 # Recommended deep sweep lane for crawler-only territory:
-# 45 2 * * *      cd $HIREOVEN_REPO && bash scripts/crons.sh crawl-full-non-ats >>/var/log/hireoven/crawl-full-non-ats.log 2>&1
-# crawl-enrichment intentionally disabled — backfills descriptions via Claude
-# (lib/crawler/normalizer.ts uses Anthropic SDK). Re-enable by uncommenting and
-# only when you want to spend on AI normalization.
+# 45 2 * * *      flock -n /tmp/hireoven-crawl.lock -c 'cd $HIREOVEN_REPO && timeout 90m bash scripts/crons.sh crawl-full-non-ats >>/var/log/hireoven/crawl-full-non-ats.log 2>&1'
+*/15 * * * *       cd $HIREOVEN_REPO && JOB_DESCRIPTION_ENRICHMENT_BATCH=200 JOB_DESCRIPTION_ENRICHMENT_CONCURRENCY=4 bash scripts/crons.sh job-description-enrichment >>/var/log/hireoven/job-description-enrichment.log 2>&1
+# crawl-enrichment intentionally disabled — AI-backed legacy enrichment.
+# Re-enable only when you want to spend on AI normalization.
 # 30 */2 * * *    cd $HIREOVEN_REPO && bash scripts/crons.sh crawl-enrichment   >>/var/log/hireoven/crawl-enrichment.log 2>&1
   0 */6 * * *      cd $HIREOVEN_REPO && bash scripts/crons.sh ghost-scan         >>/var/log/hireoven/ghost-scan.log 2>&1
   0 */6 * * *      cd $HIREOVEN_REPO && bash scripts/crons.sh timing-refresh     >>/var/log/hireoven/timing-refresh.log 2>&1
