@@ -2,6 +2,8 @@ import pLimit from "p-limit"
 import {
   envConcurrency,
   hashContent,
+  linkAbortSignal,
+  throwIfAborted,
   type AtsAdapter,
   type HarvestCtx,
   type HarvestResult,
@@ -59,18 +61,16 @@ function browserHeadersForUrl(url: string, userAgent: string): Record<string, st
 // Per-job detail fetch — enriches descriptions beyond the bullet snippets.
 // Env-tunable for operators who want to trade throughput for richer text.
 //
-// Bumped default 300 → 600 alongside DETAIL_CONCURRENCY 4 → 6. Cap at 300
-// + 4 still left ~50% of large-tenant rows blank because tier_2 boards
-// (1000+ jobs) cycle faster than the cap could fill. 600 × concurrency 6
-// = ~100 round-trip-equivalents per tick; at ~500ms per detail call that's
-// ~50s of detail time, comfortably under the 240s lease.
+// Keep this bounded in the main worker. Large Workday tenants can expose
+// 1000+ jobs; aggressive per-job detail enrichment belongs in backfills, not
+// the freshness harvester that shares CPU/RAM with every other adapter.
 const DETAIL_MAX_JOBS = Math.max(
   0,
-  Number.parseInt(process.env.HARVESTER_WORKDAY_DETAIL_MAX_JOBS ?? "600", 10)
+  Number.parseInt(process.env.HARVESTER_WORKDAY_DETAIL_MAX_JOBS ?? "120", 10)
 )
 const DETAIL_CONCURRENCY = Math.max(
   1,
-  Number.parseInt(process.env.HARVESTER_WORKDAY_DETAIL_CONCURRENCY ?? "6", 10)
+  Number.parseInt(process.env.HARVESTER_WORKDAY_DETAIL_CONCURRENCY ?? "3", 10)
 )
 const DETAIL_TIMEOUT_MS = Math.max(
   1_000,
@@ -290,8 +290,10 @@ export async function fetchWorkdayJobDetail(
   const url = detailUrlFor(parsed, externalPath)
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), DETAIL_TIMEOUT_MS)
+  const unlinkAbortSignal = linkAbortSignal(ctx.signal, controller)
 
   try {
+    throwIfAborted(ctx.signal)
     const response = await doFetch(url, {
       method: "GET",
       headers: {
@@ -324,6 +326,7 @@ export async function fetchWorkdayJobDetail(
     return null
   } finally {
     clearTimeout(timer)
+    unlinkAbortSignal()
   }
 }
 
@@ -362,8 +365,10 @@ async function postWorkdayListing(
     const startedAt = Date.now()
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), timeoutMs)
+    const unlinkAbortSignal = linkAbortSignal(ctx.signal, controller)
 
     try {
+      throwIfAborted(ctx.signal)
       const response = await doFetch(url, {
         method: "POST",
         headers: {
@@ -397,12 +402,13 @@ async function postWorkdayListing(
       lastStatus = null
       lastReason =
         error instanceof Error && error.name === "AbortError" ? "timeout" : "fetch_error"
-      if (attempt >= maxAttempts) {
+      if (ctx.signal?.aborted || attempt >= maxAttempts) {
         return { kind: "error", status: null, reason: lastReason, upstreamLatencyMs }
       }
       await sleep(250 * 2 ** (attempt - 1) + Math.random() * 250)
     } finally {
       clearTimeout(timer)
+      unlinkAbortSignal()
     }
   }
 

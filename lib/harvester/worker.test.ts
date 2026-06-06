@@ -7,6 +7,7 @@ import {
   claimEligibleCompanies,
   loadWorkerConfig,
   resolvePerCompanyTimeoutMs,
+  scaleWorkerConfigForLoops,
 } from "./worker"
 
 test("loadWorkerConfig: defaults when env is empty", () => {
@@ -25,9 +26,9 @@ test("loadWorkerConfig: reads valid env vars", () => {
     HARVESTER_CONCURRENCY: "16",
   })
   assert.equal(config.tickIntervalMs, 5_000)
-  assert.equal(config.claimBatchSize, 100)
+  assert.equal(config.claimBatchSize, 40)
   assert.equal(config.leaseSeconds, 300)
-  assert.equal(config.concurrency, 16)
+  assert.equal(config.concurrency, 12)
 })
 
 test("loadWorkerConfig: falls back on garbage env", () => {
@@ -44,9 +45,9 @@ test("loadWorkerConfig: falls back on garbage env", () => {
 })
 
 test("resolvePerCompanyTimeoutMs: uses ATS-specific defaults for slow adapters", () => {
-  assert.equal(resolvePerCompanyTimeoutMs("workday", {}), 120_000)
-  assert.equal(resolvePerCompanyTimeoutMs("smartrecruiters", {}), 90_000)
-  assert.equal(resolvePerCompanyTimeoutMs("apple", {}), 180_000)
+  assert.equal(resolvePerCompanyTimeoutMs("workday", {}), 60_000)
+  assert.equal(resolvePerCompanyTimeoutMs("smartrecruiters", {}), 60_000)
+  assert.equal(resolvePerCompanyTimeoutMs("apple", {}), 120_000)
   assert.equal(resolvePerCompanyTimeoutMs("greenhouse", {}), 60_000)
 })
 
@@ -64,6 +65,37 @@ test("resolvePerCompanyTimeoutMs: adapter override wins for that adapter only", 
   }
   assert.equal(resolvePerCompanyTimeoutMs("workday", env), 180_000)
   assert.equal(resolvePerCompanyTimeoutMs("greenhouse", env), 60_000)
+})
+
+test("scaleWorkerConfigForLoops: divides claim budget across loops", () => {
+  const config = {
+    tickIntervalMs: 15_000,
+    claimBatchSize: 40,
+    leaseSeconds: 600,
+    concurrency: 12,
+  }
+  const scaled = scaleWorkerConfigForLoops(config, 6, {})
+  assert.equal(scaled.claimBatchSize, 4)
+  assert.equal(scaled.tickIntervalMs, config.tickIntervalMs)
+  assert.equal(scaled.leaseSeconds, config.leaseSeconds)
+})
+
+test("scaleWorkerConfigForLoops: honors bounded total claim budget override", () => {
+  const config = {
+    tickIntervalMs: 15_000,
+    claimBatchSize: 40,
+    leaseSeconds: 600,
+    concurrency: 12,
+  }
+  const scaled = scaleWorkerConfigForLoops(config, 6, {
+    HARVESTER_TOTAL_CLAIM_BUDGET: "60",
+  })
+  assert.equal(scaled.claimBatchSize, 10)
+
+  const capped = scaleWorkerConfigForLoops(config, 6, {
+    HARVESTER_TOTAL_CLAIM_BUDGET: "500",
+  })
+  assert.equal(capped.claimBatchSize, 14)
 })
 
 test("claimEligibleCompanies: issues SKIP LOCKED claim with lease params and shapes rows", async () => {

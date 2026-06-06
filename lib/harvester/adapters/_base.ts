@@ -28,6 +28,7 @@ export type HarvestCtx = {
   lastModified: string | null
   userAgent?: string
   timeoutMs?: number
+  signal?: AbortSignal
   fetchImpl?: typeof fetch
   /**
    * External IDs for this company's jobs that already carry a non-trivial
@@ -97,6 +98,29 @@ export function envConcurrency(name: AtsName, fallback: number): number {
   return fallback
 }
 
+export function throwIfAborted(signal: AbortSignal | undefined): void {
+  if (!signal?.aborted) return
+  const reason = signal.reason
+  const message = reason instanceof Error ? reason.message : "aborted"
+  const error = new Error(message)
+  error.name = "AbortError"
+  throw error
+}
+
+export function linkAbortSignal(
+  parent: AbortSignal | undefined,
+  controller: AbortController
+): () => void {
+  if (!parent) return () => {}
+  const abort = () => controller.abort(parent.reason)
+  if (parent.aborted) {
+    abort()
+    return () => {}
+  }
+  parent.addEventListener("abort", abort, { once: true })
+  return () => parent.removeEventListener("abort", abort)
+}
+
 export type ConditionalFetchResult<T> =
   | { kind: "ok"; status: number; data: T; etag: string | null; lastModified: string | null; upstreamLatencyMs: number }
   | { kind: "not_modified"; status: 304; etag: string | null; lastModified: string | null; upstreamLatencyMs: number }
@@ -133,8 +157,10 @@ export async function conditionalFetchJson<T>(
     const startedAt = Date.now()
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), timeoutMs)
+    const unlinkAbortSignal = linkAbortSignal(ctx.signal, controller)
 
     try {
+      throwIfAborted(ctx.signal)
       const response = await doFetch(url, {
         method,
         headers,
@@ -207,12 +233,13 @@ export async function conditionalFetchJson<T>(
       lastStatus = null
       lastReason =
         error instanceof Error && error.name === "AbortError" ? "timeout" : "fetch_error"
-      if (attempt >= maxAttempts) {
+      if (ctx.signal?.aborted || attempt >= maxAttempts) {
         return { kind: "error", status: null, reason: lastReason, upstreamLatencyMs }
       }
       await sleep(250 * 2 ** (attempt - 1) + Math.random() * 250)
     } finally {
       clearTimeout(timeout)
+      unlinkAbortSignal()
     }
   }
 

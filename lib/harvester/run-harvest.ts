@@ -1,5 +1,6 @@
 import type { Pool } from "pg"
 import { detectAdapter, type AtsAdapter, type AtsName } from "@/lib/harvester/adapters"
+import { throwIfAborted } from "@/lib/harvester/adapters/_base"
 import { canonicalCareersUrl } from "@/lib/harvester/canonical-url"
 import { persistJobsBulk } from "@/lib/harvester/persist-bulk"
 
@@ -272,8 +273,9 @@ async function recentFailureCount(
 export async function runAtsHarvest(input: {
   pool: Pool
   company: AtsHarvestCompany
+  signal?: AbortSignal
 }): Promise<AtsHarvestOutcome> {
-  const { pool, company } = input
+  const { pool, company, signal } = input
   const detection = detectCompanyAdapter(company)
   if (!detection) return { matched: false }
 
@@ -284,13 +286,15 @@ export async function runAtsHarvest(input: {
   )
   const adapterName = detection.adapter.name
 
-  // Pre-load externalIds of jobs that already have a real description in the
-  // DB. Adapters with per-cycle detail-fetch caps use this to skip jobs that
-  // don't need re-fetching, so the cap budget goes to jobs that still need a
-  // description. Adapters without a detail-fetch step ignore the field.
-  const alreadyDescribedIds = await loadAlreadyDescribedIds(pool, company.id, adapterName)
-
   try {
+    throwIfAborted(signal)
+    // Pre-load externalIds of jobs that already have a real description in the
+    // DB. Adapters with per-cycle detail-fetch caps use this to skip jobs that
+    // don't need re-fetching, so the cap budget goes to jobs that still need a
+    // description. Adapters without a detail-fetch step ignore the field.
+    const alreadyDescribedIds = await loadAlreadyDescribedIds(pool, company.id, adapterName)
+    throwIfAborted(signal)
+
     const result = await detection.adapter.fetchJobs({
       slug: detection.slug,
       ctx: {
@@ -298,8 +302,10 @@ export async function runAtsHarvest(input: {
         lastModified: company.last_modified,
         alreadyDescribedIds,
         timeoutMs: adapterRequestTimeoutMs(adapterName as AtsName),
+        signal,
       },
     })
+    throwIfAborted(signal)
     const crawledAtIso = result.fetchedAt.toISOString()
 
     if (result.notModified) {

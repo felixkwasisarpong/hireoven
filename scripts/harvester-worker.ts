@@ -1,13 +1,19 @@
 import http from "node:http"
 import { getPostgresPool } from "@/lib/postgres/server"
-import { loadWorkerConfig, startWorkerLoop, type WorkerLogger } from "@/lib/harvester/worker"
+import {
+  buildAdapterLimits,
+  loadWorkerConfig,
+  scaleWorkerConfigForLoops,
+  startWorkerLoop,
+  type WorkerLogger,
+} from "@/lib/harvester/worker"
 
 // Spawn N worker loops in a single process so one container can saturate the
 // claim queue without needing N Coolify replicas. The DB-side claim uses
 // `FOR UPDATE SKIP LOCKED`, so each loop independently grabs a disjoint batch.
 function instanceCount(env: Record<string, string | undefined> = process.env): number {
   const parsed = Number.parseInt(env.HARVESTER_INSTANCES ?? "", 10)
-  if (Number.isFinite(parsed) && parsed >= 1) return Math.min(parsed, 16)
+  if (Number.isFinite(parsed) && parsed >= 1) return Math.min(parsed, 8)
   return 1
 }
 
@@ -61,7 +67,12 @@ async function main() {
   })
 
   const instances = instanceCount()
-  console.log(`[harvester] spawning ${instances} worker loop(s)`)
+  const loopConfig = scaleWorkerConfigForLoops(config, instances)
+  const sharedLimits = buildAdapterLimits(loopConfig.concurrency)
+  console.log(
+    `[harvester] spawning ${instances} worker loop(s) ` +
+    `(batch ${config.claimBatchSize} -> ${loopConfig.claimBatchSize}/loop; shared adapter limits)`
+  )
 
   const handles = Array.from({ length: instances }, (_, i) => {
     const tag = instances > 1 ? `w${i + 1}` : "w"
@@ -72,7 +83,7 @@ async function main() {
         console.log(`[harvester:${tag}] ${msg}`)
       }
     }
-    return startWorkerLoop(pool, config, { logger })
+    return startWorkerLoop(pool, loopConfig, { logger, limits: sharedLimits })
   })
 
   let signaled = false
