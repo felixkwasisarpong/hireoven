@@ -115,7 +115,7 @@ function isInvalidPlaceholderGoogleFaviconUrl(logoUrl: string | null | undefined
 
 function isInvalidAtsLogoUrl(logoUrl: string | null | undefined) {
   const domain = domainFromLogoUrl(logoUrl)
-  return Boolean(domain && isAtsDomain(domain))
+  return Boolean(domain && (isAtsDomain(domain) || isPlaceholderDomain(domain)))
 }
 
 function buildLogoSources(logoUrl: string | null | undefined, domain: string | null | undefined) {
