@@ -37,14 +37,13 @@ export async function GET(request: NextRequest) {
   const offset = parseInt(sp.get("offset") ?? "0", 10)
   const withScores = sp.get("withScores") === "1" || sp.get("with_scores") === "1"
 
-  // Pass companyAlias so the predicate's H1B-rescue path can admit
-  // null-location remote jobs from US H1B-sponsoring employers (Nestle USA,
-  // UT Houston, etc.) while still rejecting null-loc remotes from companies
-  // with no US-sponsorship evidence.
+  // Keep the global feed on the strict generated location column. Passing a
+  // company alias enables the null-location H1B rescue path, but that OR forces
+  // Postgres into a multi-million-row scan on the hot feed route.
   const where: string[] = [
     "jobs.is_active = true",
     sqlPublishedJob("jobs"),
-    sqlJobLocatedInUsa("jobs", { companyAlias: "companies" }),
+    sqlJobLocatedInUsa("jobs"),
   ]
   const values: Array<string | number | boolean | string[]> = []
 
@@ -112,17 +111,14 @@ export async function GET(request: NextRequest) {
   const oneHourAgo = new Date(Date.now() - 3_600_000).toISOString()
 
   try {
-    // Snapshot WHERE-only params before appending limit/offset so the count
-    // query (no LIMIT/OFFSET) doesn't get extra unused $N params bound.
-    const whereOnlyValues = [...values]
-    const limitParam = addParam(limit)
+    const dbLimit = limit + 1
+    const limitParam = addParam(dbLimit)
     const offsetParam = addParam(offset)
 
-    // Run main fetch + both counts in parallel. The previous query used
-    // `COUNT(*) OVER()` which forced full materialization of the filtered set
-    // (~2.5s on 113K matching rows). With idx_jobs_us_ca_active_freshest the
-    // separate COUNT is index-only and effectively free.
-    const [jobsResult, totalCountResult, newInLastHourResult] = await Promise.all([
+    // Avoid exact global counts on the request path. On the production-sized
+    // jobs table, COUNT(*) over the feed predicate takes 10s+ under crawler
+    // write load. Fetch one extra row instead, enough for pagination affordance.
+    const [jobsResult, newInLastHourResult] = await Promise.all([
       pool.query<JobWithOptionalCompany>(
         `SELECT jobs.*,
                 to_jsonb(companies.*) AS company,
@@ -139,28 +135,21 @@ export async function GET(request: NextRequest) {
         values
       ),
       pool.query<{ count: string }>(
+        // Mirror the main feed predicate so the "new in last hour" count
+        // matches what users actually see in the feed.
         `SELECT COUNT(*)::text AS count
          FROM jobs
-         LEFT JOIN companies ON companies.id = jobs.company_id
-         WHERE ${where.join(" AND ")}`,
-        whereOnlyValues
-      ),
-      pool.query<{ count: string }>(
-        // Mirror the main feed predicate (including companies join) so the
-        // "new in last hour" count matches what users actually see in the feed.
-        `SELECT COUNT(*)::text AS count
-         FROM jobs
-         LEFT JOIN companies ON companies.id = jobs.company_id
          WHERE jobs.is_active = true
            AND ${sqlPublishedJob("jobs")}
-           AND ${sqlJobLocatedInUsa("jobs", { companyAlias: "companies" })}
+           AND ${sqlJobLocatedInUsa("jobs")}
            AND jobs.first_detected_at >= $1`,
         [oneHourAgo]
       ),
     ])
 
-    const jobs = dedupeFeedJobsBySignature(jobsResult.rows)
-    const total = Number(totalCountResult.rows[0]?.count ?? 0)
+    const hasMore = jobsResult.rows.length > limit
+    const jobs = dedupeFeedJobsBySignature(jobsResult.rows.slice(0, limit))
+    const total = offset + jobs.length + (hasMore ? 1 : 0)
     const newInLastHour = Number(newInLastHourResult.rows[0]?.count ?? 0)
 
     if (withScores && jobs.length > 0) {
@@ -204,7 +193,7 @@ export async function GET(request: NextRequest) {
         },
       }
     })
-    return NextResponse.json({ jobs: jobsWithCardView, total, newInLastHour })
+    return NextResponse.json({ jobs: jobsWithCardView, total, newInLastHour, hasMore })
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Database query failed" },

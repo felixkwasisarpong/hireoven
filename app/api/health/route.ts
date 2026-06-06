@@ -1,6 +1,4 @@
 import { NextResponse } from "next/server"
-import { sqlPublishedJob } from "@/lib/jobs/publication"
-import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
 import { getPostgresPool } from "@/lib/postgres/server"
 
 export const dynamic = "force-dynamic"
@@ -12,7 +10,11 @@ export async function GET() {
     const [companiesResult, jobsResult, crawlResult] = await Promise.all([
       pool.query<{ count: string }>("SELECT COUNT(*)::text AS count FROM companies WHERE is_active = true"),
       pool.query<{ count: string }>(
-        `SELECT COUNT(*)::text AS count FROM jobs WHERE is_active = true AND ${sqlPublishedJob("jobs")} AND ${sqlJobLocatedInUsa("jobs")}`
+        `SELECT COALESCE((
+           SELECT GREATEST(0, reltuples)::bigint::text
+           FROM pg_class
+           WHERE oid = to_regclass('public.idx_jobs_us_ca_active_freshest')
+         ), '0') AS count`
       ),
       pool.query<{ crawled_at: string | null }>(
         "SELECT crawled_at FROM crawl_logs ORDER BY crawled_at DESC LIMIT 1"
@@ -25,6 +27,7 @@ export async function GET() {
       database: "connected",
       lastCrawl: crawlResult.rows[0]?.crawled_at ?? null,
       activeJobs: Number(jobsResult.rows[0]?.count ?? 0),
+      activeJobsEstimated: true,
       activeCompanies: Number(companiesResult.rows[0]?.count ?? 0),
     })
   } catch (err) {

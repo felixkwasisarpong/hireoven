@@ -4,7 +4,6 @@ import { ArrowRight, Check, CheckCircle2, Globe2, Radar, ShieldCheck, Sparkles, 
 import Navbar from "@/components/layout/Navbar"
 import LogoWall from "@/components/marketing/LogoWall"
 import { WaitlistInlineForm } from "@/components/marketing/WaitlistInlineForm"
-import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
 import { getPostgresPool, hasPostgresEnv } from "@/lib/postgres/server"
 import { createClient } from "@/lib/supabase/server"
 import HireovenLogo from "@/components/ui/HireovenLogo"
@@ -25,7 +24,13 @@ async function getPlatformStats() {
   try {
     const pool = getPostgresPool()
     const [jobs, companies] = await Promise.all([
-      pool.query<{ c: string }>(`SELECT COUNT(*)::text AS c FROM jobs WHERE is_active = true AND ${sqlJobLocatedInUsa("jobs")}`),
+      pool.query<{ c: string }>(
+        `SELECT COALESCE((
+           SELECT GREATEST(0, reltuples)::bigint::text
+           FROM pg_class
+           WHERE oid = to_regclass('public.idx_jobs_us_ca_active_freshest')
+         ), '0') AS c`
+      ),
       pool.query<{ c: string }>(`SELECT COUNT(*)::text AS c FROM companies WHERE is_active = true`),
     ])
     return { jobs: Number(jobs.rows[0]?.c ?? 0), companies: Number(companies.rows[0]?.c ?? 0) }

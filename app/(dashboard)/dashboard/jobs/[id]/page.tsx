@@ -387,7 +387,7 @@ export default async function DashboardJobDetailPage({ params }: Props) {
      LEFT JOIN companies c ON c.id = j.company_id
      WHERE j.is_active = true AND ${sqlJobLocatedInUsa("j")}`
 
-  const [cachedScoreResult, resumeSkillResult, similarByTitleResult, similarByCompanyResult] = await Promise.all([
+  const [cachedScoreResult, resumeSkillResult, similarByCompanyResult] = await Promise.all([
     // Lightweight cache check — joins match score with resume updated_at in one query.
     // Avoids loading the full resume/profile on cache hits.
     session?.sub
@@ -412,15 +412,11 @@ export default async function DashboardJobDetailPage({ params }: Props) {
           [session.sub]
         )
       : Promise.resolve({ rows: [] as ResumeSkillRow[] }),
-    page.normalized_title && page.normalized_title.length > 0
-      ? pool.query<SimilarJob>(
-          `${similarSql} AND j.normalized_title = $1 AND j.id <> $2::uuid LIMIT 4`,
-          [page.normalized_title, id]
-        )
-      : Promise.resolve({ rows: [] as SimilarJob[] }),
     job.company_id
       ? pool.query<SimilarJob>(
-          `${similarSql} AND j.company_id = $1 AND j.id <> $2::uuid LIMIT 6`,
+          `${similarSql} AND j.company_id = $1 AND j.id <> $2::uuid
+           ORDER BY j.first_detected_at DESC NULLS LAST
+           LIMIT 4`,
           [job.company_id, id]
         )
       : Promise.resolve({ rows: [] as SimilarJob[] }),
@@ -528,7 +524,6 @@ export default async function DashboardJobDetailPage({ params }: Props) {
   ]
 
   const similarMap = new Map<string, SimilarJob>()
-  for (const entry of similarByTitleResult.rows ?? []) similarMap.set(entry.id, entry)
   for (const entry of similarByCompanyResult.rows ?? []) {
     if (similarMap.size >= 4) break
     similarMap.set(entry.id, entry)

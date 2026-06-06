@@ -80,6 +80,7 @@ async function fetchInitialMatchJobs(requestHeaders: Headers): Promise<JobWithMa
     limit: "120",
     within: "24h",
     sort: "match",
+    computeScores: "1",
     minScore: String(INITIAL_THRESHOLD),
   })
 
