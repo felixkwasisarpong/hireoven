@@ -7,7 +7,6 @@ import {
   Copy,
   ExternalLink,
   Linkedin,
-  Loader2,
   Mail,
   MessageSquare,
   Users,
@@ -70,6 +69,23 @@ function CopyButton({ text }: { text: string }) {
   )
 }
 
+// ── Skeleton connection rows shown in idle state ──────────────────────────────
+
+function SkeletonRow({ width }: { width: string }) {
+  return (
+    <div className="flex items-center gap-3 px-5 py-3.5">
+      <div className="h-10 w-10 shrink-0 rounded-full bg-slate-100 animate-pulse" />
+      <div className="flex-1 space-y-2">
+        <div className={cn("h-3 rounded-full bg-slate-100 animate-pulse", width)} />
+        <div className="h-2.5 w-28 rounded-full bg-slate-100 animate-pulse" />
+      </div>
+      <div className="h-5 w-8 rounded-full bg-slate-100 animate-pulse" />
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export default function ReferralDraftModal({
   jobId,
   jobTitle,
@@ -87,14 +103,12 @@ export default function ReferralDraftModal({
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const appStatus = applicationStatus ?? "not yet applied"
 
-  // Listen for scan result from extension
   useEffect(() => {
     function onMessage(e: MessageEvent) {
       if (e.origin !== window.location.origin) return
       const msg = e.data as { type?: string; ok?: boolean; connections?: ScannedConnection[]; error?: string }
       if (msg.type !== "APEX_SCAN_CONNECTIONS_RESULT") return
       if (timeoutRef.current) clearTimeout(timeoutRef.current)
-
       if (!msg.ok || !msg.connections?.length) {
         setError(msg.error ?? "No connections found at this company on LinkedIn.")
         setStep("idle")
@@ -114,7 +128,7 @@ export default function ReferralDraftModal({
     setStep("scanning")
     window.postMessage({ type: "APEX_SCAN_CONNECTIONS", companyName, jobTitle }, window.location.origin)
     timeoutRef.current = setTimeout(() => {
-      setError("LinkedIn scan timed out. Make sure the extension is active and you're logged in to LinkedIn.")
+      setError("Scan timed out. Make sure the extension is active and you're logged in to LinkedIn.")
       setStep("idle")
     }, SCAN_TIMEOUT_MS)
   }
@@ -123,12 +137,10 @@ export default function ReferralDraftModal({
     setSelected(connection)
     setStep("generating")
     setError(null)
-
     const warmth = degreeWarmth(connection.degree)
     const relationship = connection.degree === 1
       ? "direct LinkedIn connection"
       : `${connection.mutualCount > 0 ? `${connection.mutualCount} mutual connections` : "2nd-degree LinkedIn connection"}`
-
     try {
       const res = await fetch("/api/apex/referral-draft", {
         method: "POST",
@@ -157,18 +169,24 @@ export default function ReferralDraftModal({
 
   return (
     <>
-      <div className="fixed inset-0 z-40 bg-black/25 backdrop-blur-[2px]" onClick={onClose} aria-hidden />
+      {/* Backdrop — solid enough to feel intentional */}
+      <div
+        className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
+        onClick={onClose}
+        aria-hidden
+      />
 
-      <div className="fixed inset-x-4 bottom-4 top-4 z-50 mx-auto flex max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-2xl sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 sm:w-full">
+      {/* Modal — centered, auto-height, max 90vh */}
+      <div className="fixed left-1/2 top-1/2 z-50 flex w-full max-w-md -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl bg-white shadow-2xl max-h-[90vh] mx-4">
 
-        {/* Header */}
-        <div className="flex shrink-0 items-start justify-between border-b border-slate-100 px-5 py-4">
+        {/* ── Header ────────────────────────────────────────────── */}
+        <div className="flex shrink-0 items-start justify-between px-5 py-4">
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-orange-500">Referral outreach</p>
-            <p className="mt-0.5 text-[14px] font-semibold text-slate-900 leading-tight">
+            <p className="mt-0.5 text-[15px] font-semibold leading-snug text-slate-900">
               {jobTitle}
-              <span className="font-normal text-slate-400"> at {companyName}</span>
             </p>
+            <p className="text-[13px] text-slate-400">at {companyName}</p>
           </div>
           <button
             type="button"
@@ -179,68 +197,96 @@ export default function ReferralDraftModal({
           </button>
         </div>
 
-        {/* Body */}
+        {/* ── Body ──────────────────────────────────────────────── */}
         <div className="flex-1 overflow-y-auto">
 
-          {/* ── Idle: find connections ── */}
+          {/* Idle */}
           {step === "idle" && (
-            <div className="flex flex-col items-center justify-center gap-5 px-6 py-14 text-center">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#0A66C2]/10">
-                <Linkedin className="h-6 w-6 text-[#0A66C2]" />
-              </div>
-              <div>
-                <p className="text-[16px] font-semibold text-slate-900">Find your connections</p>
-                <p className="mt-1.5 text-[13px] leading-relaxed text-slate-500">
-                  We'll search your LinkedIn network for people at {companyName} who could refer you.
-                </p>
-              </div>
+            <>
+              {/* LinkedIn hero strip */}
+              <div className="bg-[#0A66C2] px-5 py-6">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/20">
+                    <Linkedin className="h-5 w-5 text-white" />
+                  </div>
+                  <div>
+                    <p className="text-[15px] font-bold text-white">Find your connections</p>
+                    <p className="text-[12.5px] text-white/70">
+                      Search your network for people at {companyName}
+                    </p>
+                  </div>
+                </div>
 
-              {error && (
-                <p className="rounded-xl bg-red-50 px-4 py-3 text-[12.5px] text-red-600 text-left w-full">{error}</p>
-              )}
+                {isExtensionConnected ? (
+                  <button
+                    type="button"
+                    onClick={scan}
+                    className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-white px-5 py-3 text-[13.5px] font-bold text-[#0A66C2] shadow transition hover:bg-white/90 active:scale-[0.98]"
+                  >
+                    <Linkedin className="h-4 w-4" />
+                    Find connections at {companyName}
+                  </button>
+                ) : (
+                  <div className="mt-4 rounded-xl bg-white/10 px-4 py-3">
+                    <p className="text-[13px] font-semibold text-white">Extension not detected</p>
+                    <p className="mt-0.5 text-[12px] text-white/70">
+                      Install the Hireoven extension to scan your LinkedIn network.
+                    </p>
+                  </div>
+                )}
 
-              {isExtensionConnected ? (
-                <button
-                  type="button"
-                  onClick={scan}
-                  className="inline-flex items-center gap-2 rounded-xl bg-[#0A66C2] px-6 py-3 text-[13px] font-bold text-white shadow-sm transition hover:bg-[#0958a8]"
-                >
-                  <Linkedin className="h-4 w-4" />
-                  Find connections at {companyName}
-                </button>
-              ) : (
-                <div className="rounded-xl bg-slate-50 px-5 py-4 text-center">
-                  <p className="text-[13px] font-semibold text-slate-700">Extension not detected</p>
-                  <p className="mt-1 text-[12px] text-slate-500">
-                    Install the Hireoven extension to scan your LinkedIn network.
+                {error && (
+                  <p className="mt-3 rounded-xl bg-red-500/20 px-4 py-2.5 text-[12.5px] text-white">
+                    {error}
                   </p>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+
+              {/* Skeleton preview rows */}
+              <div className="divide-y divide-slate-50 border-b border-slate-100">
+                <SkeletonRow width="w-36" />
+                <SkeletonRow width="w-44" />
+                <SkeletonRow width="w-32" />
+              </div>
+
+              <p className="px-5 py-3 text-center text-[11.5px] text-slate-400">
+                Your 1st and 2nd degree connections will appear here
+              </p>
+            </>
           )}
 
-          {/* ── Scanning ── */}
+          {/* Scanning */}
           {step === "scanning" && (
-            <div className="flex flex-col items-center justify-center gap-4 py-16">
-              <div className="relative h-12 w-12">
-                <div className="absolute inset-0 animate-spin rounded-full border-[3px] border-slate-100 border-t-[#0A66C2]" />
-                <div className="absolute inset-[5px] flex items-center justify-center">
-                  <Linkedin className="h-4 w-4 text-[#0A66C2]" />
+            <>
+              <div className="bg-[#0A66C2] px-5 py-6">
+                <div className="flex items-center gap-3">
+                  <div className="relative h-11 w-11 shrink-0">
+                    <div className="absolute inset-0 animate-spin rounded-xl border-[3px] border-white/20 border-t-white" />
+                    <div className="absolute inset-[5px] flex items-center justify-center">
+                      <Linkedin className="h-4 w-4 text-white" />
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-[15px] font-bold text-white">Scanning LinkedIn…</p>
+                    <p className="text-[12.5px] text-white/70">Finding your connections at {companyName}</p>
+                  </div>
                 </div>
               </div>
-              <div className="text-center">
-                <p className="text-[14px] font-semibold text-slate-900">Scanning LinkedIn…</p>
-                <p className="mt-1 text-[12.5px] text-slate-400">Finding your connections at {companyName}</p>
+              <div className="divide-y divide-slate-50 border-b border-slate-100">
+                <SkeletonRow width="w-36" />
+                <SkeletonRow width="w-44" />
+                <SkeletonRow width="w-32" />
+                <SkeletonRow width="w-40" />
               </div>
-            </div>
+            </>
           )}
 
-          {/* ── Select connection ── */}
+          {/* Select */}
           {step === "select" && (
-            <div className="flex flex-col">
-              <div className="border-b border-slate-100 px-5 py-3">
+            <>
+              <div className="border-b border-slate-100 bg-slate-50 px-5 py-3">
                 <p className="text-[12px] font-semibold text-slate-500">
-                  {connections.length} connection{connections.length !== 1 ? "s" : ""} found · click one to draft your message
+                  {connections.length} connection{connections.length !== 1 ? "s" : ""} found · tap one to draft your message
                 </p>
               </div>
               <div className="divide-y divide-slate-50">
@@ -249,21 +295,20 @@ export default function ReferralDraftModal({
                     key={c.id}
                     type="button"
                     onClick={() => void generate(c)}
-                    className="flex w-full items-center gap-4 px-5 py-4 text-left transition hover:bg-slate-50"
+                    className="flex w-full items-center gap-4 px-5 py-4 text-left transition hover:bg-slate-50 active:bg-slate-100"
                   >
-                    {/* Avatar placeholder */}
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-slate-200 to-slate-300 text-[14px] font-bold text-slate-600">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#0A66C2]/20 to-[#0A66C2]/10 text-[14px] font-bold text-[#0A66C2]">
                       {c.name.charAt(0).toUpperCase()}
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <p className="text-[14px] font-semibold text-slate-900 truncate">{c.name}</p>
+                        <p className="text-[13.5px] font-semibold text-slate-900 truncate">{c.name}</p>
                         <span className={degreeBadge(c.degree)}>{degreeLabel(c.degree)}</span>
                       </div>
                       <p className="mt-0.5 text-[12.5px] text-slate-500 truncate">{c.title}</p>
                       {c.mutualCount > 0 && (
-                        <p className="mt-0.5 text-[11.5px] text-slate-400">
-                          <Users className="inline h-3 w-3 mr-0.5" />
+                        <p className="mt-0.5 text-[11px] text-slate-400">
+                          <Users className="inline h-3 w-3 mr-0.5 -mt-px" />
                           {c.mutualCount} mutual
                         </p>
                       )}
@@ -272,32 +317,33 @@ export default function ReferralDraftModal({
                   </button>
                 ))}
               </div>
-            </div>
+            </>
           )}
 
-          {/* ── Generating ── */}
+          {/* Generating */}
           {step === "generating" && selected && (
-            <div className="flex flex-col items-center justify-center gap-4 py-16">
-              <div className="relative h-10 w-10">
-                <div className="absolute inset-0 animate-spin rounded-full border-[3px] border-slate-100 border-t-orange-500" />
+            <div className="flex flex-col items-center gap-5 px-6 py-10 text-center">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-orange-50">
+                <div className="relative h-8 w-8">
+                  <div className="absolute inset-0 animate-spin rounded-full border-[3px] border-orange-100 border-t-orange-500" />
+                </div>
               </div>
-              <div className="text-center">
-                <p className="text-[14px] font-semibold text-slate-900">Writing your outreach…</p>
+              <div>
+                <p className="text-[15px] font-semibold text-slate-900">Writing your outreach…</p>
                 <p className="mt-1 text-[12.5px] text-slate-400">Crafting a message for {selected.name}</p>
               </div>
             </div>
           )}
 
-          {/* ── Result ── */}
+          {/* Result */}
           {step === "result" && draft && selected && (
             <div className="space-y-5 p-5">
-
-              {/* Who this is for */}
+              {/* Connection chip */}
               <div className="flex items-center gap-3 rounded-xl bg-slate-50 px-4 py-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-slate-200 to-slate-300 text-[13px] font-bold text-slate-600">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#0A66C2]/20 to-[#0A66C2]/10 text-[13px] font-bold text-[#0A66C2]">
                   {selected.name.charAt(0).toUpperCase()}
                 </div>
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <p className="text-[13px] font-semibold text-slate-900">{selected.name}</p>
                   <p className="text-[11.5px] text-slate-500 truncate">{selected.title}</p>
                 </div>
@@ -306,7 +352,7 @@ export default function ReferralDraftModal({
                 </span>
               </div>
 
-              {/* Channel + tone */}
+              {/* Channel tag */}
               <div className="flex items-center gap-2">
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-[11.5px] font-semibold text-slate-600">
                   {draft.channel === "email"
@@ -337,7 +383,7 @@ export default function ReferralDraftModal({
                 <div className="mb-2 flex items-center justify-between">
                   <div>
                     <p className="text-[11.5px] font-semibold text-slate-500">Forwardable blurb</p>
-                    <p className="text-[11px] text-slate-400">{selected.name} can paste this to the recruiter as-is</p>
+                    <p className="text-[11px] text-slate-400">{selected.name} pastes this to the recruiter</p>
                   </div>
                   <CopyButton text={draft.forwardable_blurb} />
                 </div>
@@ -360,7 +406,7 @@ export default function ReferralDraftModal({
           )}
         </div>
 
-        {/* Footer */}
+        {/* ── Footer ────────────────────────────────────────────── */}
         <div className="shrink-0 border-t border-slate-100 px-5 py-4">
           {(step === "idle" || step === "scanning") && (
             <button
