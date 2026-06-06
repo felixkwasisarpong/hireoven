@@ -50,7 +50,7 @@ function cleanCandidate(value: string | null | undefined): string | null {
   if (!singleLine) return null
 
   const trimmedClause = singleLine.replace(
-    /,\s*(?:we|you|they|the|this|that|who|is|are|will|can|seeks?|seeking|hiring|looking)\b.*$/i,
+    /,\s*(?:we|you|they|the|this|that|who|is|are|will|can|please|kindly|send|email|contact|submit|share|forward|reach|seeks?|seeking|hiring|looking)\b.*$/i,
     ""
   )
   const stopWords = trimmedClause.split(/\s+(?:in|at|for|to|who|that|where|with)\b/i)[0] ?? trimmedClause
