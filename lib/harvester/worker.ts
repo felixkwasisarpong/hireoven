@@ -8,6 +8,10 @@ import {
 } from "@/lib/harvester/run-harvest"
 
 export type LimitFn = ReturnType<typeof pLimit>
+export type AdapterLimits = {
+  byAdapter: Map<AtsName, LimitFn>
+  fallback: LimitFn
+}
 
 /**
  * Resolve adapter name for a claimed company. Prefers the persisted
@@ -31,10 +35,7 @@ export function adapterNameFor(company: AtsHarvestCompany): AtsName | null {
  * route to an unknown adapter (shouldn't happen given the claim filter, but
  * defensive).
  */
-export function buildAdapterLimits(defaultConcurrency: number): {
-  byAdapter: Map<AtsName, LimitFn>
-  fallback: LimitFn
-} {
+export function buildAdapterLimits(defaultConcurrency: number): AdapterLimits {
   const byAdapter = new Map<AtsName, LimitFn>()
   for (const [name, adapter] of Object.entries(adapters)) {
     if (!adapter) continue
@@ -50,12 +51,18 @@ export type WorkerConfig = {
   concurrency: number
 }
 
+const MAX_CLAIM_BATCH_SIZE = 40
+const MAX_DEFAULT_CONCURRENCY = 12
+const DEFAULT_TOTAL_CLAIM_BUDGET = 24
+const MAX_TOTAL_CLAIM_BUDGET = 80
+
 export function loadWorkerConfig(
   env: Record<string, string | undefined> = process.env
 ): WorkerConfig {
-  const intPositive = (raw: string | undefined, fallback: number, min = 1) => {
+  const intPositive = (raw: string | undefined, fallback: number, min = 1, max?: number) => {
     const parsed = Number.parseInt(raw ?? "", 10)
-    return Number.isFinite(parsed) && parsed >= min ? parsed : fallback
+    if (!Number.isFinite(parsed) || parsed < min) return fallback
+    return max ? Math.min(parsed, max) : parsed
   }
   return {
     tickIntervalMs: intPositive(env.HARVESTER_TICK_INTERVAL_MS, 30_000, 500),
@@ -65,12 +72,26 @@ export function loadWorkerConfig(
     // in the same batch. Smaller batch keeps each tick around 2 min so
     // the lease still covers it and Coolify's health checks don't flag
     // the worker as unresponsive.
-    claimBatchSize: intPositive(env.HARVESTER_CLAIM_BATCH_SIZE, 20),
+    claimBatchSize: intPositive(env.HARVESTER_CLAIM_BATCH_SIZE, 20, 1, MAX_CLAIM_BATCH_SIZE),
     // Bumped 120 → 240 to give a worst-case slightly-slow tick room
     // before the lease expires and companies get re-claimed.
     leaseSeconds: intPositive(env.HARVESTER_LEASE_SECONDS, 240),
-    concurrency: intPositive(env.HARVESTER_CONCURRENCY, 8),
+    concurrency: intPositive(env.HARVESTER_CONCURRENCY, 8, 1, MAX_DEFAULT_CONCURRENCY),
   }
+}
+
+export function scaleWorkerConfigForLoops(
+  config: WorkerConfig,
+  loopCount: number,
+  env: Record<string, string | undefined> = process.env
+): WorkerConfig {
+  const loops = Math.max(1, Math.floor(loopCount))
+  const rawBudget = Number.parseInt(env.HARVESTER_TOTAL_CLAIM_BUDGET ?? "", 10)
+  const totalBudget = Number.isFinite(rawBudget) && rawBudget >= loops
+    ? Math.min(rawBudget, MAX_TOTAL_CLAIM_BUDGET)
+    : DEFAULT_TOTAL_CLAIM_BUDGET
+  const perLoopBatch = Math.max(1, Math.min(config.claimBatchSize, Math.ceil(totalBudget / loops)))
+  return { ...config, claimBatchSize: perLoopBatch }
 }
 
 export type TickSummary = {
@@ -87,14 +108,12 @@ export type TickSummary = {
 const DEFAULT_PER_COMPANY_TIMEOUT_MS = 60_000
 const PER_COMPANY_TIMEOUT_MIN_MS = 5_000
 const PER_COMPANY_TIMEOUT_BY_ADAPTER: Partial<Record<AtsName, number>> = {
-  // These adapters perform many paginated/detail calls per company and can
-  // legitimately exceed the generic 60s budget.
-  workday: 120_000,
-  smartrecruiters: 90_000,
-  ashby: 90_000,
-  usajobs: 90_000,
-  icims: 90_000,
-  apple: 180_000,
+  workday: 60_000,
+  smartrecruiters: 45_000,
+  ashby: 60_000,
+  usajobs: 60_000,
+  icims: 60_000,
+  apple: 120_000,
 }
 
 function parseTimeoutMs(raw: string | undefined, fallback: number): number {
@@ -258,6 +277,29 @@ function crawlLogErrorMessage(outcome: Exclude<AtsHarvestOutcome, { matched: fal
   return outcome.errorMessage
 }
 
+function failedTickOutcome(args: {
+  company: AtsHarvestCompany
+  adapterName: AtsName | null
+  message: string
+  durationMs: number
+}): TickCompanyOutcome {
+  return {
+    companyId: args.company.id,
+    outcome: {
+      matched: true,
+      status: "failed",
+      jobsFound: 0,
+      newJobs: 0,
+      durationMs: args.durationMs,
+      errorMessage: args.message,
+      crawledAtIso: new Date().toISOString(),
+      adapter: args.adapterName ?? "unknown",
+      upstreamLatencyMs: args.durationMs,
+      notModified: false,
+    },
+  }
+}
+
 async function insertTickCrawlLogsSafe(pool: Pool, outcomes: TickCompanyOutcome[]) {
   const rows = outcomes.flatMap((entry) => {
     if (!entry.outcome.matched) return []
@@ -330,9 +372,8 @@ export async function claimEligibleCompanies(
 export async function runTick(
   pool: Pool,
   config: WorkerConfig,
-  limits: { byAdapter: Map<AtsName, LimitFn>; fallback: LimitFn } = buildAdapterLimits(
-    config.concurrency
-  )
+  limits: AdapterLimits = buildAdapterLimits(config.concurrency),
+  options: { signal?: AbortSignal; env?: Record<string, string | undefined> } = {}
 ): Promise<TickSummary> {
   const startedAt = Date.now()
   const companies = await claimEligibleCompanies(pool, config.claimBatchSize, config.leaseSeconds)
@@ -359,13 +400,44 @@ export async function runTick(
   const results: TickCompanyOutcome[] = await Promise.all(
     companies.map((company) => {
       const adapterName = adapterNameFor(company)
-      const perCompanyTimeoutMs = resolvePerCompanyTimeoutMs(adapterName)
+      const perCompanyTimeoutMs = resolvePerCompanyTimeoutMs(adapterName, options.env)
       const limit = adapterName ? limits.byAdapter.get(adapterName) ?? limits.fallback : limits.fallback
       return limit(async () => {
+        if (options.signal?.aborted) {
+          return failedTickOutcome({
+            company,
+            adapterName,
+            message: "tick timeout aborted company before start",
+            durationMs: Date.now() - startedAt,
+          })
+        }
+        const controller = new AbortController()
+        let parentAbortListener: (() => void) | undefined
         let timeoutHandle: ReturnType<typeof setTimeout> | undefined
+        const parentSignal = options.signal
+        const parentAbortPromise = parentSignal
+          ? new Promise<TickCompanyOutcome>((resolve) => {
+              const onAbort = () => {
+                controller.abort(parentSignal.reason)
+                resolve(failedTickOutcome({
+                  company,
+                  adapterName,
+                  message: "tick timeout aborted company before completion",
+                  durationMs: Date.now() - startedAt,
+                }))
+              }
+              if (parentSignal.aborted) {
+                onAbort()
+                return
+              }
+              parentSignal.addEventListener("abort", onAbort, { once: true })
+              parentAbortListener = () => parentSignal.removeEventListener("abort", onAbort)
+            })
+          : null
         const timeoutPromise = new Promise<TickCompanyOutcome>((resolve) => {
           timeoutHandle = setTimeout(() => {
             const message = `per-company timeout ${perCompanyTimeoutMs}ms`
+            controller.abort(new Error(message))
             // Name the culprit so we can ship a real adapter-level fix.
             // runTick is exported standalone and doesn't have the loop's logger
             // wired in, so emit via console directly using the same format.
@@ -377,32 +449,22 @@ export async function runTick(
               careers_url: company.careers_url,
               direct_ats_url: company.direct_ats_url ?? null,
             })}`)
-            resolve({
-              companyId: company.id,
-              outcome: {
-                matched: true,
-                status: "failed",
-                jobsFound: 0,
-                newJobs: 0,
-                durationMs: perCompanyTimeoutMs,
-                errorMessage: message,
-                crawledAtIso: new Date().toISOString(),
-                adapter: adapterName ?? "unknown",
-                upstreamLatencyMs: perCompanyTimeoutMs,
-                notModified: false,
-              },
-            })
+            resolve(failedTickOutcome({ company, adapterName, message, durationMs: perCompanyTimeoutMs }))
           }, perCompanyTimeoutMs)
           timeoutHandle.unref?.()
         })
-        const workPromise = runAtsHarvest({ pool, company }).then((outcome) => ({
+        const workPromise = runAtsHarvest({ pool, company, signal: controller.signal }).then((outcome) => ({
           companyId: company.id,
           outcome,
         }))
         try {
-          return await Promise.race([workPromise, timeoutPromise])
+          const racers = parentAbortPromise
+            ? [workPromise, timeoutPromise, parentAbortPromise]
+            : [workPromise, timeoutPromise]
+          return await Promise.race(racers)
         } finally {
           if (timeoutHandle) clearTimeout(timeoutHandle)
+          parentAbortListener?.()
         }
       })
     })
@@ -482,10 +544,10 @@ export type WorkerLoopHandle = {
 export function startWorkerLoop(
   pool: Pool,
   config: WorkerConfig,
-  options: { logger?: WorkerLogger } = {}
+  options: { logger?: WorkerLogger; limits?: AdapterLimits } = {}
 ): WorkerLoopHandle {
   const log = options.logger ?? defaultLogger
-  const limits = buildAdapterLimits(config.concurrency)
+  const limits = options.limits ?? buildAdapterLimits(config.concurrency)
   let stopping = false
   let resolveDone: () => void = () => {}
   const done = new Promise<void>((resolve) => {
@@ -511,12 +573,9 @@ export function startWorkerLoop(
     // climbs monotonically each tick, that's the smoking gun.
     let lastRssMb = process.memoryUsage().rss / 1024 / 1024
 
-    // Hard ceiling per tick. Without this, a single adapter call whose promise
-    // never resolves (no working timeout / Playwright hang / dangling fetch)
-    // wedges the entire loop — the process stays alive (HTTP server keeps it
-    // ref'd) but no further ticks fire. We observed exactly this in prod: one
-    // tick succeeded, then 7+ hours of silence. The Promise.race below lets
-    // the loop abandon a stuck tick and try again with a fresh batch.
+    // Hard ceiling per tick. When it fires, abort the current tick's signal so
+    // queued/active adapter work drains instead of starting a second overlapping
+    // tick on top of the stuck one.
     const tickTimeoutMs = Math.max(
       60_000,
       Number.parseInt(process.env.HARVESTER_TICK_TIMEOUT_MS ?? "300000", 10)
@@ -524,19 +583,17 @@ export function startWorkerLoop(
 
     while (!stopping) {
       const tickStartedAt = Date.now()
+      const tickController = new AbortController()
+      let tickTimedOut = false
+      const tickTimeout = setTimeout(() => {
+        tickTimedOut = true
+        const message = `tick exceeded ${tickTimeoutMs}ms — aborting stuck batch`
+        log("tick_timeout", { message })
+        tickController.abort(new Error(message))
+      }, tickTimeoutMs)
+      tickTimeout.unref?.()
       try {
-        const summary = await Promise.race([
-          runTick(pool, config, limits),
-          new Promise<never>((_, reject) => {
-            const t = setTimeout(
-              () => reject(new Error(`tick exceeded ${tickTimeoutMs}ms — abandoning stuck batch`)),
-              tickTimeoutMs
-            )
-            // Don't keep the process alive on the watchdog alone; the loop
-            // itself + HTTP server provide that anchor.
-            t.unref?.()
-          }),
-        ])
+        const summary = await runTick(pool, config, limits, { signal: tickController.signal })
         if (summary.claimed > 0) {
           const mem = process.memoryUsage()
           const rssMb = mem.rss / 1024 / 1024
@@ -552,6 +609,7 @@ export function startWorkerLoop(
             rssDeltaMb: Math.round(rssMb - lastRssMb),
             heapMb: Math.round(heapMb),
             handles,
+            ...(tickTimedOut ? { abortedByWatchdog: true } : {}),
           })
           lastRssMb = rssMb
         }
@@ -560,6 +618,8 @@ export function startWorkerLoop(
           message: error instanceof Error ? error.message : String(error),
           stack: error instanceof Error ? error.stack?.split("\n").slice(0, 5).join("\n") : undefined,
         })
+      } finally {
+        clearTimeout(tickTimeout)
       }
 
       if (stopping) break

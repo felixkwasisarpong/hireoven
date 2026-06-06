@@ -22,17 +22,15 @@ import {
 
 const PAGE_LIMIT = 100
 const MAX_PAGES = 20
-// Bumped 60 → 250. SR detail endpoint is fast (~150-300ms each); at
-// concurrency 6, 250 jobs takes ~10s of detail time, well under the 240s
-// lease. Previous cap left 50%+ of SR rows description-less because the
-// list endpoint alone has no jobAd.sections.* payload.
+// Keep main-worker detail enrichment bounded. The list endpoint alone has no
+// jobAd.sections payload, but high fan-out here can starve other adapters.
 const DETAIL_MAX_JOBS = Math.max(
   0,
-  Number.parseInt(process.env.HARVESTER_SR_DETAIL_MAX_JOBS ?? "250", 10)
+  Number.parseInt(process.env.HARVESTER_SR_DETAIL_MAX_JOBS ?? "100", 10)
 )
 const DETAIL_CONCURRENCY = Math.max(
   1,
-  Number.parseInt(process.env.HARVESTER_SR_DETAIL_CONCURRENCY ?? "6", 10)
+  Number.parseInt(process.env.HARVESTER_SR_DETAIL_CONCURRENCY ?? "3", 10)
 )
 
 type SRSection = { text?: string }
