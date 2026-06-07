@@ -45,6 +45,26 @@ function endpointFor(slug: string): string {
   return `https://${encodeURIComponent(slug)}.teamtailor.com/jobs.json`
 }
 
+// Teamtailor's own platform/infrastructure subdomains are not customer career
+// boards. Cert enumeration of teamtailor.com surfaces dozens of these (assets,
+// eu-render, tt-parser-ecs, auth-tests, …); they return no jobs and only waste
+// harvest cycles. Reject them so discovery can't re-ingest them as companies.
+const RESERVED_TEAMTAILOR_SUBDOMAINS = new Set([
+  "www", "app", "api", "assets", "static", "cdn", "dashboard", "docs", "get",
+  "hello", "web", "partner", "trust", "discover", "highlights", "updates",
+  "refer", "resources", "shipit", "talentnote", "errors", "errors-wl",
+  "finance-integrations", "extssl", "eu", "eu2", "na", "au", "ext", "career2",
+])
+
+function isReservedTeamtailorSubdomain(slug: string): boolean {
+  if (RESERVED_TEAMTAILOR_SUBDOMAINS.has(slug)) return true
+  // Region / environment / internal-service families.
+  if (/^(analytics|insights|eu|ext|na|staging|auth)(-|$)/.test(slug)) return true
+  if (/^tt-/.test(slug)) return true
+  if (/-(test|tests|staging|aws|ro|wo|ecs|assets)$/.test(slug)) return true
+  return false
+}
+
 function detectFromUrl(url: string): { slug: string } | null {
   let parsed: URL
   try {
@@ -56,7 +76,7 @@ function detectFromUrl(url: string): { slug: string } | null {
   const m = host.match(/^([a-z0-9-]+)\.teamtailor\.com$/)
   if (!m) return null
   const slug = m[1]
-  if (slug === "www" || slug === "app" || slug === "api") return null
+  if (isReservedTeamtailorSubdomain(slug)) return null
   return { slug }
 }
 

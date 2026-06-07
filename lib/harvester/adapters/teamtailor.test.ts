@@ -18,6 +18,29 @@ test("teamtailor: detectFromUrl rejects non-Teamtailor hosts", () => {
   assert.equal(teamtailorAdapter.detectFromUrl("https://jobs.lever.co/anduril"), null)
 })
 
+test("teamtailor: detectFromUrl rejects platform/infra subdomains", () => {
+  for (const host of [
+    "assets", "eu-render", "tt-parser-ecs", "auth-tests", "analytics-ro",
+    "staging-assets", "insights-aws", "docs", "dashboard", "ext-na", "errors-wl",
+    "finance-integrations", "web", "na", "au", "career2",
+  ]) {
+    assert.equal(
+      teamtailorAdapter.detectFromUrl(`https://${host}.teamtailor.com/`),
+      null,
+      `${host} should be rejected`
+    )
+  }
+})
+
+test("teamtailor: detectFromUrl still accepts real customer boards", () => {
+  for (const host of ["acme", "career", "normative", "spotify-jobs"]) {
+    assert.deepEqual(
+      teamtailorAdapter.detectFromUrl(`https://${host}.teamtailor.com/`),
+      { slug: host }
+    )
+  }
+})
+
 const LIVE = process.env.HARVESTER_LIVE_TESTS === "1"
 const LIVE_SLUG = process.env.HARVESTER_LIVE_TEAMTAILOR_SLUG ?? "teamtailor"
 
