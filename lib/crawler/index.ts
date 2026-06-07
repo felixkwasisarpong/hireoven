@@ -313,6 +313,25 @@ const COMPANY_STOPWORDS = new Set([
   "usa",
 ])
 
+// Aggregator/job-board hosts we must never crawl or ingest job links from.
+// They block server-side fetches (LinkedIn returns auth walls / HTTP 999), so a
+// careers_url pointing here only yields description-less stubs that can never be
+// enriched and pile up hidden in pending_enrichment. Discovery must resolve a
+// real ATS/career page instead.
+const BLOCKED_AGGREGATOR_HOSTS = [
+  "linkedin.com",
+  "indeed.com",
+  "glassdoor.com",
+  "ziprecruiter.com",
+]
+
+export function isBlockedAggregatorHost(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/^www\./, "")
+  return BLOCKED_AGGREGATOR_HOSTS.some(
+    (blocked) => host === blocked || host.endsWith(`.${blocked}`)
+  )
+}
+
 function parseGreenhouseBoard(url: URL) {
   return extractGreenhouseBoardToken(url.toString())
 }
@@ -1598,6 +1617,7 @@ function extractGreenhouseEmbeddedJobsFromHtml(html: string, baseUrl: URL): RawJ
 
 function isLikelyJobLink(url: URL, text: string, baseUrl: URL): boolean {
   if (!/^https?:$/i.test(url.protocol)) return false
+  if (isBlockedAggregatorHost(url.hostname)) return false
   if (url.hostname.toLowerCase() !== baseUrl.hostname.toLowerCase()) return false
   if (url.searchParams.has("gh_jid")) return false
 
@@ -4118,6 +4138,35 @@ function dedupeJobs(jobs: RawJob[]) {
 export async function crawlCareersPage(
   target: CrawlTarget
 ): Promise<CrawlResult> {
+  // Never crawl aggregator hosts (LinkedIn/Indeed/Glassdoor/ZipRecruiter): they
+  // block server-side fetches and only yield un-enrichable stubs. A careers_url
+  // pointing here is a discovery miss, not a crawlable page.
+  let blockedAggregatorHost = false
+  try {
+    blockedAggregatorHost = isBlockedAggregatorHost(new URL(target.careersUrl).hostname)
+  } catch {
+    blockedAggregatorHost = false
+  }
+  if (blockedAggregatorHost) {
+    return {
+      url: target.careersUrl,
+      jobs: [],
+      crawledAt: new Date(),
+      outcomeStatus: "bad_url",
+      outcomeReason: "blocked_aggregator_host",
+      diagnostics: [
+        {
+          originalUrl: target.careersUrl,
+          normalizedUrl: null,
+          statusCode: null,
+          reason: "blocked_aggregator_host",
+          crawlResult: "failed",
+          errorReason: "blocked_aggregator_host",
+        },
+      ],
+    }
+  }
+
   const normalized = normalizeAtsUrl(target.careersUrl, { atsType: target.atsType })
   const diagnostics: CrawlDiagnostic[] = [
     {

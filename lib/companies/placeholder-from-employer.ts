@@ -201,7 +201,14 @@ export async function ensurePlaceholderCompany(
 
   const sentinelDomain = placeholderDomain(slug, source)
   const guessedDomain = guessPublicDomain(displayName)
-  const careersUrl = `https://www.linkedin.com/jobs/search/?keywords=${encodeURIComponent(displayName)}`
+  // Do NOT seed a LinkedIn job-search URL as the careers page. LinkedIn blocks
+  // server-side fetches, so the crawler can't read it — it only scrapes loose
+  // /jobs/view links off the result page and ingests them as description-less
+  // stubs that can never be enriched (they pile up hidden in pending_enrichment).
+  // Point at the guessed public domain (crawlable) or fall back to the sentinel
+  // placeholder domain (non-resolvable → crawler fails cleanly, no junk). The
+  // careers_url column is NOT NULL, so we always need a concrete value here.
+  const careersUrl = `https://${guessedDomain ?? sentinelDomain}`
   const logoUrl = guessedDomain ? companyLogoUrlFromDomain(guessedDomain) : null
 
   // Convert "VISA TECHNOLOGY AND OPERATIONS LLC" → "Visa" before persisting.
