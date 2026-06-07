@@ -12,11 +12,18 @@ WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-# Build-time public envs used by client bundles.
+# Build-time public envs used by client bundles. NEXT_PUBLIC_* vars are inlined
+# into the browser bundle at `next build` — a runtime env var has no effect, so
+# they MUST be passed as build args here.
 ARG NEXT_PUBLIC_APP_URL
 ARG NEXT_PUBLIC_LOGO_DEV_TOKEN
+# Defaults to true so the Google sign-in button stays hidden during the waitlist
+# even if the build arg is not supplied. Set --build-arg NEXT_PUBLIC_WAITLIST_MODE=false
+# to re-enable Google sign-in.
+ARG NEXT_PUBLIC_WAITLIST_MODE=true
 ENV NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}
 ENV NEXT_PUBLIC_LOGO_DEV_TOKEN=${NEXT_PUBLIC_LOGO_DEV_TOKEN}
+ENV NEXT_PUBLIC_WAITLIST_MODE=${NEXT_PUBLIC_WAITLIST_MODE}
 RUN npm run build
 
 FROM node:20-bookworm-slim AS runner
