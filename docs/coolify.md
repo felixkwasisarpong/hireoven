@@ -41,6 +41,11 @@ Repo includes [`../Dockerfile`](../Dockerfile) and Next [`output: "standalone"`]
 
 Vercel Cron is not used. In Coolify, add **scheduled tasks** (or any cron) that `GET` your public origin with `Authorization: Bearer <CRON_SECRET>` (same secret as in `.env.production.example`).
 
+> **Production note:** on a small web box, point these at the private `app-worker`
+> on the harvester box (`http://localhost:3100`) instead of the public origin, so
+> the crawl/enrichment load never touches the user-facing box. See
+> [Production two-box topology](#production-two-box-topology-offload-crons-off-the-web-box) below.
+
 The production **Dockerfile** installs **`curl`** in the final image so scheduled task commands like the example below work. Redeploy after pulling this change; without `curl`, the job fails with `curl: not found`.
 
 | Path | Suggested schedule | Purpose |
@@ -92,6 +97,45 @@ USAJOBS_USER_AGENT=...
 ```
 
 Do not leave the harvester as a manually started `docker run` container long-term; it should be managed by the Coolify compose deployment so it is recreated with app deploys and receives the same production environment.
+
+### Production two-box topology (offload crons off the web box)
+
+`/api/crawl` and `/api/cron/job-description-enrichment` run their work **inside the
+Next.js process**. On a small web box, the hourly 55-minute crawl (thousands of
+HTTP + bulk writes) starves the app and co-located Postgres for RAM/CPU →
+intermittent **502 Bad Gateway**. Fix: keep the web box user-facing only, and run
+all batch crons on the bigger box that already runs the harvester.
+
+| Box | Specs (example) | Runs |
+|-----|-----------------|------|
+| **Web** | CPX21 · 3 vCPU · 4 GB · us-east | Next.js app (public) + Postgres + MinIO. **No crons.** |
+| **Harvester** | CPX31 · 4 vCPU · 8 GB · us-west | Harvester worker **+ `app-worker` (private)** + **all crons** |
+
+**`app-worker`** is the same app image, defined in [`../docker-compose.prod.yml`](../docker-compose.prod.yml)
+under `profiles: ["worker"]`, bound to `127.0.0.1:${WORKER_PORT:-3100}` (never
+public). The harvester box's crontab hits `http://localhost:3100/api/...` instead
+of the public origin, so crawl/enrichment/ingest CPU+RAM stay on the 8 GB box.
+
+Deploy (order matters — crons never stop, web box drained last):
+
+1. **Harvester box** `.env`: point the worker at the web box's services, same as
+   the harvester already does —
+   `DATABASE_URL=postgres://…@<WEB_BOX_IP>:5432/…` and
+   `MINIO_ENDPOINT=http://<WEB_BOX_IP>:9000`. (Optional `WORKER_PORT` if `3100`
+   clashes with the harvester health port.)
+2. Start the worker on the harvester box:
+   `docker compose --profile worker up -d app-worker`
+3. Verify: `curl -s -o /dev/null -w '%{http_code}' http://localhost:3100/` and
+   `APP_URL=http://localhost:3100 CRON_SECRET=… bash scripts/crons.sh ghost-scan`.
+4. Install the worker crontab on the harvester box: `crontab -e`, paste
+   [`../scripts/hetzner-crontab-worker.example`](../scripts/hetzner-crontab-worker.example)
+   (fill `CRON_SECRET` + `DATABASE_URL`).
+5. **Only then**, on the **web box**, `crontab -e` and delete all cron lines (see
+   [`../scripts/hetzner-crontab.example`](../scripts/hetzner-crontab.example)).
+
+> Postgres still lives on the web box and takes all write load. This split fixes
+> the app-process contention (the 502s). If the DB itself becomes the next
+> ceiling, move Postgres to the 8 GB box or a dedicated host.
 
 ### Healthcheck (optional)
 
