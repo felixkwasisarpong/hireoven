@@ -1,69 +1,12 @@
-# Hireoven cron entries — for the Hetzner cron-runner box.
+# Hireoven cron entries — for the WEB box (powerful-platypus, 4 GB, us-east).
 #
-# Setup (one-time):
-#   1. SSH into the cron-runner host as the user that owns the repo clone.
-#   2. Edit your user's crontab:    crontab -e
-#   3. Paste the contents below.
-#   4. Save & exit. Confirm with:   crontab -l
+# This box should run NO heavy crons. It only serves the public site + Postgres
+# + MinIO. Running the crawl/enrichment here is what overloaded its 4 GB RAM and
+# caused intermittent 502s. All batch crons now run on the HARVESTER box against
+# a private worker — see scripts/hetzner-crontab-worker.example.
 #
-# Adjust HIREOVEN_REPO and the env vars before pasting if your paths/secrets differ.
-# Every entry redirects stdout+stderr to /var/log/hireoven/<task>.log so you can
-# tail any single task to see when it last ran and what it returned.
+# => The web box crontab should be EMPTY. If you previously pasted the full
+#    schedule here, run `crontab -e` and delete it (after the worker crontab on
+#    the harvester box is confirmed running).
 #
-# To run one task ad-hoc:
-#   APP_URL=https://hireoven.com CRON_SECRET=*** bash scripts/crons.sh crawl
-# Continuous multi-sector capture (seeding + discovery + rotating state crawl):
-#   npm run capture:companies:continuous:execute -- --states-per-run=4 --state-limit=36
-# Full sweep (all active companies, bypass cooldown/lane exclusions):
-#   APP_URL=https://hireoven.com CRON_SECRET=*** bash scripts/crons.sh crawl-full
-# Full sweep focused on non-ATS companies (recommended when harvester is running):
-#   APP_URL=https://hireoven.com CRON_SECRET=*** bash scripts/crons.sh crawl-full-non-ats
-#
-# Schedules mirror the previous Coolify Scheduled Tasks block in crons.sh.
-
-# ── Environment (crontab requires explicit env — it doesn't source ~/.bashrc) ──
-SHELL=/bin/bash
-PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-HIREOVEN_REPO=/opt/hireoven
-APP_URL=https://hireoven.com
-CRON_SECRET=REPLACE_ME
-
-# ── Schedules ───────────────────────────────────────────────────────────────────
-# m h dom mon dow  command
-  0 * * * *        cd $HIREOVEN_REPO && bash scripts/crons.sh recent-jobs        >>/var/log/hireoven/recent-jobs.log 2>&1
- 20 * * * *        flock -n /tmp/hireoven-crawl.lock -c 'cd $HIREOVEN_REPO && timeout 55m bash scripts/crons.sh crawl >>/var/log/hireoven/crawl.log 2>&1'
-# Cross-sector capture sweep (includes discovery + rotating state-balanced crawl).
- 20 1 * * *        cd $HIREOVEN_REPO && npm run capture:companies:continuous:execute -- --states-per-run=4 --state-limit=36 --state-min-certified=8 >>/var/log/hireoven/capture-companies-continuous.log 2>&1
-# Optional deep sweep lane (heavier): run once nightly off-peak.
-# 15 2 * * *      cd $HIREOVEN_REPO && bash scripts/crons.sh crawl-full         >>/var/log/hireoven/crawl-full.log 2>&1
-# Recommended deep sweep lane for crawler-only territory:
-# 45 2 * * *      flock -n /tmp/hireoven-crawl.lock -c 'cd $HIREOVEN_REPO && timeout 90m bash scripts/crons.sh crawl-full-non-ats >>/var/log/hireoven/crawl-full-non-ats.log 2>&1'
-# Description enrichment is the gate between harvested jobs and the public feed:
-# crawler-sourced jobs land as pending_enrichment and stay hidden until this runs.
-# Run every 5 min at higher batch/concurrency so it outpaces crawler inflow; flock
-# means a long run just skips the next tick instead of piling up overlapping runs.
- */5 * * * *       flock -n /tmp/hireoven-enrich.lock -c 'cd $HIREOVEN_REPO && JOB_DESCRIPTION_ENRICHMENT_BATCH=500 JOB_DESCRIPTION_ENRICHMENT_CONCURRENCY=12 bash scripts/crons.sh job-description-enrichment >>/var/log/hireoven/job-description-enrichment.log 2>&1'
-# crawl-enrichment intentionally disabled — AI-backed legacy enrichment.
-# Re-enable only when you want to spend on AI normalization.
-# 30 */2 * * *    cd $HIREOVEN_REPO && bash scripts/crons.sh crawl-enrichment   >>/var/log/hireoven/crawl-enrichment.log 2>&1
-  0 */6 * * *      cd $HIREOVEN_REPO && bash scripts/crons.sh ghost-scan         >>/var/log/hireoven/ghost-scan.log 2>&1
-  0 */6 * * *      cd $HIREOVEN_REPO && bash scripts/crons.sh timing-refresh     >>/var/log/hireoven/timing-refresh.log 2>&1
-  0 */4 * * *      cd $HIREOVEN_REPO && bash scripts/crons.sh cohort-detect      >>/var/log/hireoven/cohort-detect.log 2>&1
-  0 */12 * * *     cd $HIREOVEN_REPO && bash scripts/crons.sh cohort-match       >>/var/log/hireoven/cohort-match.log 2>&1
-  0 1 * * *        cd $HIREOVEN_REPO && bash scripts/crons.sh layoffs-fyi        >>/var/log/hireoven/layoffs-fyi.log 2>&1
-  0 2 * * *        cd $HIREOVEN_REPO && bash scripts/crons.sh health-scores      >>/var/log/hireoven/health-scores.log 2>&1
-  0 3 * * *        cd $HIREOVEN_REPO && bash scripts/crons.sh rejection-patterns >>/var/log/hireoven/rejection-patterns.log 2>&1
-  0 4 * * *        cd $HIREOVEN_REPO && bash scripts/crons.sh burnout-classify   >>/var/log/hireoven/burnout-classify.log 2>&1
-  0 5 * * *        cd $HIREOVEN_REPO && bash scripts/crons.sh salary-digest      >>/var/log/hireoven/salary-digest.log 2>&1
-  0 6 * * *        cd $HIREOVEN_REPO && bash scripts/crons.sh warn-act           >>/var/log/hireoven/warn-act.log 2>&1
-  0 7 * * *        cd $HIREOVEN_REPO && bash scripts/crons.sh cohort-aggregate   >>/var/log/hireoven/cohort-aggregate.log 2>&1
-  0 9 * * *        cd $HIREOVEN_REPO && bash scripts/crons.sh deliver-checkins   >>/var/log/hireoven/deliver-checkins.log 2>&1
-# blog-generate intentionally disabled — uses Claude via lib/blog/generate-worker.
-# Re-enable when you want AI-authored blog drafts.
-# 0 8 * * 1-5    cd $HIREOVEN_REPO && bash scripts/crons.sh blog-generate      >>/var/log/hireoven/blog-generate.log 2>&1
-  0 */6 * * *      cd $HIREOVEN_REPO && bash scripts/crons.sh dice-ingest        >>/var/log/hireoven/dice-ingest.log 2>&1
- 30 */4 * * *      cd $HIREOVEN_REPO && CAREERS_DISCOVERY_BATCH=10 bash scripts/crons.sh careers-url-discovery >>/var/log/hireoven/careers-url-discovery.log 2>&1
-
-# ── First-time bootstrap commands (run once, then delete this comment block) ──
-#   sudo mkdir -p /var/log/hireoven && sudo chown $USER:$USER /var/log/hireoven
-#   sudo apt-get install -y curl   # if not already installed
+# Nothing below this line. Keep it that way.

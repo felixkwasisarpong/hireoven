@@ -1,0 +1,54 @@
+# Hireoven cron entries — for the HARVESTER box (havester, 8 GB, us-west).
+#
+# All heavy batch work runs HERE, against a private app-worker container on this
+# same box (http://localhost:3100 — the `app-worker` service in
+# docker-compose.prod.yml, started with `docker compose --profile worker up -d`).
+# Because APP_URL points at localhost, the crawl/enrichment/ingest CPU+RAM stay
+# on this box and never touch the user-facing 4 GB web box (which only serves the
+# site + Postgres + MinIO). That's what stops the 502s.
+#
+# Setup (one-time):
+#   1. On the harvester box, bring up the worker:
+#        docker compose --profile worker up -d app-worker
+#      (set DATABASE_URL + MINIO_ENDPOINT in .env to the web box host first.)
+#   2. crontab -e  →  paste the contents below  →  save.  Confirm: crontab -l
+#   3. sudo mkdir -p /var/log/hireoven && sudo chown $USER:$USER /var/log/hireoven
+#
+# Logs: /var/log/hireoven/<task>.log
+
+# ── Environment (crontab requires explicit env — it doesn't source ~/.bashrc) ──
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+HIREOVEN_REPO=/opt/hireoven
+# Local private worker on THIS box — not the public site.
+APP_URL=http://localhost:3100
+CRON_SECRET=REPLACE_ME
+# Needed only by the npm capture task below (runs via tsx on the host, not the
+# worker container). Point at the web box Postgres, same as the harvester.
+DATABASE_URL=REPLACE_ME
+
+# ── Schedules ───────────────────────────────────────────────────────────────────
+# m h dom mon dow  command
+  0 * * * *        cd $HIREOVEN_REPO && bash scripts/crons.sh recent-jobs        >>/var/log/hireoven/recent-jobs.log 2>&1
+ 20 * * * *        flock -n /tmp/hireoven-crawl.lock -c 'cd $HIREOVEN_REPO && timeout 55m bash scripts/crons.sh crawl >>/var/log/hireoven/crawl.log 2>&1'
+# Cross-sector capture sweep (runs via tsx on the host — uses DATABASE_URL above).
+ 20 1 * * *        cd $HIREOVEN_REPO && npm run capture:companies:continuous:execute -- --states-per-run=4 --state-limit=36 --state-min-certified=8 >>/var/log/hireoven/capture-companies-continuous.log 2>&1
+# Recommended deep sweep lane for crawler-only territory (off-peak):
+# 45 2 * * *      flock -n /tmp/hireoven-crawl.lock -c 'cd $HIREOVEN_REPO && timeout 90m bash scripts/crons.sh crawl-full-non-ats >>/var/log/hireoven/crawl-full-non-ats.log 2>&1'
+# Description enrichment — now near-empty (auto-retire keeps the pending floor at
+# zero), but keep it running to publish fresh crawler jobs within ~5 min.
+ */5 * * * *       flock -n /tmp/hireoven-enrich.lock -c 'cd $HIREOVEN_REPO && JOB_DESCRIPTION_ENRICHMENT_BATCH=500 JOB_DESCRIPTION_ENRICHMENT_CONCURRENCY=12 bash scripts/crons.sh job-description-enrichment >>/var/log/hireoven/job-description-enrichment.log 2>&1'
+  0 */6 * * *      cd $HIREOVEN_REPO && bash scripts/crons.sh ghost-scan         >>/var/log/hireoven/ghost-scan.log 2>&1
+  0 */6 * * *      cd $HIREOVEN_REPO && bash scripts/crons.sh timing-refresh     >>/var/log/hireoven/timing-refresh.log 2>&1
+  0 */4 * * *      cd $HIREOVEN_REPO && bash scripts/crons.sh cohort-detect      >>/var/log/hireoven/cohort-detect.log 2>&1
+  0 */12 * * *     cd $HIREOVEN_REPO && bash scripts/crons.sh cohort-match       >>/var/log/hireoven/cohort-match.log 2>&1
+  0 1 * * *        cd $HIREOVEN_REPO && bash scripts/crons.sh layoffs-fyi        >>/var/log/hireoven/layoffs-fyi.log 2>&1
+  0 2 * * *        cd $HIREOVEN_REPO && bash scripts/crons.sh health-scores      >>/var/log/hireoven/health-scores.log 2>&1
+  0 3 * * *        cd $HIREOVEN_REPO && bash scripts/crons.sh rejection-patterns >>/var/log/hireoven/rejection-patterns.log 2>&1
+  0 4 * * *        cd $HIREOVEN_REPO && bash scripts/crons.sh burnout-classify   >>/var/log/hireoven/burnout-classify.log 2>&1
+  0 5 * * *        cd $HIREOVEN_REPO && bash scripts/crons.sh salary-digest      >>/var/log/hireoven/salary-digest.log 2>&1
+  0 6 * * *        cd $HIREOVEN_REPO && bash scripts/crons.sh warn-act           >>/var/log/hireoven/warn-act.log 2>&1
+  0 7 * * *        cd $HIREOVEN_REPO && bash scripts/crons.sh cohort-aggregate   >>/var/log/hireoven/cohort-aggregate.log 2>&1
+  0 9 * * *        cd $HIREOVEN_REPO && bash scripts/crons.sh deliver-checkins   >>/var/log/hireoven/deliver-checkins.log 2>&1
+  0 */6 * * *      cd $HIREOVEN_REPO && bash scripts/crons.sh dice-ingest        >>/var/log/hireoven/dice-ingest.log 2>&1
+ 30 */4 * * *      cd $HIREOVEN_REPO && CAREERS_DISCOVERY_BATCH=10 bash scripts/crons.sh careers-url-discovery >>/var/log/hireoven/careers-url-discovery.log 2>&1

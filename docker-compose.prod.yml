@@ -151,6 +151,69 @@ services:
       USAJOBS_API_KEY: ${USAJOBS_API_KEY}
       USAJOBS_USER_AGENT: ${USAJOBS_USER_AGENT}
 
+  # ── Background worker (run on the HARVESTER box, not the web box) ──────────────
+  # Same app image, NOT publicly exposed. It exists only so the harvester box's
+  # crontab can hit cron endpoints LOCALLY (http://localhost:${WORKER_PORT:-3100})
+  # instead of curling the public web app — so crawl/enrichment/ingest CPU+RAM
+  # land here (8 GB box) and never touch the user-facing 4 GB web box.
+  #
+  # Enable only on the harvester box:  docker compose --profile worker up -d app-worker
+  # On that box set DATABASE_URL (and MINIO_ENDPOINT) in .env to the web box host,
+  # exactly like the harvester service already does.
+  app-worker:
+    image: ghcr.io/felixkwasisarpong/hireoven:latest
+    pull_policy: always
+    container_name: hireoven-app-worker
+    restart: unless-stopped
+    profiles: ["worker"]
+    environment:
+      NODE_ENV: production
+      # Overridable so the remote (cross-region) DB host can be supplied on the
+      # harvester box; falls back to the local compose Postgres otherwise.
+      DATABASE_URL: ${DATABASE_URL:-postgres://${POSTGRES_USER:-hireoven}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-hireoven}}
+      PGSSLMODE: disable
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-http://minio:9000}
+      MINIO_BUCKET: ${MINIO_BUCKET:-hireoven-resumes}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL}
+      NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_APP_URL}
+      AUTH_SESSION_SECRET: ${AUTH_SESSION_SECRET}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      RESEND_API_KEY: ${RESEND_API_KEY}
+      RESEND_FROM_EMAIL: ${RESEND_FROM_EMAIL}
+      LOGO_DEV_TOKEN: ${LOGO_DEV_TOKEN}
+      NEXT_PUBLIC_LOGO_DEV_TOKEN: ${NEXT_PUBLIC_LOGO_DEV_TOKEN}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY}
+      VAPID_EMAIL: ${VAPID_EMAIL}
+      CRON_SECRET: ${CRON_SECRET}
+      USAJOBS_API_KEY: ${USAJOBS_API_KEY}
+      USAJOBS_USER_AGENT: ${USAJOBS_USER_AGENT}
+      # Crawler tuning (mirrors the app service)
+      CRAWLER_PLAYWRIGHT_ENABLED: ${CRAWLER_PLAYWRIGHT_ENABLED:-false}
+      CRAWLER_MAX_COMPANIES_PER_RUN: ${CRAWLER_MAX_COMPANIES_PER_RUN:-150}
+      CRAWLER_COMPANY_CONCURRENCY: ${CRAWLER_COMPANY_CONCURRENCY:-15}
+      CRAWLER_DOMAIN_CONCURRENCY: ${CRAWLER_DOMAIN_CONCURRENCY:-6}
+      CRAWLER_FETCH_TIMEOUT_MS: ${CRAWLER_FETCH_TIMEOUT_MS:-6000}
+      CRAWLER_FAILURE_STREAK_MIN: ${CRAWLER_FAILURE_STREAK_MIN:-3}
+      CRAWLER_FAILURE_COOLDOWN_DAYS: ${CRAWLER_FAILURE_COOLDOWN_DAYS:-7}
+      CRAWLER_BLOCKED_COOLDOWN_DAYS: ${CRAWLER_BLOCKED_COOLDOWN_DAYS:-14}
+      CRAWLER_DOMAIN_BROKEN_COOLDOWN_DAYS: ${CRAWLER_DOMAIN_BROKEN_COOLDOWN_DAYS:-30}
+      CRAWLER_BAD_URL_COOLDOWN_DAYS: ${CRAWLER_BAD_URL_COOLDOWN_DAYS:-30}
+      CRAWLER_WORKDAY_FALLBACK_MAX_ATTEMPTS: ${CRAWLER_WORKDAY_FALLBACK_MAX_ATTEMPTS:-6}
+      CRAWLER_MAX_DESCRIPTION_FETCHES_PER_COMPANY: ${CRAWLER_MAX_DESCRIPTION_FETCHES_PER_COMPANY:-0}
+      CRAWLER_INCLUDE_BLOCKED_IN_MAIN: ${CRAWLER_INCLUDE_BLOCKED_IN_MAIN:-false}
+      CRAWLER_INCLUDE_DOMAIN_BROKEN_IN_MAIN: ${CRAWLER_INCLUDE_DOMAIN_BROKEN_IN_MAIN:-false}
+      CRAWLER_INCLUDE_LIKELY_INACTIVE_IN_MAIN: ${CRAWLER_INCLUDE_LIKELY_INACTIVE_IN_MAIN:-false}
+      # Description enrichment tuning
+      JOB_DESCRIPTION_ENRICHMENT_BATCH_SIZE: ${JOB_DESCRIPTION_ENRICHMENT_BATCH_SIZE:-500}
+      JOB_DESCRIPTION_ENRICHMENT_CONCURRENCY: ${JOB_DESCRIPTION_ENRICHMENT_CONCURRENCY:-12}
+    # Bind to loopback only — reachable from the host crontab, never the internet.
+    ports:
+      - "127.0.0.1:${WORKER_PORT:-3100}:3000"
+
 volumes:
   hireoven_postgres_data:
   hireoven_minio_data:
