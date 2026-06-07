@@ -149,17 +149,26 @@ async function claimJob(
   return rows[0] ?? null
 }
 
-async function markFailure(
+export async function markFailure(
   pool: Pool,
   job: DescriptionEnrichmentJob,
   runId: string,
-  reason: string
+  reason: string,
+  maxAttempts: number
 ): Promise<void> {
   const rawData = toRecord(job.raw_data)
   const attempts = readAttempts(rawData) + 1
+  // Once a job exhausts its attempts it can never be re-picked (fetchCandidateIds
+  // filters attempts < maxAttempts), so it would sit in pending_enrichment
+  // forever — the un-drainable "floor". Retire it to the terminal hidden state so
+  // it leaves the pending pool and stops being counted and retried. Only the
+  // crawler produces these; harvester jobs arrive with descriptions and never hit
+  // this path. A later re-crawl/harvest that finds a description re-publishes it.
+  const retired = attempts >= maxAttempts
   await pool.query(
     `UPDATE jobs
         SET raw_data = $2::jsonb,
+            publication_status = CASE WHEN $3::boolean THEN 'hidden_low_quality' ELSE publication_status END,
             updated_at = NOW()
       WHERE id = $1::uuid`,
     [
@@ -169,13 +178,14 @@ async function markFailure(
         description_enrichment: {
           ...enrichmentNode(rawData),
           mode: "non_ai",
-          status: "failed",
+          status: retired ? "retired" : "failed",
           attempts,
           run_id: runId,
           last_error: reason.slice(0, 500),
           last_failed_at: toIsoNow(),
         },
       }),
+      retired,
     ]
   )
 }
@@ -314,7 +324,8 @@ export async function processPendingDescriptionEnrichmentBatch(options?: {
           pool,
           job,
           runId,
-          description ? "description_too_short" : "description_fetch_failed"
+          description ? "description_too_short" : "description_fetch_failed",
+          maxAttempts
         )
         return "failed" as const
       }
