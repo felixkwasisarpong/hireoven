@@ -36,7 +36,10 @@ WITH candidates AS (
   SELECT j.id
   FROM jobs j
   WHERE j.is_active = false
-    AND COALESCE(j.last_seen_at, j.updated_at) < now() - ($1 || ' days')::interval
+    -- last_seen_at (not COALESCE) so the partial index
+    -- idx_jobs_inactive_last_seen WHERE is_active=false is used. Jobs with a NULL
+    -- last_seen_at are skipped (rare; they just age out on a later run).
+    AND j.last_seen_at < now() - ($1 || ' days')::interval
     AND NOT EXISTS (SELECT 1 FROM job_applications x      WHERE x.job_id = j.id)
     AND NOT EXISTS (SELECT 1 FROM cover_letters x         WHERE x.job_id = j.id)
     AND NOT EXISTS (SELECT 1 FROM autofill_history x      WHERE x.job_id = j.id)
