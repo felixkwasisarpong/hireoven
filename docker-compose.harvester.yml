@@ -11,6 +11,9 @@ services:
     pull_policy: always
     container_name: hireoven-harvester
     restart: unless-stopped
+    # Pin the worker command so Coolify can't substitute a Next start. This is the
+    # background harvester loop — it must NOT run a web server.
+    command: ["npm", "run", "harvester:worker"]
     environment:
       NODE_ENV: production
       DATABASE_URL: ${DATABASE_URL}
