@@ -107,6 +107,10 @@ export async function withAICall<T>({
     success = false
     if (timedOut || (err instanceof Error && err.name === "AbortError")) {
       timedOut = true
+    } else {
+      // Surface the real reason — otherwise it's swallowed into the fallback and
+      // every failure looks identical downstream.
+      console.error(`[withAICall] ${feature} (${model}) failed:`, err)
     }
     value = sanitizeGeneratedText(fallback())
   } finally {

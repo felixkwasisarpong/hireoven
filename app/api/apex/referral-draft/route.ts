@@ -138,16 +138,22 @@ export async function POST(request: NextRequest) {
     timeoutMs: 14_000,
     params: {
       model: HAIKU_MODEL,
-      max_tokens: 600,
+      // The message + forwardable blurb + subject/tone in JSON can run long;
+      // 600 truncated mid-object and broke the parse. Give it real headroom.
+      max_tokens: 1200,
       system: SYSTEM_PROMPT,
       messages: [{ role: "user", content: JSON.stringify(inputs, null, 2) }],
     },
     parse: (text: string) => {
       const jsonMatch = text.match(/\{[\s\S]*\}/)
-      if (!jsonMatch) return null
+      if (!jsonMatch) {
+        console.error("[referral-draft] no JSON in model output:", text.slice(0, 300))
+        return null
+      }
       try {
         return JSON.parse(jsonMatch[0]) as ReferralDraftResult
-      } catch {
+      } catch (err) {
+        console.error("[referral-draft] JSON.parse failed:", err, "raw:", jsonMatch[0].slice(0, 300))
         return null
       }
     },
