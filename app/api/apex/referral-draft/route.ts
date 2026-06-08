@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { HAIKU_MODEL } from "@/lib/ai/anthropic-models"
 import { withAICall } from "@/lib/apex/budget/ai-call"
-import { AI_TIMEOUTS } from "@/lib/apex/budget/router"
+import { isAiBudgetExceeded } from "@/lib/apex/budget/cap"
 import type { Company, Job, Profile } from "@/types"
 
 export const runtime = "nodejs"
@@ -129,10 +129,13 @@ export async function POST(request: NextRequest) {
     application_status: body.application_status,
   }
 
-  const { value: result } = await withAICall({
+  const { value: result, timedOut } = await withAICall({
     anthropic: anthropic!,
     feature: "apex_follow_up",
-    timeoutMs: AI_TIMEOUTS.apex_follow_up,
+    // apex_follow_up's 4s budget is sized for a 2-3 sentence follow-up; this
+    // draft generates a full message + forwardable blurb (~600 tokens), which
+    // Haiku needs longer for. Give it a realistic ceiling under maxDuration.
+    timeoutMs: 14_000,
     params: {
       model: HAIKU_MODEL,
       max_tokens: 600,
@@ -142,12 +145,20 @@ export async function POST(request: NextRequest) {
     parse: (text: string) => {
       const jsonMatch = text.match(/\{[\s\S]*\}/)
       if (!jsonMatch) return null
-      return JSON.parse(jsonMatch[0]) as ReferralDraftResult
+      try {
+        return JSON.parse(jsonMatch[0]) as ReferralDraftResult
+      } catch {
+        return null
+      }
     },
     fallback: () => null,
     userId: user.id,
   })
 
-  if (!result) return apexError(500, "Failed to generate referral draft")
+  if (!result) {
+    if (timedOut) return apexError(504, "The draft took too long to generate. Please try again.")
+    if (await isAiBudgetExceeded()) return apexError(503, "Daily AI limit reached. Try again later.")
+    return apexError(502, "Couldn't draft the message right now. Please try again.")
+  }
   return NextResponse.json({ ok: true, draft: result })
 }
