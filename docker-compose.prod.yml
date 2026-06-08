@@ -3,7 +3,33 @@ services:
     image: postgres:17-alpine
     container_name: hireoven-postgres
     restart: unless-stopped
-    shm_size: "256m"
+    shm_size: "${POSTGRES_SHM_SIZE:-1gb}"
+    # Performance tuning. Defaults target a ~16 GB box; override via .env for a
+    # different size (e.g. an 8 GB box: SHARED_BUFFERS=2GB, EFFECTIVE_CACHE_SIZE=6GB;
+    # a 4 GB box: 1GB / 3GB). Without this, Postgres uses shared_buffers=128MB and
+    # caches almost nothing → low cache-hit ratio and disk-bound queries.
+    command:
+      - "postgres"
+      - "-c"
+      - "shared_buffers=${POSTGRES_SHARED_BUFFERS:-4GB}"
+      - "-c"
+      - "effective_cache_size=${POSTGRES_EFFECTIVE_CACHE_SIZE:-12GB}"
+      - "-c"
+      - "max_connections=${POSTGRES_MAX_CONNECTIONS:-200}"
+      - "-c"
+      - "work_mem=${POSTGRES_WORK_MEM:-32MB}"
+      - "-c"
+      - "maintenance_work_mem=${POSTGRES_MAINTENANCE_WORK_MEM:-512MB}"
+      - "-c"
+      - "random_page_cost=1.1"
+      - "-c"
+      - "effective_io_concurrency=200"
+      - "-c"
+      - "wal_compression=on"
+      - "-c"
+      - "max_wal_size=4GB"
+      - "-c"
+      - "checkpoint_completion_target=0.9"
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-hireoven}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
