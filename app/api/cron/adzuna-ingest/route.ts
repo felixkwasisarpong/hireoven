@@ -31,6 +31,9 @@ import {
   type AdzunaJob,
 } from "@/lib/sources/adzuna"
 import { isValidCompanyName } from "@/lib/sources/company-name-guard"
+import { normalizePersistedJobRecord } from "@/lib/jobs/normalization"
+import { publicationStatusForJob } from "@/lib/jobs/publication"
+import type { EmploymentType } from "@/types"
 
 export const runtime = "nodejs"
 export const maxDuration = 300
@@ -179,38 +182,96 @@ export async function GET(request: NextRequest) {
     const salaryMin = job.salaryIsPredicted ? undefined : job.salaryMin
     const salaryMax = job.salaryIsPredicted ? undefined : job.salaryMax
     const firstDetected = new Date(job.created).toISOString()
-    const rawData = JSON.stringify({ source: "adzuna", category: job.category, salaryIsPredicted: job.salaryIsPredicted })
     const existingId = existingByExtId.get(externalId)
+
+    // Adzuna returns full descriptions but zero structured metadata. Run the
+    // deterministic normalizer (same one the harvester/description-enrichment
+    // path uses) to extract skills, seniority, normalized title, etc. — without
+    // this, every adzuna job lands at 0% skills and stays that way.
+    const norm = normalizePersistedJobRecord({
+      id: existingId ?? "",
+      title: job.title,
+      normalized_title: null,
+      location: job.location,
+      apply_url: job.applyUrl,
+      external_id: externalId,
+      description: job.description || null,
+      employment_type: employmentType as EmploymentType | null,
+      seniority_level: null,
+      is_remote: isRemote,
+      is_hybrid: false,
+      salary_min: salaryMin ?? null,
+      salary_max: salaryMax ?? null,
+      salary_currency: "USD",
+      sponsors_h1b: null,
+      sponsorship_score: 0,
+      requires_authorization: false,
+      visa_language_detected: null,
+      skills: [],
+      first_detected_at: firstDetected,
+      raw_data: { source: "adzuna", category: job.category, salaryIsPredicted: job.salaryIsPredicted },
+    })
+    const nc = norm.nextColumns
+    const publicationStatus = publicationStatusForJob({
+      description: nc.description,
+      skills: nc.skills,
+    })
+    const rawData = JSON.stringify({
+      source: "adzuna",
+      category: job.category,
+      salaryIsPredicted: job.salaryIsPredicted,
+      description_captured: Boolean(nc.description),
+      normalization: {
+        version: norm.canonical.schema_version,
+        normalized_at: norm.canonical.normalized_at,
+        confidence_score: norm.canonical.validation.confidence_score,
+        completeness_score: norm.canonical.validation.completeness_score,
+        requires_review: norm.canonical.validation.requires_review,
+        issues: norm.canonical.validation.issues,
+      },
+      normalized: norm.canonical,
+      structured_job: norm.structuredData,
+      view: { page: norm.pageView, card: norm.cardView },
+    })
 
     try {
       if (existingId) {
         await pool.query(
           `UPDATE jobs SET
-             title=$1, location=$2, is_remote=$3,
-             employment_type=$4, description=$5,
-             salary_min=$6, salary_max=$7, salary_currency='USD',
-             is_active=true, last_seen_at=NOW(), updated_at=NOW(), raw_data=$8
-           WHERE id=$9`,
-          [job.title, job.location, isRemote, employmentType,
-           job.description || null, salaryMin ?? null, salaryMax ?? null,
+             title=$1, normalized_title=$2, location=$3, is_remote=$4, is_hybrid=$5,
+             employment_type=$6, seniority_level=$7, description=$8,
+             salary_min=$9, salary_max=$10, salary_currency=$11,
+             requires_authorization=$12, sponsors_h1b=$13, sponsorship_score=$14,
+             visa_language_detected=$15, skills=$16, publication_status=$17,
+             is_active=true, last_seen_at=NOW(), updated_at=NOW(), raw_data=$18
+           WHERE id=$19`,
+          [job.title, nc.normalized_title, nc.location, nc.is_remote, nc.is_hybrid,
+           nc.employment_type, nc.seniority_level, nc.description,
+           nc.salary_min, nc.salary_max, nc.salary_currency ?? "USD",
+           nc.requires_authorization, nc.sponsors_h1b, nc.sponsorship_score,
+           nc.visa_language_detected, nc.skills, publicationStatus,
            rawData, existingId]
         )
         stats.updated++
       } else {
         await pool.query(
           `INSERT INTO jobs (
-             company_id, title, location, is_remote,
-             employment_type, description, apply_url, external_id,
+             company_id, title, normalized_title, location, is_remote, is_hybrid,
+             employment_type, seniority_level, description, apply_url, external_id,
              salary_min, salary_max, salary_currency,
+             requires_authorization, sponsors_h1b, sponsorship_score,
+             visa_language_detected, skills, publication_status,
              is_active, last_seen_at, first_detected_at,
              created_at, updated_at, raw_data
            ) VALUES (
-             $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'USD',
-             true, NOW(), $11, NOW(), NOW(), $12
+             $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
+             true, NOW(), $21, NOW(), NOW(), $22
            )`,
-          [companyId, job.title, job.location, isRemote,
-           employmentType, job.description || null, job.applyUrl, externalId,
-           salaryMin ?? null, salaryMax ?? null,
+          [companyId, job.title, nc.normalized_title, nc.location, nc.is_remote, nc.is_hybrid,
+           nc.employment_type, nc.seniority_level, nc.description, job.applyUrl, externalId,
+           nc.salary_min, nc.salary_max, nc.salary_currency ?? "USD",
+           nc.requires_authorization, nc.sponsors_h1b, nc.sponsorship_score,
+           nc.visa_language_detected, nc.skills, publicationStatus,
            firstDetected, rawData]
         )
         stats.inserted++
