@@ -160,7 +160,7 @@ async function main() {
     SELECT DISTINCT c.id, c.name, c.domain
     FROM companies c
     JOIN jobs j ON j.company_id = c.id AND j.is_active = true
-    WHERE c.domain LIKE '%.placeholder'
+    WHERE (c.domain LIKE '%placeholder' OR c.domain LIKE '%-discovered')
       AND (c.logo_url IS NULL OR c.logo_url = '')
     ORDER BY c.name
     ${LIMIT > 0 ? `LIMIT ${LIMIT}` : ""}
@@ -188,10 +188,17 @@ async function main() {
 
     if (!DRY_RUN) {
       try {
+        // Always set the logo (multiple companies may legitimately share a
+        // brand domain's logo). Only adopt the real domain if no other company
+        // already owns it, so we never trip the unique-domain constraint.
         await pool.query(
-          `UPDATE companies SET domain = $1, logo_url = $2, updated_at = now()
-           WHERE id = $3
-             AND NOT EXISTS (SELECT 1 FROM companies WHERE domain = $1 AND id != $3)`,
+          `UPDATE companies SET
+             logo_url = $2,
+             domain = CASE
+               WHEN NOT EXISTS (SELECT 1 FROM companies x WHERE x.domain = $1 AND x.id <> companies.id)
+               THEN $1 ELSE companies.domain END,
+             updated_at = now()
+           WHERE id = $3`,
           [domain, logoUrl, company.id]
         )
       } catch (err: unknown) {
