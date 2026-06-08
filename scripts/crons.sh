@@ -61,6 +61,7 @@ case "${1:-}" in
   crawl-full-non-ats) run 'api/crawl?sweep=all&scope=non_ats' ;;
   crawl-enrichment)  run api/crawl/enrichment ;;
   job-description-enrichment) run "api/cron/job-description-enrichment?batch=${JOB_DESCRIPTION_ENRICHMENT_BATCH:-100}&concurrency=${JOB_DESCRIPTION_ENRICHMENT_CONCURRENCY:-4}" ;;
+  job-retention)     run "api/cron/job-retention?days=${JOB_RETENTION_DAYS:-30}&batch=${JOB_RETENTION_BATCH:-5000}&maxBatches=${JOB_RETENTION_MAX_BATCHES:-50}" ;;
   ghost-scan)        run api/cron/ghost-scan ;;
   timing-refresh)    run api/cron/timing-refresh ;;
   cohort-detect)     run api/cron/cohort-detect ;;
