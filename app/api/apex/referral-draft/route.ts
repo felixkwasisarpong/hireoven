@@ -83,30 +83,36 @@ export async function POST(request: NextRequest) {
 
   const pool = getPostgresPool()
 
-  // Fetch job + company + user profile in parallel
-  const [jobResult, profileResult] = await Promise.all([
+  // Fetch job + company, the user's name, and their primary resume in parallel.
+  // Skills/role live on the parsed resume — `profiles` only carries full_name.
+  const [jobResult, profileResult, resumeResult] = await Promise.all([
     pool.query<Job & { company: Company }>(
       `SELECT j.*, to_jsonb(c.*) AS company
        FROM jobs j LEFT JOIN companies c ON c.id = j.company_id
        WHERE j.id = $1 LIMIT 1`,
       [body.jobId]
     ),
-    pool.query<Profile>(
-      `SELECT full_name, top_skills, seniority_level FROM profiles WHERE id = $1 LIMIT 1`,
+    pool.query<Pick<Profile, "full_name">>(
+      `SELECT full_name FROM profiles WHERE id = $1 LIMIT 1`,
+      [user.id]
+    ),
+    pool.query<{ top_skills: string[] | null; primary_role: string | null }>(
+      `SELECT top_skills, primary_role FROM resumes
+       WHERE user_id = $1 AND is_primary = true AND parse_status = 'complete'
+       ORDER BY updated_at DESC LIMIT 1`,
       [user.id]
     ),
   ])
 
   const job = jobResult.rows[0]
   const profile = profileResult.rows[0]
+  const resume = resumeResult.rows[0]
 
   if (!job) return apexError(404, "Job not found")
 
   const candidateName = profile?.full_name ?? "the candidate"
-  const topStrengths = (profile?.top_skills ?? []).slice(0, 3).join(", ") || "strong technical background"
-  const currentRole = profile?.seniority_level
-    ? `${profile.seniority_level} professional`
-    : "software professional"
+  const topStrengths = (resume?.top_skills ?? []).slice(0, 3).join(", ") || "strong technical background"
+  const currentRole = resume?.primary_role || "software professional"
 
   const inputs = {
     candidate: {

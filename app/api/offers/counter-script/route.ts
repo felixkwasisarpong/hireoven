@@ -51,9 +51,12 @@ export async function POST(request: Request) {
       visa_status: string | null
       top_skills: string[] | null
       desired_locations: string[] | null
-      seniority_level: string | null
     }>(
-      `SELECT visa_status, top_skills, desired_locations, seniority_level FROM profiles WHERE id = $1`,
+      `SELECT p.visa_status, p.desired_locations,
+              (SELECT top_skills FROM resumes
+               WHERE user_id = p.id AND is_primary = true AND parse_status = 'complete'
+               ORDER BY updated_at DESC LIMIT 1) AS top_skills
+       FROM profiles p WHERE p.id = $1`,
       [user.id]
     )
     const p = profileResult.rows[0]

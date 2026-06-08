@@ -71,28 +71,22 @@ export async function POST(req: NextRequest) {
   // Try resume + profile — never block submission on failure
   try {
     const [resumeRes, profileRes] = await Promise.all([
-      pool.query<{ top_skills: string[] | null; seniority_level: string | null }>(
-        `SELECT top_skills, seniority_level
+      pool.query<{ top_skills: string[] | null; years_of_experience: number | null }>(
+        `SELECT top_skills, years_of_experience
          FROM resumes
          WHERE user_id = $1 AND is_primary = true AND parse_status = 'complete'
          LIMIT 1`,
         [user.id]
       ),
       pool.query<{ visa_status: string | null }>(
-        `SELECT visa_status FROM profiles WHERE user_id = $1 LIMIT 1`,
+        `SELECT visa_status FROM profiles WHERE id = $1 LIMIT 1`,
         [user.id]
       ),
     ])
     const resume  = resumeRes.rows[0]
     const profile = profileRes.rows[0]
 
-    // Map seniority → rough years
-    const SENIORITY_YOE: Record<string, number> = {
-      intern: 0, junior: 1, mid: 3, senior: 6, staff: 10, principal: 12, director: 15,
-    }
-    const yoe = resume?.seniority_level
-      ? (SENIORITY_YOE[resume.seniority_level] ?? null)
-      : null
+    const yoe = resume?.years_of_experience ?? null
 
     // Normalise visa
     const visaMap: Record<string, string> = {

@@ -168,7 +168,11 @@ export async function POST(request: NextRequest) {
         top_skills: string[] | null
         desired_locations: string[] | null
       }>(
-        `SELECT visa_status, top_skills, desired_locations FROM profiles WHERE id = $1`,
+        `SELECT p.visa_status, p.desired_locations,
+                (SELECT top_skills FROM resumes
+                 WHERE user_id = p.id AND is_primary = true AND parse_status = 'complete'
+                 ORDER BY updated_at DESC LIMIT 1) AS top_skills
+         FROM profiles p WHERE p.id = $1`,
         [user.id]
       )
       userProfile = profileResult.rows[0] ?? null

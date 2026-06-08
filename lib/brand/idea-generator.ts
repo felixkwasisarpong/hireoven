@@ -47,8 +47,8 @@ async function gatherUserContext(userId: string): Promise<UserContext> {
        ORDER BY is_primary DESC, updated_at DESC LIMIT 1`,
       [userId]
     ),
-    pool.query<{ desired_roles: string[] | null; top_skills: string[] | null }>(
-      `SELECT desired_roles, top_skills FROM profiles WHERE id = $1`,
+    pool.query<{ desired_roles: string[] | null }>(
+      `SELECT desired_roles FROM profiles WHERE id = $1`,
       [userId]
     ),
     pool.query<{ job_title: string; company_name: string }>(
@@ -86,7 +86,6 @@ async function gatherUserContext(userId: string): Promise<UserContext> {
 
   const topSkills = [...new Set([
     ...(resume?.top_skills ?? []),
-    ...(profile?.top_skills ?? []),
     ...resumeSkills,
   ])].slice(0, 10)
 

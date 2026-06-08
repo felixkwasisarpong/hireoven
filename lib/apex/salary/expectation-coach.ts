@@ -29,7 +29,9 @@ export async function generateSalaryExpectationScript(
 
   // Get user's years of experience from profile
   const profileResult = await pool.query<{ top_skills: string[] | null }>(
-    `SELECT top_skills FROM profiles WHERE id = $1`,
+    `SELECT top_skills FROM resumes
+     WHERE user_id = $1 AND is_primary = true AND parse_status = 'complete'
+     ORDER BY updated_at DESC LIMIT 1`,
     [userId]
   )
 

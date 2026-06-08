@@ -126,7 +126,7 @@ export default function ReferralDraftModal({
   function scan() {
     setError(null)
     setStep("scanning")
-    window.postMessage({ type: "APEX_SCAN_CONNECTIONS", companyName, jobTitle }, window.location.origin)
+    window.postMessage({ source: "hireoven-apex", type: "APEX_SCAN_CONNECTIONS", companyName, jobTitle }, window.location.origin)
     timeoutRef.current = setTimeout(() => {
       setError("Scan timed out. Make sure the extension is active and you're logged in to LinkedIn.")
       setStep("idle")
@@ -289,6 +289,11 @@ export default function ReferralDraftModal({
                   {connections.length} connection{connections.length !== 1 ? "s" : ""} found · tap one to draft your message
                 </p>
               </div>
+              {error && (
+                <p className="border-b border-red-100 bg-red-50 px-5 py-3 text-[12.5px] text-red-600">
+                  {error}
+                </p>
+              )}
               <div className="divide-y divide-slate-50">
                 {connections.map((c) => (
                   <button

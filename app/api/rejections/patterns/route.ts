@@ -121,7 +121,7 @@ export async function GET(req: NextRequest) {
   if (user) {
     const [profileR, resumeR] = await Promise.all([
       pool.query<{ visa_status: string | null }>(
-        `SELECT visa_status FROM profiles WHERE user_id = $1 LIMIT 1`,
+        `SELECT visa_status FROM profiles WHERE id = $1 LIMIT 1`,
         [user.id]
       ).catch(() => ({ rows: [] as { visa_status: string | null }[] })),
       pool.query<{ top_skills: string[] | null }>(
