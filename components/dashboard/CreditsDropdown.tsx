@@ -167,6 +167,7 @@ export default function CreditsDropdown() {
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
+        title="Credits cover AI features (tailors, analyses, autofill and more). They refresh each period — open to see what's left and what each covers."
         className={cn(
           "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[12px] font-semibold transition",
           triggerColor
@@ -209,8 +210,11 @@ export default function CreditsDropdown() {
       {open && (
         <div className="opaque-dropdown absolute right-0 top-full z-50 mt-2 w-72 rounded-xl border border-slate-200 bg-white p-3 shadow-lg">
           {/* Period quotas */}
-          <p className="mb-2.5 text-[10.5px] font-bold uppercase tracking-wider text-slate-400">
+          <p className="text-[10.5px] font-bold uppercase tracking-wider text-slate-400">
             Usage this period
+          </p>
+          <p className="mb-2.5 mt-0.5 text-[11px] leading-relaxed text-slate-400">
+            Credits cover AI features and refresh each period — nothing is lost by exploring.
           </p>
           <ul className="space-y-2.5">
             {METERED_FEATURE_KEYS.map((feature) => {
@@ -298,7 +302,7 @@ function QuotaRow({
   const used = state?.used ?? 0
 
   return (
-    <div title={state ? `${used} of ${limit} used` : undefined}>
+    <div title={state ? `${config?.label ?? label}: ${used} of ${limit} used this period` : `${config?.label ?? label}: what this credit buys`}>
       <div className="flex items-baseline justify-between gap-2">
         <span className="truncate text-[12.5px] font-medium text-slate-700">{label}</span>
         <span className="shrink-0 text-[11px] font-semibold tabular-nums text-slate-400">

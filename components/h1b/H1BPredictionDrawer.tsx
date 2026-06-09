@@ -245,6 +245,10 @@ export default function H1BPredictionDrawer({
                   Prediction confidence: {prediction.confidenceLevel}
                   {prediction.confidenceLevel === "low" && " - limited data"}
                 </p>
+                <p className="text-[11.5px] leading-relaxed text-slate-500">
+                  Derived from the employer&apos;s USCIS H-1B filing history and this posting&apos;s
+                  language — weighted in the key signals below.
+                </p>
                 <p className="text-[11px] text-slate-400">
                   {prediction.dataRecency?.asOfDate
                     ? `Data as of ${new Date(prediction.dataRecency.asOfDate).toLocaleDateString()}`

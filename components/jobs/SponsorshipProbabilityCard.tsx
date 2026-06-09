@@ -81,8 +81,12 @@ function Inner({
           <span className={`text-[20px] font-bold tabular-nums tracking-tight ${tone.text}`}>{valueLabel}</span>
         </div>
 
+        <p className="mt-1.5 text-[11.5px] leading-relaxed text-slate-400">
+          Based on the employer&apos;s USCIS filing history + this posting&apos;s language.
+        </p>
+
         <div className="mt-2 flex items-center justify-between text-[13px] text-slate-500">
-          <span>Click to see details</span>
+          <span>See the signals behind this</span>
           <ChevronRight
             className="h-4 w-4 text-slate-400 transition group-hover:translate-x-0.5 group-hover:text-slate-600"
             aria-hidden
