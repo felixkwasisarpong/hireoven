@@ -321,6 +321,12 @@ function registerMessageBridge(): void {
             // Count profile links in the main results area (exclude the few in nav/sidebar)
             const countProfileLinks = () =>
               document.querySelectorAll("a[href*='/in/']").length
+            const pageText = () => document.body?.innerText?.replace(/\s+/g, " ").trim() ?? ""
+            const isAuthRequired = () =>
+              /linkedin\.com\/(login|authwall|checkpoint)/i.test(location.href) ||
+              /\b(sign in to view|sign in to continue|join linkedin|log in to linkedin)\b/i.test(pageText().slice(0, 2000))
+            const hasLoadedNoResults = () =>
+              /\b(no results found|try shortening or rephrasing your search)\b/i.test(pageText().slice(0, 2000))
 
             await new Promise<void>((resolve) => {
               const start = Date.now()
@@ -329,7 +335,7 @@ function registerMessageBridge(): void {
                 const links = countProfileLinks()
                 const elapsed = Date.now() - start
                 // Enough results, or timed out
-                if (links >= 5 || elapsed > 12_000) {
+                if (links >= 5 || hasLoadedNoResults() || isAuthRequired() || elapsed > 12_000) {
                   resolve()
                   return
                 }
@@ -343,8 +349,17 @@ function registerMessageBridge(): void {
               check()
             })
 
+            const authRequired = isAuthRequired()
+            const profileLinkCount = countProfileLinks()
             const connections = scrapeConnectionResults()
-            sendResponse({ type: "PAGE_DETECTED", page: { ats: "linkedin" }, connections } as never)
+            sendResponse({
+              type: "PAGE_DETECTED",
+              page: { ats: "linkedin" },
+              connections,
+              loaded: authRequired || profileLinkCount > 0 || hasLoadedNoResults(),
+              authRequired,
+              profileLinkCount,
+            } as never)
           })()
           return true  // keep message port open for async sendResponse
         }

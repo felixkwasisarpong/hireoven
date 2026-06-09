@@ -2269,6 +2269,121 @@ chrome.runtime.onInstalled.addListener(({ reason }) => {
  * Instead we fire-and-forget from the content script and push the result back
  * via chrome.tabs.sendMessage to the Apex tab when done.
  */
+type LinkedInConnectionScrapeResponse = {
+  connections?: ScannedConnection[]
+  loaded?: boolean
+  authRequired?: boolean
+}
+
+type LinkedInConnectionScrapeResult =
+  | { status: "ok"; connections: ScannedConnection[] }
+  | { status: "retry" }
+  | { status: "auth_required" }
+
+function isLinkedInAuthWallUrl(url?: string | null): boolean {
+  return !!url && /linkedin\.com\/(login|authwall|checkpoint)/i.test(url)
+}
+
+function normalizeSearchTerm(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()
+}
+
+function isLinkedInPeopleSearchForCompany(url: string | undefined, companyName: string): boolean {
+  if (!url) return false
+  try {
+    const parsed = new URL(url)
+    if (!/(^|\.)linkedin\.com$/i.test(parsed.hostname)) return false
+    if (!parsed.pathname.startsWith("/search/results/people")) return false
+
+    const tabKeywords = normalizeSearchTerm(parsed.searchParams.get("keywords") ?? "")
+    const companyKeywords = normalizeSearchTerm(companyName)
+    return !!tabKeywords && !!companyKeywords && tabKeywords === companyKeywords
+  } catch {
+    return false
+  }
+}
+
+async function findExistingLinkedInSearchTab(companyName: string): Promise<number | null> {
+  const patterns = [
+    "https://www.linkedin.com/search/results/people/*",
+    "https://*.linkedin.com/search/results/people/*",
+  ]
+
+  for (const pattern of patterns) {
+    const tabs = await chrome.tabs.query({ url: pattern }).catch(() => [])
+    const tab = tabs.find((candidate) =>
+      candidate.id && isLinkedInPeopleSearchForCompany(candidate.url, companyName)
+    )
+    if (tab?.id) return tab.id
+  }
+
+  return null
+}
+
+async function waitForTabComplete(tabId: number, timeoutMs = 15_000): Promise<void> {
+  const tab = await chrome.tabs.get(tabId).catch(() => null)
+  if (tab?.status === "complete") return
+
+  return new Promise((resolve) => {
+    let settled = false
+    const finish = () => {
+      if (settled) return
+      settled = true
+      chrome.tabs.onUpdated.removeListener(listener)
+      resolve()
+    }
+    const listener = (id: number, info: chrome.tabs.TabChangeInfo) => {
+      if (id === tabId && info.status === "complete") finish()
+    }
+    chrome.tabs.onUpdated.addListener(listener)
+    setTimeout(finish, timeoutMs)
+  })
+}
+
+async function scrapeLinkedInConnectionTab(tabId: number): Promise<LinkedInConnectionScrapeResult> {
+  const loaded = await chrome.tabs.get(tabId).catch(() => null)
+  if (isLinkedInAuthWallUrl(loaded?.url)) return { status: "auth_required" }
+
+  const response = await new Promise<LinkedInConnectionScrapeResponse | null>((resolve) => {
+    chrome.tabs.sendMessage(
+      tabId,
+      { type: "SCRAPE_LINKEDIN_CONNECTIONS" },
+      (raw: unknown) => {
+        if (chrome.runtime.lastError || !raw) {
+          resolve(null)
+          return
+        }
+        resolve(raw as LinkedInConnectionScrapeResponse)
+      }
+    )
+    setTimeout(() => resolve(null), 12_000)
+  })
+
+  if (!response) return { status: "retry" }
+  if (response.authRequired) return { status: "auth_required" }
+  if (response.loaded === false) return { status: "retry" }
+  if (Array.isArray(response.connections)) {
+    return { status: "ok", connections: response.connections }
+  }
+
+  return { status: "retry" }
+}
+
+async function focusFirstApexTab(origin: string): Promise<void> {
+  const apexPatterns = origin === PROD_APP_ORIGIN
+    ? ["https://hireoven.com/*", "https://www.hireoven.com/*"]
+    : ["http://localhost/*", "http://127.0.0.1/*"]
+
+  for (const pattern of apexPatterns) {
+    const apexTabs = await chrome.tabs.query({ url: pattern }).catch(() => [])
+    const apex = apexTabs.find((t) => t.id && t.url && isApexDashboardUrl(t.url))
+    if (apex?.id) {
+      await chrome.tabs.update(apex.id, { active: true }).catch(() => {})
+      return
+    }
+  }
+}
+
 async function runScanAndPushResult(companyName: string): Promise<void> {
   const origin = await resolveOrigin()
   const searchUrl = buildLinkedInSearchUrl(companyName)
@@ -2289,66 +2404,57 @@ async function runScanAndPushResult(companyName: string): Promise<void> {
     }
   }
 
-  // Open active so LinkedIn fully renders — background tabs get JS throttled
-  const tab = await chrome.tabs.create({ url: searchUrl, active: true })
-  const tabId = tab.id
-  if (!tabId) {
+  const existingTabId = await findExistingLinkedInSearchTab(companyName)
+  if (existingTabId) {
+    await waitForTabComplete(existingTabId, 5_000)
+    const existingResult = await scrapeLinkedInConnectionTab(existingTabId)
+    if (existingResult.status === "ok") {
+      await pushToApexTabs({ ok: true, connections: existingResult.connections })
+      return
+    }
+    if (existingResult.status === "auth_required") {
+      await pushToApexTabs({ ok: false, error: "Please log into LinkedIn, then try again." })
+      return
+    }
+  }
+
+  // Prefer an inactive temporary tab so the user stays in HireOven. Some LinkedIn
+  // sessions throttle background rendering; if that happens, fall back to the old
+  // active-tab path and immediately switch back to HireOven after load.
+  const inactiveTab = await chrome.tabs.create({ url: searchUrl, active: false }).catch(() => null)
+  if (inactiveTab?.id) {
+    await waitForTabComplete(inactiveTab.id, 18_000)
+    const inactiveResult = await scrapeLinkedInConnectionTab(inactiveTab.id)
+    await chrome.tabs.remove(inactiveTab.id).catch(() => {})
+    if (inactiveResult.status === "ok") {
+      await pushToApexTabs({ ok: true, connections: inactiveResult.connections })
+      return
+    }
+    if (inactiveResult.status === "auth_required") {
+      await pushToApexTabs({ ok: false, error: "Please log into LinkedIn, then try again." })
+      return
+    }
+  }
+
+  const activeTab = await chrome.tabs.create({ url: searchUrl, active: true }).catch(() => null)
+  const activeTabId = activeTab?.id
+  if (!activeTabId) {
     await pushToApexTabs({ ok: false, error: "Could not open LinkedIn tab" })
     return
   }
 
-  // Wait for page load (up to 15s)
-  await new Promise<void>((resolve) => {
-    const listener = (id: number, info: chrome.tabs.TabChangeInfo) => {
-      if (id === tabId && info.status === "complete") {
-        chrome.tabs.onUpdated.removeListener(listener)
-        resolve()
-      }
-    }
-    chrome.tabs.onUpdated.addListener(listener)
-    setTimeout(resolve, 15_000)
-  })
+  await waitForTabComplete(activeTabId)
+  await focusFirstApexTab(origin)
 
-  // Switch back to the Apex tab immediately after load so the user isn't stuck on LinkedIn
-  const apexPatterns = origin === PROD_APP_ORIGIN
-    ? ["https://hireoven.com/*", "https://www.hireoven.com/*"]
-    : ["http://localhost/*", "http://127.0.0.1/*"]
-  for (const pattern of apexPatterns) {
-    const apexTabs = await chrome.tabs.query({ url: pattern }).catch(() => [])
-    const apex = apexTabs.find((t) => t.id && t.url && isApexDashboardUrl(t.url))
-    if (apex?.id) {
-      await chrome.tabs.update(apex.id, { active: true }).catch(() => {})
-      break
-    }
-  }
+  const activeResult = await scrapeLinkedInConnectionTab(activeTabId)
+  await chrome.tabs.remove(activeTabId).catch(() => {})
 
-  // Ask the LinkedIn tab's content script to scrape
-  const scrapeResult = await new Promise<ScannedConnection[] | null>((resolve) => {
-    chrome.tabs.sendMessage(
-      tabId,
-      { type: "SCRAPE_LINKEDIN_CONNECTIONS" },
-      (response: unknown) => {
-        if (chrome.runtime.lastError) {
-          resolve(null); return
-        }
-        if (!response) {
-          resolve(null); return
-        }
-        const conns = (response as any)?.connections ?? []
-        resolve(conns)
-      }
-    )
-    setTimeout(() => {
-      resolve(null)
-    }, 12_000)
-  })
-
-  await chrome.tabs.remove(tabId).catch(() => {})
-
-  if (scrapeResult === null) {
-    await pushToApexTabs({ ok: false, error: "Could not read LinkedIn. Make sure you are logged in." })
+  if (activeResult.status === "ok") {
+    await pushToApexTabs({ ok: true, connections: activeResult.connections })
+  } else if (activeResult.status === "auth_required") {
+    await pushToApexTabs({ ok: false, error: "Please log into LinkedIn, then try again." })
   } else {
-    await pushToApexTabs({ ok: true, connections: scrapeResult })
+    await pushToApexTabs({ ok: false, error: "Could not read LinkedIn. Make sure you are logged in." })
   }
 }
 
