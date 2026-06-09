@@ -9,7 +9,7 @@ function colorForScore(score: number): string {
   if (score >= 85) return "#16a34a" // green-600
   if (score >= 70) return "#10b981" // emerald-500
   if (score >= 55) return "#f59e0b" // amber-500
-  if (score >= 40) return "#f97316" // orange-500
+  if (score >= 40) return "#FF5C18" // orange-500
   return "#ef4444"                  // red-500
 }
 

@@ -40,7 +40,7 @@ function scoreColor(label: VisaFitScoreLabel | null): {
     case "Medium":
       return { bg: "#EFF6FF", text: "#1E40AF", ring: "#BFDBFE", arc: "#3B82F6", glow: "rgba(59,130,246,0.3)" }
     case "Weak":
-      return { bg: "#FFF7ED", text: "#9A3412", ring: "#FED7AA", arc: "#F97316", glow: "rgba(249,115,22,0.3)" }
+      return { bg: "#FFF7ED", text: "#9A3412", ring: "#FED7AA", arc: "#FF5C18", glow: "rgba(255, 92, 24,0.3)" }
     case "Blocked":
       return { bg: "#FEF2F2", text: "#991B1B", ring: "#FECACA", arc: "#EF4444", glow: "rgba(239,68,68,0.3)" }
     default:

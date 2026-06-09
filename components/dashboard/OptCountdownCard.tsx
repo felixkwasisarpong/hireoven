@@ -80,7 +80,7 @@ export default function OptCountdownCard({
       <div className="rounded-2xl border border-[#E5E7EB] bg-white p-4 shadow-sm">
         <div className="flex items-start justify-between gap-2">
           <p className="text-[12px] font-semibold text-[#374151]">OPT countdown</p>
-          <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-[#F97316] text-white shadow-sm">
+          <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-[#FF5C18] text-white shadow-sm">
             <Globe2 className="h-4 w-4" strokeWidth={2.2} aria-hidden />
           </span>
         </div>
@@ -89,7 +89,7 @@ export default function OptCountdownCard({
         </p>
         <Link
           href="/dashboard/international"
-          className="mt-3 inline-flex text-xs font-semibold text-[#F97316] hover:underline"
+          className="mt-3 inline-flex text-xs font-semibold text-[#FF5C18] hover:underline"
         >
           Update visa profile →
         </Link>
@@ -108,7 +108,7 @@ export default function OptCountdownCard({
     <div className="rounded-2xl border border-[#E5E7EB] bg-white p-4 shadow-sm">
       <div className="flex items-start justify-between gap-2">
         <p className="text-[12px] font-semibold text-[#64748B]">OPT countdown</p>
-        <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-[#F97316] text-white shadow-sm">
+        <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-[#FF5C18] text-white shadow-sm">
           <Globe2 className="h-4 w-4" strokeWidth={2.2} aria-hidden />
         </span>
       </div>
@@ -134,7 +134,7 @@ export default function OptCountdownCard({
 
       <Link
         href="/dashboard/international"
-        className="mt-2 inline-flex text-[11px] font-semibold text-[#F97316] hover:underline"
+        className="mt-2 inline-flex text-[11px] font-semibold text-[#FF5C18] hover:underline"
       >
         Visa details →
       </Link>

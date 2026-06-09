@@ -13,23 +13,26 @@
     --card-foreground: 222 47% 11%;
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
-    --primary: 24 93% 48%;
+    /* One sacred orange — #FF5C18, the de-facto brand used across the app.
+       primary/brand/ring all resolve to it so the Button fill matches its own
+       shadow and every brand accent. */
+    --primary: 18 100% 55%;
     --primary-foreground: 0 0% 100%;
     --secondary: 214 24% 96%;
     --secondary-foreground: 222 47% 11%;
     --muted: 214 24% 96%;
     --muted-foreground: 215 16% 47%;
     --accent: 38 100% 95%;
-    --accent-foreground: 24 93% 30%;
+    --accent-foreground: 18 92% 38%;
     --destructive: 0 72% 48%;
     --destructive-foreground: 0 0% 100%;
     --border: 214 32% 91%;
     --input: 214 24% 88%;
-    --ring: 24 93% 48%;
+    --ring: 18 100% 55%;
     --radius: 0.5rem;
 
     /* Semantic product tokens */
-    --primary-hover: 17 91% 40%;
+    --primary-hover: 16 98% 47%;
     --surface: 0 0% 100%;
     --surface-alt: 95 18% 94%;
     --surface-muted: 95 14% 92%;
@@ -39,7 +42,7 @@
     --text-strong: 222 47% 9%;
     --text-muted: 215 16% 45%;
     --text-subtle: 215 14% 52%;
-    --accent-brand: 24 93% 40%;
+    --accent-brand: 18 92% 45%;
     --accent-soft: 38 100% 97%;
     --accent-soft-border: 30 100% 82%;
     --success: 142 71% 36%;
@@ -49,9 +52,9 @@
     --danger: 0 72% 48%;
     --danger-soft: 0 86% 96%;
 
-    /* Brand hex: orange = primary identity */
-    --brand: #F97316;
-    --brand-dark: #EA580C;
+    /* Brand hex: orange = primary identity (single sacred orange) */
+    --brand: #FF5C18;
+    --brand-dark: #E14E0E;
     --brand-navy: #9a3412;
     --brand-tint: #FFF7ED;
     --brand-tint-mid: #FED7AA;
@@ -139,7 +142,7 @@
   }
 
   ::selection {
-    background: rgba(234, 88, 12, 0.12);
+    background: rgba(255, 92, 24, 0.12);
   }
 
   *:focus-visible {
@@ -362,11 +365,11 @@
 
   .neo-nav-link-active {
     @apply text-white;
-    border-color: hsl(24 93% 35% / 0.25);
-    background: hsl(24 93% 48%);
+    border-color: hsl(18 92% 42% / 0.25);
+    background: hsl(18 100% 55%);
     box-shadow:
       0 1px 0 hsl(0 0% 100% / 0.12) inset,
-      0 4px 10px -5px hsl(24 93% 30% / 0.4);
+      0 4px 10px -5px hsl(18 92% 38% / 0.4);
   }
 
   .neo-nav-link-idle {
@@ -409,7 +412,7 @@
     width: 0.5rem;
     height: 0.5rem;
     border-radius: 9999px;
-    background: hsl(24 93% 48%);
+    background: hsl(18 100% 55%);
   }
 
   .neo-live-dot::after {
@@ -417,7 +420,7 @@
     position: absolute;
     inset: -0.35rem;
     border-radius: 9999px;
-    border: 1px solid hsl(24 93% 48% / 0.4);
+    border: 1px solid hsl(18 100% 55% / 0.4);
     animation: pulse-ring 2s ease-out infinite;
   }
 
@@ -488,7 +491,7 @@
     --surface-alt: 95 18% 94%;
     --border: 100 14% 88%;
     --accent: 38 100% 97%;
-    --accent-foreground: 24 93% 30%;
+    --accent-foreground: 18 92% 38%;
   }
 
   .product-skin .app-page {
@@ -531,11 +534,11 @@
   .product-skin .chip-control-active {
     border-color: hsl(30 100% 75%);
     background: hsl(38 100% 97%);
-    color: hsl(24 93% 40%);
+    color: hsl(18 92% 45%);
   }
 
   .product-skin .section-kicker {
-    color: hsl(24 93% 48%);
+    color: hsl(18 100% 55%);
     text-shadow: none;
   }
 
@@ -570,8 +573,8 @@
       hsl(214 60% 99% / 0.88) 100%
     );
     box-shadow:
-      0 0 0 1px hsl(24 93% 48% / 0.08),
-      0 28px 56px -16px hsl(24 93% 30% / 0.14),
+      0 0 0 1px hsl(18 100% 55% / 0.08),
+      0 28px 56px -16px hsl(18 92% 38% / 0.14),
       0 8px 20px -6px hsl(24 80% 40% / 0.08);
     backdrop-filter: blur(14px);
   }

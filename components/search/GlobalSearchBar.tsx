@@ -156,7 +156,7 @@ export default function GlobalSearchBar() {
   return (
     <div ref={containerRef} className="relative w-full max-w-[min(100%,520px)]">
       <div className={`flex h-7 items-center gap-1.5 rounded-lg border bg-white px-2 py-0.5 transition-colors ${
-        isFocused ? 'border-[#F97316] ring-1 ring-[#FED7AA]/40' : 'border-[#D7DCEA] hover:border-[#C5CCE0]'
+        isFocused ? 'border-[#FF5C18] ring-1 ring-[#FED7AA]/40' : 'border-[#D7DCEA] hover:border-[#C5CCE0]'
       }`}>
         <Search className="h-3 w-3 flex-shrink-0 text-[#9CA3AF]" />
         <input
@@ -182,7 +182,7 @@ export default function GlobalSearchBar() {
         <button
           type="button"
           onClick={() => navigate(query)}
-          className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md bg-[#F97316] text-white transition-colors hover:bg-[#EA6C0A]"
+          className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md bg-[#FF5C18] text-white transition-colors hover:bg-[#EA6C0A]"
           aria-label="Search"
         >
           <Search className="h-3 w-3" />

@@ -427,7 +427,7 @@ export function RejectionIntelligence({ companyId, jobTitle, jobId }: Props) {
         </p>
         <div className="mt-3 space-y-2">
           {data.funnel.map((stage, i) => {
-            const COLORS = ["#3B82F6","#1D9E75","#F59E0B","#F97316","#DC2626"]
+            const COLORS = ["#3B82F6","#1D9E75","#F59E0B","#FF5C18","#DC2626"]
             const bg = COLORS[Math.min(i, COLORS.length - 1)]
             return (
               <div key={stage.stage} className="flex items-center gap-3">

@@ -554,7 +554,7 @@ function FilterToggle({
       <span
         className={cn(
           "relative inline-flex h-6 w-10 shrink-0 items-center rounded-full transition-colors",
-          checked ? "bg-[#F97316]" : "bg-[#E5E7EB]"
+          checked ? "bg-[#FF5C18]" : "bg-[#E5E7EB]"
         )}
       >
         <span
@@ -587,7 +587,7 @@ function CheckboxOption<T extends string>({
         type="checkbox"
         checked={checked}
         onChange={(event) => onChange(event.target.checked)}
-        className="h-4 w-4 rounded border-[#D0D5DD] text-[#F97316] focus:ring-[#F97316]/40"
+        className="h-4 w-4 rounded border-[#D0D5DD] text-[#FF5C18] focus:ring-[#FF5C18]/40"
       />
       {Icon && (
         <span className={cn("inline-flex h-4 w-4 items-center justify-center rounded-md", iconClassName)}>
@@ -646,7 +646,7 @@ export default function JobFilters({
                 sort: filters.sort,
               })
             }
-            className="text-xs font-semibold text-[#F97316] transition-colors hover:text-[#EA580C]"
+            className="text-xs font-semibold text-[#FF5C18] transition-colors hover:text-[#EA580C]"
           >
             Clear
           </button>
@@ -732,7 +732,7 @@ export default function JobFilters({
               within: event.target.value as JobWithinWindow,
             })
           }
-          className="w-full rounded-xl border border-[#E4E7EC] bg-white px-3 py-2.5 text-[13px] font-medium text-[#344054] outline-none transition-colors focus:border-[#F97316] focus:ring-2 focus:ring-[#FDBA74]/40"
+          className="w-full rounded-xl border border-[#E4E7EC] bg-white px-3 py-2.5 text-[13px] font-medium text-[#344054] outline-none transition-colors focus:border-[#FF5C18] focus:ring-2 focus:ring-[#FDBA74]/40"
         >
           {WITHIN_OPTIONS.map((option) => (
             <option key={option.value} value={option.value}>

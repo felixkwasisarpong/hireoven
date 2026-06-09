@@ -638,7 +638,7 @@ export default async function DashboardJobDetailPage({ params }: Props) {
                 companyLogoUrl={companyLogoUrl}
                 applyUrl={page.apply_url}
                 matchScore={initialMatchScore?.overall_score ?? null}
-                className="inline-flex items-center gap-2 rounded-xl bg-orange-500 px-6 py-3 text-[14px] font-bold text-white shadow-[0_4px_24px_rgba(249,115,22,0.35)] transition hover:bg-orange-400 active:scale-[0.98] disabled:opacity-70"
+                className="inline-flex items-center gap-2 rounded-xl bg-primary px-6 py-3 text-[14px] font-bold text-primary-foreground shadow-[0_4px_24px_rgba(255,92,24,0.35)] transition hover:bg-primary-hover active:scale-[0.98] disabled:opacity-70"
               />
               <ReferralDraftButton
                 jobId={id}

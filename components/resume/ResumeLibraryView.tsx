@@ -87,7 +87,7 @@ function fmtDate(value?: string | null) {
 
 function ScoreCircle({ score, tone }: { score?: number | null; tone: "ats" | "match" }) {
   const safeScore = score ?? 0
-  const color = tone === "ats" ? "#16A34A" : safeScore >= 80 ? "#16A34A" : safeScore >= 65 ? "#2563EB" : "#F97316"
+  const color = tone === "ats" ? "#16A34A" : safeScore >= 80 ? "#16A34A" : safeScore >= 65 ? "#2563EB" : "#FF5C18"
   const circumference = 2 * Math.PI * 18
   const dash = (Math.min(100, Math.max(0, safeScore)) / 100) * circumference
 

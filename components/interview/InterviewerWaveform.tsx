@@ -62,7 +62,7 @@ export default function InterviewerWaveform({ agentStream, isAgentSpeaking, pers
     const ctx = canvas.getContext("2d")
     if (!ctx) return
 
-    const color = PERSONA_COLORS[persona] ?? "#f97316"
+    const color = PERSONA_COLORS[persona] ?? "#FF5C18"
 
     function draw() {
       animRef.current = requestAnimationFrame(draw)
@@ -118,7 +118,7 @@ export default function InterviewerWaveform({ agentStream, isAgentSpeaking, pers
   }, [isAgentSpeaking, persona])
 
   const label = PERSONA_LABELS[persona] ?? persona
-  const color = PERSONA_COLORS[persona] ?? "#f97316"
+  const color = PERSONA_COLORS[persona] ?? "#FF5C18"
 
   return (
     <div className="relative flex flex-col items-center gap-4 overflow-hidden rounded-3xl border border-white/10 bg-[#0b0b0f] p-6 text-center">

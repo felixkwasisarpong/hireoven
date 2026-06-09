@@ -32,11 +32,11 @@ function scoreColor(score: number) {
   }
   if (score >= 40) {
     return {
-      gauge: "#f97316",
+      gauge: "#FF5C18",
       gaugeSoft: "#ffedd5",
       text: "text-orange-700",
       ring: "ring-orange-200 bg-orange-50",
-      glow: "shadow-[0_0_0_3px_rgba(249,115,22,0.08)]",
+      glow: "shadow-[0_0_0_3px_rgba(255, 92, 24,0.08)]",
     }
   }
   return {

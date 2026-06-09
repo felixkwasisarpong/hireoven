@@ -56,6 +56,22 @@ const config: Config = {
         "extension-breathe": "extension-breathe 2.4s ease-in-out infinite",
       },
       colors: {
+        // Single sacred orange. Anchored on the brand #FF5C18 so every raw
+        // `orange-*` utility resolves to the same hue as `bg-primary`/Button.
+        // Tints (50/100) stay near Tailwind's so warm backgrounds don't shift.
+        orange: {
+          50: "#FFF3ED",
+          100: "#FFE4D6",
+          200: "#FFC6AD",
+          300: "#FFA178",
+          400: "#FF7D45",
+          500: "#FF5C18",
+          600: "#E84E0E",
+          700: "#C13F0B",
+          800: "#99330C",
+          900: "#7C2D0D",
+          950: "#431407",
+        },
         teal: {
           DEFAULT: "#1D9E75",
           50: "#E8F7F2",
