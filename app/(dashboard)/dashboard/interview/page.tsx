@@ -132,9 +132,9 @@ export default async function InterviewHubPage() {
 
       {/* ── Page header ─────────────────────────────────────────────────── */}
       <div className="mb-8">
-        <div className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-0.5">
-          <span className="h-1.5 w-1.5 rounded-full bg-indigo-500" />
-          <span className="text-[11px] font-semibold tracking-wide text-indigo-600">AI-powered practice</span>
+        <div className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5">
+          <span className="h-1.5 w-1.5 rounded-full bg-slate-500" />
+          <span className="text-[11px] font-semibold tracking-wide text-slate-600">AI-powered practice</span>
         </div>
         <h1 className="text-[26px] font-bold tracking-tight text-slate-900">
           Interview Practice

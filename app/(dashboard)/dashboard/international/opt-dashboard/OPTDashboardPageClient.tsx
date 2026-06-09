@@ -20,8 +20,8 @@ export default function OPTDashboardPage() {
       <div className="app-shell max-w-6xl space-y-5 pb-[max(2rem,calc(env(safe-area-inset-bottom)+1rem))]">
 
         {/* ── Page header ───────────────────────────────────── */}
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-950 via-indigo-900 to-slate-900 px-6 py-7 sm:px-8">
-          <div className="pointer-events-none absolute right-[-60px] top-[-60px] h-64 w-64 rounded-full bg-indigo-500/20 blur-3xl" />
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-orange-950 via-orange-900 to-slate-900 px-6 py-7 sm:px-8">
+          <div className="pointer-events-none absolute right-[-60px] top-[-60px] h-64 w-64 rounded-full bg-slate-500/20 blur-3xl" />
           <div className="pointer-events-none absolute bottom-[-80px] left-[20%] h-48 w-48 rounded-full bg-blue-400/15 blur-3xl" />
 
           <div className="relative flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
@@ -39,7 +39,7 @@ export default function OPTDashboardPage() {
                   <Clock3 className="h-5 w-5" />
                 </span>
                 <div>
-                  <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-indigo-300">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-slate-300">
                     F-1 OPT & STEM OPT
                   </p>
                   <h1 className="mt-0.5 text-2xl font-bold tracking-tight text-white sm:text-3xl">

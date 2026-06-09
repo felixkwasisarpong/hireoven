@@ -62,7 +62,7 @@ const FUNNEL = [
   { key: "applied", label: "Applied", bar: "bg-blue-400", chip: "bg-blue-50 text-blue-700" },
   { key: "phone_screen", label: "Screen", bar: "bg-amber-400", chip: "bg-amber-50 text-amber-700" },
   { key: "interview", label: "Interview", bar: "bg-orange-400", chip: "bg-orange-50 text-orange-700" },
-  { key: "final_round", label: "Final", bar: "bg-indigo-500", chip: "bg-indigo-50 text-indigo-700" },
+  { key: "final_round", label: "Final", bar: "bg-slate-500", chip: "bg-slate-50 text-slate-700" },
   { key: "offer", label: "Offer", bar: "bg-emerald-500", chip: "bg-emerald-50 text-emerald-700" },
 ]
 

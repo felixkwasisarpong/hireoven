@@ -97,7 +97,7 @@ export default function FeaturesPage() {
             kicker="Apex AI"
             title="Your AI career coach"
             body="Not just a chatbot. Apex reads your resume, knows the job market, and gives you a concrete plan: which roles to target, which gaps to close, which bullets to rewrite."
-            kickerColor="text-indigo-600"
+            kickerColor="text-slate-600"
           />
           <CoreFeaturesTable features={APEX_FEATURES} />
         </div>

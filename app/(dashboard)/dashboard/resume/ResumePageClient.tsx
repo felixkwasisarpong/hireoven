@@ -821,7 +821,7 @@ function CleanOverviewPanel({ onTabChange }: { onTabChange: (tab: TabId) => void
               { icon: CheckCircle2, bg: "bg-emerald-50", ic: "text-emerald-600", value: completion != null ? `${completion}%` : "–", label: "Completion", sub: completion != null ? "Based on parsed resume data." : "Waiting for parsed resume data." },
               { icon: FileText, bg: "bg-blue-50", ic: "text-blue-600", value: atsScore != null ? `${atsScore}` : "–", suffix: atsScore != null ? "/100" : "", label: "ATS Readiness", sub: atsScore != null ? "Loaded from resume scoring." : "Run scoring to load this." },
               { icon: Target, bg: "bg-orange-50", ic: "text-orange-500", value: matchScore != null ? `${matchScore}%` : "–", label: "Match Score", sub: meta?.linkedJobTitle ?? "Tailor to a job to load this." },
-              { icon: History, bg: "bg-indigo-50", ic: "text-[#5B4DFF]", value: versionCount, label: "Versions", sub: "Track and compare your progress." },
+              { icon: History, bg: "bg-slate-50", ic: "text-[#5B4DFF]", value: versionCount, label: "Versions", sub: "Track and compare your progress." },
             ].map(({ icon, bg, ic, value, suffix, label, sub }) => (
               <div key={label} className="flex items-start gap-4 px-5">
                 <StatIconCircle icon={icon} iconClass={ic} bgClass={bg} />
@@ -842,7 +842,7 @@ function CleanOverviewPanel({ onTabChange }: { onTabChange: (tab: TabId) => void
           <div className="mt-3 grid gap-3 md:grid-cols-4">
             {(
               [
-                { action: "navigate" as const, tab: "tailor" as TabId, icon: Target, bg: "bg-indigo-50", ic: "text-[#5B4DFF]", title: "Tailor to a Job", desc: "Customize your resume for a specific job to increase your match score.", cta: "Tailor Now" },
+                { action: "navigate" as const, tab: "tailor" as TabId, icon: Target, bg: "bg-slate-50", ic: "text-[#5B4DFF]", title: "Tailor to a Job", desc: "Customize your resume for a specific job to increase your match score.", cta: "Tailor Now" },
                 { action: "navigate" as const, tab: "edit" as TabId, icon: TrendingUp, bg: "bg-orange-50", ic: "text-orange-500", title: "Improve Impact", desc: "Add measurable results to your bullet points to stand out more.", cta: "Improve Now" },
                 { action: "navigate" as const, tab: "edit" as TabId, icon: Shield, bg: "bg-emerald-50", ic: "text-emerald-600", title: "Optimize ATS", desc: "Use AI Studio to improve structure, keywords, and ATS readability.", cta: "Optimize Now" },
                 { action: "save-version" as const, icon: FileText, bg: "bg-blue-50", ic: "text-blue-600", title: "Create New Version", desc: "Save a new version before major changes or applying to new roles.", cta: "New Version" },
@@ -888,7 +888,7 @@ function CleanOverviewPanel({ onTabChange }: { onTabChange: (tab: TabId) => void
               { id: "qa-preview", tab: "generate" as TabId, icon: Sparkles, bg: "bg-cyan-50", ic: "text-cyan-600", label: "Preview" },
               { id: "qa-tailor", tab: "tailor" as TabId, icon: Target, bg: "bg-red-50", ic: "text-red-500", label: "Tailor resume" },
               { id: "qa-refine", tab: "edit" as TabId, icon: Wand2, bg: "bg-orange-50", ic: "text-orange-500", label: "Refine" },
-              { id: "qa-ats", tab: "edit" as TabId, icon: Shield, bg: "bg-indigo-50", ic: "text-[#5B4DFF]", label: "Optimize ATS" },
+              { id: "qa-ats", tab: "edit" as TabId, icon: Shield, bg: "bg-slate-50", ic: "text-[#5B4DFF]", label: "Optimize ATS" },
               { id: "qa-version", kind: "save-version" as const, icon: FileText, bg: "bg-blue-50", ic: "text-blue-600", label: "New Version" },
               { id: "qa-upload", kind: "upload" as const, icon: Upload, bg: "bg-emerald-50", ic: "text-emerald-600", label: "Upload Resume" },
             ].map((item) => {
@@ -908,7 +908,7 @@ function CleanOverviewPanel({ onTabChange }: { onTabChange: (tab: TabId) => void
                     key={item.id}
                     currentVersionCount={versionCount}
                     onSaved={refreshHubData}
-                    className="flex h-[76px] flex-col items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white text-center transition hover:border-indigo-200 hover:bg-indigo-50/20 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="flex h-[76px] flex-col items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white text-center transition hover:border-slate-200 hover:bg-slate-50/20 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {content}
                   </SaveResumeVersionAction>
@@ -934,7 +934,7 @@ function CleanOverviewPanel({ onTabChange }: { onTabChange: (tab: TabId) => void
                   key={id}
                   type="button"
                   onClick={() => onTabChange(tab)}
-                  className="flex h-[76px] flex-col items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white text-center transition hover:border-indigo-200 hover:bg-indigo-50/20"
+                  className="flex h-[76px] flex-col items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white text-center transition hover:border-slate-200 hover:bg-slate-50/20"
                 >
                   {content}
                 </button>
@@ -1218,12 +1218,12 @@ function OverviewPanel({ onTabChange }: { onTabChange: (tab: TabId) => void }) {
                   action: "navigate" as const,
                   tab: "tailor" as TabId,
                   icon: Target,
-                  iconBg: "bg-indigo-100",
-                  iconColor: "text-indigo-600",
+                  iconBg: "bg-slate-100",
+                  iconColor: "text-slate-600",
                   title: "Tailor to a Job",
                   desc: "Customize your resume for a specific job to increase your match score.",
                   cta: "Tailor Now",
-                  ctaColor: "text-indigo-600",
+                  ctaColor: "text-slate-600",
                 },
                 {
                   action: "navigate" as const,
@@ -1306,7 +1306,7 @@ function OverviewPanel({ onTabChange }: { onTabChange: (tab: TabId) => void }) {
               { id: "ov-qa-tailor", tab: "tailor"   as TabId, icon: Target,    bg: "bg-emerald-50",ic: "text-emerald-600",label: "Tailor resume"   },
               { id: "ov-qa-refine", tab: "edit"     as TabId, icon: TrendingUp,bg: "bg-orange-50", ic: "text-orange-500", label: "Refine"  },
               { id: "ov-qa-ats", tab: "edit"     as TabId, icon: Shield,    bg: "bg-amber-50",  ic: "text-amber-600",  label: "Optimize ATS" },
-              { id: "ov-qa-ver", kind: "save-version" as const, icon: Layers, bg: "bg-indigo-50", ic: "text-indigo-600", label: "New Version" },
+              { id: "ov-qa-ver", kind: "save-version" as const, icon: Layers, bg: "bg-slate-50", ic: "text-slate-600", label: "New Version" },
               { id: "ov-qa-upload", kind: "upload" as const, icon: Upload, bg: "bg-teal-50", ic: "text-teal-600", label: "Upload Resume" },
             ].map((item) => {
               const Icon = item.icon

@@ -133,7 +133,7 @@ function SettingsForm({ initial, onSave, onCancel }: {
   const set = <K extends keyof SettingsFormState>(key: K, value: SettingsFormState[K]) =>
     setForm((prev) => ({ ...prev, [key]: value }))
 
-  const field = "w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/15"
+  const field = "w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-slate-400 focus:ring-2 focus:ring-primary/15"
   const label = "mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.15em] text-gray-500"
 
   return (
@@ -191,7 +191,7 @@ function SettingsForm({ initial, onSave, onCancel }: {
         <button type="button" onClick={onCancel} className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 transition hover:bg-gray-50">
           Cancel
         </button>
-        <button type="button" onClick={() => onSave(formToSettings(form))} className="rounded-xl bg-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700">
+        <button type="button" onClick={() => onSave(formToSettings(form))} className="rounded-xl bg-slate-600 px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-700">
           Save timeline
         </button>
       </div>
@@ -374,20 +374,20 @@ function PriorityList({ data }: { data: OptTimelineDashboard }) {
             <Link
               key={cat}
               href={meta.href}
-              className="group flex items-center gap-3 px-5 py-3.5 transition-colors hover:bg-indigo-50/30"
+              className="group flex items-center gap-3 px-5 py-3.5 transition-colors hover:bg-slate-50/30"
             >
-              <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-500 transition group-hover:bg-indigo-100 group-hover:text-indigo-600">
+              <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-500 transition group-hover:bg-slate-100 group-hover:text-slate-600">
                 <Icon className="h-3.5 w-3.5" />
               </span>
-              <span className="flex-1 text-sm text-gray-700 transition group-hover:text-indigo-700">
+              <span className="flex-1 text-sm text-gray-700 transition group-hover:text-slate-700">
                 {meta.label}
               </span>
               {i === 0 && (
-                <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-600">
+                <span className="rounded-full bg-slate-50 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
                   Top pick
                 </span>
               )}
-              <ExternalLink className="h-3.5 w-3.5 flex-shrink-0 text-gray-300 transition group-hover:text-indigo-400" />
+              <ExternalLink className="h-3.5 w-3.5 flex-shrink-0 text-gray-300 transition group-hover:text-slate-400" />
             </Link>
           )
         })}
@@ -413,11 +413,11 @@ function ActionList() {
               href={a.href}
               className="group flex items-center gap-3 px-5 py-3.5 transition-colors hover:bg-gray-50/70"
             >
-              <Icon className="h-4 w-4 flex-shrink-0 text-gray-400 transition group-hover:text-indigo-500" />
-              <span className="flex-1 text-sm text-gray-700 transition group-hover:text-indigo-700">
+              <Icon className="h-4 w-4 flex-shrink-0 text-gray-400 transition group-hover:text-slate-500" />
+              <span className="flex-1 text-sm text-gray-700 transition group-hover:text-slate-700">
                 {a.label}
               </span>
-              <ExternalLink className="h-3.5 w-3.5 flex-shrink-0 text-gray-300 group-hover:text-indigo-400" />
+              <ExternalLink className="h-3.5 w-3.5 flex-shrink-0 text-gray-300 group-hover:text-slate-400" />
             </Link>
           )
         })}
@@ -530,7 +530,7 @@ export default function OPTDashboard({ profile }: { profile: Profile | null }) {
     <div className="space-y-5">
       {/* Setup CTA */}
       {!isEditing && !dashboard?.daysRemaining && !isNotTracked && (
-        <div className="flex flex-col gap-3 rounded-2xl border border-dashed border-indigo-200 bg-indigo-50/40 px-5 py-5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50/40 px-5 py-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-sm font-semibold text-gray-800">Set up your OPT timeline</p>
             <p className="mt-0.5 text-xs text-gray-500">Add your OPT end date to unlock the full dashboard.</p>
@@ -538,7 +538,7 @@ export default function OPTDashboard({ profile }: { profile: Profile | null }) {
           <button
             type="button"
             onClick={() => setIsEditing(true)}
-            className="flex-shrink-0 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700"
+            className="flex-shrink-0 rounded-xl bg-slate-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-700"
           >
             Add dates
           </button>
@@ -556,7 +556,7 @@ export default function OPTDashboard({ profile }: { profile: Profile | null }) {
           <button
             type="button"
             onClick={() => setIsEditing(true)}
-            className="mt-3 text-sm font-semibold text-indigo-600 transition hover:text-indigo-800"
+            className="mt-3 text-sm font-semibold text-slate-600 transition hover:text-slate-800"
           >
             Update status →
           </button>

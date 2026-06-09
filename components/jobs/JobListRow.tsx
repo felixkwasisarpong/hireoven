@@ -246,8 +246,8 @@ export default function JobListRow({
         if (e.key === "Enter" || e.key === " ") { e.preventDefault(); router.push(detailHref) }
       }}
       className={cn(
-        "group flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-[0_1px_0_rgba(15,23,42,0.04)] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/30 sm:px-4",
-        enableHoverEffects && "hover:border-indigo-200 hover:shadow-[0_4px_14px_rgba(15,23,42,0.08)]"
+        "group flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-[0_1px_0_rgba(15,23,42,0.04)] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 sm:px-4",
+        enableHoverEffects && "hover:border-slate-200 hover:shadow-[0_4px_14px_rgba(15,23,42,0.08)]"
       )}
     >
       <CompanyLogo
@@ -269,7 +269,7 @@ export default function JobListRow({
               onClick={(e) => e.stopPropagation()}
               className={cn(
                 "truncate font-medium text-slate-600 transition",
-                enableHoverEffects && "hover:text-indigo-600 hover:underline"
+                enableHoverEffects && "hover:text-slate-600 hover:underline"
               )}
             >
               {companyName}
@@ -373,7 +373,7 @@ export default function JobListRow({
         aria-expanded={breakdownOpen}
         title={resolvedMatchScore ? "See match breakdown" : matchLabel}
         className={cn(
-          "flex h-10 w-12 shrink-0 flex-col items-center justify-center rounded-lg ring-1 tabular-nums transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/30 disabled:cursor-default",
+          "flex h-10 w-12 shrink-0 flex-col items-center justify-center rounded-lg ring-1 tabular-nums transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:cursor-default",
           enableHoverEffects && "hover:opacity-85",
           scoreColor(score)
         )}
@@ -396,7 +396,7 @@ export default function JobListRow({
               ? "border-amber-200 bg-amber-50 text-amber-600"
               : cn(
                   "border-slate-200 bg-white text-slate-400",
-                  enableHoverEffects && "hover:border-indigo-200 hover:text-indigo-500"
+                  enableHoverEffects && "hover:border-slate-200 hover:text-slate-500"
                 )
           )}
         >
@@ -440,8 +440,8 @@ export default function JobListRow({
           onClick={() => router.push(detailHref)}
           aria-label="View details"
           className={cn(
-            "inline-flex h-8 items-center justify-center gap-1 rounded-lg border border-indigo-200 bg-indigo-50 px-2 text-[12px] font-semibold text-indigo-600 transition",
-            enableHoverEffects && "hover:bg-indigo-100"
+            "inline-flex h-8 items-center justify-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2 text-[12px] font-semibold text-slate-600 transition",
+            enableHoverEffects && "hover:bg-slate-100"
           )}
         >
           View

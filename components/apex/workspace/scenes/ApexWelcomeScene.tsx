@@ -91,7 +91,7 @@ export function ApexWelcomeScene({
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <span className="text-[11px] font-bold uppercase tracking-[0.24em] text-indigo-600">Apex</span>
+                <span className="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-600">Apex</span>
                 <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-slate-400">Career Operator</span>
               </div>
               <h1 className="mt-3 max-w-3xl text-[2rem] font-semibold leading-[1.08] tracking-tight text-slate-950 sm:text-[2.45rem] motion-safe:animate-[apexFadeUp_0.6s_ease-out_60ms_both]">
@@ -106,7 +106,7 @@ export function ApexWelcomeScene({
           </div>
 
           <div className="flex flex-wrap items-center gap-2 motion-safe:animate-[apexFadeUp_0.6s_ease-out_140ms_both] xl:justify-end">
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-indigo-200 bg-white/90 px-3 py-1 text-[11px] font-semibold text-indigo-700 shadow-[0_4px_18px_rgba(15,23,42,0.04)]">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white/90 px-3 py-1 text-[11px] font-semibold text-slate-700 shadow-[0_4px_18px_rgba(15,23,42,0.04)]">
               <Zap className="h-3 w-3" />
               Monitoring active
             </span>

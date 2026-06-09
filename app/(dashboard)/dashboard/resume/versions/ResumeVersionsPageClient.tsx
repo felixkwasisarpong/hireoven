@@ -162,7 +162,7 @@ function SaveVersionComposer({
   }
 
   return (
-    <div className="inline-flex h-9 items-center gap-2 rounded-lg border border-indigo-100 bg-indigo-50 px-2">
+    <div className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-100 bg-slate-50 px-2">
       <input
         autoFocus
         value={name}

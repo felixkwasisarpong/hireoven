@@ -76,7 +76,7 @@ function ToggleRow({
         "flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition",
         checked
           ? accent
-            ? "border-indigo-200 bg-indigo-50"
+            ? "border-slate-200 bg-slate-50"
             : "border-orange-200 bg-orange-50"
           : cn("border-transparent", enableHoverEffects && "hover:bg-slate-50")
       )}
@@ -94,7 +94,7 @@ function ToggleRow({
           className={cn(
             "block text-[13px] font-medium",
             checked
-              ? accent ? "text-indigo-900" : "text-orange-900"
+              ? accent ? "text-slate-900" : "text-orange-900"
               : "text-slate-800"
           )}
         >
@@ -108,7 +108,7 @@ function ToggleRow({
         className={cn(
           "relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors",
           checked
-            ? accent ? "bg-indigo-500" : "bg-orange-400"
+            ? accent ? "bg-slate-500" : "bg-orange-400"
             : "bg-slate-200"
         )}
       >
@@ -139,7 +139,7 @@ function ChipGroup<T extends string>({
   const col = accent ?? "orange"
   const activeClass =
     col === "indigo"
-      ? "border-indigo-300 bg-indigo-100 text-indigo-900 ring-1 ring-indigo-200"
+      ? "border-slate-300 bg-slate-100 text-slate-900 ring-1 ring-primary"
       : "border-orange-300 bg-orange-100 text-orange-900 ring-1 ring-orange-200"
 
   function toggle(val: T) {
@@ -391,7 +391,7 @@ export default function AdvancedFiltersDrawer({
                   label="STEM OPT eligible"
                   description="Employers signalling STEM OPT / E-Verify readiness"
                   icon={FlaskConical}
-                  iconColor="bg-indigo-500"
+                  iconColor="bg-slate-500"
                   accent
                   enableHoverEffects={enableHoverEffects}
                   onChange={(v) => set({ stem_opt_ready: v || undefined })}
@@ -401,7 +401,7 @@ export default function AdvancedFiltersDrawer({
                   label="E-Verify signal"
                   description="Employers that are likely E-Verify enrolled"
                   icon={BadgeCheck}
-                  iconColor="bg-indigo-600"
+                  iconColor="bg-slate-600"
                   accent
                   enableHoverEffects={enableHoverEffects}
                   onChange={(v) => set({ e_verify_signal: v || undefined })}

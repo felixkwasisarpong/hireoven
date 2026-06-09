@@ -47,7 +47,7 @@ function Toggle({ on, onChange, label, sub }: { on: boolean; onChange: (v: boole
     <button
       type="button"
       onClick={() => onChange(!on)}
-      className="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-left transition hover:border-indigo-200"
+      className="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-left transition hover:border-slate-200"
     >
       <div className="min-w-0">
         <p className="text-[13px] font-semibold text-slate-800">{label}</p>
@@ -55,7 +55,7 @@ function Toggle({ on, onChange, label, sub }: { on: boolean; onChange: (v: boole
       </div>
       <span className={cn(
         "relative h-5 w-9 flex-shrink-0 rounded-full transition-colors",
-        on ? "bg-indigo-600" : "bg-slate-300"
+        on ? "bg-slate-600" : "bg-slate-300"
       )}>
         <span className={cn(
           "absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform",
@@ -108,11 +108,11 @@ export function AutoApplyPanel({ onFollowUp, extensionConnected = false, classNa
   }
 
   return (
-    <div className={cn("rounded-2xl border border-indigo-100 bg-white shadow-sm", className)}>
+    <div className={cn("rounded-2xl border border-slate-100 bg-white shadow-sm", className)}>
       {/* Header */}
       <div className="flex items-center gap-3 border-b border-slate-100 px-4 py-3.5">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50">
-          <Zap className="h-4 w-4 text-indigo-600" />
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-50">
+          <Zap className="h-4 w-4 text-slate-600" />
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-[13px] font-bold text-slate-900">1-Click Apply</p>
@@ -129,7 +129,7 @@ export function AutoApplyPanel({ onFollowUp, extensionConnected = false, classNa
         {/* Master toggle */}
         <div className={cn(
           "rounded-xl border p-3.5 transition-colors",
-          enabled ? "border-indigo-200 bg-indigo-50" : "border-slate-200 bg-slate-50"
+          enabled ? "border-slate-200 bg-slate-50" : "border-slate-200 bg-slate-50"
         )}>
           <Toggle
             on={enabled}
@@ -149,7 +149,7 @@ export function AutoApplyPanel({ onFollowUp, extensionConnected = false, classNa
           <div className="rounded-xl border border-slate-200 bg-white px-3.5 py-3">
             <div className="flex items-center justify-between">
               <p className="text-[13px] font-semibold text-slate-800">Minimum match score</p>
-              <span className="text-[13px] font-bold text-indigo-600">{criteria.minMatchScore}%</span>
+              <span className="text-[13px] font-bold text-slate-600">{criteria.minMatchScore}%</span>
             </div>
             <input
               type="range" min={70} max={99} step={1}
@@ -164,7 +164,7 @@ export function AutoApplyPanel({ onFollowUp, extensionConnected = false, classNa
           <div className="rounded-xl border border-slate-200 bg-white px-3.5 py-3">
             <div className="flex items-center justify-between">
               <p className="text-[13px] font-semibold text-slate-800">Daily limit</p>
-              <span className="text-[13px] font-bold text-indigo-600">{criteria.dailyCap}/day</span>
+              <span className="text-[13px] font-bold text-slate-600">{criteria.dailyCap}/day</span>
             </div>
             <input
               type="range" min={1} max={20} step={1}
@@ -196,7 +196,7 @@ export function AutoApplyPanel({ onFollowUp, extensionConnected = false, classNa
           type="button"
           onClick={runNow}
           disabled={launching}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 py-3 text-[13px] font-semibold text-white transition hover:bg-indigo-700 disabled:opacity-60"
+          className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-600 py-3 text-[13px] font-semibold text-white transition hover:bg-slate-700 disabled:opacity-60"
         >
           {launching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
           {launching ? "Finding your top matches…" : `Prepare my top ${criteria.dailyCap} matches now`}

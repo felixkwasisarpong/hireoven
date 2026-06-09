@@ -45,7 +45,7 @@ const COLUMNS: ColumnDef[] = [
   { id: "applied",      label: "Applied",   statuses: ["applied"],                 accent: "border-t-blue-400",    countCls: "bg-blue-50 text-blue-700",      dropStatus: "applied" },
   { id: "phone_screen", label: "Screen",    statuses: ["phone_screen"],            accent: "border-t-amber-400",   countCls: "bg-amber-50 text-amber-700",    dropStatus: "phone_screen" },
   { id: "interview",    label: "Interview", statuses: ["interview"],               accent: "border-t-orange-400",  countCls: "bg-orange-50 text-orange-700",  dropStatus: "interview" },
-  { id: "final_round",  label: "Final",     statuses: ["final_round"],             accent: "border-t-indigo-500",  countCls: "bg-indigo-50 text-indigo-700",  dropStatus: "final_round" },
+  { id: "final_round",  label: "Final",     statuses: ["final_round"],             accent: "border-t-indigo-500",  countCls: "bg-slate-50 text-slate-700",  dropStatus: "final_round" },
   { id: "offer",        label: "Offer",     statuses: ["offer"],                   accent: "border-t-emerald-500", countCls: "bg-emerald-50 text-emerald-700", dropStatus: "offer" },
   { id: "closed",       label: "Closed",    statuses: ["rejected", "withdrawn"],   accent: "border-t-red-400",     countCls: "bg-red-50 text-red-600",        dropStatus: "rejected" },
 ]
@@ -104,7 +104,7 @@ const STATUS_COLOR: Record<ApplicationStatus, string> = {
   applied:      "bg-blue-50 text-blue-700 border-blue-200",
   phone_screen: "bg-amber-50 text-amber-700 border-amber-200",
   interview:    "bg-orange-50 text-orange-700 border-orange-200",
-  final_round:  "bg-indigo-50 text-indigo-700 border-indigo-200",
+  final_round:  "bg-slate-50 text-slate-700 border-slate-200",
   offer:        "bg-emerald-50 text-emerald-700 border-emerald-200",
   rejected:     "bg-red-50 text-red-600 border-red-200",
   withdrawn:    "bg-slate-100 text-slate-500 border-slate-200",

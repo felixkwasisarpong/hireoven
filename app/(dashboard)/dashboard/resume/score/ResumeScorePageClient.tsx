@@ -199,7 +199,7 @@ function PriorityFix({
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4">
       <div className="flex items-start gap-3">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-[#5B4DFF]">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-50 text-[#5B4DFF]">
           <Icon className="h-4 w-4" />
         </div>
         <div className="min-w-0 flex-1">

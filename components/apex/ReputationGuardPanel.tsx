@@ -69,11 +69,11 @@ export function ReputationGuardPanel({ companyName, jobTitle = "", jobDescriptio
   const VerdictIcon = verdictCfg?.icon ?? Shield
 
   return (
-    <div className={cn("rounded-2xl border border-indigo-100 bg-white shadow-sm", className)}>
+    <div className={cn("rounded-2xl border border-slate-100 bg-white shadow-sm", className)}>
       {/* Header */}
       <div className="flex items-center gap-3 border-b border-slate-100 px-4 py-3.5">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50">
-          <Shield className="h-4 w-4 text-indigo-600" />
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-50">
+          <Shield className="h-4 w-4 text-slate-600" />
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-[13px] font-bold text-slate-900">Reputation Guard</p>
@@ -84,7 +84,7 @@ export function ReputationGuardPanel({ companyName, jobTitle = "", jobDescriptio
             type="button"
             onClick={analyze}
             disabled={loading}
-            className="inline-flex items-center gap-1.5 rounded-full bg-indigo-600 px-3.5 py-1.5 text-[12px] font-semibold text-white transition hover:bg-indigo-700 disabled:opacity-60"
+            className="inline-flex items-center gap-1.5 rounded-full bg-slate-600 px-3.5 py-1.5 text-[12px] font-semibold text-white transition hover:bg-slate-700 disabled:opacity-60"
           >
             {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <TrendingUp className="h-3.5 w-3.5" />}
             {loading ? "Analyzing…" : "Analyze"}
@@ -159,7 +159,7 @@ export function ReputationGuardPanel({ companyName, jobTitle = "", jobDescriptio
                   href={link.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-[11px] font-medium text-indigo-700 transition hover:bg-indigo-100"
+                  className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-slate-700 transition hover:bg-slate-100"
                 >
                   {link.label}
                   <ExternalLink className="h-2.5 w-2.5 opacity-60" />
@@ -169,7 +169,7 @@ export function ReputationGuardPanel({ companyName, jobTitle = "", jobDescriptio
           </div>
 
           <button type="button" onClick={() => setResult(null)}
-            className="text-[11px] text-indigo-400 hover:text-indigo-600 hover:underline">
+            className="text-[11px] text-slate-400 hover:text-slate-600 hover:underline">
             Re-analyze
           </button>
         </div>

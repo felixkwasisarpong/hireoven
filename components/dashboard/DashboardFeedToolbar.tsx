@@ -442,9 +442,9 @@ export default function DashboardFeedToolbar({
       activeIcon: "text-orange-600",
     },
     indigo: {
-      idleIcon: "text-indigo-500",
-      activeWrap: "border-indigo-200 bg-indigo-50 text-indigo-800 ring-1 ring-indigo-200/70",
-      activeIcon: "text-indigo-600",
+      idleIcon: "text-slate-500",
+      activeWrap: "border-slate-200 bg-slate-50 text-slate-800 ring-1 ring-primary/70",
+      activeIcon: "text-slate-600",
     },
     emerald: {
       idleIcon: "text-emerald-600",

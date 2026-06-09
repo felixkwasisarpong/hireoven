@@ -86,7 +86,7 @@ function CompanyAvatar({ name, level }: { name: string; level: ActivityLevel }) 
         "bg-cyan-500/15 text-cyan-500",
         "bg-pink-500/15 text-pink-400",
         "bg-cyan-500/15 text-cyan-400",
-        "bg-indigo-500/15 text-indigo-400",
+        "bg-slate-500/15 text-slate-400",
       ]
       return palette[letter.charCodeAt(0) % palette.length]
     })()
@@ -108,7 +108,7 @@ function actionIconFor(title: string): { Icon: LucideIcon; color: string } {
   if (t.includes("resume") || t.includes("tailor"))
     return { Icon: FileText,     color: "text-violet-400" }
   if (t.includes("saved") || t.includes("watchlist"))
-    return { Icon: Bookmark,     color: "text-indigo-400" }
+    return { Icon: Bookmark,     color: "text-slate-400" }
   return { Icon: Zap,            color: "text-slate-300" }
 }
 

@@ -11,7 +11,7 @@ const STATUS_BARS = [
   { key: "applied", label: "Applied", color: "bg-blue-400" },
   { key: "phone_screen", label: "Phone Screen", color: "bg-amber-400" },
   { key: "interview", label: "Interview", color: "bg-orange-400" },
-  { key: "final_round", label: "Final Round", color: "bg-indigo-500" },
+  { key: "final_round", label: "Final Round", color: "bg-slate-500" },
   { key: "offer", label: "Offer", color: "bg-emerald-500" },
   { key: "rejected", label: "Rejected", color: "bg-red-400" },
   { key: "withdrawn", label: "Withdrawn", color: "bg-slate-300" },

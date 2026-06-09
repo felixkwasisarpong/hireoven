@@ -139,7 +139,7 @@ export function pillToneClasses(tone: FilterPillTone): string {
     case "industry":
       return "border-teal-200/90 bg-teal-50 text-teal-900 hover:bg-teal-100/80"
     case "visa":
-      return "border-indigo-200/90 bg-indigo-50 text-indigo-900 hover:bg-indigo-100/80"
+      return "border-slate-200/90 bg-slate-50 text-slate-900 hover:bg-slate-100/80"
     case "quality":
       return "border-orange-200/90 bg-orange-50 text-orange-900 hover:bg-orange-100/80"
     default:

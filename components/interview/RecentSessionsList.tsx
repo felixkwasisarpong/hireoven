@@ -102,7 +102,7 @@ export default function RecentSessionsList({
         </div>
         <Link
           href="/dashboard/interview/history"
-          className="flex items-center gap-1 text-[12px] font-medium text-indigo-500 transition hover:text-indigo-600"
+          className="flex items-center gap-1 text-[12px] font-medium text-slate-500 transition hover:text-slate-600"
         >
           View all <ArrowRight className="h-3 w-3" />
         </Link>
@@ -157,7 +157,7 @@ export default function RecentSessionsList({
                 {isCompleted ? (
                   <Link
                     href={`/dashboard/interview/${session.id}/debrief`}
-                    className="flex items-center gap-1 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-[11px] font-semibold text-indigo-600 transition hover:bg-indigo-100"
+                    className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-600 transition hover:bg-slate-100"
                   >
                     Debrief <ArrowRight className="h-3 w-3" />
                   </Link>

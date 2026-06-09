@@ -570,7 +570,7 @@ function ModeSwitcher({
           onClick={() => onModeChange(id)}
           className={cn(
             "inline-flex h-11 min-w-[180px] items-center justify-center gap-2 border-r border-slate-200 px-4 text-[12.5px] font-bold transition last:border-r-0",
-            mode === id ? "bg-indigo-50 text-[#5B4DFF]" : "bg-white text-slate-600 hover:bg-slate-50"
+            mode === id ? "bg-slate-50 text-[#5B4DFF]" : "bg-white text-slate-600 hover:bg-slate-50"
           )}
         >
           <Icon className="h-4 w-4" />
@@ -695,16 +695,16 @@ function TailorMatchInsightPanel({
 
   return (
     <section
-      className="overflow-hidden rounded-2xl border border-indigo-200/55 bg-gradient-to-br from-white via-indigo-50/35 to-orange-50/45 shadow-[0_10px_40px_-18px_rgba(91,77,255,0.35)]"
+      className="overflow-hidden rounded-2xl border border-slate-200/55 bg-gradient-to-br from-white via-orange-50/35 to-orange-50/45 shadow-[0_10px_40px_-18px_rgba(91,77,255,0.35)]"
       aria-label="Resume match breakdown"
     >
-      <div className="relative border-b border-indigo-100/90 bg-gradient-to-r from-indigo-600/[0.06] via-orange-600/[0.05] to-fuchsia-500/[0.06] px-4 py-3 sm:px-5 sm:py-4">
+      <div className="relative border-b border-slate-100/90 bg-gradient-to-r from-orange-600/[0.06] via-orange-600/[0.05] to-fuchsia-500/[0.06] px-4 py-3 sm:px-5 sm:py-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-indigo-700/85">Match score</p>
-            <p className="mt-0.5 bg-gradient-to-r from-[#5B4DFF] via-orange-600 to-indigo-600 bg-clip-text text-3xl font-black tabular-nums tracking-tight text-transparent sm:text-[2.4rem]">
+            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-700/85">Match score</p>
+            <p className="mt-0.5 bg-gradient-to-r from-[#5B4DFF] via-orange-600 to-orange-600 bg-clip-text text-3xl font-black tabular-nums tracking-tight text-transparent sm:text-[2.4rem]">
               {resolvedScore}
-              <span className="text-[0.55em] font-extrabold text-indigo-600/90">%</span>
+              <span className="text-[0.55em] font-extrabold text-slate-600/90">%</span>
             </p>
             {delta !== null && (
               <p
@@ -726,10 +726,10 @@ function TailorMatchInsightPanel({
         <p className="mt-1.5 line-clamp-2 text-[11px] leading-relaxed text-slate-600 sm:line-clamp-none">{matchExplain(resolvedScore, resolvedAlignment)}</p>
       </div>
 
-      <details className="group border-t border-indigo-100/80">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 bg-white/40 px-3 py-2.5 text-[11px] font-bold text-slate-700 transition hover:bg-indigo-50/50 [&::-webkit-details-marker]:hidden sm:px-4">
+      <details className="group border-t border-slate-100/80">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 bg-white/40 px-3 py-2.5 text-[11px] font-bold text-slate-700 transition hover:bg-slate-50/50 [&::-webkit-details-marker]:hidden sm:px-4">
           <span className="flex items-center gap-2">
-            <span className="text-indigo-800">Keywords &amp; gaps</span>
+            <span className="text-slate-800">Keywords &amp; gaps</span>
             <span className="font-normal text-slate-500">
               {matchingSkills.length} match
               {safeAdd.length + needConfirm.length > 0
@@ -866,7 +866,7 @@ function TailorRecommendedFixesPanel({
             <li key={fix.id} className="list-none">
               <details className="group/fix overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
                 <summary className="flex cursor-pointer list-none items-start gap-1.5 p-2 pr-1.5 text-left sm:items-center sm:gap-2 sm:pr-2 [&::-webkit-details-marker]:hidden">
-                  <span className="mt-0.5 shrink-0 rounded bg-indigo-50 px-1.5 py-0.5 text-[9px] font-bold text-[#5B4DFF] sm:mt-0">
+                  <span className="mt-0.5 shrink-0 rounded bg-slate-50 px-1.5 py-0.5 text-[9px] font-bold text-[#5B4DFF] sm:mt-0">
                     {typeLabel}
                   </span>
                   <span className="min-w-0 flex-1 text-[11.5px] font-semibold leading-tight text-slate-900 line-clamp-2">
@@ -956,7 +956,7 @@ function StickyResumePreview({
         <div className="flex items-center gap-2">
           <p className="text-[14px] font-bold text-slate-950">{title}</p>
           {badge && (
-            <span className="rounded-md bg-indigo-50 px-2 py-1 text-[10.5px] font-bold text-[#5B4DFF]">
+            <span className="rounded-md bg-slate-50 px-2 py-1 text-[10.5px] font-bold text-[#5B4DFF]">
               {badge}
             </span>
           )}
@@ -2818,7 +2818,7 @@ export default function ResumeStudioPage() {
                     <span className={cn(
                       "inline-flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-[12px] font-bold transition-all duration-300",
                       isSaving
-                        ? "animate-pulse bg-indigo-50 text-[#5B4DFF] shadow-[0_0_0_4px_rgba(91,77,255,0.08)] ring-1 ring-[#5B4DFF]/20"
+                        ? "animate-pulse bg-slate-50 text-[#5B4DFF] shadow-[0_0_0_4px_rgba(91,77,255,0.08)] ring-1 ring-[#5B4DFF]/20"
                         : isDirty
                           ? "bg-amber-50 text-amber-700"
                           : "bg-emerald-50 text-emerald-700"
@@ -2928,7 +2928,7 @@ export default function ResumeStudioPage() {
                       onClick={() => setJobSource(item.id)}
                       className={cn(
                         "h-10 rounded-lg border text-[12px] font-bold transition",
-                        jobSource === item.id ? "border-[#5B4DFF] bg-indigo-50 text-[#5B4DFF]" : "border-slate-200 bg-white text-slate-600"
+                        jobSource === item.id ? "border-[#5B4DFF] bg-slate-50 text-[#5B4DFF]" : "border-slate-200 bg-white text-slate-600"
                       )}
                     >
                       {item.label}
@@ -3041,7 +3041,7 @@ export default function ResumeStudioPage() {
                   type="button"
                   onClick={() => void handleAnalyzeTailorMatch()}
                   disabled={isTailorRefining || isTailoring || !jobDescription.trim()}
-                  className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-[#5B4DFF] bg-indigo-50 text-[12.5px] font-bold text-[#5B4DFF] transition hover:bg-indigo-100 disabled:opacity-60"
+                  className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-[#5B4DFF] bg-slate-50 text-[12.5px] font-bold text-[#5B4DFF] transition hover:bg-slate-100 disabled:opacity-60"
                 >
                   {isTailorRefining ? <Loader2 className="h-4 w-4 animate-spin" /> : <Target className="h-4 w-4" />}
                   {isTailorRefining ? "Refining with AI…" : analysis ? "Re-analyze" : "Analyze Match"}
@@ -3155,7 +3155,7 @@ export default function ResumeStudioPage() {
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-start gap-3 border-b border-slate-100 px-6 py-5">
-              <span className="mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-indigo-50 text-indigo-600">
+              <span className="mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-slate-50 text-slate-600">
                 <Sparkles className="h-4 w-4" />
               </span>
               <div>

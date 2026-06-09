@@ -129,7 +129,7 @@ function planAccent(plan: string) {
   }
   if (plan === "pro") {
     return {
-      gradient: "from-sky-500 via-indigo-500 to-violet-500",
+      gradient: "from-sky-500 via-orange-500 to-violet-500",
       ring: "ring-sky-200",
       tint: "bg-sky-50",
       icon: Sparkles,
@@ -523,17 +523,17 @@ export default function BillingPageClient({
         {currentPlan !== "pro_max" && (
           <section
             id="student-verify"
-            className="mb-5 overflow-hidden rounded-2xl border-2 border-indigo-200 bg-indigo-50/40 shadow-[0_2px_12px_rgba(15,23,42,0.04)]"
+            className="mb-5 overflow-hidden rounded-2xl border-2 border-slate-200 bg-slate-50/40 shadow-[0_2px_12px_rgba(15,23,42,0.04)]"
           >
-            <div className="flex items-center gap-2 border-b border-indigo-100 px-6 py-4">
-              <GraduationCap className="h-4 w-4 text-indigo-500" aria-hidden />
+            <div className="flex items-center gap-2 border-b border-slate-100 px-6 py-4">
+              <GraduationCap className="h-4 w-4 text-slate-500" aria-hidden />
               <h2 className="text-sm font-semibold text-slate-900">Student discount — 30% off Pro</h2>
             </div>
             <div className="p-6">
               {studentStep === "verified" && studentStatus?.isStudent ? (
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold text-indigo-700">
+                    <p className="text-sm font-semibold text-slate-700">
                       Student status verified
                     </p>
                     <p className="mt-0.5 text-[13px] text-slate-500">
@@ -545,7 +545,7 @@ export default function BillingPageClient({
                     <button
                       type="button"
                       onClick={() => startCheckout("pro")}
-                      className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-700"
+                      className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl bg-slate-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700"
                     >
                       Continue to checkout
                       <ChevronDown className="h-4 w-4 -rotate-90" aria-hidden />
@@ -555,7 +555,7 @@ export default function BillingPageClient({
                     <button
                       type="button"
                       onClick={() => startCheckout("pro_max", resolvedInterval)}
-                      className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-700"
+                      className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl bg-slate-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700"
                     >
                       Upgrade to Pro Max
                       <ChevronDown className="h-4 w-4 -rotate-90" aria-hidden />
@@ -582,7 +582,7 @@ export default function BillingPageClient({
                         }
                       }}
                       placeholder="you@school.edu"
-                      className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                      className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-primary"
                       autoCorrect="off"
                       spellCheck={false}
                     />
@@ -590,7 +590,7 @@ export default function BillingPageClient({
                       type="button"
                       onClick={() => void sendStudentCode()}
                       disabled={studentBusy || !studentEmailInput.trim()}
-                      className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:opacity-50"
+                      className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl bg-slate-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:opacity-50"
                     >
                       {studentBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Send code"}
                     </button>
@@ -618,13 +618,13 @@ export default function BillingPageClient({
                         }
                       }}
                       placeholder="123456"
-                      className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2.5 font-mono text-lg tracking-[0.4em] text-slate-800 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                      className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2.5 font-mono text-lg tracking-[0.4em] text-slate-800 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-primary"
                     />
                     <button
                       type="button"
                       onClick={() => void confirmStudentCode()}
                       disabled={studentBusy || studentCodeInput.length !== 6}
-                      className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:opacity-50"
+                      className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl bg-slate-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:opacity-50"
                     >
                       {studentBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Verify"}
                     </button>
@@ -1177,7 +1177,7 @@ function UpgradeCard({
   const palette =
     tone === "sky"
       ? {
-          gradient: "from-sky-500 via-indigo-500 to-violet-500",
+          gradient: "from-sky-500 via-orange-500 to-violet-500",
           tint: "bg-sky-50",
           ring: "ring-sky-100",
           icon: "text-sky-600",

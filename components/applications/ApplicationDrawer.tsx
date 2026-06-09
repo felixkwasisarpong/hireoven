@@ -29,7 +29,7 @@ const STATUS_META: Record<ApplicationStatus, { label: string; color: string }> =
   applied: { label: "Applied", color: "bg-blue-50 text-blue-700 border-blue-200" },
   phone_screen: { label: "Phone Screen", color: "bg-amber-50 text-amber-700 border-amber-200" },
   interview: { label: "Interview", color: "bg-orange-50 text-orange-700 border-orange-200" },
-  final_round: { label: "Final Round", color: "bg-indigo-50 text-indigo-700 border-indigo-200" },
+  final_round: { label: "Final Round", color: "bg-slate-50 text-slate-700 border-slate-200" },
   offer: { label: "Offer", color: "bg-emerald-50 text-emerald-700 border-emerald-200" },
   rejected: { label: "Rejected", color: "bg-red-50 text-red-700 border-red-200" },
   withdrawn: { label: "Withdrawn", color: "bg-slate-100 text-slate-500 border-slate-200" },

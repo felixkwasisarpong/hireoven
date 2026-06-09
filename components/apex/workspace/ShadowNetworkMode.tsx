@@ -16,7 +16,7 @@ type ConnectionWithDM = ScoredConnection & { dm?: string; dmLoading?: boolean; c
 
 const TIER_CONFIG = {
   hot:  { label: "Hot",  color: "bg-amber-100 text-amber-700 border-amber-200",  dot: "bg-amber-500",  icon: Zap },
-  warm: { label: "Warm", color: "bg-indigo-100 text-indigo-700 border-indigo-200", dot: "bg-indigo-400", icon: ThumbsUp },
+  warm: { label: "Warm", color: "bg-slate-100 text-slate-700 border-slate-200", dot: "bg-slate-400", icon: ThumbsUp },
   cold: { label: "Cold", color: "bg-slate-100 text-slate-500 border-slate-200",   dot: "bg-slate-400",  icon: Minus },
 }
 
@@ -36,7 +36,7 @@ function ConnectionCard({
     <div className="rounded-xl border border-slate-100 bg-white p-3.5 shadow-[0_1px_4px_rgba(15,23,42,0.06)] transition hover:shadow-[0_2px_8px_rgba(15,23,42,0.10)]">
       <div className="flex items-start justify-between gap-3">
         {/* Avatar placeholder */}
-        <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-400 to-violet-500 text-[13px] font-bold text-white">
+        <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-orange-400 to-violet-500 text-[13px] font-bold text-white">
           {conn.name.charAt(0).toUpperCase()}
         </div>
 
@@ -49,7 +49,7 @@ function ConnectionCard({
             </span>
           </div>
           <p className="truncate text-[11.5px] text-slate-500">{conn.title}</p>
-          <p className="text-[11px] text-indigo-600">{conn.company}</p>
+          <p className="text-[11px] text-slate-600">{conn.company}</p>
         </div>
 
         <div className="text-right flex-shrink-0">
@@ -65,7 +65,7 @@ function ConnectionCard({
           <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700">Active on LinkedIn</span>
         )}
         {conn.mutualCount > 0 && (
-          <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-medium text-indigo-700">{conn.mutualCount} mutual</span>
+          <span className="rounded-full bg-slate-50 px-2 py-0.5 text-[10px] font-medium text-slate-700">{conn.mutualCount} mutual</span>
         )}
         {conn.tenureMonths >= 12 && conn.tenureMonths <= 36 && (
           <span className="rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-medium text-violet-700">Sweet-spot tenure</span>
@@ -83,7 +83,7 @@ function ConnectionCard({
               <button
                 type="button"
                 onClick={() => onCopy(conn.id, conn.dm!)}
-                className="inline-flex items-center gap-1.5 rounded-full bg-indigo-600 px-3 py-1.5 text-[11px] font-semibold text-white transition hover:bg-indigo-700"
+                className="inline-flex items-center gap-1.5 rounded-full bg-slate-600 px-3 py-1.5 text-[11px] font-semibold text-white transition hover:bg-slate-700"
               >
                 {conn.copied ? <CheckCheck className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
                 {conn.copied ? "Copied!" : "Copy DM"}
@@ -106,7 +106,7 @@ function ConnectionCard({
             type="button"
             onClick={() => onGenerateDM(conn.id)}
             disabled={conn.dmLoading}
-            className="inline-flex items-center gap-1.5 rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-[11px] font-semibold text-indigo-700 transition hover:bg-indigo-100 disabled:opacity-60"
+            className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] font-semibold text-slate-700 transition hover:bg-slate-100 disabled:opacity-60"
           >
             {conn.dmLoading
               ? <Loader2 className="h-3 w-3 animate-spin" />
@@ -223,11 +223,11 @@ export function ShadowNetworkMode({ targetCompany, targetJobTitle = "Software En
   const warmCount = connections.filter((c) => c.referralTier === "warm").length
 
   return (
-    <div className={cn("rounded-2xl border border-indigo-100 bg-slate-50", className)}>
+    <div className={cn("rounded-2xl border border-slate-100 bg-slate-50", className)}>
       {/* Header */}
       <div className="flex items-center gap-3 rounded-t-2xl border-b border-slate-200 bg-white px-4 py-3.5">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50">
-          <Network className="h-4 w-4 text-indigo-600" />
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-50">
+          <Network className="h-4 w-4 text-slate-600" />
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-[13px] font-bold text-slate-900">Shadow Network</p>
@@ -243,7 +243,7 @@ export function ShadowNetworkMode({ targetCompany, targetJobTitle = "Software En
               onChange={(e) => setCompany(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") scanLinkedIn() }}
               disabled={scanState === "scanning"}
-              className="mt-0.5 w-full rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-[12px] text-slate-800 outline-none focus:border-indigo-400 placeholder:text-slate-400 disabled:opacity-60"
+              className="mt-0.5 w-full rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-[12px] text-slate-800 outline-none focus:border-slate-400 placeholder:text-slate-400 disabled:opacity-60"
             />
           )}
         </div>
@@ -283,7 +283,7 @@ export function ShadowNetworkMode({ targetCompany, targetJobTitle = "Software En
         {scanState === "idle" && (
           <div className={cn(
             "rounded-xl border border-dashed p-4",
-            extensionConnected ? "border-indigo-200 bg-indigo-50/50" : "border-slate-200 bg-slate-50"
+            extensionConnected ? "border-slate-200 bg-slate-50/50" : "border-slate-200 bg-slate-50"
           )}>
             <p className="text-[13px] font-semibold text-slate-800">Scan your LinkedIn connections at {company}</p>
             <p className="mt-1 text-[11.5px] text-slate-500 leading-relaxed">
@@ -297,7 +297,7 @@ export function ShadowNetworkMode({ targetCompany, targetJobTitle = "Software En
               <button
                 type="button"
                 onClick={scanLinkedIn}
-                className="mt-3 inline-flex items-center gap-2 rounded-full bg-indigo-600 px-4 py-2 text-[12.5px] font-semibold text-white shadow-sm transition hover:bg-indigo-700"
+                className="mt-3 inline-flex items-center gap-2 rounded-full bg-slate-600 px-4 py-2 text-[12.5px] font-semibold text-white shadow-sm transition hover:bg-slate-700"
               >
                 <Network className="h-3.5 w-3.5" />
                 Scan LinkedIn connections
@@ -307,11 +307,11 @@ export function ShadowNetworkMode({ targetCompany, targetJobTitle = "Software En
         )}
 
         {scanState === "scanning" && (
-          <div className="flex items-center gap-3 rounded-xl border border-indigo-200 bg-indigo-50 p-4">
-            <Loader2 className="h-4 w-4 animate-spin text-indigo-600 flex-shrink-0" />
+          <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <Loader2 className="h-4 w-4 animate-spin text-slate-600 flex-shrink-0" />
             <div>
-              <p className="text-[13px] font-semibold text-indigo-800">Scanning LinkedIn…</p>
-              <p className="text-[11px] text-indigo-500">Opening search, reading your connections, then closing the tab.</p>
+              <p className="text-[13px] font-semibold text-slate-800">Scanning LinkedIn…</p>
+              <p className="text-[11px] text-slate-500">Opening search, reading your connections, then closing the tab.</p>
             </div>
           </div>
         )}
@@ -339,7 +339,7 @@ export function ShadowNetworkMode({ targetCompany, targetJobTitle = "Software En
             <button
               type="button"
               onClick={() => setScanState("idle")}
-              className="mt-2 text-[11.5px] font-semibold text-indigo-600 hover:underline"
+              className="mt-2 text-[11.5px] font-semibold text-slate-600 hover:underline"
             >
               Try again
             </button>
@@ -349,7 +349,7 @@ export function ShadowNetworkMode({ targetCompany, targetJobTitle = "Software En
         {scanState === "done" && connections.length === 0 && (
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-center">
             <p className="text-[13px] text-slate-600">No 1st or 2nd degree connections found at {company || "this company"}.</p>
-            <button type="button" onClick={() => setScanState("idle")} className="mt-2 text-[11.5px] text-indigo-500 hover:underline">Rescan</button>
+            <button type="button" onClick={() => setScanState("idle")} className="mt-2 text-[11.5px] text-slate-500 hover:underline">Rescan</button>
           </div>
         )}
       </div>

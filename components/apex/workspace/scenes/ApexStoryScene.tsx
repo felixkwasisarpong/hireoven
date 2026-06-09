@@ -62,7 +62,7 @@ export function ApexStoryScene({ command, narrative, mode, streamText }: Props) 
       <div className="relative overflow-hidden rounded-3xl border border-slate-200/80 bg-white p-5 shadow-[0_2px_18px_rgba(15,23,42,0.06)] sm:p-6">
         {/* Glow halo */}
         <div className="pointer-events-none absolute -top-12 -left-12 h-40 w-40 rounded-full bg-blue-500/10 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-16 -right-12 h-44 w-44 rounded-full bg-indigo-200/30 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-16 -right-12 h-44 w-44 rounded-full bg-slate-200/30 blur-3xl" />
 
         <div className="relative flex items-start gap-3">
           <ApexOrb size="md" state="thinking" className="mt-0.5" />

@@ -20,7 +20,7 @@ const BOTTLENECK_LABELS = {
 
 function ProbabilityBar({ week, probability }: { week: number; probability: number }) {
   const pct = Math.round(probability * 100)
-  const color = pct >= 70 ? "bg-emerald-500" : pct >= 40 ? "bg-indigo-500" : "bg-slate-300"
+  const color = pct >= 70 ? "bg-emerald-500" : pct >= 40 ? "bg-slate-500" : "bg-slate-300"
   return (
     <div className="flex items-center gap-2">
       <span className="w-12 text-right text-[11px] font-medium text-slate-500">Wk {week}</span>
@@ -31,7 +31,7 @@ function ProbabilityBar({ week, probability }: { week: number; probability: numb
         />
       </div>
       <span className={cn("w-9 text-right text-[12px] font-semibold tabular-nums",
-        pct >= 70 ? "text-emerald-600" : pct >= 40 ? "text-indigo-600" : "text-slate-400"
+        pct >= 70 ? "text-emerald-600" : pct >= 40 ? "text-slate-600" : "text-slate-400"
       )}>{pct}%</span>
     </div>
   )
@@ -48,7 +48,7 @@ function FunnelField({
         min={0}
         value={value}
         onChange={(e) => onChange(Math.max(0, parseInt(e.target.value) || 0))}
-        className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-[13px] font-semibold text-slate-800 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+        className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-[13px] font-semibold text-slate-800 outline-none focus:border-slate-400 focus:ring-2 focus:ring-primary"
       />
     </div>
   )
@@ -95,11 +95,11 @@ export function PipelineSimulator({ initialMetrics, className }: Props) {
   const set = (key: keyof FunnelMetrics) => (v: number) => setMetrics((m) => ({ ...m, [key]: v }))
 
   return (
-    <div className={cn("rounded-2xl border border-indigo-100 bg-white shadow-sm", className)}>
+    <div className={cn("rounded-2xl border border-slate-100 bg-white shadow-sm", className)}>
       {/* Header */}
       <div className="flex items-center gap-3 border-b border-slate-100 px-4 py-3.5">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50">
-          <TrendingUp className="h-4 w-4 text-indigo-600" />
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-50">
+          <TrendingUp className="h-4 w-4 text-slate-600" />
         </div>
         <div className="flex-1">
           <p className="text-[13px] font-bold text-slate-900">Pipeline Simulator</p>
@@ -122,7 +122,7 @@ export function PipelineSimulator({ initialMetrics, className }: Props) {
           type="button"
           onClick={simulate}
           disabled={loading}
-          className="w-full rounded-xl bg-indigo-600 py-2.5 text-[13px] font-semibold text-white transition hover:bg-indigo-700 disabled:opacity-60"
+          className="w-full rounded-xl bg-slate-600 py-2.5 text-[13px] font-semibold text-white transition hover:bg-slate-700 disabled:opacity-60"
         >
           {loading ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : "Run simulation"}
         </button>
@@ -133,7 +133,7 @@ export function PipelineSimulator({ initialMetrics, className }: Props) {
             <div className={cn(
               "flex items-center gap-4 rounded-xl border p-4",
               result.momentumScore >= 65 ? "border-emerald-200 bg-emerald-50"
-              : result.momentumScore >= 40 ? "border-indigo-200 bg-indigo-50"
+              : result.momentumScore >= 40 ? "border-slate-200 bg-slate-50"
               : "border-amber-200 bg-amber-50"
             )}>
               <div className="text-center">
@@ -153,7 +153,7 @@ export function PipelineSimulator({ initialMetrics, className }: Props) {
                 <p className={cn(
                   "mt-1.5 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-bold",
                   result.momentumScore >= 65 ? "bg-emerald-100 text-emerald-700"
-                  : result.momentumScore >= 40 ? "bg-indigo-100 text-indigo-700"
+                  : result.momentumScore >= 40 ? "bg-slate-100 text-slate-700"
                   : "bg-amber-100 text-amber-700"
                 )}>
                   <Zap className="h-3 w-3" />
@@ -189,8 +189,8 @@ export function PipelineSimulator({ initialMetrics, className }: Props) {
 
             {/* What-if scenarios */}
             <div className="grid grid-cols-2 gap-2.5">
-              <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-3">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-indigo-600">If you apply more</p>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-600">If you apply more</p>
                 <p className="mt-1 text-[12px] text-slate-700">{result.scenarioBoost.label}</p>
               </div>
               <div className="rounded-xl border border-violet-200 bg-violet-50 p-3">

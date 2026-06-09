@@ -381,7 +381,7 @@ export default function VisaIntelDrawer({ open, onClose, job, displayTitle }: Pr
                   <StatTile label="Total LCA Apps" value={totalLca.toLocaleString()} />
                 )}
                 {recentPetitions != null && (
-                  <StatTile label="Recent Petitions" value={recentPetitions.toLocaleString()} accent="text-indigo-700" />
+                  <StatTile label="Recent Petitions" value={recentPetitions.toLocaleString()} accent="text-slate-700" />
                 )}
                 {lcaCertRate != null && (
                   <StatTile
@@ -406,7 +406,7 @@ export default function VisaIntelDrawer({ open, onClose, job, displayTitle }: Pr
                 </p>
                 <div className="flex flex-wrap gap-1.5">
                   {immigProfile.commonJobTitles.slice(0, 5).map((t) => (
-                    <span key={t} className="rounded-full bg-indigo-50 px-2.5 py-0.5 text-[11px] font-medium text-indigo-700 ring-1 ring-indigo-200/60">
+                    <span key={t} className="rounded-full bg-slate-50 px-2.5 py-0.5 text-[11px] font-medium text-slate-700 ring-1 ring-primary/60">
                       {t}
                     </span>
                   ))}

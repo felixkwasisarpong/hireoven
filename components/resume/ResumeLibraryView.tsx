@@ -64,7 +64,7 @@ const SORT_OPTIONS: { label: string; value: SortValue }[] = [
 
 const STATUS_META: Record<ResumeStatus, { label: string; className: string }> = {
   active: { label: "Active", className: "bg-emerald-50 text-emerald-600 border-emerald-100" },
-  draft: { label: "Draft", className: "bg-indigo-50 text-[#5B4DFF] border-indigo-100" },
+  draft: { label: "Draft", className: "bg-slate-50 text-[#5B4DFF] border-slate-100" },
   tailored: { label: "Tailored", className: "bg-orange-50 text-orange-600 border-orange-100" },
   archived: { label: "Archived", className: "bg-slate-100 text-slate-500 border-slate-200" },
 }
@@ -175,7 +175,7 @@ function FilterChip({ label, count, active, onClick }: { label: string; count: n
       className={cn(
         "inline-flex h-9 shrink-0 items-center gap-1 rounded-lg border px-3 text-[12px] font-semibold transition",
         active
-          ? "border-[#5B4DFF] bg-indigo-50 text-[#5B4DFF]"
+          ? "border-[#5B4DFF] bg-slate-50 text-[#5B4DFF]"
           : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
       )}
     >
@@ -798,7 +798,7 @@ export default function ResumeLibraryView({ topSlot }: { topSlot?: ReactNode }) 
                       strokeLinecap="round"
                     />
                   </svg>
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-indigo-50">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-50">
                     {uploadPhase === "uploading"
                       ? <Upload className="h-5 w-5 text-[#5B4DFF]" />
                       : <Sparkles className="h-5 w-5 animate-pulse text-[#5B4DFF]" />
@@ -825,7 +825,7 @@ export default function ResumeLibraryView({ topSlot }: { topSlot?: ReactNode }) 
                       style={{ width: `${uploadProgress}%` }}
                     />
                   ) : (
-                    <div className="h-full w-full animate-[shimmer_1.6s_linear_infinite] rounded-full bg-gradient-to-r from-indigo-200 via-[#5B4DFF] to-indigo-200 bg-[length:200%_100%]" />
+                    <div className="h-full w-full animate-[shimmer_1.6s_linear_infinite] rounded-full bg-gradient-to-r from-orange-200 via-[#5B4DFF] to-orange-200 bg-[length:200%_100%]" />
                   )}
                 </div>
 

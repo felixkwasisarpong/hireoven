@@ -250,7 +250,7 @@ function CoverLetterRow({ letter, onDelete }: { letter: CoverLetter; onDelete: (
         {letter.job_id && (
           <Link
             href={`/dashboard/cover-letter/${letter.job_id}`}
-            className="inline-flex h-8 items-center gap-1 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 text-[12px] font-semibold text-indigo-600 transition hover:bg-indigo-100"
+            className="inline-flex h-8 items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 text-[12px] font-semibold text-slate-600 transition hover:bg-slate-100"
           >
             <FileText className="h-3.5 w-3.5" />
             Open

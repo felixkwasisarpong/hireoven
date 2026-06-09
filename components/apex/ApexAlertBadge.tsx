@@ -36,13 +36,13 @@ export function ApexAlertBadge({ disabled, className }: Props) {
         "motion-safe:animate-[apexFadeUp_0.4s_ease-out_both]",
         isTop
           ? "border border-amber-300 bg-amber-50 text-amber-900 shadow-amber-100"
-          : "border border-indigo-200 bg-indigo-50 text-indigo-800 shadow-indigo-100",
+          : "border border-slate-200 bg-slate-50 text-slate-800 shadow-indigo-100",
         className,
       )}
     >
       {isTop
         ? <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
-        : <Zap className="h-3.5 w-3.5 text-indigo-500" />
+        : <Zap className="h-3.5 w-3.5 text-slate-500" />
       }
       <button type="button" onClick={open} className="hover:underline focus-visible:outline-none">
         {isTop ? "Top match dropped" : "New match"} · {latest.matchScore}%{" "}

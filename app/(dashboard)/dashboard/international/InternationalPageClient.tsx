@@ -26,8 +26,8 @@ const TOOLS = [
     title: "OPT Survival",
     copy: "Timeline, unemployment days, weekly target",
     icon: Clock3,
-    accent: "bg-indigo-50 text-indigo-600 ring-indigo-100",
-    hover: "hover:border-indigo-200 hover:bg-indigo-50/40",
+    accent: "bg-slate-50 text-slate-600 ring-primary",
+    hover: "hover:border-slate-200 hover:bg-slate-50/40",
   },
   {
     href: "/dashboard/international/offer-risk",
@@ -96,7 +96,7 @@ export default function InternationalPage() {
     return (
       <main className="app-page flex min-h-[60vh] items-center justify-center px-6">
         <div className="max-w-sm text-center">
-          <Plane className="mx-auto mb-4 h-10 w-10 text-indigo-400" />
+          <Plane className="mx-auto mb-4 h-10 w-10 text-slate-400" />
           <h2 className="text-[17px] font-bold text-slate-900">International tools</h2>
           <p className="mt-2 text-[14px] leading-relaxed text-slate-500">
             These tools are free for international candidates. Tell us about your
@@ -105,7 +105,7 @@ export default function InternationalPage() {
           </p>
           <Link
             href="/dashboard/onboarding?step=2"
-            className="mt-5 inline-flex rounded-lg bg-indigo-600 px-5 py-2.5 text-[14px] font-semibold text-white transition hover:bg-indigo-700"
+            className="mt-5 inline-flex rounded-lg bg-slate-600 px-5 py-2.5 text-[14px] font-semibold text-white transition hover:bg-slate-700"
           >
             Set my visa status — 30 seconds
           </Link>
@@ -130,7 +130,7 @@ export default function InternationalPage() {
       {/* ── Hero header (full-bleed, edge-to-edge of dashboard column) ── */}
       <div className="relative overflow-hidden bg-slate-950 px-6 py-7 sm:px-8 sm:py-8">
           {/* Subtle glow blobs */}
-          <div className="pointer-events-none absolute right-[-60px] top-[-60px] h-72 w-72 rounded-full bg-indigo-600/20 blur-3xl" />
+          <div className="pointer-events-none absolute right-[-60px] top-[-60px] h-72 w-72 rounded-full bg-slate-600/20 blur-3xl" />
           <div className="pointer-events-none absolute bottom-[-80px] left-[30%] h-56 w-56 rounded-full bg-orange-500/15 blur-3xl" />
 
           <div className="relative grid gap-8 lg:grid-cols-[1fr_340px] lg:items-start">
@@ -147,7 +147,7 @@ export default function InternationalPage() {
                   <Plane className="h-5 w-5" />
                 </span>
                 <div>
-                  <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-indigo-400">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-slate-400">
                     International Hub
                   </p>
                   <h1 className="mt-0.5 text-2xl font-bold tracking-tight text-white sm:text-3xl">
@@ -229,7 +229,7 @@ export default function InternationalPage() {
           {/* Section header */}
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-5 py-4 sm:px-6">
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-indigo-500">
+              <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500">
                 H-1B Sponsors
               </p>
               <h2 className="mt-0.5 text-base font-semibold text-gray-900">
@@ -272,7 +272,7 @@ export default function InternationalPage() {
                 return (
                   <div
                     key={company.id}
-                    className="group flex items-center gap-4 px-6 py-3.5 transition-colors hover:bg-indigo-50/25"
+                    className="group flex items-center gap-4 px-6 py-3.5 transition-colors hover:bg-slate-50/25"
                   >
                     {/* Rank */}
                     <div className="w-8 flex-shrink-0 text-[11px] font-bold tabular-nums text-gray-300">
@@ -288,7 +288,7 @@ export default function InternationalPage() {
                         className="h-9 w-9 flex-shrink-0 rounded-xl border border-slate-100 bg-white object-contain p-1 shadow-[0_3px_8px_rgba(15,23,42,0.04)]"
                       />
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-gray-900 transition-colors group-hover:text-indigo-700">
+                        <p className="truncate text-sm font-semibold text-gray-900 transition-colors group-hover:text-slate-700">
                           {company.name}
                         </p>
                         <p className="truncate text-[11px] text-gray-400">
@@ -315,7 +315,7 @@ export default function InternationalPage() {
                     {/* Open roles */}
                     <div className="hidden w-16 flex-shrink-0 text-right sm:block">
                       {company.job_count > 0 ? (
-                        <p className="text-sm font-semibold tabular-nums text-indigo-600">
+                        <p className="text-sm font-semibold tabular-nums text-slate-600">
                           {company.job_count.toLocaleString()}
                         </p>
                       ) : (
@@ -328,7 +328,7 @@ export default function InternationalPage() {
                       <Link
                         href={`/dashboard/international/company/${company.id}`}
                         title="View company"
-                        className="rounded-lg p-1.5 text-gray-400 opacity-0 transition group-hover:opacity-100 hover:bg-indigo-50 hover:text-indigo-600"
+                        className="rounded-lg p-1.5 text-gray-400 opacity-0 transition group-hover:opacity-100 hover:bg-slate-50 hover:text-slate-600"
                       >
                         <ArrowUpRight className="h-3.5 w-3.5" />
                       </Link>
@@ -340,7 +340,7 @@ export default function InternationalPage() {
                           "rounded-lg p-1.5 transition",
                           watching
                             ? "text-[#FF5C18]"
-                            : "text-gray-400 opacity-0 group-hover:opacity-100 hover:bg-indigo-50 hover:text-indigo-600"
+                            : "text-gray-400 opacity-0 group-hover:opacity-100 hover:bg-slate-50 hover:text-slate-600"
                         )}
                       >
                         {watching ? (

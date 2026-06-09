@@ -200,9 +200,9 @@ export default function OfferRiskAnalyzer() {
 
   return (
     <section className="surface-card overflow-hidden rounded-none p-0 shadow-[0_24px_80px_rgba(15,23,42,0.08)]">
-      <div className="relative overflow-hidden border-b border-indigo-100/70 bg-[radial-gradient(circle_at_top_left,rgba(99,102,241,0.18),transparent_34%),linear-gradient(135deg,#ffffff_0%,#f8fbff_52%,#fff7ed_100%)] px-5 py-6 sm:px-7 sm:py-7">
+      <div className="relative overflow-hidden border-b border-slate-100/70 bg-[radial-gradient(circle_at_top_left,rgba(99,102,241,0.18),transparent_34%),linear-gradient(135deg,#ffffff_0%,#f8fbff_52%,#fff7ed_100%)] px-5 py-6 sm:px-7 sm:py-7">
         <div className="pointer-events-none absolute right-[-70px] top-[-90px] h-56 w-56 rounded-full bg-orange-200/35 blur-3xl" />
-        <div className="pointer-events-none absolute bottom-[-120px] left-[30%] h-56 w-56 rounded-full bg-indigo-200/35 blur-3xl" />
+        <div className="pointer-events-none absolute bottom-[-120px] left-[30%] h-56 w-56 rounded-full bg-slate-200/35 blur-3xl" />
 
         <div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-3xl">
@@ -217,7 +217,7 @@ export default function OfferRiskAnalyzer() {
                 <ShieldAlert className="h-5 w-5" aria-hidden />
               </span>
               <div>
-                <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-indigo-600">
+                <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-600">
                   Offer Intelligence
                 </p>
                 <h2 className="mt-1 text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">
@@ -234,7 +234,7 @@ export default function OfferRiskAnalyzer() {
           <div className="flex flex-wrap gap-2 lg:max-w-sm lg:justify-end">
             {[
               ["Salary vs LCA", "bg-emerald-50 text-emerald-800 ring-emerald-200"],
-              ["Sponsorship fit", "bg-indigo-50 text-indigo-800 ring-indigo-200"],
+              ["Sponsorship fit", "bg-slate-50 text-slate-800 ring-primary"],
               ["HR questions", "bg-amber-50 text-amber-900 ring-amber-200"],
               ["Not legal advice", "bg-white/80 text-slate-700 ring-slate-200"],
             ].map(([label, classes]) => (
@@ -350,7 +350,7 @@ export default function OfferRiskAnalyzer() {
                 className={cn(
                   "rounded-xl border px-3 py-2 text-left text-[12px] font-semibold transition",
                   form[key as keyof FormState]
-                    ? "border-indigo-200 bg-indigo-50 text-indigo-900"
+                    ? "border-slate-200 bg-slate-50 text-slate-900"
                     : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
                 )}
               >
@@ -423,7 +423,7 @@ export default function OfferRiskAnalyzer() {
               <div className="rounded-3xl bg-white p-5">
                 <div className="grid gap-3 sm:grid-cols-3">
                   <div className="rounded-2xl bg-slate-50 p-4">
-                    <Briefcase className="mb-2 h-4 w-4 text-indigo-500" />
+                    <Briefcase className="mb-2 h-4 w-4 text-slate-500" />
                     <p className="text-xs font-semibold text-slate-500">Visa fit</p>
                     <p className="mt-1 text-lg font-semibold text-slate-950">
                       {analysis.visaFit.label}
@@ -464,7 +464,7 @@ export default function OfferRiskAnalyzer() {
             </>
           ) : (
             <div className="flex min-h-[520px] flex-col items-center justify-center rounded-3xl bg-white p-8 text-center">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-50 text-slate-600">
                 <CheckCircle2 className="h-6 w-6" />
               </div>
               <h2 className="mt-4 text-xl font-semibold text-slate-950">

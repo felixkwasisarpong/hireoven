@@ -57,13 +57,13 @@ type ApexMiniPanelProps = {
 function TypingIndicator() {
   return (
     <div className="flex items-start gap-2.5">
-      <span className="mt-0.5 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-indigo-50">
+      <span className="mt-0.5 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-slate-50">
         <ApexIcon size={16} glow={false} />
       </span>
       <div className="flex items-center gap-1 rounded-2xl rounded-tl-sm bg-gray-100 px-3.5 py-3">
-        <span className="h-1.5 w-1.5 rounded-full bg-indigo-400 animate-bounce [animation-delay:0ms]" />
-        <span className="h-1.5 w-1.5 rounded-full bg-indigo-400 animate-bounce [animation-delay:150ms]" />
-        <span className="h-1.5 w-1.5 rounded-full bg-indigo-400 animate-bounce [animation-delay:300ms]" />
+        <span className="h-1.5 w-1.5 rounded-full bg-slate-400 animate-bounce [animation-delay:0ms]" />
+        <span className="h-1.5 w-1.5 rounded-full bg-slate-400 animate-bounce [animation-delay:150ms]" />
+        <span className="h-1.5 w-1.5 rounded-full bg-slate-400 animate-bounce [animation-delay:300ms]" />
       </div>
     </div>
   )
@@ -263,7 +263,7 @@ export function ApexMiniPanel({
           style={{ maxHeight: "min(72vh,520px)" }}
         >
           {/* ── Header ── */}
-          <div className="flex flex-shrink-0 items-center gap-3 bg-indigo-600 px-4 py-3.5">
+          <div className="flex flex-shrink-0 items-center gap-3 bg-slate-600 px-4 py-3.5">
             {/* Avatar */}
             <span className="inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-white/20 ring-2 ring-white/30">
               <ApexIcon size={20} glow={false} className="brightness-[10]" />
@@ -305,7 +305,7 @@ export function ApexMiniPanel({
 
                 {/* Apex greeting bubble */}
                 <div className="flex items-start gap-2.5">
-                  <span className="mt-0.5 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-indigo-50">
+                  <span className="mt-0.5 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-slate-50">
                     <ApexIcon size={16} glow={false} />
                   </span>
                   <div className="rounded-2xl rounded-tl-sm bg-gray-100 px-3.5 py-2.5 text-[13px] leading-5 text-gray-800">
@@ -329,7 +329,7 @@ export function ApexMiniPanel({
                         key={chip}
                         type="button"
                         onClick={() => runChip(prompt)}
-                        className="flex w-full items-center gap-2 rounded-full bg-indigo-600 px-4 py-2 text-left text-[12px] font-semibold text-white transition hover:bg-indigo-700 active:scale-[0.98]"
+                        className="flex w-full items-center gap-2 rounded-full bg-slate-600 px-4 py-2 text-left text-[12px] font-semibold text-white transition hover:bg-slate-700 active:scale-[0.98]"
                       >
                         <ApexIcon size={12} glow={false} className="flex-shrink-0 opacity-80 brightness-[10]" />
                         {chip}
@@ -349,7 +349,7 @@ export function ApexMiniPanel({
             {messages.map((msg) =>
               msg.role === "user" ? (
                 <div key={msg.id} className="flex justify-end">
-                  <div className="max-w-[80%] rounded-2xl rounded-tr-sm bg-indigo-600 px-3.5 py-2.5 text-[13px] leading-5 text-white">
+                  <div className="max-w-[80%] rounded-2xl rounded-tr-sm bg-slate-600 px-3.5 py-2.5 text-[13px] leading-5 text-white">
                     {msg.text}
                   </div>
                 </div>
@@ -390,7 +390,7 @@ export function ApexMiniPanel({
                   type="submit"
                   disabled={!query.trim() || isLoading}
                   aria-label="Send"
-                  className="flex-shrink-0 text-indigo-600 transition hover:text-indigo-700 disabled:opacity-30"
+                  className="flex-shrink-0 text-slate-600 transition hover:text-slate-700 disabled:opacity-30"
                 >
                   {isLoading
                     ? <Loader2 className="h-5 w-5 animate-spin" />
@@ -418,7 +418,7 @@ export function ApexMiniPanel({
         type="button"
         onClick={() => setIsOpen((v) => !v)}
         aria-label={isOpen ? "Close Apex" : "Open Apex"}
-        className="pointer-events-auto relative inline-flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-indigo-600 shadow-[0_4px_20px_rgba(99,102,241,0.45)] transition-all duration-200 hover:bg-indigo-700 hover:scale-105 hover:shadow-[0_6px_28px_rgba(99,102,241,0.55)] active:scale-95"
+        className="pointer-events-auto relative inline-flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-slate-600 shadow-[0_4px_20px_rgba(99,102,241,0.45)] transition-all duration-200 hover:bg-slate-700 hover:scale-105 hover:shadow-[0_6px_28px_rgba(99,102,241,0.55)] active:scale-95"
       >
         {isOpen
           ? <X className="h-5 w-5 text-white" />
@@ -427,7 +427,7 @@ export function ApexMiniPanel({
 
         {/* Unread badge */}
         {hasConversation && !isOpen && (
-          <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full border-2 border-white bg-white text-[8px] font-bold text-indigo-600">
+          <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full border-2 border-white bg-white text-[8px] font-bold text-slate-600">
             {userTurns}
           </span>
         )}

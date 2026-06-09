@@ -33,18 +33,18 @@ const MODE_STYLES: Record<Mode, {
   bestFor: string
 }> = {
   text: {
-    accent: "bg-gradient-to-r from-indigo-400 via-indigo-500 to-violet-500",
-    shell: "border-indigo-100 bg-indigo-50/40 shadow-[0_14px_34px_rgba(99,102,241,0.10)]",
+    accent: "bg-gradient-to-r from-orange-400 via-orange-500 to-violet-500",
+    shell: "border-slate-100 bg-slate-50/40 shadow-[0_14px_34px_rgba(99,102,241,0.10)]",
     surface: "bg-[radial-gradient(circle_at_6%_4%,rgba(199,210,254,0.4),transparent_46%)]",
     glow: "bg-[radial-gradient(circle_at_94%_6%,rgba(167,139,250,0.15),transparent_52%)]",
-    iconBg: "bg-white/95 ring-1 ring-indigo-200",
-    iconColor: "text-indigo-600",
-    chip: "bg-white/90 text-indigo-700 ring-1 ring-indigo-200",
+    iconBg: "bg-white/95 ring-1 ring-primary",
+    iconColor: "text-slate-600",
+    chip: "bg-white/90 text-slate-700 ring-1 ring-primary",
     title: "text-slate-900",
     description: "text-slate-600",
     bestForLabel: "text-slate-400",
     bestForValue: "text-slate-600",
-    button: "bg-indigo-600 text-white hover:bg-indigo-700",
+    button: "bg-slate-600 text-white hover:bg-slate-700",
     lockOverlay: "bg-white/90",
     lockBtn: "bg-slate-900 text-white hover:bg-slate-700",
     bestFor: "Story crafting · no time pressure",
@@ -61,7 +61,7 @@ const MODE_STYLES: Record<Mode, {
     description: "text-slate-400",
     bestForLabel: "text-slate-600",
     bestForValue: "text-slate-400",
-    button: "bg-indigo-500 text-white hover:bg-indigo-600",
+    button: "bg-slate-500 text-white hover:bg-slate-600",
     lockOverlay: "bg-[#0b0b0d]/88",
     lockBtn: "bg-white text-slate-950 hover:bg-slate-200",
     bestFor: "Final-round prep · real pressure",
@@ -122,11 +122,11 @@ function BuyCreditsButton({
         "inline-flex w-full items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-[12px] font-semibold transition disabled:opacity-60",
         tone === "dark"
           ? highlight
-            ? "bg-indigo-500 text-white hover:bg-indigo-600"
+            ? "bg-slate-500 text-white hover:bg-slate-600"
             : "border border-white/20 bg-white/5 text-slate-200 hover:bg-white/10"
           : highlight
-            ? "bg-indigo-600 text-white hover:bg-indigo-700"
-            : "border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
+            ? "bg-slate-600 text-white hover:bg-slate-700"
+            : "border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100"
       )}
     >
       <CreditCard className="h-3.5 w-3.5" />
@@ -163,7 +163,7 @@ function LockedCard({
         <Lock className={cn("mb-1 h-5 w-5", mode === "live" ? "text-slate-300" : "text-slate-400")} />
         <span className={cn(
           "rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide",
-          requiredPlan === "pro_max" ? "bg-violet-600 text-white" : "bg-indigo-600 text-white"
+          requiredPlan === "pro_max" ? "bg-violet-600 text-white" : "bg-slate-600 text-white"
         )}>
           {badge}
         </span>

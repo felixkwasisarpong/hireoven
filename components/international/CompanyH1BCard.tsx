@@ -25,7 +25,7 @@ export default function CompanyH1BCard({
   const roles = openRoles ?? company.job_count
 
   return (
-    <div className="group flex flex-col rounded-2xl border border-slate-200/70 bg-white p-4 transition duration-200 hover:border-indigo-200/80 hover:shadow-[0_12px_32px_rgba(99,102,241,0.08)]">
+    <div className="group flex flex-col rounded-2xl border border-slate-200/70 bg-white p-4 transition duration-200 hover:border-slate-200/80 hover:shadow-[0_12px_32px_rgba(99,102,241,0.08)]">
       {/* Header: logo + name + watch */}
       <div className="flex items-start gap-3">
         <CompanyLogo
@@ -35,7 +35,7 @@ export default function CompanyH1BCard({
           className="h-10 w-10 flex-shrink-0 rounded-xl border border-slate-100 bg-white object-contain p-1 shadow-[0_3px_8px_rgba(15,23,42,0.04)]"
         />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-slate-900 transition-colors group-hover:text-indigo-700">
+          <p className="truncate text-sm font-semibold text-slate-900 transition-colors group-hover:text-slate-700">
             {company.name}
           </p>
           <p className="mt-0.5 truncate text-[11px] text-slate-400">
@@ -50,7 +50,7 @@ export default function CompanyH1BCard({
             'flex-shrink-0 rounded-lg p-1.5 transition',
             isWatching
               ? 'text-[#FF5C18]'
-              : 'text-slate-300 hover:text-indigo-600'
+              : 'text-slate-300 hover:text-slate-600'
           )}
         >
           {isWatching
@@ -85,7 +85,7 @@ export default function CompanyH1BCard({
           </p>
           <p className={cn(
             'mt-1 text-xl font-bold tabular-nums',
-            roles > 0 ? 'text-indigo-600' : 'text-slate-300'
+            roles > 0 ? 'text-slate-600' : 'text-slate-300'
           )}>
             {roles > 0 ? roles.toLocaleString() : '—'}
           </p>
@@ -100,7 +100,7 @@ export default function CompanyH1BCard({
       {/* CTA */}
       <Link
         href={`/dashboard/international/company/${company.id}`}
-        className="mt-4 flex w-full items-center justify-center gap-1.5 rounded-xl border border-indigo-100 bg-indigo-50/60 py-2 text-xs font-semibold text-indigo-700 transition hover:bg-indigo-100"
+        className="mt-4 flex w-full items-center justify-center gap-1.5 rounded-xl border border-slate-100 bg-slate-50/60 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
       >
         View jobs & intel
         <ArrowUpRight className="h-3.5 w-3.5" />
