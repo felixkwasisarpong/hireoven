@@ -102,9 +102,22 @@ export default function JobNetworkingContacts({ jobId, companyName }: Props) {
           Could not load networking contacts right now.
         </p>
       ) : !hasContacts ? (
-        <p className="mt-3 rounded-xl bg-slate-50 px-3.5 py-2.5 text-[12px] text-slate-500 ring-1 ring-slate-200/70">
-          No warm contacts found yet for this job.
-        </p>
+        <div className="mt-3 rounded-xl bg-slate-50 px-3.5 py-3 ring-1 ring-slate-200/70">
+          <p className="text-[12.5px] font-semibold text-slate-700">No warm contacts surfaced yet</p>
+          <p className="mt-0.5 text-[12px] leading-relaxed text-slate-500">
+            We look for people in your network who can get your application a second look{companyName ? ` at ${companyName}` : ""}:
+          </p>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {(Object.keys(TYPE_META) as NetworkingContactType[]).map((type) => (
+              <span key={type} className={cn("inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1", TYPE_META[type].tone)}>
+                {TYPE_META[type].label}
+              </span>
+            ))}
+          </div>
+          <p className="mt-2 text-[11.5px] text-slate-400">
+            Connect LinkedIn in Settings so we can scan your 1st- and 2nd-degree network for intros.
+          </p>
+        </div>
       ) : (
         <div className="mt-3 space-y-2.5">
           {(Object.keys(TYPE_META) as NetworkingContactType[]).map((type) => {

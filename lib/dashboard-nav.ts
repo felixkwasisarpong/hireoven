@@ -32,6 +32,9 @@ export type DashboardNavItem = {
   label: string
   href: string
   icon: LucideIcon
+  /** Plain-language one-liner shown under the label to demystify product-named
+   *  destinations (Apex, Cohorts, Fair Chance…). Omit for self-evident items. */
+  subtitle?: string
   gate?: FeatureKey
   dividerAbove?: boolean
   footer?: boolean
@@ -57,25 +60,25 @@ export const NAV_GROUPS: Record<string, DashboardNavGroup> = {
 export const DASHBOARD_NAV_ITEMS: DashboardNavItem[] = [
   // ── Top level ───────────────────────────────────────────────────────────────
   { label: "Feed",           href: "/dashboard",                          icon: LayoutGrid },
-  { label: "Apex",          href: "/dashboard/apex",                    icon: Triangle,   gate: "apex_actions" },
-  { label: "Interview",      href: "/dashboard/interview",                icon: Mic },
-  { label: "Watchlist",      href: "/dashboard/watchlist",                icon: BookmarkCheck },
+  { label: "Apex",          href: "/dashboard/apex",                    icon: Triangle,   gate: "apex_actions", subtitle: "Your AI job-search copilot" },
+  { label: "Interview",      href: "/dashboard/interview",                icon: Mic,         subtitle: "Practice & prep with AI" },
+  { label: "Watchlist",      href: "/dashboard/watchlist",                icon: BookmarkCheck, subtitle: "Jobs you've saved" },
   { label: "Alerts",         href: "/dashboard/alerts",                   icon: Bell },
-  { label: "H-1B Intel",     href: "/dashboard/international/h1b-explorer", icon: Plane },
-  { label: "Cohorts",        href: "/dashboard/cohorts",                  icon: Users,      gate: "apex_strategy" },
-  { label: "Fair Chance",    href: "/dashboard/background-check",         icon: ShieldCheck, gate: "apex_strategy" },
-  { label: "Brand",          href: "/dashboard/brand",                    icon: TrendingUp, gate: "apex_strategy" },
+  { label: "H-1B Intel",     href: "/dashboard/international/h1b-explorer", icon: Plane,      subtitle: "Visa sponsorship data" },
+  { label: "Cohorts",        href: "/dashboard/cohorts",                  icon: Users,      gate: "apex_strategy", subtitle: "Peers on the same path" },
+  { label: "Fair Chance",    href: "/dashboard/background-check",         icon: ShieldCheck, gate: "apex_strategy", subtitle: "Second-chance-friendly roles" },
+  { label: "Brand",          href: "/dashboard/brand",                    icon: TrendingUp, gate: "apex_strategy", subtitle: "Grow your LinkedIn presence" },
 
   // ── My Career ───────────────────────────────────────────────────────────────
-  { label: "Applications",   href: "/dashboard/applications",             icon: ClipboardList,  group: "My Career" },
-  { label: "Resume",         href: "/dashboard/resume",                   icon: FileText,        group: "My Career", gate: "resume_upload" },
+  { label: "Applications",   href: "/dashboard/applications",             icon: ClipboardList,  group: "My Career", subtitle: "Track your pipeline" },
+  { label: "Resume",         href: "/dashboard/resume",                   icon: FileText,        group: "My Career", gate: "resume_upload", subtitle: "Build & tailor resumes" },
   { label: "Cover letters",  href: "/dashboard/cover-letters",            icon: Mails,           group: "My Career", gate: "cover_letter" },
-  { label: "Autofill",       href: "/dashboard/autofill",                 icon: Wand2,           group: "My Career", gate: "autofill" },
+  { label: "Autofill",       href: "/dashboard/autofill",                 icon: Wand2,           group: "My Career", gate: "autofill", subtitle: "One-click applications" },
 
   // ── International ────────────────────────────────────────────────────────────
   // No gate — pages enforce the profile check (is_international / visa_status)
-  { label: "International",  href: "/dashboard/international",            icon: Plane,           group: "International" },
-  { label: "Offer Risk",     href: "/dashboard/international/offer-risk", icon: ShieldAlert,     group: "International" },
+  { label: "International",  href: "/dashboard/international",            icon: Plane,           group: "International", subtitle: "Tools for visa seekers" },
+  { label: "Offer Risk",     href: "/dashboard/international/offer-risk", icon: ShieldAlert,     group: "International", subtitle: "Vet an offer's stability" },
 
   // ── Footer ───────────────────────────────────────────────────────────────────
   { label: "Settings",       href: "/dashboard/billing",                  icon: Settings,      footer: true },

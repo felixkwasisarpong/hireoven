@@ -768,9 +768,27 @@ function ActiveCohortsTab({
       {error && <p className="text-[14px] text-red-500">{error}</p>}
 
       {!loading && !error && cohorts.length === 0 && (
-        <div className="py-12 text-center">
-          <MI name="groups" className="text-[40px] text-slate-300 mb-3" />
-          <p className="text-[14px] text-slate-500">No active cohorts yet. Check back as layoffs are detected.</p>
+        <div className="mx-auto max-w-md py-10 text-center">
+          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-orange-50">
+            <MI name="groups" className="text-[26px] text-[#FF5C18]" />
+          </div>
+          <p className="text-[15px] font-semibold text-slate-900">Cohorts connect you with peers job-hunting like you</p>
+          <p className="mx-auto mt-1.5 max-w-sm text-[13px] leading-relaxed text-slate-500">
+            When a layoff is detected, we group affected people into a private cohort so you can move faster together.
+          </p>
+          <div className="mt-4 grid gap-2 text-left">
+            {[
+              ["forum", "Share leads & referrals with people in the same boat"],
+              ["insights", "See where your cohort is landing interviews and offers"],
+              ["handshake", "Get warm intros instead of cold applications"],
+            ].map(([icon, text]) => (
+              <div key={icon} className="flex items-center gap-2.5 rounded-xl border border-slate-200/70 bg-white px-3.5 py-2.5">
+                <MI name={icon} className="text-[18px] text-[#FF5C18]" />
+                <span className="text-[12.5px] text-slate-600">{text}</span>
+              </div>
+            ))}
+          </div>
+          <p className="mt-4 text-[12px] text-slate-400">No active cohorts yet — we&apos;ll surface one here the moment a relevant layoff is detected.</p>
         </div>
       )}
 

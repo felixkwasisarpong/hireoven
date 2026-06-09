@@ -130,7 +130,19 @@ function NavItem({
   const inner = (
     <>
       <Icon className={cn(iconClass, active && !locked && "fill-current")} strokeWidth={2} aria-hidden />
-      <span className="flex-1 truncate">{item.label}</span>
+      <span className="flex-1 min-w-0">
+        <span className="block truncate">{item.label}</span>
+        {item.subtitle ? (
+          <span
+            className={cn(
+              "mt-0.5 block truncate text-[11px] font-normal leading-tight",
+              variant === "dark" ? "text-slate-500" : "text-slate-400"
+            )}
+          >
+            {item.subtitle}
+          </span>
+        ) : null}
+      </span>
       {locked ? (
         <span
           className="inline-flex shrink-0 items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wide text-white"
