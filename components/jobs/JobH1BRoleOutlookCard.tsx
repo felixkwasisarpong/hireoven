@@ -60,7 +60,7 @@ function Inner({
                   {VERDICT_LABEL[combined.verdict]}
                 </span>
                 {combined.verdict !== "unknown" ? (
-                  <span className="text-sm font-medium text-stone-800">~{combined.approvalLikelihood}%</span>
+                  <span className="text-sm font-medium tabular-nums text-stone-800">~{combined.approvalLikelihood}%</span>
                 ) : null}
               </div>
               {signalCopy ? <p className="text-xs leading-relaxed text-stone-600">{signalCopy}</p> : null}

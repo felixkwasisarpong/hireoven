@@ -78,7 +78,7 @@ function Inner({
 
         <div className="mt-3 flex items-center gap-2.5">
           <span aria-hidden className={`h-2.5 w-2.5 shrink-0 rounded-full ${tone.dot}`} />
-          <span className={`text-[20px] font-bold tracking-tight ${tone.text}`}>{valueLabel}</span>
+          <span className={`text-[20px] font-bold tabular-nums tracking-tight ${tone.text}`}>{valueLabel}</span>
         </div>
 
         <div className="mt-2 flex items-center justify-between text-[13px] text-slate-500">

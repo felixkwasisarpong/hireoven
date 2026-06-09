@@ -297,7 +297,7 @@ function MatchBadge({ score, loading }: { score: number | null; loading: boolean
           <span className="text-[17px] font-extrabold leading-none tabular-nums text-slate-900">
             {score ?? "—"}
           </span>
-          <span className="mt-0.5 text-[8.5px] font-bold uppercase tracking-widest text-slate-400">
+          <span className="mt-0.5 text-[8.5px] font-bold uppercase tracking-[0.16em] text-slate-400">
             match
           </span>
         </div>
@@ -649,7 +649,7 @@ export default function JobCardV2({
             <div className="min-w-0 flex-1">
               <div className="flex items-start gap-3">
                 <div className="min-w-0 flex-1">
-                  <h3 className="line-clamp-2 text-[15px] font-bold leading-snug text-slate-950">
+                  <h3 className="line-clamp-2 text-[17px] font-bold leading-[1.35] tracking-[-0.01em] text-slate-950">
                     {displayTitle}
                   </h3>
 
@@ -695,7 +695,7 @@ export default function JobCardV2({
                   {/* Location · mode · seniority · type · salary */}
                   <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
                     {job.location?.trim() && (
-                      <span className="inline-flex items-center gap-1 text-[12px] text-slate-500">
+                      <span className="inline-flex items-center gap-1 text-[13px] text-slate-500">
                         <MapPin className="h-3 w-3" aria-hidden />
                         {job.location}
                       </span>
@@ -714,12 +714,12 @@ export default function JobCardV2({
                         {seniorityLabel}
                       </span>
                     )}
-                    <span className="inline-flex items-center gap-1 text-[12px] text-slate-500">
+                    <span className="inline-flex items-center gap-1 text-[13px] text-slate-500">
                       <Briefcase className="h-3 w-3 text-slate-400" aria-hidden />
                       {employmentType}
                     </span>
                     {salaryRange && (
-                      <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-emerald-600">
+                      <span className="inline-flex items-center gap-1 text-[13px] font-semibold tabular-nums text-emerald-600">
                         <Banknote className="h-3 w-3" aria-hidden />
                         {salaryRange}
                       </span>
@@ -891,16 +891,16 @@ export default function JobCardV2({
                 <div className="space-y-2.5 rounded-xl bg-white/5 p-3">
                   {salaryRange && (
                     <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">Salary</p>
-                      <p className="mt-0.5 text-[13px] font-bold text-emerald-400">{salaryRange}</p>
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">Salary</p>
+                      <p className="mt-0.5 text-[13px] font-bold tabular-nums text-emerald-400">{salaryRange}</p>
                     </div>
                   )}
                   <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">Posted</p>
-                    <p className="mt-0.5 text-[12px] font-medium text-slate-300">{postedAt}</p>
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">Posted</p>
+                    <p className="mt-0.5 text-[12px] font-medium tabular-nums text-slate-300">{postedAt}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">Type</p>
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">Type</p>
                     <p className="mt-0.5 text-[12px] font-medium text-slate-300">{employmentType}</p>
                   </div>
                 </div>
@@ -908,7 +908,7 @@ export default function JobCardV2({
                 {/* Col 2: H1B / LCA intel — only when data exists and not blocked by JD */}
                 {hasH1bData && (
                   <div className="rounded-xl bg-white/5 p-3">
-                    <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-slate-500">H-1B Intel</p>
+                    <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">H-1B Intel</p>
 
                     {/* Status badge */}
                     <span className={cn(
