@@ -31,6 +31,9 @@ import {
   type WaasJobSummary,
   type WaasRoleSlug,
 } from "@/lib/sources/workatastartup"
+import { normalizePersistedJobRecord } from "@/lib/jobs/normalization"
+import { publicationStatusForJob, type JobPublicationStatus } from "@/lib/jobs/publication"
+import type { EmploymentType, SeniorityLevel } from "@/types"
 
 export const runtime = "nodejs"
 export const maxDuration = 300
@@ -237,56 +240,117 @@ export async function GET(request: NextRequest) {
         ? null // keep what's already there
         : candidateDescription
 
+    // Enrich via the deterministic normalizer (same as adzuna/jsearch) so
+    // normalized_title and seniority get filled. WaaS may supply API skills too —
+    // union them with what the normalizer extracts from the description.
+    let normalizedTitle: string | null = null
+    let normalizedSeniority: SeniorityLevel | null = null
+    let mergedSkills: string[] | null = skills
+    let publicationStatus: JobPublicationStatus = "published"
+    let enrichedRawData = rawData
+    if (candidateDescription) {
+      const norm = normalizePersistedJobRecord({
+        id: existing?.id ?? "",
+        title: detail?.job?.title ?? job.title,
+        normalized_title: null,
+        location: detail?.job?.location ?? job.location,
+        apply_url: applyUrl,
+        external_id: externalId,
+        description: candidateDescription,
+        employment_type: (employmentType ?? null) as EmploymentType | null,
+        seniority_level: null,
+        is_remote: isRemote,
+        is_hybrid: isHybrid,
+        salary_min: salaryParsed.min,
+        salary_max: salaryParsed.max,
+        salary_currency: salaryParsed.currency,
+        sponsors_h1b: sponsorsH1B,
+        sponsorship_score: 0,
+        requires_authorization: false,
+        visa_language_detected: null,
+        skills: skills ?? [],
+        first_detected_at: new Date().toISOString(),
+        raw_data: JSON.parse(rawData),
+      })
+      const nc = norm.nextColumns
+      normalizedTitle = nc.normalized_title
+      normalizedSeniority = nc.seniority_level
+      const union = new Set<string>([...(skills ?? []), ...(nc.skills ?? [])])
+      mergedSkills = union.size > 0 ? [...union] : null
+      publicationStatus = publicationStatusForJob({ description: nc.description, skills: mergedSkills })
+      enrichedRawData = JSON.stringify({
+        ...JSON.parse(rawData),
+        description_captured: Boolean(nc.description),
+        normalization: {
+          version: norm.canonical.schema_version,
+          normalized_at: norm.canonical.normalized_at,
+          confidence_score: norm.canonical.validation.confidence_score,
+          completeness_score: norm.canonical.validation.completeness_score,
+          requires_review: norm.canonical.validation.requires_review,
+          issues: norm.canonical.validation.issues,
+        },
+        normalized: norm.canonical,
+        structured_job: norm.structuredData,
+        view: { page: norm.pageView, card: norm.cardView },
+      })
+    }
+
     try {
       if (existing) {
         if (descriptionToWrite === null) {
           await pool.query(
             `UPDATE jobs SET
-               title=$1, location=$2, is_remote=$3, is_hybrid=$4,
-               employment_type=$5, salary_min=$6, salary_max=$7,
-               salary_currency=$8, sponsors_h1b=$9, skills=$10,
-               apply_url=$11, is_active=true,
-               last_seen_at=NOW(), updated_at=NOW(), raw_data=$12
-             WHERE id=$13`,
+               title=$1, normalized_title=$2, location=$3, is_remote=$4, is_hybrid=$5,
+               employment_type=$6, seniority_level=$7, salary_min=$8, salary_max=$9,
+               salary_currency=$10, sponsors_h1b=$11, skills=$12, publication_status=$13,
+               apply_url=$14, is_active=true,
+               last_seen_at=NOW(), updated_at=NOW(), raw_data=$15
+             WHERE id=$16`,
             [
               detail?.job?.title ?? job.title,
+              normalizedTitle,
               detail?.job?.location ?? job.location,
               isRemote,
               isHybrid,
               employmentType,
+              normalizedSeniority,
               salaryParsed.min,
               salaryParsed.max,
               salaryParsed.currency,
               sponsorsH1B,
-              skills,
+              mergedSkills,
+              publicationStatus,
               applyUrl,
-              rawData,
+              enrichedRawData,
               existing.id,
             ]
           )
         } else {
           await pool.query(
             `UPDATE jobs SET
-               title=$1, location=$2, is_remote=$3, is_hybrid=$4,
-               employment_type=$5, description=$6, salary_min=$7,
-               salary_max=$8, salary_currency=$9, sponsors_h1b=$10,
-               skills=$11, apply_url=$12, is_active=true,
-               last_seen_at=NOW(), updated_at=NOW(), raw_data=$13
-             WHERE id=$14`,
+               title=$1, normalized_title=$2, location=$3, is_remote=$4, is_hybrid=$5,
+               employment_type=$6, seniority_level=$7, description=$8, salary_min=$9,
+               salary_max=$10, salary_currency=$11, sponsors_h1b=$12,
+               skills=$13, publication_status=$14, apply_url=$15, is_active=true,
+               last_seen_at=NOW(), updated_at=NOW(), raw_data=$16
+             WHERE id=$17`,
             [
               detail?.job?.title ?? job.title,
+              normalizedTitle,
               detail?.job?.location ?? job.location,
               isRemote,
               isHybrid,
               employmentType,
+              normalizedSeniority,
               descriptionToWrite,
               salaryParsed.min,
               salaryParsed.max,
               salaryParsed.currency,
               sponsorsH1B,
-              skills,
+              mergedSkills,
+              publicationStatus,
               applyUrl,
-              rawData,
+              enrichedRawData,
               existing.id,
             ]
           )
@@ -295,23 +359,25 @@ export async function GET(request: NextRequest) {
       } else {
         await pool.query(
           `INSERT INTO jobs (
-             company_id, title, location, is_remote, is_hybrid,
-             employment_type, description, apply_url, external_id,
+             company_id, title, normalized_title, location, is_remote, is_hybrid,
+             employment_type, seniority_level, description, apply_url, external_id,
              salary_min, salary_max, salary_currency,
-             sponsors_h1b, skills,
+             sponsors_h1b, skills, publication_status,
              is_active, last_seen_at, first_detected_at,
              created_at, updated_at, raw_data
            ) VALUES (
-             $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,
-             true, NOW(), NOW(), NOW(), NOW(), $15
+             $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,
+             true, NOW(), NOW(), NOW(), NOW(), $18
            )`,
           [
             companyId,
             detail?.job?.title ?? job.title,
+            normalizedTitle,
             detail?.job?.location ?? job.location,
             isRemote,
             isHybrid,
             employmentType,
+            normalizedSeniority,
             descriptionToWrite ?? "",
             applyUrl,
             externalId,
@@ -319,8 +385,9 @@ export async function GET(request: NextRequest) {
             salaryParsed.max,
             salaryParsed.currency,
             sponsorsH1B,
-            skills,
-            rawData,
+            mergedSkills,
+            publicationStatus,
+            enrichedRawData,
           ]
         )
         stats.inserted += 1
