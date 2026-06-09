@@ -3,8 +3,7 @@
 import { KeyboardEvent, useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { ArrowLeft, Briefcase, Globe2, Sparkles, Check, Search, ShieldCheck, Users } from "lucide-react"
-import HireovenLogo from "@/components/ui/HireovenLogo"
+import { ArrowLeft, ArrowRight, Briefcase, Globe2, Sparkles, Check, Search, ShieldCheck, Users } from "lucide-react"
 import CompanyLogo from "@/components/ui/CompanyLogo"
 import type { Company, SeniorityLevel, VisaStatus } from "@/types"
 
@@ -214,13 +213,13 @@ export default function OnboardingPage() {
               <ArrowLeft className="h-4 w-4" />
               Back to dashboard
             </Link>
-            <HireovenLogo className="h-8 w-auto" priority />
           </div>
           <button
             onClick={() => router.push("/dashboard")}
-            className="text-sm font-medium text-gray-500 transition-colors hover:text-gray-800"
+            className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 px-3.5 py-1.5 text-xs font-medium text-gray-500 transition-all hover:border-gray-300 hover:bg-gray-50 hover:text-gray-700"
           >
             Skip for now
+            <ArrowRight className="h-3.5 w-3.5" />
           </button>
         </div>
       </div>
