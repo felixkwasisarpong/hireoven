@@ -27,34 +27,44 @@ function arg(name: string, fallback: string): string {
 
 const source = arg("source", "adzuna")
 const batchSize = Math.max(1, Number.parseInt(arg("batch", "500"), 10))
-const loops = Math.max(1, Number.parseInt(arg("loops", "1000"), 10))
+const loops = Math.max(1, Number.parseInt(arg("loops", "100000"), 10))
+const pauseMs = Math.max(0, Number.parseInt(arg("pause", "150"), 10))
 const dryRun = process.argv.includes("--dry-run")
 
 type Row = PersistedJobForNormalization & { id: string }
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
 async function main() {
   const pool = getPostgresPool()
+  // Dedicated client so SET sticks; raise the per-statement timeout because the
+  // backlog scan walks the PK index across a ~470k-row table.
+  const client = await pool.connect()
+  await client.query("SET statement_timeout = '180s'")
+
   let totalUpdated = 0
+  // Keyset pagination by id — resumable, single index walk, no O(n²) re-scan.
+  let lastId = "00000000-0000-0000-0000-000000000000"
 
   for (let i = 0; i < loops; i += 1) {
-    // Only rows that haven't been normalized yet (no skills) — keeps it idempotent
-    // and lets the run resume after interruption.
-    const { rows } = await pool.query<Row>(
+    const { rows } = await client.query<Row>(
       `SELECT id, title, normalized_title, location, apply_url, external_id, description,
               employment_type, seniority_level, is_remote, is_hybrid, salary_min, salary_max,
               salary_currency, sponsors_h1b, sponsorship_score, requires_authorization,
               visa_language_detected, skills, first_detected_at, raw_data
          FROM jobs
-        WHERE is_active = true
+        WHERE id > $2
+          AND is_active = true
           AND raw_data->>'source' = $1
           AND (skills IS NULL OR array_length(skills, 1) IS NULL)
           AND length(description) >= 80
-        ORDER BY first_detected_at DESC NULLS LAST
-        LIMIT $2`,
-      [source, batchSize]
+        ORDER BY id
+        LIMIT $3`,
+      [source, lastId, batchSize]
     )
 
     if (rows.length === 0) break
+    lastId = rows[rows.length - 1].id
 
     for (const job of rows) {
       const norm = normalizePersistedJobRecord(job)
@@ -82,7 +92,7 @@ async function main() {
         view: { page: norm.pageView, card: norm.cardView },
       })
 
-      await pool.query(
+      await client.query(
         `UPDATE jobs SET
            normalized_title=$2, location=$3, is_remote=$4, is_hybrid=$5,
            employment_type=$6, seniority_level=$7, description=$8,
@@ -102,8 +112,12 @@ async function main() {
 
     console.log(`[backfill ${source}] loop=${i + 1} batch=${rows.length} totalUpdated=${totalUpdated}${dryRun ? " (dry-run)" : ""}`)
     if (rows.length < batchSize) break
+    if (pauseMs > 0) await sleep(pauseMs) // breathe — the web box also serves the app
   }
 
+  await client.query("SET statement_timeout = DEFAULT").catch(() => {})
+  client.release()
+  await pool.end().catch(() => {})
   console.log(`\n[backfill ${source}] done — ${totalUpdated} rows ${dryRun ? "would be" : ""} updated`)
 }
 
