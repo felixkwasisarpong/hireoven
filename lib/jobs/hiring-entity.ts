@@ -18,7 +18,10 @@ const CLIENT_SIGNAL_RE =
 const CLIENT_CAPTURE_PATTERNS: Array<{ source: string; re: RegExp }> = [
   {
     source: "end_client_label",
-    re: /\b(?:end[-\s]?client|client(?: company)?|client name)\s*(?:is|:|-|—)\s*([A-Za-z0-9][^\n.;|]{1,96})/i,
+    // Separator must be a colon, or "is"/dash/em-dash surrounded by whitespace.
+    // A glued hyphen is NOT a separator, so compound words like "client-side",
+    // "client-facing", "client-server" don't get misread as "client: <value>".
+    re: /\b(?:end[-\s]?client|client company|client name|client)(?:\s*:\s*|\s+(?:is\s+|[-—]\s+))([A-Za-z0-9][^\n.;|]{1,96})/i,
   },
   {
     source: "our_client",

@@ -25,6 +25,15 @@ test("extractLikelyHiringEntityFromDescription: strips recruiter CTA text from c
   assert.equal(result?.name, "Anaplan")
 })
 
+test("extractLikelyHiringEntityFromDescription: ignores compound words like client-side", () => {
+  // The hyphen in "client-side" must not be read as a "client: <value>" separator.
+  const result = extractLikelyHiringEntityFromDescription(
+    "Experience building server-side (e.g., Go, C++) and client-side (e.g., TypeScript) layers."
+  )
+
+  assert.equal(result, null)
+})
+
 test("resolveHiringEntitySignal: marks staffing intermediary when client differs", () => {
   const signal = resolveHiringEntitySignal({
     companyName: "Acme Talent Solutions",
