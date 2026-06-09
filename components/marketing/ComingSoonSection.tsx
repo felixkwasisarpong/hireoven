@@ -49,7 +49,7 @@ export default function ComingSoonSection() {
         <div className="relative mx-auto flex w-full max-w-4xl justify-center">
           <div
             aria-hidden
-            className="absolute left-1/2 top-1/2 h-[min(100%,400px)] w-[min(100%,520px)] -translate-x-1/2 -translate-y-1/2 animate-aurora-orb rounded-full bg-gradient-to-tr from-[#0369A1]/35 via-sky-300/30 to-fuchsia-300/25 blur-3xl motion-reduce:animate-none"
+            className="absolute left-1/2 top-1/2 h-[min(100%,400px)] w-[min(100%,520px)] -translate-x-1/2 -translate-y-1/2 animate-aurora-orb rounded-full bg-gradient-to-tr from-[#0369A1]/35 via-orange-300/30 to-fuchsia-300/25 blur-3xl motion-reduce:animate-none"
           />
           <div
             aria-hidden

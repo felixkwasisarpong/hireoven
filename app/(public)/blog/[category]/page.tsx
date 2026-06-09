@@ -18,7 +18,7 @@ export async function generateMetadata({ params }: { params: { category: string 
 
 const CATEGORY_COLORS: Record<string, { bar: string; badge: string; text: string; hero: string }> = {
   "h1b-visa-intel":     { bar: "bg-blue-500",   badge: "bg-blue-50 text-blue-700 border-blue-200",   text: "text-blue-700",   hero: "from-blue-900 to-blue-950" },
-  "job-market-pulse":   { bar: "bg-violet-500",  badge: "bg-violet-50 text-violet-700 border-violet-200", text: "text-violet-700", hero: "from-violet-900 to-violet-950" },
+  "job-market-pulse":   { bar: "bg-violet-500",  badge: "bg-violet-50 text-violet-700 border-violet-200", text: "text-violet-700", hero: "from-orange-900 to-orange-950" },
   "career-strategy":    { bar: "bg-emerald-500", badge: "bg-emerald-50 text-emerald-700 border-emerald-200", text: "text-emerald-700", hero: "from-emerald-900 to-emerald-950" },
   "tech-company-watch": { bar: "bg-orange-500",  badge: "bg-orange-50 text-orange-700 border-orange-200", text: "text-orange-700", hero: "from-orange-900 to-orange-950" },
   "interview-offers":   { bar: "bg-rose-500",    badge: "bg-rose-50 text-rose-700 border-rose-200",   text: "text-rose-700",   hero: "from-rose-900 to-rose-950" },

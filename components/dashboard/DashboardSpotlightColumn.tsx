@@ -29,7 +29,7 @@ const THEME = {
   orange: {
     outer:   "border-amber-400/55 shadow-[0_16px_40px_-12px_rgba(234,88,12,0.35)] ring-amber-200/70",
     glow1:   "from-orange-400/35 to-amber-300/25",
-    glow2:   "from-violet-500/20 to-fuchsia-400/15",
+    glow2:   "from-orange-500/20 to-fuchsia-400/15",
     badge:   "from-amber-500 to-orange-600",
     icon:    "from-amber-500 to-orange-600 shadow-orange-500/35",
     title:   "from-orange-950 via-amber-900 to-orange-950",
@@ -39,7 +39,7 @@ const THEME = {
   blue: {
     outer:   "border-blue-400/55 shadow-[0_16px_40px_-12px_rgba(37,99,235,0.30)] ring-blue-200/70",
     glow1:   "from-blue-400/35 to-orange-300/25",
-    glow2:   "from-violet-500/20 to-blue-400/15",
+    glow2:   "from-orange-500/20 to-blue-400/15",
     badge:   "from-blue-500 to-orange-600",
     icon:    "from-blue-500 to-orange-600 shadow-blue-500/35",
     title:   "from-blue-950 via-orange-900 to-blue-950",
@@ -58,13 +58,13 @@ const THEME = {
   },
   purple: {
     outer:   "border-violet-400/55 shadow-[0_16px_40px_-12px_rgba(139,92,246,0.30)] ring-violet-200/70",
-    glow1:   "from-violet-400/35 to-purple-300/25",
-    glow2:   "from-fuchsia-500/20 to-violet-400/15",
-    badge:   "from-violet-500 to-purple-600",
-    icon:    "from-violet-500 to-purple-600 shadow-violet-500/35",
-    title:   "from-violet-950 via-purple-900 to-violet-950",
-    cta:     "from-violet-600 to-purple-600 shadow-[0_10px_24px_-8px_rgba(139,92,246,0.45)] ring-violet-400/80 hover:shadow-[0_12px_28px_-8px_rgba(139,92,246,0.55)]",
-    bg:      "from-[#F5F3FF] via-violet-50 to-purple-50",
+    glow1:   "from-orange-400/35 to-purple-300/25",
+    glow2:   "from-fuchsia-500/20 to-orange-400/15",
+    badge:   "from-orange-500 to-purple-600",
+    icon:    "from-orange-500 to-purple-600 shadow-violet-500/35",
+    title:   "from-orange-950 via-purple-900 to-orange-950",
+    cta:     "from-orange-600 to-purple-600 shadow-[0_10px_24px_-8px_rgba(139,92,246,0.45)] ring-violet-400/80 hover:shadow-[0_12px_28px_-8px_rgba(139,92,246,0.55)]",
+    bg:      "from-[#F5F3FF] via-orange-50 to-purple-50",
   },
 } as const
 

@@ -129,7 +129,7 @@ function planAccent(plan: string) {
   }
   if (plan === "pro") {
     return {
-      gradient: "from-sky-500 via-orange-500 to-violet-500",
+      gradient: "from-orange-500 via-orange-500 to-orange-500",
       ring: "ring-sky-200",
       tint: "bg-sky-50",
       icon: Sparkles,
@@ -1177,7 +1177,7 @@ function UpgradeCard({
   const palette =
     tone === "sky"
       ? {
-          gradient: "from-sky-500 via-orange-500 to-violet-500",
+          gradient: "from-orange-500 via-orange-500 to-orange-500",
           tint: "bg-sky-50",
           ring: "ring-sky-100",
           icon: "text-sky-600",

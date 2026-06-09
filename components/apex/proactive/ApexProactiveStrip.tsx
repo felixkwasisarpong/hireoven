@@ -70,7 +70,7 @@ const TONE: Record<Severity, Tone> = {
     iconText:  "text-sky-600",
     iconRing:  "ring-sky-100",
     iconBg:    "bg-sky-50",
-    accent:    "from-sky-300 via-sky-400 to-sky-300",
+    accent:    "from-orange-300 via-orange-400 to-orange-300",
     ctaBg:     "bg-slate-900",
     ctaHover:  "hover:bg-slate-800",
     shadow:    "shadow-[0_2px_14px_rgba(15,23,42,0.06)]",

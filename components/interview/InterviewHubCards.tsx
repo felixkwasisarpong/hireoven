@@ -33,7 +33,7 @@ const MODE_STYLES: Record<Mode, {
   bestFor: string
 }> = {
   text: {
-    accent: "bg-gradient-to-r from-orange-400 via-orange-500 to-violet-500",
+    accent: "bg-gradient-to-r from-orange-400 via-orange-500 to-orange-500",
     shell: "border-slate-100 bg-slate-50/40 shadow-[0_14px_34px_rgba(99,102,241,0.10)]",
     surface: "bg-[radial-gradient(circle_at_6%_4%,rgba(199,210,254,0.4),transparent_46%)]",
     glow: "bg-[radial-gradient(circle_at_94%_6%,rgba(167,139,250,0.15),transparent_52%)]",
