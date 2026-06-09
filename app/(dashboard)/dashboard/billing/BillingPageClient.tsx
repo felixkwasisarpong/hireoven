@@ -50,6 +50,7 @@ export interface BillingInfo {
   billingInterval: BillingInterval | null
   amountCents: number | null
   cancelAtPeriodEnd: boolean
+  hasStripeCustomer?: boolean
 }
 
 export interface BillingHistoryItem {
@@ -680,7 +681,7 @@ export default function BillingPageClient({
                 </div>
               </div>
 
-              {isPro && (
+              {isPro && billing?.hasStripeCustomer && (
                 <div className="flex shrink-0 flex-col items-end gap-1.5">
                   <button
                     type="button"

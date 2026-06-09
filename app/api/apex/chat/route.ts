@@ -25,6 +25,7 @@ import { isAiBudgetExceeded } from "@/lib/apex/budget/cap"
 import { routeApexMessage, AI_TIMEOUTS } from "@/lib/apex/budget/router"
 import { apexCache, CACHE_TTL, cacheKey, stableHash } from "@/lib/apex/budget/cache"
 import { sanitizeGeneratedText } from "@/lib/text/sanitize-generated-text"
+import { extractAtsSlugs, canonicalizeAts, ATS_LABELS, type AtsSlug } from "@/lib/apex/apply-agent/ats"
 import {
   isApexIntent,
   isApexMode,
@@ -330,16 +331,36 @@ function inferBulkWorkspaceDirective(message: string): import("@/lib/apex/types"
     /\b(?:over|above|greater\s+than|more\s+than|higher\s+than|at\s+least|>=?)\s*(\d+)|(\d+)\s*(?:match|%)\b/i,
   )
   const minMatchScore = scoreMatch ? parseInt(scoreMatch[1] ?? scoreMatch[2], 10) : undefined
+  // "...with Greenhouse ATS", "...on Lever", "workday jobs" → filter the pool to
+  // that ATS. Comma-joined when several are named.
+  const atsSlugs = extractAtsSlugs(message)
+  const ats = atsSlugs.length > 0 ? atsSlugs.join(",") : undefined
 
   return {
     mode: "bulk_application",
-    payload: { count, requireSponsorshipSignal, workMode, minMatchScore, strictQuery, strictScoreOnly },
+    payload: { count, requireSponsorshipSignal, workMode, minMatchScore, strictQuery, strictScoreOnly, ats },
     chips: [
       "What's my queue status?",
       "Skip jobs with no sponsorship",
       "How do I improve my match scores?",
     ],
   }
+}
+
+/** Human-readable " with Greenhouse/Lever ATS" suffix from a comma-joined ats payload. */
+function atsLabelHint(ats: unknown): string {
+  if (typeof ats !== "string" || !ats) return ""
+  const labels = ats
+    .split(",")
+    .map((s) => canonicalizeAts(s))
+    .filter((s): s is AtsSlug => s !== null)
+    .map((slug) => ATS_LABELS[slug])
+  if (labels.length === 0) return ""
+  const joined =
+    labels.length === 1
+      ? labels[0]
+      : `${labels.slice(0, -1).join(", ")} or ${labels[labels.length - 1]}`
+  return ` with ${joined} ATS`
 }
 
 function inferWorkflowDirective(message: string, intent: ApexIntent): ApexWorkflowDirective | undefined {
@@ -1159,6 +1180,7 @@ export async function POST(request: NextRequest) {
     const countHint  = typeof bp.count === "number" ? bp.count : 10
     const scoreHint  = typeof bp.minMatchScore === "number" ? ` with match score ${bp.minMatchScore}%+` : ""
     const sponsorHint = bp.requireSponsorshipSignal ? " that sponsor H-1B" : ""
+    const atsHint    = atsLabelHint(bp.ats)
 
     // Query matching jobs server-side
     let applyAgentDirective: import("@/lib/apex/apply-agent/types").ApplyAgentDirective | undefined
@@ -1170,6 +1192,7 @@ export async function POST(request: NextRequest) {
       if (bp.workMode)               params.set("workMode", String(bp.workMode))
       if (bp.strictQuery)            params.set("strictQuery", "true")
       if (bp.strictScoreOnly)        params.set("strictScoreOnly", "true")
+      if (bp.ats)                    params.set("ats", String(bp.ats))
       // Keep "top matches" focused on fresh jobs from the last 24h.
       params.set("freshnessHours", "24")
       // Pass the full message so apply-agent can free-text search any condition
@@ -1189,6 +1212,7 @@ export async function POST(request: NextRequest) {
               workMode:                bp.workMode as string | undefined,
               strictQuery:             Boolean(bp.strictQuery),
               strictScoreOnly:         Boolean(bp.strictScoreOnly),
+              ats:                     bp.ats as string | undefined,
               count:                   countHint,
             },
             currentIndex: 0,
@@ -1201,8 +1225,8 @@ export async function POST(request: NextRequest) {
 
     const jobCount = applyAgentDirective?.jobs.length ?? 0
     const answer   = jobCount > 0
-      ? `I found **${jobCount} job${jobCount !== 1 ? "s" : ""}**${scoreHint}${sponsorHint} in the live feed. I'll walk you through tailoring and applying to each one — starting with the best match.`
-      : `I couldn't find feed jobs${scoreHint}${sponsorHint} right now. Try relaxing filters or lowering the match threshold, and I’ll rebuild the queue.`
+      ? `I found **${jobCount} job${jobCount !== 1 ? "s" : ""}**${scoreHint}${atsHint}${sponsorHint} in the live feed. I'll walk you through tailoring and applying to each one — starting with the best match.`
+      : `I couldn't find feed jobs${scoreHint}${atsHint}${sponsorHint} right now. Try relaxing filters or lowering the match threshold, and I’ll rebuild the queue.`
 
     const bulkResponse: ApexResponse = {
       answer,
@@ -2394,6 +2418,7 @@ User Input: ${userMessage}`
         if (bp.workMode)      params.set("workMode", String(bp.workMode))
         if (bp.strictQuery)   params.set("strictQuery", "true")
         if (bp.strictScoreOnly) params.set("strictScoreOnly", "true")
+        if (bp.ats)           params.set("ats", String(bp.ats))
         // Keep "top matches" focused on fresh jobs from the last 24h.
         params.set("freshnessHours", "24")
         params.set("q", userMessage)
@@ -2413,6 +2438,7 @@ User Input: ${userMessage}`
                 workMode:                bp.workMode as string | undefined,
                 strictQuery:             Boolean(bp.strictQuery),
                 strictScoreOnly:         Boolean(bp.strictScoreOnly),
+                ats:                     bp.ats as string | undefined,
                 count:                   (bp.count as number | undefined) ?? 5,
               },
               currentIndex: 0,

@@ -116,10 +116,36 @@ function formatFreshness(timestamp: string) {
   return `${days}d ago`
 }
 
+function cleanLocationString(location: string): string {
+  // Strip everything after the first ~ (Workday appends full street addresses)
+  const beforeTilde = location.split("~")[0].trim()
+
+  // Workday internal slug: US-CA-EL SEGUNDO-E01 → El Segundo, CA
+  const workdayMatch = beforeTilde.match(/^US-([A-Z]{2})-([A-Z][A-Z0-9 ]*?)(?:-[A-Z0-9]+)*$/i)
+  if (workdayMatch) {
+    const state = workdayMatch[1].toUpperCase()
+    const city = workdayMatch[2]
+      .trim()
+      .toLowerCase()
+      .replace(/\b\w/g, (c) => c.toUpperCase())
+    return `${city}, ${state}`
+  }
+
+  return beforeTilde || location
+}
+
 function formatLocation(location: string | null, isRemote: boolean) {
-  if (isRemote && location) return `${location} · Remote`
+  const cleaned = location ? cleanLocationString(location) : null
+  if (isRemote && cleaned) return `${cleaned} · Remote`
   if (isRemote) return "Remote"
-  return location ?? "Location not listed"
+  return cleaned ?? "Location not listed"
+}
+
+function cleanCompanyName(name: string | null | undefined): string | null {
+  if (!name) return null
+  // Workday "Private Posting" is an anonymous/undisclosed employer
+  if (/private\s+posting/i.test(name)) return "Confidential"
+  return name
 }
 
 function renderJobRows(
@@ -158,7 +184,7 @@ function renderJobRows(
             ${htmlEscape(job.title)}
           </a>
           <div style="font-size:13px;color:#64748b;margin-top:4px;">
-            ${htmlEscape(job.company?.name ?? "Hireoven company")} · ${htmlEscape(formatLocation(job.location, job.is_remote))}
+            ${htmlEscape([cleanCompanyName(job.company?.name), formatLocation(job.location, job.is_remote)].filter(Boolean).join(" · "))}
           </div>
           <div style="font-size:12px;color:#94a3b8;margin-top:6px;">
             Posted ${htmlEscape(formatFreshness(job.first_detected_at))}

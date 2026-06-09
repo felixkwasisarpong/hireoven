@@ -86,7 +86,7 @@ export default function MatchesPageClient({
     let cancelled = false
     setIsLoading(true)
 
-    fetch(`/api/match/feed?limit=120&within=24h&sort=match&minScore=${threshold}`, {
+    fetch(`/api/match/feed?limit=40&within=24h&sort=match&minScore=${threshold}`, {
       cache: "no-store",
     })
       .then(async (response) => {

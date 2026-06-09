@@ -71,7 +71,7 @@ function cleanCandidate(value: string | null | undefined): string | null {
   if (INVALID_CANDIDATE_RE.test(stripped) && stripped.split(/\s+/).length <= 3) return null
 
   const letters = (stripped.match(/[A-Za-z]/g) ?? []).length
-  if (letters < 2) return null
+  if (letters < 1) return null
 
   return stripped
 }

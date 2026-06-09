@@ -14,6 +14,7 @@ import { createClient } from "@/lib/supabase/server"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { sqlPublishedJob } from "@/lib/jobs/publication"
 import type { ApplyAgentJob } from "@/lib/apex/apply-agent/types"
+import { buildAtsApplyUrlFilter, canonicalizeAts, type AtsSlug } from "@/lib/apex/apply-agent/ats"
 
 export const runtime = "nodejs"
 
@@ -47,11 +48,14 @@ function parseClampedInt(
 function extractSearchTerms(raw: string): string {
   return raw
     .replace(/\b(apply\s+(to|for)|queue|batch|bulk|prepare)\b/gi, "")
-    .replace(/\b(top|best|strongest|highest|matching|scored?)\b/gi, "")
+    .replace(/\b(top|best|strongest|highest|matching|matched|scored?)\b/gi, "")
     .replace(/\b\d+\b/g, "")
     .replace(/\b(jobs?|roles?|positions?|openings?|applications?|applying)\b/gi, "")
     .replace(/\b(remote|onsite|hybrid)\b/gi, "")
     .replace(/\b(h-?1b|visa|sponsor(ship)?)\b/gi, "")
+    // ATS names are filtered structurally via the `ats` param — strip them here
+    // so "Greenhouse ATS" doesn't leak into the title/description text search.
+    .replace(/\b(ats|greenhouse|lever|workday|ashby(hq)?|icims|smart\s*recruiters?|bamboo(hr)?)\b/gi, "")
     .replace(/\b(with|in|at|for|and|the|that|has|have|a|an|it)\b/gi, "")
     .replace(/[^\w\s]/g, " ")
     .replace(/\s+/g, " ")
@@ -73,6 +77,16 @@ export async function GET(request: NextRequest) {
   const rawQuery           = (searchParams.get("q") ?? "").trim()
   const strictQuery        = searchParams.get("strictQuery") === "true"
   const strictScoreOnly    = searchParams.get("strictScoreOnly") === "true"
+  // ats=greenhouse or ats=greenhouse,lever — filters the pool to jobs whose
+  // apply_url is on the given ATS(es), i.e. jobs that ATS driver can autofill.
+  const atsSlugs = Array.from(
+    new Set(
+      (searchParams.get("ats") ?? "")
+        .split(",")
+        .map((s) => canonicalizeAts(s))
+        .filter((s): s is AtsSlug => s !== null),
+    ),
+  )
 
   const pool = getPostgresPool()
 
@@ -132,6 +146,14 @@ export async function GET(request: NextRequest) {
   } else if (normalizedWorkMode === "onsite" || normalizedWorkMode === "on-site") {
     conditions.push("COALESCE(j.is_remote, false) = false")
     conditions.push("COALESCE(j.is_hybrid, false) = false")
+  }
+
+  if (atsSlugs.length > 0) {
+    const atsFilter = buildAtsApplyUrlFilter(atsSlugs, "j", params.length + 1)
+    if (atsFilter) {
+      conditions.push(atsFilter.clause)
+      params.push(...atsFilter.params)
+    }
   }
 
   const where = conditions.join(" AND ")

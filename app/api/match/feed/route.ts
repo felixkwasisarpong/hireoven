@@ -94,12 +94,14 @@ export async function GET(request: NextRequest) {
   const isBestMatch = sortMode === "match"
   const computeScores =
     sp.get("computeScores") === "1" || sp.get("compute_scores") === "1"
-  const limit = Math.min(100, parseInt(sp.get("limit") ?? "24", 10))
+  const limit = Math.min(80, parseInt(sp.get("limit") ?? "24", 10))
   const offset = Math.max(0, parseInt(sp.get("offset") ?? "0", 10))
   const minScore = Number(sp.get("minScore") ?? "0")
   const hasTextSearch = Boolean(q.trim() || location)
-  const fetchMultiplier = hasTextSearch ? 4 : 2
-  const fetchLimit = Math.min(220, Math.max(limit + offset, 60) * fetchMultiplier)
+  const fetchMultiplier = hasTextSearch ? 3 : 2
+  const candidateFloor = isBestMatch && computeScores ? 40 : 60
+  const candidateCap = isBestMatch && computeScores ? 80 : 220
+  const fetchLimit = Math.min(candidateCap, Math.max(limit + offset, candidateFloor) * fetchMultiplier)
 
   const pool = getPostgresPool()
   const where: string[] = ["jobs.is_active = true", sqlPublishedJob("jobs"), sqlJobLocatedInUsa("jobs")]
@@ -272,7 +274,7 @@ export async function GET(request: NextRequest) {
   let scoreMap = new Map<string, JobMatchScore>()
 
   // Keep the feed's first paint cache-only. Computing match scores on cache
-  // misses can take 6-24s for ~120 jobs and makes the dashboard feel hung.
+  // misses can take several seconds for large batches and makes the dashboard feel hung.
   // Visible cards backfill missing scores through /api/match/score/batch after
   // the feed has rendered. Explicit callers can opt into blocking computation.
   try {

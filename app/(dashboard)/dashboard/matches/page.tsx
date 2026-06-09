@@ -77,7 +77,7 @@ async function fetchInitialMatchJobs(requestHeaders: Headers): Promise<JobWithMa
   const origin = resolveOrigin(requestHeaders)
   const cookieHeader = requestHeaders.get("cookie") ?? ""
   const params = new URLSearchParams({
-    limit: "120",
+    limit: "40",
     within: "24h",
     sort: "match",
     computeScores: "1",

@@ -25,6 +25,7 @@ type SubscriptionRow = {
   amount_cents: number | null
   cancel_at_period_end: boolean | null
   trial_end: string | null
+  stripe_customer_id: string | null
 }
 
 type BillingInitialData = {
@@ -44,7 +45,7 @@ function firstValue(value: string | string[] | undefined): string | undefined {
 async function fetchInitialBilling(userId: string): Promise<BillingInfo | null> {
   const pool = getPostgresPool()
   const result = await pool.query<SubscriptionRow>(
-    `SELECT plan, status, current_period_end, billing_interval, amount_cents, cancel_at_period_end, trial_end
+    `SELECT plan, status, current_period_end, billing_interval, amount_cents, cancel_at_period_end, trial_end, stripe_customer_id
      FROM subscriptions
      WHERE user_id = $1
        AND status IN ('active', 'trialing', 'past_due', 'unpaid', 'canceled')
@@ -61,6 +62,7 @@ async function fetchInitialBilling(userId: string): Promise<BillingInfo | null> 
     billingInterval: snapshot.billingInterval as BillingInterval | null,
     amountCents: snapshot.amountCents,
     cancelAtPeriodEnd: snapshot.cancelAtPeriodEnd,
+    hasStripeCustomer: Boolean(result.rows[0]?.stripe_customer_id),
   }
 }
 

@@ -41,6 +41,8 @@ export type ApplyAgentDirective = {
     workMode?:               string
     strictQuery?:            boolean
     strictScoreOnly?:        boolean
+    /** Comma-joined ATS slugs the pool was filtered to (e.g. "greenhouse"). */
+    ats?:                    string
     count:                   number
   }
   /** Zero-indexed job the agent is currently working on */

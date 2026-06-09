@@ -51,13 +51,34 @@ function matchesAlert(alert: JobAlert, job: Job): boolean {
   return true
 }
 
+function cleanLocationString(location: string): string {
+  const beforeTilde = location.split("~")[0].trim()
+  const workdayMatch = beforeTilde.match(/^US-([A-Z]{2})-([A-Z][A-Z0-9 ]*?)(?:-[A-Z0-9]+)*$/i)
+  if (workdayMatch) {
+    const state = workdayMatch[1].toUpperCase()
+    const city = workdayMatch[2]
+      .trim()
+      .toLowerCase()
+      .replace(/\b\w/g, (c) => c.toUpperCase())
+    return `${city}, ${state}`
+  }
+  return beforeTilde || location
+}
+
+function cleanCompanyName(name: string | null | undefined): string | null {
+  if (!name) return null
+  if (/private\s+posting/i.test(name)) return "Confidential"
+  return name
+}
+
 function jobCard(job: JobEmailRow): string {
   const salary =
     job.salary_min && job.salary_max
       ? `$${Math.round(job.salary_min / 1000)}k–$${Math.round(job.salary_max / 1000)}k`
       : null
+  const rawLocation = job.is_remote ? "Remote" : (job.location ? cleanLocationString(job.location) : null)
   const tags = [
-    job.is_remote ? "Remote" : job.location,
+    rawLocation,
     job.seniority_level ? job.seniority_level.charAt(0).toUpperCase() + job.seniority_level.slice(1) : null,
     salary,
     job.sponsors_h1b ? "Sponsors H1B" : null,
@@ -81,7 +102,7 @@ function jobCard(job: JobEmailRow): string {
         <a href="${href}" style="font-size:15px;font-weight:600;color:#0369A1;text-decoration:none;line-height:1.35;">
           ${job.title}
         </a>
-        <div style="font-size:13px;color:#64748b;margin-top:2px;">${job.company_name ?? ""}</div>
+        <div style="font-size:13px;color:#64748b;margin-top:2px;">${cleanCompanyName(job.company_name) ?? ""}</div>
         ${tags ? `<div style="font-size:12px;color:#94a3b8;margin-top:4px;">${tags}</div>` : ""}
       </td>
     </tr>`
