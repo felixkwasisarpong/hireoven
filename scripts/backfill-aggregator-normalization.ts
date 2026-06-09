@@ -39,10 +39,21 @@ async function main() {
   const pool = getPostgresPool()
   const prefix = `${source}:` // external_id is `<source>:<id>` — indexed (idx_jobs_external_id)
 
+  // Retry-with-backoff connect — the constrained web box occasionally restarts
+  // Postgres (brief ECONNREFUSED); ride it out instead of crashing the run.
   async function freshClient() {
-    const c = await pool.connect()
-    await c.query("SET statement_timeout = '120s'")
-    return c
+    for (let attempt = 1; ; attempt += 1) {
+      try {
+        const c = await pool.connect()
+        await c.query("SET statement_timeout = '120s'")
+        return c
+      } catch (err) {
+        if (attempt >= 30) throw err
+        const backoff = Math.min(15000, 1000 * attempt)
+        console.warn(`[backfill ${source}] connect failed (try ${attempt}), retrying in ${backoff}ms: ${(err as Error).message}`)
+        await sleep(backoff)
+      }
+    }
   }
   let client = await freshClient()
 
