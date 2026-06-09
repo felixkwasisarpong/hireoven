@@ -1,6 +1,5 @@
 import type { LucideIcon } from "lucide-react"
 import {
-  BarChart2,
   Bell,
   BookmarkCheck,
   Briefcase,
@@ -16,7 +15,6 @@ import {
   Settings,
   ShieldAlert,
   ShieldCheck,
-  Sparkles,
   Triangle,
   TrendingUp,
   Users,
@@ -51,33 +49,38 @@ export type DashboardNavGroup = {
 }
 
 export const NAV_GROUPS: Record<string, DashboardNavGroup> = {
-  "My Career":     { label: "My Career",     icon: Briefcase },
-  "International": { label: "International", icon: Globe     },
-  "Insights":      { label: "Insights",      icon: BarChart2 },
+  "Search & Apply": { label: "Search & Apply", icon: Briefcase  },
+  "Documents":      { label: "Documents",      icon: FileText   },
+  "Grow":           { label: "Grow",           icon: TrendingUp },
+  "International":   { label: "International",   icon: Globe      },
 }
 
 /** Single source of truth for dashboard sidebar links. */
 export const DASHBOARD_NAV_ITEMS: DashboardNavItem[] = [
-  // ── Top level ───────────────────────────────────────────────────────────────
+  // ── Front door: the two hubs everything else feeds into ──────────────────────
   { label: "Feed",           href: "/dashboard",                          icon: LayoutGrid },
   { label: "Apex",          href: "/dashboard/apex",                    icon: Triangle,   gate: "apex_actions", subtitle: "Your AI job-search copilot" },
-  { label: "Interview",      href: "/dashboard/interview",                icon: Mic,         subtitle: "Practice & prep with AI" },
-  { label: "Watchlist",      href: "/dashboard/watchlist",                icon: BookmarkCheck, subtitle: "Jobs you've saved" },
-  { label: "Alerts",         href: "/dashboard/alerts",                   icon: Bell },
-  { label: "H-1B Intel",     href: "/dashboard/international/h1b-explorer", icon: Plane,      subtitle: "Visa sponsorship data" },
-  { label: "Cohorts",        href: "/dashboard/cohorts",                  icon: Users,      gate: "apex_strategy", subtitle: "Peers on the same path" },
-  { label: "Fair Chance",    href: "/dashboard/background-check",         icon: ShieldCheck, gate: "apex_strategy", subtitle: "Second-chance-friendly roles" },
-  { label: "Brand",          href: "/dashboard/brand",                    icon: TrendingUp, gate: "apex_strategy", subtitle: "Grow your LinkedIn presence" },
 
-  // ── My Career ───────────────────────────────────────────────────────────────
-  { label: "Applications",   href: "/dashboard/applications",             icon: ClipboardList,  group: "My Career", subtitle: "Track your pipeline" },
-  { label: "Resume",         href: "/dashboard/resume",                   icon: FileText,        group: "My Career", gate: "resume_upload", subtitle: "Build & tailor resumes" },
-  { label: "Cover letters",  href: "/dashboard/cover-letters",            icon: Mails,           group: "My Career", gate: "cover_letter" },
-  { label: "Autofill",       href: "/dashboard/autofill",                 icon: Wand2,           group: "My Career", gate: "autofill", subtitle: "One-click applications" },
+  // ── Search & Apply ───────────────────────────────────────────────────────────
+  { label: "Watchlist",      href: "/dashboard/watchlist",                icon: BookmarkCheck, group: "Search & Apply", subtitle: "Jobs you've saved" },
+  { label: "Alerts",         href: "/dashboard/alerts",                   icon: Bell,          group: "Search & Apply", subtitle: "New-match notifications" },
+  { label: "Applications",   href: "/dashboard/applications",             icon: ClipboardList, group: "Search & Apply", subtitle: "Track your pipeline" },
+  { label: "Autofill",       href: "/dashboard/autofill",                 icon: Wand2,         group: "Search & Apply", gate: "autofill", subtitle: "One-click applications" },
+
+  // ── Documents ────────────────────────────────────────────────────────────────
+  { label: "Resume",         href: "/dashboard/resume",                   icon: FileText,        group: "Documents", gate: "resume_upload", subtitle: "Build & tailor resumes" },
+  { label: "Cover letters",  href: "/dashboard/cover-letters",            icon: Mails,           group: "Documents", gate: "cover_letter", subtitle: "Generate cover letters" },
+
+  // ── Grow ─────────────────────────────────────────────────────────────────────
+  { label: "Interview",      href: "/dashboard/interview",                icon: Mic,         group: "Grow", subtitle: "Practice & prep with AI" },
+  { label: "Cohorts",        href: "/dashboard/cohorts",                  icon: Users,       group: "Grow", gate: "apex_strategy", subtitle: "Peers on the same path" },
+  { label: "Brand",          href: "/dashboard/brand",                    icon: TrendingUp,  group: "Grow", gate: "apex_strategy", subtitle: "Grow your LinkedIn presence" },
+  { label: "Fair Chance",    href: "/dashboard/background-check",         icon: ShieldCheck, group: "Grow", gate: "apex_strategy", subtitle: "Second-chance-friendly roles" },
 
   // ── International ────────────────────────────────────────────────────────────
   // No gate — pages enforce the profile check (is_international / visa_status)
   { label: "International",  href: "/dashboard/international",            icon: Plane,           group: "International", subtitle: "Tools for visa seekers" },
+  { label: "H-1B Intel",     href: "/dashboard/international/h1b-explorer", icon: Globe,         group: "International", subtitle: "Visa sponsorship data" },
   { label: "Offer Risk",     href: "/dashboard/international/offer-risk", icon: ShieldAlert,     group: "International", subtitle: "Vet an offer's stability" },
 
   // ── Footer ───────────────────────────────────────────────────────────────────

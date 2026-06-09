@@ -10,9 +10,9 @@ import HireovenLogo from "@/components/ui/HireovenLogo"
 import MaintenanceBanner from "@/components/marketing/MaintenanceBanner"
 
 export const metadata: Metadata = {
-  title: "Hireoven — Jobs served fresh. Be an early bird applicant.",
+  title: "Hireoven — Fresh jobs, checked for H-1B sponsorship.",
   description:
-    "Real-time job alerts, AI match scores, one-click apply, and Apex AI for your entire job search. Built for people who want interviews, not just applications.",
+    "Real-time job alerts and AI match scores, with H-1B sponsorship intelligence — petition history and visa-language signals — on every role. Plus one-click apply and Apex AI for your whole search.",
 }
 
 export const dynamic = "force-dynamic"
@@ -200,15 +200,17 @@ export default async function HomePage() {
             </div>
 
             <h1 className="text-[2.8rem] font-black leading-[1.04] tracking-tight text-white sm:text-5xl md:text-[3.75rem]">
-              Your next job,{" "}
+              Your next job —{" "}
               <span style={{ background: "linear-gradient(90deg,#FF5C18,#FF9A3C,#FFD280)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
-                found first.
-              </span>
+                found first,
+              </span>{" "}
+              sponsorship-checked.
             </h1>
 
             <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-white/60 md:text-xl">
-              Real-time alerts the moment a role posts. AI match scores on every listing. One-click autofill.
-              Apex AI that researches, tailors, and prepares — while you stay in control.
+              Real-time alerts the second a role posts and AI match scores on every listing — each one
+              checked for H-1B sponsorship with petition history and visa-language signals. Apex AI
+              researches, tailors, and prepares; you stay in control.
             </p>
 
             <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
@@ -623,7 +625,8 @@ export default async function HomePage() {
                 <HireovenLogo variant="full" className="h-10 w-auto max-w-[180px]" />
               </Link>
               <p className="mt-3 max-w-xs text-[13px] text-slate-500 leading-relaxed">
-                Jobs served fresh. Built for job seekers who want interviews, not just applications.
+                Fresh jobs, checked for H-1B sponsorship. Built for job seekers who want interviews,
+                not just applications.
               </p>
             </div>
             <FooterColumn title="Product" links={[
