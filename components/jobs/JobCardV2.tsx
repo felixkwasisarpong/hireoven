@@ -147,14 +147,6 @@ function resolveVisaCardLabel(
 // Score-derived styles
 // ---------------------------------------------------------------------------
 
-function scoreGradient(score: number | null): string {
-  if (score == null) return "from-slate-400 to-slate-500"
-  if (score >= 85) return "from-emerald-500 to-teal-600"
-  if (score >= 70) return "from-blue-500 to-indigo-600"
-  if (score >= 55) return "from-amber-500 to-orange-500"
-  return "from-slate-500 to-slate-600"
-}
-
 function scoreAccent(score: number | null): string {
   if (score == null) return "from-slate-300 via-slate-400 to-slate-300"
   if (score >= 85) return "from-emerald-400 via-teal-400 to-cyan-400"
@@ -633,7 +625,7 @@ export default function JobCardV2({
           if (e.key === "Enter" || e.key === " ") { e.preventDefault(); router.push(detailHref) }
         }}
         className={cn(
-          "group relative flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_2px_8px_rgba(15,23,42,0.06)] transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/30",
+          "group relative flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_2px_8px_rgba(15,23,42,0.06)] transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
           enableHoverEffects && "hover:-translate-y-0.5 hover:border-transparent hover:shadow-[0_12px_32px_rgba(15,23,42,0.12)]",
           enableHoverEffects && scoreHoverRing(score)
         )}
@@ -669,7 +661,7 @@ export default function JobCardV2({
                         onClick={(e) => e.stopPropagation()}
                         className={cn(
                           "text-[13px] font-semibold text-slate-600 transition",
-                          enableHoverEffects && "hover:text-indigo-600 hover:underline"
+                          enableHoverEffects && "hover:text-[#FF5C18] hover:underline"
                         )}
                       >
                         {companyName}
@@ -745,7 +737,7 @@ export default function JobCardV2({
                   aria-haspopup="dialog"
                   aria-expanded={breakdownOpen}
                   className={cn(
-                    "shrink-0 rounded-xl transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/30 disabled:cursor-default",
+                    "shrink-0 rounded-xl transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:cursor-default",
                     enableHoverEffects && "hover:opacity-90"
                   )}
                 >
@@ -834,30 +826,32 @@ export default function JobCardV2({
               )}
               onClick={(e) => e.stopPropagation()}
             >
+              {/* Tertiary: Save (single canonical instance, icon only) */}
               <button
                 type="button"
                 onClick={handleSave}
                 disabled={saving}
                 aria-label={saved ? "Saved" : "Save"}
                 className={cn(
-                  "inline-flex h-8 w-8 items-center justify-center rounded-lg border transition",
+                  "inline-flex h-9 w-9 items-center justify-center rounded-lg border transition",
                   saved
-                    ? "border-amber-200 bg-amber-50 text-amber-600"
+                    ? "border-orange-200 bg-orange-50 text-[#FF5C18]"
                     : cn(
                         "border-slate-200 bg-white text-slate-400",
-                        enableHoverEffects && "hover:border-indigo-200 hover:text-indigo-500"
+                        enableHoverEffects && "hover:border-orange-200 hover:text-[#FF5C18]"
                       )
                 )}
               >
-                <Bookmark className={cn("h-3.5 w-3.5", saved && "fill-current")} />
+                <Bookmark className={cn("h-4 w-4", saved && "fill-current")} />
               </button>
+              {/* Secondary: View (neutral outline) — card body is also clickable */}
               <button
                 type="button"
                 onClick={() => router.push(detailHref)}
                 aria-label="View details"
                 className={cn(
-                  "inline-flex h-8 items-center justify-center gap-1 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 text-[12px] font-semibold text-indigo-600 transition",
-                  enableHoverEffects && "hover:bg-indigo-100"
+                  "inline-flex h-9 items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-3 text-[13px] font-semibold text-slate-600 transition",
+                  enableHoverEffects && "hover:bg-slate-50 hover:text-slate-900"
                 )}
               >
                 View
@@ -981,13 +975,13 @@ export default function JobCardV2({
                 {showMatchReasoning && (
                   <div className="rounded-xl bg-white/5 p-3">
                     <p className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-white">
-                      <Sparkles className="h-3.5 w-3.5 text-indigo-400" aria-hidden />
+                      <Sparkles className="h-3.5 w-3.5 text-[#FF7D45]" aria-hidden />
                       Why it&apos;s a match
                     </p>
                     <div className="mt-2 space-y-1.5">
                       {whyBullets.map((bullet, i) => (
                         <p key={`${job.id}-b-${i}`} className="flex items-start gap-2 text-[12px] leading-5 text-slate-300">
-                          <span className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-indigo-500" aria-hidden />
+                          <span className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[#FF5C18]" aria-hidden />
                           {bullet}
                         </p>
                       ))}
@@ -997,9 +991,9 @@ export default function JobCardV2({
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/resume/analyze/${job.id}`) }}
-                      className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-indigo-500 to-violet-600 px-3 py-1.5 text-[12px] font-semibold text-white transition hover:from-indigo-600 hover:to-violet-700"
+                      className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-white/20 bg-white/5 px-3 py-1.5 text-[12px] font-semibold text-slate-200 transition hover:bg-white/10 hover:text-white"
                     >
-                      <Sparkles className="h-3 w-3" aria-hidden />
+                      <Sparkles className="h-3 w-3 text-[#FF7D45]" aria-hidden />
                       Tailor Resume
                     </button>
                   </div>
@@ -1035,57 +1029,36 @@ export default function JobCardV2({
                 )}
               </div>
 
-              {/* Bottom action bar */}
+              {/* Bottom action bar — one filled primary (Apply), one outline
+                  secondary (View Details). Save lives once on the collapsed card. */}
               <div
-                className="mt-3 flex flex-col gap-2 border-t border-white/10 pt-3 sm:flex-row sm:items-center sm:justify-between"
+                className="mt-3 flex flex-col gap-2 border-t border-white/10 pt-3 sm:flex-row sm:items-center sm:justify-end"
                 onClick={(e) => e.stopPropagation()}
               >
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={handleSave}
-                    disabled={saving}
-                    className={cn(
-                      "inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-[12px] font-semibold transition",
-                      saved
-                        ? "bg-amber-500/20 text-amber-300 ring-1 ring-amber-500/30"
-                        : "bg-white/10 text-slate-300 hover:bg-white/15 hover:text-white"
-                    )}
-                  >
-                    <Bookmark className={cn("h-3.5 w-3.5", saved && "fill-current")} />
-                    {saved ? "Saved" : "Save"}
-                  </button>
-                </div>
-
-                <div className="flex gap-2">
-                  <a
-                    href={job.apply_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={(e) => e.stopPropagation()}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-white/20 bg-white/5 px-3.5 py-2 text-[12px] font-semibold text-white transition hover:bg-white/10"
-                  >
-                    {isLinkedIn ? (
-                      <Linkedin className="h-3.5 w-3.5 text-[#0a66c2]" aria-hidden />
-                    ) : isAtsApplyLink ? (
-                      <Zap className="h-3.5 w-3.5 text-amber-400" aria-hidden />
-                    ) : (
-                      <ArrowUpRight className="h-3.5 w-3.5 text-slate-300" aria-hidden />
-                    )}
-                    {applyCtaLabel}
-                  </a>
-                  <button
-                    type="button"
-                    onClick={() => router.push(detailHref)}
-                    className={cn(
-                      "inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r px-3.5 py-2 text-[12px] font-semibold text-white transition",
-                      scoreGradient(score)
-                    )}
-                  >
-                    View Details
-                    <ArrowUpRight className="h-3.5 w-3.5" />
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => router.push(detailHref)}
+                  className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border border-white/25 bg-transparent px-4 text-[13px] font-semibold text-white transition hover:bg-white/10"
+                >
+                  View Details
+                  <ArrowUpRight className="h-3.5 w-3.5" />
+                </button>
+                <a
+                  href={job.apply_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-primary px-4 text-[13px] font-bold text-primary-foreground shadow-[0_4px_16px_rgba(255,92,24,0.35)] transition hover:bg-primary-hover active:scale-[0.98]"
+                >
+                  {isLinkedIn ? (
+                    <Linkedin className="h-3.5 w-3.5" aria-hidden />
+                  ) : isAtsApplyLink ? (
+                    <Zap className="h-3.5 w-3.5" aria-hidden />
+                  ) : (
+                    <ArrowUpRight className="h-3.5 w-3.5" aria-hidden />
+                  )}
+                  {applyCtaLabel}
+                </a>
               </div>
             </div>
           </div>
