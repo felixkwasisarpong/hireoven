@@ -333,8 +333,8 @@ export default function JobDetailPanel({
 
   // ─── Derived ──────────────────────────────────────────────────────────────
 
+  // Match the feed/card score; resume analysis still enriches factor bars below.
   const overall = resolveOverallMatchScore({
-    analysisOverallScore: analysis?.overall_score,
     preferredScore: fastScore,
     fallbackScore: initialMatchScore ?? null,
     rawData: job.raw_data,
