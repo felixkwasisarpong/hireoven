@@ -382,9 +382,11 @@ function buildDeterministicApexResponse(message: string, mode: ApexMode): ApexRe
   const worthTimeIntent =
     /\b(worth my time|top match(?:es)?|best match(?:es)?|strong opportunities|prioritize top)\b/i.test(message)
   const sponsorshipIntent =
-    /\b(sponsorship|sponsor|h-?1b|visa)\b/i.test(message)
+    /\b(sponsorship|sponsor|h-?1b|visa|immigration|work\s+auth(?:orization)?)\b/i.test(message)
   const filterIntent =
-    /\b(filter|show|only|find|prioritize|narrow|focus)\b/i.test(message)
+    /\b(filter|show|only|find|prioriti[sz]e|narrow|focus|keep|rank|re-?rank|queue)\b/i.test(message)
+  const queuePriorityIntent =
+    /\b(keep|prioriti[sz]e|top of (?:the )?queue|queue|rank|re-?rank)\b/i.test(message)
 
   if (opportunityRerank) {
     if (opportunityRerank.query) {
@@ -430,6 +432,14 @@ function buildDeterministicApexResponse(message: string, mode: ApexMode): ApexRe
       type: "APPLY_FILTERS",
       payload: { sponsorship: "high" },
       label: "Filter high sponsorship roles",
+    })
+  }
+
+  if (sponsorshipIntent && queuePriorityIntent && !actions.some((action) => action.type === "SET_FOCUS_MODE")) {
+    actions.push({
+      type: "SET_FOCUS_MODE",
+      payload: { enabled: true, reason: "Prioritize sponsorship-friendly roles first" },
+      label: "Turn on Focus Mode",
     })
   }
 

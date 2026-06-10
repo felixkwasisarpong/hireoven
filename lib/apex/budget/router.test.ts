@@ -11,6 +11,14 @@ test("routes opportunity re-rank suggestions deterministically", () => {
   assert.equal(decision.useLLM, false)
 })
 
+test("routes sponsorship queue suggestions deterministically", () => {
+  const decision = routeApexMessage(
+    "Keep sponsor-friendly employers and roles with explicit immigration openness at the top of the queue."
+  )
+
+  assert.equal(decision.useLLM, false)
+})
+
 test("keeps analysis questions on the LLM path", () => {
   const decision = routeApexMessage("Why is this role a good fit for my background?")
 

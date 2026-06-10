@@ -28,7 +28,7 @@ const SPONSORSHIP_LOOKUP_RE = /^(does|did|will|has|have)\s+\S+\s+(sponsor|h.?1b|
 // Sponsorship/company filter commands should stay deterministic to avoid
 // over-fitting the query to prior profile keywords.
 const SPONSORSHIP_FILTER_COMMAND_RE =
-  /^(find|show|filter|prioritize|focus|only|list)\b.*\b(sponsorship|sponsor|h.?1b|visa)\b.*\b(company|companies|employer|employers|roles|jobs|openings)?/i
+  /^(find|show|filter|prioriti[sz]e|focus|only|list|keep|rank|re-?rank)\b.*\b(sponsorship|sponsor|h.?1b|visa|immigration|work\s+auth(?:orization)?)\b.*\b(company|companies|employer|employers|roles|jobs|openings|queue)?/i
 
 // Commands that map directly to app navigation
 const NAV_COMMANDS_RE = /^(go to|open|show me|take me to)\s+(my (jobs|pipeline|applications|resume|profile|saved|matches|dashboard|settings))/i
