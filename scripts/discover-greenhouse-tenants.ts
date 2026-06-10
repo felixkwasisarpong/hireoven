@@ -136,6 +136,7 @@ async function loadCandidateNames(pool: Pool): Promise<string[]> {
     "./data/enterprise-ats-seeds",
     "./data/tech-brand-seeds",
     "./data/workday-tenant-seeds",
+    "./data/company-seeds-sec-edgar",
   ]
   for (const mod of seedModules) {
     try {

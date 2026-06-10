@@ -80,7 +80,7 @@ async function probeBambooHR(slug: string): Promise<boolean> {
 
 async function loadCandidateNames(pool: Pool): Promise<string[]> {
   const seeds = new Set<string>()
-  const seedModules = ["./data/company-seeds-expansion","./data/company-seeds-f2000-us","./data/company-seeds","./data/enterprise-ats-seeds","./data/tech-brand-seeds","./data/workday-tenant-seeds"]
+  const seedModules = ["./data/company-seeds-expansion","./data/company-seeds-f2000-us","./data/company-seeds","./data/enterprise-ats-seeds","./data/tech-brand-seeds","./data/workday-tenant-seeds","./data/company-seeds-sec-edgar"]
   for (const mod of seedModules) {
     try {
       const m: Record<string, unknown> = await import(mod)
