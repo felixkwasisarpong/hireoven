@@ -25,15 +25,17 @@ const CLIENT_CAPTURE_PATTERNS: Array<{ source: string; re: RegExp }> = [
   },
   {
     source: "our_client",
-    re: /\bfor\s+our\s+client[,]?\s*([A-Za-z0-9][^\n.;|]{1,96})/i,
+    // \b after "client" so the plural "clients" (e.g. "for our clients and
+    // communities") isn't read as "for our client, <name>".
+    re: /\bfor\s+our\s+client\b[,]?\s*([A-Za-z0-9][^\n.;|]{1,96})/i,
   },
   {
     source: "on_behalf",
-    re: /\bon\s+behalf\s+of\s+(?:our\s+client\s+)?([A-Za-z0-9][^\n.;|]{1,96})/i,
+    re: /\bon\s+behalf\s+of\s+(?:our\s+client\b\s+)?([A-Za-z0-9][^\n.;|]{1,96})/i,
   },
   {
     source: "client_is",
-    re: /\bour\s+client\s+is\s+([A-Za-z0-9][^\n.;|]{1,96})/i,
+    re: /\bour\s+client\b\s+is\s+([A-Za-z0-9][^\n.;|]{1,96})/i,
   },
 ]
 
@@ -68,6 +70,9 @@ function cleanCandidate(value: string | null | undefined): string | null {
   if (!stripped) return null
   if (stripped.length < 2 || stripped.length > 80) return null
   if (/(https?:\/\/|www\.|@)/i.test(stripped)) return null
+  // A candidate that opens with a coordinating connective ("and communities",
+  // "or partners") is a sentence fragment, not a company name.
+  if (/^(?:and|or|nor|but)\b/i.test(stripped)) return null
   if (INVALID_CANDIDATE_RE.test(stripped) && stripped.split(/\s+/).length <= 3) return null
 
   const letters = (stripped.match(/[A-Za-z]/g) ?? []).length

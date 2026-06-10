@@ -352,7 +352,8 @@ export async function GET(request: NextRequest) {
           careers_url LIKE '%indeed.com%' OR
           careers_url LIKE '%glassdoor.com%' OR
           careers_url IS NULL OR
-          careers_url NOT LIKE 'http%'
+          careers_url NOT LIKE 'http%' OR
+          careers_discovery_attempted_at IS NULL
         )
         AND (
           careers_discovery_attempted_at IS NULL

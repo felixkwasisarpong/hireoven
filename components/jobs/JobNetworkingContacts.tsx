@@ -15,6 +15,10 @@ type NetworkingApiResponse = {
 }
 
 const TYPE_META: Record<NetworkingContactType, { label: string; tone: string }> = {
+  connection: {
+    label: "1st-degree",
+    tone: "bg-violet-50 text-violet-700 ring-violet-200",
+  },
   alumni: {
     label: "Alumni",
     tone: "bg-sky-50 text-sky-700 ring-sky-200",
@@ -37,6 +41,7 @@ const CONFIDENCE_META: Record<NetworkingContact["confidence"], string> = {
 
 function groupContacts(contacts: NetworkingContact[]) {
   const grouped: Record<NetworkingContactType, NetworkingContact[]> = {
+    connection: [],
     alumni: [],
     recruiter: [],
     second_degree: [],
@@ -115,7 +120,8 @@ export default function JobNetworkingContacts({ jobId, companyName }: Props) {
             ))}
           </div>
           <p className="mt-2 text-[11.5px] text-slate-400">
-            Connect LinkedIn in Settings so we can scan your 1st- and 2nd-degree network for intros.
+            Run a Shadow Network scan for {companyName ?? "this company"} in Apex so we can surface your
+            1st- and 2nd-degree connections here.
           </p>
         </div>
       ) : (

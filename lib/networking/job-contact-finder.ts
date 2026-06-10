@@ -1,6 +1,6 @@
 import { getPostgresPool } from "@/lib/postgres/server"
 
-export type NetworkingContactType = "alumni" | "second_degree" | "recruiter"
+export type NetworkingContactType = "connection" | "alumni" | "second_degree" | "recruiter"
 export type NetworkingConfidence = "high" | "medium" | "low"
 
 export type NetworkingContact = {
@@ -12,7 +12,7 @@ export type NetworkingContact = {
   company: string | null
   confidence: NetworkingConfidence
   reason: string
-  source: "cohort_members" | "employer_cohort_requests"
+  source: "cohort_members" | "employer_cohort_requests" | "linkedin_connections"
   linkedinUrl: string | null
   email: string | null
 }
@@ -67,8 +67,35 @@ type SecondDegreeRow = {
   cohort_company_name: string
 }
 
+type LinkedInConnectionRow = {
+  id: string
+  name: string
+  title: string | null
+  company: string | null
+  degree: number
+  profile_url: string | null
+  mutual_count: number
+  recently_active: boolean
+  referral_score: number
+  referral_tier: "hot" | "warm" | "cold"
+}
+
 function normalizeSkill(value: string): string {
   return value.trim().toLowerCase()
+}
+
+/**
+ * Canonical company key shared by the Shadow Network writer (persist side) and
+ * this finder (read side). Lower-cased, punctuation/suffix-stripped so "Govini",
+ * "Govini, Inc." and "govini  inc" all collapse to the same match key.
+ */
+export function normalizeCompanyKey(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[.,]/g, " ")
+    .replace(/\b(inc|llc|ltd|corp|co|company|incorporated|the)\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
 }
 
 function uniqueCaseInsensitive(values: string[]): string[] {
@@ -157,15 +184,21 @@ export async function getJobNetworkingContacts(input: {
 
   const companyId = job.company_id
   const companyName = job.company_name
-  if (!companyId || !companyName) {
-    return { jobId: input.jobId, companyId: companyId ?? null, companyName: companyName ?? null, contacts: [] }
+  // LinkedIn connections match on company name alone, so we only need a name to
+  // do anything useful. Cohort/recruiter sources additionally require a company_id.
+  if (!companyName) {
+    return { jobId: input.jobId, companyId: companyId ?? null, companyName: null, contacts: [] }
   }
 
   const normalizedJobSkills = new Set((job.skills ?? []).map(normalizeSkill).filter(Boolean))
+  const companyKey = normalizeCompanyKey(companyName)
   const nowMs = Date.now()
 
-  const [alumniResult, recruiterResult, secondDegreeResult] = await Promise.all([
-    pool.query<AlumniRow>(
+  const noRows = Promise.resolve({ rows: [] as never[] })
+
+  const [alumniResult, recruiterResult, secondDegreeResult, linkedInResult] = await Promise.all([
+    companyId
+    ? pool.query<AlumniRow>(
       `SELECT
          cm.id AS member_id,
          cm.user_id,
@@ -188,8 +221,10 @@ export async function getJobNetworkingContacts(input: {
        ORDER BY cm.vouches_received DESC, cm.joined_at DESC
        LIMIT 6`,
       [companyId, input.userId]
-    ),
-    pool.query<RecruiterRow>(
+    )
+    : noRows,
+    companyId
+    ? pool.query<RecruiterRow>(
       `SELECT
          ecr.id AS request_id,
          ecr.contact_email,
@@ -203,7 +238,8 @@ export async function getJobNetworkingContacts(input: {
        ORDER BY ecr.created_at DESC
        LIMIT 4`,
       [companyId]
-    ),
+    )
+    : noRows,
     input.userId
       ? pool.query<SecondDegreeRow>(
           `SELECT
@@ -229,7 +265,28 @@ export async function getJobNetworkingContacts(input: {
            LIMIT 80`,
           [input.userId]
         )
-      : Promise.resolve({ rows: [] as SecondDegreeRow[] })
+      : Promise.resolve({ rows: [] as SecondDegreeRow[] }),
+    input.userId
+      ? pool.query<LinkedInConnectionRow>(
+          `SELECT
+             id,
+             name,
+             title,
+             company,
+             degree,
+             profile_url,
+             mutual_count,
+             recently_active,
+             referral_score,
+             referral_tier::text
+           FROM public.linkedin_connections
+           WHERE user_id = $1::uuid
+             AND company_norm = $2
+           ORDER BY referral_score DESC
+           LIMIT 8`,
+          [input.userId, companyKey]
+        )
+      : Promise.resolve({ rows: [] as LinkedInConnectionRow[] })
   ])
 
   const alumniContacts: NetworkingContact[] = alumniResult.rows.map((row) => {
@@ -336,12 +393,35 @@ export async function getJobNetworkingContacts(input: {
     .slice(0, 5)
     .map(({ _overlapCount, ...contact }) => contact)
 
-  const contacts = [...alumniContacts, ...recruiterContacts, ...secondDegreeContacts]
+  const linkedInContacts: NetworkingContact[] = linkedInResult.rows.map((row) => {
+    const confidence: NetworkingConfidence =
+      row.referral_tier === "hot" ? "high" : row.referral_tier === "warm" ? "medium" : "low"
+    const degreeLabel = row.degree === 1 ? "1st-degree connection" : "2nd-degree connection"
+    const signals: string[] = []
+    if (row.mutual_count > 0) signals.push(`${row.mutual_count} mutual${row.mutual_count === 1 ? "" : "s"}`)
+    if (row.recently_active) signals.push("recently active")
+    return {
+      id: `linkedin:${row.id}`,
+      type: row.degree === 1 ? "connection" : "second_degree",
+      name: formatDisplayName(row.name, "LinkedIn connection"),
+      role: row.title || null,
+      team: null,
+      company: row.company || companyName,
+      confidence,
+      reason: signals.length > 0 ? `${degreeLabel} · ${signals.join(", ")}.` : `${degreeLabel} at ${companyName}.`,
+      source: "linkedin_connections",
+      linkedinUrl: row.profile_url ?? null,
+      email: null,
+    }
+  })
+
+  const contacts = [...linkedInContacts, ...alumniContacts, ...recruiterContacts, ...secondDegreeContacts]
     .sort((a, b) => {
       const typeOrder: Record<NetworkingContactType, number> = {
-        alumni: 0,
-        recruiter: 1,
-        second_degree: 2,
+        connection: 0,
+        alumni: 1,
+        recruiter: 2,
+        second_degree: 3,
       }
       const byType = typeOrder[a.type] - typeOrder[b.type]
       if (byType !== 0) return byType

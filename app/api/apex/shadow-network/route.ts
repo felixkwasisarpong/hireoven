@@ -1,11 +1,78 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getPostgresPool } from "@/lib/postgres/server"
-import { rankConnections, type ShadowConnection } from "@/lib/apex/shadow-network/scorer"
+import { rankConnections, type ScoredConnection, type ShadowConnection } from "@/lib/apex/shadow-network/scorer"
 import { generateDM } from "@/lib/apex/shadow-network/outreach"
+import { normalizeCompanyKey } from "@/lib/networking/job-contact-finder"
 
 function err(status: number, msg: string) {
   return NextResponse.json({ error: msg }, { status })
+}
+
+/**
+ * Persist the user's scraped connections for a company so they can later surface
+ * in the job-page Networking Finder. A scan returns the full current set for one
+ * company, so we replace that (user, company_norm) slice atomically.
+ */
+async function persistConnections(
+  userId: string,
+  companyName: string,
+  ranked: ScoredConnection[],
+): Promise<void> {
+  const companyKey = normalizeCompanyKey(companyName)
+  if (!companyKey) return
+
+  const rows = ranked
+    .filter((c) => c.name?.trim())
+    .slice(0, 200)
+    .map((c) => ({
+      name: c.name.trim(),
+      title: c.title?.trim() || null,
+      company: c.company?.trim() || companyName,
+      degree: Math.min(3, Math.max(1, c.degree)),
+      profileUrl: c.profileUrl?.trim() || null,
+      mutualCount: Number.isFinite(c.mutualCount) ? c.mutualCount : 0,
+      recentlyActive: Boolean(c.recentlyActive),
+      tenureMonths: Number.isFinite(c.tenureMonths) ? c.tenureMonths : 0,
+      referralScore: Math.round(c.referralScore),
+      referralTier: c.referralTier,
+    }))
+
+  const pool = getPostgresPool()
+  const client = await pool.connect()
+  try {
+    await client.query("BEGIN")
+    await client.query(
+      `DELETE FROM public.linkedin_connections WHERE user_id = $1::uuid AND company_norm = $2`,
+      [userId, companyKey],
+    )
+
+    if (rows.length > 0) {
+      const values: unknown[] = [userId, companyKey]
+      const tuples = rows.map((r, i) => {
+        const b = i * 10 + 3 // $1,$2 are user_id + company_norm
+        values.push(
+          r.name, r.title, r.company, r.degree, r.profileUrl,
+          r.mutualCount, r.recentlyActive, r.tenureMonths, r.referralScore, r.referralTier,
+        )
+        return `($1::uuid, $${b}, $${b + 1}, $${b + 2}, $2, $${b + 3}, $${b + 4}, $${b + 5}, $${b + 6}, $${b + 7}, $${b + 8}, $${b + 9})`
+      })
+      await client.query(
+        `INSERT INTO public.linkedin_connections
+           (user_id, name, title, company, company_norm, degree, profile_url,
+            mutual_count, recently_active, tenure_months, referral_score, referral_tier)
+         VALUES ${tuples.join(", ")}`,
+        values,
+      )
+    }
+
+    await client.query("COMMIT")
+  } catch (e) {
+    await client.query("ROLLBACK").catch(() => {})
+    throw e
+  } finally {
+    client.release()
+  }
 }
 
 /**
@@ -26,6 +93,16 @@ export async function POST(req: NextRequest) {
 
   const { connections, jobTitle = "", companyName = "" } = body
   const ranked = rankConnections(connections as ShadowConnection[])
+
+  // Persist for the job-page Networking Finder. Best-effort: a storage failure
+  // must not break the live Shadow Network results.
+  if (companyName.trim()) {
+    try {
+      await persistConnections(user.id, companyName, ranked)
+    } catch (e) {
+      console.error("[shadow-network] failed to persist connections:", e)
+    }
+  }
 
   // Return top 20 (rest are low-signal)
   return NextResponse.json({ ranked: ranked.slice(0, 20), total: ranked.length })

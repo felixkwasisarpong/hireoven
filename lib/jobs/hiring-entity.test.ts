@@ -34,6 +34,34 @@ test("extractLikelyHiringEntityFromDescription: ignores compound words like clie
   assert.equal(result, null)
 })
 
+test("extractLikelyHiringEntityFromDescription: ignores plural 'clients' phrases", () => {
+  // "for our clients and communities" must NOT be read as "for our client, <name>".
+  const result = extractLikelyHiringEntityFromDescription(
+    "We build technology that delivers value for our clients and communities every day."
+  )
+
+  assert.equal(result, null)
+})
+
+test("resolveHiringEntitySignal: plural 'clients' phrase is not a staffing intermediary", () => {
+  const signal = resolveHiringEntitySignal({
+    companyName: "Rbc",
+    description:
+      "As a Lead Software Engineer you will deliver platforms for our clients and communities.",
+  })
+
+  assert.equal(signal, null)
+})
+
+test("extractLikelyHiringEntityFromDescription: rejects connective-led fragments", () => {
+  // Singular "client" followed by a connective is a fragment, not a client name.
+  const result = extractLikelyHiringEntityFromDescription(
+    "We support our client and the broader community across the region."
+  )
+
+  assert.equal(result, null)
+})
+
 test("resolveHiringEntitySignal: marks staffing intermediary when client differs", () => {
   const signal = resolveHiringEntitySignal({
     companyName: "Acme Talent Solutions",
