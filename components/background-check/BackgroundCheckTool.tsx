@@ -723,8 +723,10 @@ export default function BackgroundCheckTool() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = (await res.json()) as { employers: FairChanceEmployer[] }
       setEmployers(data.employers ?? [])
-    } catch {
-      setEmployersError("Failed to load fair chance employers.")
+    } catch (err) {
+      console.error("[fair-chance-employers] load error:", err)
+      const msg = err instanceof Error ? err.message : String(err)
+      setEmployersError(`Failed to load fair chance employers. (${msg})`)
     } finally {
       setEmployersLoading(false)
     }

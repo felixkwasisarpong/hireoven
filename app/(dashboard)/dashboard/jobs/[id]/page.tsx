@@ -546,7 +546,7 @@ export default async function DashboardJobDetailPage({ params }: Props) {
           aria-hidden
         />
 
-        <div className="mx-auto w-full max-w-[1340px] px-4 pt-5 sm:px-6 lg:px-8">
+        <div className="mx-auto w-full max-w-[1600px] px-4 pt-5 sm:px-6 lg:px-8">
           {/* Back */}
           <Link
             href="/dashboard"
@@ -677,8 +677,8 @@ export default async function DashboardJobDetailPage({ params }: Props) {
       </div>
 
       {/* ── Content ───────────────────────────────────────────────── */}
-      <div className="mx-auto w-full max-w-[1340px] px-4 py-7 sm:px-6 lg:px-8">
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px] xl:gap-8">
+      <div className="mx-auto w-full max-w-[1600px] px-4 py-7 sm:px-6 lg:px-8">
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_400px] xl:gap-8">
 
           {/* ──────────── Main column ──────────── */}
           <div className="min-w-0">
