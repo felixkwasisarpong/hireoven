@@ -34,6 +34,7 @@ export type CrawlPolicyOptions = {
   failureStreakMin: number
   defaultCooldownDays: number
   blockedCooldownDays: number
+  rateLimitedCooldownDays: number
   domainBrokenCooldownDays: number
   badUrlCooldownDays: number
 }
@@ -179,7 +180,10 @@ function failureStreak(signals: CrawlSignal[]): number {
 function cooldownDaysForLane(lane: CrawlLane, latest: CrawlSignal | null, options: CrawlPolicyOptions) {
   if (!latest) return options.defaultCooldownDays
   if (lane === "domain_broken") return options.domainBrokenCooldownDays
-  if (lane === "blocked") return options.blockedCooldownDays
+  if (lane === "blocked") {
+    if (normalizeReason(latest.errorMessage) === "rate_limited") return options.rateLimitedCooldownDays
+    return options.blockedCooldownDays
+  }
   if (latest.status === "bad_url") return options.badUrlCooldownDays
   return options.defaultCooldownDays
 }
@@ -308,6 +312,7 @@ export function defaultCrawlPolicyOptions(overrides?: Partial<CrawlPolicyOptions
     failureStreakMin: Math.max(2, Number.parseInt(process.env.CRAWLER_FAILURE_STREAK_MIN ?? "3", 10)),
     defaultCooldownDays: Math.max(1, Number.parseInt(process.env.CRAWLER_FAILURE_COOLDOWN_DAYS ?? "7", 10)),
     blockedCooldownDays: Math.max(1, Number.parseInt(process.env.CRAWLER_BLOCKED_COOLDOWN_DAYS ?? "14", 10)),
+    rateLimitedCooldownDays: Math.max(1, Number.parseInt(process.env.CRAWLER_RATE_LIMITED_COOLDOWN_DAYS ?? "30", 10)),
     domainBrokenCooldownDays: Math.max(1, Number.parseInt(process.env.CRAWLER_DOMAIN_BROKEN_COOLDOWN_DAYS ?? "30", 10)),
     badUrlCooldownDays: Math.max(1, Number.parseInt(process.env.CRAWLER_BAD_URL_COOLDOWN_DAYS ?? "30", 10)),
     ...overrides,
@@ -393,7 +398,9 @@ export function applyCrawlQueuePolicy<T extends CrawlCompanyLike>(
       continue
     }
 
-    if (!options.bypassCooldown && latest && streak >= options.failureStreakMin) {
+    const isRateLimited = latest ? normalizeReason(latest.errorMessage) === "rate_limited" : false
+    const effectiveBypassCooldown = options.bypassCooldown && !isRateLimited
+    if (!effectiveBypassCooldown && latest && streak >= options.failureStreakMin) {
       const cooldownDays = cooldownDaysForLane(lane, latest, options)
       const until = addDays(latest.crawledAt, cooldownDays)
       if (until && Date.parse(until) > nowMs) {
