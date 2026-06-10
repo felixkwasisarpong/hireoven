@@ -12,6 +12,7 @@
  */
 
 import type { RoutingDecision } from "./types"
+import { isOpportunityRerankMessage } from "../opportunity-rerank"
 
 // Pure UI commands that produce structured actions — no language model needed
 const DETERMINISTIC_COMMANDS = /^(show|filter|hide|open|close|sort|clear|reset|refresh|toggle|focus|narrow|expand)\b/i
@@ -49,6 +50,9 @@ export function routeApexMessage(message: string): RoutingDecision {
   }
   if (SPONSORSHIP_FILTER_COMMAND_RE.test(msg)) {
     return { useLLM: false, reason: "sponsorship filter command — deterministic action routing" }
+  }
+  if (isOpportunityRerankMessage(msg)) {
+    return { useLLM: false, reason: "opportunity re-rank command — deterministic feed routing" }
   }
   if (NAV_COMMANDS_RE.test(msg)) {
     return { useLLM: false, reason: "navigation command" }

@@ -26,6 +26,7 @@ import { routeApexMessage, AI_TIMEOUTS } from "@/lib/apex/budget/router"
 import { apexCache, CACHE_TTL, cacheKey, stableHash } from "@/lib/apex/budget/cache"
 import { sanitizeGeneratedText } from "@/lib/text/sanitize-generated-text"
 import { extractAtsSlugs, canonicalizeAts, ATS_LABELS, type AtsSlug } from "@/lib/apex/apply-agent/ats"
+import { extractOpportunityRerankTarget } from "@/lib/apex/opportunity-rerank"
 import {
   isApexIntent,
   isApexMode,
@@ -376,6 +377,7 @@ function inferWorkflowDirective(message: string, intent: ApexIntent): ApexWorkfl
 function buildDeterministicApexResponse(message: string, mode: ApexMode): ApexResponse {
   const m = message.toLowerCase()
   const actions: ApexResponse["actions"] = []
+  const opportunityRerank = extractOpportunityRerankTarget(message)
 
   const worthTimeIntent =
     /\b(worth my time|top match(?:es)?|best match(?:es)?|strong opportunities|prioritize top)\b/i.test(message)
@@ -383,6 +385,37 @@ function buildDeterministicApexResponse(message: string, mode: ApexMode): ApexRe
     /\b(sponsorship|sponsor|h-?1b|visa)\b/i.test(message)
   const filterIntent =
     /\b(filter|show|only|find|prioritize|narrow|focus)\b/i.test(message)
+
+  if (opportunityRerank) {
+    if (opportunityRerank.query) {
+      actions.push({
+        type: "APPLY_FILTERS",
+        payload: { query: opportunityRerank.query },
+        label: `Show ${opportunityRerank.label} roles`,
+      })
+    }
+
+    actions.push({
+      type: "SET_FOCUS_MODE",
+      payload: {
+        enabled: true,
+        reason: `Prioritize ${opportunityRerank.label} that deserve attention today`,
+      },
+      label: "Turn on Focus Mode",
+    })
+
+    return {
+      answer: opportunityRerank.query
+        ? `Done — I re-ranked your opportunities around ${opportunityRerank.label} and turned on Focus Mode so the strongest matches surface first.`
+        : "Done — I turned on Focus Mode so the opportunities that deserve attention today surface first.",
+      recommendation: "Explore",
+      actions,
+      explanations: [],
+      intent: "command",
+      confidence: 0.99,
+      mode,
+    }
+  }
 
   if (worthTimeIntent) {
     actions.push({
