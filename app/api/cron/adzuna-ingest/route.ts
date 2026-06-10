@@ -18,7 +18,7 @@
  *   ADZUNA_MAX_JOBS        — max jobs per query (default: 300)
  *
  * Free tier budget: 250 API calls/day.
- * At 12 queries × ~3 pages (50 results/page) × 4 runs/day = ~144 calls/day.
+ * At 85 queries × ~10 pages (50 results/page) × 4 runs/day = ~3,400 calls/day.
  */
 
 import { NextRequest, NextResponse } from "next/server"
@@ -39,6 +39,7 @@ export const runtime = "nodejs"
 export const maxDuration = 300
 
 const DEFAULT_QUERIES = [
+  // Engineering & Tech
   "software engineer",
   "frontend developer",
   "backend developer",
@@ -48,7 +49,6 @@ const DEFAULT_QUERIES = [
   "machine learning engineer",
   "devops engineer",
   "cloud engineer",
-  "product manager",
   "site reliability engineer",
   "software developer",
   "mobile developer",
@@ -57,18 +57,83 @@ const DEFAULT_QUERIES = [
   "react developer",
   "python developer",
   "java developer",
-  "node developer",
   "qa engineer",
   "security engineer",
   "solutions architect",
-  "engineering manager",
+  "embedded engineer",
+  "firmware engineer",
+  "database administrator",
+  "network engineer",
+  "systems engineer",
+  "platform engineer",
+  "infrastructure engineer",
+  // Product & Design
+  "product manager",
   "technical program manager",
   "ui ux designer",
-  "business analyst",
+  "product designer",
+  "engineering manager",
+  // Data & Analytics
   "data analyst",
+  "business intelligence analyst",
+  "analytics engineer",
+  "quantitative analyst",
+  // Finance & Accounting
   "financial analyst",
-  "sales engineer",
+  "accountant",
+  "controller",
+  "finance manager",
+  "investment analyst",
+  "actuarial analyst",
+  "risk analyst",
+  "tax manager",
+  "audit manager",
+  // Sales & Marketing
   "account executive",
+  "sales engineer",
+  "sales manager",
+  "marketing manager",
+  "digital marketing manager",
+  "growth manager",
+  "demand generation manager",
+  "content marketing manager",
+  "seo manager",
+  "brand manager",
+  "business development manager",
+  // Operations & Supply Chain
+  "operations manager",
+  "supply chain manager",
+  "logistics manager",
+  "project manager",
+  "program manager",
+  "process engineer",
+  "manufacturing engineer",
+  "quality engineer",
+  "industrial engineer",
+  // Healthcare
+  "registered nurse",
+  "nurse practitioner",
+  "physician assistant",
+  "clinical research associate",
+  "medical director",
+  "pharmacist",
+  "physical therapist",
+  "occupational therapist",
+  "radiologist",
+  "healthcare administrator",
+  // HR & Legal
+  "human resources manager",
+  "recruiter",
+  "talent acquisition manager",
+  "attorney",
+  "paralegal",
+  "compliance manager",
+  // Customer Success & Support
+  "customer success manager",
+  "customer experience manager",
+  "technical support engineer",
+  // Other
+  "business analyst",
 ]
 
 export async function GET(request: NextRequest) {
@@ -88,8 +153,8 @@ export async function GET(request: NextRequest) {
         .filter((q, i, arr) => arr.indexOf(q) === i)
         .slice(0, 30)
 
-  const maxDaysOld = Number(url.searchParams.get("maxDaysOld") ?? process.env.ADZUNA_MAX_DAYS_OLD ?? "1")
-  const maxJobs = Number(url.searchParams.get("maxJobs") ?? process.env.ADZUNA_MAX_JOBS ?? "300")
+  const maxDaysOld = Number(url.searchParams.get("maxDaysOld") ?? process.env.ADZUNA_MAX_DAYS_OLD ?? "2")
+  const maxJobs = Number(url.searchParams.get("maxJobs") ?? process.env.ADZUNA_MAX_JOBS ?? "500")
 
   const pool = getPostgresPool()
   const stats: Record<string, number> = {

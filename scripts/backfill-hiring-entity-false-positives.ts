@@ -10,8 +10,15 @@
  * returns null, the hiring_entity key is removed so the card falls back to the
  * real company name.
  *
- *   npx tsx scripts/backfill-hiring-entity-false-positives.ts          # dry run
+ *   npx tsx scripts/backfill-hiring-entity-false-positives.ts          # dry run (full table)
  *   npx tsx scripts/backfill-hiring-entity-false-positives.ts --apply  # write
+ *
+ * Scope to one company (indexed, light — safe on the memory-constrained web box):
+ *   npx tsx scripts/backfill-hiring-entity-false-positives.ts --company <uuid> [--apply]
+ *
+ * NOTE: the unscoped form seq-scans the whole jobs table (no GIN index on
+ * raw_data) and has OOM-restarted the production Postgres box. Prefer --company,
+ * or run the full pass off-peak / on the harvester box.
  */
 
 import { loadEnvConfig } from "@next/env"
@@ -21,6 +28,8 @@ import { getPostgresPool } from "@/lib/postgres/server"
 import { resolveHiringEntitySignal } from "@/lib/jobs/hiring-entity"
 
 const APPLY = process.argv.includes("--apply")
+const companyArgIdx = process.argv.indexOf("--company")
+const COMPANY_ID = companyArgIdx >= 0 ? process.argv[companyArgIdx + 1] ?? null : null
 
 type Row = {
   id: string
@@ -69,9 +78,10 @@ async function main() {
          left join companies c on c.id = j.company_id
         where j.id > $1
           and j.raw_data ? 'hiring_entity'
+          ${COMPANY_ID ? "and j.company_id = $3::uuid" : ""}
         order by j.id
         limit $2`,
-      [lastId, BATCH],
+      COMPANY_ID ? [lastId, BATCH, COMPANY_ID] : [lastId, BATCH],
     )
     if (rows.length === 0) break
     lastId = rows[rows.length - 1].id
