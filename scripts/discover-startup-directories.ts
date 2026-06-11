@@ -31,7 +31,7 @@ import {
 import { normalizeAtsUrl } from "@/lib/companies/ats-url-normalization"
 import { companyLogoUrlFromDomain, normalizeCompanyDomain } from "@/lib/companies/logo-url"
 import { resolveDirectAtsUrl, type RenderHtml } from "@/lib/companies/ats-url-resolver"
-import { detectAdapter } from "@/lib/harvester/adapters"
+import { detectAdapter, type HarvestCtx } from "@/lib/harvester/adapters"
 import { getPostgresPool } from "@/lib/postgres/server"
 import type { BrowserContext, Page } from "playwright"
 
@@ -93,6 +93,8 @@ type ReportPayload = {
     crawl_ready: number
     ats_ready: number
     custom_ready: number
+    with_jobs: number
+    without_jobs: number
     skipped: number
     inserted: number
     updated: number
@@ -407,6 +409,34 @@ async function collectProfileLinks(page: Page, source: SourceName): Promise<stri
 
     return output
   }, source)
+}
+
+/**
+ * Probe the resolved ATS for at least one live job. Discovery should only
+ * persist a company when its board actually has openings — otherwise we fill
+ * `companies` with empty boards the harvester then crawls for nothing.
+ *
+ * Uses the same adapter the harvester would (detected from the careers / direct
+ * ATS URL). `verified` is false when no adapter matches (e.g. a custom careers
+ * page we can't introspect) or the fetch fails — in both cases the board's job
+ * count is unknown, so we treat it as "don't save".
+ */
+async function probeLiveJobCount(
+  row: CompanyResolution
+): Promise<{ jobCount: number; verified: boolean }> {
+  const detectionUrl = row.directAtsUrl?.trim() || row.careersUrl?.trim() || ""
+  if (!detectionUrl) return { jobCount: 0, verified: false }
+
+  const detection = detectAdapter(detectionUrl)
+  if (!detection) return { jobCount: 0, verified: false }
+
+  const ctx: HarvestCtx = { etag: null, lastModified: null, timeoutMs: 8_000 }
+  try {
+    const result = await detection.adapter.fetchJobs({ slug: detection.slug, ctx })
+    return { jobCount: result.jobs.length, verified: true }
+  } catch {
+    return { jobCount: 0, verified: false }
+  }
 }
 
 async function discoverYcRefs(context: BrowserContext): Promise<SourceCompanyRef[]> {
@@ -866,6 +896,8 @@ async function main() {
       crawl_ready: 0,
       ats_ready: 0,
       custom_ready: 0,
+      with_jobs: 0,
+      without_jobs: 0,
       skipped: 0,
       inserted: 0,
       updated: 0,
@@ -992,17 +1024,41 @@ async function main() {
       `[discover-startup-directories] crawl-ready=${crawlReady.length} ats-ready=${atsReady.length} custom-ready=${customReady.length} skipped=${skipped.length}`
     )
 
+    // Only keep companies whose board currently has at least one live job —
+    // never persist an empty board the harvester would crawl for nothing.
+    const probed = await Promise.all(
+      crawlReady.map((row) =>
+        limiter(async () => ({ row, ...(await probeLiveJobCount(row)) }))
+      )
+    )
+    const withJobs = probed.filter((entry) => entry.jobCount > 0)
+    report.summary.with_jobs = withJobs.length
+    report.summary.without_jobs = probed.length - withJobs.length
+    for (const entry of probed) {
+      if (entry.jobCount > 0) continue
+      report.skipped.push({
+        source: entry.row.profile.ref.source,
+        company_url: entry.row.profile.ref.companyUrl,
+        name: entry.row.profile.name,
+        reason: entry.verified ? "no_live_jobs" : "jobs_unverifiable",
+        website_url: entry.row.profile.websiteUrl,
+      })
+    }
+    console.log(
+      `[discover-startup-directories] with-jobs=${withJobs.length} skipped-no-jobs=${probed.length - withJobs.length}`
+    )
+
     if (!execute) {
-      for (const row of crawlReady.slice(0, 30)) {
+      for (const { row, jobCount } of withJobs.slice(0, 30)) {
         console.log(
-          `  ${String(row.atsType ?? "none").padEnd(16)} ${row.profile.name.padEnd(30)} ${row.careersUrl ?? "missing"}`
+          `  ${String(row.atsType ?? "none").padEnd(16)} ${row.profile.name.padEnd(30)} jobs=${String(jobCount).padEnd(4)} ${row.careersUrl ?? "missing"}`
         )
       }
       writeReport(report)
       return
     }
 
-    if (crawlReady.length === 0) {
+    if (withJobs.length === 0) {
       writeReport(report)
       return
     }
@@ -1010,7 +1066,7 @@ async function main() {
     const pool = getPostgresPool()
 
     try {
-      for (const row of crawlReady) {
+      for (const { row, jobCount } of withJobs) {
         if (!row.domain || !row.careersUrl || !row.atsType) {
           report.skipped.push({
             source: row.profile.ref.source,
@@ -1032,6 +1088,7 @@ async function main() {
             city: row.profile.ref.city,
             website_url: row.profile.websiteUrl,
             resolution_reason: row.reason,
+            discovered_job_count: jobCount,
             synced_at: new Date().toISOString(),
             ...(row.metadata ?? {}),
           },
