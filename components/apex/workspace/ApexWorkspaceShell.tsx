@@ -1224,6 +1224,7 @@ export function ApexWorkspaceShell() {
       const workMode = typeof bp.workMode === "string" ? bp.workMode : undefined
       const strictQuery = Boolean(bp.strictQuery)
       const strictScoreOnly = Boolean(bp.strictScoreOnly)
+      const ats = typeof bp.ats === "string" ? bp.ats : undefined
 
       const selectorCriteria = {
         minMatchScore,
@@ -1231,6 +1232,7 @@ export function ApexWorkspaceShell() {
         workMode,
         strictQuery,
         strictScoreOnly,
+        ats,
         count,
       }
       const runSeq = ++bulkHydrationSeqRef.current
@@ -1261,6 +1263,10 @@ export function ApexWorkspaceShell() {
               typeof safeResponse.apply_agent.criteria?.strictScoreOnly === "boolean"
                 ? safeResponse.apply_agent.criteria.strictScoreOnly
                 : selectorCriteria.strictScoreOnly,
+            ats:
+              typeof safeResponse.apply_agent.criteria?.ats === "string"
+                ? safeResponse.apply_agent.criteria.ats
+                : selectorCriteria.ats,
             count:
               typeof safeResponse.apply_agent.criteria?.count === "number"
                 ? safeResponse.apply_agent.criteria.count
@@ -1282,6 +1288,7 @@ export function ApexWorkspaceShell() {
         if (selectorCriteria.workMode) params.set("workMode", selectorCriteria.workMode)
         if (selectorCriteria.strictQuery) params.set("strictQuery", "true")
         if (selectorCriteria.strictScoreOnly) params.set("strictScoreOnly", "true")
+        if (selectorCriteria.ats) params.set("ats", selectorCriteria.ats)
         params.set("freshnessHours", "24")
         if (query.trim().length > 0) params.set("q", query.trim())
 

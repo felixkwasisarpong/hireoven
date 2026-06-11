@@ -15,6 +15,7 @@ import { getPostgresPool } from "@/lib/postgres/server"
 import { sqlPublishedJob } from "@/lib/jobs/publication"
 import type { ApplyAgentJob } from "@/lib/apex/apply-agent/types"
 import { buildAtsApplyUrlFilter, canonicalizeAts, type AtsSlug } from "@/lib/apex/apply-agent/ats"
+import { extractApplyAgentSearchTerms } from "@/lib/apex/apply-agent/search-terms"
 
 export const runtime = "nodejs"
 
@@ -39,27 +40,6 @@ function parseClampedInt(
   if (rounded < options.min) return options.min
   if (rounded > options.max) return options.max
   return rounded
-}
-
-// Strip the bulk-apply framing and return the meaningful condition remainder.
-// "apply to 3 jobs with java skill in it" → "java skill"
-// "apply to 5 remote healthcare jobs" → "healthcare"
-// "apply for 2 frontend roles at fintech companies" → "frontend fintech companies"
-function extractSearchTerms(raw: string): string {
-  return raw
-    .replace(/\b(apply\s+(to|for)|queue|batch|bulk|prepare)\b/gi, "")
-    .replace(/\b(top|best|strongest|highest|matching|matched|scored?)\b/gi, "")
-    .replace(/\b\d+\b/g, "")
-    .replace(/\b(jobs?|roles?|positions?|openings?|applications?|applying)\b/gi, "")
-    .replace(/\b(remote|onsite|hybrid)\b/gi, "")
-    .replace(/\b(h-?1b|visa|sponsor(ship)?)\b/gi, "")
-    // ATS names are filtered structurally via the `ats` param — strip them here
-    // so "Greenhouse ATS" doesn't leak into the title/description text search.
-    .replace(/\b(ats|greenhouse|lever|workday|ashby(hq)?|icims|smart\s*recruiters?|bamboo(hr)?)\b/gi, "")
-    .replace(/\b(with|in|at|for|and|the|that|has|have|a|an|it)\b/gi, "")
-    .replace(/[^\w\s]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
 }
 
 export async function GET(request: NextRequest) {
@@ -122,7 +102,7 @@ export async function GET(request: NextRequest) {
   // Free-text search: match any meaningful word from the user's query against
   // title and description so arbitrary conditions ("java", "healthcare NYC",
   // "Python AWS", "entry level fintech") all work without special parsing.
-  const searchTerms = rawQuery ? extractSearchTerms(rawQuery) : ""
+  const searchTerms = rawQuery ? extractApplyAgentSearchTerms(rawQuery) : ""
   const searchWords = Array.from(
     new Set(searchTerms.split(/\s+/).filter((w) => w.length >= 3))
   ).slice(0, 8)
@@ -149,9 +129,11 @@ export async function GET(request: NextRequest) {
   }
 
   if (atsSlugs.length > 0) {
+    params.push(atsSlugs)
+    const sourceAtsParam = `$${params.length}`
     const atsFilter = buildAtsApplyUrlFilter(atsSlugs, "j", params.length + 1)
     if (atsFilter) {
-      conditions.push(atsFilter.clause)
+      conditions.push(`(j.source_ats = ANY(${sourceAtsParam}::text[]) OR ${atsFilter.clause})`)
       params.push(...atsFilter.params)
     }
   }
