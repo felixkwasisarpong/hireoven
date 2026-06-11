@@ -42,6 +42,7 @@ import {
 } from "@/lib/jobs/match-score-display"
 import {
   JOB_APPLICATION_SAVED_EVENT,
+  JOB_APPLICATION_UNSAVED_EVENT,
   fetchJobSavedState,
   saveJobToPipeline,
 } from "@/lib/applications/save-job-client"
@@ -194,11 +195,18 @@ export default function JobListRow({
   }, [job.id])
 
   useEffect(() => {
-    function onSync(e: Event) {
+    function onSaved(e: Event) {
       if ((e as CustomEvent<{ jobId?: string }>).detail?.jobId === job.id) setSaved(true)
     }
-    window.addEventListener(JOB_APPLICATION_SAVED_EVENT, onSync as EventListener)
-    return () => window.removeEventListener(JOB_APPLICATION_SAVED_EVENT, onSync as EventListener)
+    function onUnsaved(e: Event) {
+      if ((e as CustomEvent<{ jobId?: string }>).detail?.jobId === job.id) setSaved(false)
+    }
+    window.addEventListener(JOB_APPLICATION_SAVED_EVENT, onSaved as EventListener)
+    window.addEventListener(JOB_APPLICATION_UNSAVED_EVENT, onUnsaved as EventListener)
+    return () => {
+      window.removeEventListener(JOB_APPLICATION_SAVED_EVENT, onSaved as EventListener)
+      window.removeEventListener(JOB_APPLICATION_UNSAVED_EVENT, onUnsaved as EventListener)
+    }
   }, [job.id])
 
   async function handleSave(e: React.MouseEvent) {

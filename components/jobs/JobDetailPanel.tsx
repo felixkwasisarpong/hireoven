@@ -22,6 +22,7 @@ import {
   ShieldCheck,
   TrendingDown,
   TrendingUp,
+  X,
 } from "lucide-react"
 import { GhostJobDetector } from "@/components/jobs/GhostJobDetector"
 import { TakeHomeBadge } from "@/components/compensation/TakeHomeBadge"
@@ -37,8 +38,10 @@ import { resolveSkillsFactorValue, type ScoreFactorComputationState } from "@/li
 import { resolveH1BSponsorshipDisplay } from "@/lib/jobs/sponsorship-employer-signal"
 import {
   JOB_APPLICATION_SAVED_EVENT,
+  JOB_APPLICATION_UNSAVED_EVENT,
   fetchJobSavedState,
   saveJobToPipeline,
+  unsaveJobFromPipeline,
   markJobApplied,
 } from "@/lib/applications/save-job-client"
 import { getApplyVariant } from "@/lib/jobs/apply-cta"
@@ -244,11 +247,18 @@ export default function JobDetailPanel({
   }, [job.id])
 
   useEffect(() => {
-    function onSync(e: Event) {
+    function onSaved(e: Event) {
       if ((e as CustomEvent<{ jobId?: string }>).detail?.jobId === job.id) setSaved(true)
     }
-    window.addEventListener(JOB_APPLICATION_SAVED_EVENT, onSync as EventListener)
-    return () => window.removeEventListener(JOB_APPLICATION_SAVED_EVENT, onSync as EventListener)
+    function onUnsaved(e: Event) {
+      if ((e as CustomEvent<{ jobId?: string }>).detail?.jobId === job.id) setSaved(false)
+    }
+    window.addEventListener(JOB_APPLICATION_SAVED_EVENT, onSaved as EventListener)
+    window.addEventListener(JOB_APPLICATION_UNSAVED_EVENT, onUnsaved as EventListener)
+    return () => {
+      window.removeEventListener(JOB_APPLICATION_SAVED_EVENT, onSaved as EventListener)
+      window.removeEventListener(JOB_APPLICATION_UNSAVED_EVENT, onUnsaved as EventListener)
+    }
   }, [job.id])
 
   async function handleSave() {
@@ -279,6 +289,26 @@ export default function JobDetailPanel({
       if (!result.alreadySaved) pushToast({ tone: "success", title: "Saved", description: "View it under Applications → Saved." })
     } catch (err) {
       pushToast({ tone: "error", title: "Save failed", description: err instanceof Error ? err.message : "Try again." })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleUnsave() {
+    if (saving || !saved) return
+    setSaving(true)
+    try {
+      const result = await unsaveJobFromPipeline(job.id)
+      if (!result.ok) {
+        if (result.status === 401) pushToast({ tone: "info", title: "Sign in to manage saved jobs", description: result.message })
+        else pushToast({ tone: "info", title: "Still in your pipeline", description: result.message })
+        return
+      }
+      setSaved(false)
+      window.dispatchEvent(new CustomEvent(JOB_APPLICATION_UNSAVED_EVENT, { detail: { jobId: job.id } }))
+      pushToast({ tone: "success", title: "Removed", description: "This job is no longer saved." })
+    } catch (err) {
+      pushToast({ tone: "error", title: "Couldn’t remove", description: err instanceof Error ? err.message : "Try again." })
     } finally {
       setSaving(false)
     }
@@ -479,23 +509,29 @@ export default function JobDetailPanel({
           <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
-              onClick={handleSave}
+              onClick={saved ? handleUnsave : handleSave}
               disabled={saving}
+              aria-pressed={saved}
+              title={saved ? "Click to remove from saved" : "Save to your pipeline"}
               className={cn(
-                "inline-flex items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-[12.5px] font-semibold ring-1 transition",
+                "group inline-flex items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-[12.5px] font-semibold ring-1 transition",
                 saved
-                  ? "bg-amber-50 text-amber-700 ring-amber-200"
+                  ? "bg-amber-50 text-amber-700 ring-amber-200 hover:bg-rose-50 hover:text-rose-700 hover:ring-rose-200"
                   : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-50"
               )}
             >
               {saving ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
               ) : saved ? (
-                <BookmarkCheck className="h-3.5 w-3.5" aria-hidden />
+                <>
+                  <BookmarkCheck className="h-3.5 w-3.5 group-hover:hidden" aria-hidden />
+                  <X className="hidden h-3.5 w-3.5 group-hover:block" aria-hidden />
+                </>
               ) : (
                 <Bookmark className="h-3.5 w-3.5" aria-hidden />
               )}
-              {saved ? "Saved" : "Save"}
+              <span className={saved ? "group-hover:hidden" : undefined}>{saved ? "Saved" : "Save"}</span>
+              {saved ? <span className="hidden group-hover:inline">Remove</span> : null}
             </button>
             <button
               type="button"
