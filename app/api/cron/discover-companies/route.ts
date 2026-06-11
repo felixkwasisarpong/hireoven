@@ -26,6 +26,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server"
+import pLimit from "p-limit"
 import { requireCronAuth } from "@/lib/env"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { detectAdapter } from "@/lib/harvester/adapters"
@@ -49,6 +50,35 @@ const AGGREGATOR_DOMAINS = new Set([
 
 function isAggregator(url: string): boolean {
   try { return AGGREGATOR_DOMAINS.has(new URL(url).hostname.toLowerCase()) } catch { return false }
+}
+
+// ─── Job-presence gate ───────────────────────────────────────────────────────
+// Discovery must only persist a company whose board currently has at least one
+// live job — otherwise we fill `companies` with empty boards the harvester then
+// crawls for nothing. (discover-tenants already gates on this; these stages did
+// not.) We probe with the same adapter the harvester would use.
+
+const PROBE_TIMEOUT_MS = 7_000
+// Curated/github candidates span many ATS hosts → safe to fan out a bit.
+const GITHUB_PROBE_CONCURRENCY = 6
+// crt.sh candidates within one target share a vendor host → keep this low so the
+// probe rate per host stays under WAF thresholds.
+const CRTSH_PROBE_CONCURRENCY = 2
+
+type AdapterDetection = NonNullable<ReturnType<typeof detectAdapter>>
+
+/** True when the board at `url` (or pre-detected adapter) has >= 1 live job. */
+async function boardHasJobs(url: string, det: AdapterDetection | null = detectAdapter(url)): Promise<boolean> {
+  if (!det) return false
+  try {
+    const res = await det.adapter.fetchJobs({
+      slug: det.slug,
+      ctx: { etag: null, lastModified: null, timeoutMs: PROBE_TIMEOUT_MS },
+    })
+    return res.jobs.length > 0
+  } catch {
+    return false
+  }
 }
 
 // ─── Stage 1: apply_url ATS detection ────────────────────────────────────────
@@ -108,7 +138,7 @@ async function runApplyUrlDetection(pool: Pool): Promise<number> {
 
 // ─── Stage 2: GitHub seeds ────────────────────────────────────────────────────
 
-async function runGithubSeeds(pool: Pool): Promise<number> {
+async function runGithubSeeds(pool: Pool, deadline: number): Promise<number> {
   const allCandidates = new Map<string, { atsType: string; slug: string; careersUrl: string }>()
   for (const source of DEFAULT_SEED_SOURCES) {
     const { candidates, summary } = await fetchAndExtract(source)
@@ -139,26 +169,35 @@ async function runGithubSeeds(pool: Pool): Promise<number> {
     known.filter((r) => r.ats_type && r.ats_id).map((r) => `${r.ats_type}:${r.ats_id}`)
   )
 
+  const limit = pLimit(GITHUB_PROBE_CONCURRENCY)
   let inserted = 0
-  for (const c of candidateList) {
-    if (knownUrls.has(c.careersUrl)) continue
-    if (knownAtsKeys.has(`${c.atsType}:${c.slug.toLowerCase()}`)) continue
-    let domain: string
-    try { domain = new URL(c.careersUrl).hostname } catch { domain = c.careersUrl }
+  await Promise.all(
+    candidateList.map((c) =>
+      limit(async () => {
+        if (Date.now() > deadline) return
+        if (knownUrls.has(c.careersUrl)) return
+        if (knownAtsKeys.has(`${c.atsType}:${c.slug.toLowerCase()}`)) return
+        // Only enroll boards that currently have at least one live job.
+        if (!(await boardHasJobs(c.careersUrl))) return
 
-    try {
-      const res = await pool.query(
-        `INSERT INTO companies (name, domain, careers_url, ats_type, ats_identifier,
-           status, freshness_tier, discovered_via, is_active)
-         VALUES ($1,$2,$3,$4,$5,'active','tier_3',$6,true)
-         ON CONFLICT DO NOTHING`,
-        [humanizeSeedSlug(c.atsType, c.slug), domain, c.careersUrl, c.atsType, c.slug, "cron:discover-companies:github"]
-      )
-      if (res.rowCount && res.rowCount > 0) inserted++
-    } catch {
-      // Skip individual failures — usually NOT NULL or unique constraint edge cases
-    }
-  }
+        let domain: string
+        try { domain = new URL(c.careersUrl).hostname } catch { domain = c.careersUrl }
+
+        try {
+          const res = await pool.query(
+            `INSERT INTO companies (name, domain, careers_url, ats_type, ats_identifier,
+               status, freshness_tier, discovered_via, is_active)
+             VALUES ($1,$2,$3,$4,$5,'active','tier_3',$6,true)
+             ON CONFLICT DO NOTHING`,
+            [humanizeSeedSlug(c.atsType, c.slug), domain, c.careersUrl, c.atsType, c.slug, "cron:discover-companies:github"]
+          )
+          if (res.rowCount && res.rowCount > 0) inserted++
+        } catch {
+          // Skip individual failures — usually NOT NULL or unique constraint edge cases
+        }
+      })
+    )
+  )
   return inserted
 }
 
@@ -184,7 +223,7 @@ const CRTSH_TARGETS: Array<{ ats: AtsName; apex: string; toUrl: (host: string, s
   }},
 ]
 
-async function runCrtshDiscovery(pool: Pool): Promise<number> {
+async function runCrtshDiscovery(pool: Pool, deadline: number): Promise<number> {
   let inserted = 0
   for (const target of CRTSH_TARGETS) {
     let hosts
@@ -213,22 +252,31 @@ async function runCrtshDiscovery(pool: Pool): Promise<number> {
     const knownUrls = new Set(known.map((r) => r.careers_url).filter((u): u is string => Boolean(u)))
     const knownAtsIds = new Set(known.map((r) => r.ats_id).filter((id): id is string => Boolean(id)))
 
-    for (const { url, det } of detected) {
-      if (knownUrls.has(url)) continue
-      if (knownAtsIds.has(det.slug.toLowerCase())) continue
-      let domain: string
-      try { domain = new URL(url).hostname } catch { domain = url }
-      try {
-        const res = await pool.query(
-          `INSERT INTO companies (name, domain, careers_url, ats_type, ats_identifier,
-             status, freshness_tier, discovered_via, is_active)
-           VALUES ($1,$2,$3,$4,$5,'active','tier_3',$6,true)
-           ON CONFLICT DO NOTHING`,
-          [humanizeSeedSlug(target.ats, det.slug), domain, url, target.ats, det.slug, `cron:discover-companies:crtsh:${target.ats}`]
-        )
-        if (res.rowCount && res.rowCount > 0) inserted++
-      } catch { /* skip */ }
-    }
+    const limit = pLimit(CRTSH_PROBE_CONCURRENCY)
+    await Promise.all(
+      detected.map(({ url, det }) =>
+        limit(async () => {
+          if (Date.now() > deadline) return
+          if (knownUrls.has(url)) return
+          if (knownAtsIds.has(det.slug.toLowerCase())) return
+          // Only enroll boards that currently have at least one live job.
+          if (!(await boardHasJobs(url, det))) return
+
+          let domain: string
+          try { domain = new URL(url).hostname } catch { domain = url }
+          try {
+            const res = await pool.query(
+              `INSERT INTO companies (name, domain, careers_url, ats_type, ats_identifier,
+                 status, freshness_tier, discovered_via, is_active)
+               VALUES ($1,$2,$3,$4,$5,'active','tier_3',$6,true)
+               ON CONFLICT DO NOTHING`,
+              [humanizeSeedSlug(target.ats, det.slug), domain, url, target.ats, det.slug, `cron:discover-companies:crtsh:${target.ats}`]
+            )
+            if (res.rowCount && res.rowCount > 0) inserted++
+          } catch { /* skip */ }
+        })
+      )
+    )
   }
   return inserted
 }
@@ -245,7 +293,7 @@ const WORKDAY_CRTSH_RESOLVE_LIMIT = Number.parseInt(
 // Regex matching valid Workday WD-shard labels (wd1, wd5, wd10, wd401, etc.).
 const WD_SHARD_RE = /^wd\d{1,3}$/
 
-async function runWorkdayCrtshDiscovery(pool: Pool): Promise<number> {
+async function runWorkdayCrtshDiscovery(pool: Pool, deadline: number): Promise<number> {
   let hosts
   try {
     hosts = await discoverHostsForApex("myworkdayjobs.com", { timeoutMs: 60_000, maxAttempts: 2 })
@@ -292,6 +340,9 @@ async function runWorkdayCrtshDiscovery(pool: Pool): Promise<number> {
   let enrolled = 0
 
   for (const { tenant, wd } of toResolve) {
+    // Resolve + job-probe both cost time; stop before the cron budget runs out
+    // (unresolved/unreached tenants are rediscovered from crt.sh next run).
+    if (Date.now() > deadline) break
     let resolved
     try {
       resolved = await resolveWorkdaySite({ tenant, wd, timeoutMs: 8_000 })
@@ -318,6 +369,9 @@ async function runWorkdayCrtshDiscovery(pool: Pool): Promise<number> {
     const slug       = `${tenant.toLowerCase()}:${wd}:${resolved.site}`
     const careersUrl = canonicalCareersUrl("workday", slug)
     if (!careersUrl) continue
+
+    // Only enroll a resolved Workday site that currently has live jobs.
+    if (!(await boardHasJobs(careersUrl))) continue
 
     const name   = humanizeSeedSlug("workday", slug)
     const domain = `${tenant.toLowerCase()}.${wd}.myworkdayjobs.com`
@@ -432,10 +486,14 @@ export async function GET(req: NextRequest) {
   const pool = getPostgresPool()
   const result: Record<string, number> = {}
 
+  // Leave headroom under maxDuration (300s) so the job-presence probes added to
+  // the stages below can't push the run past the Vercel budget.
+  const deadline = Date.now() + 270_000
+
   result.apply_url    = await runApplyUrlDetection(pool)
-  result.github_seeds = skipGithub ? 0 : await runGithubSeeds(pool)
-  result.crtsh        = skipCrtsh ? 0 : await runCrtshDiscovery(pool)
-  result.workday      = skipCrtsh ? 0 : await runWorkdayCrtshDiscovery(pool)
+  result.github_seeds = skipGithub ? 0 : await runGithubSeeds(pool, deadline)
+  result.crtsh        = skipCrtsh ? 0 : await runCrtshDiscovery(pool, deadline)
+  result.workday      = skipCrtsh ? 0 : await runWorkdayCrtshDiscovery(pool, deadline)
   result.oracle       = skipCrtsh ? 0 : await runOracleCrtshDiscovery(pool)
   result.total        = Object.values(result).reduce((a, b) => a + b, 0) - (result.total ?? 0)
 
