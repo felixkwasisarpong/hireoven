@@ -50,5 +50,12 @@ DATABASE_URL=REPLACE_ME
   0 6 * * *        cd $HIREOVEN_REPO && bash scripts/crons.sh warn-act           >>/var/log/hireoven/warn-act.log 2>&1
   0 7 * * *        cd $HIREOVEN_REPO && bash scripts/crons.sh cohort-aggregate   >>/var/log/hireoven/cohort-aggregate.log 2>&1
   0 9 * * *        cd $HIREOVEN_REPO && bash scripts/crons.sh deliver-checkins   >>/var/log/hireoven/deliver-checkins.log 2>&1
+ 30 0 * * *        cd $HIREOVEN_REPO && JOB_RETENTION_DAYS=30 JOB_RETENTION_BATCH=5000 JOB_RETENTION_MAX_BATCHES=50 bash scripts/crons.sh job-retention >>/var/log/hireoven/job-retention.log 2>&1
+ 15 */6 * * *      cd $HIREOVEN_REPO && bash scripts/crons.sh waas-ingest        >>/var/log/hireoven/waas-ingest.log 2>&1
+ 30 */6 * * *      cd $HIREOVEN_REPO && bash scripts/crons.sh adzuna-ingest      >>/var/log/hireoven/adzuna-ingest.log 2>&1
+ 45 5 * * *        cd $HIREOVEN_REPO && bash scripts/crons.sh jsearch-ingest     >>/var/log/hireoven/jsearch-ingest.log 2>&1
   0 */6 * * *      cd $HIREOVEN_REPO && bash scripts/crons.sh dice-ingest        >>/var/log/hireoven/dice-ingest.log 2>&1
+  0 4 * * *        cd $HIREOVEN_REPO && bash scripts/crons.sh discover-companies >>/var/log/hireoven/discover-companies.log 2>&1
+  0 */2 * * *      cd $HIREOVEN_REPO && bash scripts/crons.sh discover-tenants   >>/var/log/hireoven/discover-tenants.log 2>&1
+  0 */4 * * *      cd $HIREOVEN_REPO && bash scripts/crons.sh builtin-discovery  >>/var/log/hireoven/builtin-discovery.log 2>&1
  30 */4 * * *      cd $HIREOVEN_REPO && CAREERS_DISCOVERY_BATCH=10 bash scripts/crons.sh careers-url-discovery >>/var/log/hireoven/careers-url-discovery.log 2>&1
