@@ -3,6 +3,7 @@
 import { publishLocalNotification } from "@/lib/hooks/useNotifications"
 
 export const JOB_APPLICATION_SAVED_EVENT = "hireoven:application-saved"
+export const JOB_APPLICATION_UNSAVED_EVENT = "hireoven:application-unsaved"
 
 export type SaveJobToPipelineInput = {
   jobId: string
@@ -102,6 +103,44 @@ export async function markJobApplied(input: SaveJobToPipelineInput): Promise<App
   })
 
   return { ok: true }
+}
+
+export type UnsaveJobResult =
+  | { ok: true; removed: boolean }
+  | { ok: false; status: number; message: string }
+
+/**
+ * Remove a job from the pipeline (undo a save). Only acts on a job still in the
+ * "saved" stage — once it has progressed (applied, interviewing, …) we refuse so
+ * a stray bookmark click can't silently discard a tracked application; the user
+ * manages those from Applications.
+ */
+export async function unsaveJobFromPipeline(jobId: string): Promise<UnsaveJobResult> {
+  const existing = await fetchExistingApplication(jobId)
+  if (!existing) return { ok: true, removed: false }
+
+  if (existing.status !== "saved") {
+    return {
+      ok: false,
+      status: 409,
+      message: "This job is already in your pipeline — manage it in Applications.",
+    }
+  }
+
+  const res = await fetch(`/api/applications/${existing.id}`, {
+    method: "DELETE",
+    credentials: "same-origin",
+  })
+
+  if (res.status === 401) {
+    return { ok: false, status: 401, message: "Sign in to manage saved jobs." }
+  }
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string }
+    return { ok: false, status: res.status, message: body.error ?? "Could not remove this job." }
+  }
+
+  return { ok: true, removed: true }
 }
 
 export type SaveJobResult =

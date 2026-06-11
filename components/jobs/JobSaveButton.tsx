@@ -5,6 +5,7 @@ import Link from "next/link"
 import { Bookmark, BookmarkCheck, Loader2 } from "lucide-react"
 import {
   JOB_APPLICATION_SAVED_EVENT,
+  JOB_APPLICATION_UNSAVED_EVENT,
   fetchJobSavedState,
   saveJobToPipeline,
 } from "@/lib/applications/save-job-client"
@@ -51,12 +52,20 @@ export default function JobSaveButton({
   }, [refreshSaved])
 
   useEffect(() => {
-    function onSync(e: Event) {
+    function onSaved(e: Event) {
       const detail = (e as CustomEvent<{ jobId?: string }>).detail
       if (detail?.jobId === jobId) setSaved(true)
     }
-    window.addEventListener(JOB_APPLICATION_SAVED_EVENT, onSync as EventListener)
-    return () => window.removeEventListener(JOB_APPLICATION_SAVED_EVENT, onSync as EventListener)
+    function onUnsaved(e: Event) {
+      const detail = (e as CustomEvent<{ jobId?: string }>).detail
+      if (detail?.jobId === jobId) setSaved(false)
+    }
+    window.addEventListener(JOB_APPLICATION_SAVED_EVENT, onSaved as EventListener)
+    window.addEventListener(JOB_APPLICATION_UNSAVED_EVENT, onUnsaved as EventListener)
+    return () => {
+      window.removeEventListener(JOB_APPLICATION_SAVED_EVENT, onSaved as EventListener)
+      window.removeEventListener(JOB_APPLICATION_UNSAVED_EVENT, onUnsaved as EventListener)
+    }
   }, [jobId])
 
   const save = async () => {
