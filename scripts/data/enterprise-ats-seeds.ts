@@ -267,4 +267,25 @@ export const ENTERPRISE_ATS_SEED_ROWS: ReadonlyArray<
   ["Clark Construction", "clarkconstruction.com", "https://www.clarkconstruction.com/careers", "Construction", "large"],
   ["McCarthy Building Companies", "mccarthy.com", "https://www.mccarthy.com/careers", "Construction", "large"],
   ["Balfour Beatty US", "balfourbeattyus.com", "https://www.balfourbeattyus.com/careers", "Construction", "large"],
+
+  // ── Accounting / Audit / Tax (Workday-heavy mid-tier; resolver decides) ───
+  // Big Four (Deloitte/PwC/EY/KPMG) intentionally omitted — already seeded via
+  // workday-tenant-seeds / company-seeds. These mid-tier firms: careers-grep
+  // confirmed Workday hosts for the first five (Baker Tilly/Moss Adams wd5,
+  // CLA wd115, EisnerAmper/Vertex wd1); the resolver extracts tenant+site.
+  ["Baker Tilly", "bakertilly.com", "https://www.bakertilly.com/careers", "Accounting", "large", { sponsors_h1b: true, sponsorship_confidence: 60 }],
+  // Moss Adams intentionally omitted — merged into Baker Tilly (2025); its
+  // careers site now serves Baker Tilly's Workday board (bakertilly/BTCareers),
+  // so seeding it would double-harvest the same jobs. Deactivated in DB.
+  ["CliftonLarsonAllen (CLA)", "claconnect.com", "https://www.claconnect.com/careers", "Accounting", "large", { sponsors_h1b: true, sponsorship_confidence: 55 }],
+  ["EisnerAmper", "eisneramper.com", "https://www.eisneramper.com/careers", "Accounting", "large", { sponsors_h1b: true, sponsorship_confidence: 55 }],
+  ["Vertex", "vertexinc.com", "https://www.vertexinc.com/careers", "Tax Technology", "large", { sponsors_h1b: true, sponsorship_confidence: 65 }],
+  ["Grant Thornton", "grantthornton.com", "https://www.grantthornton.com/careers", "Accounting", "large", { sponsors_h1b: true, sponsorship_confidence: 62 }],
+  ["BDO USA", "bdo.com", "https://careers.bdo.com", "Accounting", "large", { sponsors_h1b: true, sponsorship_confidence: 60 }],
+  ["RSM US", "rsmus.com", "https://rsmus.com/careers", "Accounting", "large", { sponsors_h1b: true, sponsorship_confidence: 60 }],
+  ["Crowe", "crowe.com", "https://www.crowe.com/careers", "Accounting", "large", { sponsors_h1b: true, sponsorship_confidence: 58 }],
+  ["Armanino", "armanino.com", "https://www.armanino.com/careers", "Accounting", "medium", { sponsors_h1b: true, sponsorship_confidence: 52 }],
+  ["CohnReznick", "cohnreznick.com", "https://www.cohnreznick.com/careers", "Accounting", "large", { sponsors_h1b: true, sponsorship_confidence: 52 }],
+  ["Marcum", "marcumllp.com", "https://www.marcumllp.com/careers", "Accounting", "large", { sponsors_h1b: true, sponsorship_confidence: 52 }],
+  ["Withum", "withum.com", "https://www.withum.com/careers", "Accounting", "medium", { sponsors_h1b: true, sponsorship_confidence: 50 }],
 ]
