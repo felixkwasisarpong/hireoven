@@ -781,4 +781,17 @@ export const EXPANSION_SEED_ROWS: ReadonlyArray<
   ["Recharge", "rechargepayments.com", "https://jobs.ashbyhq.com/recharge", "E-commerce", "medium", { ats_type: "ashby", ats_identifier: "recharge", sponsors_h1b: false, sponsorship_confidence: 48 }],
   ["Away", "awaytravel.com", "https://jobs.ashbyhq.com/away", "Retail", "medium", { ats_type: "ashby", ats_identifier: "away", sponsors_h1b: false, sponsorship_confidence: 42 }],
   ["Bolt", "bolt.com", "https://jobs.ashbyhq.com/bolt", "E-commerce", "small", { ats_type: "ashby", ats_identifier: "bolt", sponsors_h1b: false, sponsorship_confidence: 48 }],
+
+  // ── Cat 61: Supply Chain / Logistics tech (ATS tokens verified live) ─────
+  // Samsara/Motive/Kodiak/Loadsmart/EasyPost/Platform Science already in DB
+  // with correct ATS. Shipium uses Rippling (not expressible here) → inserted
+  // plain and pinned by enrich-supplychain-ats.ts. Several existing rows
+  // (Altana/FourKites/Locus/Pickle/Tive/Dexterity) also fixed by that script.
+  ["project44", "project44.com", "https://boards.greenhouse.io/project44", "Logistics", "large", { ats_type: "greenhouse", ats_identifier: "project44", sponsors_h1b: true, sponsorship_confidence: 62 }],
+  ["AfterShip", "aftership.com", "https://boards.greenhouse.io/aftership", "Logistics", "medium", { ats_type: "greenhouse", ats_identifier: "aftership", sponsors_h1b: false, sponsorship_confidence: 48 }],
+  ["Gather AI", "gather.ai", "https://boards.greenhouse.io/gatherai", "Logistics", "startup", { ats_type: "greenhouse", ats_identifier: "gatherai", sponsors_h1b: false, sponsorship_confidence: 45 }],
+  ["Flexe", "flexe.com", "https://boards.greenhouse.io/flexe", "Logistics", "medium", { ats_type: "greenhouse", ats_identifier: "flexe", sponsors_h1b: false, sponsorship_confidence: 48 }],
+  ["Outrider", "outrider.ai", "https://boards.greenhouse.io/outrider", "Logistics", "small", { ats_type: "greenhouse", ats_identifier: "outrider", sponsors_h1b: true, sponsorship_confidence: 55 }],
+  ["Uber Freight", "uberfreight.com", "https://job-boards.greenhouse.io/uberfreight", "Logistics", "large", { ats_type: "greenhouse", ats_identifier: "uberfreight", sponsors_h1b: true, sponsorship_confidence: 60 }],
+  ["Shipium", "shipium.com", "https://ats.rippling.com/shipium/jobs", "Logistics", "small", { sponsors_h1b: false, sponsorship_confidence: 45 }],
 ]

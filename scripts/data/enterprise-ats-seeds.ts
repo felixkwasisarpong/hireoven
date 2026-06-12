@@ -298,4 +298,13 @@ export const ENTERPRISE_ATS_SEED_ROWS: ReadonlyArray<
   ["Arthur J. Gallagher", "ajg.com", "https://jobs.ajg.com", "Insurance", "enterprise", { sponsors_h1b: true, sponsorship_confidence: 52 }],
   ["Guardian Life", "guardianlife.com", "https://careers.guardianlife.com", "Insurance", "enterprise", { sponsors_h1b: true, sponsorship_confidence: 58 }],
   ["Marsh McLennan", "marshmclennan.com", "https://careers.marshmclennan.com", "Insurance", "enterprise", { sponsors_h1b: true, sponsorship_confidence: 60 }],
+
+  // ── Supply Chain / Logistics 3PLs & carriers (Workday + SF; resolver) ─────
+  // Most carriers (C.H. Robinson/J.B. Hunt/Ryder/XPO/UPS) already seeded
+  // elsewhere & resolved. GXO (SuccessFactors) was inactive with no ATS →
+  // resolve + reactivate. Flock Freight is UltiPro (likely no-resolve/crawl).
+  ["GXO Logistics", "gxo.com", "https://jobs.gxo.com", "Logistics", "enterprise", { sponsors_h1b: true, sponsorship_confidence: 52 }],
+  ["Stord", "stord.com", "https://www.stord.com/careers", "Logistics", "large", { sponsors_h1b: true, sponsorship_confidence: 55 }],
+  ["Lytx", "lytx.com", "https://www.lytx.com/careers", "Logistics", "large", { sponsors_h1b: true, sponsorship_confidence: 55 }],
+  ["Flock Freight", "flockfreight.com", "https://www.flockfreight.com/careers", "Logistics", "medium", { sponsors_h1b: false, sponsorship_confidence: 45 }],
 ]
