@@ -25,6 +25,9 @@ import {
   type DiceJob,
 } from "@/lib/sources/dice"
 import { isValidCompanyName } from "@/lib/sources/company-name-guard"
+import { normalizePersistedJobRecord } from "@/lib/jobs/normalization"
+import { publicationStatusForJob } from "@/lib/jobs/publication"
+import type { EmploymentType } from "@/types"
 
 export const runtime = "nodejs"
 export const maxDuration = 300
@@ -224,7 +227,6 @@ export async function GET(request: NextRequest) {
     const { isRemote, isHybrid } = parseDiceWorkMode(job.workFromHome)
     const externalId = `dice:${job.id}`
     const employmentType = job.employmentType?.toLowerCase().replace("_", "-") ?? null
-    const rawData = JSON.stringify({ source: "dice", diceId: job.id, workFromHome: job.workFromHome, easyApply: job.easyApply })
     const firstDetected = job.postedDate ? new Date(job.postedDate).toISOString() : new Date().toISOString()
 
     const existing = existingByExtId.get(externalId)
@@ -237,53 +239,100 @@ export async function GET(request: NextRequest) {
       ? null  // keep what's there
       : candidateDescription
 
+    const simpleRawData = JSON.stringify({ source: "dice", diceId: job.id, workFromHome: job.workFromHome, easyApply: job.easyApply })
+
     try {
-      if (existing) {
-        if (description === null) {
-          // No description change needed; refresh the other fields only.
-          await pool.query(
-            `UPDATE jobs SET
-               title=$1, location=$2, is_remote=$3, is_hybrid=$4,
-               employment_type=$5, salary_min=$6, salary_max=$7,
-               salary_currency=$8, is_active=true,
-               last_seen_at=NOW(), updated_at=NOW(), raw_data=$9
-             WHERE id=$10`,
-            [job.title, job.location, isRemote, isHybrid, employmentType,
-             salaryMin ?? null, salaryMax ?? null, currency,
-             rawData, existing.id]
-          )
-        } else {
-          await pool.query(
-            `UPDATE jobs SET
-               title=$1, location=$2, is_remote=$3, is_hybrid=$4,
-               employment_type=$5, description=$6, salary_min=$7,
-               salary_max=$8, salary_currency=$9, is_active=true,
-               last_seen_at=NOW(), updated_at=NOW(), raw_data=$10
-             WHERE id=$11`,
-            [job.title, job.location, isRemote, isHybrid, employmentType,
-             description, salaryMin ?? null, salaryMax ?? null, currency,
-             rawData, existing.id]
-          )
-        }
+      if (existing && description === null) {
+        // Keeping a longer existing description — refresh light fields only,
+        // leave skills/publication_status as previously enriched.
+        await pool.query(
+          `UPDATE jobs SET
+             title=$1, location=$2, is_remote=$3, is_hybrid=$4,
+             employment_type=$5, salary_min=$6, salary_max=$7,
+             salary_currency=$8, is_active=true,
+             last_seen_at=NOW(), updated_at=NOW(), raw_data=$9
+           WHERE id=$10`,
+          [job.title, job.location, isRemote, isHybrid, employmentType,
+           salaryMin ?? null, salaryMax ?? null, currency,
+           simpleRawData, existing.id]
+        )
         stats.updated++
       } else {
-        await pool.query(
-          `INSERT INTO jobs (
-             company_id, title, location, is_remote, is_hybrid,
-             employment_type, description, apply_url, external_id,
-             salary_min, salary_max, salary_currency,
-             is_active, last_seen_at, first_detected_at,
-             created_at, updated_at, raw_data
-           ) VALUES (
-             $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,
-             true, NOW(), $13, NOW(), NOW(), $14
-           )`,
-          [companyId, job.title, job.location, isRemote, isHybrid,
-           employmentType, candidateDescription, job.applyUrl, externalId,
-           salaryMin ?? null, salaryMax ?? null, currency,
-           firstDetected, rawData]
-        )
-        stats.inserted++
+        // Writing a description — run the deterministic normalizer (same one
+        // the harvester/adzuna path uses) so dice tech jobs get skills,
+        // seniority, normalized title, etc. Dice previously persisted no skills
+        // at all → every dice job sat at 0% coverage.
+        const norm = normalizePersistedJobRecord({
+          id: existing?.id ?? "",
+          title: job.title,
+          normalized_title: null,
+          location: job.location,
+          apply_url: job.applyUrl,
+          external_id: externalId,
+          description: candidateDescription || null,
+          employment_type: employmentType as EmploymentType | null,
+          seniority_level: null,
+          is_remote: isRemote,
+          is_hybrid: isHybrid,
+          salary_min: salaryMin ?? null,
+          salary_max: salaryMax ?? null,
+          salary_currency: currency ?? "USD",
+          sponsors_h1b: null,
+          sponsorship_score: 0,
+          requires_authorization: false,
+          visa_language_detected: null,
+          skills: [],
+          first_detected_at: firstDetected,
+          raw_data: { source: "dice", diceId: job.id, workFromHome: job.workFromHome, easyApply: job.easyApply },
+        })
+        const nc = norm.nextColumns
+        const publicationStatus = publicationStatusForJob({ description: nc.description, skills: nc.skills })
+        const richRawData = JSON.stringify({
+          source: "dice",
+          diceId: job.id,
+          workFromHome: job.workFromHome,
+          easyApply: job.easyApply,
+          normalized: norm.canonical,
+          structured_job: norm.structuredData,
+          view: { page: norm.pageView, card: norm.cardView },
+        })
+
+        if (existing) {
+          await pool.query(
+            `UPDATE jobs SET
+               title=$1, normalized_title=$2, location=$3, is_remote=$4, is_hybrid=$5,
+               employment_type=$6, seniority_level=$7, description=$8,
+               salary_min=$9, salary_max=$10, salary_currency=$11,
+               skills=$12, publication_status=$13, is_active=true,
+               last_seen_at=NOW(), updated_at=NOW(), raw_data=$14
+             WHERE id=$15`,
+            [job.title, nc.normalized_title, nc.location, nc.is_remote, nc.is_hybrid,
+             nc.employment_type, nc.seniority_level, nc.description,
+             nc.salary_min, nc.salary_max, nc.salary_currency ?? "USD",
+             nc.skills, publicationStatus, richRawData, existing.id]
+          )
+          stats.updated++
+        } else {
+          await pool.query(
+            `INSERT INTO jobs (
+               company_id, title, normalized_title, location, is_remote, is_hybrid,
+               employment_type, seniority_level, description, apply_url, external_id,
+               salary_min, salary_max, salary_currency,
+               skills, publication_status,
+               is_active, last_seen_at, first_detected_at,
+               created_at, updated_at, raw_data
+             ) VALUES (
+               $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,
+               true, NOW(), $17, NOW(), NOW(), $18
+             )`,
+            [companyId, job.title, nc.normalized_title, nc.location, nc.is_remote, nc.is_hybrid,
+             nc.employment_type, nc.seniority_level, nc.description, job.applyUrl, externalId,
+             nc.salary_min, nc.salary_max, nc.salary_currency ?? "USD",
+             nc.skills, publicationStatus,
+             firstDetected, richRawData]
+          )
+          stats.inserted++
+        }
       }
     } catch (err) {
       console.error(`[dice-ingest] failed to upsert job ${job.id}:`, err)
