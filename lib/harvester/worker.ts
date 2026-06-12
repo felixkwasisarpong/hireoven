@@ -114,6 +114,7 @@ const PER_COMPANY_TIMEOUT_BY_ADAPTER: Partial<Record<AtsName, number>> = {
   usajobs: 60_000,
   icims: 60_000,
   apple: 120_000,
+  amazon: 150_000, // paginates up to 100 pages of the amazon.jobs API per tick
 }
 
 function parseTimeoutMs(raw: string | undefined, fallback: number): number {
