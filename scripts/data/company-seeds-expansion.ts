@@ -794,4 +794,19 @@ export const EXPANSION_SEED_ROWS: ReadonlyArray<
   ["Outrider", "outrider.ai", "https://boards.greenhouse.io/outrider", "Logistics", "small", { ats_type: "greenhouse", ats_identifier: "outrider", sponsors_h1b: true, sponsorship_confidence: 55 }],
   ["Uber Freight", "uberfreight.com", "https://job-boards.greenhouse.io/uberfreight", "Logistics", "large", { ats_type: "greenhouse", ats_identifier: "uberfreight", sponsors_h1b: true, sponsorship_confidence: 60 }],
   ["Shipium", "shipium.com", "https://ats.rippling.com/shipium/jobs", "Logistics", "small", { sponsors_h1b: false, sponsorship_confidence: 45 }],
+
+  // ── Cat 62: Cybersecurity (ATS tokens verified live) ─────────────────────
+  // Many already in DB are fixed by enrich-cybersecurity-ats.ts (Netskope 114,
+  // KnowBe4 97, Tanium 64, Abnormal 77 were ats_type=custom -> greenhouse;
+  // Cato 123 & Dragos reactivated). These are the rows new to the seed set.
+  ["Armis", "armis.com", "https://boards.greenhouse.io/armissecurity", "Cybersecurity", "large", { ats_type: "greenhouse", ats_identifier: "armissecurity", sponsors_h1b: true, sponsorship_confidence: 60 }],
+  ["Chainguard", "chainguard.dev", "https://boards.greenhouse.io/chainguard", "Cybersecurity", "medium", { ats_type: "greenhouse", ats_identifier: "chainguard", sponsors_h1b: true, sponsorship_confidence: 60 }],
+  ["Cybereason", "cybereason.com", "https://boards.greenhouse.io/cybereason", "Cybersecurity", "large", { ats_type: "greenhouse", ats_identifier: "cybereason", sponsors_h1b: true, sponsorship_confidence: 55 }],
+  ["Censys", "censys.io", "https://boards.greenhouse.io/censys", "Cybersecurity", "small", { ats_type: "greenhouse", ats_identifier: "censys", sponsors_h1b: true, sponsorship_confidence: 52 }],
+  ["Salt Security", "salt.security", "https://boards.greenhouse.io/saltsecurity", "Cybersecurity", "small", { ats_type: "greenhouse", ats_identifier: "saltsecurity", sponsors_h1b: false, sponsorship_confidence: 48 }],
+  ["Tailscale", "tailscale.com", "https://boards.greenhouse.io/tailscale", "Cybersecurity", "small", { ats_type: "greenhouse", ats_identifier: "tailscale", sponsors_h1b: true, sponsorship_confidence: 55 }],
+  ["Yubico", "yubico.com", "https://boards.greenhouse.io/yubico", "Cybersecurity", "medium", { ats_type: "greenhouse", ats_identifier: "yubico", sponsors_h1b: true, sponsorship_confidence: 52 }],
+  ["Endor Labs", "endorlabs.com", "https://boards.greenhouse.io/endorlabs", "Cybersecurity", "small", { ats_type: "greenhouse", ats_identifier: "endorlabs", sponsors_h1b: false, sponsorship_confidence: 48 }],
+  ["Horizon3.ai", "horizon3.ai", "https://jobs.ashbyhq.com/horizon3ai", "Cybersecurity", "small", { ats_type: "ashby", ats_identifier: "horizon3ai", sponsors_h1b: false, sponsorship_confidence: 48 }],
+  ["Socket", "socket.dev", "https://jobs.ashbyhq.com/socket", "Cybersecurity", "startup", { ats_type: "ashby", ats_identifier: "socket", sponsors_h1b: false, sponsorship_confidence: 45 }],
 ]
