@@ -714,4 +714,31 @@ export const EXPANSION_SEED_ROWS: ReadonlyArray<
   ["IonQ", "ionq.com", "https://ionq.com/careers", "Technology", "medium", { sponsors_h1b: true, sponsorship_confidence: 72 }],
   ["Rigetti Computing", "rigetti.com", "https://www.rigetti.com/careers", "Technology", "small", { sponsors_h1b: true, sponsorship_confidence: 68 }],
   ["Quantinuum", "quantinuum.com", "https://www.quantinuum.com/careers", "Technology", "medium", { sponsors_h1b: true, sponsorship_confidence: 72 }],
+
+  // ── Cat 57: Marketing / Product Analytics (ATS tokens verified live) ──────
+  // All confirmed against the public ATS APIs; harvestable through existing
+  // greenhouse/lever/ashby adapters. Live job counts at seed time noted where
+  // notable. (Amplitude, Mixpanel, Braze, LaunchDarkly, Klaviyo already seeded
+  // in the base list — enriched separately since the upsert won't set ATS.)
+  ["AppsFlyer", "appsflyer.com", "https://boards.greenhouse.io/appsflyer", "Technology", "large", { ats_type: "greenhouse", ats_identifier: "appsflyer", sponsors_h1b: true, sponsorship_confidence: 70 }],
+  ["Pendo", "pendo.io", "https://boards.greenhouse.io/pendo", "Technology", "medium", { ats_type: "greenhouse", ats_identifier: "pendo", sponsors_h1b: true, sponsorship_confidence: 72 }],
+  ["Hightouch", "hightouch.com", "https://job-boards.greenhouse.io/hightouch", "Technology", "medium", { ats_type: "greenhouse", ats_identifier: "hightouch", sponsors_h1b: true, sponsorship_confidence: 68 }],
+  ["Iterable", "iterable.com", "https://job-boards.greenhouse.io/iterable", "Technology", "medium", { ats_type: "greenhouse", ats_identifier: "iterable", sponsors_h1b: true, sponsorship_confidence: 72 }],
+  ["Northbeam", "northbeam.io", "https://job-boards.greenhouse.io/northbeam", "Technology", "startup", { ats_type: "greenhouse", ats_identifier: "northbeam", sponsors_h1b: false, sponsorship_confidence: 45 }],
+  ["Similarweb", "similarweb.com", "https://boards.greenhouse.io/similarweb", "Technology", "large", { ats_type: "greenhouse", ats_identifier: "similarweb", sponsors_h1b: true, sponsorship_confidence: 65 }],
+  ["Triple Whale", "triplewhale.com", "https://job-boards.greenhouse.io/triplewhale", "Technology", "small", { ats_type: "greenhouse", ats_identifier: "triplewhale", sponsors_h1b: false, sponsorship_confidence: 45 }],
+  ["Customer.io", "customer.io", "https://boards.greenhouse.io/customerio", "Technology", "small", { ats_type: "greenhouse", ats_identifier: "customerio", sponsors_h1b: false, sponsorship_confidence: 50 }],
+  ["Hex", "hex.tech", "https://boards.greenhouse.io/hextechnologies", "Technology", "small", { ats_type: "greenhouse", ats_identifier: "hextechnologies", sponsors_h1b: true, sponsorship_confidence: 65 }],
+  ["Sisense", "sisense.com", "https://boards.greenhouse.io/sisense", "Technology", "medium", { ats_type: "greenhouse", ats_identifier: "sisense", sponsors_h1b: true, sponsorship_confidence: 62 }],
+  ["Sprout Social", "sproutsocial.com", "https://boards.greenhouse.io/sproutsocial", "Technology", "large", { ats_type: "greenhouse", ats_identifier: "sproutsocial", sponsors_h1b: true, sponsorship_confidence: 65 }],
+  ["Contentsquare", "contentsquare.com", "https://jobs.lever.co/contentsquare", "Technology", "large", { ats_type: "lever", ats_identifier: "contentsquare", sponsors_h1b: true, sponsorship_confidence: 62 }],
+  ["LogRocket", "logrocket.com", "https://jobs.lever.co/logrocket", "Technology", "small", { ats_type: "lever", ats_identifier: "logrocket", sponsors_h1b: false, sponsorship_confidence: 50 }],
+  ["Quantum Metric", "quantummetric.com", "https://jobs.lever.co/quantummetric", "Technology", "medium", { ats_type: "lever", ats_identifier: "quantummetric", sponsors_h1b: true, sponsorship_confidence: 60 }],
+  ["Kochava", "kochava.com", "https://jobs.lever.co/kochava", "Technology", "small", { ats_type: "lever", ats_identifier: "kochava", sponsors_h1b: false, sponsorship_confidence: 45 }],
+  ["Snowplow", "snowplow.io", "https://jobs.lever.co/snowplow", "Technology", "small", { ats_type: "lever", ats_identifier: "snowplow", sponsors_h1b: false, sponsorship_confidence: 45 }],
+  ["PostHog", "posthog.com", "https://jobs.ashbyhq.com/posthog", "Technology", "medium", { ats_type: "ashby", ats_identifier: "posthog", sponsors_h1b: true, sponsorship_confidence: 62 }],
+  ["FullStory", "fullstory.com", "https://jobs.ashbyhq.com/fullstory", "Technology", "medium", { ats_type: "ashby", ats_identifier: "fullstory", sponsors_h1b: true, sponsorship_confidence: 62 }],
+  ["Statsig", "statsig.com", "https://jobs.ashbyhq.com/statsig", "Technology", "small", { ats_type: "ashby", ats_identifier: "statsig", sponsors_h1b: true, sponsorship_confidence: 65 }],
+  ["Eppo", "geteppo.com", "https://jobs.ashbyhq.com/eppo", "Technology", "startup", { ats_type: "ashby", ats_identifier: "eppo", sponsors_h1b: false, sponsorship_confidence: 50 }],
+  ["Singular", "singular.net", "https://jobs.ashbyhq.com/singular", "Technology", "medium", { ats_type: "ashby", ats_identifier: "singular", sponsors_h1b: true, sponsorship_confidence: 58 }],
 ]
