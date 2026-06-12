@@ -769,4 +769,16 @@ export const EXPANSION_SEED_ROWS: ReadonlyArray<
   ["Sure", "sureapp.com", "https://jobs.lever.co/sure", "Insurance", "small", { ats_type: "lever", ats_identifier: "sure", sponsors_h1b: false, sponsorship_confidence: 48 }],
   ["Kin Insurance", "kin.com", "https://jobs.ashbyhq.com/kin", "Insurance", "medium", { ats_type: "ashby", ats_identifier: "kin", sponsors_h1b: false, sponsorship_confidence: 48 }],
   ["Trellis", "trellisconnect.com", "https://jobs.ashbyhq.com/savvyinsurance-trellis", "Insurance", "startup", { ats_type: "ashby", ats_identifier: "savvyinsurance-trellis", sponsors_h1b: false, sponsorship_confidence: 45 }],
+
+  // ── Cat 60: Retail / E-commerce (ATS tokens verified live) ───────────────
+  // Carvana/Faire/Flexport/StockX/Gorgias/Fanatics/etc. already in DB → ATS
+  // fixed by enrich-retail-ats.ts (notably Carvana NULL -> greenhouse, ~2,219
+  // jobs). These are the rows new to the seed set.
+  ["Yotpo", "yotpo.com", "https://boards.greenhouse.io/yotpo", "E-commerce", "medium", { ats_type: "greenhouse", ats_identifier: "yotpo", sponsors_h1b: true, sponsorship_confidence: 55 }],
+  ["Olipop", "drinkolipop.com", "https://boards.greenhouse.io/olipop", "Consumer Goods", "small", { ats_type: "greenhouse", ats_identifier: "olipop", sponsors_h1b: false, sponsorship_confidence: 40 }],
+  ["Liquid Death", "liquiddeath.com", "https://boards.greenhouse.io/liquiddeath", "Consumer Goods", "small", { ats_type: "greenhouse", ats_identifier: "liquiddeath", sponsors_h1b: false, sponsorship_confidence: 40 }],
+  ["Constructor", "constructor.io", "https://jobs.ashbyhq.com/constructor", "E-commerce", "medium", { ats_type: "ashby", ats_identifier: "constructor", sponsors_h1b: true, sponsorship_confidence: 55 }],
+  ["Recharge", "rechargepayments.com", "https://jobs.ashbyhq.com/recharge", "E-commerce", "medium", { ats_type: "ashby", ats_identifier: "recharge", sponsors_h1b: false, sponsorship_confidence: 48 }],
+  ["Away", "awaytravel.com", "https://jobs.ashbyhq.com/away", "Retail", "medium", { ats_type: "ashby", ats_identifier: "away", sponsors_h1b: false, sponsorship_confidence: 42 }],
+  ["Bolt", "bolt.com", "https://jobs.ashbyhq.com/bolt", "E-commerce", "small", { ats_type: "ashby", ats_identifier: "bolt", sponsors_h1b: false, sponsorship_confidence: 48 }],
 ]
