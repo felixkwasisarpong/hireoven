@@ -754,4 +754,19 @@ export const EXPANSION_SEED_ROWS: ReadonlyArray<
   ["Numeric", "numeric.io", "https://jobs.ashbyhq.com/numeric", "Accounting", "startup", { ats_type: "ashby", ats_identifier: "numeric", sponsors_h1b: false, sponsorship_confidence: 45 }],
   ["Puzzle", "puzzle.io", "https://jobs.ashbyhq.com/puzzle", "Accounting", "startup", { ats_type: "ashby", ats_identifier: "puzzle", sponsors_h1b: false, sponsorship_confidence: 45 }],
   ["Column Tax", "columntax.com", "https://jobs.ashbyhq.com/columntax", "Tax Technology", "startup", { ats_type: "ashby", ats_identifier: "columntax", sponsors_h1b: false, sponsorship_confidence: 45 }],
+
+  // ── Cat 59: Insurtech (ATS tokens verified live) ─────────────────────────
+  // Oscar/Clover/Lemonade/Root/Pie/Bestow already in DB → ATS fixed by
+  // enrich-insurance-ats.ts (the expansion upsert won't set ats on conflict).
+  ["Coalition", "coalitioninc.com", "https://boards.greenhouse.io/coalition", "Insurance", "medium", { ats_type: "greenhouse", ats_identifier: "coalition", sponsors_h1b: true, sponsorship_confidence: 60 }],
+  ["Hippo", "hippo.com", "https://boards.greenhouse.io/hippo70", "Insurance", "medium", { ats_type: "greenhouse", ats_identifier: "hippo70", sponsors_h1b: true, sponsorship_confidence: 55 }],
+  ["Counterpart", "yourcounterpart.com", "https://boards.greenhouse.io/counterpart", "Insurance", "startup", { ats_type: "greenhouse", ats_identifier: "counterpart", sponsors_h1b: false, sponsorship_confidence: 45 }],
+  ["Ladder", "ladderlife.com", "https://boards.greenhouse.io/ladder33", "Insurance", "small", { ats_type: "greenhouse", ats_identifier: "ladder33", sponsors_h1b: false, sponsorship_confidence: 48 }],
+  ["At-Bay", "at-bay.com", "https://boards.greenhouse.io/atbay", "Insurance", "medium", { ats_type: "greenhouse", ats_identifier: "atbay", sponsors_h1b: true, sponsorship_confidence: 52 }],
+  ["Ethos", "ethoslife.com", "https://boards.greenhouse.io/ethoslife", "Insurance", "medium", { ats_type: "greenhouse", ats_identifier: "ethoslife", sponsors_h1b: true, sponsorship_confidence: 55 }],
+  ["Gravie", "gravie.com", "https://jobs.lever.co/gravie", "Insurance", "small", { ats_type: "lever", ats_identifier: "gravie", sponsors_h1b: false, sponsorship_confidence: 45 }],
+  ["Sana Benefits", "sanabenefits.com", "https://jobs.lever.co/sanabenefits", "Insurance", "small", { ats_type: "lever", ats_identifier: "sanabenefits", sponsors_h1b: false, sponsorship_confidence: 45 }],
+  ["Sure", "sureapp.com", "https://jobs.lever.co/sure", "Insurance", "small", { ats_type: "lever", ats_identifier: "sure", sponsors_h1b: false, sponsorship_confidence: 48 }],
+  ["Kin Insurance", "kin.com", "https://jobs.ashbyhq.com/kin", "Insurance", "medium", { ats_type: "ashby", ats_identifier: "kin", sponsors_h1b: false, sponsorship_confidence: 48 }],
+  ["Trellis", "trellisconnect.com", "https://jobs.ashbyhq.com/savvyinsurance-trellis", "Insurance", "startup", { ats_type: "ashby", ats_identifier: "savvyinsurance-trellis", sponsors_h1b: false, sponsorship_confidence: 45 }],
 ]
