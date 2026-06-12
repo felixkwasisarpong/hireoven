@@ -741,4 +741,17 @@ export const EXPANSION_SEED_ROWS: ReadonlyArray<
   ["Statsig", "statsig.com", "https://jobs.ashbyhq.com/statsig", "Technology", "small", { ats_type: "ashby", ats_identifier: "statsig", sponsors_h1b: true, sponsorship_confidence: 65 }],
   ["Eppo", "geteppo.com", "https://jobs.ashbyhq.com/eppo", "Technology", "startup", { ats_type: "ashby", ats_identifier: "eppo", sponsors_h1b: false, sponsorship_confidence: 50 }],
   ["Singular", "singular.net", "https://jobs.ashbyhq.com/singular", "Technology", "medium", { ats_type: "ashby", ats_identifier: "singular", sponsors_h1b: true, sponsorship_confidence: 58 }],
+
+  // ── Cat 58: Accounting / Tax tech (ATS tokens verified live) ──────────────
+  // Standard-ATS accounting/tax-tech startups. Brex/Mercury/Ramp/Carta/Bill.com
+  // already seeded elsewhere (Ramp's stale greenhouse->ashby fix + bill.com's
+  // missing identifier handled by enrich-accounting-ats.ts).
+  ["Pilot", "pilot.com", "https://boards.greenhouse.io/pilothq", "Accounting", "small", { ats_type: "greenhouse", ats_identifier: "pilothq", sponsors_h1b: true, sponsorship_confidence: 60 }],
+  ["TaxBit", "taxbit.com", "https://boards.greenhouse.io/taxbit", "Tax Technology", "small", { ats_type: "greenhouse", ats_identifier: "taxbit", sponsors_h1b: true, sponsorship_confidence: 58 }],
+  ["FloQast", "floqast.com", "https://jobs.lever.co/floqast", "Accounting", "medium", { ats_type: "lever", ats_identifier: "floqast", sponsors_h1b: true, sponsorship_confidence: 60 }],
+  ["Rillet", "rillet.com", "https://jobs.ashbyhq.com/rillet", "Accounting", "startup", { ats_type: "ashby", ats_identifier: "rillet", sponsors_h1b: false, sponsorship_confidence: 45 }],
+  ["April", "getapril.com", "https://jobs.ashbyhq.com/april", "Tax Technology", "startup", { ats_type: "ashby", ats_identifier: "april", sponsors_h1b: false, sponsorship_confidence: 45 }],
+  ["Numeric", "numeric.io", "https://jobs.ashbyhq.com/numeric", "Accounting", "startup", { ats_type: "ashby", ats_identifier: "numeric", sponsors_h1b: false, sponsorship_confidence: 45 }],
+  ["Puzzle", "puzzle.io", "https://jobs.ashbyhq.com/puzzle", "Accounting", "startup", { ats_type: "ashby", ats_identifier: "puzzle", sponsors_h1b: false, sponsorship_confidence: 45 }],
+  ["Column Tax", "columntax.com", "https://jobs.ashbyhq.com/columntax", "Tax Technology", "startup", { ats_type: "ashby", ats_identifier: "columntax", sponsors_h1b: false, sponsorship_confidence: 45 }],
 ]
