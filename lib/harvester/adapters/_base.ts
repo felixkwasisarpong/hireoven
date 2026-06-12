@@ -22,6 +22,7 @@ export type AtsName =
   | "infosys"
   | "apple"
   | "amazon"
+  | "microsoft"
   | "rippling"
 
 export type HarvestCtx = {
