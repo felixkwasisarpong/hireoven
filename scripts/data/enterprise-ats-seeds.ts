@@ -233,4 +233,38 @@ export const ENTERPRISE_ATS_SEED_ROWS: ReadonlyArray<
   ["University of Michigan", "umich.edu", "https://careers.umich.edu", "Education", "enterprise", { sponsors_h1b: true, sponsorship_confidence: 65 }],
   ["University of California System", "universityofcalifornia.edu", "https://careerspark.universityofcalifornia.edu", "Education", "enterprise", { sponsors_h1b: true, sponsorship_confidence: 70 }],
   ["Johns Hopkins University", "jhu.edu", "https://hr.jhu.edu/careers/", "Education", "enterprise", { sponsors_h1b: true, sponsorship_confidence: 70 }],
+
+  // ── Construction / Civil Engineering (Workday, SmartRecruiters, iCIMS, SF) ─
+  // First two are VERIFIED direct ATS URLs (resolver short-circuits to
+  // already_direct): Procore Workday CXS = 97 jobs, AECOM SmartRecruiters
+  // (token AECOM2) = 4,662 postings. The three iCIMS portals are confirmed
+  // direct hosts. Remaining big E&C firms are wrapper hints — the seed script
+  // probes each and skips any it can't resolve.
+  ["Procore Technologies", "procore.com", "https://procore.wd12.myworkdayjobs.com/Procore_External_Careers", "Construction Technology", "large", { sponsors_h1b: true, sponsorship_confidence: 80 }],
+  ["AECOM", "aecom.com", "https://jobs.smartrecruiters.com/AECOM2", "Engineering", "enterprise", { sponsors_h1b: true, sponsorship_confidence: 85 }],
+  ["Gilbane Building Company", "gilbaneco.com", "https://careers-gilbaneco.icims.com", "Construction", "large"],
+  ["Kimley-Horn", "kimley-horn.com", "https://jobs-kimley-horn.icims.com", "Engineering", "large", { sponsors_h1b: true, sponsorship_confidence: 70 }],
+  ["Suffolk Construction", "suffolk.com", "https://careers-suffolkconstruction.icims.com", "Construction", "large"],
+  ["Fluor", "fluor.com", "https://careers.fluor.com", "Engineering", "enterprise", { sponsors_h1b: true, sponsorship_confidence: 80 }],
+  ["Bechtel", "bechtel.com", "https://jobs.bechtel.com", "Engineering", "enterprise", { sponsors_h1b: true, sponsorship_confidence: 78 }],
+  ["Jacobs", "jacobs.com", "https://careers.jacobs.com", "Engineering", "enterprise", { sponsors_h1b: true, sponsorship_confidence: 82 }],
+  ["Stantec", "stantec.com", "https://www.stantec.com/en/careers", "Engineering", "enterprise", { sponsors_h1b: true, sponsorship_confidence: 78 }],
+  ["WSP", "wsp.com", "https://www.wsp.com/en-us/careers", "Engineering", "enterprise", { sponsors_h1b: true, sponsorship_confidence: 80 }],
+  ["Parsons", "parsons.com", "https://careers.parsons.com", "Engineering", "large", { sponsors_h1b: true, sponsorship_confidence: 75 }],
+  ["Tetra Tech", "tetratech.com", "https://www.tetratech.com/careers", "Engineering", "enterprise", { sponsors_h1b: true, sponsorship_confidence: 75 }],
+  ["HDR", "hdrinc.com", "https://www.hdrinc.com/careers", "Engineering", "large", { sponsors_h1b: true, sponsorship_confidence: 72 }],
+  ["Burns & McDonnell", "burnsmcd.com", "https://www.burnsmcd.com/careers", "Engineering", "large", { sponsors_h1b: true, sponsorship_confidence: 72 }],
+  ["Black & Veatch", "bv.com", "https://www.bv.com/careers", "Engineering", "large", { sponsors_h1b: true, sponsorship_confidence: 72 }],
+  ["HNTB", "hntb.com", "https://www.hntb.com/careers", "Engineering", "large", { sponsors_h1b: true, sponsorship_confidence: 70 }],
+  ["Michael Baker International", "mbakerintl.com", "https://mbakerintl.com/careers", "Engineering", "large"],
+  ["Granite Construction", "graniteconstruction.com", "https://careers.graniteconstruction.com", "Construction", "large"],
+  ["Tutor Perini", "tutorperini.com", "https://www.tutorperini.com/careers", "Construction", "large"],
+  ["Skanska USA", "usa.skanska.com", "https://www.usa.skanska.com/careers", "Construction", "large", { sponsors_h1b: true, sponsorship_confidence: 65 }],
+  ["Kiewit", "kiewit.com", "https://kiewitcareers.kiewit.com", "Construction", "enterprise"],
+  ["Turner Construction", "turnerconstruction.com", "https://www.turnerconstruction.com/careers", "Construction", "enterprise"],
+  ["Mortenson", "mortenson.com", "https://www.mortenson.com/careers", "Construction", "large"],
+  ["DPR Construction", "dpr.com", "https://www.dpr.com/careers", "Construction", "large"],
+  ["Clark Construction", "clarkconstruction.com", "https://www.clarkconstruction.com/careers", "Construction", "large"],
+  ["McCarthy Building Companies", "mccarthy.com", "https://www.mccarthy.com/careers", "Construction", "large"],
+  ["Balfour Beatty US", "balfourbeattyus.com", "https://www.balfourbeattyus.com/careers", "Construction", "large"],
 ]
