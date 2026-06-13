@@ -38,6 +38,18 @@ export async function POST(request: Request) {
   const pool = getPostgresPool()
   const now = new Date().toISOString()
 
+  // The resume the user applies with is their primary — capture it so the
+  // closed-loop A/B optimizer can attribute the outcome to a variant.
+  const primaryResumeId =
+    (
+      await pool
+        .query<{ id: string }>(
+          `SELECT id FROM resumes WHERE user_id = $1 AND is_primary = true AND parse_status = 'complete' LIMIT 1`,
+          [user.id],
+        )
+        .catch(() => null)
+    )?.rows?.[0]?.id ?? null
+
   // ── Find existing application ─────────────────────────────────────────────────
   let appId = applicationId ?? null
 
@@ -70,9 +82,10 @@ export async function POST(request: Request) {
 
     await pool.query(
       `UPDATE job_applications
-       SET status = 'applied', applied_at = $1, timeline = $2::jsonb, updated_at = $3
+       SET status = 'applied', applied_at = $1, timeline = $2::jsonb, updated_at = $3,
+           resume_id = COALESCE(resume_id, $6)
        WHERE id = $4 AND user_id = $5`,
-      [now, JSON.stringify(timeline), now, appId, user.id]
+      [now, JSON.stringify(timeline), now, appId, user.id, primaryResumeId]
     )
     console.log("[mark-submitted] updated", { userId: user.id, appId })
   return NextResponse.json({ success: true, applicationId: appId, created: false })
@@ -90,12 +103,12 @@ export async function POST(request: Request) {
   await pool.query(
     `INSERT INTO job_applications
        (id, user_id, job_id, job_title, company_name, apply_url,
-        status, applied_at, source, timeline, created_at, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, 'applied', $7, 'apex_bulk', $8::jsonb, $9, $9)`,
+        status, applied_at, source, timeline, resume_id, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, 'applied', $7, 'apex_bulk', $8::jsonb, $10, $9, $9)`,
     [
       newId, user.id, jobId ?? null,
       jobTitle, companyName, applyUrl ?? null,
-      now, JSON.stringify([timelineEntry]), now,
+      now, JSON.stringify([timelineEntry]), now, primaryResumeId,
     ]
   )
 
