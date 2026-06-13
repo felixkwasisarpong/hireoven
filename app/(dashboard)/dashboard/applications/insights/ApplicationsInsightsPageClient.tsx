@@ -5,6 +5,7 @@ import { ArrowLeft, Loader2 } from "lucide-react"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
 import type { PipelineStats } from "@/types"
+import ResumePerformancePanel from "@/components/applications/ResumePerformancePanel"
 
 const STATUS_BARS = [
   { key: "saved", label: "Saved", color: "bg-slate-400" },
@@ -133,6 +134,8 @@ export default function ApplicationsInsightsPageClient({
         <MetricCard label="Active rounds" value={activeCount} sub="screen · interview · final" accent="text-orange-600" />
         <MetricCard label="Offers" value={stats.by_status.offer ?? 0} sub={`${stats.conversion_rates.overall}% overall win rate`} accent="text-emerald-600" />
       </div>
+
+      <ResumePerformancePanel />
 
       <div className="rounded-[18px] border border-slate-200/80 bg-white p-6 shadow-[0_1px_0_rgba(15,23,42,0.04),0_8px_24px_rgba(15,23,42,0.05)]">
         <p className="mb-5 text-[10.5px] font-semibold uppercase tracking-[0.2em] text-slate-400">Applications by status</p>
