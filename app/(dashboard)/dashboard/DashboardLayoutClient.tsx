@@ -7,6 +7,7 @@ import DashboardHeader from "@/components/dashboard/DashboardHeader"
 import { DashboardMobileNavProvider } from "@/components/dashboard/DashboardMobileNav"
 import DashboardProductTour from "@/components/dashboard/DashboardProductTour"
 import DashboardSubpageSidebar from "@/components/dashboard/DashboardSubpageSidebar"
+import SavedJobReminderPopup from "@/components/apex/SavedJobReminderPopup"
 import { ResumeProvider } from "@/components/resume/ResumeProvider"
 import { useSubscription } from "@/lib/hooks/useSubscription"
 import { cn } from "@/lib/utils"
@@ -137,6 +138,7 @@ export default function DashboardLayout({
         <div className="product-skin">
           <DashboardLayoutInner>{children}</DashboardLayoutInner>
           <DashboardProductTour />
+          <SavedJobReminderPopup />
         </div>
       </DashboardMobileNavProvider>
     </ResumeProvider>
