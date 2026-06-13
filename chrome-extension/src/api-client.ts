@@ -29,7 +29,7 @@ type CheckRequest   = {
 }
 type ProfileRequest = { type: "EXT_MVP_GET_AUTOFILL_PROFILE" }
 type ResumeRequest  = { type: "EXT_MVP_FETCH_PRIMARY_RESUME"; jobId?: string; resumeId?: string; versionId?: string }
-type CoverGenRequest    = { type: "EXT_MVP_GENERATE_COVER_LETTER"; jobId: string; resumeId?: string; ats?: string }
+type CoverGenRequest    = { type: "EXT_MVP_GENERATE_COVER_LETTER"; jobId: string; resumeId?: string; ats?: string; regenerate?: boolean }
 type CoverUpdateRequest = { type: "EXT_MVP_UPDATE_COVER_LETTER"; id: string; body?: string; was_used?: boolean }
 type CoverDocxRequest   = { type: "EXT_MVP_FETCH_COVER_LETTER_DOCX"; coverLetterId?: string; jobId?: string }
 type AnswerQuestionRequest = {
@@ -191,12 +191,15 @@ export function generateCoverLetter(args: {
   jobId: string
   resumeId?: string
   ats?: string
+  /** Force a fresh letter that overwrites the existing one. Without this, an
+   *  existing letter for the job is reused (no LLM call, no quota spent). */
+  regenerate?: boolean
 }): Promise<{
   coverLetterId: string | null
   coverLetter: string
   jobTitle: string | null
   company: string | null
-  source: "ai" | "template"
+  source: "ai" | "template" | "reused"
   atsName?: string
 }> {
   return send({
@@ -204,6 +207,7 @@ export function generateCoverLetter(args: {
     jobId: args.jobId,
     resumeId: args.resumeId,
     ats: args.ats,
+    regenerate: args.regenerate,
   })
 }
 

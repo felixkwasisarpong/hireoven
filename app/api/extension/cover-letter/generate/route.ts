@@ -32,6 +32,7 @@ import { requireQuota } from "@/lib/usage/server-quota"
 import { getPlanForUserId, gateResponse } from "@/lib/gates/server-gate"
 import { canAccess } from "@/lib/gates"
 import { replaceEmDash } from "@/lib/text/sanitize-generated-text"
+import { bodySimilarity } from "@/lib/resume/cover-letter-generator"
 import type { CoverLetter, Resume } from "@/types"
 
 export const runtime = "nodejs"
@@ -91,23 +92,44 @@ export async function POST(request: Request) {
   const plan = await getPlanForUserId(user.sub)
   if (!canAccess(plan, "cover_letter")) return gateResponse(403, "Cover letter generation requires sign-in", "auth")
 
-  const quotaResult = await requireQuota(user.sub, "cover_letter", plan)
-  if (quotaResult instanceof NextResponse) return quotaResult
-
   const [body, bodyError] = await readExtensionJsonBody<{
     jobId?: string
     resumeId?: string
     ats?: string
+    regenerate?: boolean
   }>(request)
   if (bodyError) return bodyError
 
   const { jobId, resumeId, ats } = body
+  const regenerate = body.regenerate === true
 
   if (!jobId) {
     return extensionError(request, 400, "jobId is required", { headers })
   }
 
   const pool = getPostgresPool()
+
+  // Reuse: if a letter already exists for this job and the caller didn't ask to
+  // regenerate, return it — no LLM call, and no quota consumed (this runs before
+  // requireQuota, which increments immediately). A regenerate overwrites the
+  // existing row in place rather than piling up near-duplicates.
+  const existing = await latestLetterForJob(pool, user.sub, jobId)
+  if (existing && !regenerate) {
+    return NextResponse.json(
+      {
+        coverLetterId: existing.id,
+        coverLetter: existing.body,
+        jobTitle: existing.job_title,
+        company: existing.company_name,
+        source: "reused",
+        reused: true,
+      },
+      { headers },
+    )
+  }
+
+  const quotaResult = await requireQuota(user.sub, "cover_letter", plan)
+  if (quotaResult instanceof NextResponse) return quotaResult
 
   // ── 1. Fetch job ────────────────────────────────────────────────────────────
 
@@ -219,6 +241,7 @@ export async function POST(request: Request) {
       jobTitle: jobTitle ?? "",
       companyName: companyName ?? "",
       body: text,
+      existing,
     })
     return NextResponse.json(
       {
@@ -319,6 +342,7 @@ Return ONLY the cover letter text. No commentary, no JSON wrapper, no preamble.`
       jobTitle: jobTitle ?? "",
       companyName: companyName ?? "",
       body: sanitizedCoverLetter,
+      existing,
     })
 
     return NextResponse.json(
@@ -351,6 +375,7 @@ Return ONLY the cover letter text. No commentary, no JSON wrapper, no preamble.`
       jobTitle: jobTitle ?? "",
       companyName: companyName ?? "",
       body: text,
+      existing,
     })
     return NextResponse.json(
       {
@@ -368,6 +393,26 @@ Return ONLY the cover letter text. No commentary, no JSON wrapper, no preamble.`
 
 // ── Persistence helper ─────────────────────────────────────────────────────────
 
+/** Latest existing letter for a (user, job), if any — drives reuse + overwrite. */
+async function latestLetterForJob(
+  pool: ReturnType<typeof getPostgresPool>,
+  userId: string,
+  jobId: string,
+): Promise<CoverLetter | null> {
+  try {
+    const res = await pool.query<CoverLetter>(
+      `SELECT * FROM cover_letters
+       WHERE user_id = $1 AND job_id = $2
+       ORDER BY version_number DESC, created_at DESC
+       LIMIT 1`,
+      [userId, jobId],
+    )
+    return res.rows[0] ?? null
+  } catch {
+    return null
+  }
+}
+
 async function persistCoverLetter(args: {
   userId: string
   resumeId: string
@@ -375,15 +420,33 @@ async function persistCoverLetter(args: {
   jobTitle: string
   companyName: string
   body: string
+  /** When set (a regenerate), overwrite this row in place instead of inserting. */
+  existing?: CoverLetter | null
 }): Promise<CoverLetter | null> {
   try {
     const pool = getPostgresPool()
+    const wordCount = args.body.split(/\s+/).filter(Boolean).length
+
+    // Overwrite in place on regenerate — no new library row. If the regenerated
+    // body is essentially identical, keep the existing row untouched.
+    if (args.existing) {
+      if (bodySimilarity(args.existing.body, args.body) >= 0.9) return args.existing
+      const updated = await pool.query<CoverLetter>(
+        `UPDATE cover_letters
+           SET resume_id = $1, job_title = $2, company_name = $3, body = $4,
+               word_count = $5, updated_at = NOW()
+         WHERE id = $6 AND user_id = $7
+         RETURNING *`,
+        [args.resumeId, args.jobTitle, args.companyName, args.body, wordCount, args.existing.id, args.userId],
+      )
+      return updated.rows[0] ?? args.existing
+    }
+
     const countResult = await pool.query<{ count: string }>(
       `SELECT COUNT(*)::text AS count FROM cover_letters WHERE user_id = $1 AND job_id = $2`,
       [args.userId, args.jobId],
     )
     const versionNumber = Number(countResult.rows[0]?.count ?? 0) + 1
-    const wordCount = args.body.split(/\s+/).filter(Boolean).length
 
     const insert = await pool.query<CoverLetter>(
       `INSERT INTO cover_letters (

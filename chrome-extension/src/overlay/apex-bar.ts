@@ -3932,7 +3932,7 @@ export class ApexBar {
 
     try {
       const ats = this.site === "greenhouse" || this.site === "lever" ? this.site : undefined
-      const res = await generateCoverLetter({ jobId, ats })
+      const res = await generateCoverLetter({ jobId, ats, regenerate: opts?.regenerate })
       this.coverLetterId = res.coverLetterId
       this.coverLetterBody = res.coverLetter
       this.coverLetterDirty = false
