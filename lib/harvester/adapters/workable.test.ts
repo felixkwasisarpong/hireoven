@@ -36,21 +36,25 @@ function fakeJsonResponse(body: unknown): Response {
 }
 
 test("workable: POSTs the jobs API and follows the nextPage token", async () => {
-  const calls: Array<{ method?: string; body?: string }> = []
+  const postCalls: Array<{ body?: string }> = []
   const fetchImpl = (async (_url: string, init: RequestInit) => {
-    calls.push({ method: init.method, body: init.body as string })
-    if (calls.length === 1) {
+    if (init.method === "POST") {
+      postCalls.push({ body: init.body as string })
+      if (postCalls.length === 1) {
+        return fakeJsonResponse({
+          total: 2,
+          results: [{ id: "1", title: "Engineer", shortcode: "AAA", city: "Austin", region: "TX", country: "United States" }],
+          nextPage: "TOK2",
+        })
+      }
       return fakeJsonResponse({
         total: 2,
-        results: [{ id: "1", title: "Engineer", shortcode: "AAA", city: "Austin", region: "TX", country: "United States" }],
-        nextPage: "TOK2",
+        results: [{ id: "2", title: "Product Manager", shortcode: "BBB", city: "Remote" }],
+        nextPage: null,
       })
     }
-    return fakeJsonResponse({
-      total: 2,
-      results: [{ id: "2", title: "Product Manager", shortcode: "BBB", city: "Remote" }],
-      nextPage: null,
-    })
+    // detail GET (these list rows have no description → detail-budget fires)
+    return fakeJsonResponse({ description: "<p>" + "x".repeat(400) + "</p>" })
   }) as unknown as HarvestCtx["fetchImpl"]
 
   const result = await workableAdapter.fetchJobs({
@@ -58,14 +62,39 @@ test("workable: POSTs the jobs API and follows the nextPage token", async () => 
     ctx: { etag: null, lastModified: null, fetchImpl },
   })
 
-  assert.equal(calls.length, 2, "should fetch two pages")
-  assert.equal(calls[0].method, "POST")
-  assert.equal(calls[0].body, "{}", "page 1 sends an empty body")
-  assert.equal(calls[1].method, "POST")
-  assert.deepEqual(JSON.parse(calls[1].body ?? "{}"), { token: "TOK2" }, "page 2 carries the token")
+  assert.equal(postCalls.length, 2, "should fetch two list pages")
+  assert.equal(postCalls[0].body, "{}", "page 1 sends an empty body")
+  assert.deepEqual(JSON.parse(postCalls[1].body ?? "{}"), { token: "TOK2" }, "page 2 carries the token")
   assert.equal(result.jobs.length, 2)
   assert.equal(result.notModified, false)
   assert.match(result.jobs[0].externalId, /^workable:/)
+})
+
+test("workable: detail-fetch fills the JD when the list omits it", async () => {
+  const fullJd = "About SciTec. " + "Build embedded C++ systems. ".repeat(40)
+  const fetchImpl = (async (url: string, init: RequestInit) => {
+    if (init?.method === "POST") {
+      // list returns the job with an EMPTY description (the SciTec case)
+      return fakeJsonResponse({
+        total: 1,
+        results: [{ id: "9", title: "Staff C++ Engineer", shortcode: "ZZZ", description: "", city: "Boulder", region: "CO", country: "United States" }],
+        nextPage: null,
+      })
+    }
+    // GET /api/v2/.../jobs/ZZZ → the full JD
+    assert.match(String(url), /\/api\/v2\/accounts\/scitec\/jobs\/ZZZ$/)
+    return fakeJsonResponse({ description: fullJd, requirements: "5+ years C++", benefits: "401k" })
+  }) as unknown as HarvestCtx["fetchImpl"]
+
+  const result = await workableAdapter.fetchJobs({
+    slug: "scitec",
+    ctx: { etag: null, lastModified: null, fetchImpl },
+  })
+
+  assert.equal(result.jobs.length, 1)
+  const job = result.jobs[0]
+  assert.ok((job.description?.length ?? 0) > 300, "JD filled from the detail endpoint")
+  assert.ok(job.description?.includes("C++"))
 })
 
 const LIVE = process.env.HARVESTER_LIVE_TESTS === "1"

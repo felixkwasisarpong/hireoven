@@ -17,6 +17,19 @@ import {
  */
 
 const MAX_PAGES = 10
+// Many Workable boards now return an EMPTY description in the list API and serve
+// the full JD only from the v2 detail endpoint. Jobs whose list description is
+// shorter than this get a (budgeted) detail fetch.
+const MIN_LIST_DESC = 300
+const DETAIL_MAX_JOBS = Math.max(0, Number.parseInt(process.env.HARVESTER_WORKABLE_DETAIL_MAX_JOBS ?? "50", 10))
+const DETAIL_DELAY_MS = Math.max(0, Number.parseInt(process.env.HARVESTER_WORKABLE_DETAIL_DELAY_MS ?? "200", 10))
+
+function detailUrl(slug: string, shortcode: string): string {
+  return `https://apply.workable.com/api/v2/accounts/${encodeURIComponent(slug)}/jobs/${encodeURIComponent(shortcode)}`
+}
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
 
 type WorkableRawJob = {
   id?: string
@@ -217,6 +230,36 @@ export const workableAdapter: AtsAdapter = {
       upstreamLatency += next.upstreamLatencyMs
       token = next.data?.nextPage ?? next.data?.next_page ?? null
       pages += 1
+    }
+
+    // Detail-budget pass: boards that omit the JD from the list (e.g. SciTec)
+    // serve it from /api/v2/.../jobs/{shortcode}. Fetch it for jobs with a
+    // missing/stub list description, skipping ones already well-described in the
+    // DB (ctx.alreadyDescribedIds) so the budget goes to jobs that need it.
+    if (DETAIL_MAX_JOBS > 0) {
+      const targets = jobs
+        .filter((j) => (j.description?.length ?? 0) < MIN_LIST_DESC && !ctx.alreadyDescribedIds?.has(j.externalId))
+        .slice(0, DETAIL_MAX_JOBS)
+      for (let i = 0; i < targets.length; i += 1) {
+        if (DETAIL_DELAY_MS > 0) await sleep(DETAIL_DELAY_MS)
+        const job = targets[i]
+        const shortcode = job.externalId.replace(/^workable:/, "")
+        const res = await conditionalFetchJson<WorkableRawJob>(
+          detailUrl(slug, shortcode),
+          { ...ctx, etag: null, lastModified: null },
+          { maxAttempts: 2 }
+        )
+        if (res.kind !== "ok") continue
+        upstreamLatency += res.upstreamLatencyMs
+        const full = buildDescription(res.data)
+        if (full && full.length > (job.description?.length ?? 0)) {
+          job.description = full
+          job.contentHash = hashContent([
+            job.title, job.applyUrl, job.location, job.postedAt, job.workMode, job.employmentType,
+            full.slice(0, 4_000),
+          ])
+        }
+      }
     }
 
     return {

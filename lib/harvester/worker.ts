@@ -109,6 +109,7 @@ const DEFAULT_PER_COMPANY_TIMEOUT_MS = 60_000
 const PER_COMPANY_TIMEOUT_MIN_MS = 5_000
 const PER_COMPANY_TIMEOUT_BY_ADAPTER: Partial<Record<AtsName, number>> = {
   workday: 60_000,
+  workable: 90_000, // list + a v2 detail-fetch budget for boards that omit the JD
   smartrecruiters: 45_000,
   ashby: 60_000,
   usajobs: 60_000,
