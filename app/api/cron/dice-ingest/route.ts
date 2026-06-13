@@ -85,8 +85,11 @@ export async function GET(request: NextRequest) {
 
   // Dedupe across queries by Dice job ID
   const seen = new Map<string, DiceJob>()
+  const queryDelayMs = Number(process.env.DICE_QUERY_DELAY_MS ?? "800")
 
-  for (const q of queries) {
+  for (let qi = 0; qi < queries.length; qi += 1) {
+    const q = queries[qi]
+    if (qi > 0 && queryDelayMs > 0) await new Promise((r) => setTimeout(r, queryDelayMs)) // pace queries under the WAF
     try {
       const jobs = await searchDiceAllPages({ q, postedDate }, maxJobs)
       stats.queries++

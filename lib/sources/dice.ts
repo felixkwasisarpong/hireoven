@@ -12,6 +12,17 @@ const REQUEST_TIMEOUT_MS = 12_000
 // Public key from Dice's own frontend bundle (NEXT_PUBLIC_JOB_SEARCH_API_KEY)
 const DICE_API_KEY = process.env.DICE_API_KEY ?? "1xgTdC84Vj5OI6cr4BBnH9v8rEJOCgLN3gVmyObZ"
 
+// Dice rate-limits/WAF-blocks bursts from datacenter IPs (the cron fires ~20
+// queries × multiple pages). Pace requests and retry 403/429/5xx with backoff so
+// a transient throttle doesn't fail the whole query.
+const DICE_REQUEST_DELAY_MS = Number(process.env.DICE_REQUEST_DELAY_MS ?? "700")
+const DICE_MAX_RETRIES = Math.max(1, Number(process.env.DICE_MAX_RETRIES ?? "4"))
+const DICE_RETRYABLE_STATUSES = new Set([403, 408, 429, 500, 502, 503, 504])
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
 export interface DiceJob {
   id: string
   title: string
@@ -57,32 +68,52 @@ export async function searchDiceJobs(opts: DiceSearchOptions): Promise<DiceSearc
   if (opts.employmentType) params.set("filters.employmentType", opts.employmentType)
   if (opts.workplaceType) params.set("filters.workplaceTypes", opts.workplaceType)
 
-  const res = await fetch(`${DICE_SEARCH_URL}?${params}`, {
-    headers: {
-      Accept: "application/json",
-      "x-api-key": DICE_API_KEY,
-      "User-Agent":
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-      Referer: "https://www.dice.com/",
-      Origin: "https://www.dice.com",
-    },
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-  })
-
-  if (!res.ok) throw new Error(`Dice API ${res.status} for "${opts.q}"`)
-
-  const body = await res.json() as {
-    data?: RawDiceJob[]
-    meta?: { totalResults?: number; pageSize?: number; currentPage?: number }
+  const url = `${DICE_SEARCH_URL}?${params}`
+  const headers = {
+    Accept: "application/json",
+    "x-api-key": DICE_API_KEY,
+    "User-Agent":
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    Referer: "https://www.dice.com/",
+    Origin: "https://www.dice.com",
   }
 
-  const jobs = (body.data ?? []).map(mapDiceJob).filter(Boolean) as DiceJob[]
-  return {
-    jobs,
-    totalResults: body.meta?.totalResults ?? jobs.length,
-    page: body.meta?.currentPage ?? (opts.page ?? 1),
-    pageSize: PAGE_SIZE,
+  let lastStatus = 0
+  for (let attempt = 1; attempt <= DICE_MAX_RETRIES; attempt += 1) {
+    let res: Response | null = null
+    try {
+      res = await fetch(url, { headers, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) })
+    } catch {
+      res = null // network error / timeout — treat as retryable
+    }
+
+    if (res?.ok) {
+      const body = (await res.json()) as {
+        data?: RawDiceJob[]
+        meta?: { totalResults?: number; pageSize?: number; currentPage?: number }
+      }
+      const jobs = (body.data ?? []).map(mapDiceJob).filter(Boolean) as DiceJob[]
+      return {
+        jobs,
+        totalResults: body.meta?.totalResults ?? jobs.length,
+        page: body.meta?.currentPage ?? (opts.page ?? 1),
+        pageSize: PAGE_SIZE,
+      }
+    }
+
+    lastStatus = res?.status ?? 0
+    const retryable = !res || DICE_RETRYABLE_STATUSES.has(res.status)
+    if (!retryable || attempt === DICE_MAX_RETRIES) break
+
+    // Honor Retry-After; otherwise exponential backoff with jitter (capped 20s).
+    const retryAfter = Number(res?.headers.get("retry-after"))
+    const backoffMs = Number.isFinite(retryAfter) && retryAfter > 0
+      ? Math.min(retryAfter * 1000, 20_000)
+      : Math.min(800 * 2 ** (attempt - 1) + Math.random() * 500, 20_000)
+    await sleep(backoffMs)
   }
+
+  throw new Error(`Dice API ${lastStatus} for "${opts.q}"`)
 }
 
 export async function searchDiceAllPages(
@@ -93,6 +124,7 @@ export async function searchDiceAllPages(
   let page = 1
 
   while (all.length < maxJobs) {
+    if (page > 1) await sleep(DICE_REQUEST_DELAY_MS) // pace pages to stay under the WAF
     const result = await searchDiceJobs({ ...opts, page })
     all.push(...result.jobs)
     if (all.length >= result.totalResults || result.jobs.length < PAGE_SIZE) break
