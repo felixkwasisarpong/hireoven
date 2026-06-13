@@ -27,6 +27,7 @@ import {
 import { isValidCompanyName } from "@/lib/sources/company-name-guard"
 import { normalizePersistedJobRecord } from "@/lib/jobs/normalization"
 import { publicationStatusForJob } from "@/lib/jobs/publication"
+import { safeJsonStringify } from "@/lib/jobs/json-sanitize"
 import type { EmploymentType } from "@/types"
 
 export const runtime = "nodejs"
@@ -287,7 +288,7 @@ export async function GET(request: NextRequest) {
         })
         const nc = norm.nextColumns
         const publicationStatus = publicationStatusForJob({ description: nc.description, skills: nc.skills })
-        const richRawData = JSON.stringify({
+        const richRawData = safeJsonStringify({
           source: "dice",
           diceId: job.id,
           workFromHome: job.workFromHome,

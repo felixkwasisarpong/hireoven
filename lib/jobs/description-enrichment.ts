@@ -6,6 +6,7 @@ import {
   type PersistedJobForNormalization,
 } from "@/lib/jobs/normalization"
 import { publicationStatusForJob, type JobPublicationStatus } from "@/lib/jobs/publication"
+import { safeJsonStringify } from "@/lib/jobs/json-sanitize"
 import { getPostgresPool } from "@/lib/postgres/server"
 
 const DEFAULT_BATCH_SIZE = Math.max(
@@ -244,7 +245,7 @@ async function updateSuccess(
       normalized.nextColumns.visa_language_detected,
       normalized.nextColumns.skills,
       status,
-      JSON.stringify({
+      safeJsonStringify({
         ...rawData,
         description_captured: Boolean(normalized.nextColumns.description),
         normalization: {
