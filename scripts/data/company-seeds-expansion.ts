@@ -841,4 +841,19 @@ export const EXPANSION_SEED_ROWS: ReadonlyArray<
   ["Notable Health", "notablehealth.com", "https://jobs.ashbyhq.com/notable", "Health Tech", "small", { ats_type: "ashby", ats_identifier: "notable", sponsors_h1b: false, sponsorship_confidence: 45 }],
   ["Rad AI", "radai.com", "https://jobs.ashbyhq.com/radai", "Health Tech", "small", { ats_type: "ashby", ats_identifier: "radai", sponsors_h1b: false, sponsorship_confidence: 45 }],
   ["OpenEvidence", "openevidence.com", "https://jobs.ashbyhq.com/openevidence", "Health Tech", "small", { ats_type: "ashby", ats_identifier: "openevidence", sponsors_h1b: true, sponsorship_confidence: 50 }],
+
+  // ── Cat 65: Semiconductors / Hardware / Robotics (verified live) ─────────
+  // Giants (Nvidia/AMD/Intel/Qualcomm/TSMC) already seeded. enrich-semiconductors
+  // -ats.ts fixes existing NULLs: Cerebras 105, Etched 101, Formlabs 165
+  // (reactivated), Physical Intelligence 24, Rain AI, 1X, Diligent. New rows:
+  ["SambaNova", "sambanova.ai", "https://boards.greenhouse.io/sambanovasystems", "Semiconductors", "medium", { ats_type: "greenhouse", ats_identifier: "sambanovasystems", sponsors_h1b: true, sponsorship_confidence: 62 }],
+  ["Lightmatter", "lightmatter.co", "https://boards.greenhouse.io/lightmatter", "Semiconductors", "medium", { ats_type: "greenhouse", ats_identifier: "lightmatter", sponsors_h1b: true, sponsorship_confidence: 58 }],
+  ["Baya Systems", "bayasystems.com", "https://boards.greenhouse.io/bayasystems", "Semiconductors", "small", { ats_type: "greenhouse", ats_identifier: "bayasystems", sponsors_h1b: true, sponsorship_confidence: 52 }],
+  ["EnCharge AI", "enchargeai.com", "https://boards.greenhouse.io/enchargeai", "Semiconductors", "small", { ats_type: "greenhouse", ats_identifier: "enchargeai", sponsors_h1b: true, sponsorship_confidence: 50 }],
+  ["Markforged", "markforged.com", "https://boards.greenhouse.io/markforged", "Hardware", "medium", { ats_type: "greenhouse", ats_identifier: "markforged", sponsors_h1b: false, sponsorship_confidence: 48 }],
+  ["Divergent", "divergent3d.com", "https://boards.greenhouse.io/divergent", "Hardware", "medium", { ats_type: "greenhouse", ats_identifier: "divergent", sponsors_h1b: true, sponsorship_confidence: 52 }],
+  ["Path Robotics", "path-robotics.com", "https://boards.greenhouse.io/pathrobotics", "Hardware", "small", { ats_type: "greenhouse", ats_identifier: "pathrobotics", sponsors_h1b: false, sponsorship_confidence: 45 }],
+  ["Collaborative Robotics", "collaborativerobotics.com", "https://jobs.ashbyhq.com/cobot", "Hardware", "small", { ats_type: "ashby", ats_identifier: "cobot", sponsors_h1b: true, sponsorship_confidence: 50 }],
+  ["Sanctuary AI", "sanctuary.ai", "https://jobs.lever.co/sanctuary", "Hardware", "small", { ats_type: "lever", ats_identifier: "sanctuary", sponsors_h1b: false, sponsorship_confidence: 40 }],
+  ["Positron", "positron.ai", "https://ats.rippling.com/positron/jobs", "Semiconductors", "startup", { sponsors_h1b: true, sponsorship_confidence: 48 }],
 ]
