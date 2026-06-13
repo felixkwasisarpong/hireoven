@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next"
 import { sqlPublishedJob } from "@/lib/jobs/publication"
 import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
 import { getPostgresPool } from "@/lib/postgres/server"
-import { companyParam, jobsAtPath, salariesPath } from "@/lib/seo/company-seo"
+import { companyParam, companySlug, jobsAtPath, salariesPath } from "@/lib/seo/company-seo"
 
 export const dynamic = "force-dynamic"
 
@@ -25,8 +25,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     const pool = getPostgresPool()
 
     const [companiesResult, jobsResult] = await Promise.all([
-      pool.query<{ id: string; name: string; updated_at: string; sponsors_h1b: boolean | null; h1b_sponsor_count_1yr: number | null; job_count: number | null }>(
-        `SELECT id, name, updated_at, sponsors_h1b, h1b_sponsor_count_1yr, job_count FROM companies WHERE is_active = true ORDER BY job_count DESC`
+      pool.query<{ id: string; name: string; updated_at: string; sponsors_h1b: boolean | null; h1b_sponsor_count_1yr: number | null; job_count: number | null; industry: string | null }>(
+        `SELECT id, name, updated_at, sponsors_h1b, h1b_sponsor_count_1yr, job_count, industry FROM companies WHERE is_active = true ORDER BY job_count DESC`
       ),
       pool.query<{ id: string; updated_at: string }>(
         `SELECT id, updated_at FROM jobs WHERE is_active = true AND ${sqlPublishedJob("jobs")} AND ${sqlJobLocatedInUsa(
@@ -69,6 +69,22 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         priority: 0.7,
       }))
 
+    // Industry hubs — one per industry with >= 5 H-1B sponsors.
+    const industryCounts = new Map<string, number>()
+    for (const c of companiesResult.rows) {
+      if (c.industry && c.sponsors_h1b && (c.h1b_sponsor_count_1yr ?? 0) > 0) {
+        industryCounts.set(c.industry, (industryCounts.get(c.industry) ?? 0) + 1)
+      }
+    }
+    const industryRoutes: MetadataRoute.Sitemap = [...industryCounts.entries()]
+      .filter(([, n]) => n >= 5)
+      .map(([industry]) => ({
+        url: `${base}/h1b-sponsors/industry/${companySlug(industry)}`,
+        lastModified: new Date(),
+        changeFrequency: "weekly" as const,
+        priority: 0.65,
+      }))
+
     const jobRoutes: MetadataRoute.Sitemap = jobsResult.rows.map((j) => ({
       url: `${base}/jobs/${j.id}`,
       lastModified: new Date(j.updated_at),
@@ -76,7 +92,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.6,
     }))
 
-    return [...staticRoutes, ...companyRoutes, ...sponsorRoutes, ...jobsAtRoutes, ...salaryRoutes, ...jobRoutes]
+    return [...staticRoutes, ...companyRoutes, ...sponsorRoutes, ...industryRoutes, ...jobsAtRoutes, ...salaryRoutes, ...jobRoutes]
   } catch {
     return staticRoutes
   }
