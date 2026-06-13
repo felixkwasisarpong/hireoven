@@ -15,7 +15,7 @@ type CoverLettersPageClientProps = {
   initialLoaded?: boolean
 }
 
-function CoverLetterCard({ letter, onDelete }: { letter: CoverLetter; onDelete: (id: string) => void }) {
+function CoverLetterCard({ letter, versionCount = 1, onDelete }: { letter: CoverLetter; versionCount?: number; onDelete: (id: string) => void }) {
   const [isCopied, setIsCopied] = useState(false)
   const [isFav, setIsFav] = useState(letter.is_favorite)
 
@@ -82,6 +82,11 @@ function CoverLetterCard({ letter, onDelete }: { letter: CoverLetter; onDelete: 
       </div>
 
       <div className="mt-2.5 flex flex-wrap gap-1.5">
+        {versionCount > 1 && (
+          <span className="rounded-full border border-[#0369A1]/20 bg-[#F0F9FF] px-2 py-0.5 text-[11px] font-semibold text-[#0369A1]">
+            {versionCount} versions
+          </span>
+        )}
         {[letter.tone, letter.length, letter.style.replace("_", " ")].map((tag) => (
           <span key={tag} className="rounded-full border border-slate-200/70 bg-slate-50 px-2 py-0.5 text-[11px] font-medium capitalize text-slate-500">
             {tag}
@@ -142,7 +147,7 @@ function CoverLetterCard({ letter, onDelete }: { letter: CoverLetter; onDelete: 
   )
 }
 
-function CoverLetterRow({ letter, onDelete }: { letter: CoverLetter; onDelete: (id: string) => void }) {
+function CoverLetterRow({ letter, versionCount = 1, onDelete }: { letter: CoverLetter; versionCount?: number; onDelete: (id: string) => void }) {
   const [isCopied, setIsCopied] = useState(false)
   const [isFav, setIsFav] = useState(letter.is_favorite)
 
@@ -195,6 +200,11 @@ function CoverLetterRow({ letter, onDelete }: { letter: CoverLetter; onDelete: (
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <h3 className="truncate text-[14px] font-semibold text-slate-950">{letter.job_title}</h3>
+          {versionCount > 1 && (
+            <span className="flex-shrink-0 rounded-full border border-[#0369A1]/20 bg-[#F0F9FF] px-1.5 py-0.5 text-[10px] font-semibold text-[#0369A1]">
+              {versionCount} versions
+            </span>
+          )}
           {letter.was_used && (
             <span className="rounded-full border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-600">
               Used
@@ -320,7 +330,23 @@ export default function CoverLettersPageClient({
           l.company_name.toLowerCase().includes(q)
       )
     }
-    return result
+    // Collapse versions: one entry per job, represented by its latest version,
+    // with a count — so the library stops drowning in near-duplicate rows.
+    const byJob = new Map<string, { letter: CoverLetter; count: number }>()
+    for (const l of result) {
+      const key = l.job_id ?? l.id
+      const cur = byJob.get(key)
+      if (!cur) {
+        byJob.set(key, { letter: l, count: 1 })
+        continue
+      }
+      cur.count += 1
+      const isNewer =
+        (l.version_number ?? 0) > (cur.letter.version_number ?? 0) ||
+        ((l.version_number ?? 0) === (cur.letter.version_number ?? 0) && l.created_at > cur.letter.created_at)
+      if (isNewer) cur.letter = l
+    }
+    return Array.from(byJob.values())
   }, [letters, filter, search])
 
   function handleDelete(id: string) {
@@ -448,14 +474,14 @@ export default function CoverLettersPageClient({
         {!isLoading && filtered.length > 0 && (
           view === "list" ? (
             <div className="space-y-1.5">
-              {filtered.map((letter) => (
-                <CoverLetterRow key={letter.id} letter={letter} onDelete={handleDelete} />
+              {filtered.map(({ letter, count }) => (
+                <CoverLetterRow key={letter.id} letter={letter} versionCount={count} onDelete={handleDelete} />
               ))}
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {filtered.map((letter) => (
-                <CoverLetterCard key={letter.id} letter={letter} onDelete={handleDelete} />
+              {filtered.map(({ letter, count }) => (
+                <CoverLetterCard key={letter.id} letter={letter} versionCount={count} onDelete={handleDelete} />
               ))}
             </div>
           )

@@ -386,10 +386,42 @@ export default function CoverLetterPageClient({
             />
           </div>
 
-          {/* Generate button */}
+          {/* Variation — how different a regenerate should be */}
+          {coverLetter && (
+            <div>
+              <p className="mb-2 text-sm font-medium text-gray-700">How different from this version?</p>
+              <div className="grid grid-cols-3 gap-2">
+                {([
+                  { value: "refine", label: "Refine", hint: "Light polish — reuses if nothing changed" },
+                  { value: "rework", label: "Rework", hint: "A different take" },
+                  { value: "reinvent", label: "Reinvent", hint: "Fresh angle & structure" },
+                ] as const).map((v) => {
+                  const active = (options.variation ?? "refine") === v.value
+                  return (
+                    <button
+                      key={v.value}
+                      type="button"
+                      onClick={() => updateOptions({ variation: v.value })}
+                      className={cn(
+                        "rounded-xl border px-3 py-2 text-left transition",
+                        active ? "border-[#0369A1] bg-[#F0F9FF]" : "border-gray-200 hover:border-gray-300",
+                      )}
+                    >
+                      <span className={cn("block text-sm font-semibold", active ? "text-[#0369A1]" : "text-gray-900")}>
+                        {v.label}
+                      </span>
+                      <span className="block text-[11px] leading-tight text-gray-400">{v.hint}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Generate / Regenerate (overwrites the current letter) */}
           <button
             type="button"
-            onClick={() => void generate()}
+            onClick={() => void generate("replace")}
             disabled={isGenerating || !hasResume}
             className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#0369A1] px-6 py-3.5 text-sm font-semibold text-white transition hover:bg-[#075985] disabled:opacity-60"
           >
@@ -398,8 +430,20 @@ export default function CoverLetterPageClient({
             ) : (
               <Sparkles className="h-4 w-4" />
             )}
-            {coverLetter ? "Regenerate cover letter" : "Generate cover letter"}
+            {coverLetter ? "Regenerate this version" : "Generate cover letter"}
           </button>
+
+          {/* Fork a separate version instead of overwriting */}
+          {coverLetter && (
+            <button
+              type="button"
+              onClick={() => void generate("new")}
+              disabled={isGenerating || !hasResume}
+              className="w-full rounded-2xl border border-gray-200 px-6 py-2.5 text-sm font-semibold text-gray-600 transition hover:border-gray-300 hover:text-gray-900 disabled:opacity-60"
+            >
+              Save as new version
+            </button>
+          )}
         </div>
 
         {/* ── Right column: letter / generating / placeholder ── */}

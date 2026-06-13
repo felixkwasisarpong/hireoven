@@ -89,7 +89,7 @@ export function useCoverLetter(jobId: string) {
     setOptions((prev) => ({ ...prev, ...partial }))
   }, [])
 
-  const generate = useCallback(async () => {
+  const generate = useCallback(async (mode: "replace" | "new" = "replace") => {
     if (isGenerating) return
     setIsGenerating(true)
     setError(null)
@@ -99,7 +99,12 @@ export function useCoverLetter(jobId: string) {
       const res = await fetch("/api/cover-letter", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jobId, options }),
+        body: JSON.stringify({
+          jobId,
+          options,
+          mode,
+          coverLetterId: coverLetterIdRef.current,
+        }),
       })
       const data = (await res.json()) as CoverLetter & { error?: string }
       if (!res.ok) throw new Error(data.error ?? "Generation failed")
