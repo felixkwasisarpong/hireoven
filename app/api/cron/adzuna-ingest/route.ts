@@ -33,6 +33,7 @@ import {
 import { isValidCompanyName } from "@/lib/sources/company-name-guard"
 import { normalizePersistedJobRecord } from "@/lib/jobs/normalization"
 import { publicationStatusForJob } from "@/lib/jobs/publication"
+import { safeJsonStringify } from "@/lib/jobs/json-sanitize"
 import type { EmploymentType } from "@/types"
 
 export const runtime = "nodejs"
@@ -281,7 +282,7 @@ export async function GET(request: NextRequest) {
       description: nc.description,
       skills: nc.skills,
     })
-    const rawData = JSON.stringify({
+    const rawData = safeJsonStringify({
       source: "adzuna",
       category: job.category,
       salaryIsPredicted: job.salaryIsPredicted,
