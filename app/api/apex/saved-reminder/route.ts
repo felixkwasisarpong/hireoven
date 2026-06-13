@@ -28,6 +28,7 @@ type Row = {
   company_name: string | null
   created_at: string
   company_logo_url: string | null
+  canonical_logo_url: string | null
   company_domain: string | null
 }
 
@@ -48,6 +49,7 @@ export async function GET() {
          ja.company_name,
          ja.created_at,
          ja.company_logo_url,
+         companies.logo_url AS canonical_logo_url,
          companies.domain AS company_domain
        FROM job_applications ja
        LEFT JOIN jobs ON jobs.id = ja.job_id
@@ -62,6 +64,10 @@ export async function GET() {
     )
 
     const jobs: SavedReminderJob[] = rows.map((r) => {
+      // Prefer the company's canonical stored logo, then the per-application
+      // captured logo, then derive from the company's brand domain. (Companies
+      // discovered via an ATS host return "" from companyLogoUrlFromDomain, so
+      // those fall through to null and the UI shows a gradient-initials avatar.)
       const fromDomain = r.company_domain ? companyLogoUrlFromDomain(r.company_domain) : ""
       return {
         applicationId: r.application_id,
@@ -72,7 +78,8 @@ export async function GET() {
           0,
           Math.floor((Date.now() - new Date(r.created_at).getTime()) / 86_400_000)
         ),
-        logoUrl: r.company_logo_url?.trim() || fromDomain || null,
+        logoUrl:
+          r.canonical_logo_url?.trim() || r.company_logo_url?.trim() || fromDomain || null,
       }
     })
 
