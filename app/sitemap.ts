@@ -2,6 +2,7 @@ import type { MetadataRoute } from "next"
 import { sqlPublishedJob } from "@/lib/jobs/publication"
 import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
 import { getPostgresPool } from "@/lib/postgres/server"
+import { companyParam } from "@/lib/seo/company-seo"
 
 export const dynamic = "force-dynamic"
 
@@ -13,6 +14,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${base}/features`, lastModified: new Date(), changeFrequency: "weekly", priority: 0.85 },
     { url: `${base}/extension`, lastModified: new Date(), changeFrequency: "monthly", priority: 0.8 },
     { url: `${base}/companies`, lastModified: new Date(), changeFrequency: "hourly", priority: 0.9 },
+    { url: `${base}/h1b-sponsors`, lastModified: new Date(), changeFrequency: "daily", priority: 0.9 },
     { url: `${base}/login`, lastModified: new Date(), changeFrequency: "monthly", priority: 0.3 },
     { url: `${base}/signup`, lastModified: new Date(), changeFrequency: "monthly", priority: 0.5 },
     { url: `${base}/privacy`, lastModified: new Date(), changeFrequency: "monthly", priority: 0.2 },
@@ -23,8 +25,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     const pool = getPostgresPool()
 
     const [companiesResult, jobsResult] = await Promise.all([
-      pool.query<{ id: string; updated_at: string }>(
-        `SELECT id, updated_at FROM companies WHERE is_active = true ORDER BY job_count DESC`
+      pool.query<{ id: string; name: string; updated_at: string; sponsors_h1b: boolean | null; h1b_sponsor_count_1yr: number | null }>(
+        `SELECT id, name, updated_at, sponsors_h1b, h1b_sponsor_count_1yr FROM companies WHERE is_active = true ORDER BY job_count DESC`
       ),
       pool.query<{ id: string; updated_at: string }>(
         `SELECT id, updated_at FROM jobs WHERE is_active = true AND ${sqlPublishedJob("jobs")} AND ${sqlJobLocatedInUsa(
@@ -33,14 +35,22 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       ),
     ])
 
-    const companyRoutes: MetadataRoute.Sitemap = companiesResult.rows.map(
-      (c: { id: string; updated_at: string }) => ({
+    const companyRoutes: MetadataRoute.Sitemap = companiesResult.rows.map((c) => ({
       url: `${base}/companies/${c.id}`,
       lastModified: new Date(c.updated_at),
       changeFrequency: "daily",
       priority: 0.7,
-    })
-    )
+    }))
+
+    // H-1B sponsor pages — only for companies with a sponsorship signal.
+    const sponsorRoutes: MetadataRoute.Sitemap = companiesResult.rows
+      .filter((c) => c.sponsors_h1b || (c.h1b_sponsor_count_1yr ?? 0) > 0)
+      .map((c) => ({
+        url: `${base}/h1b-sponsors/${companyParam(c.id, c.name)}`,
+        lastModified: new Date(c.updated_at),
+        changeFrequency: "weekly" as const,
+        priority: 0.75,
+      }))
 
     const jobRoutes: MetadataRoute.Sitemap = jobsResult.rows.map(
       (j: { id: string; updated_at: string }) => ({
@@ -51,7 +61,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     })
     )
 
-    return [...staticRoutes, ...companyRoutes, ...jobRoutes]
+    return [...staticRoutes, ...companyRoutes, ...sponsorRoutes, ...jobRoutes]
   } catch {
     return staticRoutes
   }
