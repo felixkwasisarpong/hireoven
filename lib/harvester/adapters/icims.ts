@@ -180,7 +180,10 @@ async function fetchJobDetail(link: JobLink, ctx: HarvestCtx): Promise<Harvested
   // Detail URLs require &in_iframe=1 just like the search page.
   const detailUrl = new URL(link.url)
   detailUrl.searchParams.set("in_iframe", "1")
-  const result = await fetchHtmlConditional(detailUrl.toString(), ctx)
+  // Detail enrichment is best-effort (a shallow job is the fallback), so cap
+  // retries lower than the search page — honored Retry-After cooldowns across
+  // 150 details at concurrency 3 must not eat the per-company lease.
+  const result = await fetchHtmlConditional(detailUrl.toString(), ctx, { maxAttempts: 2 })
   if (result.kind !== "ok") return null
   const blocks = extractJsonLdBlocks(result.html)
   const mapped = mapJsonLdToHarvestedJobs(blocks, {

@@ -22,6 +22,25 @@ const DEFAULT_USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 hireoven-harvester/1.0"
 const RETRY_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504])
 
+/** Cap on how long we'll wait honoring a server's Retry-After, so one throttled
+ *  board can't blow the per-company lease. Env-tunable. */
+function retryAfterCapMs(): number {
+  return Math.max(0, Number(process.env.HARVESTER_RETRY_AFTER_CAP_MS ?? "5000"))
+}
+
+/** Parse a Retry-After header (delta-seconds or HTTP-date) into a capped ms
+ *  delay. Rate-limiters (iCIMS sends 429 + Retry-After) need a real cooldown,
+ *  not the sub-second exponential backoff used for transient 5xx. */
+export function parseRetryAfterMs(value: string | null): number | null {
+  if (!value) return null
+  const cap = retryAfterCapMs()
+  const secs = Number(value)
+  if (Number.isFinite(secs)) return Math.min(Math.max(0, secs) * 1000, cap)
+  const when = Date.parse(value)
+  if (!Number.isNaN(when)) return Math.min(Math.max(0, when - Date.now()), cap)
+  return null
+}
+
 export type JsonLdFetchResult =
   | { kind: "ok"; html: string; etag: string | null; lastModified: string | null; upstreamLatencyMs: number }
   | { kind: "not_modified"; etag: string | null; lastModified: string | null; upstreamLatencyMs: number }
@@ -89,7 +108,11 @@ export async function fetchHtmlConditional(
       if (!RETRY_STATUSES.has(response.status) || attempt >= maxAttempts) {
         return { kind: "error", status: response.status, reason: lastReason, upstreamLatencyMs }
       }
-      await sleep(250 * 2 ** (attempt - 1) + Math.random() * 250)
+      // Honor the server's Retry-After (rate-limit / 503) when present — a real
+      // cooldown is what lets a throttled iCIMS board recover; otherwise fall
+      // back to short exponential backoff for transient 5xx.
+      const retryAfterMs = parseRetryAfterMs(response.headers.get("retry-after"))
+      await sleep(retryAfterMs ?? 250 * 2 ** (attempt - 1) + Math.random() * 250)
     } catch (error) {
       upstreamLatencyMs += Date.now() - startedAt
       lastReason =
