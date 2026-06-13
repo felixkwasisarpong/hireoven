@@ -754,4 +754,44 @@ export const EXPANSION_SEED_ROWS: ReadonlyArray<
   ["Numeric", "numeric.io", "https://jobs.ashbyhq.com/numeric", "Accounting", "startup", { ats_type: "ashby", ats_identifier: "numeric", sponsors_h1b: false, sponsorship_confidence: 45 }],
   ["Puzzle", "puzzle.io", "https://jobs.ashbyhq.com/puzzle", "Accounting", "startup", { ats_type: "ashby", ats_identifier: "puzzle", sponsors_h1b: false, sponsorship_confidence: 45 }],
   ["Column Tax", "columntax.com", "https://jobs.ashbyhq.com/columntax", "Tax Technology", "startup", { ats_type: "ashby", ats_identifier: "columntax", sponsors_h1b: false, sponsorship_confidence: 45 }],
+
+  // ── Cat 59: Insurtech (ATS tokens verified live) ─────────────────────────
+  // Oscar/Clover/Lemonade/Root/Pie/Bestow already in DB → ATS fixed by
+  // enrich-insurance-ats.ts (the expansion upsert won't set ats on conflict).
+  ["Coalition", "coalitioninc.com", "https://boards.greenhouse.io/coalition", "Insurance", "medium", { ats_type: "greenhouse", ats_identifier: "coalition", sponsors_h1b: true, sponsorship_confidence: 60 }],
+  ["Hippo", "hippo.com", "https://boards.greenhouse.io/hippo70", "Insurance", "medium", { ats_type: "greenhouse", ats_identifier: "hippo70", sponsors_h1b: true, sponsorship_confidence: 55 }],
+  ["Counterpart", "yourcounterpart.com", "https://boards.greenhouse.io/counterpart", "Insurance", "startup", { ats_type: "greenhouse", ats_identifier: "counterpart", sponsors_h1b: false, sponsorship_confidence: 45 }],
+  ["Ladder", "ladderlife.com", "https://boards.greenhouse.io/ladder33", "Insurance", "small", { ats_type: "greenhouse", ats_identifier: "ladder33", sponsors_h1b: false, sponsorship_confidence: 48 }],
+  ["At-Bay", "at-bay.com", "https://boards.greenhouse.io/atbay", "Insurance", "medium", { ats_type: "greenhouse", ats_identifier: "atbay", sponsors_h1b: true, sponsorship_confidence: 52 }],
+  ["Ethos", "ethoslife.com", "https://boards.greenhouse.io/ethoslife", "Insurance", "medium", { ats_type: "greenhouse", ats_identifier: "ethoslife", sponsors_h1b: true, sponsorship_confidence: 55 }],
+  ["Gravie", "gravie.com", "https://jobs.lever.co/gravie", "Insurance", "small", { ats_type: "lever", ats_identifier: "gravie", sponsors_h1b: false, sponsorship_confidence: 45 }],
+  ["Sana Benefits", "sanabenefits.com", "https://jobs.lever.co/sanabenefits", "Insurance", "small", { ats_type: "lever", ats_identifier: "sanabenefits", sponsors_h1b: false, sponsorship_confidence: 45 }],
+  ["Sure", "sureapp.com", "https://jobs.lever.co/sure", "Insurance", "small", { ats_type: "lever", ats_identifier: "sure", sponsors_h1b: false, sponsorship_confidence: 48 }],
+  ["Kin Insurance", "kin.com", "https://jobs.ashbyhq.com/kin", "Insurance", "medium", { ats_type: "ashby", ats_identifier: "kin", sponsors_h1b: false, sponsorship_confidence: 48 }],
+  ["Trellis", "trellisconnect.com", "https://jobs.ashbyhq.com/savvyinsurance-trellis", "Insurance", "startup", { ats_type: "ashby", ats_identifier: "savvyinsurance-trellis", sponsors_h1b: false, sponsorship_confidence: 45 }],
+
+  // ── Cat 60: Retail / E-commerce (ATS tokens verified live) ───────────────
+  // Carvana/Faire/Flexport/StockX/Gorgias/Fanatics/etc. already in DB → ATS
+  // fixed by enrich-retail-ats.ts (notably Carvana NULL -> greenhouse, ~2,219
+  // jobs). These are the rows new to the seed set.
+  ["Yotpo", "yotpo.com", "https://boards.greenhouse.io/yotpo", "E-commerce", "medium", { ats_type: "greenhouse", ats_identifier: "yotpo", sponsors_h1b: true, sponsorship_confidence: 55 }],
+  ["Olipop", "drinkolipop.com", "https://boards.greenhouse.io/olipop", "Consumer Goods", "small", { ats_type: "greenhouse", ats_identifier: "olipop", sponsors_h1b: false, sponsorship_confidence: 40 }],
+  ["Liquid Death", "liquiddeath.com", "https://boards.greenhouse.io/liquiddeath", "Consumer Goods", "small", { ats_type: "greenhouse", ats_identifier: "liquiddeath", sponsors_h1b: false, sponsorship_confidence: 40 }],
+  ["Constructor", "constructor.io", "https://jobs.ashbyhq.com/constructor", "E-commerce", "medium", { ats_type: "ashby", ats_identifier: "constructor", sponsors_h1b: true, sponsorship_confidence: 55 }],
+  ["Recharge", "rechargepayments.com", "https://jobs.ashbyhq.com/recharge", "E-commerce", "medium", { ats_type: "ashby", ats_identifier: "recharge", sponsors_h1b: false, sponsorship_confidence: 48 }],
+  ["Away", "awaytravel.com", "https://jobs.ashbyhq.com/away", "Retail", "medium", { ats_type: "ashby", ats_identifier: "away", sponsors_h1b: false, sponsorship_confidence: 42 }],
+  ["Bolt", "bolt.com", "https://jobs.ashbyhq.com/bolt", "E-commerce", "small", { ats_type: "ashby", ats_identifier: "bolt", sponsors_h1b: false, sponsorship_confidence: 48 }],
+
+  // ── Cat 61: Supply Chain / Logistics tech (ATS tokens verified live) ─────
+  // Samsara/Motive/Kodiak/Loadsmart/EasyPost/Platform Science already in DB
+  // with correct ATS. Shipium uses Rippling (not expressible here) → inserted
+  // plain and pinned by enrich-supplychain-ats.ts. Several existing rows
+  // (Altana/FourKites/Locus/Pickle/Tive/Dexterity) also fixed by that script.
+  ["project44", "project44.com", "https://boards.greenhouse.io/project44", "Logistics", "large", { ats_type: "greenhouse", ats_identifier: "project44", sponsors_h1b: true, sponsorship_confidence: 62 }],
+  ["AfterShip", "aftership.com", "https://boards.greenhouse.io/aftership", "Logistics", "medium", { ats_type: "greenhouse", ats_identifier: "aftership", sponsors_h1b: false, sponsorship_confidence: 48 }],
+  ["Gather AI", "gather.ai", "https://boards.greenhouse.io/gatherai", "Logistics", "startup", { ats_type: "greenhouse", ats_identifier: "gatherai", sponsors_h1b: false, sponsorship_confidence: 45 }],
+  ["Flexe", "flexe.com", "https://boards.greenhouse.io/flexe", "Logistics", "medium", { ats_type: "greenhouse", ats_identifier: "flexe", sponsors_h1b: false, sponsorship_confidence: 48 }],
+  ["Outrider", "outrider.ai", "https://boards.greenhouse.io/outrider", "Logistics", "small", { ats_type: "greenhouse", ats_identifier: "outrider", sponsors_h1b: true, sponsorship_confidence: 55 }],
+  ["Uber Freight", "uberfreight.com", "https://job-boards.greenhouse.io/uberfreight", "Logistics", "large", { ats_type: "greenhouse", ats_identifier: "uberfreight", sponsors_h1b: true, sponsorship_confidence: 60 }],
+  ["Shipium", "shipium.com", "https://ats.rippling.com/shipium/jobs", "Logistics", "small", { sponsors_h1b: false, sponsorship_confidence: 45 }],
 ]
