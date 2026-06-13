@@ -868,4 +868,20 @@ export const EXPANSION_SEED_ROWS: ReadonlyArray<
   ["EvenUp", "evenuplaw.com", "https://jobs.ashbyhq.com/evenup", "Artificial Intelligence", "medium", { ats_type: "ashby", ats_identifier: "evenup", sponsors_h1b: true, sponsorship_confidence: 55 }],
   ["Roboflow", "roboflow.com", "https://jobs.ashbyhq.com/roboflow", "Artificial Intelligence", "small", { ats_type: "ashby", ats_identifier: "roboflow", sponsors_h1b: true, sponsorship_confidence: 55 }],
   ["Tecton", "tecton.ai", "https://jobs.lever.co/tecton", "Data", "small", { ats_type: "lever", ats_identifier: "tecton", sponsors_h1b: true, sponsorship_confidence: 52 }],
+
+  // ── Cat 67: FinTech / Banking (gap-scan — net-new only) ──────────────────
+  // Most fintechs already seeded (Stripe/Brex/Ramp/Mercury/Plaid/Coinbase...).
+  // enrich-fintech-ats.ts fills existing NULLs: Betterment 28, Current, Argyle
+  // (rippling). These rows are new to the seed set.
+  ["Alpaca", "alpaca.markets", "https://boards.greenhouse.io/alpaca", "FinTech", "medium", { ats_type: "greenhouse", ats_identifier: "alpaca", sponsors_h1b: true, sponsorship_confidence: 55 }],
+  ["Pinwheel", "pinwheel.com", "https://boards.greenhouse.io/pinwheelapi", "FinTech", "small", { ats_type: "greenhouse", ats_identifier: "pinwheelapi", sponsors_h1b: true, sponsorship_confidence: 50 }],
+  ["Unit", "unit.co", "https://jobs.ashbyhq.com/unit", "FinTech", "small", { ats_type: "ashby", ats_identifier: "unit", sponsors_h1b: true, sponsorship_confidence: 50 }],
+  ["Method", "methodfi.com", "https://jobs.ashbyhq.com/method", "FinTech", "small", { ats_type: "ashby", ats_identifier: "method", sponsors_h1b: true, sponsorship_confidence: 50 }],
+  ["Sardine", "sardine.ai", "https://jobs.ashbyhq.com/sardine", "FinTech", "small", { ats_type: "ashby", ats_identifier: "sardine", sponsors_h1b: true, sponsorship_confidence: 52 }],
+  ["TRM Labs", "trmlabs.com", "https://jobs.ashbyhq.com/trm-labs", "FinTech", "medium", { ats_type: "ashby", ats_identifier: "trm-labs", sponsors_h1b: true, sponsorship_confidence: 52 }],
+  ["Anchorage Digital", "anchorage.com", "https://jobs.lever.co/anchorage", "FinTech", "medium", { ats_type: "lever", ats_identifier: "anchorage", sponsors_h1b: true, sponsorship_confidence: 52 }],
+  ["Dwolla", "dwolla.com", "https://jobs.lever.co/dwolla", "FinTech", "small", { ats_type: "lever", ats_identifier: "dwolla", sponsors_h1b: false, sponsorship_confidence: 42 }],
+  ["Persona", "withpersona.com", "https://jobs.lever.co/withpersona", "FinTech", "medium", { ats_type: "lever", ats_identifier: "withpersona", sponsors_h1b: true, sponsorship_confidence: 52 }],
+  ["Varo", "varomoney.com", "https://jobs.lever.co/varomoney", "FinTech", "medium", { ats_type: "lever", ats_identifier: "varomoney", sponsors_h1b: false, sponsorship_confidence: 42 }],
+  ["Increase", "increase.com", "https://jobs.lever.co/increase", "FinTech", "small", { ats_type: "lever", ats_identifier: "increase", sponsors_h1b: true, sponsorship_confidence: 48 }],
 ]
