@@ -34,3 +34,11 @@ export function companyIdFromParam(param: string): string | null {
 export function h1bSponsorPath(id: string, name: string): string {
   return `/h1b-sponsors/${companyParam(id, name)}`
 }
+
+export function jobsAtPath(id: string, name: string): string {
+  return `/jobs-at/${companyParam(id, name)}`
+}
+
+export function salariesPath(id: string, name: string): string {
+  return `/salaries/${companyParam(id, name)}`
+}

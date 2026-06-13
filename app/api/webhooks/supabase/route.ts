@@ -7,6 +7,7 @@ import {
   sendWatchlistAlert,
 } from "@/lib/alerts/sender"
 import { requireWebhookAuth } from "@/lib/env"
+import { shouldSponsorPush } from "@/lib/alerts/sponsor-match"
 import { scoreJobsForUser, scoreNewJobForAllUsers } from "@/lib/matching/batch-scorer"
 import { getPostgresPool } from "@/lib/postgres/server"
 import type { AlertFrequency, Job, NotificationChannel, NotificationType } from "@/types"
@@ -88,6 +89,10 @@ export async function POST(request: NextRequest) {
 
 async function processNotifications(job: Job) {
   try {
+    // Users notified about this job in this run — so the sponsor-match sweep
+    // below never double-pings someone who already got an alert/watchlist push.
+    const notifiedUserIds = new Set<string>()
+
     const [matchedAlerts, watchlistUserIds] = await Promise.all([
       matchJobToAlerts(job),
       matchJobToWatchlists(job),
@@ -137,6 +142,7 @@ async function processNotifications(job: Job) {
           channel,
           notificationType: "alert",
         })
+        notifiedUserIds.add(alert.user_id)
       } catch {
         // Don't let one user's failure block the rest
       }
@@ -180,6 +186,55 @@ async function processNotifications(job: Job) {
             notificationType: "watchlist",
             channel,
           })
+          notifiedUserIds.add(userId)
+        } catch {
+          // Don't let one user's failure block the rest
+        }
+      }
+    }
+
+    // ── Sponsor-match instant push (the visa edge) ───────────────────────────
+    // The second a fresh sponsor-friendly role lands, ping sponsorship-seekers
+    // who opted into instant push — even if they never built an alert for it.
+    // Gated to sponsor-friendly jobs (a minority) and a tiny indexed population.
+    if (job.sponsors_h1b) {
+      const pool = getPostgresPool()
+      const { rows: sponsorSeekers } = await pool.query<{ id: string }>(
+        `SELECT id FROM profiles
+          WHERE needs_sponsorship = true AND push_alerts = true AND alert_frequency = 'instant'
+          LIMIT 500`
+      )
+
+      for (const seeker of sponsorSeekers) {
+        if (notifiedUserIds.has(seeker.id)) continue
+
+        let matchScore: number | null = null
+        try {
+          matchScore = (await scoreJobsForUser(seeker.id, [job.id])).get(job.id)?.overall_score ?? null
+        } catch {
+          // Scoring failure shouldn't suppress the highest-intent push.
+        }
+
+        const decision = shouldSponsorPush({
+          jobSponsorsH1b: job.sponsors_h1b,
+          needsSponsorship: true,
+          pushAlerts: true,
+          frequency: "instant",
+          matchScore,
+          alreadyNotified: false,
+        })
+        if (!decision.send) continue
+
+        try {
+          await sendPushNotification(seeker.id, job, "sponsor_match")
+          await insertAlertNotificationRow({
+            userId: seeker.id,
+            jobId: job.id,
+            alertId: null,
+            channel: "push",
+            notificationType: "alert",
+          })
+          notifiedUserIds.add(seeker.id)
         } catch {
           // Don't let one user's failure block the rest
         }
