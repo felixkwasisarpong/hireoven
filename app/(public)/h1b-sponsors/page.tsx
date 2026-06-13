@@ -4,7 +4,7 @@ import { ShieldCheck } from "lucide-react"
 import Navbar from "@/components/layout/Navbar"
 import CompanyLogo from "@/components/ui/CompanyLogo"
 import { getPostgresPool, hasPostgresEnv } from "@/lib/postgres/server"
-import { companyParam } from "@/lib/seo/company-seo"
+import { companyParam, companySlug } from "@/lib/seo/company-seo"
 
 // Cached hourly (ISR) — the ranking sort shouldn't run on every request.
 export const revalidate = 3600
@@ -37,6 +37,42 @@ async function getTopSponsors(): Promise<Row[]> {
   return rows
 }
 
+type BrowseFacets = {
+  industries: { label: string; href: string }[]
+  cities: { label: string; href: string }[]
+  roles: { label: string; href: string }[]
+}
+
+// Top industry / city / occupation hubs to link from the index. Same bounded,
+// indexed query shapes the sitemap uses; this page is ISR-cached hourly so the
+// aggregates don't run per request.
+async function getBrowseFacets(): Promise<BrowseFacets> {
+  if (!hasPostgresEnv()) return { industries: [], cities: [], roles: [] }
+  const pool = getPostgresPool()
+  const [ind, cities, roles] = await Promise.all([
+    pool.query<{ industry: string }>(
+      `SELECT industry FROM companies
+        WHERE is_active = true AND sponsors_h1b = true AND COALESCE(h1b_sponsor_count_1yr, 0) > 0 AND industry IS NOT NULL
+        GROUP BY industry HAVING count(*) >= 5 ORDER BY count(*) DESC LIMIT 12`,
+    ).catch(() => ({ rows: [] as { industry: string }[] })),
+    pool.query<{ city: string; state: string }>(
+      `SELECT worksite_city AS city, worksite_state_abbr AS state FROM lca_records
+        WHERE worksite_city IS NOT NULL AND worksite_state_abbr IS NOT NULL
+        GROUP BY 1, 2 HAVING count(*) >= 100 ORDER BY count(*) DESC LIMIT 12`,
+    ).catch(() => ({ rows: [] as { city: string; state: string }[] })),
+    pool.query<{ soc_title: string }>(
+      `SELECT mode() WITHIN GROUP (ORDER BY soc_title) AS soc_title FROM lca_records
+        WHERE soc_code IS NOT NULL AND soc_title IS NOT NULL AND soc_title <> ''
+        GROUP BY soc_code HAVING count(*) >= 50 ORDER BY count(*) DESC LIMIT 12`,
+    ).catch(() => ({ rows: [] as { soc_title: string }[] })),
+  ])
+  return {
+    industries: ind.rows.map((r) => ({ label: r.industry, href: `/h1b-sponsors/industry/${companySlug(r.industry)}` })),
+    cities: cities.rows.map((r) => ({ label: `${r.city}, ${r.state}`, href: `/h1b-sponsors/in/${companySlug(r.city)}-${r.state.toLowerCase()}` })),
+    roles: roles.rows.filter((r) => r.soc_title).map((r) => ({ label: r.soc_title, href: `/h1b-sponsors/role/${companySlug(r.soc_title)}` })),
+  }
+}
+
 export const metadata: Metadata = {
   title: `Top H-1B sponsor companies (${YEAR}) — Hireoven`,
   description: `The companies sponsoring the most H-1B visas in ${YEAR}, ranked by certified LCA filings from U.S. Department of Labor data. See who sponsors, how many, and which are hiring now.`,
@@ -48,8 +84,27 @@ export const metadata: Metadata = {
   },
 }
 
+function FacetGroup({ title, items }: { title: string; items: { label: string; href: string }[] }) {
+  return (
+    <div>
+      <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">{title}</p>
+      <div className="flex flex-wrap gap-2">
+        {items.map((it) => (
+          <Link
+            key={it.href}
+            href={it.href}
+            className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[12.5px] font-medium text-slate-700 transition hover:border-emerald-300 hover:text-emerald-700"
+          >
+            {it.label}
+          </Link>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export default async function H1bSponsorsHub() {
-  const sponsors = await getTopSponsors()
+  const [sponsors, facets] = await Promise.all([getTopSponsors(), getBrowseFacets()])
 
   const jsonLd = {
     "@context": "https://schema.org",
@@ -110,6 +165,21 @@ export default async function H1bSponsorsHub() {
             </li>
           ))}
         </ol>
+
+        {(facets.industries.length > 0 || facets.cities.length > 0 || facets.roles.length > 0) && (
+          <section className="mt-12 space-y-6">
+            <h2 className="text-lg font-bold text-slate-900">Browse H-1B sponsors by</h2>
+            {facets.industries.length > 0 && (
+              <FacetGroup title="Industry" items={facets.industries} />
+            )}
+            {facets.cities.length > 0 && (
+              <FacetGroup title="City" items={facets.cities} />
+            )}
+            {facets.roles.length > 0 && (
+              <FacetGroup title="Role" items={facets.roles} />
+            )}
+          </section>
+        )}
 
         <p className="mt-10 text-[12px] leading-relaxed text-slate-400">
           Based on U.S. Department of Labor LCA disclosure data and Hireoven&apos;s live job index. Counts reflect

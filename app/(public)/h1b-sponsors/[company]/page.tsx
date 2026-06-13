@@ -7,7 +7,7 @@ import CompanyLogo from "@/components/ui/CompanyLogo"
 import { sqlPublishedJob } from "@/lib/jobs/publication"
 import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
 import { getPostgresPool, hasPostgresEnv } from "@/lib/postgres/server"
-import { companyIdFromParam, companyParam } from "@/lib/seo/company-seo"
+import { companyIdFromParam, companyParam, jobsAtPath, salariesPath } from "@/lib/seo/company-seo"
 
 export const dynamic = "force-dynamic"
 
@@ -227,6 +227,16 @@ export default async function H1bSponsorPage({ params }: Props) {
             <ArrowRight className="h-4 w-4" />
           </Link>
         </div>
+
+        <nav className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[13px] text-slate-500" aria-label="More about this company">
+          <span className="text-slate-400">More on {c.name}:</span>
+          <Link href={salariesPath(c.id, c.name)} className="font-medium text-slate-700 underline-offset-2 hover:text-slate-900 hover:underline">
+            What {c.name} pays
+          </Link>
+          <Link href={jobsAtPath(c.id, c.name)} className="font-medium text-slate-700 underline-offset-2 hover:text-slate-900 hover:underline">
+            Open jobs at {c.name}
+          </Link>
+        </nav>
 
         <section className="mt-12">
           <h2 className="flex items-center gap-2 text-lg font-bold text-slate-900">
