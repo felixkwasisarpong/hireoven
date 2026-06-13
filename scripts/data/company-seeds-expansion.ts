@@ -825,4 +825,20 @@ export const EXPANSION_SEED_ROWS: ReadonlyArray<
   ["Second Front Systems", "secondfront.com", "https://jobs.ashbyhq.com/Second-Front-Systems", "Defense", "small", { ats_type: "ashby", ats_identifier: "Second-Front-Systems", sponsors_h1b: false, sponsorship_confidence: 30 }],
   ["Forterra", "forterra.ai", "https://jobs.lever.co/forterra", "Defense", "small", { ats_type: "lever", ats_identifier: "forterra", sponsors_h1b: false, sponsorship_confidence: 30 }],
   ["Overland AI", "overland.ai", "https://ats.rippling.com/overland-ai/jobs", "Defense", "startup", { sponsors_h1b: false, sponsorship_confidence: 30 }],
+
+  // ── Cat 64: Healthcare / Health Tech (ATS tokens verified live) ──────────
+  // Many leaders already seeded & correct (Lyra 480, Sword 45, Included Health,
+  // Maven, Omada, Cerebral...). enrich-healthtech-ats.ts fills Qventus 16
+  // (reactivated), PathAI, Particle. These rows are new to the seed set.
+  ["Komodo Health", "komodohealth.com", "https://job-boards.greenhouse.io/komodohealth", "Health Tech", "medium", { ats_type: "greenhouse", ats_identifier: "komodohealth", sponsors_h1b: true, sponsorship_confidence: 55 }],
+  ["Nourish", "usenourish.com", "https://boards.greenhouse.io/usenourish", "Health Tech", "small", { ats_type: "greenhouse", ats_identifier: "usenourish", sponsors_h1b: false, sponsorship_confidence: 45 }],
+  ["Unite Us", "uniteus.com", "https://job-boards.greenhouse.io/uniteus", "Health Tech", "medium", { ats_type: "greenhouse", ats_identifier: "uniteus", sponsors_h1b: false, sponsorship_confidence: 48 }],
+  ["Suki", "suki.ai", "https://boards.greenhouse.io/suki", "Health Tech", "small", { ats_type: "greenhouse", ats_identifier: "suki", sponsors_h1b: true, sponsorship_confidence: 50 }],
+  ["Ro", "ro.co", "https://jobs.lever.co/ro", "Health Tech", "large", { ats_type: "lever", ats_identifier: "ro", sponsors_h1b: true, sponsorship_confidence: 55 }],
+  ["Redox", "redoxengine.com", "https://jobs.lever.co/redoxengine", "Health Tech", "small", { ats_type: "lever", ats_identifier: "redoxengine", sponsors_h1b: false, sponsorship_confidence: 45 }],
+  ["Carbon Health", "carbonhealth.com", "https://jobs.lever.co/carbonhealth", "Health Tech", "medium", { ats_type: "lever", ats_identifier: "carbonhealth", sponsors_h1b: false, sponsorship_confidence: 45 }],
+  ["Color", "color.com", "https://jobs.lever.co/color", "Health Tech", "medium", { ats_type: "lever", ats_identifier: "color", sponsors_h1b: true, sponsorship_confidence: 50 }],
+  ["Notable Health", "notablehealth.com", "https://jobs.ashbyhq.com/notable", "Health Tech", "small", { ats_type: "ashby", ats_identifier: "notable", sponsors_h1b: false, sponsorship_confidence: 45 }],
+  ["Rad AI", "radai.com", "https://jobs.ashbyhq.com/radai", "Health Tech", "small", { ats_type: "ashby", ats_identifier: "radai", sponsors_h1b: false, sponsorship_confidence: 45 }],
+  ["OpenEvidence", "openevidence.com", "https://jobs.ashbyhq.com/openevidence", "Health Tech", "small", { ats_type: "ashby", ats_identifier: "openevidence", sponsors_h1b: true, sponsorship_confidence: 50 }],
 ]
