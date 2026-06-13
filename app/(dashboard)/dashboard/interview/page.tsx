@@ -85,6 +85,27 @@ async function fetchRecommendedJobs(userId: string): Promise<RecommendedJob[]> {
   }))
 }
 
+/**
+ * Bound a server-side preload so a slow/restarting Postgres can't hang the SSR
+ * request. The pool only has a connection-acquire timeout, not a query timeout,
+ * so a query that stalls mid-flight would otherwise hang until the gateway 502s.
+ * On timeout we reject — Promise.allSettled below treats that as "not loaded"
+ * and the client components fetch the data themselves (initialLoaded=false).
+ */
+const PRELOAD_TIMEOUT_MS = 3_000
+function withTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => {
+      const t = setTimeout(
+        () => reject(new Error(`${label} preload timed out after ${PRELOAD_TIMEOUT_MS}ms`)),
+        PRELOAD_TIMEOUT_MS,
+      )
+      t.unref?.()
+    }),
+  ])
+}
+
 async function getHubInitialData(): Promise<HubInitialData> {
   const fallback: HubInitialData = {
     recommendedJobs: [],
@@ -105,8 +126,8 @@ async function getHubInitialData(): Promise<HubInitialData> {
     }
 
     const [recommendedResult, recentSessionsResult] = await Promise.allSettled([
-      fetchRecommendedJobs(user.sub),
-      listRecentSessions(user.sub, 5),
+      withTimeout(fetchRecommendedJobs(user.sub), "recommendedJobs"),
+      withTimeout(listRecentSessions(user.sub, 5), "recentSessions"),
     ])
 
     return {
