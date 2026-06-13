@@ -1,0 +1,21 @@
+{
+  "appId": "ai.hireoven.app",
+  "appName": "Hireoven",
+  "webDir": "public",
+  "server": {
+    "url": "https://hireoven.com",
+    "cleartext": false
+  },
+  "ios": {
+    "contentInset": "always",
+    "limitsNavigationsToAppBoundDomains": true
+  },
+  "android": {
+    "allowMixedContent": false
+  },
+  "plugins": {
+    "PushNotifications": {
+      "presentationOptions": ["badge", "sound", "alert"]
+    }
+  }
+}
