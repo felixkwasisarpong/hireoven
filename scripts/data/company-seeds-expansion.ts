@@ -856,4 +856,16 @@ export const EXPANSION_SEED_ROWS: ReadonlyArray<
   ["Collaborative Robotics", "collaborativerobotics.com", "https://jobs.ashbyhq.com/cobot", "Hardware", "small", { ats_type: "ashby", ats_identifier: "cobot", sponsors_h1b: true, sponsorship_confidence: 50 }],
   ["Sanctuary AI", "sanctuary.ai", "https://jobs.lever.co/sanctuary", "Hardware", "small", { ats_type: "lever", ats_identifier: "sanctuary", sponsors_h1b: false, sponsorship_confidence: 40 }],
   ["Positron", "positron.ai", "https://ats.rippling.com/positron/jobs", "Semiconductors", "startup", { sponsors_h1b: true, sponsorship_confidence: 48 }],
+
+  // ── Cat 66: AI / ML / Data (gap-scan — net-new only) ─────────────────────
+  // Most AI labs already seeded. enrich-ai-ats.ts handles big existing-row
+  // fixes: Harvey 262 (custom->ashby), Glean 174 (custom->greenhouse),
+  // ElevenLabs 154 (reactivated), Synthesia 78 (custom->ashby). New rows:
+  ["AssemblyAI", "assemblyai.com", "https://job-boards.greenhouse.io/assemblyai", "Artificial Intelligence", "small", { ats_type: "greenhouse", ats_identifier: "assemblyai", sponsors_h1b: true, sponsorship_confidence: 60 }],
+  ["Contextual AI", "contextual.ai", "https://boards.greenhouse.io/contextualai", "Artificial Intelligence", "small", { ats_type: "greenhouse", ats_identifier: "contextualai", sponsors_h1b: true, sponsorship_confidence: 60 }],
+  ["Dagster Labs", "dagster.io", "https://boards.greenhouse.io/dagsterlabs", "Data", "small", { ats_type: "greenhouse", ats_identifier: "dagsterlabs", sponsors_h1b: true, sponsorship_confidence: 52 }],
+  ["Astronomer", "astronomer.io", "https://jobs.ashbyhq.com/astronomer", "Data", "medium", { ats_type: "ashby", ats_identifier: "astronomer", sponsors_h1b: true, sponsorship_confidence: 58 }],
+  ["EvenUp", "evenuplaw.com", "https://jobs.ashbyhq.com/evenup", "Artificial Intelligence", "medium", { ats_type: "ashby", ats_identifier: "evenup", sponsors_h1b: true, sponsorship_confidence: 55 }],
+  ["Roboflow", "roboflow.com", "https://jobs.ashbyhq.com/roboflow", "Artificial Intelligence", "small", { ats_type: "ashby", ats_identifier: "roboflow", sponsors_h1b: true, sponsorship_confidence: 55 }],
+  ["Tecton", "tecton.ai", "https://jobs.lever.co/tecton", "Data", "small", { ats_type: "lever", ats_identifier: "tecton", sponsors_h1b: true, sponsorship_confidence: 52 }],
 ]
