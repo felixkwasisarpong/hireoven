@@ -418,7 +418,7 @@ export async function sendWatchlistAlert(userId: string, jobs: Job[], companyNam
 
 // ── Push notification ─────────────────────────────────────────────────────────
 
-export async function sendPushNotification(userId: string, job: Job, type: "alert" | "watchlist"): Promise<void> {
+export async function sendPushNotification(userId: string, job: Job, type: "alert" | "watchlist" | "sponsor_match"): Promise<void> {
   configureWebPush()
 
   const [hydratedJob] = await hydrateJobs([job])
@@ -426,9 +426,18 @@ export async function sendPushNotification(userId: string, job: Job, type: "aler
   if (!subscriptions.length) throw new Error(`No push subscriptions for user ${userId}`)
 
   const companyName = hydratedJob.company?.name ?? "Tracked company"
+  const title =
+    type === "sponsor_match"
+      ? `⚡ Sponsor role just dropped: ${job.title}`
+      : type === "watchlist"
+        ? `${companyName} is hiring`
+        : `New match: ${job.title}`
   const payload = JSON.stringify({
-    title: type === "watchlist" ? `${companyName} is hiring` : `New match: ${job.title}`,
-    body: `${companyName} · ${getLocationLabel(hydratedJob)}`,
+    title,
+    body:
+      type === "sponsor_match"
+        ? `${companyName} · ${getLocationLabel(hydratedJob)} · Likely H-1B sponsor — apply first`
+        : `${companyName} · ${getLocationLabel(hydratedJob)}`,
     icon: "/icon-192.png",
     badge: "/badge-72.png",
     data: { jobId: job.id, applyUrl: job.apply_url },
