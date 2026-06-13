@@ -12,6 +12,7 @@ import {
   MessageCircle,
   Mic,
   Plane,
+  Send,
   Settings,
   ShieldAlert,
   ShieldCheck,
@@ -66,6 +67,7 @@ export const DASHBOARD_NAV_ITEMS: DashboardNavItem[] = [
   { label: "Alerts",         href: "/dashboard/alerts",                   icon: Bell,          group: "Search & Apply", subtitle: "New-match notifications" },
   { label: "Applications",   href: "/dashboard/applications",             icon: ClipboardList, group: "Search & Apply", subtitle: "Track your pipeline" },
   { label: "Autofill",       href: "/dashboard/autofill",                 icon: Wand2,         group: "Search & Apply", gate: "autofill", subtitle: "One-click applications" },
+  { label: "Outreach",       href: "/dashboard/outreach",                 icon: Send,          group: "Search & Apply", gate: "apex_strategy", subtitle: "Reach recruiters & hiring managers" },
 
   // ── Documents ────────────────────────────────────────────────────────────────
   { label: "Resume",         href: "/dashboard/resume",                   icon: FileText,        group: "Documents", gate: "resume_upload", subtitle: "Build & tailor resumes" },
