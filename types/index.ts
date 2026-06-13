@@ -384,6 +384,18 @@ export type CoverLetterLength = 'short' | 'medium' | 'long';
 export type CoverLetterStyle = 'story' | 'skills_focused' | 'achievement_focused';
 export type SponsorshipApproach = 'proactive' | 'on_request' | 'omit';
 
+/**
+ * How different a regeneration should be from the existing letter.
+ * - refine:   light polish (low temperature). Same options + refine = reuse,
+ *             so it never spends another LLM call when nothing meaningful changed.
+ * - rework:   a genuinely different take (medium temperature).
+ * - reinvent: a fresh angle and structure (high temperature).
+ */
+export type CoverLetterVariation = 'refine' | 'rework' | 'reinvent';
+
+/** Whether a generate request overwrites the current letter or forks a new version. */
+export type CoverLetterGenerateMode = 'replace' | 'new';
+
 // CoverLetterOptions defined after ResumeAnalysis - see below
 export type CoverLetterOptionsBase = {
   tone: CoverLetterTone;
@@ -393,6 +405,7 @@ export type CoverLetterOptionsBase = {
   customInstructions?: string;
   mentionSponsorship?: boolean;
   sponsorshipApproach?: SponsorshipApproach;
+  variation?: CoverLetterVariation;
 };
 
 export type GeneratedCoverLetter = {

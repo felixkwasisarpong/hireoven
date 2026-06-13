@@ -604,7 +604,7 @@ async function handleMessage(
       return handleApproveTailoredResume(message.jobId, message.resumeId, message.ats)
 
     case "GENERATE_COVER_LETTER":
-      return handleGenerateCoverLetter(message.jobId, message.resumeId, message.ats)
+      return handleGenerateCoverLetter(message.jobId, message.resumeId, message.ats, message.regenerate)
 
     case "FILL_COVER_LETTER":
       return handleFillCoverLetter(message.elementRef, message.text)
@@ -1044,12 +1044,13 @@ async function handleApproveTailoredResume(
 async function handleGenerateCoverLetter(
   jobId: string,
   resumeId?: string,
-  ats?: string
+  ats?: string,
+  regenerate?: boolean
 ): Promise<CoverLetterResult> {
   const data = await apiRequest<ExtensionCoverLetterResponse>(
     "POST",
     "/api/extension/cover-letter/generate",
-    { jobId, resumeId, ats }
+    { jobId, resumeId, ats, regenerate }
   )
 
   if (!data) {
@@ -2056,7 +2057,7 @@ const MVP_ROUTES: Record<string, MvpRoute> = {
   EXT_MVP_GENERATE_COVER_LETTER: {
     method: "POST",
     path: "/api/extension/cover-letter/generate",
-    buildBody: (msg) => ({ jobId: msg.jobId, resumeId: msg.resumeId, ats: msg.ats }),
+    buildBody: (msg) => ({ jobId: msg.jobId, resumeId: msg.resumeId, ats: msg.ats, regenerate: msg.regenerate }),
   },
   EXT_MVP_UPDATE_COVER_LETTER: {
     method: "PATCH",

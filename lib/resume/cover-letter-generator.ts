@@ -5,8 +5,10 @@ import { getPostgresPool } from "@/lib/postgres/server"
 import { replaceEmDash, sanitizeGeneratedText } from "@/lib/text/sanitize-generated-text"
 import type {
   CoverLetter,
+  CoverLetterGenerateMode,
   CoverLetterInsert,
   CoverLetterOptions,
+  CoverLetterVariation,
   Company,
   Job,
   Resume,
@@ -46,6 +48,26 @@ const LENGTH_GUIDE = {
   long: "400-500 words. Thorough. 4-5 paragraphs. Good for senior roles or when you have a lot of relevant experience.",
 }
 
+// Variation drives both sampling temperature and an explicit directive so a
+// regeneration is meaningfully different (not the "marginally reworded" dups).
+const VARIATION_TEMPERATURE: Record<CoverLetterVariation, number> = {
+  refine: 0.3,
+  rework: 0.6,
+  reinvent: 0.9,
+}
+const VARIATION_DIRECTIVE: Record<CoverLetterVariation, string> = {
+  refine:
+    "Refine the existing direction: tighten the prose and improve word choice, but keep the same structure, examples, and opening.",
+  rework:
+    "Take a genuinely different take: lead with a different strength or example and restructure the argument. Do not merely reword the previous version.",
+  reinvent:
+    "Reinvent it: a fresh opening, a different narrative angle, and a different selection of evidence. It should read as a distinctly new letter.",
+}
+
+function resolveVariation(options: CoverLetterOptions): CoverLetterVariation {
+  return options.variation ?? "refine"
+}
+
 function buildSystemPrompt(options: CoverLetterOptions): string {
   return `You are an expert cover letter writer who has helped thousands of candidates land jobs at top companies. You write cover letters that sound like the real person wrote them - not like AI.
 
@@ -59,7 +81,8 @@ Your cover letters:
 
 Tone: ${TONE_GUIDE[options.tone]}
 Style: ${STYLE_GUIDE[options.style]}
-Length: ${LENGTH_GUIDE[options.length]}`
+Length: ${LENGTH_GUIDE[options.length]}
+Variation: ${VARIATION_DIRECTIVE[resolveVariation(options)]}`
 }
 
 function buildUserPrompt(
@@ -135,13 +158,15 @@ function extractJsonObject(text: string): string {
 
 async function callClaudeForLetter(
   systemPrompt: string,
-  userPrompt: string
+  userPrompt: string,
+  temperature: number
 ): Promise<{ subject_line: string; body: string; word_count: number; opening_line: string }> {
   if (!anthropic) throw new Error("ANTHROPIC_API_KEY not configured")
 
   const message = await anthropic.messages.create({
     model: MODEL,
     max_tokens: 2048,
+    temperature,
     system: systemPrompt,
     messages: [{ role: "user", content: userPrompt }],
   })
@@ -179,30 +204,85 @@ async function callClaudeForLetter(
   })
 }
 
+// ── Dedup helpers ───────────────────────────────────────────────────────────
+
+function normalizeForCompare(text: string): string {
+  return text.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()
+}
+
+/** Jaccard similarity over word bigrams — cheap, catches near-duplicate prose. */
+export function bodySimilarity(a: string, b: string): number {
+  const shingles = (s: string): Set<string> => {
+    const words = normalizeForCompare(s).split(" ").filter(Boolean)
+    const set = new Set<string>()
+    for (let i = 0; i < words.length - 1; i += 1) set.add(`${words[i]} ${words[i + 1]}`)
+    return set
+  }
+  const sa = shingles(a)
+  const sb = shingles(b)
+  if (sa.size === 0 || sb.size === 0) return normalizeForCompare(a) === normalizeForCompare(b) ? 1 : 0
+  let inter = 0
+  for (const sh of sa) if (sb.has(sh)) inter += 1
+  return inter / (sa.size + sb.size - inter)
+}
+const NEAR_DUPLICATE_THRESHOLD = 0.9
+
+/** The option fields that define a letter's "shape" — used for reuse matching. */
+function optionsMatchLetter(letter: CoverLetter, options: CoverLetterOptions): boolean {
+  return (
+    letter.tone === options.tone &&
+    letter.length === options.length &&
+    letter.style === options.style &&
+    letter.mentions_sponsorship === Boolean(options.mentionSponsorship) &&
+    (letter.sponsorship_approach ?? null) === (options.sponsorshipApproach ?? null) &&
+    (letter.hiring_manager ?? "") === (options.hiringManager ?? "")
+  )
+}
+
+async function listLettersForJob(userId: string, jobId: string): Promise<CoverLetter[]> {
+  const pool = getPostgresPool()
+  const res = await pool.query<CoverLetter>(
+    `SELECT * FROM cover_letters
+     WHERE user_id = $1 AND job_id = $2
+     ORDER BY version_number DESC, created_at DESC`,
+    [userId, jobId],
+  )
+  return res.rows
+}
+
+/**
+ * Free reuse: if a letter already exists for this (user, job) whose options
+ * match the request, return it — no LLM call. The route uses this for the
+ * "refine + unchanged" case so re-clicking generate stops costing money.
+ */
+export async function findReusableCoverLetter(
+  userId: string,
+  jobId: string,
+  options: CoverLetterOptions,
+): Promise<CoverLetter | null> {
+  const letters = await listLettersForJob(userId, jobId)
+  return letters.find((l) => optionsMatchLetter(l, options)) ?? null
+}
+
 export async function generateCoverLetter(
   resume: Resume,
   job: Job & { company: Company },
   options: CoverLetterOptions,
-  userId: string
+  userId: string,
+  opts: { mode?: CoverLetterGenerateMode; coverLetterId?: string } = {},
 ): Promise<CoverLetter> {
+  const mode: CoverLetterGenerateMode = opts.mode ?? "replace"
+  const variation = resolveVariation(options)
+  const pool = getPostgresPool()
+
   const systemPrompt = buildSystemPrompt(options)
   const userPrompt = buildUserPrompt(resume, job, options)
-  const generated = await callClaudeForLetter(systemPrompt, userPrompt)
+  const generated = await callClaudeForLetter(systemPrompt, userPrompt, VARIATION_TEMPERATURE[variation])
 
-  const pool = getPostgresPool()
-  const countResult = await pool.query<{ count: string }>(
-    `SELECT COUNT(*)::text AS count
-     FROM cover_letters
-     WHERE user_id = $1
-       AND job_id = $2`,
-    [userId, job.id]
-  )
-  const existingCount = Number(countResult.rows[0]?.count ?? 0)
+  const existing = await listLettersForJob(userId, job.id)
 
-  const payload: CoverLetterInsert = {
-    user_id: userId,
+  const sharedFields = {
     resume_id: resume.id,
-    job_id: job.id,
     job_title: job.title,
     company_name: job.company.name,
     hiring_manager: options.hiringManager ?? null,
@@ -212,55 +292,64 @@ export async function generateCoverLetter(
     tone: options.tone,
     length: options.length,
     style: options.style,
-    version_number: existingCount + 1,
-    is_favorite: false,
-    was_used: false,
     mentions_sponsorship: Boolean(options.mentionSponsorship),
     sponsorship_approach: options.sponsorshipApproach ?? null,
   }
 
+  // ── Replace: overwrite an existing letter in place (no new library row) ──
+  if (mode === "replace" && existing.length > 0) {
+    const target =
+      (opts.coverLetterId && existing.find((l) => l.id === opts.coverLetterId)) || existing[0]
+    const updated = await pool.query<CoverLetter>(
+      `UPDATE cover_letters SET
+         resume_id = $1, job_title = $2, company_name = $3, hiring_manager = $4,
+         subject_line = $5, body = $6, word_count = $7, tone = $8, length = $9,
+         style = $10, mentions_sponsorship = $11, sponsorship_approach = $12,
+         updated_at = NOW()
+       WHERE id = $13 AND user_id = $14
+       RETURNING *`,
+      [
+        sharedFields.resume_id, sharedFields.job_title, sharedFields.company_name,
+        sharedFields.hiring_manager, sharedFields.subject_line, sharedFields.body,
+        sharedFields.word_count, sharedFields.tone, sharedFields.length, sharedFields.style,
+        sharedFields.mentions_sponsorship, sharedFields.sponsorship_approach,
+        target.id, userId,
+      ],
+    )
+    const row = updated.rows[0]
+    if (!row) throw new Error("Failed to update cover letter")
+    return row
+  }
+
+  // ── New version: dedup against existing versions before inserting a row ──
+  const nearDuplicate = existing.find((l) => bodySimilarity(l.body, generated.body) >= NEAR_DUPLICATE_THRESHOLD)
+  if (nearDuplicate) return nearDuplicate
+
+  const payload: CoverLetterInsert = {
+    user_id: userId,
+    ...sharedFields,
+    job_id: job.id,
+    version_number: existing.length + 1,
+    is_favorite: false,
+    was_used: false,
+  }
+
   const insertResult = await pool.query<CoverLetter>(
     `INSERT INTO cover_letters (
-      user_id,
-      resume_id,
-      job_id,
-      job_title,
-      company_name,
-      hiring_manager,
-      subject_line,
-      body,
-      word_count,
-      tone,
-      length,
-      style,
-      version_number,
-      is_favorite,
-      was_used,
-      mentions_sponsorship,
-      sponsorship_approach
+      user_id, resume_id, job_id, job_title, company_name, hiring_manager,
+      subject_line, body, word_count, tone, length, style, version_number,
+      is_favorite, was_used, mentions_sponsorship, sponsorship_approach
     ) VALUES (
       $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17
     )
     RETURNING *`,
     [
-      payload.user_id,
-      payload.resume_id,
-      payload.job_id,
-      payload.job_title,
-      payload.company_name,
-      payload.hiring_manager,
-      payload.subject_line,
-      payload.body,
-      payload.word_count,
-      payload.tone,
-      payload.length,
-      payload.style,
-      payload.version_number,
-      payload.is_favorite,
-      payload.was_used,
-      payload.mentions_sponsorship,
-      payload.sponsorship_approach,
-    ]
+      payload.user_id, payload.resume_id, payload.job_id, payload.job_title,
+      payload.company_name, payload.hiring_manager, payload.subject_line, payload.body,
+      payload.word_count, payload.tone, payload.length, payload.style,
+      payload.version_number, payload.is_favorite, payload.was_used,
+      payload.mentions_sponsorship, payload.sponsorship_approach,
+    ],
   )
   const data = insertResult.rows[0]
   if (!data) throw new Error("Failed to save cover letter")
@@ -364,5 +453,6 @@ export async function generateVariants(
   ]
 
   const configs = VARIANT_OVERRIDES.slice(0, count).map((v) => ({ ...options, ...v }))
-  return Promise.all(configs.map((config) => generateCoverLetter(resume, job, config, userId)))
+  // Variants are intentionally distinct letters → always fork new rows.
+  return Promise.all(configs.map((config) => generateCoverLetter(resume, job, config, userId, { mode: "new" })))
 }

@@ -368,6 +368,7 @@ export interface GenerateCoverLetterMessage {
   jobId: string
   resumeId?: string
   ats?: string
+  regenerate?: boolean
 }
 
 export interface FillCoverLetterMessage {

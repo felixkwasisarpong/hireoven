@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server"
-import { generateCoverLetter } from "@/lib/resume/cover-letter-generator"
+import { findReusableCoverLetter, generateCoverLetter } from "@/lib/resume/cover-letter-generator"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { createClient } from "@/lib/supabase/server"
 import { requireFeature } from "@/lib/gates/server-gate"
 import { requireQuota } from "@/lib/usage/server-quota"
-import type { CoverLetter, CoverLetterOptions, Company, Job, Resume } from "@/types"
+import type { CoverLetter, CoverLetterGenerateMode, CoverLetterOptions, Company, Job, Resume } from "@/types"
 
 export const runtime = "nodejs"
 export const maxDuration = 120
@@ -49,9 +49,6 @@ export async function POST(request: Request) {
   const gate = await requireFeature("cover_letter")
   if (gate instanceof NextResponse) return gate
 
-  const quota = await requireQuota(gate.userId, "cover_letter", gate.plan)
-  if (quota instanceof NextResponse) return quota
-
   const supabase = await createClient()
   const user = (await supabase.auth.getUser()).data.user!
   const pool = getPostgresPool()
@@ -60,11 +57,25 @@ export async function POST(request: Request) {
     resumeId?: string
     jobId?: string
     options?: CoverLetterOptions
+    mode?: CoverLetterGenerateMode
+    coverLetterId?: string
   }
-  const { resumeId, jobId, options } = body
+  const { resumeId, jobId, options, coverLetterId } = body
+  const mode: CoverLetterGenerateMode = body.mode === "new" ? "new" : "replace"
 
   if (!jobId) return NextResponse.json({ error: "jobId is required" }, { status: 400 })
   if (!options) return NextResponse.json({ error: "options are required" }, { status: 400 })
+
+  // Free reuse: a "refine" regenerate with unchanged options returns the
+  // existing letter — no LLM call, no quota consumed. This is the core fix for
+  // the regenerate-spam that was burning API margin.
+  if (mode !== "new" && (options.variation ?? "refine") === "refine") {
+    const reusable = await findReusableCoverLetter(user.id, jobId, options)
+    if (reusable) return NextResponse.json({ ...reusable, reused: true })
+  }
+
+  const quota = await requireQuota(gate.userId, "cover_letter", gate.plan)
+  if (quota instanceof NextResponse) return quota
 
   // Resolve resume: use provided ID or fall back to primary
   let resume: Resume | null = null
@@ -114,7 +125,7 @@ export async function POST(request: Request) {
   const job = jobData as Job & { company: Company }
 
   try {
-    const coverLetter = await generateCoverLetter(resume, job, options, user.id)
+    const coverLetter = await generateCoverLetter(resume, job, options, user.id, { mode, coverLetterId })
     return NextResponse.json(coverLetter)
   } catch (err) {
     const message = err instanceof Error ? err.message : "Generation failed"
