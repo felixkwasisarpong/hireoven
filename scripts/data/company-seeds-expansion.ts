@@ -809,4 +809,20 @@ export const EXPANSION_SEED_ROWS: ReadonlyArray<
   ["Endor Labs", "endorlabs.com", "https://boards.greenhouse.io/endorlabs", "Cybersecurity", "small", { ats_type: "greenhouse", ats_identifier: "endorlabs", sponsors_h1b: false, sponsorship_confidence: 48 }],
   ["Horizon3.ai", "horizon3.ai", "https://jobs.ashbyhq.com/horizon3ai", "Cybersecurity", "small", { ats_type: "ashby", ats_identifier: "horizon3ai", sponsors_h1b: false, sponsorship_confidence: 48 }],
   ["Socket", "socket.dev", "https://jobs.ashbyhq.com/socket", "Cybersecurity", "startup", { ats_type: "ashby", ats_identifier: "socket", sponsors_h1b: false, sponsorship_confidence: 45 }],
+
+  // ── Cat 63: Government Contractors / Defense-adjacent (verified live) ─────
+  // Big existing-row fixes handled by enrich-defense-ats.ts: Anduril migrated
+  // lever -> greenhouse/andurilindustries (~2,086 jobs; lever board is dead),
+  // Chaos 155 / Impulse / Ursa Major reactivated, Skydio 127, Rebellion
+  // custom-upgrade. Most defense roles need US citizenship (sponsors_h1b=false).
+  ["Capella Space", "capellaspace.com", "https://boards.greenhouse.io/capellaspace", "Aerospace", "small", { ats_type: "greenhouse", ats_identifier: "capellaspace", sponsors_h1b: false, sponsorship_confidence: 35 }],
+  ["Epirus", "epirusinc.com", "https://boards.greenhouse.io/epirus", "Defense", "medium", { ats_type: "greenhouse", ats_identifier: "epirus", sponsors_h1b: false, sponsorship_confidence: 30 }],
+  ["Muon Space", "muonspace.com", "https://boards.greenhouse.io/muonspace", "Aerospace", "small", { ats_type: "greenhouse", ats_identifier: "muonspace", sponsors_h1b: false, sponsorship_confidence: 35 }],
+  ["Neros", "neros.tech", "https://boards.greenhouse.io/nerostechnologies", "Defense", "startup", { ats_type: "greenhouse", ats_identifier: "nerostechnologies", sponsors_h1b: false, sponsorship_confidence: 30 }],
+  ["Varda Space", "varda.com", "https://boards.greenhouse.io/vardaspace", "Aerospace", "small", { ats_type: "greenhouse", ats_identifier: "vardaspace", sponsors_h1b: false, sponsorship_confidence: 35 }],
+  ["Vast", "vastspace.com", "https://boards.greenhouse.io/vast", "Aerospace", "medium", { ats_type: "greenhouse", ats_identifier: "vast", sponsors_h1b: false, sponsorship_confidence: 35 }],
+  ["Mach Industries", "machindustries.com", "https://jobs.ashbyhq.com/mach", "Defense", "small", { ats_type: "ashby", ats_identifier: "mach", sponsors_h1b: false, sponsorship_confidence: 30 }],
+  ["Second Front Systems", "secondfront.com", "https://jobs.ashbyhq.com/Second-Front-Systems", "Defense", "small", { ats_type: "ashby", ats_identifier: "Second-Front-Systems", sponsors_h1b: false, sponsorship_confidence: 30 }],
+  ["Forterra", "forterra.ai", "https://jobs.lever.co/forterra", "Defense", "small", { ats_type: "lever", ats_identifier: "forterra", sponsors_h1b: false, sponsorship_confidence: 30 }],
+  ["Overland AI", "overland.ai", "https://ats.rippling.com/overland-ai/jobs", "Defense", "startup", { sponsors_h1b: false, sponsorship_confidence: 30 }],
 ]
