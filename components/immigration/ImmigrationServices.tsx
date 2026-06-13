@@ -42,6 +42,19 @@ export default function ImmigrationServices() {
   const [requests, setRequests] = useState<Req[]>([])
   const [loading, setLoading] = useState(true)
   const [active, setActive] = useState<Offering | null>(null)
+  const [paying, setPaying] = useState<string | null>(null)
+
+  async function pay(requestId: string) {
+    setPaying(requestId)
+    try {
+      const res = await fetch(`/api/immigration/services/${requestId}/checkout`, { method: "POST" })
+      const data = await res.json().catch(() => null)
+      if (res.ok && data?.url) window.location.href = data.url
+      else setPaying(null)
+    } catch {
+      setPaying(null)
+    }
+  }
 
   const load = useCallback(async () => {
     const res = await fetch("/api/immigration/services", { cache: "no-store" })
@@ -110,7 +123,19 @@ export default function ImmigrationServices() {
                     <p className="truncate text-[13.5px] font-semibold text-slate-800">{offering?.name ?? r.offering_id}</p>
                     <p className="text-[11.5px] text-slate-400">${r.quoted_price}{r.rush ? " · rush" : ""} · {new Date(r.created_at).toLocaleDateString()}</p>
                   </div>
-                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10.5px] font-semibold capitalize ${STATUS_STYLE[r.status]}`}>{r.status}</span>
+                  <div className="flex shrink-0 items-center gap-2">
+                    {r.status === "matched" && (
+                      <button
+                        onClick={() => void pay(r.id)}
+                        disabled={paying === r.id}
+                        className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1.5 text-[12px] font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-50"
+                      >
+                        {paying === r.id ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+                        Pay &amp; confirm
+                      </button>
+                    )}
+                    <span className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold capitalize ${STATUS_STYLE[r.status]}`}>{r.status}</span>
+                  </div>
                 </li>
               )
             })}

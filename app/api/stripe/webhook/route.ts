@@ -50,6 +50,29 @@ export async function POST(request: NextRequest) {
       const userId = session.metadata?.userId
       if (!userId) break
 
+      // ── Immigration marketplace booking (Connect destination charge) ────
+      if (session.metadata?.type === "immigration_service") {
+        const requestId = session.metadata?.requestId
+        if (requestId) {
+          await pool.query(
+            `UPDATE immigration_service_requests
+                SET status = 'scheduled',
+                    stripe_payment_intent_id = $1,
+                    amount_paid_cents = $2,
+                    paid_at = now(),
+                    updated_at = now()
+              WHERE id = $3 AND user_id = $4 AND status = 'matched'`,
+            [
+              (session.payment_intent as string | null) ?? null,
+              typeof session.amount_total === "number" ? session.amount_total : null,
+              requestId,
+              userId,
+            ],
+          )
+        }
+        break
+      }
+
       // ── Live interview credit purchase ──────────────────────────────────
       if (session.metadata?.type === "live_interview_credits") {
         const credits = parseInt(session.metadata?.credits ?? "0", 10)
