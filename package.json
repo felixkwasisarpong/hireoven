@@ -54,6 +54,8 @@
     "db:discover-ats-live:dry-run": "npx tsx scripts/discover-company-ats-live.ts --limit=1200 --dry-run",
     "db:discover-ats-live:overwrite": "npx tsx scripts/discover-company-ats-live.ts --limit=1200 --overwrite",
     "db:backfill-logo-urls": "npx tsx scripts/backfill-company-logo-urls.ts",
+    "db:backfill-adzuna-logos": "npx tsx scripts/backfill-adzuna-placeholder-logos.ts",
+    "db:backfill-adzuna-logos:execute": "npx tsx scripts/backfill-adzuna-placeholder-logos.ts --execute",
     "db:seed-companies": "npx tsx scripts/seed-companies.ts",
     "db:seed-companies:dry-run": "npx tsx scripts/seed-companies.ts --dry-run",
     "db:add-known-crawl-companies": "npx tsx scripts/add-known-crawl-companies.ts",
