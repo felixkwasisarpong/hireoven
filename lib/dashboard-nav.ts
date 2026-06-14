@@ -13,7 +13,6 @@ import {
   MessageCircle,
   Mic,
   Plane,
-  Scale,
   Send,
   Settings,
   ShieldAlert,
@@ -87,7 +86,8 @@ export const DASHBOARD_NAV_ITEMS: DashboardNavItem[] = [
   { label: "International",  href: "/dashboard/international",            icon: Plane,           group: "International", subtitle: "Tools for visa seekers" },
   { label: "H-1B Intel",     href: "/dashboard/international/h1b-explorer", icon: Globe,         group: "International", subtitle: "Visa sponsorship data" },
   { label: "Offer Risk",     href: "/dashboard/international/offer-risk", icon: ShieldAlert,     group: "International", subtitle: "Vet an offer's stability" },
-  { label: "Immigration Services", href: "/dashboard/international/services", icon: Scale,       group: "International", subtitle: "Book vetted attorneys & doc prep" },
+  // Hidden for now — page/routes remain at /dashboard/international/services.
+  // { label: "Immigration Services", href: "/dashboard/international/services", icon: Scale,    group: "International", subtitle: "Book vetted attorneys & doc prep" },
 
   // ── Footer ───────────────────────────────────────────────────────────────────
   { label: "Settings",       href: "/dashboard/billing",                  icon: Settings,      footer: true },
