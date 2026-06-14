@@ -20,17 +20,11 @@ import { requireCronAuth } from "@/lib/env"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { sqlPublishedJob } from "@/lib/jobs/publication"
 import { processNotifications } from "@/lib/alerts/instant-notify"
+import { instantNotifyWindowMinutes } from "@/lib/alerts/instant-notify-window"
 import type { Job } from "@/types"
 
 export const runtime = "nodejs"
 export const maxDuration = 60
-
-/** Lookback window in minutes. Wider than the cron interval so a missed run is
- *  covered; dedup makes the overlap harmless. */
-export function instantNotifyWindowMinutes(env: Record<string, string | undefined> = process.env): number {
-  const n = Number(env.INSTANT_NOTIFY_WINDOW_MIN ?? "20")
-  return Number.isFinite(n) && n > 0 ? Math.min(n, 180) : 20
-}
 
 const MAX_JOBS_PER_RUN = 500
 

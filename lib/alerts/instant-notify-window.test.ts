@@ -1,6 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { instantNotifyWindowMinutes } from "./route"
+import { instantNotifyWindowMinutes } from "./instant-notify-window"
 
 test("defaults to 20 minutes when unset or invalid", () => {
   assert.equal(instantNotifyWindowMinutes({}), 20)
