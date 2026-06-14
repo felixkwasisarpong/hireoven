@@ -38,6 +38,23 @@ const REMOTE_NEGATIVE_PATTERNS = [
   /\bnot remote\b/i,
 ]
 
+// A U.S. security clearance requires citizenship and cannot be sponsored, so any
+// of these imply "must already be authorized." The old single
+// `security clearance required` pattern missed the far more common phrasings:
+// a named level ("active SECRET clearance", "TS/SCI"), "must hold/obtain a
+// clearance", or "clearance is required".
+export const CLEARANCE_REQUIRED_PATTERNS = [
+  // Named clearance levels adjacent to "clearance" (unambiguous).
+  /\b(?:secret|top[\s-]?secret|ts\s*\/\s*sci|ts\/sci|sci|dod|q[\s-]?(?:level|clearance)|public[\s-]?trust|full[\s-]?scope\s+poly\w*|ci\s+poly\w*)\s+clearance\b/i,
+  /\bts\s*\/\s*sci\b/i,
+  // "active / current / valid / must hold / able to obtain ... clearance"
+  /\b(?:active|current|existing|valid|maintain(?:ed|s)?|obtain(?:able)?|possess(?:es)?|hold(?:s)?)\b[^.\n]{0,40}\bclearance\b/i,
+  /\b(?:must\s+(?:have|hold|possess|maintain|obtain)|requires?|able\s+to\s+obtain)\b[^.\n]{0,40}\bclearance\b/i,
+  // "clearance is required / mandatory / a must"
+  /\bclearance\s+(?:is\s+)?(?:required|mandatory|a\s+must)\b/i,
+  /\bsecurity\s+clearance\s+required\b/i,
+]
+
 const AUTH_REQUIRED_PATTERNS = [
   /\bauthorized to work\b/i,
   /\bwork authorization\b/i,
@@ -49,7 +66,7 @@ const AUTH_REQUIRED_PATTERNS = [
   /\brequires?\s+(?:u\.?\s?s\.?|united states)\s+citizen(?:ship)?\b/i,
   /\bcitizen(?:ship)?\s+(?:is\s+)?required\b/i,
   /\bu\.?\s?s\.?\s+persons?\s+only\b/i,
-  /\bsecurity\s+clearance\s+required\b/i,
+  ...CLEARANCE_REQUIRED_PATTERNS,
   /\bmust be (currently )?authorized\b/i,
 ]
 
@@ -202,6 +219,16 @@ export function inferRequiresAuthorization(
   if (AUTH_NOT_REQUIRED_PATTERNS.some((pattern) => pattern.test(text))) return false
   if (AUTH_REQUIRED_PATTERNS.some((pattern) => pattern.test(text))) return true
   return null
+}
+
+/** True when the text states a U.S. security-clearance requirement (which
+ *  implies citizenship + no sponsorship). Reused by the sponsorship inference. */
+export function mentionsSecurityClearanceRequirement(
+  description: string | null | undefined
+): boolean {
+  const text = toTextBlob(description)
+  if (!text) return false
+  return CLEARANCE_REQUIRED_PATTERNS.some((pattern) => pattern.test(text))
 }
 
 export function extractSalaryRange(

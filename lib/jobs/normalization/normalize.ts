@@ -10,6 +10,7 @@ import {
   extractSalaryRange,
   inferJobMetadata,
   inferRequiresAuthorization,
+  mentionsSecurityClearanceRequirement,
 } from "@/lib/jobs/metadata"
 import { HAIKU_MODEL } from "@/lib/ai/anthropic-models"
 import { extractCanonicalSections } from "@/lib/jobs/normalization/sections"
@@ -133,8 +134,9 @@ function inferSponsorshipFromText(description: string | null): {
   }
 
   // Test negative FIRST — ensures "unable to provide sponsorship" is not
-  // misclassified as affirmative when it also contains generic terms.
-  if (EXPLICIT_NO_SPONSORSHIP_RE.test(description)) {
+  // misclassified as affirmative when it also contains generic terms. A U.S.
+  // security clearance requires citizenship, so it can never be sponsored.
+  if (mentionsSecurityClearanceRequirement(description) || EXPLICIT_NO_SPONSORSHIP_RE.test(description)) {
     return { sponsors_h1b: false, sponsorship_score: 10, explicit_status: "no_sponsorship" }
   }
 
