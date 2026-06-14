@@ -278,10 +278,19 @@ export async function GET(request: NextRequest) {
       raw_data: { source: "adzuna", category: job.category, salaryIsPredicted: job.salaryIsPredicted },
     })
     const nc = norm.nextColumns
-    const publicationStatus = publicationStatusForJob({
+    const basePublicationStatus = publicationStatusForJob({
       description: nc.description,
       skills: nc.skills,
     })
+    // Hide Adzuna jobs whose description is too short to be useful — Adzuna's
+    // API truncates at ~500 chars and their redirect URLs can't be back-fetched.
+    // Jobs under 400 chars are typically staffing-agency stubs with no real
+    // content. They still exist in the DB for dedup purposes.
+    const publicationStatus =
+      basePublicationStatus === "published" &&
+      (nc.description?.length ?? 0) < 400
+        ? "hidden_low_quality"
+        : basePublicationStatus
     const rawData = safeJsonStringify({
       source: "adzuna",
       category: job.category,
