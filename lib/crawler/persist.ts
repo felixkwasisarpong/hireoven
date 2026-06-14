@@ -1,6 +1,7 @@
 import crypto from "crypto"
 import type { RawJob } from "@/lib/crawler"
 import { getPostgresPool } from "@/lib/postgres/server"
+import { triggerInstantNotify } from "@/lib/alerts/notify-trigger"
 import {
   cleanJobTitle,
 } from "@/lib/jobs/text-normalizer"
@@ -122,8 +123,8 @@ const JOB_UPDATE_WHITELIST = new Set<string>(
   JOB_INSERT_COLUMNS.filter((c) => c !== "first_detected_at" && c !== "created_at")
 )
 
-async function insertJobsChunk(pool: ReturnType<typeof getPostgresPool>, chunk: Record<string, unknown>[]) {
-  if (chunk.length === 0) return
+async function insertJobsChunk(pool: ReturnType<typeof getPostgresPool>, chunk: Record<string, unknown>[]): Promise<string[]> {
+  if (chunk.length === 0) return []
   // Dedupe within the chunk by (company_id, external_id) — the upstream
   // classifier looked up existing rows once, but a careers page can list the
   // same external_id twice (different URLs / filters), and both would land
@@ -148,13 +149,15 @@ async function insertJobsChunk(pool: ReturnType<typeof getPostgresPool>, chunk: 
   // existing-row lookup ran before a concurrent worker inserted the same
   // (company_id, external_id) pair. The conflict target matches the partial
   // unique index `jobs_company_external_id_uq`.
-  await pool.query(
+  const { rows } = await pool.query<{ id: string }>(
     `INSERT INTO jobs (${JOB_INSERT_COLUMNS.join(",")}) VALUES ${tuples.join(",")}
      ON CONFLICT (company_id, external_id)
        WHERE external_id IS NOT NULL AND company_id IS NOT NULL
-       DO NOTHING`,
+       DO NOTHING
+     RETURNING id`,
     values
   )
+  return rows.map((r) => r.id)
 }
 
 // Batch UPDATE — one round-trip per chunk instead of one per row.
@@ -704,10 +707,17 @@ export async function persistCrawlJobs({
     }
   }
 
+  const insertedJobIds: string[] = []
   if (toInsert.length > 0) {
     for (const insertChunk of chunkValues(toInsert, JOB_WRITE_BATCH_SIZE)) {
-      await insertJobsChunk(pool, insertChunk)
+      insertedJobIds.push(...(await insertJobsChunk(pool, insertChunk)))
     }
+  }
+
+  // Fire instant alerts for jobs the crawler just inserted — same event-driven
+  // trigger the harvester uses. Non-blocking, best-effort; the cron backstops.
+  if (insertedJobIds.length > 0) {
+    void triggerInstantNotify(insertedJobIds)
   }
 
   await updateJobsBatch(pool, toUpdate, JOB_WRITE_BATCH_SIZE)
@@ -892,6 +902,7 @@ export async function persistCrawlJobs({
 
   return {
     inserted: toInsert.length,
+    insertedJobIds,
     updated: toUpdate.length,
     deactivated: staleIds.length,
     activeCount,
