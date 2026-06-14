@@ -316,4 +316,72 @@ export const SKILL_DICTIONARY: SkillEntry[] = [
   { canonical: "Korean", aliases: ["fluent in korean", "korean speaking"], category: "natlang" },
   { canonical: "Portuguese", aliases: ["fluent in portuguese", "brazilian portuguese"], category: "natlang" },
   { canonical: "ASL", aliases: ["american sign language", "\\bASL\\b"], category: "natlang" },
+
+  // ── Accounting / Audit / Tax ────────────────────────────────────────────────
+  { canonical: "GAAP", aliases: ["gaap", "generally accepted accounting principles"], category: "finance" },
+  { canonical: "IFRS", aliases: ["ifrs", "international financial reporting standards"], category: "finance" },
+  { canonical: "Sarbanes-Oxley", aliases: ["sarbanes-oxley", "sarbanes oxley", "sox compliance"], category: "finance" },
+  { canonical: "Financial Reporting", aliases: ["financial reporting"], category: "finance" },
+  { canonical: "Financial Modeling", aliases: ["financial modeling", "financial modelling"], category: "finance" },
+  { canonical: "Tax Provision", aliases: ["tax provision", "income tax provision", "asc 740"], category: "finance" },
+  { canonical: "Transfer Pricing", aliases: ["transfer pricing"], category: "finance" },
+  { canonical: "Internal Audit", aliases: ["internal audit", "internal controls", "audit engagement"], category: "finance" },
+  { canonical: "NetSuite", aliases: ["netsuite"], category: "finance" },
+
+  // ── Insurance / Actuarial ───────────────────────────────────────────────────
+  { canonical: "Actuarial Science", aliases: ["actuarial", "actuarial science"], category: "finance" },
+  { canonical: "Loss Reserving", aliases: ["loss reserving", "loss reserves"], category: "finance" },
+  { canonical: "Underwriting", aliases: ["underwriting", "underwriter"], category: "finance" },
+  { canonical: "Generalized Linear Models", aliases: ["generalized linear model", "generalized linear models"], category: "ml" },
+  { canonical: "Property & Casualty", aliases: ["property and casualty", "property & casualty", "p&c insurance"], category: "finance" },
+  { canonical: "Claims Management", aliases: ["claims management", "claims adjusting"], category: "finance" },
+
+  // ── Construction / Civil Engineering ────────────────────────────────────────
+  { canonical: "Revit", aliases: ["revit", "autodesk revit"], category: "domain" },
+  { canonical: "BIM", aliases: ["building information modeling", "building information modelling"], category: "domain" },
+  { canonical: "Civil 3D", aliases: ["civil 3d", "autocad civil 3d"], category: "domain" },
+  { canonical: "Geotechnical Engineering", aliases: ["geotechnical", "geotechnical engineering"], category: "domain" },
+  { canonical: "PE License", aliases: ["pe license", "professional engineer license", "licensed professional engineer"], category: "domain" },
+  { canonical: "Construction Management", aliases: ["construction management"], category: "domain" },
+  { canonical: "Primavera P6", aliases: ["primavera p6", "primavera"], category: "tool" },
+  { canonical: "OSHA", aliases: ["osha 30", "osha 10", "osha certification"], category: "domain" },
+
+  // ── Energy / Oil & Gas / Renewables ─────────────────────────────────────────
+  { canonical: "Petroleum Engineering", aliases: ["petroleum engineering"], category: "domain" },
+  { canonical: "Reservoir Engineering", aliases: ["reservoir engineering", "reservoir simulation"], category: "domain" },
+  { canonical: "Drilling Engineering", aliases: ["drilling engineering", "drilling operations"], category: "domain" },
+  { canonical: "Petrophysics", aliases: ["petrophysics", "petrophysical"], category: "domain" },
+  { canonical: "Well Logging", aliases: ["well logging", "wireline logging"], category: "domain" },
+  { canonical: "Aspen HYSYS", aliases: ["aspen hysys", "hysys"], category: "tool" },
+  { canonical: "Renewable Energy", aliases: ["renewable energy", "solar energy", "wind energy", "photovoltaic"], category: "domain" },
+
+  // ── Food Tech / Agriculture ─────────────────────────────────────────────────
+  { canonical: "HACCP", aliases: ["haccp"], category: "domain" },
+  { canonical: "Food Safety", aliases: ["food safety"], category: "domain" },
+  { canonical: "Food Science", aliases: ["food science", "food technology"], category: "domain" },
+  { canonical: "Sensory Analysis", aliases: ["sensory analysis", "sensory evaluation"], category: "domain" },
+  { canonical: "Fermentation", aliases: ["fermentation"], category: "domain" },
+  { canonical: "Agronomy", aliases: ["agronomy", "agronomist"], category: "domain" },
+  { canonical: "Precision Agriculture", aliases: ["precision agriculture"], category: "domain" },
+
+  // ── Controls / Manufacturing / Mechanical ───────────────────────────────────
+  { canonical: "SCADA", aliases: ["scada"], category: "domain" },
+  { canonical: "HMI", aliases: ["human machine interface", "human-machine interface"], category: "domain" },
+  { canonical: "Thermodynamics", aliases: ["thermodynamics"], category: "domain" },
+  { canonical: "Lean Manufacturing", aliases: ["lean manufacturing", "lean six sigma"], category: "method" },
+  { canonical: "Fiber Optics", aliases: ["fiber optic", "fiber optics", "fibre optic"], category: "domain" },
+
+  // ── Supply Chain / Logistics ────────────────────────────────────────────────
+  { canonical: "Warehouse Management System", aliases: ["warehouse management system"], category: "operations" },
+  { canonical: "S&OP", aliases: ["sales and operations planning", "sales & operations planning"], category: "operations" },
+  { canonical: "Demand Planning", aliases: ["demand planning", "demand forecasting"], category: "operations" },
+  { canonical: "Inventory Management", aliases: ["inventory management"], category: "operations" },
+  { canonical: "Procurement", aliases: ["procurement", "strategic sourcing"], category: "operations" },
+  { canonical: "Freight Forwarding", aliases: ["freight forwarding"], category: "operations" },
+
+  // ── Pharma / Clinical ───────────────────────────────────────────────────────
+  { canonical: "GxP", aliases: ["gxp", "good clinical practice", "good laboratory practice"], category: "healthcare" },
+  { canonical: "Biostatistics", aliases: ["biostatistics", "biostatistician"], category: "healthcare" },
+  { canonical: "Epidemiology", aliases: ["epidemiology", "epidemiologist"], category: "healthcare" },
+  { canonical: "Regulatory Affairs", aliases: ["regulatory affairs"], category: "healthcare" },
 ]
