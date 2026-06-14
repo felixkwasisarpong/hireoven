@@ -43,7 +43,7 @@ function makeJob(overrides: Partial<HarvestedJob> = {}): HarvestedJob {
 
 test("persistJobsBulk: single ON CONFLICT upsert with content_hash short-circuit", async () => {
   const { pool, captured } = makeFakePool([
-    [{ inserted: true }, { inserted: false }],
+    [{ id: "11111111-1111-1111-1111-111111111111", inserted: true }, { id: "22222222-2222-2222-2222-222222222222", inserted: false }],
     [],
     [],
   ])
@@ -82,7 +82,7 @@ test("persistJobsBulk: single ON CONFLICT upsert with content_hash short-circuit
     /description\s*=\s*COALESCE\(NULLIF\(EXCLUDED\.description,\s*''\),\s*jobs\.description\)/
   )
   assert.match(upsert.text, /jsonb_array_elements\(\$5::jsonb\)/)
-  assert.match(upsert.text, /RETURNING \(xmax = 0\) AS inserted/)
+  assert.match(upsert.text, /RETURNING id, \(xmax = 0\) AS inserted/)
   assert.equal(upsert.values[0], "00000000-0000-0000-0000-000000000001")
   assert.equal(upsert.values[2], "greenhouse")
   assert.equal(upsert.values[3], "acme")
@@ -97,6 +97,7 @@ test("persistJobsBulk: single ON CONFLICT upsert with content_hash short-circuit
   assert.equal(outcome.inserted, 1)
   assert.equal(outcome.updated, 1)
   assert.equal(outcome.unchanged, 1)
+  assert.deepEqual(outcome.insertedJobIds, ["11111111-1111-1111-1111-111111111111"])
   assert.equal(outcome.written, 2)
   assert.equal(outcome.inputCount, 3)
   assert.equal(outcome.filteredOut, 0)

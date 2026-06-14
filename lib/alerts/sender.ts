@@ -464,6 +464,60 @@ export async function sendPushNotification(userId: string, job: Job, type: "aler
   await logApiUsage({ service: "webpush", operation: type, tokens_used: null, cost_usd: 0 })
 }
 
+/**
+ * One push summarizing a batch of new matches, so a harvest/crawl that lands
+ * many matching jobs at once doesn't fire a separate ping per job. Delegates to
+ * the single-job push for a batch of one.
+ */
+export async function sendBatchPushNotification(
+  userId: string,
+  jobs: Job[],
+  type: "alert" | "watchlist" | "sponsor_match",
+): Promise<void> {
+  if (jobs.length === 0) return
+  if (jobs.length === 1) return sendPushNotification(userId, jobs[0], type)
+
+  configureWebPush()
+  const subscriptions = await getUserSubscriptions(userId)
+  if (!subscriptions.length) throw new Error(`No push subscriptions for user ${userId}`)
+
+  const [first] = await hydrateJobs([jobs[0]])
+  const companyName = first.company?.name ?? "a company"
+  const n = jobs.length
+  const title =
+    type === "sponsor_match"
+      ? `⚡ ${n} new sponsor-friendly roles`
+      : type === "watchlist"
+        ? `${n} new roles at ${companyName}`
+        : `${n} new job matches`
+  const payload = JSON.stringify({
+    title,
+    body: `${jobs[0].title} at ${companyName}, and ${n - 1} more`,
+    icon: "/icon-192.png",
+    badge: "/badge-72.png",
+    data: { count: n, jobIds: jobs.slice(0, 12).map((j) => j.id) },
+    actions: [
+      { action: "view", title: "View matches" },
+      { action: "dismiss", title: "Dismiss" },
+    ],
+  })
+
+  let successCount = 0
+  for (const subscription of subscriptions) {
+    try {
+      await webpush.sendNotification(subscription, payload)
+      successCount += 1
+    } catch (error) {
+      const statusCode = (error as { statusCode?: number }).statusCode
+      if (statusCode === 404 || statusCode === 410) { await removeSubscription(subscription.endpoint); continue }
+      throw error
+    }
+  }
+
+  if (successCount === 0) throw new Error(`Unable to deliver push notification to user ${userId}`)
+  await logApiUsage({ service: "webpush", operation: `${type}_batch`, tokens_used: null, cost_usd: 0 })
+}
+
 export function combineChannels({ emailSent, pushSent }: { emailSent: boolean; pushSent: boolean }): NotificationChannel | null {
   if (emailSent && pushSent) return "both"
   if (emailSent) return "email"
