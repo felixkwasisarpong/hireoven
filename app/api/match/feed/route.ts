@@ -21,6 +21,20 @@ import type {
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
+// Every jobs column EXCEPT raw_data (a ~47 GB TOAST blob the feed never uses).
+// Selecting `jobs.*` de-toasted it for every returned card; this avoids that.
+const JOB_FEED_COLUMNS = [
+  "id", "company_id", "title", "department", "location", "is_remote", "is_hybrid",
+  "employment_type", "seniority_level", "salary_min", "salary_max", "salary_currency",
+  "description", "apply_url", "external_id", "first_detected_at", "last_seen_at",
+  "is_active", "sponsors_h1b", "sponsorship_score", "visa_language_detected",
+  "requires_authorization", "skills", "normalized_title", "created_at", "updated_at",
+  "h1b_prediction", "h1b_prediction_at", "normalization_version", "normalization_confidence",
+  "normalization_completeness", "normalization_requires_review", "posted_at", "closed_at",
+  "content_hash", "source_ats", "source_ats_slug", "duplicate_of_id", "is_us_or_ca_strict",
+  "job_intelligence", "publication_status",
+].map((c) => `jobs.${c}`).join(", ")
+
 const WITHIN_MS: Record<string, number> = {
   "1h": 3_600_000,
   "6h": 21_600_000,
@@ -155,8 +169,10 @@ export async function GET(request: NextRequest) {
   // else, the UNION pulls in jobs the user has explicitly saved even if
   // they fall outside the within window, so a chrome-extension save shows
   // up in the main feed regardless of the JD's age.
+  // Explicit column list excludes raw_data — a ~47 GB TOAST blob the feed never
+  // renders. `jobs.*` was de-toasting it for every card on every load.
   const sql = isBestMatch
-    ? `SELECT jobs.*, to_jsonb(companies.*) AS company,
+    ? `SELECT ${JOB_FEED_COLUMNS}, to_jsonb(companies.*) AS company,
               gjs.risk_score AS ghost_risk_score,
               gjs.risk_level AS ghost_risk_level,
               gjs.repost_count AS ghost_repost_count,
@@ -173,7 +189,7 @@ export async function GET(request: NextRequest) {
        ORDER BY jobs.first_detected_at DESC NULLS LAST
        LIMIT ${limitParam}`
     : `WITH base AS (
-         SELECT jobs.*, to_jsonb(companies.*) AS company,
+         SELECT ${JOB_FEED_COLUMNS}, to_jsonb(companies.*) AS company,
                 gjs.risk_score AS ghost_risk_score,
                 gjs.risk_level AS ghost_risk_level,
                 gjs.repost_count AS ghost_repost_count,
@@ -191,7 +207,7 @@ export async function GET(request: NextRequest) {
          LIMIT ${limitParam}
        ),
        saved AS (
-         SELECT jobs.*, to_jsonb(companies.*) AS company,
+         SELECT ${JOB_FEED_COLUMNS}, to_jsonb(companies.*) AS company,
                 gjs.risk_score AS ghost_risk_score,
                 gjs.risk_level AS ghost_risk_level,
                 gjs.repost_count AS ghost_repost_count,
