@@ -43,11 +43,9 @@ export async function POST(request: NextRequest) {
     [ids],
   )
 
-  let processed = 0
-  for (const job of rows) {
-    await processNotifications(job)
-    processed += 1
-  }
+  // One batch call so a user matching many of these jobs gets one combined
+  // email + one summary push, not a ping per job.
+  await processNotifications(rows)
 
-  return NextResponse.json({ ok: true, requested: ids.length, processed })
+  return NextResponse.json({ ok: true, requested: ids.length, processed: rows.length })
 }

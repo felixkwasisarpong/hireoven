@@ -1,20 +1,21 @@
 /**
- * Instant-notification pipeline (shared).
+ * Instant-notification pipeline (shared, batch-aware).
  *
- * Runs a newly-detected job through alert + watchlist matching and the
- * sponsor-match push, for users on "instant" frequency. Extracted from the
- * Supabase webhook so the harvester-driven notify cron can reuse the exact same
- * logic — the webhook only ever fired for Supabase-cloud inserts, which the
- * self-hosted harvester bypasses, so harvested jobs produced no instant alerts.
+ * Runs a *batch* of newly-detected jobs through alert + watchlist matching and
+ * the sponsor-match push, for users on "instant" frequency. Notifications come
+ * together: when a harvest/crawl lands many matching jobs at once, each user
+ * gets ONE email (multi-job digest) and ONE summary push — not a ping per job.
  *
- * Idempotent: each (user, job, type) is recorded in alert_notifications and
- * re-checked before sending, so the cron can reprocess overlapping time windows
- * without double-notifying. (Single-threaded cron ⇒ no TOCTOU race.)
+ * Extracted from the Supabase webhook so the harvester + crawler event triggers
+ * and the cron fallback all share it. Idempotent: each (user, job, type) is
+ * recorded in alert_notifications and re-checked before sending, so reprocessing
+ * an overlapping batch/window can't double-notify. (Single-threaded callers ⇒ no
+ * TOCTOU race.)
  */
 import {
   combineChannels,
+  sendBatchPushNotification,
   sendEmailAlert,
-  sendPushNotification,
   sendWatchlistAlert,
 } from "@/lib/alerts/sender"
 import { matchJobToAlerts, matchJobToWatchlists } from "@/lib/alerts/matcher"
@@ -42,7 +43,6 @@ async function fetchProfileChannels(userId: string): Promise<ProfileChannels | n
   return rows[0] ?? null
 }
 
-/** Idempotency guard: has this user already been notified about this job/type? */
 async function alreadyNotified(userId: string, jobId: string, type: NotificationType): Promise<boolean> {
   const pool = getPostgresPool()
   const { rows } = await pool.query(
@@ -53,157 +53,201 @@ async function alreadyNotified(userId: string, jobId: string, type: Notification
   return rows.length > 0
 }
 
-async function recordNotification(params: {
-  userId: string
-  jobId: string
-  alertId: string | null
-  channel: NotificationChannel
-  notificationType: NotificationType
-}) {
+async function recordNotification(
+  userId: string,
+  jobId: string,
+  channel: NotificationChannel,
+  notificationType: NotificationType,
+  alertId: string | null = null,
+) {
   const pool = getPostgresPool()
   try {
     await pool.query(
       `INSERT INTO alert_notifications (user_id, job_id, alert_id, channel, notification_type)
        VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT (user_id, job_id, notification_type) DO NOTHING`,
-      [params.userId, params.jobId, params.alertId, params.channel, params.notificationType],
+      [userId, jobId, alertId, channel, notificationType],
     )
   } catch (error) {
-    const pgError = error as { code?: string }
-    if (pgError.code !== "23505") throw error
+    if ((error as { code?: string }).code !== "23505") throw error
   }
 }
 
 /**
- * Match a job against alerts/watchlists/sponsor-seekers and fire instant
- * notifications for instant-frequency users. Safe to call repeatedly for the
- * same job.
+ * Match a batch of jobs and fire instant notifications for instant-frequency
+ * users, grouped per user. Safe to call repeatedly for the same jobs.
  */
-export async function processNotifications(job: Job): Promise<void> {
+export async function processNotifications(jobs: Job[]): Promise<void> {
+  if (jobs.length === 0) return
   try {
-    // Users already pinged for this job in this run — so the watchlist + sponsor
-    // passes never double-notify someone the alert pass already reached.
-    const notifiedUserIds = new Set<string>()
+    // (userId -> jobIds notified this run) so a user the alert pass reached
+    // isn't also hit by the watchlist / sponsor pass for the same job.
+    const notified = new Map<string, Set<string>>()
+    const markNotified = (userId: string, jobId: string) => {
+      const set = notified.get(userId) ?? new Set<string>()
+      set.add(jobId)
+      notified.set(userId, set)
+    }
+    const wasNotified = (userId: string, jobId: string) => notified.get(userId)?.has(jobId) ?? false
 
-    const [matchedAlerts, watchlistUserIds] = await Promise.all([
-      matchJobToAlerts(job),
-      matchJobToWatchlists(job),
-    ])
-
-    // ── Alert matches ─────────────────────────────────────────────────────────
-    for (const alert of matchedAlerts) {
-      const profile = await fetchProfileChannels(alert.user_id)
-      if (!profile) continue
-      if (profile.alert_frequency !== "instant") continue
-      if (await alreadyNotified(alert.user_id, job.id, "alert")) {
-        notifiedUserIds.add(alert.user_id)
-        continue
-      }
-
-      // Score-quality gate for email; users with no scorable resume fall through.
-      let belowThreshold = false
-      try {
-        const matchScore = (await scoreJobsForUser(alert.user_id, [job.id])).get(job.id)
-        if (matchScore && matchScore.overall_score < INSTANT_EMAIL_MIN_MATCH_SCORE) belowThreshold = true
-      } catch {
-        // scoring failure shouldn't block the alert
-      }
-
-      const channel = combineChannels({
-        emailSent: Boolean(profile.email_alerts) && !belowThreshold,
-        pushSent: Boolean(profile.push_alerts),
-      })
-      if (!channel) continue
-
-      try {
-        if (channel === "email" || channel === "both") await sendEmailAlert(alert.user_id, [job], alert.name ?? "Job alert")
-        if (channel === "push" || channel === "both") await sendPushNotification(alert.user_id, job, "alert")
-        await recordNotification({ userId: alert.user_id, jobId: job.id, alertId: alert.id, channel, notificationType: "alert" })
-        notifiedUserIds.add(alert.user_id)
-      } catch {
-        // don't let one user's failure block the rest
+    // ── 1. Alert matches, grouped per user ────────────────────────────────────
+    const alertsByUser = new Map<string, { name: string; jobs: Map<string, Job> }>()
+    for (const job of jobs) {
+      for (const alert of await matchJobToAlerts(job)) {
+        const entry = alertsByUser.get(alert.user_id) ?? { name: alert.name ?? "Job alert", jobs: new Map() }
+        entry.jobs.set(job.id, job)
+        alertsByUser.set(alert.user_id, entry)
       }
     }
 
-    // ── Watchlist matches ──────────────────────────────────────────────────────
-    if (watchlistUserIds.length > 0) {
+    for (const [userId, entry] of alertsByUser) {
+      const profile = await fetchProfileChannels(userId)
+      if (!profile || profile.alert_frequency !== "instant") continue
+      if (!profile.email_alerts && !profile.push_alerts) continue
+
+      const fresh: Job[] = []
+      for (const job of entry.jobs.values()) {
+        if (!(await alreadyNotified(userId, job.id, "alert"))) fresh.push(job)
+      }
+      if (fresh.length === 0) continue
+
+      // Email is score-gated; push is not (matches the prior per-job behaviour).
+      let emailJobs = fresh
+      if (profile.email_alerts) {
+        try {
+          const scores = await scoreJobsForUser(userId, fresh.map((j) => j.id))
+          emailJobs = fresh.filter((j) => {
+            const s = scores.get(j.id)
+            return !s || s.overall_score >= INSTANT_EMAIL_MIN_MATCH_SCORE
+          })
+        } catch {
+          // keep all on scoring failure
+        }
+      }
+
+      const emailSent = Boolean(profile.email_alerts) && emailJobs.length > 0
+      const channel = combineChannels({ emailSent, pushSent: Boolean(profile.push_alerts) })
+      if (!channel) continue
+
+      try {
+        if (emailSent) await sendEmailAlert(userId, emailJobs, entry.name)
+        if (profile.push_alerts) await sendBatchPushNotification(userId, fresh, "alert")
+        for (const job of fresh) {
+          await recordNotification(userId, job.id, channel, "alert")
+          markNotified(userId, job.id)
+        }
+      } catch {
+        // per-user isolation
+      }
+    }
+
+    // ── 2. Watchlist matches, grouped per (user, company) ─────────────────────
+    const watchByUser = new Map<string, Map<string, Job[]>>() // userId -> companyId -> jobs
+    const companyIds = new Set<string>()
+    for (const job of jobs) {
+      const userIds = await matchJobToWatchlists(job)
+      for (const userId of userIds) {
+        if (wasNotified(userId, job.id)) continue
+        let byCompany = watchByUser.get(userId)
+        if (!byCompany) {
+          byCompany = new Map()
+          watchByUser.set(userId, byCompany)
+        }
+        const list = byCompany.get(job.company_id) ?? []
+        list.push(job)
+        byCompany.set(job.company_id, list)
+        companyIds.add(job.company_id)
+      }
+    }
+
+    const companyNames = new Map<string, string>()
+    if (companyIds.size > 0) {
       const pool = getPostgresPool()
-      const companyResult = await pool.query<{ name: string }>(
-        `SELECT name FROM companies WHERE id = $1 LIMIT 1`,
-        [job.company_id],
+      const { rows } = await pool.query<{ id: string; name: string }>(
+        `SELECT id, name FROM companies WHERE id = ANY($1::uuid[])`,
+        [[...companyIds]],
       )
-      const companyName = companyResult.rows[0]?.name ?? "Tracked company"
+      for (const r of rows) companyNames.set(r.id, r.name)
+    }
 
-      for (const userId of watchlistUserIds) {
-        if (notifiedUserIds.has(userId)) continue
-        const profile = await fetchProfileChannels(userId)
-        if (!profile) continue
-        if (profile.alert_frequency !== "instant") continue
-        if (await alreadyNotified(userId, job.id, "watchlist")) continue
+    for (const [userId, byCompany] of watchByUser) {
+      const profile = await fetchProfileChannels(userId)
+      if (!profile || profile.alert_frequency !== "instant") continue
+      const channel = combineChannels({ emailSent: Boolean(profile.email_alerts), pushSent: Boolean(profile.push_alerts) })
+      if (!channel) continue
 
-        const channel = combineChannels({
-          emailSent: Boolean(profile.email_alerts),
-          pushSent: Boolean(profile.push_alerts),
-        })
-        if (!channel) continue
+      for (const [companyId, list] of byCompany) {
+        const fresh: Job[] = []
+        for (const job of list) {
+          if (wasNotified(userId, job.id)) continue
+          if (!(await alreadyNotified(userId, job.id, "watchlist"))) fresh.push(job)
+        }
+        if (fresh.length === 0) continue
+        const companyName = companyNames.get(companyId) ?? "Tracked company"
 
         try {
-          if (channel === "email" || channel === "both") await sendWatchlistAlert(userId, [job], companyName)
-          if (channel === "push" || channel === "both") await sendPushNotification(userId, job, "watchlist")
-          await recordNotification({ userId, jobId: job.id, alertId: null, channel, notificationType: "watchlist" })
-          notifiedUserIds.add(userId)
+          if (channel === "email" || channel === "both") await sendWatchlistAlert(userId, fresh, companyName)
+          if (channel === "push" || channel === "both") await sendBatchPushNotification(userId, fresh, "watchlist")
+          for (const job of fresh) {
+            await recordNotification(userId, job.id, channel, "watchlist")
+            markNotified(userId, job.id)
+          }
         } catch {
-          // don't let one user's failure block the rest
+          // per-user isolation
         }
       }
     }
 
-    // ── Sponsor-match instant push (the visa edge) ─────────────────────────────
-    // The moment a fresh sponsor-friendly role lands, ping sponsorship-seekers on
-    // instant push — even with no alert built. Gated to sponsor-friendly jobs and
-    // a tiny indexed population.
-    if (job.sponsors_h1b) {
+    // ── 3. Sponsor-match push, grouped per seeker ─────────────────────────────
+    const sponsorJobs = jobs.filter((j) => j.sponsors_h1b)
+    if (sponsorJobs.length > 0) {
       const pool = getPostgresPool()
-      const { rows: sponsorSeekers } = await pool.query<{ id: string }>(
+      const { rows: seekers } = await pool.query<{ id: string }>(
         `SELECT id FROM profiles
           WHERE needs_sponsorship = true AND push_alerts = true AND alert_frequency = 'instant'
           LIMIT 500`,
       )
 
-      for (const seeker of sponsorSeekers) {
-        if (notifiedUserIds.has(seeker.id)) continue
-        if (await alreadyNotified(seeker.id, job.id, "alert")) {
-          notifiedUserIds.add(seeker.id)
-          continue
+      for (const seeker of seekers) {
+        const fresh: Job[] = []
+        for (const job of sponsorJobs) {
+          if (wasNotified(seeker.id, job.id)) continue
+          if (await alreadyNotified(seeker.id, job.id, "alert")) continue
+          fresh.push(job)
+        }
+        if (fresh.length === 0) continue
+
+        let scores: Map<string, { overall_score: number }> | null = null
+        try {
+          scores = await scoreJobsForUser(seeker.id, fresh.map((j) => j.id))
+        } catch {
+          // no scores → shouldSponsorPush still sends (highest-intent users)
         }
 
-        let matchScore: number | null = null
-        try {
-          matchScore = (await scoreJobsForUser(seeker.id, [job.id])).get(job.id)?.overall_score ?? null
-        } catch {
-          // scoring failure shouldn't suppress the highest-intent push
-        }
-
-        const decision = shouldSponsorPush({
-          jobSponsorsH1b: job.sponsors_h1b,
-          needsSponsorship: true,
-          pushAlerts: true,
-          frequency: "instant",
-          matchScore,
-          alreadyNotified: false,
-        })
-        if (!decision.send) continue
+        const qualifying = fresh.filter((job) =>
+          shouldSponsorPush({
+            jobSponsorsH1b: job.sponsors_h1b,
+            needsSponsorship: true,
+            pushAlerts: true,
+            frequency: "instant",
+            matchScore: scores?.get(job.id)?.overall_score ?? null,
+            alreadyNotified: false,
+          }).send,
+        )
+        if (qualifying.length === 0) continue
 
         try {
-          await sendPushNotification(seeker.id, job, "sponsor_match")
-          await recordNotification({ userId: seeker.id, jobId: job.id, alertId: null, channel: "push", notificationType: "alert" })
-          notifiedUserIds.add(seeker.id)
+          await sendBatchPushNotification(seeker.id, qualifying, "sponsor_match")
+          for (const job of qualifying) {
+            await recordNotification(seeker.id, job.id, "push", "alert")
+            markNotified(seeker.id, job.id)
+          }
         } catch {
-          // don't let one user's failure block the rest
+          // per-user isolation
         }
       }
     }
   } catch {
-    // best-effort; callers (webhook/cron) must not fail on notification errors
+    // best-effort; callers must not fail on notification errors
   }
 }

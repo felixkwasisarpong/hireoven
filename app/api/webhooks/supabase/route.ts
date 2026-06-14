@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
 
   // Return 200 immediately — Supabase retries on non-2xx, so we must not block.
   // Shared with the harvester-driven /api/cron/instant-notify path.
-  void processNotifications(job)
+  void processNotifications([job])
   void scoreNewJobForAllUsers(job)
 
   return NextResponse.json({ received: true, jobId: job.id })

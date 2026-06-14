@@ -56,11 +56,9 @@ export async function GET(request: NextRequest) {
     [windowMin],
   )
 
-  let processed = 0
-  for (const job of rows) {
-    await processNotifications(job)
-    processed += 1
-  }
+  // One batch call so each user gets one combined notification across the
+  // window's jobs, not a separate ping per job.
+  await processNotifications(rows)
 
-  return NextResponse.json({ ok: true, windowMin, candidates: rows.length, processed })
+  return NextResponse.json({ ok: true, windowMin, candidates: rows.length, processed: rows.length })
 }
