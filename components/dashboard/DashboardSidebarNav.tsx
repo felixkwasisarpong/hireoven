@@ -67,6 +67,7 @@ function NavItem({
   const lockLabel = requiredPlan ? PLAN_NAMES[requiredPlan] : "Pro"
   const feedSkin = navSkin === "feed" && variant === "light"
   const tourId = navTourId(item.label)
+  const hasSubtitle = Boolean(item.subtitle)
 
   const badge =
     item.label === "Applications" && !feedSkin
@@ -101,14 +102,14 @@ function NavItem({
             : "text-slate-500 group-hover:text-slate-900"
       )
     : cn(
-        "h-4 w-4 flex-shrink-0 fill-none transition-colors duration-200",
+        "h-[15px] w-[15px] flex-shrink-0 transition-colors duration-200",
         locked
-          ? "text-muted-foreground/60"
+          ? "text-slate-400"
           : active
-            ? "text-white fill-[#FED7AA]"
+            ? "text-white"
             : variant === "dark"
-              ? "text-slate-400 group-hover:text-primary"
-              : "text-muted-foreground group-hover:text-primary"
+              ? "text-slate-400 group-hover:text-slate-200"
+              : "text-slate-500 group-hover:text-slate-700"
       )
 
   if (subLoading && item.gate) {
@@ -121,22 +122,42 @@ function NavItem({
         )}
         aria-hidden
       >
-        <div className={cn("h-4 w-4 animate-pulse rounded bg-slate-200/80")} />
+        <div className={cn("h-7 w-7 animate-pulse rounded-lg bg-slate-100")} />
         <div className="h-3 w-24 animate-pulse rounded bg-slate-200/80" />
       </div>
     )
   }
 
+  // Icon — wrapped in a soft rounded square for grouped items (subtitle present)
+  const iconEl = !feedSkin && hasSubtitle ? (
+    <span className={cn(
+      "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-colors duration-150",
+      locked
+        ? "bg-slate-100/80"
+        : active
+          ? "bg-white/20"
+          : variant === "dark"
+            ? "bg-slate-700/60 group-hover:bg-slate-600/60"
+            : "bg-slate-100 group-hover:bg-slate-200/80"
+    )}>
+      <Icon className={iconClass} strokeWidth={1.75} aria-hidden />
+    </span>
+  ) : (
+    <Icon className={cn(iconClass, !feedSkin && active && !locked && "fill-current")} strokeWidth={2} aria-hidden />
+  )
+
   const inner = (
     <>
-      <Icon className={cn(iconClass, active && !locked && "fill-current")} strokeWidth={2} aria-hidden />
+      {iconEl}
       <span className="flex-1 min-w-0">
         <span className="block truncate">{item.label}</span>
         {item.subtitle ? (
           <span
             className={cn(
               "mt-0.5 block truncate text-[11px] font-normal leading-tight",
-              variant === "dark" ? "text-slate-500" : "text-slate-400"
+              active && !feedSkin
+                ? "text-white/70"
+                : variant === "dark" ? "text-slate-500" : "text-slate-400"
             )}
           >
             {item.subtitle}
@@ -242,30 +263,39 @@ function NavGroup({
           : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
       )
     : cn(
-        "group neo-nav-link neo-nav-link-idle w-full",
-        hasActive && "text-slate-900 font-semibold"
+        "group flex w-full items-center gap-2 rounded-md px-2 py-1.5 transition-colors",
+        hasActive ? "text-slate-700" : "text-slate-400 hover:text-slate-600"
       )
 
-  const iconClass = feedSkin
+  const headerIconClass = feedSkin
     ? cn("h-[18px] w-[18px] flex-shrink-0 fill-none", hasActive ? "text-[#FF5C18] fill-[#FF5C18]" : "text-slate-500 group-hover:text-slate-900")
-    : cn("h-4 w-4 flex-shrink-0 fill-none", variant === "dark" ? "text-slate-400" : "text-muted-foreground group-hover:text-primary")
+    : cn("h-3.5 w-3.5 flex-shrink-0", hasActive ? "text-slate-500" : "text-slate-400")
 
   return (
     <div>
       <button type="button" onClick={() => setOpen((o) => !o)} className={headerClass}>
-        <GroupIcon className={cn(iconClass, hasActive && "fill-current")} strokeWidth={2} aria-hidden />
-        <span className="flex-1 truncate text-left">{group.label}</span>
+        {feedSkin && (
+          <GroupIcon className={cn(headerIconClass, hasActive && "fill-current")} strokeWidth={2} aria-hidden />
+        )}
+        <span className={cn(
+          "flex-1 truncate text-left",
+          feedSkin
+            ? "text-[14px]"
+            : "text-[10.5px] font-bold uppercase tracking-[0.1em]"
+        )}>
+          {group.label}
+        </span>
         <ChevronRight
           className={cn(
-            "h-3.5 w-3.5 shrink-0 transition-transform duration-200",
-            feedSkin ? "text-slate-400" : "text-muted-foreground/60",
+            "h-3 w-3 shrink-0 transition-transform duration-200",
+            feedSkin ? "text-slate-400" : "text-slate-300",
             open && "rotate-90"
           )}
         />
       </button>
 
       {open && (
-        <div className="mt-0.5 space-y-0.5 pl-4 border-l-2 border-slate-100 ml-[22px]">
+        <div className="mt-1 space-y-0.5">
           {items.map((item) => (
             <NavItem
               key={item.label}
