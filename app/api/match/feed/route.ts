@@ -113,8 +113,14 @@ export async function GET(request: NextRequest) {
   const minScore = Number(sp.get("minScore") ?? "0")
   const hasTextSearch = Boolean(q.trim() || location)
   const fetchMultiplier = hasTextSearch ? 3 : 2
-  const candidateFloor = isBestMatch && computeScores ? 40 : 60
-  const candidateCap = isBestMatch && computeScores ? 80 : 220
+  // Best Match scores the freshest N jobs and shows the top `limit`. A single
+  // Adzuna ingest inserts thousands of rows with near-identical
+  // first_detected_at — enough to fill the entire freshest window with
+  // unbranded `*.placeholder` companies and crowd real, logo-bearing employers
+  // out of the candidate pool entirely. Widen the pool so those real companies
+  // stay in scoring contention (and surface above generic placeholder jobs).
+  const candidateFloor = isBestMatch && computeScores ? 80 : 60
+  const candidateCap = isBestMatch && computeScores ? 160 : 220
   const fetchLimit = Math.min(candidateCap, Math.max(limit + offset, candidateFloor) * fetchMultiplier)
 
   const pool = getPostgresPool()

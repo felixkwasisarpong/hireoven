@@ -8,7 +8,17 @@
  */
 import { useEffect, useState } from "react"
 import Link from "next/link"
-import { ArrowUpRight, GraduationCap, Loader2, Sparkles, TrendingUp } from "lucide-react"
+import {
+  ArrowUpRight,
+  BookOpen,
+  GraduationCap,
+  Loader2,
+  Sparkles,
+  Target,
+  TrendingUp,
+  Zap,
+} from "lucide-react"
+import { cn } from "@/lib/utils"
 
 type Course = { provider: string; title: string; url: string }
 type Gap = {
@@ -33,6 +43,13 @@ function k(n: number): string {
   return `$${Math.round(n / 1000)}K`
 }
 
+const RANK_RING = [
+  "ring-2 ring-emerald-400 bg-emerald-500 text-white",
+  "ring-2 ring-sky-400 bg-sky-500 text-white",
+  "ring-2 ring-violet-400 bg-violet-500 text-white",
+]
+const BAR_COLOR = ["bg-emerald-400", "bg-sky-400", "bg-violet-400", "bg-slate-300"]
+
 export default function SkillGapEngine() {
   const [data, setData] = useState<Data | null>(null)
   const [loading, setLoading] = useState(true)
@@ -44,16 +61,15 @@ export default function SkillGapEngine() {
       .then((d) => !cancelled && setData(d))
       .catch(() => {})
       .finally(() => !cancelled && setLoading(false))
-    return () => {
-      cancelled = true
-    }
+    return () => { cancelled = true }
   }, [])
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-10">
-        <div className="flex items-center gap-2 text-slate-400">
-          <Loader2 className="h-4 w-4 animate-spin" /> Mapping your skills against live roles…
+      <div className="mx-auto max-w-3xl px-4 py-14">
+        <div className="flex items-center gap-2.5 text-slate-400">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          <span className="text-[14px]">Mapping your skills against live roles…</span>
         </div>
       </div>
     )
@@ -62,6 +78,7 @@ export default function SkillGapEngine() {
   if (data?.needsResume) {
     return (
       <EmptyState
+        icon={<BookOpen className="h-6 w-6" />}
         title="Add a resume to map your skills"
         body="We compare the skills on your resume against live postings for your target roles. Upload one to see what to learn next."
         ctaHref="/dashboard/resume"
@@ -72,6 +89,7 @@ export default function SkillGapEngine() {
   if (data?.needsProfile) {
     return (
       <EmptyState
+        icon={<Target className="h-6 w-6" />}
         title="Tell us your target roles"
         body="Set the roles you're aiming for and we'll show which skills unlock the most of them — and what they pay."
         ctaHref="/dashboard/apex"
@@ -82,6 +100,7 @@ export default function SkillGapEngine() {
   if (!data || data.gaps.length === 0) {
     return (
       <EmptyState
+        icon={<Sparkles className="h-6 w-6" />}
         title="You're well-matched to your target roles"
         body={
           data && data.targetJobs > 0
@@ -98,81 +117,148 @@ export default function SkillGapEngine() {
   const maxJobs = Math.max(...data.gaps.map((g) => g.jobsRequiring), 1)
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5 px-4 py-8">
-      {/* Hero recommendation */}
+    <div className="mx-auto max-w-3xl space-y-6 px-4 py-8">
+
+      {/* ── Hero recommendation ───────────────────────────────────────── */}
       {top.oneAway > 0 && (
-        <div className="rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-teal-50 p-5">
-          <div className="flex items-center gap-2 text-emerald-700">
-            <Sparkles className="h-4 w-4" />
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em]">Highest-leverage next skill</p>
+        <div className="relative overflow-hidden rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 p-6">
+          <div className="absolute right-0 top-0 h-40 w-40 rounded-full bg-emerald-200/30 blur-3xl" />
+          <div className="relative">
+            <div className="flex items-center gap-2 text-emerald-700">
+              <Zap className="h-3.5 w-3.5 fill-emerald-500 stroke-none" />
+              <p className="text-[11px] font-bold uppercase tracking-[0.2em]">Highest-leverage next skill</p>
+            </div>
+            <p className="mt-2 text-[21px] font-bold leading-snug text-slate-900">
+              Learn {top.skill} → unlock{" "}
+              <span className="text-emerald-600">{top.oneAway} role{top.oneAway === 1 ? "" : "s"}</span>{" "}
+              you&apos;re one skill away from
+            </p>
+            <p className="mt-1.5 max-w-xl text-[13.5px] leading-relaxed text-slate-600">
+              {top.skill} appears in {top.jobsRequiring.toLocaleString()} of your {data.targetJobs.toLocaleString()} target postings
+              {top.medianSalary ? `, paying a median of ${k(top.medianSalary)}` : ""}
+              {top.salaryUplift && top.salaryUplift > 2000 ? ` — ${k(top.salaryUplift)} above your target average` : ""}.
+            </p>
+            <div className="mt-4 flex flex-wrap items-center gap-2.5">
+              <a
+                href={top.course.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-[13px] font-semibold text-white shadow-sm transition hover:bg-emerald-700 hover:shadow-md"
+              >
+                <GraduationCap className="h-4 w-4" />
+                <span>{top.course.title}</span>
+                <span className="opacity-70">·</span>
+                <span className="opacity-80">{top.course.provider}</span>
+                <ArrowUpRight className="h-3.5 w-3.5" />
+              </a>
+              {top.salaryUplift && top.salaryUplift > 2000 && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-white/80 border border-emerald-200 px-3 py-1 text-[12px] font-semibold text-emerald-700">
+                  <TrendingUp className="h-3.5 w-3.5" />
+                  +{k(top.salaryUplift)} salary uplift
+                </span>
+              )}
+            </div>
           </div>
-          <p className="mt-2 text-[20px] font-bold leading-tight text-slate-900">
-            Learn {top.skill} → unlock {top.oneAway} role{top.oneAway === 1 ? "" : "s"} you&apos;re one skill away from
-          </p>
-          <p className="mt-1 text-[13.5px] text-slate-600">
-            {top.skill} appears in {top.jobsRequiring} of your {data.targetJobs.toLocaleString()} target postings
-            {top.medianSalary ? `, paying a median of ${k(top.medianSalary)}` : ""}
-            {top.salaryUplift && top.salaryUplift > 2000 ? ` — ${k(top.salaryUplift)} above your target average` : ""}.
-          </p>
-          <a
-            href={top.course.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-2 text-[13px] font-semibold text-white transition hover:bg-emerald-700"
-          >
-            <GraduationCap className="h-4 w-4" />
-            {top.course.title} · {top.course.provider}
-            <ArrowUpRight className="h-3.5 w-3.5" />
-          </a>
         </div>
       )}
 
-      {/* Coverage summary */}
+      {/* ── Coverage stats ─────────────────────────────────────────────── */}
       <div className="grid grid-cols-3 gap-3">
-        <Stat label="Target postings" value={data.targetJobs.toLocaleString()} />
-        <Stat label="Already eligible" value={data.eligibleNow.toLocaleString()} accent="text-emerald-600" />
-        <Stat label="Your skills" value={data.haveSkills.toLocaleString()} />
+        <StatCard
+          icon={<Target className="h-4 w-4" />}
+          iconClass="bg-slate-100 text-slate-600"
+          value={data.targetJobs.toLocaleString()}
+          label="Target postings"
+        />
+        <StatCard
+          icon={<Sparkles className="h-4 w-4" />}
+          iconClass="bg-emerald-100 text-emerald-600"
+          value={data.eligibleNow.toLocaleString()}
+          label="Already eligible"
+          valueClass="text-emerald-600"
+        />
+        <StatCard
+          icon={<Zap className="h-4 w-4" />}
+          iconClass="bg-sky-100 text-sky-600"
+          value={data.haveSkills.toLocaleString()}
+          label="Your skills"
+          valueClass="text-sky-600"
+        />
       </div>
 
-      {/* Gap list */}
+      {/* ── Gap list ───────────────────────────────────────────────────── */}
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-        <div className="border-b border-slate-100 px-5 py-3">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Skills ranked by what they unlock</p>
+        <div className="border-b border-slate-100 px-5 py-3.5 flex items-center justify-between">
+          <p className="text-[11.5px] font-bold uppercase tracking-[0.16em] text-slate-400">
+            Skills ranked by what they unlock
+          </p>
+          <p className="text-[11px] text-slate-400">{data.gaps.length} gap{data.gaps.length !== 1 ? "s" : ""} found</p>
         </div>
         <ul className="divide-y divide-slate-100">
-          {data.gaps.map((g) => (
-            <li key={g.skill} className="flex items-center gap-4 px-5 py-3.5">
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <p className="truncate text-[14.5px] font-semibold text-slate-800">{g.skill}</p>
-                  {g.oneAway > 0 && (
-                    <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[10.5px] font-semibold text-emerald-700">
-                      {g.oneAway} one away
-                    </span>
+          {data.gaps.map((g, idx) => {
+            const barCol = BAR_COLOR[Math.min(idx, BAR_COLOR.length - 1)]
+            const ringStyle = RANK_RING[idx] ?? "bg-slate-100 text-slate-400"
+            return (
+              <li key={g.skill} className="flex items-center gap-4 px-5 py-4">
+                {/* Rank badge */}
+                <div
+                  className={cn(
+                    "shrink-0 flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-bold",
+                    ringStyle
                   )}
+                >
+                  {idx + 1}
                 </div>
-                <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
-                  <div className="h-full rounded-full bg-slate-300" style={{ width: `${(g.jobsRequiring / maxJobs) * 100}%` }} />
+
+                {/* Main content */}
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                    <p className="truncate text-[14.5px] font-semibold text-slate-800">{g.skill}</p>
+                    {g.oneAway > 0 && (
+                      <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[10.5px] font-bold text-emerald-700">
+                        <Zap className="h-2.5 w-2.5" />
+                        {g.oneAway} one away
+                      </span>
+                    )}
+                    {g.salaryUplift && g.salaryUplift > 2000 && (
+                      <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-sky-50 border border-sky-200 px-2 py-0.5 text-[10.5px] font-semibold text-sky-700">
+                        <TrendingUp className="h-2.5 w-2.5" />
+                        +{k(g.salaryUplift)}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Bar */}
+                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+                    <div
+                      className={cn("h-full rounded-full transition-all duration-500", barCol)}
+                      style={{ width: `${(g.jobsRequiring / maxJobs) * 100}%` }}
+                    />
+                  </div>
+
+                  <p className="mt-1 text-[11.5px] text-slate-400">
+                    in {g.jobsRequiring.toLocaleString()} postings
+                    {g.medianSalary ? ` · median ${k(g.medianSalary)}` : ""}
+                  </p>
                 </div>
-                <p className="mt-1 text-[11.5px] text-slate-400">
-                  in {g.jobsRequiring} postings
-                  {g.medianSalary ? ` · median ${k(g.medianSalary)}` : ""}
-                  {g.salaryUplift && g.salaryUplift > 2000 ? (
-                    <span className="text-emerald-600"> · <TrendingUp className="inline h-3 w-3" /> +{k(g.salaryUplift)}</span>
-                  ) : null}
-                </p>
-              </div>
-              <a
-                href={g.course.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-[12px] font-semibold text-slate-600 transition hover:border-emerald-300 hover:text-emerald-700"
-              >
-                <GraduationCap className="h-3.5 w-3.5" />
-                Learn
-              </a>
-            </li>
-          ))}
+
+                {/* Course link */}
+                <a
+                  href={g.course.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="shrink-0 inline-flex flex-col items-end gap-0.5 group"
+                  title={`${g.course.title} on ${g.course.provider}`}
+                >
+                  <span className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[12px] font-semibold text-slate-600 shadow-xs transition group-hover:border-emerald-300 group-hover:bg-emerald-50 group-hover:text-emerald-700 group-hover:shadow-sm">
+                    <GraduationCap className="h-3.5 w-3.5" />
+                    Learn
+                  </span>
+                  <span className="text-[10px] text-slate-400 group-hover:text-slate-500">{g.course.provider}</span>
+                </a>
+              </li>
+            )
+          })}
         </ul>
       </div>
 
@@ -184,20 +270,49 @@ export default function SkillGapEngine() {
   )
 }
 
-function Stat({ label, value, accent }: { label: string; value: string; accent?: string }) {
+function StatCard({
+  icon,
+  iconClass,
+  value,
+  label,
+  valueClass = "text-slate-900",
+}: {
+  icon: React.ReactNode
+  iconClass: string
+  value: string
+  label: string
+  valueClass?: string
+}) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-3.5">
-      <p className={`text-[20px] font-bold tabular-nums ${accent ?? "text-slate-900"}`}>{value}</p>
-      <p className="mt-0.5 text-[11px] font-medium text-slate-400">{label}</p>
+    <div className="rounded-xl border border-slate-200 bg-white p-4 flex flex-col gap-3">
+      <div className={cn("flex h-8 w-8 items-center justify-center rounded-lg", iconClass)}>
+        {icon}
+      </div>
+      <div>
+        <p className={cn("text-[22px] font-bold tabular-nums leading-none", valueClass)}>{value}</p>
+        <p className="mt-1 text-[11px] font-medium uppercase tracking-wide text-slate-400">{label}</p>
+      </div>
     </div>
   )
 }
 
-function EmptyState({ title, body, ctaHref, ctaLabel }: { title: string; body: string; ctaHref: string; ctaLabel: string }) {
+function EmptyState({
+  icon,
+  title,
+  body,
+  ctaHref,
+  ctaLabel,
+}: {
+  icon: React.ReactNode
+  title: string
+  body: string
+  ctaHref: string
+  ctaLabel: string
+}) {
   return (
     <div className="mx-auto max-w-lg px-4 py-16 text-center">
       <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
-        <GraduationCap className="h-6 w-6" />
+        {icon}
       </div>
       <h2 className="mt-4 text-[18px] font-bold text-slate-900">{title}</h2>
       <p className="mt-1.5 text-[14px] leading-relaxed text-slate-500">{body}</p>
