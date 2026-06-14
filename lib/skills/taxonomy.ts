@@ -485,6 +485,90 @@ export const SKILL_DEFINITIONS: SkillDefinition[] = [
   { label: "Writing",              aliases: ["technical writing", "writing skills", "copywriting", "content writing"] },
   { label: "Adaptability",         aliases: ["adaptability", "adaptable"] },
   { label: "Organizational Skills", aliases: ["organizational skills", "highly organized"] },
+
+  // ── Accounting / Audit / Tax ────────────────────────────────────────────────
+  { label: "GAAP",                 aliases: ["gaap", "generally accepted accounting principles", "us gaap"] },
+  { label: "IFRS",                 aliases: ["ifrs", "international financial reporting standards"] },
+  { label: "Sarbanes-Oxley",       aliases: ["sarbanes-oxley", "sarbanes oxley", "sox compliance"] },
+  { label: "Financial Reporting",  aliases: ["financial reporting", "financial statements preparation"] },
+  { label: "Financial Modeling",   aliases: ["financial modeling", "financial modelling", "three-statement model"] },
+  { label: "Tax Provision",        aliases: ["tax provision", "income tax provision", "asc 740"] },
+  { label: "Transfer Pricing",     aliases: ["transfer pricing"] },
+  { label: "Internal Audit",       aliases: ["internal audit", "internal controls", "audit engagement", "external audit"] },
+  { label: "Accounts Payable",     aliases: ["accounts payable", "accounts receivable"] },
+  { label: "NetSuite",             aliases: ["netsuite"] },
+  { label: "Variance Analysis",    aliases: ["variance analysis"] },
+
+  // ── Insurance / Actuarial ───────────────────────────────────────────────────
+  { label: "Actuarial Science",    aliases: ["actuarial", "actuarial science", "actuarial analysis", "actuarial modeling"] },
+  { label: "Loss Reserving",       aliases: ["loss reserving", "loss reserves", "reserving analysis"] },
+  { label: "Underwriting",         aliases: ["underwriting", "underwriter"] },
+  { label: "Generalized Linear Models", aliases: ["generalized linear model", "generalized linear models"] },
+  { label: "Property & Casualty",  aliases: ["property and casualty", "property & casualty", "p&c insurance"] },
+  { label: "Claims Management",    aliases: ["claims management", "claims adjusting", "claims processing"] },
+  { label: "Risk Modeling",        aliases: ["risk modeling", "risk modelling"] },
+
+  // ── Construction / Civil Engineering ────────────────────────────────────────
+  { label: "Revit",                aliases: ["revit", "autodesk revit"] },
+  { label: "BIM",                  aliases: ["building information modeling", "building information modelling", "bim"] },
+  { label: "Civil 3D",             aliases: ["civil 3d", "autocad civil 3d"] },
+  { label: "STAAD.Pro",            aliases: ["staad.pro", "staad pro", "staad"] },
+  { label: "Geotechnical Engineering", aliases: ["geotechnical", "geotechnical engineering"] },
+  { label: "Land Surveying",       aliases: ["land surveying", "civil surveying"] },
+  { label: "PE License",           aliases: ["pe license", "professional engineer license", "licensed professional engineer"] },
+  { label: "FE Exam",              aliases: ["fe exam", "fundamentals of engineering exam", "engineer in training"] },
+  { label: "Construction Management", aliases: ["construction management"] },
+  { label: "Primavera P6",         aliases: ["primavera", "primavera p6"] },
+  { label: "OSHA",                 aliases: ["osha", "osha 30", "osha 10"] },
+
+  // ── Energy / Oil & Gas / Renewables ─────────────────────────────────────────
+  { label: "Petroleum Engineering", aliases: ["petroleum engineering"] },
+  { label: "Reservoir Engineering", aliases: ["reservoir engineering", "reservoir simulation", "reservoir modeling"] },
+  { label: "Drilling Engineering", aliases: ["drilling engineering", "drilling operations"] },
+  { label: "Petrophysics",         aliases: ["petrophysics", "petrophysical analysis"] },
+  { label: "Well Logging",         aliases: ["well logging", "well log analysis", "wireline logging"] },
+  { label: "Aspen HYSYS",          aliases: ["hysys", "aspen hysys"] },
+  { label: "Aspen Plus",           aliases: ["aspen plus"] },
+  { label: "Process Simulation",   aliases: ["process simulation"] },
+  { label: "Pipeline Integrity",   aliases: ["pipeline engineering", "pipeline integrity"] },
+  { label: "Renewable Energy",     aliases: ["renewable energy", "solar energy", "wind energy", "photovoltaic"] },
+  { label: "HSE",                  aliases: ["health safety environment", "health, safety and environment", "hse compliance"] },
+
+  // ── Food Tech / Agriculture ─────────────────────────────────────────────────
+  { label: "HACCP",                aliases: ["haccp"] },
+  { label: "Food Safety",          aliases: ["food safety", "food safety management"] },
+  { label: "Food Science",         aliases: ["food science", "food technology"] },
+  { label: "Sensory Analysis",     aliases: ["sensory analysis", "sensory evaluation"] },
+  { label: "Fermentation",         aliases: ["fermentation"] },
+  { label: "Agronomy",             aliases: ["agronomy", "agronomist"] },
+  { label: "Precision Agriculture", aliases: ["precision agriculture", "precision ag"] },
+  { label: "Remote Sensing",       aliases: ["remote sensing"] },
+
+  // ── Controls / Manufacturing / Mechanical ───────────────────────────────────
+  { label: "SCADA",                aliases: ["scada"] },
+  { label: "HMI",                  aliases: ["human machine interface", "human-machine interface", "hmi development"] },
+  { label: "Thermodynamics",       aliases: ["thermodynamics"] },
+  { label: "Tolerance Analysis",   aliases: ["tolerance analysis", "tolerance stackup", "tolerance stack-up"] },
+  { label: "Actuators",            aliases: ["actuators", "actuator design"] },
+  { label: "Lean Manufacturing",   aliases: ["lean manufacturing", "lean six sigma"] },
+
+  // ── Telecommunications ──────────────────────────────────────────────────────
+  { label: "Fiber Optics",         aliases: ["fiber optic", "fiber optics", "fibre optic"] },
+
+  // ── Supply Chain / Logistics ────────────────────────────────────────────────
+  { label: "Warehouse Management System", aliases: ["warehouse management system", "warehouse management"] },
+  { label: "S&OP",                 aliases: ["sales and operations planning", "sales & operations planning", "s&op"] },
+  { label: "Demand Planning",      aliases: ["demand planning", "demand forecasting"] },
+  { label: "Inventory Management", aliases: ["inventory management"] },
+  { label: "Procurement",          aliases: ["procurement", "strategic sourcing"] },
+  { label: "Transportation Management", aliases: ["transportation management system", "transportation management"] },
+  { label: "Freight Forwarding",   aliases: ["freight forwarding", "freight operations"] },
+
+  // ── Pharma / Clinical (gaps) ────────────────────────────────────────────────
+  { label: "GxP",                  aliases: ["gxp", "good clinical practice", "good laboratory practice", "good manufacturing practice"] },
+  { label: "Biostatistics",        aliases: ["biostatistics", "biostatistician"] },
+  { label: "Epidemiology",         aliases: ["epidemiology", "epidemiologist"] },
+  { label: "Regulatory Affairs",   aliases: ["regulatory affairs"] },
 ]
 
 const BY_KEY = new Map<string, string>()
@@ -635,6 +719,15 @@ const ENGINEERING_SKILLS = new Set([
   "Mechanical Design", "Aerospace Engineering", "Electrical Engineering", "Hardware Design",
   "Signal Processing", "Power Electronics", "RF Engineering", "Sensors", "Controls",
   "LabVIEW", "COMSOL", "Simulink",
+  // Civil / construction
+  "Revit", "BIM", "Civil 3D", "STAAD.Pro", "Geotechnical Engineering", "Land Surveying",
+  "PE License", "FE Exam", "Construction Management", "Primavera P6",
+  // Energy / oil & gas / process
+  "Petroleum Engineering", "Reservoir Engineering", "Drilling Engineering", "Aspen HYSYS",
+  "Aspen Plus", "Process Simulation", "Pipeline Integrity", "Renewable Energy",
+  // Controls / manufacturing / mechanical
+  "SCADA", "HMI", "Thermodynamics", "Tolerance Analysis", "Actuators", "Lean Manufacturing",
+  "Fiber Optics",
 ])
 
 const TESTING_SKILLS = new Set([
@@ -660,6 +753,7 @@ const HEALTHCARE_SKILLS = new Set([
   "Clinical Laboratory Techniques", "GMP", "FDA Regulatory", "Bioinformatics",
   "PCR", "qPCR", "CRISPR", "Flow Cytometry", "Microscopy", "Molecular Biology",
   "NGS", "Cell Culture", "Pharmacovigilance", "Medical Devices", "Radiology",
+  "GxP", "Regulatory Affairs", "HACCP", "Food Safety",
 ])
 
 const SCIENCE_SKILLS = new Set([
@@ -667,6 +761,9 @@ const SCIENCE_SKILLS = new Set([
   "Experimental Design", "Mass Spectrometry", "Protein Analysis", "Western Blotting",
   "Animal Studies", "Animal Models", "Clinical Laboratory Techniques",
   "Molecular Biology", "qPCR", "GIS",
+  // Food / agriculture / earth science
+  "Petrophysics", "Well Logging", "Food Science", "Sensory Analysis", "Fermentation",
+  "Agronomy", "Precision Agriculture", "Remote Sensing", "Biostatistics", "Epidemiology",
 ])
 
 export const SOFT_SKILLS = new Set([
