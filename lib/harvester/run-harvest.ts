@@ -3,6 +3,7 @@ import { detectAdapter, type AtsAdapter, type AtsName } from "@/lib/harvester/ad
 import { throwIfAborted } from "@/lib/harvester/adapters/_base"
 import { canonicalCareersUrl } from "@/lib/harvester/canonical-url"
 import { persistJobsBulk } from "@/lib/harvester/persist-bulk"
+import { triggerInstantNotify } from "@/lib/alerts/notify-trigger"
 
 const TIER_INTERVAL_DEFAULTS: Record<string, number> = {
   tier_1: 180,        // 3 min — active sponsors / always-fresh boards
@@ -353,6 +354,12 @@ export async function runAtsHarvest(input: {
       bumpLastCrawled: false,
       emptyCrawl: result.jobs.length > 0 ? "reset" : "increment",
     })
+
+    // Fire instant alerts the moment a matching job lands. Non-blocking +
+    // best-effort; the /api/cron/instant-notify sweep backstops any miss.
+    if (persistResult.insertedJobIds.length > 0) {
+      void triggerInstantNotify(persistResult.insertedJobIds)
+    }
 
     return {
       matched: true,

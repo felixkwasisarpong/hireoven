@@ -1,14 +1,15 @@
 /**
- * GET /api/cron/instant-notify
+ * GET /api/cron/instant-notify  (safety-net sweep)
  *
- * Drives instant alerts/push for harvester-ingested jobs. The Supabase database
- * webhook only fires for Supabase-cloud inserts; the self-hosted harvester
- * bulk-inserts directly, so its jobs never reached the instant pipeline. This
- * cron closes that gap: every few minutes it sweeps jobs first detected inside a
- * lookback window and runs each through the shared processNotifications().
+ * The PRIMARY trigger is event-driven: the harvester POSTs new job IDs to
+ * /api/internal/notify-jobs the moment it inserts them (see notify-trigger.ts).
+ * This cron is the fallback — it catches anything the event path missed (the
+ * harvester couldn't reach the app, a non-harvester insert path, etc.) by
+ * sweeping jobs first detected inside a lookback window and running each through
+ * the shared processNotifications().
  *
- * Idempotent (alert_notifications dedup), so an overlapping window can't double-
- * notify. Bounded (window + LIMIT) so a big crawl can't trigger a storm.
+ * Idempotent (alert_notifications dedup), so re-processing a job the event path
+ * already handled can't double-notify. Bounded (window + LIMIT) so it can't storm.
  *
  * Schedule (crontab on the box), e.g. every 5 minutes:
  *   *\/5 * * * * curl -fsS -H "authorization: Bearer $CRON_SECRET" \

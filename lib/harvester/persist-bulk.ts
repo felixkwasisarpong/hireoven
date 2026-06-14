@@ -55,6 +55,8 @@ export type BulkPersistOutcome = {
   written: number
   inputCount: number
   filteredOut: number
+  /** IDs of rows newly inserted this run — used to fire instant notifications. */
+  insertedJobIds: string[]
 }
 
 type RawDataPayload = {
@@ -358,7 +360,7 @@ DO UPDATE SET
   closed_at              = NULL,
   updated_at             = EXCLUDED.updated_at
 WHERE jobs.content_hash IS DISTINCT FROM EXCLUDED.content_hash
-RETURNING (xmax = 0) AS inserted
+RETURNING id, (xmax = 0) AS inserted
 `
 
 function buildPersistRow(args: {
@@ -587,6 +589,7 @@ export async function persistJobsBulk(
       written: 0,
       inputCount,
       filteredOut: inputCount,
+      insertedJobIds: [],
     }
   }
 
@@ -610,10 +613,11 @@ export async function persistJobsBulk(
   // ON CONFLICT semantics).
   let inserted = 0
   let updated = 0
+  const insertedJobIds: string[] = []
   for (let i = 0; i < rows.length; i += MAX_JOBS_PER_BATCH) {
     const batch = rows.slice(i, i + MAX_JOBS_PER_BATCH)
     const payload = JSON.stringify(sanitizeJsonValue(batch))
-    const result = await pool.query<{ inserted: boolean }>(UPSERT_SQL, [
+    const result = await pool.query<{ id: string; inserted: boolean }>(UPSERT_SQL, [
       companyId,
       crawledAtIso,
       sourceAts,
@@ -621,8 +625,12 @@ export async function persistJobsBulk(
       payload,
     ])
     for (const r of result.rows) {
-      if (r.inserted) inserted += 1
-      else updated += 1
+      if (r.inserted) {
+        inserted += 1
+        insertedJobIds.push(r.id)
+      } else {
+        updated += 1
+      }
     }
   }
   const written = inserted + updated
@@ -646,5 +654,6 @@ export async function persistJobsBulk(
     written,
     inputCount,
     filteredOut: inputCount - deduped.length,
+    insertedJobIds,
   }
 }
