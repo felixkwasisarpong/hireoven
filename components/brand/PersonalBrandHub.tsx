@@ -2,8 +2,11 @@
 
 import { useCallback, useEffect, useState } from "react"
 import {
+  Activity,
   AlertCircle,
   AlertTriangle,
+  ArrowRight,
+  Award,
   BarChart3,
   Check,
   Copy,
@@ -12,8 +15,12 @@ import {
   Info,
   Lightbulb,
   Loader2,
+  MessageSquare,
   Pencil,
+  RefreshCw,
   Sparkles,
+  TrendingUp,
+  Users,
   Wrench,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -46,6 +53,8 @@ type WeeklyAction = {
 
 type BrandProfile = {
   linkedin_url: string | null
+  linkedin_connected: boolean
+  linkedin_last_synced_at: string | null
   visibility_score: number
   posting_frequency_target: number
   communities_active: number
@@ -53,7 +62,16 @@ type BrandProfile = {
   estimated_connections: number | null
   has_about_section: boolean | null
   headline: string | null
+  last_post_detected_at: string | null
   days_since_last_activity: number | null
+}
+
+type BrandRescanResponse = {
+  profile: BrandProfile
+  score: VisibilityScore
+  auditItems: BrandAuditItem[]
+  weeklyActions: WeeklyAction[]
+  scan?: { source: string; message: string }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -71,11 +89,26 @@ const VERDICT_CONFIG = {
   invisible: { label: "Invisible", color: "#dc2626", bg: "#fef2f2", ring: "ring-red-200" },
 } as const
 
-const SEVERITY_ICON: Record<string, React.ReactNode> = {
-  high:   <AlertCircle className="h-5 w-5 mt-0.5 shrink-0 text-red-500" />,
-  medium: <AlertTriangle className="h-5 w-5 mt-0.5 shrink-0 text-amber-500" />,
-  low:    <Info className="h-5 w-5 mt-0.5 shrink-0 text-slate-400" />,
-}
+const AUDIT_SEVERITY_CONFIG = {
+  high: {
+    label: "High priority",
+    Icon: AlertCircle,
+    iconClass: "bg-red-50 text-red-600 ring-red-100",
+    badgeClass: "bg-red-50 text-red-700 ring-red-100",
+  },
+  medium: {
+    label: "Medium priority",
+    Icon: AlertTriangle,
+    iconClass: "bg-amber-50 text-amber-600 ring-amber-100",
+    badgeClass: "bg-amber-50 text-amber-700 ring-amber-100",
+  },
+  low: {
+    label: "Low priority",
+    Icon: Info,
+    iconClass: "bg-slate-50 text-slate-500 ring-slate-100",
+    badgeClass: "bg-slate-50 text-slate-600 ring-slate-100",
+  },
+} as const
 
 const CONTENT_TYPE_LABELS: Record<string, string> = {
   linkedin_post: "LinkedIn Post",
@@ -92,6 +125,37 @@ const TONE_OPTIONS = [
   { value: "personal", label: "Personal" },
   { value: "technical", label: "Technical" },
   { value: "warm", label: "Warm" },
+] as const
+
+const MANUAL_PROFILE_FIELDS = [
+  {
+    label: "Recommendations",
+    key: "recommendations_count",
+    helper: "Received on LinkedIn",
+    suffix: "received",
+    Icon: Award,
+  },
+  {
+    label: "Connections",
+    key: "estimated_connections",
+    helper: "Network size",
+    suffix: "people",
+    Icon: Users,
+  },
+  {
+    label: "Communities",
+    key: "communities_active",
+    helper: "Groups or newsletters",
+    suffix: "active",
+    Icon: MessageSquare,
+  },
+  {
+    label: "Activity age",
+    key: "days_since_last_activity",
+    helper: "Lower is better",
+    suffix: "days",
+    Icon: Activity,
+  },
 ] as const
 
 // ── Score ring ────────────────────────────────────────────────────────────────
@@ -143,14 +207,34 @@ function BreakdownBar({ label, score, max, note }: { label: string; score: numbe
 
 // ── Audit item ────────────────────────────────────────────────────────────────
 
-function AuditItem({ item }: { item: BrandAuditItem }) {
+function AuditItem({ item, onAction }: { item: BrandAuditItem; onAction: () => void }) {
+  const cfg = AUDIT_SEVERITY_CONFIG[item.severity] ?? AUDIT_SEVERITY_CONFIG.low
+  const Icon = cfg.Icon
+
   return (
-    <div className="flex items-start gap-3 py-3.5 border-b border-slate-100 last:border-0">
-      {SEVERITY_ICON[item.severity] ?? <Info className="h-5 w-5 mt-0.5 shrink-0 text-slate-400" />}
-      <div className="flex-1 min-w-0">
-        <p className="text-[14px] font-semibold text-slate-900">{item.title}</p>
-        <p className="text-[13px] text-slate-500 mt-0.5 leading-relaxed">{item.detail}</p>
-        <p className="mt-1.5 text-[12px] font-semibold text-[var(--color-primary,#2563eb)]">→ {item.fix_action}</p>
+    <div className="rounded-xl border border-slate-200 bg-white p-4 transition-colors hover:border-slate-300">
+      <div className="flex items-start gap-3">
+        <div className={cn("mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ring-1", cfg.iconClass)}>
+          <Icon className="h-[18px] w-[18px]" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="mb-1 flex flex-wrap items-center gap-2">
+            <span className={cn("rounded-full px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-wide ring-1", cfg.badgeClass)}>
+              {cfg.label}
+            </span>
+            <span className="text-[11px] font-medium text-slate-400">{CONTENT_TYPE_LABELS[item.item_type] ?? item.item_type.replace(/_/g, " ")}</span>
+          </div>
+          <p className="text-[14.5px] font-bold text-slate-950">{item.title}</p>
+          <p className="mt-1 text-[13px] leading-relaxed text-slate-500">{item.detail}</p>
+          <button
+            type="button"
+            onClick={onAction}
+            className="mt-3 inline-flex max-w-full items-center gap-1.5 rounded-lg bg-slate-50 px-3 py-2 text-left text-[12.5px] font-semibold leading-snug text-[var(--color-primary,#2563eb)] ring-1 ring-slate-200 transition hover:bg-blue-50 hover:ring-blue-100"
+          >
+            <ArrowRight className="h-3.5 w-3.5 shrink-0" />
+            <span>{item.fix_action}</span>
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -300,6 +384,88 @@ function LinkedInPrompt({ onSave }: { onSave: (url: string) => void }) {
   )
 }
 
+function profileHref(url: string): string {
+  return /^https?:\/\//i.test(url) ? url : `https://${url}`
+}
+
+function formatScanTime(value: string | null | undefined): string {
+  if (!value) return "Not scanned yet"
+  return new Date(value).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  })
+}
+
+function formatActivityAge(days: number | null | undefined): string {
+  if (days === null || days === undefined) return "activity unknown"
+  if (days <= 0) return "activity today"
+  if (days === 1) return "activity 1 day ago"
+  if (days < 30) return `activity ${days} days ago`
+  if (days < 365) return `activity ${Math.round(days / 30)} months ago`
+  return `activity ${Math.round(days / 365)} years ago`
+}
+
+function LinkedInRescanPanel({
+  profile,
+  rescanning,
+  message,
+  onRescan,
+}: {
+  profile: BrandProfile
+  rescanning: boolean
+  message: string | null
+  onRescan: () => void
+}) {
+  if (!profile.linkedin_url) return null
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">LinkedIn profile</p>
+          <a
+            href={profileHref(profile.linkedin_url)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-1 block truncate text-[13px] font-semibold text-slate-900 hover:text-orange-700"
+          >
+            {profile.linkedin_url}
+          </a>
+          <p className="mt-1 text-[12px] text-slate-500">
+            Last scanned: {formatScanTime(profile.linkedin_last_synced_at)}
+            {profile.linkedin_connected ? " · public metadata found" : " · using saved profile data"}
+            {" · "}
+            {formatActivityAge(profile.days_since_last_activity)}
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={onRescan}
+          disabled={rescanning}
+          className={cn(
+            "inline-flex shrink-0 items-center justify-center gap-2 rounded-lg px-3.5 py-2 text-[13px] font-semibold transition-colors",
+            rescanning
+              ? "cursor-not-allowed bg-slate-100 text-slate-400"
+              : "bg-slate-950 text-white hover:bg-slate-800"
+          )}
+        >
+          <RefreshCw className={cn("h-3.5 w-3.5", rescanning && "animate-spin")} />
+          {rescanning ? "Scanning..." : "Rescan LinkedIn"}
+        </button>
+      </div>
+
+      {message ? (
+        <p className="mt-3 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-[12px] leading-relaxed text-orange-800">
+          {message}
+        </p>
+      ) : null}
+    </div>
+  )
+}
+
 // ── Weekly actions strip ──────────────────────────────────────────────────────
 
 function WeeklyActions({ actions }: { actions: WeeklyAction[] }) {
@@ -344,7 +510,10 @@ export default function PersonalBrandHub() {
   const [writingIdeaId, setWritingIdeaId] = useState<string | null>(null)
   const [draftsLoading, setDraftsLoading] = useState(false)
   const [toneForIdea, setToneForIdea] = useState<"professional" | "personal" | "technical" | "warm">("professional")
+  const [ideaSource, setIdeaSource] = useState<"cv" | "trending">("cv")
   const [error, setError] = useState<string | null>(null)
+  const [rescanning, setRescanning] = useState(false)
+  const [rescanMessage, setRescanMessage] = useState<string | null>(null)
 
   const loadProfile = useCallback(async () => {
     try {
@@ -399,7 +568,11 @@ export default function PersonalBrandHub() {
   async function handleGenerateIdeas() {
     setGeneratingIdeas(true)
     try {
-      const r = await fetch("/api/brand/ideas", { method: "POST" })
+      const r = await fetch("/api/brand/ideas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: ideaSource }),
+      })
       if (r.ok) {
         const d = await r.json() as { ideas: ContentIdea[] }
         setIdeas((prev) => [...d.ideas, ...prev].slice(0, 20))
@@ -446,6 +619,112 @@ export default function PersonalBrandHub() {
     setIdeas((prev) => prev.filter((i) => i.id !== id))
   }
 
+  function scanLinkedInWithExtension(url: string | null | undefined): Promise<
+    { status: "synced" } | { status: "unavailable" } | { status: "failed"; error: string }
+  > {
+    if (typeof window === "undefined") return Promise.resolve({ status: "unavailable" })
+
+    return new Promise((resolve) => {
+      let started = false
+      let settled = false
+      let ackTimer: ReturnType<typeof setTimeout> | null = null
+      let resultTimer: ReturnType<typeof setTimeout> | null = null
+
+      const cleanup = () => {
+        window.removeEventListener("message", handler)
+        if (ackTimer) clearTimeout(ackTimer)
+        if (resultTimer) clearTimeout(resultTimer)
+      }
+
+      const settle = (result: { status: "synced" } | { status: "unavailable" } | { status: "failed"; error: string }) => {
+        if (settled) return
+        settled = true
+        cleanup()
+        resolve(result)
+      }
+
+      const handler = (event: MessageEvent) => {
+        if (event.source !== window) return
+        if (typeof event.data !== "object" || event.data === null) return
+        const msg = event.data as Record<string, unknown>
+        if (msg.source !== "hireoven-ext") return
+
+        if (msg.type === "LINKEDIN_BRAND_PROFILE_SCAN_STARTED") {
+          started = true
+          if (ackTimer) clearTimeout(ackTimer)
+          return
+        }
+
+        if (msg.type === "LINKEDIN_BRAND_PROFILE_RESULT") {
+          if (msg.ok === true) {
+            settle({ status: "synced" })
+          } else {
+            settle({
+              status: "failed",
+              error: typeof msg.error === "string" && msg.error
+                ? msg.error
+                : "Extension could not read LinkedIn.",
+            })
+          }
+        }
+      }
+
+      window.addEventListener("message", handler)
+      window.postMessage(
+        {
+          source: "hireoven-apex",
+          type: "BRAND_RESCAN_LINKEDIN",
+          ...(url ? { url } : {}),
+        },
+        window.location.origin
+      )
+
+      ackTimer = setTimeout(() => {
+        if (!started) settle({ status: "unavailable" })
+      }, 1200)
+
+      resultTimer = setTimeout(() => {
+        settle({ status: "failed", error: "Extension scan timed out." })
+      }, 45_000)
+    })
+  }
+
+  async function handleRescanLinkedIn() {
+    setRescanning(true)
+    setError(null)
+    setRescanMessage(null)
+    try {
+      const extensionScan = await scanLinkedInWithExtension(profile?.linkedin_url)
+      if (extensionScan.status === "synced") {
+        await Promise.all([loadProfile(), loadScore()])
+        setRescanMessage("LinkedIn refreshed through the Chrome extension.")
+        return
+      }
+      if (extensionScan.status === "failed") {
+        setRescanMessage(`${extensionScan.error} Falling back to public LinkedIn scan.`)
+      }
+
+      const r = await fetch("/api/brand/rescan", { method: "POST" })
+      const d = await r.json().catch(() => ({})) as Partial<BrandRescanResponse> & { error?: string }
+      if (!r.ok || !d.profile || !d.score) {
+        throw new Error(d.error ?? "Could not rescan LinkedIn.")
+      }
+
+      setProfile(d.profile)
+      setScore(d.score)
+      setAuditItems(d.auditItems ?? [])
+      setWeeklyActions(d.weeklyActions ?? [])
+      setRescanMessage((prev) => {
+        const publicMessage = d.scan?.message ?? "LinkedIn profile refreshed."
+        return prev ? `${prev} ${publicMessage}` : publicMessage
+      })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not rescan LinkedIn.")
+    } finally {
+      setRescanning(false)
+    }
+  }
+
   const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: "overview", label: "Overview", icon: <BarChart3 className="h-4 w-4" /> },
     { id: "ideas", label: "Content ideas", icon: <Lightbulb className="h-4 w-4" /> },
@@ -453,19 +732,19 @@ export default function PersonalBrandHub() {
   ]
 
   return (
-    <div className="mx-auto max-w-2xl px-4 pb-12 sm:px-6">
+    <div className="w-full pb-12">
       {/* Tab bar */}
-      <div className="flex gap-1 border-b border-slate-200 mb-6">
+      <div className="mb-6 flex flex-wrap gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
         {TABS.map((t) => (
           <button
             key={t.id}
             type="button"
             onClick={() => setTab(t.id)}
             className={cn(
-              "flex items-center gap-1.5 px-4 py-3 text-[13.5px] font-medium transition-colors border-b-2 -mb-px",
+              "flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-[13px] font-semibold transition-colors",
               tab === t.id
-                ? "border-[var(--color-primary,#2563eb)] text-[var(--color-primary,#2563eb)]"
-                : "border-transparent text-slate-500 hover:text-slate-800"
+                ? "bg-orange-50 text-orange-700"
+                : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
             )}
           >
             {t.icon}
@@ -478,7 +757,21 @@ export default function PersonalBrandHub() {
       {tab === "overview" && (
         <div className="space-y-6">
           {!profile?.linkedin_url && (
-            <LinkedInPrompt onSave={(url) => setProfile((p) => p ? { ...p, linkedin_url: url } : null)} />
+            <LinkedInPrompt
+              onSave={(url) => {
+                setProfile((p) => p ? { ...p, linkedin_url: url } : null)
+                setRescanMessage("LinkedIn URL saved. Run a rescan to refresh your score.")
+              }}
+            />
+          )}
+
+          {profile?.linkedin_url && (
+            <LinkedInRescanPanel
+              profile={profile}
+              rescanning={rescanning}
+              message={rescanMessage}
+              onRescan={handleRescanLinkedIn}
+            />
           )}
 
           {scoreLoading ? (
@@ -490,7 +783,7 @@ export default function PersonalBrandHub() {
           ) : score ? (
             <>
               {/* Score hero */}
-              <div className="rounded-2xl border border-slate-200 bg-white p-5">
+              <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
                 <div className="flex items-center gap-5">
                   <ScoreRing score={score.score} verdict={score.verdict} />
                   <div className="flex-1">
@@ -524,49 +817,83 @@ export default function PersonalBrandHub() {
 
               {/* Audit items */}
               {auditItems.length > 0 && (
-                <div className="rounded-2xl border border-slate-200 bg-white p-5">
-                  <p className="text-[11.5px] font-bold uppercase tracking-wide text-slate-400 mb-1">
-                    What to fix
-                  </p>
-                  <p className="text-[12px] text-slate-400 mb-4">{auditItems.length} item{auditItems.length !== 1 ? "s" : ""}</p>
-                  <div>
+                <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <p className="text-[11.5px] font-bold uppercase tracking-wide text-slate-400">
+                        What to fix
+                      </p>
+                      <p className="mt-1 text-[13px] text-slate-500">Prioritized LinkedIn gaps from your current score.</p>
+                    </div>
+                    <span className="inline-flex w-fit items-center rounded-full bg-slate-50 px-2.5 py-1 text-[11px] font-bold text-slate-500 ring-1 ring-slate-200">
+                      {auditItems.length} item{auditItems.length !== 1 ? "s" : ""}
+                    </span>
+                  </div>
+                  <div className="mt-4 grid gap-3">
                     {auditItems.map((item) => (
-                      <AuditItem key={item.item_type} item={item} />
+                      <AuditItem key={item.item_type} item={item} onAction={() => setTab("ideas")} />
                     ))}
                   </div>
                 </div>
               )}
 
               {/* Manual update prompt */}
-              <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-4">
-                <p className="text-[12.5px] font-semibold text-slate-600 mb-3">Update your profile data</p>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                  {[
-                    { label: "Recommendations", key: "recommendations_count", type: "number" },
-                    { label: "Connections", key: "estimated_connections", type: "number" },
-                    { label: "Communities active", key: "communities_active", type: "number" },
-                  ].map(({ label, key, type }) => (
-                    <div key={key}>
-                      <label className="block text-[11px] font-semibold text-slate-400 mb-1">{label}</label>
-                      <input
-                        type={type}
-                        min={0}
-                        defaultValue={(profile as Record<string, unknown>)?.[key] as number ?? ""}
-                        onBlur={async (e) => {
-                          const val = parseInt(e.target.value, 10)
-                          if (!isNaN(val)) {
-                            await fetch("/api/brand/profile", {
-                              method: "PATCH",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ [key]: val }),
-                            })
-                            loadScore()
-                          }
-                        }}
-                        className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[13px] outline-none focus:border-[var(--color-primary,#2563eb)]"
-                      />
-                    </div>
-                  ))}
+              <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+                <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <p className="text-[11.5px] font-bold uppercase tracking-wide text-slate-400">Profile signals</p>
+                    <p className="mt-1 text-[14px] font-bold text-slate-900">Update LinkedIn data</p>
+                  </div>
+                  <p className="max-w-md text-[12px] leading-relaxed text-slate-400">
+                    Manual values are used only when LinkedIn hides a field from the extension or public scan.
+                  </p>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  {MANUAL_PROFILE_FIELDS.map((field) => {
+                    const Icon = field.Icon
+                    const key = field.key
+                    const value = ((profile as Record<string, unknown>)?.[key] as number | null) ?? 0
+
+                    return (
+                      <div key={`${key}-${value}`} className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+                        <div className="flex items-start gap-2.5">
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white text-slate-500 ring-1 ring-slate-200">
+                            <Icon className="h-4 w-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <label className="block text-[12px] font-bold text-slate-800">{field.label}</label>
+                            <p className="mt-0.5 truncate text-[11px] text-slate-400">{field.helper}</p>
+                          </div>
+                        </div>
+                        <div className="mt-3 flex h-10 items-center rounded-lg border border-slate-200 bg-white transition focus-within:border-[var(--color-primary,#2563eb)] focus-within:ring-2 focus-within:ring-blue-50">
+                          <input
+                            type="number"
+                            min={0}
+                            aria-label={field.label}
+                            defaultValue={value}
+                            onBlur={async (e) => {
+                              const val = parseInt(e.target.value, 10)
+                              if (!isNaN(val)) {
+                                const body: Record<string, number | string> = { [key]: val }
+                                if (key === "days_since_last_activity") {
+                                  body.last_post_detected_at = new Date(Date.now() - val * 86_400_000).toISOString()
+                                }
+                                await fetch("/api/brand/profile", {
+                                  method: "PATCH",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify(body),
+                                })
+                                loadProfile()
+                                loadScore()
+                              }
+                            }}
+                            className="min-w-0 flex-1 bg-transparent px-3 text-[17px] font-bold tabular-nums text-slate-950 outline-none"
+                          />
+                          <span className="shrink-0 pr-3 text-[11px] font-semibold text-slate-400">{field.suffix}</span>
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
             </>
@@ -577,9 +904,37 @@ export default function PersonalBrandHub() {
       {/* ── Ideas tab ── */}
       {tab === "ideas" && (
         <div>
+          {/* Source toggle */}
+          <div className="mb-4 flex items-center gap-1 p-1 rounded-xl border border-slate-200 bg-white w-fit shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+            <button
+              type="button"
+              onClick={() => setIdeaSource("cv")}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12.5px] font-semibold transition-colors",
+                ideaSource === "cv" ? "bg-slate-900 text-white" : "text-slate-500 hover:text-slate-800 hover:bg-slate-50"
+              )}
+            >
+              <Lightbulb className="h-3.5 w-3.5" />
+              From my experience
+            </button>
+            <button
+              type="button"
+              onClick={() => setIdeaSource("trending")}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12.5px] font-semibold transition-colors",
+                ideaSource === "trending" ? "bg-slate-900 text-white" : "text-slate-500 hover:text-slate-800 hover:bg-slate-50"
+              )}
+            >
+              <TrendingUp className="h-3.5 w-3.5" />
+              Trending in my field
+            </button>
+          </div>
+
           <div className="flex items-center justify-between mb-5">
             <p className="text-[13px] text-slate-500">
-              Content ideas specific to your experience and skills
+              {ideaSource === "trending"
+                ? "Hot topics and debates in your field — add your perspective"
+                : "Content ideas specific to your experience and skills"}
             </p>
             <div className="flex items-center gap-2">
               <select
@@ -602,7 +957,9 @@ export default function PersonalBrandHub() {
               >
                 {generatingIdeas
                   ? <><Loader2 className="h-3.5 w-3.5 animate-spin" />Generating…</>
-                  : <><Sparkles className="h-3.5 w-3.5" />Generate ideas</>
+                  : ideaSource === "trending"
+                    ? <><TrendingUp className="h-3.5 w-3.5" />Find trending ideas</>
+                    : <><Sparkles className="h-3.5 w-3.5" />Generate ideas</>
                 }
               </button>
             </div>
@@ -614,19 +971,31 @@ export default function PersonalBrandHub() {
             </div>
           ) : ideas.length === 0 ? (
             <div className="py-14 text-center">
-              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-50 text-amber-500">
-                <Lightbulb className="h-6 w-6" />
+              <div className={cn(
+                "mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl",
+                ideaSource === "trending" ? "bg-blue-50 text-blue-500" : "bg-amber-50 text-amber-500"
+              )}>
+                {ideaSource === "trending"
+                  ? <TrendingUp className="h-6 w-6" />
+                  : <Lightbulb className="h-6 w-6" />
+                }
               </div>
               <p className="text-[14.5px] font-semibold text-slate-700 mb-1">No ideas yet</p>
-              <p className="text-[13px] text-slate-500 mb-5">Generate your first batch of ideas from your profile</p>
+              <p className="text-[13px] text-slate-500 mb-5">
+                {ideaSource === "trending"
+                  ? "Find trending topics in your field to post about"
+                  : "Generate your first batch of ideas from your profile"}
+              </p>
               <button
                 type="button"
                 disabled={generatingIdeas}
                 onClick={handleGenerateIdeas}
                 className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--color-primary,#2563eb)] px-4 py-2 text-[13px] font-semibold text-white hover:bg-blue-700 transition-colors"
               >
-                <Sparkles className="h-4 w-4" />
-                Generate 5 ideas from my profile
+                {ideaSource === "trending"
+                  ? <><TrendingUp className="h-4 w-4" />Find trending ideas in my field</>
+                  : <><Sparkles className="h-4 w-4" />Generate 5 ideas from my profile</>
+                }
               </button>
             </div>
           ) : (

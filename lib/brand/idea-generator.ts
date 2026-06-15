@@ -128,15 +128,8 @@ const FALLBACK_IDEAS: BrandContentIdea[] = [
   },
 ]
 
-export async function generateContentIdeas(
-  userId: string,
-  count = 5
-): Promise<BrandContentIdea[]> {
-  const ctx = await gatherUserContext(userId)
-
-  if (!anthropic) return FALLBACK_IDEAS.slice(0, count)
-
-  const prompt = `You are a personal brand coach for tech professionals. Generate ${count} specific LinkedIn content ideas.
+function buildCvPrompt(ctx: UserContext, count: number): string {
+  return `You are a personal brand coach for tech professionals. Generate ${count} specific LinkedIn content ideas.
 
 USER PROFILE:
 - Name: ${ctx.fullName ?? "the user"}
@@ -168,6 +161,65 @@ Return a JSON array of ${count} objects with this exact shape:
 
 Mix content types: 3 linkedin_posts, 1 linkedin_article, 1 profile_update.
 Order by estimated impact (highest first).`
+}
+
+function buildTrendingPrompt(ctx: UserContext, count: number): string {
+  const field = ctx.topSkills.slice(0, 5).join(", ") || "software engineering"
+  const seniority = ctx.seniorityLevel ?? "mid-level"
+  const targeting = ctx.targetRoles.slice(0, 3).join(", ") || "engineering roles"
+
+  return `You are a personal brand coach for tech professionals. Generate ${count} LinkedIn content ideas based on CURRENTLY TRENDING topics in their field — not their personal history.
+
+PERSON'S BACKGROUND (use this so they can write authentically):
+- Seniority: ${seniority} · ${ctx.yearsExperience ?? "several"} years experience
+- Skills: ${field}
+- Targeting: ${targeting}
+
+YOUR TASK:
+Identify hot, currently discussed topics/debates/tools/shifts in the space of: ${field}.
+Examples of the type of thing you should surface:
+- A newly released framework, model, or tool everyone is evaluating
+- An industry debate or opinion (e.g. "is X dead?", "X vs Y")
+- A hiring/job market shift that affects people in this field
+- An AI tool that is changing workflows in this domain
+- A recent methodology shift (e.g. new best practice replacing old one)
+- A regulatory/legal development relevant to this industry
+
+RULES:
+1. Each idea must be about something ACTUALLY trending or debated right now in their field
+2. Show them how to connect it to their own experience — the hook should feel like their authentic take
+3. Hot takes and contrarian angles outperform neutral summaries
+4. No generic "thoughts on AI" — be specific about which tool, which debate, which shift
+5. Each idea must be completable in under 300 words for a linkedin_post
+
+Return a JSON array of ${count} objects with this exact shape:
+[{
+  "title": "Specific headline anchored to the trend",
+  "hook": "Their authentic opening take on this trend, max 20 words, first-person or strong opinion",
+  "content_type": "linkedin_post",
+  "topic_tags": ["tag1", "tag2", "tag3"],
+  "estimated_reach_min": 1000,
+  "estimated_reach_max": 5000,
+  "best_day_to_post": "Tuesday",
+  "generated_from": "name the specific trend, tool, or debate this is about"
+}]
+
+Mix: 3 linkedin_posts, 1 linkedin_article, 1 community_post.
+Order by likely virality (highest first).`
+}
+
+export async function generateContentIdeas(
+  userId: string,
+  count = 5,
+  mode: "cv" | "trending" = "cv"
+): Promise<BrandContentIdea[]> {
+  const ctx = await gatherUserContext(userId)
+
+  if (!anthropic) return FALLBACK_IDEAS.slice(0, count)
+
+  const prompt = mode === "trending"
+    ? buildTrendingPrompt(ctx, count)
+    : buildCvPrompt(ctx, count)
 
   try {
     const message = await anthropic.messages.create({
