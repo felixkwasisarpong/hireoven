@@ -1132,6 +1132,44 @@ export async function POST(request: NextRequest) {
   if (requestSource === "mini") {
     if (!routing.useLLM) {
       const deterministicResponse = buildDeterministicApexResponse(userMessage, mode)
+
+      // When Focus Mode is being enabled, also fetch the user's top-match jobs
+      // and add HIGHLIGHT_JOBS so the feed visually calls them out.
+      const enablesFocus = deterministicResponse.actions?.some(
+        (a) => a.type === "SET_FOCUS_MODE" && "payload" in a && (a.payload as { enabled?: boolean }).enabled
+      )
+      if (enablesFocus) {
+        try {
+          const { getPostgresPool } = await import("@/lib/postgres/server")
+          const pool = getPostgresPool()
+          const { rows: topScores } = await pool.query<{ job_id: string; overall_score: number }>(
+            `SELECT jms.job_id, jms.overall_score
+               FROM job_match_scores jms
+               INNER JOIN jobs j ON j.id = jms.job_id
+              WHERE jms.user_id = $1
+                AND j.is_active = true
+                AND COALESCE(j.publication_status, 'published') = 'published'
+              ORDER BY jms.overall_score DESC
+              LIMIT 8`,
+            [user.id]
+          )
+          if (topScores.length > 0) {
+            deterministicResponse.actions = deterministicResponse.actions ?? []
+            deterministicResponse.actions.push({
+              type: "HIGHLIGHT_JOBS",
+              payload: {
+                jobIds: topScores.map((r) => r.job_id),
+                reason: `Your top ${topScores.length} matches — highest overall scores`,
+              },
+              label: `Highlight top ${topScores.length} matches`,
+            })
+            deterministicResponse.answer = `Done — I sorted your feed by best match and highlighted your top ${topScores.length} opportunities. Scroll up to see them.`
+          }
+        } catch {
+          // non-critical — still return the focus mode action
+        }
+      }
+
       budgetTracker.record({
         feature: "apex_chat", model: MODEL, tier: inferTier(MODEL),
         inputTokens: 0, outputTokens: 0, latencyMs: 0, costUsd: 0,
