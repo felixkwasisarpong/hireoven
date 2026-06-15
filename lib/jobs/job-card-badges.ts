@@ -2,6 +2,24 @@ import { getPostedFreshness } from "@/lib/jobs/intelligence"
 import type { Job } from "@/types"
 import type { JobEvidenceFacts } from "@/types/job-evidence-facts"
 
+export type ApplicantRankTier = "top" | "strong" | "good"
+
+export type ApplicantRankBadge = {
+  tier: ApplicantRankTier
+  label: string
+  /** Tailwind classes for the pill */
+  pillClass: string
+}
+
+/** Derive a score-based applicant rank badge. Returns null when no score or score < 55. */
+export function getApplicantRankBadge(score: number | null): ApplicantRankBadge | null {
+  if (score === null) return null
+  if (score >= 85) return { tier: "top",    label: "Top Applicant",  pillClass: "bg-emerald-500 text-white" }
+  if (score >= 70) return { tier: "strong", label: "Strong Match",   pillClass: "bg-sky-500 text-white" }
+  if (score >= 55) return { tier: "good",   label: "Good Match",     pillClass: "bg-amber-500 text-white" }
+  return null
+}
+
 function toRecord(raw: unknown): Record<string, unknown> | null {
   return raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : null
 }

@@ -48,7 +48,7 @@ import {
   hasUsableMatchScore,
   resolveOverallMatchScore,
 } from "@/lib/jobs/match-score-display"
-import { buildTopApplicantOpportunityBadgeTitle } from "@/lib/jobs/job-card-badges"
+import { buildTopApplicantOpportunityBadgeTitle, getApplicantRankBadge } from "@/lib/jobs/job-card-badges"
 import {
   JOB_APPLICATION_SAVED_EVENT,
   JOB_APPLICATION_UNSAVED_EVENT,
@@ -516,6 +516,8 @@ export default function JobCardV2({
     return show
   }, [rawTopApplicantFlag, job, score])
 
+  const rankBadge = getApplicantRankBadge(score)
+
   const whyBullets = useMemo(() => {
     const bullets: string[] = []
     if (score !== null) {
@@ -754,8 +756,14 @@ export default function JobCardV2({
               </div>
 
               {/* Status badges */}
-              {(activelyHiring || easyApply || topApplicantSignal || ghostRepostSignals.length > 0) && (
+              {(rankBadge || activelyHiring || easyApply || topApplicantSignal || ghostRepostSignals.length > 0) && (
                 <div className="mt-2.5 flex flex-wrap gap-1.5">
+                  {rankBadge && (
+                    <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold", rankBadge.pillClass)}>
+                      <Trophy className="h-3 w-3" aria-hidden />
+                      {rankBadge.label}
+                    </span>
+                  )}
                   {activelyHiring && (
                     <span className="inline-flex items-center gap-1.5 rounded-full bg-violet-600 px-2.5 py-1 text-[11px] font-semibold text-white">
                       <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white/70" aria-hidden />
@@ -768,7 +776,7 @@ export default function JobCardV2({
                       Easy Apply
                     </span>
                   )}
-                  {topApplicantSignal && (
+                  {topApplicantSignal && !rankBadge && (
                     <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500 px-2.5 py-1 text-[11px] font-semibold text-white">
                       <Trophy className="h-3 w-3" aria-hidden />
                       Top Applicant

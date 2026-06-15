@@ -37,6 +37,7 @@ import { FairChanceBadge } from "@/components/background-check/FairChanceBadge"
 import { CohortBadge } from "@/components/cohorts/CohortBadge"
 import { useToast } from "@/components/ui/ToastProvider"
 import { buildJobCardFactList, buildJobEvidenceFacts } from "@/lib/jobs/job-evidence-facts"
+import { getApplicantRankBadge } from "@/lib/jobs/job-card-badges"
 import { jobSourceFallbackLogo } from "@/lib/jobs/source-fallback-logo"
 import { cn } from "@/lib/utils"
 import type { JobMatchScore, JobWithCompany, JobWithMatchScore } from "@/types"
@@ -192,6 +193,8 @@ export default function JobCard({
   const showSponsorshipBanner =
     employerLikelySponsorsH1b(job) || (!job.requires_authorization && sponsorScore >= 55)
   const sponsorshipCopy = showSponsorshipBanner ? employerSponsorshipCardCopy(job) : null
+
+  const rankBadge = getApplicantRankBadge(score)
 
   const evidenceFacts = useMemo(() => buildJobEvidenceFacts(job), [job])
   const jobCardFactItems = useMemo(
@@ -354,6 +357,12 @@ export default function JobCard({
                       <Trophy className="h-2.5 w-2.5" aria-hidden />
                     </span>
                     Top Match
+                  </span>
+                )}
+                {rankBadge && (
+                  <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.08em]", rankBadge.pillClass)}>
+                    <Trophy className="h-2.5 w-2.5" aria-hidden />
+                    {rankBadge.label}
                   </span>
                 )}
               </div>
