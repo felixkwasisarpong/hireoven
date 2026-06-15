@@ -429,6 +429,42 @@ function registerMessageBridge(): void {
           })()
           return true // keep the message port open for async sendResponse
         }
+        case "SCRAPE_LINKEDIN_BRAND_PROFILE": {
+          // Runs on the user's own LinkedIn profile/activity tab and returns
+          // structured Brand signals for the dashboard score.
+          const storedLinkedInUrl = typeof (message as { storedLinkedInUrl?: unknown }).storedLinkedInUrl === "string"
+            ? (message as { storedLinkedInUrl: string }).storedLinkedInUrl
+            : null
+          ;(async () => {
+            await new Promise<void>((resolve) => {
+              const start = Date.now()
+              let lastHeight = 0
+              let stableSince = 0
+              function step() {
+                const elapsed = Date.now() - start
+                const h = document.body?.scrollHeight ?? 0
+                const atBottom = window.scrollY + window.innerHeight >= h - 240
+                if (h === lastHeight && atBottom) {
+                  if (!stableSince) stableSince = elapsed
+                  if (elapsed - stableSince > 500) { resolve(); return }
+                } else {
+                  stableSince = 0
+                }
+                lastHeight = h
+                if (elapsed > 6000) { resolve(); return }
+                window.scrollBy(0, Math.round(window.innerHeight * 0.85))
+                setTimeout(step, 280)
+              }
+              step()
+            })
+
+            window.scrollTo(0, 0)
+            await new Promise((r) => setTimeout(r, 400))
+            const profile = extractLinkedInProfile(storedLinkedInUrl)
+            sendResponse({ type: "PAGE_DETECTED", page: { ats: "linkedin" }, profile } as never)
+          })()
+          return true
+        }
         case "PUSH_LINKEDIN_PROFILE_RESULT": {
           // Background finished the profile import and is pushing the result to this
           // Apex tab. Relay it to the web app via window.postMessage.
@@ -437,6 +473,17 @@ function registerMessageBridge(): void {
             type: "LINKEDIN_PROFILE_RESULT",
             ok: msg.ok,
             rawText: msg.rawText,
+            error: msg.error,
+          }, window.location.origin)
+          sendResponse({ type: "PAGE_DETECTED", page: { ats: "other" } } as never)
+          break
+        }
+        case "PUSH_LINKEDIN_BRAND_RESULT": {
+          const msg = message as unknown as { ok: boolean; error?: string }
+          window.postMessage({
+            source: EXT_SOURCE,
+            type: "LINKEDIN_BRAND_PROFILE_RESULT",
+            ok: msg.ok,
             error: msg.error,
           }, window.location.origin)
           sendResponse({ type: "PAGE_DETECTED", page: { ats: "other" } } as never)
@@ -755,6 +802,13 @@ function registerPageBridge(): void {
           ok: false,
           error: "Extension was updated — please refresh this page (⌘⇧R) and try again.",
         }, window.location.origin)
+      } else if (msg.type === "BRAND_RESCAN_LINKEDIN") {
+        window.postMessage({
+          source: EXT_SOURCE,
+          type: "LINKEDIN_BRAND_PROFILE_RESULT",
+          ok: false,
+          error: "Extension was updated — please refresh this page and try again.",
+        }, window.location.origin)
       }
       return
     }
@@ -802,6 +856,16 @@ function registerPageBridge(): void {
     if (msg.type === "IMPORT_LINKEDIN_PROFILE") {
       const url = typeof msg.url === "string" ? msg.url : undefined
       chrome.runtime.sendMessage({ type: "IMPORT_LINKEDIN_PROFILE", url }).catch(() => {})
+      return
+    }
+
+    if (msg.type === "BRAND_RESCAN_LINKEDIN") {
+      const url = typeof msg.url === "string" ? msg.url : undefined
+      window.postMessage({
+        source: EXT_SOURCE,
+        type: "LINKEDIN_BRAND_PROFILE_SCAN_STARTED",
+      }, window.location.origin)
+      chrome.runtime.sendMessage({ type: "SYNC_LINKEDIN_BRAND_PROFILE_NOW", url }).catch(() => {})
       return
     }
 

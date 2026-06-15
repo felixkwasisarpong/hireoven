@@ -112,6 +112,8 @@ export type ContentMessageType =
   | "PUSH_SCAN_RESULT"
   | "SCRAPE_LINKEDIN_PROFILE"
   | "PUSH_LINKEDIN_PROFILE_RESULT"
+  | "SCRAPE_LINKEDIN_BRAND_PROFILE"
+  | "PUSH_LINKEDIN_BRAND_RESULT"
 
 export interface DetectPageMessage { type: "DETECT_PAGE" }
 export interface ExtractJobMessage { type: "EXTRACT_JOB" }
@@ -153,6 +155,17 @@ export interface PushLinkedInProfileResultMessage {
   error?: string
 }
 
+export interface ScrapeLinkedInBrandProfileMessage {
+  type: "SCRAPE_LINKEDIN_BRAND_PROFILE"
+  storedLinkedInUrl?: string | null
+}
+
+export interface PushLinkedInBrandResultMessage {
+  type: "PUSH_LINKEDIN_BRAND_RESULT"
+  ok: boolean
+  error?: string
+}
+
 export type ContentMessage =
   | DetectPageMessage
   | ExtractJobMessage
@@ -164,6 +177,8 @@ export type ContentMessage =
   | PushScanResultMessage
   | ScrapeLinkedInProfileMessage
   | PushLinkedInProfileResultMessage
+  | ScrapeLinkedInBrandProfileMessage
+  | PushLinkedInBrandResultMessage
 
 // Safe profile subset the extension receives
 export interface ExtensionSafeProfile {
@@ -308,6 +323,7 @@ export type BackgroundMessageType =
   | "FETCH_RESUME_FILE"
   | "INJECT_RESUME_FILE_IN_TAB"
   | "SYNC_LINKEDIN_BRAND_PROFILE"
+  | "SYNC_LINKEDIN_BRAND_PROFILE_NOW"
   | "GET_STORED_LINKEDIN_URL"
   | "AGENT_APPLICATION_SUBMITTED"
   | "SCAN_LINKEDIN_CONNECTIONS"
@@ -549,6 +565,7 @@ export type BackgroundMessage =
   | FetchResumeFileMessage
   | InjectResumeFileInTabMessage
   | SyncLinkedInBrandProfileMessage
+  | SyncLinkedInBrandProfileNowMessage
   | GetStoredLinkedInUrlMessage
   | AgentApplicationSubmittedMessage
   | AgentRunStatusMessage
@@ -604,6 +621,11 @@ export interface SyncLinkedInBrandProfileMessage {
     lastPostDetectedAt: string | null
     daysSinceLastActivity: number | null
   }
+}
+
+export interface SyncLinkedInBrandProfileNowMessage {
+  type: "SYNC_LINKEDIN_BRAND_PROFILE_NOW"
+  url?: string
 }
 
 export interface OperatorOpenTabMessage {

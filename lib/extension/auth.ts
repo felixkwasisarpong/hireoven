@@ -29,7 +29,7 @@ export function extensionCorsHeaders(origin: string | null): Record<string, stri
   const allowedOrigin = isChromeExtensionOrigin(origin) ? origin! : "null"
   return {
     "Access-Control-Allow-Origin": allowedOrigin,
-    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Methods": "GET, POST, PATCH, OPTIONS",
     "Access-Control-Allow-Headers": "Accept, Content-Type, Authorization, X-Hireoven-Extension",
     "Access-Control-Allow-Credentials": "true",
     "Access-Control-Max-Age": "86400",

@@ -49,6 +49,7 @@ import type {
   FetchResumeFileResult,
   InjectResumeFileInTabResult,
 } from "./types"
+import type { LinkedInProfileData } from "./extractors/linkedin-profile"
 
 // ── Config ─────────────────────────────────────────────────────────────────────
 
@@ -637,14 +638,14 @@ async function handleMessage(
       // Fetch the user's stored LinkedIn URL from the brand profile.
       // Used by content script to verify it's on the user's own profile before syncing.
       const brandProfile = await apiRequest<{ profile?: { linkedin_url?: string | null } | null }>(
-        "GET", "/api/brand/profile"
+        "GET", "/api/extension/brand/profile"
       )
       return { linkedinUrl: brandProfile?.profile?.linkedin_url ?? null }
     }
 
     case "SYNC_LINKEDIN_BRAND_PROFILE": {
       const p = (message as import("./types").SyncLinkedInBrandProfileMessage).profile
-      void apiRequest("PATCH", "/api/brand/profile", {
+      void apiRequest("PATCH", "/api/extension/brand/profile", {
         linkedin_url:             p.linkedinUrl,
         headline:                 p.headline,
         has_about_section:        p.hasAboutSection,
@@ -654,6 +655,12 @@ async function handleMessage(
         last_post_detected_at:    p.lastPostDetectedAt,
         days_since_last_activity: p.daysSinceLastActivity,
       })
+      return { type: "OPERATOR_OPEN_TAB_ACK" } as const
+    }
+
+    case "SYNC_LINKEDIN_BRAND_PROFILE_NOW": {
+      const url = typeof message.url === "string" ? message.url : undefined
+      void runBrandSyncAndPushResult(url)
       return { type: "OPERATOR_OPEN_TAB_ACK" } as const
     }
 
@@ -2489,11 +2496,147 @@ function sanitizeLinkedInProfileUrl(raw?: string): string | null {
     if (!/^https?:\/\//i.test(s)) s = `https://${s}`
     const u = new URL(s)
     if (!/(^|\.)linkedin\.com$/i.test(u.hostname)) return null
-    if (!/^\/in\/[^/]+/i.test(u.pathname)) return null
-    const cleanPath = u.pathname.replace(/\/+$/, "")
-    return `https://www.linkedin.com${cleanPath}/`
+    const match = u.pathname.match(/^\/in\/([^/]+)/i)
+    if (!match) return null
+    return `https://www.linkedin.com/in/${match[1]}/`
   } catch {
     return null
+  }
+}
+
+function isLinkedInBrandProfileData(value: unknown): value is LinkedInProfileData {
+  if (!value || typeof value !== "object") return false
+  const row = value as Record<string, unknown>
+  return typeof row.linkedinUrl === "string"
+    && typeof row.hasAboutSection === "boolean"
+    && typeof row.skillsCount === "number"
+    && typeof row.recommendationsCount === "number"
+    && typeof row.isOwnProfile === "boolean"
+}
+
+async function pushBrandSyncResultToApexTabs(
+  origin: string,
+  payload: { ok: boolean; error?: string }
+): Promise<void> {
+  const patterns = origin === PROD_APP_ORIGIN
+    ? ["https://hireoven.com/*", "https://www.hireoven.com/*"]
+    : ["http://localhost/*", "http://127.0.0.1/*"]
+
+  for (const pattern of patterns) {
+    const tabs = await chrome.tabs.query({ url: pattern }).catch(() => [])
+    for (const tab of tabs) {
+      if (!tab.id || !tab.url) continue
+      if (!isApexDashboardUrl(tab.url)) continue
+      chrome.tabs.sendMessage(tab.id, { type: "PUSH_LINKEDIN_BRAND_RESULT", ...payload }).catch(() => {})
+    }
+  }
+}
+
+function scrapeBrandProfileFromTab(tabId: number, storedLinkedInUrl?: string | null): Promise<LinkedInProfileData | null> {
+  return new Promise((resolve) => {
+    chrome.tabs.sendMessage(tabId, { type: "SCRAPE_LINKEDIN_BRAND_PROFILE", storedLinkedInUrl }, (response: unknown) => {
+      if (chrome.runtime.lastError || !response) {
+        resolve(null)
+        return
+      }
+      const profile = (response as { profile?: unknown }).profile
+      resolve(isLinkedInBrandProfileData(profile) ? profile : null)
+    })
+    setTimeout(() => resolve(null), 14_000)
+  })
+}
+
+async function runBrandSyncAndPushResult(requestedUrl?: string): Promise<void> {
+  const origin = await resolveOrigin()
+  const stored = await apiRequest<{ profile?: { linkedin_url?: string | null } | null }>(
+    "GET",
+    "/api/extension/brand/profile"
+  )
+  const targetProfileUrl =
+    sanitizeLinkedInProfileUrl(requestedUrl) ??
+    sanitizeLinkedInProfileUrl(stored?.profile?.linkedin_url ?? undefined)
+  const profileUrl = targetProfileUrl ?? "https://www.linkedin.com/in/me/"
+
+  const tab = await chrome.tabs.create({ url: profileUrl, active: true })
+  const tabId = tab.id
+  if (!tabId) {
+    await pushBrandSyncResultToApexTabs(origin, { ok: false, error: "Could not open LinkedIn tab." })
+    return
+  }
+
+  await waitForTabComplete(tabId)
+  const loaded = await chrome.tabs.get(tabId).catch(() => null)
+  if (loaded?.url && /\/(login|authwall|checkpoint)/i.test(loaded.url)) {
+    await chrome.tabs.remove(tabId).catch(() => {})
+    await pushBrandSyncResultToApexTabs(origin, { ok: false, error: "Please log into LinkedIn, then try again." })
+    return
+  }
+
+  let profile = await scrapeBrandProfileFromTab(tabId, targetProfileUrl)
+  if (!profile) {
+    await chrome.tabs.remove(tabId).catch(() => {})
+    await pushBrandSyncResultToApexTabs(origin, { ok: false, error: "Could not read your LinkedIn profile." })
+    return
+  }
+  if (!profile.isOwnProfile) {
+    await chrome.tabs.remove(tabId).catch(() => {})
+    await pushBrandSyncResultToApexTabs(origin, { ok: false, error: "Open your own LinkedIn profile to sync Brand activity." })
+    return
+  }
+
+  const base = (() => {
+    try {
+      const u = new URL(loaded?.url ?? profile.linkedinUrl)
+      const match = u.pathname.match(/^\/in\/([^/]+)/i)
+      return match ? `https://www.linkedin.com/in/${match[1]}/` : null
+    } catch {
+      return null
+    }
+  })()
+
+  if (base && profile.daysSinceLastActivity === null) {
+    await chrome.tabs.update(tabId, { url: `${base}recent-activity/all/` }).catch(() => {})
+    await waitForTabComplete(tabId, 12_000)
+    const activityProfile = await scrapeBrandProfileFromTab(tabId, targetProfileUrl)
+    if (activityProfile?.daysSinceLastActivity !== null && activityProfile?.daysSinceLastActivity !== undefined) {
+      profile = {
+        ...profile,
+        lastPostDetectedAt: activityProfile.lastPostDetectedAt,
+        daysSinceLastActivity: activityProfile.daysSinceLastActivity,
+      }
+    }
+  }
+
+  await chrome.tabs.remove(tabId).catch(() => {})
+
+  const syncResult = await apiRequest<{ ok?: boolean }>("PATCH", "/api/extension/brand/profile", {
+    linkedin_url:             profile.linkedinUrl,
+    headline:                 profile.headline,
+    has_about_section:        profile.hasAboutSection,
+    skills_count:             profile.skillsCount || null,
+    recommendations_count:    profile.recommendationsCount || null,
+    estimated_connections:    profile.connectionsEstimate,
+    last_post_detected_at:    profile.lastPostDetectedAt,
+    days_since_last_activity: profile.daysSinceLastActivity,
+  })
+
+  await pushBrandSyncResultToApexTabs(
+    origin,
+    syncResult?.ok
+      ? { ok: true }
+      : { ok: false, error: "LinkedIn was read, but Hireoven could not save the Brand scan." }
+  )
+
+  const apexPatterns = origin === PROD_APP_ORIGIN
+    ? ["https://hireoven.com/*", "https://www.hireoven.com/*"]
+    : ["http://localhost/*", "http://127.0.0.1/*"]
+  for (const pattern of apexPatterns) {
+    const apexTabs = await chrome.tabs.query({ url: pattern }).catch(() => [])
+    const apex = apexTabs.find((t) => t.id && t.url && isApexDashboardUrl(t.url))
+    if (apex?.id) {
+      await chrome.tabs.update(apex.id, { active: true }).catch(() => {})
+      break
+    }
   }
 }
 

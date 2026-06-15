@@ -86,12 +86,33 @@ function extractHeadline(): string | null {
   return null
 }
 
+function sectionByHeading(label: string): HTMLElement | null {
+  const normalized = label.toLowerCase()
+  for (const section of Array.from(document.querySelectorAll<HTMLElement>('section'))) {
+    const heading = section.querySelector('h2, h3')?.textContent?.replace(/\s+/g, " ").trim().toLowerCase() ?? ""
+    const text = section.innerText?.replace(/\s+/g, " ").trim().toLowerCase() ?? ""
+    if (heading === normalized || text.startsWith(`${normalized} `)) return section
+  }
+  return null
+}
+
+function meaningfulSectionText(section: HTMLElement): string {
+  return (section.innerText ?? "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line && !/^(about|show all|see more|top skills)$/i.test(line))
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim()
+}
+
 function extractHasAbout(): boolean {
   // About section exists and has meaningful content
   const aboutSection =
     document.querySelector('#about') ??
-    document.querySelector('section[data-section="summary"]') ??
-    document.querySelector('[id*="about"]')
+    document.querySelector<HTMLElement>('section[data-section="summary"]') ??
+    sectionByHeading("About") ??
+    document.querySelector<HTMLElement>('[id*="about"]')?.closest('section')
 
   if (!aboutSection) return false
 
@@ -101,7 +122,7 @@ function extractHasAbout(): boolean {
     aboutSection.parentElement?.querySelector('.pv-shared-text-with-see-more')
 
   const text = content?.textContent?.trim() ?? aboutSection.textContent?.trim() ?? ""
-  return text.length > 20
+  return (text.length > 20 || meaningfulSectionText(aboutSection as HTMLElement).length > 20)
 }
 
 function extractSkillsCount(): number {
@@ -130,7 +151,8 @@ function extractSkillsCount(): number {
 function extractRecommendationsCount(): number {
   const recsSection =
     document.querySelector('#recommendations') ??
-    document.querySelector('section[data-section="recommendations"]')
+    document.querySelector('section[data-section="recommendations"]') ??
+    sectionByHeading("Recommendations")
 
   if (!recsSection) return 0
 
@@ -181,20 +203,31 @@ function extractLastPostDate(): { isoDate: string | null; daysSince: number | nu
     document.querySelector('#activity') ??
     document.querySelector('[data-section="posts"]')
 
-  if (!activitySection) return { isoDate: null, daysSince: null }
-
-  const parent = activitySection.closest('section') ?? activitySection.parentElement
+  const isActivityPage = /\/(?:recent-activity|details\/recent-activity)(?:\/|$)/i.test(window.location.pathname)
+  const parent = activitySection?.closest('section') ?? activitySection?.parentElement ?? (isActivityPage ? document.body : null)
+  if (!parent) return { isoDate: null, daysSince: null }
 
   // LinkedIn posts show relative times like "2 days ago", "1 week ago", "3 months ago"
-  const timeEls = parent?.querySelectorAll('time, [aria-label*="ago"], span.t-black--light') ?? []
+  // and often compact forms like "2d", "1w", "3mo".
+  const timeEls = parent.querySelectorAll(
+    'time, [datetime], [aria-label*="ago"], [aria-label*="reposted"], span.t-black--light, .update-components-actor__sub-description'
+  )
   let bestDays: number | null = null
 
   for (const el of Array.from(timeEls)) {
-    const text = el.textContent?.trim() ?? el.getAttribute('aria-label') ?? ""
-    const days = parseRelativeTime(text)
+    const text = [
+      el.textContent?.trim(),
+      el.getAttribute('aria-label'),
+      el.getAttribute('datetime'),
+    ].filter(Boolean).join(" ")
+    const days = parseActivityDate(text)
     if (days !== null && (bestDays === null || days < bestDays)) {
       bestDays = days
     }
+  }
+
+  if (bestDays === null && isActivityPage) {
+    bestDays = minRelativeTimeInText(document.body.innerText)
   }
 
   if (bestDays === null) return { isoDate: null, daysSince: null }
@@ -203,32 +236,43 @@ function extractLastPostDate(): { isoDate: string | null; daysSince: number | nu
   return { isoDate: date.toISOString(), daysSince: bestDays }
 }
 
-function parseRelativeTime(text: string): number | null {
+function parseActivityDate(text: string): number | null {
+  const isoMatch = text.match(/\b20\d{2}-\d{2}-\d{2}(?:[T ][\d:.+-Z]+)?\b/)
+  if (isoMatch) {
+    const time = new Date(isoMatch[0]).getTime()
+    if (Number.isFinite(time)) {
+      const days = Math.floor((Date.now() - time) / 86_400_000)
+      if (days >= 0 && days <= 3650) return days
+    }
+  }
+  return minRelativeTimeInText(text)
+}
+
+function minRelativeTimeInText(text: string): number | null {
   const lower = text.toLowerCase()
-  const now = /just now|moments? ago/i.test(lower) ? 0 : null
-  if (now !== null) return 0
+  const candidates: number[] = []
+  if (/\b(just now|moments? ago|today)\b/i.test(lower)) candidates.push(0)
+  if (/\byesterday\b/i.test(lower)) candidates.push(1)
 
-  const match =
-    lower.match(/(\d+)\s+day[s]?\s+ago/i) ??
-    lower.match(/(\d+)\s+week[s]?\s+ago/i) ??
-    lower.match(/(\d+)\s+month[s]?\s+ago/i) ??
-    lower.match(/(\d+)\s+year[s]?\s+ago/i) ??
-    lower.match(/(\d+)\s+hour[s]?\s+ago/i)
+  const re = /\b(\d{1,3})\s*(m|min|mins|minute|minutes|h|hr|hrs|hour|hours|d|day|days|w|wk|wks|week|weeks|mo|mos|month|months|y|yr|yrs|year|years)\s*(?:ago)?\b/gi
+  let match: RegExpExecArray | null
+  while ((match = re.exec(lower)) !== null) {
+    const n = parseInt(match[1], 10)
+    if (!Number.isFinite(n)) continue
+    const unit = match[2]
+    if (/^(m|min|mins|minute|minutes|h|hr|hrs|hour|hours)$/i.test(unit)) candidates.push(0)
+    else if (/^(d|day|days)$/i.test(unit)) candidates.push(n)
+    else if (/^(w|wk|wks|week|weeks)$/i.test(unit)) candidates.push(n * 7)
+    else if (/^(mo|mos|month|months)$/i.test(unit)) candidates.push(n * 30)
+    else if (/^(y|yr|yrs|year|years)$/i.test(unit)) candidates.push(n * 365)
+  }
 
-  if (!match) return null
-
-  const n = parseInt(match[1], 10)
-  if (/hour/.test(lower)) return 0
-  if (/day/.test(lower)) return n
-  if (/week/.test(lower)) return n * 7
-  if (/month/.test(lower)) return n * 30
-  if (/year/.test(lower)) return n * 365
-  return null
+  return candidates.length > 0 ? Math.min(...candidates) : null
 }
 
 // ── Main export ───────────────────────────────────────────────────────────────
 
-export function extractLinkedInProfile(): LinkedInProfileData {
+export function extractLinkedInProfile(storedLinkedInUrl?: string | null): LinkedInProfileData {
   const url = window.location.href.split('?')[0].replace(/\/$/, '')
   const { isoDate, daysSince } = extractLastPostDate()
 
@@ -241,6 +285,6 @@ export function extractLinkedInProfile(): LinkedInProfileData {
     connectionsEstimate: extractConnectionsEstimate(),
     lastPostDetectedAt: isoDate,
     daysSinceLastActivity: daysSince,
-    isOwnProfile: isOwnLinkedInProfile(),
+    isOwnProfile: isOwnLinkedInProfile(storedLinkedInUrl),
   }
 }
