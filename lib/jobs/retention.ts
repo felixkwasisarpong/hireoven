@@ -81,5 +81,7 @@ export async function purgeExpiredInactiveJobs(options?: {
     batches += 1
   }
 
+  if (deleted > 0) await pool.query("VACUUM jobs")
+
   return { deleted, batches, olderThanDays }
 }
