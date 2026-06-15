@@ -60,6 +60,24 @@ function toRecord(value: unknown): Record<string, unknown> {
   return value as Record<string, unknown>
 }
 
+// Fields from raw_data that are actually read at runtime (dedup lookups,
+// extension resolve, signal tenant filters). Everything else from the
+// original source blob is dropped after enrichment to keep TOAST small.
+const SLIM_RAW_DATA_KEYS = [
+  "apexSource", "apexSourceId", "apexSources",
+  "signalTenantId", "captureSource", "hiring_entity",
+  "sourceUrl", "canonicalSourceUrl", "applyUrl", "canonicalApplyUrl",
+  "metadata",
+] as const
+
+function slimRawData(rawData: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const key of SLIM_RAW_DATA_KEYS) {
+    if (rawData[key] !== undefined) out[key] = rawData[key]
+  }
+  return out
+}
+
 function toIsoNow(): string {
   return new Date().toISOString()
 }
@@ -175,7 +193,7 @@ export async function markFailure(
     [
       job.id,
       JSON.stringify({
-        ...rawData,
+        ...slimRawData(rawData),
         description_enrichment: {
           ...enrichmentNode(rawData),
           mode: "non_ai",
@@ -246,7 +264,7 @@ async function updateSuccess(
       normalized.nextColumns.skills,
       status,
       safeJsonStringify({
-        ...rawData,
+        ...slimRawData(rawData),
         description_captured: Boolean(normalized.nextColumns.description),
         normalization: {
           ...toRecord(rawData.normalization),
