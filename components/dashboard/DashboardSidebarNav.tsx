@@ -79,18 +79,13 @@ function NavItem({
 
   const linkClass = feedSkin
     ? cn(
-        "group relative flex items-center rounded-lg text-[13px] transition-all duration-150",
-        feedGrouped
-          ? "min-h-[50px] gap-2.5 px-2.5 py-2"
-          : "min-h-[40px] gap-2.5 px-2.5 py-2",
+        "group flex items-center rounded-xl text-[13px] transition-colors duration-150",
+        feedGrouped ? "gap-3 px-3 py-2.5" : "gap-3 px-3 py-2",
         locked
           ? "cursor-pointer opacity-60 hover:opacity-80"
           : active
-            ? cn(
-                "bg-[#FFF7ED] font-semibold text-[#C2410C] ring-1 ring-[#FED7AA]/80 shadow-[0_1px_2px_rgba(124,45,18,0.06)]",
-                feedGrouped && "before:absolute before:-left-[15px] before:top-1/2 before:h-6 before:w-[2px] before:-translate-y-1/2 before:rounded-full before:bg-[#FF5C18]"
-              )
-            : "font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-950 hover:ring-1 hover:ring-slate-200/80"
+            ? "bg-orange-50 font-semibold text-orange-700"
+            : "font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900"
       )
     : cn(
         "group neo-nav-link",
@@ -103,12 +98,12 @@ function NavItem({
 
   const iconClass = feedSkin
     ? cn(
-        "h-[17px] w-[17px] flex-shrink-0 fill-none transition-colors duration-200",
+        "h-4 w-4 flex-shrink-0 fill-none transition-colors duration-150",
         locked
           ? "text-slate-400"
           : active
-            ? "text-[#EA580C]"
-            : "text-slate-500 group-hover:text-slate-900"
+            ? "text-orange-600"
+            : "text-slate-400 group-hover:text-slate-700"
       )
     : cn(
         "h-[15px] w-[15px] flex-shrink-0 transition-colors duration-200",
@@ -126,29 +121,20 @@ function NavItem({
       <div
         className={cn(
           feedSkin
-            ? "flex min-h-[40px] items-center gap-3 rounded-lg px-3 py-2"
+            ? "flex min-h-[40px] items-center gap-3 rounded-xl px-3 py-2"
             : "group neo-nav-link neo-nav-link-idle opacity-70"
         )}
         aria-hidden
       >
-        <div className={cn("h-7 w-7 animate-pulse rounded-lg bg-slate-100")} />
+        <div className="h-4 w-4 animate-pulse rounded bg-slate-100" />
         <div className="h-3 w-24 animate-pulse rounded bg-slate-200/80" />
       </div>
     )
   }
 
-  // Icon — wrapped in a soft rounded square for grouped/detail items.
-  const iconEl = feedGrouped ? (
-    <span className={cn(
-      "flex h-8 w-8 shrink-0 items-center justify-center rounded-md border transition-colors duration-150",
-      locked
-        ? "border-slate-200 bg-slate-50"
-        : active
-          ? "border-[#FED7AA] bg-white text-[#EA580C]"
-          : "border-slate-200 bg-white text-slate-500 group-hover:border-slate-300 group-hover:bg-slate-50 group-hover:text-slate-900"
-    )}>
-      <Icon className={iconClass} strokeWidth={1.8} aria-hidden />
-    </span>
+  // Icon — flat for feedSkin, boxed for non-feed detail items.
+  const iconEl = feedSkin ? (
+    <Icon className={iconClass} strokeWidth={1.8} aria-hidden />
   ) : !feedSkin && hasSubtitle ? (
     <span className={cn(
       "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-colors duration-150",
@@ -179,7 +165,7 @@ function NavItem({
               active && !feedSkin
                 ? "text-white/70"
                 : feedSkin && active
-                  ? "text-orange-700/75"
+                  ? "text-orange-600/70"
                   : variant === "dark" ? "text-slate-500" : "text-slate-400"
             )}
           >
@@ -280,10 +266,10 @@ function NavGroup({
 
   const headerClass = feedSkin
     ? cn(
-        "group flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] font-semibold transition-all duration-150",
+        "group flex w-full items-center gap-2 rounded-xl px-3 py-2 text-[13px] font-semibold transition-colors duration-150",
         hasActive
-          ? "bg-slate-50 text-slate-950 ring-1 ring-slate-200/80"
-          : "text-slate-600 hover:bg-slate-50 hover:text-slate-950 hover:ring-1 hover:ring-slate-200/80"
+          ? "text-slate-900"
+          : "text-slate-500 hover:bg-slate-50 hover:text-slate-800"
       )
     : cn(
         "group flex w-full items-center gap-2 rounded-md px-2 py-1.5 transition-colors",
@@ -291,22 +277,13 @@ function NavGroup({
       )
 
   const headerIconClass = feedSkin
-    ? cn("h-[16px] w-[16px] flex-shrink-0 fill-none", hasActive ? "text-[#EA580C]" : "text-slate-500 group-hover:text-slate-900")
+    ? cn("h-4 w-4 flex-shrink-0 fill-none", hasActive ? "text-orange-500" : "text-slate-400 group-hover:text-slate-600")
     : cn("h-3.5 w-3.5 flex-shrink-0", hasActive ? "text-slate-500" : "text-slate-400")
 
   return (
     <div>
       <button type="button" onClick={() => setOpen((o) => !o)} className={headerClass}>
-        {feedSkin && (
-          <span className={cn(
-            "flex h-7 w-7 shrink-0 items-center justify-center rounded-md border transition-colors",
-            hasActive
-              ? "border-[#FED7AA] bg-white"
-              : "border-slate-200 bg-white group-hover:border-slate-300 group-hover:bg-slate-50"
-          )}>
-            <GroupIcon className={headerIconClass} strokeWidth={1.9} aria-hidden />
-          </span>
-        )}
+        {feedSkin && <GroupIcon className={headerIconClass} strokeWidth={1.9} aria-hidden />}
         <span className={cn(
           "flex-1 truncate text-left",
           feedSkin
@@ -317,18 +294,15 @@ function NavGroup({
         </span>
         <ChevronRight
           className={cn(
-            "h-3 w-3 shrink-0 transition-transform duration-200",
-            feedSkin ? "text-slate-400" : "text-slate-300",
+            "h-3.5 w-3.5 shrink-0 transition-transform duration-200",
+            feedSkin ? "text-slate-300" : "text-slate-300",
             open && "rotate-90"
           )}
         />
       </button>
 
       {open && (
-        <div className={cn(
-          "mt-1 space-y-1",
-          feedSkin && "relative ml-[13px] border-l border-slate-200/90 pl-3"
-        )}>
+        <div className="mt-0.5 space-y-0.5">
           {items.map((item) => (
             <NavItem
               key={item.label}
