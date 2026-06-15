@@ -91,10 +91,11 @@ export async function processNotifications(jobs: Job[]): Promise<void> {
     const wasNotified = (userId: string, jobId: string) => notified.get(userId)?.has(jobId) ?? false
 
     // ── 1. Alert matches, grouped per user ────────────────────────────────────
-    const alertsByUser = new Map<string, { name: string; jobs: Map<string, Job> }>()
+    const alertsByUser = new Map<string, { name: string; alertIds: Set<string>; jobs: Map<string, Job> }>()
     for (const job of jobs) {
       for (const alert of await matchJobToAlerts(job)) {
-        const entry = alertsByUser.get(alert.user_id) ?? { name: alert.name ?? "Job alert", jobs: new Map() }
+        const entry = alertsByUser.get(alert.user_id) ?? { name: alert.name ?? "Job alert", alertIds: new Set(), jobs: new Map() }
+        entry.alertIds.add(alert.id)
         entry.jobs.set(job.id, job)
         alertsByUser.set(alert.user_id, entry)
       }
@@ -135,6 +136,14 @@ export async function processNotifications(jobs: Job[]): Promise<void> {
         for (const job of fresh) {
           await recordNotification(userId, job.id, channel, "alert")
           markNotified(userId, job.id)
+        }
+        // Stamp last_triggered_at on every alert that matched this run
+        if (entry.alertIds.size > 0) {
+          const pool = getPostgresPool()
+          await pool.query(
+            `UPDATE job_alerts SET last_triggered_at = now() WHERE id = ANY($1::uuid[])`,
+            [[...entry.alertIds]],
+          )
         }
       } catch {
         // per-user isolation

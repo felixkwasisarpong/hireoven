@@ -376,11 +376,11 @@ export async function GET(request: NextRequest) {
     )
     return new Set(rows.map((row) => row.user_id))
   }
-  async function recordEmailSends(userId: string, jobIds: string[]): Promise<void> {
+  async function recordEmailSends(userId: string, jobIds: string[], alertIds: string[]): Promise<void> {
     if (jobIds.length === 0) return
     await pool.query(
-      `INSERT INTO alert_notifications (user_id, job_id, channel)
-       SELECT $1::uuid, ids.job_id, 'email'
+      `INSERT INTO alert_notifications (user_id, job_id, channel, notification_type)
+       SELECT $1::uuid, ids.job_id, 'email', 'alert'
        FROM unnest($2::uuid[]) AS ids(job_id)
        WHERE NOT EXISTS (
          SELECT 1
@@ -391,6 +391,13 @@ export async function GET(request: NextRequest) {
        )`,
       [userId, jobIds]
     )
+    // Stamp last_triggered_at so the UI shows when the alert last fired
+    if (alertIds.length > 0) {
+      await pool.query(
+        `UPDATE job_alerts SET last_triggered_at = now() WHERE id = ANY($1::uuid[])`,
+        [alertIds]
+      )
+    }
   }
 
   // Hoisted: both segments need to check user-alert existence as the explicit
@@ -538,7 +545,7 @@ export async function GET(request: NextRequest) {
         })
         sentWithResume += 1
         try {
-          await recordEmailSends(user.id, topJobs.map((j) => j.id))
+          await recordEmailSends(user.id, topJobs.map((j) => j.id), userAlerts.map((a) => a.id))
         } catch (err) {
           errors += 1
           console.warn("[recent-jobs] failed to record send", err)
@@ -634,7 +641,7 @@ export async function GET(request: NextRequest) {
           })
           sentWithoutResume += 1
           try {
-            await recordEmailSends(user.id, userJobs.map((j) => j.id))
+            await recordEmailSends(user.id, userJobs.map((j) => j.id), userAlerts.map((a) => a.id))
           } catch (err) {
             errors += 1
             console.warn("[recent-jobs] failed to record send", err)
