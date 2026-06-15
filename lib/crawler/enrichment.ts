@@ -4,6 +4,21 @@ import type { PersistedJobForNormalization } from "@/lib/jobs/normalization/type
 import { publicationStatusForJob } from "@/lib/jobs/publication"
 import { getPostgresPool } from "@/lib/postgres/server"
 
+const SLIM_RAW_DATA_KEYS = [
+  "apexSource", "apexSourceId", "apexSources",
+  "signalTenantId", "captureSource", "hiring_entity",
+  "sourceUrl", "canonicalSourceUrl", "applyUrl", "canonicalApplyUrl",
+  "metadata",
+] as const
+
+function slimRawData(rawData: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const key of SLIM_RAW_DATA_KEYS) {
+    if (rawData[key] !== undefined) out[key] = rawData[key]
+  }
+  return out
+}
+
 const DEFAULT_BATCH_SIZE = Math.max(
   1,
   Number.parseInt(process.env.CRAWLER_AI_ENRICHMENT_BATCH_SIZE ?? "40", 10)
@@ -116,7 +131,7 @@ async function updateJobAfterEnrichmentSuccess(
   const nowIso = toIsoNow()
 
   const nextRawData: Record<string, unknown> = {
-    ...rawData,
+    ...slimRawData(rawData),
     source_adapter: normalization.canonical.source.adapter,
     description_captured: Boolean(normalization.nextColumns.description),
     normalization: {
