@@ -29,15 +29,18 @@ export async function GET() {
   return NextResponse.json({ ideas: existing.rows })
 }
 
-export async function POST() {
+export async function POST(request: Request) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
+  const body = await request.json().catch(() => ({})) as { mode?: string }
+  const mode = body.mode === "trending" ? "trending" : "cv"
+
   const pool = getPostgresPool()
 
   try {
-    await generateContentIdeas(user.id, 5)
+    await generateContentIdeas(user.id, 5, mode)
   } catch (err) {
     console.error("[brand/ideas] generation error:", err instanceof Error ? err.message : err)
     // Don't 500 — fall through and return whatever was inserted (could be fallback ideas)
