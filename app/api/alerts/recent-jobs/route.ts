@@ -16,7 +16,7 @@ export const maxDuration = 300
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null
 const RECENT_JOBS_LOCK_ID = 83319421
-const DEFAULT_MIN_SEND_INTERVAL_MINUTES = 60
+const DEFAULT_MIN_SEND_INTERVAL_MINUTES = 30
 
 async function acquireRecentJobsLock(pool: Pool): Promise<PoolClient | null> {
   const client = await pool.connect()
@@ -282,7 +282,7 @@ export async function GET(request: NextRequest) {
   }
 
   const segment = getSegment(request.nextUrl.searchParams)
-  const withResumeWindowHours = Number(request.nextUrl.searchParams.get("withResumeHours") ?? "6")
+  const withResumeWindowHours = Number(request.nextUrl.searchParams.get("withResumeHours") ?? "1")
   const minSendIntervalMinutes = Number(
     request.nextUrl.searchParams.get("minSendIntervalMinutes") ?? String(DEFAULT_MIN_SEND_INTERVAL_MINUTES)
   )
