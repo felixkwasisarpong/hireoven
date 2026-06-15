@@ -33,27 +33,27 @@ const MODE_STYLES: Record<Mode, {
   bestFor: string
 }> = {
   text: {
-    accent: "bg-gradient-to-r from-orange-400 via-orange-500 to-orange-500",
-    shell: "border-slate-100 bg-slate-50/40 shadow-[0_14px_34px_rgba(99,102,241,0.10)]",
-    surface: "bg-[radial-gradient(circle_at_6%_4%,rgba(199,210,254,0.4),transparent_46%)]",
-    glow: "bg-[radial-gradient(circle_at_94%_6%,rgba(167,139,250,0.15),transparent_52%)]",
-    iconBg: "bg-white/95 ring-1 ring-primary",
-    iconColor: "text-slate-600",
-    chip: "bg-white/90 text-slate-700 ring-1 ring-primary",
+    accent: "bg-orange-500",
+    shell: "border-orange-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)]",
+    surface: "bg-white",
+    glow: "",
+    iconBg: "bg-orange-50 ring-1 ring-orange-200",
+    iconColor: "text-orange-600",
+    chip: "bg-orange-50 text-orange-700 ring-1 ring-orange-200",
     title: "text-slate-900",
     description: "text-slate-600",
     bestForLabel: "text-slate-400",
     bestForValue: "text-slate-600",
-    button: "bg-slate-600 text-white hover:bg-slate-700",
+    button: "bg-slate-950 text-white hover:bg-slate-800",
     lockOverlay: "bg-white/90",
-    lockBtn: "bg-slate-900 text-white hover:bg-slate-700",
+    lockBtn: "bg-slate-950 text-white hover:bg-slate-800",
     bestFor: "Story crafting · no time pressure",
   },
   live: {
-    accent: "bg-gradient-to-r from-slate-600 via-slate-700 to-slate-800",
-    shell: "border-[#1e293b] bg-[#0f172a] shadow-[0_24px_65px_rgba(2,6,23,0.65)]",
-    surface: "bg-[radial-gradient(circle_at_12%_-4%,rgba(99,102,241,0.12),transparent_42%)]",
-    glow: "bg-[radial-gradient(circle_at_88%_6%,rgba(148,163,184,0.07),transparent_48%)]",
+    accent: "bg-slate-700",
+    shell: "border-slate-800 bg-slate-950 shadow-[0_12px_28px_rgba(15,23,42,0.22)]",
+    surface: "bg-slate-950",
+    glow: "",
     iconBg: "bg-white/5 ring-1 ring-white/10",
     iconColor: "text-slate-100",
     chip: "bg-white/10 text-slate-200 ring-1 ring-white/15",
@@ -67,20 +67,20 @@ const MODE_STYLES: Record<Mode, {
     bestFor: "Final-round prep · real pressure",
   },
   coding: {
-    accent: "bg-gradient-to-r from-emerald-400 via-emerald-500 to-teal-500",
-    shell: "border-emerald-100 bg-emerald-50/40 shadow-[0_14px_32px_rgba(16,185,129,0.10)]",
-    surface: "bg-[radial-gradient(circle_at_14%_2%,rgba(167,243,208,0.35),transparent_44%)]",
-    glow: "bg-[radial-gradient(circle_at_90%_8%,rgba(94,234,212,0.2),transparent_46%)]",
-    iconBg: "bg-white/95 ring-1 ring-emerald-200",
+    accent: "bg-emerald-500",
+    shell: "border-emerald-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)]",
+    surface: "bg-white",
+    glow: "",
+    iconBg: "bg-emerald-50 ring-1 ring-emerald-200",
     iconColor: "text-emerald-600",
-    chip: "bg-white/90 text-emerald-700 ring-1 ring-emerald-200",
+    chip: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200",
     title: "text-slate-900",
     description: "text-slate-600",
     bestForLabel: "text-slate-400",
     bestForValue: "text-slate-600",
     button: "bg-emerald-600 text-white hover:bg-emerald-700",
     lockOverlay: "bg-white/90",
-    lockBtn: "bg-slate-900 text-white hover:bg-slate-700",
+    lockBtn: "bg-slate-950 text-white hover:bg-slate-800",
     bestFor: "Algorithm rounds · think out loud",
   },
 }
@@ -119,7 +119,7 @@ function BuyCreditsButton({
       onClick={buy}
       disabled={loading}
       className={cn(
-        "inline-flex w-full items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-[12px] font-semibold transition disabled:opacity-60",
+        "inline-flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-[12px] font-semibold transition disabled:opacity-60",
         tone === "dark"
           ? highlight
             ? "bg-slate-500 text-white hover:bg-slate-600"
@@ -155,11 +155,11 @@ function LockedCard({
   const upgradeHref = `/dashboard/upgrade?plan=${requiredPlan}`
 
   return (
-    <div className={cn("group relative flex flex-col overflow-hidden rounded-[24px] border", s.shell)}>
-      <div className={cn("h-1.5 w-full", s.accent)} />
+    <div className={cn("group relative flex min-h-[270px] flex-col overflow-hidden rounded-lg border", s.shell)}>
+      <div className={cn("h-1 w-full", s.accent)} />
       <div className={cn("pointer-events-none absolute inset-0", s.glow)} />
 
-      <div className={cn("absolute inset-0 top-1.5 z-10 flex flex-col items-center justify-center gap-1 rounded-b-[24px] px-5 text-center backdrop-blur-sm", s.lockOverlay)}>
+      <div className={cn("absolute inset-0 top-1 z-10 flex flex-col items-center justify-center gap-1 rounded-b-lg px-5 text-center backdrop-blur-sm", s.lockOverlay)}>
         <Lock className={cn("mb-1 h-5 w-5", mode === "live" ? "text-slate-300" : "text-slate-400")} />
         <span className={cn(
           "rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide",
@@ -174,14 +174,14 @@ function LockedCard({
         </p>
         <Link
           href={upgradeHref}
-          className={cn("mt-2 rounded-xl px-4 py-1.5 text-[12px] font-semibold transition", s.lockBtn)}
+          className={cn("mt-2 rounded-lg px-4 py-1.5 text-[12px] font-semibold transition", s.lockBtn)}
         >
           Upgrade
         </Link>
       </div>
 
       <div className={cn("relative flex flex-1 flex-col p-5", s.surface)}>
-        <div className={cn("mb-3 flex h-11 w-11 items-center justify-center rounded-2xl", s.iconBg)}>
+        <div className={cn("mb-3 flex h-10 w-10 items-center justify-center rounded-lg", s.iconBg)}>
           <Icon className={cn("h-5 w-5", s.iconColor)} strokeWidth={2} />
         </div>
         <span className={cn("mb-2 inline-flex w-fit rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider", s.chip)}>
@@ -195,7 +195,7 @@ function LockedCard({
         <p className={cn("mt-3 text-[11px]", s.bestForLabel)}>
           Best for: <span className={s.bestForValue}>{s.bestFor}</span>
         </p>
-        <div className={cn("mt-4 h-9 rounded-xl", mode === "live" ? "bg-white/10" : "bg-slate-100")} />
+        <div className={cn("mt-4 h-9 rounded-lg", mode === "live" ? "bg-white/10" : "bg-slate-100")} />
       </div>
     </div>
   )
@@ -219,12 +219,12 @@ function ModeCard({
   const s = MODE_STYLES[mode]
 
   return (
-    <div className={cn("group relative flex flex-col overflow-hidden rounded-[24px] border transition-all duration-300 hover:-translate-y-0.5", s.shell)}>
-      <div className={cn("h-1.5 w-full", s.accent)} />
+    <div className={cn("group relative flex min-h-[270px] flex-col overflow-hidden rounded-lg border transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_24px_rgba(15,23,42,0.08)]", s.shell)}>
+      <div className={cn("h-1 w-full", s.accent)} />
       <div className={cn("pointer-events-none absolute inset-0", s.glow)} />
 
       <div className={cn("relative flex flex-1 flex-col p-5", s.surface)}>
-        <div className={cn("mb-3 flex h-11 w-11 items-center justify-center rounded-2xl", s.iconBg)}>
+        <div className={cn("mb-3 flex h-10 w-10 items-center justify-center rounded-lg", s.iconBg)}>
           <Icon className={cn("h-5 w-5", s.iconColor)} strokeWidth={2} />
         </div>
         <span className={cn("mb-2 inline-flex w-fit rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider", s.chip)}>
@@ -241,7 +241,7 @@ function ModeCard({
             <Link
               href={href}
               className={cn(
-                "mt-4 inline-flex items-center justify-center rounded-xl px-4 py-2.5 text-[13px] font-semibold transition",
+                "mt-4 inline-flex items-center justify-center rounded-lg px-4 py-2.5 text-[13px] font-semibold transition",
                 s.button
               )}
             >
@@ -266,7 +266,7 @@ function LiveCard({ credits, isProMax }: { credits: CreditInfo; isProMax: boolea
       label="Live Interview"
       description="Speak your answers, hold eye contact, and navigate real pressure in a focused, recruiter-like room."
     >
-      <div className="mt-3 flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2">
+      <div className="mt-3 flex items-center justify-between rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2">
         <span className="text-[12px] text-slate-400">Sessions available</span>
         <span className={cn("text-[13px] font-bold tabular-nums", balance === 0 ? "text-red-300" : "text-white")}>
           {balance} {balance === 1 ? "session" : "sessions"}
@@ -276,7 +276,7 @@ function LiveCard({ credits, isProMax }: { credits: CreditInfo; isProMax: boolea
       {hasSessions ? (
         <Link
           href="/dashboard/interview/setup?type=live"
-          className={cn("mt-3 inline-flex items-center justify-center rounded-xl px-4 py-2.5 text-[13px] font-semibold transition", s.button)}
+          className={cn("mt-3 inline-flex items-center justify-center rounded-lg px-4 py-2.5 text-[13px] font-semibold transition", s.button)}
         >
           Start live interview
         </Link>
@@ -325,16 +325,16 @@ export default function InterviewHubCards() {
 
   if (isLoading) {
     return (
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
         {[0, 1, 2].map((i) => (
-          <div key={i} className="h-56 animate-pulse rounded-2xl bg-slate-100" />
+          <div key={i} className="h-64 animate-pulse rounded-lg bg-slate-100" />
         ))}
       </div>
     )
   }
 
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+    <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
       {isPro ? (
         <ModeCard
           icon={MessageSquare}

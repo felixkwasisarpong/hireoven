@@ -291,6 +291,13 @@
     --dash-primary: #ea580c;
   }
 
+  .sidebar-nav-subtitle {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
   .neo-hero {
     @apply surface-panel relative overflow-hidden rounded-xl border px-5 py-5 sm:px-7 sm:py-7;
     background-image:

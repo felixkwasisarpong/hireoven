@@ -143,12 +143,12 @@ function StepIndicator({ view }: { view: View }) {
   const currentIdx = order.indexOf(view)
 
   return (
-    <div className="flex items-center mb-10">
+    <div className="mb-8 grid gap-2 sm:flex sm:items-center">
       {steps.map((step, idx) => {
         const done   = idx < currentIdx
         const active = idx === currentIdx
         return (
-          <div key={step.id} className="flex items-center flex-1 min-w-0">
+          <div key={step.id} className="flex min-w-0 flex-1 items-center">
             <div className="flex items-center gap-2 shrink-0">
               {done ? (
                 <div className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-600">
@@ -159,7 +159,7 @@ function StepIndicator({ view }: { view: View }) {
                   className={cn(
                     "flex h-7 w-7 items-center justify-center rounded-full text-[12px] font-bold border-2",
                     active
-                      ? "border-[var(--color-primary,#2563eb)] bg-[var(--color-primary,#2563eb)] text-white"
+                      ? "border-orange-500 bg-orange-500 text-white"
                       : "border-slate-200 text-slate-400 bg-white"
                   )}
                 >
@@ -176,7 +176,7 @@ function StepIndicator({ view }: { view: View }) {
               </span>
             </div>
             {idx < steps.length - 1 && (
-              <div className={cn("flex-1 h-px mx-3", done ? "bg-emerald-300" : "bg-slate-200")} />
+              <div className={cn("mx-3 hidden h-px flex-1 sm:block", done ? "bg-emerald-300" : "bg-slate-200")} />
             )}
           </div>
         )
@@ -205,7 +205,7 @@ function Pill({
       className={cn(
         "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px] font-medium border transition-all",
         selected
-          ? "border-[var(--color-primary,#2563eb)] bg-[var(--color-primary,#2563eb)] text-white shadow-sm"
+          ? "border-orange-500 bg-orange-500 text-white shadow-sm"
           : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
       )}
     >
@@ -352,7 +352,7 @@ function IntakeView({
           className={cn(
             "inline-flex items-center gap-2 rounded-xl px-6 py-3 text-[14px] font-semibold transition-all",
             canSubmit && !loading
-              ? "bg-[var(--color-primary,#2563eb)] text-white hover:bg-blue-700 shadow-sm hover:shadow-md"
+              ? "bg-slate-950 text-white shadow-sm hover:bg-slate-800 hover:shadow-md"
               : "bg-slate-100 text-slate-400 cursor-not-allowed"
           )}
         >
@@ -603,7 +603,7 @@ function EmployersView({
                     href={emp.pledge_source_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-slate-400 hover:text-[var(--color-primary,#2563eb)]"
+                    className="text-slate-400 hover:text-orange-600"
                     title="View pledge"
                   >
                     <ExternalLink className="h-4 w-4" />
@@ -626,7 +626,7 @@ function EmployersView({
         </button>
         <a
           href="/dashboard/companies"
-          className="text-[13px] font-semibold text-[var(--color-primary,#2563eb)] hover:underline"
+          className="text-[13px] font-semibold text-orange-700 hover:underline"
         >
           View all fair chance employers →
         </a>
@@ -712,42 +712,44 @@ export default function BackgroundCheckTool() {
   }
 
   return (
-    <div ref={topRef} className="mx-auto max-w-2xl px-4 py-8 sm:px-6">
-      <StepIndicator view={view} />
+    <div ref={topRef} className="w-full pb-12">
+      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] sm:p-6">
+        <StepIndicator view={view} />
 
-      {error && view === "intake" && (
-        <div className="mb-5 rounded-xl bg-red-50 border border-red-200 px-4 py-3 flex items-start gap-2.5">
-          <X className="h-4 w-4 shrink-0 mt-0.5 text-red-500" />
-          <p className="text-[13px] text-red-600">{error}</p>
-        </div>
-      )}
+        {error && view === "intake" && (
+          <div className="mb-5 flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+            <X className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
+            <p className="text-[13px] text-red-600">{error}</p>
+          </div>
+        )}
 
-      {view === "intake" && (
-        <IntakeView
-          intake={intake}
-          setIntake={setIntake}
-          onSubmit={handleSubmit}
-          loading={loading}
-        />
-      )}
+        {view === "intake" && (
+          <IntakeView
+            intake={intake}
+            setIntake={setIntake}
+            onSubmit={handleSubmit}
+            loading={loading}
+          />
+        )}
 
-      {view === "results" && result && (
-        <ResultsView
-          intake={intake}
-          result={result}
-          onEdit={() => { setView("intake"); scrollTop() }}
-          onNext={goToEmployers}
-        />
-      )}
+        {view === "results" && result && (
+          <ResultsView
+            intake={intake}
+            result={result}
+            onEdit={() => { setView("intake"); scrollTop() }}
+            onNext={goToEmployers}
+          />
+        )}
 
-      {view === "employers" && (
-        <EmployersView
-          employers={employers}
-          loading={employersLoading}
-          error={employersError}
-          onBack={() => { setView("results"); scrollTop() }}
-        />
-      )}
+        {view === "employers" && (
+          <EmployersView
+            employers={employers}
+            loading={employersLoading}
+            error={employersError}
+            onBack={() => { setView("results"); scrollTop() }}
+          />
+        )}
+      </div>
     </div>
   )
 }

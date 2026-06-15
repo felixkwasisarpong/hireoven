@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { Zap } from "lucide-react"
+import { cn } from "@/lib/utils"
 
 type RecommendedJob = {
   id: string
@@ -14,6 +15,7 @@ type RecommendedJob = {
 type RecommendedJobsListProps = {
   initialJobs?: RecommendedJob[]
   initialLoaded?: boolean
+  className?: string
 }
 
 function formatDate(iso: string) {
@@ -47,6 +49,7 @@ function CompanyInitial({ name }: { name: string }) {
 export default function RecommendedJobsList({
   initialJobs = [],
   initialLoaded = false,
+  className,
 }: RecommendedJobsListProps) {
   const [jobs, setJobs] = useState<RecommendedJob[]>(initialJobs)
   const [loading, setLoading] = useState(!initialLoaded)
@@ -63,11 +66,11 @@ export default function RecommendedJobsList({
 
   if (loading) {
     return (
-      <section className="mt-10">
-        <div className="h-3.5 w-48 animate-pulse rounded-full bg-slate-100" />
+      <section className={cn("rounded-lg border border-slate-200 bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]", className)}>
+        <div className="h-4 w-44 animate-pulse rounded-full bg-slate-100" />
         <div className="mt-3 space-y-2">
           {[0, 1].map((i) => (
-            <div key={i} className="h-16 animate-pulse rounded-xl bg-slate-100" />
+            <div key={i} className="h-16 animate-pulse rounded-lg bg-slate-100" />
           ))}
         </div>
       </section>
@@ -77,19 +80,21 @@ export default function RecommendedJobsList({
   if (jobs.length === 0) return null
 
   return (
-    <section className="mt-10">
-      <div className="mb-3 flex items-center gap-2">
-        <div className="h-4 w-0.5 rounded-full bg-slate-400" />
-        <h2 className="text-[12px] font-bold uppercase tracking-widest text-slate-400">
-          Practice for your pipeline
-        </h2>
+    <section className={cn("rounded-lg border border-slate-200 bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]", className)}>
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-orange-600">
+            Pipeline practice
+          </p>
+          <h2 className="mt-1 text-sm font-semibold text-slate-950">Saved jobs to rehearse</h2>
+        </div>
       </div>
 
       <div className="space-y-2">
         {jobs.map((job) => (
           <div
             key={job.id}
-            className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-[0_1px_6px_rgba(15,23,42,0.05)] transition hover:border-slate-300 hover:shadow-[0_4px_12px_rgba(15,23,42,0.08)]"
+            className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-3 transition hover:border-slate-300 hover:bg-slate-50"
           >
             <CompanyInitial name={job.company} />
 
@@ -104,7 +109,7 @@ export default function RecommendedJobsList({
 
             <Link
               href={`/dashboard/interview/setup?jobId=${job.id}`}
-              className="flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-[12px] font-semibold text-slate-600 transition hover:bg-slate-100"
+              className="flex shrink-0 items-center gap-1.5 rounded-lg border border-orange-200 bg-orange-50 px-3 py-1.5 text-[12px] font-semibold text-orange-700 transition hover:bg-orange-100"
             >
               <Zap className="h-3 w-3" />
               Practice

@@ -1,7 +1,8 @@
 export const dynamic = "force-dynamic"
 
 import dynamicImport from "next/dynamic"
-import DashboardPageHeader from "@/components/layout/DashboardPageHeader"
+import { ShieldCheck } from "lucide-react"
+import GrowPageShell from "@/components/grow/GrowPageShell"
 
 const BackgroundCheckTool = dynamicImport(
   () => import("@/components/background-check/BackgroundCheckTool"),
@@ -10,14 +11,18 @@ const BackgroundCheckTool = dynamicImport(
 
 export default function BackgroundCheckPage() {
   return (
-    <>
-      <DashboardPageHeader
-        kicker="Background Check Awareness"
-        title="Fair Chance Check"
-        description="Understand how your background may be reviewed — and where your protections are."
-        className="rounded-none border-x-0 border-t-0"
-      />
+    <GrowPageShell
+      kicker="Grow"
+      title="Fair Chance Check"
+      description="Understand how your background may be reviewed, what protections apply, and which employers are more open to second-chance hiring."
+      icon={ShieldCheck}
+      signals={[
+        { label: "Privacy", value: "Browser-only intake" },
+        { label: "Coverage", value: "State protections" },
+        { label: "Search", value: "Fair chance employers" },
+      ]}
+    >
       <BackgroundCheckTool />
-    </>
+    </GrowPageShell>
   )
 }

@@ -1,7 +1,8 @@
 export const dynamic = "force-dynamic"
 
 import dynamicImport from "next/dynamic"
-import DashboardPageHeader from "@/components/layout/DashboardPageHeader"
+import { TrendingUp } from "lucide-react"
+import GrowPageShell from "@/components/grow/GrowPageShell"
 
 const PersonalBrandHub = dynamicImport(
   () => import("@/components/brand/PersonalBrandHub"),
@@ -10,14 +11,18 @@ const PersonalBrandHub = dynamicImport(
 
 export default function BrandPage() {
   return (
-    <>
-      <DashboardPageHeader
-        kicker="Personal Brand"
-        title="Brand Visibility"
-        description="Build your presence, generate content ideas, and track what recruiters see when they search for you."
-        className="rounded-none border-x-0 border-t-0"
-      />
+    <GrowPageShell
+      kicker="Grow"
+      title="Brand Visibility"
+      description="Audit your recruiter-facing presence, generate credible LinkedIn ideas, and keep a steady content rhythm."
+      icon={TrendingUp}
+      signals={[
+        { label: "Measure", value: "Visibility score" },
+        { label: "Create", value: "Content ideas" },
+        { label: "Ship", value: "Draft writer" },
+      ]}
+    >
       <PersonalBrandHub />
-    </>
+    </GrowPageShell>
   )
 }

@@ -779,14 +779,16 @@ function ActiveCohortsTab({
             When a layoff is detected, we group affected people into a private cohort so you can move faster together.
           </p>
           <div className="mt-5 grid gap-2 text-left">
-            {[
-              [MessageSquare, "Share leads & referrals with people in the same boat"],
-              [TrendingUp,    "See where your cohort is landing interviews and offers"],
-              [Users,         "Get warm intros instead of cold applications"],
-            ].map(([Icon, text], i) => (
+            {(
+              [
+                { Icon: MessageSquare, text: "Share leads & referrals with people in the same boat" },
+                { Icon: TrendingUp,    text: "See where your cohort is landing interviews and offers" },
+                { Icon: Users,         text: "Get warm intros instead of cold applications" },
+              ] as const
+            ).map(({ Icon, text }, i) => (
               <div key={i} className="flex items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3.5 py-3">
                 <Icon className="h-4 w-4 shrink-0 text-orange-500" />
-                <span className="text-[12.5px] text-slate-600">{text as string}</span>
+                <span className="text-[12.5px] text-slate-600">{text}</span>
               </div>
             ))}
           </div>
@@ -1180,19 +1182,19 @@ export default function LayoffCohortHub() {
   ]
 
   return (
-    <div className="mx-auto max-w-2xl px-4 pb-12 sm:px-6">
+    <div className="w-full pb-12">
       {/* Tab bar */}
-      <div className="flex gap-1 border-b border-slate-200 mb-6">
+      <div className="mb-6 flex flex-wrap gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
         {TABS.map((t) => (
           <button
             key={t.id}
             type="button"
             onClick={() => setTab(t.id)}
             className={cn(
-              "flex items-center gap-1.5 px-4 py-3 text-[13.5px] font-medium transition-colors border-b-2 -mb-px",
+              "flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-[13px] font-semibold transition-colors",
               tab === t.id
-                ? "border-emerald-500 text-emerald-700"
-                : "border-transparent text-slate-500 hover:text-slate-800"
+                ? "bg-emerald-50 text-emerald-700"
+                : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
             )}
           >
             {t.icon}

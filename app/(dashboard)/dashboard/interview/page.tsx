@@ -1,6 +1,9 @@
 import { getSessionUser } from "@/lib/auth/session-user"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { listRecentSessions, type InterviewSessionWithDebrief } from "@/lib/apex/interview/queries"
+import Link from "next/link"
+import { ArrowRight, Mic } from "lucide-react"
+import GrowPageShell from "@/components/grow/GrowPageShell"
 import InterviewHubCards from "@/components/interview/InterviewHubCards"
 import RecommendedJobsList from "@/components/interview/RecommendedJobsList"
 import RecentSessionsList from "@/components/interview/RecentSessionsList"
@@ -149,37 +152,51 @@ export default async function InterviewHubPage() {
   const initialData = await getHubInitialData()
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
+    <GrowPageShell
+      kicker="Grow"
+      title="Interview Practice"
+      description="Choose text, live voice, or coding practice, then turn each session into a focused debrief for your next real interview."
+      icon={Mic}
+      signals={[
+        { label: "Modes", value: "Text, live, coding" },
+        { label: "Output", value: "Debriefs" },
+        { label: "Context", value: "Saved jobs" },
+      ]}
+    >
+      <div className="space-y-5">
+        <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] sm:p-5">
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-orange-600">
+                Practice modes
+              </p>
+              <h2 className="mt-1 text-base font-semibold text-slate-950">Start a session</h2>
+            </div>
+            <Link
+              href="/dashboard/interview/history"
+              className="inline-flex w-fit items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[13px] font-semibold text-slate-700 transition hover:bg-slate-50 hover:text-slate-950"
+            >
+              Session history
+              <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+            </Link>
+          </div>
 
-      {/* ── Page header ─────────────────────────────────────────────────── */}
-      <div className="mb-8">
-        <div className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5">
-          <span className="h-1.5 w-1.5 rounded-full bg-slate-500" />
-          <span className="text-[11px] font-semibold tracking-wide text-slate-600">AI-powered practice</span>
+          <InterviewHubCards />
+        </section>
+
+        <div className="grid gap-5 lg:grid-cols-2">
+          <RecommendedJobsList
+            className="mt-0"
+            initialJobs={initialData.recommendedJobs}
+            initialLoaded={initialData.recommendedJobsLoaded}
+          />
+          <RecentSessionsList
+            className="mt-0"
+            initialSessions={initialData.recentSessions}
+            initialLoaded={initialData.recentSessionsLoaded}
+          />
         </div>
-        <h1 className="text-[26px] font-bold tracking-tight text-slate-900">
-          Interview Practice
-        </h1>
-        <p className="mt-1.5 max-w-xl text-[14px] leading-relaxed text-slate-500">
-          Three modes, one debrief. Pick the format that matches your next real interview.
-        </p>
       </div>
-
-      {/* Mode cards */}
-      <InterviewHubCards />
-
-      {/* Divider */}
-      <div className="mt-10 border-t border-slate-100" />
-
-      {/* Recommended + recent */}
-      <RecommendedJobsList
-        initialJobs={initialData.recommendedJobs}
-        initialLoaded={initialData.recommendedJobsLoaded}
-      />
-      <RecentSessionsList
-        initialSessions={initialData.recentSessions}
-        initialLoaded={initialData.recentSessionsLoaded}
-      />
-    </div>
+    </GrowPageShell>
   )
 }

@@ -48,11 +48,13 @@ function NavItem({
   applicationCount,
   variant,
   navSkin,
+  grouped = false,
 }: {
   item: DashboardNavItem
   applicationCount?: number
   variant: "light" | "dark"
   navSkin: "default" | "feed"
+  grouped?: boolean
 }) {
   const pathname = usePathname()
   const { plan, isLoading: subLoading } = useSubscription()
@@ -68,6 +70,7 @@ function NavItem({
   const feedSkin = navSkin === "feed" && variant === "light"
   const tourId = navTourId(item.label)
   const hasSubtitle = Boolean(item.subtitle)
+  const feedGrouped = feedSkin && grouped
 
   const badge =
     item.label === "Applications" && !feedSkin
@@ -76,12 +79,18 @@ function NavItem({
 
   const linkClass = feedSkin
     ? cn(
-        "group relative flex min-h-[40px] items-center gap-3 rounded-lg px-3 py-2 text-[14px] transition-colors",
+        "group relative flex items-center rounded-lg text-[13px] transition-all duration-150",
+        feedGrouped
+          ? "min-h-[50px] gap-2.5 px-2.5 py-2"
+          : "min-h-[40px] gap-2.5 px-2.5 py-2",
         locked
           ? "cursor-pointer opacity-60 hover:opacity-80"
           : active
-            ? "bg-orange-50 font-semibold text-[#FF5C18]"
-            : "font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+            ? cn(
+                "bg-[#FFF7ED] font-semibold text-[#C2410C] ring-1 ring-[#FED7AA]/80 shadow-[0_1px_2px_rgba(124,45,18,0.06)]",
+                feedGrouped && "before:absolute before:-left-[15px] before:top-1/2 before:h-6 before:w-[2px] before:-translate-y-1/2 before:rounded-full before:bg-[#FF5C18]"
+              )
+            : "font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-950 hover:ring-1 hover:ring-slate-200/80"
       )
     : cn(
         "group neo-nav-link",
@@ -94,11 +103,11 @@ function NavItem({
 
   const iconClass = feedSkin
     ? cn(
-        "h-[18px] w-[18px] flex-shrink-0 fill-none transition-colors duration-200",
+        "h-[17px] w-[17px] flex-shrink-0 fill-none transition-colors duration-200",
         locked
           ? "text-slate-400"
           : active
-            ? "text-[#FF5C18] fill-[#FF5C18]"
+            ? "text-[#EA580C]"
             : "text-slate-500 group-hover:text-slate-900"
       )
     : cn(
@@ -128,8 +137,19 @@ function NavItem({
     )
   }
 
-  // Icon — wrapped in a soft rounded square for grouped items (subtitle present)
-  const iconEl = !feedSkin && hasSubtitle ? (
+  // Icon — wrapped in a soft rounded square for grouped/detail items.
+  const iconEl = feedGrouped ? (
+    <span className={cn(
+      "flex h-8 w-8 shrink-0 items-center justify-center rounded-md border transition-colors duration-150",
+      locked
+        ? "border-slate-200 bg-slate-50"
+        : active
+          ? "border-[#FED7AA] bg-white text-[#EA580C]"
+          : "border-slate-200 bg-white text-slate-500 group-hover:border-slate-300 group-hover:bg-slate-50 group-hover:text-slate-900"
+    )}>
+      <Icon className={iconClass} strokeWidth={1.8} aria-hidden />
+    </span>
+  ) : !feedSkin && hasSubtitle ? (
     <span className={cn(
       "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-colors duration-150",
       locked
@@ -150,14 +170,17 @@ function NavItem({
     <>
       {iconEl}
       <span className="flex-1 min-w-0">
-        <span className="block truncate">{item.label}</span>
+        <span className={cn("block truncate", feedGrouped && "leading-4")}>{item.label}</span>
         {item.subtitle ? (
           <span
             className={cn(
-              "mt-0.5 block truncate text-[11px] font-normal leading-tight",
+              "mt-0.5 block text-[11px] font-normal leading-[1.2]",
+              feedSkin ? "sidebar-nav-subtitle" : "truncate",
               active && !feedSkin
                 ? "text-white/70"
-                : variant === "dark" ? "text-slate-500" : "text-slate-400"
+                : feedSkin && active
+                  ? "text-orange-700/75"
+                  : variant === "dark" ? "text-slate-500" : "text-slate-400"
             )}
           >
             {item.subtitle}
@@ -257,10 +280,10 @@ function NavGroup({
 
   const headerClass = feedSkin
     ? cn(
-        "group flex w-full items-center gap-3 rounded-lg px-3 py-2 text-[14px] font-medium transition-colors",
+        "group flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] font-semibold transition-all duration-150",
         hasActive
-          ? "text-[#FF5C18]"
-          : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+          ? "bg-slate-50 text-slate-950 ring-1 ring-slate-200/80"
+          : "text-slate-600 hover:bg-slate-50 hover:text-slate-950 hover:ring-1 hover:ring-slate-200/80"
       )
     : cn(
         "group flex w-full items-center gap-2 rounded-md px-2 py-1.5 transition-colors",
@@ -268,19 +291,26 @@ function NavGroup({
       )
 
   const headerIconClass = feedSkin
-    ? cn("h-[18px] w-[18px] flex-shrink-0 fill-none", hasActive ? "text-[#FF5C18] fill-[#FF5C18]" : "text-slate-500 group-hover:text-slate-900")
+    ? cn("h-[16px] w-[16px] flex-shrink-0 fill-none", hasActive ? "text-[#EA580C]" : "text-slate-500 group-hover:text-slate-900")
     : cn("h-3.5 w-3.5 flex-shrink-0", hasActive ? "text-slate-500" : "text-slate-400")
 
   return (
     <div>
       <button type="button" onClick={() => setOpen((o) => !o)} className={headerClass}>
         {feedSkin && (
-          <GroupIcon className={cn(headerIconClass, hasActive && "fill-current")} strokeWidth={2} aria-hidden />
+          <span className={cn(
+            "flex h-7 w-7 shrink-0 items-center justify-center rounded-md border transition-colors",
+            hasActive
+              ? "border-[#FED7AA] bg-white"
+              : "border-slate-200 bg-white group-hover:border-slate-300 group-hover:bg-slate-50"
+          )}>
+            <GroupIcon className={headerIconClass} strokeWidth={1.9} aria-hidden />
+          </span>
         )}
         <span className={cn(
           "flex-1 truncate text-left",
           feedSkin
-            ? "text-[14px]"
+            ? "text-[13px]"
             : "text-[10.5px] font-bold uppercase tracking-[0.1em]"
         )}>
           {group.label}
@@ -295,7 +325,10 @@ function NavGroup({
       </button>
 
       {open && (
-        <div className="mt-1 space-y-0.5">
+        <div className={cn(
+          "mt-1 space-y-1",
+          feedSkin && "relative ml-[13px] border-l border-slate-200/90 pl-3"
+        )}>
           {items.map((item) => (
             <NavItem
               key={item.label}
@@ -303,6 +336,7 @@ function NavGroup({
               applicationCount={applicationCount}
               variant={variant}
               navSkin={navSkin}
+              grouped
             />
           ))}
         </div>

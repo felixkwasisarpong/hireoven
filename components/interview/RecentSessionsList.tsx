@@ -19,6 +19,7 @@ type Session = {
 type RecentSessionsListProps = {
   initialSessions?: Session[]
   initialLoaded?: boolean
+  className?: string
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -62,6 +63,7 @@ function formatDate(iso: string) {
 export default function RecentSessionsList({
   initialSessions = [],
   initialLoaded = false,
+  className,
 }: RecentSessionsListProps) {
   const [sessions, setSessions] = useState<Session[]>(initialSessions)
   const [loading, setLoading] = useState(!initialLoaded)
@@ -78,11 +80,11 @@ export default function RecentSessionsList({
 
   if (loading) {
     return (
-      <section className="mt-10">
-        <div className="h-3.5 w-32 animate-pulse rounded-full bg-slate-100" />
+      <section className={cn("rounded-lg border border-slate-200 bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]", className)}>
+        <div className="h-4 w-32 animate-pulse rounded-full bg-slate-100" />
         <div className="mt-3 space-y-2">
           {[0, 1, 2].map((i) => (
-            <div key={i} className="h-[60px] animate-pulse rounded-xl bg-slate-100" />
+            <div key={i} className="h-[60px] animate-pulse rounded-lg bg-slate-100" />
           ))}
         </div>
       </section>
@@ -92,13 +94,13 @@ export default function RecentSessionsList({
   if (sessions.length === 0) return null
 
   return (
-    <section className="mt-10">
+    <section className={cn("rounded-lg border border-slate-200 bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]", className)}>
       <div className="mb-3 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="h-4 w-0.5 rounded-full bg-slate-300" />
-          <h2 className="text-[12px] font-bold uppercase tracking-widest text-slate-400">
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">
             Recent sessions
-          </h2>
+          </p>
+          <h2 className="mt-1 text-sm font-semibold text-slate-950">Debriefs and active rooms</h2>
         </div>
         <Link
           href="/dashboard/interview/history"
@@ -118,7 +120,7 @@ export default function RecentSessionsList({
           return (
             <div
               key={session.id}
-              className="group flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-[0_1px_6px_rgba(15,23,42,0.05)] transition hover:border-slate-300 hover:shadow-[0_4px_12px_rgba(15,23,42,0.08)]"
+              className="group flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-3 transition hover:border-slate-300 hover:bg-slate-50"
             >
               {/* Type pill */}
               <span className={cn("hidden shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-semibold sm:inline-flex", style.pill)}>
