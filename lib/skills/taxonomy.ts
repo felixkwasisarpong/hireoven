@@ -228,7 +228,9 @@ export const SKILL_DEFINITIONS: SkillDefinition[] = [
   { label: "Roadmapping",         aliases: ["roadmapping", "roadmap planning"] },
   { label: "Stakeholder Management", aliases: ["stakeholder management", "stakeholder communication"] },
   { label: "OKRs",                aliases: ["okrs", "objectives and key results"] },
-  { label: "PRDs",                aliases: ["prds", "product requirements", "product requirements document"] },
+  // "product requirements" alone is too broad — appears in "translate product
+  // requirements into solutions" on nearly every SWE JD without meaning PRD authorship.
+  { label: "PRDs",                aliases: ["prds", "product requirements document", "product requirements documents"] },
 
   // ─── Marketing ───────────────────────────────────────────────────────────
   { label: "SEO",                   aliases: ["seo", "search engine optimization"] },
@@ -969,6 +971,11 @@ const BOILERPLATE_PRONE_SKILLS = new Set([
   // assistants", "onboarding flow"); keep only when an HR/CS-qualified phrase
   // matches the (tightened) aliases.
   "Onboarding",
+  // "PRDs" must only fire when the text explicitly names "prds" or the full
+  // "product requirements document" phrase — the alias "product requirements"
+  // was removed because it fires on every SWE JD that says "translate
+  // product requirements into technical solutions".
+  "PRDs",
 ])
 
 export function filterSkillsByTextEvidence(

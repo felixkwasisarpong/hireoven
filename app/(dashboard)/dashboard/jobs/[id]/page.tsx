@@ -453,7 +453,7 @@ export default async function DashboardJobDetailPage({ params }: Props) {
         ...page.sections.skills.items,
         ...page.sections.requirements.items,
         ...page.sections.preferred_qualifications.items
-      )
+      ).filter(s => !isSoftSkill(s))
       const resumeLabels = normalizeSkillList([
         ...(resumeRow?.top_skills ?? []),
         ...getSkillsBucketValues(resumeRow?.skills ?? null),
