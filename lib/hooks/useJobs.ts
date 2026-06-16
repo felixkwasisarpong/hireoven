@@ -330,6 +330,9 @@ export function useJobs(
   const exhaustedRef = useRef(false)
   const loadingRef = useRef(false)
   const requestKeyRef = useRef("")
+  // When a refresh bails because another fetch is in-flight, we store it here
+  // so the in-flight fetch can re-run it from its finally block.
+  const pendingRefreshRef = useRef<(() => Promise<void>) | null>(null)
 
   function setAllJobs(jobs: JobWithMatchScore[]) {
     allJobsRef.current = jobs
@@ -446,9 +449,17 @@ export function useJobs(
   const ensureVisibleJobs = useCallback(
     async (targetVisible: number, reset = false) => {
       const requestKey = JSON.stringify({ filters, searchQuery })
-      requestKeyRef.current = requestKey
 
-      if (loadingRef.current) return
+      if (loadingRef.current) {
+        // Signal the in-flight fetch to abort (requestKey mismatch) and queue
+        // this request to run once the in-flight fetch releases loadingRef.
+        requestKeyRef.current = requestKey
+        pendingRefreshRef.current = () => ensureVisibleJobs(targetVisible, reset)
+        return
+      }
+
+      pendingRefreshRef.current = null
+      requestKeyRef.current = requestKey
       loadingRef.current = true
       setIsLoading(true)
 
@@ -530,6 +541,12 @@ export function useJobs(
           setIsLoading(false)
         }
         loadingRef.current = false
+        // If a newer refresh was queued while this fetch ran, execute it now.
+        const pending = pendingRefreshRef.current
+        if (pending) {
+          pendingRefreshRef.current = null
+          void pending()
+        }
       }
     },
     [fetchChunk, filters, personalized, searchQuery]

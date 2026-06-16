@@ -2058,11 +2058,15 @@ ${finalContext}
 
 User Input: ${userMessage}`
 
-    // Use more tokens when structured add-ons are present (extra JSON sections in response)
+    // Token budget by complexity. Informational questions (H-1B, visa, market
+    // research) generate large explanation arrays that easily exceed 1024 tokens.
+    // Compare / interview-prep add extra JSON sections on top.
     const maxTokens =
       (context.compareJobs && context.compareJobs.length >= 2) || isInterviewPrepIntent
-        ? 1536
-        : 1024
+        ? 3072
+        : inferredIntent === "question"
+          ? 2048
+          : 1536
 
     // ── Streaming branch ────────────────────────────────────────────────────────
     // When body.stream === true, run the Anthropic call + post-processing inside

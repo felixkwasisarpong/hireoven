@@ -43,6 +43,10 @@ export type DashboardNavItem = {
   /** If set, clicking the item triggers a named in-app action instead of
    *  navigating. The sidebar maps these to the right context handler. */
   action?: DashboardNavAction
+  /** Use exact-path matching for active detection. Set this when the item's
+   *  href is also a prefix of sibling items (e.g. /dashboard/international
+   *  vs /dashboard/international/offer-risk). */
+  exact?: boolean
 }
 
 export type DashboardNavGroup = {
@@ -83,7 +87,7 @@ export const DASHBOARD_NAV_ITEMS: DashboardNavItem[] = [
 
   // ── International ────────────────────────────────────────────────────────────
   // No gate — pages enforce the profile check (is_international / visa_status)
-  { label: "International",  href: "/dashboard/international",            icon: Plane,           group: "International", subtitle: "Tools for visa seekers" },
+  { label: "International",  href: "/dashboard/international",            icon: Plane,           group: "International", subtitle: "Tools for visa seekers", exact: true },
   { label: "H-1B Intel",     href: "/dashboard/international/h1b-explorer", icon: Globe,         group: "International", subtitle: "Visa sponsorship data" },
   { label: "Offer Risk",     href: "/dashboard/international/offer-risk", icon: ShieldAlert,     group: "International", subtitle: "Vet an offer's stability" },
   // Hidden for now — page/routes remain at /dashboard/international/services.
@@ -95,11 +99,11 @@ export const DASHBOARD_NAV_ITEMS: DashboardNavItem[] = [
   { label: "Help & support", href: "mailto:support@hireoven.com",         icon: LifeBuoy,      footer: true },
 ]
 
-export function isDashboardNavActive(pathname: string, href: string): boolean {
+export function isDashboardNavActive(pathname: string, href: string, exact?: boolean): boolean {
   if (href.startsWith("mailto:") || href.startsWith("http://") || href.startsWith("https://")) {
     return false
   }
-  if (href === "/dashboard") {
+  if (href === "/dashboard" || exact) {
     return pathname === href
   }
   return pathname === href || pathname.startsWith(`${href}/`)

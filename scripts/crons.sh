@@ -48,6 +48,7 @@ run() {
 # waas-ingest        15 */6 * * *      run api/cron/waas-ingest
 # discover-companies 0 5 * * *         run api/cron/discover-companies
 # discover-tenants   0 */2 * * *       run api/cron/discover-tenants
+# discover-from-domains 0 6 * * *      run api/cron/discover-from-domains  # requires DISCOVER_FROM_DOMAINS_ENABLED=true
 # careers-url-discovery 30 */4 * * *   CAREERS_DISCOVERY_BATCH=10 bash scripts/crons.sh careers-url-discovery
 # glassdoor-discovery 30 5 * * *       run api/cron/glassdoor-discovery
 # builtin-discovery   0 */4 * * *       run api/cron/builtin-discovery
@@ -81,6 +82,7 @@ case "${1:-}" in
   waas-ingest)       run api/cron/waas-ingest ;;
   discover-companies) run api/cron/discover-companies ;;
   discover-tenants)  run api/cron/discover-tenants ;;
+  discover-from-domains) run "api/cron/discover-from-domains?batch=${DISCOVER_FROM_DOMAINS_BATCH:-100}&concurrency=${DISCOVER_FROM_DOMAINS_CONCURRENCY:-8}" ;;
   careers-url-discovery) run "api/cron/careers-url-discovery?batch=${CAREERS_DISCOVERY_BATCH:-10}" ;;
   glassdoor-discovery) run api/cron/glassdoor-discovery ;;
   builtin-discovery) run api/cron/builtin-discovery ;;

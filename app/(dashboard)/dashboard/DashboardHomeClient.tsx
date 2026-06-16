@@ -57,10 +57,21 @@ export default function DashboardHomeClient({
    * Default to `sort=match` once a resume is ready without rewriting the URL
    * (the old rewrite caused a visible double-fetch on first load).
    */
-  const [localFocusMode, setLocalFocusMode] = useState(false)
+  // Read localStorage synchronously so the very first render already knows
+  // whether Focus Mode is on. A deferred useEffect would cause the initial
+  // feed fetch to run with sort=freshest, then lose the result when Focus Mode
+  // activates mid-flight (the new refresh can't start while the old fetch holds
+  // loadingRef, and the old fetch abandons due to a requestKey mismatch).
+  const [localFocusMode, setLocalFocusMode] = useState(() => {
+    try {
+      return typeof window !== "undefined" && localStorage.getItem("hireoven:apex-focus-mode:v1") === "1"
+    } catch {
+      return false
+    }
+  })
   const focusMode = searchParams.get("focus") === "1" || localFocusMode
 
-  // Persist focus mode across navigation even when the URL param is absent.
+  // Keep in sync when the URL changes (e.g. Apex navigates to ?focus=1).
   useEffect(() => {
     if (typeof window === "undefined") return
     if (searchParams.get("focus") === "1") {
