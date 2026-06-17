@@ -541,10 +541,14 @@ export function useJobs(
           setIsLoading(false)
         }
         loadingRef.current = false
-        // If a newer refresh was queued while this fetch ran, execute it now.
-        const pending = pendingRefreshRef.current
+        // If a newer refresh was queued while this fetch ran, run it now.
+        // pendingRefreshRef stores a self-reference to THIS callback (see above),
+        // and that circular reference makes TS resolve `.current` to `never`
+        // right here — so calling it directly is a TS2349 build break. Read it
+        // back through an explicit cast to its declared type before invoking.
+        const pending = pendingRefreshRef.current as (() => Promise<void>) | null
+        pendingRefreshRef.current = null
         if (pending) {
-          pendingRefreshRef.current = null
           void pending()
         }
       }
