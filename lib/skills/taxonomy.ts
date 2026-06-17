@@ -32,10 +32,10 @@ export type SkillCategory =
 export type CategorizedSkills = Record<SkillCategory, string[]>
 
 const GO_LANGUAGE_SIGNAL_RE =
-  /\b(?:go\s+language|go\s+(?:developer|engineer|backend|services?|microservices?|sdk|runtime)|golang|written in go|using go|experience\s+(?:with|in)\s+go|proficien(?:cy|t)\s+(?:with|in)\s+go|knowledge of go|expertise in go|fluency in go|(?:python|java|rust|kotlin|scala|typescript|javascript|c\+\+|c#|ruby|php)\s*(?:,|\/|\band\b)\s*go|go\s*(?:,|\/|\band\b)\s*(?:python|java|rust|kotlin|scala|typescript|javascript|c\+\+|c#|ruby|php))\b/i
+  /\b(?:go\s+language|go\s+(?:developer|engineer|backend|services?|microservices?|sdk|runtime)|golang|written in go|using go|experience\s+(?:with|in)\s+go|proficien(?:cy|t)\s+(?:with|in)\s+go|knowledge of go|expertise in go|fluency in go|(?:python|java|rust|kotlin|scala|typescript|javascript|c\+\+|c#|ruby|php)\s*(?:,|\/|\band\b|\bor\b)\s*go|go\s*(?:,|\/|\band\b|\bor\b)\s*(?:python|java|rust|kotlin|scala|typescript|javascript|c\+\+|c#|ruby|php))\b/i
 
 const RUST_LANGUAGE_SIGNAL_RE =
-  /\b(?:rust\s+(?:language|developer|engineer|programming|crate|crates|ownership|borrow|async|tokio|axum)|written in rust|using rust|experience\s+(?:with|in)\s+rust|proficien(?:cy|t)\s+(?:with|in)\s+rust|knowledge of rust|(?:python|java|go|kotlin|c\+\+|typescript|javascript)\s*(?:,|\/|\band\b)\s*rust|rust\s*(?:,|\/|\band\b)\s*(?:python|java|go|kotlin|c\+\+|typescript|javascript))\b/i
+  /\b(?:rust\s+(?:language|developer|engineer|programming|crate|crates|ownership|borrow|async|tokio|axum)|written in rust|using rust|experience\s+(?:with|in)\s+rust|proficien(?:cy|t)\s+(?:with|in)\s+rust|knowledge of rust|familiarity\s+with\s+rust|(?:python|java|go|kotlin|c\+\+|typescript|javascript)\s*(?:,|\/|\band\b|\bor\b)\s*rust|rust\s*(?:,|\/|\band\b|\bor\b)\s*(?:python|java|go|kotlin|c\+\+|typescript|javascript))\b/i
 
 const MACHINE_LEARNING_SIGNAL_RE =
   /\b(?:machine learning|ml engineer|ml platform|ml model|ml pipeline|ml ops|mlops|ml infrastructure|train(?:ing)?\s+(?:a\s+)?(?:model|algorithm)|ml\s+(?:framework|project|team|experience|background)|deploy(?:ing)?\s+ml|build(?:ing)?\s+ml)\b/i
@@ -111,6 +111,7 @@ export const SKILL_DEFINITIONS: SkillDefinition[] = [
   { label: ".NET",       aliases: [".net", "dotnet", "asp.net"] },
   { label: "Distributed Systems", aliases: ["distributed systems", "distributed system", "distributed architecture"] },
   { label: "Backend Development", aliases: ["backend development", "backend service development", "backend services", "server-side development"] },
+  { label: "Full-Stack Development", aliases: ["full stack", "fullstack", "full-stack"] },
   { label: "Object-Oriented Programming", aliases: ["object-oriented programming", "object oriented programming", "oop"] },
   { label: "Data Structures", aliases: ["data structures", "data structure"] },
   { label: "Algorithms", aliases: ["algorithms", "algorithm design"] },
@@ -152,6 +153,9 @@ export const SKILL_DEFINITIONS: SkillDefinition[] = [
   { label: "Prometheus",   aliases: ["prometheus"] },
   { label: "Grafana",      aliases: ["grafana"] },
   { label: "Datadog",      aliases: ["datadog"] },
+  { label: "DevOps",       aliases: ["devops"] },
+  { label: "Site Reliability Engineering", aliases: ["site reliability engineering", "site reliability engineer", "sre"] },
+  { label: "Platform Engineering",         aliases: ["platform engineering", "platform engineer"] },
 
   // ─── APIs & Integration ───────────────────────────────────────────────────
   // Bare "api"/"apis" matched every backend JD that merely mentions APIs.
@@ -179,6 +183,7 @@ export const SKILL_DEFINITIONS: SkillDefinition[] = [
   { label: "dbt",               aliases: ["dbt", "data build tool"] },
   { label: "Data Analysis",     aliases: ["data analysis", "data analytics"] },
   { label: "Data Engineering",  aliases: ["data engineering", "data pipelines", "etl", "elt"] },
+  { label: "Data Science",      aliases: ["data science", "data scientist"] },
   { label: "Data Visualization", aliases: ["data visualization", "data viz", "tableau", "power bi", "looker"] },
   { label: "NLP",               aliases: ["nlp", "natural language processing"], patterns: [NLP_SIGNAL_RE], requiresPattern: false },
   { label: "Computer Vision",   aliases: ["computer vision", "cv"], patterns: [COMPUTER_VISION_SIGNAL_RE], requiresPattern: false },
@@ -214,9 +219,9 @@ export const SKILL_DEFINITIONS: SkillDefinition[] = [
   { label: "Accessibility",      aliases: ["accessibility", "a11y", "wcag", "ada compliance"] },
 
   // ─── Product & Project Management ────────────────────────────────────────
-  { label: "Product Management",  aliases: ["product management"] },
+  { label: "Product Management",  aliases: ["product management", "product manager"] },
   { label: "Product Strategy",    aliases: ["product strategy", "product vision", "product roadmap"] },
-  { label: "Project Management",  aliases: ["project management"] },
+  { label: "Project Management",  aliases: ["project management", "project manager"] },
   {
     label: "Agile",
     aliases: ["agile", "scrum", "kanban", "sprint planning"],
@@ -359,7 +364,7 @@ export const SKILL_DEFINITIONS: SkillDefinition[] = [
   { label: "DO-160",            aliases: ["do-160", "do160"] },
   { label: "DO-178",            aliases: ["do-178", "do-178c", "do178"] },
   { label: "DO-254",            aliases: ["do-254", "do254"] },
-  { label: "Systems Engineering", aliases: ["systems engineering", "model-based systems engineering", "mbse"] },
+  { label: "Systems Engineering", aliases: ["systems engineering", "systems engineer", "model-based systems engineering", "mbse"] },
   { label: "Robotics",          aliases: ["robotics", "robot operating system", "ros2"] },
   { label: "PLC",               aliases: ["plc", "programmable logic controller", "ladder logic"] },
   { label: "CAM",               aliases: ["cam", "computer-aided manufacturing"] },
@@ -409,6 +414,7 @@ export const SKILL_DEFINITIONS: SkillDefinition[] = [
   { label: "5G/LTE",            aliases: ["5g", "lte", "4g lte", "cellular networks", "ran"] },
   { label: "VoIP",              aliases: ["voip", "sip", "asterisk", "webrtc", "unified communications"] },
   { label: "Zero Trust",        aliases: ["zero trust", "zero-trust", "ztna"] },
+  { label: "Network Engineering", aliases: ["network engineering", "network engineer"] },
 
   // ─── Media & Creative Tools ───────────────────────────────────────────────
   { label: "Premiere Pro",      aliases: ["premiere pro", "adobe premiere", "premiere"] },
@@ -629,6 +635,7 @@ const FRAMEWORK_SKILLS = new Set([
   ".NET",
   "Distributed Systems",
   "Backend Development",
+  "Full-Stack Development",
   "Object-Oriented Programming",
   "Data Structures",
   "Algorithms",
@@ -676,6 +683,9 @@ const DEVOPS_SKILLS = new Set([
   "Datadog",
   "Kafka",
   "RabbitMQ",
+  "DevOps",
+  "Site Reliability Engineering",
+  "Platform Engineering",
 ])
 
 const AI_ML_SKILLS = new Set([
@@ -697,6 +707,7 @@ const DATA_SKILLS = new Set([
   "dbt",
   "Data Analysis",
   "Data Engineering",
+  "Data Science",
   "Data Visualization",
   "Statistics",
   "A/B Testing",
@@ -741,6 +752,7 @@ const TESTING_SKILLS = new Set([
 const NETWORKING_SKILLS = new Set([
   "TCP/IP", "DNS", "Firewall", "VPN", "Cisco", "BGP/OSPF", "SD-WAN",
   "Load Balancing", "Wireshark", "Network Monitoring", "5G/LTE", "VoIP", "Zero Trust",
+  "Network Engineering",
 ])
 
 const MEDIA_SKILLS = new Set([
