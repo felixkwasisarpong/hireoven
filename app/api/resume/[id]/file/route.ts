@@ -111,9 +111,20 @@ export async function GET(
         storagePath: resume.storage_path,
         error: error instanceof Error ? error.message : String(error),
       })
+      // When this is a preview request (no ?download=1), don't fall through to
+      // DOCX generation — the browser can't display DOCX inline and will trigger
+      // an unwanted page-level download from within the iframe.
+      if (!forceDownload) {
+        return NextResponse.json({ error: "File unavailable" }, { status: 404 })
+      }
     }
   }
 
+  // DOCX generation fallback — only reached when there is no storage_path, or
+  // storage_path exists but streaming failed AND the caller explicitly requested
+  // a download (?download=1). Preview requests (forceDownload=false) with a
+  // storage_path bail out above so we never serve an un-embeddable DOCX to an
+  // iframe.
   try {
     const docxBuffer = await generateResumeDocx(resume)
     return new NextResponse(new Uint8Array(docxBuffer), {

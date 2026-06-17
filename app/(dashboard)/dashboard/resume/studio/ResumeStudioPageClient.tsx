@@ -929,6 +929,59 @@ function TailorRecommendedFixesPanel({
   )
 }
 
+function ResumeFullscreenModal({
+  open,
+  onClose,
+  resume,
+  profile,
+  sections,
+  customSections,
+  personalFields,
+}: {
+  open: boolean
+  onClose: () => void
+  resume: Resume | null
+  profile: Profile | null
+  sections?: ResumeSectionState[]
+  customSections?: Record<string, ResumePreviewCustomSection>
+  personalFields?: ResumePreviewPersonalField[]
+}) {
+  useEffect(() => {
+    if (!open) return
+    function onKey(e: KeyboardEvent) { if (e.key === "Escape") onClose() }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [open, onClose])
+
+  if (!open) return null
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col bg-white">
+      <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-6 py-3">
+        <p className="text-sm font-semibold text-slate-700">Resume Preview</p>
+        <button
+          type="button"
+          onClick={onClose}
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+          aria-label="Close preview"
+        >
+          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto bg-slate-100 p-8">
+        <ResumeDocumentPreview
+          resume={resume}
+          profile={profile}
+          sectionOrder={sections}
+          customSections={customSections}
+          personalFields={personalFields}
+          className="!max-h-none !overflow-visible mx-auto max-w-3xl"
+        />
+      </div>
+    </div>
+  )
+}
+
 function StickyResumePreview({
   title,
   badge,
@@ -950,8 +1003,20 @@ function StickyResumePreview({
   personalFields?: ResumePreviewPersonalField[]
   onPreviewSectionNavigate?: (sectionId: string) => void
 }) {
+  const [modalOpen, setModalOpen] = useState(false)
+
   return (
-    <aside className="xl:sticky xl:top-4 xl:self-start">
+    <>
+      <ResumeFullscreenModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        resume={resume}
+        profile={profile}
+        sections={sections}
+        customSections={customSections}
+        personalFields={personalFields}
+      />
+      <aside className="xl:sticky xl:top-4 xl:self-start">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <p className="text-[14px] font-bold text-slate-950">{title}</p>
@@ -966,6 +1031,7 @@ function StickyResumePreview({
         <div className="absolute -left-4 top-8 z-10 hidden flex-col gap-2 xl:flex">
           <button
             type="button"
+            onClick={() => setModalOpen(true)}
             className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm transition hover:text-[#5B4DFF]"
             aria-label="View resume"
           >
@@ -991,6 +1057,7 @@ function StickyResumePreview({
         />
       </div>
     </aside>
+    </>
   )
 }
 

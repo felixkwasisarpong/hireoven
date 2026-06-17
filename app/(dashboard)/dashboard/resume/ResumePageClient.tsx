@@ -160,45 +160,13 @@ function SectionHeading({ children }: { children: React.ReactNode }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function ResumePreviewThumb({ resume }: { resume: Resume }) {
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const title = resume.full_name ?? resume.name ?? resume.file_name
   const role = resume.primary_role ?? "Resume"
   const summary = resume.summary ?? resume.raw_text?.split(/\s+/).slice(0, 18).join(" ") ?? "Parsed resume preview"
   const skills = (resume.top_skills ?? []).slice(0, 3)
-  const canRenderFile = Boolean(resume.storage_path && resume.file_type !== "generated")
-  const isPdf = /pdf/i.test(resume.file_type ?? resume.file_name)
-
-  useEffect(() => {
-    let cancelled = false
-
-    async function loadPreviewUrl() {
-      if (!canRenderFile) {
-        setPreviewUrl(null)
-        return
-      }
-
-      const response = await fetch(`/api/resume/${resume.id}`, { cache: "no-store" })
-      if (!response.ok) return
-      const data = (await response.json()) as Resume & { download_url?: string }
-      if (!cancelled) setPreviewUrl(data.download_url ?? data.file_url ?? null)
-    }
-
-    void loadPreviewUrl()
-
-    return () => {
-      cancelled = true
-    }
-  }, [canRenderFile, resume.id])
 
   return (
     <div className="h-[132px] w-[104px] overflow-hidden rounded-lg border border-slate-200 bg-white p-2 shadow-sm">
-      {previewUrl && isPdf ? (
-        <iframe
-          title={`${title} preview`}
-          src={`${previewUrl}#toolbar=0&navpanes=0&scrollbar=0&page=1&zoom=55`}
-          className="h-full w-full rounded border border-slate-100 bg-white"
-        />
-      ) : (
       <div className="h-full overflow-hidden rounded border border-slate-100 bg-slate-50 px-2 py-2">
         <p className="truncate text-[7px] font-bold uppercase tracking-wide text-slate-700">{title}</p>
         <p className="mt-0.5 truncate text-[6px] font-medium text-[#5B4DFF]">{role}</p>
@@ -217,7 +185,6 @@ function ResumePreviewThumb({ resume }: { resume: Resume }) {
           ))}
         </div>
       </div>
-      )}
     </div>
   )
 }
