@@ -1,5 +1,5 @@
 import type { Pool } from "pg"
-import { detectAdapter, type AtsAdapter, type AtsName } from "@/lib/harvester/adapters"
+import { detectAdapter, getAdapter, type AtsAdapter, type AtsName } from "@/lib/harvester/adapters"
 import { throwIfAborted } from "@/lib/harvester/adapters/_base"
 import { canonicalCareersUrl } from "@/lib/harvester/canonical-url"
 import { persistJobsBulk } from "@/lib/harvester/persist-bulk"
@@ -146,10 +146,27 @@ function detectCompanyAdapter(
 
   const atsType = company.ats_type?.trim()
   const atsIdentifier = company.ats_identifier?.trim()
-  if (!atsType || !atsIdentifier) return null
 
-  const canonicalUrl = canonicalCareersUrl(atsType as AtsName, atsIdentifier)
-  return canonicalUrl ? detectAdapter(canonicalUrl) : null
+  if (atsType && atsIdentifier) {
+    const canonicalUrl = canonicalCareersUrl(atsType as AtsName, atsIdentifier)
+    if (canonicalUrl) {
+      const fromCanonical = detectAdapter(canonicalUrl)
+      if (fromCanonical) return fromCanonical
+    }
+  }
+
+  // Direct adapter lookup for types that have no URL pattern (e.g. jsonld).
+  // Slug = ats_identifier when set (allows a more specific listing URL),
+  // otherwise falls back to the company's careers_url.
+  if (atsType) {
+    const adapter = getAdapter(atsType as AtsName)
+    if (adapter) {
+      const slug = atsIdentifier || detectionUrl
+      return { adapter, slug }
+    }
+  }
+
+  return null
 }
 
 export type AtsHarvestOutcome =

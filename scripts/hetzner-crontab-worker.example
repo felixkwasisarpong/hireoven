@@ -59,3 +59,10 @@ DATABASE_URL=REPLACE_ME
   0 */2 * * *      cd $HIREOVEN_REPO && bash scripts/crons.sh discover-tenants   >>/var/log/hireoven/discover-tenants.log 2>&1
   0 */4 * * *      cd $HIREOVEN_REPO && bash scripts/crons.sh builtin-discovery  >>/var/log/hireoven/builtin-discovery.log 2>&1
  30 */4 * * *      cd $HIREOVEN_REPO && CAREERS_DISCOVERY_BATCH=10 bash scripts/crons.sh careers-url-discovery >>/var/log/hireoven/careers-url-discovery.log 2>&1
+# ── Off-box enumeration (host-side tsx, like the capture task above — uses DATABASE_URL, NOT a 300s route) ──
+# Common Crawl mines path-based ATS boards (Greenhouse/Ashby/Workable/SmartRecruiters/Rippling) that crt.sh
+# structurally can't see. Heavy CDX parse → runs on the host, weekly. Size it first: drop EXECUTE=true for a dry run.
+  0 3 * * 1        flock -n /tmp/hireoven-ccmine.lock -c 'cd $HIREOVEN_REPO && EXECUTE=true bash scripts/run-discovery-mining.sh >>/var/log/hireoven/commoncrawl-mine.log 2>&1'
+# Workday backlog drain — resolves the {tenant}:{wd}:unresolved stubs discover-companies parks (it only does 20/run).
+# Size the backlog first: drop --apply for a dry run.
+  0 */6 * * *      flock -n /tmp/hireoven-wddrain.lock -c 'cd $HIREOVEN_REPO && npx tsx scripts/drain-workday-candidates.ts --apply --limit=500 >>/var/log/hireoven/drain-workday.log 2>&1'

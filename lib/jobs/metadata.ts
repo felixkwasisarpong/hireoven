@@ -47,6 +47,8 @@ export const CLEARANCE_REQUIRED_PATTERNS = [
   // Named clearance levels adjacent to "clearance" (unambiguous).
   /\b(?:secret|top[\s-]?secret|ts\s*\/\s*sci|ts\/sci|sci|dod|q[\s-]?(?:level|clearance)|public[\s-]?trust|full[\s-]?scope\s+poly\w*|ci\s+poly\w*)\s+clearance\b/i,
   /\bts\s*\/\s*sci\b/i,
+  // "Full Scope Polygraph" or "CI Polygraph" standalone — implies TS/SCI citizenship requirement
+  /\b(?:full[\s-]?scope|ci)\s+poly(?:graph)?\b/i,
   // "active / current / valid / must hold / able to obtain ... clearance"
   /\b(?:active|current|existing|valid|maintain(?:ed|s)?|obtain(?:able)?|possess(?:es)?|hold(?:s)?)\b[^.\n]{0,40}\bclearance\b/i,
   /\b(?:must\s+(?:have|hold|possess|maintain|obtain)|requires?|able\s+to\s+obtain)\b[^.\n]{0,40}\bclearance\b/i,

@@ -25,6 +25,8 @@ export type AtsName =
   | "microsoft"
   | "netflix"
   | "rippling"
+  | "jsonld"
+  | "radancy"
 
 export type HarvestCtx = {
   etag: string | null

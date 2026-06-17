@@ -3,8 +3,9 @@
  *
  * Adzuna aggregates LinkedIn, Indeed, company boards, and more — giving us a
  * broad "new postings today" signal without scraping those boards directly.
- * Full descriptions are included in search results, so no enrichment step is
- * needed (unlike Dice).
+ * NOTE: descriptions are truncated at ~500 chars by the API. The redirect_url
+ * always points to adzuna.com (behind AWS WAF), so back-fetching for full
+ * descriptions is not feasible. Low-quality results are filtered at ingest.
  *
  * Register at https://developer.adzuna.com for free credentials.
  * Free tier: 250 calls/day, 50 results/page.

@@ -194,15 +194,18 @@ export async function GET(request: NextRequest) {
   // Bulk lookup existing companies
   const companyNames = [...byCompany.keys()]
   const companyIdMap = new Map<string, string>()
+  // Tracks companies we harvest directly — Adzuna jobs from these are redundant.
+  const harvestedCompanyIds = new Set<string>()
 
-  const existingResult = await pool.query<{ id: string; name: string }>(
-    `SELECT id, LOWER(TRIM(name)) AS name
+  const existingResult = await pool.query<{ id: string; name: string; ats_type: string | null; is_active: boolean }>(
+    `SELECT id, LOWER(TRIM(name)) AS name, ats_type, is_active
      FROM companies
      WHERE LOWER(TRIM(name)) = ANY($1)`,
     [companyNames]
   )
   for (const row of existingResult.rows) {
     companyIdMap.set(row.name, row.id)
+    if (row.ats_type && row.is_active) harvestedCompanyIds.add(row.id)
   }
 
   // Create placeholder companies for unknowns so the FK is satisfied.
@@ -282,13 +285,19 @@ export async function GET(request: NextRequest) {
       description: nc.description,
       skills: nc.skills,
     })
-    // Hide Adzuna jobs whose description is too short to be useful — Adzuna's
-    // API truncates at ~500 chars and their redirect URLs can't be back-fetched.
-    // Jobs under 400 chars are typically staffing-agency stubs with no real
-    // content. They still exist in the DB for dedup purposes.
+    const descLen = nc.description?.length ?? 0
+    const skillCount = nc.skills?.length ?? 0
+    // Adzuna truncates descriptions at ~500 chars; redirect URLs are behind AWS
+    // WAF so enrichment is impossible. Hide jobs that add no signal:
+    //   • description < 400 chars — too short to be useful
+    //   • description 490-525 (at the truncation ceiling) with 0-1 skills
+    //     — typically staffing-agency boilerplate with no tech keywords
+    //   • from a company we harvest directly — the harvested version is richer
+    const likelyTruncated = descLen >= 490 && descLen <= 525
+    const redundantHarvested = harvestedCompanyIds.has(companyId)
     const publicationStatus =
       basePublicationStatus === "published" &&
-      (nc.description?.length ?? 0) < 400
+      (descLen < 400 || (likelyTruncated && skillCount <= 1) || redundantHarvested)
         ? "hidden_low_quality"
         : basePublicationStatus
     const rawData = safeJsonStringify({

@@ -53,6 +53,10 @@ run() {
 # glassdoor-discovery 30 5 * * *       run api/cron/glassdoor-discovery
 # builtin-discovery   0 */4 * * *       run api/cron/builtin-discovery
 # signal-api-webhooks * * * * *        run api/cron/signal-api-webhooks
+#
+# NOTE: the two off-box discovery jobs (commoncrawl-mine, drain-workday) are NOT
+# Coolify tasks — they run on the harvester box via Hetzner crontab. See
+# scripts/hetzner-crontab-worker.example.
 # ──────────────────────────────────────────────────────────────────────────────
 
 case "${1:-}" in

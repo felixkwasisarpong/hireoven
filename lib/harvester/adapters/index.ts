@@ -6,6 +6,8 @@ import { amazonAdapter } from "@/lib/harvester/adapters/amazon"
 import { microsoftAdapter } from "@/lib/harvester/adapters/microsoft"
 import { netflixAdapter } from "@/lib/harvester/adapters/netflix"
 import { ripplingAdapter } from "@/lib/harvester/adapters/rippling"
+import { jsonldAdapter } from "@/lib/harvester/adapters/jsonld"
+import { radancyAdapter } from "@/lib/harvester/adapters/radancy"
 import { greenhouseAdapter } from "@/lib/harvester/adapters/greenhouse"
 import { icimsAdapter } from "@/lib/harvester/adapters/icims"
 import { infosysAdapter } from "@/lib/harvester/adapters/infosys"
@@ -47,6 +49,8 @@ export const adapters: Partial<Record<AtsName, AtsAdapter>> = {
   microsoft: microsoftAdapter,
   netflix: netflixAdapter,
   rippling: ripplingAdapter,
+  jsonld: jsonldAdapter,
+  radancy: radancyAdapter,
 }
 
 export function getAdapter(name: AtsName): AtsAdapter | undefined {
