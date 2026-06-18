@@ -1,8 +1,8 @@
 /**
  * Fast resume↔job scorer — pure TypeScript, runs in-process with no external calls.
  *
- * Eight weighted dimensions (weights sum to 1.0):
- *   skills 0.36 · experience 0.20 · title 0.10 · education 0.09
+ * Nine weighted dimensions (weights sum to 1.0):
+ *   skills 0.36 · experience 0.14 · seniority 0.06 · title 0.10 · education 0.09
  *   role-family 0.14 · semantic 0.06 · domain 0.03 · certs 0.02
  *
  * Hard gates applied after aggregation:
@@ -76,7 +76,8 @@ const CURRENT_YEAR = new Date().getFullYear()
 
 const W = {
   skills:     0.36,
-  experience: 0.20,
+  experience: 0.14,
+  seniority:  0.06,
   title:      0.10,
   education:  0.09,
   domain:     0.03,
@@ -537,31 +538,12 @@ const SENIORITY_YEAR_FLOOR: Partial<Record<SeniorityLevel, number>> = {
 
 function scoreExperience(
   resumeContext: FastScoreResumeContext,
-  job: Job,
-  resumeSeniority?: SeniorityLevel | null
+  job: Job
 ) {
   const extracted = extractMinYears(job.description)
   const seniorityFloor = (job.seniority_level ? SENIORITY_YEAR_FLOOR[job.seniority_level] : 0) ?? 0
   const required = Math.max(extracted, seniorityFloor)
   const years = resumeContext.years
-
-  // Over-qualification penalty: when the candidate is meaningfully above the
-  // job's seniority tier, return a partial score instead of the implicit 1.0
-  // that years/required would produce. Without this, an 8-year senior would
-  // match cashier/intern roles at seniority=100% just because years >> minimum.
-  const gap = getSeniorityGap(resumeSeniority, job.seniority_level)
-  if (gap !== null && gap >= 2) {
-    // gap=2 (senior→junior) = 0.55, gap=3 (senior→intern) = 0.35,
-    // gap=4 (staff→intern) = 0.20 (the extreme_seniority gate caps at 35 anyway)
-    const overqualPenalty = Math.max(0.20, 0.85 - 0.20 * gap)
-    return {
-      score: overqualPenalty,
-      evidence: `Candidate is ~${gap} tiers above this role; partial fit only.`,
-      flags: ["overqualified"] as string[],
-      relevantYears: years,
-      required,
-    }
-  }
 
   if (required <= 0) {
     return {
@@ -1340,6 +1322,42 @@ export function getSeniorityGap(c: SeniorityLevel | null | undefined, j: Seniori
   return c && j ? SENIORITY_MAP[c] - SENIORITY_MAP[j] : null
 }
 
+function scoreSeniorityAlignment(
+  candidateLevel: SeniorityLevel | null | undefined,
+  jobLevel: SeniorityLevel | null | undefined
+) {
+  const gap = getSeniorityGap(candidateLevel, jobLevel)
+
+  if (gap === null) {
+    return {
+      score: 0.75,
+      evidence: "Seniority level unavailable for candidate or role; using neutral fit.",
+      gap,
+    }
+  }
+
+  if (gap === 0) {
+    return {
+      score: 1,
+      evidence: `Candidate seniority (${candidateLevel}) matches role seniority (${jobLevel}).`,
+      gap,
+    }
+  }
+
+  const absGap = Math.abs(gap)
+  const score =
+    gap > 0
+      ? Math.max(0.2, 0.9 - 0.2 * (absGap - 1))
+      : Math.max(0.15, 0.82 - 0.24 * (absGap - 1))
+  const direction = gap > 0 ? "above" : "below"
+
+  return {
+    score,
+    evidence: `Candidate seniority (${candidateLevel}) is ~${absGap} tier${absGap === 1 ? "" : "s"} ${direction} role seniority (${jobLevel}).`,
+    gap,
+  }
+}
+
 function getSponsorshipScore(profile: Profile, job: Job) {
   if (!profile.needs_sponsorship) return { score: 100, compatible: true }
   if (job.sponsors_h1b) return { score: 100, compatible: true }
@@ -1451,7 +1469,9 @@ export function computeFastScore({
 }: FastScoreInput): JobMatchScoreInsert {
   const context = resumeContext ?? buildFastScoreResumeContext(resume)
   const skills     = scoreSkills(context, job)
-  const experience = scoreExperience(context, job, resume.seniority_level)
+  const candidateSeniority = resume.seniority_level ?? profile.seniority_level
+  const experience = scoreExperience(context, job)
+  const seniority  = scoreSeniorityAlignment(candidateSeniority, job.seniority_level)
   const title      = scoreTitle(context, job)
   const education  = scoreEducation(resume, job)
   const domain     = scoreDomain(context, job)
@@ -1459,12 +1479,13 @@ export function computeFastScore({
   const semantic   = scoreSemanticOverlap(context, job)
   const roleFamily = scoreRoleFamilyFit(context, resume, job)
   const sponsorship = getSponsorshipScore(profile, job)
-  const seniorityGap = getSeniorityGap(resume.seniority_level, job.seniority_level)
+  const seniorityGap = seniority.gap
 
   // Weighted sum → 0–100
   let overall = Math.round(
     skills.score     * W.skills     * 100 +
     experience.score * W.experience * 100 +
+    seniority.score  * W.seniority  * 100 +
     title.score      * W.title      * 100 +
     education.score  * W.education  * 100 +
     domain.score     * W.domain     * 100 +
@@ -1539,6 +1560,14 @@ export function computeFastScore({
     gatesTriggered.push("extreme_seniority_mismatch")
   }
 
+  // Moderate level mismatches should not land in the excellent band purely
+  // because the candidate has enough raw years or overlapping skills.
+  if (seniorityGap !== null && Math.abs(seniorityGap) >= 2) {
+    const cap = seniorityGap < 0 ? 72 : 78
+    overall = Math.min(overall, cap)
+    gatesTriggered.push(`seniority_mismatch:${seniorityGap}`)
+  }
+
   // Same broad family is helpful but not enough by itself. A pharmacist and
   // registered nurse are both healthcare; a backend engineer and help-desk
   // technician are both tech. If the title evidence is very weak, keep the
@@ -1573,6 +1602,7 @@ export function computeFastScore({
     gate === "missing_required_skills_gt75pct" ||
     gate === "insufficient_experience" ||
     gate === "extreme_seniority_mismatch" ||
+    gate.startsWith("seniority_mismatch:") ||
     gate === "same_family_low_title_fit" ||
     gate.startsWith("role_family_mismatch:")
   )
@@ -1587,6 +1617,7 @@ export function computeFastScore({
     roleFamily.score >= 1 &&
     title.score >= 0.9 &&
     experience.score >= 0.7 &&
+    seniority.score >= 0.7 &&
     education.score >= 0.5 &&
     hasUsableSkillEvidence
 
@@ -1620,14 +1651,14 @@ export function computeFastScore({
     job_id: job.id,
     overall_score: overall,
     skills_score:          Math.round(skills.score * 100),
-    seniority_score:       Math.round(experience.score * 100),
+    seniority_score:       Math.round(seniority.score * 100),
     education_score:       Math.round(education.score * 100),
     role_fit_score:        Math.round(title.score * 100),
     location_score:        null,
     employment_type_score: null,
     sponsorship_score:     sponsorship.score,
     domain_score:          Math.round(domain.score * 100),
-    is_seniority_match:    experience.score >= 0.5,
+    is_seniority_match:    seniority.score >= 0.65,
     is_education_match:    education.score >= 0.6,
     is_role_fit_match:     title.score >= 0.5,
     is_location_match:     null,
@@ -1645,7 +1676,7 @@ export function computeFastScore({
       overallScore:        overall,
       skillsScore:         Math.round(skills.score * 100),
       experienceScore:     Math.round(experience.score * 100),
-      seniorityScore:      null,
+      seniorityScore:      Math.round(seniority.score * 100),
       roleFamilyScore:     Math.round(roleFamily.score * 100),
       roleFamily:          roleFamily.jobFamily,
       candidateRoleFamilies: roleFamily.candidateFamilies,
