@@ -265,3 +265,129 @@ test("same broad healthcare family does not make cross-specialty roles high conf
 
   assert.ok(score.overall_score < 70, `expected nurse score < 70, got ${score.overall_score}`)
 })
+
+test("resume experience text contributes skill evidence when skill buckets are sparse", () => {
+  const resume = makeHealthcareResume({
+    id: "resume-experience-skills-1",
+    file_name: "backend.pdf",
+    name: "Backend Candidate",
+    summary: "Backend engineer focused on API platforms.",
+    work_experience: [
+      {
+        company: "Platform Co",
+        title: "Backend Engineer",
+        start_date: "2020",
+        end_date: null,
+        is_current: true,
+        description: "Built Python APIs with Django, PostgreSQL, Docker, and AWS for distributed services.",
+        achievements: [],
+      },
+    ],
+    education: [
+      {
+        institution: "University",
+        degree: "Bachelor of Science",
+        field: "Computer Science",
+        start_date: "2014",
+        end_date: "2018",
+        gpa: null,
+      },
+    ],
+    skills: {
+      technical: [],
+      soft: [],
+      languages: [],
+      certifications: [],
+    },
+    projects: [],
+    seniority_level: "senior",
+    years_of_experience: 6,
+    primary_role: "Backend Engineer",
+    industries: ["Technology"],
+    top_skills: [],
+    raw_text: null,
+  })
+  const job = makeJob({
+    id: "job-backend-sparse-resume-1",
+    title: "Senior Backend Engineer",
+    description: "Requirements: Python, Django, PostgreSQL, Docker, AWS, and API development.",
+    skills: ["Python", "Django", "PostgreSQL", "Docker", "AWS", "API Development"],
+    seniority_level: "senior",
+  })
+
+  const score = computeFastScore({
+    resume,
+    job,
+    profile: baseProfile,
+    resumeContext: buildFastScoreResumeContext(resume),
+  })
+
+  assert.ok(score.overall_score >= 85, `expected experience-derived skills to score strongly, got ${score.overall_score}`)
+  assert.deepEqual(
+    score.score_breakdown?.matchedSkills.slice(0, 5),
+    ["Python", "Django", "PostgreSQL", "Docker", "AWS"]
+  )
+})
+
+test("sparse same-family postings with no skill support stay below strong match", () => {
+  const resume = makeHealthcareResume({
+    id: "resume-tech-no-skill-support-1",
+    file_name: "software-no-support.pdf",
+    name: "Software Candidate",
+    summary: "Software engineer with backend platform experience.",
+    work_experience: [
+      {
+        company: "Platform Co",
+        title: "Software Engineer",
+        start_date: "2018",
+        end_date: null,
+        is_current: true,
+        description: "Built backend platform services and internal tooling.",
+        achievements: [],
+      },
+    ],
+    education: [
+      {
+        institution: "University",
+        degree: "Bachelor of Science",
+        field: "Computer Science",
+        start_date: "2010",
+        end_date: "2014",
+        gpa: null,
+      },
+    ],
+    skills: {
+      technical: [],
+      soft: [],
+      languages: [],
+      certifications: [],
+    },
+    projects: [],
+    seniority_level: "senior",
+    years_of_experience: 8,
+    primary_role: "Software Engineer",
+    industries: ["Technology"],
+    top_skills: [],
+    raw_text: null,
+  })
+  const job = makeJob({
+    id: "job-sparse-no-skill-support-1",
+    title: "Senior Software Engineer",
+    description: "Requirements: Rust and Kubernetes.",
+    skills: ["Rust", "Kubernetes"],
+    seniority_level: "senior",
+  })
+
+  const score = computeFastScore({
+    resume,
+    job,
+    profile: baseProfile,
+    resumeContext: buildFastScoreResumeContext(resume),
+  })
+
+  assert.ok(score.overall_score < 70, `expected sparse no-skill-support score < 70, got ${score.overall_score}`)
+  assert.ok(
+    score.score_breakdown?.concerns.some((concern) => concern.includes("low_signal_skills_lt5")),
+    "expected low-signal gate to be surfaced"
+  )
+})

@@ -20,6 +20,11 @@ const BACKGROUND_USER_LIMIT = 10_000
 const UPSERT_CHUNK_SIZE = 250
 const BACKGROUND_CONCURRENCY = 50
 
+function resumeVersionFromUpdatedAt(updatedAt: string): number | null {
+  const timestamp = new Date(updatedAt).getTime()
+  return Number.isFinite(timestamp) && timestamp > 0 ? Math.floor(timestamp / 1000) : null
+}
+
 function chunkArray<T>(items: T[], size: number) {
   const chunks: T[][] = []
   for (let index = 0; index < items.length; index += size) {
@@ -236,9 +241,12 @@ export async function getCachedScoresForUser(userId: string, jobIds: string[]) {
   )
 
   const fresh = result.rows.filter((row) => {
+    const currentResumeVersion = resumeVersionFromUpdatedAt(row.resume_updated_at)
     return isScoreFreshForResume({
       computedAt: row.computed_at,
       resumeUpdatedAt: row.resume_updated_at,
+      scoreResumeVersion: row.resume_version,
+      currentResumeVersion,
     })
   })
   return new Map<string, JobMatchScore>(fresh.map((row) => [row.job_id, row]))
@@ -267,9 +275,12 @@ export async function scoreJobsForUser(userId: string, jobIds: string[]) {
   )
 
   const existingFreshScores = existingResult.rows.filter((row) => {
+    const currentResumeVersion = resumeVersionFromUpdatedAt(row.resume_updated_at)
     return isScoreFreshForResume({
       computedAt: row.computed_at,
       resumeUpdatedAt: row.resume_updated_at,
+      scoreResumeVersion: row.resume_version,
+      currentResumeVersion,
     })
   })
 

@@ -1367,9 +1367,28 @@ function toResumeExperienceSnapshot(exp: WorkExperience): ResumeExperienceSnapsh
 }
 
 export function buildFastScoreResumeContext(resume: Resume): FastScoreResumeContext {
+  const resumeEvidenceText = [
+    resume.summary ?? "",
+    resume.primary_role ?? "",
+    ...(resume.work_experience ?? []).map((exp) =>
+      [
+        exp.title,
+        exp.description,
+        ...(exp.achievements ?? []),
+      ].join(" ")
+    ),
+    ...(resume.projects ?? []).map((project) =>
+      [
+        project.name,
+        project.description,
+        ...(project.technologies ?? []),
+      ].join(" ")
+    ),
+    resume.raw_text ?? "",
+  ]
   const candidateSkillLabels = normalizeSkillList([
     ...getAllResumeSkillLabels(resume),
-    ...extractSkillsFromText(resume.raw_text ?? ""),
+    ...extractSkillsFromText(...resumeEvidenceText),
   ])
   const candidateSkillKeys = candidateSkillLabels.map((candidateSkill) =>
     normalizeSkillKey(canonicalizeSkill(candidateSkill))
@@ -1475,7 +1494,11 @@ export function computeFastScore({
   // Observed: Dutch Bros "Broista" job with 1 extracted skill scored 72
   // against a SWE resume — caught here at 65.
   if (totalRequired > 0 && totalRequired < 5) {
+    const hasLowSignalSkillSupport =
+      skills.score >= 0.4 ||
+      skills.hardMatchedCount >= 1
     const strongSameFamilyEvidence =
+      hasLowSignalSkillSupport &&
       roleFamily.score >= 1 &&
       experience.score >= 0.7 &&
       title.score >= 0.65 &&
@@ -1554,8 +1577,11 @@ export function computeFastScore({
     gate.startsWith("role_family_mismatch:")
   )
   const hasUsableSkillEvidence =
-    skills.score >= 0.45 ||
-    (totalRequired > 0 && totalRequired < 5 && skills.hardMatchedCount >= 1 && skills.hardMissing.length <= 1)
+    skills.score >= 0.55 ||
+    (totalRequired > 0 &&
+      totalRequired < 5 &&
+      (skills.hardMatchedCount >= 1 || skills.score >= 0.5) &&
+      skills.hardMissing.length <= 1)
   const excellentSameProfessionEvidence =
     !hasTopBandBlockingGate &&
     roleFamily.score >= 1 &&
@@ -1623,6 +1649,9 @@ export function computeFastScore({
       roleFamilyScore:     Math.round(roleFamily.score * 100),
       roleFamily:          roleFamily.jobFamily,
       candidateRoleFamilies: roleFamily.candidateFamilies,
+      domainScore:         Math.round(domain.score * 100),
+      semanticScore:       Math.round(semantic.score * 100),
+      certificationScore:  Math.round(certs.score * 100),
       locationScore:       null,
       employmentTypeScore: null,
       sponsorshipScore:    sponsorship.score,

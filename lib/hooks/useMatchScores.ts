@@ -2,11 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { devWarn } from "@/lib/client-dev-log"
+import { FAST_SCORE_CACHE_EPOCH_MS } from "@/lib/matching/score-freshness"
 import { fetchSessionUser } from "@/lib/supabase/client"
 import type { JobMatchScore } from "@/types"
 
 type CacheEnvelope = {
   expiresAt: number
+  epochMs?: number
   scores: Record<string, JobMatchScore>
 }
 
@@ -14,7 +16,17 @@ const MEMORY_CACHE = new Map<string, JobMatchScore>()
 const ONE_HOUR_MS = 60 * 60 * 1_000
 
 function getSessionKey(userId: string) {
-  return `match_scores_${userId}`
+  return `match_scores_${userId}_${FAST_SCORE_CACHE_EPOCH_MS}`
+}
+
+function getMemoryKey(userId: string, jobId: string) {
+  return `${FAST_SCORE_CACHE_EPOCH_MS}:${userId}:${jobId}`
+}
+
+function isClientFreshScore(score: JobMatchScore | null | undefined) {
+  if (!score?.computed_at) return false
+  const computedAt = Date.parse(score.computed_at)
+  return Number.isFinite(computedAt) && computedAt >= FAST_SCORE_CACHE_EPOCH_MS
 }
 
 function readSessionCache(userId: string) {
@@ -25,12 +37,18 @@ function readSessionCache(userId: string) {
     if (!raw) return {}
 
     const parsed = JSON.parse(raw) as CacheEnvelope
-    if (!parsed.expiresAt || parsed.expiresAt < Date.now()) {
+    if (
+      !parsed.expiresAt ||
+      parsed.expiresAt < Date.now() ||
+      parsed.epochMs !== FAST_SCORE_CACHE_EPOCH_MS
+    ) {
       window.sessionStorage.removeItem(getSessionKey(userId))
       return {}
     }
 
-    return parsed.scores ?? {}
+    return Object.fromEntries(
+      Object.entries(parsed.scores ?? {}).filter(([, score]) => isClientFreshScore(score))
+    )
   } catch {
     return {}
   }
@@ -41,7 +59,10 @@ function writeSessionCache(userId: string, scores: Record<string, JobMatchScore>
 
   const envelope: CacheEnvelope = {
     expiresAt: Date.now() + ONE_HOUR_MS,
-    scores,
+    epochMs: FAST_SCORE_CACHE_EPOCH_MS,
+    scores: Object.fromEntries(
+      Object.entries(scores).filter(([, score]) => isClientFreshScore(score))
+    ),
   }
 
   window.sessionStorage.setItem(getSessionKey(userId), JSON.stringify(envelope))
@@ -78,7 +99,7 @@ export function useMatchScores(jobIds: string[], externalUserId?: string | null)
 
     const cached = readSessionCache(userId)
     for (const [jobId, score] of Object.entries(cached)) {
-      MEMORY_CACHE.set(`${userId}:${jobId}`, score)
+      MEMORY_CACHE.set(getMemoryKey(userId, jobId), score)
       scoresRef.current.set(jobId, score)
     }
 
@@ -99,24 +120,21 @@ export function useMatchScores(jobIds: string[], externalUserId?: string | null)
       if (!userId || requestedJobIds.length === 0) return
 
       const missingJobIds = requestedJobIds.filter((jobId) => {
-        const existing = scoresRef.current.get(jobId) ?? MEMORY_CACHE.get(`${userId}:${jobId}`)
+        const existing = scoresRef.current.get(jobId) ?? MEMORY_CACHE.get(getMemoryKey(userId, jobId))
         if (!existing) return true
+        if (!isClientFreshScore(existing)) return true
 
         scoresRef.current.set(jobId, existing)
         return false
       })
 
-      if (missingJobIds.length === 0) {
-        return
-      }
-
-      setIsLoading(true)
+      setIsLoading(missingJobIds.length > 0)
 
       try {
         const response = await fetch("/api/match/score/batch", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ jobIds: missingJobIds }),
+          body: JSON.stringify({ jobIds: requestedJobIds }),
         })
 
         if (!response.ok) {
@@ -139,9 +157,17 @@ export function useMatchScores(jobIds: string[], externalUserId?: string | null)
           scores?: Record<string, JobMatchScore>
         }
 
+        const returnedJobIds = new Set(Object.keys(payload.scores ?? {}))
+
         for (const [jobId, score] of Object.entries(payload.scores ?? {})) {
           scoresRef.current.set(jobId, score)
-          MEMORY_CACHE.set(`${userId}:${jobId}`, score)
+          MEMORY_CACHE.set(getMemoryKey(userId, jobId), score)
+        }
+
+        for (const jobId of requestedJobIds) {
+          if (returnedJobIds.has(jobId)) continue
+          scoresRef.current.delete(jobId)
+          MEMORY_CACHE.delete(getMemoryKey(userId, jobId))
         }
 
         persist()
