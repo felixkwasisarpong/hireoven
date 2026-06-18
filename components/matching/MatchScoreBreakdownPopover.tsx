@@ -79,11 +79,15 @@ type BreakdownPanelProps = {
 function formatConcern(raw: string): string {
   // Convert internal gate labels into something readable.
   if (raw.startsWith("Gate: missing_required_cert")) return "Missing a required certification"
-  if (raw.startsWith("Gate: missing_required_skills_gt60pct"))
-    return "Missing more than 60% of required skills"
+  if (raw.startsWith("Gate: missing_required_skills_gt75pct"))
+    return "Missing more than 75% of required skills"
+  if (raw.startsWith("Gate: low_signal_skills_lt5"))
+    return "Sparse skill evidence in this posting"
   if (raw.startsWith("Gate: insufficient_experience"))
     return "Below the stated minimum years of experience"
   if (raw.startsWith("Gate: extreme_seniority_mismatch")) return "Seniority is far from the role"
+  if (raw.startsWith("Gate: same_family_low_title_fit"))
+    return "Same broad career family, but the title evidence is weak"
   if (raw.startsWith("Gate: role_family_mismatch")) {
     const m = /role_family_mismatch:(.+?)→(.+)$/.exec(raw)
     if (m) return `Career family mismatch (your background: ${m[1]} → role: ${m[2]})`
@@ -99,11 +103,14 @@ function BreakdownPanel({ score, onClose, onSeeFullAnalysis }: BreakdownPanelPro
   const skillsFactor = resolveSkillsFactorValue({ fastScore: score })
 
   const dimensions: Dimension[] = [
-    { label: "Skills", value: skillsFactor.value, weight: 0.45, state: skillsFactor.state },
-    { label: "Experience", value: score.seniority_score, weight: 0.22 },
+    { label: "Skills", value: skillsFactor.value, weight: 0.36, state: skillsFactor.state },
+    { label: "Experience", value: score.seniority_score, weight: 0.2 },
+    { label: "Role family", value: breakdown?.roleFamilyScore ?? null, weight: 0.14 },
     { label: "Title fit", value: score.role_fit_score, weight: 0.1 },
-    { label: "Education", value: score.education_score, weight: 0.1 },
-    { label: "Sponsorship", value: score.sponsorship_score, weight: 0.02 },
+    { label: "Education", value: score.education_score, weight: 0.09 },
+    { label: "Semantic", value: breakdown?.semanticScore ?? null, weight: 0.06 },
+    { label: "Domain", value: score.domain_score ?? breakdown?.domainScore ?? null, weight: 0.03 },
+    { label: "Certifications", value: breakdown?.certificationScore ?? null, weight: 0.02 },
   ]
 
   const matched = breakdown?.matchedSkills?.slice(0, 6) ?? []
