@@ -589,6 +589,28 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
 }
 
+const INLINE_ALIAS_BOUNDARY_PATTERN = INLINE_SECTION_ALIASES
+  .map((alias) => escapeRegExp(alias.alias))
+  .sort((left, right) => right.length - left.length)
+  .join("|")
+
+const GLUED_INLINE_HEADING_RE = new RegExp(
+  `\\b(${INLINE_ALIAS_BOUNDARY_PATTERN})(${INLINE_ALIAS_BOUNDARY_PATTERN})\\b`,
+  "gi"
+)
+
+function normalizeGluedInlineHeadings(description: string): string {
+  let current = description
+
+  for (let i = 0; i < 4; i += 1) {
+    const next = current.replace(GLUED_INLINE_HEADING_RE, "$1\n$2")
+    if (next === current) break
+    current = next
+  }
+
+  return current
+}
+
 function findInlineHeadingMatches(description: string): InlineHeadingMatch[] {
   const lower = description.toLowerCase()
   const matches: InlineHeadingMatch[] = []
@@ -729,6 +751,12 @@ function looksLikeRequirementItem(value: string): boolean {
   if (REQUIREMENT_LIKE_RE.test(value)) return true
   if (/\b\d+\+?\s+years?\b/i.test(value)) return true
   if (/\b(experience in|experience with|proven|ability to|track record|expertise|knowledge of)\b/i.test(value)) {
+    return true
+  }
+  if (/^(?:experience|familiarity|comfort|proficiency|knowledge|expertise)\b/i.test(value)) {
+    return true
+  }
+  if (/\bexperience\b/i.test(value) && /\b(ai|ml|llm|python|engineering|development|systems?|production)\b/i.test(value)) {
     return true
   }
   return false
@@ -1697,7 +1725,9 @@ export function extractCanonicalSections(input: {
   }
 
   if (input.description) {
-    const explicitSegments = extractExplicitHeadingSegments(input.description)
+    const description = normalizeGluedInlineHeadings(input.description)
+
+    const explicitSegments = extractExplicitHeadingSegments(description)
     for (const segment of explicitSegments) {
       const classification = classifyHeading(segment.heading)
       const items = itemsFromTextBlock(segment.body)
@@ -1718,7 +1748,7 @@ export function extractCanonicalSections(input: {
       )
     }
 
-    const inlineSegments = extractInlineHeadingSegments(input.description)
+    const inlineSegments = extractInlineHeadingSegments(description)
     for (const segment of inlineSegments) {
       const items = itemsFromTextBlock(segment.body)
       if (items.length === 0) continue
@@ -1738,7 +1768,7 @@ export function extractCanonicalSections(input: {
       )
     }
 
-    const parsed = parseJobDescriptionSections(input.description)
+    const parsed = parseJobDescriptionSections(description)
     for (const section of parsed) {
       const items = flattenSectionContent(section)
       if (items.length === 0) continue
@@ -1772,7 +1802,7 @@ export function extractCanonicalSections(input: {
       )
     }
 
-    fallbackFromFirstParagraphs(buckets, input.description, input.adapter)
+    fallbackFromFirstParagraphs(buckets, description, input.adapter)
     fallbackResponsibilities(buckets, input.adapter)
     fallbackRequirements(buckets, input.adapter)
     enrichFromMixedText(buckets, input.adapter)

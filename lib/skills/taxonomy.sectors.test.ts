@@ -76,6 +76,28 @@ test("Pharma / Clinical", () => {
   )
 })
 
+test("AI platform and agentic systems", () => {
+  extracts(
+    "Requirements: agentic AI systems, RAG pipelines, LLM workloads, Production ML / LLM operations, Python, LangGraph / Temporal / orchestration frameworks, Vector databases, HIPAA / SOC-2, Terraform / Kubernetes",
+    [
+      "Agentic AI",
+      "RAG",
+      "LLMs",
+      "MLOps",
+      "LLMOps",
+      "Python",
+      "LangGraph",
+      "Temporal",
+      "AI Orchestration",
+      "Vector Databases",
+      "HIPAA",
+      "Compliance",
+      "Terraform",
+      "Kubernetes",
+    ],
+  )
+})
+
 test("does not false-positive on ordinary prose", () => {
   const found = new Set(
     extractSkillsFromText(
