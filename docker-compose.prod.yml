@@ -148,34 +148,11 @@ services:
     ports:
       - "${APP_PORT:-3000}:3000"
 
-  harvester:
-    # Built from Dockerfile.harvester by GitHub Actions.
-    image: ghcr.io/felixkwasisarpong/hireoven-harvester:latest
-    pull_policy: always
-    container_name: hireoven-harvester
-    restart: unless-stopped
-    depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      NODE_ENV: production
-      DATABASE_URL: postgres://${POSTGRES_USER:-hireoven}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-hireoven}
-      PGSSLMODE: disable
-      HARVESTER_USE_NEW_ADAPTERS: ${HARVESTER_USE_NEW_ADAPTERS:-true}
-      HARVESTER_INSTANCES: ${HARVESTER_INSTANCES:-3}
-      HARVESTER_TOTAL_CLAIM_BUDGET: ${HARVESTER_TOTAL_CLAIM_BUDGET:-36}
-      HARVESTER_TICK_INTERVAL_MS: ${HARVESTER_TICK_INTERVAL_MS:-30000}
-      HARVESTER_HEALTH_PORT: ${HARVESTER_HEALTH_PORT:-3000}
-      HARVESTER_CLAIM_BATCH_SIZE: ${HARVESTER_CLAIM_BATCH_SIZE:-20}
-      HARVESTER_CONCURRENCY: ${HARVESTER_CONCURRENCY:-8}
-      HARVESTER_LEASE_SECONDS: ${HARVESTER_LEASE_SECONDS:-240}
-      HARVESTER_TIER_1_INTERVAL_SEC: ${HARVESTER_TIER_1_INTERVAL_SEC:-600}
-      HARVESTER_TIER_2_INTERVAL_SEC: ${HARVESTER_TIER_2_INTERVAL_SEC:-3600}
-      HARVESTER_FAILURE_COOLDOWN_SECONDS: ${HARVESTER_FAILURE_COOLDOWN_SECONDS:-1800}
-      HARVESTER_HTTP_403_COOLDOWN_SECONDS: ${HARVESTER_HTTP_403_COOLDOWN_SECONDS:-86400}
-      HARVESTER_APPLE_CONCURRENCY: ${HARVESTER_APPLE_CONCURRENCY:-1}
-      USAJOBS_API_KEY: ${USAJOBS_API_KEY}
-      USAJOBS_USER_AGENT: ${USAJOBS_USER_AGENT}
+  # NOTE: there is intentionally NO `harvester` service in this web-box compose.
+  # The harvester runs on its OWN dedicated server via docker-compose.harvester.yml.
+  # It used to be defined here with no `profiles:` gate, so Coolify booted it right
+  # next to the public app and pegged the CPU — crash-looping the web-box app
+  # (incident 2026-06-17). Do not re-add it here.
 
   # ── Background worker (run on the HARVESTER box, not the web box) ──────────────
   # Same app image, NOT publicly exposed. It exists only so the harvester box's
